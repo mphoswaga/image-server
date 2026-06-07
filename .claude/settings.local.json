@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npm start *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/maths/fractions/maths_fractions_001.jpg)",
+      "Bash(node image-server.js)",
+      "Bash(node -e \"const express = require\\('express'\\); console.log\\('express ok', express.version\\)\")",
+      "Bash(curl *)",
+      "Bash(kill 8139 *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(node /Users/mphogiftmokoena/Documents/LessonCope/image-agent/image-server.js)",
+      "Bash(node -e ' *)",
+      "Bash(node *)",
+      "Bash(pkill -f \"node image-server.js\")",
+      "Bash(git init *)",
+      "Bash(git add *)"
+    ]
+  }
+}
