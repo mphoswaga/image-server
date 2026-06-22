@@ -1,26 +1,24 @@
 // Lightweight teacher accounts: email + password (bcrypt-hashed), stored in
-// data/users.json. Sessions are stateless JWTs in an httpOnly cookie, signed
-// with a persisted secret. No database needed for the MVP.
+// <DATA_DIR>/users.json. Sessions are stateless JWTs in an httpOnly cookie,
+// signed with a persisted secret. DATA_DIR lives on a persistent volume in
+// production (see storage.js) so accounts survive redeploys.
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { DATA_DIR, writeFileAtomic, writeJsonAtomic } = require('./storage');
 
-const DATA_DIR = path.join(__dirname, 'data');
 const USERS_PATH = path.join(DATA_DIR, 'users.json');
 const SECRET_PATH = path.join(DATA_DIR, '.session-secret');
 const TOKEN_TTL = '30d';
 const COOKIE_NAME = 'lc_token';
 
-function ensureDir() { fs.mkdirSync(DATA_DIR, { recursive: true }); }
-
 function getSecret() {
   if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
-  ensureDir();
   if (fs.existsSync(SECRET_PATH)) return fs.readFileSync(SECRET_PATH, 'utf8');
   const secret = crypto.randomBytes(48).toString('hex');
-  fs.writeFileSync(SECRET_PATH, secret);
+  writeFileAtomic(SECRET_PATH, secret);
   return secret;
 }
 const SECRET = getSecret();
@@ -29,7 +27,7 @@ function loadUsers() {
   if (!fs.existsSync(USERS_PATH)) return {};
   try { return JSON.parse(fs.readFileSync(USERS_PATH, 'utf8')); } catch { return {}; }
 }
-function saveUsers(users) { ensureDir(); fs.writeFileSync(USERS_PATH, JSON.stringify(users, null, 2)); }
+function saveUsers(users) { writeJsonAtomic(USERS_PATH, users); }
 
 function findByEmail(email) {
   const users = loadUsers();

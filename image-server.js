@@ -30,6 +30,10 @@ app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Health check for the host (Railway): confirms the process booted and the
+// port is bound. Must not depend on any API keys or external services.
+app.get('/healthz', (req, res) => res.json({ ok: true, uptime: process.uptime() }));
+
 // ── Auth ──────────────────────────────────────────────────────────────────
 const setSession = (res, userId) => res.cookie(COOKIE_NAME, issueToken(userId), {
   httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000,

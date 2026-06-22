@@ -5,8 +5,8 @@ const path = require('path');
 const mammoth = require('mammoth');
 const XLSX = require('xlsx');
 const { PDFParse } = require('pdf-parse');
+const { DATA_DIR, writeFileAtomic, writeJsonAtomic } = require('./storage');
 
-const DATA_DIR = path.join(__dirname, 'data');
 const userDir = userId => path.join(DATA_DIR, 'users', String(userId));
 const templatePath = userId => path.join(userDir(userId), 'template.json');
 const originalBase = userId => path.join(userDir(userId), 'template-original'); // + ext
@@ -47,10 +47,10 @@ function saveTemplate(userId, { filename, text, buffer }) {
     for (const f of fs.readdirSync(dir)) {
       if (f.startsWith('template-original')) fs.unlinkSync(path.join(dir, f));
     }
-    fs.writeFileSync(originalBase(userId) + ext, buffer);
+    writeFileAtomic(originalBase(userId) + ext, buffer);
   }
   const record = { filename, ext, uploadedAt: new Date().toISOString(), text: text.trim(), hasOriginal: !!buffer };
-  fs.writeFileSync(templatePath(userId), JSON.stringify(record, null, 2));
+  writeJsonAtomic(templatePath(userId), record);
   return record;
 }
 
