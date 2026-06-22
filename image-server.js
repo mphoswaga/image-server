@@ -12,7 +12,7 @@ const { fillDocx, fillXlsx } = require('./fill-template');
 const { animateBuffer } = require('./animate-pptx');
 const { addImages } = require('./admin-images');
 const { generateImage } = require('./ai-image');
-const { parseFraction } = require('./concept-diagram');
+const { parseFraction, detectLabelledDiagram } = require('./concept-diagram');
 
 // Add transitions/animations; never let it break the download.
 function safeAnimate(buffer, band) {
@@ -80,6 +80,7 @@ function previewEntry(slide, image) {
     // a step/cycle process diagram (any subject)
     visual: (slide.visual && (slide.visual.type === 'steps' || slide.visual.type === 'cycle') && Array.isArray(slide.visual.items) && slide.visual.items.length >= 2) ? slide.visual : null,
     differentiation: slide.differentiation || null,
+    labelled: detectLabelledDiagram(`${slide.title || ''} ${slide.imageQuery || ''} ${slide.example || ''}`),
   };
 }
 

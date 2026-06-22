@@ -14,7 +14,7 @@ const pptxgen = require('pptxgenjs');
 const { generateContent } = require('./content');
 const { fetchUnsplashImage } = require('./fetch-image');
 const { gradeProfile } = require('./grade');
-const { parseFraction, drawFractionPizza, drawStepsDiagram, drawStepsHorizontal, drawNumberLine } = require('./concept-diagram');
+const { parseFraction, drawFractionPizza, drawStepsDiagram, drawStepsHorizontal, drawNumberLine, detectLabelledDiagram, drawLabelledDiagram } = require('./concept-diagram');
 
 // Draw an animated concept diagram in the image area when one fits; otherwise
 // place the photo. Returns true if a diagram was drawn.
@@ -278,6 +278,15 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
     default: { // content
       const v = slideData.visual;
       const hasFraction = parseFraction(slideData.example) || parseFraction(slideData.title) || parseFraction(slideData.imageQuery);
+
+      // Curated labelled science diagram (water cycle, cell, plant…) → hero layout.
+      const labelledKey = detectLabelledDiagram(`${slideData.title} ${slideData.imageQuery || ''} ${slideData.example || ''}`);
+      if (!hasFraction && labelledKey) {
+        slide.addText('LABELLED DIAGRAM', { x: 0.5, y: 0.4, w: 9, h: 0.4, fontFace: THEME.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
+        slide.addText(slideData.title, { x: 0.5, y: 0.85, w: 9, h: 0.9, fontFace: THEME.font, fontSize: t.titleSize, bold: true, color: THEME.primary });
+        drawLabelledDiagram(pptx, slide, labelledKey, accent);
+        break;
+      }
       // Diagram-led: the diagram is the hero — title on top, big visual below.
       const isFlow = v && (v.type === 'steps' || v.type === 'cycle') && Array.isArray(v.items) && v.items.length >= 2;
       const isLine = v && v.type === 'numberline' && Array.isArray(v.items) && v.items.length >= 3;

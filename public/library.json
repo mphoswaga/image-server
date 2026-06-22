@@ -1,10 +1,11 @@
 {
   "generatedAt": "2026-06-22T08:03:59.121Z",
-  "count": 988,
+  "count": 1009,
   "subjects": [
     "english",
     "ict",
-    "maths"
+    "maths",
+    "science"
   ],
   "images": [
     {
@@ -20685,6 +20686,497 @@
         "education",
         "writing"
       ]
+    },
+    {
+      "subject": "maths",
+      "topic": "geometry",
+      "filename": "maths_geometry_gen_3d-object-recognition.jpg",
+      "relpath": "maths/geometry/maths_geometry_gen_3d-object-recognition.jpg",
+      "tags": [
+        "maths",
+        "geometry"
+      ],
+      "caption": "3D white space, floating objects",
+      "keywords": [
+        "3d",
+        "object",
+        "recognition"
+      ],
+      "source": "unsplash-ondemand",
+      "credit": {
+        "name": "Dexter Fernandes",
+        "link": "https://unsplash.com/@soakedinnirvana"
+      }
+    },
+    {
+      "subject": "maths",
+      "topic": "geometry",
+      "filename": "maths_geometry_gen_sphere-examples.jpg",
+      "relpath": "maths/geometry/maths_geometry_gen_sphere-examples.jpg",
+      "tags": [
+        "maths",
+        "geometry"
+      ],
+      "caption": "Real Possibilities Series 3; these two are the same geometry setup, which involved cutting thin \"coins\" from a sphere, then placing that geometry inside the clear glass sphere. So, unlike image 2A, it's not an illusion from refraction, the coins are literally hugging the curve of the sphere. The image to the left with frosted glass, oddly, makes the coins appear as if they're on the surface of the glass, but they are not, they're inside.",
+      "keywords": [
+        "sphere",
+        "examples"
+      ],
+      "source": "unsplash-ondemand",
+      "credit": {
+        "name": "Buddha Elemental 3D",
+        "link": "https://unsplash.com/@buddhaelemental3d"
+      }
+    },
+    {
+      "subject": "maths",
+      "topic": "geometry",
+      "filename": "maths_geometry_gen_shapes-recap.jpg",
+      "relpath": "maths/geometry/maths_geometry_gen_shapes-recap.jpg",
+      "tags": [
+        "maths",
+        "geometry"
+      ],
+      "caption": "shape",
+      "keywords": [
+        "shapes",
+        "recap"
+      ],
+      "source": "unsplash-ondemand",
+      "credit": {
+        "name": "Vimal S",
+        "link": "https://unsplash.com/@vimal_saran"
+      }
+    },
+    {
+      "subject": "maths",
+      "topic": "geometry",
+      "filename": "maths_geometry_ai_a-cube-has-6-square-face_mqp0h3pc.png",
+      "relpath": "maths/geometry/maths_geometry_ai_a-cube-has-6-square-face_mqp0h3pc.png",
+      "tags": [
+        "maths",
+        "geometry"
+      ],
+      "caption": "A cube has 6 square faces.",
+      "keywords": [
+        "a",
+        "cube",
+        "has",
+        "6",
+        "square",
+        "faces"
+      ],
+      "source": "ai-generated"
+    },
+    {
+      "subject": "maths",
+      "topic": "geometry",
+      "filename": "maths_geometry_ai_a-basketball-is-a-sphere_mqp0idgq.png",
+      "relpath": "maths/geometry/maths_geometry_ai_a-basketball-is-a-sphere_mqp0idgq.png",
+      "tags": [
+        "maths",
+        "geometry"
+      ],
+      "caption": "A basketball is a sphere.",
+      "keywords": [
+        "a",
+        "basketball",
+        "is",
+        "a",
+        "sphere"
+      ],
+      "source": "ai-generated"
+    },
+    {
+      "subject": "maths",
+      "topic": "geometry",
+      "filename": "maths_geometry_ai_3d-shapes-can-be-held-an_mqp0jd0w.png",
+      "relpath": "maths/geometry/maths_geometry_ai_3d-shapes-can-be-held-an_mqp0jd0w.png",
+      "tags": [
+        "maths",
+        "geometry"
+      ],
+      "caption": "3D shapes can be held and touched!",
+      "keywords": [
+        "3d",
+        "shapes",
+        "can",
+        "be",
+        "held",
+        "and",
+        "touched"
+      ],
+      "source": "ai-generated"
+    },
+    {
+      "subject": "science",
+      "topic": "plants",
+      "filename": "science_plants_001.jpg",
+      "relpath": "science/plants/science_plants_001.jpg",
+      "tags": [
+        "science",
+        "plants"
+      ],
+      "caption": "Young green seedlings emerging from soil, displaying fresh leaves and stems.",
+      "keywords": [
+        "seedlings",
+        "green leaves",
+        "soil",
+        "growth",
+        "plants",
+        "nature",
+        "agriculture",
+        "germination"
+      ],
+      "credit": {
+        "name": "Francesco Gallarotti",
+        "link": "https://unsplash.com/@gallarotti"
+      },
+      "source": "unsplash-admin"
+    },
+    {
+      "subject": "science",
+      "topic": "plants",
+      "filename": "science_plants_002.jpg",
+      "relpath": "science/plants/science_plants_002.jpg",
+      "tags": [
+        "science",
+        "plants"
+      ],
+      "caption": "A greenhouse filled with various potted plants arranged along narrow pathways.",
+      "keywords": [
+        "greenhouse",
+        "potted plants",
+        "cactus",
+        "succulents",
+        "pathway",
+        "glass panels",
+        "plant care",
+        "agriculture"
+      ],
+      "credit": {
+        "name": "Artem Korolev",
+        "link": "https://unsplash.com/@artemisss666"
+      },
+      "source": "unsplash-admin"
+    },
+    {
+      "subject": "science",
+      "topic": "plants",
+      "filename": "science_plants_003.jpg",
+      "relpath": "science/plants/science_plants_003.jpg",
+      "tags": [
+        "science",
+        "plants"
+      ],
+      "caption": "A large glass greenhouse with a pyramid-shaped roof under a blue sky.",
+      "keywords": [
+        "greenhouse",
+        "glass",
+        "pyramid roof",
+        "plants",
+        "architecture",
+        "sky",
+        "modern design",
+        "horticulture"
+      ],
+      "credit": {
+        "name": "Emanuel Haas",
+        "link": "https://unsplash.com/@dermanuskript"
+      },
+      "source": "unsplash-admin"
+    },
+    {
+      "subject": "science",
+      "topic": "plants",
+      "filename": "science_plants_004.jpg",
+      "relpath": "science/plants/science_plants_004.jpg",
+      "tags": [
+        "science",
+        "plants"
+      ],
+      "caption": "A greenhouse is visible in a wooded area with dappled sunlight filtering through the leaves.",
+      "keywords": [
+        "greenhouse",
+        "trees",
+        "sunlight",
+        "wooded area",
+        "plants",
+        "nature",
+        "outdoor",
+        "landscape"
+      ],
+      "credit": {
+        "name": "Osmany M Leyva Aldana",
+        "link": "https://unsplash.com/@ozym"
+      },
+      "source": "unsplash-admin"
+    },
+    {
+      "subject": "science",
+      "topic": "plants",
+      "filename": "science_plants_005.jpg",
+      "relpath": "science/plants/science_plants_005.jpg",
+      "tags": [
+        "science",
+        "plants"
+      ],
+      "caption": "A broken window with a poster about plant propagation visible on the glass.",
+      "keywords": [
+        "broken window",
+        "poster",
+        "plant propagation",
+        "glass shards",
+        "door",
+        "building exterior",
+        "nature",
+        "educational material"
+      ],
+      "credit": {
+        "name": "Eugene Chystiakov",
+        "link": "https://unsplash.com/@eugenechystiakov"
+      },
+      "source": "unsplash-admin"
+    },
+    {
+      "subject": "science",
+      "topic": "plants",
+      "filename": "science_plants_006.jpg",
+      "relpath": "science/plants/science_plants_006.jpg",
+      "tags": [
+        "science",
+        "plants"
+      ],
+      "caption": "A modern glass building surrounded by trees with leafless branches and autumn foliage.",
+      "keywords": [
+        "glass building",
+        "trees",
+        "autumn",
+        "branches",
+        "urban setting",
+        "architecture",
+        "nature",
+        "overcast sky"
+      ],
+      "credit": {
+        "name": "Wenzy Wong",
+        "link": "https://unsplash.com/@wenzywong"
+      },
+      "source": "unsplash-admin"
+    },
+    {
+      "subject": "science",
+      "topic": "plants",
+      "filename": "science_plants_007.jpg",
+      "relpath": "science/plants/science_plants_007.jpg",
+      "tags": [
+        "science",
+        "plants"
+      ],
+      "caption": "A person stands in front of a wall displaying various botanical illustrations in a gallery-like setting.",
+      "keywords": [
+        "botanical illustrations",
+        "gallery",
+        "person",
+        "black and white",
+        "plants",
+        "art display",
+        "exhibition wall",
+        "visual arts"
+      ],
+      "credit": {
+        "name": "Toan Le",
+        "link": "https://unsplash.com/@toanle1001"
+      },
+      "source": "unsplash-admin"
+    },
+    {
+      "subject": "science",
+      "topic": "plants",
+      "filename": "science_plants_008.jpg",
+      "relpath": "science/plants/science_plants_008.jpg",
+      "tags": [
+        "science",
+        "plants"
+      ],
+      "caption": "The photo shows a large glass conservatory surrounded by trees and blue sky.",
+      "keywords": [
+        "conservatory",
+        "glass structure",
+        "trees",
+        "blue sky",
+        "outdoor",
+        "botanical garden",
+        "architecture",
+        "landscape"
+      ],
+      "credit": {
+        "name": "Ana Soares",
+        "link": "https://unsplash.com/@analuisasoares"
+      },
+      "source": "unsplash-admin"
+    },
+    {
+      "subject": "science",
+      "topic": "plants",
+      "filename": "science_plants_009.jpg",
+      "relpath": "science/plants/science_plants_009.jpg",
+      "tags": [
+        "science",
+        "plants"
+      ],
+      "caption": "A person in an apron stands in a greenhouse holding a small plant while speaking to a camera.",
+      "keywords": [
+        "greenhouse",
+        "person",
+        "apron",
+        "plant",
+        "camera",
+        "videography",
+        "horticulture",
+        "gardening"
+      ],
+      "credit": {
+        "name": "Vitaly Gariev",
+        "link": "https://unsplash.com/@silverkblack"
+      },
+      "source": "unsplash-admin"
+    },
+    {
+      "subject": "science",
+      "topic": "plants",
+      "filename": "science_plants_010.jpg",
+      "relpath": "science/plants/science_plants_010.jpg",
+      "tags": [
+        "science",
+        "plants"
+      ],
+      "caption": "A collection of large green lily pads with pink edges resting on a tranquil pond surface, surrounded by lush vegetation.",
+      "keywords": [
+        "lily pads",
+        "pond",
+        "vegetation",
+        "water",
+        "green",
+        "flowers",
+        "nature",
+        "reflection"
+      ],
+      "credit": {
+        "name": "Elly M",
+        "link": "https://unsplash.com/@ellyendeavours"
+      },
+      "source": "unsplash-admin"
+    },
+    {
+      "subject": "science",
+      "topic": "plants",
+      "filename": "science_plants_011.jpg",
+      "relpath": "science/plants/science_plants_011.jpg",
+      "tags": [
+        "science",
+        "plants"
+      ],
+      "caption": "A geodesic dome partially obscured by tropical palm leaves in a clear sky setting.",
+      "keywords": [
+        "geodesic dome",
+        "palm leaves",
+        "tropical plants",
+        "clear sky",
+        "modern architecture",
+        "outdoor setting",
+        "nature",
+        "geometric design"
+      ],
+      "credit": {
+        "name": "Iago Yoshimi Seo",
+        "link": "https://unsplash.com/@iagoseo"
+      },
+      "source": "unsplash-admin"
+    },
+    {
+      "subject": "science",
+      "topic": "plants",
+      "filename": "science_plants_gen_photosynthesis-process-diagram.jpg",
+      "relpath": "science/plants/science_plants_gen_photosynthesis-process-diagram.jpg",
+      "tags": [
+        "science",
+        "plants"
+      ],
+      "caption": "Work up of a reaction sketched on fume hood sash glass",
+      "keywords": [
+        "photosynthesis",
+        "process",
+        "diagram"
+      ],
+      "source": "unsplash-ondemand",
+      "credit": {
+        "name": "Stephan HK",
+        "link": "https://unsplash.com/@chromatograph"
+      }
+    },
+    {
+      "subject": "science",
+      "topic": "plants",
+      "filename": "science_plants_gen_plant-life-cycle-diagram.jpg",
+      "relpath": "science/plants/science_plants_gen_plant-life-cycle-diagram.jpg",
+      "tags": [
+        "science",
+        "plants"
+      ],
+      "caption": "blue and green flowers illustration",
+      "keywords": [
+        "plant",
+        "life",
+        "cycle",
+        "diagram"
+      ],
+      "source": "unsplash-ondemand",
+      "credit": {
+        "name": "Evie S.",
+        "link": "https://unsplash.com/@evieshaffer"
+      }
+    },
+    {
+      "subject": "science",
+      "topic": "plants",
+      "filename": "science_plants_gen_photosynthesis-needs.jpg",
+      "relpath": "science/plants/science_plants_gen_photosynthesis-needs.jpg",
+      "tags": [
+        "science",
+        "plants"
+      ],
+      "caption": "close-up photo of gree nleaf",
+      "keywords": [
+        "photosynthesis",
+        "needs"
+      ],
+      "source": "unsplash-ondemand",
+      "credit": {
+        "name": "Micah Hallahan",
+        "link": "https://unsplash.com/@micah_hallahan"
+      }
+    },
+    {
+      "subject": "science",
+      "topic": "plants",
+      "filename": "science_plants_gen_plant-recap-overview.jpg",
+      "relpath": "science/plants/science_plants_gen_plant-recap-overview.jpg",
+      "tags": [
+        "science",
+        "plants"
+      ],
+      "caption": "Two saplings brigt stock photo",
+      "keywords": [
+        "plant",
+        "recap",
+        "overview"
+      ],
+      "source": "unsplash-ondemand",
+      "credit": {
+        "name": "The Eclatique",
+        "link": "https://unsplash.com/@the_eclatique"
+      }
     }
   ]
 }

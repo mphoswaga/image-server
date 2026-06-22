@@ -119,4 +119,89 @@ function drawNumberLine(pptx, slide, { start, end, step, mark, x, y, w, accent }
   return true;
 }
 
-module.exports = { parseFraction, drawFractionPizza, drawStepsDiagram, drawStepsHorizontal, drawNumberLine };
+// ── Labelled diagrams (curated, accurate, animated) ───────────────────────
+// Detect which curated diagram (if any) a slide is about.
+function detectLabelledDiagram(text) {
+  const s = String(text || '').toLowerCase();
+  if (/water cycle|hydrological cycle/.test(s)) return 'water-cycle';
+  if (/plant cell/.test(s)) return 'plant-cell';
+  if (/animal cell/.test(s)) return 'animal-cell';
+  if (/parts of (a |the )?(flower|plant)|plant parts|flower parts/.test(s)) return 'plant-parts';
+  return null;
+}
+
+// A label chip (named so it animates in). leaderTo = optional {x,y} part to point at.
+function addLabel(pptx, slide, text, lx, ly, lw, accent, idx, leaderTo) {
+  if (leaderTo) {
+    slide.addShape(pptx.ShapeType.line, { x: Math.min(lx, leaderTo.x), y: Math.min(ly + 0.16, leaderTo.y), w: Math.abs(leaderTo.x - lx), h: Math.abs(leaderTo.y - (ly + 0.16)), line: { color: '9AA6B2', width: 1, beginArrowType: 'none', endArrowType: 'oval' }, flipH: leaderTo.x < lx, flipV: leaderTo.y < ly + 0.16 });
+  }
+  slide.addText(text, { x: lx, y: ly, w: lw, h: 0.36, fontFace: 'Arial', fontSize: 13, bold: true, color: '1F4E79', align: 'center', valign: 'middle', fill: { color: 'FFFFFF' }, line: { color: accent, width: 1 }, rectRadius: 0.04, shape: pptx.ShapeType.roundRect, objectName: `lc-anim-fill-${idx}` });
+}
+
+function drawWaterCycle(pptx, slide, { accent }) {
+  // sea + ground
+  slide.addShape(pptx.ShapeType.roundRect, { x: 0.7, y: 4.55, w: 8.6, h: 0.8, fill: { color: 'AED6F1' }, line: { type: 'none' }, rectRadius: 0.05 });
+  // sun
+  slide.addShape(pptx.ShapeType.ellipse, { x: 0.9, y: 2.05, w: 1.0, h: 1.0, fill: { color: 'F7C948' }, line: { color: 'E1A100', width: 1.5 } });
+  // cloud
+  slide.addShape(pptx.ShapeType.ellipse, { x: 3.9, y: 2.0, w: 2.7, h: 1.2, fill: { color: 'EEF2F7' }, line: { color: 'B8C4D0', width: 1.5 } });
+  // evaporation arrow (up, left) and precipitation arrow (down, right)
+  slide.addShape(pptx.ShapeType.line, { x: 2.5, y: 3.1, w: 1.1, h: 1.45, flipV: true, line: { color: '2E86C1', width: 4, endArrowType: 'triangle' } });
+  slide.addShape(pptx.ShapeType.line, { x: 6.6, y: 3.2, w: 1.0, h: 1.35, line: { color: '2E86C1', width: 4, endArrowType: 'triangle' } });
+  // labels (reveal in cycle order)
+  addLabel(pptx, slide, '1  Evaporation', 1.5, 3.55, 1.7, accent, 0);
+  addLabel(pptx, slide, '2  Condensation', 3.95, 1.45, 1.9, accent, 1);
+  addLabel(pptx, slide, '3  Precipitation', 6.9, 3.5, 1.8, accent, 2);
+  addLabel(pptx, slide, '4  Collection', 3.95, 4.62, 1.7, accent, 3);
+}
+
+function drawCell(pptx, slide, { accent, animal }) {
+  const cx = 1.0, cy = 2.1, cw = 4.3, ch = 3.1; // cell body on the left
+  // cell wall (plant) / membrane (animal)
+  if (!animal) slide.addShape(pptx.ShapeType.roundRect, { x: cx, y: cy, w: cw, h: ch, fill: { color: 'EAF7EC' }, line: { color: '2F9E44', width: 3 }, rectRadius: 0.06 });
+  slide.addShape(animal ? pptx.ShapeType.ellipse : pptx.ShapeType.roundRect, { x: cx + 0.18, y: cy + 0.18, w: cw - 0.36, h: ch - 0.36, fill: { color: animal ? 'FDEEF4' : 'D7F0DC' }, line: { color: animal ? 'D6336C' : '69B578', width: 2 }, rectRadius: 0.5 });
+  // nucleus
+  const nuc = { x: cx + 1.5, y: cy + 1.1, w: 1.0, h: 1.0 };
+  slide.addShape(pptx.ShapeType.ellipse, { ...nuc, fill: { color: '7048E8' }, line: { color: '4A2FB0', width: 2 } });
+  // vacuole (plant) or extra organelles
+  if (!animal) slide.addShape(pptx.ShapeType.ellipse, { x: cx + 2.7, y: cy + 0.5, w: 1.2, h: 2.0, fill: { color: 'CFE9FF' }, line: { color: '4DABF7', width: 2 } });
+  // chloroplasts (plant) / mitochondria (animal)
+  for (let i = 0; i < 3; i++) slide.addShape(pptx.ShapeType.ellipse, { x: cx + 0.5 + i * 0.55, y: cy + 0.4, w: 0.4, h: 0.22, fill: { color: animal ? 'F08C00' : '2F9E44' }, line: { type: 'none' } });
+
+  // labels on the right with leaders
+  let i = 0;
+  addLabel(pptx, slide, animal ? 'Cell membrane' : 'Cell wall', 6.4, 2.2, 2.4, accent, i++, { x: cx + cw, y: cy + 0.3 });
+  addLabel(pptx, slide, 'Nucleus', 6.4, 2.95, 2.4, accent, i++, { x: nuc.x + nuc.w, y: nuc.y + 0.5 });
+  if (!animal) addLabel(pptx, slide, 'Vacuole', 6.4, 3.7, 2.4, accent, i++, { x: cx + cw - 0.2, y: cy + 1.5 });
+  addLabel(pptx, slide, animal ? 'Mitochondria' : 'Chloroplast', 6.4, 4.45, 2.4, accent, i++, { x: cx + 1.0, y: cy + 0.5 });
+}
+
+function drawPlantParts(pptx, slide, { accent }) {
+  const sx = 2.6; // stem center x
+  // roots
+  for (let i = -2; i <= 2; i++) slide.addShape(pptx.ShapeType.line, { x: sx, y: 4.5, w: 0.5 * i, h: 0.7, line: { color: '8B5E34', width: 2 } });
+  // stem
+  slide.addShape(pptx.ShapeType.roundRect, { x: sx - 0.12, y: 3.0, w: 0.24, h: 1.55, fill: { color: '2F9E44' }, line: { type: 'none' }, rectRadius: 0.1 });
+  // leaves
+  slide.addShape(pptx.ShapeType.ellipse, { x: sx - 1.1, y: 3.5, w: 1.1, h: 0.5, fill: { color: '69B578' }, line: { color: '2F9E44', width: 1.5 }, rotate: 20 });
+  slide.addShape(pptx.ShapeType.ellipse, { x: sx + 0.1, y: 3.7, w: 1.1, h: 0.5, fill: { color: '69B578' }, line: { color: '2F9E44', width: 1.5 }, rotate: -20 });
+  // flower
+  for (let k = 0; k < 6; k++) slide.addShape(pptx.ShapeType.ellipse, { x: sx - 0.55 + 0.5 * Math.cos(k * Math.PI / 3), y: 2.1 + 0.5 * Math.sin(k * Math.PI / 3), w: 0.5, h: 0.5, fill: { color: 'F783AC' }, line: { type: 'none' } });
+  slide.addShape(pptx.ShapeType.ellipse, { x: sx - 0.3, y: 2.35, w: 0.6, h: 0.6, fill: { color: 'F59F00' }, line: { type: 'none' } });
+  // labels right with leaders
+  let i = 0;
+  addLabel(pptx, slide, 'Flower', 5.6, 2.4, 2.0, accent, i++, { x: sx + 0.5, y: 2.6 });
+  addLabel(pptx, slide, 'Leaf', 5.6, 3.2, 2.0, accent, i++, { x: sx + 1.0, y: 3.9 });
+  addLabel(pptx, slide, 'Stem', 5.6, 4.0, 2.0, accent, i++, { x: sx + 0.1, y: 3.8 });
+  addLabel(pptx, slide, 'Roots', 5.6, 4.8, 2.0, accent, i++, { x: sx + 0.6, y: 4.9 });
+}
+
+function drawLabelledDiagram(pptx, slide, key, accent) {
+  if (key === 'water-cycle') return drawWaterCycle(pptx, slide, { accent });
+  if (key === 'plant-cell') return drawCell(pptx, slide, { accent, animal: false });
+  if (key === 'animal-cell') return drawCell(pptx, slide, { accent, animal: true });
+  if (key === 'plant-parts') return drawPlantParts(pptx, slide, { accent });
+  return false;
+}
+
+module.exports = { parseFraction, drawFractionPizza, drawStepsDiagram, drawStepsHorizontal, drawNumberLine, detectLabelledDiagram, drawLabelledDiagram };

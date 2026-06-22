@@ -455,6 +455,9 @@
       let thumb;
       if(s.fraction){
         thumb=`<div class="thumb" style="display:flex;align-items:center;justify-content:center;background:#fffdf9">${svgPie(s.fraction.num,s.fraction.den)}<span class="badge ai">animated · ${s.fraction.num}/${s.fraction.den}</span></div>`;
+      } else if(s.labelled){
+        const nm=s.labelled.replace(/-/g,' ');
+        thumb=`<div class="thumb" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#f0faf4;color:#2f9e44">${ICON('i-target')}<b style="text-transform:capitalize;font-size:14px">${esc(nm)} diagram</b><span class="badge ai">animated labels</span></div>`;
       } else if(s.visual){
         const steps=s.visual.items.slice(0,5).map((it,n)=>`<div style="display:flex;align-items:center;gap:7px;background:#fff6e9;border:1px solid #ec7f3b;border-radius:8px;padding:5px 9px;font-size:12px"><b style="color:#ec7f3b">${s.visual.type==='cycle'?'↻':n+1}</b><span>${esc(it)}</span></div>`).join('<div style="text-align:center;color:#ec7f3b;font-size:10px;line-height:1">▼</div>');
         thumb=`<div class="thumb" style="background:#fffdf9;display:flex;flex-direction:column;justify-content:center;gap:4px;padding:12px;aspect-ratio:16/9;overflow:hidden">${steps}<span class="badge ai">animated · ${esc(s.visual.type)}</span></div>`;
