@@ -1,21 +1,36 @@
 {
   "name": "image-agent",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "LessonCope — type a subject and topic, get a finished, illustrated PowerPoint.",
+  "main": "image-server.js",
   "scripts": {
     "start": "node image-server.js",
+    "generate": "node generate.js",
+    "index": "node index-library.js",
+    "caption": "node caption-library.js",
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@xmldom/xmldom": "^0.9.10",
     "axios": "^1.17.0",
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
     "dotenv": "^17.4.2",
     "express": "^4.22.2",
-    "fs": "^0.0.1-security",
-    "path": "^0.12.7"
+    "jsonwebtoken": "^9.0.3",
+    "mammoth": "^1.12.0",
+    "multer": "^2.2.0",
+    "openai": "^6.44.0",
+    "pdf-parse": "^2.4.5",
+    "pizzip": "^3.2.0",
+    "pptxgenjs": "^4.0.1",
+    "xlsx": "^0.18.5"
   }
 }
