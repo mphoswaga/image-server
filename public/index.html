@@ -334,7 +334,8 @@
     const SWAP_HTML=`${ICON('i-shuffle')}Swap`;
     const REGEN_HTML=`${ICON('i-refresh')}Regenerate`;
     const AI_HTML=`${ICON('i-spark')}AI image`;
-    function badgeMeta(src){ if(src==='ai-generated') return {cls:'ai',label:'AI'}; if(src&&src!=='library') return {cls:'fetched',label:'fetched'}; return {cls:'',label:'library'}; }
+    const DIA_HTML=`${ICON('i-target')}Make diagram`;
+    function badgeMeta(src){ if(src==='ai-generated') return {cls:'ai',label:'AI'}; if(src==='svg-diagram') return {cls:'ai',label:'diagram'}; if(src&&src!=='library') return {cls:'fetched',label:'fetched'}; return {cls:'',label:'library'}; }
     const composer=$('composer'), planStage=$('planStage'), results=$('results'), statusEl=$('status');
     let library={subjects:[],topicsBySubject:{}}, ctx=null, currentDeckId=null;
 
@@ -475,7 +476,9 @@
         // Example/task slides can get an accurate AI-generated illustration.
         const aiBtn=(s.type==='content'||s.type==='activity')?`<button data-action="ai" data-i="${i}" title="Generate an accurate AI illustration">${AI_HTML}</button>`:'';
         const regenBtn=s.type==='content'?`<button data-action="regen" data-i="${i}">${REGEN_HTML}</button>`:'';
-        const actions=(aiBtn||regenBtn)?`<div class="card-actions">${regenBtn}${aiBtn}</div>`:'';
+        // a photo content slide can be turned into a labelled diagram
+        const diaBtn=(s.type==='content'&&!s.fraction&&!s.visual&&!s.labelled)?`<button data-action="diagram" data-i="${i}" title="Turn this into a labelled diagram">${DIA_HTML}</button>`:'';
+        const actions=(aiBtn||regenBtn||diaBtn)?`<div class="card-actions">${regenBtn}${diaBtn}${aiBtn}</div>`:'';
         const diff=s.differentiation?`<div class="diff"><div><b style="color:#15824b">Support</b> ${esc(s.differentiation.support)}</div><div><b style="color:#1f4e79">Stretch</b> ${esc(s.differentiation.stretch)}</div></div>`:'';
         body=`${kicker}<h3 contenteditable data-field="title">${esc(s.title)}</h3>${bl}${ex}${diff}${actions}`;
       }
@@ -499,6 +502,12 @@
         try{ const r=await fetch(`/api/slide/${currentDeckId}/ai-image`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})}); const d=await r.json(); if(!r.ok) throw new Error(d.error);
           card.querySelector('.thumb img').src=d.image; setBadge('ai-generated');
         }catch(err){ alert(err.message); } b.disabled=false; b.innerHTML=AI_HTML;
+      } else if(b.dataset.action==='diagram'){ b.disabled=true; b.innerHTML='<span class="spinner"></span>Drawing diagram…';
+        try{ const r=await fetch(`/api/slide/${currentDeckId}/diagram`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})}); const d=await r.json(); if(!r.ok) throw new Error(d.error);
+          if(d.labelled){ const nm=d.labelled.replace(/-/g,' ');
+            card.querySelector('.thumb').outerHTML=`<div class="thumb" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#f0faf4;color:#2f9e44">${ICON('i-target')}<b style="text-transform:capitalize;font-size:14px">${esc(nm)} diagram</b><span class="badge ai">animated labels</span></div>`;
+          } else if(d.image){ const img=card.querySelector('.thumb img'); if(img){ img.src=d.image; setBadge('svg-diagram'); } }
+        }catch(err){ alert(err.message); } b.disabled=false; b.innerHTML=DIA_HTML;
       } else if(b.dataset.action==='regen'){ b.disabled=true; b.innerHTML='<span class="spinner"></span>Regenerating…';
         try{ const r=await fetch(`/api/slide/${currentDeckId}/regenerate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})}); const d=await r.json(); if(!r.ok) throw new Error(d.error); card.outerHTML=cardHTML(d.slide,i);
         }catch(err){ alert(err.message); b.disabled=false; b.innerHTML=REGEN_HTML; }

@@ -13,6 +13,7 @@ const { animateBuffer } = require('./animate-pptx');
 const { addImages } = require('./admin-images');
 const { generateImage } = require('./ai-image');
 const { parseFraction, detectLabelledDiagram } = require('./concept-diagram');
+const { generateDiagram } = require('./svg-diagram');
 
 // Add transitions/animations; never let it break the download.
 function safeAnimate(buffer, band) {
@@ -253,6 +254,33 @@ app.post('/api/slide/:id/ai-image', requireAuth, async (req, res) => {
     res.json({ image: '/' + entry.relpath, imageSource: 'ai-generated', reused: false });
   } catch (err) {
     console.error('AI image failed:', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Force a labelled diagram onto a slide (curated if one fits, else generated).
+app.post('/api/slide/:id/diagram', requireAuth, async (req, res) => {
+  const deck = decks.get(req.params.id);
+  if (!deck) return res.status(404).json({ error: 'Deck expired — generate again.' });
+  const i = Number(req.body.index);
+  if (!Number.isInteger(i) || i < 0 || i >= deck.slides.length) return res.status(400).json({ error: 'bad index' });
+  const slide = deck.slides[i];
+  try {
+    // Curated diagram available for this topic? Render the animated vector one.
+    const curated = detectLabelledDiagram(`${slide.title} ${slide.imageQuery || ''} ${slide.example || ''}`);
+    if (curated) {
+      slide.visual = { type: 'none', items: [] }; // let the title-based curated detection drive it
+      return res.json({ labelled: curated });
+    }
+    const concept = `${slide.title}${slide.imageQuery ? ' — ' + slide.imageQuery : ''}`.trim();
+    const reuse = findReusableImage({ subject: deck.subject, topic: deck.topic, query: concept, minScore: 3, source: 'svg-diagram', exclude: deck.images.map(im => im.relpath) });
+    let entry = reuse;
+    if (!entry) { entry = await generateDiagram({ subject: deck.subject, topic: deck.topic, concept }); addLibraryImages([entry]); }
+    slide.visual = { type: 'diagram', items: [concept] };
+    deck.images[i] = entry;
+    res.json({ image: '/' + entry.relpath, imageSource: 'svg-diagram' });
+  } catch (err) {
+    console.error('Diagram failed:', err.message);
     res.status(400).json({ error: err.message });
   }
 });
