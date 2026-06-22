@@ -221,7 +221,7 @@ function addTitleBar(pptx, slide, title, t, accent) {
   slide.addText(title, { x: 0.5, y: 0.35, w: 9, h: 0.9, fontFace: THEME.font, fontSize: t.titleSize, bold: true, color: THEME.primary });
 }
 
-function renderSlide(pptx, slideData, imgPath, t, idx = 0) {
+function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }) {
   const slide = pptx.addSlide();
   slide.background = { color: THEME.bg };
   const accent = t.accent;
@@ -302,6 +302,23 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0) {
       const imageLeft = slideData.side === 'left';
       const textX = imageLeft ? 4.7 : 0.5;
       const imgX = imageLeft ? 0.4 : 5.8;
+
+      // Layout variety: alternate PHOTO slides use a half-bleed photo for a more
+      // designed feel (counted among photo slides so it doesn't collide with
+      // diagram slides). Text sits on the white half. Skips fraction & playful.
+      if (!hasFraction && !t.playful && (state.photoN++ % 2 === 1)) {
+        const img = imageLeft ? { x: 0, y: 0, w: 4.9, h: 5.625 } : { x: 5.1, y: 0, w: 4.9, h: 5.625 };
+        slide.addImage({ path: imgPath, ...img, sizing: { type: 'cover', w: img.w, h: img.h } });
+        const tx = imageLeft ? 5.35 : 0.5;
+        slide.addText(slideData.title, { x: tx, y: 0.6, w: 4.15, h: 1.0, fontFace: THEME.font, fontSize: t.titleSize, bold: true, color: THEME.primary });
+        slide.addText(bulletItems(slideData.bullets, t), { x: tx, y: 1.85, w: 4.15, h: 2.6, fontFace: THEME.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
+        if (slideData.example) {
+          slide.addShape(pptx.ShapeType.roundRect, { x: tx, y: 4.5, w: 4.15, h: 0.85, fill: { color: SOFT.accentSoft }, line: { type: 'none' }, rectRadius: 0.08 });
+          slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: THEME.text } }],
+            { x: tx + 0.15, y: 4.55, w: 3.85, h: 0.75, fontFace: THEME.font, fontSize: Math.max(12, t.bulletSize - 4), valign: 'middle', italic: true });
+        }
+        break;
+      }
       // Playful early-grade design: soft pastel background + decorative blobs.
       if (t.playful) {
         slide.background = { color: t.pastels[idx % t.pastels.length] };
@@ -326,9 +343,10 @@ function assembleDeck(slides, images, gradeTheme) {
   const pptx = new pptxgen();
   pptx.layout = 'LAYOUT_16x9'; // 10 x 5.625 in
   pptx.defineSlideMaster({ title: 'LESSONCOPE', background: { color: THEME.bg } });
+  const state = { photoN: 0 };
   slides.forEach((slideData, idx) => {
     const img = images[idx];
-    renderSlide(pptx, slideData, path.join(PUBLIC_DIR, img.relpath), gradeTheme, idx);
+    renderSlide(pptx, slideData, path.join(PUBLIC_DIR, img.relpath), gradeTheme, idx, state);
   });
   return pptx;
 }
