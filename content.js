@@ -41,7 +41,7 @@ const DECK_SCHEMA = {
           visual: {
             type: 'object',
             properties: {
-              type: { type: 'string', enum: ['steps', 'cycle', 'numberline', 'none'] },
+              type: { type: 'string', enum: ['steps', 'cycle', 'numberline', 'diagram', 'none'] },
               items: { type: 'array', items: { type: 'string' } },
             },
             required: ['type', 'items'],
@@ -132,6 +132,7 @@ Produce a full lesson with this structure:
     • "steps" — a process/sequence (an algorithm, the writing process, the scientific method, "how to…", a sequence of events): give 3-5 very short stage labels (2-4 words each) in visual.items.
     • "cycle" — a repeating cycle (life cycle, water cycle): 3-5 short stage labels in visual.items.
     • "numberline" — counting, a number range, or measuring on a scale: visual.items = exactly [start, end, step, value-to-mark] as numbers in quotes, e.g. ["0","100","10","40"].
+    • "diagram" — ONLY for a single CONCRETE structure, object or system whose parts sit in clear physical positions and benefit from a labelled drawing (the water cycle, a cell, the heart, an electric circuit, the layers of the Earth, a flower, a food web, a labelled tool/object…). For abstract topics, overviews, or lists of ideas, do NOT use "diagram" — use "steps" or "none". Set visual.items = [one short description of exactly what to draw AND the key parts to label], e.g. ["the human heart showing the four chambers and the main blood vessels"].
     • "none" — a normal photo illustrates it better: visual.items = [].
   Prefer a diagram whenever it genuinely helps students follow the idea.
 - check: ONE quick "check for understanding" question about the lesson, plus an "answer" of 2-3 short lines (the answer first, then a one-line why) — the teacher reveals these after students try. Include an imageQuery.

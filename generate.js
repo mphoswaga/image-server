@@ -160,6 +160,22 @@ async function selectImages(slides, subject, topic) {
   const chosen = [];
 
   for (const slide of slides) {
+    // LLM asked for a labelled diagram, and it's not one of the curated ones →
+    // generate (or reuse) an SVG diagram for any subject.
+    if (slide.visual && slide.visual.type === 'diagram' && !detectLabelledDiagram(`${slide.title} ${slide.imageQuery || ''}`)) {
+      const concept = (slide.visual.items || []).join(', ').trim() || slide.title;
+      const reuse = findReusableImage({ subject, topic, query: concept, minScore: 3, source: 'svg-diagram', exclude: [...used] });
+      if (reuse) { used.add(reuse.relpath); chosen.push(reuse); continue; }
+      try {
+        const { generateDiagram } = require('./svg-diagram');
+        const entry = await generateDiagram({ subject, topic, concept });
+        addLibraryImages([entry]); used.add(entry.relpath); chosen.push(entry); continue;
+      } catch (err) {
+        console.log(`Diagram generation failed (${err.message}) — falling back to a photo.`);
+        // fall through to normal image selection
+      }
+    }
+
     const queryTokens = tokenize(slide.imageQuery);
     const { best, bestScore } = bestLibraryMatch(pool, queryTokens, used);
 
@@ -285,6 +301,14 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
         slide.addText('LABELLED DIAGRAM', { x: 0.5, y: 0.4, w: 9, h: 0.4, fontFace: THEME.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
         slide.addText(slideData.title, { x: 0.5, y: 0.85, w: 9, h: 0.9, fontFace: THEME.font, fontSize: t.titleSize, bold: true, color: THEME.primary });
         drawLabelledDiagram(pptx, slide, labelledKey, accent);
+        break;
+      }
+
+      // General (any-subject) generated SVG diagram → big hero image.
+      if (slideData.visual && slideData.visual.type === 'diagram') {
+        slide.addText('DIAGRAM', { x: 0.5, y: 0.4, w: 9, h: 0.4, fontFace: THEME.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
+        slide.addText(slideData.title, { x: 0.5, y: 0.85, w: 9, h: 0.9, fontFace: THEME.font, fontSize: t.titleSize, bold: true, color: THEME.primary });
+        slide.addImage({ path: imgPath, x: 1.25, y: 1.9, w: 7.5, h: 3.55, sizing: { type: 'contain', w: 7.5, h: 3.55 } });
         break;
       }
       // Diagram-led: the diagram is the hero — title on top, big visual below.
