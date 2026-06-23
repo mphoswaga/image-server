@@ -22,7 +22,9 @@ function safeAnimate(buffer, band) {
   try { return animateBuffer(buffer, band); }
   catch (err) { console.log('animation skipped:', err.message); return buffer; }
 }
-const { signup, login, issueToken, requireAuth, requireAdmin, COOKIE_NAME } = require('./auth');
+const { signup, login, issueToken, verifyToken, getUserById, requireAuth, requireAdmin, COOKIE_NAME } = require('./auth');
+const { runWithUser } = require('./ai-client');
+const usage = require('./usage');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -30,6 +32,16 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
 
 app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser());
+
+// Attribute every AI call in this request to the signed-in user (for cost
+// tracking). Reads the auth cookie once; AsyncLocalStorage carries it through
+// all the awaited generator calls. Unauthenticated requests → no owner.
+app.use((req, res, next) => {
+  let uid = null;
+  try { const tok = req.cookies && req.cookies[COOKIE_NAME]; uid = (tok && verifyToken(tok)) || null; } catch {}
+  runWithUser(uid, () => next());
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Health check for the host (Railway): confirms the process booted and the
@@ -95,6 +107,17 @@ app.get('/api/library', (req, res) => res.json(listLibrary()));
 
 // ── Admin: grow the image library ─────────────────────────────────────────
 app.get('/api/admin/stats', requireAdmin, (req, res) => res.json(libraryStats()));
+
+// AI cost: totals, per-user (with emails), and per-model — so the admin can
+// see what the app is costing and price it.
+app.get('/api/admin/usage', requireAdmin, (req, res) => {
+  const u = usage.summary();
+  const byUser = Object.entries(u.byUser || {}).map(([uid, b]) => {
+    const who = uid === 'system' ? { email: '(system / CLI)', name: 'System' } : (getUserById(uid) || {});
+    return { userId: uid, email: who.email || uid, name: who.name || '', ...b };
+  }).sort((a, b) => b.costUSD - a.costUSD);
+  res.json({ totals: u.totals, byUser, byModel: u.byModel || {}, pricing: usage.PRICING, updatedAt: u.updatedAt });
+});
 
 app.post('/api/admin/add-images', requireAdmin, async (req, res) => {
   const { subject, topic, count } = req.body || {};

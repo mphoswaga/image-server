@@ -2,7 +2,7 @@
 // grade) produce the student-facing artifacts that surround a lesson. Phase 2a
 // ships the worksheet and the exit ticket. Each is one OpenAI structured-output
 // call, grade-calibrated the same way content.js calibrates the deck.
-const OpenAI = require('openai');
+const { client: aiClient } = require('./ai-client');
 const { ageFor } = require('./grade');
 
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
@@ -49,7 +49,7 @@ function ctxBlock({ subject, topic, grade, objectives, lessonPlanText }) {
 }
 
 async function callModel(schema, name, prompt, max_tokens = 3500) {
-  const client = new OpenAI();
+  const client = aiClient();
   const res = await client.chat.completions.create({
     model: MODEL, max_tokens,
     messages: [{ role: 'user', content: prompt }],

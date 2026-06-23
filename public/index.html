@@ -153,6 +153,32 @@
     .pack-doc .ak { background:#f3f6fb; border-radius:10px; padding:6px 13px; }
     .pd-dl { margin-top:18px; }
 
+    /* Admin: AI usage & cost */
+    .admin-h { display:flex; align-items:center; gap:8px; margin:26px 0 4px; font-size:15px; color:var(--primary); font-weight:700; }
+    .admin-h .ic { color:var(--accent); }
+    .usage-cards { display:flex; gap:12px; flex-wrap:wrap; margin:12px 0 14px; }
+    .usage-card { flex:1; min-width:124px; border:1px solid var(--border); border-radius:14px; padding:13px 16px; background:#fff; box-shadow:var(--sh-sm); }
+    .usage-card .v { font-size:22px; font-weight:800; color:var(--primary); line-height:1.1; }
+    .usage-card .v.cost { color:var(--accent); }
+    .usage-card .l { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; margin-top:3px; }
+    .usage-table { border:1px solid var(--border); border-radius:14px; overflow:hidden; }
+    .usage-table .row { display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:8px; padding:9px 14px; font-size:13px; border-top:1px solid var(--border); align-items:center; }
+    .usage-table .row:first-child { border-top:none; background:var(--primary-soft); color:var(--primary); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.3px; }
+    .usage-table .row .who { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .usage-table .row .num { text-align:right; font-variant-numeric:tabular-nums; color:var(--muted); }
+    .usage-table .row .cost { text-align:right; font-weight:700; color:var(--accent); font-variant-numeric:tabular-nums; }
+    .usage-models { margin-top:12px; }
+    .usage-models summary { cursor:pointer; font-size:13px; color:var(--primary); font-weight:600; }
+    .usage-mrow { display:flex; justify-content:space-between; font-size:13px; padding:7px 2px; border-top:1px solid var(--border); }
+    .usage-note { font-size:11.5px; color:var(--muted); margin-top:10px; }
+
+    /* Info "i" tooltips — explain each field on hover/focus */
+    .hint-i { display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; border-radius:50%; background:var(--primary-soft); color:var(--primary-2); font-size:10px; font-weight:800; font-style:normal; cursor:help; margin-left:5px; vertical-align:middle; position:relative; user-select:none; }
+    .hint-i:hover, .hint-i:focus { background:var(--primary-2); color:#fff; outline:none; }
+    .hint-i::after { content:attr(data-tip); position:absolute; left:-3px; bottom:165%; width:252px; max-width:70vw; background:var(--ink); color:#fff; text-align:left; font-size:12px; font-weight:500; line-height:1.45; padding:9px 12px; border-radius:10px; box-shadow:var(--sh-lg); opacity:0; pointer-events:none; transition:opacity .15s; z-index:50; }
+    .hint-i::before { content:''; position:absolute; left:5px; bottom:165%; transform:translateY(100%); border:6px solid transparent; border-top-color:var(--ink); opacity:0; transition:opacity .15s; }
+    .hint-i:hover::after, .hint-i:focus::after, .hint-i:hover::before, .hint-i:focus::before { opacity:1; }
+
     /* Plan stage */
     .bar { display:flex; flex-wrap:wrap; align-items:center; gap:12px; justify-content:space-between; background:var(--card); border:1px solid var(--border); border-radius:16px; box-shadow:var(--sh); padding:16px 20px; margin-bottom:16px; }
     .bar .meta { font-size:15px; display:flex; align-items:center; gap:8px; } .bar .meta b { color:var(--primary); }
@@ -318,6 +344,7 @@
       <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Plan a lesson</h2>
       <p class="hint">Your template is reused automatically. Paste this lesson's objectives and we'll write a plan that matches it.</p>
 
+      <label>Lesson-plan templates <span class="hint-i" tabindex="0" role="img" aria-label="Upload your school's lesson-plan formats (Word, PDF, Excel). Save several - detailed, observation, weekly, etc. - and tick which to use for this lesson. The plan is generated to match it and downloads in that same format." data-tip="Upload your school's lesson-plan formats (Word, PDF, Excel). Save several - detailed, observation, weekly, etc. - and tick which to use for this lesson. The plan is generated to match it and downloads in that same format.">i</span></label>
       <div id="tplList" class="tpl-list"><span class="info none">Loading your templates…</span></div>
       <div class="tpl-add">
         <input id="tplName" type="text" placeholder="Name (e.g. Observation plan)" aria-label="Template name" />
@@ -335,20 +362,20 @@
       <input id="tplFile" type="file" accept=".docx,.pdf,.xlsx,.xls,.txt,.md,.csv" style="display:none" />
 
       <div class="grid2">
-        <div><label for="subject">Subject</label><input id="subject" list="subjectList" autocomplete="off" placeholder="Pick or type a new subject" required /><datalist id="subjectList"></datalist><div id="subjErr" class="field-err">Add a subject.</div></div>
-        <div><label for="topic">Topic</label><input id="topic" list="topicList" autocomplete="off" placeholder="Pick or type a new topic" required /><datalist id="topicList"></datalist><div id="topicErr" class="field-err">Add a topic.</div></div>
+        <div><label for="subject">Subject <span class="hint-i" tabindex="0" role="img" aria-label="The subject area - e.g. Maths, English, Science. Pick a saved one or type a new one; new subjects get images fetched and labelled automatically." data-tip="The subject area - e.g. Maths, English, Science. Pick a saved one or type a new one; new subjects get images fetched and labelled automatically.">i</span></label><input id="subject" list="subjectList" autocomplete="off" placeholder="Pick or type a new subject" required /><datalist id="subjectList"></datalist><div id="subjErr" class="field-err">Add a subject.</div></div>
+        <div><label for="topic">Topic <span class="hint-i" tabindex="0" role="img" aria-label="The specific topic within the subject, e.g. adding fractions or the water cycle. It drives the lesson content and the images chosen." data-tip="The specific topic within the subject, e.g. adding fractions or the water cycle. It drives the lesson content and the images chosen.">i</span></label><input id="topic" list="topicList" autocomplete="off" placeholder="Pick or type a new topic" required /><datalist id="topicList"></datalist><div id="topicErr" class="field-err">Add a topic.</div></div>
       </div>
       <p class="fmt-note"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg> New subject or topic? We'll fetch &amp; caption images for it automatically (first time takes a little longer).</p>
       <div class="grid3">
-        <div><label for="grade">Grade level</label>
+        <div><label for="grade">Grade level <span class="hint-i" tabindex="0" role="img" aria-label="The class you are teaching. Content difficulty, vocabulary and slide design are all pitched to this exact grade - not easier, not harder." data-tip="The class you are teaching. Content difficulty, vocabulary and slide design are all pitched to this exact grade - not easier, not harder.">i</span></label>
           <select id="grade">
             <option>Grade R</option><option>Grade 1</option><option>Grade 2</option><option>Grade 3</option>
             <option>Grade 4</option><option selected>Grade 5</option><option>Grade 6</option><option>Grade 7</option>
             <option>Grade 8</option><option>Grade 9</option><option>Grade 10</option><option>Grade 11</option><option>Grade 12</option>
           </select>
         </div>
-        <div><label for="slideCount">Content slides</label><input id="slideCount" type="number" min="1" max="20" value="5" /></div>
-        <div><label for="tone">Tone</label>
+        <div><label for="slideCount">Content slides <span class="hint-i" tabindex="0" role="img" aria-label="How many teaching slides to generate, in between the title/objectives and the activity/recap. More means more detail; 4 to 6 suits most lessons." data-tip="How many teaching slides to generate, in between the title/objectives and the activity/recap. More means more detail; 4 to 6 suits most lessons.">i</span></label><input id="slideCount" type="number" min="1" max="20" value="5" /></div>
+        <div><label for="tone">Tone <span class="hint-i" tabindex="0" role="img" aria-label="The voice of the lesson. Playful suits younger classes; Formal suits exams and seniors; Gentle eases into tricky topics." data-tip="The voice of the lesson. Playful suits younger classes; Formal suits exams and seniors; Gentle eases into tricky topics.">i</span></label>
           <select id="tone">
             <option value="clear and engaging">Clear &amp; engaging</option>
             <option value="playful and fun">Playful &amp; fun</option>
@@ -357,10 +384,10 @@
           </select>
         </div>
       </div>
-      <label for="objectives">Lesson objectives <span style="color:var(--err)">*</span></label>
+      <label for="objectives">Lesson objectives <span style="color:var(--err)">*</span> <span class="hint-i" tabindex="0" role="img" aria-label="Paste what students should be able to DO by the end, one per line. The plan, slides, worksheet and exit ticket are all built to meet these." data-tip="Paste what students should be able to DO by the end, one per line. The plan, slides, worksheet and exit ticket are all built to meet these.">i</span></label>
       <textarea id="objectives" rows="4" placeholder="Paste what students should be able to do, e.g.&#10;• Identify the numerator and denominator&#10;• Compare two fractions&#10;• Add fractions with the same denominator" required></textarea>
       <div id="objErr" class="field-err">Please add at least one objective.</div>
-      <label for="focus">Focus or angle <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+      <label for="focus">Focus or angle <span style="color:var(--muted);font-weight:400">(optional)</span> <span class="hint-i" tabindex="0" role="img" aria-label="An optional steer for the lesson, e.g. use sport examples, lots of group work, or a specific sub-skill to emphasise." data-tip="An optional steer for the lesson, e.g. use sport examples, lots of group work, or a specific sub-skill to emphasise.">i</span></label>
       <textarea id="focus" rows="2" placeholder="e.g. use pizza and sports examples; lots of group work"></textarea>
 
       <button id="planBtn" class="btn primary full" type="submit"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Generate lesson plan</button>
@@ -397,7 +424,7 @@
 
       <!-- Lesson pack: student-facing materials from this same lesson -->
       <section id="packSection" class="card wide" style="margin-top:24px">
-        <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Lesson pack</h2>
+        <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Lesson pack <span class="hint-i" tabindex="0" role="img" aria-label="Student-facing materials from this same lesson. Generate a worksheet (practice questions + answer key) or an exit ticket (a quick end-of-lesson check), edit them, and download each as a Word document." data-tip="Student-facing materials from this same lesson. Generate a worksheet (practice questions + answer key) or an exit ticket (a quick end-of-lesson check), edit them, and download each as a Word document.">i</span></h2>
         <p class="hint">Turn this lesson into student-facing materials — generate, tweak, and download each as a Word document.</p>
         <div class="pack-actions">
           <button type="button" class="btn ghost" data-pack="worksheet"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Worksheet</button>
@@ -409,12 +436,21 @@
 
     <!-- ADMIN PANEL -->
     <section id="adminPanel" class="card wide" style="display:none">
-      <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg> Image library admin</h2>
+      <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> Admin</h2>
+
+      <h3 class="admin-h"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> AI usage &amp; cost</h3>
+      <p class="hint">What every OpenAI call has cost so far — overall and per teacher — so you can price the app.</p>
+      <div id="usageCards" class="usage-cards"></div>
+      <div id="usageByUser" class="usage-table"></div>
+      <details class="usage-models"><summary>Cost by model</summary><div id="usageByModel"></div></details>
+      <p class="usage-note">Prices are estimates from an editable table (usage.js, or <code>PRICE_*</code> env vars). Tune them to match your OpenAI bill.</p>
+
+      <h3 class="admin-h"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg> Image library</h3>
       <p class="hint">Add more images to any subject &amp; topic. Each new image is fetched and <b>auto-captioned</b> for context, then indexed instantly.</p>
       <div class="grid3">
-        <div><label for="adSubject">Subject</label><input id="adSubject" list="subjList" placeholder="e.g. maths" /><datalist id="subjList"></datalist></div>
-        <div><label for="adTopic">Topic</label><input id="adTopic" placeholder="e.g. fractions" /></div>
-        <div><label for="adCount">How many</label><input id="adCount" type="number" min="1" max="30" value="10" /></div>
+        <div><label for="adSubject">Subject <span class="hint-i" tabindex="0" role="img" aria-label="The subject folder to add images to." data-tip="The subject folder to add images to.">i</span></label><input id="adSubject" list="subjList" placeholder="e.g. maths" /><datalist id="subjList"></datalist></div>
+        <div><label for="adTopic">Topic <span class="hint-i" tabindex="0" role="img" aria-label="The topic these images illustrate - they will be matched to lessons on this topic." data-tip="The topic these images illustrate - they will be matched to lessons on this topic.">i</span></label><input id="adTopic" placeholder="e.g. fractions" /></div>
+        <div><label for="adCount">How many <span class="hint-i" tabindex="0" role="img" aria-label="How many images to fetch and auto-caption for this subject and topic (1 to 30)." data-tip="How many images to fetch and auto-caption for this subject and topic (1 to 30).">i</span></label><input id="adCount" type="number" min="1" max="30" value="10" /></div>
       </div>
       <button id="addImgBtn" class="btn primary full"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg> Add images</button>
       <div id="adminStatus" class="status"></div>
@@ -786,9 +822,29 @@
     function openAdmin(){
       composer.style.display='none'; planStage.style.display='none'; results.style.display='none';
       stepsEl.style.display='none'; statusEl.innerHTML=''; adminPanel.style.display='block';
-      loadStats(); window.scrollTo({top:0,behavior:'smooth'});
+      loadUsage(); loadStats(); window.scrollTo({top:0,behavior:'smooth'});
     }
     function closeAdmin(){ adminPanel.style.display='none'; stepsEl.style.display='flex'; show('composer'); setStep(1); }
+
+    // AI cost: totals, per teacher, per model.
+    const fmtUSD=n=>'$'+(Number(n)||0).toFixed((Number(n)||0)>=1?2:4);
+    const fmtN=n=>(Number(n)||0).toLocaleString();
+    async function loadUsage(){
+      try{
+        const u=await (await fetch('/api/admin/usage')).json();
+        const t=u.totals||{};
+        $('usageCards').innerHTML=[
+          ['cost','Total cost',fmtUSD(t.costUSD)],
+          ['','AI calls',fmtN(t.calls)],
+          ['','Tokens',fmtN((t.promptTokens||0)+(t.completionTokens||0))],
+          ['','Images',fmtN(t.images)],
+        ].map(([c,l,v])=>`<div class="usage-card"><div class="v ${c}">${v}</div><div class="l">${l}</div></div>`).join('');
+        const head=`<div class="row"><span class="who">Teacher</span><span class="num">Calls</span><span class="num">Tokens</span><span class="cost">Cost</span></div>`;
+        const users=(u.byUser||[]);
+        $('usageByUser').innerHTML=head+(users.length?users.map(r=>`<div class="row"><span class="who" title="${esc(r.email)}">${esc(r.email)}${r.name?` · ${esc(r.name)}`:''}</span><span class="num">${fmtN(r.calls)}</span><span class="num">${fmtN((r.promptTokens||0)+(r.completionTokens||0))}</span><span class="cost">${fmtUSD(r.costUSD)}</span></div>`).join(''):`<div class="row"><span class="who" style="color:var(--muted)">No AI usage yet.</span><span></span><span></span><span></span></div>`);
+        $('usageByModel').innerHTML=Object.entries(u.byModel||{}).map(([m,b])=>`<div class="usage-mrow"><span>${esc(m)}</span><span>${fmtN(b.calls)} calls${b.images?` · ${fmtN(b.images)} imgs`:''} · <b style="color:var(--accent)">${fmtUSD(b.costUSD)}</b></span></div>`).join('')||'<div class="usage-mrow"><span style="color:var(--muted)">No calls yet.</span></div>';
+      }catch{ $('usageCards').innerHTML='<span class="status err">Could not load usage.</span>'; }
+    }
     $('adminBtn').onclick=openAdmin;
     $('adminBack').onclick=closeAdmin;
 

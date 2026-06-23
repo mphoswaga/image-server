@@ -1,7 +1,7 @@
 // Generates an accurate, literal illustration with OpenAI's image model — for
 // slides where a precise depiction matters (an example or a task, e.g.
 // "a pizza cut exactly in half"), rather than a generic stock photo.
-const OpenAI = require('openai');
+const { client: aiClient } = require('./ai-client');
 const fs = require('fs');
 const path = require('path');
 
@@ -31,7 +31,7 @@ async function genB64(client, model, prompt) {
 async function generateImage({ subject, topic, concept, grade = 'middle school' }) {
   if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not set.');
   if (!concept || !concept.trim()) throw new Error('Nothing to illustrate for this slide.');
-  const client = new OpenAI();
+  const client = aiClient();
   const prompt = buildPrompt({ concept, subject, grade });
 
   let b64;

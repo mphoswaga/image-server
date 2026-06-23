@@ -1,7 +1,7 @@
 // Generates a lesson plan that mirrors the teacher's uploaded template format,
 // filled in from the pasted objectives. Output is a list of {heading, content}
 // sections so it can be rendered, edited, and then drive slide creation.
-const OpenAI = require('openai');
+const { client: aiClient } = require('./ai-client');
 const { gradeProfile } = require('./grade');
 
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
@@ -73,7 +73,7 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     console.log('No OPENAI_API_KEY set — using placeholder lesson plan.');
     return placeholderPlan(objectives);
   }
-  const client = new OpenAI();
+  const client = aiClient();
   const response = await client.chat.completions.create({
     model: MODEL,
     max_tokens: 6000,

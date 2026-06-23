@@ -10,7 +10,7 @@
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
-const OpenAI = require('openai');
+const { client: aiClient } = require('./ai-client');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const LIBRARY_PATH = path.join(PUBLIC_DIR, 'library.json');
@@ -29,7 +29,7 @@ const CAPTION_SCHEMA = {
   additionalProperties: false,
 };
 
-const client = new OpenAI({ maxRetries: 6 }); // auto-backoff on 429, honoring retry-after
+const client = aiClient(); // instrumented; raw client already sets maxRetries for 429 backoff
 
 async function captionImage(absPath) {
   const b64 = fs.readFileSync(absPath).toString('base64');

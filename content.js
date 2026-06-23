@@ -7,7 +7,7 @@
 // downstream (matcher, assembler) reads `imageQuery` + `type`.
 //
 // If OPENAI_API_KEY is missing, falls back to placeholder text.
-const OpenAI = require('openai');
+const { client: aiClient } = require('./ai-client');
 const { gradeProfile, ageFor } = require('./grade');
 
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
@@ -229,7 +229,7 @@ function placeholderDeck(subject, topic, slideCount) {
 }
 
 async function callModel(schema, name, messages, max_tokens = 9000) {
-  const client = new OpenAI();
+  const client = aiClient();
   const response = await client.chat.completions.create({
     model: MODEL,
     max_tokens,

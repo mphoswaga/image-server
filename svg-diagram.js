@@ -2,7 +2,7 @@
 // labelled SVG of the concept (labels are real text, so they're crisp and
 // correct), which we sanitize and rasterise to a PNG for the slide.
 // Used when no curated diagram fits. gpt-4o gives far better layout than mini.
-const OpenAI = require('openai');
+const { client: aiClient } = require('./ai-client');
 const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
@@ -39,7 +39,7 @@ function sanitize(raw) {
 async function generateDiagram({ subject, topic, concept }) {
   if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not set.');
   if (!concept || !concept.trim()) throw new Error('Nothing to diagram.');
-  const client = new OpenAI();
+  const client = aiClient();
   const res = await client.chat.completions.create({
     model: MODEL, max_tokens: 3000,
     messages: [{ role: 'user', content: prompt(concept) }],
