@@ -14,6 +14,8 @@ const { addImages } = require('./admin-images');
 const { generateImage } = require('./ai-image');
 const { parseFraction, detectLabelledDiagram } = require('./concept-diagram');
 const { generateDiagram } = require('./svg-diagram');
+const { generateWorksheet, generateExitTicket } = require('./lesson-pack');
+const { worksheetDocx, exitTicketDocx } = require('./docgen');
 
 // Add transitions/animations; never let it break the download.
 function safeAnimate(buffer, band) {
@@ -201,6 +203,42 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
     res.json({ sections: plan.sections, usedTemplate: !!tpl, templateName: tpl ? tpl.name : null, templateId: tpl ? tpl.id : null });
   } catch (err) {
     console.error('Lesson plan failed:', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ── Lesson pack (worksheet, exit ticket) from the approved plan ────────────
+const PACK_GEN = { worksheet: generateWorksheet, 'exit-ticket': generateExitTicket };
+const PACK_RENDER = { worksheet: worksheetDocx, 'exit-ticket': exitTicketDocx };
+
+app.post('/api/pack/:type', requireAuth, async (req, res) => {
+  const gen = PACK_GEN[req.params.type];
+  if (!gen) return res.status(404).json({ error: 'Unknown lesson-pack item.' });
+  const { subject, topic, grade, tone, objectives, lessonPlan } = req.body || {};
+  if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
+  try {
+    const lessonPlanText = lessonPlan && lessonPlan.sections ? planToText(lessonPlan) : '';
+    const data = await gen({ subject: String(subject).toLowerCase(), topic: String(topic).toLowerCase(), grade, tone, objectives, lessonPlanText });
+    res.json({ type: req.params.type, data });
+  } catch (err) {
+    console.error('Pack generation failed:', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/pack/:type/download', requireAuth, async (req, res) => {
+  const render = PACK_RENDER[req.params.type];
+  if (!render) return res.status(404).json({ error: 'Unknown lesson-pack item.' });
+  const { data, subject, topic, grade } = req.body || {};
+  if (!data) return res.status(400).json({ error: 'Nothing to download.' });
+  try {
+    const buffer = await render(data, { subject, topic, grade });
+    const base = String(topic || req.params.type).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'lesson';
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename="${base}-${req.params.type}.docx"`);
+    res.send(buffer);
+  } catch (err) {
+    console.error('Pack download failed:', err.message);
     res.status(400).json({ error: err.message });
   }
 });

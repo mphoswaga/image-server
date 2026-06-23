@@ -141,6 +141,18 @@
     @keyframes toastIn { from { opacity:0; transform:translateY(-10px); } to { opacity:1; } }
     .btn.ghost.warn, .nav .logout.warn { color:var(--err); border-color:#eccfcb; background:#fdf1ef; }
 
+    /* Lesson pack */
+    .pack-actions { display:flex; gap:10px; flex-wrap:wrap; margin:2px 0 0; }
+    .pack-doc { border:1px solid var(--border); border-radius:14px; padding:20px 22px; margin-top:18px; background:#fff; box-shadow:var(--sh-sm); }
+    .pack-doc .pd-title { font-family:'Fraunces',Georgia,serif; font-size:21px; font-weight:600; color:var(--primary); margin:0 0 2px; }
+    .pack-doc .pd-focus { color:var(--muted); font-style:italic; font-size:14px; margin:0 0 6px; }
+    .pack-doc h4 { text-transform:uppercase; letter-spacing:.5px; font-size:11.5px; color:var(--accent); margin:17px 0 7px; }
+    .pack-doc ol { margin:0; padding-left:22px; } .pack-doc ol li { font-size:14px; margin:6px 0; color:var(--ink); }
+    .pack-doc .ex { background:var(--primary-soft); border-radius:10px; padding:11px 13px; font-size:13.5px; line-height:1.5; }
+    .pack-doc .ex b { color:var(--primary); }
+    .pack-doc .ak { background:#f3f6fb; border-radius:10px; padding:6px 13px; }
+    .pd-dl { margin-top:18px; }
+
     /* Plan stage */
     .bar { display:flex; flex-wrap:wrap; align-items:center; gap:12px; justify-content:space-between; background:var(--card); border:1px solid var(--border); border-radius:16px; box-shadow:var(--sh); padding:16px 20px; margin-bottom:16px; }
     .bar .meta { font-size:15px; display:flex; align-items:center; gap:8px; } .bar .meta b { color:var(--primary); }
@@ -382,6 +394,17 @@
       </div>
       <p class="edit-tip"><svg class="ic" aria-hidden="true" style="color:var(--accent)"><use href="#i-pencil"/></svg> Click any text to <b>edit it</b> · use <b>Swap image</b> or <b>Regenerate</b> before downloading.</p>
       <div id="deck" class="deck"></div>
+
+      <!-- Lesson pack: student-facing materials from this same lesson -->
+      <section id="packSection" class="card wide" style="margin-top:24px">
+        <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Lesson pack</h2>
+        <p class="hint">Turn this lesson into student-facing materials — generate, tweak, and download each as a Word document.</p>
+        <div class="pack-actions">
+          <button type="button" class="btn ghost" data-pack="worksheet"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Worksheet</button>
+          <button type="button" class="btn ghost" data-pack="exit-ticket"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg> Exit ticket</button>
+        </div>
+        <div id="packPreview"></div>
+      </section>
     </section>
 
     <!-- ADMIN PANEL -->
@@ -623,6 +646,7 @@
       $('deckTitle').textContent=d.filename.replace('.pptx','');
       $('deckCount').innerHTML=`· ${d.slideCount} slides ${d.band?`<span class="band-pill">${ICON('i-target')}${BAND[d.band]||d.band}</span>`:''}`;
       deckEl.className='deck'+(d.band?' band-'+d.band:''); deckEl.innerHTML=d.slides.map((s,i)=>cardHTML(s,i)).join('');
+      $('packPreview').innerHTML=''; // reset lesson-pack for the new deck
     }
     deckEl.addEventListener('click', async (e)=>{
       const b=e.target.closest('button[data-action]'); if(!b) return;
@@ -660,6 +684,55 @@
         const blob=await r.blob(), url=URL.createObjectURL(blob), a=document.createElement('a'); a.href=url; a.download=$('deckTitle').textContent+'.pptx'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
       }catch(err){ toast(err.message); } dl.disabled=false; dl.innerHTML=orig;
     });
+    // ---- lesson pack (worksheet / exit ticket) ----
+    let packType=null, packData=null;
+    const packList=(arr,f)=>`<ol>${(arr||[]).map(x=>`<li contenteditable data-f="${f}">${esc(x)}</li>`).join('')}</ol>`;
+    function renderPack(type,data){
+      packType=type; packData=data;
+      let h=`<p class="pd-title" contenteditable data-f="title">${esc(data.title||'')}</p>`;
+      if(type==='worksheet'){
+        if(data.focus!=null) h+=`<p class="pd-focus" contenteditable data-f="focus">${esc(data.focus)}</p>`;
+        if(data.warmup) h+=`<h4>Warm-up</h4>${packList(data.warmup,'warmup')}`;
+        if(data.example) h+=`<h4>Worked example</h4><div class="ex"><b contenteditable data-f="exP">${esc(data.example.problem||'')}</b><br><span contenteditable data-f="exS">${esc(data.example.solution||'')}</span></div>`;
+        if(data.questions) h+=`<h4>Practice</h4>${packList(data.questions,'q')}`;
+        if(data.challenge!=null) h+=`<h4>Challenge</h4><ol><li contenteditable data-f="challenge">${esc(data.challenge)}</li></ol>`;
+        if(data.answerKey) h+=`<h4>Answer key (teacher)</h4><div class="ak">${packList(data.answerKey,'ak')}</div>`;
+      }else{
+        if(data.questions) h+=`<h4>Questions</h4>${packList(data.questions,'q')}`;
+        if(data.answerKey) h+=`<h4>Answer key (teacher)</h4><div class="ak">${packList(data.answerKey,'ak')}</div>`;
+      }
+      h+=`<div class="pd-dl"><button type="button" class="btn accent" id="packDlBtn">${ICON('i-download')} Download .docx</button></div>`;
+      $('packPreview').innerHTML=`<div class="pack-doc">${h}</div>`;
+    }
+    function collectPack(){
+      const box=$('packPreview'), d=JSON.parse(JSON.stringify(packData));
+      const one=f=>{ const el=box.querySelector(`[data-f="${f}"]`); return el?el.innerText.trim():undefined; };
+      const many=f=>[...box.querySelectorAll(`[data-f="${f}"]`)].map(x=>x.innerText.trim()).filter(Boolean);
+      if(d.title!=null) d.title=one('title')||d.title;
+      if(d.focus!=null) d.focus=one('focus');
+      if(d.warmup) d.warmup=many('warmup');
+      if(d.example){ d.example.problem=one('exP'); d.example.solution=one('exS'); }
+      if(d.questions) d.questions=many('q');
+      if(d.challenge!=null) d.challenge=one('challenge');
+      if(d.answerKey) d.answerKey=many('ak');
+      return d;
+    }
+    $('packSection').addEventListener('click', async (e)=>{
+      const gen=e.target.closest('button[data-pack]');
+      if(gen){ const type=gen.dataset.pack; gen.disabled=true; const o=gen.innerHTML; gen.innerHTML='<span class="spinner"></span>Generating…'; $('packPreview').innerHTML='';
+        try{ const r=await fetch('/api/pack/'+type,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...ctx,lessonPlan:collectPlan()})});
+          const d=await r.json(); if(!r.ok) throw new Error(d.error); renderPack(type,d.data);
+        }catch(err){ toast(err.message); } gen.disabled=false; gen.innerHTML=o; return; }
+      const dl=e.target.closest('#packDlBtn');
+      if(dl){ dl.disabled=true; const o=dl.innerHTML; dl.innerHTML='<span class="spinner"></span>Preparing…';
+        try{ const r=await fetch('/api/pack/'+packType+'/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:collectPack(),subject:ctx.subject,topic:ctx.topic,grade:ctx.grade})});
+          if(!r.ok){const x=await r.json().catch(()=>({error:'Download failed'}));throw new Error(x.error);}
+          const blob=await r.blob(),url=URL.createObjectURL(blob),a=document.createElement('a');
+          const cd=r.headers.get('Content-Disposition')||'',m=cd.match(/filename="([^"]+)"/);
+          a.href=url; a.download=m?m[1]:(packType+'.docx'); document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+        }catch(err){ toast(err.message); } dl.disabled=false; dl.innerHTML=o; }
+    });
+
     // "Start over" discards the generated deck (and any edits) — two-step confirm.
     let restartArm=false, restartTmr=null;
     function doRestart(){ const b=$('restartBtn'); b.textContent='Start over'; b.classList.remove('warn'); restartArm=false; clearTimeout(restartTmr);
