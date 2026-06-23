@@ -35,15 +35,17 @@ function findByEmail(email) {
   return Object.values(users).find(u => u.email === key) || null;
 }
 
-async function signup(email, password, name) {
+async function signup(email, password, name, forceRole) {
   email = String(email || '').trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error('Please enter a valid email address.');
   if (!password || password.length < 6) throw new Error('Password must be at least 6 characters.');
   if (findByEmail(email)) throw new Error('An account with that email already exists.');
   const users = loadUsers();
-  // First teacher to sign up (or the configured ADMIN_EMAIL) becomes admin.
+  // Students (signing up from a game link) are always 'student'. Otherwise the
+  // first teacher to sign up (or the configured ADMIN_EMAIL) becomes admin.
   const adminEmail = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
-  const role = (Object.keys(users).length === 0 || (adminEmail && email === adminEmail)) ? 'admin' : 'teacher';
+  const role = forceRole === 'student' ? 'student'
+    : (Object.keys(users).length === 0 || (adminEmail && email === adminEmail)) ? 'admin' : 'teacher';
   const id = crypto.randomUUID();
   users[id] = { id, email, name: (name || '').trim() || email.split('@')[0], passwordHash: await bcrypt.hash(password, 10), role, createdAt: new Date().toISOString() };
   saveUsers(users);

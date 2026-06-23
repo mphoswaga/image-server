@@ -172,6 +172,17 @@
     .usage-mrow { display:flex; justify-content:space-between; font-size:13px; padding:7px 2px; border-top:1px solid var(--border); }
     .usage-note { font-size:11.5px; color:var(--muted); margin-top:10px; }
 
+    /* Student game (teacher side) */
+    .game-link { display:flex; gap:8px; align-items:center; flex-wrap:wrap; background:var(--primary-soft); border-radius:12px; padding:10px 12px; }
+    .game-link input { flex:1; min-width:200px; font-size:13px; background:#fff; border:1px solid var(--border); border-radius:9px; padding:9px 11px; }
+    .res-table { border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-top:12px; }
+    .res-row { display:grid; grid-template-columns:2fr 1fr 1fr; gap:8px; padding:9px 14px; font-size:13.5px; border-top:1px solid var(--border); align-items:center; }
+    .res-row:first-child { border-top:none; background:var(--primary-soft); color:var(--primary); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.3px; }
+    .res-row .sc { text-align:right; font-weight:700; color:var(--accent); } .res-row .pc { text-align:right; color:var(--muted); }
+    .game-card { border:1px solid var(--border); border-radius:14px; padding:15px 16px; margin-bottom:12px; }
+    .game-card h4 { margin:0 0 4px; font-size:15px; color:var(--primary); text-transform:capitalize; }
+    .game-card .gmeta { font-size:12.5px; color:var(--muted); margin-bottom:10px; }
+
     /* Info "i" tooltips — explain each field on hover/focus */
     .hint-i { display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; border-radius:50%; background:var(--primary-soft); color:var(--primary-2); font-size:10px; font-weight:800; font-style:normal; cursor:help; margin-left:5px; vertical-align:middle; position:relative; user-select:none; }
     .hint-i:hover, .hint-i:focus { background:var(--primary-2); color:#fff; outline:none; }
@@ -345,7 +356,7 @@
   <!-- TOP NAV -->
   <nav id="nav" class="nav" style="display:none">
     <span class="logo"><span class="brandmark"><svg class="ic" aria-hidden="true"><use href="#i-grad"/></svg></span><span class="wordmark">Lesson<span class="cope">Cope</span></span></span>
-    <span class="user"><button id="adminBtn" class="logout" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg> Admin</button><span id="navAvatar" class="avatar"></span><span id="navName"></span><button id="logoutBtn" class="logout"><svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg> Log out</button></span>
+    <span class="user"><button id="gamesBtn" class="logout"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> My games</button><button id="adminBtn" class="logout" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg> Admin</button><span id="navAvatar" class="avatar"></span><span id="navName"></span><button id="logoutBtn" class="logout"><svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg> Log out</button></span>
   </nav>
 
   <div class="wrap" id="app" style="display:none">
@@ -454,6 +465,14 @@
         </div>
         <div id="packPreview"></div>
       </section>
+
+      <!-- Student game: a shareable link + live results -->
+      <section id="gameSection" class="card wide" style="margin-top:24px">
+        <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> Student game <span class="hint-i" tabindex="0" role="img" aria-label="Creates a link you share with students. They log in, revise a summary of this lesson, then play a quick multiple-choice game. Their scores are saved here." data-tip="Creates a link you share with students. They log in, revise a summary of this lesson, then play a quick multiple-choice game. Their scores are saved here.">i</span></h2>
+        <p class="hint">Generate a link students open to revise this lesson, then play a quick quiz — their scores appear here.</p>
+        <button type="button" id="makeGameBtn" class="btn accent" style="width:auto"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Create student game</button>
+        <div id="gamePanel" style="display:none;margin-top:16px"></div>
+      </section>
     </section>
 
     <!-- ADMIN PANEL -->
@@ -480,6 +499,14 @@
       <h3 style="display:flex;align-items:center;gap:8px;margin:26px 0 10px;font-size:15px;color:var(--primary)"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Current library <span id="adminTotal" style="color:var(--muted);font-weight:500;font-size:13px"></span></h3>
       <div id="adminStats" class="admin-stats"></div>
       <div style="margin-top:20px"><button id="adminBack" class="btn ghost">← Back to app</button></div>
+    </section>
+
+    <!-- MY GAMES -->
+    <section id="gamesPanel" class="card wide" style="display:none">
+      <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> My games</h2>
+      <p class="hint">Every student game you've created, and how your students scored.</p>
+      <div id="gamesList" class="admin-stats"></div>
+      <div style="margin-top:20px"><button id="gamesBack" class="btn ghost">← Back to app</button></div>
     </section>
   </div>
 
@@ -719,6 +746,7 @@
       $('deckCount').innerHTML=`· ${d.slideCount} slides ${d.band?`<span class="band-pill">${ICON('i-target')}${BAND[d.band]||d.band}</span>`:''}`;
       deckEl.className='deck'+(d.band?' band-'+d.band:''); deckEl.innerHTML=d.slides.map((s,i)=>cardHTML(s,i)).join('');
       $('packPreview').innerHTML=''; // reset lesson-pack for the new deck
+      resetGameSection(); // reset the student-game box for the new deck
       loadQuota(); // show remaining AI-visual budget + gate the AI buttons
     }
     deckEl.addEventListener('click', async (e)=>{
@@ -969,6 +997,51 @@
       }catch(err){ $('adminStatus').className='status err'; $('adminStatus').textContent=err.message; }
       b.disabled=false; b.innerHTML=orig;
     });
+
+    // ---- student game (teacher side) ----
+    const resultsTable=rs=> rs && rs.length
+      ? '<div class="res-table"><div class="res-row"><span>Student</span><span class="sc">Score</span><span class="pc">%</span></div>'+rs.map(r=>`<div class="res-row"><span>${esc(r.name)}</span><span class="sc">${r.score}/${r.total}</span><span class="pc">${Math.round(r.score/r.total*100)}%</span></div>`).join('')+'</div>'
+      : '<p class="hint" style="margin-top:8px">No students have played yet.</p>';
+    async function loadGameResults(gid,elId){ const wrap=$(elId); if(!wrap) return;
+      try{ const d=await (await fetch('/api/game/'+gid+'/results')).json(); wrap.innerHTML=resultsTable(d.results); }
+      catch{ wrap.innerHTML='<p class="hint">Could not load results.</p>'; }
+    }
+    function resetGameSection(){ $('makeGameBtn').disabled=false; $('makeGameBtn').innerHTML=`${ICON('i-spark')} Create student game`; $('gamePanel').style.display='none'; $('gamePanel').innerHTML=''; }
+    function copyLink(url){ if(navigator.clipboard){ navigator.clipboard.writeText(url).then(()=>toast('Link copied','ok')).catch(()=>toast('Copy failed — select and copy manually')); } else toast('Copy not supported — select the link'); }
+    $('makeGameBtn').addEventListener('click', async ()=>{
+      const b=$('makeGameBtn'); b.disabled=true; const o=b.innerHTML; b.innerHTML='<span class="spinner"></span>Building game…';
+      try{ const r=await fetch('/api/game',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deckId:currentDeckId})});
+        const d=await r.json(); if(!r.ok) throw new Error(d.error);
+        const url=location.origin+d.path;
+        $('gamePanel').style.display='block';
+        $('gamePanel').innerHTML=`<div class="game-link"><input id="gameUrl" readonly value="${esc(url)}"><button type="button" class="btn ghost" id="copyGameBtn" style="width:auto;padding:10px 14px">${ICON('i-doc')} Copy link</button></div>
+          <p class="hint" style="margin:10px 0 2px">${d.questionCount} questions · share this link with your class.</p>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px"><b style="font-size:14px;color:var(--primary)">Results</b><button type="button" id="refreshResBtn" style="font-size:12.5px;font-weight:600;padding:6px 11px;border:1px solid var(--border);border-radius:9px;background:#fff;color:var(--primary);cursor:pointer;display:inline-flex;align-items:center;gap:6px">${ICON('i-refresh')} Refresh</button></div>
+          <div id="gameResults"></div>`;
+        $('copyGameBtn').addEventListener('click',()=>copyLink(url));
+        $('refreshResBtn').addEventListener('click',()=>loadGameResults(d.gameId,'gameResults'));
+        loadGameResults(d.gameId,'gameResults');
+        b.innerHTML=`${ICON('i-check')} Game created`;
+      }catch(err){ toast(err.message); b.disabled=false; b.innerHTML=o; }
+    });
+
+    // ---- "My games" view ----
+    const gamesPanel=$('gamesPanel');
+    function openGames(){ composer.style.display='none'; planStage.style.display='none'; results.style.display='none'; adminPanel.style.display='none';
+      stepsEl.style.display='none'; statusEl.innerHTML=''; gamesPanel.style.display='block'; loadMyGames(); window.scrollTo({top:0,behavior:'smooth'}); }
+    function closeGames(){ gamesPanel.style.display='none'; stepsEl.style.display='flex'; show('composer'); setStep(1); }
+    $('gamesBtn').onclick=openGames; $('gamesBack').onclick=closeGames;
+    async function loadMyGames(){ const wrap=$('gamesList'); wrap.innerHTML='<span class="status">Loading…</span>';
+      try{ const d=await (await fetch('/api/games')).json();
+        if(!d.games||!d.games.length){ wrap.innerHTML='<p class="hint">No games yet — create one from a finished lesson (the “Student game” box under your slides).</p>'; return; }
+        wrap.innerHTML=d.games.map(g=>{ const url=location.origin+'/play/'+g.id;
+          return `<div class="game-card"><h4>${esc(g.lessonTitle)}</h4><div class="gmeta">${esc(g.subject)} · ${esc(g.topic)} · ${g.questionCount} questions · ${g.plays} played</div>
+            <div class="game-link"><input readonly value="${esc(url)}"><button type="button" class="btn ghost gcopy" data-url="${esc(url)}" style="width:auto;padding:9px 13px">${ICON('i-doc')} Copy</button></div>
+            <div id="res-${g.id}"></div></div>`; }).join('');
+        d.games.forEach(g=>loadGameResults(g.id,'res-'+g.id));
+        wrap.querySelectorAll('.gcopy').forEach(b=>b.addEventListener('click',()=>copyLink(b.dataset.url)));
+      }catch{ wrap.innerHTML='<span class="status err">Could not load games.</span>'; }
+    }
 
     (async function init(){
       try{ const r=await fetch('/api/me'); if(r.ok){ const {user}=await r.json(); enterApp(user); return; } }catch{}

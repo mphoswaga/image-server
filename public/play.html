@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LessonCope — Lesson Game</title>
+  <meta name="theme-color" content="#1f4e79" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink:#1b2430; --muted:#697586; --primary:#1f4e79; --primary-2:#2a6aa6; --accent:#ec7f3b;
+      --bg:#f4f6fb; --card:#fff; --border:#e8eaf0; --ok:#15824b; --err:#c0392b;
+      --sh:0 2px 6px rgba(16,24,40,.05), 0 14px 32px rgba(16,24,40,.08);
+      --sh-lg:0 8px 18px rgba(16,24,40,.08), 0 24px 60px rgba(16,24,40,.12);
+      --c1:#1971c2; --c2:#e8833a; --c3:#2f9e44; --c4:#9c36b5;
+    }
+    * { box-sizing:border-box; }
+    html,body { margin:0; }
+    body { font-family:'Plus Jakarta Sans',-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--ink); line-height:1.55; min-height:100vh;
+      background:radial-gradient(820px 540px at 100% -8%, #e6eefa 0, transparent 52%), radial-gradient(680px 480px at -8% 6%, #fdeede 0, transparent 46%), var(--bg); }
+    .wrap { max-width:680px; margin:0 auto; padding:26px 18px 70px; }
+    .brand { display:flex; align-items:center; justify-content:center; gap:10px; margin:6px 0 20px; }
+    .brandmark { width:34px; height:34px; border-radius:10px; background:linear-gradient(135deg,var(--primary-2),var(--primary)); color:#fff; display:inline-flex; align-items:center; justify-content:center; }
+    .brandmark svg { width:19px; height:19px; }
+    .wordmark { font-family:'Fraunces',Georgia,serif; font-weight:600; font-size:23px; color:var(--primary); letter-spacing:-.5px; }
+    .wordmark .cope { color:var(--accent); }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:20px; box-shadow:var(--sh); padding:28px; }
+    h1 { font-family:'Fraunces',Georgia,serif; font-weight:600; font-size:26px; margin:0 0 4px; color:var(--primary); letter-spacing:-.4px; }
+    .sub { color:var(--muted); font-size:14.5px; margin:0 0 20px; }
+    label { display:block; font-weight:600; font-size:12.5px; margin:14px 0 6px; color:#42505f; }
+    input { width:100%; padding:12px 13px; font-size:15px; font-family:inherit; border:1px solid var(--border); border-radius:12px; background:#fdfdfe; }
+    input:focus { outline:none; border-color:var(--primary-2); box-shadow:0 0 0 4px rgba(42,106,166,.14); }
+    .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:13px 18px; font-size:15px; font-weight:700; font-family:inherit; border:none; border-radius:12px; cursor:pointer; transition:.12s; }
+    .btn.primary { color:#fff; background:linear-gradient(135deg,var(--primary-2),var(--primary)); box-shadow:0 6px 16px rgba(31,78,121,.26); width:100%; }
+    .btn.accent { color:#fff; background:linear-gradient(135deg,#f0954a,var(--accent)); box-shadow:0 6px 16px rgba(236,127,59,.28); width:100%; font-size:16px; padding:15px; }
+    .btn:disabled { opacity:.6; cursor:default; }
+    .tabs { display:flex; gap:6px; background:var(--bg); border-radius:12px; padding:5px; margin-bottom:6px; }
+    .tabs button { flex:1; padding:10px; border:none; background:none; border-radius:9px; font-weight:700; font-size:14px; color:var(--muted); cursor:pointer; font-family:inherit; }
+    .tabs button.active { background:#fff; color:var(--primary); box-shadow:var(--sh); }
+    .err { color:var(--err); font-size:13px; min-height:18px; margin-top:10px; text-align:center; }
+    .meta-pill { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; padding:4px 11px; border-radius:999px; background:#eaf2fa; color:var(--primary); margin-bottom:14px; text-transform:capitalize; }
+    /* summary */
+    .concept { border:1px solid var(--border); border-radius:14px; padding:13px 15px; margin-bottom:10px; background:#fff; }
+    .concept b { color:var(--primary); display:block; margin-bottom:2px; }
+    .concept span { font-size:14px; color:var(--ink); }
+    .overview { background:#eaf2fa; border-radius:14px; padding:14px 16px; font-size:15px; margin-bottom:18px; }
+    /* game */
+    .progress { display:flex; align-items:center; justify-content:space-between; font-size:13px; color:var(--muted); font-weight:600; margin-bottom:14px; }
+    .score-chip { background:var(--accent); color:#fff; border-radius:999px; padding:4px 12px; font-weight:800; }
+    .qbar { height:7px; background:#e8eaf0; border-radius:99px; overflow:hidden; margin-bottom:18px; }
+    .qbar > div { height:100%; background:linear-gradient(90deg,var(--primary-2),var(--primary)); transition:width .3s; }
+    .question { font-size:20px; font-weight:700; margin:0 0 18px; line-height:1.35; }
+    .options { display:grid; gap:11px; }
+    .opt { text-align:left; padding:15px 17px; border-radius:14px; border:2px solid transparent; font-size:15.5px; font-weight:600; font-family:inherit; color:#fff; cursor:pointer; transition:.12s; display:flex; align-items:center; gap:12px; }
+    .opt .k { width:26px; height:26px; border-radius:7px; background:rgba(255,255,255,.25); display:inline-flex; align-items:center; justify-content:center; font-weight:800; flex:none; }
+    .opt:nth-child(1){ background:var(--c1); } .opt:nth-child(2){ background:var(--c2); }
+    .opt:nth-child(3){ background:var(--c3); } .opt:nth-child(4){ background:var(--c4); }
+    .opt:hover:not(:disabled){ transform:translateY(-1px); filter:brightness(1.06); }
+    .opt:disabled { cursor:default; opacity:.55; }
+    .opt.correct { outline:4px solid #b2f2bb; opacity:1; }
+    .opt.wrong { outline:4px solid #ffc9c9; opacity:1; }
+    .feedback { margin-top:18px; padding:14px 16px; border-radius:14px; font-size:14.5px; display:none; }
+    .feedback.show { display:block; }
+    .feedback.right { background:#ebfbee; color:#0f6b3d; } .feedback.no { background:#fff0ef; color:#a32820; }
+    .feedback b { display:block; margin-bottom:3px; }
+    .next-row { margin-top:16px; }
+    /* result */
+    .result-score { font-family:'Fraunces',Georgia,serif; font-size:52px; font-weight:700; color:var(--primary); text-align:center; margin:6px 0 0; }
+    .result-of { text-align:center; color:var(--muted); margin:0 0 8px; }
+    .result-msg { text-align:center; font-size:16px; margin:0 0 22px; }
+    .center { text-align:center; }
+    .spinner { display:inline-block; width:30px; height:30px; border:3px solid rgba(31,78,121,.2); border-top-color:var(--primary-2); border-radius:50%; animation:spin .7s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">
+      <span class="brandmark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1 2.7 3 6 3s6-2 6-3v-5"/></svg></span>
+      <span class="wordmark">Lesson<span class="cope">Cope</span></span>
+    </div>
+
+    <div id="loading" class="card center"><div class="spinner"></div></div>
+
+    <!-- STUDENT AUTH -->
+    <div id="authScreen" class="card" style="display:none">
+      <h1>Join the lesson game</h1>
+      <p class="sub">Sign in as a student to play and see your results.</p>
+      <div class="tabs"><button id="tabLogin" class="active" type="button">Log in</button><button id="tabSignup" type="button">Sign up</button></div>
+      <form id="authForm">
+        <div id="nameRow" style="display:none"><label for="auName">Your name</label><input id="auName" type="text" placeholder="First name" autocomplete="name" /></div>
+        <label for="auEmail">Email</label><input id="auEmail" type="email" placeholder="you@school.edu" autocomplete="email" required />
+        <label for="auPass">Password</label><input id="auPass" type="password" placeholder="At least 6 characters" autocomplete="current-password" required />
+        <div style="margin-top:18px"><button id="authBtn" class="btn primary" type="submit">Log in</button></div>
+        <div id="authErr" class="err"></div>
+      </form>
+    </div>
+
+    <!-- LESSON SUMMARY -->
+    <div id="summaryScreen" class="card" style="display:none">
+      <div class="meta-pill" id="sumMeta"></div>
+      <h1 id="sumTitle"></h1>
+      <p class="sub">Read this recap. When you understand it, start the game.</p>
+      <div class="overview" id="sumOverview"></div>
+      <div id="sumConcepts"></div>
+      <div style="margin-top:22px"><button id="startBtn" class="btn accent">I understand — start the game 🎮</button></div>
+    </div>
+
+    <!-- GAME -->
+    <div id="gameScreen" class="card" style="display:none">
+      <div class="progress"><span id="qProgress"></span><span class="score-chip" id="qScore">0</span></div>
+      <div class="qbar"><div id="qBarFill" style="width:0%"></div></div>
+      <p class="question" id="qText"></p>
+      <div class="options" id="qOptions"></div>
+      <div class="feedback" id="qFeedback"></div>
+      <div class="next-row" id="qNextRow" style="display:none"><button id="nextBtn" class="btn primary">Next →</button></div>
+    </div>
+
+    <!-- RESULT -->
+    <div id="resultScreen" class="card" style="display:none">
+      <h1 class="center">Game complete! 🎉</h1>
+      <div class="result-score" id="resScore"></div>
+      <p class="result-of" id="resOf"></p>
+      <p class="result-msg" id="resMsg"></p>
+      <button id="againBtn" class="btn primary">Play again</button>
+      <p class="center sub" style="margin-top:16px">Your teacher can see your result.</p>
+    </div>
+  </div>
+
+  <script>
+    const $=id=>document.getElementById(id);
+    const esc=s=>String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+    const GAME_ID=location.pathname.split('/').filter(Boolean).pop();
+    let game=null, questions=[], qi=0, score=0, answers=[];
+
+    function show(id){ ['loading','authScreen','summaryScreen','gameScreen','resultScreen'].forEach(s=>$(s).style.display=s===id?'block':'none'); }
+
+    // ---- auth ----
+    let mode='login';
+    function setMode(m){ mode=m; $('tabLogin').classList.toggle('active',m==='login'); $('tabSignup').classList.toggle('active',m==='signup');
+      $('nameRow').style.display=m==='signup'?'block':'none'; $('authBtn').textContent=m==='login'?'Log in':'Create account';
+      $('auPass').setAttribute('autocomplete',m==='login'?'current-password':'new-password'); $('authErr').textContent=''; }
+    $('tabLogin').onclick=()=>setMode('login'); $('tabSignup').onclick=()=>setMode('signup');
+    $('authForm').addEventListener('submit', async e=>{
+      e.preventDefault(); const btn=$('authBtn'); btn.disabled=true; $('authErr').textContent='';
+      const body={ email:$('auEmail').value.trim(), password:$('auPass').value, name:$('auName').value.trim() };
+      try{ const r=await fetch('/api/'+(mode==='login'?'login':'student/signup'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        const d=await r.json(); if(!r.ok) throw new Error(d.error); await loadGame();
+      }catch(err){ $('authErr').textContent=err.message; } btn.disabled=false;
+    });
+
+    // ---- summary ----
+    async function loadGame(){
+      show('loading');
+      const r=await fetch('/api/game/'+GAME_ID);
+      if(r.status===401){ show('authScreen'); return; }
+      if(!r.ok){ const d=await r.json().catch(()=>({})); $('loading').innerHTML='<p class="center">'+esc(d.error||'Game not found.')+'</p>'; show('loading'); return; }
+      game=await r.json();
+      $('sumMeta').textContent=`${game.subject} · ${game.topic} · ${game.grade||''}`;
+      $('sumTitle').textContent=game.lessonTitle;
+      $('sumOverview').textContent=game.summary.overview||'';
+      $('sumConcepts').innerHTML=(game.summary.concepts||[]).map(c=>`<div class="concept"><b>${esc(c.term)}</b><span>${esc(c.explanation)}</span></div>`).join('');
+      show('summaryScreen');
+    }
+    $('startBtn').addEventListener('click', startGame);
+
+    // ---- game ----
+    async function startGame(){
+      show('loading');
+      const r=await fetch('/api/game/'+GAME_ID+'/play'); const d=await r.json();
+      questions=d.questions||[]; qi=0; score=0; answers=[]; show('gameScreen'); renderQuestion();
+    }
+    const KEY=['A','B','C','D'];
+    function renderQuestion(){
+      const q=questions[qi];
+      $('qProgress').textContent=`Question ${qi+1} of ${questions.length}`;
+      $('qScore').textContent=score;
+      $('qBarFill').style.width=Math.round((qi/questions.length)*100)+'%';
+      $('qText').textContent=q.question;
+      $('qOptions').innerHTML=q.options.map((o,k)=>`<button class="opt" data-k="${k}"><span class="k">${KEY[k]}</span><span>${esc(o)}</span></button>`).join('');
+      $('qFeedback').className='feedback'; $('qFeedback').innerHTML=''; $('qNextRow').style.display='none';
+    }
+    $('qOptions').addEventListener('click', async e=>{
+      const b=e.target.closest('.opt'); if(!b) return;
+      const choice=+b.dataset.k; const opts=[...$('qOptions').querySelectorAll('.opt')];
+      opts.forEach(o=>o.disabled=true);
+      const r=await fetch('/api/game/'+GAME_ID+'/answer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({questionIndex:qi,choice})});
+      const d=await r.json();
+      answers[qi]=choice;
+      opts[d.correctIndex] && opts[d.correctIndex].classList.add('correct');
+      if(!d.correct){ b.classList.add('wrong'); } else { score++; $('qScore').textContent=score; }
+      const fb=$('qFeedback'); fb.className='feedback show '+(d.correct?'right':'no');
+      fb.innerHTML=`<b>${d.correct?'Correct! ✅':'Not quite ❌'}</b>${esc(d.explanation||'')}`;
+      $('qNextRow').style.display='block';
+      $('nextBtn').textContent = qi+1>=questions.length ? 'See my result →' : 'Next →';
+    });
+    $('nextBtn').addEventListener('click', async ()=>{
+      qi++;
+      if(qi>=questions.length){ await finishGame(); return; }
+      renderQuestion();
+    });
+
+    // ---- result ----
+    async function finishGame(){
+      show('loading');
+      const r=await fetch('/api/game/'+GAME_ID+'/finish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answers})});
+      const d=await r.json();
+      $('resScore').textContent=`${d.score}/${d.total}`;
+      $('resOf').textContent=`${Math.round((d.score/d.total)*100)}% correct`;
+      const pct=d.score/d.total;
+      $('resMsg').textContent = pct===1?'Perfect — you nailed it! 🌟' : pct>=0.7?'Great work! 👏' : pct>=0.5?'Good effort — review the tricky ones.' : 'Keep practising — you’ll get there! 💪';
+      show('resultScreen');
+    }
+    $('againBtn').addEventListener('click', startGame);
+
+    loadGame();
+  </script>
+</body>
+</html>

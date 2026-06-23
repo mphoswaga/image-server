@@ -15,8 +15,9 @@ const { addImages } = require('./admin-images');
 const { generateImage } = require('./ai-image');
 const { parseFraction, detectLabelledDiagram } = require('./concept-diagram');
 const { generateDiagram } = require('./svg-diagram');
-const { generateWorksheet, generateExitTicket } = require('./lesson-pack');
+const { generateWorksheet, generateExitTicket, generateGame } = require('./lesson-pack');
 const { worksheetDocx, exitTicketDocx } = require('./docgen');
+const games = require('./games');
 
 // Add transitions/animations; never let it break the download.
 function safeAnimate(buffer, band) {
@@ -58,6 +59,16 @@ app.post('/api/signup', async (req, res) => {
   try {
     const { email, password, name } = req.body || {};
     const user = await signup(email, password, name);
+    setSession(res, user.id);
+    res.json({ user });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// Students sign up from a game link — always the 'student' role.
+app.post('/api/student/signup', async (req, res) => {
+  try {
+    const { email, password, name } = req.body || {};
+    const user = await signup(email, password, name, 'student');
     setSession(res, user.id);
     res.json({ user });
   } catch (err) { res.status(400).json({ error: err.message }); }
@@ -281,6 +292,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
       subject: String(subject).toLowerCase(), topic: String(topic).toLowerCase(),
       grade: grade || 'middle school', tone, focus, band: built.band,
       slides: built.slides, images: built.images, createdAt: Date.now(),
+      objectives: objectives || '', lessonPlanText, // kept so the student game can be grounded in this lesson
     });
     const filename = `${subject}-${topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
     res.json({
@@ -467,5 +479,73 @@ app.post('/api/download/:id', requireAuth, async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
+
+// ── Student game: create from a deck, play, store results ──────────────────
+// Teacher: turn the current deck into a shareable, persistent student game.
+app.post('/api/game', requireAuth, async (req, res) => {
+  if (req.user.role === 'student') return res.status(403).json({ error: 'Teachers only.' });
+  const deck = decks.get(req.body && req.body.deckId);
+  if (!deck) return res.status(404).json({ error: 'Deck expired — regenerate the deck, then create the game.' });
+  try {
+    const game = await generateGame({ subject: deck.subject, topic: deck.topic, grade: deck.grade, tone: deck.tone, objectives: deck.objectives || '', lessonPlanText: deck.lessonPlanText || '' });
+    const lessonTitle = (deck.slides.find(s => s.type === 'title') || {}).title || deck.topic;
+    const rec = games.createGame({ teacherId: req.userId, teacherName: req.user.name, lessonTitle, subject: deck.subject, topic: deck.topic, grade: deck.grade, game });
+    res.json({ gameId: rec.id, path: `/play/${rec.id}`, questionCount: rec.questions.length });
+  } catch (err) {
+    console.error('Game creation failed:', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Student: lesson summary + meta (NO correct answers).
+app.get('/api/game/:id', requireAuth, (req, res) => {
+  const g = games.getGame(req.params.id);
+  if (!g) return res.status(404).json({ error: 'Game not found.' });
+  res.json({ id: g.id, lessonTitle: g.lessonTitle, subject: g.subject, topic: g.topic, grade: g.grade, summary: g.summary, questionCount: (g.questions || []).length, teacherName: g.teacherName });
+});
+
+// Student: the questions, WITHOUT the correct answers.
+app.get('/api/game/:id/play', requireAuth, (req, res) => {
+  const g = games.getGame(req.params.id);
+  if (!g) return res.status(404).json({ error: 'Game not found.' });
+  res.json({ questions: g.questions.map((q, i) => ({ i, question: q.question, options: q.options })) });
+});
+
+// Student: check one answer (instant feedback).
+app.post('/api/game/:id/answer', requireAuth, (req, res) => {
+  const g = games.getGame(req.params.id);
+  if (!g) return res.status(404).json({ error: 'Game not found.' });
+  const q = g.questions[Number(req.body.questionIndex)];
+  if (!q) return res.status(400).json({ error: 'bad question' });
+  res.json({ correct: Number(req.body.choice) === q.correctIndex, correctIndex: q.correctIndex, explanation: q.explanation });
+});
+
+// Student: finish — server re-scores authoritatively + stores the attempt.
+app.post('/api/game/:id/finish', requireAuth, (req, res) => {
+  const g = games.getGame(req.params.id);
+  if (!g) return res.status(404).json({ error: 'Game not found.' });
+  const answers = Array.isArray(req.body.answers) ? req.body.answers : [];
+  let score = 0;
+  g.questions.forEach((q, i) => { if (Number(answers[i]) === q.correctIndex) score++; });
+  games.recordResult(g.id, { studentId: req.userId, name: req.user.name || req.user.email, score, total: g.questions.length, answers });
+  res.json({ score, total: g.questions.length });
+});
+
+// Teacher: results for one of their games (owner only).
+app.get('/api/game/:id/results', requireAuth, (req, res) => {
+  const g = games.getGame(req.params.id);
+  if (!g) return res.status(404).json({ error: 'Game not found.' });
+  if (g.teacherId !== req.userId) return res.status(403).json({ error: 'Not your game.' });
+  const results = games.getResults(g.id)
+    .map(r => ({ name: r.name, score: r.score, total: r.total, at: r.at, attempts: r.attempts }))
+    .sort((a, b) => b.score - a.score || (a.at < b.at ? -1 : 1));
+  res.json({ lessonTitle: g.lessonTitle, questionCount: g.questions.length, results });
+});
+
+// Teacher: list my games.
+app.get('/api/games', requireAuth, (req, res) => res.json({ games: games.listTeacherGames(req.userId) }));
+
+// Student play page (the shareable link target).
+app.get('/play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'play.html')));
 
 app.listen(PORT, () => console.log(`LessonCope running at http://localhost:${PORT}`));
