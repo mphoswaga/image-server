@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>LessonCope — Lesson Game</title>
   <meta name="theme-color" content="#1f4e79" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
@@ -21,15 +21,15 @@
     html,body { margin:0; }
     body { font-family:'Plus Jakarta Sans',-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--ink); line-height:1.55; min-height:100vh;
       background:radial-gradient(820px 540px at 100% -8%, #e6eefa 0, transparent 52%), radial-gradient(680px 480px at -8% 6%, #fdeede 0, transparent 46%), var(--bg); }
-    .wrap { max-width:680px; margin:0 auto; padding:26px 18px 70px; }
-    .brand { display:flex; align-items:center; justify-content:center; gap:10px; margin:6px 0 20px; }
-    .brandmark { width:34px; height:34px; border-radius:10px; background:linear-gradient(135deg,var(--primary-2),var(--primary)); color:#fff; display:inline-flex; align-items:center; justify-content:center; }
-    .brandmark svg { width:19px; height:19px; }
-    .wordmark { font-family:'Fraunces',Georgia,serif; font-weight:600; font-size:23px; color:var(--primary); letter-spacing:-.5px; }
+    .wrap { max-width:680px; margin:0 auto; padding:22px 16px 50px; }
+    .brand { display:flex; align-items:center; justify-content:center; gap:10px; margin:4px 0 16px; }
+    .brandmark { width:32px; height:32px; border-radius:10px; background:linear-gradient(135deg,var(--primary-2),var(--primary)); color:#fff; display:inline-flex; align-items:center; justify-content:center; }
+    .brandmark svg { width:18px; height:18px; }
+    .wordmark { font-family:'Fraunces',Georgia,serif; font-weight:600; font-size:22px; color:var(--primary); letter-spacing:-.5px; }
     .wordmark .cope { color:var(--accent); }
-    .card { background:var(--card); border:1px solid var(--border); border-radius:20px; box-shadow:var(--sh); padding:28px; }
-    h1 { font-family:'Fraunces',Georgia,serif; font-weight:600; font-size:26px; margin:0 0 4px; color:var(--primary); letter-spacing:-.4px; }
-    .sub { color:var(--muted); font-size:14.5px; margin:0 0 20px; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:20px; box-shadow:var(--sh); padding:26px; }
+    h1 { font-family:'Fraunces',Georgia,serif; font-weight:600; font-size:25px; margin:0 0 4px; color:var(--primary); letter-spacing:-.4px; }
+    .sub { color:var(--muted); font-size:14.5px; margin:0 0 18px; }
     label { display:block; font-weight:600; font-size:12.5px; margin:14px 0 6px; color:#42505f; }
     input { width:100%; padding:12px 13px; font-size:15px; font-family:inherit; border:1px solid var(--border); border-radius:12px; background:#fdfdfe; }
     input:focus { outline:none; border-color:var(--primary-2); box-shadow:0 0 0 4px rgba(42,106,166,.14); }
@@ -42,38 +42,42 @@
     .tabs button.active { background:#fff; color:var(--primary); box-shadow:var(--sh); }
     .err { color:var(--err); font-size:13px; min-height:18px; margin-top:10px; text-align:center; }
     .meta-pill { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; padding:4px 11px; border-radius:999px; background:#eaf2fa; color:var(--primary); margin-bottom:14px; text-transform:capitalize; }
-    /* summary */
-    .concept { border:1px solid var(--border); border-radius:14px; padding:13px 15px; margin-bottom:10px; background:#fff; }
+    .concept { border:1px solid var(--border); border-radius:14px; padding:13px 15px; margin-bottom:10px; }
     .concept b { color:var(--primary); display:block; margin-bottom:2px; }
-    .concept span { font-size:14px; color:var(--ink); }
+    .concept span { font-size:14px; }
     .overview { background:#eaf2fa; border-radius:14px; padding:14px 16px; font-size:15px; margin-bottom:18px; }
-    /* game */
-    .progress { display:flex; align-items:center; justify-content:space-between; font-size:13px; color:var(--muted); font-weight:600; margin-bottom:14px; }
-    .score-chip { background:var(--accent); color:#fff; border-radius:999px; padding:4px 12px; font-weight:800; }
-    .qbar { height:7px; background:#e8eaf0; border-radius:99px; overflow:hidden; margin-bottom:18px; }
-    .qbar > div { height:100%; background:linear-gradient(90deg,var(--primary-2),var(--primary)); transition:width .3s; }
-    .question { font-size:20px; font-weight:700; margin:0 0 18px; line-height:1.35; }
-    .options { display:grid; gap:11px; }
-    .opt { text-align:left; padding:15px 17px; border-radius:14px; border:2px solid transparent; font-size:15.5px; font-weight:600; font-family:inherit; color:#fff; cursor:pointer; transition:.12s; display:flex; align-items:center; gap:12px; }
-    .opt .k { width:26px; height:26px; border-radius:7px; background:rgba(255,255,255,.25); display:inline-flex; align-items:center; justify-content:center; font-weight:800; flex:none; }
-    .opt:nth-child(1){ background:var(--c1); } .opt:nth-child(2){ background:var(--c2); }
-    .opt:nth-child(3){ background:var(--c3); } .opt:nth-child(4){ background:var(--c4); }
-    .opt:hover:not(:disabled){ transform:translateY(-1px); filter:brightness(1.06); }
-    .opt:disabled { cursor:default; opacity:.55; }
-    .opt.correct { outline:4px solid #b2f2bb; opacity:1; }
-    .opt.wrong { outline:4px solid #ffc9c9; opacity:1; }
-    .feedback { margin-top:18px; padding:14px 16px; border-radius:14px; font-size:14.5px; display:none; }
-    .feedback.show { display:block; }
-    .feedback.right { background:#ebfbee; color:#0f6b3d; } .feedback.no { background:#fff0ef; color:#a32820; }
-    .feedback b { display:block; margin-bottom:3px; }
-    .next-row { margin-top:16px; }
-    /* result */
-    .result-score { font-family:'Fraunces',Georgia,serif; font-size:52px; font-weight:700; color:var(--primary); text-align:center; margin:6px 0 0; }
-    .result-of { text-align:center; color:var(--muted); margin:0 0 8px; }
-    .result-msg { text-align:center; font-size:16px; margin:0 0 22px; }
     .center { text-align:center; }
     .spinner { display:inline-block; width:30px; height:30px; border:3px solid rgba(31,78,121,.2); border-top-color:var(--primary-2); border-radius:50%; animation:spin .7s linear infinite; }
     @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* ---- arcade ---- */
+    #gameScreen { padding:0; overflow:hidden; }
+    .hud { display:flex; align-items:center; justify-content:space-between; padding:13px 18px; font-weight:800; font-size:15px; }
+    .hud .lives { letter-spacing:3px; font-size:18px; }
+    .hud .prog { color:var(--primary); }
+    .stage { position:relative; width:100%; max-width:340px; margin:0 auto; }
+    #gameCanvas { width:100%; display:block; background:#39404e; touch-action:none; }
+    .controls { display:flex; gap:16px; justify-content:center; padding:16px; }
+    .ctrl { width:96px; height:58px; border-radius:15px; border:none; background:linear-gradient(135deg,var(--primary-2),var(--primary)); color:#fff; font-size:26px; font-weight:800; cursor:pointer; user-select:none; -webkit-user-select:none; touch-action:none; box-shadow:0 6px 14px rgba(31,78,121,.28); }
+    .ctrl:active { transform:translateY(1px); filter:brightness(1.12); }
+    .tip { text-align:center; font-size:12px; color:var(--muted); padding:0 0 12px; }
+    .q-overlay { position:absolute; inset:0; background:rgba(16,24,40,.82); display:none; align-items:center; justify-content:center; padding:12px; }
+    .q-overlay.show { display:flex; }
+    .q-box { background:#fff; border-radius:16px; padding:16px; width:100%; max-width:312px; max-height:97%; overflow:auto; box-shadow:var(--sh-lg); }
+    .q-box .crash { font-weight:800; color:var(--err); font-size:13px; text-align:center; margin:0 0 8px; }
+    .question { font-size:16.5px; font-weight:700; margin:0 0 14px; line-height:1.35; }
+    .options { display:grid; gap:9px; }
+    .opt { text-align:left; padding:12px 14px; border-radius:12px; border:2px solid transparent; font-size:14.5px; font-weight:600; font-family:inherit; color:#fff; cursor:pointer; transition:.12s; display:flex; align-items:center; gap:10px; }
+    .opt .k { width:24px; height:24px; border-radius:6px; background:rgba(255,255,255,.25); display:inline-flex; align-items:center; justify-content:center; font-weight:800; flex:none; }
+    .opt:nth-child(1){ background:var(--c1); } .opt:nth-child(2){ background:var(--c2); } .opt:nth-child(3){ background:var(--c3); } .opt:nth-child(4){ background:var(--c4); }
+    .opt:hover:not(:disabled){ filter:brightness(1.07); } .opt:disabled { cursor:default; opacity:.55; }
+    .opt.correct { outline:4px solid #b2f2bb; opacity:1; } .opt.wrong { outline:4px solid #ffc9c9; opacity:1; }
+    .feedback { margin-top:14px; padding:12px 14px; border-radius:12px; font-size:14px; display:none; }
+    .feedback.show { display:block; } .feedback.right { background:#ebfbee; color:#0f6b3d; } .feedback.no { background:#fff0ef; color:#a32820; }
+    .feedback b { display:block; margin-bottom:3px; }
+    .result-score { font-family:'Fraunces',Georgia,serif; font-size:52px; font-weight:700; color:var(--primary); text-align:center; margin:6px 0 0; }
+    .result-of { text-align:center; color:var(--muted); margin:0 0 8px; }
+    .result-msg { text-align:center; font-size:16px; margin:0 0 22px; }
   </style>
 </head>
 <body>
@@ -103,25 +107,34 @@
     <div id="summaryScreen" class="card" style="display:none">
       <div class="meta-pill" id="sumMeta"></div>
       <h1 id="sumTitle"></h1>
-      <p class="sub">Read this recap. When you understand it, start the game.</p>
+      <p class="sub">Read this recap. When you understand it, start the game. You steer a car — every time you crash, you answer a question!</p>
       <div class="overview" id="sumOverview"></div>
       <div id="sumConcepts"></div>
-      <div style="margin-top:22px"><button id="startBtn" class="btn accent">I understand — start the game 🎮</button></div>
+      <div style="margin-top:22px"><button id="startBtn" class="btn accent">I understand — start driving 🚗</button></div>
     </div>
 
-    <!-- GAME -->
+    <!-- GAME (arcade) -->
     <div id="gameScreen" class="card" style="display:none">
-      <div class="progress"><span id="qProgress"></span><span class="score-chip" id="qScore">0</span></div>
-      <div class="qbar"><div id="qBarFill" style="width:0%"></div></div>
-      <p class="question" id="qText"></p>
-      <div class="options" id="qOptions"></div>
-      <div class="feedback" id="qFeedback"></div>
-      <div class="next-row" id="qNextRow" style="display:none"><button id="nextBtn" class="btn primary">Next →</button></div>
+      <div class="hud"><span class="lives" id="hudLives"></span><span class="prog" id="hudProg"></span></div>
+      <div class="stage">
+        <canvas id="gameCanvas" width="320" height="480"></canvas>
+        <div class="q-overlay" id="qOverlay">
+          <div class="q-box">
+            <p class="crash">💥 Crash! Answer to win your life back:</p>
+            <p class="question" id="qText"></p>
+            <div class="options" id="qOptions"></div>
+            <div class="feedback" id="qFeedback"></div>
+            <div id="qNextRow" style="display:none;margin-top:14px"><button id="nextBtn" class="btn primary">Keep driving →</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="controls"><button id="leftBtn" class="ctrl" aria-label="Left">◀</button><button id="rightBtn" class="ctrl" aria-label="Right">▶</button></div>
+      <p class="tip">Use ◀ ▶, arrow keys, or drag on the road. Dodge the cars — they speed up!</p>
     </div>
 
     <!-- RESULT -->
     <div id="resultScreen" class="card" style="display:none">
-      <h1 class="center">Game complete! 🎉</h1>
+      <h1 class="center">Game over! 🏁</h1>
       <div class="result-score" id="resScore"></div>
       <p class="result-of" id="resOf"></p>
       <p class="result-msg" id="resMsg"></p>
@@ -134,8 +147,7 @@
     const $=id=>document.getElementById(id);
     const esc=s=>String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
     const GAME_ID=location.pathname.split('/').filter(Boolean).pop();
-    let game=null, questions=[], qi=0, score=0, answers=[];
-
+    let game=null, questions=[], answers=[];
     function show(id){ ['loading','authScreen','summaryScreen','gameScreen','resultScreen'].forEach(s=>$(s).style.display=s===id?'block':'none'); }
 
     // ---- auth ----
@@ -167,51 +179,136 @@
     }
     $('startBtn').addEventListener('click', startGame);
 
-    // ---- game ----
+    /* ======================= ARCADE ENGINE ======================= */
+    const cv=$('gameCanvas'), cx=cv.getContext('2d');
+    const W=cv.width, H=cv.height;
+    const ROAD_X=26, ROAD_W=W-52, LANES=3, LANE_W=ROAD_W/LANES;
+    const PW=42, PH=66, EW=42, EH=66;
+    // blocky "tetris" car: . empty, 1 body, 2 window, 3 wheel
+    const CAR=['.111.','31113','12221','11111','.111.','12221','11111','31113'];
+    const PAL_P={'1':'#2a6aa6','2':'#a5d8ff','3':'#10161f'};
+    const ENEMY_PALS=[{'1':'#e8833a','2':'#ffe3c2','3':'#10161f'},{'1':'#c0392b','2':'#ffc9c9','3':'#10161f'},{'1':'#2f9e44','2':'#b2f2bb','3':'#10161f'},{'1':'#9c36b5','2':'#eebefa','3':'#10161f'}];
+    function drawCar(x,y,w,h,pal){ const cols=5,rows=8,cw=w/cols,ch=h/rows;
+      for(let r=0;r<rows;r++){ const row=CAR[r]; for(let c=0;c<cols;c++){ const ch2=row[c]; if(ch2==='.')continue; cx.fillStyle=pal[ch2]; cx.fillRect(x+c*cw, y+r*ch, cw+0.6, ch+0.6); } } }
+
+    let S=null, raf=0, lastT=0, keyDir=0, dragX=null;
+    function laneCenter(l){ return ROAD_X + l*LANE_W + LANE_W/2; }
+    function newState(){
+      return { px:W/2-PW/2, py:H-PH-14, dir:0, enemies:[], spawnT:0, dash:0,
+        lives:3, qi:0, score:0, elapsed:0, invuln:1.0, paused:false, running:true };
+    }
+    function updateHud(){ $('hudLives').innerHTML='❤️'.repeat(Math.max(0,S.lives))||'—'; $('hudProg').textContent=`Q ${Math.min(S.qi+ (S.paused?0:0), questions.length)} / ${questions.length}`; }
+    function speed(){ return 120 + S.elapsed*9; }                 // px/s, ramps up
+    function spawnGap(){ return Math.max(0.55, 1.15 - S.elapsed*0.012); }
+
     async function startGame(){
       show('loading');
       const r=await fetch('/api/game/'+GAME_ID+'/play'); const d=await r.json();
-      questions=d.questions||[]; qi=0; score=0; answers=[]; show('gameScreen'); renderQuestion();
+      questions=d.questions||[]; answers=new Array(questions.length);
+      S=newState(); show('gameScreen'); updateHud();
+      $('qOverlay').classList.remove('show');
+      lastT=performance.now(); cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
     }
+
+    function loop(t){
+      if(!S||!S.running) return;
+      let dt=(t-lastT)/1000; lastT=t; if(dt>0.05) dt=0.05;
+      if(!S.paused){ update(dt); }
+      render();
+      raf=requestAnimationFrame(loop);
+    }
+
+    function update(dt){
+      S.elapsed+=dt; S.dash=(S.dash+speed()*dt)%40; if(S.invuln>0) S.invuln-=dt;
+      // movement
+      if(dragX!=null){ S.px=Math.max(ROAD_X, Math.min(ROAD_X+ROAD_W-PW, dragX-PW/2)); }
+      else { const dir=keyDir||S.dir; S.px+=dir*230*dt; S.px=Math.max(ROAD_X, Math.min(ROAD_X+ROAD_W-PW, S.px)); }
+      // spawn
+      S.spawnT-=dt;
+      if(S.spawnT<=0){ S.spawnT=spawnGap(); const lane=Math.floor(Math.random()*LANES); S.enemies.push({ x:laneCenter(lane)-EW/2, y:-EH, pal:ENEMY_PALS[Math.floor(Math.random()*ENEMY_PALS.length)] }); }
+      // move enemies + collide
+      const sp=speed();
+      for(let i=S.enemies.length-1;i>=0;i--){ const e=S.enemies[i]; e.y+=sp*dt;
+        if(e.y>H){ S.enemies.splice(i,1); continue; }
+        if(S.invuln<=0 && e.x < S.px+PW-8 && e.x+EW-8 > S.px && e.y < S.py+PH-10 && e.y+EH-10 > S.py){ hit(i); return; }
+      }
+    }
+
+    function render(){
+      cx.clearRect(0,0,W,H);
+      // grass
+      cx.fillStyle='#2f3a30'; cx.fillRect(0,0,W,H);
+      // road
+      cx.fillStyle='#39404e'; cx.fillRect(ROAD_X,0,ROAD_W,H);
+      cx.fillStyle='#cfd6e2'; cx.fillRect(ROAD_X-4,0,4,H); cx.fillRect(ROAD_X+ROAD_W,0,4,H);
+      // lane dashes (scrolling)
+      cx.fillStyle='rgba(255,255,255,.55)';
+      for(let l=1;l<LANES;l++){ const x=ROAD_X+l*LANE_W-2; for(let y=-40+S.dash;y<H;y+=40){ cx.fillRect(x,y,4,22); } }
+      // enemies
+      S.enemies.forEach(e=>drawCar(e.x,e.y,EW,EH,e.pal));
+      // player (blink while invulnerable)
+      if(!(S.invuln>0 && Math.floor(S.elapsed*12)%2)) drawCar(S.px,S.py,PW,PH,PAL_P);
+    }
+
+    function hit(idx){
+      S.enemies.splice(idx,1);
+      S.lives--; updateHud();
+      if(S.qi < questions.length){ askQuestion(); }
+      else if(S.lives<=0){ endGame(); }
+      else { S.invuln=1.2; }
+    }
+
+    // ---- crash question overlay ----
     const KEY=['A','B','C','D'];
-    function renderQuestion(){
-      const q=questions[qi];
-      $('qProgress').textContent=`Question ${qi+1} of ${questions.length}`;
-      $('qScore').textContent=score;
-      $('qBarFill').style.width=Math.round((qi/questions.length)*100)+'%';
+    function askQuestion(){
+      S.paused=true;
+      const q=questions[S.qi];
       $('qText').textContent=q.question;
       $('qOptions').innerHTML=q.options.map((o,k)=>`<button class="opt" data-k="${k}"><span class="k">${KEY[k]}</span><span>${esc(o)}</span></button>`).join('');
       $('qFeedback').className='feedback'; $('qFeedback').innerHTML=''; $('qNextRow').style.display='none';
+      $('qOverlay').classList.add('show');
     }
     $('qOptions').addEventListener('click', async e=>{
       const b=e.target.closest('.opt'); if(!b) return;
-      const choice=+b.dataset.k; const opts=[...$('qOptions').querySelectorAll('.opt')];
-      opts.forEach(o=>o.disabled=true);
-      const r=await fetch('/api/game/'+GAME_ID+'/answer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({questionIndex:qi,choice})});
-      const d=await r.json();
-      answers[qi]=choice;
+      const choice=+b.dataset.k; const opts=[...$('qOptions').querySelectorAll('.opt')]; opts.forEach(o=>o.disabled=true);
+      const r=await fetch('/api/game/'+GAME_ID+'/answer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({questionIndex:S.qi,choice})});
+      const d=await r.json(); answers[S.qi]=choice;
       opts[d.correctIndex] && opts[d.correctIndex].classList.add('correct');
-      if(!d.correct){ b.classList.add('wrong'); } else { score++; $('qScore').textContent=score; }
       const fb=$('qFeedback'); fb.className='feedback show '+(d.correct?'right':'no');
-      fb.innerHTML=`<b>${d.correct?'Correct! ✅':'Not quite ❌'}</b>${esc(d.explanation||'')}`;
+      if(d.correct){ S.score++; S.lives++; updateHud(); fb.innerHTML=`<b>Correct! ✅ +1 life</b>${esc(d.explanation||'')}`; }
+      else { b.classList.add('wrong'); fb.innerHTML=`<b>Not quite ❌</b>${esc(d.explanation||'')}`; }
+      $('nextBtn').textContent = (S.qi+1>=questions.length) ? 'See my result →' : 'Keep driving →';
       $('qNextRow').style.display='block';
-      $('nextBtn').textContent = qi+1>=questions.length ? 'See my result →' : 'Next →';
     });
-    $('nextBtn').addEventListener('click', async ()=>{
-      qi++;
-      if(qi>=questions.length){ await finishGame(); return; }
-      renderQuestion();
+    $('nextBtn').addEventListener('click', ()=>{
+      $('qOverlay').classList.remove('show');
+      S.qi++;
+      if(S.qi>=questions.length || S.lives<=0){ endGame(); return; }
+      // clear cars near the player so you don't instantly re-crash
+      S.enemies=S.enemies.filter(e=>e.y < S.py-120); S.invuln=1.6; S.paused=false; lastT=performance.now();
     });
 
+    // ---- controls ----
+    document.addEventListener('keydown',e=>{ if(e.key==='ArrowLeft'){keyDir=-1;e.preventDefault();} if(e.key==='ArrowRight'){keyDir=1;e.preventDefault();} });
+    document.addEventListener('keyup',e=>{ if((e.key==='ArrowLeft'&&keyDir===-1)||(e.key==='ArrowRight'&&keyDir===1)) keyDir=0; });
+    function holdBtn(el,dir){ const on=e=>{e.preventDefault(); if(S)S.dir=dir;}; const off=e=>{e&&e.preventDefault(); if(S)S.dir=0;};
+      el.addEventListener('pointerdown',on); el.addEventListener('pointerup',off); el.addEventListener('pointerleave',off); el.addEventListener('pointercancel',off); }
+    holdBtn($('leftBtn'),-1); holdBtn($('rightBtn'),1);
+    // drag on the road
+    function canvasX(e){ const r=cv.getBoundingClientRect(); return ((e.clientX-r.left)/r.width)*W; }
+    cv.addEventListener('pointerdown',e=>{ if(S&&!S.paused){ dragX=canvasX(e); cv.setPointerCapture(e.pointerId); } });
+    cv.addEventListener('pointermove',e=>{ if(dragX!=null) dragX=canvasX(e); });
+    const endDrag=()=>{ dragX=null; }; cv.addEventListener('pointerup',endDrag); cv.addEventListener('pointercancel',endDrag);
+
     // ---- result ----
-    async function finishGame(){
-      show('loading');
-      const r=await fetch('/api/game/'+GAME_ID+'/finish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answers})});
+    async function endGame(){
+      S.running=false; cancelAnimationFrame(raf); show('loading');
+      const r=await fetch('/api/game/'+GAME_ID+'/finish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answers:answers.map(a=>a==null?-1:a)})});
       const d=await r.json();
       $('resScore').textContent=`${d.score}/${d.total}`;
       $('resOf').textContent=`${Math.round((d.score/d.total)*100)}% correct`;
       const pct=d.score/d.total;
-      $('resMsg').textContent = pct===1?'Perfect — you nailed it! 🌟' : pct>=0.7?'Great work! 👏' : pct>=0.5?'Good effort — review the tricky ones.' : 'Keep practising — you’ll get there! 💪';
+      $('resMsg').textContent = pct===1?'Perfect — you nailed every question! 🌟' : pct>=0.7?'Great driving and great answers! 👏' : pct>=0.5?'Good effort — review the tricky ones.' : 'Keep practising — you’ll get there! 💪';
       show('resultScreen');
     }
     $('againBtn').addEventListener('click', startGame);
