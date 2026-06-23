@@ -43,41 +43,54 @@
     .err { color:var(--err); font-size:13px; min-height:18px; margin-top:10px; text-align:center; }
     .meta-pill { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; padding:4px 11px; border-radius:999px; background:#eaf2fa; color:var(--primary); margin-bottom:14px; text-transform:capitalize; }
     .concept { border:1px solid var(--border); border-radius:14px; padding:13px 15px; margin-bottom:10px; }
-    .concept b { color:var(--primary); display:block; margin-bottom:2px; }
-    .concept span { font-size:14px; }
+    .concept b { color:var(--primary); display:block; margin-bottom:2px; } .concept span { font-size:14px; }
     .overview { background:#eaf2fa; border-radius:14px; padding:14px 16px; font-size:15px; margin-bottom:18px; }
     .center { text-align:center; }
     .spinner { display:inline-block; width:30px; height:30px; border:3px solid rgba(31,78,121,.2); border-top-color:var(--primary-2); border-radius:50%; animation:spin .7s linear infinite; }
     @keyframes spin { to { transform:rotate(360deg); } }
 
-    /* ---- arcade ---- */
+    /* picker */
+    .game-cards { display:grid; gap:12px; }
+    .game-pick { text-align:left; display:flex; align-items:center; gap:14px; padding:16px; border:1.5px solid var(--border); border-radius:16px; background:#fff; cursor:pointer; font-family:inherit; transition:.12s; }
+    .game-pick:hover { border-color:var(--primary-2); background:#fbfcfe; transform:translateY(-1px); box-shadow:var(--sh); }
+    .game-pick .gi { font-size:30px; flex:none; }
+    .game-pick b { display:block; font-size:16px; color:var(--primary); }
+    .game-pick span { font-size:13px; color:var(--muted); }
+
+    /* arcade shell */
     #gameScreen { padding:0; overflow:hidden; }
-    .hud { display:flex; align-items:center; justify-content:space-between; padding:13px 18px; font-weight:800; font-size:15px; }
-    .hud .lives { letter-spacing:3px; font-size:18px; }
-    .hud .prog { color:var(--primary); }
-    .stage { position:relative; width:100%; max-width:340px; margin:0 auto; }
-    #gameCanvas { width:100%; display:block; background:#39404e; touch-action:none; }
-    .controls { display:flex; gap:16px; justify-content:center; padding:16px; }
-    .ctrl { width:96px; height:58px; border-radius:15px; border:none; background:linear-gradient(135deg,var(--primary-2),var(--primary)); color:#fff; font-size:26px; font-weight:800; cursor:pointer; user-select:none; -webkit-user-select:none; touch-action:none; box-shadow:0 6px 14px rgba(31,78,121,.28); }
+    .hud { display:flex; align-items:center; justify-content:space-between; padding:11px 16px; font-weight:800; font-size:14px; }
+    .hud .lives { letter-spacing:2px; font-size:17px; } .hud .prog { color:var(--primary); } .hud .score { color:var(--accent); }
+    .qbanner { padding:10px 16px 4px; display:none; }
+    .qbanner .qt { font-size:15.5px; font-weight:700; margin:0 0 8px; line-height:1.3; }
+    .legend { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+    .leg { font-size:12.5px; font-weight:600; color:#fff; border-radius:9px; padding:7px 9px; display:flex; gap:7px; align-items:center; }
+    .leg b { width:20px; height:20px; border-radius:5px; background:rgba(255,255,255,.28); display:inline-flex; align-items:center; justify-content:center; flex:none; }
+    .leg0{background:var(--c1)} .leg1{background:var(--c2)} .leg2{background:var(--c3)} .leg3{background:var(--c4)}
+    .qfb { margin:8px 16px 0; padding:9px 12px; border-radius:11px; font-size:13px; display:none; }
+    .qfb.show { display:block; } .qfb.right { background:#ebfbee; color:#0f6b3d; } .qfb.no { background:#fff0ef; color:#a32820; } .qfb b { display:block; }
+    .stage { position:relative; width:100%; max-width:340px; margin:8px auto 0; }
+    #gameCanvas { width:100%; display:block; background:#39404e; touch-action:none; border-radius:4px; }
+    .controls { display:flex; gap:14px; justify-content:center; align-items:center; padding:14px; }
+    .ctrl { width:88px; height:56px; border-radius:15px; border:none; background:linear-gradient(135deg,var(--primary-2),var(--primary)); color:#fff; font-size:24px; font-weight:800; cursor:pointer; user-select:none; -webkit-user-select:none; touch-action:none; box-shadow:0 6px 14px rgba(31,78,121,.28); display:flex; align-items:center; justify-content:center; }
+    .ctrl.fire { background:linear-gradient(135deg,#f0954a,var(--accent)); width:104px; font-size:17px; }
     .ctrl:active { transform:translateY(1px); filter:brightness(1.12); }
-    .tip { text-align:center; font-size:12px; color:var(--muted); padding:0 0 12px; }
+    .tip { text-align:center; font-size:12px; color:var(--muted); padding:0 14px 12px; }
+    /* car crash overlay */
     .q-overlay { position:absolute; inset:0; background:rgba(16,24,40,.82); display:none; align-items:center; justify-content:center; padding:12px; }
     .q-overlay.show { display:flex; }
     .q-box { background:#fff; border-radius:16px; padding:16px; width:100%; max-width:312px; max-height:97%; overflow:auto; box-shadow:var(--sh-lg); }
     .q-box .crash { font-weight:800; color:var(--err); font-size:13px; text-align:center; margin:0 0 8px; }
-    .question { font-size:16.5px; font-weight:700; margin:0 0 14px; line-height:1.35; }
+    .question { font-size:16px; font-weight:700; margin:0 0 13px; line-height:1.35; }
     .options { display:grid; gap:9px; }
-    .opt { text-align:left; padding:12px 14px; border-radius:12px; border:2px solid transparent; font-size:14.5px; font-weight:600; font-family:inherit; color:#fff; cursor:pointer; transition:.12s; display:flex; align-items:center; gap:10px; }
+    .opt { text-align:left; padding:12px 14px; border-radius:12px; border:2px solid transparent; font-size:14.5px; font-weight:600; font-family:inherit; color:#fff; cursor:pointer; display:flex; align-items:center; gap:10px; }
     .opt .k { width:24px; height:24px; border-radius:6px; background:rgba(255,255,255,.25); display:inline-flex; align-items:center; justify-content:center; font-weight:800; flex:none; }
     .opt:nth-child(1){ background:var(--c1); } .opt:nth-child(2){ background:var(--c2); } .opt:nth-child(3){ background:var(--c3); } .opt:nth-child(4){ background:var(--c4); }
-    .opt:hover:not(:disabled){ filter:brightness(1.07); } .opt:disabled { cursor:default; opacity:.55; }
-    .opt.correct { outline:4px solid #b2f2bb; opacity:1; } .opt.wrong { outline:4px solid #ffc9c9; opacity:1; }
+    .opt:disabled { cursor:default; opacity:.55; } .opt.correct { outline:4px solid #b2f2bb; opacity:1; } .opt.wrong { outline:4px solid #ffc9c9; opacity:1; }
     .feedback { margin-top:14px; padding:12px 14px; border-radius:12px; font-size:14px; display:none; }
-    .feedback.show { display:block; } .feedback.right { background:#ebfbee; color:#0f6b3d; } .feedback.no { background:#fff0ef; color:#a32820; }
-    .feedback b { display:block; margin-bottom:3px; }
+    .feedback.show { display:block; } .feedback.right { background:#ebfbee; color:#0f6b3d; } .feedback.no { background:#fff0ef; color:#a32820; } .feedback b { display:block; margin-bottom:3px; }
     .result-score { font-family:'Fraunces',Georgia,serif; font-size:52px; font-weight:700; color:var(--primary); text-align:center; margin:6px 0 0; }
-    .result-of { text-align:center; color:var(--muted); margin:0 0 8px; }
-    .result-msg { text-align:center; font-size:16px; margin:0 0 22px; }
+    .result-of { text-align:center; color:var(--muted); margin:0 0 8px; } .result-msg { text-align:center; font-size:16px; margin:0 0 22px; }
   </style>
 </head>
 <body>
@@ -89,7 +102,6 @@
 
     <div id="loading" class="card center"><div class="spinner"></div></div>
 
-    <!-- STUDENT AUTH -->
     <div id="authScreen" class="card" style="display:none">
       <h1>Join the lesson game</h1>
       <p class="sub">Sign in as a student to play and see your results.</p>
@@ -103,19 +115,29 @@
       </form>
     </div>
 
-    <!-- LESSON SUMMARY -->
     <div id="summaryScreen" class="card" style="display:none">
       <div class="meta-pill" id="sumMeta"></div>
       <h1 id="sumTitle"></h1>
-      <p class="sub">Read this recap. When you understand it, start the game. You steer a car — every time you crash, you answer a question!</p>
+      <p class="sub">Read this recap. When you understand it, choose a game to play!</p>
       <div class="overview" id="sumOverview"></div>
       <div id="sumConcepts"></div>
-      <div style="margin-top:22px"><button id="startBtn" class="btn accent">I understand — start driving 🚗</button></div>
+      <div style="margin-top:22px"><button id="startBtn" class="btn accent">I understand — choose a game 🎮</button></div>
     </div>
 
-    <!-- GAME (arcade) -->
+    <div id="pickerScreen" class="card" style="display:none">
+      <h1>Choose your game</h1>
+      <p class="sub">Same questions — your pick of game. Ready?</p>
+      <div class="game-cards">
+        <button class="game-pick" data-game="car"><span class="gi">🚗</span><span><b>Car Dodge</b><span>Steer and dodge traffic — crash to answer a question.</span></span></button>
+        <button class="game-pick" data-game="space"><span class="gi">🚀</span><span><b>Space Blaster</b><span>Move and FIRE at the asteroid with the correct answer.</span></span></button>
+        <button class="game-pick" data-game="runner"><span class="gi">🏃</span><span><b>Answer Runner</b><span>Run through the gate with the correct answer.</span></span></button>
+      </div>
+    </div>
+
     <div id="gameScreen" class="card" style="display:none">
-      <div class="hud"><span class="lives" id="hudLives"></span><span class="prog" id="hudProg"></span></div>
+      <div class="hud"><span class="lives" id="hudLives"></span><span class="prog" id="hudProg"></span><span class="score" id="hudScore"></span></div>
+      <div class="qbanner" id="qBanner"><p class="qt" id="qText2"></p><div class="legend" id="qLegend"></div></div>
+      <div class="qfb" id="qFb"></div>
       <div class="stage">
         <canvas id="gameCanvas" width="320" height="480"></canvas>
         <div class="q-overlay" id="qOverlay">
@@ -128,17 +150,20 @@
           </div>
         </div>
       </div>
-      <div class="controls"><button id="leftBtn" class="ctrl" aria-label="Left">◀</button><button id="rightBtn" class="ctrl" aria-label="Right">▶</button></div>
-      <p class="tip">Use ◀ ▶, arrow keys, or drag on the road. Dodge the cars — they speed up!</p>
+      <div class="controls">
+        <button id="leftBtn" class="ctrl" aria-label="Left">◀</button>
+        <button id="fireBtn" class="ctrl fire" style="display:none">FIRE</button>
+        <button id="rightBtn" class="ctrl" aria-label="Right">▶</button>
+      </div>
+      <p class="tip" id="dragTip"></p>
     </div>
 
-    <!-- RESULT -->
     <div id="resultScreen" class="card" style="display:none">
       <h1 class="center">Game over! 🏁</h1>
       <div class="result-score" id="resScore"></div>
       <p class="result-of" id="resOf"></p>
       <p class="result-msg" id="resMsg"></p>
-      <button id="againBtn" class="btn primary">Play again</button>
+      <button id="againBtn" class="btn primary">Play another game</button>
       <p class="center sub" style="margin-top:16px">Your teacher can see your result.</p>
     </div>
   </div>
@@ -147,8 +172,11 @@
     const $=id=>document.getElementById(id);
     const esc=s=>String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
     const GAME_ID=location.pathname.split('/').filter(Boolean).pop();
-    let game=null, questions=[], answers=[];
-    function show(id){ ['loading','authScreen','summaryScreen','gameScreen','resultScreen'].forEach(s=>$(s).style.display=s===id?'block':'none'); }
+    const LCOL=['#1971c2','#e8833a','#2f9e44','#9c36b5'];
+    let game=null, questions=[], answers=[], qi=0, score=0, lives=3, active=null, raf=0, lastT=0;
+    let keyDir=0, dragX=null, fireQueued=false;
+    const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), rnd=n=>Math.floor(Math.random()*n);
+    function show(id){ ['loading','authScreen','summaryScreen','pickerScreen','gameScreen','resultScreen'].forEach(s=>$(s).style.display=s===id?'block':'none'); }
 
     // ---- auth ----
     let mode='login';
@@ -164,7 +192,7 @@
       }catch(err){ $('authErr').textContent=err.message; } btn.disabled=false;
     });
 
-    // ---- summary ----
+    // ---- summary + picker ----
     async function loadGame(){
       show('loading');
       const r=await fetch('/api/game/'+GAME_ID);
@@ -177,141 +205,129 @@
       $('sumConcepts').innerHTML=(game.summary.concepts||[]).map(c=>`<div class="concept"><b>${esc(c.term)}</b><span>${esc(c.explanation)}</span></div>`).join('');
       show('summaryScreen');
     }
-    $('startBtn').addEventListener('click', startGame);
+    $('startBtn').addEventListener('click', ()=>show('pickerScreen'));
+    document.querySelectorAll('.game-pick').forEach(b=>b.addEventListener('click',()=>pickGame(b.dataset.game)));
 
-    /* ======================= ARCADE ENGINE ======================= */
-    const cv=$('gameCanvas'), cx=cv.getContext('2d');
-    const W=cv.width, H=cv.height;
-    const ROAD_X=26, ROAD_W=W-52, LANES=3, LANE_W=ROAD_W/LANES;
-    const PW=42, PH=66, EW=42, EH=66;
-    // blocky "tetris" car: . empty, 1 body, 2 window, 3 wheel
-    const CAR=['.111.','31113','12221','11111','.111.','12221','11111','31113'];
-    const PAL_P={'1':'#2a6aa6','2':'#a5d8ff','3':'#10161f'};
-    const ENEMY_PALS=[{'1':'#e8833a','2':'#ffe3c2','3':'#10161f'},{'1':'#c0392b','2':'#ffc9c9','3':'#10161f'},{'1':'#2f9e44','2':'#b2f2bb','3':'#10161f'},{'1':'#9c36b5','2':'#eebefa','3':'#10161f'}];
-    function drawCar(x,y,w,h,pal){ const cols=5,rows=8,cw=w/cols,ch=h/rows;
-      for(let r=0;r<rows;r++){ const row=CAR[r]; for(let c=0;c<cols;c++){ const ch2=row[c]; if(ch2==='.')continue; cx.fillStyle=pal[ch2]; cx.fillRect(x+c*cw, y+r*ch, cw+0.6, ch+0.6); } } }
-
-    let S=null, raf=0, lastT=0, keyDir=0, dragX=null;
-    function laneCenter(l){ return ROAD_X + l*LANE_W + LANE_W/2; }
-    function newState(){
-      return { px:W/2-PW/2, py:H-PH-14, dir:0, enemies:[], spawnT:0, dash:0,
-        lives:3, qi:0, score:0, elapsed:0, invuln:1.0, paused:false, running:true };
-    }
-    function updateHud(){ $('hudLives').innerHTML='❤️'.repeat(Math.max(0,S.lives))||'—'; $('hudProg').textContent=`Q ${Math.min(S.qi+ (S.paused?0:0), questions.length)} / ${questions.length}`; }
-    function speed(){ return 120 + S.elapsed*9; }                 // px/s, ramps up
-    function spawnGap(){ return Math.max(0.55, 1.15 - S.elapsed*0.012); }
-
-    async function startGame(){
-      show('loading');
-      const r=await fetch('/api/game/'+GAME_ID+'/play'); const d=await r.json();
-      questions=d.questions||[]; answers=new Array(questions.length);
-      S=newState(); show('gameScreen'); updateHud();
-      $('qOverlay').classList.remove('show');
-      lastT=performance.now(); cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
-    }
-
-    function loop(t){
-      if(!S||!S.running) return;
-      let dt=(t-lastT)/1000; lastT=t; if(dt>0.05) dt=0.05;
-      if(!S.paused){ update(dt); }
-      render();
-      raf=requestAnimationFrame(loop);
-    }
-
-    function update(dt){
-      S.elapsed+=dt; S.dash=(S.dash+speed()*dt)%40; if(S.invuln>0) S.invuln-=dt;
-      // movement
-      if(dragX!=null){ S.px=Math.max(ROAD_X, Math.min(ROAD_X+ROAD_W-PW, dragX-PW/2)); }
-      else { const dir=keyDir||S.dir; S.px+=dir*230*dt; S.px=Math.max(ROAD_X, Math.min(ROAD_X+ROAD_W-PW, S.px)); }
-      // spawn
-      S.spawnT-=dt;
-      if(S.spawnT<=0){ S.spawnT=spawnGap(); const lane=Math.floor(Math.random()*LANES); S.enemies.push({ x:laneCenter(lane)-EW/2, y:-EH, pal:ENEMY_PALS[Math.floor(Math.random()*ENEMY_PALS.length)] }); }
-      // move enemies + collide
-      const sp=speed();
-      for(let i=S.enemies.length-1;i>=0;i--){ const e=S.enemies[i]; e.y+=sp*dt;
-        if(e.y>H){ S.enemies.splice(i,1); continue; }
-        if(S.invuln<=0 && e.x < S.px+PW-8 && e.x+EW-8 > S.px && e.y < S.py+PH-10 && e.y+EH-10 > S.py){ hit(i); return; }
-      }
-    }
-
-    function render(){
-      cx.clearRect(0,0,W,H);
-      // grass
-      cx.fillStyle='#2f3a30'; cx.fillRect(0,0,W,H);
-      // road
-      cx.fillStyle='#39404e'; cx.fillRect(ROAD_X,0,ROAD_W,H);
-      cx.fillStyle='#cfd6e2'; cx.fillRect(ROAD_X-4,0,4,H); cx.fillRect(ROAD_X+ROAD_W,0,4,H);
-      // lane dashes (scrolling)
-      cx.fillStyle='rgba(255,255,255,.55)';
-      for(let l=1;l<LANES;l++){ const x=ROAD_X+l*LANE_W-2; for(let y=-40+S.dash;y<H;y+=40){ cx.fillRect(x,y,4,22); } }
-      // enemies
-      S.enemies.forEach(e=>drawCar(e.x,e.y,EW,EH,e.pal));
-      // player (blink while invulnerable)
-      if(!(S.invuln>0 && Math.floor(S.elapsed*12)%2)) drawCar(S.px,S.py,PW,PH,PAL_P);
-    }
-
-    function hit(idx){
-      S.enemies.splice(idx,1);
-      S.lives--; updateHud();
-      if(S.qi < questions.length){ askQuestion(); }
-      else if(S.lives<=0){ endGame(); }
-      else { S.invuln=1.2; }
-    }
-
-    // ---- crash question overlay ----
-    const KEY=['A','B','C','D'];
-    function askQuestion(){
-      S.paused=true;
-      const q=questions[S.qi];
-      $('qText').textContent=q.question;
-      $('qOptions').innerHTML=q.options.map((o,k)=>`<button class="opt" data-k="${k}"><span class="k">${KEY[k]}</span><span>${esc(o)}</span></button>`).join('');
-      $('qFeedback').className='feedback'; $('qFeedback').innerHTML=''; $('qNextRow').style.display='none';
-      $('qOverlay').classList.add('show');
-    }
-    $('qOptions').addEventListener('click', async e=>{
-      const b=e.target.closest('.opt'); if(!b) return;
-      const choice=+b.dataset.k; const opts=[...$('qOptions').querySelectorAll('.opt')]; opts.forEach(o=>o.disabled=true);
-      const r=await fetch('/api/game/'+GAME_ID+'/answer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({questionIndex:S.qi,choice})});
-      const d=await r.json(); answers[S.qi]=choice;
-      opts[d.correctIndex] && opts[d.correctIndex].classList.add('correct');
-      const fb=$('qFeedback'); fb.className='feedback show '+(d.correct?'right':'no');
-      if(d.correct){ S.score++; S.lives++; updateHud(); fb.innerHTML=`<b>Correct! ✅ +1 life</b>${esc(d.explanation||'')}`; }
-      else { b.classList.add('wrong'); fb.innerHTML=`<b>Not quite ❌</b>${esc(d.explanation||'')}`; }
-      $('nextBtn').textContent = (S.qi+1>=questions.length) ? 'See my result →' : 'Keep driving →';
-      $('qNextRow').style.display='block';
-    });
-    $('nextBtn').addEventListener('click', ()=>{
-      $('qOverlay').classList.remove('show');
-      S.qi++;
-      if(S.qi>=questions.length || S.lives<=0){ endGame(); return; }
-      // clear cars near the player so you don't instantly re-crash
-      S.enemies=S.enemies.filter(e=>e.y < S.py-120); S.invuln=1.6; S.paused=false; lastT=performance.now();
-    });
-
-    // ---- controls ----
-    document.addEventListener('keydown',e=>{ if(e.key==='ArrowLeft'){keyDir=-1;e.preventDefault();} if(e.key==='ArrowRight'){keyDir=1;e.preventDefault();} });
-    document.addEventListener('keyup',e=>{ if((e.key==='ArrowLeft'&&keyDir===-1)||(e.key==='ArrowRight'&&keyDir===1)) keyDir=0; });
-    function holdBtn(el,dir){ const on=e=>{e.preventDefault(); if(S)S.dir=dir;}; const off=e=>{e&&e.preventDefault(); if(S)S.dir=0;};
-      el.addEventListener('pointerdown',on); el.addEventListener('pointerup',off); el.addEventListener('pointerleave',off); el.addEventListener('pointercancel',off); }
-    holdBtn($('leftBtn'),-1); holdBtn($('rightBtn'),1);
-    // drag on the road
-    function canvasX(e){ const r=cv.getBoundingClientRect(); return ((e.clientX-r.left)/r.width)*W; }
-    cv.addEventListener('pointerdown',e=>{ if(S&&!S.paused){ dragX=canvasX(e); cv.setPointerCapture(e.pointerId); } });
-    cv.addEventListener('pointermove',e=>{ if(dragX!=null) dragX=canvasX(e); });
-    const endDrag=()=>{ dragX=null; }; cv.addEventListener('pointerup',endDrag); cv.addEventListener('pointercancel',endDrag);
-
-    // ---- result ----
-    async function endGame(){
-      S.running=false; cancelAnimationFrame(raf); show('loading');
-      const r=await fetch('/api/game/'+GAME_ID+'/finish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answers:answers.map(a=>a==null?-1:a)})});
-      const d=await r.json();
-      $('resScore').textContent=`${d.score}/${d.total}`;
-      $('resOf').textContent=`${Math.round((d.score/d.total)*100)}% correct`;
-      const pct=d.score/d.total;
-      $('resMsg').textContent = pct===1?'Perfect — you nailed every question! 🌟' : pct>=0.7?'Great driving and great answers! 👏' : pct>=0.5?'Good effort — review the tricky ones.' : 'Keep practising — you’ll get there! 💪';
+    /* ===== shared engine ===== */
+    function updateHud(){ $('hudLives').innerHTML='❤️'.repeat(Math.max(0,lives))||'💀'; $('hudProg').textContent=`Q ${Math.min(qi+1,questions.length)}/${questions.length}`; $('hudScore').textContent='⭐ '+score; }
+    async function submitAnswer(choice){ answers[qi]=choice; const d=await (await fetch('/api/game/'+GAME_ID+'/answer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({questionIndex:qi,choice})})).json(); if(d.correct) score++; return d; }
+    function advance(){ qi++; if(qi>=questions.length || lives<=0){ endGame(); return false; } updateHud(); return true; }
+    async function endGame(){ active=null; cancelAnimationFrame(raf); show('loading');
+      const d=await (await fetch('/api/game/'+GAME_ID+'/finish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answers:answers.map(a=>a==null?-1:a)})})).json();
+      $('resScore').textContent=`${d.score}/${d.total}`; $('resOf').textContent=`${Math.round((d.score/d.total)*100)}% correct`;
+      const pct=d.score/d.total; $('resMsg').textContent=pct===1?'Perfect — you nailed every question! 🌟':pct>=0.7?'Great work! 👏':pct>=0.5?'Good effort — review the tricky ones.':'Keep practising — you’ll get there! 💪';
       show('resultScreen');
     }
-    $('againBtn').addEventListener('click', startGame);
+    function loop(t){ if(!active) return; let dt=(t-lastT)/1000; lastT=t; if(dt>0.05) dt=0.05; active.update(dt); active.render(); raf=requestAnimationFrame(loop); }
+    async function pickGame(key){
+      show('loading');
+      const r=await fetch('/api/game/'+GAME_ID+'/play'); const d=await r.json();
+      questions=d.questions||[]; answers=new Array(questions.length); qi=0; score=0; lives=3;
+      $('fireBtn').style.display = key==='space'?'flex':'none';
+      $('qBanner').style.display = key==='car'?'none':'block';
+      $('qFb').className='qfb';
+      $('dragTip').textContent = key==='space'?'Move ◀ ▶ (or drag), then FIRE at the right answer — they speed up!' : key==='runner'?'Steer ◀ ▶ (or drag) into the gate with the correct answer!' : 'Dodge the cars — crash to answer. They speed up!';
+      active = key==='car' ? CarGame() : LaneGame(key);
+      show('gameScreen'); $('qOverlay').classList.remove('show'); active.init(); updateHud();
+      lastT=performance.now(); cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
+    }
+    $('againBtn').addEventListener('click', ()=>show('pickerScreen'));
+
+    const cv=$('gameCanvas'), cx=cv.getContext('2d'); const W=cv.width, H=cv.height;
+    function blockCar(x,y,w,h,pal){ const CAR=['.111.','31113','12221','11111','.111.','12221','11111','31113'],cw=w/5,ch=h/8;
+      for(let r=0;r<8;r++){const row=CAR[r];for(let c=0;c<5;c++){const k=row[c];if(k==='.')continue;cx.fillStyle=pal[k];cx.fillRect(x+c*cw,y+r*ch,cw+0.6,ch+0.6);}} }
+
+    /* ===== CAR DODGE ===== */
+    function CarGame(){
+      const RX=26,RW=W-52,LN=3,LW=RW/LN,PW=42,PH=66,EW=42,EH=66;
+      const PP={'1':'#2a6aa6','2':'#a5d8ff','3':'#10161f'};
+      const EP=[{'1':'#e8833a','2':'#ffe3c2','3':'#10161f'},{'1':'#c0392b','2':'#ffc9c9','3':'#10161f'},{'1':'#2f9e44','2':'#b2f2bb','3':'#10161f'},{'1':'#9c36b5','2':'#eebefa','3':'#10161f'}];
+      let s; const lc=l=>RX+l*LW+LW/2; const spd=()=>120+s.elapsed*9;
+      function init(){ s={px:W/2-PW/2,py:H-PH-14,dir:0,enemies:[],spawnT:0,dash:0,elapsed:0,invuln:1,paused:false}; }
+      function update(dt){ if(s.paused) return;
+        s.elapsed+=dt; s.dash=(s.dash+spd()*dt)%40; if(s.invuln>0)s.invuln-=dt;
+        if(dragX!=null) s.px=clamp(dragX-PW/2,RX,RX+RW-PW); else s.px=clamp(s.px+moveDir*230*dt,RX,RX+RW-PW);
+        s.spawnT-=dt; if(s.spawnT<=0){ s.spawnT=Math.max(.55,1.15-s.elapsed*.012); const l=rnd(LN); s.enemies.push({x:lc(l)-EW/2,y:-EH,pal:EP[rnd(EP.length)]}); }
+        const sp=spd();
+        for(let i=s.enemies.length-1;i>=0;i--){ const e=s.enemies[i]; e.y+=sp*dt; if(e.y>H){s.enemies.splice(i,1);continue;}
+          if(s.invuln<=0 && e.x<s.px+PW-8 && e.x+EW-8>s.px && e.y<s.py+PH-10 && e.y+EH-10>s.py){ s.enemies.splice(i,1); lives--; updateHud(); s.paused=true; openCrash(); return; } } }
+      function render(){ cx.fillStyle='#2f3a30'; cx.fillRect(0,0,W,H); cx.fillStyle='#39404e'; cx.fillRect(RX,0,RW,H);
+        cx.fillStyle='#cfd6e2'; cx.fillRect(RX-4,0,4,H); cx.fillRect(RX+RW,0,4,H);
+        cx.fillStyle='rgba(255,255,255,.55)'; for(let l=1;l<LN;l++){const x=RX+l*LW-2;for(let y=-40+s.dash;y<H;y+=40)cx.fillRect(x,y,4,22);}
+        s.enemies.forEach(e=>blockCar(e.x,e.y,EW,EH,e.pal));
+        if(!(s.invuln>0 && Math.floor(s.elapsed*12)%2)) blockCar(s.px,s.py,PW,PH,PP); }
+      return { init, update, render, resume(){ s.enemies=s.enemies.filter(e=>e.y<s.py-120); s.invuln=1.6; s.paused=false; lastT=performance.now(); } };
+    }
+    // car crash overlay
+    function openCrash(){ const q=questions[qi]; $('qText').textContent=q.question;
+      $('qOptions').innerHTML=q.options.map((o,k)=>`<button class="opt" data-k="${k}"><span class="k">${'ABCD'[k]}</span><span>${esc(o)}</span></button>`).join('');
+      $('qFeedback').className='feedback'; $('qFeedback').innerHTML=''; $('qNextRow').style.display='none'; $('qOverlay').classList.add('show'); }
+    $('qOptions').addEventListener('click', async e=>{ const b=e.target.closest('.opt'); if(!b||b.disabled) return;
+      const opts=[...$('qOptions').querySelectorAll('.opt')]; opts.forEach(o=>o.disabled=true);
+      const d=await submitAnswer(+b.dataset.k);
+      opts[d.correctIndex] && opts[d.correctIndex].classList.add('correct');
+      const fb=$('qFeedback'); fb.className='feedback show '+(d.correct?'right':'no');
+      if(d.correct){ lives++; updateHud(); fb.innerHTML=`<b>Correct! ✅ +1 life</b>${esc(d.explanation||'')}`; } else { b.classList.add('wrong'); fb.innerHTML=`<b>Not quite ❌</b>${esc(d.explanation||'')}`; }
+      $('nextBtn').textContent=(qi+1>=questions.length)?'See my result →':'Keep driving →'; $('qNextRow').style.display='block'; });
+    $('nextBtn').addEventListener('click', ()=>{ $('qOverlay').classList.remove('show'); if(advance() && active && active.resume) active.resume(); });
+
+    /* ===== SPACE BLASTER + ANSWER RUNNER (shared lane game) ===== */
+    function LaneGame(theme){
+      const SELY=H-78, PW=46, PH=52, OBJ=62;
+      const lx=l=>(W/4)*l + W/8;
+      let s;
+      function init(){ s={px:lx(0),dir:0,objs:[],speed:80,elapsed:0,state:'run',laser:0,stars:[]};
+        if(theme==='space'){ for(let i=0;i<46;i++) s.stars.push({x:Math.random()*W,y:Math.random()*H,z:Math.random()*2+0.6}); }
+        spawnRow(); showBanner(); }
+      function showBanner(){ const q=questions[qi]; $('qText2').textContent=q.question;
+        $('qLegend').innerHTML=q.options.map((o,k)=>`<div class="leg leg${k}"><b>${'ABCD'[k]}</b> ${esc(o)}</div>`).join(''); }
+      function spawnRow(){ s.speed=70+s.elapsed*7; s.objs=questions[qi].options.map((o,k)=>({lane:k,y:-OBJ})); s.state='run'; }
+      function curLane(){ let best=0,bd=1e9; for(let l=0;l<4;l++){const d=Math.abs(lx(l)-s.px);if(d<bd){bd=d;best=l;}} return best; }
+      async function pick(lane){ if(s.state!=='run') return; s.state='wait'; if(theme==='space') s.laser=0.18;
+        const d=await submitAnswer(lane); s.correctLane=d.correctIndex;
+        if(!d.correct) lives--; updateHud();
+        const fb=$('qFb'); fb.className='qfb show '+(d.correct?'right':'no');
+        fb.innerHTML = d.correct?`<b>Correct! ✅</b>${esc(d.explanation||'')}` : `<b>Not quite ❌ — ${'ABCD'[d.correctIndex]} was right</b>${esc(d.explanation||'')}`;
+        setTimeout(()=>{ $('qFb').className='qfb'; if(advance()){ spawnRow(); showBanner(); } }, 1500); }
+      function update(dt){ s.elapsed+=dt; if(s.laser>0)s.laser-=dt;
+        if(theme==='space') s.stars.forEach(st=>{ st.y+=(30+s.elapsed*5)*st.z*dt; if(st.y>H){st.y=0;st.x=Math.random()*W;} });
+        if(dragX!=null) s.px=clamp(dragX,24,W-24); else s.px=clamp(s.px+moveDir*250*dt,24,W-24);
+        if(s.state!=='run') return;
+        s.objs.forEach(o=>o.y+=s.speed*dt);
+        if(theme==='runner'){ if(s.objs[0].y >= SELY-OBJ/2){ pick(curLane()); } }
+        else { if(fireQueued){ fireQueued=false; pick(curLane()); } else if(s.objs[0].y > H+10){ pick(curLane()); } } }
+      function drawObj(o){ const x=lx(o.lane), y=o.y+OBJ/2, col=LCOL[o.lane];
+        if(theme==='space'){ cx.fillStyle=col; cx.beginPath(); cx.arc(x,y,OBJ/2-3,0,7); cx.fill(); cx.fillStyle='rgba(255,255,255,.18)'; cx.beginPath(); cx.arc(x-7,y-7,OBJ/4,0,7); cx.fill(); }
+        else { cx.fillStyle=col; rr(x-OBJ/2+4,o.y,OBJ-8,OBJ-6,10); cx.fillStyle='rgba(255,255,255,.85)'; rr(x-OBJ/2+10,o.y+6,OBJ-20,OBJ-18,6); cx.fillStyle=col; }
+        cx.fillStyle='#fff'; cx.font='800 26px Plus Jakarta Sans,sans-serif'; cx.textAlign='center'; cx.textBaseline='middle'; cx.fillText('ABCD'[o.lane], x, y); }
+      function rr(x,y,w,h,r){ cx.beginPath(); cx.moveTo(x+r,y); cx.arcTo(x+w,y,x+w,y+h,r); cx.arcTo(x+w,y+h,x,y+h,r); cx.arcTo(x,y+h,x,y,r); cx.arcTo(x,y,x+w,y,r); cx.fill(); }
+      function render(){
+        if(theme==='space'){ cx.fillStyle='#0b1020'; cx.fillRect(0,0,W,H); cx.fillStyle='#fff'; s.stars.forEach(st=>{cx.globalAlpha=st.z/2.6;cx.fillRect(st.x,st.y,st.z,st.z);}); cx.globalAlpha=1; }
+        else { cx.fillStyle='#2f3a30'; cx.fillRect(0,0,W,H); cx.fillStyle='#39404e'; cx.fillRect(20,0,W-40,H);
+          cx.fillStyle='rgba(255,255,255,.5)'; for(let l=1;l<4;l++){const x=(W/4)*l-2;for(let y=-40+((s.elapsed*s.speed)%40);y<H;y+=40)cx.fillRect(x,y,4,22);} }
+        s.objs.forEach(drawObj);
+        // player
+        const px=s.px;
+        if(theme==='space'){ cx.fillStyle='#2a6aa6'; cx.beginPath(); cx.moveTo(px,SELY-PH/2); cx.lineTo(px-PW/2,SELY+PH/2); cx.lineTo(px+PW/2,SELY+PH/2); cx.closePath(); cx.fill();
+          cx.fillStyle='#a5d8ff'; cx.beginPath(); cx.arc(px,SELY,7,0,7); cx.fill();
+          if(s.laser>0){ cx.fillStyle='#ffd43b'; cx.fillRect(px-3,0,6,SELY-PH/2); } }
+        else { blockCar(px-PW/2,SELY-PH/2,PW,PH+10,{'1':'#2a6aa6','2':'#a5d8ff','3':'#10161f'});
+          cx.strokeStyle='rgba(255,255,255,.4)'; cx.lineWidth=2; cx.beginPath(); cx.moveTo(20,SELY+PH/2+6); cx.lineTo(W-20,SELY+PH/2+6); cx.stroke(); } }
+      return { init, update, render };
+    }
+
+    /* ===== controls (one shared moveDir for keys + buttons) ===== */
+    let moveDir=0;
+    document.addEventListener('keydown',e=>{ if(e.key==='ArrowLeft'){moveDir=-1;e.preventDefault();} else if(e.key==='ArrowRight'){moveDir=1;e.preventDefault();} else if(e.key===' '||e.key==='ArrowUp'){fireQueued=true;e.preventDefault();} });
+    document.addEventListener('keyup',e=>{ if((e.key==='ArrowLeft'&&moveDir===-1)||(e.key==='ArrowRight'&&moveDir===1)) moveDir=0; });
+    function bindHold(el,dir){ const on=e=>{ e.preventDefault(); moveDir=dir; }; const off=e=>{ if(e)e.preventDefault(); if(moveDir===dir) moveDir=0; };
+      el.addEventListener('pointerdown',on); el.addEventListener('pointerup',off); el.addEventListener('pointerleave',off); el.addEventListener('pointercancel',off); }
+    bindHold($('leftBtn'),-1); bindHold($('rightBtn'),1);
+    $('fireBtn').addEventListener('pointerdown',e=>{ e.preventDefault(); fireQueued=true; });
+    function canvasX(e){ const r=cv.getBoundingClientRect(); return ((e.clientX-r.left)/r.width)*W; }
+    cv.addEventListener('pointerdown',e=>{ dragX=canvasX(e); cv.setPointerCapture(e.pointerId); if($('fireBtn').style.display!=='none') fireQueued=true; });
+    cv.addEventListener('pointermove',e=>{ if(dragX!=null) dragX=canvasX(e); });
+    const endDrag=()=>{ dragX=null; }; cv.addEventListener('pointerup',endDrag); cv.addEventListener('pointercancel',endDrag);
 
     loadGame();
   </script>
