@@ -47,8 +47,20 @@ const DECK_SCHEMA = {
             required: ['type', 'items'],
             additionalProperties: false,
           },
+          // When the slide introduces vocabulary / key terms, each gets a clear
+          // grade-appropriate definition so the teacher can actually explain it.
+          // Empty array on non-vocabulary slides.
+          vocab: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: { term: { type: 'string' }, definition: { type: 'string' } },
+              required: ['term', 'definition'],
+              additionalProperties: false,
+            },
+          },
         },
-        required: ['title', 'bullets', 'example', 'speakerNotes', 'imageQuery', 'visual'],
+        required: ['title', 'bullets', 'example', 'speakerNotes', 'imageQuery', 'visual', 'vocab'],
         additionalProperties: false,
       },
     },
@@ -66,11 +78,13 @@ const DECK_SCHEMA = {
       type: 'object',
       properties: {
         title: { type: 'string' },
-        instructions: { type: 'array', items: { type: 'string' } },
+        goal: { type: 'string' },                                   // what students are trying to do / how to "win"
+        materials: { type: 'array', items: { type: 'string' } },     // what the teacher needs to run it ([] if none)
+        instructions: { type: 'array', items: { type: 'string' } },  // the actual rules / how-to-play steps, in order
         speakerNotes: { type: 'string' },
         imageQuery: { type: 'string' },
       },
-      required: ['title', 'instructions', 'speakerNotes', 'imageQuery'],
+      required: ['title', 'goal', 'materials', 'instructions', 'speakerNotes', 'imageQuery'],
       additionalProperties: false,
     },
     recap: {
@@ -99,8 +113,17 @@ const ONE_SLIDE_SCHEMA = {
     example: { type: 'string' },
     speakerNotes: { type: 'string' },
     imageQuery: { type: 'string' },
+    vocab: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { term: { type: 'string' }, definition: { type: 'string' } },
+        required: ['term', 'definition'],
+        additionalProperties: false,
+      },
+    },
   },
-  required: ['title', 'bullets', 'example', 'speakerNotes', 'imageQuery'],
+  required: ['title', 'bullets', 'example', 'speakerNotes', 'imageQuery', 'vocab'],
   additionalProperties: false,
 };
 
@@ -128,6 +151,8 @@ Produce a full lesson with this structure:
 - titleSlide: a punchy lesson title + one-line subtitle.
 - objectives: 3-4 short "students will be able to…" learning objectives.
 - slides: EXACTLY ${slideCount} content slides (this array MUST have exactly ${slideCount} items — count them). Each has a clear title, ${p.bullets} bullet points (${p.wordsPerBullet}), a concrete real-world "example" (one short sentence a student would relate to), and speaker notes (${p.notes}).
+  VOCABULARY: if a slide introduces vocabulary, key words or terms, you MUST fill "vocab" with each term AND a short, clear definition written so a ${grade} student understands it (one simple sentence, plain words — actually explain what it means, e.g. {"term":"Cooperate","definition":"to work together with others to get something done"}). Never list a word without defining it. On non-vocabulary slides, "vocab" is an empty array []. Use the speaker notes to tell the teacher how to explain each term with an example.
+  GAMES & ACTIVITIES: if a content slide presents a game or hands-on activity, do NOT write a vague teaser (e.g. "build a tower / work together"). Its bullets MUST contain the actual instructions: the GOAL (what students try to do / how to "win"), what's NEEDED, and the clear ordered RULES of how to play, so a teacher could run it without inventing anything. Put the same detail in the speaker notes. Do not name a game on one slide and leave its rules unstated.
   Each content slide also has a "visual":
     • "steps" — a process/sequence (an algorithm, the writing process, the scientific method, "how to…", a sequence of events): give 3-5 very short stage labels (2-4 words each) in visual.items.
     • "cycle" — a repeating cycle (life cycle, water cycle): 3-5 short stage labels in visual.items.
@@ -136,7 +161,7 @@ Produce a full lesson with this structure:
     • "none" — a normal photo illustrates it better: visual.items = [].
   Prefer a diagram whenever it genuinely helps students follow the idea.
 - check: ONE quick "check for understanding" question about the lesson, plus an "answer" of 2-3 short lines (the answer first, then a one-line why) — the teacher reveals these after students try. Include an imageQuery.
-- activity: a hands-on "Your Turn" task students physically DO. Where it fits the topic, have them ESTIMATE or predict first, then check/measure/try. Give a title, 2-4 clear step instructions, and speaker notes for the teacher.
+- activity: a hands-on "Your Turn" task students physically DO. It MUST be fully runnable, not vague — give: a title; "goal" (one sentence: what students are trying to achieve or how to "win"); "materials" (a list of what's needed, or [] if nothing); "instructions" (3-6 clear, ordered RULES / steps of exactly how to do or play it, including rough timing where useful, so a teacher could run it as-is); and speaker notes. Where it fits the topic, have students ESTIMATE or predict first, then check/try. If it is a game, the instructions ARE the rules of the game.
 - recap: 3-4 key takeaways that summarise the lesson.
 - differentiation: a "support" tip (1 sentence) to help students who find it difficult (scaffold, simpler version, concrete aid), and a "stretch" challenge (1 sentence) to extend fast finishers — both still on this exact grade's topic.
 
@@ -152,15 +177,30 @@ function flattenDeck(data) {
   const slides = [];
   slides.push({ type: 'title', layout: 'title', title: data.titleSlide.title, subtitle: data.titleSlide.subtitle, imageQuery: data.titleSlide.imageQuery });
   slides.push({ type: 'objectives', title: 'Learning Objectives', bullets: data.objectives.items, imageQuery: data.objectives.imageQuery });
-  data.slides.forEach((s, i) => slides.push({
-    type: 'content', title: s.title, bullets: s.bullets, example: s.example,
-    speakerNotes: s.speakerNotes, imageQuery: s.imageQuery, visual: s.visual,
-    side: i % 2 === 0 ? 'right' : 'left', // alternate image side for visual rhythm
-  }));
+  data.slides.forEach((s, i) => {
+    const vocab = Array.isArray(s.vocab) ? s.vocab.filter(v => v && v.term) : [];
+    // On a vocabulary slide, the term–definition lines ARE the teaching content,
+    // so they become the bullets (rendered by the existing layout). The example
+    // and speaker notes still carry extra explanation for the teacher.
+    const bullets = vocab.length ? vocab.map(v => `${v.term} — ${v.definition}`) : s.bullets;
+    slides.push({
+      type: 'content', title: s.title, bullets, example: s.example,
+      speakerNotes: s.speakerNotes, imageQuery: s.imageQuery, visual: s.visual, vocab,
+      side: i % 2 === 0 ? 'right' : 'left', // alternate image side for visual rhythm
+    });
+  });
   if (data.check) slides.push({ type: 'check', title: data.check.question, bullets: data.check.answer, imageQuery: data.check.imageQuery });
   const diff = data.differentiation;
-  const actNotes = (data.activity.speakerNotes || '') + (diff ? `\n\nSupport (students who find it hard): ${diff.support}\nChallenge (fast finishers): ${diff.stretch}` : '');
-  slides.push({ type: 'activity', title: data.activity.title || 'Your Turn', bullets: data.activity.instructions, speakerNotes: actNotes, imageQuery: data.activity.imageQuery, differentiation: diff });
+  const act = data.activity;
+  // Build a fully runnable task: goal + what's needed + the actual rules/steps.
+  const actBullets = [];
+  if (act.goal) actBullets.push(`Goal: ${act.goal}`);
+  if (Array.isArray(act.materials) && act.materials.length) actBullets.push(`You'll need: ${act.materials.join(', ')}`);
+  actBullets.push(...(act.instructions || []));
+  const matLine = (Array.isArray(act.materials) && act.materials.length) ? `\nMaterials: ${act.materials.join(', ')}` : '';
+  const actNotes = (act.goal ? `Goal: ${act.goal}${matLine}\n\n` : '') + (act.speakerNotes || '')
+    + (diff ? `\n\nSupport (students who find it hard): ${diff.support}\nChallenge (fast finishers): ${diff.stretch}` : '');
+  slides.push({ type: 'activity', title: act.title || 'Your Turn', bullets: actBullets, speakerNotes: actNotes, imageQuery: act.imageQuery, differentiation: diff });
   slides.push({ type: 'recap', title: 'Recap', bullets: data.recap.points, imageQuery: data.recap.imageQuery });
   return slides;
 }
@@ -179,9 +219,10 @@ function placeholderDeck(subject, topic, slideCount) {
       speakerNotes: `Placeholder notes for ${pretty}, idea ${i + 1}.`,
       imageQuery: q,
       visual: { type: 'none', items: [] },
+      vocab: [],
     })),
     check: { question: `What did we learn about ${pretty}?`, answer: ['Placeholder answer.', 'Because… (placeholder reason).'], imageQuery: q },
-    activity: { title: 'Your Turn', instructions: [`Estimate first, then try a ${pretty} exercise`, 'Share with a partner'], speakerNotes: 'Placeholder activity notes.', imageQuery: q },
+    activity: { title: 'Your Turn', goal: `Practise ${pretty} together`, materials: [], instructions: [`Estimate first, then try a ${pretty} exercise`, 'Share with a partner'], speakerNotes: 'Placeholder activity notes.', imageQuery: q },
     recap: { points: [`${cap(pretty)} recap point 1`, 'recap point 2', 'recap point 3'], imageQuery: q },
     differentiation: { support: `Give a worked example of ${pretty}.`, stretch: `Try a harder ${pretty} problem.` },
   });
@@ -210,7 +251,7 @@ async function generateContent(subject, topic, slideCount, grade = 'middle schoo
   // Structured outputs can't enforce array length; retry until we get the count.
   let best = null;
   for (let attempt = 1; attempt <= 3; attempt++) {
-    const data = await callModel(DECK_SCHEMA, 'lesson_deck', [{ role: 'user', content: prompt }]);
+    const data = await callModel(DECK_SCHEMA, 'lesson_deck', [{ role: 'user', content: prompt }], 12000);
     if (!best || data.slides.length > best.slides.length) best = data;
     if (data.slides.length >= slideCount) break;
     console.log(`Model returned ${data.slides.length}/${slideCount} content slides, retrying (${attempt}/3)…`);
@@ -229,9 +270,11 @@ async function generateOneSlide({ subject, topic, grade, tone = 'clear and engag
   const pretty = topic.replace(/-/g, ' ');
   const avoid = avoidTitles.length ? `\nDo NOT repeat these existing slide titles: ${avoidTitles.join('; ')}.` : '';
   const prompt = `Write ONE fresh content slide for a ${grade} lesson on "${pretty}" (${subject}). ${tone} tone.${focus ? ' Focus: ' + focus + '.' : ''}
-Give a clear title, ${p.bullets} bullets (${p.wordsPerBullet}), a concrete real-world example sentence, speaker notes (${p.notes}), and a 2-4 keyword imageQuery. ${p.depth}${avoid}`;
-  const s = await callModel(ONE_SLIDE_SCHEMA, 'one_slide', [{ role: 'user', content: prompt }], 1500);
-  return { type: 'content', ...s };
+Give a clear title, ${p.bullets} bullets (${p.wordsPerBullet}), a concrete real-world example sentence, speaker notes (${p.notes}), and a 2-4 keyword imageQuery. If the slide introduces vocabulary/key terms, fill "vocab" with each term and a short clear definition a ${grade} student understands; otherwise "vocab" is []. ${p.depth}${avoid}`;
+  const s = await callModel(ONE_SLIDE_SCHEMA, 'one_slide', [{ role: 'user', content: prompt }], 1800);
+  const vocab = Array.isArray(s.vocab) ? s.vocab.filter(v => v && v.term) : [];
+  if (vocab.length) s.bullets = vocab.map(v => `${v.term} — ${v.definition}`);
+  return { type: 'content', ...s, vocab };
 }
 
 module.exports = { generateContent, generateOneSlide };
