@@ -95,6 +95,28 @@
     .tpl .act:hover { border-color:var(--primary-2); background:var(--primary-soft); }
     .fmt-note { font-size:12px; color:var(--muted); margin:2px 0 4px; display:flex; align-items:center; gap:6px; }
 
+    /* Template packs */
+    .tpl-list { display:flex; flex-direction:column; gap:8px; margin-bottom:10px; }
+    .tpl-row { display:flex; align-items:center; gap:12px; border:1.5px solid var(--border); border-radius:12px; padding:11px 13px; cursor:pointer; background:#fff; transition:.12s; }
+    .tpl-row:hover { border-color:#cfd6e2; background:#fbfcfe; }
+    .tpl-row.sel { border-color:var(--primary-2); background:var(--primary-soft); box-shadow:0 0 0 3px rgba(42,106,166,.10); }
+    .tpl-row .pick { width:19px; height:19px; border-radius:50%; border:2px solid #cdd5e0; flex:none; display:flex; align-items:center; justify-content:center; color:#fff; }
+    .tpl-row.sel .pick { border-color:var(--primary-2); background:var(--primary-2); }
+    .tpl-row .pick .ic { width:11px; height:11px; }
+    .tpl-row .ficon { width:36px; height:36px; border-radius:10px; background:var(--primary-soft); color:var(--primary); display:flex; align-items:center; justify-content:center; flex:none; }
+    .tpl-row.sel .ficon { background:#fff; }
+    .tpl-row .meta { min-width:0; flex:1; }
+    .tpl-row .nm { font-weight:700; color:var(--ink); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .tpl-row .sub { font-size:12px; color:var(--muted); }
+    .tpl-chip { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; padding:2px 8px; border-radius:999px; background:var(--accent-soft); color:var(--accent); }
+    .tpl-del { border:none; background:none; color:var(--muted); cursor:pointer; padding:6px; border-radius:8px; flex:none; display:inline-flex; }
+    .tpl-del:hover, .tpl-del.warn { color:var(--err); background:#fdf1ef; }
+    .tpl-del .ic { width:16px; height:16px; }
+    .tpl-add { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .tpl-add input { flex:1; min-width:170px; }
+    .tpl-add select { width:auto; flex:none; }
+    .tpl-add .act { white-space:nowrap; }
+
     .status { text-align:center; margin:22px auto 0; max-width:700px; min-height:22px; font-size:14px; color:var(--muted); }
     .status.err { color:var(--err); } .status.ok { color:var(--ok); }
     .spinner { display:inline-block; width:15px; height:15px; margin-right:8px; vertical-align:-3px; border:2px solid rgba(31,78,121,.22); border-top-color:var(--primary-2); border-radius:50%; animation:spin .7s linear infinite; }
@@ -229,6 +251,7 @@
         <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".5"/></symbol>
         <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
         <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.6 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+        <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></symbol>
       </g>
     </defs>
   </svg>
@@ -283,8 +306,20 @@
       <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Plan a lesson</h2>
       <p class="hint">Your template is reused automatically. Paste this lesson's objectives and we'll write a plan that matches it.</p>
 
-      <div id="tplBox" class="tpl"><span class="info none">Checking for a saved template…</span></div>
-      <p class="fmt-note"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Word, PDF, Excel or text. Optional — without one we use a standard plan structure.</p>
+      <div id="tplList" class="tpl-list"><span class="info none">Loading your templates…</span></div>
+      <div class="tpl-add">
+        <input id="tplName" type="text" placeholder="Name (e.g. Observation plan)" aria-label="Template name" />
+        <select id="tplType" aria-label="Template type">
+          <option value="detailed">Detailed plan</option>
+          <option value="observation">Observation</option>
+          <option value="weekly">Weekly plan</option>
+          <option value="intervention">Intervention</option>
+          <option value="substitute">Substitute</option>
+          <option value="custom">Other</option>
+        </select>
+        <button type="button" class="act" id="tplAddBtn"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg> Add template</button>
+      </div>
+      <p class="fmt-note"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Word, PDF, Excel or text. Save several formats and pick one per lesson. Optional — without one we use a standard structure.</p>
       <input id="tplFile" type="file" accept=".docx,.pdf,.xlsx,.xls,.txt,.md,.csv" style="display:none" />
 
       <div class="grid2">
@@ -414,27 +449,53 @@
     $('subject').addEventListener('input',fillTopics);
     $('subject').addEventListener('change',fillTopics);
 
-    async function loadTemplate(){
-      const box=$('tplBox');
-      try{
-        const t=await (await fetch('/api/template')).json();
-        if(t.exists){ const d=new Date(t.uploadedAt).toLocaleDateString();
-          const warn=t.hasOriginal?'':`<br><span class="sub" style="color:var(--err)">⚠ Re-upload to enable exact-format download.</span>`;
-          box.innerHTML=`<span class="left"><span class="ficon">${ICON('i-doc')}</span><span class="info"><b>${esc(t.filename)}</b><br><span class="sub">saved ${d} · reused automatically</span>${warn}</span></span><button type="button" class="act" id="tplReplace">${ICON('i-upload')} Replace</button>`;
-        }else{
-          box.innerHTML=`<span class="left"><span class="ficon">${ICON('i-upload')}</span><span class="info none">No template yet — upload your school's lesson-plan format.</span></span><button type="button" class="act" id="tplReplace">${ICON('i-upload')} Upload</button>`;
-        }
-        $('tplReplace').addEventListener('click',()=>$('tplFile').click());
-      }catch{ box.innerHTML='<span class="info none">Template unavailable.</span>'; }
+    // Template packs: save several lesson-plan formats, pick one per lesson.
+    let templates=[], selectedTemplateId=null, planTemplateId=null;
+    const TYPE_LABEL={detailed:'Detailed',observation:'Observation',weekly:'Weekly',intervention:'Intervention',substitute:'Substitute',custom:'Custom'};
+    function renderTemplates(){
+      const list=$('tplList');
+      if(!templates.length){ selectedTemplateId=null; list.innerHTML=`<span class="info none">No templates yet — add your school's lesson-plan formats below (or skip to use a standard structure).</span>`; return; }
+      if(!selectedTemplateId || !templates.some(t=>t.id===selectedTemplateId)) selectedTemplateId=templates[0].id;
+      list.innerHTML=templates.map(t=>{
+        const sel=t.id===selectedTemplateId, d=new Date(t.uploadedAt).toLocaleDateString();
+        const warn=t.hasOriginal?'':' · <span style="color:var(--err)">re-upload for exact-format download</span>';
+        return `<div class="tpl-row${sel?' sel':''}" data-id="${t.id}" role="button" tabindex="0" aria-pressed="${sel}">
+          <span class="pick">${sel?ICON('i-check'):''}</span>
+          <span class="ficon">${ICON('i-doc')}</span>
+          <span class="meta"><span class="nm">${esc(t.name)} <span class="tpl-chip">${esc(TYPE_LABEL[t.type]||t.type)}</span></span><span class="sub">${esc(t.filename)} · saved ${d}${warn}</span></span>
+          <button type="button" class="tpl-del" data-del="${t.id}" aria-label="Delete ${esc(t.name)}">${ICON('i-trash')}</button>
+        </div>`;
+      }).join('');
     }
+    async function loadTemplates(){
+      try{ const d=await (await fetch('/api/templates')).json(); templates=d.templates||[]; renderTemplates(); }
+      catch{ $('tplList').innerHTML='<span class="info none">Templates unavailable.</span>'; }
+    }
+    function confirmDel(btn){
+      if(btn._armed){ clearTimeout(btn._t); return true; }
+      btn._armed=true; btn.classList.add('warn'); btn.setAttribute('aria-label','Click again to delete');
+      btn._t=setTimeout(()=>{ btn._armed=false; btn.classList.remove('warn'); },2500);
+      toast('Click the bin again to delete this template.','err'); return false;
+    }
+    $('tplList').addEventListener('click', async (e)=>{
+      const del=e.target.closest('[data-del]');
+      if(del){ e.stopPropagation(); if(!confirmDel(del)) return; const id=del.dataset.del;
+        try{ const r=await fetch('/api/templates/'+id,{method:'DELETE'}); if(!r.ok){const x=await r.json().catch(()=>({}));throw new Error(x.error||'Delete failed');}
+          if(selectedTemplateId===id) selectedTemplateId=null; await loadTemplates(); toast('Template removed.','ok');
+        }catch(err){ toast(err.message); } return; }
+      const row=e.target.closest('.tpl-row'); if(!row) return;
+      selectedTemplateId=row.dataset.id; renderTemplates();
+    });
+    $('tplAddBtn').addEventListener('click',()=>$('tplFile').click());
     $('tplFile').addEventListener('change', async (e)=>{
       const file=e.target.files[0]; if(!file) return;
-      const box=$('tplBox'); box.innerHTML='<span class="info"><span class="spinner"></span>Reading template…</span>';
-      try{ const fd=new FormData(); fd.append('file',file);
-        const r=await fetch('/api/template',{method:'POST',body:fd}); const d=await r.json(); if(!r.ok) throw new Error(d.error);
-        await loadTemplate();
-      }catch(err){ box.innerHTML=`<span class="info" style="color:var(--err)">${esc(err.message)}</span><button type="button" class="act" id="tplReplace">Try again</button>`; $('tplReplace').addEventListener('click',()=>$('tplFile').click()); }
-      e.target.value='';
+      const name=$('tplName').value.trim(), type=$('tplType').value;
+      const btn=$('tplAddBtn'); btn.disabled=true; const orig=btn.innerHTML; btn.innerHTML='<span class="spinner"></span>Reading…';
+      try{ const fd=new FormData(); fd.append('file',file); if(name) fd.append('name',name); fd.append('type',type);
+        const r=await fetch('/api/templates',{method:'POST',body:fd}); const d=await r.json(); if(!r.ok) throw new Error(d.error);
+        $('tplName').value=''; selectedTemplateId=d.template.id; await loadTemplates(); toast('Template added.','ok');
+      }catch(err){ toast(err.message); }
+      btn.disabled=false; btn.innerHTML=orig; e.target.value='';
     });
 
     // Inline required-field validation (clears as the teacher types).
@@ -451,7 +512,7 @@
       const firstBad=['subject','topic','objectives'][bad.indexOf(true)];
       if(firstBad){ $(firstBad).focus(); $(firstBad).scrollIntoView({behavior:'smooth',block:'center'}); return; }
       ctx={ subject:$('subject').value, topic:$('topic').value, grade:$('grade').value||'middle school',
-        slideCount:Number($('slideCount').value)||5, tone:$('tone').value, focus:$('focus').value.trim(), objectives };
+        slideCount:Number($('slideCount').value)||5, tone:$('tone').value, focus:$('focus').value.trim(), objectives, templateId:selectedTemplateId };
       $('planBtn').disabled=true; statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>Writing a lesson plan that matches your template…';
       try{
         const r=await fetch('/api/lesson-plan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(ctx)});
@@ -462,6 +523,7 @@
     });
 
     function renderPlan(d){
+      planTemplateId=d.templateId||null;
       $('planSrc').textContent=d.usedTemplate?`· matching ${d.templateName}`:'· standard structure (no template)';
       $('planSections').innerHTML=d.sections.map((s,i)=>`
         <div class="plan-section" data-i="${i}">
@@ -479,7 +541,7 @@
     $('dlPlanBtn').addEventListener('click', async ()=>{
       const b=$('dlPlanBtn'); b.disabled=true; const orig=b.innerHTML; b.innerHTML='<span class="spinner"></span>Filling your template…';
       try{
-        const r=await fetch('/api/lesson-plan/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(collectPlan())});
+        const r=await fetch('/api/lesson-plan/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...collectPlan(),templateId:planTemplateId})});
         if(!r.ok){ const d=await r.json().catch(()=>({error:'Download failed'})); throw new Error(d.error); }
         const blob=await r.blob(), url=URL.createObjectURL(blob), a=document.createElement('a');
         const cd=r.headers.get('Content-Disposition')||''; const m=cd.match(/filename="([^"]+)"/);
@@ -642,7 +704,7 @@
       const first=(user.name||'').trim().split(/\s+/)[0];
       $('greeting').innerHTML=first?`Welcome back, <span class="hi">${esc(first)}</span>`:'Plan a lesson';
       $('adminBtn').style.display = user.role==='admin' ? 'inline-flex' : 'none';
-      loadLibrary(); loadTemplate();
+      loadLibrary(); loadTemplates();
     }
     function showAuth(){ authScreen.style.display='block'; nav.style.display='none'; appEl.style.display='none'; setMode('login'); }
 

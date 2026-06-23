@@ -6,7 +6,7 @@ const cookieParser = require('cookie-parser');
 const path = require('path');
 const { buildDeck, rebuildDeck, alternativeImage, findReusableImage, listLibrary, addLibraryImages, libraryStats } = require('./generate');
 const { generateOneSlide } = require('./content');
-const { extractText, saveTemplate, loadTemplate, loadOriginal } = require('./template');
+const { extractText, saveTemplate, listTemplates, getTemplate, renameTemplate, deleteTemplate, loadOriginalById, loadTemplate, loadOriginal, TYPES } = require('./template');
 const { generateLessonPlan, planToText } = require('./lesson-plan');
 const { fillDocx, fillXlsx } = require('./fill-template');
 const { animateBuffer } = require('./animate-pptx');
@@ -112,14 +112,14 @@ app.post('/api/admin/add-images', requireAdmin, async (req, res) => {
   }
 });
 
-// ── Lesson-plan template (uploaded once, reused) ──────────────────────────
-app.get('/api/template', requireAuth, (req, res) => {
-  const t = loadTemplate(req.userId);
-  if (!t) return res.json({ exists: false });
-  res.json({ exists: true, filename: t.filename, uploadedAt: t.uploadedAt, preview: t.text.slice(0, 500), hasOriginal: !!t.hasOriginal, ext: t.ext });
+// ── Lesson-plan template packs (save many; pick one per lesson) ────────────
+const publicTemplate = t => ({ id: t.id, name: t.name, type: t.type, filename: t.filename, ext: t.ext, uploadedAt: t.uploadedAt, hasOriginal: !!t.hasOriginal });
+
+app.get('/api/templates', requireAuth, (req, res) => {
+  res.json({ templates: listTemplates(req.userId).map(publicTemplate), types: TYPES });
 });
 
-app.post('/api/template', requireAuth, upload.single('file'), async (req, res) => {
+app.post('/api/templates', requireAuth, upload.single('file'), async (req, res) => {
   try {
     let text, filename, buffer = null;
     if (req.file) {
@@ -133,19 +133,32 @@ app.post('/api/template', requireAuth, upload.single('file'), async (req, res) =
       return res.status(400).json({ error: 'Upload a file or paste template text.' });
     }
     if (!text || !text.trim()) return res.status(400).json({ error: 'Could not read any text from that file.' });
-    const rec = saveTemplate(req.userId, { filename, text, buffer });
-    res.json({ exists: true, filename: rec.filename, uploadedAt: rec.uploadedAt, preview: rec.text.slice(0, 500) });
+    const rec = saveTemplate(req.userId, { name: req.body && req.body.name, type: req.body && req.body.type, filename, text, buffer });
+    res.json({ template: publicTemplate(rec) });
   } catch (err) {
     console.error('Template upload failed:', err.message);
     res.status(400).json({ error: err.message });
   }
 });
 
+app.patch('/api/templates/:id', requireAuth, (req, res) => {
+  const rec = renameTemplate(req.userId, req.params.id, { name: req.body && req.body.name, type: req.body && req.body.type });
+  if (!rec) return res.status(404).json({ error: 'Template not found.' });
+  res.json({ template: publicTemplate(rec) });
+});
+
+app.delete('/api/templates/:id', requireAuth, (req, res) => {
+  const ok = deleteTemplate(req.userId, req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Template not found.' });
+  res.json({ ok: true });
+});
+
 // Download the lesson plan filled into the ORIGINAL template (exact layout).
 app.post('/api/lesson-plan/download', requireAuth, (req, res) => {
   const sections = (req.body && req.body.sections) || [];
+  const templateId = req.body && req.body.templateId;
   if (!sections.length) return res.status(400).json({ error: 'No lesson plan to download.' });
-  const orig = loadOriginal(req.userId);
+  const orig = templateId ? loadOriginalById(req.userId, templateId) : loadOriginal(req.userId);
   if (!orig) {
     return res.status(400).json({ error: 'No original template file is stored. Please re-upload your template — the app now keeps the original so it can fill it.' });
   }
@@ -176,16 +189,16 @@ app.post('/api/lesson-plan/download', requireAuth, (req, res) => {
 
 // ── Lesson plan generation (objectives + stored template → plan) ──────────
 app.post('/api/lesson-plan', requireAuth, async (req, res) => {
-  const { subject, topic, grade, tone, objectives } = req.body || {};
+  const { subject, topic, grade, tone, objectives, templateId } = req.body || {};
   if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
   if (!objectives || !objectives.trim()) return res.status(400).json({ error: 'Please paste the lesson objectives.' });
   try {
-    const tpl = loadTemplate(req.userId);
+    const tpl = (templateId && getTemplate(req.userId, templateId)) || loadTemplate(req.userId);
     const plan = await generateLessonPlan({
       subject: String(subject).toLowerCase(), topic: String(topic).toLowerCase(),
       grade, tone, objectives, templateText: tpl ? tpl.text : '',
     });
-    res.json({ sections: plan.sections, usedTemplate: !!tpl, templateName: tpl ? tpl.filename : null });
+    res.json({ sections: plan.sections, usedTemplate: !!tpl, templateName: tpl ? tpl.name : null, templateId: tpl ? tpl.id : null });
   } catch (err) {
     console.error('Lesson plan failed:', err.message);
     res.status(400).json({ error: err.message });
