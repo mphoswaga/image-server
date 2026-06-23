@@ -471,6 +471,31 @@ function alternativeImage({ subject, topic, imageQuery, exclude = [] }) {
   return best;
 }
 
+const imageInfo = img => ({ relpath: img.relpath, image: '/' + img.relpath, caption: img.caption || '', source: img.source || 'library', credit: img.credit || null });
+
+// Stock-first image search for the picker: rank the whole library by how well
+// the query matches each image's caption/keywords/tags, lightly boosting the
+// lesson's own subject/topic. Empty query → show this subject's images.
+function searchLibrary({ q, subject, topic, limit = 24 }) {
+  const qt = tokenize(q || '');
+  const scored = [];
+  for (const img of LIBRARY.images) {
+    let s = qt.size ? scoreImage(img, qt) : 0;
+    if (subject && img.subject === subject) s += 0.5;
+    if (topic && img.topic === topic) s += 1;
+    if (qt.size === 0) { if (!(subject && img.subject === subject)) continue; }
+    else if (s <= 0) continue;
+    scored.push({ img, s });
+  }
+  scored.sort((a, b) => b.s - a.s);
+  return scored.slice(0, limit).map(x => imageInfo(x.img));
+}
+
+// Look up a single library image by its relpath (for "set this image").
+function getLibraryImage(relpath) {
+  return LIBRARY.images.find(i => i.relpath === relpath) || null;
+}
+
 // Admin: append newly-fetched images to the in-memory library + persist to disk
 // so they're matchable immediately (no server restart).
 function addLibraryImages(entries) {
@@ -493,7 +518,7 @@ function libraryStats() {
   return { total: LIBRARY.images.length, captioned: LIBRARY.images.filter(i => i.caption).length, bySubject };
 }
 
-module.exports = { buildDeck, rebuildDeck, alternativeImage, findReusableImage, listLibrary, validateSelection, selectImages, addLibraryImages, libraryStats };
+module.exports = { buildDeck, rebuildDeck, alternativeImage, findReusableImage, searchLibrary, getLibraryImage, listLibrary, validateSelection, selectImages, addLibraryImages, libraryStats };
 
 if (require.main === module) {
   main().catch(err => {

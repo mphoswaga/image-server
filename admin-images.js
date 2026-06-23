@@ -9,7 +9,7 @@ const { captionImage } = require('./caption-library');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const slug = s => String(s).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-async function addImages({ subject, topic, count = 10, onProgress }) {
+async function addImages({ subject, topic, count = 10, query, onProgress }) {
   const key = process.env.UNSPLASH_ACCESS_KEY;
   if (!key) throw new Error('UNSPLASH_ACCESS_KEY is not set — add it to .env.');
   subject = slug(subject); topic = slug(topic);
@@ -26,7 +26,7 @@ async function addImages({ subject, topic, count = 10, onProgress }) {
     let photos;
     try {
       const res = await axios.get('https://api.unsplash.com/search/photos', {
-        params: { query: `${subject} ${topic} education`, per_page: 30, page, orientation: 'landscape' },
+        params: { query: (query && String(query).trim()) || `${subject} ${topic} education`, per_page: 30, page, orientation: 'landscape' },
         headers: { Authorization: `Client-ID ${key}` }, timeout: 15000,
       });
       photos = res.data.results;

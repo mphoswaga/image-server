@@ -206,6 +206,27 @@
     .swap-btn { position:absolute; bottom:9px; right:9px; font-size:12px; font-weight:600; padding:6px 11px; border-radius:9px; border:none; background:rgba(255,255,255,.94); color:var(--primary); cursor:pointer; display:inline-flex; align-items:center; gap:5px; box-shadow:var(--sh-sm); }
     .swap-btn:hover { background:#fff; }
     .swap-btn .ic { width:14px; height:14px; }
+
+    /* AI-visual quota pill */
+    .quota-pill { text-align:center; font-size:12.5px; color:var(--muted); margin:-8px 0 14px; }
+    .quota-pill b { color:var(--primary); } .quota-pill.low b { color:var(--err); }
+
+    /* Image picker modal */
+    .modal { position:fixed; inset:0; background:rgba(16,24,40,.5); display:flex; align-items:center; justify-content:center; z-index:80; padding:20px; }
+    .modal-card { background:#fff; border-radius:18px; box-shadow:var(--sh-lg); width:680px; max-width:100%; max-height:86vh; display:flex; flex-direction:column; overflow:hidden; }
+    .modal-head { display:flex; align-items:center; justify-content:space-between; padding:15px 20px; border-bottom:1px solid var(--border); font-size:16px; }
+    .modal-x { border:none; background:none; font-size:26px; line-height:1; cursor:pointer; color:var(--muted); padding:0 4px; }
+    .modal-x:hover { color:var(--ink); }
+    .picker-search { display:flex; gap:8px; padding:14px 20px 4px; flex-wrap:wrap; }
+    .picker-search input { flex:1; min-width:150px; }
+    .picker-search .btn { padding:10px 13px; font-size:13.5px; }
+    .picker-hint { padding:2px 20px 6px; font-size:12px; color:var(--muted); }
+    .picker-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:10px 20px 20px; overflow-y:auto; }
+    .picker-grid .pg { aspect-ratio:4/3; border-radius:10px; overflow:hidden; cursor:pointer; border:2px solid transparent; background:#eef0f4; padding:0; }
+    .picker-grid .pg img { width:100%; height:100%; object-fit:cover; display:block; }
+    .picker-grid .pg:hover { border-color:var(--primary-2); }
+    .picker-grid .pg-msg { grid-column:1/-1; text-align:center; color:var(--muted); padding:26px; font-size:14px; }
+    @media (max-width:600px){ .picker-grid { grid-template-columns:repeat(2,1fr); } }
     .slide .body { padding:15px 17px 16px; flex:1; display:flex; flex-direction:column; }
     .kicker { display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; margin-bottom:7px; }
     .kicker .ic { width:13px; height:13px; }
@@ -419,7 +440,8 @@
           <button id="restartBtn" class="btn ghost">Start over</button>
         </div>
       </div>
-      <p class="edit-tip"><svg class="ic" aria-hidden="true" style="color:var(--accent)"><use href="#i-pencil"/></svg> Click any text to <b>edit it</b> · use <b>Swap image</b> or <b>Regenerate</b> before downloading.</p>
+      <p class="edit-tip"><svg class="ic" aria-hidden="true" style="color:var(--accent)"><use href="#i-pencil"/></svg> Click any text to <b>edit it</b> · use <b>Replace</b> to search images · <b>Regenerate</b> before downloading.</p>
+      <div id="quotaPill" class="quota-pill" style="display:none"></div>
       <div id="deck" class="deck"></div>
 
       <!-- Lesson pack: student-facing materials from this same lesson -->
@@ -461,6 +483,20 @@
     </section>
   </div>
 
+  <!-- IMAGE PICKER: stock library first, web fetch as fallback -->
+  <div id="imgPicker" class="modal" style="display:none" role="dialog" aria-modal="true" aria-label="Choose an image">
+    <div class="modal-card">
+      <div class="modal-head"><b>Choose an image</b><button class="modal-x" id="pickerClose" aria-label="Close">&times;</button></div>
+      <div class="picker-search">
+        <input id="pickerQ" type="text" placeholder="Search images…" aria-label="Search images" />
+        <button type="button" class="btn ghost" id="pickerSearchBtn"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg> Stock</button>
+        <button type="button" class="btn ghost" id="pickerWebBtn"><svg class="ic" aria-hidden="true"><use href="#i-shuffle"/></svg> Search the web</button>
+      </div>
+      <div class="picker-hint" id="pickerHint">Stock library first — free and instant. No match? Try “Search the web”.</div>
+      <div id="pickerGrid" class="picker-grid"></div>
+    </div>
+  </div>
+
   <script>
     const $=id=>document.getElementById(id);
     const cap=s=>s.replace(/\b\w/g,c=>c.toUpperCase());
@@ -488,7 +524,7 @@
       return res;
     };
     function sessionExpired(){ appReady=false; showAuth(); $('authErr').textContent='Your session expired — please log in again.'; window.scrollTo({top:0}); }
-    const SWAP_HTML=`${ICON('i-shuffle')}Swap`;
+    const SWAP_HTML=`${ICON('i-image')}Replace`;
     const REGEN_HTML=`${ICON('i-refresh')}Regenerate`;
     const AI_HTML=`${ICON('i-spark')}AI image`;
     const DIA_HTML=`${ICON('i-target')}Make diagram`;
@@ -683,25 +719,27 @@
       $('deckCount').innerHTML=`· ${d.slideCount} slides ${d.band?`<span class="band-pill">${ICON('i-target')}${BAND[d.band]||d.band}</span>`:''}`;
       deckEl.className='deck'+(d.band?' band-'+d.band:''); deckEl.innerHTML=d.slides.map((s,i)=>cardHTML(s,i)).join('');
       $('packPreview').innerHTML=''; // reset lesson-pack for the new deck
+      loadQuota(); // show remaining AI-visual budget + gate the AI buttons
     }
     deckEl.addEventListener('click', async (e)=>{
       const b=e.target.closest('button[data-action]'); if(!b) return;
       const i=+b.dataset.i, card=deckEl.querySelector(`.slide[data-index="${i}"]`);
       function setBadge(src){ const bd=card.querySelector('.badge'); if(bd){ const m=badgeMeta(src); bd.innerHTML=ICON('i-image')+m.label; bd.className='badge '+m.cls; } }
-      if(b.dataset.action==='swap'){ b.disabled=true; b.innerHTML='<span class="spinner"></span>';
-        try{ const r=await fetch(`/api/slide/${currentDeckId}/swap-image`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})}); const d=await r.json(); if(!r.ok) throw new Error(d.error);
-          card.querySelector('.thumb img').src=d.image; setBadge(d.imageSource);
-        }catch(err){ toast(err.message); } b.disabled=false; b.innerHTML=SWAP_HTML;
+      if(b.dataset.action==='swap'){ openPicker(i); return;
       } else if(b.dataset.action==='ai'){ b.disabled=true; b.innerHTML='<span class="spinner"></span>Generating…';
-        try{ const r=await fetch(`/api/slide/${currentDeckId}/ai-image`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})}); const d=await r.json(); if(!r.ok) throw new Error(d.error);
-          card.querySelector('.thumb img').src=d.image; setBadge('ai-generated');
-        }catch(err){ toast(err.message); } b.disabled=false; b.innerHTML=AI_HTML;
+        try{ const r=await fetch(`/api/slide/${currentDeckId}/ai-image`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})}); const d=await r.json();
+          if(r.status===403&&d.limitReached){ quotaReached(); toast(d.error); }
+          else if(!r.ok){ throw new Error(d.error); }
+          else { card.querySelector('.thumb img').src=d.image; setBadge('ai-generated'); applyQuota(d); }
+        }catch(err){ toast(err.message); } b.disabled=false; b.innerHTML=AI_HTML; updateAiButtons();
       } else if(b.dataset.action==='diagram'){ b.disabled=true; b.innerHTML='<span class="spinner"></span>Drawing diagram…';
-        try{ const r=await fetch(`/api/slide/${currentDeckId}/diagram`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})}); const d=await r.json(); if(!r.ok) throw new Error(d.error);
-          if(d.labelled){ const nm=d.labelled.replace(/-/g,' ');
+        try{ const r=await fetch(`/api/slide/${currentDeckId}/diagram`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})}); const d=await r.json();
+          if(r.status===403&&d.limitReached){ quotaReached(); toast(d.error); }
+          else if(!r.ok){ throw new Error(d.error); }
+          else if(d.labelled){ const nm=d.labelled.replace(/-/g,' ');
             card.querySelector('.thumb').outerHTML=`<div class="thumb" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#f0faf4;color:#2f9e44">${ICON('i-target')}<b style="text-transform:capitalize;font-size:14px">${esc(nm)} diagram</b><span class="badge ai">animated labels</span></div>`;
-          } else if(d.image){ const img=card.querySelector('.thumb img'); if(img){ img.src=d.image; setBadge('svg-diagram'); } }
-        }catch(err){ toast(err.message); } b.disabled=false; b.innerHTML=DIA_HTML;
+          } else if(d.image){ const img=card.querySelector('.thumb img'); if(img){ img.src=d.image; setBadge('svg-diagram'); } applyQuota(d); }
+        }catch(err){ toast(err.message); } b.disabled=false; b.innerHTML=DIA_HTML; updateAiButtons();
       } else if(b.dataset.action==='regen'){ b.disabled=true; b.innerHTML='<span class="spinner"></span>Regenerating…';
         try{ const r=await fetch(`/api/slide/${currentDeckId}/regenerate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})}); const d=await r.json(); if(!r.ok) throw new Error(d.error); card.outerHTML=cardHTML(d.slide,i);
         }catch(err){ toast(err.message); b.disabled=false; b.innerHTML=REGEN_HTML; }
@@ -720,6 +758,61 @@
         const blob=await r.blob(), url=URL.createObjectURL(blob), a=document.createElement('a'); a.href=url; a.download=$('deckTitle').textContent+'.pptx'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
       }catch(err){ toast(err.message); } dl.disabled=false; dl.innerHTML=orig;
     });
+    // ---- AI-visual budget (monthly cap) ----
+    let aiQuota=null;
+    async function loadQuota(){ try{ aiQuota=await (await fetch('/api/quota')).json(); }catch{ aiQuota=null; } renderQuotaPill(); updateAiButtons(); }
+    function renderQuotaPill(){ const el=$('quotaPill');
+      if(!aiQuota || aiQuota.unlimited){ el.style.display='none'; return; }
+      el.style.display='block'; el.className='quota-pill'+(aiQuota.remaining<=5?' low':'');
+      el.innerHTML=`<b>${aiQuota.remaining}</b> of ${aiQuota.limit} AI visuals left this month`;
+    }
+    function updateAiButtons(){ const blocked=aiQuota && !aiQuota.unlimited && aiQuota.remaining<=0;
+      deckEl.querySelectorAll('[data-action="ai"],[data-action="diagram"]').forEach(b=>{ b.disabled=!!blocked; b.title=blocked?'Monthly AI-visual limit reached — search the stock library instead':''; });
+    }
+    function applyQuota(d){ if(aiQuota && d && d.remaining!=null){ aiQuota.remaining=d.remaining; if(d.limit!=null) aiQuota.limit=d.limit; renderQuotaPill(); updateAiButtons(); } }
+    function quotaReached(){ if(aiQuota && !aiQuota.unlimited){ aiQuota.remaining=0; renderQuotaPill(); updateAiButtons(); } }
+
+    // ---- image picker (stock first, web fetch fallback) ----
+    let pickerIndex=null;
+    function openPicker(i){ pickerIndex=i;
+      const card=deckEl.querySelector(`.slide[data-index="${i}"]`);
+      const title=card&&card.querySelector('h3')?card.querySelector('h3').innerText.trim():'';
+      $('pickerQ').value=title||ctx.topic||''; $('imgPicker').style.display='flex'; runStock(); setTimeout(()=>$('pickerQ').focus(),50);
+    }
+    function closePicker(){ $('imgPicker').style.display='none'; pickerIndex=null; }
+    function pickerGridHTML(images,fromWeb){
+      if(!images||!images.length) return `<div class="pg-msg">No ${fromWeb?'web ':'stock '}images found.${fromWeb?'':' Try “Search the web”.'}</div>`;
+      return images.map(im=>`<button type="button" class="pg" data-rel="${esc(im.relpath)}" title="${esc(im.caption||'')}"><img src="${esc(im.image)}" loading="lazy"></button>`).join('');
+    }
+    async function runStock(){ const q=$('pickerQ').value.trim();
+      $('pickerHint').textContent='Stock library — free and instant.';
+      $('pickerGrid').innerHTML='<div class="pg-msg"><span class="spinner"></span>Searching…</div>';
+      try{ const u=new URLSearchParams({q,subject:ctx.subject||'',topic:ctx.topic||''});
+        const d=await (await fetch('/api/images/search?'+u)).json(); $('pickerGrid').innerHTML=pickerGridHTML(d.images,false);
+      }catch{ $('pickerGrid').innerHTML='<div class="pg-msg">Search failed.</div>'; }
+    }
+    async function runWeb(){ const q=$('pickerQ').value.trim(); if(!q){ $('pickerQ').focus(); return; }
+      $('pickerHint').textContent='Fresh images from the web (added to your library).';
+      $('pickerGrid').innerHTML='<div class="pg-msg"><span class="spinner"></span>Fetching from the web…</div>';
+      try{ const d=await (await fetch('/api/images/fetch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q,subject:ctx.subject,topic:ctx.topic})})).json();
+        if(d.error) throw new Error(d.error); $('pickerGrid').innerHTML=pickerGridHTML(d.images,true);
+      }catch(err){ $('pickerGrid').innerHTML='<div class="pg-msg">'+esc(err.message)+'</div>'; }
+    }
+    async function pickImage(relpath){
+      try{ const r=await fetch(`/api/slide/${currentDeckId}/set-image`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:pickerIndex,relpath})}); const d=await r.json(); if(!r.ok) throw new Error(d.error);
+        const card=deckEl.querySelector(`.slide[data-index="${pickerIndex}"]`);
+        const img=card&&card.querySelector('.thumb img'); if(img) img.src=d.image;
+        const bd=card&&card.querySelector('.badge'); if(bd){ const m=badgeMeta(d.imageSource); bd.innerHTML=ICON('i-image')+m.label; bd.className='badge '+m.cls; }
+        closePicker();
+      }catch(err){ toast(err.message); }
+    }
+    $('pickerClose').addEventListener('click',closePicker);
+    $('imgPicker').addEventListener('click',e=>{ if(e.target===$('imgPicker')) closePicker(); });
+    $('pickerSearchBtn').addEventListener('click',runStock);
+    $('pickerWebBtn').addEventListener('click',runWeb);
+    $('pickerQ').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); runStock(); } });
+    $('pickerGrid').addEventListener('click',e=>{ const pg=e.target.closest('.pg'); if(pg) pickImage(pg.dataset.rel); });
+
     // ---- lesson pack (worksheet / exit ticket) ----
     let packType=null, packData=null;
     const packList=(arr,f)=>`<ol>${(arr||[]).map(x=>`<li contenteditable data-f="${f}">${esc(x)}</li>`).join('')}</ol>`;

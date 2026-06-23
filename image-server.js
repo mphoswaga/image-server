@@ -4,7 +4,8 @@ const express = require('express');
 const multer = require('multer');
 const cookieParser = require('cookie-parser');
 const path = require('path');
-const { buildDeck, rebuildDeck, alternativeImage, findReusableImage, listLibrary, addLibraryImages, libraryStats } = require('./generate');
+const { buildDeck, rebuildDeck, alternativeImage, findReusableImage, searchLibrary, getLibraryImage, listLibrary, addLibraryImages, libraryStats } = require('./generate');
+const quota = require('./quota');
 const { generateOneSlide } = require('./content');
 const { extractText, saveTemplate, listTemplates, getTemplate, renameTemplate, deleteTemplate, loadOriginalById, loadTemplate, loadOriginal, TYPES } = require('./template');
 const { generateLessonPlan, planToText } = require('./lesson-plan');
@@ -306,6 +307,43 @@ app.post('/api/slide/:id/swap-image', requireAuth, (req, res) => {
   res.json({ image: '/' + alt.relpath, imageSource: alt.source || 'library' });
 });
 
+// Remaining AI-visual budget for this month (for the UI to show + gate buttons).
+app.get('/api/quota', requireAuth, (req, res) => res.json(quota.status(req.userId, req.user.role === 'admin')));
+
+// Stock-first image search: look through the curated library.
+app.get('/api/images/search', requireAuth, (req, res) => {
+  const { q, subject, topic } = req.query || {};
+  res.json({ images: searchLibrary({ q, subject, topic, limit: 24 }) });
+});
+
+// Fallback: fetch fresh images from Unsplash for a query (free; captioned +
+// added to the library so they're reusable). Not an AI visual — not capped.
+app.post('/api/images/fetch', requireAuth, async (req, res) => {
+  const { q, subject, topic } = req.body || {};
+  if (!q || !String(q).trim()) return res.status(400).json({ error: 'Type what you are looking for.' });
+  try {
+    const added = await addImages({ subject: subject || 'search', topic: topic || 'general', count: 8, query: String(q).trim() });
+    if (added.length) addLibraryImages(added);
+    res.json({ images: added.map(e => ({ relpath: e.relpath, image: '/' + e.relpath, caption: e.caption || '', source: e.source || 'unsplash' })) });
+  } catch (err) {
+    console.error('Image fetch failed:', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Set a chosen library image onto a slide (from the picker).
+app.post('/api/slide/:id/set-image', requireAuth, (req, res) => {
+  const deck = decks.get(req.params.id);
+  if (!deck) return res.status(404).json({ error: 'Deck expired — generate again.' });
+  const i = Number(req.body.index);
+  if (!Number.isInteger(i) || i < 0 || i >= deck.slides.length) return res.status(400).json({ error: 'bad index' });
+  const entry = getLibraryImage(String(req.body.relpath || ''));
+  if (!entry) return res.status(404).json({ error: 'Image not found.' });
+  deck.images[i] = entry;
+  if (deck.slides[i].visual) deck.slides[i].visual = { type: 'none', items: [] }; // a chosen photo replaces any diagram/visual
+  res.json({ image: '/' + entry.relpath, imageSource: entry.source || 'library' });
+});
+
 // Generate an accurate AI illustration for a slide's example/task.
 app.post('/api/slide/:id/ai-image', requireAuth, async (req, res) => {
   const deck = decks.get(req.params.id);
@@ -326,10 +364,18 @@ app.post('/api/slide/:id/ai-image', requireAuth, async (req, res) => {
       deck.images[i] = reuse;
       return res.json({ image: '/' + reuse.relpath, imageSource: 'ai-generated', reused: true });
     }
+    // Paid generation — enforce the monthly AI-visual cap (admins exempt).
+    const isAdmin = req.user.role === 'admin';
+    const q = quota.status(req.userId, isAdmin);
+    if (!q.unlimited && q.remaining <= 0) {
+      return res.status(403).json({ error: `You've used all ${q.limit} AI visuals this month — search the stock library instead, or they reset next month.`, limitReached: true, remaining: 0, limit: q.limit });
+    }
     const entry = await generateImage({ subject: deck.subject, topic: deck.topic, concept, grade: deck.grade });
     addLibraryImages([entry]);   // cache for reuse + matching
     deck.images[i] = entry;
-    res.json({ image: '/' + entry.relpath, imageSource: 'ai-generated', reused: false });
+    quota.consume(req.userId);
+    const after = quota.status(req.userId, isAdmin);
+    res.json({ image: '/' + entry.relpath, imageSource: 'ai-generated', reused: false, remaining: after.remaining, limit: after.limit });
   } catch (err) {
     console.error('AI image failed:', err.message);
     res.status(400).json({ error: err.message });
@@ -352,11 +398,23 @@ app.post('/api/slide/:id/diagram', requireAuth, async (req, res) => {
     }
     const concept = `${slide.title}${slide.imageQuery ? ' — ' + slide.imageQuery : ''}`.trim();
     const reuse = findReusableImage({ subject: deck.subject, topic: deck.topic, query: concept, minScore: 3, source: 'svg-diagram', exclude: deck.images.map(im => im.relpath) });
-    let entry = reuse;
-    if (!entry) { entry = await generateDiagram({ subject: deck.subject, topic: deck.topic, concept }); addLibraryImages([entry]); }
+    let entry = reuse, remaining, limit;
+    if (!entry) {
+      // Generating a new diagram is a paid AI visual — enforce the cap.
+      const isAdmin = req.user.role === 'admin';
+      const q = quota.status(req.userId, isAdmin);
+      if (!q.unlimited && q.remaining <= 0) {
+        return res.status(403).json({ error: `You've used all ${q.limit} AI visuals this month — search the stock library instead, or they reset next month.`, limitReached: true, remaining: 0, limit: q.limit });
+      }
+      entry = await generateDiagram({ subject: deck.subject, topic: deck.topic, concept });
+      addLibraryImages([entry]);
+      quota.consume(req.userId);
+      const after = quota.status(req.userId, isAdmin);
+      remaining = after.remaining; limit = after.limit;
+    }
     slide.visual = { type: 'diagram', items: [concept] };
     deck.images[i] = entry;
-    res.json({ image: '/' + entry.relpath, imageSource: 'svg-diagram' });
+    res.json({ image: '/' + entry.relpath, imageSource: 'svg-diagram', remaining, limit });
   } catch (err) {
     console.error('Diagram failed:', err.message);
     res.status(400).json({ error: err.message });
