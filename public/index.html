@@ -4,6 +4,17 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>LessonCope — lesson plans & decks in one place</title>
+  <meta name="description" content="LessonCope turns your lesson objectives into a plan that matches your school's template, then an illustrated, ready-to-teach slide deck." />
+  <meta name="theme-color" content="#1f4e79" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/favicon.svg" />
+  <!-- Social / link previews -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="LessonCope — lesson plans & decks in one place" />
+  <meta property="og:description" content="Paste your objectives — get a lesson plan in your school's format, then a matching illustrated deck." />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="LessonCope" />
+  <meta name="twitter:description" content="Lesson plans & decks, in your school's format." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -88,6 +99,25 @@
     .status.err { color:var(--err); } .status.ok { color:var(--ok); }
     .spinner { display:inline-block; width:15px; height:15px; margin-right:8px; vertical-align:-3px; border:2px solid rgba(31,78,121,.22); border-top-color:var(--primary-2); border-radius:50%; animation:spin .7s linear infinite; }
     @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* Hero greeting (logged-in) */
+    .hero .greeting { font-family:'Fraunces',Georgia,serif; font-weight:600; letter-spacing:-.5px; color:var(--ink); font-size:29px; margin:0; }
+    .hero .greeting .hi { color:var(--primary); }
+
+    /* Inline field errors + invalid state */
+    .field-err { color:var(--err); font-size:12.5px; margin:6px 0 0; min-height:0; display:none; }
+    .field-err.show { display:block; }
+    .invalid { border-color:var(--err) !important; box-shadow:0 0 0 4px rgba(192,57,43,.12) !important; }
+
+    /* Toasts (replace native alert) */
+    .toast-wrap { position:fixed; top:70px; left:50%; transform:translateX(-50%); z-index:60; display:flex; flex-direction:column; gap:9px; align-items:center; pointer-events:none; width:max-content; max-width:92vw; }
+    .toast { pointer-events:auto; background:#fff; border:1px solid var(--border); border-left:4px solid var(--primary-2); box-shadow:var(--sh-lg); border-radius:12px; padding:11px 15px; font-size:14px; font-weight:600; color:var(--ink); display:flex; align-items:center; gap:9px; max-width:min(92vw,460px); animation:toastIn .22s ease; }
+    .toast .ic { width:17px; height:17px; flex:none; }
+    .toast.err { border-left-color:var(--err); color:var(--err); }
+    .toast.ok { border-left-color:var(--ok); color:#0f6b3d; }
+    .toast.leaving { opacity:0; transform:translateY(-8px); transition:.25s; }
+    @keyframes toastIn { from { opacity:0; transform:translateY(-10px); } to { opacity:1; } }
+    .btn.ghost.warn, .nav .logout.warn { color:var(--err); border-color:#eccfcb; background:#fdf1ef; }
 
     /* Plan stage */
     .bar { display:flex; flex-wrap:wrap; align-items:center; gap:12px; justify-content:space-between; background:var(--card); border:1px solid var(--border); border-radius:16px; box-shadow:var(--sh); padding:16px 20px; margin-bottom:16px; }
@@ -198,14 +228,18 @@
         <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 2l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></symbol>
         <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".5"/></symbol>
         <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
+        <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.6 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
       </g>
     </defs>
   </svg>
 
+  <!-- Toast notifications (replace native alert) -->
+  <div id="toastWrap" class="toast-wrap" aria-live="assertive" aria-atomic="true"></div>
+
   <!-- AUTH SCREEN -->
   <div id="authScreen" style="display:none">
     <div class="auth-card">
-      <div class="logo"><span class="brandmark"><svg class="ic"><use href="#i-grad"/></svg></span><span class="wordmark">Lesson<span class="cope">Cope</span></span></div>
+      <div class="logo"><span class="brandmark"><svg class="ic" aria-hidden="true"><use href="#i-grad"/></svg></span><span class="wordmark">Lesson<span class="cope">Cope</span></span></div>
       <div class="sub">Lesson plans &amp; decks, in your school's format.</div>
       <div class="tabs">
         <button id="tabLogin" class="active" type="button">Log in</button>
@@ -228,38 +262,44 @@
 
   <!-- TOP NAV -->
   <nav id="nav" class="nav" style="display:none">
-    <span class="logo"><span class="brandmark"><svg class="ic"><use href="#i-grad"/></svg></span><span class="wordmark">Lesson<span class="cope">Cope</span></span></span>
-    <span class="user"><button id="adminBtn" class="logout" style="display:none"><svg class="ic"><use href="#i-image"/></svg> Admin</button><span id="navAvatar" class="avatar"></span><span id="navName"></span><button id="logoutBtn" class="logout"><svg class="ic"><use href="#i-logout"/></svg> Log out</button></span>
+    <span class="logo"><span class="brandmark"><svg class="ic" aria-hidden="true"><use href="#i-grad"/></svg></span><span class="wordmark">Lesson<span class="cope">Cope</span></span></span>
+    <span class="user"><button id="adminBtn" class="logout" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg> Admin</button><span id="navAvatar" class="avatar"></span><span id="navName"></span><button id="logoutBtn" class="logout"><svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg> Log out</button></span>
   </nav>
 
   <div class="wrap" id="app" style="display:none">
     <div class="hero">
-      <div class="logo"><span class="brandmark"><svg class="ic"><use href="#i-grad"/></svg></span><span class="wordmark">Lesson<span class="cope">Cope</span></span></div>
+      <h1 id="greeting" class="greeting">Plan a lesson</h1>
       <div class="tagline">Paste your objectives — get a lesson plan that matches your template, then a matching deck.</div>
     </div>
 
     <div class="steps">
-      <span class="st active" data-step="1"><svg class="ic"><use href="#i-target"/></svg> Objectives</span>
-      <span class="st" data-step="2"><svg class="ic"><use href="#i-doc"/></svg> Lesson plan</span>
-      <span class="st" data-step="3"><svg class="ic"><use href="#i-layers"/></svg> Slides</span>
+      <span class="st active" data-step="1"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> Objectives</span>
+      <span class="st" data-step="2"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Lesson plan</span>
+      <span class="st" data-step="3"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Slides</span>
     </div>
 
     <!-- STAGE 1 -->
-    <form id="composer" class="card">
-      <h2 class="card-title"><svg class="ic"><use href="#i-spark"/></svg> Plan a lesson</h2>
+    <form id="composer" class="card" novalidate>
+      <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Plan a lesson</h2>
       <p class="hint">Your template is reused automatically. Paste this lesson's objectives and we'll write a plan that matches it.</p>
 
       <div id="tplBox" class="tpl"><span class="info none">Checking for a saved template…</span></div>
-      <p class="fmt-note"><svg class="ic"><use href="#i-doc"/></svg> Word, PDF, Excel or text. Optional — without one we use a standard plan structure.</p>
+      <p class="fmt-note"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Word, PDF, Excel or text. Optional — without one we use a standard plan structure.</p>
       <input id="tplFile" type="file" accept=".docx,.pdf,.xlsx,.xls,.txt,.md,.csv" style="display:none" />
 
       <div class="grid2">
-        <div><label for="subject">Subject</label><input id="subject" list="subjectList" autocomplete="off" placeholder="Pick or type a new subject" required /><datalist id="subjectList"></datalist></div>
-        <div><label for="topic">Topic</label><input id="topic" list="topicList" autocomplete="off" placeholder="Pick or type a new topic" required /><datalist id="topicList"></datalist></div>
+        <div><label for="subject">Subject</label><input id="subject" list="subjectList" autocomplete="off" placeholder="Pick or type a new subject" required /><datalist id="subjectList"></datalist><div id="subjErr" class="field-err">Add a subject.</div></div>
+        <div><label for="topic">Topic</label><input id="topic" list="topicList" autocomplete="off" placeholder="Pick or type a new topic" required /><datalist id="topicList"></datalist><div id="topicErr" class="field-err">Add a topic.</div></div>
       </div>
-      <p class="fmt-note"><svg class="ic"><use href="#i-image"/></svg> New subject or topic? We'll fetch &amp; caption images for it automatically (first time takes a little longer).</p>
+      <p class="fmt-note"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg> New subject or topic? We'll fetch &amp; caption images for it automatically (first time takes a little longer).</p>
       <div class="grid3">
-        <div><label for="grade">Grade level</label><input id="grade" type="text" value="grade 5" /></div>
+        <div><label for="grade">Grade level</label>
+          <select id="grade">
+            <option>Grade R</option><option>Grade 1</option><option>Grade 2</option><option>Grade 3</option>
+            <option>Grade 4</option><option selected>Grade 5</option><option>Grade 6</option><option>Grade 7</option>
+            <option>Grade 8</option><option>Grade 9</option><option>Grade 10</option><option>Grade 11</option><option>Grade 12</option>
+          </select>
+        </div>
         <div><label for="slideCount">Content slides</label><input id="slideCount" type="number" min="1" max="20" value="5" /></div>
         <div><label for="tone">Tone</label>
           <select id="tone">
@@ -272,55 +312,56 @@
       </div>
       <label for="objectives">Lesson objectives <span style="color:var(--err)">*</span></label>
       <textarea id="objectives" rows="4" placeholder="Paste what students should be able to do, e.g.&#10;• Identify the numerator and denominator&#10;• Compare two fractions&#10;• Add fractions with the same denominator" required></textarea>
+      <div id="objErr" class="field-err">Please add at least one objective.</div>
       <label for="focus">Focus or angle <span style="color:var(--muted);font-weight:400">(optional)</span></label>
       <textarea id="focus" rows="2" placeholder="e.g. use pizza and sports examples; lots of group work"></textarea>
 
-      <button id="planBtn" class="btn primary full" type="submit"><svg class="ic"><use href="#i-spark"/></svg> Generate lesson plan</button>
+      <button id="planBtn" class="btn primary full" type="submit"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Generate lesson plan</button>
     </form>
 
     <!-- STAGE 2 -->
     <section id="planStage" class="card wide" style="display:none">
       <div class="bar" style="box-shadow:none;border:none;padding:0;margin-bottom:10px">
-        <div class="meta"><svg class="ic"><use href="#i-doc"/></svg> <b>Review your lesson plan</b> <span id="planSrc" style="color:var(--muted);font-size:13px"></span></div>
+        <div class="meta"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> <b>Review your lesson plan</b> <span id="planSrc" style="color:var(--muted);font-size:13px"></span></div>
       </div>
       <p class="hint">Edit anything below. When it looks right, create the slides — they'll follow this plan.</p>
       <div id="planSections"></div>
       <div class="plan-actions" style="margin-top:16px">
-        <button id="acceptBtn" class="btn accent"><svg class="ic"><use href="#i-layers"/></svg> Accept &amp; create slides</button>
-        <button id="dlPlanBtn" class="btn ghost"><svg class="ic"><use href="#i-download"/></svg> Download lesson plan</button>
-        <button id="regenPlanBtn" class="btn ghost"><svg class="ic"><use href="#i-refresh"/></svg> Regenerate plan</button>
+        <button id="acceptBtn" class="btn accent"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Accept &amp; create slides</button>
+        <button id="dlPlanBtn" class="btn ghost"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Download lesson plan</button>
+        <button id="regenPlanBtn" class="btn ghost"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg> Regenerate plan</button>
         <button id="backBtn" class="btn ghost">← Back</button>
       </div>
     </section>
 
-    <div id="status" class="status"></div>
+    <div id="status" class="status" role="status" aria-live="polite"></div>
 
     <!-- STAGE 3 -->
     <section id="results" style="display:none">
       <div class="bar">
-        <div class="meta"><svg class="ic"><use href="#i-layers"/></svg> Your deck is ready — <b id="deckTitle"></b> <span id="deckCount" style="color:var(--muted)"></span></div>
+        <div class="meta"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Your deck is ready — <b id="deckTitle"></b> <span id="deckCount" style="color:var(--muted)"></span></div>
         <div class="result-actions">
-          <button id="downloadBtn" class="btn accent"><svg class="ic"><use href="#i-download"/></svg> Download .pptx</button>
+          <button id="downloadBtn" class="btn accent"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Download .pptx</button>
           <button id="restartBtn" class="btn ghost">Start over</button>
         </div>
       </div>
-      <p class="edit-tip"><svg class="ic" style="color:var(--accent)"><use href="#i-pencil"/></svg> Click any text to <b>edit it</b> · use <b>Swap image</b> or <b>Regenerate</b> before downloading.</p>
+      <p class="edit-tip"><svg class="ic" aria-hidden="true" style="color:var(--accent)"><use href="#i-pencil"/></svg> Click any text to <b>edit it</b> · use <b>Swap image</b> or <b>Regenerate</b> before downloading.</p>
       <div id="deck" class="deck"></div>
     </section>
 
     <!-- ADMIN PANEL -->
     <section id="adminPanel" class="card wide" style="display:none">
-      <h2 class="card-title"><svg class="ic"><use href="#i-image"/></svg> Image library admin</h2>
+      <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg> Image library admin</h2>
       <p class="hint">Add more images to any subject &amp; topic. Each new image is fetched and <b>auto-captioned</b> for context, then indexed instantly.</p>
       <div class="grid3">
         <div><label for="adSubject">Subject</label><input id="adSubject" list="subjList" placeholder="e.g. maths" /><datalist id="subjList"></datalist></div>
         <div><label for="adTopic">Topic</label><input id="adTopic" placeholder="e.g. fractions" /></div>
         <div><label for="adCount">How many</label><input id="adCount" type="number" min="1" max="30" value="10" /></div>
       </div>
-      <button id="addImgBtn" class="btn primary full"><svg class="ic"><use href="#i-image"/></svg> Add images</button>
+      <button id="addImgBtn" class="btn primary full"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg> Add images</button>
       <div id="adminStatus" class="status"></div>
 
-      <h3 style="display:flex;align-items:center;gap:8px;margin:26px 0 10px;font-size:15px;color:var(--primary)"><svg class="ic"><use href="#i-layers"/></svg> Current library <span id="adminTotal" style="color:var(--muted);font-weight:500;font-size:13px"></span></h3>
+      <h3 style="display:flex;align-items:center;gap:8px;margin:26px 0 10px;font-size:15px;color:var(--primary)"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Current library <span id="adminTotal" style="color:var(--muted);font-weight:500;font-size:13px"></span></h3>
       <div id="adminStats" class="admin-stats"></div>
       <div style="margin-top:20px"><button id="adminBack" class="btn ghost">← Back to app</button></div>
     </section>
@@ -330,7 +371,29 @@
     const $=id=>document.getElementById(id);
     const cap=s=>s.replace(/\b\w/g,c=>c.toUpperCase());
     const esc=s=>String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-    const ICON=id=>`<svg class="ic"><use href="#${id}"/></svg>`;
+    const ICON=id=>`<svg class="ic" aria-hidden="true"><use href="#${id}"/></svg>`;
+
+    // Toast notifications (replace native alert): non-blocking, screen-reader announced.
+    function toast(msg,type='err'){
+      const wrap=$('toastWrap'); const el=document.createElement('div');
+      el.className='toast '+type; el.setAttribute('role','status');
+      el.innerHTML=ICON(type==='ok'?'i-check':'i-alert')+`<span>${esc(msg)}</span>`;
+      wrap.appendChild(el);
+      setTimeout(()=>{ el.classList.add('leaving'); setTimeout(()=>el.remove(),260); }, type==='ok'?3200:4600);
+    }
+
+    // Session-expiry handling: if any API call returns 401 after we're in the app,
+    // send the teacher back to log in instead of showing a cryptic error.
+    let appReady=false;
+    const _fetch=window.fetch.bind(window);
+    window.fetch=async(...a)=>{
+      const res=await _fetch(...a);
+      try{ const url=typeof a[0]==='string'?a[0]:(a[0]&&a[0].url)||'';
+        if(res.status===401 && appReady && url.startsWith('/api/') && !url.endsWith('/api/me')) sessionExpired();
+      }catch{}
+      return res;
+    };
+    function sessionExpired(){ appReady=false; showAuth(); $('authErr').textContent='Your session expired — please log in again.'; window.scrollTo({top:0}); }
     const SWAP_HTML=`${ICON('i-shuffle')}Swap`;
     const REGEN_HTML=`${ICON('i-refresh')}Regenerate`;
     const AI_HTML=`${ICON('i-spark')}AI image`;
@@ -346,7 +409,7 @@
     async function loadLibrary(){
       try{ const r=await fetch('/api/library'); if(!r.ok) throw new Error('HTTP '+r.status); library=await r.json();
         $('subjectList').innerHTML=library.subjects.map(s=>`<option value="${s}">`).join(''); fillTopics();
-      }catch(err){ statusEl.className='status err'; statusEl.innerHTML=`Couldn't reach the server — open this at <b>http://localhost:4000</b>.`; }
+      }catch(err){ statusEl.className='status err'; statusEl.innerHTML=`Couldn't reach the server. Please check your connection and refresh.`; }
     }
     $('subject').addEventListener('input',fillTopics);
     $('subject').addEventListener('change',fillTopics);
@@ -374,10 +437,19 @@
       e.target.value='';
     });
 
+    // Inline required-field validation (clears as the teacher types).
+    function fieldErr(inputId,errId,bad){
+      const inp=$(inputId), err=$(errId);
+      err.classList.toggle('show',bad); inp.classList.toggle('invalid',bad);
+      if(bad && !inp._wired){ inp._wired=true; inp.addEventListener('input',()=>{ err.classList.remove('show'); inp.classList.remove('invalid'); },{once:true}); }
+      return bad;
+    }
     composer.addEventListener('submit', async (e)=>{
       e.preventDefault();
-      const objectives=$('objectives').value.trim();
-      if(!objectives){ $('objectives').focus(); return; }
+      const subject=$('subject').value.trim(), topic=$('topic').value.trim(), objectives=$('objectives').value.trim();
+      const bad=[ fieldErr('subject','subjErr',!subject), fieldErr('topic','topicErr',!topic), fieldErr('objectives','objErr',!objectives) ];
+      const firstBad=['subject','topic','objectives'][bad.indexOf(true)];
+      if(firstBad){ $(firstBad).focus(); $(firstBad).scrollIntoView({behavior:'smooth',block:'center'}); return; }
       ctx={ subject:$('subject').value, topic:$('topic').value, grade:$('grade').value||'middle school',
         slideCount:Number($('slideCount').value)||5, tone:$('tone').value, focus:$('focus').value.trim(), objectives };
       $('planBtn').disabled=true; statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>Writing a lesson plan that matches your template…';
@@ -412,7 +484,7 @@
         const blob=await r.blob(), url=URL.createObjectURL(blob), a=document.createElement('a');
         const cd=r.headers.get('Content-Disposition')||''; const m=cd.match(/filename="([^"]+)"/);
         a.href=url; a.download=m?m[1]:'lesson-plan'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-      }catch(err){ alert(err.message); }
+      }catch(err){ toast(err.message); }
       b.disabled=false; b.innerHTML=orig;
     });
 
@@ -497,20 +569,20 @@
       if(b.dataset.action==='swap'){ b.disabled=true; b.innerHTML='<span class="spinner"></span>';
         try{ const r=await fetch(`/api/slide/${currentDeckId}/swap-image`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})}); const d=await r.json(); if(!r.ok) throw new Error(d.error);
           card.querySelector('.thumb img').src=d.image; setBadge(d.imageSource);
-        }catch(err){ alert(err.message); } b.disabled=false; b.innerHTML=SWAP_HTML;
+        }catch(err){ toast(err.message); } b.disabled=false; b.innerHTML=SWAP_HTML;
       } else if(b.dataset.action==='ai'){ b.disabled=true; b.innerHTML='<span class="spinner"></span>Generating…';
         try{ const r=await fetch(`/api/slide/${currentDeckId}/ai-image`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})}); const d=await r.json(); if(!r.ok) throw new Error(d.error);
           card.querySelector('.thumb img').src=d.image; setBadge('ai-generated');
-        }catch(err){ alert(err.message); } b.disabled=false; b.innerHTML=AI_HTML;
+        }catch(err){ toast(err.message); } b.disabled=false; b.innerHTML=AI_HTML;
       } else if(b.dataset.action==='diagram'){ b.disabled=true; b.innerHTML='<span class="spinner"></span>Drawing diagram…';
         try{ const r=await fetch(`/api/slide/${currentDeckId}/diagram`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})}); const d=await r.json(); if(!r.ok) throw new Error(d.error);
           if(d.labelled){ const nm=d.labelled.replace(/-/g,' ');
             card.querySelector('.thumb').outerHTML=`<div class="thumb" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#f0faf4;color:#2f9e44">${ICON('i-target')}<b style="text-transform:capitalize;font-size:14px">${esc(nm)} diagram</b><span class="badge ai">animated labels</span></div>`;
           } else if(d.image){ const img=card.querySelector('.thumb img'); if(img){ img.src=d.image; setBadge('svg-diagram'); } }
-        }catch(err){ alert(err.message); } b.disabled=false; b.innerHTML=DIA_HTML;
+        }catch(err){ toast(err.message); } b.disabled=false; b.innerHTML=DIA_HTML;
       } else if(b.dataset.action==='regen'){ b.disabled=true; b.innerHTML='<span class="spinner"></span>Regenerating…';
         try{ const r=await fetch(`/api/slide/${currentDeckId}/regenerate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})}); const d=await r.json(); if(!r.ok) throw new Error(d.error); card.outerHTML=cardHTML(d.slide,i);
-        }catch(err){ alert(err.message); b.disabled=false; b.innerHTML=REGEN_HTML; }
+        }catch(err){ toast(err.message); b.disabled=false; b.innerHTML=REGEN_HTML; }
       }
     });
     function collectEdits(){ return [...deckEl.querySelectorAll('.slide[data-index]')].map(card=>{
@@ -524,9 +596,18 @@
       if(!currentDeckId) return; const dl=$('downloadBtn'); dl.disabled=true; const orig=dl.innerHTML; dl.innerHTML='<span class="spinner"></span>Preparing…';
       try{ const r=await fetch(`/api/download/${currentDeckId}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({edits:collectEdits()})}); if(!r.ok){const d=await r.json().catch(()=>({error:'Download failed'}));throw new Error(d.error);}
         const blob=await r.blob(), url=URL.createObjectURL(blob), a=document.createElement('a'); a.href=url; a.download=$('deckTitle').textContent+'.pptx'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-      }catch(err){ alert(err.message); } dl.disabled=false; dl.innerHTML=orig;
+      }catch(err){ toast(err.message); } dl.disabled=false; dl.innerHTML=orig;
     });
-    $('restartBtn').addEventListener('click',()=>{ show('composer'); setStep(1); statusEl.innerHTML=''; window.scrollTo({top:0,behavior:'smooth'}); });
+    // "Start over" discards the generated deck (and any edits) — two-step confirm.
+    let restartArm=false, restartTmr=null;
+    function doRestart(){ const b=$('restartBtn'); b.textContent='Start over'; b.classList.remove('warn'); restartArm=false; clearTimeout(restartTmr);
+      show('composer'); setStep(1); statusEl.innerHTML=''; window.scrollTo({top:0,behavior:'smooth'}); }
+    $('restartBtn').addEventListener('click',()=>{
+      const b=$('restartBtn');
+      if(!restartArm){ restartArm=true; b.textContent='Discard deck?'; b.classList.add('warn');
+        restartTmr=setTimeout(()=>{ restartArm=false; b.textContent='Start over'; b.classList.remove('warn'); },3000); return; }
+      doRestart();
+    });
 
     // ---- auth ----
     const authScreen=$('authScreen'), nav=$('nav'), appEl=$('app');
@@ -554,9 +635,12 @@
     $('logoutBtn').onclick=async ()=>{ await fetch('/api/logout',{method:'POST'}); location.reload(); };
 
     function enterApp(user){
+      appReady=true;
       authScreen.style.display='none'; nav.style.display='flex'; appEl.style.display='block';
       $('navName').textContent=user.name||user.email;
       $('navAvatar').textContent=(user.name||user.email||'?').trim().charAt(0).toUpperCase();
+      const first=(user.name||'').trim().split(/\s+/)[0];
+      $('greeting').innerHTML=first?`Welcome back, <span class="hi">${esc(first)}</span>`:'Plan a lesson';
       $('adminBtn').style.display = user.role==='admin' ? 'inline-flex' : 'none';
       loadLibrary(); loadTemplate();
     }
