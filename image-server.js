@@ -836,56 +836,6 @@ app.delete('/api/admin/apikeys/:hash', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-// ── Temp: move misplaced seed data to the correct user ──────────────────────────────
-// Finds rosters/games written under the wrong ID (when TEACHER_ID was undefined) and
-// moves them to the actual user who owns mphoeduc@gmail.com.
-app.post('/api/admin/fix-seed', requireAdmin, (req, res) => {
-  try {
-    const fs = require('fs');
-    const { DATA_DIR } = require('./storage');
-    const usersDir = require('path').join(DATA_DIR, 'users');
-    const correct = req.userId; // the logged-in admin = Mpho
-
-    // Check if there's a stray 'undefined' or wrong-user roster dir
-    const dirs = fs.existsSync(usersDir) ? fs.readdirSync(usersDir) : [];
-    const stray = dirs.filter(d => d !== correct);
-    const moved = [];
-
-    for (const dir of stray) {
-      const src = require('path').join(usersDir, dir, 'rosters');
-      const dst = require('path').join(usersDir, correct, 'rosters');
-      if (!fs.existsSync(src)) continue;
-      fs.mkdirSync(dst, { recursive: true });
-      for (const f of fs.readdirSync(src)) {
-        fs.renameSync(require('path').join(src, f), require('path').join(dst, f));
-        moved.push(f);
-      }
-      try { fs.rmdirSync(src); fs.rmdirSync(require('path').join(usersDir, dir)); } catch {}
-    }
-
-    // Also re-point game teacherIds to correct user
-    const gamesDir = require('path').join(DATA_DIR, 'games');
-    const fixed = [];
-    if (fs.existsSync(gamesDir)) {
-      for (const f of fs.readdirSync(gamesDir).filter(f => f.endsWith('.json') && !f.includes('results') && f !== '_rooms.json')) {
-        const p = require('path').join(gamesDir, f);
-        const g = JSON.parse(fs.readFileSync(p, 'utf8'));
-        if (stray.includes(g.teacherId)) {
-          g.teacherId = correct;
-          fs.writeFileSync(p, JSON.stringify(g));
-          fixed.push(f);
-        }
-      }
-    }
-
-    const { roster } = require('./roster') || {};
-    const count = require('./roster').listRosters(correct).length;
-    res.json({ ok: true, movedRosters: moved, fixedGames: fixed, rosterCount: count, userId: correct });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ── External API (v1) ───────────────────────────────────────────────────────────────
 // Read-only endpoints for the external report-card app, authenticated via Bearer token.
 // Only admin-scoped keys are accepted.
