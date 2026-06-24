@@ -608,7 +608,7 @@ app.get('/api/game/:id', requireGameAccess, (req, res) => {
   // Students must hold a session for THIS game.
   if (req.gameSession && req.gameSession.gameId !== g.id) return res.status(403).json({ error: 'Session is for a different game.' });
   const hasRoster = !!g.rosterId;
-  res.json({ id: g.id, lessonTitle: g.lessonTitle, subject: g.subject, topic: g.topic, grade: g.grade, summary: g.summary, questionCount: (g.questions || []).length, teacherName: g.teacherName, hasRoster });
+  res.json({ id: g.id, lessonTitle: g.lessonTitle, subject: g.subject, topic: g.topic, grade: g.grade, summary: g.summary, questionCount: (g.questions || []).length, teacherName: g.teacherName, hasRoster, highScores: games.getHighScores(g.id) });
 });
 
 // Student: the questions, WITHOUT the correct answers.
@@ -640,8 +640,13 @@ app.post('/api/game/:id/finish', requireGameAccess, (req, res) => {
   // Use student session identity (ID + display name); teacher fallback for legacy.
   const studentId = (req.gameSession && req.gameSession.studentId) || req.userId || 'unknown';
   const name = (req.gameSession && req.gameSession.name) || (req.user && (req.user.name || req.user.email)) || studentId;
-  games.recordResult(g.id, { studentId, name, score, total: g.questions.length, answers });
-  res.json({ score, total: g.questions.length });
+  const arcadeScore = Math.max(0, parseInt(req.body.arcadeScore, 10) || 0);
+  const gameType = ['car', 'space', 'runner'].includes(req.body.gameType) ? req.body.gameType : null;
+  const prevHigh = gameType ? games.getHighScores(g.id)[gameType] : 0;
+  games.recordResult(g.id, { studentId, name, score, total: g.questions.length, answers, arcadeScore, gameType });
+  const newHighScores = games.getHighScores(g.id);
+  const isNewHigh = gameType && arcadeScore > 0 && arcadeScore > prevHigh;
+  res.json({ score, total: g.questions.length, arcadeScore, gameType, highScores: newHighScores, isNewHigh });
 });
 
 // Teacher: results for one of their games (owner only).

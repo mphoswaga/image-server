@@ -119,6 +119,7 @@
       <p class="sub">Read this recap. When you understand it, choose a game to play!</p>
       <div class="overview" id="sumOverview"></div>
       <div id="sumConcepts"></div>
+      <div id="sumHighScores" style="display:none;background:#fff7e6;border:1.5px solid #ffd43b;border-radius:14px;padding:12px 16px;margin-top:18px;font-size:13.5px"></div>
       <div style="margin-top:22px"><button id="startBtn" class="btn accent">I understand — choose a game 🎮</button></div>
     </div>
 
@@ -158,9 +159,13 @@
 
     <div id="resultScreen" class="card" style="display:none">
       <h1 class="center">Game over! 🏁</h1>
-      <div class="result-score" id="resScore"></div>
-      <p class="result-of" id="resOf"></p>
-      <p class="result-msg" id="resMsg"></p>
+      <div id="resArcade" style="text-align:center;margin:10px 0 4px"></div>
+      <div id="resHighScore" style="text-align:center;margin-bottom:18px"></div>
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
+        <div class="result-score" id="resScore"></div>
+        <p class="result-of" id="resOf"></p>
+        <p class="result-msg" id="resMsg"></p>
+      </div>
       <button id="againBtn" class="btn primary">Play another game</button>
       <p class="center sub" style="margin-top:16px">Your teacher can see your result.</p>
     </div>
@@ -172,6 +177,7 @@
     const GAME_ID=location.pathname.split('/').filter(Boolean).pop();
     const LCOL=['#1971c2','#e8833a','#2f9e44','#9c36b5'];
     let game=null, questions=[], answers=[], qi=0, score=0, lives=3, active=null, raf=0, lastT=0;
+    let arcadeScore=0, activeGameType=null;
     let keyDir=0, dragX=null, fireQueued=false;
     const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), rnd=n=>Math.floor(Math.random()*n);
     function show(id){ ['loading','authScreen','summaryScreen','pickerScreen','gameScreen','resultScreen'].forEach(s=>$(s).style.display=s===id?'block':'none'); }
@@ -221,26 +227,50 @@
       $('sumTitle').textContent=game.lessonTitle;
       $('sumOverview').textContent=game.summary.overview||'';
       $('sumConcepts').innerHTML=(game.summary.concepts||[]).map(c=>`<div class="concept"><b>${esc(c.term)}</b><span>${esc(c.explanation)}</span></div>`).join('');
+      // High score board (anonymous — no names, just the scores)
+      const hs=game.highScores||{};
+      const hsLines=[];
+      if(hs.car>0)   hsLines.push(`🚗 <b>Car Dodge:</b> ${hs.car} cars dodged`);
+      if(hs.space>0) hsLines.push(`🚀 <b>Space Blaster:</b> ${hs.space} correct shots`);
+      if(hs.runner>0)hsLines.push(`🏃 <b>Answer Runner:</b> ${hs.runner} correct gates`);
+      if(hsLines.length){ $('sumHighScores').innerHTML='<div style="font-weight:700;margin-bottom:8px">🏆 Records — can you beat them?</div>'+hsLines.map(l=>`<div style="margin-bottom:4px">${l}</div>`).join(''); $('sumHighScores').style.display='block'; }
+      else $('sumHighScores').style.display='none';
       show('summaryScreen');
     }
     $('startBtn').addEventListener('click', ()=>show('pickerScreen'));
     document.querySelectorAll('.game-pick').forEach(b=>b.addEventListener('click',()=>pickGame(b.dataset.game)));
 
     /* ===== shared engine ===== */
-    function updateHud(){ $('hudLives').innerHTML='❤️'.repeat(Math.max(0,lives))||'💀'; $('hudProg').textContent=`Q ${Math.min(qi+1,questions.length)}/${questions.length}`; $('hudScore').textContent='⭐ '+score; }
+    function updateHud(){ $('hudLives').innerHTML='❤️'.repeat(Math.max(0,lives))||'💀'; $('hudProg').textContent=`Q ${Math.min(qi+1,questions.length)}/${questions.length}`; $('hudScore').textContent='🏎️ '+arcadeScore; }
     async function submitAnswer(choice){ answers[qi]=choice; const d=await (await fetch('/api/game/'+GAME_ID+'/answer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({questionIndex:qi,choice})})).json(); if(d.correct) score++; return d; }
     function advance(){ qi++; if(qi>=questions.length || lives<=0){ endGame(); return false; } updateHud(); return true; }
     async function endGame(){ active=null; cancelAnimationFrame(raf); show('loading');
-      const d=await (await fetch('/api/game/'+GAME_ID+'/finish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answers:answers.map(a=>a==null?-1:a)})})).json();
+      const d=await (await fetch('/api/game/'+GAME_ID+'/finish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answers:answers.map(a=>a==null?-1:a),arcadeScore,gameType:activeGameType})})).json();
+
+      // Arcade score block
+      const typeLabel=activeGameType==='car'?'cars dodged':activeGameType==='space'?'correct shots':'correct gates';
+      $('resArcade').innerHTML=`<div style="font-size:56px;font-weight:900;color:var(--accent);line-height:1">${arcadeScore}</div><div style="font-size:14px;color:var(--muted);margin-top:4px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">${typeLabel}</div>`;
+
+      // High score comparison (anonymous — no names shown)
+      const hs=d.highScores&&activeGameType?d.highScores[activeGameType]||0:0;
+      if(d.isNewHigh){
+        $('resHighScore').innerHTML='<div style="background:#fff7e6;border:1.5px solid #ffd43b;border-radius:12px;padding:10px 18px;display:inline-block;font-size:15px;font-weight:700">🎉 New record! You\'re the best so far!</div>';
+      } else if(hs>0){
+        const gap=hs-arcadeScore;
+        $('resHighScore').innerHTML=`<div style="font-size:13px;color:var(--muted)">🏆 Record: <b style="color:var(--primary);font-size:16px">${hs}</b>&ensp;${gap>0?'You need '+gap+' more to beat it!':'You tied the record!'}</div>`;
+      } else {
+        $('resHighScore').innerHTML='<div style="font-size:13px;color:var(--muted)">🏆 You\'re the first to play — set the record!</div>';
+      }
+
       $('resScore').textContent=`${d.score}/${d.total}`; $('resOf').textContent=`${Math.round((d.score/d.total)*100)}% correct`;
-      const pct=d.score/d.total; $('resMsg').textContent=pct===1?'Perfect — you nailed every question! 🌟':pct>=0.7?'Great work! 👏':pct>=0.5?'Good effort — review the tricky ones.':'Keep practising — you’ll get there! 💪';
+      const pct=d.score/d.total; $('resMsg').textContent=pct===1?'Perfect — you nailed every question! 🌟':pct>=0.7?'Great work! 👏':pct>=0.5?'Good effort — review the tricky ones.':'Keep practising — you\'ll get there! 💪';
       show('resultScreen');
     }
     function loop(t){ if(!active) return; let dt=(t-lastT)/1000; lastT=t; if(dt>0.05) dt=0.05; active.update(dt); active.render(); raf=requestAnimationFrame(loop); }
     async function pickGame(key){
       show('loading');
       const r=await fetch('/api/game/'+GAME_ID+'/play'); const d=await r.json();
-      questions=d.questions||[]; answers=new Array(questions.length); qi=0; score=0; lives=3;
+      questions=d.questions||[]; answers=new Array(questions.length); qi=0; score=0; lives=3; arcadeScore=0; activeGameType=key;
       $('fireBtn').style.display = key==='space'?'flex':'none';
       $('qBanner').style.display = key==='car'?'none':'block';
       $('qFb').className='qfb';
@@ -267,7 +297,7 @@
         if(dragX!=null) s.px=clamp(dragX-PW/2,RX,RX+RW-PW); else s.px=clamp(s.px+moveDir*230*dt,RX,RX+RW-PW);
         s.spawnT-=dt; if(s.spawnT<=0){ s.spawnT=Math.max(.55,1.15-s.elapsed*.012); const l=rnd(LN); s.enemies.push({x:lc(l)-EW/2,y:-EH,pal:EP[rnd(EP.length)]}); }
         const sp=spd();
-        for(let i=s.enemies.length-1;i>=0;i--){ const e=s.enemies[i]; e.y+=sp*dt; if(e.y>H){s.enemies.splice(i,1);continue;}
+        for(let i=s.enemies.length-1;i>=0;i--){ const e=s.enemies[i]; e.y+=sp*dt; if(e.y>H){s.enemies.splice(i,1); arcadeScore++; updateHud(); continue;}
           if(s.invuln<=0 && e.x<s.px+PW-4 && e.x+EW-4>s.px && e.y<s.py+PH-8 && e.y+EH-8>s.py){ s.enemies.splice(i,1); lives--; updateHud(); s.paused=true; openCrash(); return; } } }
       function render(){ cx.fillStyle='#2f3a30'; cx.fillRect(0,0,W,H); cx.fillStyle='#39404e'; cx.fillRect(RX,0,RW,H);
         cx.fillStyle='#cfd6e2'; cx.fillRect(RX-4,0,4,H); cx.fillRect(RX+RW,0,4,H);
@@ -303,7 +333,7 @@
       function curLane(){ let best=0,bd=1e9; for(let l=0;l<4;l++){const d=Math.abs(lx(l)-s.px);if(d<bd){bd=d;best=l;}} return best; }
       async function pick(lane){ if(s.state!=='run') return; s.state='wait'; if(theme==='space') s.laser=0.18;
         const d=await submitAnswer(lane); s.correctLane=d.correctIndex;
-        if(!d.correct) lives--; updateHud();
+        if(d.correct){ arcadeScore++; } else { lives--; } updateHud();
         const fb=$('qFb'); fb.className='qfb show '+(d.correct?'right':'no');
         fb.innerHTML = d.correct?`<b>Correct! ✅</b>${esc(d.explanation||'')}` : `<b>Not quite ❌ — ${'ABCD'[d.correctIndex]} was right</b>${esc(d.explanation||'')}`;
         setTimeout(()=>{ $('qFb').className='qfb'; if(advance()){ spawnRow(); showBanner(); } }, 1500); }

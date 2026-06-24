@@ -67,21 +67,36 @@ function loadResults(id) {
   try { return JSON.parse(fs.readFileSync(resultsPath(String(id)), 'utf8')); } catch { return []; }
 }
 
-// Upsert a student's attempt — keep their latest score, count attempts.
-function recordResult(id, { studentId, name, score, total, answers }) {
+// Upsert a student's attempt — keep latest quiz score, keep BEST arcade score per game type.
+function recordResult(id, { studentId, name, score, total, answers, arcadeScore, gameType }) {
   const results = loadResults(id);
   const at = new Date().toISOString();
   const existing = results.find(r => r.studentId === studentId);
   if (existing) {
-    Object.assign(existing, { name, score, total, answers, at, attempts: (existing.attempts || 1) + 1 });
+    const as = existing.arcadeScores || {};
+    if (gameType) as[gameType] = Math.max(as[gameType] || 0, arcadeScore || 0);
+    Object.assign(existing, { name, score, total, answers, at, attempts: (existing.attempts || 1) + 1, arcadeScores: as, gameType });
   } else {
-    results.push({ studentId, name, score, total, answers, at, attempts: 1 });
+    const arcadeScores = {};
+    if (gameType) arcadeScores[gameType] = arcadeScore || 0;
+    results.push({ studentId, name, score, total, answers, at, attempts: 1, arcadeScores, gameType: gameType || null });
   }
   writeJsonAtomic(resultsPath(id), results);
   return results;
 }
 
 function getResults(id) { return loadResults(id); }
+
+// Returns the anonymous high score for each game type across all students.
+function getHighScores(id) {
+  const hs = { car: 0, space: 0, runner: 0 };
+  for (const r of loadResults(id)) {
+    if (r.arcadeScores) {
+      for (const t of ['car', 'space', 'runner']) hs[t] = Math.max(hs[t], r.arcadeScores[t] || 0);
+    }
+  }
+  return hs;
+}
 
 function listTeacherGames(teacherId) {
   fs.mkdirSync(GAMES_DIR, { recursive: true });
@@ -97,4 +112,4 @@ function listTeacherGames(teacherId) {
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
-module.exports = { createGame, getGame, recordResult, getResults, listTeacherGames, getRoomCode };
+module.exports = { createGame, getGame, recordResult, getResults, getHighScores, listTeacherGames, getRoomCode };
