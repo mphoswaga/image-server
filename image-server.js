@@ -836,8 +836,12 @@ app.delete('/api/admin/apikeys/:hash', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-// ── One-shot test-data seed (admin only) ────────────────────────────────────────────
-app.post('/api/admin/seed-test-data', requireAdmin, (req, res) => {
+// ── One-shot test-data seed (admin session OR SEED_SECRET header) ───────────────────
+app.post('/api/admin/seed-test-data', (req, res, next) => {
+  const seedKey = process.env.SEED_SECRET;
+  if (seedKey && req.headers['x-seed-secret'] === seedKey) return next();
+  return requireAdmin(req, res, next);
+}, (req, res) => {
   try {
     const fs = require('fs');
     const { DATA_DIR, writeJsonAtomic } = require('./storage');
@@ -863,8 +867,12 @@ app.post('/api/admin/seed-test-data', requireAdmin, (req, res) => {
       });
     }
 
-    const TEACHER_ID = req.userId; // whoever is logged in as admin
-    const { getUserById } = require('./auth');
+    const { getUserById, listAllUserIds } = require('./auth');
+    // Use session user if available, otherwise pick the first admin user on the volume
+    const TEACHER_ID = req.userId || listAllUserIds().find(id => {
+      const u = getUserById(id);
+      return u && u.role === 'admin';
+    });
     const teacher = getUserById(TEACHER_ID);
 
     // Rosters
