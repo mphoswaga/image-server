@@ -129,6 +129,7 @@ function purgeOldDecks() {
   const now = Date.now();
   for (const [id, d] of decks) if (now - d.createdAt > DECK_TTL) decks.delete(id);
 }
+setInterval(purgeOldDecks, 12 * 60 * 1000).unref();
 
 // Build a preview entry the frontend can render + edit.
 function previewEntry(slide, image) {
@@ -335,10 +336,9 @@ app.post('/api/generate', requireAuth, async (req, res) => {
   const focus = clip(req.body.focus, LIMITS.focus);
   if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
   try {
-    purgeOldDecks();
     // If an accepted lesson plan was passed, the slides follow it.
     const lessonPlanText = lessonPlan && lessonPlan.sections ? planToText(lessonPlan) : '';
-    const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives, lessonPlanText, extras: { regenerate: !!regenerate } });
+    const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives, lessonPlanText, extras: { regenerate: !!regenerate }, skipAssemble: true });
     const id = crypto.randomUUID();
     decks.set(id, {
       subject: String(subject).toLowerCase(), topic: String(topic).toLowerCase(),
