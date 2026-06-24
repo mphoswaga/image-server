@@ -129,6 +129,10 @@
     /* Inline field errors + invalid state */
     .field-err { color:var(--err); font-size:12.5px; margin:6px 0 0; min-height:0; display:none; }
     .field-err.show { display:block; }
+    .char-row { display:flex; justify-content:space-between; align-items:flex-start; min-height:20px; }
+    .char-count { font-size:11.5px; color:var(--muted); white-space:nowrap; padding-top:5px; }
+    .char-count.near { color:#c77700; }
+    .char-count.full { color:var(--err); font-weight:600; }
     .invalid { border-color:var(--err) !important; box-shadow:0 0 0 4px rgba(192,57,43,.12) !important; }
 
     /* Toasts (replace native alert) */
@@ -405,8 +409,8 @@
       <input id="tplFile" type="file" accept=".docx,.pdf,.xlsx,.xls,.txt,.md,.csv" style="display:none" />
 
       <div class="grid2">
-        <div><label for="subject">Subject <span class="hint-i" tabindex="0" role="img" aria-label="The subject area - e.g. Maths, English, Science. Pick a saved one or type a new one; new subjects get images fetched and labelled automatically." data-tip="The subject area - e.g. Maths, English, Science. Pick a saved one or type a new one; new subjects get images fetched and labelled automatically.">i</span></label><input id="subject" list="subjectList" autocomplete="off" placeholder="Pick or type a new subject" required /><datalist id="subjectList"></datalist><div id="subjErr" class="field-err">Add a subject.</div></div>
-        <div><label for="topic">Topic <span class="hint-i" tabindex="0" role="img" aria-label="The specific topic within the subject, e.g. adding fractions or the water cycle. It drives the lesson content and the images chosen." data-tip="The specific topic within the subject, e.g. adding fractions or the water cycle. It drives the lesson content and the images chosen.">i</span></label><input id="topic" list="topicList" autocomplete="off" placeholder="Pick or type a new topic" required /><datalist id="topicList"></datalist><div id="topicErr" class="field-err">Add a topic.</div></div>
+        <div><label for="subject">Subject <span class="hint-i" tabindex="0" role="img" aria-label="The subject area - e.g. Maths, English, Science. Pick a saved one or type a new one; new subjects get images fetched and labelled automatically." data-tip="The subject area - e.g. Maths, English, Science. Pick a saved one or type a new one; new subjects get images fetched and labelled automatically.">i</span></label><input id="subject" list="subjectList" autocomplete="off" placeholder="Pick or type a new subject" maxlength="60" required /><datalist id="subjectList"></datalist><div id="subjErr" class="field-err">Add a subject.</div></div>
+        <div><label for="topic">Topic <span class="hint-i" tabindex="0" role="img" aria-label="The specific topic within the subject, e.g. adding fractions or the water cycle. It drives the lesson content and the images chosen." data-tip="The specific topic within the subject, e.g. adding fractions or the water cycle. It drives the lesson content and the images chosen.">i</span></label><input id="topic" list="topicList" autocomplete="off" placeholder="Pick or type a new topic" maxlength="80" required /><datalist id="topicList"></datalist><div id="topicErr" class="field-err">Add a topic.</div></div>
       </div>
       <p class="fmt-note"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg> New subject or topic? We'll fetch &amp; caption images for it automatically (first time takes a little longer).</p>
       <div class="grid3">
@@ -428,10 +432,11 @@
         </div>
       </div>
       <label for="objectives">Lesson objectives <span style="color:var(--err)">*</span> <span class="hint-i" tabindex="0" role="img" aria-label="Paste what students should be able to DO by the end, one per line. The plan, slides, worksheet and exit ticket are all built to meet these." data-tip="Paste what students should be able to DO by the end, one per line. The plan, slides, worksheet and exit ticket are all built to meet these.">i</span></label>
-      <textarea id="objectives" rows="4" placeholder="Paste what students should be able to do, e.g.&#10;• Identify the numerator and denominator&#10;• Compare two fractions&#10;• Add fractions with the same denominator" required></textarea>
-      <div id="objErr" class="field-err">Please add at least one objective.</div>
+      <textarea id="objectives" rows="4" maxlength="1500" placeholder="Paste what students should be able to do, e.g.&#10;• Identify the numerator and denominator&#10;• Compare two fractions&#10;• Add fractions with the same denominator" required></textarea>
+      <div class="char-row"><div id="objErr" class="field-err">Please add at least one objective.</div><span class="char-count" id="objCount"></span></div>
       <label for="focus">Focus or angle <span style="color:var(--muted);font-weight:400">(optional)</span> <span class="hint-i" tabindex="0" role="img" aria-label="An optional steer for the lesson, e.g. use sport examples, lots of group work, or a specific sub-skill to emphasise." data-tip="An optional steer for the lesson, e.g. use sport examples, lots of group work, or a specific sub-skill to emphasise.">i</span></label>
-      <textarea id="focus" rows="2" placeholder="e.g. use pizza and sports examples; lots of group work"></textarea>
+      <textarea id="focus" rows="2" maxlength="400" placeholder="e.g. use pizza and sports examples; lots of group work"></textarea>
+      <div class="char-row"><span></span><span class="char-count" id="focusCount"></span></div>
 
       <button id="planBtn" class="btn primary full" type="submit"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Generate lesson plan</button>
     </form>
@@ -581,6 +586,22 @@
     }
     $('subject').addEventListener('input',fillTopics);
     $('subject').addEventListener('change',fillTopics);
+
+    // Live char counters for objectives and focus.
+    function charCounter(inputId, countId, max) {
+      const el = $(inputId), counter = $(countId);
+      if (!el || !counter) return;
+      function update() {
+        const n = el.value.length;
+        const left = max - n;
+        counter.textContent = left <= max * 0.15 ? `${left} left` : '';
+        counter.className = 'char-count' + (left === 0 ? ' full' : left <= max * 0.1 ? ' near' : '');
+      }
+      el.addEventListener('input', update);
+      update();
+    }
+    charCounter('objectives', 'objCount', 1500);
+    charCounter('focus', 'focusCount', 400);
 
     // Template packs: save several lesson-plan formats, pick one per lesson.
     let templates=[], selectedTemplateId=null, planTemplateId=null;

@@ -68,21 +68,32 @@ function placeholderPlan(objectives) {
   };
 }
 
-async function generateLessonPlan({ subject, topic, grade = 'middle school', tone = 'clear and engaging', objectives, templateText }) {
+async function generateLessonPlan({ subject, topic, grade = 'middle school', tone = 'clear and engaging', objectives, templateText, regenerate = false }) {
   if (!process.env.OPENAI_API_KEY) {
     console.log('No OPENAI_API_KEY set — using placeholder lesson plan.');
     return placeholderPlan(objectives);
   }
-  const client = aiClient();
-  const response = await client.chat.completions.create({
-    model: MODEL,
-    max_tokens: 6000,
-    messages: [{ role: 'user', content: buildPrompt({ subject, topic, grade, tone, objectives, templateText }) }],
-    response_format: { type: 'json_schema', json_schema: { name: 'lesson_plan', strict: true, schema: PLAN_SCHEMA } },
+  const { wrap } = require('./cache');
+  return wrap('lesson-plan', {
+    subject: String(subject || '').toLowerCase().trim(),
+    topic: String(topic || '').toLowerCase().trim(),
+    grade: String(grade || 'middle school').trim(),
+    tone: String(tone || 'clear and engaging').trim(),
+    objectives: String(objectives || '').trim(),
+    templateText: String(templateText || '').slice(0, 6000).trim(),
+    regenerate,
+  }, async () => {
+    const client = aiClient();
+    const response = await client.chat.completions.create({
+      model: MODEL,
+      max_tokens: 6000,
+      messages: [{ role: 'user', content: buildPrompt({ subject, topic, grade, tone, objectives, templateText }) }],
+      response_format: { type: 'json_schema', json_schema: { name: 'lesson_plan', strict: true, schema: PLAN_SCHEMA } },
+    });
+    const text = response.choices[0]?.message?.content;
+    if (!text) throw new Error('No lesson plan returned from the model');
+    return JSON.parse(text);
   });
-  const text = response.choices[0]?.message?.content;
-  if (!text) throw new Error('No lesson plan returned from the model');
-  return JSON.parse(text);
 }
 
 // Render an accepted plan to a compact text block to feed into slide generation.

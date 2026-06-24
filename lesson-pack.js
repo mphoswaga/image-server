@@ -60,9 +60,23 @@ async function callModel(schema, name, prompt, max_tokens = 3500) {
   return JSON.parse(text);
 }
 
+function ctxKey(type, ctx) {
+  return {
+    type,
+    subject: String(ctx.subject || '').toLowerCase().trim(),
+    topic: String(ctx.topic || '').toLowerCase().trim(),
+    grade: String(ctx.grade || 'middle school').trim(),
+    objectives: String(ctx.objectives || '').trim(),
+    lessonPlanText: String(ctx.lessonPlanText || '').slice(0, 5000).trim(),
+    regenerate: !!ctx.regenerate,
+  };
+}
+
 async function generateWorksheet(ctx) {
   if (!process.env.OPENAI_API_KEY) return placeholderWorksheet(ctx);
-  const prompt = `You are an expert teacher creating a printable STUDENT WORKSHEET for this lesson.
+  const { wrap } = require('./cache');
+  return wrap('worksheet', ctxKey('worksheet', ctx), async () => {
+    const prompt = `You are an expert teacher creating a printable STUDENT WORKSHEET for this lesson.
 ${ctxBlock(ctx)}
 Produce:
 - title: a clear worksheet title.
@@ -74,12 +88,15 @@ Produce:
 - answerKey: the correct answer to each practice question IN THE SAME ORDER, then the challenge's answer LAST.
 ${calibration(ctx.grade)}
 Plain text only — no markdown symbols.`;
-  return callModel(WORKSHEET_SCHEMA, 'worksheet', prompt, 4000);
+    return callModel(WORKSHEET_SCHEMA, 'worksheet', prompt, 4000);
+  });
 }
 
 async function generateExitTicket(ctx) {
   if (!process.env.OPENAI_API_KEY) return placeholderExitTicket(ctx);
-  const prompt = `Create a short EXIT TICKET (a quick end-of-lesson check students complete in a few minutes) for this lesson.
+  const { wrap } = require('./cache');
+  return wrap('exit-ticket', ctxKey('exit-ticket', ctx), async () => {
+    const prompt = `Create a short EXIT TICKET (a quick end-of-lesson check students complete in a few minutes) for this lesson.
 ${ctxBlock(ctx)}
 Produce:
 - title: a short title.
@@ -87,7 +104,8 @@ Produce:
 - answerKey: the expected answer to each question, in the same order.
 ${calibration(ctx.grade)}
 Plain text only — no markdown symbols.`;
-  return callModel(EXIT_TICKET_SCHEMA, 'exit_ticket', prompt, 1500);
+    return callModel(EXIT_TICKET_SCHEMA, 'exit_ticket', prompt, 1500);
+  });
 }
 
 function placeholderWorksheet({ topic }) {
@@ -147,7 +165,9 @@ function normalizeGame(g) {
 
 async function generateGame(ctx) {
   if (!process.env.OPENAI_API_KEY) return placeholderGame(ctx);
-  const prompt = `Create a short REVISION GAME for students based on this lesson.
+  const { wrap } = require('./cache');
+  return wrap('game', ctxKey('game', ctx), async () => {
+    const prompt = `Create a short REVISION GAME for students based on this lesson.
 ${ctxBlock(ctx)}
 Produce:
 - overview: 2-3 sentences recapping what the lesson was about.
@@ -155,7 +175,8 @@ Produce:
 - questions: exactly 6 multiple-choice questions that check the lesson objectives. Each has: "question"; "options" = EXACTLY 4 answer choices; "correctIndex" = the 0-based index (0,1,2,3) of the correct option; and "explanation" = one sentence on why it is correct. Mix easier and harder questions, and make the wrong options plausible (not silly).
 ${calibration(ctx.grade)}
 Plain text only — no markdown.`;
-  return normalizeGame(await callModel(GAME_SCHEMA, 'lesson_game', prompt, 3500));
+    return normalizeGame(await callModel(GAME_SCHEMA, 'lesson_game', prompt, 3500));
+  });
 }
 
 function placeholderGame({ topic }) {

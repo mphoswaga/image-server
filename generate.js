@@ -439,7 +439,7 @@ function assembleDeck(slides, images, gradeTheme) {
 // Returns { pptx, slides }. Caller decides how to output (writeFile / buffer).
 const slugify = s => String(s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-async function buildDeck({ subject, topic, slideCount = 4, grade = 'middle school', tone = 'clear and engaging', focus = '', objectives = '', lessonPlanText = '' }) {
+async function buildDeck({ subject, topic, slideCount = 4, grade = 'middle school', tone = 'clear and engaging', focus = '', objectives = '', lessonPlanText = '', extras = {} }) {
   subject = slugify(subject);
   topic = slugify(topic);
   if (!subject || !topic) throw new Error('Subject and topic are required.');
@@ -448,7 +448,7 @@ async function buildDeck({ subject, topic, slideCount = 4, grade = 'middle schoo
   // their images are fetched on demand in selectImages().
 
   const profile = gradeProfile(grade);
-  const slides = await generateContent(subject, topic, slideCount, grade, tone, focus, { objectives, lessonPlanText });
+  const slides = await generateContent(subject, topic, slideCount, grade, tone, focus, { objectives, lessonPlanText, ...extras });
   const images = await selectImages(slides, subject, topic);
   const pptx = assembleDeck(slides, images, profile.theme);
   return { pptx, slides, images, band: profile.band };

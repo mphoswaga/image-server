@@ -289,18 +289,29 @@ async function generateContent(subject, topic, slideCount, grade = 'middle schoo
     console.log('No OPENAI_API_KEY set — using placeholder text. Add a key to .env for AI-written slides.');
     return placeholderDeck(subject, topic, slideCount);
   }
-  const prompt = buildPrompt(subject, topic, grade, slideCount, tone, focus, extras);
-
-  // Structured outputs can't enforce array length; retry until we get the count.
-  let best = null;
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    const data = await callModel(DECK_SCHEMA, 'lesson_deck', [{ role: 'user', content: prompt }], 12000);
-    if (!best || data.slides.length > best.slides.length) best = data;
-    if (data.slides.length >= slideCount) break;
-    console.log(`Model returned ${data.slides.length}/${slideCount} content slides, retrying (${attempt}/3)…`);
-  }
-  best.slides = best.slides.slice(0, slideCount);
-  return flattenDeck(best);
+  const { wrap } = require('./cache');
+  return wrap('content', {
+    subject: String(subject).toLowerCase().trim(),
+    topic: String(topic).toLowerCase().trim(),
+    slideCount: Number(slideCount),
+    grade: String(grade || 'middle school').trim(),
+    tone: String(tone || 'clear and engaging').trim(),
+    focus: String(focus || '').trim(),
+    lessonPlanText: String((extras && extras.lessonPlanText) || '').trim(),
+    regenerate: !!(extras && extras.regenerate),
+  }, async () => {
+    const prompt = buildPrompt(subject, topic, grade, slideCount, tone, focus, extras);
+    // Structured outputs can't enforce array length; retry until we get the count.
+    let best = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const data = await callModel(DECK_SCHEMA, 'lesson_deck', [{ role: 'user', content: prompt }], 12000);
+      if (!best || data.slides.length > best.slides.length) best = data;
+      if (data.slides.length >= slideCount) break;
+      console.log(`Model returned ${data.slides.length}/${slideCount} content slides, retrying (${attempt}/3)…`);
+    }
+    best.slides = best.slides.slice(0, slideCount);
+    return flattenDeck(best);
+  });
 }
 
 // Regenerate a single content slide (for the editable preview's "regenerate").

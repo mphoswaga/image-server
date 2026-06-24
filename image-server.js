@@ -226,16 +226,24 @@ app.post('/api/lesson-plan/download', requireAuth, (req, res) => {
   }
 });
 
+// Hard truncation limits — enforce here as a server-side backstop so malformed
+// or oversized requests can't inflate token budgets even if the UI is bypassed.
+const LIMITS = { subject: 60, topic: 80, objectives: 1500, focus: 400 };
+function clip(val, max) { return String(val || '').slice(0, max); }
+
 // ── Lesson plan generation (objectives + stored template → plan) ──────────
 app.post('/api/lesson-plan', requireAuth, async (req, res) => {
-  const { subject, topic, grade, tone, objectives, templateId } = req.body || {};
+  const { grade, tone, templateId, regenerate } = req.body || {};
+  const subject = clip(req.body.subject, LIMITS.subject);
+  const topic = clip(req.body.topic, LIMITS.topic);
+  const objectives = clip(req.body.objectives, LIMITS.objectives);
   if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
-  if (!objectives || !objectives.trim()) return res.status(400).json({ error: 'Please paste the lesson objectives.' });
+  if (!objectives.trim()) return res.status(400).json({ error: 'Please paste the lesson objectives.' });
   try {
     const tpl = (templateId && getTemplate(req.userId, templateId)) || loadTemplate(req.userId);
     const plan = await generateLessonPlan({
-      subject: String(subject).toLowerCase(), topic: String(topic).toLowerCase(),
-      grade, tone, objectives, templateText: tpl ? tpl.text : '',
+      subject: subject.toLowerCase(), topic: topic.toLowerCase(),
+      grade, tone, objectives, templateText: tpl ? tpl.text : '', regenerate: !!regenerate,
     });
     res.json({ sections: plan.sections, usedTemplate: !!tpl, templateName: tpl ? tpl.name : null, templateId: tpl ? tpl.id : null });
   } catch (err) {
@@ -251,11 +259,14 @@ const PACK_RENDER = { worksheet: worksheetDocx, 'exit-ticket': exitTicketDocx };
 app.post('/api/pack/:type', requireAuth, async (req, res) => {
   const gen = PACK_GEN[req.params.type];
   if (!gen) return res.status(404).json({ error: 'Unknown lesson-pack item.' });
-  const { subject, topic, grade, tone, objectives, lessonPlan } = req.body || {};
+  const { grade, tone, lessonPlan, regenerate } = req.body || {};
+  const subject = clip(req.body.subject, LIMITS.subject);
+  const topic = clip(req.body.topic, LIMITS.topic);
+  const objectives = clip(req.body.objectives, LIMITS.objectives);
   if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
   try {
     const lessonPlanText = lessonPlan && lessonPlan.sections ? planToText(lessonPlan) : '';
-    const data = await gen({ subject: String(subject).toLowerCase(), topic: String(topic).toLowerCase(), grade, tone, objectives, lessonPlanText });
+    const data = await gen({ subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, regenerate: !!regenerate });
     res.json({ type: req.params.type, data });
   } catch (err) {
     console.error('Pack generation failed:', err.message);
@@ -282,13 +293,17 @@ app.post('/api/pack/:type/download', requireAuth, async (req, res) => {
 
 // Generate a deck; store state; return preview metadata + download id.
 app.post('/api/generate', requireAuth, async (req, res) => {
-  const { subject, topic, slideCount, grade, tone, focus, objectives, lessonPlan } = req.body || {};
+  const { slideCount, grade, tone, lessonPlan, regenerate } = req.body || {};
+  const subject = clip(req.body.subject, LIMITS.subject);
+  const topic = clip(req.body.topic, LIMITS.topic);
+  const objectives = clip(req.body.objectives, LIMITS.objectives);
+  const focus = clip(req.body.focus, LIMITS.focus);
   if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
   try {
     purgeOldDecks();
     // If an accepted lesson plan was passed, the slides follow it.
     const lessonPlanText = lessonPlan && lessonPlan.sections ? planToText(lessonPlan) : '';
-    const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives, lessonPlanText });
+    const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives, lessonPlanText, extras: { regenerate: !!regenerate } });
     const id = crypto.randomUUID();
     decks.set(id, {
       subject: String(subject).toLowerCase(), topic: String(topic).toLowerCase(),
