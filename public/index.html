@@ -367,9 +367,22 @@
     .btn-progress { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:700; font-family:inherit; color:#fff; background:linear-gradient(135deg,var(--primary-2),var(--primary)); border:none; border-radius:10px; padding:9px 15px; cursor:pointer; transition:.12s; box-shadow:0 3px 10px rgba(31,78,121,.22); }
     .btn-progress:hover { box-shadow:0 5px 14px rgba(31,78,121,.30); }
     .btn-progress .ic { width:14px; height:14px; }
-    .btn-icon-del { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:10px; border:1.5px solid var(--border); background:#fff; color:var(--muted); cursor:pointer; transition:.15s; font-family:inherit; }
-    .btn-icon-del:hover { border-color:#e0a09a; color:var(--err); background:#fdf1ef; }
+    .btn-icon-del { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:10px; border:1.5px solid var(--border); background:#fff; color:var(--muted); cursor:pointer; transition:.15s; font-family:inherit; opacity:.45; }
+    .btn-icon-del:hover { border-color:#e0a09a; color:var(--err); background:#fdf1ef; opacity:1; }
     .btn-icon-del .ic { width:16px; height:16px; }
+    .btn-icon-del.armed { opacity:1; border-color:var(--err); color:var(--err); background:#fdf1ef; animation:arm-pulse .3s ease; }
+    @keyframes arm-pulse { 0%{transform:scale(1)} 50%{transform:scale(1.18)} 100%{transform:scale(1)} }
+    .roster-del-confirm { margin-top:10px; padding:14px 16px; background:#fff8f7; border:1.5px solid #f5c2bb; border-radius:12px; display:flex; flex-direction:column; gap:10px; }
+    .roster-del-confirm p { margin:0; font-size:13px; color:var(--ink); font-weight:600; }
+    .roster-del-confirm .del-hint { font-size:12px; color:var(--muted); font-weight:400; margin-top:-4px; }
+    .roster-del-confirm .del-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .roster-del-confirm input[type=password] { flex:1; min-width:160px; max-width:280px; font-size:13px; padding:9px 12px; border-radius:9px; border:1.5px solid #f5c2bb; background:#fff; }
+    .roster-del-confirm input[type=password]:focus { border-color:var(--err); outline:none; box-shadow:0 0 0 3px rgba(192,57,43,.12); }
+    .btn-del-confirm { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:700; font-family:inherit; color:#fff; background:var(--err); border:none; border-radius:9px; padding:9px 16px; cursor:pointer; transition:.12s; white-space:nowrap; }
+    .btn-del-confirm:hover { background:#a93226; }
+    .btn-del-confirm:disabled { opacity:.5; cursor:not-allowed; }
+    .btn-del-cancel { display:inline-flex; align-items:center; font-size:13px; font-weight:600; font-family:inherit; color:var(--muted); background:none; border:1.5px solid var(--border); border-radius:9px; padding:9px 14px; cursor:pointer; transition:.12s; }
+    .btn-del-cancel:hover { background:var(--primary-soft); color:var(--primary); border-color:var(--primary-2); }
 
     /* ── Game cards (My games panel) ── */
     .game-card { border:1.5px solid var(--border); border-radius:16px; margin-bottom:14px; background:#fff; box-shadow:var(--sh-sm); overflow:hidden; transition:.12s; }
@@ -778,7 +791,8 @@
         <button id="progressBack" class="btn ghost" style="width:auto;padding:8px 14px;font-size:13px"><svg class="ic" aria-hidden="true"><use href="#i-arrow" style="transform:scaleX(-1)"/></svg> All classes</button>
         <h2 id="progressTitle" style="margin:0;font-size:20px;font-weight:700;flex:1"></h2>
       </div>
-      <div id="progressStats" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px"></div>
+      <div id="progressStats" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px"></div>
+      <div id="subjectFilter" class="sort-bar" style="margin-bottom:10px;display:none"></div>
       <div class="sort-bar">
         <input id="progressSearch" class="prog-search" type="search" placeholder="Search student…" autocomplete="off" />
         <span style="font-size:12px;color:var(--muted);font-weight:600">Sort:</span>
@@ -1427,7 +1441,7 @@
         if(!d.rosters||!d.rosters.length){ wrap.innerHTML='<div class=”empty-state”><svg class=”ic” aria-hidden=”true” style=”width:36px;height:36px;opacity:.3”><use href=”#i-doc”/></svg><p>No rosters yet</p><p style=”font-size:13px;color:var(--muted)”>Add your first class list below.</p></div>'; return; }
         wrap.innerHTML='';
         d.rosters.forEach(r=>{
-          const item=document.createElement('div'); item.className='roster-row';
+          const item=document.createElement('div'); item.className='roster-row'; item.style.flexWrap='wrap';
           const icon=document.createElement('div'); icon.className='roster-icon'; icon.innerHTML=ICON('i-target');
           const info=document.createElement('div'); info.className='roster-info';
           const nm=document.createElement('div'); nm.className='roster-name'; nm.textContent=r.name;
@@ -1438,16 +1452,57 @@
           pb.addEventListener('click',()=>openProgress(r.id));
           const db=document.createElement('button'); db.className='btn-icon-del'; db.title='Delete roster'; db.setAttribute('aria-label','Delete roster');
           db.innerHTML=`<svg class=”ic” aria-hidden=”true”><use href=”#i-trash”/></svg>`;
-          db.addEventListener('click',async()=>{ if(!confirm('Delete this roster? All student data linked to it will be removed.')) return; await fetch('/api/roster/'+r.id,{method:'DELETE'}); loadRosters(); });
+
+          // Two-step delete: first click arms it; second click shows inline password confirm.
+          let armTimer=null;
+          let confirmPanel=null; // forward reference — assigned below
+          const disarm=()=>{ db.classList.remove('armed'); clearTimeout(armTimer); if(confirmPanel&&confirmPanel.parentNode) item.removeChild(confirmPanel); };
+
+          // Inline confirm panel — built programmatically to avoid innerHTML/querySelector fragility.
+          confirmPanel=document.createElement('div'); confirmPanel.className='roster-del-confirm'; confirmPanel.style.width='100%';
+          const _cpHead=document.createElement('p'); _cpHead.innerHTML=`Delete <em>${esc(r.name)}</em>? This cannot be undone.`;
+          const _cpHint=document.createElement('p'); _cpHint.className='del-hint'; _cpHint.textContent='Enter your password to confirm.';
+          const _cpRow=document.createElement('div'); _cpRow.className='del-row';
+          const pwInput=document.createElement('input'); pwInput.type='password'; pwInput.placeholder='Your password'; pwInput.autocomplete='current-password';
+          const confirmBtn=document.createElement('button'); confirmBtn.className='btn-del-confirm'; confirmBtn.innerHTML=ICON('i-trash')+' Delete';
+          const cancelBtn=document.createElement('button'); cancelBtn.className='btn-del-cancel'; cancelBtn.textContent='Cancel';
+          const delErr=document.createElement('div'); delErr.className='del-err field-err'; delErr.style.marginTop='4px';
+          _cpRow.append(pwInput,confirmBtn,cancelBtn);
+          confirmPanel.append(_cpHead,_cpHint,_cpRow,delErr);
+          cancelBtn.addEventListener('click',disarm);
+          confirmBtn.addEventListener('click',async()=>{
+            const pw=pwInput.value;
+            if(!pw){ delErr.textContent='Enter your password.'; return; }
+            confirmBtn.disabled=true; delErr.textContent='';
+            const orig=confirmBtn.innerHTML; confirmBtn.innerHTML='<span class=”spinner”></span>';
+            const res=await fetch('/api/roster/'+r.id,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
+            const data=await res.json();
+            if(!res.ok){ delErr.textContent=data.error||'Incorrect password.'; confirmBtn.disabled=false; confirmBtn.innerHTML=orig; pwInput.value=''; pwInput.focus(); return; }
+            loadRosters();
+          });
+          pwInput.addEventListener('keydown',e=>{ if(e.key==='Enter') confirmBtn.click(); if(e.key==='Escape') disarm(); });
+
+          db.addEventListener('click',()=>{
+            if(!db.classList.contains('armed')){
+              db.classList.add('armed');
+              armTimer=setTimeout(()=>disarm(),6000); // auto-disarm after 6s if no action
+            } else {
+              clearTimeout(armTimer);
+              if(!confirmPanel.parentNode){ item.appendChild(confirmPanel); }
+              pwInput.value=''; delErr.textContent=''; pwInput.focus();
+            }
+          });
+
           actions.append(pb,db);
           item.append(icon,info,actions); wrap.appendChild(item);
         });
-      }catch{ if(wrap) wrap.innerHTML='<p class=”hint err”>Could not load rosters.</p>'; }
+      }catch(e){ if(wrap) wrap.innerHTML='<p class=”hint err”>Could not load rosters.</p>'; }
     }
 
     // ---- Student progress panel ----
-    let progressData = null;   // last-loaded progress response
-    let currentSort  = 'name';
+    let progressData   = null;   // last-loaded progress response
+    let currentSort    = 'name';
+    let currentSubject = null;
 
     function openProgress(rosterId) {
       hideAllPanels();
@@ -1458,13 +1513,14 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
       fetch('/api/roster/' + rosterId + '/progress')
         .then(r => r.json())
-        .then(d => { if (d.error) throw new Error(d.error); progressData = d; renderProgress(); })
+        .then(d => { if (d.error) throw new Error(d.error); progressData = d; currentSubject = null; buildSubjectFilter(); renderProgress(); })
         .catch(err => { $('progressStudents').innerHTML = '<p class="hint err">Could not load progress: ' + esc(err.message) + '</p>'; });
     }
 
     $('progressBack').onclick = () => {
       $('progressWrap').style.display = 'none';
       $('rostersPanel').style.display = 'block';
+      currentSubject = null;
       window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
@@ -1477,6 +1533,24 @@
 
     // Search filter
     $('progressSearch').addEventListener('input', () => renderProgress());
+
+    function buildSubjectFilter() {
+      const el = $('subjectFilter');
+      if (!el || !progressData) return;
+      const subjects = [...new Set(
+        progressData.students.flatMap(s => s.results.map(r => r.subject).filter(Boolean))
+      )].sort();
+      if (subjects.length <= 1) { el.style.display = 'none'; return; }
+      el.style.display = '';
+      el.innerHTML = '<span style="font-size:12px;color:var(--muted);font-weight:600">Subject:</span>' +
+        `<button class="sort-btn subj-btn active" data-subj="">All subjects</button>` +
+        subjects.map(s => `<button class="sort-btn subj-btn" data-subj="${esc(s)}">${esc(s.charAt(0).toUpperCase()+s.slice(1))}</button>`).join('');
+      el.querySelectorAll('.subj-btn').forEach(b => b.addEventListener('click', () => {
+        currentSubject = b.dataset.subj || null;
+        el.querySelectorAll('.subj-btn').forEach(x => x.classList.toggle('active', x === b));
+        renderProgress();
+      }));
+    }
 
     function relTime(iso) {
       if (!iso) return '—';
@@ -1499,19 +1573,28 @@
       const { roster, students } = progressData;
       $('progressTitle').textContent = roster.name;
 
-      // Stats bar
-      const active   = students.filter(s => s.gamesPlayed > 0);
-      const totalPlays = students.reduce((s, st) => s + st.gamesPlayed, 0);
-      const classAvg = active.length ? Math.round(active.reduce((s, st) => s + st.avgPct, 0) / active.length) : null;
+      // Apply subject filter — recompute per-student stats from filtered results
+      const view = students.map(s => {
+        const results = currentSubject ? s.results.filter(r => r.subject === currentSubject) : s.results;
+        const gamesPlayed = results.length;
+        const avgPct = gamesPlayed ? Math.round(results.reduce((sum, r) => sum + r.pct, 0) / gamesPlayed) : null;
+        const lastAt = results.length ? results[0].at : null;
+        return { ...s, results, gamesPlayed, avgPct, lastAt };
+      });
+
+      // Stats bar (reflects current subject filter)
+      const active     = view.filter(s => s.gamesPlayed > 0);
+      const totalPlays = view.reduce((s, st) => s + st.gamesPlayed, 0);
+      const classAvg   = active.length ? Math.round(active.reduce((s, st) => s + st.avgPct, 0) / active.length) : null;
       $('progressStats').innerHTML =
         `<div class="prog-stat"><div class="v">${students.length}</div><div class="l">Students</div></div>` +
         `<div class="prog-stat"><div class="v">${totalPlays}</div><div class="l">Game plays</div></div>` +
         (classAvg !== null ? `<div class="prog-stat"><div class="v ${pctCls(classAvg)}">${classAvg}%</div><div class="l">Class average</div></div>` : '') +
         `<div class="prog-stat"><div class="v">${active.length}</div><div class="l">Active students</div></div>`;
 
-      // Filter + sort
+      // Search + sort on filtered view
       const q = ($('progressSearch').value || '').toLowerCase().trim();
-      let list = q ? students.filter(s => s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q)) : [...students];
+      let list = q ? view.filter(s => s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q)) : [...view];
       if      (currentSort === 'score')  list.sort((a, b) => (b.avgPct ?? -1) - (a.avgPct ?? -1));
       else if (currentSort === 'recent') list.sort((a, b) => (b.lastAt || '').localeCompare(a.lastAt || ''));
       else                               list.sort((a, b) => a.name.localeCompare(b.name));
@@ -1535,14 +1618,15 @@
                 <span class="dt">${relTime(r.at)}</span>
               </div>`).join('')}
             </div>`
-          : '<p style="margin:0;font-size:13px;color:var(--muted)">This student hasn\'t played any games yet.</p>';
+          : `<p style="margin:0;font-size:13px;color:var(--muted)">${currentSubject ? 'No ' + currentSubject + ' games played yet.' : 'This student hasn\'t played any games yet.'}</p>`;
 
+        const metaSubject = currentSubject ? '' : (s.bestSubject ? ' · best: ' + esc(s.bestSubject) : '');
         return `<div class="stu-card">
           <div class="stu-head" data-sid="${esc(s.id)}">
             <div class="stu-avatar">${esc(initials)}</div>
             <div style="flex:1;min-width:0">
               <div style="font-weight:700;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.name)}</div>
-              <div style="font-size:11.5px;color:var(--muted);margin-top:1px">${s.id}${s.gamesPlayed ? ' · ' + s.gamesPlayed + ' game' + (s.gamesPlayed!==1?'s':'') : ''}${s.bestSubject ? ' · best: ' + esc(s.bestSubject) : ''}${s.lastAt ? ' · ' + relTime(s.lastAt) : ''}</div>
+              <div style="font-size:11.5px;color:var(--muted);margin-top:1px">${s.id}${s.gamesPlayed ? ' · ' + s.gamesPlayed + ' game' + (s.gamesPlayed!==1?'s':'') : ''}${metaSubject}${s.lastAt ? ' · ' + relTime(s.lastAt) : ''}</div>
             </div>
             ${barFill}${badge}
             <svg class="ic stu-chevron" style="color:var(--muted);transition:transform .2s;flex:none;margin-left:8px" aria-hidden="true"><use href="#i-arrow"/></svg>

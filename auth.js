@@ -70,6 +70,12 @@ function getUserById(id) {
   return u ? publicUser(u) : null;
 }
 
+async function verifyPassword(userId, password) {
+  const u = loadUsers()[userId];
+  if (!u || !u.passwordHash) return false;
+  return bcrypt.compare(String(password || ''), u.passwordHash);
+}
+
 function listAllUserIds() {
   return Object.keys(loadUsers());
 }
@@ -93,4 +99,4 @@ function requireAdmin(req, res, next) {
   });
 }
 
-module.exports = { signup, login, issueToken, verifyToken, getUserById, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME };
+module.exports = { signup, login, issueToken, verifyToken, getUserById, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME };

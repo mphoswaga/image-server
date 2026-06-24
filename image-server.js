@@ -26,7 +26,7 @@ function safeAnimate(buffer, band) {
   try { return animateBuffer(buffer, band); }
   catch (err) { console.log('animation skipped:', err.message); return buffer; }
 }
-const { signup, login, issueToken, verifyToken, getUserById, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME } = require('./auth');
+const { signup, login, issueToken, verifyToken, getUserById, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME } = require('./auth');
 const { runWithUser } = require('./ai-client');
 const usage = require('./usage');
 const jwt = require('jsonwebtoken');
@@ -719,9 +719,13 @@ app.post('/api/roster', requireAuth, (req, res, next) => {
 
 app.get('/api/rosters', requireAuth, (req, res) => res.json({ rosters: roster.listRosters(req.userId) }));
 
-app.delete('/api/roster/:id', requireAuth, (req, res) => {
+app.delete('/api/roster/:id', requireAuth, async (req, res) => {
   const r = roster.getRoster(req.userId, req.params.id);
   if (!r) return res.status(404).json({ error: 'Roster not found.' });
+  const { password } = req.body || {};
+  if (!password) return res.status(400).json({ error: 'Password required to delete a roster.' });
+  const ok = await verifyPassword(req.userId, password);
+  if (!ok) return res.status(403).json({ error: 'Incorrect password.' });
   roster.deleteRoster(req.userId, req.params.id);
   res.json({ ok: true });
 });
