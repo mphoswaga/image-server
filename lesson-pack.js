@@ -166,25 +166,27 @@ function normalizeGame(g) {
 async function generateGame(ctx) {
   if (!process.env.OPENAI_API_KEY) return placeholderGame(ctx);
   const { wrap } = require('./cache');
-  return wrap('game', ctxKey('game', ctx), async () => {
+  const n = Math.min(20, Math.max(4, parseInt(ctx.questionCount, 10) || 6));
+  return wrap('game', ctxKey('game', { ...ctx, questionCount: n }), async () => {
     const prompt = `Create a short REVISION GAME for students based on this lesson.
 ${ctxBlock(ctx)}
 Produce:
 - overview: 2-3 sentences recapping what the lesson was about.
 - concepts: the 3-5 KEY ideas of the lesson, each with a short, clear explanation a student understands (so they can revise before playing).
-- questions: exactly 6 multiple-choice questions that check the lesson objectives. Each has: "question"; "options" = EXACTLY 4 answer choices; "correctIndex" = the 0-based index (0,1,2,3) of the correct option; and "explanation" = one sentence on why it is correct. Mix easier and harder questions, and make the wrong options plausible (not silly).
+- questions: exactly ${n} multiple-choice questions that check the lesson objectives. Each has: "question"; "options" = EXACTLY 4 answer choices; "correctIndex" = the 0-based index (0,1,2,3) of the correct option; and "explanation" = one sentence on why it is correct. Mix easier and harder questions, and make the wrong options plausible (not silly).
 ${calibration(ctx.grade)}
 Plain text only — no markdown.`;
-    return normalizeGame(await callModel(GAME_SCHEMA, 'lesson_game', prompt, 3500));
+    return normalizeGame(await callModel(GAME_SCHEMA, 'lesson_game', prompt, Math.max(3500, n * 300)));
   });
 }
 
-function placeholderGame({ topic }) {
+function placeholderGame({ topic, questionCount }) {
   const t = String(topic || 'the topic').replace(/-/g, ' ');
+  const n = Math.min(20, Math.max(4, parseInt(questionCount, 10) || 6));
   return normalizeGame({
     overview: `This lesson was about ${t}.`,
     concepts: [{ term: t, explanation: `Key ideas about ${t} (set OPENAI_API_KEY for real content).` }],
-    questions: Array.from({ length: 6 }, (_, i) => ({ question: `Question ${i + 1} about ${t}?`, options: ['A', 'B', 'C', 'D'], correctIndex: 0, explanation: 'Placeholder.' })),
+    questions: Array.from({ length: n }, (_, i) => ({ question: `Question ${i + 1} about ${t}?`, options: ['A', 'B', 'C', 'D'], correctIndex: 0, explanation: 'Placeholder.' })),
   });
 }
 

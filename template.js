@@ -12,6 +12,7 @@ const crypto = require('crypto');
 const mammoth = require('mammoth');
 const XLSX = require('xlsx');
 const { PDFParse } = require('pdf-parse');
+const JSZip = require('jszip');
 const { DATA_DIR, writeFileAtomic, writeJsonAtomic } = require('./storage');
 
 const userDir = userId => path.join(DATA_DIR, 'users', String(userId));
@@ -22,8 +23,29 @@ const origPath = (userId, id, ext) => path.join(templatesDir(userId), `${id}-ori
 const legacyRecPath = userId => path.join(userDir(userId), 'template.json');
 const legacyOrigBase = userId => path.join(userDir(userId), 'template-original');
 
-const SUPPORTED = ['.docx', '.pdf', '.xlsx', '.xls', '.txt', '.md', '.csv'];
+const SUPPORTED = ['.docx', '.pdf', '.xlsx', '.xls', '.txt', '.md', '.csv', '.pptx', '.ppt'];
 const TYPES = ['detailed', 'observation', 'weekly', 'intervention', 'substitute', 'custom'];
+
+// Extract all visible text from a .pptx by reading slide XML inside the ZIP.
+async function extractPptxText(buffer) {
+  const zip = await JSZip.loadAsync(buffer);
+  const slideFiles = Object.keys(zip.files)
+    .filter(name => /^ppt\/slides\/slide\d+\.xml$/.test(name))
+    .sort((a, b) => {
+      const na = parseInt(a.match(/\d+/)[0], 10);
+      const nb = parseInt(b.match(/\d+/)[0], 10);
+      return na - nb;
+    });
+  const texts = [];
+  for (const name of slideFiles) {
+    const xml = await zip.files[name].async('string');
+    // Pull all <a:t> text nodes — these are the visible text runs in a slide.
+    const matches = xml.match(/<a:t[^>]*>([^<]*)<\/a:t>/g) || [];
+    const slideText = matches.map(m => m.replace(/<[^>]+>/g, '').trim()).filter(Boolean).join(' ');
+    if (slideText) texts.push(slideText);
+  }
+  return texts.join('\n');
+}
 
 const nameFromFilename = f => String(f || '').replace(/\.[^.]+$/, '').trim();
 
@@ -49,7 +71,10 @@ async function extractText(buffer, filename) {
   if (ext === '.txt' || ext === '.md') {
     return buffer.toString('utf8');
   }
-  throw new Error(`Unsupported file type "${ext || 'unknown'}". Use Word (.docx), PDF, Excel (.xlsx), or text.`);
+  if (ext === '.pptx' || ext === '.ppt') {
+    return extractPptxText(buffer);
+  }
+  throw new Error(`Unsupported file type "${ext || 'unknown'}". Use PowerPoint (.pptx), Word (.docx), PDF, Excel (.xlsx), or text.`);
 }
 
 // One-time migration: fold a pre-packs single template into the collection.

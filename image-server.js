@@ -538,14 +538,36 @@ app.post('/api/game', requireAuth, async (req, res) => {
   if (req.user.role === 'student') return res.status(403).json({ error: 'Teachers only.' });
   const deck = decks.get(req.body && req.body.deckId);
   if (!deck) return res.status(404).json({ error: 'Deck expired — regenerate the deck, then create the game.' });
+  const questionCount = Math.min(20, Math.max(4, parseInt(req.body && req.body.questionCount, 10) || 6));
   try {
-    const game = await generateGame({ subject: deck.subject, topic: deck.topic, grade: deck.grade, tone: deck.tone, objectives: deck.objectives || '', lessonPlanText: deck.lessonPlanText || '' });
+    const game = await generateGame({ subject: deck.subject, topic: deck.topic, grade: deck.grade, tone: deck.tone, objectives: deck.objectives || '', lessonPlanText: deck.lessonPlanText || '', questionCount });
     const lessonTitle = (deck.slides.find(s => s.type === 'title') || {}).title || deck.topic;
     const rosterId = (req.body && req.body.rosterId) || null;
     const rec = games.createGame({ teacherId: req.userId, teacherName: req.user.name, lessonTitle, subject: deck.subject, topic: deck.topic, grade: deck.grade, game, rosterId });
     res.json({ gameId: rec.id, path: `/play/${rec.id}`, questionCount: rec.questions.length, roomCode: rec.roomCode });
   } catch (err) {
     console.error('Game creation failed:', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Create a game from the teacher's own uploaded PowerPoint (no deck generation needed).
+app.post('/api/game/from-pptx', requireAuth, upload.single('file'), async (req, res) => {
+  if (req.user.role === 'student') return res.status(403).json({ error: 'Teachers only.' });
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+  const subject = String(req.body && req.body.subject || '').trim().toLowerCase();
+  const topic   = String(req.body && req.body.topic   || '').trim().toLowerCase();
+  const grade   = String(req.body && req.body.grade   || 'Grade 5').trim();
+  if (!subject || !topic) return res.status(400).json({ error: 'Subject and topic are required.' });
+  const questionCount = Math.min(20, Math.max(4, parseInt(req.body && req.body.questionCount, 10) || 6));
+  const rosterId = (req.body && req.body.rosterId) || null;
+  try {
+    const lessonPlanText = await extractText(req.file.buffer, req.file.originalname);
+    const game = await generateGame({ subject, topic, grade, objectives: '', lessonPlanText, questionCount });
+    const rec = games.createGame({ teacherId: req.userId, teacherName: req.user.name, lessonTitle: topic, subject, topic, grade, game, rosterId });
+    res.json({ gameId: rec.id, path: `/play/${rec.id}`, questionCount: rec.questions.length, roomCode: rec.roomCode });
+  } catch (err) {
+    console.error('Game from pptx failed:', err.message);
     res.status(400).json({ error: err.message });
   }
 });

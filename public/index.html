@@ -518,11 +518,13 @@
       <section id="gameSection" class="card wide" style="margin-top:24px">
         <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> Student game <span class="hint-i" tabindex="0" role="img" aria-label="Creates a link you share with students. Students enter the Room Code + their Student ID — no email or password needed. Their scores are saved here." data-tip="Creates a link you share with students. Students enter the Room Code + their Student ID — no email or password needed. Their scores are saved here.">i</span></h2>
         <p class="hint">Share the Room Code on the board — students go to <b>lessonco.pe/join</b> and type it in. No sign-up needed.</p>
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
           <label for="gameRosterPick" style="font-size:13px;font-weight:600;white-space:nowrap">Class roster <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
           <select id="gameRosterPick" style="width:auto;min-width:180px;font-size:13px;padding:8px 10px">
             <option value="">— No roster (free-form names) —</option>
           </select>
+          <label for="gameQCount" style="font-size:13px;font-weight:600;white-space:nowrap">Questions</label>
+          <input id="gameQCount" type="number" min="4" max="20" value="6" style="width:64px;font-size:13px;padding:8px 10px" />
         </div>
         <button type="button" id="makeGameBtn" class="btn accent" style="width:auto"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Create student game</button>
         <div id="gamePanel" style="display:none;margin-top:16px"></div>
@@ -579,6 +581,36 @@
     <section id="gamesPanel" class="card wide" style="display:none">
       <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> My games</h2>
       <p class="hint">Every student game you've created. Share the Room Code on the board — students go to <b>/join</b> and type it in with their Student ID.</p>
+
+      <details id="fromPptxDetails" style="margin-bottom:20px;border:1px solid var(--border);border-radius:14px;padding:14px 16px">
+        <summary style="cursor:pointer;font-size:14px;font-weight:700;color:var(--primary);display:flex;align-items:center;gap:7px"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Create a game from your own PowerPoint</summary>
+        <p class="hint" style="margin:10px 0 14px">Already have a lesson deck? Upload it and we'll generate the quiz questions from it — no need to rebuild your slides here.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Subject</label><input id="pptxSubject" type="text" placeholder="e.g. maths" style="width:100%;box-sizing:border-box" /></div>
+          <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Topic</label><input id="pptxTopic" type="text" placeholder="e.g. fractions" style="width:100%;box-sizing:border-box" /></div>
+          <div>
+            <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Grade</label>
+            <select id="pptxGrade" style="width:100%;font-size:13px;padding:8px 10px;box-sizing:border-box">
+              <option>Grade R</option><option>Grade 1</option><option>Grade 2</option><option>Grade 3</option><option>Grade 4</option><option selected>Grade 5</option><option>Grade 6</option><option>Grade 7</option><option>Grade 8</option><option>Grade 9</option><option>Grade 10</option><option>Grade 11</option><option>Grade 12</option>
+            </select>
+          </div>
+          <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Questions (4–20)</label><input id="pptxQCount" type="number" min="4" max="20" value="6" style="width:100%;box-sizing:border-box;font-size:13px;padding:8px 10px" /></div>
+          <div style="grid-column:1/-1"><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Class roster <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+            <select id="pptxRosterPick" style="width:100%;font-size:13px;padding:8px 10px;box-sizing:border-box">
+              <option value="">— No roster (free-form names) —</option>
+            </select>
+          </div>
+        </div>
+        <div id="pptxDrop" style="border:2px dashed var(--border);border-radius:12px;padding:22px;text-align:center;cursor:pointer;color:var(--muted);font-size:13px;margin-bottom:10px;transition:border-color .15s">
+          <svg class="ic" aria-hidden="true" style="font-size:22px;display:block;margin:0 auto 6px"><use href="#i-image"/></svg>
+          Drop your <b>.pptx</b> here or <span style="color:var(--primary);font-weight:600">click to browse</span>
+          <input id="pptxFileInput" type="file" accept=".pptx,.ppt" style="display:none" />
+        </div>
+        <div id="pptxFileName" style="font-size:12.5px;color:var(--primary);font-weight:600;margin-bottom:10px;display:none"></div>
+        <button id="pptxCreateBtn" class="btn accent" style="width:auto"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Create game from presentation</button>
+        <div id="pptxResult" style="margin-top:14px"></div>
+      </details>
+
       <div id="gamesList" class="admin-stats"></div>
       <div style="margin-top:20px"><button id="gamesBack" class="btn ghost">← Back to app</button></div>
     </section>
@@ -1182,7 +1214,8 @@
     $('makeGameBtn').addEventListener('click', async ()=>{
       const b=$('makeGameBtn'); b.disabled=true; const o=b.innerHTML; b.innerHTML='<span class=”spinner”></span>Building game…';
       const rosterId=$('gameRosterPick').value||null;
-      try{ const r=await fetch('/api/game',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deckId:currentDeckId,rosterId})});
+      const questionCount=Math.min(20,Math.max(4,parseInt($('gameQCount').value,10)||6));
+      try{ const r=await fetch('/api/game',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deckId:currentDeckId,rosterId,questionCount})});
         const d=await r.json(); if(!r.ok) throw new Error(d.error);
         const url=location.origin+d.path;
         const joinUrl=location.origin+'/join';
@@ -1204,7 +1237,7 @@
     // ---- “My games” view ----
     const gamesPanel=$('gamesPanel');
     function hideAllPanels(){ composer.style.display='none'; planStage.style.display='none'; results.style.display='none'; adminPanel.style.display='none'; gamesPanel.style.display='none'; if($('rostersPanel')) $('rostersPanel').style.display='none'; if($('progressWrap')) $('progressWrap').style.display='none'; stepsEl.style.display='none'; statusEl.innerHTML=''; }
-    function openGames(){ hideAllPanels(); gamesPanel.style.display='block'; loadMyGames(); window.scrollTo({top:0,behavior:'smooth'}); }
+    function openGames(){ hideAllPanels(); gamesPanel.style.display='block'; loadMyGames(); loadRosters(true); window.scrollTo({top:0,behavior:'smooth'}); }
     function closeGames(){ gamesPanel.style.display='none'; stepsEl.style.display='flex'; show('composer'); setStep(1); }
     $('gamesBtn').onclick=openGames; $('gamesBack').onclick=closeGames;
     async function loadMyGames(){ const wrap=$('gamesList'); wrap.innerHTML='<span class=”status”>Loading…</span>';
@@ -1221,6 +1254,45 @@
       }catch{ wrap.innerHTML='<span class=”status err”>Could not load games.</span>'; }
     }
 
+    // ---- Game from own PowerPoint ----
+    let pptxFile=null;
+    function showGamePanel(container, d, rosterId){
+      const url=location.origin+d.path;
+      const joinUrl=location.origin+'/join';
+      container.innerHTML=`
+        ${d.roomCode?`<div style="margin-bottom:12px"><p style="font-size:13px;font-weight:600;margin-bottom:6px">Room Code — show this on the board:</p><div style="font-size:32px;font-weight:900;letter-spacing:6px;color:var(--primary);background:#e8f0fb;display:inline-block;padding:8px 18px;border-radius:10px">${esc(d.roomCode)}</div><p class="hint" style="margin-top:6px">Students go to <b>${esc(joinUrl)}</b> and type this code.</p></div>`:''}
+        <div class="game-link"><input id="pptxGameUrl" readonly value="${esc(url)}"><button type="button" class="btn ghost" id="pptxCopyBtn" style="width:auto;padding:10px 14px">${ICON('i-doc')} Copy link</button></div>
+        <p class="hint" style="margin:8px 0 0">${d.questionCount} questions · ${rosterId?'roster attached':'free-form names'}.</p>`;
+      document.getElementById('pptxCopyBtn').addEventListener('click',()=>copyLink(url));
+    }
+    const pptxDrop=$('pptxDrop');
+    pptxDrop.addEventListener('click',()=>$('pptxFileInput').click());
+    pptxDrop.addEventListener('dragover',e=>{e.preventDefault();pptxDrop.style.borderColor='var(--primary)';});
+    pptxDrop.addEventListener('dragleave',()=>pptxDrop.style.borderColor='');
+    pptxDrop.addEventListener('drop',e=>{e.preventDefault();pptxDrop.style.borderColor='';const f=e.dataTransfer.files[0];if(f){pptxFile=f;showPptxFile(f.name);}});
+    $('pptxFileInput').addEventListener('change',e=>{if(e.target.files[0]){pptxFile=e.target.files[0];showPptxFile(pptxFile.name);}});
+    function showPptxFile(name){const el=$('pptxFileName');el.textContent='Selected: '+name;el.style.display='block';}
+    $('pptxCreateBtn').addEventListener('click',async()=>{
+      if(!pptxFile) return toast('Please select a PowerPoint file first.');
+      const subject=$('pptxSubject').value.trim(); const topic=$('pptxTopic').value.trim();
+      if(!subject||!topic) return toast('Subject and topic are required.');
+      const btn=$('pptxCreateBtn'); btn.disabled=true; const orig=btn.innerHTML;
+      btn.innerHTML='<span class="spinner"></span>Building game…';
+      const fd=new FormData();
+      fd.append('file',pptxFile,pptxFile.name);
+      fd.append('subject',subject); fd.append('topic',topic);
+      fd.append('grade',$('pptxGrade').value);
+      fd.append('questionCount',Math.min(20,Math.max(4,parseInt($('pptxQCount').value,10)||6)));
+      fd.append('rosterId',$('pptxRosterPick').value||'');
+      try{
+        const r=await fetch('/api/game/from-pptx',{method:'POST',body:fd});
+        const d=await r.json(); if(!r.ok) throw new Error(d.error);
+        showGamePanel($('pptxResult'),d,$('pptxRosterPick').value);
+        btn.innerHTML=`${ICON('i-check')} Game created`;
+        loadMyGames();
+      }catch(err){ toast(err.message); btn.disabled=false; btn.innerHTML=orig; }
+    });
+
     // ---- Class rosters ----
     const rostersPanel=$('rostersPanel');
     function openRosters(){ hideAllPanels(); rostersPanel.style.display='block'; loadRosters(); window.scrollTo({top:0,behavior:'smooth'}); }
@@ -1231,11 +1303,9 @@
       const wrap=$('rosterList'); if(wrap) wrap.innerHTML='<span class=”status”>Loading…</span>';
       try{
         const d=await (await fetch('/api/rosters')).json();
-        if(populatePicker && $('gameRosterPick')){
-          const pick=$('gameRosterPick'); const cur=pick.value;
-          pick.innerHTML='<option value=””>— No roster (free-form names) —</option>'+
-            (d.rosters||[]).map(r=>`<option value=”${esc(r.id)}”>${esc(r.name)} (${r.count} students)</option>`).join('');
-          if(cur) pick.value=cur;
+        if(populatePicker){
+          const rosterOpts='<option value=””>— No roster (free-form names) —</option>'+(d.rosters||[]).map(r=>`<option value=”${esc(r.id)}”>${esc(r.name)} (${r.count} students)</option>`).join('');
+          [$('gameRosterPick'),$('pptxRosterPick')].forEach(pick=>{ if(!pick) return; const cur=pick.value; pick.innerHTML=rosterOpts; if(cur) pick.value=cur; });
         }
         if(!wrap) return;
         if(!d.rosters||!d.rosters.length){ wrap.innerHTML='<p class=”hint”>No rosters yet — add one below.</p>'; return; }
