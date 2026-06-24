@@ -19,6 +19,7 @@ const { generateWorksheet, generateExitTicket, generateGame } = require('./lesso
 const { worksheetDocx, exitTicketDocx } = require('./docgen');
 const games = require('./games');
 const roster = require('./roster');
+const apikeys = require('./apikeys');
 
 // Add transitions/animations; never let it break the download.
 function safeAnimate(buffer, band) {
@@ -787,5 +788,73 @@ app.get('/join', (req, res) => res.sendFile(path.join(__dirname, 'public', 'join
 
 // Student play page (the shareable link target).
 app.get('/play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'play.html')));
+
+// ── API Key Management ──────────────────────────────────────────────────────────────
+// Teacher-only endpoints to manage external API keys.
+app.post('/api/apikeys', requireAuth, (req, res) => {
+  const label = String(req.body?.label || 'API Key').slice(0, 50);
+  try {
+    const { key, hash, createdAt } = apikeys.createKey(req.userId, label);
+    res.json({ key, hash, createdAt, label });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+app.get('/api/apikeys', requireAuth, (req, res) => {
+  const keys = apikeys.listKeys(req.userId);
+  res.json({ keys: keys.map(k => ({ hash: k.hash, label: k.label, createdAt: k.createdAt, lastUsedAt: k.lastUsedAt })) });
+});
+
+app.delete('/api/apikeys/:hash', requireAuth, (req, res) => {
+  apikeys.deleteKey(req.userId, req.params.hash);
+  res.json({ ok: true });
+});
+
+// ── External API (v1) ───────────────────────────────────────────────────────────────
+// Public read-only endpoints authenticated via Bearer token (API key).
+function requireApiKey(req, res, next) {
+  const auth = req.headers.authorization || '';
+  const match = auth.match(/^Bearer\s+(\S+)$/);
+  if (!match) return res.status(401).json({ error: 'Missing Authorization header.' });
+  const teacherId = apikeys.verifyKey(match[1]);
+  if (!teacherId) return res.status(401).json({ error: 'Invalid API key.' });
+  req.apiUserId = teacherId;
+  next();
+}
+
+// List all rosters for the teacher who owns the API key.
+app.get('/api/v1/rosters', requireApiKey, (req, res) => {
+  const rosters = roster.listRosters(req.apiUserId);
+  res.json({ rosters: rosters.map(r => ({ id: r.id, name: r.name, studentCount: r.count, createdAt: r.createdAt })) });
+});
+
+// Get progress data for a roster (student names, IDs, all game scores).
+app.get('/api/v1/roster/:id/progress', requireApiKey, (req, res) => {
+  const r = roster.getRoster(req.apiUserId, req.params.id);
+  if (!r) return res.status(404).json({ error: 'Roster not found.' });
+
+  const allGames = games.listTeacherGames(req.apiUserId);
+  const byStudent = new Map();
+  for (const g of allGames) {
+    for (const result of games.getResults(g.id)) {
+      if (!r.students.find(s => s.id === result.studentId)) continue;
+      if (!byStudent.has(result.studentId)) byStudent.set(result.studentId, []);
+      byStudent.get(result.studentId).push({
+        topic: g.topic,
+        subject: g.subject,
+        score: result.score,
+        total: result.total,
+        percentage: result.total > 0 ? Math.round((result.score / result.total) * 100) : 0,
+        at: result.at,
+      });
+    }
+  }
+
+  const students = r.students.map(s => {
+    const results = byStudent.get(s.id) || [];
+    return { id: s.id, name: s.name, results };
+  });
+
+  res.json({ roster: { id: r.id, name: r.name }, students });
+});
 
 app.listen(PORT, () => console.log(`LessonCope running at http://localhost:${PORT}`));
