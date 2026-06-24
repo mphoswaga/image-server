@@ -59,8 +59,20 @@ const DECK_SCHEMA = {
               additionalProperties: false,
             },
           },
+          // When the lesson teaches a keyboard shortcut / tool button / specific
+          // key combo or menu command, give the EXACT keys so students can DO it
+          // (e.g. {action:'Undo', keys:'Ctrl + Z'}). Empty array otherwise.
+          shortcuts: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: { action: { type: 'string' }, keys: { type: 'string' } },
+              required: ['action', 'keys'],
+              additionalProperties: false,
+            },
+          },
         },
-        required: ['title', 'bullets', 'example', 'speakerNotes', 'imageQuery', 'visual', 'vocab'],
+        required: ['title', 'bullets', 'example', 'speakerNotes', 'imageQuery', 'visual', 'vocab', 'shortcuts'],
         additionalProperties: false,
       },
     },
@@ -122,8 +134,17 @@ const ONE_SLIDE_SCHEMA = {
         additionalProperties: false,
       },
     },
+    shortcuts: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { action: { type: 'string' }, keys: { type: 'string' } },
+        required: ['action', 'keys'],
+        additionalProperties: false,
+      },
+    },
   },
-  required: ['title', 'bullets', 'example', 'speakerNotes', 'imageQuery', 'vocab'],
+  required: ['title', 'bullets', 'example', 'speakerNotes', 'imageQuery', 'vocab', 'shortcuts'],
   additionalProperties: false,
 };
 
@@ -153,6 +174,7 @@ Produce a full lesson with this structure:
 - slides: EXACTLY ${slideCount} content slides (this array MUST have exactly ${slideCount} items — count them). Each has a clear title, ${p.bullets} bullet points (${p.wordsPerBullet}), a concrete real-world "example" (one short sentence a student would relate to), and speaker notes (${p.notes}).
   VOCABULARY: if a slide introduces vocabulary, key words or terms, you MUST fill "vocab" with each term AND a short, clear definition written so a ${grade} student understands it (one simple sentence, plain words — actually explain what it means, e.g. {"term":"Cooperate","definition":"to work together with others to get something done"}). Never list a word without defining it. On non-vocabulary slides, "vocab" is an empty array []. Use the speaker notes to tell the teacher how to explain each term with an example.
   GAMES & ACTIVITIES: if a content slide presents a game or hands-on activity, do NOT write a vague teaser (e.g. "build a tower / work together"). Its bullets MUST contain the actual instructions: the GOAL (what students try to do / how to "win"), what's NEEDED, and the clear ordered RULES of how to play, so a teacher could run it without inventing anything. Put the same detail in the speaker notes. Do not name a game on one slide and leave its rules unstated.
+  SHOW, DON'T JUST DESCRIBE: whenever a slide teaches HOW to do something with specific keys, buttons, menu commands or steps, give the EXACT thing to press/click — never just describe it. In particular, if it teaches keyboard shortcuts or tool buttons, you MUST fill "shortcuts" with each action and its exact keys, e.g. {"action":"Undo","keys":"Ctrl + Z"}, {"action":"Copy","keys":"Ctrl + C"}, {"action":"Save","keys":"Ctrl + S"}. Use "+" between keys. (Add a Mac note in the bullet/notes if useful, e.g. ⌘ instead of Ctrl.) Don't say "use Undo to reverse a mistake" without giving Ctrl + Z. On slides with no shortcuts/commands, "shortcuts" is an empty array []. This rule generalises: name the actual buttons, menu paths or keys, not vague descriptions.
   Each content slide also has a "visual":
     • "steps" — a process/sequence (an algorithm, the writing process, the scientific method, "how to…", a sequence of events): give 3-5 very short stage labels (2-4 words each) in visual.items.
     • "cycle" — a repeating cycle (life cycle, water cycle): 3-5 short stage labels in visual.items.
@@ -183,9 +205,10 @@ function flattenDeck(data) {
     // so they become the bullets (rendered by the existing layout). The example
     // and speaker notes still carry extra explanation for the teacher.
     const bullets = vocab.length ? vocab.map(v => `${v.term} — ${v.definition}`) : s.bullets;
+    const shortcuts = Array.isArray(s.shortcuts) ? s.shortcuts.filter(x => x && x.action && x.keys) : [];
     slides.push({
       type: 'content', title: s.title, bullets, example: s.example,
-      speakerNotes: s.speakerNotes, imageQuery: s.imageQuery, visual: s.visual, vocab,
+      speakerNotes: s.speakerNotes, imageQuery: s.imageQuery, visual: s.visual, vocab, shortcuts,
       side: i % 2 === 0 ? 'right' : 'left', // alternate image side for visual rhythm
     });
   });
@@ -219,7 +242,7 @@ function placeholderDeck(subject, topic, slideCount) {
       speakerNotes: `Placeholder notes for ${pretty}, idea ${i + 1}.`,
       imageQuery: q,
       visual: { type: 'none', items: [] },
-      vocab: [],
+      vocab: [], shortcuts: [],
     })),
     check: { question: `What did we learn about ${pretty}?`, answer: ['Placeholder answer.', 'Because… (placeholder reason).'], imageQuery: q },
     activity: { title: 'Your Turn', goal: `Practise ${pretty} together`, materials: [], instructions: [`Estimate first, then try a ${pretty} exercise`, 'Share with a partner'], speakerNotes: 'Placeholder activity notes.', imageQuery: q },
@@ -270,11 +293,12 @@ async function generateOneSlide({ subject, topic, grade, tone = 'clear and engag
   const pretty = topic.replace(/-/g, ' ');
   const avoid = avoidTitles.length ? `\nDo NOT repeat these existing slide titles: ${avoidTitles.join('; ')}.` : '';
   const prompt = `Write ONE fresh content slide for a ${grade} lesson on "${pretty}" (${subject}). ${tone} tone.${focus ? ' Focus: ' + focus + '.' : ''}
-Give a clear title, ${p.bullets} bullets (${p.wordsPerBullet}), a concrete real-world example sentence, speaker notes (${p.notes}), and a 2-4 keyword imageQuery. If the slide introduces vocabulary/key terms, fill "vocab" with each term and a short clear definition a ${grade} student understands; otherwise "vocab" is []. ${p.depth}${avoid}`;
+Give a clear title, ${p.bullets} bullets (${p.wordsPerBullet}), a concrete real-world example sentence, speaker notes (${p.notes}), and a 2-4 keyword imageQuery. If the slide introduces vocabulary/key terms, fill "vocab" with each term and a short clear definition a ${grade} student understands; otherwise "vocab" is []. If it teaches keyboard shortcuts / tool buttons / key combos, fill "shortcuts" with each action and its EXACT keys (e.g. {"action":"Undo","keys":"Ctrl + Z"}); otherwise "shortcuts" is []. ${p.depth}${avoid}`;
   const s = await callModel(ONE_SLIDE_SCHEMA, 'one_slide', [{ role: 'user', content: prompt }], 1800);
   const vocab = Array.isArray(s.vocab) ? s.vocab.filter(v => v && v.term) : [];
   if (vocab.length) s.bullets = vocab.map(v => `${v.term} — ${v.definition}`);
-  return { type: 'content', ...s, vocab };
+  const shortcuts = Array.isArray(s.shortcuts) ? s.shortcuts.filter(x => x && x.action && x.keys) : [];
+  return { type: 'content', ...s, vocab, shortcuts };
 }
 
 module.exports = { generateContent, generateOneSlide };

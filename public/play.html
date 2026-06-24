@@ -239,7 +239,7 @@
 
     /* ===== CAR DODGE ===== */
     function CarGame(){
-      const RX=26,RW=W-52,LN=3,LW=RW/LN,PW=42,PH=66,EW=42,EH=66;
+      const RX=26,RW=W-52,LN=3,LW=RW/LN,PW=46,PH=66,EW=58,EH=66; // cars wider than the gap → no safe spot on lane dividers
       const PP={'1':'#2a6aa6','2':'#a5d8ff','3':'#10161f'};
       const EP=[{'1':'#e8833a','2':'#ffe3c2','3':'#10161f'},{'1':'#c0392b','2':'#ffc9c9','3':'#10161f'},{'1':'#2f9e44','2':'#b2f2bb','3':'#10161f'},{'1':'#9c36b5','2':'#eebefa','3':'#10161f'}];
       let s; const lc=l=>RX+l*LW+LW/2; const spd=()=>120+s.elapsed*9;
@@ -250,7 +250,7 @@
         s.spawnT-=dt; if(s.spawnT<=0){ s.spawnT=Math.max(.55,1.15-s.elapsed*.012); const l=rnd(LN); s.enemies.push({x:lc(l)-EW/2,y:-EH,pal:EP[rnd(EP.length)]}); }
         const sp=spd();
         for(let i=s.enemies.length-1;i>=0;i--){ const e=s.enemies[i]; e.y+=sp*dt; if(e.y>H){s.enemies.splice(i,1);continue;}
-          if(s.invuln<=0 && e.x<s.px+PW-8 && e.x+EW-8>s.px && e.y<s.py+PH-10 && e.y+EH-10>s.py){ s.enemies.splice(i,1); lives--; updateHud(); s.paused=true; openCrash(); return; } } }
+          if(s.invuln<=0 && e.x<s.px+PW-4 && e.x+EW-4>s.px && e.y<s.py+PH-8 && e.y+EH-8>s.py){ s.enemies.splice(i,1); lives--; updateHud(); s.paused=true; openCrash(); return; } } }
       function render(){ cx.fillStyle='#2f3a30'; cx.fillRect(0,0,W,H); cx.fillStyle='#39404e'; cx.fillRect(RX,0,RW,H);
         cx.fillStyle='#cfd6e2'; cx.fillRect(RX-4,0,4,H); cx.fillRect(RX+RW,0,4,H);
         cx.fillStyle='rgba(255,255,255,.55)'; for(let l=1;l<LN;l++){const x=RX+l*LW-2;for(let y=-40+s.dash;y<H;y+=40)cx.fillRect(x,y,4,22);}

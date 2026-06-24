@@ -111,6 +111,7 @@ function previewEntry(slide, image) {
     // a step/cycle process diagram (any subject)
     visual: (slide.visual && (slide.visual.type === 'steps' || slide.visual.type === 'cycle') && Array.isArray(slide.visual.items) && slide.visual.items.length >= 2) ? slide.visual : null,
     differentiation: slide.differentiation || null,
+    shortcuts: (Array.isArray(slide.shortcuts) && slide.shortcuts.length) ? slide.shortcuts : null,
     labelled: detectLabelledDiagram(`${slide.title || ''} ${slide.imageQuery || ''} ${slide.example || ''}`),
   };
 }

@@ -251,6 +251,12 @@
     .slide .diff { margin-top:10px; display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--ink); }
     .slide .diff > div { background:#f3f6fb; border-radius:7px; padding:6px 9px; }
     .slide .diff b { margin-right:5px; }
+    .slide .shortcuts { margin-top:9px; display:flex; flex-direction:column; gap:6px; }
+    .slide .sc-row { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:13px; }
+    .slide .sc-act { font-weight:700; color:var(--ink); }
+    .slide .sc-keys { display:inline-flex; align-items:center; gap:4px; flex:none; }
+    .keycap { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; font-weight:700; color:#2b3645; background:#f1f3f7; border:1px solid #c7d0dc; border-bottom-width:2px; border-radius:6px; padding:2px 7px; min-width:22px; text-align:center; box-shadow:0 1px 0 rgba(0,0,0,.05); }
+    .sc-plus { color:#9aa5b1; font-weight:700; font-size:11px; }
     .card-actions { display:flex; gap:8px; margin-top:13px; }
     .card-actions button { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; padding:7px 11px; border-radius:9px; border:1px solid var(--border); background:#fff; color:var(--primary); cursor:pointer; transition:.12s; }
     .card-actions button:hover:not(:disabled) { border-color:var(--primary-2); background:var(--primary-soft); }
@@ -736,7 +742,8 @@
         const diaBtn=(s.type==='content'&&!s.fraction&&!s.visual&&!s.labelled)?`<button data-action="diagram" data-i="${i}" title="Turn this into a labelled diagram">${DIA_HTML}</button>`:'';
         const actions=(aiBtn||regenBtn||diaBtn)?`<div class="card-actions">${regenBtn}${diaBtn}${aiBtn}</div>`:'';
         const diff=s.differentiation?`<div class="diff"><div><b style="color:#15824b">Support</b> ${esc(s.differentiation.support)}</div><div><b style="color:#1f4e79">Stretch</b> ${esc(s.differentiation.stretch)}</div></div>`:'';
-        body=`${kicker}<h3 contenteditable data-field="title">${esc(s.title)}</h3>${bl}${ex}${diff}${actions}`;
+        const sc=(s.shortcuts&&s.shortcuts.length)?`<div class="shortcuts">${s.shortcuts.map(x=>`<div class="sc-row"><span class="sc-act">${esc(x.action)}</span><span class="sc-keys">${String(x.keys).split('+').map(k=>k.trim()).filter(Boolean).map((k,n)=>(n>0?'<span class="sc-plus">+</span>':'')+'<kbd class="keycap">'+esc(k)+'</kbd>').join('')}</span></div>`).join('')}</div>`:'';
+        body=`${kicker}<h3 contenteditable data-field="title">${esc(s.title)}</h3>${bl}${sc}${ex}${diff}${actions}`;
       }
       return `<div class="slide" data-index="${i}">${thumb}<div class="body">${body}</div></div>`;
     }

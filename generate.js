@@ -237,6 +237,27 @@ function addTitleBar(pptx, slide, title, t, accent) {
   slide.addText(title, { x: 0.5, y: 0.35, w: 9, h: 0.9, fontFace: THEME.font, fontSize: t.titleSize, bold: true, color: THEME.primary });
 }
 
+// Render shortcuts as keycaps: "Action" followed by [key] + [key] (each key a
+// button-like rounded box) — so students see exactly what to press, not just a
+// description.
+function drawShortcuts(pptx, slide, shortcuts, accent) {
+  const list = shortcuts.slice(0, 6);
+  const startY = 2.25, rowH = Math.min(0.74, (5.15 - startY) / Math.max(list.length, 1));
+  list.forEach((sc, i) => {
+    const y = startY + i * rowH, capY = y + (rowH - 0.5) / 2;
+    slide.addText(sc.action, { x: 0.7, y, w: 3.1, h: rowH, fontFace: THEME.font, fontSize: 18, bold: true, color: THEME.text, valign: 'middle' });
+    let x = 4.05;
+    const keys = String(sc.keys).split('+').map(k => k.trim()).filter(Boolean);
+    keys.forEach((k, ki) => {
+      if (ki > 0) { slide.addText('+', { x, y, w: 0.3, h: rowH, fontFace: THEME.font, fontSize: 18, bold: true, color: '9AA5B1', align: 'center', valign: 'middle' }); x += 0.34; }
+      const kw = Math.max(0.62, 0.42 + 0.16 * k.length);
+      slide.addShape(pptx.ShapeType.roundRect, { x, y: capY, w: kw, h: 0.5, fill: { color: 'F1F3F7' }, line: { color: 'C7D0DC', width: 1.25 }, rectRadius: 0.07, shadow: { type: 'outer', blur: 4, offset: 2, angle: 90, color: 'AEB7C4', opacity: 0.55 } });
+      slide.addText(k, { x, y: capY, w: kw, h: 0.5, fontFace: THEME.font, fontSize: 15, bold: true, color: '2B3645', align: 'center', valign: 'middle' });
+      x += kw + 0.16;
+    });
+  });
+}
+
 function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }) {
   const slide = pptx.addSlide();
   slide.background = { color: THEME.bg };
@@ -309,6 +330,14 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
         slide.addText('DIAGRAM', { x: 0.5, y: 0.4, w: 9, h: 0.4, fontFace: THEME.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
         slide.addText(slideData.title, { x: 0.5, y: 0.85, w: 9, h: 0.9, fontFace: THEME.font, fontSize: t.titleSize, bold: true, color: THEME.primary });
         slide.addImage({ path: imgPath, x: 1.25, y: 1.9, w: 7.5, h: 3.55, sizing: { type: 'contain', w: 7.5, h: 3.55 } });
+        break;
+      }
+      // Keyboard shortcuts / tool buttons → keycap layout (show the keys).
+      if (Array.isArray(slideData.shortcuts) && slideData.shortcuts.length) {
+        slide.addText('SHORTCUTS', { x: 0.5, y: 0.4, w: 9, h: 0.4, fontFace: THEME.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
+        slide.addText(slideData.title, { x: 0.5, y: 0.85, w: 9, h: 0.9, fontFace: THEME.font, fontSize: t.titleSize, bold: true, color: THEME.primary });
+        if (slideData.example) slide.addText(slideData.example, { x: 0.5, y: 1.62, w: 9, h: 0.5, fontFace: THEME.font, fontSize: 15, italic: true, color: '6B7280' });
+        drawShortcuts(pptx, slide, slideData.shortcuts, accent);
         break;
       }
       // Diagram-led: the diagram is the hero — title on top, big visual below.
