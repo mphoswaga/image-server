@@ -643,13 +643,48 @@ app.get('/api/game/:id/results', requireAuth, (req, res) => {
 app.get('/api/games', requireAuth, (req, res) => res.json({ games: games.listTeacherGames(req.userId) }));
 
 // ── Class rosters ──────────────────────────────────────────────────────────────
-// Upload a CSV roster (studentId,name — one per line).
-app.post('/api/roster', requireAuth, express.text({ type: '*/*', limit: '500kb' }), (req, res) => {
-  const name = String(req.query.name || req.headers['x-roster-name'] || 'Class roster').slice(0, 60).trim();
-  const csvText = req.body || '';
-  if (!csvText.trim()) return res.status(400).json({ error: 'CSV is empty.' });
+
+// Parse a file (CSV, Excel) and return headers + preview rows for UI verification.
+// Does NOT save anything — the teacher must confirm the column mapping first.
+app.post('/api/roster/preview', requireAuth, upload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
   try {
-    const r = roster.saveRoster(req.userId, { name, csvText });
+    const result = roster.parseRosterFile(req.file.buffer, req.file.originalname);
+    res.json({
+      headers: result.headers,
+      preview: result.rows.slice(0, 12),
+      totalRows: result.totalRows,
+      detectedIdCol: result.detectedIdCol,
+      detectedNameCol: result.detectedNameCol,
+      allRows: result.rows,          // sent back by client on confirm
+    });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// Save a roster. Accepts two body formats:
+//   • JSON  { name, rows:[{col:val}], idCol, nameCol }  — from verified file upload
+//   • plain text CSV  (legacy path — still works for backwards compat)
+app.post('/api/roster', requireAuth, (req, res, next) => {
+  const ct = (req.headers['content-type'] || '').toLowerCase();
+  if (ct.includes('application/json')) return express.json({ limit: '2mb' })(req, res, next);
+  return express.text({ type: '*/*', limit: '500kb' })(req, res, next);
+}, (req, res) => {
+  const name = String(req.query.name || req.headers['x-roster-name'] || (req.body && req.body.name) || 'Class roster').slice(0, 60).trim();
+  try {
+    let r;
+    if (req.body && typeof req.body === 'object' && req.body.rows) {
+      // Verified file-upload path
+      const { rows, idCol, nameCol } = req.body;
+      if (!idCol) return res.status(400).json({ error: 'idCol is required.' });
+      const students = roster.buildStudentsFromMapping(rows, idCol, nameCol);
+      if (!students.length) return res.status(400).json({ error: 'No valid students found in the selected columns.' });
+      r = roster.saveRoster(req.userId, { name, students });
+    } else {
+      // Legacy CSV text path
+      const csvText = String(req.body || '').trim();
+      if (!csvText) return res.status(400).json({ error: 'CSV is empty.' });
+      r = roster.saveRoster(req.userId, { name, csvText });
+    }
     res.json({ id: r.id, name: r.name, count: r.students.length });
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
@@ -661,6 +696,55 @@ app.delete('/api/roster/:id', requireAuth, (req, res) => {
   if (!r) return res.status(404).json({ error: 'Roster not found.' });
   roster.deleteRoster(req.userId, req.params.id);
   res.json({ ok: true });
+});
+
+// Student progress: aggregates every game result for each student in a roster.
+// Returns roster summary + per-student { gamesPlayed, avgPct, bestSubject, lastAt, results[] }.
+app.get('/api/roster/:id/progress', requireAuth, (req, res) => {
+  const r = roster.getRoster(req.userId, req.params.id);
+  if (!r) return res.status(404).json({ error: 'Roster not found.' });
+
+  const rosterMap = new Map(r.students.map(s => [s.id, s.name]));
+  const allGames  = games.listTeacherGames(req.userId);
+
+  // Collect results keyed by studentId.
+  const byStudent = new Map();
+  for (const g of allGames) {
+    for (const result of games.getResults(g.id)) {
+      if (!rosterMap.has(result.studentId)) continue;
+      if (!byStudent.has(result.studentId)) byStudent.set(result.studentId, []);
+      byStudent.get(result.studentId).push({
+        gameId: g.id,
+        lessonTitle: g.lessonTitle || g.topic,
+        topic: g.topic,
+        subject: g.subject,
+        score: result.score,
+        total: result.total,
+        pct: result.total > 0 ? Math.round((result.score / result.total) * 100) : 0,
+        at: result.at,
+        attempts: result.attempts || 1,
+      });
+    }
+  }
+
+  const students = r.students.map(s => {
+    const results = (byStudent.get(s.id) || []).sort((a, b) => (b.at || '').localeCompare(a.at || ''));
+    const gamesPlayed = results.length;
+    const avgPct = gamesPlayed ? Math.round(results.reduce((sum, r) => sum + r.pct, 0) / gamesPlayed) : null;
+    const lastAt = results.length ? results[0].at : null;
+    // Subject with highest average score.
+    const subjTotals = {};
+    for (const r of results) {
+      if (!subjTotals[r.subject]) subjTotals[r.subject] = { sum: 0, n: 0 };
+      subjTotals[r.subject].sum += r.pct; subjTotals[r.subject].n++;
+    }
+    const bestSubject = Object.entries(subjTotals)
+      .sort((a, b) => (b[1].sum / b[1].n) - (a[1].sum / a[1].n))[0]?.[0] || null;
+
+    return { id: s.id, name: s.name, gamesPlayed, avgPct, lastAt, bestSubject, results };
+  });
+
+  res.json({ roster: { id: r.id, name: r.name }, students });
 });
 
 // Teacher: printable QR card sheet for a game's attached roster.

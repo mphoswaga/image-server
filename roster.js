@@ -94,4 +94,77 @@ function findStudentInRoster(teacherId, rosterId, studentId) {
   return r.students.find(s => s.id === studentId) || null;
 }
 
-module.exports = { saveRoster, getRoster, listRosters, deleteRoster, findStudent, findStudentInRoster, parseCSV };
+// ── File parsing (CSV + Excel) for roster import ────────────────────────────
+
+const xlsx = require('xlsx');
+
+// Header-name patterns that suggest a student-ID column.
+const ID_PATTERNS = /^(student[\s_-]?id|stud[\s_-]?id|learner[\s_-]?id|pupil[\s_-]?id|roll[\s_-]?no|reg[\s_-]?no|admission[\s_-]?no|id|no|number|student[\s_-]?no|learner[\s_-]?no)$/i;
+// Header-name patterns that suggest a display-name column.
+const NAME_PATTERNS = /^(full[\s_-]?name|first[\s_-]?name|last[\s_-]?name|given[\s_-]?name|student[\s_-]?name|learner[\s_-]?name|pupil[\s_-]?name|surname|name|display[\s_-]?name)$/i;
+
+function detectIdCol(headers) {
+  return headers.find(h => ID_PATTERNS.test(h.trim())) || null;
+}
+
+function detectNameCol(headers) {
+  return headers.find(h => NAME_PATTERNS.test(h.trim())) || null;
+}
+
+// Parse a Buffer into { headers, rows, totalRows, detectedIdCol, detectedNameCol }.
+// Supports .xlsx, .xls (via SheetJS) and CSV / TSV / plain text.
+function parseRosterFile(buffer, filename) {
+  const ext = (filename || '').split('.').pop().toLowerCase();
+  let headers, rows;
+
+  if (ext === 'xlsx' || ext === 'xls') {
+    const wb = xlsx.read(buffer, { type: 'buffer' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const data = xlsx.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    if (!data.length) throw new Error('Spreadsheet appears to be empty.');
+    headers = data[0].map(h => String(h == null ? '' : h).trim()).filter(h => h !== '');
+    if (!headers.length) throw new Error('Could not read column headers from the spreadsheet.');
+    rows = data.slice(1)
+      .map(row => {
+        const obj = {};
+        headers.forEach((h, i) => { obj[h] = String(row[i] == null ? '' : row[i]).trim(); });
+        return obj;
+      })
+      .filter(r => headers.some(h => r[h]));
+  } else {
+    // CSV / TSV / TXT
+    const text = buffer.toString('utf8');
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (!lines.length) throw new Error('File is empty.');
+    const sep = lines[0].includes('\t') ? '\t' : ',';
+    headers = lines[0].split(sep).map(h => h.replace(/^"|"$/g, '').trim());
+    rows = lines.slice(1).map(line => {
+      const cells = line.split(sep).map(c => c.replace(/^"|"$/g, '').trim());
+      const obj = {};
+      headers.forEach((h, i) => { obj[h] = cells[i] || ''; });
+      return obj;
+    }).filter(r => headers.some(h => r[h]));
+  }
+
+  const detectedIdCol = detectIdCol(headers) || headers[0] || null;
+  const detectedNameCol = detectNameCol(headers) || (headers.length > 1 ? headers[1] : null);
+
+  return { headers, rows, totalRows: rows.length, detectedIdCol, detectedNameCol };
+}
+
+// Convert parsed rows to [{ id, name }] using teacher-confirmed column choices.
+function buildStudentsFromMapping(rows, idCol, nameCol) {
+  const out = [];
+  for (const row of rows) {
+    const id = (row[idCol] || '').trim();
+    const name = nameCol ? (row[nameCol] || '').trim() : '';
+    if (id) out.push({ id, name: name || id });
+  }
+  return out;
+}
+
+module.exports = {
+  saveRoster, getRoster, listRosters, deleteRoster,
+  findStudent, findStudentInRoster, parseCSV,
+  parseRosterFile, buildStudentsFromMapping,
+};

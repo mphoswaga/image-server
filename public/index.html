@@ -187,6 +187,38 @@
     .game-card h4 { margin:0 0 4px; font-size:15px; color:var(--primary); text-transform:capitalize; }
     .game-card .gmeta { font-size:12.5px; color:var(--muted); margin-bottom:10px; }
 
+    /* Student progress panel */
+    .prog-stat { flex:1; min-width:100px; border:1px solid var(--border); border-radius:14px; padding:13px 16px; background:#fff; box-shadow:var(--sh-sm); }
+    .prog-stat .v { font-size:22px; font-weight:800; color:var(--primary); line-height:1.1; }
+    .prog-stat .v.ok  { color:var(--ok); }
+    .prog-stat .v.amber { color:#c77700; }
+    .prog-stat .v.red   { color:var(--err); }
+    .prog-stat .l { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; margin-top:3px; }
+    .prog-bar { height:8px; border-radius:999px; background:#e8eaf0; overflow:hidden; width:72px; flex:none; }
+    .prog-bar-fill { height:100%; border-radius:999px; transition:width .4s; }
+    .stu-card { border:1px solid var(--border); border-radius:14px; margin-bottom:8px; overflow:hidden; background:#fff; box-shadow:var(--sh-sm); }
+    .stu-head { display:flex; align-items:center; gap:12px; padding:13px 16px; cursor:pointer; user-select:none; transition:.12s; }
+    .stu-head:hover { background:var(--primary-soft); }
+    .stu-avatar { width:36px; height:36px; border-radius:50%; background:var(--primary-soft); color:var(--primary); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; flex:none; border:2px solid var(--border); }
+    .stu-badge { font-size:11px; font-weight:700; padding:3px 9px; border-radius:999px; flex:none; }
+    .stu-badge.ok     { background:#dff5eb; color:var(--ok); }
+    .stu-badge.amber  { background:#fff3cd; color:#8a5e00; }
+    .stu-badge.red    { background:#fdecea; color:var(--err); }
+    .stu-badge.none   { background:var(--primary-soft); color:var(--primary); }
+    .stu-detail { display:none; border-top:1px solid var(--border); padding:14px 16px 16px; background:#fbfcfe; }
+    .stu-detail.open  { display:block; }
+    .stu-res-table { border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+    .stu-res-row { display:grid; grid-template-columns:3fr 1fr 1fr 1fr; gap:6px; padding:9px 12px; border-top:1px solid var(--border); align-items:center; font-size:13px; }
+    .stu-res-row:first-child { border-top:none; background:var(--primary-soft); color:var(--primary); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; }
+    .stu-res-row .sc { text-align:right; font-weight:700; color:var(--accent); }
+    .stu-res-row .pc { text-align:right; font-weight:700; }
+    .stu-res-row .dt { text-align:right; color:var(--muted); font-size:11.5px; }
+    .sort-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+    .sort-btn { font-size:12px; font-weight:600; padding:6px 12px; border-radius:999px; border:1px solid var(--border); background:#fff; color:var(--muted); cursor:pointer; transition:.12s; }
+    .sort-btn.active { background:var(--primary-soft); color:var(--primary); border-color:var(--primary-2); }
+    .sort-btn:hover:not(.active) { border-color:#cfd6e2; background:#f8f9fc; }
+    .prog-search { flex:1; min-width:160px; max-width:260px; padding:8px 12px; font-size:13px; border:1px solid var(--border); border-radius:999px; }
+
     /* Info "i" tooltips — explain each field on hover/focus */
     .hint-i { display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; border-radius:50%; background:var(--primary-soft); color:var(--primary-2); font-size:10px; font-weight:800; font-style:normal; cursor:help; margin-left:5px; vertical-align:middle; position:relative; user-select:none; }
     .hint-i:hover, .hint-i:focus { background:var(--primary-2); color:#fff; outline:none; }
@@ -534,23 +566,80 @@
     <!-- CLASS ROSTERS -->
     <section id="rostersPanel" class="card wide" style="display:none">
       <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> Class rosters</h2>
-      <p class="hint">Upload your class list so students are verified by Student ID — no email or password needed. One CSV per class, two columns: <code>studentId,name</code>.</p>
+      <p class="hint">Upload your class list — Excel or CSV — so students verify themselves with a Student ID. No passwords, no email addresses.</p>
       <div id="rosterList" style="margin-bottom:16px"></div>
-      <details style="margin-bottom:12px">
+
+      <details id="rosterAdd" style="margin-bottom:12px">
         <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--primary)">+ Add a new roster</summary>
-        <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
+        <div style="margin-top:14px;display:flex;flex-direction:column;gap:12px">
           <input id="rosterName" type="text" maxlength="60" placeholder="Class name (e.g. Grade 5A)" style="max-width:340px" />
-          <p style="font-size:12.5px;color:var(--muted);margin:0">Paste or upload a CSV: one student per line, format <code>studentId,name</code></p>
-          <textarea id="rosterCsv" rows="6" placeholder="STU-99432,Alice Johnson&#10;STU-99433,Bob Smith&#10;STU-99434,Charlie Brown" style="font-family:monospace;font-size:13px;max-width:440px"></textarea>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button id="rosterUploadBtn" class="btn primary" style="width:auto;padding:10px 16px">Upload roster</button>
-            <label style="cursor:pointer"><input id="rosterFileInput" type="file" accept=".csv,.txt" style="display:none" /><span class="btn ghost" style="display:inline-block;padding:10px 14px;font-size:13px">Import CSV file</span></label>
+
+          <!-- Step 1: file drop zone -->
+          <div id="rosterDropZone" style="border:2px dashed var(--border);border-radius:12px;padding:24px 16px;text-align:center;cursor:pointer;transition:.15s;background:#fafbfd;max-width:440px" role="button" tabindex="0" aria-label="Upload roster file">
+            <svg class="ic" aria-hidden="true" style="width:28px;height:28px;color:var(--primary);margin-bottom:8px"><use href="#i-doc"/></svg>
+            <p style="margin:0;font-size:14px;font-weight:600">Drop file here or click to browse</p>
+            <p style="margin:4px 0 0;font-size:12px;color:var(--muted)">Excel (.xlsx, .xls) or CSV — any column layout</p>
+            <input id="rosterFileInput" type="file" accept=".csv,.xls,.xlsx,.txt" style="display:none" />
           </div>
+
+          <!-- Step 2: verify columns (shown after parse) -->
+          <div id="rosterVerify" style="display:none;max-width:560px">
+            <p style="font-size:13px;margin:0 0 10px"><strong id="rosterRowCount"></strong> rows detected. Confirm which columns contain the Student ID and the student's name:</p>
+            <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px">
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <label style="font-size:12px;font-weight:600">Student ID column</label>
+                <select id="rosterIdCol" style="font-size:13px;padding:8px 10px;border-radius:8px;border:1.5px solid var(--border)"></select>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <label style="font-size:12px;font-weight:600">Name column</label>
+                <select id="rosterNameCol" style="font-size:13px;padding:8px 10px;border-radius:8px;border:1.5px solid var(--border)"><option value="">(none — use ID as display name)</option></select>
+              </div>
+            </div>
+            <!-- Preview table -->
+            <div id="rosterPreviewWrap" style="overflow-x:auto;margin-bottom:12px">
+              <table id="rosterPreviewTable" style="width:100%;border-collapse:collapse;font-size:12.5px"></table>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button id="rosterConfirmBtn" class="btn primary" style="width:auto;padding:10px 18px">Save roster</button>
+              <button id="rosterCancelVerify" class="btn ghost" style="width:auto;padding:10px 14px">Cancel</button>
+            </div>
+          </div>
+
+          <!-- Fallback: paste CSV manually -->
+          <details style="margin-top:4px">
+            <summary style="cursor:pointer;font-size:12px;color:var(--muted)">Or paste CSV manually</summary>
+            <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
+              <p style="font-size:12px;color:var(--muted);margin:0">One student per line: <code>studentId,name</code></p>
+              <textarea id="rosterCsv" rows="5" placeholder="STU-99432,Alice Johnson&#10;STU-99433,Bob Smith" style="font-family:monospace;font-size:13px;max-width:440px"></textarea>
+              <button id="rosterCsvSaveBtn" class="btn primary" style="width:auto;padding:10px 16px;align-self:flex-start">Save CSV roster</button>
+            </div>
+          </details>
+
           <div id="rosterErr" class="field-err"></div>
         </div>
       </details>
+
       <div style="margin-top:16px"><button id="rostersBack" class="btn ghost">← Back to app</button></div>
     </section>
+  </div>
+
+  <!-- STUDENT PROGRESS PANEL -->
+  <div class="wrap" id="progressWrap" style="display:none">
+    <div class="card wide">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap">
+        <button id="progressBack" class="btn ghost" style="width:auto;padding:8px 14px;font-size:13px"><svg class="ic" aria-hidden="true"><use href="#i-arrow" style="transform:scaleX(-1)"/></svg> All classes</button>
+        <h2 id="progressTitle" style="margin:0;font-size:20px;font-weight:700;flex:1"></h2>
+      </div>
+      <div id="progressStats" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px"></div>
+      <div class="sort-bar">
+        <input id="progressSearch" class="prog-search" type="search" placeholder="Search student…" autocomplete="off" />
+        <span style="font-size:12px;color:var(--muted);font-weight:600">Sort:</span>
+        <button class="sort-btn active" data-sort="name">Name</button>
+        <button class="sort-btn" data-sort="score">Score</button>
+        <button class="sort-btn" data-sort="recent">Recent</button>
+      </div>
+      <div id="progressStudents"></div>
+    </div>
   </div>
 
   <!-- IMAGE PICKER: stock library first, web fetch as fallback -->
@@ -1093,7 +1182,7 @@
 
     // ---- “My games” view ----
     const gamesPanel=$('gamesPanel');
-    function hideAllPanels(){ composer.style.display='none'; planStage.style.display='none'; results.style.display='none'; adminPanel.style.display='none'; gamesPanel.style.display='none'; if($('rostersPanel')) $('rostersPanel').style.display='none'; stepsEl.style.display='none'; statusEl.innerHTML=''; }
+    function hideAllPanels(){ composer.style.display='none'; planStage.style.display='none'; results.style.display='none'; adminPanel.style.display='none'; gamesPanel.style.display='none'; if($('rostersPanel')) $('rostersPanel').style.display='none'; if($('progressWrap')) $('progressWrap').style.display='none'; stepsEl.style.display='none'; statusEl.innerHTML=''; }
     function openGames(){ hideAllPanels(); gamesPanel.style.display='block'; loadMyGames(); window.scrollTo({top:0,behavior:'smooth'}); }
     function closeGames(){ gamesPanel.style.display='none'; stepsEl.style.display='flex'; show('composer'); setStep(1); }
     $('gamesBtn').onclick=openGames; $('gamesBack').onclick=closeGames;
@@ -1129,34 +1218,235 @@
         }
         if(!wrap) return;
         if(!d.rosters||!d.rosters.length){ wrap.innerHTML='<p class=”hint”>No rosters yet — add one below.</p>'; return; }
-        wrap.innerHTML=d.rosters.map(r=>`<div class=”tpl-item”><span class=”tpl-name”>${esc(r.name)}</span><span class=”tpl-type”>${r.count} students</span><button class=”btn ghost tpl-del” data-rid=”${esc(r.id)}” style=”padding:6px 10px;font-size:12px;color:var(--err);border-color:var(--err)”>Delete</button></div>`).join('');
-        wrap.querySelectorAll('.tpl-del').forEach(b=>b.addEventListener('click',async ()=>{
-          if(!confirm('Delete this roster?')) return;
-          await fetch('/api/roster/'+b.dataset.rid,{method:'DELETE'}); loadRosters();
-        }));
+        wrap.innerHTML='';
+        d.rosters.forEach(r=>{
+          const item=document.createElement('div'); item.className='tpl-item';
+          const nm=document.createElement('span'); nm.className='tpl-name'; nm.textContent=r.name;
+          const ct=document.createElement('span'); ct.className='tpl-type'; ct.textContent=r.count+' students';
+          const pb=document.createElement('button'); pb.className='btn ghost'; pb.style.cssText='padding:6px 12px;font-size:12px;display:inline-flex;align-items:center;gap:5px'; pb.innerHTML=ICON('i-target')+' Progress';
+          pb.addEventListener('click',()=>openProgress(r.id));
+          const db=document.createElement('button'); db.className='btn ghost tpl-del'; db.style.cssText='padding:6px 10px;font-size:12px;color:var(--err);border-color:var(--err)'; db.textContent='Delete';
+          db.addEventListener('click',async()=>{ if(!confirm('Delete this roster?')) return; await fetch('/api/roster/'+r.id,{method:'DELETE'}); loadRosters(); });
+          item.append(nm,ct,pb,db); wrap.appendChild(item);
+        });
       }catch{ if(wrap) wrap.innerHTML='<p class=”hint err”>Could not load rosters.</p>'; }
     }
 
-    // Import CSV file into textarea.
-    $('rosterFileInput').addEventListener('change', e=>{
-      const f=e.target.files[0]; if(!f) return;
-      const reader=new FileReader(); reader.onload=ev=>{ $('rosterCsv').value=ev.target.result; if(!$('rosterName').value) $('rosterName').value=f.name.replace(/\.[^.]+$/,''); };
-      reader.readAsText(f);
+    // ---- Student progress panel ----
+    let progressData = null;   // last-loaded progress response
+    let currentSort  = 'name';
+
+    function openProgress(rosterId) {
+      hideAllPanels();
+      $('progressWrap').style.display = 'block';
+      $('progressTitle').textContent  = 'Loading…';
+      $('progressStudents').innerHTML = '<span class="status">Loading…</span>';
+      $('progressStats').innerHTML    = '';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      fetch('/api/roster/' + rosterId + '/progress')
+        .then(r => r.json())
+        .then(d => { if (d.error) throw new Error(d.error); progressData = d; renderProgress(); })
+        .catch(err => { $('progressStudents').innerHTML = '<p class="hint err">Could not load progress: ' + esc(err.message) + '</p>'; });
+    }
+
+    $('progressBack').onclick = () => {
+      $('progressWrap').style.display = 'none';
+      $('rostersPanel').style.display = 'block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    // Sort buttons
+    document.querySelectorAll('.sort-btn').forEach(b => b.addEventListener('click', () => {
+      currentSort = b.dataset.sort;
+      document.querySelectorAll('.sort-btn').forEach(x => x.classList.toggle('active', x === b));
+      renderProgress();
+    }));
+
+    // Search filter
+    $('progressSearch').addEventListener('input', () => renderProgress());
+
+    function relTime(iso) {
+      if (!iso) return '—';
+      const diff = Date.now() - new Date(iso).getTime();
+      const m = Math.floor(diff / 60000), h = Math.floor(m / 60), d = Math.floor(h / 24);
+      if (d > 30) return new Date(iso).toLocaleDateString();
+      if (d > 0)  return d === 1 ? 'yesterday' : d + ' days ago';
+      if (h > 0)  return h + 'h ago';
+      if (m > 1)  return m + 'm ago';
+      return 'just now';
+    }
+
+    function pctColor(pct) {
+      return pct >= 80 ? 'var(--ok)' : pct >= 60 ? '#c77700' : 'var(--err)';
+    }
+    function pctCls(pct) { return pct >= 80 ? 'ok' : pct >= 60 ? 'amber' : 'red'; }
+
+    function renderProgress() {
+      if (!progressData) return;
+      const { roster, students } = progressData;
+      $('progressTitle').textContent = roster.name;
+
+      // Stats bar
+      const active   = students.filter(s => s.gamesPlayed > 0);
+      const totalPlays = students.reduce((s, st) => s + st.gamesPlayed, 0);
+      const classAvg = active.length ? Math.round(active.reduce((s, st) => s + st.avgPct, 0) / active.length) : null;
+      $('progressStats').innerHTML =
+        `<div class="prog-stat"><div class="v">${students.length}</div><div class="l">Students</div></div>` +
+        `<div class="prog-stat"><div class="v">${totalPlays}</div><div class="l">Game plays</div></div>` +
+        (classAvg !== null ? `<div class="prog-stat"><div class="v ${pctCls(classAvg)}">${classAvg}%</div><div class="l">Class average</div></div>` : '') +
+        `<div class="prog-stat"><div class="v">${active.length}</div><div class="l">Active students</div></div>`;
+
+      // Filter + sort
+      const q = ($('progressSearch').value || '').toLowerCase().trim();
+      let list = q ? students.filter(s => s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q)) : [...students];
+      if      (currentSort === 'score')  list.sort((a, b) => (b.avgPct ?? -1) - (a.avgPct ?? -1));
+      else if (currentSort === 'recent') list.sort((a, b) => (b.lastAt || '').localeCompare(a.lastAt || ''));
+      else                               list.sort((a, b) => a.name.localeCompare(b.name));
+
+      if (!list.length) { $('progressStudents').innerHTML = '<p class="hint">No students match your search.</p>'; return; }
+
+      $('progressStudents').innerHTML = list.map(s => {
+        const initials = s.name.trim().split(/\s+/).map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
+        const pct = s.avgPct;
+        const cls = pct !== null ? pctCls(pct) : 'none';
+        const barFill = pct !== null ? `<div class="prog-bar" style="margin:0 12px 0 4px"><div class="prog-bar-fill" style="width:${pct}%;background:${pctColor(pct)}"></div></div>` : '';
+        const badge = pct !== null ? `<span class="stu-badge ${cls}">${pct}%</span>` : `<span class="stu-badge none">No plays</span>`;
+
+        const detailRows = s.results.length
+          ? `<div class="stu-res-table">
+              <div class="stu-res-row"><span>Lesson</span><span style="text-align:right">Score</span><span style="text-align:right">%</span><span style="text-align:right">When</span></div>
+              ${s.results.map(r => `<div class="stu-res-row">
+                <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(r.lessonTitle)}">${esc(r.lessonTitle)}</span>
+                <span class="sc">${r.score}/${r.total}</span>
+                <span class="pc" style="color:${pctColor(r.pct)}">${r.pct}%</span>
+                <span class="dt">${relTime(r.at)}</span>
+              </div>`).join('')}
+            </div>`
+          : '<p style="margin:0;font-size:13px;color:var(--muted)">This student hasn\'t played any games yet.</p>';
+
+        return `<div class="stu-card">
+          <div class="stu-head" data-sid="${esc(s.id)}">
+            <div class="stu-avatar">${esc(initials)}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:700;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.name)}</div>
+              <div style="font-size:11.5px;color:var(--muted);margin-top:1px">${s.id}${s.gamesPlayed ? ' · ' + s.gamesPlayed + ' game' + (s.gamesPlayed!==1?'s':'') : ''}${s.bestSubject ? ' · best: ' + esc(s.bestSubject) : ''}${s.lastAt ? ' · ' + relTime(s.lastAt) : ''}</div>
+            </div>
+            ${barFill}${badge}
+            <svg class="ic stu-chevron" style="color:var(--muted);transition:transform .2s;flex:none;margin-left:8px" aria-hidden="true"><use href="#i-arrow"/></svg>
+          </div>
+          <div class="stu-detail" id="stu-${esc(s.id)}">${detailRows}</div>
+        </div>`;
+      }).join('');
+
+      // Toggle expansion
+      $('progressStudents').querySelectorAll('.stu-head').forEach(h => {
+        h.addEventListener('click', () => {
+          const det = $('stu-' + h.dataset.sid);
+          const open = det.classList.toggle('open');
+          h.querySelector('.stu-chevron').style.transform = open ? 'rotate(90deg)' : '';
+        });
+      });
+    }
+
+    // ---- Roster file upload → verify → save ----
+    let rosterParsedRows = [];   // held in memory between preview and confirm
+
+    function rosterErr(msg){ $('rosterErr').textContent=msg||''; msg?$('rosterErr').classList.add('show'):$('rosterErr').classList.remove('show'); }
+
+    function rosterRenderPreview(headers, rows, idCol, nameCol){
+      const idIdx = headers.indexOf(idCol);
+      const nmIdx = headers.indexOf(nameCol);
+      const head = '<thead><tr>' + headers.map((h,i)=>`<th style=”padding:5px 8px;border-bottom:2px solid var(--border);text-align:left;font-size:12px;${i===idIdx?'background:#e8f0fb;':i===nmIdx?'background:#fef3e8;':''}”>${esc(h)}</th>`).join('') + '</tr></thead>';
+      const body = '<tbody>' + rows.map(r=>'<tr>'+headers.map((h,i)=>`<td style=”padding:5px 8px;border-bottom:1px solid var(--border);font-size:12px;white-space:nowrap;${i===idIdx?'background:#e8f0fb;font-weight:600;':i===nmIdx?'background:#fef3e8;':''}”>${esc(r[h]||'')}</td>`).join('')+'</tr>').join('') + '</tbody>';
+      $('rosterPreviewTable').innerHTML = head + body;
+    }
+
+    function rosterShowVerify(data){
+      const { headers, preview, totalRows, detectedIdCol, detectedNameCol, allRows } = data;
+      rosterParsedRows = allRows;
+      $('rosterRowCount').textContent = totalRows + ' student' + (totalRows===1?'':'s');
+
+      // Populate column selectors
+      const idSel=$('rosterIdCol'), nameSel=$('rosterNameCol');
+      idSel.innerHTML   = headers.map(h=>`<option value=”${esc(h)}” ${h===detectedIdCol?'selected':''}>${esc(h)}</option>`).join('');
+      nameSel.innerHTML = '<option value=””>(none)</option>' + headers.map(h=>`<option value=”${esc(h)}” ${h===detectedNameCol?'selected':''}>${esc(h)}</option>`).join('');
+
+      rosterRenderPreview(headers, preview, detectedIdCol||headers[0], detectedNameCol||'');
+      $('rosterDropZone').style.display='none';
+      $('rosterVerify').style.display='block';
+
+      // Live re-render when columns change
+      const rerender=()=>rosterRenderPreview(headers, preview, idSel.value, nameSel.value);
+      idSel.onchange=rerender; nameSel.onchange=rerender;
+    }
+
+    async function rosterParseFile(file){
+      if(!$('rosterName').value.trim()) $('rosterName').value=file.name.replace(/\.[^.]+$/,'');
+      rosterErr('');
+      const fd=new FormData(); fd.append('file',file);
+      const btn=$('rosterDropZone');
+      btn.style.opacity='0.6';
+      try{
+        const r=await fetch('/api/roster/preview',{method:'POST',body:fd});
+        const d=await r.json(); if(!r.ok) throw new Error(d.error);
+        rosterShowVerify(d);
+      }catch(err){ rosterErr(err.message); }
+      btn.style.opacity='';
+      $('rosterFileInput').value='';
+    }
+
+    // Click to open file picker
+    $('rosterDropZone').addEventListener('click',()=>$('rosterFileInput').click());
+    $('rosterDropZone').addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); $('rosterFileInput').click(); }});
+
+    // Drag-and-drop
+    $('rosterDropZone').addEventListener('dragover',e=>{ e.preventDefault(); $('rosterDropZone').style.borderColor='var(--primary)'; });
+    $('rosterDropZone').addEventListener('dragleave',()=>{ $('rosterDropZone').style.borderColor=''; });
+    $('rosterDropZone').addEventListener('drop',e=>{ e.preventDefault(); $('rosterDropZone').style.borderColor=''; const f=e.dataTransfer.files[0]; if(f) rosterParseFile(f); });
+
+    // File input change
+    $('rosterFileInput').addEventListener('change',e=>{ const f=e.target.files[0]; if(f) rosterParseFile(f); });
+
+    // Cancel verification → go back to drop zone
+    $('rosterCancelVerify').addEventListener('click',()=>{
+      $('rosterVerify').style.display='none'; $('rosterDropZone').style.display=''; rosterParsedRows=[]; rosterErr('');
     });
 
-    $('rosterUploadBtn').addEventListener('click', async ()=>{
+    // Confirm: save with selected column mapping
+    $('rosterConfirmBtn').addEventListener('click', async ()=>{
+      const name=$('rosterName').value.trim()||'Class roster';
+      const idCol=$('rosterIdCol').value;
+      const nameCol=$('rosterNameCol').value||null;
+      if(!idCol){ rosterErr('Please select the Student ID column.'); return; }
+      $('rosterConfirmBtn').disabled=true;
+      try{
+        const r=await fetch('/api/roster?name='+encodeURIComponent(name),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,rows:rosterParsedRows,idCol,nameCol})});
+        const d=await r.json(); if(!r.ok) throw new Error(d.error);
+        toast(`Roster “${d.name}” saved — ${d.count} students`,'ok');
+        $('rosterName').value=''; rosterParsedRows=[];
+        $('rosterVerify').style.display='none'; $('rosterDropZone').style.display='';
+        $('rosterErr').classList.remove('show');
+        $('rosterAdd').removeAttribute('open');
+        loadRosters();
+      }catch(err){ rosterErr(err.message); }
+      $('rosterConfirmBtn').disabled=false;
+    });
+
+    // Legacy: save pasted CSV directly
+    $('rosterCsvSaveBtn').addEventListener('click', async ()=>{
       const name=$('rosterName').value.trim()||'Class roster';
       const csv=$('rosterCsv').value.trim();
-      if(!csv){ $('rosterErr').textContent='Paste a CSV first.'; $('rosterErr').classList.add('show'); return; }
-      $('rosterUploadBtn').disabled=true;
+      if(!csv){ rosterErr('Paste a CSV first.'); return; }
+      $('rosterCsvSaveBtn').disabled=true;
       try{
         const r=await fetch('/api/roster?name='+encodeURIComponent(name),{method:'POST',headers:{'Content-Type':'text/plain'},body:csv});
         const d=await r.json(); if(!r.ok) throw new Error(d.error);
         toast(`Roster “${d.name}” saved — ${d.count} students`,'ok');
-        $('rosterCsv').value=''; $('rosterName').value=''; $('rosterErr').classList.remove('show');
+        $('rosterCsv').value=''; $('rosterName').value=''; rosterErr('');
+        $('rosterAdd').removeAttribute('open');
         loadRosters();
-      }catch(err){ $('rosterErr').textContent=err.message; $('rosterErr').classList.add('show'); }
-      $('rosterUploadBtn').disabled=false;
+      }catch(err){ rosterErr(err.message); }
+      $('rosterCsvSaveBtn').disabled=false;
     });
 
     (async function init(){
