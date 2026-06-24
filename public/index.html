@@ -257,6 +257,11 @@
     .slide .sc-keys { display:inline-flex; align-items:center; gap:4px; flex:none; }
     .keycap { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; font-weight:700; color:#2b3645; background:#f1f3f7; border:1px solid #c7d0dc; border-bottom-width:2px; border-radius:6px; padding:2px 7px; min-width:22px; text-align:center; box-shadow:0 1px 0 rgba(0,0,0,.05); }
     .sc-plus { color:#9aa5b1; font-weight:700; font-size:11px; }
+    .slide .worked { margin-top:9px; }
+    .slide .worked .wtask { font-style:italic; color:var(--muted); font-size:13px; margin-bottom:7px; }
+    .slide .worked ol { margin:0; padding:0; list-style:none; counter-reset:wstep; }
+    .slide .worked li { counter-increment:wstep; font-size:13.5px; margin:6px 0; padding-left:27px; position:relative; color:var(--ink); }
+    .slide .worked li::before { content:counter(wstep); position:absolute; left:0; top:1px; width:18px; height:18px; border-radius:50%; background:var(--accent); color:#fff; font-size:10.5px; font-weight:800; display:flex; align-items:center; justify-content:center; }
     .card-actions { display:flex; gap:8px; margin-top:13px; }
     .card-actions button { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; padding:7px 11px; border-radius:9px; border:1px solid var(--border); background:#fff; color:var(--primary); cursor:pointer; transition:.12s; }
     .card-actions button:hover:not(:disabled) { border-color:var(--primary-2); background:var(--primary-soft); }
@@ -743,7 +748,8 @@
         const actions=(aiBtn||regenBtn||diaBtn)?`<div class="card-actions">${regenBtn}${diaBtn}${aiBtn}</div>`:'';
         const diff=s.differentiation?`<div class="diff"><div><b style="color:#15824b">Support</b> ${esc(s.differentiation.support)}</div><div><b style="color:#1f4e79">Stretch</b> ${esc(s.differentiation.stretch)}</div></div>`:'';
         const sc=(s.shortcuts&&s.shortcuts.length)?`<div class="shortcuts">${s.shortcuts.map(x=>`<div class="sc-row"><span class="sc-act">${esc(x.action)}</span><span class="sc-keys">${String(x.keys).split('+').map(k=>k.trim()).filter(Boolean).map((k,n)=>(n>0?'<span class="sc-plus">+</span>':'')+'<kbd class="keycap">'+esc(k)+'</kbd>').join('')}</span></div>`).join('')}</div>`:'';
-        body=`${kicker}<h3 contenteditable data-field="title">${esc(s.title)}</h3>${bl}${sc}${ex}${diff}${actions}`;
+        const wk=(s.worked&&s.worked.steps&&s.worked.steps.length)?`<div class="worked">${s.worked.task?`<div class="wtask">${esc(s.worked.task)}</div>`:''}<ol>${s.worked.steps.map(st=>`<li>${esc(st)}</li>`).join('')}</ol></div>`:'';
+        body=`${kicker}<h3 contenteditable data-field="title">${esc(s.title)}</h3>${bl}${sc}${wk}${ex}${diff}${actions}`;
       }
       return `<div class="slide" data-index="${i}">${thumb}<div class="body">${body}</div></div>`;
     }

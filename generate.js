@@ -258,6 +258,20 @@ function drawShortcuts(pptx, slide, shortcuts, accent) {
   });
 }
 
+// Render a worked example / how-to: the task, then numbered steps with badges —
+// so students see the real working, not a vague description.
+function drawWorked(pptx, slide, worked, accent) {
+  const steps = (worked.steps || []).slice(0, 6);
+  if (worked.task) slide.addText(worked.task, { x: 0.6, y: 1.62, w: 8.9, h: 0.5, fontFace: THEME.font, fontSize: 17, bold: true, italic: true, color: '6B7280' });
+  const startY = 2.32, rowH = Math.min(0.64, (5.2 - startY) / Math.max(steps.length, 1));
+  steps.forEach((st, i) => {
+    const y = startY + i * rowH, badgeY = y + (rowH - 0.42) / 2;
+    slide.addShape(pptx.ShapeType.ellipse, { x: 0.7, y: badgeY, w: 0.42, h: 0.42, fill: { color: accent }, line: { type: 'none' } });
+    slide.addText(String(i + 1), { x: 0.7, y: badgeY, w: 0.42, h: 0.42, fontFace: THEME.font, fontSize: 14, bold: true, color: 'FFFFFF', align: 'center', valign: 'middle' });
+    slide.addText(st, { x: 1.36, y, w: 8.0, h: rowH, fontFace: THEME.font, fontSize: 15.5, color: THEME.text, valign: 'middle' });
+  });
+}
+
 function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }) {
   const slide = pptx.addSlide();
   slide.background = { color: THEME.bg };
@@ -338,6 +352,14 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
         slide.addText(slideData.title, { x: 0.5, y: 0.85, w: 9, h: 0.9, fontFace: THEME.font, fontSize: t.titleSize, bold: true, color: THEME.primary });
         if (slideData.example) slide.addText(slideData.example, { x: 0.5, y: 1.62, w: 9, h: 0.5, fontFace: THEME.font, fontSize: 15, italic: true, color: '6B7280' });
         drawShortcuts(pptx, slide, slideData.shortcuts, accent);
+        break;
+      }
+
+      // Worked example / how-to (any subject) → numbered steps showing the real working.
+      if (slideData.worked && Array.isArray(slideData.worked.steps) && slideData.worked.steps.length) {
+        slide.addText('WORKED EXAMPLE', { x: 0.5, y: 0.4, w: 9, h: 0.4, fontFace: THEME.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
+        slide.addText(slideData.title, { x: 0.5, y: 0.85, w: 9, h: 0.9, fontFace: THEME.font, fontSize: t.titleSize, bold: true, color: THEME.primary });
+        drawWorked(pptx, slide, slideData.worked, accent);
         break;
       }
       // Diagram-led: the diagram is the hero — title on top, big visual below.

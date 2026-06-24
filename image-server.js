@@ -112,6 +112,7 @@ function previewEntry(slide, image) {
     visual: (slide.visual && (slide.visual.type === 'steps' || slide.visual.type === 'cycle') && Array.isArray(slide.visual.items) && slide.visual.items.length >= 2) ? slide.visual : null,
     differentiation: slide.differentiation || null,
     shortcuts: (Array.isArray(slide.shortcuts) && slide.shortcuts.length) ? slide.shortcuts : null,
+    worked: (slide.worked && slide.worked.task && Array.isArray(slide.worked.steps) && slide.worked.steps.length) ? slide.worked : null,
     labelled: detectLabelledDiagram(`${slide.title || ''} ${slide.imageQuery || ''} ${slide.example || ''}`),
   };
 }
