@@ -26,7 +26,7 @@ function safeAnimate(buffer, band) {
   try { return animateBuffer(buffer, band); }
   catch (err) { console.log('animation skipped:', err.message); return buffer; }
 }
-const { signup, login, issueToken, verifyToken, getUserById, requireAuth, requireAdmin, COOKIE_NAME } = require('./auth');
+const { signup, login, issueToken, verifyToken, getUserById, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME } = require('./auth');
 const { runWithUser } = require('./ai-client');
 const usage = require('./usage');
 const jwt = require('jsonwebtoken');
@@ -789,72 +789,120 @@ app.get('/join', (req, res) => res.sendFile(path.join(__dirname, 'public', 'join
 // Student play page (the shareable link target).
 app.get('/play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'play.html')));
 
-// ── API Key Management ──────────────────────────────────────────────────────────────
-// Teacher-only endpoints to manage external API keys.
-app.post('/api/apikeys', requireAuth, (req, res) => {
-  const label = String(req.body?.label || 'API Key').slice(0, 50);
+// ── Admin API Key Management ────────────────────────────────────────────────────────
+// Only the admin can create / list / revoke API keys used by external apps.
+app.post('/api/admin/apikeys', requireAdmin, (req, res) => {
+  const label = String(req.body?.label || 'Admin API Key').slice(0, 50);
   try {
-    const { key, hash, createdAt } = apikeys.createKey(req.userId, label);
+    const { key, hash, createdAt } = apikeys.createAdminKey(label);
     res.json({ key, hash, createdAt, label });
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
-app.get('/api/apikeys', requireAuth, (req, res) => {
-  const keys = apikeys.listKeys(req.userId);
+app.get('/api/admin/apikeys', requireAdmin, (req, res) => {
+  const keys = apikeys.listAdminKeys();
   res.json({ keys: keys.map(k => ({ hash: k.hash, label: k.label, createdAt: k.createdAt, lastUsedAt: k.lastUsedAt })) });
 });
 
-app.delete('/api/apikeys/:hash', requireAuth, (req, res) => {
-  apikeys.deleteKey(req.userId, req.params.hash);
+app.delete('/api/admin/apikeys/:hash', requireAdmin, (req, res) => {
+  apikeys.deleteAdminKey(req.params.hash);
   res.json({ ok: true });
 });
 
 // ── External API (v1) ───────────────────────────────────────────────────────────────
-// Public read-only endpoints authenticated via Bearer token (API key).
+// Read-only endpoints for the external report-card app, authenticated via Bearer token.
+// Only admin-scoped keys are accepted.
 function requireApiKey(req, res, next) {
   const auth = req.headers.authorization || '';
   const match = auth.match(/^Bearer\s+(\S+)$/);
   if (!match) return res.status(401).json({ error: 'Missing Authorization header.' });
-  const teacherId = apikeys.verifyKey(match[1]);
-  if (!teacherId) return res.status(401).json({ error: 'Invalid API key.' });
-  req.apiUserId = teacherId;
+  const result = apikeys.verifyKey(match[1]);
+  if (!result) return res.status(401).json({ error: 'Invalid API key.' });
+  req.apiIsAdmin = result.isAdmin;
   next();
 }
 
-// List all rosters for the teacher who owns the API key.
+// List all rosters across all teachers.
 app.get('/api/v1/rosters', requireApiKey, (req, res) => {
-  const rosters = roster.listRosters(req.apiUserId);
-  res.json({ rosters: rosters.map(r => ({ id: r.id, name: r.name, studentCount: r.count, createdAt: r.createdAt })) });
+  const all = [];
+  for (const teacherId of listAllUserIds()) {
+    for (const r of roster.listRosters(teacherId)) {
+      all.push({ id: r.id, teacherId, name: r.name, studentCount: r.count, createdAt: r.createdAt });
+    }
+  }
+  res.json({ rosters: all });
 });
 
-// Get progress data for a roster (student names, IDs, all game scores).
-app.get('/api/v1/roster/:id/progress', requireApiKey, (req, res) => {
-  const r = roster.getRoster(req.apiUserId, req.params.id);
-  if (!r) return res.status(404).json({ error: 'Roster not found.' });
+// Get all students across all teachers with all game results.
+// Optional ?rosterId=<id> to narrow to one roster (still searches all teachers for that roster).
+app.get('/api/v1/students', requireApiKey, (req, res) => {
+  const filterRosterId = req.query.rosterId || null;
+  const allUserIds = listAllUserIds();
+  const out = [];
 
-  const allGames = games.listTeacherGames(req.apiUserId);
+  for (const teacherId of allUserIds) {
+    const rosters = filterRosterId
+      ? [roster.getRoster(teacherId, filterRosterId)].filter(Boolean)
+      : (() => {
+          const ids = roster.listRosters(teacherId).map(r => r.id);
+          return ids.map(id => roster.getRoster(teacherId, id)).filter(Boolean);
+        })();
+
+    if (!rosters.length) continue;
+
+    const allGames = games.listTeacherGames(teacherId);
+    const byStudent = new Map();
+    for (const g of allGames) {
+      for (const result of games.getResults(g.id)) {
+        if (!byStudent.has(result.studentId)) byStudent.set(result.studentId, []);
+        byStudent.get(result.studentId).push({
+          topic: g.topic, subject: g.subject,
+          score: result.score, total: result.total,
+          percentage: result.total > 0 ? Math.round((result.score / result.total) * 100) : 0,
+          at: result.at,
+        });
+      }
+    }
+
+    for (const r of rosters) {
+      for (const s of r.students) {
+        const results = byStudent.get(s.id) || [];
+        out.push({ id: s.id, name: s.name, rosterId: r.id, rosterName: r.name, teacherId, results });
+      }
+    }
+  }
+
+  res.json({ students: out });
+});
+
+// Get progress data for a specific roster (by any teacher).
+app.get('/api/v1/roster/:id/progress', requireApiKey, (req, res) => {
+  const rosterIdParam = req.params.id;
+  let foundRoster = null;
+  let foundTeacherId = null;
+  for (const teacherId of listAllUserIds()) {
+    const r = roster.getRoster(teacherId, rosterIdParam);
+    if (r) { foundRoster = r; foundTeacherId = teacherId; break; }
+  }
+  if (!foundRoster) return res.status(404).json({ error: 'Roster not found.' });
+
+  const allGames = games.listTeacherGames(foundTeacherId);
   const byStudent = new Map();
   for (const g of allGames) {
     for (const result of games.getResults(g.id)) {
-      if (!r.students.find(s => s.id === result.studentId)) continue;
+      if (!foundRoster.students.find(s => s.id === result.studentId)) continue;
       if (!byStudent.has(result.studentId)) byStudent.set(result.studentId, []);
       byStudent.get(result.studentId).push({
-        topic: g.topic,
-        subject: g.subject,
-        score: result.score,
-        total: result.total,
+        topic: g.topic, subject: g.subject,
+        score: result.score, total: result.total,
         percentage: result.total > 0 ? Math.round((result.score / result.total) * 100) : 0,
         at: result.at,
       });
     }
   }
 
-  const students = r.students.map(s => {
-    const results = byStudent.get(s.id) || [];
-    return { id: s.id, name: s.name, results };
-  });
-
-  res.json({ roster: { id: r.id, name: r.name }, students });
+  const students = foundRoster.students.map(s => ({ id: s.id, name: s.name, results: byStudent.get(s.id) || [] }));
+  res.json({ roster: { id: foundRoster.id, name: foundRoster.name, teacherId: foundTeacherId }, students });
 });
 
 app.listen(PORT, () => console.log(`LessonCope running at http://localhost:${PORT}`));

@@ -1,77 +1,67 @@
 // API key management for external app access.
-// Keys are stored as hashes (SHA-256); plaintext is returned only once on creation.
+// Admin keys: stored as hashes at DATA_DIR/admin-apikeys.json — grant read access to ALL data.
+// (Per-teacher keys were removed; only admin keys are used by the external report-card app.)
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { DATA_DIR, writeJsonAtomic } = require('./storage');
 
-function keysPath(teacherId) {
-  return path.join(DATA_DIR, 'users', teacherId, 'apikeys.json');
+const ADMIN_KEYS_PATH = path.join(DATA_DIR, 'admin-apikeys.json');
+
+function loadAdminKeys() {
+  try { return JSON.parse(fs.readFileSync(ADMIN_KEYS_PATH, 'utf8')); }
+  catch { return []; }
 }
 
-// Load all keys for a teacher (hash form).
-function loadKeys(teacherId) {
-  try {
-    return JSON.parse(fs.readFileSync(keysPath(teacherId), 'utf8'));
-  } catch {
-    return [];
-  }
-}
-
-// Generate a new API key: 32 random bytes → base64 "lc_xxxxxxx" format.
+// Generate a new API key: 32 random bytes → base64url "lc_xxxxxxx" format.
 function generateKey() {
   const bytes = crypto.randomBytes(32);
   return 'lc_' + bytes.toString('base64').slice(0, 48).replace(/[+/=]/g, x => ({ '+': '-', '/': '_', '=': '' }[x]));
 }
 
-// Hash a key for storage (never store plaintext).
+// SHA-256 hash a key for storage (never store plaintext).
 function hashKey(key) {
   return crypto.createHash('sha256').update(key).digest('hex');
 }
 
-// Create a new API key. Returns { key (plaintext, shown once), hash, createdAt, label }.
-function createKey(teacherId, label = 'API Key') {
+// Create a new admin-scoped API key. Returns { key (plaintext, shown once), hash, createdAt, label }.
+function createAdminKey(label) {
   const key = generateKey();
   const hash = hashKey(key);
-  const keys = loadKeys(teacherId);
-  const record = { hash, label, createdAt: new Date().toISOString(), lastUsedAt: null };
+  const keys = loadAdminKeys();
+  const record = { hash, label: String(label || 'Admin API Key').slice(0, 50), createdAt: new Date().toISOString(), lastUsedAt: null };
   keys.push(record);
-  fs.mkdirSync(path.dirname(keysPath(teacherId)), { recursive: true });
-  writeJsonAtomic(keysPath(teacherId), keys);
-  return { key, ...record };  // Return plaintext key once
+  writeJsonAtomic(ADMIN_KEYS_PATH, keys);
+  return { key, ...record };
 }
 
-// List all keys for a teacher (hashes only, no plaintext).
-function listKeys(teacherId) {
-  return loadKeys(teacherId);
+// List all admin keys (hashes only — no plaintext).
+function listAdminKeys() {
+  return loadAdminKeys();
 }
 
-// Delete a key by hash.
-function deleteKey(teacherId, hash) {
-  const keys = loadKeys(teacherId).filter(k => k.hash !== hash);
-  fs.mkdirSync(path.dirname(keysPath(teacherId)), { recursive: true });
-  writeJsonAtomic(keysPath(teacherId), keys);
+// Delete an admin key by hash.
+function deleteAdminKey(hash) {
+  const keys = loadAdminKeys().filter(k => k.hash !== hash);
+  writeJsonAtomic(ADMIN_KEYS_PATH, keys);
 }
 
-// Verify a plaintext key and return the teacher ID if valid.
-// On success, also record lastUsedAt.
+// Verify a plaintext Bearer key.
+// Returns { isAdmin: true } if it matches an admin key, or null if invalid.
+// On match, records lastUsedAt.
 function verifyKey(plainKey) {
   const hash = hashKey(plainKey);
-  // Scan all teachers' keys (slow but simple; optimize later with an index if needed).
-  const usersDir = path.join(DATA_DIR, 'users');
-  if (!fs.existsSync(usersDir)) return null;
-  for (const teacherId of fs.readdirSync(usersDir)) {
-    const keys = loadKeys(teacherId);
-    const found = keys.find(k => k.hash === hash);
-    if (found) {
-      // Update lastUsedAt
-      found.lastUsedAt = new Date().toISOString();
-      const allKeys = loadKeys(teacherId);
-      writeJsonAtomic(keysPath(teacherId), allKeys);
-      return teacherId;
-    }
+
+  // Check admin keys first.
+  const adminKeys = loadAdminKeys();
+  const adminMatch = adminKeys.find(k => k.hash === hash);
+  if (adminMatch) {
+    adminMatch.lastUsedAt = new Date().toISOString();
+    writeJsonAtomic(ADMIN_KEYS_PATH, adminKeys);
+    return { isAdmin: true };
   }
+
   return null;
 }
 
-module.exports = { generateKey, createKey, listKeys, deleteKey, verifyKey };
+module.exports = { generateKey, createAdminKey, listAdminKeys, deleteAdminKey, verifyKey };

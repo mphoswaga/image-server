@@ -70,6 +70,10 @@ function getUserById(id) {
   return u ? publicUser(u) : null;
 }
 
+function listAllUserIds() {
+  return Object.keys(loadUsers());
+}
+
 // Express middleware: require a logged-in teacher (sets req.userId + req.user).
 function requireAuth(req, res, next) {
   const token = req.cookies && req.cookies[COOKIE_NAME];
@@ -89,4 +93,4 @@ function requireAdmin(req, res, next) {
   });
 }
 
-module.exports = { signup, login, issueToken, verifyToken, getUserById, requireAuth, requireAdmin, COOKIE_NAME };
+module.exports = { signup, login, issueToken, verifyToken, getUserById, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME };

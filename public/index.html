@@ -403,7 +403,7 @@
   <!-- TOP NAV -->
   <nav id="nav" class="nav" style="display:none">
     <span class="logo"><span class="brandmark"><svg class="ic" aria-hidden="true"><use href="#i-grad"/></svg></span><span class="wordmark">Lesson<span class="cope">Cope</span></span></span>
-    <span class="user"><button id="rostersBtn" class="logout"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Rosters</button><button id="gamesBtn" class="logout"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> My games</button><button id="apiBtn" class="logout"><svg class="ic" aria-hidden="true"><use href="#i-shuffle"/></svg> API</button><button id="adminBtn" class="logout" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg> Admin</button><span id="navAvatar" class="avatar"></span><span id="navName"></span><button id="logoutBtn" class="logout"><svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg> Log out</button></span>
+    <span class="user"><button id="rostersBtn" class="logout"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Rosters</button><button id="gamesBtn" class="logout"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> My games</button><button id="adminBtn" class="logout" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg> Admin</button><span id="navAvatar" class="avatar"></span><span id="navName"></span><button id="logoutBtn" class="logout"><svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg> Log out</button></span>
   </nav>
 
   <div class="wrap" id="app" style="display:none">
@@ -550,6 +550,26 @@
       <button id="addImgBtn" class="btn primary full"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg> Add images</button>
       <div id="adminStatus" class="status"></div>
 
+      <h3 class="admin-h"><svg class="ic" aria-hidden="true"><use href="#i-shuffle"/></svg> External API keys</h3>
+      <p class="hint">API keys let your external apps (e.g. report card writer) pull all student names, IDs, and game results across every class. Keys are shown once — keep them safe!</p>
+      <details id="apiGenDetails" style="margin-bottom:18px">
+        <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--primary)">+ Generate new API key</summary>
+        <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
+          <input id="apiLabel" type="text" maxlength="50" placeholder="Key description (e.g. Report Card App)" style="max-width:340px" />
+          <button id="apiGenBtn" class="btn primary" style="width:auto;padding:10px 18px">Generate key</button>
+        </div>
+      </details>
+      <div id="apiKeysList" style="margin-bottom:16px"></div>
+      <div id="apiKeyDisplay" style="display:none;background:#f0faf4;border:1px solid var(--ok);border-radius:12px;padding:16px;margin-bottom:16px">
+        <p style="font-size:12px;color:var(--muted);margin:0 0 10px;text-transform:uppercase;font-weight:700">Your new API key (copy now — shown once)</p>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <code id="apiKeyValue" style="flex:1;min-width:200px;background:#fff;border:1px solid var(--ok);border-radius:8px;padding:10px 12px;font-size:13px;font-weight:600;font-family:monospace;word-break:break-all"></code>
+          <button id="apiKeyCopyBtn" class="btn primary" style="width:auto;padding:10px 16px">Copy</button>
+        </div>
+        <p style="font-size:11.5px;color:var(--muted);margin:8px 0 0">Use in your app: <code>Authorization: Bearer &lt;key&gt;</code></p>
+      </div>
+      <p class="hint" style="margin-top:4px">Endpoints: <code>GET /api/v1/students</code> &nbsp;·&nbsp; <code>GET /api/v1/rosters</code> &nbsp;·&nbsp; <code>GET /api/v1/roster/:id/progress</code></p>
+
       <h3 style="display:flex;align-items:center;gap:8px;margin:26px 0 10px;font-size:15px;color:var(--primary)"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Current library <span id="adminTotal" style="color:var(--muted);font-weight:500;font-size:13px"></span></h3>
       <div id="adminStats" class="admin-stats"></div>
       <div style="margin-top:20px"><button id="adminBack" class="btn ghost">← Back to app</button></div>
@@ -642,32 +662,6 @@
     </div>
   </div>
 
-  <!-- API KEYS PANEL -->
-  <div class="wrap" id="apiWrap" style="display:none">
-    <div class="card wide">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap">
-        <button id="apiBack" class="btn ghost" style="width:auto;padding:8px 14px;font-size:13px"><svg class="ic" aria-hidden="true"><use href="#i-arrow" style="transform:scaleX(-1)"/></svg> Back</button>
-        <h2 id="apiTitle" style="margin:0;font-size:20px;font-weight:700;flex:1">API Keys</h2>
-      </div>
-      <p class="hint">Generate an API key for your external app to pull student data, marks, and progress. Keys are shown once — keep them safe!</p>
-      <details style="margin-bottom:18px">
-        <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--primary)">+ Generate new API key</summary>
-        <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
-          <input id="apiLabel" type="text" maxlength="50" placeholder="Key description (e.g. Report Card App)" style="max-width:340px" />
-          <button id="apiGenBtn" class="btn primary" style="width:auto;padding:10px 18px">Generate key</button>
-        </div>
-      </details>
-      <div id="apiKeysList" style="margin-bottom:16px"></div>
-      <div id="apiKeyDisplay" style="display:none;background:#f0faf4;border:1px solid var(--ok);border-radius:12px;padding:16px;margin-bottom:16px">
-        <p style="font-size:12px;color:var(--muted);margin:0 0 10px;text-transform:uppercase;font-weight:700">Your new API key (copy now — shown once)</p>
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <code id="apiKeyValue" style="flex:1;min-width:200px;background:#fff;border:1px solid var(--ok);border-radius:8px;padding:10px 12px;font-size:13px;font-weight:600;font-family:monospace;word-break:break-all"></code>
-          <button id="apiKeyCopyBtn" class="btn primary" style="width:auto;padding:10px 16px">Copy</button>
-        </div>
-        <p style="font-size:11.5px;color:var(--muted);margin:8px 0 0">Use in your app: <code>Authorization: Bearer &lt;key&gt;</code></p>
-      </div>
-    </div>
-  </div>
 
   <!-- IMAGE PICKER: stock library first, web fetch as fallback -->
   <div id="imgPicker" class="modal" style="display:none" role="dialog" aria-modal="true" aria-label="Choose an image">
@@ -1120,7 +1114,7 @@
     function openAdmin(){
       composer.style.display='none'; planStage.style.display='none'; results.style.display='none'; gamesPanel.style.display='none'; if($('rostersPanel')) $('rostersPanel').style.display='none';
       stepsEl.style.display='none'; statusEl.innerHTML=''; adminPanel.style.display='block';
-      loadUsage(); loadStats(); window.scrollTo({top:0,behavior:'smooth'});
+      loadUsage(); loadStats(); loadAPIKeys(); window.scrollTo({top:0,behavior:'smooth'});
     }
     function closeAdmin(){ adminPanel.style.display='none'; stepsEl.style.display='flex'; show('composer'); setStep(1); }
 
@@ -1209,7 +1203,7 @@
 
     // ---- “My games” view ----
     const gamesPanel=$('gamesPanel');
-    function hideAllPanels(){ composer.style.display='none'; planStage.style.display='none'; results.style.display='none'; adminPanel.style.display='none'; gamesPanel.style.display='none'; if($('rostersPanel')) $('rostersPanel').style.display='none'; if($('progressWrap')) $('progressWrap').style.display='none'; if($('apiWrap')) $('apiWrap').style.display='none'; stepsEl.style.display='none'; statusEl.innerHTML=''; }
+    function hideAllPanels(){ composer.style.display='none'; planStage.style.display='none'; results.style.display='none'; adminPanel.style.display='none'; gamesPanel.style.display='none'; if($('rostersPanel')) $('rostersPanel').style.display='none'; if($('progressWrap')) $('progressWrap').style.display='none'; stepsEl.style.display='none'; statusEl.innerHTML=''; }
     function openGames(){ hideAllPanels(); gamesPanel.style.display='block'; loadMyGames(); window.scrollTo({top:0,behavior:'smooth'}); }
     function closeGames(){ gamesPanel.style.display='none'; stepsEl.style.display='flex'; show('composer'); setStep(1); }
     $('gamesBtn').onclick=openGames; $('gamesBack').onclick=closeGames;
@@ -1476,18 +1470,14 @@
       $('rosterCsvSaveBtn').disabled=false;
     });
 
-    // ---- API Keys panel ----
-    function openAPI(){ hideAllPanels(); $('apiWrap').style.display='block'; loadAPIKeys(); window.scrollTo({top:0,behavior:'smooth'}); }
-    function closeAPI(){ $('apiWrap').style.display='none'; stepsEl.style.display='flex'; show('composer'); setStep(1); }
-    $('apiBtn').onclick=openAPI; $('apiBack').onclick=closeAPI;
-
+    // ---- API Keys (admin panel section) ----
     async function loadAPIKeys(){
       const wrap=$('apiKeysList');
       try{
-        const d=await (await fetch('/api/apikeys')).json();
+        const d=await (await fetch('/api/admin/apikeys')).json();
         if(!d.keys||!d.keys.length){ wrap.innerHTML='<p class="hint">No API keys yet — generate one below.</p>'; return; }
-        wrap.innerHTML=d.keys.map(k=>`<div class="tpl-item"><span class="tpl-name">${esc(k.label)}</span><span class="tpl-type">created ${new Date(k.createdAt).toLocaleDateString()}${k.lastUsedAt?' · used '+new Date(k.lastUsedAt).toLocaleDateString():'·never used'}</span><button class="btn ghost tpl-del" data-khash="${esc(k.hash)}" style="padding:6px 10px;font-size:12px;color:var(--err);border-color:var(--err)">Revoke</button></div>`).join('');
-        wrap.querySelectorAll('[data-khash]').forEach(b=>b.addEventListener('click',async()=>{ if(!confirm('Revoke this API key? Apps using it will stop working.')) return; await fetch('/api/apikeys/'+b.dataset.khash,{method:'DELETE'}); loadAPIKeys(); }));
+        wrap.innerHTML=d.keys.map(k=>`<div class="tpl-item"><span class="tpl-name">${esc(k.label)}</span><span class="tpl-type">created ${new Date(k.createdAt).toLocaleDateString()}${k.lastUsedAt?' · used '+new Date(k.lastUsedAt).toLocaleDateString():' · never used'}</span><button class="btn ghost tpl-del" data-khash="${esc(k.hash)}" style="padding:6px 10px;font-size:12px;color:var(--err);border-color:var(--err)">Revoke</button></div>`).join('');
+        wrap.querySelectorAll('[data-khash]').forEach(b=>b.addEventListener('click',async()=>{ if(!confirm('Revoke this API key? Apps using it will stop working.')) return; await fetch('/api/admin/apikeys/'+b.dataset.khash,{method:'DELETE'}); loadAPIKeys(); }));
       }catch{ wrap.innerHTML='<p class="hint err">Could not load API keys.</p>'; }
     }
 
@@ -1495,7 +1485,7 @@
       const label=$('apiLabel').value.trim()||'API Key';
       $('apiGenBtn').disabled=true;
       try{
-        const r=await fetch('/api/apikeys',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label})});
+        const r=await fetch('/api/admin/apikeys',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label})});
         const d=await r.json(); if(!r.ok) throw new Error(d.error);
         $('apiKeyValue').textContent=d.key;
         $('apiKeyDisplay').style.display='block';
