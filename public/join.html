@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Join Game — LessonCope</title>
+  <style>
+    :root { --primary:#1a56a0; --accent:#e8833a; --ink:#1c2331; --muted:#6b7280; --border:#dde3ec; --err:#c0392b; --bg:#f4f6fb; --sh:0 2px 12px rgba(0,0,0,.10); }
+    *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:var(--bg); min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; color:var(--ink); }
+    .logo { display:flex; align-items:center; gap:10px; font-size:20px; font-weight:800; margin-bottom:28px; }
+    .logo svg { width:36px; height:36px; }
+    .cope { color:var(--accent); }
+    .card { background:#fff; border-radius:18px; box-shadow:var(--sh); padding:32px 28px; width:100%; max-width:380px; }
+    h1 { font-size:22px; font-weight:800; margin-bottom:6px; }
+    .sub { color:var(--muted); font-size:14px; margin-bottom:22px; }
+    label { font-size:13px; font-weight:600; display:block; margin-bottom:6px; color:var(--ink); }
+    input { width:100%; padding:13px 14px; font-size:16px; font-family:inherit; border:1.5px solid var(--border); border-radius:12px; background:#fdfdfe; color:var(--ink); transition:.15s; margin-bottom:16px; }
+    input:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 4px rgba(26,86,160,.12); }
+    .code-input { font-size:26px; font-weight:800; letter-spacing:6px; text-align:center; text-transform:uppercase; font-family:ui-monospace,Menlo,Consolas,monospace; }
+    .sid-input { font-family:ui-monospace,Menlo,Consolas,monospace; letter-spacing:1px; }
+    .btn { display:block; width:100%; padding:14px; font-size:15px; font-weight:700; border:none; border-radius:12px; cursor:pointer; background:var(--primary); color:#fff; transition:.15s; }
+    .btn:hover { background:#1346888; }
+    .btn:disabled { opacity:.6; cursor:not-allowed; }
+    .err { color:var(--err); font-size:13px; margin-top:10px; min-height:18px; }
+    .divider { border:none; border-top:1px solid var(--border); margin:20px 0; }
+    #step2 { display:none; }
+    .game-pill { background:#e8f0fb; color:var(--primary); font-size:13px; font-weight:600; border-radius:20px; padding:4px 12px; display:inline-block; margin-bottom:14px; }
+  </style>
+</head>
+<body>
+  <div class="logo">
+    <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="40" height="40" rx="10" fill="#1a56a0"/>
+      <rect x="10" y="10" width="8" height="8" rx="2" fill="white"/>
+      <rect x="22" y="10" width="8" height="8" rx="2" fill="white" opacity=".7"/>
+      <rect x="10" y="22" width="8" height="8" rx="2" fill="white" opacity=".7"/>
+      <rect x="22" y="22" width="8" height="8" rx="2" fill="#e8833a"/>
+    </svg>
+    <span>Lesson<span class="cope">Cope</span></span>
+  </div>
+
+  <div class="card">
+    <!-- Step 1: Room Code -->
+    <div id="step1">
+      <h1>Join a game</h1>
+      <p class="sub">Enter the Room Code your teacher is showing.</p>
+      <form id="codeForm">
+        <label for="roomCode">Room Code</label>
+        <input id="roomCode" class="code-input" type="text" maxlength="6" placeholder="ABC123" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" required />
+        <button class="btn" type="submit" id="codeBtn">Next →</button>
+        <div class="err" id="codeErr"></div>
+      </form>
+    </div>
+
+    <!-- Step 2: Student ID -->
+    <div id="step2">
+      <div class="game-pill" id="gamePill"></div>
+      <h1>Enter your ID</h1>
+      <p class="sub" id="sidSub">Type your Student ID to join.</p>
+      <form id="idForm">
+        <label for="studentId" id="sidLbl">Student ID</label>
+        <input id="studentId" class="sid-input" type="text" maxlength="40" placeholder="e.g. STU-99432" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" required />
+        <button class="btn" type="submit" id="idBtn">Join game →</button>
+        <div class="err" id="idErr"></div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    let resolvedGameId = null;
+
+    // Auto-fill Student ID from QR scan (?sid=...).
+    const params = new URLSearchParams(location.search);
+    const prefillSid = params.get('sid');
+    if (prefillSid) {
+      $('studentId').value = prefillSid.toUpperCase();
+    }
+
+    // Step 1: resolve Room Code → game ID.
+    $('codeForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = $('codeBtn'); btn.disabled = true; $('codeErr').textContent = '';
+      const code = $('roomCode').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+      try {
+        const r = await fetch('/api/join?code=' + encodeURIComponent(code));
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        resolvedGameId = d.gameId;
+        // Check if game has a roster to adjust label.
+        const gMeta = await fetch('/api/game/' + resolvedGameId).then(r => r.json()).catch(() => ({}));
+        if (gMeta.hasRoster === false) {
+          $('sidLbl').textContent = 'Your name';
+          $('studentId').placeholder = 'Enter your first name';
+          $('sidSub').textContent = 'Type your name to join.';
+        }
+        $('gamePill').textContent = gMeta.lessonTitle || 'Lesson game';
+        $('step1').style.display = 'none';
+        $('step2').style.display = 'block';
+        // If QR pre-filled ID, go straight to submission.
+        if (prefillSid) { $('idForm').requestSubmit(); return; }
+        $('studentId').focus();
+      } catch (err) { $('codeErr').textContent = err.message; }
+      btn.disabled = false;
+    });
+
+    // Step 2: enter game with Student ID.
+    $('idForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = $('idBtn'); btn.disabled = true; $('idErr').textContent = '';
+      const studentId = $('studentId').value.trim().toUpperCase();
+      try {
+        const r = await fetch('/api/game/' + resolvedGameId + '/enter', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentId }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        // Redirect to the play page with the game ID.
+        location.href = '/play/' + resolvedGameId;
+      } catch (err) { $('idErr').textContent = err.message; btn.disabled = false; }
+    });
+
+    // If ?sid= was in URL and we have no room code yet, show step 1 still.
+    // Auto-capitalise room code input.
+    $('roomCode').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
+    $('studentId').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase(); });
+  </script>
+</body>
+</html>

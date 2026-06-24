@@ -18,6 +18,7 @@ const { generateDiagram } = require('./svg-diagram');
 const { generateWorksheet, generateExitTicket, generateGame } = require('./lesson-pack');
 const { worksheetDocx, exitTicketDocx } = require('./docgen');
 const games = require('./games');
+const roster = require('./roster');
 
 // Add transitions/animations; never let it break the download.
 function safeAnimate(buffer, band) {
@@ -27,6 +28,39 @@ function safeAnimate(buffer, band) {
 const { signup, login, issueToken, verifyToken, getUserById, requireAuth, requireAdmin, COOKIE_NAME } = require('./auth');
 const { runWithUser } = require('./ai-client');
 const usage = require('./usage');
+const jwt = require('jsonwebtoken');
+
+const GAME_COOKIE = 'lc_game';
+const JWT_SECRET = (() => {
+  try { return require('fs').readFileSync(require('path').join(require('./storage').DATA_DIR, '.session-secret'), 'utf8').trim(); } catch { return process.env.JWT_SECRET || 'dev-secret'; }
+})();
+
+// Issue a short-lived student game session (8 h).
+function issueGameToken(payload) {
+  return jwt.sign({ type: 'game', ...payload }, JWT_SECRET, { expiresIn: '8h' });
+}
+
+// Accepts either lc_game (student) or lc_token (teacher).
+// Student path: sets req.gameSession = { studentId, gameId, name }.
+// Teacher path: sets req.userId (existing behaviour).
+function requireGameAccess(req, res, next) {
+  const gameTok = req.cookies && req.cookies[GAME_COOKIE];
+  if (gameTok) {
+    try {
+      const p = jwt.verify(gameTok, JWT_SECRET);
+      if (p.type === 'game') { req.gameSession = { studentId: p.studentId, gameId: p.gameId, name: p.name }; return next(); }
+    } catch {}
+  }
+  // Fall back to teacher token.
+  const tok = req.cookies && req.cookies[COOKIE_NAME];
+  if (tok) {
+    try {
+      const p = verifyToken(tok);
+      if (p) { req.userId = p; req.user = getUserById(p) || {}; return next(); }
+    } catch {}
+  }
+  res.status(401).json({ error: 'Not authenticated.' });
+}
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -506,61 +540,166 @@ app.post('/api/game', requireAuth, async (req, res) => {
   try {
     const game = await generateGame({ subject: deck.subject, topic: deck.topic, grade: deck.grade, tone: deck.tone, objectives: deck.objectives || '', lessonPlanText: deck.lessonPlanText || '' });
     const lessonTitle = (deck.slides.find(s => s.type === 'title') || {}).title || deck.topic;
-    const rec = games.createGame({ teacherId: req.userId, teacherName: req.user.name, lessonTitle, subject: deck.subject, topic: deck.topic, grade: deck.grade, game });
-    res.json({ gameId: rec.id, path: `/play/${rec.id}`, questionCount: rec.questions.length });
+    const rosterId = (req.body && req.body.rosterId) || null;
+    const rec = games.createGame({ teacherId: req.userId, teacherName: req.user.name, lessonTitle, subject: deck.subject, topic: deck.topic, grade: deck.grade, game, rosterId });
+    res.json({ gameId: rec.id, path: `/play/${rec.id}`, questionCount: rec.questions.length, roomCode: rec.roomCode });
   } catch (err) {
     console.error('Game creation failed:', err.message);
     res.status(400).json({ error: err.message });
   }
 });
 
-// Student: lesson summary + meta (NO correct answers).
-app.get('/api/game/:id', requireAuth, (req, res) => {
+// Student: enter a game with their Student ID — issues a short-lived game session.
+// If the game has an attached roster, the studentId is verified against it.
+// If no roster, any non-empty string is accepted as a free-form name.
+app.post('/api/game/:id/enter', async (req, res) => {
   const g = games.getGame(req.params.id);
   if (!g) return res.status(404).json({ error: 'Game not found.' });
-  res.json({ id: g.id, lessonTitle: g.lessonTitle, subject: g.subject, topic: g.topic, grade: g.grade, summary: g.summary, questionCount: (g.questions || []).length, teacherName: g.teacherName });
+  const studentId = String(req.body && req.body.studentId || '').trim();
+  if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
+  let displayName = studentId;
+  if (g.rosterId) {
+    const teacher = getUserById(g.teacherId);
+    const s = teacher ? roster.findStudentInRoster(g.teacherId, g.rosterId, studentId) : null;
+    if (!s) return res.status(403).json({ error: 'Student ID not found. Check with your teacher.' });
+    displayName = s.name;
+  }
+  const token = issueGameToken({ gameId: g.id, studentId, name: displayName });
+  res.cookie(GAME_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: 8 * 60 * 60 * 1000 });
+  res.json({ name: displayName });
+});
+
+// Public: resolve a Room Code to a game ID (for the /join page).
+app.get('/api/join', (req, res) => {
+  const code = String(req.query.code || '').trim().toUpperCase();
+  if (!code) return res.status(400).json({ error: 'Enter a Room Code.' });
+  const gameId = games.getRoomCode(code);
+  if (!gameId) return res.status(404).json({ error: 'Room not found. Check the code and try again.' });
+  res.json({ gameId });
+});
+
+// Student: lesson summary + meta (NO correct answers).
+app.get('/api/game/:id', requireGameAccess, (req, res) => {
+  const g = games.getGame(req.params.id);
+  if (!g) return res.status(404).json({ error: 'Game not found.' });
+  // Students must hold a session for THIS game.
+  if (req.gameSession && req.gameSession.gameId !== g.id) return res.status(403).json({ error: 'Session is for a different game.' });
+  const hasRoster = !!g.rosterId;
+  res.json({ id: g.id, lessonTitle: g.lessonTitle, subject: g.subject, topic: g.topic, grade: g.grade, summary: g.summary, questionCount: (g.questions || []).length, teacherName: g.teacherName, hasRoster });
 });
 
 // Student: the questions, WITHOUT the correct answers.
-app.get('/api/game/:id/play', requireAuth, (req, res) => {
+app.get('/api/game/:id/play', requireGameAccess, (req, res) => {
   const g = games.getGame(req.params.id);
   if (!g) return res.status(404).json({ error: 'Game not found.' });
+  if (req.gameSession && req.gameSession.gameId !== g.id) return res.status(403).json({ error: 'Session is for a different game.' });
   res.json({ questions: g.questions.map((q, i) => ({ i, question: q.question, options: q.options })) });
 });
 
 // Student: check one answer (instant feedback).
-app.post('/api/game/:id/answer', requireAuth, (req, res) => {
+app.post('/api/game/:id/answer', requireGameAccess, (req, res) => {
   const g = games.getGame(req.params.id);
   if (!g) return res.status(404).json({ error: 'Game not found.' });
+  if (req.gameSession && req.gameSession.gameId !== g.id) return res.status(403).json({ error: 'Session is for a different game.' });
   const q = g.questions[Number(req.body.questionIndex)];
   if (!q) return res.status(400).json({ error: 'bad question' });
   res.json({ correct: Number(req.body.choice) === q.correctIndex, correctIndex: q.correctIndex, explanation: q.explanation });
 });
 
 // Student: finish — server re-scores authoritatively + stores the attempt.
-app.post('/api/game/:id/finish', requireAuth, (req, res) => {
+app.post('/api/game/:id/finish', requireGameAccess, (req, res) => {
   const g = games.getGame(req.params.id);
   if (!g) return res.status(404).json({ error: 'Game not found.' });
+  if (req.gameSession && req.gameSession.gameId !== g.id) return res.status(403).json({ error: 'Session is for a different game.' });
   const answers = Array.isArray(req.body.answers) ? req.body.answers : [];
   let score = 0;
   g.questions.forEach((q, i) => { if (Number(answers[i]) === q.correctIndex) score++; });
-  games.recordResult(g.id, { studentId: req.userId, name: req.user.name || req.user.email, score, total: g.questions.length, answers });
+  // Use student session identity (ID + display name); teacher fallback for legacy.
+  const studentId = (req.gameSession && req.gameSession.studentId) || req.userId || 'unknown';
+  const name = (req.gameSession && req.gameSession.name) || (req.user && (req.user.name || req.user.email)) || studentId;
+  games.recordResult(g.id, { studentId, name, score, total: g.questions.length, answers });
   res.json({ score, total: g.questions.length });
 });
 
 // Teacher: results for one of their games (owner only).
+// If the game has a roster, join real names from it.
 app.get('/api/game/:id/results', requireAuth, (req, res) => {
   const g = games.getGame(req.params.id);
   if (!g) return res.status(404).json({ error: 'Game not found.' });
   if (g.teacherId !== req.userId) return res.status(403).json({ error: 'Not your game.' });
+  const rosterData = g.rosterId ? roster.getRoster(req.userId, g.rosterId) : null;
+  const rosterMap = rosterData ? Object.fromEntries(rosterData.students.map(s => [s.id, s.name])) : {};
   const results = games.getResults(g.id)
-    .map(r => ({ name: r.name, score: r.score, total: r.total, at: r.at, attempts: r.attempts }))
+    .map(r => ({
+      studentId: r.studentId,
+      name: rosterMap[r.studentId] || r.name,
+      score: r.score, total: r.total, at: r.at, attempts: r.attempts,
+    }))
     .sort((a, b) => b.score - a.score || (a.at < b.at ? -1 : 1));
-  res.json({ lessonTitle: g.lessonTitle, questionCount: g.questions.length, results });
+  res.json({ lessonTitle: g.lessonTitle, questionCount: g.questions.length, roomCode: g.roomCode, results });
 });
 
 // Teacher: list my games.
 app.get('/api/games', requireAuth, (req, res) => res.json({ games: games.listTeacherGames(req.userId) }));
+
+// ── Class rosters ──────────────────────────────────────────────────────────────
+// Upload a CSV roster (studentId,name — one per line).
+app.post('/api/roster', requireAuth, express.text({ type: '*/*', limit: '500kb' }), (req, res) => {
+  const name = String(req.query.name || req.headers['x-roster-name'] || 'Class roster').slice(0, 60).trim();
+  const csvText = req.body || '';
+  if (!csvText.trim()) return res.status(400).json({ error: 'CSV is empty.' });
+  try {
+    const r = roster.saveRoster(req.userId, { name, csvText });
+    res.json({ id: r.id, name: r.name, count: r.students.length });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+app.get('/api/rosters', requireAuth, (req, res) => res.json({ rosters: roster.listRosters(req.userId) }));
+
+app.delete('/api/roster/:id', requireAuth, (req, res) => {
+  const r = roster.getRoster(req.userId, req.params.id);
+  if (!r) return res.status(404).json({ error: 'Roster not found.' });
+  roster.deleteRoster(req.userId, req.params.id);
+  res.json({ ok: true });
+});
+
+// Teacher: printable QR card sheet for a game's attached roster.
+app.get('/api/game/:id/qr-sheet', requireAuth, async (req, res) => {
+  const g = games.getGame(req.params.id);
+  if (!g) return res.status(404).json({ error: 'Game not found.' });
+  if (g.teacherId !== req.userId) return res.status(403).json({ error: 'Not your game.' });
+  if (!g.rosterId) return res.status(400).json({ error: 'This game has no roster attached.' });
+  const r = roster.getRoster(req.userId, g.rosterId);
+  if (!r) return res.status(404).json({ error: 'Roster not found.' });
+  const qrcode = require('qrcode');
+  const baseUrl = `${req.protocol}://${req.get('host')}/join`;
+  const cards = await Promise.all(r.students.map(async s => {
+    const url = `${baseUrl}?sid=${encodeURIComponent(s.id)}`;
+    const svg = await qrcode.toString(url, { type: 'svg', margin: 1, width: 150 });
+    return `<div class="card"><div class="qr">${svg}</div><div class="sid">${esc(s.id)}</div><div class="sname">${esc(s.name)}</div></div>`;
+  }));
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>QR Cards — ${esc(g.lessonTitle)}</title>
+<style>body{font-family:sans-serif;margin:0;padding:20px;background:#fff}
+.header{text-align:center;margin-bottom:20px;padding-bottom:16px;border-bottom:2px solid #333}
+.header h1{margin:0;font-size:22px}.header .code{font-size:36px;font-weight:900;letter-spacing:4px;color:#1a56a0;background:#e8f0fb;display:inline-block;padding:8px 20px;border-radius:8px;margin-top:8px}
+.grid{display:flex;flex-wrap:wrap;gap:12px;justify-content:flex-start}
+.card{border:1px dashed #999;border-radius:8px;padding:10px;text-align:center;width:170px;break-inside:avoid}
+.card .qr svg{width:140px;height:140px}.card .sid{font-size:11px;color:#666;margin:4px 0 2px;font-family:monospace}
+.card .sname{font-size:13px;font-weight:600}
+@media print{.no-print{display:none}body{padding:0}.header{margin-bottom:12px}}</style></head>
+<body><div class="header no-print"><h1>${esc(g.lessonTitle)} — Student QR Cards</h1>
+<p style="margin:4px 0">Lesson Room Code: <span class="code">${esc(g.roomCode || '')}</span></p>
+<p style="color:#666;font-size:13px">Cut out each card and hand it to the matching student. They scan it to join any game — the Room Code is entered separately.</p>
+<button onclick="window.print()" style="margin-top:10px;padding:8px 18px;font-size:14px;cursor:pointer">Print</button></div>
+<div class="header" style="display:none" class="print-only"><h1>${esc(g.lessonTitle)}</h1><div class="code">${esc(g.roomCode || '')}</div></div>
+<div class="grid">${cards.join('')}</div></body></html>`;
+  res.setHeader('Content-Type', 'text/html');
+  res.send(html);
+});
+
+// Student join page (Room Code entry).
+app.get('/join', (req, res) => res.sendFile(path.join(__dirname, 'public', 'join.html')));
 
 // Student play page (the shareable link target).
 app.get('/play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'play.html')));

@@ -371,7 +371,7 @@
   <!-- TOP NAV -->
   <nav id="nav" class="nav" style="display:none">
     <span class="logo"><span class="brandmark"><svg class="ic" aria-hidden="true"><use href="#i-grad"/></svg></span><span class="wordmark">Lesson<span class="cope">Cope</span></span></span>
-    <span class="user"><button id="gamesBtn" class="logout"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> My games</button><button id="adminBtn" class="logout" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg> Admin</button><span id="navAvatar" class="avatar"></span><span id="navName"></span><button id="logoutBtn" class="logout"><svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg> Log out</button></span>
+    <span class="user"><button id="rostersBtn" class="logout"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Rosters</button><button id="gamesBtn" class="logout"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> My games</button><button id="adminBtn" class="logout" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg> Admin</button><span id="navAvatar" class="avatar"></span><span id="navName"></span><button id="logoutBtn" class="logout"><svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg> Log out</button></span>
   </nav>
 
   <div class="wrap" id="app" style="display:none">
@@ -484,8 +484,14 @@
 
       <!-- Student game: a shareable link + live results -->
       <section id="gameSection" class="card wide" style="margin-top:24px">
-        <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> Student game <span class="hint-i" tabindex="0" role="img" aria-label="Creates a link you share with students. They log in, revise a summary of this lesson, then play a quick multiple-choice game. Their scores are saved here." data-tip="Creates a link you share with students. They log in, revise a summary of this lesson, then play a quick multiple-choice game. Their scores are saved here.">i</span></h2>
-        <p class="hint">Generate a link students open to revise this lesson, then play a quick quiz — their scores appear here.</p>
+        <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> Student game <span class="hint-i" tabindex="0" role="img" aria-label="Creates a link you share with students. Students enter the Room Code + their Student ID — no email or password needed. Their scores are saved here." data-tip="Creates a link you share with students. Students enter the Room Code + their Student ID — no email or password needed. Their scores are saved here.">i</span></h2>
+        <p class="hint">Share the Room Code on the board — students go to <b>lessonco.pe/join</b> and type it in. No sign-up needed.</p>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px">
+          <label for="gameRosterPick" style="font-size:13px;font-weight:600;white-space:nowrap">Class roster <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+          <select id="gameRosterPick" style="width:auto;min-width:180px;font-size:13px;padding:8px 10px">
+            <option value="">— No roster (free-form names) —</option>
+          </select>
+        </div>
         <button type="button" id="makeGameBtn" class="btn accent" style="width:auto"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Create student game</button>
         <div id="gamePanel" style="display:none;margin-top:16px"></div>
       </section>
@@ -520,9 +526,30 @@
     <!-- MY GAMES -->
     <section id="gamesPanel" class="card wide" style="display:none">
       <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> My games</h2>
-      <p class="hint">Every student game you've created, and how your students scored.</p>
+      <p class="hint">Every student game you've created. Share the Room Code on the board — students go to <b>/join</b> and type it in with their Student ID.</p>
       <div id="gamesList" class="admin-stats"></div>
       <div style="margin-top:20px"><button id="gamesBack" class="btn ghost">← Back to app</button></div>
+    </section>
+
+    <!-- CLASS ROSTERS -->
+    <section id="rostersPanel" class="card wide" style="display:none">
+      <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> Class rosters</h2>
+      <p class="hint">Upload your class list so students are verified by Student ID — no email or password needed. One CSV per class, two columns: <code>studentId,name</code>.</p>
+      <div id="rosterList" style="margin-bottom:16px"></div>
+      <details style="margin-bottom:12px">
+        <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--primary)">+ Add a new roster</summary>
+        <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
+          <input id="rosterName" type="text" maxlength="60" placeholder="Class name (e.g. Grade 5A)" style="max-width:340px" />
+          <p style="font-size:12.5px;color:var(--muted);margin:0">Paste or upload a CSV: one student per line, format <code>studentId,name</code></p>
+          <textarea id="rosterCsv" rows="6" placeholder="STU-99432,Alice Johnson&#10;STU-99433,Bob Smith&#10;STU-99434,Charlie Brown" style="font-family:monospace;font-size:13px;max-width:440px"></textarea>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button id="rosterUploadBtn" class="btn primary" style="width:auto;padding:10px 16px">Upload roster</button>
+            <label style="cursor:pointer"><input id="rosterFileInput" type="file" accept=".csv,.txt" style="display:none" /><span class="btn ghost" style="display:inline-block;padding:10px 14px;font-size:13px">Import CSV file</span></label>
+          </div>
+          <div id="rosterErr" class="field-err"></div>
+        </div>
+      </details>
+      <div style="margin-top:16px"><button id="rostersBack" class="btn ghost">← Back to app</button></div>
     </section>
   </div>
 
@@ -968,14 +995,14 @@
       const first=(user.name||'').trim().split(/\s+/)[0];
       $('greeting').innerHTML=first?`Welcome back, <span class="hi">${esc(first)}</span>`:'Plan a lesson';
       $('adminBtn').style.display = user.role==='admin' ? 'inline-flex' : 'none';
-      loadLibrary(); loadTemplates();
+      loadLibrary(); loadTemplates(); loadRosters(true);
     }
     function showAuth(){ authScreen.style.display='block'; nav.style.display='none'; appEl.style.display='none'; setMode('login'); }
 
     // ---- admin ----
     const adminPanel=$('adminPanel'), hero=document.querySelector('.hero'), stepsEl=document.querySelector('.steps');
     function openAdmin(){
-      composer.style.display='none'; planStage.style.display='none'; results.style.display='none';
+      composer.style.display='none'; planStage.style.display='none'; results.style.display='none'; gamesPanel.style.display='none'; if($('rostersPanel')) $('rostersPanel').style.display='none';
       stepsEl.style.display='none'; statusEl.innerHTML=''; adminPanel.style.display='block';
       loadUsage(); loadStats(); window.scrollTo({top:0,behavior:'smooth'});
     }
@@ -1043,15 +1070,20 @@
     function resetGameSection(){ $('makeGameBtn').disabled=false; $('makeGameBtn').innerHTML=`${ICON('i-spark')} Create student game`; $('gamePanel').style.display='none'; $('gamePanel').innerHTML=''; }
     function copyLink(url){ if(navigator.clipboard){ navigator.clipboard.writeText(url).then(()=>toast('Link copied','ok')).catch(()=>toast('Copy failed — select and copy manually')); } else toast('Copy not supported — select the link'); }
     $('makeGameBtn').addEventListener('click', async ()=>{
-      const b=$('makeGameBtn'); b.disabled=true; const o=b.innerHTML; b.innerHTML='<span class="spinner"></span>Building game…';
-      try{ const r=await fetch('/api/game',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deckId:currentDeckId})});
+      const b=$('makeGameBtn'); b.disabled=true; const o=b.innerHTML; b.innerHTML='<span class=”spinner”></span>Building game…';
+      const rosterId=$('gameRosterPick').value||null;
+      try{ const r=await fetch('/api/game',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deckId:currentDeckId,rosterId})});
         const d=await r.json(); if(!r.ok) throw new Error(d.error);
         const url=location.origin+d.path;
+        const joinUrl=location.origin+'/join';
         $('gamePanel').style.display='block';
-        $('gamePanel').innerHTML=`<div class="game-link"><input id="gameUrl" readonly value="${esc(url)}"><button type="button" class="btn ghost" id="copyGameBtn" style="width:auto;padding:10px 14px">${ICON('i-doc')} Copy link</button></div>
-          <p class="hint" style="margin:10px 0 2px">${d.questionCount} questions · share this link with your class.</p>
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px"><b style="font-size:14px;color:var(--primary)">Results</b><button type="button" id="refreshResBtn" style="font-size:12.5px;font-weight:600;padding:6px 11px;border:1px solid var(--border);border-radius:9px;background:#fff;color:var(--primary);cursor:pointer;display:inline-flex;align-items:center;gap:6px">${ICON('i-refresh')} Refresh</button></div>
-          <div id="gameResults"></div>`;
+        $('gamePanel').innerHTML=`
+          ${d.roomCode?`<div style=”margin-bottom:14px”><p style=”font-size:13px;font-weight:600;margin-bottom:6px”>Room Code — show this on the board:</p><div style=”font-size:36px;font-weight:900;letter-spacing:6px;color:var(--primary);background:#e8f0fb;display:inline-block;padding:10px 20px;border-radius:10px”>${esc(d.roomCode)}</div><p class=”hint” style=”margin-top:6px”>Students go to <b>${esc(joinUrl)}</b> and type this code.</p></div>`:''}
+          <div class=”game-link”><input id=”gameUrl” readonly value=”${esc(url)}”><button type=”button” class=”btn ghost” id=”copyGameBtn” style=”width:auto;padding:10px 14px”>${ICON('i-doc')} Copy link</button></div>
+          <p class=”hint” style=”margin:10px 0 2px”>${d.questionCount} questions · ${rosterId?'roster attached':'no roster — free-form names'}.</p>
+          ${d.roomCode&&rosterId?`<a href=”/api/game/${esc(d.gameId)}/qr-sheet” target=”_blank” style=”font-size:13px;font-weight:600;color:var(--primary);display:inline-flex;align-items:center;gap:4px;margin-bottom:8px”>${ICON('i-image')} Print QR cards</a>`:''}
+          <div style=”display:flex;justify-content:space-between;align-items:center;margin-top:12px”><b style=”font-size:14px;color:var(--primary)”>Results</b><button type=”button” id=”refreshResBtn” style=”font-size:12.5px;font-weight:600;padding:6px 11px;border:1px solid var(--border);border-radius:9px;background:#fff;color:var(--primary);cursor:pointer;display:inline-flex;align-items:center;gap:6px”>${ICON('i-refresh')} Refresh</button></div>
+          <div id=”gameResults”></div>`;
         $('copyGameBtn').addEventListener('click',()=>copyLink(url));
         $('refreshResBtn').addEventListener('click',()=>loadGameResults(d.gameId,'gameResults'));
         loadGameResults(d.gameId,'gameResults');
@@ -1059,23 +1091,73 @@
       }catch(err){ toast(err.message); b.disabled=false; b.innerHTML=o; }
     });
 
-    // ---- "My games" view ----
+    // ---- “My games” view ----
     const gamesPanel=$('gamesPanel');
-    function openGames(){ composer.style.display='none'; planStage.style.display='none'; results.style.display='none'; adminPanel.style.display='none';
-      stepsEl.style.display='none'; statusEl.innerHTML=''; gamesPanel.style.display='block'; loadMyGames(); window.scrollTo({top:0,behavior:'smooth'}); }
+    function hideAllPanels(){ composer.style.display='none'; planStage.style.display='none'; results.style.display='none'; adminPanel.style.display='none'; gamesPanel.style.display='none'; if($('rostersPanel')) $('rostersPanel').style.display='none'; stepsEl.style.display='none'; statusEl.innerHTML=''; }
+    function openGames(){ hideAllPanels(); gamesPanel.style.display='block'; loadMyGames(); window.scrollTo({top:0,behavior:'smooth'}); }
     function closeGames(){ gamesPanel.style.display='none'; stepsEl.style.display='flex'; show('composer'); setStep(1); }
     $('gamesBtn').onclick=openGames; $('gamesBack').onclick=closeGames;
-    async function loadMyGames(){ const wrap=$('gamesList'); wrap.innerHTML='<span class="status">Loading…</span>';
+    async function loadMyGames(){ const wrap=$('gamesList'); wrap.innerHTML='<span class=”status”>Loading…</span>';
       try{ const d=await (await fetch('/api/games')).json();
-        if(!d.games||!d.games.length){ wrap.innerHTML='<p class="hint">No games yet — create one from a finished lesson (the “Student game” box under your slides).</p>'; return; }
+        if(!d.games||!d.games.length){ wrap.innerHTML='<p class=”hint”>No games yet — create one from a finished lesson (the “Student game” box under your slides).</p>'; return; }
         wrap.innerHTML=d.games.map(g=>{ const url=location.origin+'/play/'+g.id;
-          return `<div class="game-card"><h4>${esc(g.lessonTitle)}</h4><div class="gmeta">${esc(g.subject)} · ${esc(g.topic)} · ${g.questionCount} questions · ${g.plays} played</div>
-            <div class="game-link"><input readonly value="${esc(url)}"><button type="button" class="btn ghost gcopy" data-url="${esc(url)}" style="width:auto;padding:9px 13px">${ICON('i-doc')} Copy</button></div>
-            <div id="res-${g.id}"></div></div>`; }).join('');
+          return `<div class=”game-card”><h4>${esc(g.lessonTitle)}</h4><div class=”gmeta”>${esc(g.subject)} · ${esc(g.topic)} · ${g.questionCount} questions · ${g.plays} played</div>
+            ${g.roomCode?`<div style=”font-size:22px;font-weight:900;letter-spacing:4px;color:var(--primary);background:#e8f0fb;display:inline-block;padding:5px 14px;border-radius:8px;margin-bottom:10px”>${esc(g.roomCode)}</div>`:''}
+            <div class=”game-link”><input readonly value=”${esc(url)}”><button type=”button” class=”btn ghost gcopy” data-url=”${esc(url)}” style=”width:auto;padding:9px 13px”>${ICON('i-doc')} Copy</button></div>
+            ${g.rosterId?`<a href=”/api/game/${esc(g.id)}/qr-sheet” target=”_blank” style=”font-size:12.5px;font-weight:600;color:var(--primary);display:inline-flex;align-items:center;gap:4px;margin-top:4px”>${ICON('i-image')} QR cards</a>`:''}
+            <div id=”res-${g.id}” style=”margin-top:8px”></div></div>`; }).join('');
         d.games.forEach(g=>loadGameResults(g.id,'res-'+g.id));
         wrap.querySelectorAll('.gcopy').forEach(b=>b.addEventListener('click',()=>copyLink(b.dataset.url)));
-      }catch{ wrap.innerHTML='<span class="status err">Could not load games.</span>'; }
+      }catch{ wrap.innerHTML='<span class=”status err”>Could not load games.</span>'; }
     }
+
+    // ---- Class rosters ----
+    const rostersPanel=$('rostersPanel');
+    function openRosters(){ hideAllPanels(); rostersPanel.style.display='block'; loadRosters(); window.scrollTo({top:0,behavior:'smooth'}); }
+    function closeRosters(){ rostersPanel.style.display='none'; stepsEl.style.display='flex'; show('composer'); setStep(1); }
+    $('rostersBtn').onclick=openRosters; $('rostersBack').onclick=closeRosters;
+
+    async function loadRosters(populatePicker=true){
+      const wrap=$('rosterList'); if(wrap) wrap.innerHTML='<span class=”status”>Loading…</span>';
+      try{
+        const d=await (await fetch('/api/rosters')).json();
+        if(populatePicker && $('gameRosterPick')){
+          const pick=$('gameRosterPick'); const cur=pick.value;
+          pick.innerHTML='<option value=””>— No roster (free-form names) —</option>'+
+            (d.rosters||[]).map(r=>`<option value=”${esc(r.id)}”>${esc(r.name)} (${r.count} students)</option>`).join('');
+          if(cur) pick.value=cur;
+        }
+        if(!wrap) return;
+        if(!d.rosters||!d.rosters.length){ wrap.innerHTML='<p class=”hint”>No rosters yet — add one below.</p>'; return; }
+        wrap.innerHTML=d.rosters.map(r=>`<div class=”tpl-item”><span class=”tpl-name”>${esc(r.name)}</span><span class=”tpl-type”>${r.count} students</span><button class=”btn ghost tpl-del” data-rid=”${esc(r.id)}” style=”padding:6px 10px;font-size:12px;color:var(--err);border-color:var(--err)”>Delete</button></div>`).join('');
+        wrap.querySelectorAll('.tpl-del').forEach(b=>b.addEventListener('click',async ()=>{
+          if(!confirm('Delete this roster?')) return;
+          await fetch('/api/roster/'+b.dataset.rid,{method:'DELETE'}); loadRosters();
+        }));
+      }catch{ if(wrap) wrap.innerHTML='<p class=”hint err”>Could not load rosters.</p>'; }
+    }
+
+    // Import CSV file into textarea.
+    $('rosterFileInput').addEventListener('change', e=>{
+      const f=e.target.files[0]; if(!f) return;
+      const reader=new FileReader(); reader.onload=ev=>{ $('rosterCsv').value=ev.target.result; if(!$('rosterName').value) $('rosterName').value=f.name.replace(/\.[^.]+$/,''); };
+      reader.readAsText(f);
+    });
+
+    $('rosterUploadBtn').addEventListener('click', async ()=>{
+      const name=$('rosterName').value.trim()||'Class roster';
+      const csv=$('rosterCsv').value.trim();
+      if(!csv){ $('rosterErr').textContent='Paste a CSV first.'; $('rosterErr').classList.add('show'); return; }
+      $('rosterUploadBtn').disabled=true;
+      try{
+        const r=await fetch('/api/roster?name='+encodeURIComponent(name),{method:'POST',headers:{'Content-Type':'text/plain'},body:csv});
+        const d=await r.json(); if(!r.ok) throw new Error(d.error);
+        toast(`Roster “${d.name}” saved — ${d.count} students`,'ok');
+        $('rosterCsv').value=''; $('rosterName').value=''; $('rosterErr').classList.remove('show');
+        loadRosters();
+      }catch(err){ $('rosterErr').textContent=err.message; $('rosterErr').classList.add('show'); }
+      $('rosterUploadBtn').disabled=false;
+    });
 
     (async function init(){
       try{ const r=await fetch('/api/me'); if(r.ok){ const {user}=await r.json(); enterApp(user); return; } }catch{}

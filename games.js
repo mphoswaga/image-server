@@ -8,21 +8,54 @@ const crypto = require('crypto');
 const { DATA_DIR, writeJsonAtomic } = require('./storage');
 
 const GAMES_DIR = path.join(DATA_DIR, 'games');
+const ROOMS_PATH = path.join(GAMES_DIR, '_rooms.json');
 const gamePath = id => path.join(GAMES_DIR, `${id}.json`);
 const resultsPath = id => path.join(GAMES_DIR, `${id}.results.json`);
-const isGameFile = f => f.endsWith('.json') && !f.endsWith('.results.json');
+const isGameFile = f => f.endsWith('.json') && !f.endsWith('.results.json') && f !== '_rooms.json';
 
-function createGame({ teacherId, teacherName, lessonTitle, subject, topic, grade, game }) {
+// 6-char room code using unambiguous chars (no 0/O/1/I/L).
+const ROOM_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+function genRoomCode() {
+  let code = '';
+  const bytes = crypto.randomBytes(6);
+  for (const b of bytes) code += ROOM_CHARS[b % ROOM_CHARS.length];
+  return code;
+}
+
+// Room-code index: { "XK9P4M": "gameId", ... } persisted at ROOMS_PATH.
+function loadRooms() {
+  try { return JSON.parse(fs.readFileSync(ROOMS_PATH, 'utf8')); } catch { return {}; }
+}
+
+function saveRooms(rooms) {
+  fs.mkdirSync(GAMES_DIR, { recursive: true });
+  writeJsonAtomic(ROOMS_PATH, rooms);
+}
+
+function getRoomCode(code) {
+  if (!code) return null;
+  const rooms = loadRooms();
+  return rooms[String(code).toUpperCase()] || null;
+}
+
+function createGame({ teacherId, teacherName, lessonTitle, subject, topic, grade, game, rosterId }) {
   fs.mkdirSync(GAMES_DIR, { recursive: true });
   const id = crypto.randomUUID().slice(0, 8); // short + shareable
+  const roomCode = genRoomCode();
   const rec = {
     id, teacherId, teacherName: teacherName || '',
     lessonTitle: lessonTitle || topic, subject, topic, grade,
+    roomCode,
+    rosterId: rosterId || null,
     summary: game.summary || { overview: game.overview || '', concepts: game.concepts || [] },
     questions: game.questions || [],
     createdAt: new Date().toISOString(),
   };
   writeJsonAtomic(gamePath(id), rec);
+  // Register room code in the index.
+  const rooms = loadRooms();
+  rooms[roomCode] = id;
+  saveRooms(rooms);
   return rec;
 }
 
@@ -59,8 +92,9 @@ function listTeacherGames(teacherId) {
     .map(g => ({
       id: g.id, lessonTitle: g.lessonTitle, subject: g.subject, topic: g.topic, grade: g.grade,
       questionCount: (g.questions || []).length, createdAt: g.createdAt, plays: loadResults(g.id).length,
+      roomCode: g.roomCode || null, rosterId: g.rosterId || null,
     }))
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
-module.exports = { createGame, getGame, recordResult, getResults, listTeacherGames };
+module.exports = { createGame, getGame, recordResult, getResults, listTeacherGames, getRoomCode };

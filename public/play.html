@@ -104,13 +104,11 @@
 
     <div id="authScreen" class="card" style="display:none">
       <h1>Join the lesson game</h1>
-      <p class="sub">Sign in as a student to play and see your results.</p>
-      <div class="tabs"><button id="tabLogin" class="active" type="button">Log in</button><button id="tabSignup" type="button">Sign up</button></div>
+      <p class="sub" id="authSub">Enter your Student ID to join.</p>
       <form id="authForm">
-        <div id="nameRow" style="display:none"><label for="auName">Your name</label><input id="auName" type="text" placeholder="First name" autocomplete="name" /></div>
-        <label for="auEmail">Email</label><input id="auEmail" type="email" placeholder="you@school.edu" autocomplete="email" required />
-        <label for="auPass">Password</label><input id="auPass" type="password" placeholder="At least 6 characters" autocomplete="current-password" required />
-        <div style="margin-top:18px"><button id="authBtn" class="btn primary" type="submit">Log in</button></div>
+        <label for="auSid" id="sidLabel">Student ID</label>
+        <input id="auSid" type="text" placeholder="e.g. STU-99432" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" maxlength="40" required style="font-family:monospace;font-size:18px;letter-spacing:1px" />
+        <div style="margin-top:18px"><button id="authBtn" class="btn primary" type="submit">Join game →</button></div>
         <div id="authErr" class="err"></div>
       </form>
     </div>
@@ -178,27 +176,47 @@
     const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), rnd=n=>Math.floor(Math.random()*n);
     function show(id){ ['loading','authScreen','summaryScreen','pickerScreen','gameScreen','resultScreen'].forEach(s=>$(s).style.display=s===id?'block':'none'); }
 
-    // ---- auth ----
-    let mode='login';
-    function setMode(m){ mode=m; $('tabLogin').classList.toggle('active',m==='login'); $('tabSignup').classList.toggle('active',m==='signup');
-      $('nameRow').style.display=m==='signup'?'block':'none'; $('authBtn').textContent=m==='login'?'Log in':'Create account';
-      $('auPass').setAttribute('autocomplete',m==='login'?'current-password':'new-password'); $('authErr').textContent=''; }
-    $('tabLogin').onclick=()=>setMode('login'); $('tabSignup').onclick=()=>setMode('signup');
-    $('authForm').addEventListener('submit', async e=>{
-      e.preventDefault(); const btn=$('authBtn'); btn.disabled=true; $('authErr').textContent='';
-      const body={ email:$('auEmail').value.trim(), password:$('auPass').value, name:$('auName').value.trim() };
-      try{ const r=await fetch('/api/'+(mode==='login'?'login':'student/signup'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-        const d=await r.json(); if(!r.ok) throw new Error(d.error); await loadGame();
-      }catch(err){ $('authErr').textContent=err.message; } btn.disabled=false;
+    // ---- auth: Student ID entry ----
+    // ?sid= param auto-fills and auto-submits (QR scan path).
+    let _hasRoster = false;
+    function setAuthLabels(hasRoster) {
+      _hasRoster = hasRoster;
+      $('sidLabel').textContent = hasRoster ? 'Student ID' : 'Your name';
+      $('auSid').placeholder = hasRoster ? 'e.g. STU-99432' : 'Enter your first name';
+      $('authSub').textContent = hasRoster ? 'Enter your Student ID to join.' : 'Type your name to join.';
+    }
+    $('authForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = $('authBtn'); btn.disabled = true; $('authErr').textContent = '';
+      const studentId = $('auSid').value.trim().toUpperCase();
+      if (!studentId) { $('authErr').textContent = 'Please enter your ID.'; btn.disabled = false; return; }
+      try {
+        const r = await fetch('/api/game/' + GAME_ID + '/enter', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId }) });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        await loadGame();
+      } catch (err) { $('authErr').textContent = err.message; }
+      btn.disabled = false;
     });
+    // Auto-fill from QR scan (?sid=...) and auto-submit once the game meta loads.
+    const _sidParam = new URLSearchParams(location.search).get('sid');
+    if (_sidParam) { $('auSid').value = _sidParam.toUpperCase(); }
 
     // ---- summary + picker ----
     async function loadGame(){
       show('loading');
       const r=await fetch('/api/game/'+GAME_ID);
-      if(r.status===401){ show('authScreen'); return; }
+      if(r.status===401){
+        // Pre-load game meta to know if it has a roster (to set correct label).
+        // We don't have auth yet, so we'll use a best-effort approach and show the entry form.
+        setAuthLabels(true); // default to Student ID label; updated after entry succeeds
+        // If ?sid= is already filled, attempt auto-submit.
+        if (_sidParam && $('auSid').value) { show('authScreen'); $('authForm').requestSubmit(); return; }
+        show('authScreen'); return;
+      }
       if(!r.ok){ const d=await r.json().catch(()=>({})); $('loading').innerHTML='<p class="center">'+esc(d.error||'Game not found.')+'</p>'; show('loading'); return; }
       game=await r.json();
+      setAuthLabels(!!game.hasRoster);
       $('sumMeta').textContent=`${game.subject} · ${game.topic} · ${game.grade||''}`;
       $('sumTitle').textContent=game.lessonTitle;
       $('sumOverview').textContent=game.summary.overview||'';
