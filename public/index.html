@@ -166,10 +166,12 @@
     .usage-card .v.cost { color:var(--accent); }
     .usage-card .l { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; margin-top:3px; }
     .usage-table { border:1px solid var(--border); border-radius:14px; overflow:hidden; }
-    .usage-table .row { display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:8px; padding:9px 14px; font-size:13px; border-top:1px solid var(--border); align-items:center; }
+    .usage-table .row { display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1fr; gap:8px; padding:9px 14px; font-size:13px; border-top:1px solid var(--border); align-items:center; }
     .usage-table .row:first-child { border-top:none; background:var(--primary-soft); color:var(--primary); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.3px; }
+    .usage-table .row.total-row { background:#f5f7fb; font-weight:700; border-top:2px solid var(--border); }
     .usage-table .row .who { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .usage-table .row .num { text-align:right; font-variant-numeric:tabular-nums; color:var(--muted); }
+    .usage-table .row.total-row .num { color:var(--ink); }
     .usage-table .row .cost { text-align:right; font-weight:700; color:var(--accent); font-variant-numeric:tabular-nums; }
     .usage-models { margin-top:12px; }
     .usage-models summary { cursor:pointer; font-size:13px; color:var(--primary); font-weight:600; }
@@ -1273,9 +1275,12 @@
           ['','Tokens',fmtN((t.promptTokens||0)+(t.completionTokens||0))],
           ['','Images',fmtN(t.images)],
         ].map(([c,l,v])=>`<div class="usage-card"><div class="v ${c}">${v}</div><div class="l">${l}</div></div>`).join('');
-        const head=`<div class="row"><span class="who">Teacher</span><span class="num">Calls</span><span class="num">Tokens</span><span class="cost">Cost</span></div>`;
+        const head=`<div class="row"><span class="who">Teacher</span><span class="num">Calls</span><span class="num">Tokens</span><span class="num">Images</span><span class="cost">Cost</span></div>`;
         const users=(u.byUser||[]);
-        $('usageByUser').innerHTML=head+(users.length?users.map(r=>`<div class="row"><span class="who" title="${esc(r.email)}">${esc(r.email)}${r.name?` · ${esc(r.name)}`:''}</span><span class="num">${fmtN(r.calls)}</span><span class="num">${fmtN((r.promptTokens||0)+(r.completionTokens||0))}</span><span class="cost">${fmtUSD(r.costUSD)}</span></div>`).join(''):`<div class="row"><span class="who" style="color:var(--muted)">No AI usage yet.</span><span></span><span></span><span></span></div>`);
+        const userRows=users.length?users.map(r=>`<div class="row"><span class="who" title="${esc(r.email)}">${esc(r.email)}${r.name?` · ${esc(r.name)}`:''}</span><span class="num">${fmtN(r.calls)}</span><span class="num">${fmtN((r.promptTokens||0)+(r.completionTokens||0))}</span><span class="num">${fmtN(r.images||0)}</span><span class="cost">${fmtUSD(r.costUSD)}</span></div>`).join(''):`<div class="row"><span class="who" style="color:var(--muted)">No AI usage yet.</span><span></span><span></span><span></span><span></span></div>`;
+        const tot=u.totals||{};
+        const totalRow=users.length?`<div class="row total-row"><span class="who">Overall total</span><span class="num">${fmtN(tot.calls)}</span><span class="num">${fmtN((tot.promptTokens||0)+(tot.completionTokens||0))}</span><span class="num">${fmtN(tot.images||0)}</span><span class="cost">${fmtUSD(tot.costUSD)}</span></div>`:'';
+        $('usageByUser').innerHTML=head+userRows+totalRow;
         $('usageByModel').innerHTML=Object.entries(u.byModel||{}).map(([m,b])=>`<div class="usage-mrow"><span>${esc(m)}</span><span>${fmtN(b.calls)} calls${b.images?` · ${fmtN(b.images)} imgs`:''} · <b style="color:var(--accent)">${fmtUSD(b.costUSD)}</b></span></div>`).join('')||'<div class="usage-mrow"><span style="color:var(--muted)">No calls yet.</span></div>';
       }catch{ $('usageCards').innerHTML='<span class="status err">Could not load usage.</span>'; }
     }
