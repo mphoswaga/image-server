@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Authorize — LessonCope</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 16px rgba(0,0,0,.10); width: 100%; max-width: 420px; overflow: hidden; }
+    .card-head { background: #1a56a0; color: #fff; padding: 24px; text-align: center; }
+    .card-head .logo { font-size: 22px; font-weight: 800; letter-spacing: -.5px; }
+    .card-head .tagline { font-size: 13px; opacity: .75; margin-top: 4px; }
+    .card-body { padding: 28px 28px 24px; }
+    h2 { font-size: 17px; font-weight: 700; color: #111; margin-bottom: 20px; line-height: 1.4; text-align: center; }
+    .app-name { color: #1a56a0; }
+    .scopes { background: #f7f9fc; border: 1px solid #e0e6f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 22px; }
+    .scopes p { font-size: 12px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
+    .scope-item { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+    .scope-item:last-child { margin-bottom: 0; }
+    .scope-icon { width: 20px; height: 20px; background: #dbeafe; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+    .scope-icon svg { width: 11px; height: 11px; fill: #1a56a0; }
+    .scope-text strong { display: block; font-size: 13px; color: #111; }
+    .scope-text span { font-size: 12px; color: #666; }
+    .btn-row { display: flex; gap: 10px; margin-top: 8px; }
+    .btn { flex: 1; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: opacity .15s; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-primary { background: #1a56a0; color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: #174d93; }
+    .btn-secondary { background: #f0f2f5; color: #333; }
+    .btn-secondary:hover:not(:disabled) { background: #e4e8ee; }
+    .footer-note { font-size: 11px; color: #999; text-align: center; margin-top: 14px; line-height: 1.5; }
+    label { display: block; font-size: 13px; font-weight: 600; color: #444; margin-bottom: 5px; }
+    input[type=email], input[type=password] {
+      width: 100%; padding: 10px 12px; border: 1px solid #d0d8e4; border-radius: 7px;
+      font-size: 14px; outline: none; margin-bottom: 14px;
+    }
+    input:focus { border-color: #1a56a0; box-shadow: 0 0 0 3px rgba(26,86,160,.12); }
+    .error-msg { background: #fff0f0; border: 1px solid #fbc8c8; border-radius: 7px; padding: 10px 12px; font-size: 13px; color: #c0392b; margin-bottom: 14px; display: none; }
+    .error-msg.show { display: block; }
+    #loading { text-align: center; padding: 48px 0; color: #888; font-size: 14px; }
+    #error-screen { text-align: center; padding: 32px 28px; }
+    #error-screen h2 { color: #c0392b; margin-bottom: 8px; }
+    #error-screen p { font-size: 14px; color: #555; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="card-head">
+    <div class="logo">LessonCope</div>
+    <div class="tagline">Authorization</div>
+  </div>
+  <div class="card-body" id="content">
+    <div id="loading">Loading…</div>
+  </div>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const clientId   = params.get('client_id')    || '';
+const redirectUri = params.get('redirect_uri') || '';
+const rawScope   = params.get('scope')         || '';
+const state      = params.get('state')         || '';
+const respType   = params.get('response_type') || '';
+
+const SCOPE_LABELS = {
+  'profile:read':  { title: 'Your account info',  desc: 'Name and email address' },
+  'rosters:read':  { title: 'Class rosters',       desc: 'Roster names and student IDs' },
+  'results:read':  { title: 'Game results',         desc: 'Quiz scores and progress data' },
+};
+
+const TICK = `<svg viewBox="0 0 12 12"><path d="M1.5 6l3 3 6-6" stroke="#1a56a0" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+
+const content = document.getElementById('content');
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showError(msg) {
+  content.innerHTML = `
+    <div id="error-screen">
+      <h2>Authorization Error</h2>
+      <p>${esc(msg)}</p>
+    </div>`;
+}
+
+function showLoginForm(meta) {
+  const scopes = rawScope.split(/\s+/).filter(s => SCOPE_LABELS[s]);
+  content.innerHTML = `
+    <h2><span class="app-name">${esc(meta.clientName)}</span> wants to access your LessonCope account</h2>
+    <div id="lerr" class="error-msg"></div>
+    <label for="lemail">Your LessonCope email</label>
+    <input id="lemail" type="email" autocomplete="email" placeholder="teacher@school.com">
+    <label for="lpass">Password</label>
+    <input id="lpass" type="password" autocomplete="current-password" placeholder="••••••••">
+    <button id="lbtn" class="btn btn-primary" style="width:100%;margin-bottom:8px">Sign in &amp; continue</button>
+    <p style="font-size:12px;color:#999;text-align:center">Don't have a LessonCope account? <a href="/" style="color:#1a56a0">Sign up</a></p>`;
+
+  const lerr = document.getElementById('lerr');
+  document.getElementById('lbtn').addEventListener('click', async () => {
+    const email = document.getElementById('lemail').value.trim();
+    const password = document.getElementById('lpass').value;
+    if (!email || !password) { lerr.textContent = 'Enter your email and password.'; lerr.classList.add('show'); return; }
+    document.getElementById('lbtn').disabled = true;
+    try {
+      const r = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, password}) });
+      const data = await r.json();
+      if (!r.ok) { lerr.textContent = data.error || 'Sign-in failed.'; lerr.classList.add('show'); document.getElementById('lbtn').disabled = false; return; }
+      showConsentScreen(meta);
+    } catch { lerr.textContent = 'Network error — try again.'; lerr.classList.add('show'); document.getElementById('lbtn').disabled = false; }
+  });
+  document.getElementById('lpass').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('lbtn').click(); });
+}
+
+function showConsentScreen(meta) {
+  const scopes = rawScope.split(/\s+/).filter(s => SCOPE_LABELS[s]);
+  const scopeHtml = scopes.map(s => {
+    const l = SCOPE_LABELS[s];
+    return `<div class="scope-item"><div class="scope-icon">${TICK}</div><div class="scope-text"><strong>${esc(l.title)}</strong><span>${esc(l.desc)}</span></div></div>`;
+  }).join('');
+
+  content.innerHTML = `
+    <h2><span class="app-name">${esc(meta.clientName)}</span> wants to connect to your LessonCope account</h2>
+    <div class="scopes">
+      <p>It will be able to access:</p>
+      ${scopeHtml}
+    </div>
+    <div id="cerr" class="error-msg"></div>
+    <div class="btn-row">
+      <button id="deny-btn" class="btn btn-secondary">Deny</button>
+      <button id="allow-btn" class="btn btn-primary">Allow access</button>
+    </div>
+    <p class="footer-note">You can revoke this access at any time from your LessonCope settings.</p>`;
+
+  const cerr = document.getElementById('cerr');
+
+  async function submit(action) {
+    document.getElementById('allow-btn').disabled = true;
+    document.getElementById('deny-btn').disabled = true;
+    try {
+      const r = await fetch('/oauth/authorize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: clientId, redirect_uri: redirectUri, scope: rawScope, state, action }),
+      });
+      const data = await r.json();
+      if (!r.ok) { cerr.textContent = data.error || 'Something went wrong.'; cerr.classList.add('show'); document.getElementById('allow-btn').disabled = false; document.getElementById('deny-btn').disabled = false; return; }
+      if (data.redirectTo) location.href = data.redirectTo;
+    } catch { cerr.textContent = 'Network error — try again.'; cerr.classList.add('show'); document.getElementById('allow-btn').disabled = false; document.getElementById('deny-btn').disabled = false; }
+  }
+
+  document.getElementById('allow-btn').addEventListener('click', () => submit('approve'));
+  document.getElementById('deny-btn').addEventListener('click', () => submit('deny'));
+}
+
+async function init() {
+  if (!clientId || !redirectUri || respType !== 'code') {
+    showError('Invalid authorization request. Please return to the application and try again.');
+    return;
+  }
+
+  // Fetch client metadata (server re-validates client_id and redirect_uri).
+  let meta;
+  try {
+    const r = await fetch(`/oauth/client-info?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(rawScope)}`);
+    const data = await r.json();
+    if (!r.ok) { showError(data.error || 'Invalid client.'); return; }
+    meta = data;
+  } catch { showError('Could not load authorization details. Please try again.'); return; }
+
+  // Check if signed in.
+  let me = null;
+  try {
+    const r = await fetch('/api/me');
+    if (r.ok) me = await r.json();
+  } catch {}
+
+  if (!me || !me.user) { showLoginForm(meta); return; }
+  if (me.user.role === 'student') { showError('Only teacher accounts can authorize applications.'); return; }
+  showConsentScreen(meta);
+}
+
+init();
+</script>
+</body>
+</html>

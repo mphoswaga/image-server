@@ -20,6 +20,9 @@ const { worksheetDocx, exitTicketDocx } = require('./docgen');
 const games = require('./games');
 const roster = require('./roster');
 const apikeys = require('./apikeys');
+const oauth = require('./oauth');
+const audit = require('./audit');
+const webhooks = require('./webhooks');
 
 // Add transitions/animations; never let it break the download.
 function safeAnimate(buffer, band) {
@@ -644,6 +647,9 @@ app.post('/api/game/:id/finish', requireGameAccess, (req, res) => {
   const gameType = ['car', 'space', 'runner'].includes(req.body.gameType) ? req.body.gameType : null;
   const prevHigh = gameType ? games.getHighScores(g.id)[gameType] : 0;
   games.recordResult(g.id, { studentId, name, score, total: g.questions.length, answers, arcadeScore, gameType });
+  if (g.rosterId) {
+    setImmediate(() => webhooks.dispatch('result.created', { gameId: g.id, rosterId: g.rosterId, studentId, score, total: g.questions.length, at: new Date().toISOString() }).catch(() => {}));
+  }
   const newHighScores = games.getHighScores(g.id);
   const isNewHigh = gameType && arcadeScore > 0 && arcadeScore > prevHigh;
   res.json({ score, total: g.questions.length, arcadeScore, gameType, highScores: newHighScores, isNewHigh });
@@ -713,6 +719,7 @@ app.post('/api/roster', requireAuth, (req, res, next) => {
       if (!csvText) return res.status(400).json({ error: 'CSV is empty.' });
       r = roster.saveRoster(req.userId, { name, csvText });
     }
+    setImmediate(() => webhooks.dispatch('roster.updated', { rosterId: r.id, teacherId: req.userId, studentCount: r.students.length, action: 'created' }).catch(() => {}));
     res.json({ id: r.id, name: r.name, count: r.students.length });
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
@@ -727,6 +734,7 @@ app.delete('/api/roster/:id', requireAuth, async (req, res) => {
   const ok = await verifyPassword(req.userId, password);
   if (!ok) return res.status(403).json({ error: 'Incorrect password.' });
   roster.deleteRoster(req.userId, req.params.id);
+  setImmediate(() => webhooks.dispatch('roster.updated', { rosterId: req.params.id, teacherId: req.userId, action: 'deleted' }).catch(() => {}));
   res.json({ ok: true });
 });
 
@@ -820,6 +828,13 @@ app.get('/join', (req, res) => res.sendFile(path.join(__dirname, 'public', 'join
 // Student play page (the shareable link target).
 app.get('/play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'play.html')));
 
+// ── Pagination helper ──────────────────────────────────────────────────────────────
+function parsePagination(query) {
+  const page  = Math.max(1, parseInt(query.page, 10) || 1);
+  const limit = Math.min(200, Math.max(1, parseInt(query.limit, 10) || 50));
+  return { page, limit, offset: (page - 1) * limit };
+}
+
 // ── Admin API Key Management ────────────────────────────────────────────────────────
 // Only the admin can create / list / revoke API keys used by external apps.
 app.post('/api/admin/apikeys', requireAdmin, (req, res) => {
@@ -840,48 +855,331 @@ app.delete('/api/admin/apikeys/:hash', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── OAuth 2.0 endpoints ─────────────────────────────────────────────────────────────
+
+// Serve the consent page (static HTML; client JS reads query params and calls /oauth/client-info).
+app.get('/oauth/authorize', (req, res) => res.sendFile(path.join(__dirname, 'public', 'oauth-consent.html')));
+
+// Client info: validate params and return safe display data for the consent page.
+app.get('/oauth/client-info', (req, res) => {
+  const { client_id, redirect_uri, scope } = req.query;
+  const client = client_id && oauth.getClient(client_id);
+  if (!client) return res.status(400).json({ error: 'Unknown client_id.' });
+  if (!redirect_uri || !client.redirectUris.includes(redirect_uri)) {
+    return res.status(400).json({ error: 'redirect_uri not registered for this client.' });
+  }
+  const requestedScopes = String(scope || '').split(/\s+/).filter(Boolean);
+  const invalid = requestedScopes.filter(s => !client.allowedScopes.includes(s));
+  if (invalid.length) return res.status(400).json({ error: `Scope not permitted: ${invalid.join(', ')}` });
+  const scopes = requestedScopes.length ? requestedScopes : client.allowedScopes;
+  audit.log('auth.consent_shown', { clientId: client.clientId, ip: req.ip });
+  res.json({ clientName: client.name, scopes });
+});
+
+// Approve or deny: requires a live teacher session (lc_token cookie).
+app.post('/oauth/authorize', requireAuth, (req, res) => {
+  const { client_id, redirect_uri, scope, state, action } = req.body || {};
+  const client = client_id && oauth.getClient(client_id);
+  if (!client) return res.status(400).json({ error: 'Unknown client_id.' });
+  if (!redirect_uri || !client.redirectUris.includes(redirect_uri)) {
+    return res.status(400).json({ error: 'redirect_uri not registered.' });
+  }
+
+  if (action === 'deny') {
+    audit.log('auth.denied', { clientId: client.clientId, teacherId: req.userId, ip: req.ip });
+    const url = new URL(redirect_uri);
+    url.searchParams.set('error', 'access_denied');
+    if (state) url.searchParams.set('state', state);
+    return res.json({ redirectTo: url.toString() });
+  }
+
+  if (action !== 'approve') return res.status(400).json({ error: 'action must be approve or deny.' });
+  if (req.user.role === 'student') return res.status(403).json({ error: 'Teacher account required.' });
+
+  const requestedScopes = String(scope || '').split(/\s+/).filter(s => client.allowedScopes.includes(s));
+  const finalScopes = requestedScopes.length ? requestedScopes : client.allowedScopes;
+
+  const code = oauth.createAuthCode({ clientId: client.clientId, teacherId: req.userId, scopes: finalScopes, redirectUri: redirect_uri });
+  audit.log('auth.code_issued', { clientId: client.clientId, teacherId: req.userId, ip: req.ip });
+
+  const url = new URL(redirect_uri);
+  url.searchParams.set('code', code);
+  if (state) url.searchParams.set('state', state);
+  res.json({ redirectTo: url.toString() });
+});
+
+// Token endpoint: exchange an authorization code for an access token.
+app.post('/oauth/token', async (req, res) => {
+  const { grant_type, code, redirect_uri, client_id, client_secret } = req.body || {};
+  if (grant_type !== 'authorization_code') return res.status(400).json({ error: 'unsupported_grant_type' });
+  if (!client_id || !client_secret || !code || !redirect_uri) {
+    return res.status(400).json({ error: 'missing_parameters' });
+  }
+  const client = oauth.getClient(client_id);
+  if (!client) return res.status(401).json({ error: 'invalid_client' });
+  const secretOk = await oauth.verifyClientSecret(client_id, client_secret);
+  if (!secretOk) {
+    audit.log('auth.bad_secret', { clientId: client_id, ip: req.ip });
+    return res.status(401).json({ error: 'invalid_client' });
+  }
+  const entry = oauth.consumeAuthCode(code, client_id, redirect_uri);
+  if (!entry) return res.status(400).json({ error: 'invalid_grant' });
+
+  const tokenData = oauth.createAccessToken({ clientId: client_id, teacherId: entry.teacherId, scopes: entry.scopes });
+  audit.log('token.issued', { clientId: client_id, teacherId: entry.teacherId, scopes: entry.scopes, ip: req.ip });
+  res.json({ access_token: tokenData.accessToken, token_type: tokenData.tokenType, expires_in: tokenData.expiresIn, scope: tokenData.scope });
+});
+
+// Revoke endpoint: invalidate an access token.
+app.post('/oauth/revoke', (req, res) => {
+  const token = (req.body || {}).token;
+  if (!token) return res.status(400).json({ error: 'token required' });
+  const rec = oauth.verifyAccessToken(token);
+  if (rec) {
+    oauth.revokeAccessToken(token);
+    audit.log('token.revoked', { clientId: rec.clientId, teacherId: rec.teacherId, ip: req.ip });
+  }
+  res.json({ ok: true }); // always 200 per OAuth spec
+});
+
+// Teacher: list + revoke their own OAuth connections.
+app.get('/api/oauth/connections', requireAuth, (req, res) => {
+  res.json({ connections: oauth.listConnectionsForTeacher(req.userId) });
+});
+
+app.delete('/api/oauth/connections/:clientId', requireAuth, (req, res) => {
+  const n = oauth.revokeConnection(req.userId, req.params.clientId);
+  audit.log('token.revoked_connection', { teacherId: req.userId, clientId: req.params.clientId, count: n });
+  res.json({ ok: true, revoked: n });
+});
+
+// ── Admin: OAuth client management ──────────────────────────────────────────────────
+
+app.post('/api/admin/oauth/clients', requireAdmin, async (req, res) => {
+  const { name, redirectUris, allowedScopes } = req.body || {};
+  if (!name) return res.status(400).json({ error: 'name is required.' });
+  if (!Array.isArray(redirectUris) || !redirectUris.length) return res.status(400).json({ error: 'redirectUris must be a non-empty array.' });
+  try {
+    const result = await oauth.registerClient({ name, redirectUris, allowedScopes });
+    audit.log('client.registered', { clientId: result.clientId, name, adminId: req.userId });
+    res.json(result); // clientSecret shown once — never stored in plaintext
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+app.get('/api/admin/oauth/clients', requireAdmin, (req, res) => {
+  res.json({ clients: oauth.listClients() });
+});
+
+app.patch('/api/admin/oauth/clients/:id', requireAdmin, (req, res) => {
+  const { status } = req.body || {};
+  if (!['active', 'suspended'].includes(status)) return res.status(400).json({ error: 'status must be active or suspended.' });
+  const ok = oauth.setClientStatus(req.params.id, status);
+  if (!ok) return res.status(404).json({ error: 'Client not found.' });
+  audit.log('client.status_changed', { clientId: req.params.id, status, adminId: req.userId });
+  res.json({ ok: true });
+});
+
+// ── Admin: Webhook management ────────────────────────────────────────────────────────
+
+app.post('/api/admin/oauth/webhooks', requireAdmin, (req, res) => {
+  const { clientId, url, secret, events } = req.body || {};
+  if (!clientId) return res.status(400).json({ error: 'clientId required.' });
+  if (!oauth.getClient(clientId)) return res.status(404).json({ error: 'Client not found.' });
+  try {
+    const w = webhooks.setWebhook(clientId, { url, secret, events });
+    res.json(w);
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+app.get('/api/admin/oauth/webhooks', requireAdmin, (req, res) => {
+  res.json({ webhooks: webhooks.listWebhooks() });
+});
+
+app.delete('/api/admin/oauth/webhooks/:clientId', requireAdmin, (req, res) => {
+  webhooks.deleteWebhook(req.params.clientId);
+  res.json({ ok: true });
+});
+
+// Admin: recent audit log.
+app.get('/api/admin/oauth/audit', requireAdmin, (req, res) => {
+  res.json({ entries: audit.recent(200) });
+});
+
 // ── External API (v1) ───────────────────────────────────────────────────────────────
-// Read-only endpoints for the external report-card app, authenticated via Bearer token.
-// Only admin-scoped keys are accepted.
-function requireApiKey(req, res, next) {
+// Authenticated by either:
+//   • OAuth Bearer token  (lc_at_…) — teacher-scoped, requires the matching scope
+//   • Admin API key        (lc_…)    — all-data access; legacy / developer use only
+
+function requireApiAccess(req, res, next) {
   const auth = req.headers.authorization || '';
   const match = auth.match(/^Bearer\s+(\S+)$/);
-  if (!match) return res.status(401).json({ error: 'Missing Authorization header.' });
-  const result = apikeys.verifyKey(match[1]);
-  if (!result) return res.status(401).json({ error: 'Invalid API key.' });
+  if (!match) return res.status(401).json({ error: 'Missing Authorization: Bearer header.' });
+  const bearer = match[1];
+
+  if (bearer.startsWith('lc_at_')) {
+    const token = oauth.verifyAccessToken(bearer);
+    if (!token) return res.status(401).json({ error: 'OAuth token invalid, expired, or revoked.' });
+    req.oauthToken   = token;
+    req.oauthTeacherId = token.teacherId;
+    req.oauthScopes  = token.scopes;
+    setImmediate(() => audit.log('token.used', { clientId: token.clientId, teacherId: token.teacherId, path: req.path }));
+    return next();
+  }
+
+  const result = apikeys.verifyKey(bearer);
+  if (!result) return res.status(401).json({ error: 'Invalid Bearer token.' });
   req.apiIsAdmin = result.isAdmin;
   next();
 }
 
-// List all rosters across all teachers.
-app.get('/api/v1/rosters', requireApiKey, (req, res) => {
+function requireScope(scope) {
+  return (req, res, next) => {
+    if (req.apiIsAdmin) return next();
+    if (!req.oauthScopes || !req.oauthScopes.includes(scope)) {
+      return res.status(403).json({ error: `Token missing scope: ${scope}` });
+    }
+    next();
+  };
+}
+
+// Teacher identity — OAuth only (admin keys have no single teacher identity).
+app.get('/api/v1/me', requireApiAccess, requireScope('profile:read'), (req, res) => {
+  if (!req.oauthTeacherId) return res.status(400).json({ error: 'Admin keys have no /me identity. Use an OAuth token.' });
+  const user = getUserById(req.oauthTeacherId);
+  if (!user) return res.status(404).json({ error: 'Teacher not found.' });
+  res.json({ id: user.id, email: user.email, name: user.name });
+});
+
+// Rosters: OAuth returns this teacher's only; admin key returns all.
+app.get('/api/v1/rosters', requireApiAccess, requireScope('rosters:read'), (req, res) => {
+  const updatedSince = req.query.updated_since || null;
+  const teacherIds = req.oauthTeacherId ? [req.oauthTeacherId] : listAllUserIds();
   const all = [];
-  for (const teacherId of listAllUserIds()) {
-    for (const r of roster.listRosters(teacherId)) {
-      all.push({ id: r.id, teacherId, name: r.name, studentCount: r.count, createdAt: r.createdAt });
+  for (const tid of teacherIds) {
+    for (const r of roster.listRosters(tid)) {
+      if (updatedSince && r.createdAt < updatedSince) continue;
+      all.push({ id: r.id, teacherId: tid, name: r.name, studentCount: r.count, createdAt: r.createdAt, updatedAt: r.createdAt });
     }
   }
   res.json({ rosters: all });
 });
 
-// Get all students across all teachers with all game results.
-// Optional ?rosterId=<id> to narrow to one roster (still searches all teachers for that roster).
-app.get('/api/v1/students', requireApiKey, (req, res) => {
+// Students in a specific roster — teacher-isolated.
+app.get('/api/v1/roster/:id/students', requireApiAccess, requireScope('rosters:read'), (req, res) => {
+  let found = null, foundTeacherId = null;
+  const teacherIds = req.oauthTeacherId ? [req.oauthTeacherId] : listAllUserIds();
+  for (const tid of teacherIds) {
+    const r = roster.getRoster(tid, req.params.id);
+    if (r) { found = r; foundTeacherId = tid; break; }
+  }
+  if (!found) return res.status(404).json({ error: 'Roster not found.' });
+  res.json({
+    roster: { id: found.id, name: found.name, teacherId: foundTeacherId, createdAt: found.createdAt },
+    students: found.students.map(s => ({ id: s.id, name: s.name })),
+  });
+});
+
+// Student progress for a roster — teacher-isolated.
+app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:read'), (req, res) => {
+  let foundRoster = null, foundTeacherId = null;
+  const teacherIds = req.oauthTeacherId ? [req.oauthTeacherId] : listAllUserIds();
+  for (const tid of teacherIds) {
+    const r = roster.getRoster(tid, req.params.id);
+    if (r) { foundRoster = r; foundTeacherId = tid; break; }
+  }
+  if (!foundRoster) return res.status(404).json({ error: 'Roster not found.' });
+
+  const allGames = games.listTeacherGames(foundTeacherId);
+  const byStudent = new Map();
+  for (const g of allGames) {
+    for (const result of games.getResults(g.id)) {
+      if (!foundRoster.students.find(s => s.id === result.studentId)) continue;
+      if (!byStudent.has(result.studentId)) byStudent.set(result.studentId, []);
+      byStudent.get(result.studentId).push({
+        gameId: g.id, topic: g.topic, subject: g.subject,
+        score: result.score, total: result.total,
+        percentage: result.total > 0 ? Math.round((result.score / result.total) * 100) : 0,
+        at: result.at, updatedAt: result.at,
+      });
+    }
+  }
+
+  const students = foundRoster.students.map(s => {
+    const results = (byStudent.get(s.id) || []).sort((a, b) => (b.at || '').localeCompare(a.at || ''));
+    const avgPct = results.length ? Math.round(results.reduce((sum, r) => sum + r.percentage, 0) / results.length) : null;
+    const updatedAt = results.length ? results[0].at : foundRoster.createdAt;
+    return { id: s.id, name: s.name, gamesPlayed: results.length, averagePercentage: avgPct, updatedAt, results };
+  });
+
+  res.json({
+    roster: { id: foundRoster.id, name: foundRoster.name, teacherId: foundTeacherId, createdAt: foundRoster.createdAt },
+    students,
+  });
+});
+
+// All activities (games) that used a specific roster.
+app.get('/api/v1/roster/:id/activities', requireApiAccess, requireScope('results:read'), (req, res) => {
+  let foundRoster = null, foundTeacherId = null;
+  const teacherIds = req.oauthTeacherId ? [req.oauthTeacherId] : listAllUserIds();
+  for (const tid of teacherIds) {
+    const r = roster.getRoster(tid, req.params.id);
+    if (r) { foundRoster = r; foundTeacherId = tid; break; }
+  }
+  if (!foundRoster) return res.status(404).json({ error: 'Roster not found.' });
+
+  const activities = games.listTeacherGames(foundTeacherId)
+    .filter(g => g.rosterId === foundRoster.id)
+    .map(g => ({ id: g.id, lessonTitle: g.lessonTitle, subject: g.subject, topic: g.topic, grade: g.grade, questionCount: (g.questions || []).length, createdAt: g.createdAt, roomCode: g.roomCode }));
+
+  res.json({ roster: { id: foundRoster.id, name: foundRoster.name }, activities });
+});
+
+// Incremental results sync with pagination — all game results for this teacher.
+// ?updated_since=<ISO>  &page=1  &limit=50
+app.get('/api/v1/results', requireApiAccess, requireScope('results:read'), (req, res) => {
+  const updatedSince = req.query.updated_since || null;
+  const { page, limit, offset } = parsePagination(req.query);
+  const teacherIds = req.oauthTeacherId ? [req.oauthTeacherId] : listAllUserIds();
+
+  const all = [];
+  for (const tid of teacherIds) {
+    for (const g of games.listTeacherGames(tid)) {
+      for (const r of games.getResults(g.id)) {
+        if (updatedSince && r.at < updatedSince) continue;
+        all.push({
+          id: `${g.id}_${r.studentId}_${r.at}`,
+          gameId: g.id, rosterId: g.rosterId || null,
+          studentId: r.studentId,
+          subject: g.subject, topic: g.topic,
+          score: r.score, total: r.total,
+          percentage: r.total > 0 ? Math.round((r.score / r.total) * 100) : 0,
+          at: r.at, updatedAt: r.at,
+        });
+      }
+    }
+  }
+
+  all.sort((a, b) => (b.at || '').localeCompare(a.at || ''));
+  const total = all.length;
+  res.json({
+    results: all.slice(offset, offset + limit),
+    pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+  });
+});
+
+// Legacy: all students across all teachers (admin key only — existing behaviour).
+app.get('/api/v1/students', requireApiAccess, requireScope('rosters:read'), (req, res) => {
   const filterRosterId = req.query.rosterId || null;
-  const allUserIds = listAllUserIds();
+  const teacherIds = req.oauthTeacherId ? [req.oauthTeacherId] : listAllUserIds();
   const out = [];
 
-  for (const teacherId of allUserIds) {
+  for (const tid of teacherIds) {
     const rosters = filterRosterId
-      ? [roster.getRoster(teacherId, filterRosterId)].filter(Boolean)
-      : (() => {
-          const ids = roster.listRosters(teacherId).map(r => r.id);
-          return ids.map(id => roster.getRoster(teacherId, id)).filter(Boolean);
-        })();
-
+      ? [roster.getRoster(tid, filterRosterId)].filter(Boolean)
+      : roster.listRosters(tid).map(r => roster.getRoster(tid, r.id)).filter(Boolean);
     if (!rosters.length) continue;
 
-    const allGames = games.listTeacherGames(teacherId);
+    const allGames = games.listTeacherGames(tid);
     const byStudent = new Map();
     for (const g of allGames) {
       for (const result of games.getResults(g.id)) {
@@ -897,43 +1195,12 @@ app.get('/api/v1/students', requireApiKey, (req, res) => {
 
     for (const r of rosters) {
       for (const s of r.students) {
-        const results = byStudent.get(s.id) || [];
-        out.push({ id: s.id, name: s.name, rosterId: r.id, rosterName: r.name, teacherId, results });
+        out.push({ id: s.id, name: s.name, rosterId: r.id, rosterName: r.name, teacherId: tid, results: byStudent.get(s.id) || [] });
       }
     }
   }
 
   res.json({ students: out });
-});
-
-// Get progress data for a specific roster (by any teacher).
-app.get('/api/v1/roster/:id/progress', requireApiKey, (req, res) => {
-  const rosterIdParam = req.params.id;
-  let foundRoster = null;
-  let foundTeacherId = null;
-  for (const teacherId of listAllUserIds()) {
-    const r = roster.getRoster(teacherId, rosterIdParam);
-    if (r) { foundRoster = r; foundTeacherId = teacherId; break; }
-  }
-  if (!foundRoster) return res.status(404).json({ error: 'Roster not found.' });
-
-  const allGames = games.listTeacherGames(foundTeacherId);
-  const byStudent = new Map();
-  for (const g of allGames) {
-    for (const result of games.getResults(g.id)) {
-      if (!foundRoster.students.find(s => s.id === result.studentId)) continue;
-      if (!byStudent.has(result.studentId)) byStudent.set(result.studentId, []);
-      byStudent.get(result.studentId).push({
-        topic: g.topic, subject: g.subject,
-        score: result.score, total: result.total,
-        percentage: result.total > 0 ? Math.round((result.score / result.total) * 100) : 0,
-        at: result.at,
-      });
-    }
-  }
-
-  const students = foundRoster.students.map(s => ({ id: s.id, name: s.name, results: byStudent.get(s.id) || [] }));
-  res.json({ roster: { id: foundRoster.id, name: foundRoster.name, teacherId: foundTeacherId }, students });
 });
 
 app.listen(PORT, () => console.log(`LessonCope running at http://localhost:${PORT}`));
