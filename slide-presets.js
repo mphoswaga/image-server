@@ -42,6 +42,22 @@ const PRESETS = [
   { id: 'chalk-minimal',   name: 'Chalk',      group: 'Minimal', bg: 'F5F5F0', primary: '1A1A2E', accent: '4A4A8A', soft: 'E8E8E4', text: '2D2D2D', font: 'Arial', layout: 'minimal', dark: false, multicolor: false },
   { id: 'paper-minimal',   name: 'Paper',      group: 'Minimal', bg: 'FEFCE8', primary: '1C1917', accent: 'CA8A04', soft: 'FEF9C3', text: '1C1917', font: 'Arial', layout: 'minimal', dark: false, multicolor: false },
 
+  // ── Full-bleed ────────────────────────────────────────────────────────────
+  { id: 'dusk-fullbleed',   name: 'Dusk',    group: 'Full-bleed',  bg: '1A1A2E', primary: 'FFFFFF', accent: '60A5FA', soft: '1E293B', text: 'E2E8F0', font: 'Arial', layout: 'fullbleed', dark: true,  multicolor: false },
+  { id: 'ember-fullbleed',  name: 'Ember',   group: 'Full-bleed',  bg: '1C0A00', primary: 'FFFFFF', accent: 'FB923C', soft: '2C1A00', text: 'FED7AA', font: 'Arial', layout: 'fullbleed', dark: true,  multicolor: false },
+
+  // ── Two-column ────────────────────────────────────────────────────────────
+  { id: 'carbon-twocol',    name: 'Carbon',  group: 'Two-column',  bg: 'F8F9FA', primary: '111827', accent: '374151', soft: 'E5E7EB', text: '374151', font: 'Arial', layout: 'twocol',    dark: false, multicolor: false },
+  { id: 'azure-twocol',     name: 'Azure',   group: 'Two-column',  bg: 'FFFFFF', primary: '1F4E79', accent: '2E75B6', soft: 'E8F1FA', text: '2D2D2D', font: 'Arial', layout: 'twocol',    dark: false, multicolor: false },
+
+  // ── Sidebar ───────────────────────────────────────────────────────────────
+  { id: 'ruby-sidebar',     name: 'Ruby',    group: 'Sidebar',     bg: 'FFFFFF', primary: '9B1C1C', accent: 'E53E3E', soft: 'FFF5F5', text: '2D2D2D', font: 'Arial', layout: 'sidebar',   dark: false, multicolor: false },
+  { id: 'admiral-sidebar',  name: 'Admiral', group: 'Sidebar',     bg: 'FFFFFF', primary: '1E3A5F', accent: '2B6CB0', soft: 'EBF8FF', text: '2D2D2D', font: 'Arial', layout: 'sidebar',   dark: false, multicolor: false },
+
+  // ── Splash ────────────────────────────────────────────────────────────────
+  { id: 'violet-splash',    name: 'Violet',  group: 'Splash',      bg: 'FAF5FF', primary: '5B21B6', accent: '7C3AED', soft: 'EDE9FE', text: '2D1F4A', font: 'Arial', layout: 'splash',    dark: false, multicolor: false },
+  { id: 'pine-splash',      name: 'Pine',    group: 'Splash',      bg: 'F0FDF4', primary: '064E3B', accent: '059669', soft: 'D1FAE5', text: '022C22', font: 'Arial', layout: 'splash',    dark: false, multicolor: false },
+
   // ── Playful / young-learner (rainbow bullets + cycling pastel bgs) ─────────
   { id: 'sunshine-banner',    name: 'Sunshine',   group: 'Playful', bg: 'FFFBEB', primary: 'B45309', accent: 'FBBF24', soft: 'FEF3C7', text: '292524', font: 'Arial', layout: 'banner',  dark: false, multicolor: true },
   { id: 'strawberry-classic', name: 'Strawberry', group: 'Playful', bg: 'FFF1F2', primary: 'BE123C', accent: 'FB7185', soft: 'FFE4E6', text: '1C0A0A', font: 'Arial', layout: 'classic', dark: false, multicolor: true },

@@ -401,6 +401,66 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
         break;
       }
 
+      // ── Layout variant: fullbleed — image fills slide, text on dark overlay ──
+      if (layout === 'fullbleed') {
+        slide.addImage({ path: imgPath, x: 0, y: 0, w: 10, h: 5.625, sizing: { type: 'cover', w: 10, h: 5.625 } });
+        slide.addShape(pptx.ShapeType.rect, { x: 0, y: 2.6, w: 10, h: 3.025, fill: { color: '000000', transparency: 30 }, line: { type: 'none' } });
+        slide.addText(slideData.title, { x: 0.5, y: 2.75, w: 9, h: 0.9, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: 'FFFFFF' });
+        slide.addText(bulletItems(slideData.bullets, t, thm, multicolor), { x: 0.5, y: 3.75, w: 9, h: 1.6, fontFace: thm.font, fontSize: Math.max(13, t.bulletSize - 2), valign: 'top', paraSpaceAfter: 4 });
+        if (slideData.example) {
+          slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: 'E2E8F0' } }],
+            { x: 0.5, y: 5.18, w: 9, h: 0.32, fontFace: thm.font, fontSize: Math.max(11, t.bulletSize - 5), valign: 'middle', italic: true });
+        }
+        break;
+      }
+
+      // ── Layout variant: twocol — two-column bullets, no image ─────────────
+      if (layout === 'twocol') {
+        slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 1.15, fill: { color: thm.soft }, line: { type: 'none' } });
+        slide.addText(slideData.title, { x: 0.5, y: 0.12, w: 9, h: 0.9, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
+        const half = Math.ceil(slideData.bullets.length / 2);
+        slide.addText(bulletItems(slideData.bullets.slice(0, half), t, thm, multicolor), { x: 0.5, y: 1.3, w: 4.15, h: 3.6, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
+        slide.addShape(pptx.ShapeType.rect, { x: 4.85, y: 1.4, w: 0.05, h: 3.4, fill: { color: accent, transparency: 50 }, line: { type: 'none' } });
+        slide.addText(bulletItems(slideData.bullets.slice(half), t, thm, multicolor), { x: 5.1, y: 1.3, w: 4.4, h: 3.6, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
+        if (slideData.example) {
+          slide.addShape(pptx.ShapeType.roundRect, { x: 0.5, y: 5.0, w: 9, h: 0.4, fill: { color: thm.soft }, line: { type: 'none' }, rectRadius: 0.06 });
+          slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: thm.text } }],
+            { x: 0.65, y: 5.02, w: 8.7, h: 0.36, fontFace: thm.font, fontSize: Math.max(11, t.bulletSize - 5), valign: 'middle', italic: true });
+        }
+        break;
+      }
+
+      // ── Layout variant: sidebar — colored left panel, content right ────────
+      if (layout === 'sidebar') {
+        slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 1.9, h: 5.625, fill: { color: thm.primary }, line: { type: 'none' } });
+        slide.addShape(pptx.ShapeType.rect, { x: 0.25, y: 0.35, w: 1.4, h: 0.09, fill: { color: accent }, line: { type: 'none' } });
+        slide.addShape(pptx.ShapeType.ellipse, { x: 0.2, y: 2.4, w: 1.5, h: 1.5, fill: { color: accent, transparency: 78 }, line: { type: 'none' } });
+        slide.addText(slideData.title, { x: 2.15, y: 0.3, w: 7.6, h: 0.9, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
+        slide.addText(bulletItems(slideData.bullets, t, thm, multicolor), { x: 2.15, y: 1.35, w: 4.5, h: 3.0, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
+        placeVisual(pptx, slide, slideData, imgPath, accent, { x: 6.85, y: 1.0, w: 2.85, h: 3.8 });
+        if (slideData.example) {
+          slide.addShape(pptx.ShapeType.roundRect, { x: 2.15, y: 4.5, w: 7.6, h: 0.85, fill: { color: thm.soft }, line: { type: 'none' }, rectRadius: 0.08 });
+          slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: thm.text } }],
+            { x: 2.3, y: 4.55, w: 7.3, h: 0.75, fontFace: thm.font, fontSize: Math.max(12, t.bulletSize - 4), valign: 'middle', italic: true });
+        }
+        break;
+      }
+
+      // ── Layout variant: splash — full-width colored hero, content below ────
+      if (layout === 'splash') {
+        slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 2.05, fill: { color: thm.primary }, line: { type: 'none' } });
+        slide.addText(slideData.title, { x: 0.5, y: 0.2, w: 9, h: 1.65, fontFace: thm.font, fontSize: Math.min(t.titleSize + 4, 36), bold: true, color: 'FFFFFF', valign: 'middle' });
+        slide.addShape(pptx.ShapeType.rect, { x: 0, y: 2.0, w: 10, h: 0.1, fill: { color: accent }, line: { type: 'none' } });
+        slide.addText(bulletItems(slideData.bullets, t, thm, multicolor), { x: 0.5, y: 2.3, w: 5.5, h: 2.8, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
+        slide.addImage({ path: imgPath, x: 6.2, y: 2.2, w: 3.6, h: 3.0, sizing: { type: 'cover', w: 3.6, h: 3.0 }, rounding: true });
+        if (slideData.example) {
+          slide.addShape(pptx.ShapeType.roundRect, { x: 0.5, y: 5.1, w: 5.5, h: 0.38, fill: { color: thm.soft }, line: { type: 'none' }, rectRadius: 0.06 });
+          slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: thm.text } }],
+            { x: 0.65, y: 5.12, w: 5.2, h: 0.34, fontFace: thm.font, fontSize: Math.max(11, t.bulletSize - 5), valign: 'middle', italic: true });
+        }
+        break;
+      }
+
       // ── Layout variant: banner — colored full-width header bar ──────────────
       if (layout === 'banner') {
         slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 1.25, fill: { color: thm.primary }, line: { type: 'none' } });
