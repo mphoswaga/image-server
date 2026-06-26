@@ -120,13 +120,21 @@ async function fetchWikimediaImages({ subject, topic, count = 8, query } = {}) {
     const filepath = path.join(folder, filename);
     if (fs.existsSync(filepath)) continue;
 
+    // Small delay between Wikimedia downloads to avoid 429 rate-limiting.
+    if (added.length > 0) await new Promise(r => setTimeout(r, 400));
     try {
       const img = await axios.get(url, {
         responseType: 'arraybuffer', timeout: 30000,
-        headers: { 'User-Agent': 'LessonCope/1.0' },
+        headers: {
+          'User-Agent': 'LessonCope/1.0 (educational tool; mphoeduc@gmail.com)',
+          'Referer': 'https://commons.wikimedia.org/',
+        },
       });
       fs.writeFileSync(filepath, Buffer.from(img.data));
-    } catch { continue; }
+    } catch (e) {
+      if (e.response?.status === 429) await new Promise(r => setTimeout(r, 1500));
+      continue;
+    }
 
     let caption = '', keywords = [];
     try { const c = await captionImage(filepath); caption = c.caption; keywords = c.keywords; } catch {}
