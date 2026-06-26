@@ -1684,7 +1684,7 @@
     async function runWeb(){ const q=$('pickerQ').value.trim(); if(!q){ $('pickerQ').focus(); return; }
       $('pickerHint').textContent='Fresh images from the web (added to your library).';
       $('pickerGrid').innerHTML='<div class="pg-msg"><span class="spinner"></span>Fetching from the web…</div>';
-      try{ const d=await (await fetch('/api/images/fetch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q,subject:ctx.subject,topic:ctx.topic})})).json();
+      try{ const d=await (await fetch('/api/images/fetch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q,subject:ctx.subject,topic:ctx.topic,grade:ctx.grade})})).json();
         if(d.error) throw new Error(d.error); $('pickerGrid').innerHTML=pickerGridHTML(d.images,true);
       }catch(err){ $('pickerGrid').innerHTML='<div class="pg-msg">'+esc(err.message)+'</div>'; }
     }

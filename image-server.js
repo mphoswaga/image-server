@@ -528,13 +528,53 @@ app.get('/api/images/search', requireAuth, (req, res) => {
   res.json({ images: searchLibrary({ q, subject, topic, limit: 24 }) });
 });
 
+// Rewrite a teacher's image search query into one that returns educationally
+// relevant results. Two passes: (1) strip noisy prefixes; (2) disambiguate
+// terms that have a non-educational meaning on stock/web searches; (3) append
+// grade + "education" so search engines bias toward classroom content.
+function rewriteImageQuery(raw, { grade = '' } = {}) {
+  let q = String(raw).trim();
+  // Strip verbose prefixes that add no signal for image search
+  q = q.replace(/^(examples?\s+of\s+|types?\s+of\s+|what\s+(is|are)\s+|the\s+)/i, '').trim();
+  // Disambiguation: terms whose common image-search meaning clashes with the
+  // school/curriculum meaning. Replace the matched portion with a richer phrase.
+  const CLARIFY = [
+    [/(output\s+devices?)/i,   'computer monitor printer speaker headphones $1'],
+    [/(input\s+devices?)/i,    'keyboard mouse touchscreen microphone $1 computer'],
+    [/(storage\s+devices?)/i,  'hard drive usb flash drive memory card $1 computer'],
+    [/(processing\s+unit|cpu|processor)/i, 'computer cpu processor chip hardware'],
+    [/(memory|ram\b)/i,        'computer ram memory chip hardware'],
+    [/(network\b)/i,           'computer network internet school diagram'],
+    [/(circuit\b)/i,           'electric circuit diagram school science'],
+    [/(cell\b)/i,              'cell biology organism microscope diagram'],
+    [/(ecosystem\b)/i,         'ecosystem food web nature animals plants diagram'],
+    [/(algorithm\b)/i,         'algorithm flowchart programming steps diagram'],
+    [/(fraction\b)/i,          'fraction math numbers halves thirds diagram'],
+    [/(photosynthesis\b)/i,    'plant photosynthesis sunlight chlorophyll diagram'],
+    [/(volcano\b)/i,           'volcano eruption lava diagram geography'],
+    [/(water\s+cycle)/i,       'water cycle evaporation rain diagram school'],
+  ];
+  for (const [pattern, replacement] of CLARIFY) {
+    if (pattern.test(q)) { q = q.replace(pattern, replacement); break; }
+  }
+  // Append grade context when available
+  if (grade && grade !== 'middle school' && grade !== 'high school') {
+    const gradeNum = grade.replace(/[^0-9]/g, '');
+    if (gradeNum) q += ` grade ${gradeNum} students`;
+  }
+  // Always bias toward educational content
+  if (!/education|school|classroom|student|diagram|learn/i.test(q)) q += ' education';
+  return q.trim();
+}
+
 // Fallback: fetch fresh images from Unsplash for a query (free; captioned +
 // added to the library so they're reusable). Not an AI visual — not capped.
 app.post('/api/images/fetch', requireAuth, async (req, res) => {
-  const { q, subject, topic } = req.body || {};
+  const { q, subject, topic, grade } = req.body || {};
   if (!q || !String(q).trim()) return res.status(400).json({ error: 'Type what you are looking for.' });
   try {
-    const added = await addImages({ subject: subject || 'search', topic: topic || 'general', count: 8, query: String(q).trim() });
+    const searchQ = rewriteImageQuery(String(q).trim(), { grade: grade || '' });
+    const added = await addImages({ subject: subject || 'search', topic: topic || 'general', count: 8, query: searchQ });
     if (added.length) addLibraryImages(added);
     res.json({ images: added.map(e => ({ relpath: e.relpath, image: '/' + e.relpath, caption: e.caption || '', source: e.source || 'unsplash' })) });
   } catch (err) {
