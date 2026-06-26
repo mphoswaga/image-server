@@ -27,20 +27,24 @@ function gradeFromSheetName(name) {
   return m ? 'Grade ' + m[1] : null;
 }
 
-function subjectFromFilename(filename) {
-  const f = String(filename || '').toLowerCase();
-  if (/ict|comput/.test(f))           return 'ICT';
-  if (/math|maths|numeracy/.test(f))  return 'Mathematics';
-  if (/english|literacy|reading/.test(f)) return 'English';
-  if (/science/.test(f))              return 'Science';
-  if (/social|ss\b/.test(f))          return 'Social Studies';
-  if (/history/.test(f))              return 'History';
-  if (/geography/.test(f))            return 'Geography';
-  if (/art\b/.test(f))                return 'Art';
-  if (/music/.test(f))                return 'Music';
-  if (/\bpe\b|physical\s+ed/.test(f)) return 'PE';
+function detectSubject(text) {
+  const f = String(text || '').toLowerCase();
+  if (/ict|comput/.test(f))               return 'ICT';
+  if (/\bmath|maths|numeracy/.test(f))    return 'Mathematics';
+  if (/\benglish|literacy|reading/.test(f)) return 'English';
+  if (/science/.test(f))                  return 'Science';
+  if (/social\s+stud|ss\b/.test(f))       return 'Social Studies';
+  if (/history/.test(f))                  return 'History';
+  if (/geography/.test(f))                return 'Geography';
+  if (/\bart\b/.test(f))                  return 'Art';
+  if (/music/.test(f))                    return 'Music';
+  if (/\bpe\b|physical\s+ed/.test(f))     return 'PE';
+  if (/afrikaans/.test(f))                return 'Afrikaans';
+  if (/zulu|xhosa|sotho|tswana|venda|tsonga|swati|ndebele/.test(f)) return 'Home Language';
+  if (/life\s+(skills?|orient)/.test(f))  return 'Life Skills';
   return null;
 }
+const subjectFromFilename = detectSubject;
 
 // Column header → field mapping
 const COL_PATTERNS = {
@@ -171,11 +175,53 @@ function parseSheet(sheet, grade) {
 
 // ── Main parse entry point ───────────────────────────────────────────────────
 
+function subjectFromSheetNames(sheetNames) {
+  for (const name of sheetNames) {
+    if (!gradeFromSheetName(name)) continue;
+    // Strip the grade portion and test the remainder for a subject keyword
+    const stripped = name
+      .replace(/(?:grade|gr\.?|g|year|yr|form)\s*\d+/gi, '')
+      .replace(/[-_·•\s]+/g, ' ')
+      .trim();
+    const s = detectSubject(stripped);
+    if (s) return s;
+  }
+  // Also try the full sheet name without stripping (e.g. "ICT Overview")
+  for (const name of sheetNames) {
+    const s = detectSubject(name);
+    if (s) return s;
+  }
+  return null;
+}
+
+function subjectFromCells(sheet) {
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', range: 0 });
+  for (let r = 0; r < Math.min(rows.length, 10); r++) {
+    for (const cell of (rows[r] || [])) {
+      const m = String(cell || '').match(/^subject\s*:\s*(.+)/i);
+      if (m) {
+        const s = detectSubject(m[1].trim());
+        if (s) return s;
+      }
+    }
+  }
+  return null;
+}
+
 function parseExcelSource(buffer, filename) {
   const wb = XLSX.read(buffer, { type: 'buffer' });
   const items = [];
   const gradesFound = [];
-  const subject = subjectFromFilename(filename);
+
+  // Subject detection: filename → sheet names → cell content
+  let subject = detectSubject(filename);
+  if (!subject) subject = subjectFromSheetNames(wb.SheetNames);
+  if (!subject) {
+    for (const sn of wb.SheetNames) {
+      subject = subjectFromCells(wb.Sheets[sn]);
+      if (subject) break;
+    }
+  }
 
   for (const sheetName of wb.SheetNames) {
     const grade = gradeFromSheetName(sheetName);

@@ -500,6 +500,44 @@
     .section-divider h3 .ic { color:var(--accent); width:17px; height:17px; }
     .section-divider::after { content:''; flex:1; height:1px; background:var(--border); }
 
+    /* ── Guide FAB ── */
+    .guide-fab { position:fixed; bottom:28px; right:28px; z-index:30; display:none; align-items:center; gap:9px; background:linear-gradient(135deg,#2a6aa6,var(--primary)); color:#fff; border:none; border-radius:999px; padding:14px 24px; font-size:15px; font-weight:700; font-family:inherit; cursor:pointer; box-shadow:0 8px 28px rgba(31,78,121,.46); transition:transform .15s, box-shadow .15s; letter-spacing:-.1px; }
+    .guide-fab:hover { transform:translateY(-3px); box-shadow:0 14px 40px rgba(31,78,121,.56); }
+    .guide-fab .ic { width:20px; height:20px; }
+    @media(max-width:480px){ .guide-fab-label { display:none; } .guide-fab { padding:14px; border-radius:50%; } }
+
+    /* ── Wizard ── */
+    .wizard-overlay { position:fixed; inset:0; background:rgba(16,24,40,.62); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:20px; }
+    .wizard-card { background:#fff; border-radius:22px; box-shadow:0 20px 60px rgba(16,24,40,.28); width:560px; max-width:100%; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; animation:wz-in .28s cubic-bezier(.22,1,.36,1); }
+    @keyframes wz-in { from { opacity:0; transform:scale(.93) translateY(18px); } to { opacity:1; transform:none; } }
+    .wizard-header { display:flex; align-items:center; justify-content:space-between; padding:20px 24px 0; }
+    .wizard-dots { display:flex; gap:7px; align-items:center; }
+    .wz-dot { width:8px; height:8px; border-radius:50%; background:#dde1ec; transition:.25s; flex:none; }
+    .wz-dot.active { background:var(--primary); width:24px; border-radius:999px; }
+    .wz-dot.done { background:var(--ok); }
+    .wizard-close { border:none; background:none; width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--muted); padding:0; transition:.15s; flex:none; }
+    .wizard-close:hover { background:var(--bg); color:var(--ink); }
+    .wizard-close .ic { width:18px; height:18px; }
+    .wizard-body { padding:28px 32px 20px; overflow-y:auto; flex:1; }
+    .wz-icon-wrap { width:76px; height:76px; border-radius:22px; display:flex; align-items:center; justify-content:center; margin:0 auto 22px; box-shadow:0 4px 18px rgba(16,24,40,.1); }
+    .wz-icon { width:38px; height:38px; stroke-width:1.7; fill:none; stroke:currentColor; stroke-linecap:round; stroke-linejoin:round; }
+    .wz-title { font-family:'Fraunces',Georgia,serif; font-size:23px; font-weight:600; color:var(--ink); margin:0 0 8px; text-align:center; }
+    .wz-subtitle { font-size:14.5px; color:var(--muted); text-align:center; margin:0 0 24px; line-height:1.65; }
+    .wz-features { list-style:none; margin:0 0 6px; padding:0; display:flex; flex-direction:column; gap:10px; }
+    .wz-features li { display:flex; align-items:flex-start; gap:13px; font-size:14.5px; color:var(--ink); line-height:1.5; }
+    .wz-feat-icon { width:34px; height:34px; border-radius:10px; background:var(--primary-soft); display:flex; align-items:center; justify-content:center; flex:none; margin-top:1px; }
+    .wz-feat-icon .ic { width:17px; height:17px; color:var(--primary); fill:none; }
+    .wz-body { font-size:14.5px; color:var(--ink); line-height:1.68; margin:0 0 20px; }
+    .wz-tip { display:flex; align-items:flex-start; gap:10px; background:var(--accent-soft); border-radius:12px; padding:13px 15px; font-size:13.5px; color:var(--ink); line-height:1.5; }
+    .wz-tip .ic { color:var(--accent); flex:none; margin-top:2px; }
+    .wizard-footer { display:flex; align-items:center; justify-content:space-between; padding:16px 32px 26px; border-top:1px solid var(--border); gap:12px; }
+    .wz-skip { border:none; background:none; color:var(--muted); font-size:13px; cursor:pointer; padding:4px 8px; font-family:inherit; border-radius:6px; transition:.12s; }
+    .wz-skip:hover { color:var(--ink); background:var(--bg); }
+
+    /* ── Page header icon boxes ── */
+    .phd-icon { width:46px; height:46px; border-radius:13px; display:flex; align-items:center; justify-content:center; flex:none; box-shadow:var(--sh-sm); }
+    .phd-icon .ic { width:22px; height:22px; }
+
     /* ── Auth ── */
     #authScreen { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
     .auth-card { background:var(--card); border:1px solid var(--border); border-radius:22px; box-shadow:var(--sh-lg); padding:38px 32px; width:100%; max-width:410px; }
@@ -533,6 +571,15 @@
         <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
         <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.6 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
         <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></symbol>
+        <symbol id="i-users" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+        <symbol id="i-gamepad" viewBox="0 0 24 24"><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59l-.507 6.677A4 4 0 0 0 6.168 20h.032a4 4 0 0 0 3.094-1.47l.738-.949c.265-.34.673-.538 1.105-.538h1.732c.43 0 .838.198 1.103.537l.738.95A4 4 0 0 0 17.8 20h.032a4 4 0 0 0 3.974-4.732l-.507-6.678A4 4 0 0 0 17.32 5z"/><line x1="6" y1="11" x2="10" y2="11"/><line x1="8" y1="9" x2="8" y2="13"/><line x1="15" y1="11" x2="15.01" y2="11"/><line x1="18" y1="9" x2="18.01" y2="9"/></symbol>
+        <symbol id="i-sliders" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></symbol>
+        <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></symbol>
+        <symbol id="i-clipboard" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></symbol>
+        <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></symbol>
+        <symbol id="i-book-open" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></symbol>
+        <symbol id="i-close" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+        <symbol id="i-award" viewBox="0 0 24 24"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></symbol>
       </g>
     </defs>
   </svg>
@@ -569,9 +616,11 @@
     <span class="logo"><span class="brandmark"><svg class="ic" aria-hidden="true"><use href="#i-grad"/></svg></span><span class="wordmark">Lesson<span class="cope">Cope</span></span></span>
     <span class="nav-links">
       <button id="homeBtn" class="nav-link"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Plan</button>
-      <button id="rostersBtn" class="nav-link"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Rosters</button>
-      <button id="gamesBtn" class="nav-link"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> My games</button>
-      <button id="adminBtn" class="nav-link" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg> Admin</button>
+      <button id="rostersBtn" class="nav-link"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg> Rosters</button>
+      <button id="gamesBtn" class="nav-link"><svg class="ic" aria-hidden="true"><use href="#i-gamepad"/></svg> My games</button>
+      <button id="adminBtn" class="nav-link" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-sliders"/></svg> Admin</button>
+      <span class="nav-sep" style="margin:0 4px"></span>
+      <button id="guideBtnNav" class="nav-link" style="color:var(--accent);font-weight:700" title="Quick start guide"><svg class="ic" aria-hidden="true"><use href="#i-compass"/></svg> Guide</button>
     </span>
     <span class="nav-sep"></span>
     <span class="nav-user">
@@ -585,6 +634,11 @@
     <div class="hero">
       <h1 id="greeting" class="greeting">Plan a lesson</h1>
       <div class="tagline">Paste your objectives — get a lesson plan that matches your template, then a matching deck.</div>
+      <div style="margin-top:14px">
+        <button id="guideHeroBtn" class="btn ghost" style="display:none;font-size:13.5px;padding:9px 18px;gap:8px;border-radius:999px">
+          <svg class="ic" aria-hidden="true"><use href="#i-compass"/></svg> Quick start guide
+        </button>
+      </div>
     </div>
 
     <div class="steps">
@@ -602,7 +656,7 @@
       <div class="ps-step">
         <div class="ps-num">1</div>
         <div class="ps-body">
-          <div class="ps-heading">Lesson plan template <span class="hint-i" tabindex="0" role="img" aria-label="Controls the output structure — upload your school's lesson-plan format (Word, PDF, Excel). Optional — without one we use a standard structure." data-tip="Controls the output structure — upload your school's lesson-plan format (Word, PDF, Excel). Optional — without one we use a standard structure.">i</span></div>
+          <div class="ps-heading"><svg class="ic" aria-hidden="true" style="color:var(--accent)"><use href="#i-book-open"/></svg> Lesson plan template <span class="hint-i" tabindex="0" role="img" aria-label="Controls the output structure — upload your school's lesson-plan format (Word, PDF, Excel). Optional — without one we use a standard structure." data-tip="Controls the output structure — upload your school's lesson-plan format (Word, PDF, Excel). Optional — without one we use a standard structure.">i</span></div>
           <div id="tplList" class="tpl-list"><span class="info none">Loading your templates…</span></div>
           <div class="tpl-add">
             <input id="tplName" type="text" placeholder="Name (e.g. Observation plan)" aria-label="Template name" />
@@ -622,7 +676,7 @@
       <div class="ps-step">
         <div class="ps-num">2</div>
         <div class="ps-body">
-          <div class="ps-heading">Planning source <span class="hint-i" tabindex="0" role="img" aria-label="Upload your year plan, pacing guide, or weekly plan. LessonCope extracts weeks, units, objectives and success criteria — you just pick the week." data-tip="Upload your year plan, pacing guide, or weekly plan. LessonCope extracts weeks, units, objectives and success criteria — you just pick the week.">i</span></div>
+          <div class="ps-heading"><svg class="ic" aria-hidden="true" style="color:var(--accent)"><use href="#i-calendar"/></svg> Planning source <span class="hint-i" tabindex="0" role="img" aria-label="Upload your year plan, pacing guide, or weekly plan. LessonCope extracts weeks, units, objectives and success criteria — you just pick the week." data-tip="Upload your year plan, pacing guide, or weekly plan. LessonCope extracts weeks, units, objectives and success criteria — you just pick the week.">i</span></div>
           <div class="ps-tabs">
             <button type="button" class="ps-tab active" data-ptab="import"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg> Import from plan</button>
             <button type="button" class="ps-tab" data-ptab="manual"><svg class="ic" aria-hidden="true"><use href="#i-pencil"/></svg> Paste manually</button>
@@ -650,9 +704,9 @@
       <div class="ps-step" id="weekStep" style="display:none">
         <div class="ps-num">3</div>
         <div class="ps-body">
-          <div class="ps-heading">Select week or lesson</div>
+          <div class="ps-heading"><svg class="ic" aria-hidden="true" style="color:var(--accent)"><use href="#i-target"/></svg> Select week or lesson</div>
           <div class="grid4">
-            <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Subject</label><input id="wkSubject" type="text" style="font-size:13px;background:#f8fafc" readonly/></div>
+            <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Subject</label><input id="wkSubject" type="text" style="font-size:13px" placeholder="e.g. ICT, Mathematics"/></div>
             <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Grade</label><select id="wkGrade" style="font-size:13px"><option value="">— Select grade —</option></select></div>
             <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Plan view</label><select id="wkView" style="font-size:13px"><option value="week">Week</option></select></div>
             <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Week</label><select id="wkWeek" style="font-size:13px"><option value="">— Select week —</option></select></div>
@@ -674,7 +728,7 @@
       <div class="ps-step">
         <div class="ps-num" id="objStepNum">3</div>
         <div class="ps-body">
-          <div class="ps-heading" id="objStepLabel">Lesson objectives <span style="color:var(--err)">*</span></div>
+          <div class="ps-heading" id="objStepLabel"><svg class="ic" aria-hidden="true" style="color:var(--accent)"><use href="#i-clipboard"/></svg> Lesson objectives <span style="color:var(--err)">*</span></div>
           <!-- Import mode: pulled from plan -->
           <div id="pullSection" style="display:none">
             <div class="pull-src" id="pullSrc"></div>
@@ -697,7 +751,7 @@
       <div class="ps-step">
         <div class="ps-num" id="settingsStepNum">4</div>
         <div class="ps-body">
-          <div class="ps-heading">Lesson settings</div>
+          <div class="ps-heading"><svg class="ic" aria-hidden="true" style="color:var(--accent)"><use href="#i-sliders"/></svg> Lesson settings</div>
           <div class="grid3">
             <div id="gradeRow"><label for="grade">Grade level <span class="hint-i" tabindex="0" role="img" aria-label="The class you are teaching. Vocabulary and difficulty are pitched to this exact grade." data-tip="The class you are teaching.">i</span></label>
               <select id="grade">
@@ -757,7 +811,7 @@
 
       <!-- Lesson pack: student-facing materials from this same lesson -->
       <section id="packSection" class="card wide" style="margin-top:24px">
-        <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Lesson pack <span class="hint-i" tabindex="0" role="img" aria-label="Student-facing materials from this same lesson. Generate a worksheet (practice questions + answer key) or an exit ticket (a quick end-of-lesson check), edit them, and download each as a Word document." data-tip="Student-facing materials from this same lesson. Generate a worksheet (practice questions + answer key) or an exit ticket (a quick end-of-lesson check), edit them, and download each as a Word document.">i</span></h2>
+        <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg> Lesson pack <span class="hint-i" tabindex="0" role="img" aria-label="Student-facing materials from this same lesson. Generate a worksheet (practice questions + answer key) or an exit ticket (a quick end-of-lesson check), edit them, and download each as a Word document." data-tip="Student-facing materials from this same lesson. Generate a worksheet (practice questions + answer key) or an exit ticket (a quick end-of-lesson check), edit them, and download each as a Word document.">i</span></h2>
         <p class="hint">Turn this lesson into student-facing materials — generate, tweak, and download each as a Word document.</p>
         <div class="pack-actions">
           <button type="button" class="btn ghost" data-pack="worksheet"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Worksheet</button>
@@ -772,7 +826,7 @@
 
       <!-- Student game: a shareable link + live results -->
       <section id="gameSection" class="card wide" style="margin-top:24px">
-        <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> Student game <span class="hint-i" tabindex="0" role="img" aria-label="Creates a link you share with students. Students enter the Room Code + their Student ID — no email or password needed. Their scores are saved here." data-tip="Creates a link you share with students. Students enter the Room Code + their Student ID — no email or password needed. Their scores are saved here.">i</span></h2>
+        <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-gamepad"/></svg> Student game <span class="hint-i" tabindex="0" role="img" aria-label="Creates a link you share with students. Students enter the Room Code + their Student ID — no email or password needed. Their scores are saved here." data-tip="Creates a link you share with students. Students enter the Room Code + their Student ID — no email or password needed. Their scores are saved here.">i</span></h2>
         <p class="hint">Share the Room Code on the board — students go to <b>lessonco.pe/join</b> and type it in. No sign-up needed.</p>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
           <label for="gameRosterPick" style="font-size:13px;font-weight:600;white-space:nowrap">Class roster <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
@@ -791,6 +845,7 @@
     <section id="adminPanel" class="card wide" style="display:none">
       <div class="page-hd">
         <button class="back-btn" id="adminBackTop"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back</button>
+        <div class="phd-icon" style="background:#f0f0f8;color:#5b6af0"><svg class="ic" aria-hidden="true"><use href="#i-sliders"/></svg></div>
         <h2>Admin</h2>
       </div>
 
@@ -840,6 +895,7 @@
     <section id="gamesPanel" class="card wide" style="display:none">
       <div class="page-hd">
         <button class="back-btn" id="gamesBackTop"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back</button>
+        <div class="phd-icon" style="background:var(--accent-soft);color:var(--accent)"><svg class="ic" aria-hidden="true"><use href="#i-gamepad"/></svg></div>
         <div>
           <h2>My games</h2>
           <p class="page-sub">Share a Room Code on the board — students go to <b>/join</b> and type it in.</p>
@@ -885,6 +941,7 @@
     <section id="rostersPanel" class="card wide" style="display:none">
       <div class="page-hd">
         <button class="back-btn" id="rostersBackTop"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back</button>
+        <div class="phd-icon" style="background:var(--primary-soft);color:var(--primary)"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg></div>
         <div>
           <h2>Class rosters</h2>
           <p class="page-sub">Upload your class list — Excel or CSV — so students verify themselves with a Student ID. No email, no passwords.</p>
@@ -978,6 +1035,30 @@
       </div>
       <div class="picker-hint" id="pickerHint">Stock library first — free and instant. No match? Try “Search the web”.</div>
       <div id="pickerGrid" class="picker-grid"></div>
+    </div>
+  </div>
+
+  <!-- GUIDE FAB -->
+  <button id="guideFloat" class="guide-fab" aria-label="Open quick start guide">
+    <svg class="ic" aria-hidden="true"><use href="#i-compass"/></svg>
+    <span class="guide-fab-label">Quick Start</span>
+  </button>
+
+  <!-- WIZARD OVERLAY -->
+  <div id="wizardOverlay" class="wizard-overlay" style="display:none" role="dialog" aria-modal="true" aria-labelledby="wizardTitle">
+    <div class="wizard-card">
+      <div class="wizard-header">
+        <div class="wizard-dots" id="wizardDots"></div>
+        <button class="wizard-close" id="wizardCloseBtn" aria-label="Close guide"><svg class="ic" aria-hidden="true"><use href="#i-close"/></svg></button>
+      </div>
+      <div class="wizard-body" id="wizardBodyEl"></div>
+      <div class="wizard-footer">
+        <button class="wz-skip" id="wizardSkipBtn">Skip guide</button>
+        <div style="display:flex;gap:10px">
+          <button class="btn ghost" id="wizardBackBtn" style="padding:10px 18px">← Back</button>
+          <button class="btn primary" id="wizardNextBtn" style="padding:10px 24px">Next →</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1634,9 +1715,18 @@
       $('greeting').innerHTML=first?`Welcome back, <span class="hi">${esc(first)}</span>`:'Plan a lesson';
       $('adminBtn').style.display = user.role==='admin' ? 'inline-flex' : 'none';
       setActiveNav('homeBtn');
+      // Show guide buttons
+      $('guideFloat').style.display='flex';
+      $('guideHeroBtn').style.display='inline-flex';
+      // Auto-open wizard on first visit
+      if(!localStorage.getItem('lc_wizard_done')) setTimeout(openWizard, 600);
       loadLibrary(); loadTemplates(); loadRosters(true); loadPlanningSources();
     }
-    function showAuth(){ authScreen.style.display='block'; nav.style.display='none'; appEl.style.display='none'; setMode('login'); }
+    function showAuth(){
+      authScreen.style.display='block'; nav.style.display='none'; appEl.style.display='none';
+      $('guideFloat').style.display='none'; $('guideHeroBtn').style.display='none';
+      setMode('login');
+    }
 
     // ---- admin ----
     const adminPanel=$('adminPanel'), hero=document.querySelector('.hero'), stepsEl=document.querySelector('.steps');
@@ -2164,6 +2254,77 @@
       const key=$('apiKeyValue').textContent;
       navigator.clipboard.writeText(key).then(()=>toast('API key copied to clipboard','ok')).catch(()=>toast('Could not copy to clipboard'));
     });
+
+    // ── Quick Start Wizard ────────────────────────────────────────────────────
+    const WZ_STEPS=[
+      { icon:'i-compass', iconBg:'#eaf2fa', iconColor:'var(--primary)',
+        title:'Welcome to LessonCope',
+        subtitle:'Create curriculum-aligned lessons — plan, slides, and student materials — in minutes.',
+        features:[
+          {icon:'i-book-open',text:'Upload your school\'s lesson plan template once — every plan follows it exactly'},
+          {icon:'i-calendar',text:'Import your Excel pacing guide and pull objectives by week automatically'},
+          {icon:'i-spark',text:'AI generates a lesson plan, then illustrated slides, calibrated to your grade'},
+          {icon:'i-clipboard',text:'Worksheet, exit ticket, quiz, and a student game — all from the same lesson'},
+        ],
+      },
+      { icon:'i-book-open', iconBg:'#fdf0e3', iconColor:'var(--accent)',
+        title:'Step 1 — Your school\'s template',
+        subtitle:'Upload your lesson plan template once. Every plan you generate will follow its exact structure.',
+        body:'LessonCope reads your Word, PDF, or Excel template and mirrors its headings, sections, and layout. Save multiple templates — Observation, Weekly, Intervention — and pick one each time you plan.',
+        tip:'No template yet? LessonCope uses a built-in default structure so you can start right now.',
+      },
+      { icon:'i-calendar', iconBg:'#f0faf4', iconColor:'#15824b',
+        title:'Step 2 — Import your pacing guide',
+        subtitle:'Upload an Excel year plan or pacing guide. Objectives are extracted week by week.',
+        body:'If your school has an Excel pacing guide with grade-named sheets (e.g. "ICT Grade 4"), upload it once in the Planning source step. Then just pick the week — the objectives fill in automatically, ready to tick and send to the AI.',
+        tip:'Works with merged cells, multi-grade workbooks, and subject labels in sheet names like "ICT Grade 2".',
+      },
+      { icon:'i-clipboard', iconBg:'#f3efff', iconColor:'#7048e8',
+        title:'Step 3 — Objectives & settings',
+        subtitle:'Select pulled objectives or paste them, then set grade, slides, and tone.',
+        body:'In import mode: tick the objectives you want for this lesson. In manual mode: paste or type them. Then set the grade level (controls vocabulary and difficulty), the number of content slides, and the teaching tone.',
+        tip:'The "Lesson style" box is powerful — try "use real-world examples" or "lots of group work" to shape the whole plan.',
+      },
+      { icon:'i-spark', iconBg:'#eaf2fa', iconColor:'var(--primary)',
+        title:'Step 4 — Generate, review & share',
+        subtitle:'Hit Generate, review the plan, accept it, and your full lesson pack is ready to download.',
+        body:'LessonCope generates the lesson plan first so you can edit it. Accept it — illustrated slides are created in seconds. Then generate a worksheet, exit ticket, quiz, or a Room Code student game — all from the same lesson, no extra input needed.',
+        tip:'Room Code games need no app or sign-up. Students go to /join, type the Room Code, and play on any device.',
+      },
+    ];
+    let wzStep=0;
+
+    function openWizard(){
+      wzStep=0; renderWzStep();
+      $('wizardOverlay').style.display='flex';
+      document.body.style.overflow='hidden';
+    }
+    function closeWizard(){
+      $('wizardOverlay').style.display='none';
+      document.body.style.overflow='';
+      localStorage.setItem('lc_wizard_done','1');
+    }
+    function renderWzStep(){
+      const s=WZ_STEPS[wzStep], tot=WZ_STEPS.length;
+      $('wizardDots').innerHTML=WZ_STEPS.map((_,i)=>`<span class="wz-dot${i===wzStep?' active':i<wzStep?' done':''}"></span>`).join('');
+      let html=`<div class="wz-icon-wrap" style="background:${s.iconBg}"><svg class="wz-icon" aria-hidden="true" style="color:${s.iconColor}"><use href="#${s.icon}"/></svg></div><h3 class="wz-title" id="wizardTitle">${esc(s.title)}</h3><p class="wz-subtitle">${esc(s.subtitle)}</p>`;
+      if(s.features) html+=`<ul class="wz-features">`+s.features.map(f=>`<li><span class="wz-feat-icon">${ICON(f.icon)}</span><span>${esc(f.text)}</span></li>`).join('')+`</ul>`;
+      if(s.body) html+=`<p class="wz-body">${esc(s.body)}</p>`;
+      if(s.tip) html+=`<div class="wz-tip">${ICON('i-alert')}<span>${esc(s.tip)}</span></div>`;
+      $('wizardBodyEl').innerHTML=html;
+      const isLast=wzStep===tot-1;
+      $('wizardBackBtn').style.visibility=wzStep===0?'hidden':'visible';
+      $('wizardNextBtn').textContent=isLast?'Start planning →':'Next →';
+      $('wizardNextBtn').className=(isLast?'btn accent':'btn primary');
+      $('wizardNextBtn').style.padding='10px 24px';
+      $('wizardSkipBtn').style.display=isLast?'none':'inline';
+    }
+    $('wizardCloseBtn').addEventListener('click',closeWizard);
+    $('wizardSkipBtn').addEventListener('click',closeWizard);
+    $('wizardBackBtn').addEventListener('click',()=>{ if(wzStep>0){wzStep--;renderWzStep();} });
+    $('wizardNextBtn').addEventListener('click',()=>{ if(wzStep<WZ_STEPS.length-1){wzStep++;renderWzStep();}else closeWizard(); });
+    $('wizardOverlay').addEventListener('click',e=>{ if(e.target===$('wizardOverlay'))closeWizard(); });
+    ['guideFloat','guideBtnNav','guideHeroBtn'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('click',openWizard); });
 
     (async function init(){
       try{ const r=await fetch('/api/me'); if(r.ok){ const {user}=await r.json(); enterApp(user); return; } }catch{}
