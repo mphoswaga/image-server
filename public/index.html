@@ -705,15 +705,17 @@
         <div class="ps-num">3</div>
         <div class="ps-body">
           <div class="ps-heading"><svg class="ic" aria-hidden="true" style="color:var(--accent)"><use href="#i-target"/></svg> Select week or lesson</div>
-          <div class="grid4">
-            <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Subject</label><input id="wkSubject" type="text" style="font-size:13px" placeholder="e.g. ICT, Mathematics"/></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+            <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Subject <span style="color:var(--err)">*</span></label><input id="wkSubject" type="text" style="font-size:13px" placeholder="e.g. ICT, Mathematics"/></div>
+            <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Topic / Unit title <span style="color:var(--err)">*</span></label><input id="wkTopic" type="text" style="font-size:13px" placeholder="Auto-filled from your plan — or type it"/></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
             <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Grade</label><select id="wkGrade" style="font-size:13px"><option value="">— Select grade —</option></select></div>
-            <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Plan view</label><select id="wkView" style="font-size:13px"><option value="week">Week</option></select></div>
             <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Week</label><select id="wkWeek" style="font-size:13px"><option value="">— Select week —</option></select></div>
           </div>
           <div id="unitTitleCard" class="utc-card" style="display:none">
-            <div class="utc-icon"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg></div>
-            <div class="utc-body"><div class="utc-label">Unit title <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#aab">(auto-filled)</span></div><div class="utc-title" id="utcTitle">—</div></div>
+            <div class="utc-icon"><svg class="ic" aria-hidden="true"><use href="#i-book-open"/></svg></div>
+            <div class="utc-body"><div class="utc-label">From plan</div><div class="utc-title" id="utcTitle">—</div></div>
             <div class="utc-badge" id="utcBadge">WK —</div>
           </div>
           <div id="weekCarousel" class="week-carousel" style="display:none">
@@ -1250,6 +1252,7 @@
       const src=planningSources.find(s=>s.id===sourceId); if(!src) return;
       $('weekStep').style.display=''; updateStepNums();
       $('wkSubject').value=src.subject||'';
+      $('wkTopic').value='';
       const wg=$('wkGrade');
       wg.innerHTML='<option value="">— Select grade —</option>'+(src.gradesFound||[]).map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join('');
       $('wkWeek').innerHTML='<option value="">— Select week —</option>';
@@ -1273,6 +1276,8 @@
       const d=await(await fetch(`/api/planning-sources/${selectedPsrcId}/items?grade=${encodeURIComponent(selGrade)}&week=${wn}`)).json();
       const items=d.items||[]; if(!items.length){ clearPulledObjectives(); return; }
       const item=items[0]; pulledItemData=item;
+      // Populate editable topic field from unit title
+      if(item.unitTitle) $('wkTopic').value=item.unitTitle;
       $('unitTitleCard').style.display=''; $('utcTitle').textContent=item.unitTitle||'—'; $('utcBadge').textContent='WK '+wn;
       // Auto-set grade dropdown
       $('grade').value=selGrade;
@@ -1368,14 +1373,17 @@
         if(!selWeekNum){ toast('Select a grade and week from your plan.'); return; }
         objectives=collectImportObjectives();
         if(!objectives.trim()){ toast('Select at least one objective.'); return; }
-        subject=src.subject||''; topic=(pulledItemData&&pulledItemData.unitTitle)||subject;
+        subject=$('wkSubject').value.trim()||src.subject||'';
+        topic=$('wkTopic').value.trim();
+        if(!subject){ toast('Enter the subject (e.g. ICT, Mathematics) in the week selector.'); $('wkSubject').focus(); return; }
+        if(!topic){ toast('Enter the topic or unit title for this lesson in the week selector.'); $('wkTopic').focus(); return; }
       }else{
         subject=$('subject').value.trim(); topic=$('topic').value.trim(); objectives=$('objectives').value.trim();
         const bad=[fieldErr('subject','subjErr',!subject),fieldErr('topic','topicErr',!topic),fieldErr('objectives','objErr',!objectives)];
         const firstBad=['subject','topic','objectives'][bad.indexOf(true)];
         if(firstBad){ $(firstBad).focus(); $(firstBad).scrollIntoView({behavior:'smooth',block:'center'}); return; }
       }
-      ctx={ subject, topic:topic||subject, grade:$('grade').value||'middle school',
+      ctx={ subject, topic, grade:$('grade').value||'middle school',
         slideCount:Number($('slideCount').value)||5, tone:$('tone').value, focus:$('focus').value.trim(), objectives,
         templateId:selectedTemplateId,
         successCriteria:(planMode==='import'&&pulledItemData)?pulledItemData.successCriteria:[],
