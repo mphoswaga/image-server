@@ -126,6 +126,12 @@ app.post('/api/logout', (req, res) => { res.clearCookie(COOKIE_NAME); res.json({
 
 app.get('/api/me', requireAuth, (req, res) => res.json({ user: req.user }));
 
+app.get('/api/config/apps', requireAuth, (req, res) => {
+  res.json({
+    teacherScopeUrl: process.env.TEACHERSCOPE_APP_URL || 'https://curriculum-comment-generator-production-801b.up.railway.app',
+  });
+});
+
 // In-memory deck state so the editable preview can mutate before download.
 const decks = new Map(); // id -> { subject, topic, grade, tone, focus, slides, images, createdAt }
 const DECK_TTL = 60 * 60 * 1000; // 1 hour
