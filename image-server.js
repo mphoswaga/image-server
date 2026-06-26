@@ -134,7 +134,7 @@ app.get('/api/config/apps', requireAuth, (req, res) => {
 
 app.get('/api/presets', requireAuth, (req, res) => {
   const { PRESETS } = require('./slide-presets');
-  res.json({ presets: PRESETS.map(p => ({ id: p.id, name: p.name, layout: p.layout, dark: p.dark, bg: p.bg, primary: p.primary, accent: p.accent, soft: p.soft, text: p.text })) });
+  res.json({ presets: PRESETS.map(p => ({ id: p.id, name: p.name, group: p.group, layout: p.layout, dark: p.dark, bg: p.bg, primary: p.primary, accent: p.accent, soft: p.soft, text: p.text })) });
 });
 
 // In-memory deck state so the editable preview can mutate before download.
