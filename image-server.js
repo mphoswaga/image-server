@@ -528,16 +528,15 @@ app.get('/api/images/search', requireAuth, (req, res) => {
   res.json({ images: searchLibrary({ q, subject, topic, limit: 24 }) });
 });
 
+// Cache AI-rewritten queries so the same input never costs a second API call.
+const _rewriteCache = new Map();
+
 // Rewrite a teacher's image search query into one that returns educationally
-// relevant results. Two passes: (1) strip noisy prefixes; (2) disambiguate
-// terms that have a non-educational meaning on stock/web searches; (3) append
-// grade + "education" so search engines bias toward classroom content.
-function rewriteImageQuery(raw, { grade = '' } = {}) {
+// relevant results. Static CLARIFY rules handle known ambiguous terms instantly.
+// For anything unrecognised, GPT-4o-mini generates concrete visual keywords.
+async function rewriteImageQuery(raw, { grade = '' } = {}) {
   let q = String(raw).trim();
-  // Strip verbose prefixes that add no signal for image search
-  q = q.replace(/^(examples?\s+of\s+|types?\s+of\s+|what\s+(is|are)\s+|the\s+)/i, '').trim();
-  // Disambiguation: terms whose common image-search meaning clashes with the
-  // school/curriculum meaning. Replace the matched portion with a richer phrase.
+  q = q.replace(/^(examples?\s+of\s+|types?\s+of\s+|what\s+(is|are)\s+|using\s+(the\s+)?|the\s+)/i, '').trim();
   const CLARIFY = [
     [/(output\s+devices?)/i,   'computer monitor printer speaker headphones $1'],
     [/(input\s+devices?)/i,    'keyboard mouse touchscreen microphone $1 computer'],
@@ -553,16 +552,49 @@ function rewriteImageQuery(raw, { grade = '' } = {}) {
     [/(photosynthesis\b)/i,    'plant photosynthesis sunlight chlorophyll diagram'],
     [/(volcano\b)/i,           'volcano eruption lava diagram geography'],
     [/(water\s+cycle)/i,       'water cycle evaporation rain diagram school'],
+    [/(spell.?check)/i,        'computer screen word processor spell check autocorrect'],
+    [/(document|word\s+process)/i, 'computer screen document typing word processor'],
+    [/(spreadsheet|excel)/i,   'computer screen spreadsheet data table rows columns'],
+    [/(presentation|slides?)/i,'computer screen presentation slideshow projector'],
+    [/(internet|web\s+brows)/i,'computer screen internet browser website online'],
+    [/(email|e-mail)/i,        'computer screen email inbox message typing'],
+    [/(file\s*manag|folder)/i, 'computer screen file folder documents organize'],
+    [/(copy.?paste|cut.?paste)/i,'computer keyboard shortcut copy paste edit'],
+    [/(keyboard\s+shortcut)/i, 'computer keyboard shortcut keys ctrl function'],
+    [/(print)/i,               'printer computer printing paper document office'],
+    [/(save\b)/i,              'computer screen save file document floppy disk icon'],
   ];
+  let ruleMatched = false;
   for (const [pattern, replacement] of CLARIFY) {
-    if (pattern.test(q)) { q = q.replace(pattern, replacement); break; }
+    if (pattern.test(q)) { q = q.replace(pattern, replacement); ruleMatched = true; break; }
   }
-  // Append grade context when available
+
+  // For queries no static rule recognises, ask GPT-4o-mini for concrete visual keywords.
+  if (!ruleMatched && process.env.OPENAI_API_KEY) {
+    const cacheKey = q.toLowerCase().trim();
+    if (_rewriteCache.has(cacheKey)) {
+      q = _rewriteCache.get(cacheKey);
+    } else {
+      try {
+        const { client: aiClient } = require('./ai-client');
+        const resp = await aiClient().chat.completions.create({
+          model: 'gpt-4o-mini',
+          max_tokens: 50,
+          messages: [{ role: 'user', content: `Convert this educational slide title into 4-6 specific visual keywords for stock photo search. Describe what the IMAGE should show — concrete objects, settings, actions. No abstract words. Space-separated, no punctuation.\n\nTitle: "${q}"` }],
+        });
+        const rewritten = resp.choices[0]?.message?.content?.trim().replace(/["\n]/g, '');
+        if (rewritten && rewritten.length > 3 && rewritten.length < 150) {
+          _rewriteCache.set(cacheKey, rewritten);
+          q = rewritten;
+        }
+      } catch { /* leave q unchanged if AI fails */ }
+    }
+  }
+
   if (grade && grade !== 'middle school' && grade !== 'high school') {
     const gradeNum = grade.replace(/[^0-9]/g, '');
     if (gradeNum) q += ` grade ${gradeNum} students`;
   }
-  // Always bias toward educational content
   if (!/education|school|classroom|student|diagram|learn/i.test(q)) q += ' education';
   return q.trim();
 }
@@ -573,7 +605,7 @@ app.post('/api/images/fetch', requireAuth, async (req, res) => {
   const { q, subject, topic, grade } = req.body || {};
   if (!q || !String(q).trim()) return res.status(400).json({ error: 'Type what you are looking for.' });
   try {
-    const searchQ = rewriteImageQuery(String(q).trim(), { grade: grade || '' });
+    const searchQ = await rewriteImageQuery(String(q).trim(), { grade: grade || '' });
     const sub = subject || 'search', top = topic || 'general';
     // Fetch from Unsplash + Wikimedia Commons simultaneously
     const [unsplash, wikimedia] = await Promise.all([
@@ -631,7 +663,7 @@ app.post('/api/slide/:id/ai-image', requireAuth, async (req, res) => {
     // Try Wikimedia Commons before consuming AI quota (free, educational images).
     const wikiImgs = await fetchWikimediaImages({
       subject: deck.subject, topic: deck.topic, count: 3,
-      query: rewriteImageQuery(concept, { grade: deck.grade }),
+      query: await rewriteImageQuery(concept, { grade: deck.grade }),
     }).catch(() => []);
     if (wikiImgs.length) {
       const wEntry = wikiImgs[0];
@@ -678,7 +710,7 @@ app.post('/api/slide/:id/diagram', requireAuth, async (req, res) => {
     if (!entry) {
       const wikiDiagrams = await fetchWikimediaImages({
         subject: deck.subject, topic: deck.topic, count: 3,
-        query: rewriteImageQuery(concept, { grade: deck.grade }) + ' diagram',
+        query: (await rewriteImageQuery(concept, { grade: deck.grade })) + ' diagram',
       }).catch(() => []);
       if (wikiDiagrams.length) {
         entry = wikiDiagrams[0];
