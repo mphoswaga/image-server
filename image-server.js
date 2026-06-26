@@ -18,6 +18,7 @@ const { generateDiagram } = require('./svg-diagram');
 const { generateWorksheet, generateExitTicket, generateQuiz, generateGame } = require('./lesson-pack');
 const { worksheetDocx, exitTicketDocx, quizDocx } = require('./docgen');
 const unit = require('./unit');
+const planningSource = require('./planning-source');
 const games = require('./games');
 const roster = require('./roster');
 const apikeys = require('./apikeys');
@@ -304,6 +305,49 @@ app.get('/api/units/:id', requireAuth, (req, res) => {
 
 app.delete('/api/units/:id', requireAuth, (req, res) => {
   unit.deleteUnit(req.userId, req.params.id);
+  res.json({ ok: true });
+});
+
+// ── Planning sources (pacing guides / year plans / weekly plans) ─────────────
+app.post('/api/planning-sources', requireAuth, upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Upload an Excel file (.xlsx).' });
+  const { originalname, buffer } = req.file;
+  const ext = path.extname(originalname).toLowerCase();
+  if (ext !== '.xlsx' && ext !== '.xls') return res.status(400).json({ error: 'Only Excel files (.xlsx / .xls) are supported for planning sources.' });
+  try {
+    const { items, gradesFound, subject } = planningSource.parseExcelSource(buffer, originalname);
+    if (!items.length) return res.status(400).json({ error: 'No weekly data could be extracted. Check that your file has a Grade sheet with Week, Unit, and Objectives columns.' });
+    const rec = await planningSource.savePlanningSource(req.userId, { fileName: originalname, items, gradesFound, subject, sourceType: req.body.sourceType || 'pacing_guide' });
+    res.json({ source: { id: rec.id, fileName: rec.fileName, sourceType: rec.sourceType, subject: rec.subject, gradesFound: rec.gradesFound, uploadedAt: rec.uploadedAt, itemCount: items.length } });
+  } catch (err) {
+    console.error('Planning source parse failed:', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/planning-sources', requireAuth, (req, res) => {
+  res.json({ sources: planningSource.listPlanningSources(req.userId) });
+});
+
+app.get('/api/planning-sources/:id', requireAuth, (req, res) => {
+  const src = planningSource.getPlanningSource(req.userId, req.params.id);
+  if (!src) return res.status(404).json({ error: 'Not found.' });
+  // Return without the full items array (can be large)
+  const { items: _, ...meta } = src;
+  res.json({ source: { ...meta, itemCount: (src.items || []).length } });
+});
+
+app.get('/api/planning-sources/:id/items', requireAuth, (req, res) => {
+  const { grade, week } = req.query;
+  const items = planningSource.queryItems(req.userId, req.params.id, { grade, week });
+  // Also return list of all available weeks for this source+grade (for carousel)
+  const allForGrade = planningSource.queryItems(req.userId, req.params.id, { grade });
+  const weeks = [...new Set(allForGrade.map(i => i.weekNumber))].sort((a, b) => a - b);
+  res.json({ items, availableWeeks: weeks, grade, week: week ? parseInt(week, 10) : null });
+});
+
+app.delete('/api/planning-sources/:id', requireAuth, (req, res) => {
+  planningSource.deletePlanningSource(req.userId, req.params.id);
   res.json({ ok: true });
 });
 
