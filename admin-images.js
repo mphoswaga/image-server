@@ -76,7 +76,13 @@ async function fetchWikimediaImages({ subject, topic, count = 8, query } = {}) {
   fs.mkdirSync(folder, { recursive: true });
   const existing = fs.readdirSync(folder).filter(f => f.startsWith('wm_')).length;
 
-  const searchQ = (query && String(query).trim()) || `${subject} ${topic} education`;
+  // Wikimedia Commons returns scanned PDFs when queries contain educational context
+  // words or become too long. Strip those words and cap at 3 terms so the search
+  // stays focused on the visual concept rather than attracting document results.
+  const searchQ = ((query && String(query).trim()) || `${subject.replace(/-/g,' ')} ${topic.replace(/-/g,' ')}`)
+    .replace(/\b(education|school|classroom|students?|learn(?:ing)?|grade\s+\d+|internet|diagram)\b/gi, '')
+    .replace(/\s{2,}/g, ' ').trim()
+    .split(/\s+/).slice(0, 3).join(' ');
 
   const params = new URLSearchParams({
     action: 'query', generator: 'search', gsrnamespace: '6',
