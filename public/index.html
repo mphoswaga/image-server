@@ -350,10 +350,14 @@
     .picker-search .btn { padding:10px 13px; font-size:13.5px; }
     .picker-hint { padding:2px 20px 6px; font-size:12px; color:var(--muted); }
     .picker-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:10px 20px 20px; overflow-y:auto; }
-    .picker-grid .pg { aspect-ratio:4/3; border-radius:10px; overflow:hidden; cursor:pointer; border:2px solid transparent; background:#eef0f4; padding:0; }
+    .picker-grid .pg { aspect-ratio:4/3; border-radius:10px; overflow:hidden; cursor:pointer; border:2px solid transparent; background:#eef0f4; padding:0; position:relative; }
     .picker-grid .pg img { width:100%; height:100%; object-fit:cover; display:block; }
     .picker-grid .pg:hover { border-color:var(--primary-2); }
     .picker-grid .pg-msg { grid-column:1/-1; text-align:center; color:var(--muted); padding:26px; font-size:14px; }
+    .pg-source { position:absolute; bottom:5px; left:5px; font-size:10px; font-weight:700; letter-spacing:.3px; padding:2px 6px; border-radius:4px; pointer-events:none; line-height:1.4; }
+    .pg-source.src-wiki { background:rgba(10,80,180,.82); color:#fff; }
+    .pg-source.src-unsplash { background:rgba(20,20,20,.65); color:#fff; }
+    .pg-source.src-ai { background:rgba(100,30,180,.82); color:#fff; }
     @media (max-width:600px){ .picker-grid { grid-template-columns:repeat(2,1fr); } }
     .slide .body { padding:15px 17px 16px; flex:1; display:flex; flex-direction:column; }
     .kicker { display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; margin-bottom:7px; }
@@ -1672,7 +1676,12 @@
     function closePicker(){ $('imgPicker').style.display='none'; pickerIndex=null; }
     function pickerGridHTML(images,fromWeb){
       if(!images||!images.length) return `<div class="pg-msg">No ${fromWeb?'web ':'stock '}images found.${fromWeb?'':' Try "Search the web".'}</div>`;
-      return images.map(im=>`<button type="button" class="pg" data-rel="${esc(im.relpath)}" title="${esc(im.caption||'')}"><img src="${esc(im.image)}" loading="lazy"></button>`).join('');
+      return images.map(im=>{
+        const src=im.source||'';
+        const srcClass=src==='wikimedia'?'src-wiki':src==='svg-diagram'?'src-ai':'src-unsplash';
+        const srcLabel=src==='wikimedia'?'Wikimedia':src==='svg-diagram'?'AI':'Unsplash';
+        return `<button type="button" class="pg" data-rel="${esc(im.relpath)}" title="${esc(im.caption||'')}"><img src="${esc(im.image)}" loading="lazy"><span class="pg-source ${srcClass}">${srcLabel}</span></button>`;
+      }).join('');
     }
     async function runStock(){ const q=$('pickerQ').value.trim();
       $('pickerHint').textContent='Stock library — free and instant.';
