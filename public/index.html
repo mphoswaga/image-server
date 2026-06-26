@@ -477,6 +477,23 @@
     .room-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); margin-bottom:5px; }
     .gc-body { padding:14px 18px; }
     .gc-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:12px; }
+    .gc-status-live  { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:800; padding:3px 10px; border-radius:999px; background:#d1fae5; color:#065f46; text-transform:uppercase; letter-spacing:.4px; }
+    .gc-status-closed{ display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:800; padding:3px 10px; border-radius:999px; background:#f1f5f9; color:#64748b; text-transform:uppercase; letter-spacing:.4px; }
+    .gc-status-live::before  { content:''; width:7px; height:7px; border-radius:50%; background:#10b981; flex:none; animation:pulse-live 1.6s infinite; }
+    .gc-status-closed::before{ content:''; width:7px; height:7px; border-radius:50%; background:#94a3b8; flex:none; }
+    @keyframes pulse-live { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .games-filter { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:16px; }
+    .games-filter input  { flex:1; min-width:160px; font-size:13px; padding:9px 12px; border:1.5px solid var(--border); border-radius:10px; background:#fff; }
+    .games-filter select { font-size:13px; padding:9px 12px; border:1.5px solid var(--border); border-radius:10px; background:#fff; width:auto; }
+    .gc-dates { font-size:12px; color:var(--muted); display:flex; gap:14px; flex-wrap:wrap; margin-top:4px; }
+    .gc-extend-row { margin-top:10px; display:none; align-items:center; gap:8px; flex-wrap:wrap; background:var(--primary-soft); border-radius:10px; padding:10px 12px; }
+    .gc-extend-row input[type=datetime-local] { font-size:12.5px; padding:7px 10px; border:1.5px solid var(--border); border-radius:9px; flex:1; min-width:180px; background:#fff; }
+    .gc-extend-save { font-size:12.5px; font-weight:700; padding:7px 14px; border-radius:9px; background:var(--primary); color:#fff; border:none; cursor:pointer; font-family:inherit; white-space:nowrap; }
+    .gc-extend-save:hover { background:var(--primary-2); }
+    .gc-extend-cancel { font-size:12.5px; font-weight:600; padding:7px 12px; border-radius:9px; background:#fff; color:var(--muted); border:1px solid var(--border); cursor:pointer; font-family:inherit; }
+    .cutoff-field { margin-top:10px; }
+    .cutoff-field label { font-size:13px; font-weight:600; display:block; margin-bottom:4px; }
+    .cutoff-field input { font-size:13px; padding:8px 10px; border:1.5px solid var(--border); border-radius:9px; background:#fff; width:100%; box-sizing:border-box; }
 
     /* ── Collapsible add sections ── */
     details.panel-add { border:1.5px dashed var(--border); border-radius:14px; overflow:hidden; margin-bottom:14px; }
@@ -838,7 +855,11 @@
           <label for="gameQCount" style="font-size:13px;font-weight:600;white-space:nowrap">Questions</label>
           <input id="gameQCount" type="number" min="4" max="20" value="6" style="width:64px;font-size:13px;padding:8px 10px" />
         </div>
-        <button type="button" id="makeGameBtn" class="btn accent" style="width:auto"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Create student game</button>
+        <div class="cutoff-field">
+          <label for="gameCutoff">Close game at <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+          <input id="gameCutoff" type="datetime-local" />
+        </div>
+        <button type="button" id="makeGameBtn" class="btn accent" style="width:auto;margin-top:10px"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Create student game</button>
         <div id="gamePanel" style="display:none;margin-top:16px"></div>
       </section>
     </section>
@@ -923,6 +944,9 @@
               <option value="">— No roster (free-form names) —</option>
             </select>
           </div>
+          <div style="grid-column:1/-1"><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Close game at <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+            <input id="pptxCutoff" type="datetime-local" style="width:100%;font-size:13px;padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;background:#fff;box-sizing:border-box" />
+          </div>
         </div>
         <div id="pptxDrop" style="border:2px dashed var(--border);border-radius:12px;padding:22px;text-align:center;cursor:pointer;color:var(--muted);font-size:13px;margin-bottom:10px;transition:border-color .15s">
           <svg class="ic" aria-hidden="true" style="font-size:22px;display:block;margin:0 auto 6px"><use href="#i-image"/></svg>
@@ -935,6 +959,14 @@
         </div><!-- .add-body -->
       </details>
 
+      <div class="games-filter">
+        <input id="gamesSearch" type="text" placeholder="Search by topic…" autocomplete="off" />
+        <select id="gamesStatusFilter">
+          <option value="all">All games</option>
+          <option value="live">Live</option>
+          <option value="closed">Closed</option>
+        </select>
+      </div>
       <div id="gamesList"></div>
       <div style="margin-top:28px;padding-top:18px;border-top:1px solid var(--border)"><button id="gamesBack" class="back-btn"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back to lesson planner</button></div>
     </section>
@@ -1816,7 +1848,8 @@
       const b=$('makeGameBtn'); b.disabled=true; const o=b.innerHTML; b.innerHTML='<span class="spinner"></span>Building game…';
       const rosterId=$('gameRosterPick').value||null;
       const questionCount=Math.min(20,Math.max(4,parseInt($('gameQCount').value,10)||6));
-      try{ const r=await fetch('/api/game',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deckId:currentDeckId,rosterId,questionCount})});
+      const cutoffAt=$('gameCutoff').value||null;
+      try{ const r=await fetch('/api/game',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deckId:currentDeckId,rosterId,questionCount,cutoffAt})});
         const d=await r.json(); if(!r.ok) throw new Error(d.error);
         const url=location.origin+d.path;
         const joinUrl=location.origin+'/join';
@@ -1841,33 +1874,107 @@
     function openGames(){ hideAllPanels(); gamesPanel.style.display='block'; loadMyGames(); loadRosters(true); setActiveNav('gamesBtn'); window.scrollTo({top:0,behavior:'smooth'}); }
     function closeGames(){ gamesPanel.style.display='none'; stepsEl.style.display='flex'; show('composer'); setStep(1); setActiveNav('homeBtn'); }
     $('gamesBtn').onclick=openGames; $('gamesBack').onclick=closeGames; $('gamesBackTop').onclick=closeGames;
-    async function loadMyGames(){ const wrap=$('gamesList'); wrap.innerHTML='<span class="status">Loading…</span>';
-      try{ const d=await (await fetch('/api/games')).json();
-        if(!d.games||!d.games.length){ wrap.innerHTML='<div class="empty-state"><svg class="ic" aria-hidden="true" style="width:36px;height:36px;opacity:.3"><use href="#i-target"/></svg><p>No games yet</p><p style="font-size:13px;color:var(--muted)">Create one from a finished lesson — look for the "Student game" section under your slides.</p></div>'; return; }
-        const html=d.games.map(g=>{ const url=location.origin+'/play/'+g.id;
-          const joinUrl=location.origin+'/join';
-          const subjectChip=g.subject?`<span class="gc-chip">${esc(g.subject)}</span>`:'';
-          const gradeChip=g.grade?`<span class="gc-chip">${esc(g.grade)}</span>`:'';
-          return `<div class="game-card">
-            <div class="gc-head">
-              <div class="gc-top">
-                <div>
-                  <div class="gc-title">${esc(g.lessonTitle)}</div>
-                  <div class="gc-meta">${subjectChip}${gradeChip}<span class="gc-chip">${g.questionCount} Qs</span><span class="gc-chip">${g.plays} played</span></div>
-                </div>
-                ${g.roomCode?`<div style="text-align:right"><span class="room-label">Room code</span><div class="room-code">${esc(g.roomCode)}</div></div>`:''}
+    function fmtDate(iso){if(!iso)return'';const d=new Date(iso);return d.toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'});}
+    function fmtDateTime(iso){if(!iso)return'';const d=new Date(iso);return d.toLocaleString(undefined,{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}
+    function gameLive(cutoffAt){return!cutoffAt||new Date(cutoffAt)>new Date();}
+
+    let allGames=[];
+
+    function filterGames(games,search,status){
+      return games.filter(g=>{
+        const matchText=!search||(g.topic||'').toLowerCase().includes(search)||(g.lessonTitle||'').toLowerCase().includes(search)||(g.subject||'').toLowerCase().includes(search);
+        const live=gameLive(g.cutoffAt);
+        const matchStatus=status==='all'||(status==='live'&&live)||(status==='closed'&&!live);
+        return matchText&&matchStatus;
+      });
+    }
+
+    function renderGamesList(games){
+      const wrap=$('gamesList');
+      if(!games||!games.length){
+        wrap.innerHTML='<div class="empty-state"><svg class="ic" aria-hidden="true" style="width:36px;height:36px;opacity:.3"><use href="#i-target"/></svg><p>No games yet</p><p style="font-size:13px;color:var(--muted)">Create one from a finished lesson — look for the "Student game" section under your slides.</p></div>';
+        return;
+      }
+      const joinUrl=location.origin+'/join';
+      const html=games.map(g=>{
+        const url=location.origin+'/play/'+g.id;
+        const subjectChip=g.subject?`<span class="gc-chip">${esc(g.subject)}</span>`:'';
+        const gradeChip=g.grade?`<span class="gc-chip">${esc(g.grade)}</span>`:'';
+        const live=gameLive(g.cutoffAt);
+        const badge=live?'<span class="gc-status-live">Live</span>':'<span class="gc-status-closed">Closed</span>';
+        const cutoffLine=g.cutoffAt?`<span>Closes ${fmtDateTime(g.cutoffAt)}</span>`:'<span>No close date</span>';
+        const extRowId='ext-'+g.id;
+        return `<div class="game-card">
+          <div class="gc-head">
+            <div class="gc-top">
+              <div>
+                <div class="gc-title">${esc(g.lessonTitle)}</div>
+                <div class="gc-meta">${subjectChip}${gradeChip}<span class="gc-chip">${g.questionCount} Qs</span><span class="gc-chip">${g.plays} played</span></div>
+                <div class="gc-dates"><span>Created ${fmtDate(g.createdAt)}</span>${cutoffLine}${badge}</div>
               </div>
-              ${g.roomCode?`<p class="hint" style="margin:4px 0 0;font-size:12px">Students join at <b>${esc(joinUrl)}</b> and enter this code</p>`:''}
+              ${g.roomCode?`<div style="text-align:right"><span class="room-label">Room code</span><div class="room-code">${esc(g.roomCode)}</div></div>`:''}
             </div>
-            <div class="gc-body">
-              <div class="game-link"><input readonly value="${esc(url)}"><button type="button" class="btn ghost gcopy" data-url="${esc(url)}" style="width:auto;padding:9px 13px">${ICON('i-doc')} Copy</button></div>
-              ${g.rosterId?`<a href="/api/game/${esc(g.id)}/qr-sheet" target="_blank" style="font-size:12.5px;font-weight:600;color:var(--primary);display:inline-flex;align-items:center;gap:4px;margin-top:8px">${ICON('i-image')} Print QR cards</a>`:''}
-              <div id="res-${g.id}" style="margin-top:10px"></div>
+            ${g.roomCode?`<p class="hint" style="margin:4px 0 0;font-size:12px">Students join at <b>${esc(joinUrl)}</b> and enter this code</p>`:''}
+          </div>
+          <div class="gc-body">
+            <div class="game-link"><input readonly value="${esc(url)}"><button type="button" class="btn ghost gcopy" data-url="${esc(url)}" style="width:auto;padding:9px 13px">${ICON('i-doc')} Copy</button></div>
+            ${g.rosterId?`<a href="/api/game/${esc(g.id)}/qr-sheet" target="_blank" style="font-size:12.5px;font-weight:600;color:var(--primary);display:inline-flex;align-items:center;gap:4px;margin-top:8px">${ICON('i-image')} Print QR cards</a>`:''}
+            <div class="gc-actions" style="margin-top:10px">
+              <button type="button" class="btn ghost gc-extend-btn" data-id="${esc(g.id)}" data-row="${extRowId}" style="font-size:12px;padding:6px 12px;width:auto">Extend deadline</button>
             </div>
-          </div>`; }).join('');
-        wrap.innerHTML=html;
-        d.games.forEach(g=>loadGameResults(g.id,'res-'+g.id));
-        wrap.querySelectorAll('.gcopy').forEach(b=>b.addEventListener('click',()=>copyLink(b.dataset.url)));
+            <div class="gc-extend-row" id="${extRowId}">
+              <input type="datetime-local" class="gc-extend-input" />
+              <button type="button" class="gc-extend-save" data-id="${esc(g.id)}" data-row="${extRowId}">Save</button>
+              <button type="button" class="gc-extend-cancel" data-row="${extRowId}">Cancel</button>
+            </div>
+            <div id="res-${g.id}" style="margin-top:10px"></div>
+          </div>
+        </div>`;
+      }).join('');
+      wrap.innerHTML=html;
+      games.forEach(g=>loadGameResults(g.id,'res-'+g.id));
+      wrap.querySelectorAll('.gcopy').forEach(b=>b.addEventListener('click',()=>copyLink(b.dataset.url)));
+      wrap.querySelectorAll('.gc-extend-btn').forEach(b=>b.addEventListener('click',()=>{
+        const row=document.getElementById(b.dataset.row);
+        const visible=row.style.display==='flex';
+        row.style.display=visible?'none':'flex';
+        if(!visible){
+          const g=allGames.find(x=>x.id===b.dataset.id);
+          const inp=row.querySelector('.gc-extend-input');
+          if(g&&g.cutoffAt&&inp){const d=new Date(g.cutoffAt);inp.value=new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);}
+        }
+      }));
+      wrap.querySelectorAll('.gc-extend-save').forEach(b=>b.addEventListener('click',()=>extendCutoff(b.dataset.id,b.dataset.row)));
+      wrap.querySelectorAll('.gc-extend-cancel').forEach(b=>b.addEventListener('click',()=>{document.getElementById(b.dataset.row).style.display='none';}));
+    }
+
+    async function extendCutoff(gameId,rowId){
+      const row=document.getElementById(rowId);
+      const inp=row?row.querySelector('.gc-extend-input'):null;
+      if(!inp)return;
+      const cutoffAt=inp.value?new Date(inp.value).toISOString():null;
+      try{
+        const r=await fetch('/api/game/'+gameId+'/cutoff',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({cutoffAt})});
+        const d=await r.json(); if(!r.ok)throw new Error(d.error);
+        const g=allGames.find(x=>x.id===gameId); if(g)g.cutoffAt=d.cutoffAt;
+        renderGamesList(filterGames(allGames,$('gamesSearch').value.toLowerCase(),$('gamesStatusFilter').value));
+        toast(cutoffAt?'Deadline updated.':'Close date removed.');
+      }catch(e){toast(e.message||'Failed to update.');}
+    }
+
+    async function loadMyGames(){
+      const wrap=$('gamesList'); wrap.innerHTML='<span class="status">Loading…</span>';
+      try{
+        const d=await (await fetch('/api/games')).json();
+        if(!d.games||!d.games.length){ allGames=[]; wrap.innerHTML='<div class="empty-state"><svg class="ic" aria-hidden="true" style="width:36px;height:36px;opacity:.3"><use href="#i-target"/></svg><p>No games yet</p><p style="font-size:13px;color:var(--muted)">Create one from a finished lesson — look for the "Student game" section under your slides.</p></div>'; return; }
+        allGames=d.games;
+        renderGamesList(filterGames(allGames,$('gamesSearch').value.toLowerCase(),$('gamesStatusFilter').value));
+        const searchEl=$('gamesSearch'); const filterEl=$('gamesStatusFilter');
+        if(!searchEl.dataset.wired){
+          searchEl.dataset.wired='1'; filterEl.dataset.wired='1';
+          const refilter=()=>renderGamesList(filterGames(allGames,$('gamesSearch').value.toLowerCase(),$('gamesStatusFilter').value));
+          searchEl.addEventListener('input',refilter); filterEl.addEventListener('change',refilter);
+        }
       }catch{ wrap.innerHTML='<span class="status err">Could not load games.</span>'; }
     }
 
@@ -1901,6 +2008,7 @@
       fd.append('grade',$('pptxGrade').value);
       fd.append('questionCount',Math.min(20,Math.max(4,parseInt($('pptxQCount').value,10)||6)));
       fd.append('rosterId',$('pptxRosterPick').value||'');
+      fd.append('cutoffAt',$('pptxCutoff').value||'');
       try{
         const r=await fetch('/api/game/from-pptx',{method:'POST',body:fd});
         const d=await r.json(); if(!r.ok) throw new Error(d.error);

@@ -679,7 +679,8 @@ app.post('/api/game', requireAuth, async (req, res) => {
     const game = await generateGame({ subject: deck.subject, topic: deck.topic, grade: deck.grade, tone: deck.tone, objectives: deck.objectives || '', lessonPlanText: deck.lessonPlanText || '', questionCount });
     const lessonTitle = (deck.slides.find(s => s.type === 'title') || {}).title || deck.topic;
     const rosterId = (req.body && req.body.rosterId) || null;
-    const rec = games.createGame({ teacherId: req.userId, teacherName: req.user.name, lessonTitle, subject: deck.subject, topic: deck.topic, grade: deck.grade, game, rosterId });
+    const cutoffAt = (req.body && req.body.cutoffAt) || null;
+    const rec = games.createGame({ teacherId: req.userId, teacherName: req.user.name, lessonTitle, subject: deck.subject, topic: deck.topic, grade: deck.grade, game, rosterId, cutoffAt });
     res.json({ gameId: rec.id, path: `/play/${rec.id}`, questionCount: rec.questions.length, roomCode: rec.roomCode });
   } catch (err) {
     console.error('Game creation failed:', err.message);
@@ -697,15 +698,26 @@ app.post('/api/game/from-pptx', requireAuth, upload.single('file'), async (req, 
   if (!subject || !topic) return res.status(400).json({ error: 'Subject and topic are required.' });
   const questionCount = Math.min(20, Math.max(4, parseInt(req.body && req.body.questionCount, 10) || 6));
   const rosterId = (req.body && req.body.rosterId) || null;
+  const cutoffAt = (req.body && req.body.cutoffAt) || null;
   try {
     const lessonPlanText = await extractText(req.file.buffer, req.file.originalname);
     const game = await generateGame({ subject, topic, grade, objectives: '', lessonPlanText, questionCount });
-    const rec = games.createGame({ teacherId: req.userId, teacherName: req.user.name, lessonTitle: topic, subject, topic, grade, game, rosterId });
+    const rec = games.createGame({ teacherId: req.userId, teacherName: req.user.name, lessonTitle: topic, subject, topic, grade, game, rosterId, cutoffAt });
     res.json({ gameId: rec.id, path: `/play/${rec.id}`, questionCount: rec.questions.length, roomCode: rec.roomCode });
   } catch (err) {
     console.error('Game from pptx failed:', err.message);
     res.status(400).json({ error: err.message });
   }
+});
+
+// Teacher: update the cutoff date for a game they own.
+app.patch('/api/game/:id/cutoff', requireAuth, (req, res) => {
+  const g = games.getGame(req.params.id);
+  if (!g) return res.status(404).json({ error: 'Game not found.' });
+  if (g.teacherId !== req.userId) return res.status(403).json({ error: 'Not your game.' });
+  const cutoffAt = (req.body && req.body.cutoffAt) || null;
+  const updated = games.updateGameCutoff(req.params.id, cutoffAt);
+  res.json({ ok: true, cutoffAt: updated.cutoffAt });
 });
 
 // Student: enter a game with their Student ID — issues a short-lived game session.

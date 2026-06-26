@@ -38,7 +38,7 @@ function getRoomCode(code) {
   return rooms[String(code).toUpperCase()] || null;
 }
 
-function createGame({ teacherId, teacherName, lessonTitle, subject, topic, grade, game, rosterId }) {
+function createGame({ teacherId, teacherName, lessonTitle, subject, topic, grade, game, rosterId, cutoffAt }) {
   fs.mkdirSync(GAMES_DIR, { recursive: true });
   const id = crypto.randomUUID().slice(0, 8); // short + shareable
   const roomCode = genRoomCode();
@@ -47,6 +47,7 @@ function createGame({ teacherId, teacherName, lessonTitle, subject, topic, grade
     lessonTitle: lessonTitle || topic, subject, topic, grade,
     roomCode,
     rosterId: rosterId || null,
+    cutoffAt: cutoffAt || null,
     summary: game.summary || { overview: game.overview || '', concepts: game.concepts || [] },
     questions: game.questions || [],
     createdAt: new Date().toISOString(),
@@ -107,9 +108,18 @@ function listTeacherGames(teacherId) {
     .map(g => ({
       id: g.id, lessonTitle: g.lessonTitle, subject: g.subject, topic: g.topic, grade: g.grade,
       questionCount: (g.questions || []).length, createdAt: g.createdAt, plays: loadResults(g.id).length,
-      roomCode: g.roomCode || null, rosterId: g.rosterId || null,
+      roomCode: g.roomCode || null, rosterId: g.rosterId || null, cutoffAt: g.cutoffAt || null,
     }))
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
-module.exports = { createGame, getGame, recordResult, getResults, getHighScores, listTeacherGames, getRoomCode };
+function updateGameCutoff(id, cutoffAt) {
+  const p = gamePath(String(id));
+  if (!fs.existsSync(p)) return null;
+  const g = JSON.parse(fs.readFileSync(p, 'utf8'));
+  g.cutoffAt = cutoffAt || null;
+  writeJsonAtomic(p, g);
+  return g;
+}
+
+module.exports = { createGame, getGame, recordResult, getResults, getHighScores, listTeacherGames, getRoomCode, updateGameCutoff };
