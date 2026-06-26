@@ -15,6 +15,7 @@ const { generateContent } = require('./content');
 const { fetchUnsplashImage } = require('./fetch-image');
 const { gradeProfile } = require('./grade');
 const { parseFraction, drawFractionPizza, drawStepsDiagram, drawStepsHorizontal, drawNumberLine, detectLabelledDiagram, drawLabelledDiagram } = require('./concept-diagram');
+const { getPreset } = require('./slide-presets');
 
 // Draw an animated concept diagram in the image area when one fits; otherwise
 // place the photo. Returns true if a diagram was drawn.
@@ -211,10 +212,9 @@ async function selectImages(slides, subject, topic) {
 // ── D. PPTX Assembler — distinct layout per slide type ─────────────────────
 const SOFT = { accentSoft: 'FBEEDE', primarySoft: 'EAF1F8' };
 
-function bulletItems(bullets, t) {
+function bulletItems(bullets, t, thm) {
+  thm = thm || THEME;
   return bullets.map((b, bi) => {
-    // Playful (early grades): an emoji acts as the bullet marker. breakLine
-    // keeps each on its own paragraph (needed for layout + per-bullet animation).
     if (t.playful && t.bulletEmojis) {
       return {
         text: `${t.bulletEmojis[bi % t.bulletEmojis.length]}  ${b}`,
@@ -225,7 +225,7 @@ function bulletItems(bullets, t) {
       text: b,
       options: {
         bullet: { code: t.bulletGlyph },
-        color: t.colorful ? t.bulletPalette[bi % t.bulletPalette.length] : (t.bulletPalette[0] || THEME.text),
+        color: t.colorful ? t.bulletPalette[bi % t.bulletPalette.length] : (t.bulletPalette[0] || thm.text),
         fontSize: t.bulletSize,
         bold: t.colorful,
       },
@@ -233,96 +233,97 @@ function bulletItems(bullets, t) {
   });
 }
 
-function addTitleBar(pptx, slide, title, t, accent) {
-  slide.addText(title, { x: 0.5, y: 0.35, w: 9, h: 0.9, fontFace: THEME.font, fontSize: t.titleSize, bold: true, color: THEME.primary });
+function addTitleBar(pptx, slide, title, t, accent, thm) {
+  thm = thm || THEME;
+  slide.addText(title, { x: 0.5, y: 0.35, w: 9, h: 0.9, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
 }
 
-// Render shortcuts as keycaps: "Action" followed by [key] + [key] (each key a
-// button-like rounded box) — so students see exactly what to press, not just a
-// description.
-function drawShortcuts(pptx, slide, shortcuts, accent) {
+function drawShortcuts(pptx, slide, shortcuts, accent, thm) {
+  thm = thm || THEME;
   const list = shortcuts.slice(0, 6);
   const startY = 2.25, rowH = Math.min(0.74, (5.15 - startY) / Math.max(list.length, 1));
   list.forEach((sc, i) => {
     const y = startY + i * rowH, capY = y + (rowH - 0.5) / 2;
-    slide.addText(sc.action, { x: 0.7, y, w: 3.1, h: rowH, fontFace: THEME.font, fontSize: 18, bold: true, color: THEME.text, valign: 'middle' });
+    slide.addText(sc.action, { x: 0.7, y, w: 3.1, h: rowH, fontFace: thm.font, fontSize: 18, bold: true, color: thm.text, valign: 'middle' });
     let x = 4.05;
     const keys = String(sc.keys).split('+').map(k => k.trim()).filter(Boolean);
     keys.forEach((k, ki) => {
-      if (ki > 0) { slide.addText('+', { x, y, w: 0.3, h: rowH, fontFace: THEME.font, fontSize: 18, bold: true, color: '9AA5B1', align: 'center', valign: 'middle' }); x += 0.34; }
+      if (ki > 0) { slide.addText('+', { x, y, w: 0.3, h: rowH, fontFace: thm.font, fontSize: 18, bold: true, color: '9AA5B1', align: 'center', valign: 'middle' }); x += 0.34; }
       const kw = Math.max(0.62, 0.42 + 0.16 * k.length);
       slide.addShape(pptx.ShapeType.roundRect, { x, y: capY, w: kw, h: 0.5, fill: { color: 'F1F3F7' }, line: { color: 'C7D0DC', width: 1.25 }, rectRadius: 0.07, shadow: { type: 'outer', blur: 4, offset: 2, angle: 90, color: 'AEB7C4', opacity: 0.55 } });
-      slide.addText(k, { x, y: capY, w: kw, h: 0.5, fontFace: THEME.font, fontSize: 15, bold: true, color: '2B3645', align: 'center', valign: 'middle' });
+      slide.addText(k, { x, y: capY, w: kw, h: 0.5, fontFace: thm.font, fontSize: 15, bold: true, color: '2B3645', align: 'center', valign: 'middle' });
       x += kw + 0.16;
     });
   });
 }
 
-// Render a worked example / how-to: the task, then numbered steps with badges —
-// so students see the real working, not a vague description.
-function drawWorked(pptx, slide, worked, accent) {
+function drawWorked(pptx, slide, worked, accent, thm) {
+  thm = thm || THEME;
   const steps = (worked.steps || []).slice(0, 6);
-  if (worked.task) slide.addText(worked.task, { x: 0.6, y: 1.62, w: 8.9, h: 0.5, fontFace: THEME.font, fontSize: 17, bold: true, italic: true, color: '6B7280' });
+  if (worked.task) slide.addText(worked.task, { x: 0.6, y: 1.62, w: 8.9, h: 0.5, fontFace: thm.font, fontSize: 17, bold: true, italic: true, color: '6B7280' });
   const startY = 2.32, rowH = Math.min(0.64, (5.2 - startY) / Math.max(steps.length, 1));
   steps.forEach((st, i) => {
     const y = startY + i * rowH, badgeY = y + (rowH - 0.42) / 2;
     slide.addShape(pptx.ShapeType.ellipse, { x: 0.7, y: badgeY, w: 0.42, h: 0.42, fill: { color: accent }, line: { type: 'none' } });
-    slide.addText(String(i + 1), { x: 0.7, y: badgeY, w: 0.42, h: 0.42, fontFace: THEME.font, fontSize: 14, bold: true, color: 'FFFFFF', align: 'center', valign: 'middle' });
-    slide.addText(st, { x: 1.36, y, w: 8.0, h: rowH, fontFace: THEME.font, fontSize: 15.5, color: THEME.text, valign: 'middle' });
+    slide.addText(String(i + 1), { x: 0.7, y: badgeY, w: 0.42, h: 0.42, fontFace: thm.font, fontSize: 14, bold: true, color: 'FFFFFF', align: 'center', valign: 'middle' });
+    slide.addText(st, { x: 1.36, y, w: 8.0, h: rowH, fontFace: thm.font, fontSize: 15.5, color: thm.text, valign: 'middle' });
   });
 }
 
-function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }) {
+function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }, preset = null) {
+  // Derive theme colours and layout variant from the preset (falls back to THEME/SOFT defaults).
+  const thm = preset || THEME;
+  const soft = preset ? { accentSoft: preset.soft, primarySoft: preset.soft } : SOFT;
+  const layout = (preset && preset.layout) || 'classic';
+
   const slide = pptx.addSlide();
-  slide.background = { color: THEME.bg };
+  slide.background = { color: thm.bg };
   const accent = t.accent;
   slide.addNotes(slideData.speakerNotes || '');
 
   switch (slideData.type) {
     case 'title': {
       slide.addImage({ path: imgPath, x: 0, y: 0, w: 10, h: 5.625, sizing: { type: 'cover', w: 10, h: 5.625 } });
-      slide.addShape(pptx.ShapeType.rect, { x: 0, y: 3.6, w: 10, h: 2.025, fill: { color: THEME.primary, transparency: 15 } });
-      slide.addText(slideData.title, { x: 0.5, y: 3.75, w: 9, h: 0.9, fontFace: THEME.font, fontSize: 40, bold: true, color: 'FFFFFF' });
-      slide.addText(slideData.subtitle || '', { x: 0.5, y: 4.65, w: 9, h: 0.6, fontFace: THEME.font, fontSize: 18, color: 'FFFFFF' });
+      slide.addShape(pptx.ShapeType.rect, { x: 0, y: 3.6, w: 10, h: 2.025, fill: { color: thm.primary, transparency: 15 } });
+      slide.addText(slideData.title, { x: 0.5, y: 3.75, w: 9, h: 0.9, fontFace: thm.font, fontSize: 40, bold: true, color: 'FFFFFF' });
+      slide.addText(slideData.subtitle || '', { x: 0.5, y: 4.65, w: 9, h: 0.6, fontFace: thm.font, fontSize: 18, color: 'FFFFFF' });
       break;
     }
     case 'objectives': {
-      // Section-divider look: colored panel on the left, full-height image right.
-      slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 5.4, h: 5.625, fill: { color: THEME.primary } });
-      slide.addText('LEARNING OBJECTIVES', { x: 0.5, y: 0.6, w: 4.4, h: 0.5, fontFace: THEME.font, fontSize: 15, bold: true, color: SOFT.accentSoft, charSpacing: 2 });
+      slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 5.4, h: 5.625, fill: { color: thm.primary } });
+      slide.addText('LEARNING OBJECTIVES', { x: 0.5, y: 0.6, w: 4.4, h: 0.5, fontFace: thm.font, fontSize: 15, bold: true, color: soft.accentSoft, charSpacing: 2 });
       slide.addText(
         slideData.bullets.map((b, i) => ({ text: `${i + 1}.  ${b}`, options: { color: 'FFFFFF', fontSize: Math.max(16, t.bulletSize - 2), paraSpaceAfter: 14, breakLine: true } })),
-        { x: 0.5, y: 1.4, w: 4.5, h: 3.8, fontFace: THEME.font, valign: 'top' }
+        { x: 0.5, y: 1.4, w: 4.5, h: 3.8, fontFace: thm.font, valign: 'top' }
       );
       slide.addImage({ path: imgPath, x: 5.4, y: 0, w: 4.6, h: 5.625, sizing: { type: 'cover', w: 4.6, h: 5.625 } });
       break;
     }
     case 'activity': {
-      // Stand-out task slide: warm tinted background, big accent heading.
-      slide.background = { color: SOFT.accentSoft };
-      slide.addText('YOUR TURN', { x: 0.5, y: 0.45, w: 9, h: 0.4, fontFace: THEME.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
-      slide.addText(slideData.title || 'Activity', { x: 0.5, y: 0.85, w: 9, h: 0.8, fontFace: THEME.font, fontSize: t.titleSize, bold: true, color: THEME.primary });
+      slide.background = { color: soft.accentSoft };
+      slide.addText('YOUR TURN', { x: 0.5, y: 0.45, w: 9, h: 0.4, fontFace: thm.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
+      slide.addText(slideData.title || 'Activity', { x: 0.5, y: 0.85, w: 9, h: 0.8, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
       slide.addText(
-        slideData.bullets.map((b, i) => ({ text: b, options: { bullet: { code: '25B6' }, color: THEME.text, fontSize: t.bulletSize, paraSpaceAfter: t.paraSpaceAfter } })),
-        { x: 0.5, y: 1.9, w: 5, h: 3.3, fontFace: THEME.font, valign: 'top' }
+        slideData.bullets.map((b) => ({ text: b, options: { bullet: { code: '25B6' }, color: thm.text, fontSize: t.bulletSize, paraSpaceAfter: t.paraSpaceAfter } })),
+        { x: 0.5, y: 1.9, w: 5, h: 3.3, fontFace: thm.font, valign: 'top' }
       );
       slide.addImage({ path: imgPath, x: 5.8, y: 1.9, w: 3.7, h: 3.2, sizing: { type: 'cover', w: 3.7, h: 3.2 }, rounding: true });
       break;
     }
     case 'recap': {
-      slide.background = { color: SOFT.primarySoft };
-      addTitleBar(pptx, slide, slideData.title || 'Recap', t, accent);
+      slide.background = { color: soft.primarySoft };
+      addTitleBar(pptx, slide, slideData.title || 'Recap', t, accent, thm);
       slide.addText(
-        slideData.bullets.map(b => ({ text: b, options: { bullet: { code: '2713' }, color: THEME.text, fontSize: t.bulletSize, paraSpaceAfter: t.paraSpaceAfter } })),
-        { x: 0.5, y: 1.5, w: 5, h: 3.6, fontFace: THEME.font, valign: 'top' }
+        slideData.bullets.map(b => ({ text: b, options: { bullet: { code: '2713' }, color: thm.text, fontSize: t.bulletSize, paraSpaceAfter: t.paraSpaceAfter } })),
+        { x: 0.5, y: 1.5, w: 5, h: 3.6, fontFace: thm.font, valign: 'top' }
       );
       slide.addImage({ path: imgPath, x: 5.8, y: 1.4, w: 3.7, h: 3.5, sizing: { type: 'cover', w: 3.7, h: 3.5 } });
       break;
     }
-    case 'check': { // a "check for understanding" question; the answer reveals on click
-      slide.addText('QUICK CHECK', { x: 0.5, y: 0.4, w: 9, h: 0.4, fontFace: THEME.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
-      slide.addText(slideData.title, { x: 0.5, y: 0.85, w: 9, h: 0.9, fontFace: THEME.font, fontSize: t.titleSize, bold: true, color: THEME.primary });
-      slide.addText(bulletItems(slideData.bullets, t), { x: 0.5, y: 2.05, w: 5, h: 3.1, fontFace: THEME.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
+    case 'check': {
+      slide.addText('QUICK CHECK', { x: 0.5, y: 0.4, w: 9, h: 0.4, fontFace: thm.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
+      slide.addText(slideData.title, { x: 0.5, y: 0.85, w: 9, h: 0.9, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
+      slide.addText(bulletItems(slideData.bullets, t, thm), { x: 0.5, y: 2.05, w: 5, h: 3.1, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
       placeVisual(pptx, slide, slideData, imgPath, accent, { x: 5.8, y: 1.9, w: 3.7, h: 3.2 });
       break;
     }
@@ -330,107 +331,147 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
       const v = slideData.visual;
       const hasFraction = parseFraction(slideData.example) || parseFraction(slideData.title) || parseFraction(slideData.imageQuery);
 
-      // Curated labelled science diagram (water cycle, cell, plant…) → hero layout.
+      // Curated labelled diagram → hero layout (layout-agnostic; content drives it).
       const labelledKey = detectLabelledDiagram(`${slideData.title} ${slideData.imageQuery || ''} ${slideData.example || ''}`);
       if (!hasFraction && labelledKey) {
-        slide.addText('LABELLED DIAGRAM', { x: 0.5, y: 0.4, w: 9, h: 0.4, fontFace: THEME.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
-        slide.addText(slideData.title, { x: 0.5, y: 0.85, w: 9, h: 0.9, fontFace: THEME.font, fontSize: t.titleSize, bold: true, color: THEME.primary });
+        slide.addText('LABELLED DIAGRAM', { x: 0.5, y: 0.4, w: 9, h: 0.4, fontFace: thm.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
+        slide.addText(slideData.title, { x: 0.5, y: 0.85, w: 9, h: 0.9, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
         drawLabelledDiagram(pptx, slide, labelledKey, accent);
         break;
       }
 
-      // General (any-subject) generated SVG diagram → big hero image.
+      // Generated SVG diagram → hero.
       if (slideData.visual && slideData.visual.type === 'diagram') {
-        slide.addText('DIAGRAM', { x: 0.5, y: 0.4, w: 9, h: 0.4, fontFace: THEME.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
-        slide.addText(slideData.title, { x: 0.5, y: 0.85, w: 9, h: 0.9, fontFace: THEME.font, fontSize: t.titleSize, bold: true, color: THEME.primary });
+        slide.addText('DIAGRAM', { x: 0.5, y: 0.4, w: 9, h: 0.4, fontFace: thm.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
+        slide.addText(slideData.title, { x: 0.5, y: 0.85, w: 9, h: 0.9, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
         slide.addImage({ path: imgPath, x: 1.25, y: 1.9, w: 7.5, h: 3.55, sizing: { type: 'contain', w: 7.5, h: 3.55 } });
         break;
       }
-      // Keyboard shortcuts / tool buttons → keycap layout (show the keys).
+      // Keyboard shortcuts → keycap layout.
       if (Array.isArray(slideData.shortcuts) && slideData.shortcuts.length) {
-        slide.addText('SHORTCUTS', { x: 0.5, y: 0.4, w: 9, h: 0.4, fontFace: THEME.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
-        slide.addText(slideData.title, { x: 0.5, y: 0.85, w: 9, h: 0.9, fontFace: THEME.font, fontSize: t.titleSize, bold: true, color: THEME.primary });
-        if (slideData.example) slide.addText(slideData.example, { x: 0.5, y: 1.62, w: 9, h: 0.5, fontFace: THEME.font, fontSize: 15, italic: true, color: '6B7280' });
-        drawShortcuts(pptx, slide, slideData.shortcuts, accent);
+        slide.addText('SHORTCUTS', { x: 0.5, y: 0.4, w: 9, h: 0.4, fontFace: thm.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
+        slide.addText(slideData.title, { x: 0.5, y: 0.85, w: 9, h: 0.9, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
+        if (slideData.example) slide.addText(slideData.example, { x: 0.5, y: 1.62, w: 9, h: 0.5, fontFace: thm.font, fontSize: 15, italic: true, color: '6B7280' });
+        drawShortcuts(pptx, slide, slideData.shortcuts, accent, thm);
         break;
       }
-
-      // Worked example / how-to (any subject) → numbered steps showing the real working.
+      // Worked example → numbered steps.
       if (slideData.worked && Array.isArray(slideData.worked.steps) && slideData.worked.steps.length) {
-        slide.addText('WORKED EXAMPLE', { x: 0.5, y: 0.4, w: 9, h: 0.4, fontFace: THEME.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
-        slide.addText(slideData.title, { x: 0.5, y: 0.85, w: 9, h: 0.9, fontFace: THEME.font, fontSize: t.titleSize, bold: true, color: THEME.primary });
-        drawWorked(pptx, slide, slideData.worked, accent);
+        slide.addText('WORKED EXAMPLE', { x: 0.5, y: 0.4, w: 9, h: 0.4, fontFace: thm.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
+        slide.addText(slideData.title, { x: 0.5, y: 0.85, w: 9, h: 0.9, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
+        drawWorked(pptx, slide, slideData.worked, accent, thm);
         break;
       }
-      // Diagram-led: the diagram is the hero — title on top, big visual below.
+      // Diagram-led: steps/cycle/numberline.
       const isFlow = v && (v.type === 'steps' || v.type === 'cycle') && Array.isArray(v.items) && v.items.length >= 2;
       const isLine = v && v.type === 'numberline' && Array.isArray(v.items) && v.items.length >= 3;
       if (!hasFraction && (isFlow || isLine)) {
         const kicker = isLine ? 'NUMBER LINE' : (v.type === 'cycle' ? 'THE CYCLE' : 'STEP BY STEP');
-        slide.addText(kicker, { x: 0.5, y: 0.4, w: 9, h: 0.4, fontFace: THEME.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
-        slide.addText(slideData.title, { x: 0.5, y: 0.85, w: 9, h: 0.9, fontFace: THEME.font, fontSize: t.titleSize, bold: true, color: THEME.primary });
+        slide.addText(kicker, { x: 0.5, y: 0.4, w: 9, h: 0.4, fontFace: thm.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
+        slide.addText(slideData.title, { x: 0.5, y: 0.85, w: 9, h: 0.9, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
         const caption = slideData.example || (slideData.bullets && slideData.bullets[0]) || '';
-        if (caption) slide.addText(caption, { x: 0.5, y: 1.8, w: 9, h: 0.6, fontFace: THEME.font, fontSize: 16, italic: true, align: 'center', color: '6B7280' });
+        if (caption) slide.addText(caption, { x: 0.5, y: 1.8, w: 9, h: 0.6, fontFace: thm.font, fontSize: 16, italic: true, align: 'center', color: '6B7280' });
         let drew = false;
         if (isLine) {
           const [a, b, s, mk] = v.items.map(Number);
           drew = drawNumberLine(pptx, slide, { start: a, end: b, step: s, mark: v.items[3] != null ? mk : null, x: 0.9, y: 2.7, w: 8.2, accent });
         }
         if (!drew && isFlow) drawStepsHorizontal(pptx, slide, { items: v.items, x: 0.5, y: 2.9, w: 9, h: 2.2, accent, isCycle: v.type === 'cycle' });
-        else if (!drew && !isFlow) { // numberline failed validation → fall back to photo layout
+        else if (!drew && !isFlow) {
           slide.addImage({ path: imgPath, x: 3.15, y: 2.7, w: 3.7, h: 2.5, sizing: { type: 'cover', w: 3.7, h: 2.5 } });
         }
         break;
       }
-      // alternates image side, with an example callout
+
+      // ── Layout variant: banner — colored full-width header bar ──────────────
+      if (layout === 'banner') {
+        slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 1.25, fill: { color: thm.primary }, line: { type: 'none' } });
+        slide.addText(slideData.title, { x: 0.5, y: 0.15, w: 9, h: 0.95, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: 'FFFFFF' });
+        slide.addText(bulletItems(slideData.bullets, t, thm), { x: 0.5, y: 1.45, w: 5.0, h: 3.7, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
+        placeVisual(pptx, slide, slideData, imgPath, accent, { x: 5.8, y: 1.45, w: 3.8, h: 3.7 });
+        if (slideData.example) {
+          slide.addShape(pptx.ShapeType.roundRect, { x: 0.5, y: 5.1, w: 5.0, h: 0.38, fill: { color: soft.accentSoft }, line: { type: 'none' }, rectRadius: 0.06 });
+          slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: thm.text } }],
+            { x: 0.65, y: 5.12, w: 4.7, h: 0.34, fontFace: thm.font, fontSize: Math.max(11, t.bulletSize - 5), valign: 'middle', italic: true });
+        }
+        break;
+      }
+
+      // ── Layout variant: split — always half-bleed photo ─────────────────────
+      if (layout === 'split') {
+        const imageLeft = idx % 2 === 0;
+        const img = imageLeft ? { x: 0, y: 0, w: 4.9, h: 5.625 } : { x: 5.1, y: 0, w: 4.9, h: 5.625 };
+        slide.addImage({ path: imgPath, ...img, sizing: { type: 'cover', w: img.w, h: img.h } });
+        const tx = imageLeft ? 5.35 : 0.5;
+        slide.addText(slideData.title, { x: tx, y: 0.6, w: 4.15, h: 1.0, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
+        slide.addText(bulletItems(slideData.bullets, t, thm), { x: tx, y: 1.85, w: 4.15, h: 2.6, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
+        if (slideData.example) {
+          slide.addShape(pptx.ShapeType.roundRect, { x: tx, y: 4.5, w: 4.15, h: 0.85, fill: { color: soft.accentSoft }, line: { type: 'none' }, rectRadius: 0.08 });
+          slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: thm.text } }],
+            { x: tx + 0.15, y: 4.55, w: 3.85, h: 0.75, fontFace: thm.font, fontSize: Math.max(12, t.bulletSize - 4), valign: 'middle', italic: true });
+        }
+        break;
+      }
+
+      // ── Layout variant: minimal — clean typography, accent underline ─────────
+      if (layout === 'minimal') {
+        slide.addText(slideData.title, { x: 0.5, y: 0.4, w: 8.5, h: 0.85, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
+        slide.addShape(pptx.ShapeType.rect, { x: 0.5, y: 1.32, w: 2.0, h: 0.07, fill: { color: accent }, line: { type: 'none' } });
+        slide.addText(bulletItems(slideData.bullets, t, thm), { x: 0.5, y: 1.55, w: 5.8, h: 3.1, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
+        if (slideData.example) {
+          slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: thm.text } }],
+            { x: 0.5, y: 4.85, w: 5.8, h: 0.55, fontFace: thm.font, fontSize: Math.max(12, t.bulletSize - 4), valign: 'middle', italic: true });
+        }
+        slide.addImage({ path: imgPath, x: 6.55, y: 1.5, w: 3.2, h: 3.7, sizing: { type: 'cover', w: 3.2, h: 3.7 }, rounding: true });
+        break;
+      }
+
+      // ── Classic / dark layout — image right (or half-bleed alternating) ─────
       const imageLeft = slideData.side === 'left';
       const textX = imageLeft ? 4.7 : 0.5;
       const imgX = imageLeft ? 0.4 : 5.8;
 
-      // Layout variety: alternate PHOTO slides use a half-bleed photo for a more
-      // designed feel (counted among photo slides so it doesn't collide with
-      // diagram slides). Text sits on the white half. Skips fraction & playful.
       if (!hasFraction && !t.playful && (state.photoN++ % 2 === 1)) {
         const img = imageLeft ? { x: 0, y: 0, w: 4.9, h: 5.625 } : { x: 5.1, y: 0, w: 4.9, h: 5.625 };
         slide.addImage({ path: imgPath, ...img, sizing: { type: 'cover', w: img.w, h: img.h } });
         const tx = imageLeft ? 5.35 : 0.5;
-        slide.addText(slideData.title, { x: tx, y: 0.6, w: 4.15, h: 1.0, fontFace: THEME.font, fontSize: t.titleSize, bold: true, color: THEME.primary });
-        slide.addText(bulletItems(slideData.bullets, t), { x: tx, y: 1.85, w: 4.15, h: 2.6, fontFace: THEME.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
+        slide.addText(slideData.title, { x: tx, y: 0.6, w: 4.15, h: 1.0, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
+        slide.addText(bulletItems(slideData.bullets, t, thm), { x: tx, y: 1.85, w: 4.15, h: 2.6, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
         if (slideData.example) {
-          slide.addShape(pptx.ShapeType.roundRect, { x: tx, y: 4.5, w: 4.15, h: 0.85, fill: { color: SOFT.accentSoft }, line: { type: 'none' }, rectRadius: 0.08 });
-          slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: THEME.text } }],
-            { x: tx + 0.15, y: 4.55, w: 3.85, h: 0.75, fontFace: THEME.font, fontSize: Math.max(12, t.bulletSize - 4), valign: 'middle', italic: true });
+          slide.addShape(pptx.ShapeType.roundRect, { x: tx, y: 4.5, w: 4.15, h: 0.85, fill: { color: soft.accentSoft }, line: { type: 'none' }, rectRadius: 0.08 });
+          slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: thm.text } }],
+            { x: tx + 0.15, y: 4.55, w: 3.85, h: 0.75, fontFace: thm.font, fontSize: Math.max(12, t.bulletSize - 4), valign: 'middle', italic: true });
         }
         break;
       }
-      // Playful early-grade design: soft pastel background + decorative blobs.
       if (t.playful) {
         slide.background = { color: t.pastels[idx % t.pastels.length] };
         slide.addShape(pptx.ShapeType.ellipse, { x: 8.8, y: -0.7, w: 2, h: 2, fill: { color: accent, transparency: 86 }, line: { type: 'none' } });
-        slide.addShape(pptx.ShapeType.ellipse, { x: -0.6, y: 4.5, w: 1.7, h: 1.7, fill: { color: THEME.primary, transparency: 90 }, line: { type: 'none' } });
+        slide.addShape(pptx.ShapeType.ellipse, { x: -0.6, y: 4.5, w: 1.7, h: 1.7, fill: { color: thm.primary, transparency: 90 }, line: { type: 'none' } });
       }
-      slide.addText(slideData.title, { x: 0.5, y: 0.35, w: 9, h: 0.9, fontFace: THEME.font, fontSize: t.titleSize, bold: true, color: THEME.primary });
-      slide.addText(bulletItems(slideData.bullets, t), { x: textX, y: 1.45, w: 4.9, h: 2.9, fontFace: THEME.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
+      slide.addText(slideData.title, { x: 0.5, y: 0.35, w: 9, h: 0.9, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
+      slide.addText(bulletItems(slideData.bullets, t, thm), { x: textX, y: 1.45, w: 4.9, h: 2.9, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
       if (slideData.example) {
-        slide.addShape(pptx.ShapeType.roundRect, { x: textX, y: 4.5, w: 4.9, h: 0.85, fill: { color: SOFT.accentSoft }, line: { type: 'none' }, rectRadius: 0.08 });
+        slide.addShape(pptx.ShapeType.roundRect, { x: textX, y: 4.5, w: 4.9, h: 0.85, fill: { color: soft.accentSoft }, line: { type: 'none' }, rectRadius: 0.08 });
         slide.addText([
           { text: 'Example  ', options: { bold: true, color: accent } },
-          { text: slideData.example, options: { color: THEME.text } },
-        ], { x: textX + 0.15, y: 4.55, w: 4.6, h: 0.75, fontFace: THEME.font, fontSize: Math.max(12, t.bulletSize - 4), valign: 'middle', italic: true });
+          { text: slideData.example, options: { color: thm.text } },
+        ], { x: textX + 0.15, y: 4.55, w: 4.6, h: 0.75, fontFace: thm.font, fontSize: Math.max(12, t.bulletSize - 4), valign: 'middle', italic: true });
       }
       placeVisual(pptx, slide, slideData, imgPath, accent, { x: imgX, y: 1.35, w: 3.9, h: 4.0 });
     }
   }
 }
 
-function assembleDeck(slides, images, gradeTheme) {
+function assembleDeck(slides, images, gradeTheme, preset) {
+  const thm = preset || THEME;
   const pptx = new pptxgen();
   pptx.layout = 'LAYOUT_16x9'; // 10 x 5.625 in
-  pptx.defineSlideMaster({ title: 'LESSONCOPE', background: { color: THEME.bg } });
+  pptx.defineSlideMaster({ title: 'LESSONCOPE', background: { color: thm.bg } });
   const state = { photoN: 0 };
   slides.forEach((slideData, idx) => {
     const img = images[idx];
-    renderSlide(pptx, slideData, path.join(PUBLIC_DIR, img.relpath), gradeTheme, idx, state);
+    renderSlide(pptx, slideData, path.join(PUBLIC_DIR, img.relpath), gradeTheme, idx, state, preset);
   });
   return pptx;
 }
@@ -439,7 +480,7 @@ function assembleDeck(slides, images, gradeTheme) {
 // Returns { pptx, slides }. Caller decides how to output (writeFile / buffer).
 const slugify = s => String(s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-async function buildDeck({ subject, topic, slideCount = 4, grade = 'middle school', tone = 'clear and engaging', focus = '', objectives = '', lessonPlanText = '', extras = {}, skipAssemble = false }) {
+async function buildDeck({ subject, topic, slideCount = 4, grade = 'middle school', tone = 'clear and engaging', focus = '', objectives = '', lessonPlanText = '', extras = {}, skipAssemble = false, presetId = null }) {
   subject = slugify(subject);
   topic = slugify(topic);
   if (!subject || !topic) throw new Error('Subject and topic are required.');
@@ -447,12 +488,13 @@ async function buildDeck({ subject, topic, slideCount = 4, grade = 'middle schoo
   // Note: no validateSelection here — unknown subjects/topics are allowed and
   // their images are fetched on demand in selectImages().
 
+  const preset = getPreset(presetId);
   const profile = gradeProfile(grade);
   const slides = await generateContent(subject, topic, slideCount, grade, tone, focus, { objectives, lessonPlanText, ...extras });
   const images = await selectImages(slides, subject, topic);
-  if (skipAssemble) return { slides, images, band: profile.band };
-  const pptx = assembleDeck(slides, images, profile.theme);
-  return { pptx, slides, images, band: profile.band };
+  if (skipAssemble) return { slides, images, band: profile.band, preset };
+  const pptx = assembleDeck(slides, images, profile.theme, preset);
+  return { pptx, slides, images, band: profile.band, preset };
 }
 
 // ── CLI entrypoint (only when run directly, not when imported) ──────────────
@@ -485,9 +527,10 @@ async function main() {
 
 // Reassemble a deck from already-chosen slides + images (no LLM call) — used by
 // the editable preview when the teacher edits text or swaps images.
-function rebuildDeck({ slides, images, grade }) {
+function rebuildDeck({ slides, images, grade, presetId = null }) {
   const theme = gradeProfile(grade).theme;
-  return assembleDeck(slides, images, theme);
+  const preset = getPreset(presetId);
+  return assembleDeck(slides, images, theme, preset);
 }
 
 // Find an existing saved image good enough to reuse for a concept (so we don't

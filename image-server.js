@@ -132,6 +132,11 @@ app.get('/api/config/apps', requireAuth, (req, res) => {
   });
 });
 
+app.get('/api/presets', requireAuth, (req, res) => {
+  const { PRESETS } = require('./slide-presets');
+  res.json({ presets: PRESETS.map(p => ({ id: p.id, name: p.name, layout: p.layout, dark: p.dark, bg: p.bg, primary: p.primary, accent: p.accent, soft: p.soft, text: p.text })) });
+});
+
 // In-memory deck state so the editable preview can mutate before download.
 const decks = new Map(); // id -> { subject, topic, grade, tone, focus, slides, images, createdAt }
 const DECK_TTL = 60 * 60 * 1000; // 1 hour
@@ -466,7 +471,7 @@ app.post('/api/pack/:type/download', requireAuth, async (req, res) => {
 
 // Generate a deck; store state; return preview metadata + download id.
 app.post('/api/generate', requireAuth, async (req, res) => {
-  const { slideCount, grade, tone, lessonPlan, unitId, lessonIndex, regenerate } = req.body || {};
+  const { slideCount, grade, tone, lessonPlan, unitId, lessonIndex, regenerate, presetId } = req.body || {};
   const subject = clip(req.body.subject, LIMITS.subject);
   const topic = clip(req.body.topic, LIMITS.topic);
   const objectives = clip(req.body.objectives, LIMITS.objectives);
@@ -480,13 +485,14 @@ app.post('/api/generate', requireAuth, async (req, res) => {
     const lessonPlanText = lessonPlan && lessonPlan.sections
       ? planToText(lessonPlan)
       : (unitBlock || '');
-    const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives, lessonPlanText, extras: { regenerate: !!regenerate }, skipAssemble: true });
+    const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives, lessonPlanText, extras: { regenerate: !!regenerate }, skipAssemble: true, presetId: presetId || null });
     const id = crypto.randomUUID();
     decks.set(id, {
       subject: String(subject).toLowerCase(), topic: String(topic).toLowerCase(),
       grade: grade || 'middle school', tone, focus, band: built.band,
       slides: built.slides, images: built.images, createdAt: Date.now(),
       objectives: objectives || '', lessonPlanText, // kept so the student game can be grounded in this lesson
+      presetId: presetId || null,
     });
     const filename = `${subject}-${topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
     res.json({
@@ -662,7 +668,7 @@ app.post('/api/download/:id', requireAuth, async (req, res) => {
       if (typeof edit.example === 'string') s.example = edit.example;
       if (typeof edit.subtitle === 'string') s.subtitle = edit.subtitle;
     }
-    const pptx = rebuildDeck({ slides: deck.slides, images: deck.images, grade: deck.grade });
+    const pptx = rebuildDeck({ slides: deck.slides, images: deck.images, grade: deck.grade, presetId: deck.presetId || null });
     const buffer = safeAnimate(await pptx.write({ outputType: 'nodebuffer' }), deck.band);
     const filename = `${deck.subject}-${deck.topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
