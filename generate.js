@@ -212,7 +212,14 @@ async function selectImages(slides, subject, topic) {
 // ── D. PPTX Assembler — distinct layout per slide type ─────────────────────
 const SOFT = { accentSoft: 'FBEEDE', primarySoft: 'EAF1F8' };
 
-function bulletItems(bullets, t, thm) {
+// Rainbow bullet palette for multicolor (playful) presets.
+const RAINBOW_PALETTE = ['E11D48', 'D97706', '16A34A', '2563EB', '7C3AED', 'DB2777'];
+// Pastel slide backgrounds that cycle across content slides for multicolor presets.
+const MC_PASTELS = ['FFF1F2', 'FFFBEB', 'F0FDF4', 'EFF6FF', 'FDF4FF', 'ECFDF5'];
+// Accent blobs: semi-transparent corner decorations on multicolor slides.
+const MC_BLOBS   = ['E11D48', 'D97706', '16A34A', '2563EB', '7C3AED'];
+
+function bulletItems(bullets, t, thm, multicolor) {
   thm = thm || THEME;
   return bullets.map((b, bi) => {
     if (t.playful && t.bulletEmojis) {
@@ -221,13 +228,16 @@ function bulletItems(bullets, t, thm) {
         options: { color: t.bulletPalette[bi % t.bulletPalette.length], fontSize: t.bulletSize, bold: true, breakLine: true, paraSpaceAfter: t.paraSpaceAfter },
       };
     }
+    const bulletColor = multicolor
+      ? RAINBOW_PALETTE[bi % RAINBOW_PALETTE.length]
+      : (t.colorful ? t.bulletPalette[bi % t.bulletPalette.length] : (t.bulletPalette[0] || thm.text));
     return {
       text: b,
       options: {
         bullet: { code: t.bulletGlyph },
-        color: t.colorful ? t.bulletPalette[bi % t.bulletPalette.length] : (t.bulletPalette[0] || thm.text),
+        color: bulletColor,
         fontSize: t.bulletSize,
-        bold: t.colorful,
+        bold: multicolor || t.colorful,
       },
     };
   });
@@ -271,10 +281,11 @@ function drawWorked(pptx, slide, worked, accent, thm) {
 }
 
 function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }, preset = null) {
-  // Derive theme colours and layout variant from the preset (falls back to THEME/SOFT defaults).
+  // Derive theme colours, layout variant, and multicolor flag from the preset.
   const thm = preset || THEME;
   const soft = preset ? { accentSoft: preset.soft, primarySoft: preset.soft } : SOFT;
   const layout = (preset && preset.layout) || 'classic';
+  const multicolor = !!(preset && preset.multicolor);
 
   const slide = pptx.addSlide();
   slide.background = { color: thm.bg };
@@ -323,13 +334,20 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
     case 'check': {
       slide.addText('QUICK CHECK', { x: 0.5, y: 0.4, w: 9, h: 0.4, fontFace: thm.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
       slide.addText(slideData.title, { x: 0.5, y: 0.85, w: 9, h: 0.9, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
-      slide.addText(bulletItems(slideData.bullets, t, thm), { x: 0.5, y: 2.05, w: 5, h: 3.1, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
+      slide.addText(bulletItems(slideData.bullets, t, thm, multicolor), { x: 0.5, y: 2.05, w: 5, h: 3.1, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
       placeVisual(pptx, slide, slideData, imgPath, accent, { x: 5.8, y: 1.9, w: 3.7, h: 3.2 });
       break;
     }
     default: { // content
       const v = slideData.visual;
       const hasFraction = parseFraction(slideData.example) || parseFraction(slideData.title) || parseFraction(slideData.imageQuery);
+
+      // Multicolor (playful preset): cycle pastel slide backgrounds + corner blob decorations.
+      if (multicolor) {
+        slide.background = { color: MC_PASTELS[idx % MC_PASTELS.length] };
+        slide.addShape(pptx.ShapeType.ellipse, { x: 8.4, y: -0.9, w: 2.4, h: 2.4, fill: { color: MC_BLOBS[(idx + 2) % MC_BLOBS.length], transparency: 80 }, line: { type: 'none' } });
+        slide.addShape(pptx.ShapeType.ellipse, { x: -0.9, y: 4.2, w: 2.0, h: 2.0, fill: { color: MC_BLOBS[(idx + 1) % MC_BLOBS.length], transparency: 83 }, line: { type: 'none' } });
+      }
 
       // Curated labelled diagram → hero layout (layout-agnostic; content drives it).
       const labelledKey = detectLabelledDiagram(`${slideData.title} ${slideData.imageQuery || ''} ${slideData.example || ''}`);
@@ -387,7 +405,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
       if (layout === 'banner') {
         slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 1.25, fill: { color: thm.primary }, line: { type: 'none' } });
         slide.addText(slideData.title, { x: 0.5, y: 0.15, w: 9, h: 0.95, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: 'FFFFFF' });
-        slide.addText(bulletItems(slideData.bullets, t, thm), { x: 0.5, y: 1.45, w: 5.0, h: 3.7, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
+        slide.addText(bulletItems(slideData.bullets, t, thm, multicolor), { x: 0.5, y: 1.45, w: 5.0, h: 3.7, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
         placeVisual(pptx, slide, slideData, imgPath, accent, { x: 5.8, y: 1.45, w: 3.8, h: 3.7 });
         if (slideData.example) {
           slide.addShape(pptx.ShapeType.roundRect, { x: 0.5, y: 5.1, w: 5.0, h: 0.38, fill: { color: soft.accentSoft }, line: { type: 'none' }, rectRadius: 0.06 });
@@ -404,7 +422,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
         slide.addImage({ path: imgPath, ...img, sizing: { type: 'cover', w: img.w, h: img.h } });
         const tx = imageLeft ? 5.35 : 0.5;
         slide.addText(slideData.title, { x: tx, y: 0.6, w: 4.15, h: 1.0, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
-        slide.addText(bulletItems(slideData.bullets, t, thm), { x: tx, y: 1.85, w: 4.15, h: 2.6, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
+        slide.addText(bulletItems(slideData.bullets, t, thm, multicolor), { x: tx, y: 1.85, w: 4.15, h: 2.6, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
         if (slideData.example) {
           slide.addShape(pptx.ShapeType.roundRect, { x: tx, y: 4.5, w: 4.15, h: 0.85, fill: { color: soft.accentSoft }, line: { type: 'none' }, rectRadius: 0.08 });
           slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: thm.text } }],
@@ -417,7 +435,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
       if (layout === 'minimal') {
         slide.addText(slideData.title, { x: 0.5, y: 0.4, w: 8.5, h: 0.85, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
         slide.addShape(pptx.ShapeType.rect, { x: 0.5, y: 1.32, w: 2.0, h: 0.07, fill: { color: accent }, line: { type: 'none' } });
-        slide.addText(bulletItems(slideData.bullets, t, thm), { x: 0.5, y: 1.55, w: 5.8, h: 3.1, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
+        slide.addText(bulletItems(slideData.bullets, t, thm, multicolor), { x: 0.5, y: 1.55, w: 5.8, h: 3.1, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
         if (slideData.example) {
           slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: thm.text } }],
             { x: 0.5, y: 4.85, w: 5.8, h: 0.55, fontFace: thm.font, fontSize: Math.max(12, t.bulletSize - 4), valign: 'middle', italic: true });
@@ -436,7 +454,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
         slide.addImage({ path: imgPath, ...img, sizing: { type: 'cover', w: img.w, h: img.h } });
         const tx = imageLeft ? 5.35 : 0.5;
         slide.addText(slideData.title, { x: tx, y: 0.6, w: 4.15, h: 1.0, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
-        slide.addText(bulletItems(slideData.bullets, t, thm), { x: tx, y: 1.85, w: 4.15, h: 2.6, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
+        slide.addText(bulletItems(slideData.bullets, t, thm, multicolor), { x: tx, y: 1.85, w: 4.15, h: 2.6, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
         if (slideData.example) {
           slide.addShape(pptx.ShapeType.roundRect, { x: tx, y: 4.5, w: 4.15, h: 0.85, fill: { color: soft.accentSoft }, line: { type: 'none' }, rectRadius: 0.08 });
           slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: thm.text } }],
@@ -450,7 +468,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
         slide.addShape(pptx.ShapeType.ellipse, { x: -0.6, y: 4.5, w: 1.7, h: 1.7, fill: { color: thm.primary, transparency: 90 }, line: { type: 'none' } });
       }
       slide.addText(slideData.title, { x: 0.5, y: 0.35, w: 9, h: 0.9, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
-      slide.addText(bulletItems(slideData.bullets, t, thm), { x: textX, y: 1.45, w: 4.9, h: 2.9, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
+      slide.addText(bulletItems(slideData.bullets, t, thm, multicolor), { x: textX, y: 1.45, w: 4.9, h: 2.9, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
       if (slideData.example) {
         slide.addShape(pptx.ShapeType.roundRect, { x: textX, y: 4.5, w: 4.9, h: 0.85, fill: { color: soft.accentSoft }, line: { type: 'none' }, rectRadius: 0.08 });
         slide.addText([
