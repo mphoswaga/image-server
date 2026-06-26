@@ -36,8 +36,20 @@ const PRESETS = [
   { id: 'plum-dark',       name: 'Plum',           bg: '1E0A2B', primary: 'F3E8FF', accent: 'C084FC', soft: '2D1042', text: 'DDD6FE', font: 'Arial',    layout: 'classic', dark: true  },
 
   // ── Group 5: Minimal layout (clean type + accent underline) ──────────────
-  { id: 'chalk-minimal',   name: 'Chalk',          bg: 'F5F5F0', primary: '1A1A2E', accent: '4A4A8A', soft: 'E8E8E4', text: '2D2D2D', font: 'Arial',    layout: 'minimal', dark: false },
-  { id: 'paper-minimal',   name: 'Paper',          bg: 'FEFCE8', primary: '1C1917', accent: 'CA8A04', soft: 'FEF9C3', text: '1C1917', font: 'Arial',    layout: 'minimal', dark: false },
+  { id: 'chalk-minimal',      name: 'Chalk',        bg: 'F5F5F0', primary: '1A1A2E', accent: '4A4A8A', soft: 'E8E8E4', text: '2D2D2D', font: 'Arial',    layout: 'minimal', dark: false },
+  { id: 'paper-minimal',      name: 'Paper',        bg: 'FEFCE8', primary: '1C1917', accent: 'CA8A04', soft: 'FEF9C3', text: '1C1917', font: 'Arial',    layout: 'minimal', dark: false },
+
+  // ── Group 6: Playful / young-learner (bright, saturated palettes) ─────────
+  { id: 'sunshine-banner',    name: 'Sunshine',     bg: 'FFFBEB', primary: 'B45309', accent: 'FBBF24', soft: 'FEF3C7', text: '292524', font: 'Arial',    layout: 'banner',  dark: false },
+  { id: 'strawberry-classic', name: 'Strawberry',   bg: 'FFF1F2', primary: 'BE123C', accent: 'FB7185', soft: 'FFE4E6', text: '1C0A0A', font: 'Arial',    layout: 'classic', dark: false },
+  { id: 'skyblue-split',      name: 'Sky Blue',     bg: 'F0F9FF', primary: '0284C7', accent: '38BDF8', soft: 'E0F2FE', text: '082F49', font: 'Arial',    layout: 'split',   dark: false },
+  { id: 'limeburst-banner',   name: 'Lime Burst',   bg: 'F7FEE7', primary: '3F6212', accent: '84CC16', soft: 'ECFCCB', text: '1A2E05', font: 'Arial',    layout: 'banner',  dark: false },
+  { id: 'tangerine-classic',  name: 'Tangerine',    bg: 'FFF7ED', primary: 'C2410C', accent: 'FB923C', soft: 'FFEDD5', text: '431407', font: 'Arial',    layout: 'classic', dark: false },
+  { id: 'bubblegum-banner',   name: 'Bubblegum',    bg: 'FDF4FF', primary: '7E22CE', accent: 'E879F9', soft: 'FAE8FF', text: '3B0764', font: 'Arial',    layout: 'banner',  dark: false },
+  { id: 'lavender-split',     name: 'Lavender',     bg: 'F5F3FF', primary: '4338CA', accent: 'A78BFA', soft: 'EDE9FE', text: '1E1B4B', font: 'Arial',    layout: 'split',   dark: false },
+  { id: 'mint-classic',       name: 'Mint',         bg: 'F0FDF4', primary: '15803D', accent: '4ADE80', soft: 'DCFCE7', text: '052E16', font: 'Arial',    layout: 'classic', dark: false },
+  { id: 'poppy-banner',       name: 'Poppy',        bg: 'FFF1F2', primary: '9F1239', accent: 'FB7185', soft: 'FFE4E6', text: '4C0519', font: 'Arial',    layout: 'banner',  dark: false },
+  { id: 'aqua-split',         name: 'Aqua',         bg: 'ECFEFF', primary: '0E7490', accent: '22D3EE', soft: 'CFFAFE', text: '083344', font: 'Arial',    layout: 'split',   dark: false },
 ];
 
 const DEFAULT_PRESET_ID = 'ocean-classic';
