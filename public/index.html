@@ -145,6 +145,23 @@
     @keyframes toastIn { from { opacity:0; transform:translateY(-10px); } to { opacity:1; } }
     .btn.ghost.warn, .nav .logout.warn { color:var(--err); border-color:#eccfcb; background:#fdf1ef; }
 
+    /* Unit / scheme of work */
+    .unit-list { display:flex; flex-direction:column; gap:8px; margin-bottom:10px; }
+    .unit-row { display:flex; align-items:center; gap:12px; border:1.5px solid var(--border); border-radius:12px; padding:10px 13px; cursor:pointer; background:#fff; transition:.12s; }
+    .unit-row:hover { border-color:#cfd6e2; background:#fbfcfe; }
+    .unit-row.sel { border-color:var(--primary-2); background:var(--primary-soft); box-shadow:0 0 0 3px rgba(42,106,166,.10); }
+    .unit-row .pick { width:19px; height:19px; border-radius:50%; border:2px solid #cdd5e0; flex:none; display:flex; align-items:center; justify-content:center; color:#fff; }
+    .unit-row.sel .pick { border-color:var(--primary-2); background:var(--primary-2); }
+    .unit-row .pick .ic { width:11px; height:11px; }
+    .unit-row .meta { min-width:0; flex:1; }
+    .unit-row .nm { font-weight:700; color:var(--ink); }
+    .unit-row .sub { font-size:12px; color:var(--muted); }
+    .unit-del { border:none; background:none; color:var(--muted); cursor:pointer; padding:6px; border-radius:8px; flex:none; display:inline-flex; }
+    .unit-del:hover { color:var(--err); background:#fdf1ef; }
+    .unit-del .ic { width:16px; height:16px; }
+    .unit-lesson-row { display:flex; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap; }
+    .unit-badge { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; padding:3px 9px; border-radius:999px; background:#e8f0fb; color:var(--primary-2); }
+
     /* Lesson pack */
     .pack-actions { display:flex; gap:10px; flex-wrap:wrap; margin:2px 0 0; }
     .pack-doc { border:1px solid var(--border); border-radius:14px; padding:20px 22px; margin-top:18px; background:#fff; box-shadow:var(--sh-sm); }
@@ -536,6 +553,21 @@
       <p class="fmt-note"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Word, PDF, Excel or text. Save several formats and pick one per lesson. Optional — without one we use a standard structure.</p>
       <input id="tplFile" type="file" accept=".docx,.pdf,.xlsx,.xls,.txt,.md,.csv" style="display:none" />
 
+      <!-- Unit / Scheme of work -->
+      <label>Scheme of work <span style="color:var(--muted);font-weight:400">(optional)</span> <span class="hint-i" tabindex="0" role="img" aria-label="Upload your scheme of work (Word, PDF, text). LessonCope extracts the lesson sequence so every plan and deck knows its place in the unit — what came before, what comes next, and what the assessment goals are." data-tip="Upload your scheme of work (Word, PDF, text). LessonCope extracts the lesson sequence so every plan and deck knows its place in the unit — what came before, what comes next, and what the assessment goals are.">i</span></label>
+      <div id="unitList" class="unit-list"><span class="info none">No scheme of work uploaded yet.</span></div>
+      <div class="tpl-add">
+        <button type="button" class="act" id="unitAddBtn"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg> Upload scheme of work</button>
+      </div>
+      <p class="fmt-note"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Word, PDF or plain text. LessonCope reads the lesson list and injects context into every plan, deck, and resource it generates.</p>
+      <input id="unitFile" type="file" accept=".docx,.pdf,.xlsx,.xls,.txt,.md" style="display:none" />
+
+      <div id="lessonPickerRow" class="unit-lesson-row" style="display:none">
+        <span class="unit-badge" id="unitBadge"></span>
+        <label for="lessonPicker" style="font-size:13px;font-weight:600;white-space:nowrap">Lesson:</label>
+        <select id="lessonPicker" style="flex:1;min-width:200px;font-size:13px;padding:8px 10px"></select>
+      </div>
+
       <div class="grid2">
         <div><label for="subject">Subject <span class="hint-i" tabindex="0" role="img" aria-label="The subject area - e.g. Maths, English, Science. Pick a saved one or type a new one; new subjects get images fetched and labelled automatically." data-tip="The subject area - e.g. Maths, English, Science. Pick a saved one or type a new one; new subjects get images fetched and labelled automatically.">i</span></label><input id="subject" list="subjectList" autocomplete="off" placeholder="Pick or type a new subject" maxlength="60" required /><datalist id="subjectList"></datalist><div id="subjErr" class="field-err">Add a subject.</div></div>
         <div><label for="topic">Topic <span class="hint-i" tabindex="0" role="img" aria-label="The specific topic within the subject, e.g. adding fractions or the water cycle. It drives the lesson content and the images chosen." data-tip="The specific topic within the subject, e.g. adding fractions or the water cycle. It drives the lesson content and the images chosen.">i</span></label><input id="topic" list="topicList" autocomplete="off" placeholder="Pick or type a new topic" maxlength="80" required /><datalist id="topicList"></datalist><div id="topicErr" class="field-err">Add a topic.</div></div>
@@ -606,8 +638,12 @@
         <div class="pack-actions">
           <button type="button" class="btn ghost" data-pack="worksheet"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Worksheet</button>
           <button type="button" class="btn ghost" data-pack="exit-ticket"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg> Exit ticket</button>
+          <button type="button" class="btn ghost" data-pack="quiz"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> Quiz</button>
         </div>
         <div id="packPreview"></div>
+        <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
+          <button type="button" id="fullPackBtn" class="btn accent"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Generate full pack <span style="font-size:12px;font-weight:400;opacity:.8">(.zip — worksheet + exit ticket + quiz)</span></button>
+        </div>
       </section>
 
       <!-- Student game: a shareable link + live results -->
@@ -940,6 +976,59 @@
       if(bad && !inp._wired){ inp._wired=true; inp.addEventListener('input',()=>{ err.classList.remove('show'); inp.classList.remove('invalid'); },{once:true}); }
       return bad;
     }
+    // ---- unit / scheme of work ----
+    let units=[], selectedUnitId=null, selectedLessonIndex=0;
+    function renderUnits(){
+      const list=$('unitList');
+      if(!units.length){ selectedUnitId=null; list.innerHTML=`<span class="info none">No scheme of work yet — upload one to give every lesson unit-level context.</span>`; $('lessonPickerRow').style.display='none'; return; }
+      list.innerHTML=units.map(u=>{
+        const sel=u.id===selectedUnitId;
+        return `<div class="unit-row${sel?' sel':''}" data-id="${u.id}" role="button" tabindex="0"><span class="pick">${sel?ICON('i-check'):''}</span><span class="meta"><span class="nm">${esc(u.name)}</span><span class="sub">${esc(u.subject||'')}${u.grade?' · '+esc(u.grade):''}  · ${u.lessonCount} lesson${u.lessonCount!==1?'s':''}</span></span><button type="button" class="unit-del" data-del="${u.id}" title="Remove"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></button></div>`;
+      }).join('');
+      list.querySelectorAll('.unit-row').forEach(row=>{
+        row.addEventListener('click',e=>{ if(e.target.closest('.unit-del')) return;
+          const id=row.dataset.id;
+          if(selectedUnitId===id){ selectedUnitId=null; selectedLessonIndex=0; renderUnits(); return; }
+          selectedUnitId=id; selectedLessonIndex=0; renderUnits(); renderLessonPicker(); });
+        row.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); row.click(); } });
+      });
+      list.querySelectorAll('[data-del]').forEach(btn=>btn.addEventListener('click',async e=>{
+        e.stopPropagation(); if(!confirm('Remove this unit?')) return;
+        await fetch('/api/units/'+btn.dataset.del,{method:'DELETE'});
+        if(selectedUnitId===btn.dataset.del){ selectedUnitId=null; selectedLessonIndex=0; }
+        await loadUnits();
+      }));
+      renderLessonPicker();
+    }
+    function renderLessonPicker(){
+      const row=$('lessonPickerRow'), pick=$('lessonPicker'), badge=$('unitBadge');
+      if(!selectedUnitId){ row.style.display='none'; return; }
+      const u=units.find(x=>x.id===selectedUnitId); if(!u){ row.style.display='none'; return; }
+      badge.textContent=u.name; row.style.display='flex';
+      fetch('/api/units/'+selectedUnitId).then(r=>r.json()).then(({unit})=>{
+        if(!unit||!unit.lessons) return;
+        pick.innerHTML=unit.lessons.map((l,i)=>`<option value="${i}">Lesson ${l.n||i+1}: ${esc(l.title)}</option>`).join('');
+        pick.value=selectedLessonIndex;
+      }).catch(()=>{});
+    }
+    async function loadUnits(){
+      try{ const r=await fetch('/api/units'); const d=await r.json(); units=d.units||[]; renderUnits(); }catch{}
+    }
+    $('unitAddBtn').addEventListener('click',()=>$('unitFile').click());
+    $('unitFile').addEventListener('change', async e=>{
+      const file=e.target.files[0]; if(!file) return;
+      const btn=$('unitAddBtn'); btn.disabled=true; const orig=btn.innerHTML; btn.innerHTML='<span class="spinner"></span>Parsing…';
+      try{
+        const fd=new FormData(); fd.append('file',file);
+        const r=await fetch('/api/units',{method:'POST',body:fd});
+        const d=await r.json(); if(!r.ok) throw new Error(d.error);
+        selectedUnitId=d.unit.id; selectedLessonIndex=0;
+        await loadUnits(); toast(`"${d.unit.name}" — ${d.unit.lessonCount} lessons found.`,'ok');
+      }catch(err){ toast(err.message); }
+      btn.disabled=false; btn.innerHTML=orig; $('unitFile').value='';
+    });
+    $('lessonPicker').addEventListener('change',()=>{ selectedLessonIndex=Number($('lessonPicker').value)||0; });
+
     composer.addEventListener('submit', async (e)=>{
       e.preventDefault();
       const subject=$('subject').value.trim(), topic=$('topic').value.trim(), objectives=$('objectives').value.trim();
@@ -947,7 +1036,8 @@
       const firstBad=['subject','topic','objectives'][bad.indexOf(true)];
       if(firstBad){ $(firstBad).focus(); $(firstBad).scrollIntoView({behavior:'smooth',block:'center'}); return; }
       ctx={ subject:$('subject').value, topic:$('topic').value, grade:$('grade').value||'middle school',
-        slideCount:Number($('slideCount').value)||5, tone:$('tone').value, focus:$('focus').value.trim(), objectives, templateId:selectedTemplateId };
+        slideCount:Number($('slideCount').value)||5, tone:$('tone').value, focus:$('focus').value.trim(), objectives,
+        templateId:selectedTemplateId, unitId:selectedUnitId, lessonIndex:selectedLessonIndex };
       $('planBtn').disabled=true; statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>Writing a lesson plan that matches your template…';
       try{
         const r=await fetch('/api/lesson-plan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(ctx)});
@@ -1159,6 +1249,7 @@
     // ---- lesson pack (worksheet / exit ticket) ----
     let packType=null, packData=null;
     const packList=(arr,f)=>`<ol>${(arr||[]).map(x=>`<li contenteditable data-f="${f}">${esc(x)}</li>`).join('')}</ol>`;
+    const OPT=['A','B','C','D'];
     function renderPack(type,data){
       packType=type; packData=data;
       let h=`<p class="pd-title" contenteditable data-f="title">${esc(data.title||'')}</p>`;
@@ -1169,6 +1260,23 @@
         if(data.questions) h+=`<h4>Practice</h4>${packList(data.questions,'q')}`;
         if(data.challenge!=null) h+=`<h4>Challenge</h4><ol><li contenteditable data-f="challenge">${esc(data.challenge)}</li></ol>`;
         if(data.answerKey) h+=`<h4>Answer key (teacher)</h4><div class="ak">${packList(data.answerKey,'ak')}</div>`;
+      }else if(type==='quiz'){
+        if(data.instructions) h+=`<p class="pd-focus" style="font-style:italic">${esc(data.instructions)}</p>`;
+        if(data.mcq&&data.mcq.length){
+          h+=`<h4>Section A — Multiple Choice</h4><ol style="padding-left:18px">`;
+          data.mcq.forEach(q=>{ h+=`<li style="margin-bottom:10px"><div>${esc(q.question)}</div><ul style="list-style:none;padding-left:12px;margin-top:4px">${(q.options||[]).map((o,j)=>`<li style="margin:2px 0">${OPT[j]}.&nbsp;${esc(o)}</li>`).join('')}</ul></li>`; });
+          h+=`</ol>`;
+        }
+        if(data.shortAnswer&&data.shortAnswer.length){
+          h+=`<h4>Section B — Short Answer</h4><ol style="padding-left:18px">`;
+          data.shortAnswer.forEach(q=>{ h+=`<li style="margin-bottom:8px">${esc(q.question)} <span class="info">(${q.marks} mark${q.marks!==1?'s':''})</span></li>`; });
+          h+=`</ol>`;
+        }
+        if(data.totalMarks) h+=`<p style="text-align:right;font-weight:600;color:var(--navy)">Total: ${data.totalMarks} marks</p>`;
+        h+=`<h4>Answer Key (teacher)</h4><div class="ak">`;
+        if(data.mcq&&data.mcq.length) h+=`<b>Section A:</b> ${data.mcq.map((q,i)=>`${i+1}. ${OPT[q.correctIndex]}`).join(' · ')}<br>`;
+        if(data.shortAnswer&&data.shortAnswer.length) h+=`<b>Section B:</b><ol style="padding-left:18px;margin:4px 0">${data.shortAnswer.map(q=>`<li>${esc(q.answer)}</li>`).join('')}</ol>`;
+        h+=`</div>`;
       }else{
         if(data.questions) h+=`<h4>Questions</h4>${packList(data.questions,'q')}`;
         if(data.answerKey) h+=`<h4>Answer key (teacher)</h4><div class="ak">${packList(data.answerKey,'ak')}</div>`;
@@ -1203,6 +1311,21 @@
           const cd=r.headers.get('Content-Disposition')||'',m=cd.match(/filename="([^"]+)"/);
           a.href=url; a.download=m?m[1]:(packType+'.docx'); document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
         }catch(err){ toast(err.message); } dl.disabled=false; dl.innerHTML=o; }
+    });
+
+    $('fullPackBtn').addEventListener('click', async()=>{
+      const btn=$('fullPackBtn'); btn.disabled=true; const orig=btn.innerHTML;
+      btn.innerHTML='<span class="spinner"></span>Generating all three…';
+      try{
+        const r=await fetch('/api/pack/full',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({...ctx,lessonPlan:collectPlan()})});
+        if(!r.ok){const x=await r.json().catch(()=>({error:'Download failed'}));throw new Error(x.error);}
+        const blob=await r.blob(),url=URL.createObjectURL(blob),a=document.createElement('a');
+        const cd=r.headers.get('Content-Disposition')||'',m=cd.match(/filename="([^"]+)"/);
+        a.href=url; a.download=m?m[1]:'lesson-pack.zip'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+        toast('Lesson pack downloaded!','ok');
+      }catch(err){ toast(err.message); }
+      btn.disabled=false; btn.innerHTML=orig;
     });
 
     // "Start over" discards the generated deck (and any edits) — two-step confirm.
@@ -1250,7 +1373,7 @@
       $('greeting').innerHTML=first?`Welcome back, <span class="hi">${esc(first)}</span>`:'Plan a lesson';
       $('adminBtn').style.display = user.role==='admin' ? 'inline-flex' : 'none';
       setActiveNav('homeBtn');
-      loadLibrary(); loadTemplates(); loadRosters(true);
+      loadLibrary(); loadTemplates(); loadRosters(true); loadUnits();
     }
     function showAuth(){ authScreen.style.display='block'; nav.style.display='none'; appEl.style.display='none'; setMode('login'); }
 

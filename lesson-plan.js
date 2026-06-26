@@ -23,9 +23,10 @@ const PLAN_SCHEMA = {
   additionalProperties: false,
 };
 
-function buildPrompt({ subject, topic, grade, tone, objectives, templateText }) {
+function buildPrompt({ subject, topic, grade, tone, objectives, templateText, unitBlock }) {
   const pretty = topic.replace(/-/g, ' ');
   const depth = gradeProfile(grade).content.depth;
+  const unitSection = unitBlock ? `\n${unitBlock}\n` : '';
   const templateBlock = templateText
     ? `The school's LESSON PLAN TEMPLATE is below. Reproduce its section headings and their order EXACTLY as they appear — same names, same sequence (e.g. Starter, Main Activity, Plenary, Exit Card, Resources, etc.). Fill each section with content written specifically for THIS lesson.
 
@@ -40,7 +41,7 @@ Subject: ${subject}
 Topic: ${pretty}
 Grade level: ${grade}
 Tone: ${tone}
-
+${unitSection}
 Learning objectives provided by the teacher (the plan MUST address these):
 ${objectives}
 
@@ -68,7 +69,7 @@ function placeholderPlan(objectives) {
   };
 }
 
-async function generateLessonPlan({ subject, topic, grade = 'middle school', tone = 'clear and engaging', objectives, templateText, regenerate = false }) {
+async function generateLessonPlan({ subject, topic, grade = 'middle school', tone = 'clear and engaging', objectives, templateText, unitBlock = '', regenerate = false }) {
   if (!process.env.OPENAI_API_KEY) {
     console.log('No OPENAI_API_KEY set — using placeholder lesson plan.');
     return placeholderPlan(objectives);
@@ -81,13 +82,14 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     tone: String(tone || 'clear and engaging').trim(),
     objectives: String(objectives || '').trim(),
     templateText: String(templateText || '').slice(0, 6000).trim(),
+    unitBlock: String(unitBlock || '').slice(0, 2000).trim(),
     regenerate,
   }, async () => {
     const client = aiClient();
     const response = await client.chat.completions.create({
       model: MODEL,
       max_tokens: 6000,
-      messages: [{ role: 'user', content: buildPrompt({ subject, topic, grade, tone, objectives, templateText }) }],
+      messages: [{ role: 'user', content: buildPrompt({ subject, topic, grade, tone, objectives, templateText, unitBlock }) }],
       response_format: { type: 'json_schema', json_schema: { name: 'lesson_plan', strict: true, schema: PLAN_SCHEMA } },
     });
     const text = response.choices[0]?.message?.content;

@@ -42,10 +42,11 @@ function calibration(grade) {
   return `Pitch everything precisely at ${grade} (students about ${age} years old): vocabulary, reading level, and difficulty must suit ${grade} — assume they mastered the previous grade, and do NOT drift easier or harder.`;
 }
 
-function ctxBlock({ subject, topic, grade, objectives, lessonPlanText }) {
+function ctxBlock({ subject, topic, grade, objectives, lessonPlanText, unitBlock }) {
   const pretty = String(topic || '').replace(/-/g, ' ');
   const plan = lessonPlanText ? `\nApproved lesson plan (base the artifact on this):\n--- PLAN ---\n${String(lessonPlanText).slice(0, 5000)}\n--- END ---\n` : '';
-  return `Subject: ${subject}\nTopic: ${pretty}\nGrade: ${grade}\nLesson objectives the artifact MUST assess/practise:\n${objectives}\n${plan}`;
+  const unit = unitBlock ? `\n${String(unitBlock).slice(0, 1500)}\n` : '';
+  return `Subject: ${subject}\nTopic: ${pretty}\nGrade: ${grade}\nLesson objectives the artifact MUST assess/practise:\n${objectives}\n${unit}${plan}`;
 }
 
 async function callModel(schema, name, prompt, max_tokens = 3500) {
@@ -124,6 +125,78 @@ function placeholderExitTicket({ topic }) {
   return { title: `${t} — Exit Ticket`, questions: [`What is one thing you learned about ${t}?`, `Give an example of ${t}.`], answerKey: ['Student answers vary.', 'Student answers vary.'] };
 }
 
+// ── Quiz: printable assessment (MCQ + short-answer, with marks) ────────────
+
+const QUIZ_SCHEMA = {
+  type: 'object',
+  properties: {
+    title: { type: 'string' },
+    instructions: { type: 'string' },
+    mcq: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          question: { type: 'string' },
+          options: { type: 'array', items: { type: 'string' } }, // exactly 4
+          correctIndex: { type: 'integer' },                     // 0-3
+        },
+        required: ['question', 'options', 'correctIndex'],
+        additionalProperties: false,
+      },
+    },
+    shortAnswer: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          question: { type: 'string' },
+          marks: { type: 'integer' },
+          answer: { type: 'string' },
+        },
+        required: ['question', 'marks', 'answer'],
+        additionalProperties: false,
+      },
+    },
+    totalMarks: { type: 'integer' },
+  },
+  required: ['title', 'instructions', 'mcq', 'shortAnswer', 'totalMarks'],
+  additionalProperties: false,
+};
+
+async function generateQuiz(ctx) {
+  if (!process.env.OPENAI_API_KEY) return placeholderQuiz(ctx);
+  const { wrap } = require('./cache');
+  return wrap('quiz', ctxKey('quiz', ctx), async () => {
+    const prompt = `Create a printable QUIZ for this lesson — a mix of multiple-choice and short-answer questions the teacher can hand out and mark.
+${ctxBlock(ctx)}
+Produce:
+- title: a clear quiz title.
+- instructions: one sentence of instructions for the student (e.g. "Circle the correct letter for MCQ. Write your working for short-answer questions.").
+- mcq: 5 multiple-choice questions tied to the lesson objectives. Each has "question", "options" (EXACTLY 4 choices), and "correctIndex" (0-based index of the correct one). Make wrong options plausible.
+- shortAnswer: 3 short-answer questions that require working or reasoning, each with "marks" (1-4) and "answer" (teacher's expected response).
+- totalMarks: sum of all marks (mcq = 1 each; short-answer as specified).
+${calibration(ctx.grade)}
+Plain text only — no markdown.`;
+    return callModel(QUIZ_SCHEMA, 'quiz', prompt, 3000);
+  });
+}
+
+function placeholderQuiz({ topic }) {
+  const t = String(topic || 'the topic').replace(/-/g, ' ');
+  return {
+    title: `${t} — Quiz`,
+    instructions: 'Circle the correct letter for MCQ. Show your working for short-answer questions.',
+    mcq: Array.from({ length: 5 }, (_, i) => ({ question: `MCQ question ${i + 1} about ${t}.`, options: ['Option A', 'Option B', 'Option C', 'Option D'], correctIndex: 0 })),
+    shortAnswer: [
+      { question: `Explain one key concept about ${t}.`, marks: 2, answer: 'Student answers vary.' },
+      { question: `Give an example of ${t}.`, marks: 2, answer: 'Student answers vary.' },
+      { question: `How would you apply ${t} in real life?`, marks: 3, answer: 'Student answers vary.' },
+    ],
+    totalMarks: 12,
+  };
+}
+
 // ── Student game: lesson summary + multiple-choice questions ────────────────
 const GAME_SCHEMA = {
   type: 'object',
@@ -190,4 +263,4 @@ function placeholderGame({ topic, questionCount }) {
   });
 }
 
-module.exports = { generateWorksheet, generateExitTicket, generateGame };
+module.exports = { generateWorksheet, generateExitTicket, generateQuiz, generateGame };

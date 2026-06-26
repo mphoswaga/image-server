@@ -15,8 +15,9 @@ const { addImages } = require('./admin-images');
 const { generateImage } = require('./ai-image');
 const { parseFraction, detectLabelledDiagram } = require('./concept-diagram');
 const { generateDiagram } = require('./svg-diagram');
-const { generateWorksheet, generateExitTicket, generateGame } = require('./lesson-pack');
-const { worksheetDocx, exitTicketDocx } = require('./docgen');
+const { generateWorksheet, generateExitTicket, generateQuiz, generateGame } = require('./lesson-pack');
+const { worksheetDocx, exitTicketDocx, quizDocx } = require('./docgen');
+const unit = require('./unit');
 const games = require('./games');
 const roster = require('./roster');
 const apikeys = require('./apikeys');
@@ -265,6 +266,47 @@ app.post('/api/lesson-plan/download', requireAuth, (req, res) => {
   }
 });
 
+// ── Scheme of work / unit management ──────────────────────────────────────
+// Upload a scheme of work → LLM parses it into a structured unit.
+// The unit is then available as context for lesson plans and decks.
+
+app.post('/api/units', requireAuth, upload.single('file'), async (req, res) => {
+  try {
+    let text, filename;
+    if (req.file) {
+      filename = req.file.originalname;
+      text = await extractText(req.file.buffer, filename);
+    } else if (req.body && req.body.text) {
+      filename = 'pasted-scheme.txt';
+      text = String(req.body.text);
+    } else {
+      return res.status(400).json({ error: 'Upload a scheme of work file or paste text.' });
+    }
+    if (!text || !text.trim()) return res.status(400).json({ error: 'Could not read any text from that file.' });
+    const parsed = await unit.parseUnit(text);
+    const rec = await unit.saveUnit(req.userId, parsed, filename);
+    res.json({ unit: { id: rec.id, name: rec.name, subject: rec.subject, grade: rec.grade, lessonCount: rec.lessons.length, createdAt: rec.createdAt } });
+  } catch (err) {
+    console.error('Unit parse failed:', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/units', requireAuth, (req, res) => {
+  res.json({ units: unit.listUnits(req.userId) });
+});
+
+app.get('/api/units/:id', requireAuth, (req, res) => {
+  const u = unit.getUnit(req.userId, req.params.id);
+  if (!u) return res.status(404).json({ error: 'Unit not found.' });
+  res.json({ unit: u });
+});
+
+app.delete('/api/units/:id', requireAuth, (req, res) => {
+  unit.deleteUnit(req.userId, req.params.id);
+  res.json({ ok: true });
+});
+
 // Hard truncation limits — enforce here as a server-side backstop so malformed
 // or oversized requests can't inflate token budgets even if the UI is bypassed.
 const LIMITS = { subject: 60, topic: 80, objectives: 1500, focus: 400 };
@@ -272,7 +314,7 @@ function clip(val, max) { return String(val || '').slice(0, max); }
 
 // ── Lesson plan generation (objectives + stored template → plan) ──────────
 app.post('/api/lesson-plan', requireAuth, async (req, res) => {
-  const { grade, tone, templateId, regenerate } = req.body || {};
+  const { grade, tone, templateId, unitId, lessonIndex, regenerate } = req.body || {};
   const subject = clip(req.body.subject, LIMITS.subject);
   const topic = clip(req.body.topic, LIMITS.topic);
   const objectives = clip(req.body.objectives, LIMITS.objectives);
@@ -280,9 +322,11 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
   if (!objectives.trim()) return res.status(400).json({ error: 'Please paste the lesson objectives.' });
   try {
     const tpl = (templateId && getTemplate(req.userId, templateId)) || loadTemplate(req.userId);
+    const u = unitId ? unit.getUnit(req.userId, unitId) : null;
+    const unitBlock = u ? unit.buildUnitBlock(u, lessonIndex) : '';
     const plan = await generateLessonPlan({
       subject: subject.toLowerCase(), topic: topic.toLowerCase(),
-      grade, tone, objectives, templateText: tpl ? tpl.text : '', regenerate: !!regenerate,
+      grade, tone, objectives, templateText: tpl ? tpl.text : '', unitBlock, regenerate: !!regenerate,
     });
     res.json({ sections: plan.sections, usedTemplate: !!tpl, templateName: tpl ? tpl.name : null, templateId: tpl ? tpl.id : null });
   } catch (err) {
@@ -291,24 +335,64 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
   }
 });
 
-// ── Lesson pack (worksheet, exit ticket) from the approved plan ────────────
-const PACK_GEN = { worksheet: generateWorksheet, 'exit-ticket': generateExitTicket };
-const PACK_RENDER = { worksheet: worksheetDocx, 'exit-ticket': exitTicketDocx };
+// ── Lesson pack (worksheet, exit ticket, quiz) from the approved plan ───────
+const PACK_GEN    = { worksheet: generateWorksheet, 'exit-ticket': generateExitTicket, quiz: generateQuiz };
+const PACK_RENDER = { worksheet: worksheetDocx, 'exit-ticket': exitTicketDocx, quiz: quizDocx };
 
 app.post('/api/pack/:type', requireAuth, async (req, res) => {
   const gen = PACK_GEN[req.params.type];
   if (!gen) return res.status(404).json({ error: 'Unknown lesson-pack item.' });
-  const { grade, tone, lessonPlan, regenerate } = req.body || {};
+  const { grade, tone, lessonPlan, unitId, lessonIndex, regenerate } = req.body || {};
   const subject = clip(req.body.subject, LIMITS.subject);
   const topic = clip(req.body.topic, LIMITS.topic);
   const objectives = clip(req.body.objectives, LIMITS.objectives);
   if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
   try {
+    const u = unitId ? unit.getUnit(req.userId, unitId) : null;
+    const unitBlock = u ? unit.buildUnitBlock(u, lessonIndex) : '';
     const lessonPlanText = lessonPlan && lessonPlan.sections ? planToText(lessonPlan) : '';
-    const data = await gen({ subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, regenerate: !!regenerate });
+    const data = await gen({ subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, unitBlock, regenerate: !!regenerate });
     res.json({ type: req.params.type, data });
   } catch (err) {
     console.error('Pack generation failed:', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Full lesson pack: all three artifacts in parallel → zip download.
+app.post('/api/pack/full', requireAuth, async (req, res) => {
+  const { grade, tone, lessonPlan, unitId, lessonIndex } = req.body || {};
+  const subject = clip(req.body.subject, LIMITS.subject);
+  const topic = clip(req.body.topic, LIMITS.topic);
+  const objectives = clip(req.body.objectives, LIMITS.objectives);
+  if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
+  try {
+    const u = unitId ? unit.getUnit(req.userId, unitId) : null;
+    const unitBlock = u ? unit.buildUnitBlock(u, lessonIndex) : '';
+    const lessonPlanText = lessonPlan && lessonPlan.sections ? planToText(lessonPlan) : '';
+    const ctx = { subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, unitBlock };
+    const meta = { subject, topic, grade };
+
+    const [wData, etData, qData] = await Promise.all([
+      generateWorksheet(ctx), generateExitTicket(ctx), generateQuiz(ctx),
+    ]);
+    const [wBuf, etBuf, qBuf] = await Promise.all([
+      worksheetDocx(wData, meta), exitTicketDocx(etData, meta), quizDocx(qData, meta),
+    ]);
+
+    const PizZip = require('pizzip');
+    const zip = new PizZip();
+    const base = String(topic).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'lesson';
+    zip.file(`${base}-worksheet.docx`, wBuf);
+    zip.file(`${base}-exit-ticket.docx`, etBuf);
+    zip.file(`${base}-quiz.docx`, qBuf);
+    const zipBuf = zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${base}-lesson-pack.zip"`);
+    res.send(zipBuf);
+  } catch (err) {
+    console.error('Full pack failed:', err.message);
     res.status(400).json({ error: err.message });
   }
 });
@@ -332,15 +416,20 @@ app.post('/api/pack/:type/download', requireAuth, async (req, res) => {
 
 // Generate a deck; store state; return preview metadata + download id.
 app.post('/api/generate', requireAuth, async (req, res) => {
-  const { slideCount, grade, tone, lessonPlan, regenerate } = req.body || {};
+  const { slideCount, grade, tone, lessonPlan, unitId, lessonIndex, regenerate } = req.body || {};
   const subject = clip(req.body.subject, LIMITS.subject);
   const topic = clip(req.body.topic, LIMITS.topic);
   const objectives = clip(req.body.objectives, LIMITS.objectives);
   const focus = clip(req.body.focus, LIMITS.focus);
   if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
   try {
-    // If an accepted lesson plan was passed, the slides follow it.
-    const lessonPlanText = lessonPlan && lessonPlan.sections ? planToText(lessonPlan) : '';
+    const u = unitId ? unit.getUnit(req.userId, unitId) : null;
+    const unitBlock = u ? unit.buildUnitBlock(u, lessonIndex) : '';
+    // If an accepted lesson plan was passed, the slides follow it; unit context
+    // falls back into lessonPlanText so it still reaches the content generator.
+    const lessonPlanText = lessonPlan && lessonPlan.sections
+      ? planToText(lessonPlan)
+      : (unitBlock || '');
     const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives, lessonPlanText, extras: { regenerate: !!regenerate }, skipAssemble: true });
     const id = crypto.randomUUID();
     decks.set(id, {

@@ -84,4 +84,59 @@ function exitTicketDocx(data, meta = {}) {
   return Packer.toBuffer(doc(c));
 }
 
-module.exports = { worksheetDocx, exitTicketDocx };
+const OPTION_LABELS = ['A', 'B', 'C', 'D'];
+
+function quizDocx(data, meta = {}) {
+  const c = [];
+  c.push(title(data.title || 'Quiz'), subtitle(metaSubtitle(meta)), nameDate());
+  if (data.instructions) c.push(body(data.instructions, { italics: true, after: 160 }));
+
+  // Multiple choice
+  if (Array.isArray(data.mcq) && data.mcq.length) {
+    c.push(heading('Section A — Multiple Choice  (1 mark each)'));
+    data.mcq.forEach((q, i) => {
+      c.push(numbered(i + 1, q.question, { after: 60 }));
+      (q.options || []).slice(0, 4).forEach((opt, j) => {
+        c.push(new Paragraph({ spacing: { after: 50 },
+          children: [new TextRun({ text: `     ${OPTION_LABELS[j]}.  `, bold: true, color: GREY, size: 21 }), new TextRun({ text: opt, color: INK, size: 21 })] }));
+      });
+      c.push(new Paragraph({ spacing: { after: 120 }, children: [] }));
+    });
+  }
+
+  // Short answer
+  if (Array.isArray(data.shortAnswer) && data.shortAnswer.length) {
+    c.push(heading('Section B — Short Answer'));
+    data.shortAnswer.forEach((q, i) => {
+      const marks = q.marks || 1;
+      const label = `${i + 1}.  (${marks} mark${marks !== 1 ? 's' : ''})`;
+      c.push(new Paragraph({ spacing: { before: 200, after: 80 },
+        children: [new TextRun({ text: label + '  ', bold: true, color: NAVY, size: 22 }), new TextRun({ text: q.question, color: INK, size: 22 })] }));
+      for (let l = 0; l < Math.max(2, marks); l++) c.push(writeLine());
+      c.push(new Paragraph({ spacing: { after: 60 }, children: [] }));
+    });
+  }
+
+  if (data.totalMarks) {
+    c.push(new Paragraph({ spacing: { before: 200, after: 40 }, alignment: AlignmentType.RIGHT,
+      children: [new TextRun({ text: `Total: ______ / ${data.totalMarks}`, bold: true, color: NAVY, size: 22 })] }));
+  }
+
+  // Answer key
+  c.push(answerKeyHeading());
+  if (Array.isArray(data.mcq) && data.mcq.length) {
+    c.push(heading('Section A'));
+    data.mcq.forEach((q, i) => {
+      const letter = OPTION_LABELS[q.correctIndex] || '?';
+      c.push(numbered(i + 1, `${letter}.  ${(q.options || [])[q.correctIndex] || ''}`, { after: 40 }));
+    });
+  }
+  if (Array.isArray(data.shortAnswer) && data.shortAnswer.length) {
+    c.push(heading('Section B'));
+    data.shortAnswer.forEach((q, i) => c.push(numbered(i + 1, q.answer || '', { after: 40 })));
+  }
+
+  return Packer.toBuffer(doc(c));
+}
+
+module.exports = { worksheetDocx, exitTicketDocx, quizDocx };
