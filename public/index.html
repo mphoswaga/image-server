@@ -961,6 +961,9 @@
 
       <div class="games-filter">
         <input id="gamesSearch" type="text" placeholder="Search by topic…" autocomplete="off" />
+        <select id="gamesClassFilter">
+          <option value="all">All classes</option>
+        </select>
         <select id="gamesStatusFilter">
           <option value="all">All games</option>
           <option value="live">Live</option>
@@ -1880,14 +1883,17 @@
 
     let allGames=[];
 
-    function filterGames(games,search,status){
+    function filterGames(games,search,status,classId){
       return games.filter(g=>{
         const matchText=!search||(g.topic||'').toLowerCase().includes(search)||(g.lessonTitle||'').toLowerCase().includes(search)||(g.subject||'').toLowerCase().includes(search);
         const live=gameLive(g.cutoffAt);
         const matchStatus=status==='all'||(status==='live'&&live)||(status==='closed'&&!live);
-        return matchText&&matchStatus;
+        const matchClass=classId==='all'||(classId==='none'&&!g.rosterId)||(g.rosterId===classId);
+        return matchText&&matchStatus&&matchClass;
       });
     }
+    function getFilters(){ return {search:$('gamesSearch').value.toLowerCase(), status:$('gamesStatusFilter').value, classId:$('gamesClassFilter').value}; }
+    function applyFilters(){ const f=getFilters(); renderGamesList(filterGames(allGames,f.search,f.status,f.classId)); }
 
     function renderGamesList(games){
       const wrap=$('gamesList');
@@ -1957,7 +1963,7 @@
         const r=await fetch('/api/game/'+gameId+'/cutoff',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({cutoffAt})});
         const d=await r.json(); if(!r.ok)throw new Error(d.error);
         const g=allGames.find(x=>x.id===gameId); if(g)g.cutoffAt=d.cutoffAt;
-        renderGamesList(filterGames(allGames,$('gamesSearch').value.toLowerCase(),$('gamesStatusFilter').value));
+        applyFilters();
         toast(cutoffAt?'Deadline updated.':'Close date removed.');
       }catch(e){toast(e.message||'Failed to update.');}
     }
@@ -1965,15 +1971,24 @@
     async function loadMyGames(){
       const wrap=$('gamesList'); wrap.innerHTML='<span class="status">Loading…</span>';
       try{
-        const d=await (await fetch('/api/games')).json();
-        if(!d.games||!d.games.length){ allGames=[]; wrap.innerHTML='<div class="empty-state"><svg class="ic" aria-hidden="true" style="width:36px;height:36px;opacity:.3"><use href="#i-target"/></svg><p>No games yet</p><p style="font-size:13px;color:var(--muted)">Create one from a finished lesson — look for the "Student game" section under your slides.</p></div>'; return; }
-        allGames=d.games;
-        renderGamesList(filterGames(allGames,$('gamesSearch').value.toLowerCase(),$('gamesStatusFilter').value));
+        const [gd, rd] = await Promise.all([fetch('/api/games').then(r=>r.json()), fetch('/api/rosters').then(r=>r.json())]);
+        const rosters = rd.rosters || [];
+        if(!gd.games||!gd.games.length){ allGames=[]; wrap.innerHTML='<div class="empty-state"><svg class="ic" aria-hidden="true" style="width:36px;height:36px;opacity:.3"><use href="#i-target"/></svg><p>No games yet</p><p style="font-size:13px;color:var(--muted)">Create one from a finished lesson — look for the "Student game" section under your slides.</p></div>'; return; }
+        allGames=gd.games;
+        // Build class dropdown — only rosters referenced by at least one game + "No class" if any game has no roster
+        const usedRosterIds=new Set(allGames.map(g=>g.rosterId).filter(Boolean));
+        const classEl=$('gamesClassFilter');
+        const curClass=classEl.value;
+        const hasNoRoster=allGames.some(g=>!g.rosterId);
+        classEl.innerHTML='<option value="all">All classes</option>'
+          +(hasNoRoster?'<option value="none">No class</option>':'')
+          +rosters.filter(r=>usedRosterIds.has(r.id)).map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');
+        if(curClass&&classEl.querySelector(`option[value="${curClass}"]`)) classEl.value=curClass;
+        applyFilters();
         const searchEl=$('gamesSearch'); const filterEl=$('gamesStatusFilter');
         if(!searchEl.dataset.wired){
-          searchEl.dataset.wired='1'; filterEl.dataset.wired='1';
-          const refilter=()=>renderGamesList(filterGames(allGames,$('gamesSearch').value.toLowerCase(),$('gamesStatusFilter').value));
-          searchEl.addEventListener('input',refilter); filterEl.addEventListener('change',refilter);
+          searchEl.dataset.wired='1'; filterEl.dataset.wired='1'; classEl.dataset.wired='1';
+          searchEl.addEventListener('input',applyFilters); filterEl.addEventListener('change',applyFilters); classEl.addEventListener('change',applyFilters);
         }
       }catch{ wrap.innerHTML='<span class="status err">Could not load games.</span>'; }
     }
