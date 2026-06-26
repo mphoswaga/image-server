@@ -628,6 +628,17 @@ app.post('/api/slide/:id/ai-image', requireAuth, async (req, res) => {
       deck.images[i] = reuse;
       return res.json({ image: '/' + reuse.relpath, imageSource: 'ai-generated', reused: true });
     }
+    // Try Wikimedia Commons before consuming AI quota (free, educational images).
+    const wikiImgs = await fetchWikimediaImages({
+      subject: deck.subject, topic: deck.topic, count: 3,
+      query: rewriteImageQuery(concept, { grade: deck.grade }),
+    }).catch(() => []);
+    if (wikiImgs.length) {
+      const wEntry = wikiImgs[0];
+      addLibraryImages([wikiImgs[0]]);
+      deck.images[i] = wEntry;
+      return res.json({ image: '/' + wEntry.relpath, imageSource: 'wikimedia', reused: false });
+    }
     // Paid generation — enforce the monthly AI-visual cap (admins exempt).
     const isAdmin = req.user.role === 'admin';
     const q = quota.status(req.userId, isAdmin);
@@ -663,6 +674,17 @@ app.post('/api/slide/:id/diagram', requireAuth, async (req, res) => {
     const concept = `${slide.title}${slide.imageQuery ? ' — ' + slide.imageQuery : ''}`.trim();
     const reuse = findReusableImage({ subject: deck.subject, topic: deck.topic, query: concept, minScore: 3, source: 'svg-diagram', exclude: deck.images.map(im => im.relpath) });
     let entry = reuse, remaining, limit;
+    // Try Wikimedia Commons for a free diagram before consuming AI quota.
+    if (!entry) {
+      const wikiDiagrams = await fetchWikimediaImages({
+        subject: deck.subject, topic: deck.topic, count: 3,
+        query: rewriteImageQuery(concept, { grade: deck.grade }) + ' diagram',
+      }).catch(() => []);
+      if (wikiDiagrams.length) {
+        entry = wikiDiagrams[0];
+        addLibraryImages([entry]);
+      }
+    }
     if (!entry) {
       // Generating a new diagram is a paid AI visual — enforce the cap.
       const isAdmin = req.user.role === 'admin';
@@ -678,7 +700,8 @@ app.post('/api/slide/:id/diagram', requireAuth, async (req, res) => {
     }
     slide.visual = { type: 'diagram', items: [concept] };
     deck.images[i] = entry;
-    res.json({ image: '/' + entry.relpath, imageSource: 'svg-diagram', remaining, limit });
+    const src = entry.source === 'wikimedia' ? 'wikimedia' : 'svg-diagram';
+    res.json({ image: '/' + entry.relpath, imageSource: src, remaining, limit });
   } catch (err) {
     console.error('Diagram failed:', err.message);
     res.status(400).json({ error: err.message });
