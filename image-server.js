@@ -11,7 +11,7 @@ const { extractText, saveTemplate, listTemplates, getTemplate, renameTemplate, d
 const { generateLessonPlan, planToText } = require('./lesson-plan');
 const { fillDocx, fillXlsx } = require('./fill-template');
 const { animateBuffer } = require('./animate-pptx');
-const { addImages } = require('./admin-images');
+const { addImages, fetchWikimediaImages } = require('./admin-images');
 const { generateImage } = require('./ai-image');
 const { parseFraction, detectLabelledDiagram } = require('./concept-diagram');
 const { generateDiagram } = require('./svg-diagram');
@@ -574,9 +574,21 @@ app.post('/api/images/fetch', requireAuth, async (req, res) => {
   if (!q || !String(q).trim()) return res.status(400).json({ error: 'Type what you are looking for.' });
   try {
     const searchQ = rewriteImageQuery(String(q).trim(), { grade: grade || '' });
-    const added = await addImages({ subject: subject || 'search', topic: topic || 'general', count: 8, query: searchQ });
-    if (added.length) addLibraryImages(added);
-    res.json({ images: added.map(e => ({ relpath: e.relpath, image: '/' + e.relpath, caption: e.caption || '', source: e.source || 'unsplash' })) });
+    const sub = subject || 'search', top = topic || 'general';
+    // Fetch from Unsplash + Wikimedia Commons simultaneously
+    const [unsplash, wikimedia] = await Promise.all([
+      addImages({ subject: sub, topic: top, count: 6, query: searchQ }).catch(e => { console.error('Unsplash:', e.message); return []; }),
+      fetchWikimediaImages({ subject: sub, topic: top, count: 6, query: searchQ }).catch(e => { console.error('Wikimedia:', e.message); return []; }),
+    ]);
+    // Interleave so both sources appear together in the grid
+    const combined = [];
+    for (let i = 0; i < Math.max(unsplash.length, wikimedia.length); i++) {
+      if (i < unsplash.length)  combined.push(unsplash[i]);
+      if (i < wikimedia.length) combined.push(wikimedia[i]);
+    }
+    if (!combined.length) return res.status(400).json({ error: 'No images found — try different search terms.' });
+    addLibraryImages(combined);
+    res.json({ images: combined.map(e => ({ relpath: e.relpath, image: '/' + e.relpath, caption: e.caption || '', source: e.source || 'unsplash' })) });
   } catch (err) {
     console.error('Image fetch failed:', err.message);
     res.status(400).json({ error: err.message });

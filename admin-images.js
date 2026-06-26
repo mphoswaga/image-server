@@ -66,4 +66,74 @@ async function addImages({ subject, topic, count = 10, query, onProgress }) {
   return added;
 }
 
-module.exports = { addImages };
+// Fetch images from Wikimedia Commons (free, no key needed, educational content).
+async function fetchWikimediaImages({ subject, topic, count = 8, query } = {}) {
+  subject = slug(subject || 'search');
+  topic   = slug(topic   || 'general');
+  count   = Math.min(20, Math.max(1, parseInt(count, 10) || 8));
+
+  const folder = path.join(PUBLIC_DIR, subject, topic);
+  fs.mkdirSync(folder, { recursive: true });
+  const existing = fs.readdirSync(folder).filter(f => f.startsWith('wm_')).length;
+
+  const searchQ = (query && String(query).trim()) || `${subject} ${topic} education`;
+
+  const params = new URLSearchParams({
+    action: 'query', generator: 'search', gsrnamespace: '6',
+    gsrsearch: searchQ, gsrlimit: String(Math.min(count * 4, 50)),
+    prop: 'imageinfo', iiprop: 'url|size|mime', iiurlwidth: '1280',
+    format: 'json', origin: '*',
+  });
+
+  let pages;
+  try {
+    const res = await axios.get(`https://commons.wikimedia.org/w/api.php?${params}`, {
+      headers: { 'User-Agent': 'LessonCope/1.0 (educational slide generator)' },
+      timeout: 15000,
+    });
+    pages = Object.values(res.data?.query?.pages || {});
+  } catch (err) {
+    console.error('Wikimedia search failed:', err.message);
+    return [];
+  }
+
+  const added = [];
+  for (const page of pages) {
+    if (added.length >= count) break;
+    const ii = page.imageinfo?.[0];
+    if (!ii) continue;
+    if (!['image/jpeg', 'image/png'].includes(ii.mime)) continue;
+    if (ii.width && ii.height && ii.width < ii.height) continue; // skip portrait
+    if ((ii.thumbwidth || ii.width || 0) < 300) continue;        // skip tiny
+    const url = ii.thumburl || ii.url;
+    if (!url) continue;
+
+    const n = existing + added.length + 1;
+    const ext = ii.mime === 'image/png' ? 'png' : 'jpg';
+    const filename = `wm_${subject}_${topic}_${String(n).padStart(3, '0')}.${ext}`;
+    const filepath = path.join(folder, filename);
+    if (fs.existsSync(filepath)) continue;
+
+    try {
+      const img = await axios.get(url, {
+        responseType: 'arraybuffer', timeout: 30000,
+        headers: { 'User-Agent': 'LessonCope/1.0' },
+      });
+      fs.writeFileSync(filepath, Buffer.from(img.data));
+    } catch { continue; }
+
+    let caption = '', keywords = [];
+    try { const c = await captionImage(filepath); caption = c.caption; keywords = c.keywords; } catch {}
+
+    added.push({
+      subject, topic, filename,
+      relpath: path.posix.join(subject, topic, filename),
+      tags: [subject, topic.replace(/-/g, ' ')],
+      caption, keywords,
+      source: 'wikimedia',
+    });
+  }
+  return added;
+}
+
+module.exports = { addImages, fetchWikimediaImages };
