@@ -57,6 +57,7 @@ async function addImages({ subject, topic, count = 10, query, onProgress }) {
         caption, keywords,
         credit: photo.user ? { name: photo.user.name, link: photo.user.links?.html } : undefined,
         source: 'unsplash-admin',
+        addedAt: new Date().toISOString(),
       });
       if (onProgress) onProgress(added.length, count);
     }
@@ -145,6 +146,7 @@ async function fetchWikimediaImages({ subject, topic, count = 8, query } = {}) {
       tags: [subject, topic.replace(/-/g, ' ')],
       caption, keywords,
       source: 'wikimedia',
+      addedAt: new Date().toISOString(),
     });
   }
   return added;

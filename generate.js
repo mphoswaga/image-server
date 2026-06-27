@@ -697,7 +697,31 @@ function libraryStats() {
   return { total: LIBRARY.images.length, captioned: LIBRARY.images.filter(i => i.caption).length, bySubject };
 }
 
-module.exports = { buildDeck, rebuildDeck, alternativeImage, findReusableImage, searchLibrary, getLibraryImage, listLibrary, validateSelection, selectImages, addLibraryImages, libraryStats };
+// Return all images for a specific subject/topic (for the admin browse view).
+function getLibraryByTopic(subject, topic) {
+  return LIBRARY.images.filter(i => i.subject === subject && i.topic === topic);
+}
+
+// Return images added within the last `days` days, newest first.
+function recentLibraryImages(days = 7) {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  return LIBRARY.images
+    .filter(i => i.addedAt && new Date(i.addedAt).getTime() >= cutoff)
+    .sort((a, b) => new Date(b.addedAt) - new Date(a.addedAt));
+}
+
+// Remove one image from the in-memory library and persist the change.
+function removeLibraryImage(relpath) {
+  const idx = LIBRARY.images.findIndex(i => i.relpath === relpath);
+  if (idx === -1) return false;
+  LIBRARY.images.splice(idx, 1);
+  LIBRARY.count = LIBRARY.images.length;
+  LIBRARY.subjects = [...new Set(LIBRARY.images.map(i => i.subject))].sort();
+  try { fs.writeFileSync(LIBRARY_PATH, JSON.stringify(LIBRARY, null, 2)); } catch (err) { console.log('library persist failed:', err.message); }
+  return true;
+}
+
+module.exports = { buildDeck, rebuildDeck, alternativeImage, findReusableImage, searchLibrary, getLibraryImage, listLibrary, validateSelection, selectImages, addLibraryImages, libraryStats, getLibraryByTopic, recentLibraryImages, removeLibraryImage };
 
 if (require.main === module) {
   main().catch(err => {

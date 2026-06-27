@@ -53,6 +53,7 @@ async function fetchUnsplashImage({ query, subject, topic, publicDir }) {
     keywords: query.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean),
     source: 'unsplash-ondemand',
     credit: photo.user ? { name: photo.user.name, link: photo.user.links && photo.user.links.html } : undefined,
+    addedAt: new Date().toISOString(),
   };
 }
 

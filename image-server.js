@@ -1,10 +1,11 @@
 require('dotenv').config();
 const crypto = require('crypto');
+const fs = require('fs');
 const express = require('express');
 const multer = require('multer');
 const cookieParser = require('cookie-parser');
 const path = require('path');
-const { buildDeck, rebuildDeck, alternativeImage, findReusableImage, searchLibrary, getLibraryImage, listLibrary, addLibraryImages, libraryStats } = require('./generate');
+const { buildDeck, rebuildDeck, alternativeImage, findReusableImage, searchLibrary, getLibraryImage, listLibrary, addLibraryImages, libraryStats, getLibraryByTopic, recentLibraryImages, removeLibraryImage } = require('./generate');
 const quota = require('./quota');
 const { generateOneSlide } = require('./content');
 const { extractText, saveTemplate, listTemplates, getTemplate, renameTemplate, deleteTemplate, loadOriginalById, loadTemplate, loadOriginal, TYPES } = require('./template');
@@ -173,6 +174,40 @@ app.get('/api/library', (req, res) => res.json(listLibrary()));
 
 // ── Admin: grow the image library ─────────────────────────────────────────
 app.get('/api/admin/stats', requireAdmin, (req, res) => res.json(libraryStats()));
+
+// Browse images for a specific topic (admin only).
+app.get('/api/admin/images', requireAdmin, (req, res) => {
+  const { subject, topic } = req.query;
+  if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required.' });
+  const images = getLibraryByTopic(subject, topic).map(i => ({
+    relpath: i.relpath, image: '/' + i.relpath,
+    caption: i.caption || '', source: i.source || '', addedAt: i.addedAt || null,
+  }));
+  res.json({ images });
+});
+
+// Images added in the last N days (default 7), newest first.
+app.get('/api/admin/images/recent', requireAdmin, (req, res) => {
+  const days = Math.min(90, Math.max(1, parseInt(req.query.days) || 7));
+  const images = recentLibraryImages(days).map(i => ({
+    relpath: i.relpath, image: '/' + i.relpath,
+    caption: i.caption || '', source: i.source || '', addedAt: i.addedAt,
+    subject: i.subject, topic: i.topic,
+  }));
+  res.json({ images, days });
+});
+
+// Delete one image from the library and from disk.
+app.delete('/api/admin/images', requireAdmin, (req, res) => {
+  const { relpath } = req.body || {};
+  if (!relpath || typeof relpath !== 'string' || relpath.includes('..') || relpath.startsWith('/')) {
+    return res.status(400).json({ error: 'Invalid relpath.' });
+  }
+  const found = removeLibraryImage(relpath);
+  if (!found) return res.status(404).json({ error: 'Image not found in library.' });
+  try { fs.unlinkSync(path.join(__dirname, 'public', relpath)); } catch { /* already gone */ }
+  res.json({ ok: true });
+});
 
 // AI cost: totals, per-user (with emails), and per-model — so the admin can
 // see what the app is costing and price it.
