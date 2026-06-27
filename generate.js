@@ -151,7 +151,7 @@ async function selectImages(slides, subject, topic) {
     try {
       const count = Math.min(15, Math.max(8, slides.length + 2));
       const topicQuery = await rewriteImageQuery(`${topic.replace(/-/g,' ')} ${subject.replace(/-/g,' ')}`);
-      const added = await addImages({ subject, topic, count, query: topicQuery });
+      const added = await addImages({ subject, topic, count, query: topicQuery, skipCaption: true });
       if (added.length) {
         addLibraryImages(added);
         pool = LIBRARY.images.filter(img => img.subject === subject && img.topic === topic);
