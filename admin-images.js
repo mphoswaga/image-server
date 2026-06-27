@@ -80,7 +80,7 @@ async function fetchWikimediaImages({ subject, topic, count = 8, query } = {}) {
   // words or become too long. Strip those words and cap at 3 terms so the search
   // stays focused on the visual concept rather than attracting document results.
   const searchQ = ((query && String(query).trim()) || `${subject.replace(/-/g,' ')} ${topic.replace(/-/g,' ')}`)
-    .replace(/\b(education|school|classroom|students?|learn(?:ing)?|grade\s+\d+|internet|diagram)\b/gi, '')
+    .replace(/\b(education|school|classroom|students?|learn(?:ing)?|grade\s+\d+|internet|diagram|advantages?|disadvantages?|types?\s+of|using|what\s+is|complete|setup)\b/gi, '')
     .replace(/\s{2,}/g, ' ').trim()
     .split(/\s+/).slice(0, 3).join(' ');
 

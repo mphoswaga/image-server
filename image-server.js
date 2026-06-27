@@ -552,6 +552,12 @@ async function rewriteImageQuery(raw, { grade = '' } = {}) {
     [/(photosynthesis\b)/i,    'plant photosynthesis sunlight chlorophyll diagram'],
     [/(volcano\b)/i,           'volcano eruption lava diagram geography'],
     [/(water\s+cycle)/i,       'water cycle evaporation rain diagram school'],
+    [/(parts?\s+of\s+(a\s+)?computer)/i, 'computer desktop monitor keyboard mouse complete setup'],
+    [/(iot|internet\s+of\s+things)(\s+devices?)?/i, 'smart home device sensor connected appliance'],
+    [/(kiddle|safe\s*search|child.safe)[\w.\s]*/i,  'child student laptop computer internet browsing'],
+    [/(advantages?\s+of\s+networks?)/i,  'school network computers connected sharing classroom'],
+    [/(disadvantages?\s+of\s+networks?)/i,'computer network problem security virus risk'],
+    [/(types?\s+of\s+networks?)/i,       'LAN WAN network diagram computers connected'],
     [/(spell.?check)/i,        'computer screen word processor spell check autocorrect'],
     [/(document|word\s+process)/i, 'computer screen document typing word processor'],
     [/(spreadsheet|excel)/i,   'computer screen spreadsheet data table rows columns'],
@@ -566,7 +572,12 @@ async function rewriteImageQuery(raw, { grade = '' } = {}) {
   ];
   let ruleMatched = false;
   for (const [pattern, replacement] of CLARIFY) {
-    if (pattern.test(q)) { q = q.replace(pattern, replacement); ruleMatched = true; break; }
+    if (pattern.test(q)) {
+      q = q.replace(pattern, replacement)
+           .replace(/\s*(safely|quiz|lesson|activity|worksheet|review|starter|plenary|\.\w+)[\s\w]*$/i, '')
+           .replace(/[?.!,;:]+$/, '').trim();
+      ruleMatched = true; break;
+    }
   }
 
   // For queries no static rule recognises, ask GPT-4o-mini for concrete visual keywords.
@@ -660,18 +671,9 @@ app.post('/api/slide/:id/ai-image', requireAuth, async (req, res) => {
       deck.images[i] = reuse;
       return res.json({ image: '/' + reuse.relpath, imageSource: 'ai-generated', reused: true });
     }
-    // Try Wikimedia Commons before consuming AI quota (free, educational images).
-    const wikiImgs = await fetchWikimediaImages({
-      subject: deck.subject, topic: deck.topic, count: 3,
-      query: await rewriteImageQuery(concept, { grade: deck.grade }),
-    }).catch(() => []);
-    if (wikiImgs.length) {
-      const wEntry = wikiImgs[0];
-      addLibraryImages([wikiImgs[0]]);
-      deck.images[i] = wEntry;
-      return res.json({ image: '/' + wEntry.relpath, imageSource: 'wikimedia', reused: false });
-    }
     // Paid generation — enforce the monthly AI-visual cap (admins exempt).
+    // NOTE: Wikimedia is NOT tried here — the teacher explicitly clicked "AI image"
+    // and expects a generated illustration, not a stock photo.
     const isAdmin = req.user.role === 'admin';
     const q = quota.status(req.userId, isAdmin);
     if (!q.unlimited && q.remaining <= 0) {
