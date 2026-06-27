@@ -13,6 +13,7 @@ const path = require('path');
 const pptxgen = require('pptxgenjs');
 const { generateContent } = require('./content');
 const { fetchUnsplashImage } = require('./fetch-image');
+const { rewriteImageQuery } = require('./query-rewrite');
 const { gradeProfile } = require('./grade');
 const { parseFraction, drawFractionPizza, drawStepsDiagram, drawStepsHorizontal, drawNumberLine, detectLabelledDiagram, drawLabelledDiagram } = require('./concept-diagram');
 const { getPreset } = require('./slide-presets');
@@ -149,7 +150,8 @@ async function selectImages(slides, subject, topic) {
     const { addImages } = require('./admin-images');
     try {
       const count = Math.min(15, Math.max(8, slides.length + 2));
-      const added = await addImages({ subject, topic, count });
+      const topicQuery = await rewriteImageQuery(`${topic.replace(/-/g,' ')} ${subject.replace(/-/g,' ')}`);
+      const added = await addImages({ subject, topic, count, query: topicQuery });
       if (added.length) {
         addLibraryImages(added);
         pool = LIBRARY.images.filter(img => img.subject === subject && img.topic === topic);
@@ -192,8 +194,9 @@ async function selectImages(slides, subject, topic) {
     // Weak/no match → fetch a gap-filler from Unsplash.
     let fetched = null;
     if (slide.imageQuery) {
-      console.log(`No strong match for "${slide.imageQuery}" — fetching from Unsplash…`);
-      fetched = await fetchUnsplashImage({ query: slide.imageQuery, subject, topic, publicDir: PUBLIC_DIR });
+      const rewrittenQ = await rewriteImageQuery(slide.imageQuery);
+      console.log(`No strong match for "${slide.imageQuery}" → rewritten to "${rewrittenQ}" — fetching from Unsplash…`);
+      fetched = await fetchUnsplashImage({ query: rewrittenQ, subject, topic, publicDir: PUBLIC_DIR });
     }
     if (fetched) {
       pool.push(fetched);
