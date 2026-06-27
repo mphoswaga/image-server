@@ -160,6 +160,13 @@ async function selectImages(slides, subject, topic) {
       throw new Error(`Couldn't fetch images for "${subject} / ${topic}": ${err.message}`);
     }
   }
+  // If the specific topic returned nothing (e.g. Unsplash had no results or all
+  // downloads failed), fall back to any images from the same subject so the deck
+  // can still be built rather than crashing.
+  if (!pool.length) {
+    pool = LIBRARY.images.filter(img => img.subject === subject);
+    if (pool.length) console.log(`No images for "${topic}" — falling back to ${pool.length} images from subject "${subject}".`);
+  }
   if (!pool.length) throw new Error(`No images available for "${subject} / ${topic}". Try a different topic.`);
 
   const used = new Set();

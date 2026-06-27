@@ -21,6 +21,7 @@ const CLARIFY = [
   [/(volcano\b)/i,            'volcano eruption lava diagram geography'],
   [/(water\s+cycle)/i,        'water cycle evaporation rain diagram school'],
   [/(parts?\s+of\s+(a\s+)?computer)/i, 'computer desktop monitor keyboard mouse complete setup'],
+  [/\bcomputer\b/i,                    'desktop computer monitor keyboard mouse screen technology'],
   [/(iot|internet\s+of\s+things)(\s+devices?)?/i, 'smart home device sensor connected appliance'],
   [/(kiddle|safe\s*search|child.safe)[\w.\s]*/i,  'child student laptop computer internet browsing'],
   [/(advantages?\s+of\s+networks?)/i,  'school network computers connected sharing classroom'],
