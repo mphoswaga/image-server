@@ -708,17 +708,6 @@ app.post('/api/slide/:id/diagram', requireAuth, async (req, res) => {
     const concept = `${slide.title}${slide.imageQuery ? ' — ' + slide.imageQuery : ''}`.trim();
     const reuse = findReusableImage({ subject: deck.subject, topic: deck.topic, query: concept, minScore: 3, source: 'svg-diagram', exclude: deck.images.map(im => im.relpath) });
     let entry = reuse, remaining, limit;
-    // Try Wikimedia Commons for a free diagram before consuming AI quota.
-    if (!entry) {
-      const wikiDiagrams = await fetchWikimediaImages({
-        subject: deck.subject, topic: deck.topic, count: 3,
-        query: (await rewriteImageQuery(concept, { grade: deck.grade })) + ' diagram',
-      }).catch(() => []);
-      if (wikiDiagrams.length) {
-        entry = wikiDiagrams[0];
-        addLibraryImages([entry]);
-      }
-    }
     if (!entry) {
       // Generating a new diagram is a paid AI visual — enforce the cap.
       const isAdmin = req.user.role === 'admin';

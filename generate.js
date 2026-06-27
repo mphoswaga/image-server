@@ -141,19 +141,15 @@ function persistNewImage(entry) {
 async function selectImages(slides, subject, topic) {
   let pool = LIBRARY.images.filter(img => img.subject === subject && img.topic === topic);
 
-  // Brand-new subject/topic with no images yet → fetch a starter set.
-  // Wikimedia first (free, educational diagrams); Unsplash as supplementary.
+  // Brand-new subject/topic — fetch a starter set from Unsplash.
+  // Wikimedia is intentionally excluded here: its unfiltered corpus returns
+  // buildings, trams, portraits and other off-topic photos at generation time.
+  // Teachers can still pull Wikimedia images via the picker ("Search the web").
   if (!pool.length) {
-    const { addImages, fetchWikimediaImages } = require('./admin-images');
+    const { addImages } = require('./admin-images');
     try {
       const count = Math.min(15, Math.max(8, slides.length + 2));
-      const half = Math.ceil(count / 2);
-      const [wikiAdded, unsplashAdded] = await Promise.all([
-        fetchWikimediaImages({ subject, topic, count: half, query: `${topic.replace(/-/g, ' ')} ${subject.replace(/-/g, ' ')} education` }).catch(() => []),
-        addImages({ subject, topic, count: half }).catch(() => []),
-      ]);
-      // Wikimedia images go first in the pool so keyword matching prefers them
-      const added = [...wikiAdded, ...unsplashAdded];
+      const added = await addImages({ subject, topic, count });
       if (added.length) {
         addLibraryImages(added);
         pool = LIBRARY.images.filter(img => img.subject === subject && img.topic === topic);
@@ -174,20 +170,6 @@ async function selectImages(slides, subject, topic) {
       const concept = (slide.visual.items || []).join(', ').trim() || slide.title;
       const reuse = findReusableImage({ subject, topic, query: concept, minScore: 3, source: 'svg-diagram', exclude: [...used] });
       if (reuse) { used.add(reuse.relpath); chosen.push(reuse); continue; }
-      // Try Wikimedia for a free diagram image before paying for AI generation.
-      try {
-        const { fetchWikimediaImages } = require('./admin-images');
-        const wikiDiag = await fetchWikimediaImages({
-          subject, topic, count: 3,
-          query: `${concept.replace(/-/g, ' ')} diagram education`,
-        });
-        if (wikiDiag.length) {
-          addLibraryImages([wikiDiag[0]]);
-          used.add(wikiDiag[0].relpath);
-          chosen.push(wikiDiag[0]);
-          continue;
-        }
-      } catch { /* ignore, fall through to AI */ }
       try {
         const { generateDiagram } = require('./svg-diagram');
         const entry = await generateDiagram({ subject, topic, concept });
@@ -207,21 +189,11 @@ async function selectImages(slides, subject, topic) {
       continue;
     }
 
-    // Weak/no match → try Wikimedia first (free), then Unsplash as fallback.
+    // Weak/no match → fetch a gap-filler from Unsplash.
     let fetched = null;
     if (slide.imageQuery) {
-      try {
-        const { fetchWikimediaImages } = require('./admin-images');
-        const wikiImgs = await fetchWikimediaImages({
-          subject, topic, count: 1,
-          query: `${slide.imageQuery.replace(/-/g, ' ')} education`,
-        });
-        if (wikiImgs.length) fetched = wikiImgs[0];
-      } catch { /* ignore */ }
-      if (!fetched) {
-        console.log(`No strong match for "${slide.imageQuery}" — fetching from Unsplash…`);
-        fetched = await fetchUnsplashImage({ query: slide.imageQuery, subject, topic, publicDir: PUBLIC_DIR });
-      }
+      console.log(`No strong match for "${slide.imageQuery}" — fetching from Unsplash…`);
+      fetched = await fetchUnsplashImage({ query: slide.imageQuery, subject, topic, publicDir: PUBLIC_DIR });
     }
     if (fetched) {
       pool.push(fetched);
