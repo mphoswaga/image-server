@@ -623,9 +623,28 @@
     .auth-card .tabs button { flex:1; padding:10px; border:none; background:none; border-radius:9px; font-weight:700; font-size:14px; color:var(--muted); cursor:pointer; font-family:inherit; transition:.15s; }
     .auth-card .tabs button.active { background:#fff; color:var(--primary); box-shadow:var(--sh-sm); }
     .auth-card .err { color:var(--err); font-size:13px; min-height:18px; margin-top:10px; text-align:center; }
+
+    /* ── Splash screen ── */
+    #splash {
+      position: fixed; inset: 0; z-index: 99999;
+      background: #05111e;
+      display: flex; align-items: center; justify-content: center;
+      transition: opacity .75s cubic-bezier(.4,0,.2,1);
+    }
+    #splash.fade-out { opacity: 0; pointer-events: none; }
+    #splashVideo {
+      width: min(72vw, 760px);
+      height: auto;
+    }
   </style>
 </head>
 <body>
+  <!-- SPLASH (plays once per visit, then fades to reveal the app) -->
+  <div id="splash">
+    <video id="splashVideo" autoplay muted playsinline preload="auto">
+      <source src="/lessonscope-splash.mp4" type="video/mp4">
+    </video>
+  </div>
   <!-- ICON SPRITE -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
@@ -2786,9 +2805,30 @@
     $('wizardOverlay').addEventListener('click',e=>{ if(e.target===$('wizardOverlay'))closeWizard(); });
     ['guideFloat','guideBtnNav','guideHeroBtn'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('click',openWizard); });
 
+    // ── Splash screen control ──
+    (function(){
+      const splash=$('splash'), video=$('splashVideo');
+      if(!splash) return;
+      let videoEnded=false, authReady=false;
+      function hideSplash(){
+        splash.classList.add('fade-out');
+        setTimeout(()=>splash.remove(), 800);
+      }
+      function tryHide(){ if(videoEnded && authReady) hideSplash(); }
+      // Mark auth done (called after enterApp / showAuth below)
+      window._splashAuthReady=()=>{ authReady=true; tryHide(); };
+      // Video finished naturally
+      if(video){
+        video.addEventListener('ended',()=>{ videoEnded=true; tryHide(); });
+        // Fallback: video fails to load or autoplay is blocked → hide after 1.2s
+        video.addEventListener('error',()=>{ videoEnded=true; tryHide(); });
+        setTimeout(()=>{ videoEnded=true; tryHide(); }, 7000); // hard ceiling
+      } else { videoEnded=true; }
+    })();
+
     (async function init(){
-      try{ const r=await fetch('/api/me'); if(r.ok){ const {user}=await r.json(); enterApp(user); return; } }catch{}
-      showAuth();
+      try{ const r=await fetch('/api/me'); if(r.ok){ const {user}=await r.json(); enterApp(user); window._splashAuthReady?.(); return; } }catch{}
+      showAuth(); window._splashAuthReady?.();
     })();
   </script>
 </body>
