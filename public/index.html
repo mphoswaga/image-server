@@ -3,17 +3,17 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LessonCope — lesson plans & decks in one place</title>
-  <meta name="description" content="LessonCope turns your lesson objectives into a plan that matches your school's template, then an illustrated, ready-to-teach slide deck." />
-  <meta name="theme-color" content="#1f4e79" />
+  <title>LessonScope — lesson plans & decks in one place</title>
+  <meta name="description" content="LessonScope turns your lesson objectives into a plan that matches your school's template, then an illustrated, ready-to-teach slide deck." />
+  <meta name="theme-color" content="#1a3a6b" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="/favicon.svg" />
   <!-- Social / link previews -->
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="LessonCope — lesson plans & decks in one place" />
+  <meta property="og:title" content="LessonScope — lesson plans & decks in one place" />
   <meta property="og:description" content="Paste your objectives — get a lesson plan in your school's format, then a matching illustrated deck." />
   <meta name="twitter:card" content="summary" />
-  <meta name="twitter:title" content="LessonCope" />
+  <meta name="twitter:title" content="LessonScope" />
   <meta name="twitter:description" content="Lesson plans & decks, in your school's format." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -45,6 +45,7 @@
     .brandmark .ic { width:20px; height:20px; }
     .wordmark { font-family:'Fraunces',Georgia,serif; font-weight:600; letter-spacing:-.5px; color:var(--primary); }
     .wordmark .cope { color:var(--accent); }
+    .logo-img { display:block; width:auto; }
 
     /* Hero */
     .hero { text-align:center; margin:6px 0 26px; }
@@ -403,8 +404,8 @@
 
     /* Top nav */
     .nav { position:sticky; top:0; z-index:20; display:flex; align-items:center; justify-content:space-between; padding:11px 22px; background:rgba(255,255,255,.78); backdrop-filter:blur(12px); border-bottom:1px solid var(--border); }
-    .nav .logo { display:flex; align-items:center; gap:10px; }
-    .nav .logo .wordmark { font-size:21px; }
+    .nav .logo { display:flex; align-items:center; }
+    .nav .logo .logo-img { height:46px; }
     .nav .user { display:flex; align-items:center; gap:11px; font-size:14px; color:var(--muted); font-weight:600; }
     .nav .avatar { width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg,var(--accent-2),var(--accent)); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; box-shadow:var(--sh-sm); }
     .nav .logout { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:var(--primary); background:#fff; border:1px solid var(--border); border-radius:9px; padding:8px 13px; cursor:pointer; box-shadow:var(--sh-sm); }
@@ -616,8 +617,8 @@
     /* ── Auth ── */
     #authScreen { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
     .auth-card { background:var(--card); border:1px solid var(--border); border-radius:22px; box-shadow:var(--sh-lg); padding:38px 32px; width:100%; max-width:410px; }
-    .auth-card .logo { display:flex; align-items:center; justify-content:center; gap:11px; }
-    .auth-card .wordmark { font-size:30px; }
+    .auth-card .logo { display:flex; justify-content:center; margin-bottom:6px; }
+    .auth-card .logo .logo-img { height:140px; }
     .auth-card .sub { text-align:center; color:var(--muted); font-size:14px; margin:12px 0 24px; }
     .auth-card .tabs { display:flex; gap:6px; background:var(--bg); border-radius:12px; padding:5px; margin-bottom:18px; }
     .auth-card .tabs button { flex:1; padding:10px; border:none; background:none; border-radius:9px; font-weight:700; font-size:14px; color:var(--muted); cursor:pointer; font-family:inherit; transition:.15s; }
@@ -685,7 +686,7 @@
   <!-- AUTH SCREEN -->
   <div id="authScreen" style="display:none">
     <div class="auth-card">
-      <div class="logo"><span class="brandmark"><svg class="ic" aria-hidden="true"><use href="#i-grad"/></svg></span><span class="wordmark">Lesson<span class="cope">Cope</span></span></div>
+      <div class="logo"><img src="/lessonscope-logo.svg" alt="LessonScope" class="logo-img"></div>
       <div class="sub">Lesson plans &amp; decks, in your school's format.</div>
       <div class="tabs">
         <button id="tabLogin" class="active" type="button">Log in</button>
@@ -708,7 +709,7 @@
 
   <!-- TOP NAV -->
   <nav id="nav" class="nav" style="display:none">
-    <span class="logo"><span class="brandmark"><svg class="ic" aria-hidden="true"><use href="#i-grad"/></svg></span><span class="wordmark">Lesson<span class="cope">Cope</span></span></span>
+    <span class="logo"><img src="/lessonscope-logo.svg" alt="LessonScope" class="logo-img"></span>
     <span class="nav-links">
       <button id="homeBtn" class="nav-link"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Plan</button>
       <button id="rostersBtn" class="nav-link"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg> Rosters</button>
