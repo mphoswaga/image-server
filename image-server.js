@@ -668,7 +668,44 @@ app.post('/api/assignment/:id/submit', requireGameAccess, async (req, res) => {
   }
 
   assignments.saveSubmission(a.id, { studentId, name, answers, grades, totalMarks, maxMarks, submittedAt: new Date().toISOString() });
-  res.json({ totalMarks, maxMarks, grades });
+  // Grading always runs (the teacher needs it ready to review), but the
+  // student only sees marks/verdicts once released or the due date has
+  // passed — their own answers are always visible, just not the scoring yet.
+  const released = assignments.isReleased(a);
+  res.json(released ? { released, totalMarks, maxMarks, grades } : { released, totalMarks: null, maxMarks, grades: null });
+});
+
+// Teacher: release (or un-release) results to students for this assignment.
+app.patch('/api/assignment/:id/release', requireAuth, (req, res) => {
+  const a = assignments.getAssignment(req.params.id);
+  if (!a) return res.status(404).json({ error: 'Assignment not found.' });
+  if (a.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assignment.' });
+  const released = !!(req.body && req.body.released);
+  const updated = assignments.releaseResults(req.params.id, released);
+  res.json({ ok: true, resultsReleased: updated.resultsReleased });
+});
+
+// Student: their own past submission — answers always visible, marks/
+// verdicts only once released or overdue. This is what a student hits when
+// they return to an assignment they've already submitted.
+app.get('/api/assignment/:id/my-results', requireGameAccess, (req, res) => {
+  if (!req.gameSession || !req.gameSession.assignmentId) return res.status(401).json({ error: 'Your session has expired — rejoin using the Room Code or link.' });
+  const a = assignments.getAssignment(req.params.id);
+  if (!a) return res.status(404).json({ error: 'Assignment not found.' });
+  if (req.gameSession.assignmentId !== a.id) return res.status(403).json({ error: 'Session is for a different assignment.' });
+  const sub = assignments.getSubmission(a.id, req.gameSession.studentId);
+  if (!sub) return res.status(404).json({ error: 'No submission found.' });
+  const released = assignments.isReleased(a);
+  res.json({
+    title: a.title,
+    questions: a.content.questions.map(q => ({ id: q.id, question: q.question, kind: q.kind, options: q.options || null, marks: q.marks })),
+    answers: sub.answers,
+    submittedAt: sub.submittedAt,
+    released,
+    totalMarks: released ? sub.totalMarks : null,
+    maxMarks: sub.maxMarks,
+    grades: released ? sub.grades : null,
+  });
 });
 
 // Teacher: results for one of their assignments (owner only) — per student,
@@ -681,7 +718,7 @@ app.get('/api/assignment/:id/results', requireAuth, (req, res) => {
   const rosterData = a.rosterId ? roster.getRoster(req.userId, a.rosterId) : null;
   const rosterMap = rosterData ? Object.fromEntries(rosterData.students.map(s => [s.id, s.name])) : {};
   const submissions = assignments.getSubmissions(a.id).map(s => ({ ...s, name: rosterMap[s.studentId] || s.name }));
-  res.json({ questions: a.content.questions, submissions });
+  res.json({ questions: a.content.questions, submissions, resultsReleased: a.resultsReleased, cutoffAt: a.cutoffAt, effectivelyReleased: assignments.isReleased(a) });
 });
 
 // Teacher: override a student's grade for one question. This both corrects

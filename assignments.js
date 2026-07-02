@@ -72,6 +72,8 @@ function createAssignment({ teacherId, teacherName, type, subject, topic, grade,
     id, teacherId, teacherName: teacherName || '',
     type, title: content.title || topic, subject, topic, grade,
     roomCode, rosterId: rosterId || null, cutoffAt: cutoffAt || null,
+    resultsReleased: false, // students see their own answers immediately, but
+                             // marks/verdicts only once released or overdue
     content,
     createdAt: new Date().toISOString(),
   };
@@ -92,6 +94,23 @@ function updateAssignmentCutoff(id, cutoffAt) {
   rec.cutoffAt = cutoffAt || null;
   writeJsonAtomic(recPath(id), rec);
   return rec;
+}
+
+function releaseResults(id, released) {
+  const rec = getAssignment(id);
+  if (!rec) return null;
+  rec.resultsReleased = !!released;
+  writeJsonAtomic(recPath(id), rec);
+  return rec;
+}
+
+// True once a teacher has explicitly released results, OR the due date has
+// passed (whichever comes first) — matches "released or overdue" for students.
+function isReleased(a) {
+  if (!a) return false;
+  if (a.resultsReleased) return true;
+  if (a.cutoffAt && Date.now() > new Date(a.cutoffAt).getTime()) return true;
+  return false;
 }
 
 // ── Submissions ──────────────────────────────────────────────────────────
@@ -155,6 +174,7 @@ function listTeacherAssignments(teacherId) {
     .map(a => ({
       id: a.id, type: a.type, title: a.title, subject: a.subject, topic: a.topic, grade: a.grade,
       createdAt: a.createdAt, roomCode: a.roomCode, rosterId: a.rosterId, cutoffAt: a.cutoffAt,
+      resultsReleased: isReleased(a),
       submissions: loadSubmissions(a.id).length,
     }))
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
@@ -162,6 +182,7 @@ function listTeacherAssignments(teacherId) {
 
 module.exports = {
   createAssignment, getAssignment, updateAssignmentCutoff, getRoomCode,
+  releaseResults, isReleased,
   saveSubmission, getSubmissions, getSubmission,
   findConfirmedVerdict, recordVerdict, normalizeAnswer,
   listTeacherAssignments,

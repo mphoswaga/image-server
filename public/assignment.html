@@ -37,7 +37,6 @@
     .verdict.partial { background:#fdf3e2; color:#b26a00; }
     .verdict.incorrect { background:#fdeeee; color:var(--err); }
     .rationale { color:var(--muted); font-size:13px; margin-top:4px; }
-    #already { display:none; }
   </style>
 </head>
 <body>
@@ -55,11 +54,6 @@
       </form>
     </div>
 
-    <div id="already" class="card center">
-      <h1>Already submitted</h1>
-      <p class="sub">You've already completed this assignment.</p>
-    </div>
-
     <div id="form" style="display:none">
       <div class="card">
         <h1 id="title"></h1>
@@ -73,9 +67,13 @@
     </div>
 
     <div id="results" style="display:none">
-      <div class="card center">
+      <div class="card center" id="scoreWrap">
         <div class="result-score"><span id="scoreVal"></span></div>
         <p class="sub">out of <span id="scoreMax"></span> marks</p>
+      </div>
+      <div class="card center" id="pendingMsg" style="display:none">
+        <h1>Submitted</h1>
+        <p class="sub" id="pendingSub">Your teacher hasn't released marks for this assignment yet — check back once it's been reviewed.</p>
       </div>
       <div class="card" id="gradeBreakdown"></div>
     </div>
@@ -123,20 +121,26 @@
       });
     }
 
-    function renderResults(d) {
+    // Students always see their own answers; marks/rationale only render
+    // once the assignment is released (d.released) or overdue — d.grades is
+    // null from the server in that case, so `g` stays undefined and no
+    // verdict badge is shown, just the plain answer.
+    function renderResults(d, givenAnswers) {
       $('form').style.display = 'none';
-      $('scoreVal').textContent = d.totalMarks;
-      $('scoreMax').textContent = d.maxMarks;
+      $('scoreWrap').style.display = d.released ? 'block' : 'none';
+      $('pendingMsg').style.display = d.released ? 'none' : 'block';
+      if (d.released) { $('scoreVal').textContent = d.totalMarks; $('scoreMax').textContent = d.maxMarks; }
       $('gradeBreakdown').innerHTML = questions.map((q, i) => {
-        const g = d.grades[q.id] || {};
+        const given = givenAnswers ? givenAnswers[q.id] : undefined;
+        const answerText = q.kind === 'mcq' ? (q.options && given != null ? q.options[given] : '(no answer)') : (given || '(no answer)');
+        const g = d.released && d.grades ? (d.grades[q.id] || {}) : null;
         return `<div class="result-grade">
           <div style="flex:1">
             <div class="qtext" style="margin-bottom:2px">${i + 1}. ${esc(stripMarks(q.question))}</div>
-            ${g.rationale ? `<div class="rationale">${esc(g.rationale)}</div>` : ''}
+            <div class="rationale">Your answer: ${esc(String(answerText))}</div>
+            ${g && g.rationale ? `<div class="rationale">${esc(g.rationale)}</div>` : ''}
           </div>
-          <div style="text-align:right;flex-shrink:0">
-            <span class="verdict ${esc(g.verdict || '')}">${g.marksAwarded}/${q.marks}</span>
-          </div>
+          ${g ? `<div style="text-align:right;flex-shrink:0"><span class="verdict ${esc(g.verdict || '')}">${g.marksAwarded}/${q.marks}</span></div>` : ''}
         </div>`;
       }).join('');
       $('results').style.display = 'block';
@@ -170,7 +174,13 @@
         questions = take.questions;
         $('loading').style.display = 'none';
 
-        if (take.alreadySubmitted) { $('already').style.display = 'block'; return; }
+        if (take.alreadySubmitted) {
+          const myRes = await fetch('/api/assignment/' + assignmentId + '/my-results');
+          const my = await myRes.json();
+          if (!myRes.ok) throw new Error(my.error || 'Could not load your submission.');
+          renderResults(my, my.answers);
+          return;
+        }
 
         renderQuestions();
         $('form').style.display = 'block';
@@ -213,7 +223,7 @@
         });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error);
-        renderResults(d);
+        renderResults(d, answers);
       } catch (err) {
         $('submitErr').textContent = err.message;
         btn.disabled = false; btn.textContent = 'Submit';
