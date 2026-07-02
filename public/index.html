@@ -1844,8 +1844,26 @@
         if(data.questions) h+=`<h4>Questions</h4>${packList(data.questions,'q')}`;
         if(data.answerKey) h+=`<h4>Answer key (teacher)</h4><div class="ak">${packList(data.answerKey,'ak')}</div>`;
       }
-      h+=`<div class="pd-dl"><button type="button" class="btn accent" id="packDlBtn">${ICON('i-download')} Download .docx</button></div>`;
+      h+=`<div class="pd-dl">
+        <button type="button" class="btn accent" id="packDlBtn">${ICON('i-download')} Download .docx</button>
+        <button type="button" class="btn ghost" id="packPublishBtn" style="margin-left:8px">${ICON('i-spark')} Create online version</button>
+      </div>
+      <div id="assignPanel" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+        <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
+          <div>
+            <label for="assignRosterPick" style="font-size:13px;font-weight:600;white-space:nowrap;display:block;margin-bottom:4px">Class roster <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+            <select id="assignRosterPick" style="width:auto;min-width:180px;font-size:13px;padding:8px 10px"></select>
+          </div>
+          <div>
+            <label for="assignCutoff" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Due date <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+            <input id="assignCutoff" type="datetime-local" style="font-size:13px;padding:8px 10px" />
+          </div>
+          <button type="button" class="btn accent" id="publishGoBtn" style="width:auto">${ICON('i-spark')} Publish</button>
+        </div>
+        <div id="assignResultPanel"></div>
+      </div>`;
       $('packPreview').innerHTML=`<div class="pack-doc">${h}</div>`;
+      loadRosters(true);
     }
     function collectPack(){
       const box=$('packPreview'), d=JSON.parse(JSON.stringify(packData));
@@ -1873,8 +1891,74 @@
           const blob=await r.blob(),url=URL.createObjectURL(blob),a=document.createElement('a');
           const cd=r.headers.get('Content-Disposition')||'',m=cd.match(/filename="([^"]+)"/);
           a.href=url; a.download=m?m[1]:(packType+'.docx'); document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-        }catch(err){ toast(err.message); } dl.disabled=false; dl.innerHTML=o; }
+        }catch(err){ toast(err.message); } dl.disabled=false; dl.innerHTML=o; return; }
+
+      const pubToggle=e.target.closest('#packPublishBtn');
+      if(pubToggle){ const p=$('assignPanel'); p.style.display=p.style.display==='none'?'block':'none'; return; }
+
+      const pubGo=e.target.closest('#publishGoBtn');
+      if(pubGo){ pubGo.disabled=true; const o=pubGo.innerHTML; pubGo.innerHTML='<span class="spinner"></span>Publishing…';
+        const rosterId=$('assignRosterPick').value||null;
+        const cutoffAt=$('assignCutoff').value||null;
+        try{ const r=await fetch('/api/pack/'+packType+'/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:collectPack(),subject:ctx.subject,topic:ctx.topic,grade:ctx.grade,rosterId,cutoffAt})});
+          const d=await r.json(); if(!r.ok) throw new Error(d.error);
+          const url=location.origin+d.path, joinUrl=location.origin+'/join';
+          $('assignResultPanel').innerHTML=`
+            ${d.roomCode?`<div style="margin-bottom:14px"><p style="font-size:13px;font-weight:600;margin-bottom:6px">Room Code — show this on the board:</p><div style="font-size:36px;font-weight:900;letter-spacing:6px;color:var(--primary);background:#e8f0fb;display:inline-block;padding:10px 20px;border-radius:10px">${esc(d.roomCode)}</div><p class="hint" style="margin-top:6px">Students go to <b>${esc(joinUrl)}</b> and type this code.</p></div>`:''}
+            <div class="game-link"><input readonly value="${esc(url)}"><button type="button" class="btn ghost" id="copyAssignBtn" style="width:auto;padding:10px 14px">${ICON('i-doc')} Copy link</button></div>
+            <p class="hint" style="margin:10px 0 2px">${d.questionCount} questions.</p>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px"><b style="font-size:14px;color:var(--primary)">Submissions</b><button type="button" id="refreshAssignBtn" style="font-size:12.5px;font-weight:600;padding:6px 11px;border:1px solid var(--border);border-radius:9px;background:#fff;color:var(--primary);cursor:pointer;display:inline-flex;align-items:center;gap:6px">${ICON('i-refresh')} Refresh</button></div>
+            <div id="assignSubmissions"></div>`;
+          $('copyAssignBtn').addEventListener('click',()=>copyLink(url));
+          $('refreshAssignBtn').addEventListener('click',()=>loadAssignmentResults(d.assignmentId));
+          loadAssignmentResults(d.assignmentId);
+        }catch(err){ toast(err.message); } pubGo.disabled=false; pubGo.innerHTML=o; return; }
+
+      const override=e.target.closest('.grade-override-btn');
+      if(override){ const {assignId,studentId,questionId}=override.dataset;
+        const row=override.closest('.grade-row'); const input=row.querySelector('.grade-marks-input');
+        const marksAwarded=Number(input.value); override.disabled=true;
+        try{ const r=await fetch(`/api/assignment/${assignId}/grade`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({studentId,questionId,marksAwarded})});
+          const d=await r.json(); if(!r.ok) throw new Error(d.error);
+          toast('Grade updated','ok'); loadAssignmentResults(assignId);
+        }catch(err){ toast(err.message); override.disabled=false; } }
     });
+
+    async function loadAssignmentResults(assignId){
+      const wrap=$('assignSubmissions'); if(!wrap) return;
+      wrap.innerHTML='<span class="status">Loading…</span>';
+      try{
+        const d=await (await fetch('/api/assignment/'+assignId+'/results')).json();
+        if(!d.submissions||!d.submissions.length){ wrap.innerHTML='<p class="hint" style="margin-top:8px">No students have submitted yet.</p>'; return; }
+        wrap.innerHTML=d.submissions.map(s=>{
+          const rows=d.questions.map(q=>{
+            const g=s.grades[q.id]||{}; const ans=s.answers[q.id];
+            const ansText=q.kind==='mcq' ? (q.options&&q.options[ans]!=null?q.options[ans]:'(no answer)') : (ans||'(no answer)');
+            const confirmed=g.source==='teacher'||g.source==='ai-confirmed';
+            // MCQ is deterministically auto-graded — no AI verdict to confirm,
+            // so it gets no badge instead of a misleading "AI — unconfirmed".
+            const badge = q.kind==='mcq' ? '' : (confirmed
+              ? '<span style="font-size:11.5px;color:var(--ok,#1f9d55);font-weight:600">confirmed</span>'
+              : '<span style="font-size:11.5px;color:var(--muted)">AI — unconfirmed</span>');
+            return `<div class="grade-row" style="padding:10px 0;border-top:1px solid var(--border)">
+              <div style="font-size:13px;font-weight:600">${esc(String(q.question||'').replace(/\s*\(\d+\s*marks?\)\s*$/i,''))}</div>
+              <div style="font-size:13px;color:var(--muted);margin:4px 0">Answer: ${esc(String(ansText))}</div>
+              ${g.rationale&&q.kind!=='mcq'?`<div style="font-size:12.5px;color:var(--muted);font-style:italic;margin-bottom:6px">${esc(g.rationale)}</div>`:''}
+              <div style="display:flex;align-items:center;gap:8px">
+                <input class="grade-marks-input" type="number" min="0" max="${q.marks}" value="${g.marksAwarded||0}" style="width:56px;font-size:13px;padding:4px 6px" />
+                <span style="font-size:12.5px;color:var(--muted)">/ ${q.marks} marks</span>
+                <button type="button" class="grade-override-btn" data-assign-id="${assignId}" data-student-id="${esc(s.studentId)}" data-question-id="${esc(q.id)}" style="font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer">Save</button>
+                ${badge}
+              </div>
+            </div>`;
+          }).join('');
+          return `<div style="margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:10px">
+            <div style="display:flex;justify-content:space-between;font-weight:700;font-size:14px"><span>${esc(s.name)}</span><span>${s.totalMarks}/${s.maxMarks}</span></div>
+            ${rows}
+          </div>`;
+        }).join('');
+      }catch{ wrap.innerHTML='<p class="hint">Could not load submissions.</p>'; }
+    }
 
     $('fullPackBtn').addEventListener('click', async()=>{
       const btn=$('fullPackBtn'); btn.disabled=true; const orig=btn.innerHTML;
@@ -2451,7 +2535,7 @@
         const d=await (await fetch('/api/rosters')).json();
         if(populatePicker){
           const rosterOpts='<option value="">— No roster (free-form names) —</option>'+(d.rosters||[]).map(r=>`<option value="${esc(r.id)}">${esc(r.name)} (${r.count} students)</option>`).join('');
-          [$('gameRosterPick'),$('pptxRosterPick')].forEach(pick=>{ if(!pick) return; const cur=pick.value; pick.innerHTML=rosterOpts; if(cur) pick.value=cur; });
+          [$('gameRosterPick'),$('pptxRosterPick'),$('assignRosterPick')].forEach(pick=>{ if(!pick) return; const cur=pick.value; pick.innerHTML=rosterOpts; if(cur) pick.value=cur; });
         }
         if(!wrap) return;
         if(!d.rosters||!d.rosters.length){ wrap.innerHTML='<div class="empty-state"><svg class="ic" aria-hidden="true" style="width:36px;height:36px;opacity:.3"><use href="#i-doc"/></svg><p>No rosters yet</p><p style="font-size:13px;color:var(--muted)">Add your first class list below.</p></div>'; return; }

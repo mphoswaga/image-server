@@ -69,7 +69,7 @@
 
   <script>
     const $ = id => document.getElementById(id);
-    let resolvedGameId = null;
+    let resolvedId = null, resolvedType = null; // 'game' | 'assignment'
 
     // Auto-fill Student ID from QR scan (?sid=...).
     const params = new URLSearchParams(location.search);
@@ -78,7 +78,7 @@
       $('studentId').value = prefillSid.toUpperCase();
     }
 
-    // Step 1: resolve Room Code → game ID.
+    // Step 1: resolve Room Code → a game OR an assignment.
     $('codeForm').addEventListener('submit', async e => {
       e.preventDefault();
       const btn = $('codeBtn'); btn.disabled = true; $('codeErr').textContent = '';
@@ -87,15 +87,15 @@
         const r = await fetch('/api/join?code=' + encodeURIComponent(code));
         const d = await r.json();
         if (!r.ok) throw new Error(d.error);
-        resolvedGameId = d.gameId;
-        // Check if game has a roster to adjust label.
-        const gMeta = await fetch('/api/game/' + resolvedGameId).then(r => r.json()).catch(() => ({}));
-        if (gMeta.hasRoster === false) {
+        resolvedId = d.id; resolvedType = d.type;
+        const metaUrl = resolvedType === 'assignment' ? '/api/assignment/' + resolvedId : '/api/game/' + resolvedId;
+        const meta = await fetch(metaUrl).then(r => r.json()).catch(() => ({}));
+        if (meta.hasRoster === false) {
           $('sidLbl').textContent = 'Your name';
           $('studentId').placeholder = 'Enter your first name';
           $('sidSub').textContent = 'Type your name to join.';
         }
-        $('gamePill').textContent = gMeta.lessonTitle || 'Lesson game';
+        $('gamePill').textContent = meta.lessonTitle || meta.title || (resolvedType === 'assignment' ? 'Assignment' : 'Lesson game');
         $('step1').style.display = 'none';
         $('step2').style.display = 'block';
         // If QR pre-filled ID, go straight to submission.
@@ -105,20 +105,20 @@
       btn.disabled = false;
     });
 
-    // Step 2: enter game with Student ID.
+    // Step 2: enter with Student ID.
     $('idForm').addEventListener('submit', async e => {
       e.preventDefault();
       const btn = $('idBtn'); btn.disabled = true; $('idErr').textContent = '';
       const studentId = $('studentId').value.trim().toUpperCase();
       try {
-        const r = await fetch('/api/game/' + resolvedGameId + '/enter', {
+        const enterUrl = resolvedType === 'assignment' ? '/api/assignment/' + resolvedId + '/enter' : '/api/game/' + resolvedId + '/enter';
+        const r = await fetch(enterUrl, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ studentId }),
         });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error);
-        // Redirect to the play page with the game ID.
-        location.href = '/play/' + resolvedGameId;
+        location.href = (resolvedType === 'assignment' ? '/assignment/' : '/play/') + resolvedId;
       } catch (err) { $('idErr').textContent = err.message; btn.disabled = false; }
     });
 

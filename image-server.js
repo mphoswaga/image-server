@@ -21,6 +21,8 @@ const { worksheetDocx, exitTicketDocx, quizDocx } = require('./docgen');
 const unit = require('./unit');
 const planningSource = require('./planning-source');
 const games = require('./games');
+const assignments = require('./assignments');
+const { gradeAnswer } = require('./auto-grade');
 const roster = require('./roster');
 const apikeys = require('./apikeys');
 const oauth = require('./oauth');
@@ -43,13 +45,17 @@ const JWT_SECRET = (() => {
   try { return require('fs').readFileSync(require('path').join(require('./storage').DATA_DIR, '.session-secret'), 'utf8').trim(); } catch { return process.env.JWT_SECRET || 'dev-secret'; }
 })();
 
-// Issue a short-lived student game session (8 h).
-function issueGameToken(payload) {
-  return jwt.sign({ type: 'game', ...payload }, JWT_SECRET, { expiresIn: '8h' });
+// Issue a short-lived student game/assignment session (8 h). `kind` is
+// 'game' (default, unchanged) or 'assignment' — same cookie, same JWT infra.
+function issueGameToken(payload, kind = 'game') {
+  return jwt.sign({ type: kind, ...payload }, JWT_SECRET, { expiresIn: '8h' });
 }
 
 // Accepts either lc_game (student) or lc_token (teacher).
-// Student path: sets req.gameSession = { studentId, gameId, name }.
+// Student path: sets req.gameSession = { studentId, name, gameId } for a game
+// session, or { studentId, name, assignmentId } for an assignment session —
+// only the relevant id is populated, so existing game routes' `gameId` checks
+// are unaffected by assignment tokens (assignmentId is simply undefined there).
 // Teacher path: sets req.userId (existing behaviour).
 function requireGameAccess(req, res, next) {
   const gameTok = req.cookies && req.cookies[GAME_COOKIE];
@@ -57,6 +63,7 @@ function requireGameAccess(req, res, next) {
     try {
       const p = jwt.verify(gameTok, JWT_SECRET);
       if (p.type === 'game') { req.gameSession = { studentId: p.studentId, gameId: p.gameId, name: p.name }; return next(); }
+      if (p.type === 'assignment') { req.gameSession = { studentId: p.studentId, assignmentId: p.assignmentId, name: p.name }; return next(); }
     } catch {}
   }
   // Fall back to teacher token.
@@ -538,6 +545,162 @@ app.post('/api/pack/:type/download', requireAuth, async (req, res) => {
   }
 });
 
+// ── Online assignments (worksheet/exit-ticket/quiz, student-submittable) ────
+// Publishes already-generated pack data (from /api/pack/:type) as a live,
+// joinable assignment — same room-code/roster/cutoff pattern as games.
+app.post('/api/pack/:type/publish', requireAuth, (req, res) => {
+  if (!PACK_GEN[req.params.type]) return res.status(404).json({ error: 'Unknown lesson-pack item.' });
+  const { data, subject, topic, grade, rosterId, cutoffAt } = req.body || {};
+  if (!data) return res.status(400).json({ error: 'Nothing to publish — generate the pack first.' });
+  try {
+    const rec = assignments.createAssignment({
+      teacherId: req.userId, teacherName: req.user.name, type: req.params.type,
+      subject, topic, grade, data, rosterId: rosterId || null, cutoffAt: cutoffAt || null,
+    });
+    res.json({ assignmentId: rec.id, path: `/assignment/${rec.id}`, roomCode: rec.roomCode, questionCount: rec.content.questions.length });
+  } catch (err) {
+    console.error('Publish assignment failed:', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/assignments', requireAuth, (req, res) => res.json({ assignments: assignments.listTeacherAssignments(req.userId) }));
+
+// Teacher: update the cutoff date for an assignment they own.
+app.patch('/api/assignment/:id/cutoff', requireAuth, (req, res) => {
+  const a = assignments.getAssignment(req.params.id);
+  if (!a) return res.status(404).json({ error: 'Assignment not found.' });
+  if (a.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assignment.' });
+  const updated = assignments.updateAssignmentCutoff(req.params.id, (req.body && req.body.cutoffAt) || null);
+  res.json({ ok: true, cutoffAt: updated.cutoffAt });
+});
+
+// Public: resolve a Room Code to EITHER a game or an assignment (shared join flow).
+app.get('/api/join', (req, res) => {
+  const code = String(req.query.code || '').trim().toUpperCase();
+  if (!code) return res.status(400).json({ error: 'Enter a Room Code.' });
+  const gameId = games.getRoomCode(code);
+  if (gameId) return res.json({ type: 'game', id: gameId });
+  const assignmentId = assignments.getRoomCode(code);
+  if (assignmentId) return res.json({ type: 'assignment', id: assignmentId });
+  res.status(404).json({ error: 'Room not found. Check the code and try again.' });
+});
+
+// Student: enter an assignment with their Student ID — issues a short-lived session.
+app.post('/api/assignment/:id/enter', async (req, res) => {
+  const a = assignments.getAssignment(req.params.id);
+  if (!a) return res.status(404).json({ error: 'Assignment not found.' });
+  const studentId = String(req.body && req.body.studentId || '').trim();
+  if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
+  let displayName = studentId;
+  if (a.rosterId) {
+    const s = roster.findStudentInRoster(a.teacherId, a.rosterId, studentId);
+    if (!s) return res.status(403).json({ error: 'Student ID not found. Check with your teacher.' });
+    displayName = s.name;
+  }
+  const token = issueGameToken({ assignmentId: a.id, studentId, name: displayName }, 'assignment');
+  res.cookie(GAME_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: 8 * 60 * 60 * 1000 });
+  res.json({ name: displayName });
+});
+
+// Student: assignment meta (no answer keys).
+app.get('/api/assignment/:id', requireGameAccess, (req, res) => {
+  const a = assignments.getAssignment(req.params.id);
+  if (!a) return res.status(404).json({ error: 'Assignment not found.' });
+  if (req.gameSession && req.gameSession.assignmentId !== a.id) return res.status(403).json({ error: 'Session is for a different assignment.' });
+  res.json({ id: a.id, type: a.type, title: a.title, subject: a.subject, topic: a.topic, grade: a.grade, teacherName: a.teacherName, hasRoster: !!a.rosterId, instructions: a.content.instructions, questionCount: a.content.questions.length });
+});
+
+// Student: the questions, WITHOUT answer keys/correctIndex.
+app.get('/api/assignment/:id/take', requireGameAccess, (req, res) => {
+  const a = assignments.getAssignment(req.params.id);
+  if (!a) return res.status(404).json({ error: 'Assignment not found.' });
+  if (req.gameSession && req.gameSession.assignmentId !== a.id) return res.status(403).json({ error: 'Session is for a different assignment.' });
+  const already = req.gameSession && assignments.getSubmission(a.id, req.gameSession.studentId);
+  res.json({
+    title: a.title, instructions: a.content.instructions,
+    questions: a.content.questions.map(q => ({ id: q.id, question: q.question, kind: q.kind, options: q.options || null, marks: q.marks })),
+    alreadySubmitted: !!already,
+  });
+});
+
+// Student: submit answers — MCQ grades instantly; free-text checks the
+// teacher-confirmed verdict cache first, only calling AI on a genuine miss.
+app.post('/api/assignment/:id/submit', requireGameAccess, async (req, res) => {
+  const a = assignments.getAssignment(req.params.id);
+  if (!a) return res.status(404).json({ error: 'Assignment not found.' });
+  if (req.gameSession && req.gameSession.assignmentId !== a.id) return res.status(403).json({ error: 'Session is for a different assignment.' });
+  const answers = (req.body && req.body.answers) || {};
+  const studentId = req.gameSession.studentId;
+  const name = req.gameSession.name || studentId;
+
+  const grades = {};
+  let totalMarks = 0, maxMarks = 0;
+  try {
+    for (const q of a.content.questions) {
+      maxMarks += q.marks;
+      const given = answers[q.id];
+      if (q.kind === 'mcq') {
+        const correct = Number.isInteger(given) && given === q.correctIndex;
+        grades[q.id] = { marksAwarded: correct ? q.marks : 0, verdict: correct ? 'correct' : 'incorrect', rationale: correct ? 'Correct option selected.' : 'Not the correct option.', source: 'auto' };
+      } else {
+        const cached = assignments.findConfirmedVerdict(a.id, q.id, given);
+        if (cached) {
+          grades[q.id] = { marksAwarded: cached.marksAwarded, verdict: cached.verdict, rationale: cached.rationale, source: 'ai-confirmed' };
+        } else {
+          const verdict = await gradeAnswer({ question: q.question, answerKey: q.answerKey, studentAnswer: given, maxMarks: q.marks, grade: a.grade });
+          assignments.recordVerdict(a.id, q.id, { answerText: given, ...verdict, confirmed: false, source: 'ai' });
+          grades[q.id] = { ...verdict, source: 'ai' };
+        }
+      }
+      totalMarks += grades[q.id].marksAwarded;
+    }
+  } catch (err) {
+    console.error('Grading failed:', err.message);
+    return res.status(400).json({ error: 'Grading failed: ' + err.message });
+  }
+
+  assignments.saveSubmission(a.id, { studentId, name, answers, grades, totalMarks, maxMarks, submittedAt: new Date().toISOString() });
+  res.json({ totalMarks, maxMarks, grades });
+});
+
+// Teacher: results for one of their assignments (owner only) — per student,
+// per question: their answer, the grade, the AI's rationale, and whether that
+// grading has been teacher-confirmed yet.
+app.get('/api/assignment/:id/results', requireAuth, (req, res) => {
+  const a = assignments.getAssignment(req.params.id);
+  if (!a) return res.status(404).json({ error: 'Assignment not found.' });
+  if (a.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assignment.' });
+  const rosterData = a.rosterId ? roster.getRoster(req.userId, a.rosterId) : null;
+  const rosterMap = rosterData ? Object.fromEntries(rosterData.students.map(s => [s.id, s.name])) : {};
+  const submissions = assignments.getSubmissions(a.id).map(s => ({ ...s, name: rosterMap[s.studentId] || s.name }));
+  res.json({ questions: a.content.questions, submissions });
+});
+
+// Teacher: override a student's grade for one question. This both corrects
+// that submission AND promotes/overwrites the verdict cache entry for that
+// exact answer text — the only way an AI verdict becomes reusable.
+app.patch('/api/assignment/:id/grade', requireAuth, (req, res) => {
+  const a = assignments.getAssignment(req.params.id);
+  if (!a) return res.status(404).json({ error: 'Assignment not found.' });
+  if (a.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assignment.' });
+  const { studentId, questionId, marksAwarded, verdict, rationale } = req.body || {};
+  const sub = assignments.getSubmission(a.id, studentId);
+  if (!sub) return res.status(404).json({ error: 'Submission not found.' });
+  const q = a.content.questions.find(q => q.id === questionId);
+  if (!q) return res.status(404).json({ error: 'Question not found.' });
+  const marks = Math.max(0, Math.min(q.marks, parseInt(marksAwarded, 10) || 0));
+  const v = verdict || (marks === q.marks ? 'correct' : marks === 0 ? 'incorrect' : 'partial');
+  const answerText = sub.answers[questionId];
+
+  assignments.recordVerdict(a.id, questionId, { answerText, marksAwarded: marks, verdict: v, rationale: rationale || (sub.grades[questionId] || {}).rationale || '', confirmed: true, source: 'teacher' });
+
+  sub.grades[questionId] = { marksAwarded: marks, verdict: v, rationale: rationale || (sub.grades[questionId] || {}).rationale || '', source: 'teacher' };
+  sub.totalMarks = Object.values(sub.grades).reduce((s, g) => s + g.marksAwarded, 0);
+  assignments.saveSubmission(a.id, sub);
+  res.json({ ok: true, submission: sub });
+});
+
 // Generate a deck; store state; return preview metadata + download id.
 app.post('/api/generate', requireAuth, async (req, res) => {
   const { slideCount, grade, tone, lessonPlan, unitId, lessonIndex, regenerate, presetId } = req.body || {};
@@ -839,15 +1002,6 @@ app.post('/api/game/:id/enter', async (req, res) => {
   res.json({ name: displayName });
 });
 
-// Public: resolve a Room Code to a game ID (for the /join page).
-app.get('/api/join', (req, res) => {
-  const code = String(req.query.code || '').trim().toUpperCase();
-  if (!code) return res.status(400).json({ error: 'Enter a Room Code.' });
-  const gameId = games.getRoomCode(code);
-  if (!gameId) return res.status(404).json({ error: 'Room not found. Check the code and try again.' });
-  res.json({ gameId });
-});
-
 // Student: lesson summary + meta (NO correct answers).
 app.get('/api/game/:id', requireGameAccess, (req, res) => {
   const g = games.getGame(req.params.id);
@@ -1071,6 +1225,9 @@ app.get('/join', (req, res) => res.sendFile(path.join(__dirname, 'public', 'join
 
 // Student play page (the shareable link target).
 app.get('/play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'play.html')));
+
+// Student assignment page (worksheet/exit-ticket/quiz online submission).
+app.get('/assignment/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'assignment.html')));
 
 // ── Pagination helper ──────────────────────────────────────────────────────────────
 function parsePagination(query) {
