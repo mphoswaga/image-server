@@ -429,27 +429,11 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
 const PACK_GEN    = { worksheet: generateWorksheet, 'exit-ticket': generateExitTicket, quiz: generateQuiz };
 const PACK_RENDER = { worksheet: worksheetDocx, 'exit-ticket': exitTicketDocx, quiz: quizDocx };
 
-app.post('/api/pack/:type', requireAuth, async (req, res) => {
-  const gen = PACK_GEN[req.params.type];
-  if (!gen) return res.status(404).json({ error: 'Unknown lesson-pack item.' });
-  const { grade, tone, lessonPlan, unitId, lessonIndex, regenerate } = req.body || {};
-  const subject = clip(req.body.subject, LIMITS.subject);
-  const topic = clip(req.body.topic, LIMITS.topic);
-  const objectives = clip(req.body.objectives, LIMITS.objectives);
-  if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
-  try {
-    const u = unitId ? unit.getUnit(req.userId, unitId) : null;
-    const unitBlock = u ? unit.buildUnitBlock(u, lessonIndex) : '';
-    const lessonPlanText = lessonPlan && lessonPlan.sections ? planToText(lessonPlan) : '';
-    const data = await gen({ subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, unitBlock, regenerate: !!regenerate });
-    res.json({ type: req.params.type, data });
-  } catch (err) {
-    console.error('Pack generation failed:', err.message);
-    res.status(400).json({ error: err.message });
-  }
-});
-
 // Full lesson pack: all three artifacts in parallel → zip download.
+// Registered BEFORE '/api/pack/:type' — Express matches routes in
+// registration order, and ':type' would otherwise swallow this literal
+// path (req.params.type === 'full', which isn't a PACK_GEN key) before
+// this handler is ever reached.
 app.post('/api/pack/full', requireAuth, async (req, res) => {
   const { grade, tone, lessonPlan, unitId, lessonIndex } = req.body || {};
   const subject = clip(req.body.subject, LIMITS.subject);
@@ -483,6 +467,26 @@ app.post('/api/pack/full', requireAuth, async (req, res) => {
     res.send(zipBuf);
   } catch (err) {
     console.error('Full pack failed:', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/pack/:type', requireAuth, async (req, res) => {
+  const gen = PACK_GEN[req.params.type];
+  if (!gen) return res.status(404).json({ error: 'Unknown lesson-pack item.' });
+  const { grade, tone, lessonPlan, unitId, lessonIndex, regenerate } = req.body || {};
+  const subject = clip(req.body.subject, LIMITS.subject);
+  const topic = clip(req.body.topic, LIMITS.topic);
+  const objectives = clip(req.body.objectives, LIMITS.objectives);
+  if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
+  try {
+    const u = unitId ? unit.getUnit(req.userId, unitId) : null;
+    const unitBlock = u ? unit.buildUnitBlock(u, lessonIndex) : '';
+    const lessonPlanText = lessonPlan && lessonPlan.sections ? planToText(lessonPlan) : '';
+    const data = await gen({ subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, unitBlock, regenerate: !!regenerate });
+    res.json({ type: req.params.type, data });
+  } catch (err) {
+    console.error('Pack generation failed:', err.message);
     res.status(400).json({ error: err.message });
   }
 });
