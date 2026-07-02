@@ -44,6 +44,17 @@
   <div class="wrap">
     <div id="loading" class="card center">Loading…</div>
 
+    <div id="authScreen" class="card" style="display:none">
+      <h1>Join this assignment</h1>
+      <p class="sub" id="authSub">Enter your Student ID to continue.</p>
+      <form id="authForm" style="margin-top:16px">
+        <label for="auSid" id="sidLabel" style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Student ID</label>
+        <input id="auSid" type="text" placeholder="e.g. STU-99432" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" maxlength="40" required style="width:100%;padding:12px 14px;font-size:15px;border:1.5px solid var(--border);border-radius:10px;margin-bottom:14px" />
+        <button class="btn" id="authBtn" type="submit">Continue</button>
+        <div class="err" id="authErr"></div>
+      </form>
+    </div>
+
     <div id="already" class="card center">
       <h1>Already submitted</h1>
       <p class="sub">You've already completed this assignment.</p>
@@ -133,11 +144,29 @@
 
     async function init() {
       try {
-        const meta = await fetch('/api/assignment/' + assignmentId).then(r => r.json());
+        const metaRes = await fetch('/api/assignment/' + assignmentId);
+        if (metaRes.status === 401) {
+          // No session yet (or it expired) — this happens whenever the raw
+          // link is opened directly instead of via /join. Prompt inline
+          // rather than rendering a broken/partial form.
+          $('loading').style.display = 'none';
+          $('authScreen').style.display = 'block';
+          if (prefillSid) { $('auSid').value = prefillSid; $('authForm').requestSubmit(); }
+          return;
+        }
+        const meta = await metaRes.json();
+        if (!metaRes.ok) throw new Error(meta.error || 'Could not load this assignment.');
         $('title').textContent = meta.title || 'Assignment';
         $('instructions').textContent = meta.instructions || '';
+        if (meta.hasRoster === false) {
+          $('sidLabel').textContent = 'Your name';
+          $('auSid').placeholder = 'Enter your first name';
+          $('authSub').textContent = 'Type your name to continue.';
+        }
 
-        const take = await fetch('/api/assignment/' + assignmentId + '/take').then(r => r.json());
+        const takeRes = await fetch('/api/assignment/' + assignmentId + '/take');
+        const take = await takeRes.json();
+        if (!takeRes.ok) throw new Error(take.error || 'Could not load the questions.');
         questions = take.questions;
         $('loading').style.display = 'none';
 
@@ -146,9 +175,33 @@
         renderQuestions();
         $('form').style.display = 'block';
       } catch (err) {
-        $('loading').textContent = 'Could not load this assignment.';
+        $('loading').style.display = 'block';
+        $('authScreen').style.display = 'none';
+        $('loading').textContent = err.message || 'Could not load this assignment.';
       }
     }
+
+    const prefillSid = new URLSearchParams(location.search).get('sid');
+    if (prefillSid) $('auSid').value = prefillSid.toUpperCase();
+
+    $('authForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = $('authBtn'); btn.disabled = true; $('authErr').textContent = '';
+      const studentId = $('auSid').value.trim().toUpperCase();
+      if (!studentId) { $('authErr').textContent = 'Please enter your ID.'; btn.disabled = false; return; }
+      try {
+        const r = await fetch('/api/assignment/' + assignmentId + '/enter', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentId }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        $('authScreen').style.display = 'none';
+        $('loading').style.display = 'block'; $('loading').textContent = 'Loading…';
+        init();
+      } catch (err) { $('authErr').textContent = err.message; }
+      btn.disabled = false;
+    });
 
     $('submitBtn').addEventListener('click', async () => {
       const btn = $('submitBtn'); btn.disabled = true; $('submitErr').textContent = '';

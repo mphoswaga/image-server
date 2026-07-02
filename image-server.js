@@ -627,9 +627,13 @@ app.get('/api/assignment/:id/take', requireGameAccess, (req, res) => {
 // Student: submit answers — MCQ grades instantly; free-text checks the
 // teacher-confirmed verdict cache first, only calling AI on a genuine miss.
 app.post('/api/assignment/:id/submit', requireGameAccess, async (req, res) => {
+  // requireGameAccess also accepts a teacher's own login as a fallback for
+  // read-only routes, WITHOUT setting req.gameSession — submitting needs a
+  // real student session, so reject explicitly instead of crashing below.
+  if (!req.gameSession || !req.gameSession.assignmentId) return res.status(401).json({ error: 'Your session has expired — rejoin using the Room Code or link, then try again.' });
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
-  if (req.gameSession && req.gameSession.assignmentId !== a.id) return res.status(403).json({ error: 'Session is for a different assignment.' });
+  if (req.gameSession.assignmentId !== a.id) return res.status(403).json({ error: 'Session is for a different assignment.' });
   const answers = (req.body && req.body.answers) || {};
   const studentId = req.gameSession.studentId;
   const name = req.gameSession.name || studentId;
