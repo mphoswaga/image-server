@@ -76,6 +76,46 @@ async function verifyPassword(userId, password) {
   return bcrypt.compare(String(password || ''), u.passwordHash);
 }
 
+// ── Password reset ───────────────────────────────────────────────────────
+const RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+// Returns the raw token to email the user (never stored in plain form — only
+// its hash is persisted, same principle as the password itself) or null if
+// no account matches. Callers must respond the same way either way, so this
+// endpoint can't be used to test which emails have accounts.
+async function createPasswordResetToken(email) {
+  const u = findByEmail(email);
+  if (!u) return null;
+  const token = crypto.randomBytes(32).toString('hex');
+  const users = loadUsers();
+  users[u.id].resetTokenHash = await bcrypt.hash(token, 10);
+  users[u.id].resetTokenExpires = Date.now() + RESET_TTL_MS;
+  saveUsers(users);
+  return token;
+}
+
+// Verifies the token against every user with a pending reset (there's no
+// direct token->user index since only the hash is stored) and, if valid,
+// sets the new password and invalidates the token immediately.
+async function resetPasswordWithToken(token, newPassword) {
+  if (!token) throw new Error('Invalid or expired reset link.');
+  if (!newPassword || newPassword.length < 6) throw new Error('Password must be at least 6 characters.');
+  const users = loadUsers();
+  const now = Date.now();
+  for (const u of Object.values(users)) {
+    if (!u.resetTokenHash || !u.resetTokenExpires) continue;
+    if (u.resetTokenExpires < now) continue;
+    if (await bcrypt.compare(token, u.resetTokenHash)) {
+      u.passwordHash = await bcrypt.hash(newPassword, 10);
+      u.resetTokenHash = null;
+      u.resetTokenExpires = null;
+      saveUsers(users);
+      return true;
+    }
+  }
+  throw new Error('Invalid or expired reset link.');
+}
+
 function listAllUserIds() {
   return Object.keys(loadUsers());
 }
@@ -99,4 +139,4 @@ function requireAdmin(req, res, next) {
   });
 }
 
-module.exports = { signup, login, issueToken, verifyToken, getUserById, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME };
+module.exports = { signup, login, issueToken, verifyToken, getUserById, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME, createPasswordResetToken, resetPasswordWithToken };

@@ -36,7 +36,8 @@ function safeAnimate(buffer, band) {
   try { return animateBuffer(buffer, band); }
   catch (err) { console.log('animation skipped:', err.message); return buffer; }
 }
-const { signup, login, issueToken, verifyToken, getUserById, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME } = require('./auth');
+const { signup, login, issueToken, verifyToken, getUserById, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME, createPasswordResetToken, resetPasswordWithToken } = require('./auth');
+const { sendEmail } = require('./email');
 const { runWithUser } = require('./ai-client');
 const usage = require('./usage');
 const jwt = require('jsonwebtoken');
@@ -156,6 +157,36 @@ app.post('/api/login', async (req, res) => {
 });
 
 app.post('/api/logout', (req, res) => { res.clearCookie(COOKIE_NAME); res.json({ ok: true }); });
+
+// Always responds the same way whether or not the email has an account —
+// otherwise this endpoint could be used to test which emails are registered.
+app.post('/api/password-reset/request', async (req, res) => {
+  const email = String(req.body && req.body.email || '').trim();
+  if (!email) return res.status(400).json({ error: 'Enter your email address.' });
+  try {
+    const token = await createPasswordResetToken(email);
+    if (token) {
+      const base = `${req.protocol}://${req.get('host')}`;
+      const link = `${base}/?resetToken=${encodeURIComponent(token)}`;
+      await sendEmail({
+        to: email, subject: 'Reset your LessonScope password',
+        html: `<p>Click the link below to set a new password. This link expires in 1 hour.</p><p><a href="${link}">${link}</a></p><p>If you didn't request this, you can ignore this email.</p>`,
+      });
+    }
+    res.json({ ok: true, message: 'If an account exists for that email, a reset link has been sent.' });
+  } catch (err) {
+    console.error('Password reset request failed:', err.message);
+    res.status(500).json({ error: 'Could not send the reset email — try again shortly.' });
+  }
+});
+
+app.post('/api/password-reset/confirm', async (req, res) => {
+  const { token, password } = req.body || {};
+  try {
+    await resetPasswordWithToken(token, password);
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
 
 app.get('/api/me', requireAuth, (req, res) => res.json({ user: req.user }));
 

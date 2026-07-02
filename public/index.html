@@ -746,6 +746,25 @@
         <input id="auPass" type="password" placeholder="At least 6 characters" autocomplete="current-password" required />
         <button id="authBtn" class="btn primary full" type="submit">Log in</button>
         <div id="authErr" class="err"></div>
+        <button id="forgotPwBtn" type="button" style="background:none;border:none;color:var(--muted);font-size:12.5px;cursor:pointer;padding:8px 0 0;display:block;text-align:center;width:100%">Forgot password?</button>
+      </form>
+
+      <form id="resetRequestForm" style="display:none">
+        <p class="sub" style="margin-bottom:14px">Enter your email and we'll send you a reset link.</p>
+        <label for="resetEmail">Email</label>
+        <input id="resetEmail" type="email" placeholder="you@school.edu" autocomplete="email" required />
+        <button id="resetRequestBtn" class="btn primary full" type="submit">Send reset link</button>
+        <div id="resetRequestErr" class="err"></div>
+        <div id="resetRequestMsg" class="err" style="color:var(--ok,#1f9d55)"></div>
+        <button id="backToLoginBtn" type="button" style="background:none;border:none;color:var(--muted);font-size:12.5px;cursor:pointer;padding:8px 0 0;display:block;text-align:center;width:100%">Back to log in</button>
+      </form>
+
+      <form id="resetConfirmForm" style="display:none">
+        <p class="sub" style="margin-bottom:14px">Choose a new password.</p>
+        <label for="newPass">New password</label>
+        <input id="newPass" type="password" placeholder="At least 6 characters" autocomplete="new-password" required />
+        <button id="resetConfirmBtn" class="btn primary full" type="submit">Set new password</button>
+        <div id="resetConfirmErr" class="err"></div>
       </form>
     </div>
   </div>
@@ -2085,6 +2104,44 @@
       btn.disabled=false;
     });
     $('logoutBtn').onclick=async ()=>{ await fetch('/api/logout',{method:'POST'}); location.reload(); };
+
+    // ---- forgot / reset password ----
+    function showAuthForm(){ $('authForm').style.display='block'; $('resetRequestForm').style.display='none'; $('resetConfirmForm').style.display='none'; }
+    function showResetRequest(){ $('authForm').style.display='none'; $('resetRequestForm').style.display='block'; $('resetConfirmForm').style.display='none'; $('resetRequestErr').textContent=''; $('resetRequestMsg').textContent=''; $('resetEmail').focus(); }
+    function showResetConfirm(){ $('authForm').style.display='none'; $('resetRequestForm').style.display='none'; $('resetConfirmForm').style.display='block'; $('newPass').focus(); }
+
+    $('forgotPwBtn').onclick=showResetRequest;
+    $('backToLoginBtn').onclick=showAuthForm;
+
+    $('resetRequestForm').addEventListener('submit', async e=>{
+      e.preventDefault(); const btn=$('resetRequestBtn'); btn.disabled=true; $('resetRequestErr').textContent=''; $('resetRequestMsg').textContent='';
+      try{
+        const r=await fetch('/api/password-reset/request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:$('resetEmail').value.trim()})});
+        const d=await r.json(); if(!r.ok) throw new Error(d.error);
+        $('resetRequestMsg').textContent=d.message;
+      }catch(err){ $('resetRequestErr').textContent=err.message; }
+      btn.disabled=false;
+    });
+
+    let pendingResetToken=null;
+    $('resetConfirmForm').addEventListener('submit', async e=>{
+      e.preventDefault(); const btn=$('resetConfirmBtn'); btn.disabled=true; $('resetConfirmErr').textContent='';
+      try{
+        const r=await fetch('/api/password-reset/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:pendingResetToken,password:$('newPass').value})});
+        const d=await r.json(); if(!r.ok) throw new Error(d.error);
+        history.replaceState(null,'','/');
+        showAuthForm();
+        setMode('login');
+        $('authErr').textContent='Password updated — log in with your new password.';
+      }catch(err){ $('resetConfirmErr').textContent=err.message; }
+      btn.disabled=false;
+    });
+
+    // A reset link (?resetToken=...) lands here — show the "set new password" panel instead of login.
+    (()=>{
+      const t=new URLSearchParams(location.search).get('resetToken');
+      if(t){ pendingResetToken=t; showResetConfirm(); }
+    })();
 
     // ---- App switcher ----
     async function loadAppConfig(){
