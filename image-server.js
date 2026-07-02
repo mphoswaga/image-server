@@ -598,9 +598,29 @@ app.get('/api/join', (req, res) => {
 app.get('/api/my-work', (req, res) => {
   const studentId = String(req.query.studentId || '').trim();
   if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
+  const pin = req.query.pin ? String(req.query.pin).trim() : '';
   const includeFreeform = req.query.includeFreeform === '1' || req.query.includeFreeform === 'true';
 
-  const matches = roster.findStudentAcrossAllTeachers(studentId);
+  const allMatches = roster.findStudentAcrossAllTeachers(studentId);
+  // A Student ID can appear in several teachers' rosters (same real student
+  // in multiple classes) — each roster entry has its own independent PIN.
+  // Split into "needs a PIN we don't have yet" vs "already set, unlocked
+  // with what was given" so we can tell the client which case it's in
+  // without silently mixing verified and unverifiable results.
+  const pinRequiredMatches = allMatches.filter(m => roster.getPinState(m.teacherId, m.rosterId, studentId) === 'set');
+  if (pinRequiredMatches.length && !pin) {
+    return res.status(428).json({ needsPin: true, name: pinRequiredMatches[0].name, error: 'Enter your PIN to continue.' });
+  }
+  const matches = allMatches.filter(m => {
+    const state = roster.getPinState(m.teacherId, m.rosterId, studentId);
+    // Never set up on this roster — same openness as before this feature
+    // existed. Protection kicks in the first time this student sets a PIN
+    // via /enter; my-work itself doesn't offer setup, only lookup.
+    if (state === 'unset') return true;
+    return roster.verifyPin(m.teacherId, m.rosterId, studentId, pin);
+  });
+  if (pinRequiredMatches.length && !matches.length) return res.status(403).json({ error: 'Incorrect PIN.' });
+
   const work = [];
   let name = null;
 
@@ -664,15 +684,37 @@ app.post('/api/assignment/:id/enter', async (req, res) => {
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
   const studentId = String(req.body && req.body.studentId || '').trim();
   if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
+  const pin = req.body && req.body.pin ? String(req.body.pin).trim() : '';
   let displayName = studentId;
   if (a.rosterId) {
     const s = roster.findStudentInRoster(a.teacherId, a.rosterId, studentId);
     if (!s) return res.status(403).json({ error: 'Student ID not found. Check with your teacher.' });
     displayName = s.name;
+    const pinState = roster.getPinState(a.teacherId, a.rosterId, studentId);
+    if (pinState === 'unset') {
+      if (!pin) return res.status(428).json({ needsPinSetup: true, name: displayName, error: 'Set up a 4-digit PIN to continue.' });
+      if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
+      if (!roster.setPin(a.teacherId, a.rosterId, studentId, pin)) return res.status(409).json({ error: 'A PIN was just set for this ID — enter it instead.' });
+    } else {
+      if (!pin) return res.status(428).json({ needsPin: true, name: displayName, error: 'Enter your PIN to continue.' });
+      if (!roster.verifyPin(a.teacherId, a.rosterId, studentId, pin)) return res.status(403).json({ error: 'Incorrect PIN.' });
+    }
   }
   const token = issueGameToken({ assignmentId: a.id, studentId, name: displayName }, 'assignment');
   res.cookie(GAME_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
   res.json({ name: displayName });
+});
+
+// Student: forgot their PIN — flags it for the teacher; does NOT unlock
+// anything by itself (see roster.js's requestPinReset).
+app.post('/api/assignment/:id/pin/reset-request', (req, res) => {
+  const a = assignments.getAssignment(req.params.id);
+  if (!a || !a.rosterId) return res.status(404).json({ error: 'Assignment not found.' });
+  const studentId = String(req.body && req.body.studentId || '').trim();
+  if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
+  const ok = roster.requestPinReset(a.teacherId, a.rosterId, studentId);
+  if (!ok) return res.status(404).json({ error: 'Student ID not found.' });
+  res.json({ ok: true });
 });
 
 // Student: assignment meta (no answer keys).
@@ -1103,16 +1145,38 @@ app.post('/api/game/:id/enter', async (req, res) => {
   if (!g) return res.status(404).json({ error: 'Game not found.' });
   const studentId = String(req.body && req.body.studentId || '').trim();
   if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
+  const pin = req.body && req.body.pin ? String(req.body.pin).trim() : '';
   let displayName = studentId;
   if (g.rosterId) {
     const teacher = getUserById(g.teacherId);
     const s = teacher ? roster.findStudentInRoster(g.teacherId, g.rosterId, studentId) : null;
     if (!s) return res.status(403).json({ error: 'Student ID not found. Check with your teacher.' });
     displayName = s.name;
+    const pinState = roster.getPinState(g.teacherId, g.rosterId, studentId);
+    if (pinState === 'unset') {
+      if (!pin) return res.status(428).json({ needsPinSetup: true, name: displayName, error: 'Set up a 4-digit PIN to continue.' });
+      if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
+      if (!roster.setPin(g.teacherId, g.rosterId, studentId, pin)) return res.status(409).json({ error: 'A PIN was just set for this ID — enter it instead.' });
+    } else {
+      if (!pin) return res.status(428).json({ needsPin: true, name: displayName, error: 'Enter your PIN to continue.' });
+      if (!roster.verifyPin(g.teacherId, g.rosterId, studentId, pin)) return res.status(403).json({ error: 'Incorrect PIN.' });
+    }
   }
   const token = issueGameToken({ gameId: g.id, studentId, name: displayName });
   res.cookie(GAME_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
   res.json({ name: displayName });
+});
+
+// Student: forgot their PIN — flags it for the teacher; does NOT unlock
+// anything by itself.
+app.post('/api/game/:id/pin/reset-request', (req, res) => {
+  const g = games.getGame(req.params.id);
+  if (!g || !g.rosterId) return res.status(404).json({ error: 'Game not found.' });
+  const studentId = String(req.body && req.body.studentId || '').trim();
+  if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
+  const ok = roster.requestPinReset(g.teacherId, g.rosterId, studentId);
+  if (!ok) return res.status(404).json({ error: 'Student ID not found.' });
+  res.json({ ok: true });
 });
 
 // Student: lesson summary + meta (NO correct answers).
@@ -1236,6 +1300,25 @@ app.post('/api/roster', requireAuth, (req, res, next) => {
 });
 
 app.get('/api/rosters', requireAuth, (req, res) => res.json({ rosters: roster.listRosters(req.userId) }));
+
+// Teacher: full roster detail with per-student PIN status (never the hash
+// itself) — powers the roster panel's per-student PIN column.
+app.get('/api/roster/:id', requireAuth, (req, res) => {
+  const r = roster.getRoster(req.userId, req.params.id);
+  if (!r) return res.status(404).json({ error: 'Roster not found.' });
+  res.json({
+    id: r.id, name: r.name, createdAt: r.createdAt,
+    students: r.students.map(s => ({ id: s.id, name: s.name, pinState: s.pinHash ? 'set' : 'unset', pinResetRequested: s.pinResetRequested || null })),
+  });
+});
+
+// Teacher: approve a student's PIN reset request — clears the PIN so their
+// next join attempt falls back into the setup flow.
+app.patch('/api/roster/:rosterId/student/:studentId/pin-reset', requireAuth, (req, res) => {
+  const s = roster.approvePinReset(req.userId, req.params.rosterId, req.params.studentId);
+  if (!s) return res.status(404).json({ error: 'Student not found in this roster.' });
+  res.json({ ok: true });
+});
 
 app.delete('/api/roster/:id', requireAuth, async (req, res) => {
   const r = roster.getRoster(req.userId, req.params.id);

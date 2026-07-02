@@ -58,6 +58,13 @@
       <form id="lookupForm">
         <label for="studentId">Student ID</label>
         <input id="studentId" class="sid-input" type="text" maxlength="40" placeholder="e.g. STU-99432" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" required />
+
+        <div id="pinBlock" style="display:none">
+          <label for="pinInput">Your PIN</label>
+          <input id="pinInput" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="font-size:20px;letter-spacing:6px;text-align:center;font-family:ui-monospace,monospace" />
+          <p class="sub" style="margin:6px 0 16px">Set up when you first joined a game or assignment. No PIN yet? Ask your teacher.</p>
+        </div>
+
         <button class="btn" type="submit" id="lookupBtn">Show my work →</button>
         <div class="err" id="lookupErr"></div>
         <button type="button" class="btn" id="widerSearchBtn" style="display:none;margin-top:10px;background:#fff;border:1.5px solid var(--border);color:var(--ink)">Also search work with no class list attached →</button>
@@ -111,23 +118,32 @@
       }).join('');
     }
 
-    async function runLookup(studentId, includeFreeform) {
-      const url = '/api/my-work?studentId=' + encodeURIComponent(studentId) + (includeFreeform ? '&includeFreeform=1' : '');
+    async function runLookup(studentId, pin, includeFreeform) {
+      let url = '/api/my-work?studentId=' + encodeURIComponent(studentId);
+      if (pin) url += '&pin=' + encodeURIComponent(pin);
+      if (includeFreeform) url += '&includeFreeform=1';
       const r = await fetch(url);
       const d = await r.json();
-      if (!r.ok) throw new Error(d.error);
-      return d;
+      return { ok: r.ok, status: r.status, data: d };
     }
 
     let lastStudentId = '';
+    let needsPin = false;
 
     $('lookupForm').addEventListener('submit', async e => {
       e.preventDefault();
       const btn = $('lookupBtn'); btn.disabled = true; $('lookupErr').textContent = ''; $('widerSearchBtn').style.display = 'none';
       const studentId = $('studentId').value.trim().toUpperCase();
       lastStudentId = studentId;
+      const pin = needsPin ? $('pinInput').value.trim() : '';
+      if (needsPin && !/^\d{4}$/.test(pin)) { $('lookupErr').textContent = 'Enter your 4-digit PIN.'; btn.disabled = false; return; }
       try {
-        const d = await runLookup(studentId, false);
+        const { ok, status, data: d } = await runLookup(studentId, pin, false);
+        if (status === 428 && d.needsPin) {
+          needsPin = true; $('pinBlock').style.display = 'block'; $('pinInput').focus();
+          btn.disabled = false; return;
+        }
+        if (!ok) throw new Error(d.error);
         $('form').style.display = 'none';
         $('greet').textContent = `Hi ${d.name} — here's everything you've submitted:`;
         renderWork(d.work);
@@ -145,7 +161,9 @@
     $('widerSearchBtn').addEventListener('click', async () => {
       const btn = $('widerSearchBtn'); btn.disabled = true;
       try {
-        const d = await runLookup(lastStudentId, true);
+        const pin = needsPin ? $('pinInput').value.trim() : '';
+        const { ok, data: d } = await runLookup(lastStudentId, pin, true);
+        if (!ok) throw new Error(d.error);
         $('form').style.display = 'none';
         $('greet').textContent = `Hi ${d.name} — here's everything matching "${lastStudentId}":`;
         renderWork(d.work);

@@ -700,6 +700,7 @@
         <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></symbol>
         <symbol id="i-book-open" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></symbol>
         <symbol id="i-close" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+        <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
         <symbol id="i-award" viewBox="0 0 24 24"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></symbol>
         <symbol id="i-apps" viewBox="0 0 24 24"><rect x="3" y="3" width="4" height="4" rx=".5" fill="currentColor" stroke="none"/><rect x="10" y="3" width="4" height="4" rx=".5" fill="currentColor" stroke="none"/><rect x="17" y="3" width="4" height="4" rx=".5" fill="currentColor" stroke="none"/><rect x="3" y="10" width="4" height="4" rx=".5" fill="currentColor" stroke="none"/><rect x="10" y="10" width="4" height="4" rx=".5" fill="currentColor" stroke="none"/><rect x="17" y="10" width="4" height="4" rx=".5" fill="currentColor" stroke="none"/><rect x="3" y="17" width="4" height="4" rx=".5" fill="currentColor" stroke="none"/><rect x="10" y="17" width="4" height="4" rx=".5" fill="currentColor" stroke="none"/><rect x="17" y="17" width="4" height="4" rx=".5" fill="currentColor" stroke="none"/></symbol>
       </g>
@@ -2723,11 +2724,57 @@
             }
           });
 
-          actions.append(pb,db);
-          item.append(icon,info,actions); wrap.appendChild(item);
+          const pinsBtn=document.createElement('button'); pinsBtn.className='btn-progress'; pinsBtn.innerHTML=ICON('i-lock')+' PINs';
+          const pinsPanel=document.createElement('div'); pinsPanel.className='roster-pins-panel'; pinsPanel.style.cssText='display:none;width:100%;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)';
+          pinsBtn.addEventListener('click',()=>{
+            const opening=pinsPanel.style.display==='none';
+            pinsPanel.style.display=opening?'block':'none';
+            if(opening) loadRosterPins(r.id, pinsPanel);
+          });
+
+          actions.append(pb,pinsBtn,db);
+          item.append(icon,info,actions,pinsPanel); wrap.appendChild(item);
         });
       }catch(e){ if(wrap) wrap.innerHTML='<p class="hint err">Could not load rosters.</p>'; }
     }
+
+    // Per-student PIN status inside a roster row — set/unset, and any
+    // pending "forgot my PIN" request the student raised, with a one-click
+    // clear so the student can set a new PIN on their next join attempt.
+    async function loadRosterPins(rosterId, panel){
+      panel.innerHTML='<span class="status">Loading…</span>';
+      try{
+        const d=await (await fetch('/api/roster/'+rosterId)).json();
+        if(!d.students||!d.students.length){ panel.innerHTML='<p class="hint">No students in this roster.</p>'; return; }
+        const pending=d.students.filter(s=>s.pinResetRequested).length;
+        panel.innerHTML=(pending?`<p class="hint" style="color:#b26a00;font-weight:600;margin-bottom:8px">${pending} student${pending!==1?'s':''} requested a PIN reset</p>`:'')
+          +d.students.map(s=>{
+            const setBadge=s.pinState==='set'
+              ? '<span style="font-size:11.5px;color:var(--ok,#1f9d55);font-weight:600">PIN set</span>'
+              : '<span style="font-size:11.5px;color:var(--muted)">No PIN yet</span>';
+            const resetRow=s.pinResetRequested
+              ? `<button type="button" class="pin-clear-btn" data-roster-id="${esc(rosterId)}" data-student-id="${esc(s.id)}" style="font-size:11.5px;font-weight:600;padding:3px 10px;border:1px solid #f0c674;border-radius:7px;background:#fff8ea;color:#b26a00;cursor:pointer">Reset requested — clear PIN</button>`
+              : '';
+            return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--border)">
+              <div><span style="font-size:13px;font-weight:600">${esc(s.name)}</span> <span style="font-size:12px;color:var(--muted)">${esc(s.id)}</span></div>
+              <div style="display:flex;align-items:center;gap:8px">${setBadge}${resetRow}</div>
+            </div>`;
+          }).join('');
+      }catch{ panel.innerHTML='<p class="hint err">Could not load PIN status.</p>'; }
+    }
+
+    document.addEventListener('click', async e=>{
+      const clearBtn=e.target.closest('.pin-clear-btn');
+      if(!clearBtn) return;
+      const {rosterId,studentId}=clearBtn.dataset;
+      clearBtn.disabled=true;
+      try{
+        const r=await fetch(`/api/roster/${rosterId}/student/${encodeURIComponent(studentId)}/pin-reset`,{method:'PATCH'});
+        const d=await r.json(); if(!r.ok) throw new Error(d.error);
+        toast('PIN cleared — student can set a new one next time they join','ok');
+        loadRosterPins(rosterId, clearBtn.closest('.roster-pins-panel'));
+      }catch(err){ toast(err.message); clearBtn.disabled=false; }
+    });
 
     // ---- Student progress panel ----
     let progressData   = null;   // last-loaded progress response

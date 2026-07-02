@@ -108,8 +108,24 @@
       <form id="authForm">
         <label for="auSid" id="sidLabel">Student ID</label>
         <input id="auSid" type="text" placeholder="e.g. STU-99432" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" maxlength="40" required style="font-family:monospace;font-size:18px;letter-spacing:1px" />
+
+        <div id="pinSetupBlock" style="display:none">
+          <p class="sub" style="margin:10px 0">First time — create a 4-digit PIN. You'll use this to get back in next time.</p>
+          <label>Create a 4-digit PIN</label>
+          <input id="auPinNew" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="font-size:20px;letter-spacing:6px;text-align:center;font-family:ui-monospace,monospace" />
+          <label>Confirm PIN</label>
+          <input id="auPinConfirm" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="font-size:20px;letter-spacing:6px;text-align:center;font-family:ui-monospace,monospace" />
+        </div>
+
+        <div id="pinEnterBlock" style="display:none">
+          <label>Your PIN</label>
+          <input id="auPin" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="font-size:20px;letter-spacing:6px;text-align:center;font-family:ui-monospace,monospace" />
+          <button type="button" id="forgotPinBtn" style="background:none;border:none;color:var(--muted);font-size:12.5px;cursor:pointer;padding:6px 0;display:block">Forgot your PIN?</button>
+        </div>
+
         <div style="margin-top:18px"><button id="authBtn" class="btn primary" type="submit">Join game →</button></div>
         <div id="authErr" class="err"></div>
+        <div id="forgotMsg" class="err" style="color:var(--ok, #1f9d55)"></div>
       </form>
     </div>
 
@@ -191,16 +207,47 @@
       $('auSid').placeholder = hasRoster ? 'e.g. STU-99432' : 'Enter your first name';
       $('authSub').textContent = hasRoster ? 'Enter your Student ID to join.' : 'Type your name to join.';
     }
+    let authStep = null;
+    function showPinSetup() { authStep = 'setup'; $('pinSetupBlock').style.display = 'block'; $('pinEnterBlock').style.display = 'none'; $('auPinNew').focus(); }
+    function showPinEnter() { authStep = 'enter'; $('pinEnterBlock').style.display = 'block'; $('pinSetupBlock').style.display = 'none'; $('auPin').focus(); }
+
     $('authForm').addEventListener('submit', async e => {
       e.preventDefault();
-      const btn = $('authBtn'); btn.disabled = true; $('authErr').textContent = '';
+      const btn = $('authBtn'); btn.disabled = true; $('authErr').textContent = ''; $('forgotMsg').textContent = '';
       const studentId = $('auSid').value.trim().toUpperCase();
       if (!studentId) { $('authErr').textContent = 'Please enter your ID.'; btn.disabled = false; return; }
+
+      let pin;
+      if (authStep === 'setup') {
+        const p1 = $('auPinNew').value.trim(), p2 = $('auPinConfirm').value.trim();
+        if (!/^\d{4}$/.test(p1)) { $('authErr').textContent = 'PIN must be exactly 4 digits.'; btn.disabled = false; return; }
+        if (p1 !== p2) { $('authErr').textContent = "PINs don't match."; btn.disabled = false; return; }
+        pin = p1;
+      } else if (authStep === 'enter') {
+        pin = $('auPin').value.trim();
+        if (!/^\d{4}$/.test(pin)) { $('authErr').textContent = 'Enter your 4-digit PIN.'; btn.disabled = false; return; }
+      }
+
       try {
-        const r = await fetch('/api/game/' + GAME_ID + '/enter', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId }) });
+        const r = await fetch('/api/game/' + GAME_ID + '/enter', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId, pin }) });
         const d = await r.json();
+        if (r.status === 428 && d.needsPinSetup) { showPinSetup(); btn.disabled = false; return; }
+        if (r.status === 428 && d.needsPin) { showPinEnter(); btn.disabled = false; return; }
         if (!r.ok) throw new Error(d.error);
         await loadGame();
+      } catch (err) { $('authErr').textContent = err.message; }
+      btn.disabled = false;
+    });
+
+    $('forgotPinBtn').addEventListener('click', async () => {
+      const studentId = $('auSid').value.trim().toUpperCase();
+      if (!studentId) { $('authErr').textContent = 'Enter your Student ID first.'; return; }
+      const btn = $('forgotPinBtn'); btn.disabled = true;
+      try {
+        const r = await fetch('/api/game/' + GAME_ID + '/pin/reset-request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId }) });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        $('forgotMsg').textContent = "Your teacher has been notified — check back with them, then try again once they've cleared it.";
       } catch (err) { $('authErr').textContent = err.message; }
       btn.disabled = false;
     });
