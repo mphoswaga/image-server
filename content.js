@@ -34,7 +34,14 @@ const DECK_SCHEMA = {
         type: 'object',
         properties: {
           title: { type: 'string' },
-          bullets: { type: 'array', items: { type: 'string' } },
+          // Senior grade profile asks for up to 6 bullets — cap matches that, not
+          // the lower grades' target (which the prompt still asks for directly).
+          bullets: { type: 'array', items: { type: 'string' }, maxItems: 6 },
+          // 'TEXT_HEAVY' when the slide's content stands on its own without a
+          // supporting photo (e.g. a dense list, vocabulary, or facts where a
+          // stock image would just be filler); 'STANDARD' otherwise. Only the
+          // 'classic' preset layout currently reacts to this hint.
+          layoutHint: { type: 'string', enum: ['STANDARD', 'TEXT_HEAVY'] },
           example: { type: 'string' },
           speakerNotes: { type: 'string' },
           imageQuery: { type: 'string' },
@@ -81,7 +88,7 @@ const DECK_SCHEMA = {
             additionalProperties: false,
           },
         },
-        required: ['title', 'bullets', 'example', 'speakerNotes', 'imageQuery', 'visual', 'vocab', 'shortcuts', 'worked'],
+        required: ['title', 'bullets', 'layoutHint', 'example', 'speakerNotes', 'imageQuery', 'visual', 'vocab', 'shortcuts', 'worked'],
         additionalProperties: false,
       },
     },
@@ -201,6 +208,7 @@ Produce a full lesson with this structure:
     • "diagram" — ONLY for a single CONCRETE structure, object or system whose parts sit in clear physical positions and benefit from a labelled drawing (the water cycle, a cell, the heart, an electric circuit, the layers of the Earth, a flower, a food web, a labelled tool/object…). For abstract topics, overviews, or lists of ideas, do NOT use "diagram" — use "steps" or "none". Set visual.items = [one short description of exactly what to draw AND the key parts to label], e.g. ["the human heart showing the four chambers and the main blood vessels"].
     • "none" — a normal photo illustrates it better: visual.items = [].
   Prefer a diagram whenever it genuinely helps students follow the idea.
+  Each content slide also has a "layoutHint": "TEXT_HEAVY" when the slide's bullets are self-explanatory (a dense list, vocabulary, or facts) and a stock photo next to them would add no teaching value; "STANDARD" whenever a supporting photo genuinely helps (most slides). Default to "STANDARD" unless there's a clear reason the image would just be filler.
 - check: ONE quick "check for understanding" question about the lesson, plus an "answer" of 2-3 short lines (the answer first, then a one-line why) — the teacher reveals these after students try. Include an imageQuery.
 - activity: a hands-on "Your Turn" task students physically DO. It MUST be fully runnable, not vague — give: a title; "goal" (one sentence: what students are trying to achieve or how to "win"); "materials" (a list of what's needed, or [] if nothing); "instructions" (3-6 clear, ordered RULES / steps of exactly how to do or play it, including rough timing where useful, so a teacher could run it as-is); and speaker notes. Where it fits the topic, have students ESTIMATE or predict first, then check/try. If it is a game, the instructions ARE the rules of the game.
 - recap: 3-4 key takeaways that summarise the lesson.
@@ -213,6 +221,18 @@ Rules:
 - Make the content build logically from objectives → ideas → practice → recap.`;
 }
 
+// Safety net only — the schema can't enforce string length (OpenAI's strict
+// json_schema mode doesn't support maxLength), so this catches the rare
+// runaway bullet after the fact rather than relying on the prompt alone.
+// Cuts at the last word boundary; never fires on normal-length output.
+function truncateBullet(b, maxChars = 160) {
+  const s = String(b == null ? '' : b);
+  if (s.length <= maxChars) return s;
+  const cut = s.slice(0, maxChars);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > 40 ? cut.slice(0, lastSpace) : cut).trim();
+}
+
 // Flatten the structured deck into the ordered slide array the pipeline renders.
 function flattenDeck(data) {
   const slides = [];
@@ -223,13 +243,16 @@ function flattenDeck(data) {
     // On a vocabulary slide, the term–definition lines ARE the teaching content,
     // so they become the bullets (rendered by the existing layout). The example
     // and speaker notes still carry extra explanation for the teacher.
-    const bullets = vocab.length ? vocab.map(v => `${v.term} — ${v.definition}`) : s.bullets;
+    const bullets = (vocab.length ? vocab.map(v => `${v.term} — ${v.definition}`) : s.bullets).map(b => truncateBullet(b));
     const shortcuts = Array.isArray(s.shortcuts) ? s.shortcuts.filter(x => x && x.action && x.keys) : [];
     const worked = (s.worked && s.worked.task && Array.isArray(s.worked.steps) && s.worked.steps.length) ? s.worked : null;
     slides.push({
       type: 'content', title: s.title, bullets, example: s.example,
       speakerNotes: s.speakerNotes, imageQuery: s.imageQuery, visual: s.visual, vocab, shortcuts, worked,
       side: i % 2 === 0 ? 'right' : 'left', // alternate image side for visual rhythm
+      // Missing/unrecognised value (placeholder deck, older cached slide) falls
+      // back to 'STANDARD' — today's behaviour, unchanged.
+      layoutHint: s.layoutHint === 'TEXT_HEAVY' ? 'TEXT_HEAVY' : 'STANDARD',
     });
   });
   if (data.check) slides.push({ type: 'check', title: data.check.question, bullets: data.check.answer, imageQuery: data.check.imageQuery });

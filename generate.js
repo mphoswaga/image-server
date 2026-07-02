@@ -522,7 +522,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
       const textX = imageLeft ? 4.7 : 0.5;
       const imgX = imageLeft ? 0.4 : 5.8;
 
-      if (!hasFraction && !t.playful && (state.photoN++ % 2 === 1)) {
+      if (!hasFraction && !t.playful && slideData.layoutHint !== 'TEXT_HEAVY' && (state.photoN++ % 2 === 1)) {
         const img = imageLeft ? { x: 0, y: 0, w: 4.9, h: 5.625 } : { x: 5.1, y: 0, w: 4.9, h: 5.625 };
         slide.addImage({ path: imgPath, ...img, sizing: { type: 'cover', w: img.w, h: img.h } });
         const tx = imageLeft ? 5.35 : 0.5;
@@ -540,6 +540,23 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
         slide.addShape(pptx.ShapeType.ellipse, { x: 8.8, y: -0.7, w: 2, h: 2, fill: { color: accent, transparency: 86 }, line: { type: 'none' } });
         slide.addShape(pptx.ShapeType.ellipse, { x: -0.6, y: 4.5, w: 1.7, h: 1.7, fill: { color: thm.primary, transparency: 90 }, line: { type: 'none' } });
       }
+
+      // Content-driven layout: the LLM flagged this slide as self-explanatory
+      // (a dense list / vocabulary / facts) — skip the image, give the text
+      // the full width instead of squeezing it into the narrow default column.
+      if (slideData.layoutHint === 'TEXT_HEAVY') {
+        slide.addText(slideData.title, { x: 0.5, y: 0.35, w: 9, h: 0.9, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
+        slide.addText(bulletItems(slideData.bullets, t, thm, multicolor), { x: 0.5, y: 1.45, w: 9, h: 2.9, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
+        if (slideData.example) {
+          slide.addShape(pptx.ShapeType.roundRect, { x: 0.5, y: 4.6, w: 9, h: 0.75, fill: { color: soft.accentSoft }, line: { type: 'none' }, rectRadius: 0.08 });
+          slide.addText([
+            { text: 'Example  ', options: { bold: true, color: accent } },
+            { text: slideData.example, options: { color: thm.text } },
+          ], { x: 0.65, y: 4.65, w: 8.7, h: 0.65, fontFace: thm.font, fontSize: Math.max(12, t.bulletSize - 4), valign: 'middle', italic: true });
+        }
+        break;
+      }
+
       slide.addText(slideData.title, { x: 0.5, y: 0.35, w: 9, h: 0.9, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
       slide.addText(bulletItems(slideData.bullets, t, thm, multicolor), { x: textX, y: 1.45, w: 4.9, h: 2.9, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
       if (slideData.example) {
