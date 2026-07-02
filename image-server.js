@@ -598,16 +598,19 @@ app.get('/api/join', (req, res) => {
 app.get('/api/my-work', (req, res) => {
   const studentId = String(req.query.studentId || '').trim();
   if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
-  const matches = roster.findStudentAcrossAllTeachers(studentId);
-  if (!matches.length) return res.status(404).json({ error: 'Student ID not found. Check with your teacher.' });
+  const includeFreeform = req.query.includeFreeform === '1' || req.query.includeFreeform === 'true';
 
+  const matches = roster.findStudentAcrossAllTeachers(studentId);
   const work = [];
+  let name = null;
+
   for (const m of matches) {
     const teacher = getUserById(m.teacherId) || {};
+    name = name || m.name;
     for (const g of games.listTeacherGames(m.teacherId)) {
       if (g.rosterId !== m.rosterId) continue;
       const mine = games.getResults(g.id).find(r => r.studentId === studentId);
-      if (mine) work.push({ kind: 'game', id: g.id, title: g.lessonTitle, subject: g.subject, topic: g.topic, teacherName: teacher.name || '', score: mine.score, total: mine.total, at: mine.at, path: '/play/' + g.id });
+      if (mine) work.push({ kind: 'game', id: g.id, title: g.lessonTitle, subject: g.subject, topic: g.topic, teacherName: teacher.name || '', score: mine.score, total: mine.total, at: mine.at, path: '/play/' + g.id, verified: true });
     }
     for (const a of assignments.listTeacherAssignments(m.teacherId)) {
       if (a.rosterId !== m.rosterId) continue;
@@ -615,12 +618,44 @@ app.get('/api/my-work', (req, res) => {
       if (sub) {
         const rec = assignments.getAssignment(a.id);
         const released = assignments.isReleased(rec);
-        work.push({ kind: 'assignment', id: a.id, title: a.title, subject: a.subject, topic: a.topic, type: a.type, teacherName: teacher.name || '', released, totalMarks: released ? sub.totalMarks : null, maxMarks: sub.maxMarks, at: sub.submittedAt, path: '/assignment/' + a.id });
+        work.push({ kind: 'assignment', id: a.id, title: a.title, subject: a.subject, topic: a.topic, type: a.type, teacherName: teacher.name || '', released, totalMarks: released ? sub.totalMarks : null, maxMarks: sub.maxMarks, at: sub.submittedAt, path: '/assignment/' + a.id, verified: true });
       }
     }
   }
+
+  // Opt-in only (?includeFreeform=1) — a no-roster activity stores whatever
+  // raw text the student typed as their "name", with no verification at all.
+  // Matching on that text can collide across different real students (two
+  // "John"s), so these results are flagged verified:false and only searched
+  // when the student explicitly asks for them. Scans every teacher's every
+  // no-roster activity — unindexed, matches this app's small-scale file
+  // model; fine at current scale, would need real indexing at real scale.
+  if (includeFreeform) {
+    const norm = s => String(s || '').trim().toLowerCase();
+    const target = norm(studentId);
+    const seen = new Set(work.map(w => w.kind + ':' + w.id));
+    for (const teacherId of listAllUserIds()) {
+      const teacher = getUserById(teacherId) || {};
+      for (const g of games.listTeacherGames(teacherId)) {
+        if (g.rosterId || seen.has('game:' + g.id)) continue;
+        const mine = games.getResults(g.id).find(r => norm(r.studentId) === target || norm(r.name) === target);
+        if (mine) { work.push({ kind: 'game', id: g.id, title: g.lessonTitle, subject: g.subject, topic: g.topic, teacherName: teacher.name || '', score: mine.score, total: mine.total, at: mine.at, path: '/play/' + g.id, verified: false }); seen.add('game:' + g.id); }
+      }
+      for (const a of assignments.listTeacherAssignments(teacherId)) {
+        if (a.rosterId || seen.has('assignment:' + a.id)) continue;
+        const mine = assignments.getSubmissions(a.id).find(s => norm(s.studentId) === target || norm(s.name) === target);
+        if (mine) {
+          const released = assignments.isReleased(assignments.getAssignment(a.id));
+          work.push({ kind: 'assignment', id: a.id, title: a.title, subject: a.subject, topic: a.topic, type: a.type, teacherName: teacher.name || '', released, totalMarks: released ? mine.totalMarks : null, maxMarks: mine.maxMarks, at: mine.submittedAt, path: '/assignment/' + a.id, verified: false });
+          seen.add('assignment:' + a.id);
+        }
+      }
+    }
+  }
+
+  if (!work.length) return res.status(404).json({ error: 'Student ID not found. Check with your teacher.' });
   work.sort((x, y) => String(y.at || '').localeCompare(String(x.at || '')));
-  res.json({ name: matches[0].name, work });
+  res.json({ name: name || studentId, work });
 });
 
 // Student: enter an assignment with their Student ID — issues a short-lived session.
