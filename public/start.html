@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>LessonScope</title>
+  <style>
+    :root { --primary:#1a56a0; --accent:#e8833a; --ink:#1c2331; --muted:#6b7280; --border:#dde3ec; --err:#c0392b; --ok:#1f9d55; --bg:#f4f6fb; --sh:0 2px 12px rgba(0,0,0,.10); }
+    *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:var(--bg); min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:40px 20px; color:var(--ink); }
+    .logo { display:flex; align-items:center; gap:10px; font-size:20px; font-weight:800; margin-bottom:28px; }
+    .logo svg { width:36px; height:36px; }
+    .cope { color:var(--accent); }
+    .card { background:#fff; border-radius:18px; box-shadow:var(--sh); padding:32px 28px; width:100%; max-width:420px; }
+    h1 { font-size:22px; font-weight:800; margin-bottom:6px; }
+    .sub { color:var(--muted); font-size:14px; margin-bottom:22px; }
+    label { font-size:13px; font-weight:600; display:block; margin-bottom:6px; color:var(--ink); }
+    input { width:100%; padding:13px 14px; font-size:16px; font-family:inherit; border:1.5px solid var(--border); border-radius:12px; background:#fdfdfe; color:var(--ink); transition:.15s; margin-bottom:16px; }
+    input:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 4px rgba(26,86,160,.12); }
+    .sid-input { font-family:ui-monospace,Menlo,Consolas,monospace; letter-spacing:1px; text-transform:uppercase; }
+    .pin-input { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:20px; letter-spacing:6px; text-align:center; }
+    .btn { display:block; width:100%; padding:14px; font-size:15px; font-weight:700; border:none; border-radius:12px; cursor:pointer; background:var(--primary); color:#fff; transition:.15s; }
+    .btn:disabled { opacity:.6; cursor:not-allowed; }
+    .btn.ghost { background:#fff; border:1.5px solid var(--border); color:var(--ink); }
+    .err { color:var(--err); font-size:13px; margin-top:10px; min-height:18px; }
+    .ok-msg { color:var(--ok); font-size:13px; margin-top:10px; }
+    .link-btn { background:none; border:none; color:var(--muted); font-size:12.5px; cursor:pointer; padding:0 0 14px; display:block; text-align:left; }
+
+    .wrap { width:100%; max-width:640px; }
+    #dashboard { display:none; width:100%; }
+    .greet { font-size:20px; font-weight:800; margin-bottom:4px; }
+    .greet-sub { color:var(--muted); font-size:14px; margin-bottom:20px; }
+    .join-card { background:#fff; border-radius:14px; box-shadow:var(--sh); padding:20px; margin-bottom:20px; }
+    .join-row { display:flex; gap:10px; }
+    .join-row input { margin-bottom:0; text-transform:uppercase; letter-spacing:3px; font-family:ui-monospace,monospace; font-weight:700; }
+    .join-row button { width:auto; padding:13px 20px; white-space:nowrap; }
+    .section-title { font-size:14px; font-weight:700; margin:24px 0 12px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; }
+    .work-card { background:#fff; border-radius:14px; box-shadow:var(--sh); padding:18px 20px; margin-bottom:12px; }
+    .wc-top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+    .wc-title { font-size:15px; font-weight:700; }
+    .wc-meta { font-size:12.5px; color:var(--muted); margin-top:4px; }
+    .wc-chip { display:inline-block; background:#eef2f8; color:var(--primary); font-size:11.5px; font-weight:600; border-radius:6px; padding:2px 8px; margin-right:6px; }
+    .wc-score { font-size:18px; font-weight:800; color:var(--primary); white-space:nowrap; }
+    .wc-pending { font-size:12.5px; color:#b26a00; font-weight:600; white-space:nowrap; }
+    .wc-link { display:inline-block; margin-top:10px; font-size:13px; font-weight:600; color:var(--primary); text-decoration:none; }
+    .empty { text-align:center; color:var(--muted); font-size:14px; padding:30px 0; }
+    .logout-link { display:block; text-align:center; margin-top:20px; font-size:13px; color:var(--muted); text-decoration:none; }
+  </style>
+</head>
+<body>
+  <div class="logo">
+    <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="40" height="40" rx="10" fill="#1a56a0"/>
+      <rect x="10" y="10" width="8" height="8" rx="2" fill="white"/>
+      <rect x="22" y="10" width="8" height="8" rx="2" fill="white" opacity=".7"/>
+      <rect x="10" y="22" width="8" height="8" rx="2" fill="white" opacity=".7"/>
+      <rect x="22" y="22" width="8" height="8" rx="2" fill="#e8833a"/>
+    </svg>
+    <span>Lesson<span class="cope">Scope</span></span>
+  </div>
+
+  <div class="wrap">
+    <div id="loading" class="card" style="text-align:center;margin:0 auto">Loading…</div>
+
+    <div id="authCard" class="card" style="display:none;margin:0 auto">
+      <h1>Sign in</h1>
+      <p class="sub" id="authIntro">Enter your Student ID to continue.</p>
+      <form id="authForm">
+        <label for="studentId">Student ID</label>
+        <input id="studentId" class="sid-input" type="text" maxlength="40" placeholder="e.g. STU-99432" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" required />
+
+        <div id="pinSetupBlock" style="display:none">
+          <p class="sub" style="margin:0 0 10px">First time — create a 4-digit PIN. You'll use this every time you come back.</p>
+          <label for="pinNew">Create a 4-digit PIN</label>
+          <input id="pinNew" class="pin-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" />
+          <label for="pinConfirm">Confirm PIN</label>
+          <input id="pinConfirm" class="pin-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" />
+        </div>
+
+        <div id="pinEnterBlock" style="display:none">
+          <label for="pinInput">Your PIN</label>
+          <input id="pinInput" class="pin-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="margin-bottom:6px" />
+          <button type="button" id="forgotPinBtn" class="link-btn">Forgot your PIN?</button>
+        </div>
+
+        <button class="btn" type="submit" id="authBtn">Continue →</button>
+        <div class="err" id="authErr"></div>
+        <div class="ok-msg" id="forgotMsg"></div>
+      </form>
+    </div>
+
+    <div id="dashboard">
+      <div class="greet" id="greet"></div>
+      <p class="greet-sub">Here's your LessonScope space.</p>
+
+      <div class="join-card">
+        <label for="roomCode" style="margin-bottom:8px">Join something new</label>
+        <div class="join-row">
+          <input id="roomCode" type="text" maxlength="6" placeholder="Room Code" autocomplete="off" autocorrect="off" spellcheck="false" />
+          <button class="btn" id="joinBtn" type="button" style="width:auto">Join →</button>
+        </div>
+        <div class="err" id="joinErr"></div>
+      </div>
+
+      <div class="section-title">My work</div>
+      <div id="workList"></div>
+
+      <a href="#" class="logout-link" id="logoutLink">Not you? Sign out</a>
+    </div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const typeLabel = { worksheet: 'Worksheet', 'exit-ticket': 'Exit ticket', quiz: 'Quiz', game: 'Game' };
+    const fmtDate = iso => { if (!iso) return ''; const d = new Date(iso); return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); };
+
+    function renderWork(list) {
+      if (!list.length) { $('workList').innerHTML = '<div class="empty">Nothing submitted yet — join something above to get started.</div>'; return; }
+      $('workList').innerHTML = list.map(w => {
+        const kindLabel = w.kind === 'game' ? 'Game' : (typeLabel[w.type] || w.type);
+        let scoreHTML;
+        if (w.kind === 'game') scoreHTML = `<div class="wc-score">${w.score}/${w.total}</div>`;
+        else if (w.released) scoreHTML = `<div class="wc-score">${w.totalMarks}/${w.maxMarks}</div>`;
+        else scoreHTML = `<div class="wc-pending">Pending review</div>`;
+        return `<div class="work-card">
+          <div class="wc-top">
+            <div>
+              <div class="wc-title">${esc(w.title)}</div>
+              <div class="wc-meta">
+                <span class="wc-chip">${esc(kindLabel)}</span>
+                ${w.subject ? `<span class="wc-chip">${esc(w.subject)}</span>` : ''}
+                ${w.teacherName ? esc(w.teacherName) + ' · ' : ''}${fmtDate(w.at)}
+              </div>
+            </div>
+            ${scoreHTML}
+          </div>
+          <a class="wc-link" href="${esc(w.path)}">Open →</a>
+        </div>`;
+      }).join('');
+    }
+
+    async function showDashboard(name) {
+      $('loading').style.display = 'none';
+      $('authCard').style.display = 'none';
+      $('greet').textContent = `Hi ${name}!`;
+      $('dashboard').style.display = 'block';
+      try {
+        const r = await fetch('/api/student/my-work');
+        const d = await r.json();
+        renderWork(r.ok ? d.work : []);
+      } catch { renderWork([]); }
+    }
+
+    let authStep = null;
+    function showPinSetup() { authStep = 'setup'; $('pinSetupBlock').style.display = 'block'; $('pinEnterBlock').style.display = 'none'; $('pinNew').focus(); }
+    function showPinEnter() { authStep = 'enter'; $('pinEnterBlock').style.display = 'block'; $('pinSetupBlock').style.display = 'none'; $('pinInput').focus(); }
+
+    $('authForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = $('authBtn'); btn.disabled = true; $('authErr').textContent = ''; $('forgotMsg').textContent = '';
+      const studentId = $('studentId').value.trim().toUpperCase();
+      if (!studentId) { $('authErr').textContent = 'Please enter your ID.'; btn.disabled = false; return; }
+
+      let pin;
+      if (authStep === 'setup') {
+        const p1 = $('pinNew').value.trim(), p2 = $('pinConfirm').value.trim();
+        if (!/^\d{4}$/.test(p1)) { $('authErr').textContent = 'PIN must be exactly 4 digits.'; btn.disabled = false; return; }
+        if (p1 !== p2) { $('authErr').textContent = "PINs don't match."; btn.disabled = false; return; }
+        pin = p1;
+      } else if (authStep === 'enter') {
+        pin = $('pinInput').value.trim();
+        if (!/^\d{4}$/.test(pin)) { $('authErr').textContent = 'Enter your 4-digit PIN.'; btn.disabled = false; return; }
+      }
+
+      try {
+        const r = await fetch('/api/student/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId, pin }) });
+        const d = await r.json();
+        if (r.status === 428 && d.needsPinSetup) { showPinSetup(); btn.disabled = false; return; }
+        if (r.status === 428 && d.needsPin) { showPinEnter(); btn.disabled = false; return; }
+        if (!r.ok) throw new Error(d.error);
+        await showDashboard(d.name);
+      } catch (err) { $('authErr').textContent = err.message; }
+      btn.disabled = false;
+    });
+
+    $('forgotPinBtn').addEventListener('click', async () => {
+      const studentId = $('studentId').value.trim().toUpperCase();
+      if (!studentId) { $('authErr').textContent = 'Enter your Student ID first.'; return; }
+      const btn = $('forgotPinBtn'); btn.disabled = true;
+      try {
+        const r = await fetch('/api/student/pin/reset-request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId }) });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        $('forgotMsg').textContent = "Your teacher has been notified — check back with them, then try again once they've cleared it.";
+      } catch (err) { $('authErr').textContent = err.message; }
+      btn.disabled = false;
+    });
+
+    $('joinBtn').addEventListener('click', async () => {
+      const btn = $('joinBtn'); btn.disabled = true; $('joinErr').textContent = '';
+      const code = $('roomCode').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (!code) { $('joinErr').textContent = 'Enter a Room Code.'; btn.disabled = false; return; }
+      try {
+        const r = await fetch('/api/student/join-room', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        location.href = d.path;
+      } catch (err) { $('joinErr').textContent = err.message; btn.disabled = false; }
+    });
+    $('roomCode').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase(); });
+    $('roomCode').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('joinBtn').click(); } });
+
+    $('logoutLink').addEventListener('click', async e => {
+      e.preventDefault();
+      await fetch('/api/student/logout', { method: 'POST' });
+      location.reload();
+    });
+
+    $('studentId').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase(); });
+
+    // On load: already signed in (lc_student cookie still valid)? Skip straight to the dashboard.
+    (async () => {
+      try {
+        const r = await fetch('/api/student/me');
+        if (r.ok) { const d = await r.json(); await showDashboard(d.name); return; }
+      } catch {}
+      $('loading').style.display = 'none';
+      $('authCard').style.display = 'block';
+      $('studentId').focus();
+    })();
+  </script>
+</body>
+</html>

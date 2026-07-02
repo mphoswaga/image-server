@@ -1,15 +1,13 @@
 // Class roster management. Each teacher can have multiple named rosters.
 // Stored at DATA_DIR/users/<teacherId>/rosters/<id>.json.
-// A roster contains a list of { id, name, pinHash, pinResetRequested }
-// entries — "id" is the opaque Student ID (e.g. STU-99432); "name" is the
-// real name that stays on the teacher's side only, never in the game
-// results database. "pinHash" is a self-service 4-digit PIN the student
-// sets on first use (bcrypt-hashed, never sent to the client) — without it,
-// knowing a Student ID alone is enough to act as that student.
+// A roster contains a list of { id, name } entries — "id" is the opaque
+// Student ID (e.g. STU-99432); "name" is the real name that stays on the
+// teacher's side only, never in the game results database. PIN/account
+// state lives in student-account.js — one account per Student ID, global
+// across every roster it appears in (not per-class).
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const bcrypt = require('bcryptjs');
 const { DATA_DIR, writeJsonAtomic } = require('./storage');
 
 function rosterDir(teacherId) {
@@ -120,64 +118,6 @@ function findStudentInRoster(teacherId, rosterId, studentId) {
   return r.students.find(s => s.id === studentId) || null;
 }
 
-// ── Self-service PIN (Student ID alone isn't secret — see file header) ─────
-
-// 'unset' (never set up, or a reset was approved and it's waiting on the
-// student to set a new one) | 'set' (has an active PIN) | null (no such
-// student/roster).
-function getPinState(teacherId, rosterId, studentId) {
-  const s = findStudentInRoster(teacherId, rosterId, studentId);
-  if (!s) return null;
-  return s.pinHash ? 'set' : 'unset';
-}
-
-// First-time setup only — refuses to overwrite an active PIN so a student
-// can't silently clobber another student's PIN by re-"setting up" on their
-// ID. Overwriting requires a teacher-approved reset first (see below).
-function setPin(teacherId, rosterId, studentId, pin) {
-  const r = getRoster(teacherId, rosterId);
-  if (!r) return false;
-  const s = r.students.find(s => s.id === studentId);
-  if (!s || s.pinHash) return false;
-  s.pinHash = bcrypt.hashSync(String(pin), 10);
-  s.pinResetRequested = null;
-  writeJsonAtomic(rosterPath(teacherId, rosterId), r);
-  return true;
-}
-
-function verifyPin(teacherId, rosterId, studentId, pin) {
-  const s = findStudentInRoster(teacherId, rosterId, studentId);
-  if (!s || !s.pinHash) return false;
-  return bcrypt.compareSync(String(pin || ''), s.pinHash);
-}
-
-// Student-initiated — just flags the entry for the teacher to see. Doesn't
-// touch pinHash by itself (a bare reset *request* needs no proof of
-// identity, so it must not unlock anything on its own — only the teacher's
-// approval does that).
-function requestPinReset(teacherId, rosterId, studentId) {
-  const r = getRoster(teacherId, rosterId);
-  if (!r) return false;
-  const s = r.students.find(s => s.id === studentId);
-  if (!s) return false;
-  s.pinResetRequested = new Date().toISOString();
-  writeJsonAtomic(rosterPath(teacherId, rosterId), r);
-  return true;
-}
-
-// Teacher-initiated — clears the PIN so the student's next attempt falls
-// back into the setup flow. Also clears the pending-request flag.
-function approvePinReset(teacherId, rosterId, studentId) {
-  const r = getRoster(teacherId, rosterId);
-  if (!r) return null;
-  const s = r.students.find(s => s.id === studentId);
-  if (!s) return null;
-  s.pinHash = null;
-  s.pinResetRequested = null;
-  writeJsonAtomic(rosterPath(teacherId, rosterId), r);
-  return s;
-}
-
 // ── File parsing (CSV + Excel) for roster import ────────────────────────────
 
 const xlsx = require('xlsx');
@@ -251,5 +191,4 @@ module.exports = {
   saveRoster, getRoster, listRosters, deleteRoster,
   findStudent, findStudentInRoster, findStudentAcrossAllTeachers, parseCSV,
   parseRosterFile, buildStudentsFromMapping,
-  getPinState, setPin, verifyPin, requestPinReset, approvePinReset,
 };

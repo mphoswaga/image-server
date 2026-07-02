@@ -24,6 +24,7 @@ const games = require('./games');
 const assignments = require('./assignments');
 const { gradeAnswer } = require('./auto-grade');
 const roster = require('./roster');
+const studentAccount = require('./student-account');
 const apikeys = require('./apikeys');
 const oauth = require('./oauth');
 const audit = require('./audit');
@@ -78,6 +79,26 @@ function requireGameAccess(req, res, next) {
     } catch {}
   }
   res.status(401).json({ error: 'Not authenticated.' });
+}
+
+// General student identity — NOT scoped to one game/assignment, unlike
+// lc_game above. Established once via /api/student/login (Student ID + PIN),
+// then reused to browse "my work" and join new games/assignments by Room
+// Code without re-entering credentials each time. Separate cookie so an
+// active game/assignment session (lc_game) is never clobbered by browsing.
+const STUDENT_COOKIE = 'lc_student';
+function issueStudentToken(studentId, name) {
+  return jwt.sign({ type: 'student', studentId, name }, JWT_SECRET, { expiresIn: '30d' });
+}
+function requireStudentAccess(req, res, next) {
+  const tok = req.cookies && req.cookies[STUDENT_COOKIE];
+  if (tok) {
+    try {
+      const p = jwt.verify(tok, JWT_SECRET);
+      if (p.type === 'student') { req.studentSession = { studentId: p.studentId, name: p.name }; return next(); }
+    } catch {}
+  }
+  res.status(401).json({ error: 'Not signed in.' });
 }
 
 const app = express();
@@ -595,32 +616,11 @@ app.get('/api/join', (req, res) => {
 // (Student ID is the credential throughout this app), just aggregated.
 // Only rostered games/assignments are included — a free-form typed name on a
 // no-roster activity can't be reliably tied back to this ID.
-app.get('/api/my-work', (req, res) => {
-  const studentId = String(req.query.studentId || '').trim();
-  if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
-  const pin = req.query.pin ? String(req.query.pin).trim() : '';
-  const includeFreeform = req.query.includeFreeform === '1' || req.query.includeFreeform === 'true';
-
-  const allMatches = roster.findStudentAcrossAllTeachers(studentId);
-  // A Student ID can appear in several teachers' rosters (same real student
-  // in multiple classes) — each roster entry has its own independent PIN.
-  // Split into "needs a PIN we don't have yet" vs "already set, unlocked
-  // with what was given" so we can tell the client which case it's in
-  // without silently mixing verified and unverifiable results.
-  const pinRequiredMatches = allMatches.filter(m => roster.getPinState(m.teacherId, m.rosterId, studentId) === 'set');
-  if (pinRequiredMatches.length && !pin) {
-    return res.status(428).json({ needsPin: true, name: pinRequiredMatches[0].name, error: 'Enter your PIN to continue.' });
-  }
-  const matches = allMatches.filter(m => {
-    const state = roster.getPinState(m.teacherId, m.rosterId, studentId);
-    // Never set up on this roster — same openness as before this feature
-    // existed. Protection kicks in the first time this student sets a PIN
-    // via /enter; my-work itself doesn't offer setup, only lookup.
-    if (state === 'unset') return true;
-    return roster.verifyPin(m.teacherId, m.rosterId, studentId, pin);
-  });
-  if (pinRequiredMatches.length && !matches.length) return res.status(403).json({ error: 'Incorrect PIN.' });
-
+// Pure data gather, no auth/response concerns — shared by the legacy
+// query-string endpoint and the session-based /api/student/my-work so
+// they can never drift out of sync.
+function gatherWork(studentId, includeFreeform) {
+  const matches = roster.findStudentAcrossAllTeachers(studentId);
   const work = [];
   let name = null;
 
@@ -643,13 +643,12 @@ app.get('/api/my-work', (req, res) => {
     }
   }
 
-  // Opt-in only (?includeFreeform=1) — a no-roster activity stores whatever
-  // raw text the student typed as their "name", with no verification at all.
-  // Matching on that text can collide across different real students (two
-  // "John"s), so these results are flagged verified:false and only searched
-  // when the student explicitly asks for them. Scans every teacher's every
-  // no-roster activity — unindexed, matches this app's small-scale file
-  // model; fine at current scale, would need real indexing at real scale.
+  // Opt-in only — a no-roster activity stores whatever raw text the student
+  // typed as their "name", with no verification at all. Matching on that
+  // text can collide across different real students (two "John"s), so these
+  // results are flagged verified:false and only searched when explicitly
+  // asked for. Scans every teacher's every no-roster activity — unindexed,
+  // matches this app's small-scale file model.
   if (includeFreeform) {
     const norm = s => String(s || '').trim().toLowerCase();
     const target = norm(studentId);
@@ -673,9 +672,116 @@ app.get('/api/my-work', (req, res) => {
     }
   }
 
-  if (!work.length) return res.status(404).json({ error: 'Student ID not found. Check with your teacher.' });
   work.sort((x, y) => String(y.at || '').localeCompare(String(x.at || '')));
+  return { name, work };
+}
+
+app.get('/api/my-work', (req, res) => {
+  const studentId = String(req.query.studentId || '').trim();
+  if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
+  const pin = req.query.pin ? String(req.query.pin).trim() : '';
+  const includeFreeform = req.query.includeFreeform === '1' || req.query.includeFreeform === 'true';
+
+  const matches = roster.findStudentAcrossAllTeachers(studentId);
+  // PIN is a single global account per Student ID (student-account.js) —
+  // one check covers every roster this ID appears in. 'unset' stays open
+  // (same as before this feature existed — protection only starts once the
+  // student actually sets a PIN via /enter or /api/student/login).
+  const pinState = studentAccount.getAccountState(studentId);
+  if (pinState === 'set') {
+    if (!pin) return res.status(428).json({ needsPin: true, name: matches[0] && matches[0].name, error: 'Enter your PIN to continue.' });
+    if (!studentAccount.verifyPin(studentId, pin)) return res.status(403).json({ error: 'Incorrect PIN.' });
+  }
+
+  const { name, work } = gatherWork(studentId, includeFreeform);
+  if (!work.length) return res.status(404).json({ error: 'Student ID not found. Check with your teacher.' });
   res.json({ name: name || studentId, work });
+});
+
+// ── Unified student entry point (one link: Student ID -> PIN setup/verify
+// -> browse "my work" + join by Room Code, no re-entering credentials) ─────
+
+// Single endpoint for both first-time setup and returning verification —
+// same pattern as /api/assignment/:id/enter, just not scoped to one activity.
+app.post('/api/student/login', (req, res) => {
+  const studentId = String(req.body && req.body.studentId || '').trim();
+  if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
+  const pin = req.body && req.body.pin ? String(req.body.pin).trim() : '';
+
+  const matches = roster.findStudentAcrossAllTeachers(studentId);
+  if (!matches.length) return res.status(404).json({ error: 'Student ID not found. Check with your teacher.' });
+  const displayName = matches[0].name;
+
+  const pinState = studentAccount.getAccountState(studentId);
+  if (pinState === 'unset') {
+    if (!pin) return res.status(428).json({ needsPinSetup: true, name: displayName, error: 'Set up a 4-digit PIN to continue.' });
+    if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
+    if (!studentAccount.setPin(studentId, pin)) return res.status(409).json({ error: 'A PIN was just set for this ID — enter it instead.' });
+  } else {
+    if (!pin) return res.status(428).json({ needsPin: true, name: displayName, error: 'Enter your PIN to continue.' });
+    if (!studentAccount.verifyPin(studentId, pin)) return res.status(403).json({ error: 'Incorrect PIN.' });
+  }
+
+  res.cookie(STUDENT_COOKIE, issueStudentToken(studentId, displayName), { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
+  res.json({ name: displayName });
+});
+
+app.post('/api/student/pin/reset-request', (req, res) => {
+  const studentId = String(req.body && req.body.studentId || '').trim();
+  if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
+  const ok = studentAccount.requestPinReset(studentId);
+  if (!ok) return res.status(404).json({ error: 'No account found for this ID yet.' });
+  res.json({ ok: true });
+});
+
+// Already-logged-in check — lets /start skip straight to the dashboard on repeat visits.
+app.get('/api/student/me', requireStudentAccess, (req, res) => res.json({ studentId: req.studentSession.studentId, name: req.studentSession.name }));
+
+app.post('/api/student/logout', (req, res) => { res.clearCookie(STUDENT_COOKIE); res.json({ ok: true }); });
+
+// Same data as /api/my-work, but identity comes from the verified session —
+// no PIN passed in a URL query string.
+app.get('/api/student/my-work', requireStudentAccess, (req, res) => {
+  const includeFreeform = req.query.includeFreeform === '1' || req.query.includeFreeform === 'true';
+  const { work } = gatherWork(req.studentSession.studentId, includeFreeform);
+  res.json({ name: req.studentSession.name, work });
+});
+
+// Join a game/assignment by Room Code using the already-verified identity —
+// no re-entering Student ID/PIN. Issues the same scoped lc_game session the
+// old per-activity /enter flow does, so the target page just works.
+app.post('/api/student/join-room', requireStudentAccess, (req, res) => {
+  const code = String(req.body && req.body.code || '').trim().toUpperCase();
+  if (!code) return res.status(400).json({ error: 'Enter a Room Code.' });
+  const { studentId, name } = req.studentSession || {};
+  if (!studentId) return res.status(401).json({ error: 'Not signed in.' });
+
+  const gameId = games.getRoomCode(code);
+  const assignmentId = !gameId && assignments.getRoomCode(code);
+  if (!gameId && !assignmentId) return res.status(404).json({ error: 'Room not found. Check the code and try again.' });
+
+  if (gameId) {
+    const g = games.getGame(gameId);
+    let displayName = name;
+    if (g.rosterId) {
+      const s = roster.findStudentInRoster(g.teacherId, g.rosterId, studentId);
+      if (!s) return res.status(403).json({ error: "You're not on the roster for this game." });
+      displayName = s.name;
+    }
+    const token = issueGameToken({ gameId, studentId, name: displayName });
+    res.cookie(GAME_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
+    return res.json({ type: 'game', id: gameId, path: '/play/' + gameId });
+  }
+  const a = assignments.getAssignment(assignmentId);
+  let displayName = name;
+  if (a.rosterId) {
+    const s = roster.findStudentInRoster(a.teacherId, a.rosterId, studentId);
+    if (!s) return res.status(403).json({ error: "You're not on the roster for this assignment." });
+    displayName = s.name;
+  }
+  const token = issueGameToken({ assignmentId, studentId, name: displayName }, 'assignment');
+  res.cookie(GAME_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
+  res.json({ type: 'assignment', id: assignmentId, path: '/assignment/' + assignmentId });
 });
 
 // Student: enter an assignment with their Student ID — issues a short-lived session.
@@ -690,18 +796,19 @@ app.post('/api/assignment/:id/enter', async (req, res) => {
     const s = roster.findStudentInRoster(a.teacherId, a.rosterId, studentId);
     if (!s) return res.status(403).json({ error: 'Student ID not found. Check with your teacher.' });
     displayName = s.name;
-    const pinState = roster.getPinState(a.teacherId, a.rosterId, studentId);
+    const pinState = studentAccount.getAccountState(studentId);
     if (pinState === 'unset') {
       if (!pin) return res.status(428).json({ needsPinSetup: true, name: displayName, error: 'Set up a 4-digit PIN to continue.' });
       if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
-      if (!roster.setPin(a.teacherId, a.rosterId, studentId, pin)) return res.status(409).json({ error: 'A PIN was just set for this ID — enter it instead.' });
+      if (!studentAccount.setPin(studentId, pin)) return res.status(409).json({ error: 'A PIN was just set for this ID — enter it instead.' });
     } else {
       if (!pin) return res.status(428).json({ needsPin: true, name: displayName, error: 'Enter your PIN to continue.' });
-      if (!roster.verifyPin(a.teacherId, a.rosterId, studentId, pin)) return res.status(403).json({ error: 'Incorrect PIN.' });
+      if (!studentAccount.verifyPin(studentId, pin)) return res.status(403).json({ error: 'Incorrect PIN.' });
     }
   }
   const token = issueGameToken({ assignmentId: a.id, studentId, name: displayName }, 'assignment');
   res.cookie(GAME_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
+  res.cookie(STUDENT_COOKIE, issueStudentToken(studentId, displayName), { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
   res.json({ name: displayName });
 });
 
@@ -712,8 +819,8 @@ app.post('/api/assignment/:id/pin/reset-request', (req, res) => {
   if (!a || !a.rosterId) return res.status(404).json({ error: 'Assignment not found.' });
   const studentId = String(req.body && req.body.studentId || '').trim();
   if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
-  const ok = roster.requestPinReset(a.teacherId, a.rosterId, studentId);
-  if (!ok) return res.status(404).json({ error: 'Student ID not found.' });
+  const ok = studentAccount.requestPinReset(studentId);
+  if (!ok) return res.status(404).json({ error: 'No account found for this ID yet.' });
   res.json({ ok: true });
 });
 
@@ -1152,18 +1259,19 @@ app.post('/api/game/:id/enter', async (req, res) => {
     const s = teacher ? roster.findStudentInRoster(g.teacherId, g.rosterId, studentId) : null;
     if (!s) return res.status(403).json({ error: 'Student ID not found. Check with your teacher.' });
     displayName = s.name;
-    const pinState = roster.getPinState(g.teacherId, g.rosterId, studentId);
+    const pinState = studentAccount.getAccountState(studentId);
     if (pinState === 'unset') {
       if (!pin) return res.status(428).json({ needsPinSetup: true, name: displayName, error: 'Set up a 4-digit PIN to continue.' });
       if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
-      if (!roster.setPin(g.teacherId, g.rosterId, studentId, pin)) return res.status(409).json({ error: 'A PIN was just set for this ID — enter it instead.' });
+      if (!studentAccount.setPin(studentId, pin)) return res.status(409).json({ error: 'A PIN was just set for this ID — enter it instead.' });
     } else {
       if (!pin) return res.status(428).json({ needsPin: true, name: displayName, error: 'Enter your PIN to continue.' });
-      if (!roster.verifyPin(g.teacherId, g.rosterId, studentId, pin)) return res.status(403).json({ error: 'Incorrect PIN.' });
+      if (!studentAccount.verifyPin(studentId, pin)) return res.status(403).json({ error: 'Incorrect PIN.' });
     }
   }
   const token = issueGameToken({ gameId: g.id, studentId, name: displayName });
   res.cookie(GAME_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
+  res.cookie(STUDENT_COOKIE, issueStudentToken(studentId, displayName), { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
   res.json({ name: displayName });
 });
 
@@ -1174,8 +1282,8 @@ app.post('/api/game/:id/pin/reset-request', (req, res) => {
   if (!g || !g.rosterId) return res.status(404).json({ error: 'Game not found.' });
   const studentId = String(req.body && req.body.studentId || '').trim();
   if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
-  const ok = roster.requestPinReset(g.teacherId, g.rosterId, studentId);
-  if (!ok) return res.status(404).json({ error: 'Student ID not found.' });
+  const ok = studentAccount.requestPinReset(studentId);
+  if (!ok) return res.status(404).json({ error: 'No account found for this ID yet.' });
   res.json({ ok: true });
 });
 
@@ -1308,15 +1416,20 @@ app.get('/api/roster/:id', requireAuth, (req, res) => {
   if (!r) return res.status(404).json({ error: 'Roster not found.' });
   res.json({
     id: r.id, name: r.name, createdAt: r.createdAt,
-    students: r.students.map(s => ({ id: s.id, name: s.name, pinState: s.pinHash ? 'set' : 'unset', pinResetRequested: s.pinResetRequested || null })),
+    // PIN state now lives in a global per-Student-ID account (student-account.js),
+    // not per-roster — a student's PIN is the same across every class they're in.
+    students: r.students.map(s => ({ id: s.id, name: s.name, pinState: studentAccount.getAccountState(s.id), pinResetRequested: studentAccount.getResetRequest(s.id) })),
   });
 });
 
 // Teacher: approve a student's PIN reset request — clears the PIN so their
-// next join attempt falls back into the setup flow.
+// next join attempt falls back into the setup flow. Ownership check: the
+// student must actually be in one of THIS teacher's rosters (even though the
+// account itself is global, a teacher can only act on students they teach).
 app.patch('/api/roster/:rosterId/student/:studentId/pin-reset', requireAuth, (req, res) => {
-  const s = roster.approvePinReset(req.userId, req.params.rosterId, req.params.studentId);
+  const s = roster.findStudentInRoster(req.userId, req.params.rosterId, req.params.studentId);
   if (!s) return res.status(404).json({ error: 'Student not found in this roster.' });
+  studentAccount.approvePinReset(req.params.studentId);
   res.json({ ok: true });
 });
 
@@ -1421,6 +1534,10 @@ app.get('/join', (req, res) => res.sendFile(path.join(__dirname, 'public', 'join
 
 // Student "my work" page (Student ID lookup — no login).
 app.get('/my-work', (req, res) => res.sendFile(path.join(__dirname, 'public', 'my-work.html')));
+
+// The ONE link to hand students: Student ID -> PIN setup/verify -> browse
+// past work + join new games/assignments by Room Code, all on one page.
+app.get('/start', (req, res) => res.sendFile(path.join(__dirname, 'public', 'start.html')));
 
 // Student play page (the shareable link target).
 app.get('/play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'play.html')));
