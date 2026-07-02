@@ -45,10 +45,13 @@ const JWT_SECRET = (() => {
   try { return require('fs').readFileSync(require('path').join(require('./storage').DATA_DIR, '.session-secret'), 'utf8').trim(); } catch { return process.env.JWT_SECRET || 'dev-secret'; }
 })();
 
-// Issue a short-lived student game/assignment session (8 h). `kind` is
-// 'game' (default, unchanged) or 'assignment' — same cookie, same JWT infra.
+// Issue a student game/assignment session. `kind` is 'game' (default,
+// unchanged) or 'assignment' — same cookie, same JWT infra. 30 days (matches
+// the teacher's own session TTL) so a student is never timed out mid-task —
+// a session was previously 8h, which silently expired students who kept a
+// tab open across a school day or worked on a take-home assignment overnight.
 function issueGameToken(payload, kind = 'game') {
-  return jwt.sign({ type: kind, ...payload }, JWT_SECRET, { expiresIn: '8h' });
+  return jwt.sign({ type: kind, ...payload }, JWT_SECRET, { expiresIn: '30d' });
 }
 
 // Accepts either lc_game (student) or lc_token (teacher).
@@ -599,7 +602,7 @@ app.post('/api/assignment/:id/enter', async (req, res) => {
     displayName = s.name;
   }
   const token = issueGameToken({ assignmentId: a.id, studentId, name: displayName }, 'assignment');
-  res.cookie(GAME_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: 8 * 60 * 60 * 1000 });
+  res.cookie(GAME_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
   res.json({ name: displayName });
 });
 
@@ -1002,7 +1005,7 @@ app.post('/api/game/:id/enter', async (req, res) => {
     displayName = s.name;
   }
   const token = issueGameToken({ gameId: g.id, studentId, name: displayName });
-  res.cookie(GAME_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: 8 * 60 * 60 * 1000 });
+  res.cookie(GAME_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
   res.json({ name: displayName });
 });
 
