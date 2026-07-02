@@ -26,6 +26,7 @@ const apikeys = require('./apikeys');
 const oauth = require('./oauth');
 const audit = require('./audit');
 const webhooks = require('./webhooks');
+const { DATA_DIR, writeJsonAtomic } = require('./storage');
 
 // Add transitions/animations; never let it break the download.
 function safeAnimate(buffer, band) {
@@ -139,14 +140,43 @@ app.get('/api/presets', requireAuth, (req, res) => {
 });
 
 // In-memory deck state so the editable preview can mutate before download.
+// Snapshotted to DATA_DIR periodically so an in-progress deck survives a
+// server restart/redeploy, not just the TTL below — a teacher mid-edit
+// shouldn't have to regenerate (and re-spend AI calls) because we shipped
+// a deploy while they were working.
 const decks = new Map(); // id -> { subject, topic, grade, tone, focus, slides, images, createdAt }
-const DECK_TTL = 60 * 60 * 1000; // 1 hour
+const DECK_TTL = 6 * 60 * 60 * 1000; // 6 hours — covers a full teaching day of prep/interruptions
+const DECKS_PATH = path.join(DATA_DIR, 'decks.json');
+
+function loadDecks() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(DECKS_PATH, 'utf8'));
+    const now = Date.now();
+    let restored = 0;
+    for (const [id, d] of Object.entries(raw)) {
+      if (d && typeof d.createdAt === 'number' && now - d.createdAt <= DECK_TTL) { decks.set(id, d); restored++; }
+    }
+    if (restored) console.log(`Restored ${restored} in-progress deck(s) from disk.`);
+  } catch { /* no snapshot yet, or unreadable — start empty, same as before this change */ }
+}
+loadDecks();
+
+function persistDecks() {
+  try { writeJsonAtomic(DECKS_PATH, Object.fromEntries(decks)); }
+  catch (e) { console.error('Deck snapshot failed:', e.message); }
+}
 
 function purgeOldDecks() {
   const now = Date.now();
-  for (const [id, d] of decks) if (now - d.createdAt > DECK_TTL) decks.delete(id);
+  let purged = false;
+  for (const [id, d] of decks) if (now - d.createdAt > DECK_TTL) { decks.delete(id); purged = true; }
+  if (purged) persistDecks();
 }
 setInterval(purgeOldDecks, 12 * 60 * 1000).unref();
+// Snapshot regularly so a crash loses at most this window of edits, not
+// the whole in-progress deck (every mutation site would be more precise
+// but far more invasive — this covers the same ground with one call site).
+setInterval(persistDecks, 30 * 1000).unref();
 
 // Build a preview entry the frontend can render + edit.
 function previewEntry(slide, image) {
