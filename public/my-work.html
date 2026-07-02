@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>My Work — LessonScope</title>
+  <style>
+    :root { --primary:#1a56a0; --accent:#e8833a; --ink:#1c2331; --muted:#6b7280; --border:#dde3ec; --err:#c0392b; --ok:#1f9d55; --bg:#f4f6fb; --sh:0 2px 12px rgba(0,0,0,.10); }
+    *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:var(--bg); min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:40px 20px; color:var(--ink); }
+    .logo { display:flex; align-items:center; gap:10px; font-size:20px; font-weight:800; margin-bottom:28px; }
+    .logo svg { width:36px; height:36px; }
+    .cope { color:var(--accent); }
+    .card { background:#fff; border-radius:18px; box-shadow:var(--sh); padding:32px 28px; width:100%; max-width:420px; }
+    h1 { font-size:22px; font-weight:800; margin-bottom:6px; }
+    .sub { color:var(--muted); font-size:14px; margin-bottom:22px; }
+    label { font-size:13px; font-weight:600; display:block; margin-bottom:6px; color:var(--ink); }
+    input { width:100%; padding:13px 14px; font-size:16px; font-family:inherit; border:1.5px solid var(--border); border-radius:12px; background:#fdfdfe; color:var(--ink); transition:.15s; margin-bottom:16px; }
+    input:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 4px rgba(26,86,160,.12); }
+    .sid-input { font-family:ui-monospace,Menlo,Consolas,monospace; letter-spacing:1px; text-transform:uppercase; }
+    .btn { display:block; width:100%; padding:14px; font-size:15px; font-weight:700; border:none; border-radius:12px; cursor:pointer; background:var(--primary); color:#fff; transition:.15s; }
+    .btn:disabled { opacity:.6; cursor:not-allowed; }
+    .err { color:var(--err); font-size:13px; margin-top:10px; min-height:18px; }
+
+    .wrap { width:100%; max-width:640px; }
+    #results { display:none; width:100%; }
+    .greet { font-size:15px; color:var(--muted); margin:20px 0 14px; text-align:center; }
+    .work-card { background:#fff; border-radius:14px; box-shadow:var(--sh); padding:18px 20px; margin-bottom:12px; }
+    .wc-top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+    .wc-title { font-size:15px; font-weight:700; }
+    .wc-meta { font-size:12.5px; color:var(--muted); margin-top:4px; }
+    .wc-chip { display:inline-block; background:#eef2f8; color:var(--primary); font-size:11.5px; font-weight:600; border-radius:6px; padding:2px 8px; margin-right:6px; }
+    .wc-score { font-size:18px; font-weight:800; color:var(--primary); white-space:nowrap; }
+    .wc-pending { font-size:12.5px; color:#b26a00; font-weight:600; white-space:nowrap; }
+    .wc-link { display:inline-block; margin-top:10px; font-size:13px; font-weight:600; color:var(--primary); text-decoration:none; }
+    .empty { text-align:center; color:var(--muted); font-size:14px; padding:30px 0; }
+    .back-link { display:block; text-align:center; margin-top:18px; font-size:13px; color:var(--muted); text-decoration:none; }
+  </style>
+</head>
+<body>
+  <div class="logo">
+    <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="40" height="40" rx="10" fill="#1a56a0"/>
+      <rect x="10" y="10" width="8" height="8" rx="2" fill="white"/>
+      <rect x="22" y="10" width="8" height="8" rx="2" fill="white" opacity=".7"/>
+      <rect x="10" y="22" width="8" height="8" rx="2" fill="white" opacity=".7"/>
+      <rect x="22" y="22" width="8" height="8" rx="2" fill="#e8833a"/>
+    </svg>
+    <span>Lesson<span class="cope">Scope</span></span>
+  </div>
+
+  <div class="wrap">
+    <div id="form" class="card" style="margin:0 auto">
+      <h1>My work</h1>
+      <p class="sub">Enter your Student ID to see everything you've submitted.</p>
+      <form id="lookupForm">
+        <label for="studentId">Student ID</label>
+        <input id="studentId" class="sid-input" type="text" maxlength="40" placeholder="e.g. STU-99432" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" required />
+        <button class="btn" type="submit" id="lookupBtn">Show my work →</button>
+        <div class="err" id="lookupErr"></div>
+      </form>
+    </div>
+
+    <div id="results">
+      <p class="greet" id="greet"></p>
+      <div id="workList"></div>
+      <a href="/my-work" class="back-link" id="searchAgain">← Look up a different Student ID</a>
+    </div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const typeLabel = { worksheet: 'Worksheet', 'exit-ticket': 'Exit ticket', quiz: 'Quiz', game: 'Game' };
+    const fmtDate = iso => { if (!iso) return ''; const d = new Date(iso); return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); };
+
+    function renderWork(list) {
+      if (!list.length) { $('workList').innerHTML = '<div class="empty">No submitted work found yet.</div>'; return; }
+      $('workList').innerHTML = list.map(w => {
+        const kindLabel = w.kind === 'game' ? 'Game' : (typeLabel[w.type] || w.type);
+        let scoreHTML;
+        if (w.kind === 'game') {
+          scoreHTML = `<div class="wc-score">${w.score}/${w.total}</div>`;
+        } else if (w.released) {
+          scoreHTML = `<div class="wc-score">${w.totalMarks}/${w.maxMarks}</div>`;
+        } else {
+          scoreHTML = `<div class="wc-pending">Pending review</div>`;
+        }
+        return `<div class="work-card">
+          <div class="wc-top">
+            <div>
+              <div class="wc-title">${esc(w.title)}</div>
+              <div class="wc-meta">
+                <span class="wc-chip">${esc(kindLabel)}</span>
+                ${w.subject ? `<span class="wc-chip">${esc(w.subject)}</span>` : ''}
+                ${w.teacherName ? esc(w.teacherName) + ' · ' : ''}${fmtDate(w.at)}
+              </div>
+            </div>
+            ${scoreHTML}
+          </div>
+          <a class="wc-link" href="${esc(w.path)}">Open →</a>
+        </div>`;
+      }).join('');
+    }
+
+    $('lookupForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = $('lookupBtn'); btn.disabled = true; $('lookupErr').textContent = '';
+      const studentId = $('studentId').value.trim().toUpperCase();
+      try {
+        const r = await fetch('/api/my-work?studentId=' + encodeURIComponent(studentId));
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        $('form').style.display = 'none';
+        $('greet').textContent = `Hi ${d.name} — here's everything you've submitted:`;
+        renderWork(d.work);
+        $('results').style.display = 'block';
+      } catch (err) {
+        $('lookupErr').textContent = err.message;
+      }
+      btn.disabled = false;
+    });
+
+    $('studentId').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase(); });
+  </script>
+</body>
+</html>

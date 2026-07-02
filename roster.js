@@ -87,6 +87,28 @@ function findStudent(teacherId, studentId) {
   return null;
 }
 
+// Find a Student ID across EVERY teacher's rosters (a Student ID is only
+// unique within one teacher's classes, not school-wide) — powers the
+// no-login "my work" lookup: a student types their ID once and sees every
+// class/roster it appears in, across however many teachers use this ID.
+function findStudentAcrossAllTeachers(studentId) {
+  const usersDir = path.join(DATA_DIR, 'users');
+  if (!fs.existsSync(usersDir)) return [];
+  const matches = [];
+  for (const teacherId of fs.readdirSync(usersDir)) {
+    const dir = rosterDir(teacherId);
+    if (!fs.existsSync(dir)) continue;
+    for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.json'))) {
+      try {
+        const r = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+        const s = r.students.find(s => s.id === studentId);
+        if (s) matches.push({ teacherId, rosterId: r.id, rosterName: r.name, name: s.name });
+      } catch {}
+    }
+  }
+  return matches;
+}
+
 // Find student within a specific roster. Returns { id, name } or null.
 function findStudentInRoster(teacherId, rosterId, studentId) {
   const r = getRoster(teacherId, rosterId);
@@ -165,6 +187,6 @@ function buildStudentsFromMapping(rows, idCol, nameCol) {
 
 module.exports = {
   saveRoster, getRoster, listRosters, deleteRoster,
-  findStudent, findStudentInRoster, parseCSV,
+  findStudent, findStudentInRoster, findStudentAcrossAllTeachers, parseCSV,
   parseRosterFile, buildStudentsFromMapping,
 };

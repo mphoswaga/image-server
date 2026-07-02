@@ -589,6 +589,40 @@ app.get('/api/join', (req, res) => {
   res.status(404).json({ error: 'Room not found. Check the code and try again.' });
 });
 
+// Public, no-login "my work": a student types their Student ID once and sees
+// every game/assignment they've submitted, across every roster that ID
+// appears in — same accepted trust model as joining a single game/assignment
+// (Student ID is the credential throughout this app), just aggregated.
+// Only rostered games/assignments are included — a free-form typed name on a
+// no-roster activity can't be reliably tied back to this ID.
+app.get('/api/my-work', (req, res) => {
+  const studentId = String(req.query.studentId || '').trim();
+  if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
+  const matches = roster.findStudentAcrossAllTeachers(studentId);
+  if (!matches.length) return res.status(404).json({ error: 'Student ID not found. Check with your teacher.' });
+
+  const work = [];
+  for (const m of matches) {
+    const teacher = getUserById(m.teacherId) || {};
+    for (const g of games.listTeacherGames(m.teacherId)) {
+      if (g.rosterId !== m.rosterId) continue;
+      const mine = games.getResults(g.id).find(r => r.studentId === studentId);
+      if (mine) work.push({ kind: 'game', id: g.id, title: g.lessonTitle, subject: g.subject, topic: g.topic, teacherName: teacher.name || '', score: mine.score, total: mine.total, at: mine.at, path: '/play/' + g.id });
+    }
+    for (const a of assignments.listTeacherAssignments(m.teacherId)) {
+      if (a.rosterId !== m.rosterId) continue;
+      const sub = assignments.getSubmission(a.id, studentId);
+      if (sub) {
+        const rec = assignments.getAssignment(a.id);
+        const released = assignments.isReleased(rec);
+        work.push({ kind: 'assignment', id: a.id, title: a.title, subject: a.subject, topic: a.topic, type: a.type, teacherName: teacher.name || '', released, totalMarks: released ? sub.totalMarks : null, maxMarks: sub.maxMarks, at: sub.submittedAt, path: '/assignment/' + a.id });
+      }
+    }
+  }
+  work.sort((x, y) => String(y.at || '').localeCompare(String(x.at || '')));
+  res.json({ name: matches[0].name, work });
+});
+
 // Student: enter an assignment with their Student ID — issues a short-lived session.
 app.post('/api/assignment/:id/enter', async (req, res) => {
   const a = assignments.getAssignment(req.params.id);
@@ -1266,6 +1300,9 @@ app.get('/api/game/:id/qr-sheet', requireAuth, async (req, res) => {
 
 // Student join page (Room Code entry).
 app.get('/join', (req, res) => res.sendFile(path.join(__dirname, 'public', 'join.html')));
+
+// Student "my work" page (Student ID lookup — no login).
+app.get('/my-work', (req, res) => res.sendFile(path.join(__dirname, 'public', 'my-work.html')));
 
 // Student play page (the shareable link target).
 app.get('/play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'play.html')));
