@@ -37,6 +37,10 @@
     .verdict.partial { background:#fdf3e2; color:#b26a00; }
     .verdict.incorrect { background:#fdeeee; color:var(--err); }
     .rationale { color:var(--muted); font-size:13px; margin-top:4px; }
+    .my-answer { background:#f4f6fb; border-radius:8px; padding:8px 10px; margin-top:8px; font-size:13.5px; }
+    .my-answer b { display:block; font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); font-weight:700; margin-bottom:2px; }
+    .feedback { display:flex; gap:6px; margin-top:8px; font-size:13px; color:var(--muted); font-style:italic; }
+    .feedback .fb-icon { flex-shrink:0; }
   </style>
 </head>
 <body>
@@ -137,8 +141,8 @@
         return `<div class="result-grade">
           <div style="flex:1">
             <div class="qtext" style="margin-bottom:2px">${i + 1}. ${esc(stripMarks(q.question))}</div>
-            <div class="rationale">Your answer: ${esc(String(answerText))}</div>
-            ${g && g.rationale ? `<div class="rationale">${esc(g.rationale)}</div>` : ''}
+            <div class="my-answer"><b>Your answer</b>${esc(String(answerText))}</div>
+            ${g && g.rationale ? `<div class="feedback"><span class="fb-icon">💬</span><span>${esc(g.rationale)}</span></div>` : ''}
           </div>
           ${g ? `<div style="text-align:right;flex-shrink:0"><span class="verdict ${esc(g.verdict || '')}">${g.marksAwarded}/${q.marks}</span></div>` : ''}
         </div>`;

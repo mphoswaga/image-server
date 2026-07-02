@@ -1976,8 +1976,8 @@
         : '<span style="font-size:11.5px;color:var(--muted)">AI — unconfirmed</span>');
       return `<div class="grade-row" style="padding:10px 0;border-top:1px solid var(--border)">
         <div style="font-size:13px;font-weight:600">${esc(headingText)}</div>
-        <div style="font-size:13px;color:var(--muted);margin:4px 0">Answer: ${esc(String(ansText))}</div>
-        ${g.rationale&&q.kind!=='mcq'?`<div style="font-size:12.5px;color:var(--muted);font-style:italic;margin-bottom:6px">${esc(g.rationale)}</div>`:''}
+        <div style="font-size:13.5px;background:#f4f6fb;border-radius:8px;padding:8px 10px;margin:4px 0"><b style="display:block;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;margin-bottom:2px">Answer</b>${esc(String(ansText))}</div>
+        ${g.rationale&&q.kind!=='mcq'?`<div style="display:flex;gap:6px;font-size:12.5px;color:var(--muted);font-style:italic;margin-bottom:6px"><span style="flex-shrink:0">💬</span><span>${esc(g.rationale)}</span></div>`:''}
         <div style="display:flex;align-items:center;gap:8px">
           <input class="grade-marks-input" type="number" min="0" max="${q.marks}" value="${g.marksAwarded||0}" style="width:56px;font-size:13px;padding:4px 6px" />
           <span style="font-size:12.5px;color:var(--muted)">/ ${q.marks} marks</span>
