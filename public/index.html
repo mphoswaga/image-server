@@ -1953,47 +1953,84 @@
           const d=await r.json(); if(!r.ok) throw new Error(d.error);
           toast(released?'Results released to students':'Results hidden again','ok');
           loadAssignmentResults(assignId, wrapId||'assignSubmissions');
-        }catch(err){ toast(err.message); releaseBtn.disabled=false; } }
+        }catch(err){ toast(err.message); releaseBtn.disabled=false; } return; }
+
+      const tabBtn=e.target.closest('.view-tab-btn');
+      if(tabBtn){ const {assignId,wrapId,view}=tabBtn.dataset;
+        renderAssignmentResults(assignId, wrapId, view); } // cached — no refetch needed
     }
 
-    async function loadAssignmentResults(assignId, wrapId='assignSubmissions'){
+    const assignResultsCache=new Map(); // assignId -> last-fetched {questions, submissions, ...}
+
+    // One grade row's markup — shared by both view modes below (by-student
+    // shows all of one student's questions; by-question shows all students'
+    // answers to one question). Same fields, different grouping.
+    function gradeRowHTML(q, s, assignId, wrapId, headingText){
+      const g=s.grades[q.id]||{}; const ans=s.answers[q.id];
+      const ansText=q.kind==='mcq' ? (q.options&&q.options[ans]!=null?q.options[ans]:'(no answer)') : (ans||'(no answer)');
+      const confirmed=g.source==='teacher'||g.source==='ai-confirmed';
+      // MCQ is deterministically auto-graded — no AI verdict to confirm,
+      // so it gets no badge instead of a misleading "AI — unconfirmed".
+      const badge = q.kind==='mcq' ? '' : (confirmed
+        ? '<span style="font-size:11.5px;color:var(--ok,#1f9d55);font-weight:600">confirmed</span>'
+        : '<span style="font-size:11.5px;color:var(--muted)">AI — unconfirmed</span>');
+      return `<div class="grade-row" style="padding:10px 0;border-top:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:600">${esc(headingText)}</div>
+        <div style="font-size:13px;color:var(--muted);margin:4px 0">Answer: ${esc(String(ansText))}</div>
+        ${g.rationale&&q.kind!=='mcq'?`<div style="font-size:12.5px;color:var(--muted);font-style:italic;margin-bottom:6px">${esc(g.rationale)}</div>`:''}
+        <div style="display:flex;align-items:center;gap:8px">
+          <input class="grade-marks-input" type="number" min="0" max="${q.marks}" value="${g.marksAwarded||0}" style="width:56px;font-size:13px;padding:4px 6px" />
+          <span style="font-size:12.5px;color:var(--muted)">/ ${q.marks} marks</span>
+          <button type="button" class="grade-override-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-student-id="${esc(s.studentId)}" data-question-id="${esc(q.id)}" style="font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer">Save</button>
+          ${badge}
+        </div>
+      </div>`;
+    }
+    const stripMarksText=t=>String(t||'').replace(/\s*\(\d+\s*marks?\)\s*$/i,'');
+
+    function renderByStudent(d, assignId, wrapId){
+      return d.submissions.map(s=>{
+        const rows=d.questions.map(q=>gradeRowHTML(q, s, assignId, wrapId, stripMarksText(q.question))).join('');
+        return `<div style="margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:10px">
+          <div style="display:flex;justify-content:space-between;font-weight:700;font-size:14px"><span>${esc(s.name)}</span><span>${s.totalMarks}/${s.maxMarks}</span></div>
+          ${rows}
+        </div>`;
+      }).join('');
+    }
+
+    function renderByQuestion(d, assignId, wrapId){
+      return d.questions.map((q,qi)=>{
+        const rows=d.submissions.map(s=>gradeRowHTML(q, s, assignId, wrapId, s.name)).join('');
+        return `<div style="margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:10px">
+          <div style="font-weight:700;font-size:14px;margin-bottom:2px">${qi+1}. ${esc(stripMarksText(q.question))}</div>
+          ${rows}
+        </div>`;
+      }).join('');
+    }
+
+    function renderAssignmentResults(assignId, wrapId, view){
       const wrap=$(wrapId); if(!wrap) return;
+      const d=assignResultsCache.get(assignId); if(!d) return;
+      wrap.dataset.view=view;
+      const releaseBar=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:${d.effectivelyReleased?'#eafaf0':'#fdf6ea'}">
+        <span style="font-size:13px;font-weight:600;color:${d.effectivelyReleased?'var(--ok,#1f9d55)':'#b26a00'}">${d.effectivelyReleased?(d.resultsReleased?'Results released to students':'Results released — due date passed'):'Results hidden from students'}</span>
+        ${!d.resultsReleased?`<button type="button" class="release-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" style="font-size:12.5px;font-weight:600;padding:6px 12px;border:1px solid var(--primary);border-radius:8px;background:#fff;color:var(--primary);cursor:pointer">Release results</button>`
+          :`<button type="button" class="unrelease-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" style="font-size:12.5px;font-weight:600;padding:6px 12px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--muted);cursor:pointer">Hide again</button>`}
+      </div>`;
+      const tabBtn=(v,label)=>`<button type="button" class="view-tab-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-view="${v}" style="font-size:12.5px;font-weight:600;padding:6px 14px;border:1px solid ${view===v?'var(--primary)':'var(--border)'};border-radius:8px;background:${view===v?'var(--primary)':'#fff'};color:${view===v?'#fff':'var(--ink)'};cursor:pointer">${label}</button>`;
+      const tabs=`<div style="display:flex;gap:8px;margin-bottom:10px">${tabBtn('student','By student')}${tabBtn('question','By question')}</div>`;
+      if(!d.submissions||!d.submissions.length){ wrap.innerHTML=releaseBar+tabs+'<p class="hint" style="margin-top:8px">No students have submitted yet.</p>'; return; }
+      wrap.innerHTML=releaseBar+tabs+(view==='question'?renderByQuestion(d,assignId,wrapId):renderByStudent(d,assignId,wrapId));
+    }
+
+    async function loadAssignmentResults(assignId, wrapId='assignSubmissions', view){
+      const wrap=$(wrapId); if(!wrap) return;
+      const keepView=view||wrap.dataset.view||'student';
       wrap.innerHTML='<span class="status">Loading…</span>';
       try{
         const d=await (await fetch('/api/assignment/'+assignId+'/results')).json();
-        const releaseBar=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:${d.effectivelyReleased?'#eafaf0':'#fdf6ea'}">
-          <span style="font-size:13px;font-weight:600;color:${d.effectivelyReleased?'var(--ok,#1f9d55)':'#b26a00'}">${d.effectivelyReleased?(d.resultsReleased?'Results released to students':'Results released — due date passed'):'Results hidden from students'}</span>
-          ${!d.resultsReleased?`<button type="button" class="release-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" style="font-size:12.5px;font-weight:600;padding:6px 12px;border:1px solid var(--primary);border-radius:8px;background:#fff;color:var(--primary);cursor:pointer">Release results</button>`
-            :`<button type="button" class="unrelease-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" style="font-size:12.5px;font-weight:600;padding:6px 12px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--muted);cursor:pointer">Hide again</button>`}
-        </div>`;
-        if(!d.submissions||!d.submissions.length){ wrap.innerHTML=releaseBar+'<p class="hint" style="margin-top:8px">No students have submitted yet.</p>'; return; }
-        wrap.innerHTML=releaseBar+d.submissions.map(s=>{
-          const rows=d.questions.map(q=>{
-            const g=s.grades[q.id]||{}; const ans=s.answers[q.id];
-            const ansText=q.kind==='mcq' ? (q.options&&q.options[ans]!=null?q.options[ans]:'(no answer)') : (ans||'(no answer)');
-            const confirmed=g.source==='teacher'||g.source==='ai-confirmed';
-            // MCQ is deterministically auto-graded — no AI verdict to confirm,
-            // so it gets no badge instead of a misleading "AI — unconfirmed".
-            const badge = q.kind==='mcq' ? '' : (confirmed
-              ? '<span style="font-size:11.5px;color:var(--ok,#1f9d55);font-weight:600">confirmed</span>'
-              : '<span style="font-size:11.5px;color:var(--muted)">AI — unconfirmed</span>');
-            return `<div class="grade-row" style="padding:10px 0;border-top:1px solid var(--border)">
-              <div style="font-size:13px;font-weight:600">${esc(String(q.question||'').replace(/\s*\(\d+\s*marks?\)\s*$/i,''))}</div>
-              <div style="font-size:13px;color:var(--muted);margin:4px 0">Answer: ${esc(String(ansText))}</div>
-              ${g.rationale&&q.kind!=='mcq'?`<div style="font-size:12.5px;color:var(--muted);font-style:italic;margin-bottom:6px">${esc(g.rationale)}</div>`:''}
-              <div style="display:flex;align-items:center;gap:8px">
-                <input class="grade-marks-input" type="number" min="0" max="${q.marks}" value="${g.marksAwarded||0}" style="width:56px;font-size:13px;padding:4px 6px" />
-                <span style="font-size:12.5px;color:var(--muted)">/ ${q.marks} marks</span>
-                <button type="button" class="grade-override-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-student-id="${esc(s.studentId)}" data-question-id="${esc(q.id)}" style="font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer">Save</button>
-                ${badge}
-              </div>
-            </div>`;
-          }).join('');
-          return `<div style="margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:10px">
-            <div style="display:flex;justify-content:space-between;font-weight:700;font-size:14px"><span>${esc(s.name)}</span><span>${s.totalMarks}/${s.maxMarks}</span></div>
-            ${rows}
-          </div>`;
-        }).join('');
+        assignResultsCache.set(assignId, d);
+        renderAssignmentResults(assignId, wrapId, keepView);
       }catch{ wrap.innerHTML='<p class="hint">Could not load submissions.</p>'; }
     }
 
