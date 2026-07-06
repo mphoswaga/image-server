@@ -145,7 +145,7 @@
       <div class="game-cards">
         <button class="game-pick" data-game="car"><span class="gi">🚗</span><span><b>Car Dodge</b><span>Steer and dodge traffic — crash to answer a question.</span></span></button>
         <button class="game-pick" data-game="space"><span class="gi">🚀</span><span><b>Space Blaster</b><span>Move and FIRE at the asteroid with the correct answer.</span></span></button>
-        <button class="game-pick" data-game="runner"><span class="gi">🏃</span><span><b>Answer Runner</b><span>Dodge obstacles Temple Run-style, then steer into the correct gate.</span></span></button>
+        <button class="game-pick" data-game="runner"><span class="gi">🏃</span><span><b>Answer Runner</b><span>Jump rocks and duck branches — crash into one to answer a question.</span></span></button>
       </div>
     </div>
 
@@ -169,7 +169,7 @@
         <button id="jumpBtn" class="ctrl" aria-label="Jump">⬆</button>
         <button id="duckBtn" class="ctrl" aria-label="Duck">⬇</button>
       </div>
-      <div class="controls">
+      <div class="controls" id="lrControls">
         <button id="leftBtn" class="ctrl" aria-label="Left">◀</button>
         <button id="fireBtn" class="ctrl fire" style="display:none">FIRE</button>
         <button id="rightBtn" class="ctrl" aria-label="Right">▶</button>
@@ -324,9 +324,10 @@
       questions=d.questions||[]; answers=new Array(questions.length); qi=0; score=0; lives=3; arcadeScore=0; activeGameType=key;
       $('fireBtn').style.display = key==='space'?'flex':'none';
       $('vertControls').style.display = key==='runner'?'flex':'none';
+      $('lrControls').style.display = key==='runner'?'none':'flex';
       $('qBanner').style.display = (key==='car'||key==='runner')?'none':'block';
       $('qFb').className='qfb';
-      $('dragTip').textContent = key==='space'?'Move ◀ ▶ (or drag), then FIRE at the right answer — they speed up!' : key==='runner'?'◀ ▶ to switch lanes, ⬆ to jump rocks, ⬇ to duck branches — hit one and answer to keep going!' : 'Dodge the cars — crash to answer. They speed up!';
+      $('dragTip').textContent = key==='space'?'Move ◀ ▶ (or drag), then FIRE at the right answer — they speed up!' : key==='runner'?'⬆ to jump rocks, ⬇ to duck branches — hit one and answer to keep going!' : 'Dodge the cars — crash to answer. They speed up!';
       active = key==='car' ? CarGame() : key==='runner' ? RunnerGame() : SpaceGame();
       show('gameScreen'); $('qOverlay').classList.remove('show'); active.init(); updateHud();
       lastT=performance.now(); cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
@@ -419,20 +420,15 @@
       return { init, update, render };
     }
 
-    /* ===== ANSWER RUNNER — Temple Run-style endless runner:
-       perspective road, 3 lanes. Dodge obstacles left/right by changing lane,
-       or up/down by jumping over low rocks / ducking under overhead branches.
-       Hitting one triggers the question (reuses the crash overlay), same as
-       Car Dodge — but avoidance now needs both axes, not just steering. */
+    /* ===== ANSWER RUNNER — classic side-on endless runner (the sprite is
+       drawn in profile, so the player stays fixed and the world scrolls past
+       left instead of a forward 3D view). Jump rocks, duck branches; hitting
+       one triggers the question (reuses the crash overlay), same as Car Dodge. */
     function RunnerGame(){
-      const LANES=3, HORIZON=H*0.34, PLANE_Y=H-86, LANE_W=78, cx0=W/2;
-      const laneBaseX=l=>cx0+(l-(LANES-1)/2)*LANE_W;
-      const projX=(l,t)=>cx0+(laneBaseX(l)-cx0)*t;
-      const projY=t=>HORIZON+t*t*(PLANE_Y-HORIZON+50);
-      const projScale=t=>0.16+0.84*t;
+      const GROUND_Y=H-84, PLAYER_X=84;
       let s;
-      function init(){ s={lane:1,objs:[],spawnT:0.9,elapsed:0,step:0,state:'run',vert:'run',vertT:0,invuln:1,prevMove:0}; }
-      function spawnObstacle(){ s.objs.push({kind: Math.random()<0.5?'rock':'branch', lane:rnd(LANES), t:0}); }
+      function init(){ s={objs:[],spawnT:0.9,elapsed:0,step:0,state:'run',vert:'run',vertT:0,invuln:1}; }
+      function spawnObstacle(){ s.objs.push({kind: Math.random()<0.5?'rock':'branch', x:W+40}); }
       function doJump(){ if(s.state==='run' && s.vert==='run'){ s.vert='jump'; s.vertT=0.55; } }
       function doDuck(){ if(s.state==='run' && s.vert==='run'){ s.vert='duck'; s.vertT=0.5; } }
       function crash(){ s.state='wait'; lives--; updateHud(); openCrash(); }
@@ -442,46 +438,43 @@
         if(duckQueued){ duckQueued=false; doDuck(); }
         if(s.vertT>0){ s.vertT-=dt; if(s.vertT<=0) s.vert='run'; }
         if(s.invuln>0) s.invuln-=dt;
-        if(moveDir>0.5 && s.prevMove<=0.5){ s.lane=clamp(s.lane+1,0,LANES-1); }
-        else if(moveDir<-0.5 && s.prevMove>=-0.5){ s.lane=clamp(s.lane-1,0,LANES-1); }
-        s.prevMove=moveDir;
-        const speed=0.36+s.elapsed*0.009;
-        for(let i=s.objs.length-1;i>=0;i--){ const o=s.objs[i]; o.t+=speed*dt;
-          if(o.t>=1){
-            const sameLane=o.lane===s.lane;
+        const speed=150+s.elapsed*14;
+        for(let i=s.objs.length-1;i>=0;i--){ const o=s.objs[i]; o.x-=speed*dt;
+          if(o.x<=PLAYER_X){
             const dodgedVertically = o.kind==='rock' ? s.vert==='jump' : s.vert==='duck';
             s.objs.splice(i,1);
-            if(sameLane && !dodgedVertically && s.invuln<=0){ crash(); return; }
+            if(!dodgedVertically && s.invuln<=0){ crash(); return; }
             arcadeScore++; updateHud();
           }
         }
         s.spawnT-=dt; if(s.spawnT<=0){ s.spawnT=1.05+Math.random()*0.55; spawnObstacle(); }
       }
-      function drawRoad(){
-        const g=cx.createLinearGradient(0,0,0,HORIZON); g.addColorStop(0,'#bfe3ff'); g.addColorStop(1,'#8fc9f2');
-        cx.fillStyle=g; cx.fillRect(0,0,W,HORIZON);
-        cx.fillStyle='#6a9955'; cx.fillRect(0,HORIZON,W,H-HORIZON);
-        cx.beginPath(); cx.moveTo(laneBaseX(0)-LANE_W*0.6, PLANE_Y+40); cx.lineTo(laneBaseX(LANES-1)+LANE_W*0.6, PLANE_Y+40);
-        cx.lineTo(cx0+5, HORIZON); cx.lineTo(cx0-5, HORIZON); cx.closePath();
-        const rg=cx.createLinearGradient(0,HORIZON,0,PLANE_Y+40); rg.addColorStop(0,'#8a7a63'); rg.addColorStop(1,'#5b5040');
-        cx.fillStyle=rg; cx.fill();
-        cx.strokeStyle='rgba(255,255,255,.5)'; cx.lineWidth=2;
-        for(let l=1;l<LANES;l++){ cx.beginPath(); cx.moveTo(cx0,HORIZON+2); cx.lineTo(laneBaseX(l-0.5), PLANE_Y+38); cx.stroke(); }
+      function drawBackground(){
+        const g=cx.createLinearGradient(0,0,0,GROUND_Y); g.addColorStop(0,'#bfe3ff'); g.addColorStop(1,'#e7f4ea');
+        cx.fillStyle=g; cx.fillRect(0,0,W,GROUND_Y+30);
+        cx.fillStyle='#8fc98f';
+        const hillOff=(s.elapsed*20)%160;
+        for(let i=-1;i<4;i++){ const hx=i*160-hillOff; cx.beginPath(); cx.arc(hx+80,GROUND_Y+10,90,Math.PI,0); cx.fill(); }
+        cx.fillStyle='#6a9955'; cx.fillRect(0,GROUND_Y,W,H-GROUND_Y);
+        cx.strokeStyle='rgba(255,255,255,.5)'; cx.lineWidth=3;
+        const dashOff=(s.elapsed*(150+s.elapsed*14))%36;
+        cx.beginPath();
+        for(let x=-36+dashOff;x<W;x+=36) cx.moveTo(W-x,GROUND_Y+10), cx.lineTo(W-x-20,GROUND_Y+10);
+        cx.stroke();
       }
-      function drawObstacle(o){ const t=o.t, x=projX(o.lane,t), y=projY(t), sc=projScale(t);
-        cx.globalAlpha=Math.min(1,0.3+t);
-        if(o.kind==='rock'){ const r=26*sc;
-          cx.fillStyle='#7d7568'; cx.beginPath(); cx.ellipse(x,y,r*1.15,r*0.85,0,0,7); cx.fill();
-          cx.fillStyle='#948c7d'; cx.beginPath(); cx.ellipse(x-r*0.25,y-r*0.25,r*0.55,r*0.4,0,0,7); cx.fill();
-        } else { const w=LANE_W*0.92*sc, h=14*sc, hangY=y-70*sc;
-          cx.strokeStyle='#5c4632'; cx.lineWidth=Math.max(2,4*sc); cx.beginPath(); cx.moveTo(x,hangY); cx.lineTo(x,y-16*sc); cx.stroke();
-          cx.fillStyle='#8a5a34'; cx.fillRect(x-w/2,hangY-h/2,w,h);
-          cx.fillStyle='rgba(0,0,0,.18)'; cx.fillRect(x-w/2,hangY+h/2-3*sc,w,3*sc);
+      function drawObstacle(o){
+        if(o.kind==='rock'){ const r=24;
+          cx.fillStyle='#7d7568'; cx.beginPath(); cx.ellipse(o.x,GROUND_Y-2,r*1.15,r*0.85,0,0,7); cx.fill();
+          cx.fillStyle='#948c7d'; cx.beginPath(); cx.ellipse(o.x-r*0.25,GROUND_Y-r*0.6,r*0.55,r*0.4,0,0,7); cx.fill();
+        } else { const w=64, h=14, hangY=GROUND_Y-70;
+          cx.strokeStyle='#5c4632'; cx.lineWidth=4; cx.beginPath(); cx.moveTo(o.x,hangY-30); cx.lineTo(o.x,hangY); cx.stroke();
+          cx.fillStyle='#8a5a34'; cx.fillRect(o.x-w/2,hangY-h/2,w,h);
+          cx.fillStyle='rgba(0,0,0,.18)'; cx.fillRect(o.x-w/2,hangY+h/2-3,w,3);
         }
-        cx.globalAlpha=1; }
+      }
       function drawPlayer(){
-        const x=cx0, groundY=PLANE_Y;
-        const jumpH = s.vert==='jump' ? Math.sin(Math.min(1,(0.55-s.vertT)/0.55)*Math.PI)*46 : 0;
+        const x=PLAYER_X, groundY=GROUND_Y;
+        const jumpH = s.vert==='jump' ? Math.sin(Math.min(1,(0.55-s.vertT)/0.55)*Math.PI)*50 : 0;
         const y = groundY - jumpH;
         cx.fillStyle='rgba(0,0,0,.18)'; cx.beginPath(); cx.ellipse(x,groundY+6,20,6*Math.max(0.3,1-jumpH/60),0,0,7); cx.fill();
         let f;
@@ -489,15 +482,15 @@
         else if(s.vert==='jump'){ const p=Math.min(1,(0.55-s.vertT)/0.55); f=JUMP_FRAMES[Math.min(JUMP_FRAMES.length-1,Math.floor(p*JUMP_FRAMES.length))]; }
         else if(s.vert==='duck'){ f=DUCK_FRAMES[Math.floor(s.step*8)%DUCK_FRAMES.length]; }
         else { f=RUN_FRAMES[Math.floor(s.step*12)%RUN_FRAMES.length]; }
-        if(f){ const m=7, sw=f.w-m*2, sh=f.h-m*2, dw=76, dh=76*(sh/sw);
+        if(f){ const m=7, sw=f.w-m*2, sh=f.h-m*2, dw=80, dh=80*(sh/sw);
           cx.drawImage(RUNNER_SPRITE.img, f.x+m, f.y+m, sw, sh, x-dw/2, y-dh, dw, dh);
-          if(s.invuln>0 && Math.floor(s.elapsed*14)%2){ cx.globalAlpha=0.3; cx.fillStyle='#fff'; cx.beginPath(); cx.arc(x,y-dh/2,32,0,7); cx.fill(); cx.globalAlpha=1; }
+          if(s.invuln>0 && Math.floor(s.elapsed*14)%2){ cx.globalAlpha=0.3; cx.fillStyle='#fff'; cx.beginPath(); cx.arc(x,y-dh/2,34,0,7); cx.fill(); cx.globalAlpha=1; }
         }
       }
-      function render(){ drawRoad();
-        [...s.objs].sort((a,b)=>a.t-b.t).forEach(drawObstacle);
+      function render(){ drawBackground();
+        s.objs.forEach(drawObstacle);
         drawPlayer(); }
-      return { init, update, render, resume(){ s.objs=s.objs.filter(o=>o.t<0.5); s.invuln=1.4; s.state='run'; lastT=performance.now(); } };
+      return { init, update, render, resume(){ s.objs=s.objs.filter(o=>o.x>PLAYER_X-40); s.invuln=1.4; s.state='run'; lastT=performance.now(); } };
     }
 
     /* ===== controls (one shared moveDir for keys + buttons) ===== */
