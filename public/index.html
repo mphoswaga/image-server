@@ -701,6 +701,7 @@
         <symbol id="i-book-open" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></symbol>
         <symbol id="i-close" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
         <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+        <symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.6 12.4 20 3M17 6l3 3M14 9l2 2"/></symbol>
         <symbol id="i-award" viewBox="0 0 24 24"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></symbol>
         <symbol id="i-apps" viewBox="0 0 24 24"><rect x="3" y="3" width="4" height="4" rx=".5" fill="currentColor" stroke="none"/><rect x="10" y="3" width="4" height="4" rx=".5" fill="currentColor" stroke="none"/><rect x="17" y="3" width="4" height="4" rx=".5" fill="currentColor" stroke="none"/><rect x="3" y="10" width="4" height="4" rx=".5" fill="currentColor" stroke="none"/><rect x="10" y="10" width="4" height="4" rx=".5" fill="currentColor" stroke="none"/><rect x="17" y="10" width="4" height="4" rx=".5" fill="currentColor" stroke="none"/><rect x="3" y="17" width="4" height="4" rx=".5" fill="currentColor" stroke="none"/><rect x="10" y="17" width="4" height="4" rx=".5" fill="currentColor" stroke="none"/><rect x="17" y="17" width="4" height="4" rx=".5" fill="currentColor" stroke="none"/></symbol>
       </g>
@@ -747,6 +748,9 @@
         <button id="authBtn" class="btn primary full" type="submit">Log in</button>
         <div id="authErr" class="err"></div>
         <button id="forgotPwBtn" type="button" style="background:none;border:none;color:var(--muted);font-size:12.5px;cursor:pointer;padding:8px 0 0;display:block;text-align:center;width:100%">Forgot password?</button>
+        <button id="passkeyLoginBtn" type="button" class="btn full" style="margin-top:10px;background:#fff;border:1.5px solid var(--border);color:var(--ink);display:none">
+          <svg class="ic" aria-hidden="true" style="margin-right:4px"><use href="#i-key"/></svg> Sign in with a passkey
+        </button>
       </form>
 
       <form id="resetRequestForm" style="display:none">
@@ -818,9 +822,23 @@
       </div>
       <span id="navAvatar" class="avatar"></span>
       <span id="navName" class="nav-name"></span>
+      <button id="passkeysNavBtn" class="logout" title="Manage passkeys" style="background:none"><svg class="ic" aria-hidden="true"><use href="#i-key"/></svg></button>
       <button id="logoutBtn" class="logout"><svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg> Log out</button>
     </span>
   </nav>
+
+  <div id="passkeysModal" style="display:none;position:fixed;inset:0;background:rgba(20,24,33,.5);z-index:200;align-items:center;justify-content:center">
+    <div style="background:#fff;border-radius:16px;padding:26px;width:100%;max-width:420px;max-height:80vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <h2 style="font-size:18px;font-weight:700">Passkeys</h2>
+        <button id="passkeysCloseBtn" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--muted);line-height:1">&times;</button>
+      </div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Sign in with Face ID, Touch ID, Windows Hello, or a security key instead of typing your password.</p>
+      <div id="passkeysList" style="margin-bottom:16px"></div>
+      <button id="addPasskeyBtn" class="btn primary full" type="button"><svg class="ic" aria-hidden="true" style="margin-right:4px"><use href="#i-key"/></svg> Add a passkey</button>
+      <div id="passkeysErr" class="err" style="text-align:center"></div>
+    </div>
+  </div>
 
   <div class="wrap" id="app" style="display:none">
     <div class="hero">
@@ -2104,6 +2122,120 @@
       btn.disabled=false;
     });
     $('logoutBtn').onclick=async ()=>{ await fetch('/api/logout',{method:'POST'}); location.reload(); };
+
+    // ---- passkeys (WebAuthn) ----
+    // The server hands binary fields (challenge, credential IDs, etc.) as
+    // base64url strings over JSON; the browser's WebAuthn API wants raw
+    // ArrayBuffers. These two helpers are the only glue needed to bridge
+    // that — no client-side library required.
+    function b64urlToBuf(b64url){
+      const pad='='.repeat((4-b64url.length%4)%4);
+      const b64=(b64url+pad).replace(/-/g,'+').replace(/_/g,'/');
+      const bin=atob(b64); const buf=new Uint8Array(bin.length);
+      for(let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i);
+      return buf.buffer;
+    }
+    function bufToB64url(buf){
+      const bytes=new Uint8Array(buf); let bin='';
+      for(let i=0;i<bytes.length;i++) bin+=String.fromCharCode(bytes[i]);
+      return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+    }
+
+    // Only show "Sign in with a passkey" on browsers that actually support
+    // WebAuthn with a platform authenticator (Face ID/Touch ID/Windows
+    // Hello) — no point offering a button that can't work.
+    (async ()=>{
+      if(!window.PublicKeyCredential) return;
+      try{
+        if(await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()) $('passkeyLoginBtn').style.display='block';
+      }catch{}
+    })();
+
+    $('passkeyLoginBtn').addEventListener('click', async ()=>{
+      const btn=$('passkeyLoginBtn'); btn.disabled=true; $('authErr').textContent='';
+      try{
+        const optRes=await fetch('/api/webauthn/login/options');
+        const {options,requestId}=await optRes.json();
+        if(!optRes.ok) throw new Error(options.error||'Could not start passkey sign-in.');
+        const publicKey={
+          ...options,
+          challenge:b64urlToBuf(options.challenge),
+          allowCredentials:(options.allowCredentials||[]).map(c=>({...c,id:b64urlToBuf(c.id)})),
+        };
+        const cred=await navigator.credentials.get({publicKey});
+        const response={
+          id:cred.id, rawId:bufToB64url(cred.rawId), type:cred.type,
+          response:{
+            authenticatorData:bufToB64url(cred.response.authenticatorData),
+            clientDataJSON:bufToB64url(cred.response.clientDataJSON),
+            signature:bufToB64url(cred.response.signature),
+            userHandle:cred.response.userHandle?bufToB64url(cred.response.userHandle):undefined,
+          },
+          clientExtensionResults:cred.getClientExtensionResults(),
+        };
+        const r=await fetch('/api/webauthn/login/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId,response})});
+        const d=await r.json(); if(!r.ok) throw new Error(d.error);
+        enterApp(d.user);
+      }catch(err){ $('authErr').textContent=err.name==='NotAllowedError'?'Passkey sign-in was cancelled.':err.message; }
+      btn.disabled=false;
+    });
+
+    // ---- manage passkeys (logged-in teacher) ----
+    async function loadPasskeysList(){
+      const wrap=$('passkeysList'); wrap.innerHTML='<span class="status">Loading…</span>';
+      try{
+        const d=await (await fetch('/api/webauthn/passkeys')).json();
+        if(!d.passkeys||!d.passkeys.length){ wrap.innerHTML='<p class="hint">No passkeys yet — add one below.</p>'; return; }
+        wrap.innerHTML=d.passkeys.map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-top:1px solid var(--border)">
+          <div><div style="font-size:13.5px;font-weight:600">${esc(p.label)}</div><div style="font-size:11.5px;color:var(--muted)">Added ${new Date(p.createdAt).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'})}</div></div>
+          <button type="button" class="passkey-del-btn" data-id="${esc(p.id)}" style="font-size:12px;padding:5px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--err);cursor:pointer">Remove</button>
+        </div>`).join('');
+      }catch{ wrap.innerHTML='<p class="hint err">Could not load passkeys.</p>'; }
+    }
+    $('passkeysNavBtn').onclick=()=>{ $('passkeysModal').style.display='flex'; $('passkeysErr').textContent=''; loadPasskeysList(); };
+    $('passkeysCloseBtn').onclick=()=>{ $('passkeysModal').style.display='none'; };
+    $('passkeysModal').addEventListener('click', e=>{ if(e.target.id==='passkeysModal') $('passkeysModal').style.display='none'; });
+
+    $('passkeysList').addEventListener('click', async e=>{
+      const btn=e.target.closest('.passkey-del-btn'); if(!btn) return;
+      btn.disabled=true;
+      try{
+        const r=await fetch('/api/webauthn/passkeys/'+encodeURIComponent(btn.dataset.id),{method:'DELETE'});
+        const d=await r.json(); if(!r.ok) throw new Error(d.error);
+        loadPasskeysList();
+      }catch(err){ $('passkeysErr').textContent=err.message; btn.disabled=false; }
+    });
+
+    $('addPasskeyBtn').addEventListener('click', async ()=>{
+      const btn=$('addPasskeyBtn'); btn.disabled=true; $('passkeysErr').textContent='';
+      const orig=btn.innerHTML; btn.innerHTML='<span class="spinner"></span>Follow your device\'s prompt…';
+      try{
+        const optRes=await fetch('/api/webauthn/register/options');
+        const options=await optRes.json();
+        if(!optRes.ok) throw new Error(options.error||'Could not start passkey setup.');
+        const publicKey={
+          ...options,
+          challenge:b64urlToBuf(options.challenge),
+          user:{...options.user,id:b64urlToBuf(options.user.id)},
+          excludeCredentials:(options.excludeCredentials||[]).map(c=>({...c,id:b64urlToBuf(c.id)})),
+        };
+        const cred=await navigator.credentials.create({publicKey});
+        const response={
+          id:cred.id, rawId:bufToB64url(cred.rawId), type:cred.type,
+          response:{
+            attestationObject:bufToB64url(cred.response.attestationObject),
+            clientDataJSON:bufToB64url(cred.response.clientDataJSON),
+            transports:cred.response.getTransports?cred.response.getTransports():[],
+          },
+          clientExtensionResults:cred.getClientExtensionResults(),
+        };
+        const label=(prompt('Name this passkey — e.g. "MacBook" or "Work phone"','')||'Passkey').trim().slice(0,60)||'Passkey';
+        const r=await fetch('/api/webauthn/register/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({response,label})});
+        const d=await r.json(); if(!r.ok) throw new Error(d.error);
+        loadPasskeysList();
+      }catch(err){ $('passkeysErr').textContent=err.name==='NotAllowedError'?'Passkey setup was cancelled.':err.message; }
+      btn.disabled=false; btn.innerHTML=orig;
+    });
 
     // ---- forgot / reset password ----
     function showAuthForm(){ $('authForm').style.display='block'; $('resetRequestForm').style.display='none'; $('resetConfirmForm').style.display='none'; }

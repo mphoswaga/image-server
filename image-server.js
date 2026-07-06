@@ -36,8 +36,9 @@ function safeAnimate(buffer, band) {
   try { return animateBuffer(buffer, band); }
   catch (err) { console.log('animation skipped:', err.message); return buffer; }
 }
-const { signup, login, issueToken, verifyToken, getUserById, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME, createPasswordResetToken, resetPasswordWithToken } = require('./auth');
+const { signup, login, issueToken, verifyToken, getUserById, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME, createPasswordResetToken, resetPasswordWithToken, listPasskeys, deletePasskey } = require('./auth');
 const { sendEmail } = require('./email');
+const webauthn = require('./webauthn');
 const { runWithUser } = require('./ai-client');
 const usage = require('./usage');
 const jwt = require('jsonwebtoken');
@@ -189,6 +190,59 @@ app.post('/api/password-reset/confirm', async (req, res) => {
 });
 
 app.get('/api/me', requireAuth, (req, res) => res.json({ user: req.user }));
+
+// ── Passkeys (WebAuthn) ──────────────────────────────────────────────────
+// The app is reachable on more than one domain (a railway.app URL and a
+// custom domain), and WebAuthn's rpID/origin must exactly match whichever
+// domain actually served the page — so these are computed per-request
+// rather than hardcoded to one domain.
+const rpIDFor = req => req.hostname;
+const originFor = req => `${req.protocol}://${req.get('host')}`;
+
+// Teacher: list their own passkeys (never the public key itself, just what's
+// needed to show "MacBook Touch ID · added 2 Jul" with a delete button).
+app.get('/api/webauthn/passkeys', requireAuth, (req, res) => res.json({ passkeys: listPasskeys(req.userId) }));
+
+app.delete('/api/webauthn/passkeys/:id', requireAuth, (req, res) => {
+  const ok = deletePasskey(req.userId, req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Passkey not found.' });
+  res.json({ ok: true });
+});
+
+// Add a passkey to the CURRENTLY signed-in teacher's account — requires
+// being logged in already (via password), same as adding a second factor.
+app.get('/api/webauthn/register/options', requireAuth, async (req, res) => {
+  try {
+    const options = await webauthn.getRegistrationOptions(req.userId, req.user.email, rpIDFor(req));
+    res.json(options);
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+app.post('/api/webauthn/register/verify', requireAuth, async (req, res) => {
+  try {
+    const label = String((req.body && req.body.label) || 'Passkey').slice(0, 60);
+    await webauthn.verifyRegistration(req.userId, req.body && req.body.response, rpIDFor(req), originFor(req), label);
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// Sign in with a passkey — public, no prior auth. Discoverable/usernameless:
+// the browser shows the teacher which of their passkeys to use, so no email
+// needs to be typed first.
+app.get('/api/webauthn/login/options', async (req, res) => {
+  try {
+    const { options, requestId } = await webauthn.getLoginOptions(rpIDFor(req));
+    res.json({ options, requestId });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+app.post('/api/webauthn/login/verify', async (req, res) => {
+  try {
+    const userId = await webauthn.verifyLogin(req.body && req.body.requestId, req.body && req.body.response, rpIDFor(req), originFor(req));
+    setSession(res, userId);
+    res.json({ user: getUserById(userId) });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
 
 app.get('/api/config/apps', requireAuth, (req, res) => {
   res.json({

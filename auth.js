@@ -76,6 +76,68 @@ async function verifyPassword(userId, password) {
   return bcrypt.compare(String(password || ''), u.passwordHash);
 }
 
+// ── Passkeys (WebAuthn) — alongside password login, not replacing it ───────
+// Each user may have several passkeys (one per device). Only the public key
+// is ever stored; the private key never leaves the authenticator. The
+// cryptographic verification itself lives in webauthn.js via
+// @simplewebauthn/server — these are just the storage primitives.
+
+function addPasskey(userId, { id, publicKey, counter, transports, deviceType, backedUp, label }) {
+  const users = loadUsers();
+  const u = users[userId];
+  if (!u) return false;
+  u.passkeys = u.passkeys || [];
+  u.passkeys.push({
+    id, publicKey: Buffer.from(publicKey).toString('base64'), counter,
+    transports: transports || [], deviceType, backedUp,
+    label: String(label || 'Passkey').slice(0, 60),
+    createdAt: new Date().toISOString(),
+  });
+  saveUsers(users);
+  return true;
+}
+
+// Public-safe view — never exposes the public key itself.
+function listPasskeys(userId) {
+  const u = loadUsers()[userId];
+  return ((u && u.passkeys) || []).map(p => ({ id: p.id, label: p.label, createdAt: p.createdAt }));
+}
+
+function deletePasskey(userId, credentialId) {
+  const users = loadUsers();
+  const u = users[userId];
+  if (!u || !u.passkeys) return false;
+  const before = u.passkeys.length;
+  u.passkeys = u.passkeys.filter(p => p.id !== credentialId);
+  if (u.passkeys.length === before) return false;
+  saveUsers(users);
+  return true;
+}
+
+// Login (discoverable credentials) doesn't know which user is authenticating
+// until the browser reports which credential ID it used — so this scans
+// every user's passkeys. Fine at this app's scale (same pattern as the
+// password-reset token scan).
+function findByCredentialId(credentialId) {
+  const users = loadUsers();
+  for (const u of Object.values(users)) {
+    const cred = (u.passkeys || []).find(p => p.id === credentialId);
+    if (cred) return { userId: u.id, credential: { id: cred.id, publicKey: Buffer.from(cred.publicKey, 'base64'), counter: cred.counter, transports: cred.transports } };
+  }
+  return null;
+}
+
+// Authenticators report an incrementing counter on each use — persisting it
+// lets a future login detect a cloned/replayed credential (its counter would
+// go backward or repeat instead of increasing).
+function updatePasskeyCounter(userId, credentialId, newCounter) {
+  const users = loadUsers();
+  const u = users[userId];
+  if (!u || !u.passkeys) return;
+  const cred = u.passkeys.find(p => p.id === credentialId);
+  if (cred) { cred.counter = newCounter; saveUsers(users); }
+}
+
 // ── Password reset ───────────────────────────────────────────────────────
 const RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
 
@@ -139,4 +201,4 @@ function requireAdmin(req, res, next) {
   });
 }
 
-module.exports = { signup, login, issueToken, verifyToken, getUserById, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME, createPasswordResetToken, resetPasswordWithToken };
+module.exports = { signup, login, issueToken, verifyToken, getUserById, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME, createPasswordResetToken, resetPasswordWithToken, addPasskey, listPasskeys, deletePasskey, findByCredentialId, updatePasskeyCounter };
