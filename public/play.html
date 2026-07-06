@@ -144,8 +144,9 @@
       <p class="sub">Same questions — your pick of game. Ready?</p>
       <div class="game-cards">
         <button class="game-pick" data-game="car"><span class="gi">🚗</span><span><b>Car Dodge</b><span>Steer and dodge traffic — crash to answer a question.</span></span></button>
-        <button class="game-pick" data-game="space"><span class="gi">🚀</span><span><b>Space Blaster</b><span>Move and FIRE at the asteroid with the correct answer.</span></span></button>
+        <button class="game-pick" data-game="space"><span class="gi">🚀</span><span><b>Space Blaster</b><span>Blast the alien fleet and dodge their bombs — get hit to answer a question.</span></span></button>
         <button class="game-pick" data-game="runner"><span class="gi">🏃</span><span><b>Answer Runner</b><span>Jump rocks and duck branches — crash into one to answer a question.</span></span></button>
+        <button class="game-pick" data-game="balloon"><span class="gi">🎈</span><span><b>Balloon Pop</b><span>Tap the balloon with the correct answer before it floats away!</span></span></button>
       </div>
     </div>
 
@@ -198,7 +199,7 @@
     const LCOL=['#1971c2','#e8833a','#2f9e44','#9c36b5'];
     let game=null, questions=[], answers=[], qi=0, score=0, lives=3, active=null, raf=0, lastT=0;
     let arcadeScore=0, activeGameType=null;
-    let keyDir=0, dragX=null, fireQueued=false, jumpQueued=false, duckQueued=false;
+    let keyDir=0, dragX=null, fireQueued=false, jumpQueued=false, duckQueued=false, tapQueued=false, tapX=0, tapY=0;
     const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), rnd=n=>Math.floor(Math.random()*n);
     function show(id){ ['loading','authScreen','summaryScreen','pickerScreen','gameScreen','resultScreen'].forEach(s=>$(s).style.display=s===id?'block':'none'); }
 
@@ -282,8 +283,9 @@
       const hs=game.highScores||{};
       const hsLines=[];
       if(hs.car>0)   hsLines.push(`🚗 <b>Car Dodge:</b> ${hs.car} cars dodged`);
-      if(hs.space>0) hsLines.push(`🚀 <b>Space Blaster:</b> ${hs.space} correct shots`);
+      if(hs.space>0) hsLines.push(`🚀 <b>Space Blaster:</b> ${hs.space} invaders blasted`);
       if(hs.runner>0)hsLines.push(`🏃 <b>Answer Runner:</b> ${hs.runner} obstacles cleared`);
+      if(hs.balloon>0)hsLines.push(`🎈 <b>Balloon Pop:</b> ${hs.balloon} balloons popped`);
       if(hsLines.length){ $('sumHighScores').innerHTML='<div style="font-weight:700;margin-bottom:8px">🏆 Records — can you beat them?</div>'+hsLines.map(l=>`<div style="margin-bottom:4px">${l}</div>`).join(''); $('sumHighScores').style.display='block'; }
       else $('sumHighScores').style.display='none';
       show('summaryScreen');
@@ -292,14 +294,16 @@
     document.querySelectorAll('.game-pick').forEach(b=>b.addEventListener('click',()=>pickGame(b.dataset.game)));
 
     /* ===== shared engine ===== */
-    function updateHud(){ $('hudLives').innerHTML='❤️'.repeat(Math.max(0,lives))||'💀'; $('hudProg').textContent=`Q ${Math.min(qi+1,questions.length)}/${questions.length}`; $('hudScore').textContent='🏎️ '+arcadeScore; }
+    function updateHud(){ $('hudLives').innerHTML='❤️'.repeat(Math.max(0,lives))||'💀'; $('hudProg').textContent=`Q ${Math.min(qi+1,questions.length)}/${questions.length}`;
+      const icon=activeGameType==='space'?'🚀':activeGameType==='runner'?'🏃':activeGameType==='balloon'?'🎈':'🏎️';
+      $('hudScore').textContent=icon+' '+arcadeScore; }
     async function submitAnswer(choice){ answers[qi]=choice; const d=await (await fetch('/api/game/'+GAME_ID+'/answer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({questionIndex:qi,choice})})).json(); if(d.correct) score++; return d; }
     function advance(){ qi++; if(qi>=questions.length || lives<=0){ endGame(); return false; } updateHud(); return true; }
     async function endGame(){ active=null; cancelAnimationFrame(raf); show('loading');
       const d=await (await fetch('/api/game/'+GAME_ID+'/finish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answers:answers.map(a=>a==null?-1:a),arcadeScore,gameType:activeGameType})})).json();
 
       // Arcade score block
-      const typeLabel=activeGameType==='car'?'cars dodged':activeGameType==='space'?'correct shots':'obstacles cleared';
+      const typeLabel=activeGameType==='car'?'cars dodged':activeGameType==='space'?'invaders blasted':activeGameType==='runner'?'obstacles cleared':'balloons popped';
       $('resArcade').innerHTML=`<div style="font-size:56px;font-weight:900;color:var(--accent);line-height:1">${arcadeScore}</div><div style="font-size:14px;color:var(--muted);margin-top:4px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">${typeLabel}</div>`;
 
       // High score comparison (anonymous — no names shown)
@@ -324,11 +328,11 @@
       questions=d.questions||[]; answers=new Array(questions.length); qi=0; score=0; lives=3; arcadeScore=0; activeGameType=key;
       $('fireBtn').style.display = key==='space'?'flex':'none';
       $('vertControls').style.display = key==='runner'?'flex':'none';
-      $('lrControls').style.display = key==='runner'?'none':'flex';
-      $('qBanner').style.display = (key==='car'||key==='runner')?'none':'block';
+      $('lrControls').style.display = (key==='runner'||key==='balloon')?'none':'flex';
+      $('qBanner').style.display = key==='balloon'?'block':'none';
       $('qFb').className='qfb';
-      $('dragTip').textContent = key==='space'?'Move ◀ ▶ (or drag), then FIRE at the right answer — they speed up!' : key==='runner'?'⬆ to jump rocks, ⬇ to duck branches — hit one and answer to keep going!' : 'Dodge the cars — crash to answer. They speed up!';
-      active = key==='car' ? CarGame() : key==='runner' ? RunnerGame() : SpaceGame();
+      $('dragTip').textContent = key==='space'?'Move ◀ ▶ (or drag), tap FIRE — blast the invaders, dodge their bombs!' : key==='runner'?'⬆ to jump rocks, ⬇ to duck branches — hit one and answer to keep going!' : key==='balloon'?'Tap the balloon with the correct answer — don\'t let them float away!' : 'Dodge the cars — crash to answer. They speed up!';
+      active = key==='car' ? CarGame() : key==='runner' ? RunnerGame() : key==='balloon' ? BalloonGame() : SpaceGame();
       show('gameScreen'); $('qOverlay').classList.remove('show'); active.init(); updateHud();
       lastT=performance.now(); cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
     }
@@ -379,7 +383,9 @@
       return { init, update, render, resume(){ s.enemies=s.enemies.filter(e=>e.y<s.py-120); s.invuln=1.6; s.paused=false; lastT=performance.now(); } };
     }
     // car crash overlay
-    function openCrash(){ const q=questions[qi]; $('qText').textContent=q.question;
+    function openCrash(){ const q=questions[qi];
+      document.querySelector('#qOverlay .crash').textContent = activeGameType==='space' ? '💥 Ship hit! Answer to win your life back:' : '💥 Crash! Answer to win your life back:';
+      $('qText').textContent=q.question;
       $('qOptions').innerHTML=q.options.map((o,k)=>`<button class="opt" data-k="${k}"><span class="k">${'ABCD'[k]}</span><span>${esc(o)}</span></button>`).join('');
       $('qFeedback').className='feedback'; $('qFeedback').innerHTML=''; $('qNextRow').style.display='none'; $('qOverlay').classList.add('show'); }
     $('qOptions').addEventListener('click', async e=>{ const b=e.target.closest('.opt'); if(!b||b.disabled) return;
@@ -388,44 +394,104 @@
       opts[d.correctIndex] && opts[d.correctIndex].classList.add('correct');
       const fb=$('qFeedback'); fb.className='feedback show '+(d.correct?'right':'no');
       if(d.correct){ lives++; updateHud(); fb.innerHTML=`<b>Correct! ✅ +1 life</b>${esc(d.explanation||'')}`; } else { b.classList.add('wrong'); fb.innerHTML=`<b>Not quite ❌</b>${esc(d.explanation||'')}`; }
-      $('nextBtn').textContent=(qi+1>=questions.length)?'See my result →':'Keep driving →'; $('qNextRow').style.display='block'; });
+      const verb=activeGameType==='space'?'Keep flying →':activeGameType==='runner'?'Keep running →':'Keep driving →';
+      $('nextBtn').textContent=(qi+1>=questions.length)?'See my result →':verb; $('qNextRow').style.display='block'; });
     $('nextBtn').addEventListener('click', ()=>{ $('qOverlay').classList.remove('show'); if(advance() && active && active.resume) active.resume(); });
 
-    /* ===== SPACE BLASTER (lane game) ===== */
+    /* ===== SPACE BLASTER — Space Invaders-style: a fleet of pixel aliens
+       marches side to side and descends, dropping bombs. Blast them for
+       points; getting hit (or letting them reach you) opens the question
+       via the crash overlay, same flow as Car Dodge and Answer Runner. */
     function SpaceGame(){
-      const SELY=H-78, PW=46, PH=52, OBJ=62;
-      const lx=l=>(W/4)*l + W/8;
+      const SHIP_Y=H-56, COLS=6, ROWS=3, COL_W=42, ROW_H=34, AW=30, AH=21;
+      const ALIENS=[ // one pixel-map + colour per formation row
+        { col:'#b197fc', map:['..1..1..','.111111.','11211211','11111111','.1....1.','1..11..1'] },
+        { col:'#69db7c', map:['...11...','..1111..','.121121.','11111111','.1.11.1.','1.1..1.1'] },
+        { col:'#ffa8a8', map:['.11..11.','11111111','11211211','11111111','..1..1..','.1....1.'] },
+      ];
+      const SHIP_MAP=['.....1.....','....121....','....111....','.1..111..1.','11111111111','1.1112111.1'];
       let s;
-      function init(){ s={px:lx(0),dir:0,objs:[],speed:80,elapsed:0,state:'run',laser:0,stars:[]};
-        for(let i=0;i<46;i++) s.stars.push({x:Math.random()*W,y:Math.random()*H,z:Math.random()*2+0.6});
-        spawnRow(); showBanner(); }
-      function showBanner(){ const q=questions[qi]; $('qText2').textContent=q.question;
-        $('qLegend').innerHTML=q.options.map((o,k)=>`<div class="leg leg${k}"><b>${'ABCD'[k]}</b> ${esc(o)}</div>`).join(''); }
-      function spawnRow(){ s.speed=70+s.elapsed*7; s.objs=questions[qi].options.map((o,k)=>({lane:k,y:-OBJ})); s.state='run'; }
-      function curLane(){ let best=0,bd=1e9; for(let l=0;l<4;l++){const d=Math.abs(lx(l)-s.px);if(d<bd){bd=d;best=l;}} return best; }
-      async function pick(lane){ if(s.state!=='run') return; s.state='wait'; s.laser=0.18;
-        const d=await submitAnswer(lane); s.correctLane=d.correctIndex;
-        if(d.correct){ arcadeScore++; } else { lives--; } updateHud();
-        const fb=$('qFb'); fb.className='qfb show '+(d.correct?'right':'no');
-        fb.innerHTML = d.correct?`<b>Correct! ✅</b>${esc(d.explanation||'')}` : `<b>Not quite ❌ — ${'ABCD'[d.correctIndex]} was right</b>${esc(d.explanation||'')}`;
-        setTimeout(()=>{ $('qFb').className='qfb'; if(advance()){ spawnRow(); showBanner(); } }, 1500); }
-      function update(dt){ s.elapsed+=dt; if(s.laser>0)s.laser-=dt;
-        s.stars.forEach(st=>{ st.y+=(30+s.elapsed*5)*st.z*dt; if(st.y>H){st.y=0;st.x=Math.random()*W;} });
-        if(dragX!=null) s.px=clamp(dragX,24,W-24); else s.px=clamp(s.px+moveDir*250*dt,24,W-24);
+      function pix(map,x,y,cw,ch,col){ for(let r=0;r<map.length;r++){ const row=map[r];
+        for(let c=0;c<row.length;c++){ const k=row[c]; if(k==='.') continue;
+          cx.fillStyle = k==='2' ? '#0b1020' : col; cx.fillRect(x+c*cw,y+r*ch,cw+0.5,ch+0.5); } } }
+      const alX=a=>s.fx+a.c*COL_W, alY=a=>s.fy+a.r*ROW_H;
+      function spawnWave(){ s.aliens=[]; for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) s.aliens.push({c,r,alive:true});
+        s.fx=(W-(COLS-1)*COL_W-AW)/2; s.fy=56; s.dir=1; s.bombT=1.5; }
+      function init(){ s={px:W/2,shots:[],bombs:[],parts:[],pops:[],stars:[],aliens:[],wave:1,fx:0,fy:0,dir:1,bombT:1.5,fireCool:0,elapsed:0,state:'run',invuln:1.2};
+        for(let i=0;i<54;i++) s.stars.push({x:Math.random()*W,y:Math.random()*H,z:Math.random()*2+0.5});
+        spawnWave(); }
+      function crash(){ s.state='wait'; lives--; updateHud(); openCrash(); }
+      function boom(x,y,col){ for(let i=0;i<10;i++){ const a=Math.random()*Math.PI*2, sp=50+Math.random()*110;
+        s.parts.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,t:0,life:0.4+Math.random()*0.2,r:2+Math.random()*2.5,col:Math.random()<0.3?'#fff':col}); } }
+      function update(dt){
+        s.parts=s.parts.filter(p=>(p.t+=dt)<p.life);
+        s.parts.forEach(p=>{ p.x+=p.vx*dt; p.y+=p.vy*dt; });
+        s.pops=s.pops.filter(p=>(p.t+=dt)<0.9);
         if(s.state!=='run') return;
-        s.objs.forEach(o=>o.y+=s.speed*dt);
-        if(fireQueued){ fireQueued=false; pick(curLane()); } else if(s.objs[0].y > H+10){ pick(curLane()); } }
-      function drawObj(o){ const x=lx(o.lane), y=o.y+OBJ/2, col=LCOL[o.lane];
-        cx.fillStyle=col; cx.beginPath(); cx.arc(x,y,OBJ/2-3,0,7); cx.fill(); cx.fillStyle='rgba(255,255,255,.18)'; cx.beginPath(); cx.arc(x-7,y-7,OBJ/4,0,7); cx.fill();
-        cx.fillStyle='#fff'; cx.font='800 26px Plus Jakarta Sans,sans-serif'; cx.textAlign='center'; cx.textBaseline='middle'; cx.fillText('ABCD'[o.lane], x, y); }
+        s.elapsed+=dt; if(s.fireCool>0)s.fireCool-=dt; if(s.invuln>0)s.invuln-=dt;
+        s.stars.forEach(st=>{ st.y+=(14+st.z*22)*dt; if(st.y>H){st.y=0;st.x=Math.random()*W;} });
+        if(dragX!=null) s.px=clamp(dragX,24,W-24); else s.px=clamp(s.px+moveDir*250*dt,24,W-24);
+        if(fireQueued && s.fireCool<=0 && s.shots.length<3){ fireQueued=false; s.fireCool=0.3; s.shots.push({x:s.px,y:SHIP_Y-26}); }
+        // formation march: speeds up per wave and as the fleet thins out
+        const alive=s.aliens.filter(a=>a.alive), total=s.aliens.length;
+        if(alive.length){
+          const hspd=(24+s.wave*8)*(1+(total-alive.length)/total*1.5);
+          s.fx+=s.dir*hspd*dt;
+          let lo=1e9,hi=-1e9; alive.forEach(a=>{ const x=alX(a); if(x<lo)lo=x; if(x+AW>hi)hi=x+AW; });
+          if(hi>W-8){ s.dir=-1; s.fy+=16; } else if(lo<8){ s.dir=1; s.fy+=16; }
+        }
+        // player shots: up the screen, kill aliens, intercept bombs
+        for(let i=s.shots.length-1;i>=0;i--){ const sh=s.shots[i]; sh.y-=340*dt;
+          if(sh.y<-12){ s.shots.splice(i,1); continue; }
+          let bi=s.bombs.findIndex(b=>Math.abs(b.x-sh.x)<9 && Math.abs(b.y-sh.y)<13);
+          if(bi>=0){ boom(sh.x,sh.y,'#ffd43b'); s.bombs.splice(bi,1); s.shots.splice(i,1); continue; }
+          const hit=alive.find(a=>a.alive && sh.x>alX(a)-2 && sh.x<alX(a)+AW+2 && sh.y>alY(a)-2 && sh.y<alY(a)+AH+6);
+          if(hit){ hit.alive=false; s.shots.splice(i,1); arcadeScore++; updateHud();
+            boom(alX(hit)+AW/2,alY(hit)+AH/2,ALIENS[hit.r].col);
+            s.pops.push({x:alX(hit)+AW/2,y:alY(hit),t:0,text:'+1'}); }
+        }
+        // alien bombs: drop, wiggle, hit the ship
+        s.bombT-=dt;
+        if(s.bombT<=0 && alive.length){
+          const a = Math.random()<0.35 ? alive.reduce((b1,a1)=>Math.abs(alX(a1)+AW/2-s.px)<Math.abs(alX(b1)+AW/2-s.px)?a1:b1, alive[0]) : alive[rnd(alive.length)];
+          s.bombs.push({x:alX(a)+AW/2,y:alY(a)+AH,wig:Math.random()*6});
+          s.bombT=Math.max(0.55,1.5-s.wave*0.12)+Math.random()*0.6;
+        }
+        for(let i=s.bombs.length-1;i>=0;i--){ const b=s.bombs[i];
+          b.y+=(120+s.wave*14)*dt; b.x+=Math.sin(s.elapsed*6+b.wig)*12*dt;
+          if(b.y>H+12){ s.bombs.splice(i,1); continue; }
+          if(s.invuln<=0 && Math.abs(b.x-s.px)<17 && b.y>SHIP_Y-14 && b.y<SHIP_Y+16){ s.bombs.splice(i,1); boom(s.px,SHIP_Y,'#8ecae6'); crash(); return; }
+        }
+        // fleet reached the ship's row → invasion
+        if(s.invuln<=0 && alive.some(a=>a.alive && alY(a)+AH>=SHIP_Y-16)){ boom(s.px,SHIP_Y,'#8ecae6'); crash(); return; }
+        if(!alive.length){ s.wave++; spawnWave(); s.pops.push({x:W/2,y:H/2,t:0,text:'WAVE '+s.wave,big:true}); }
+      }
       function render(){
-        cx.fillStyle='#0b1020'; cx.fillRect(0,0,W,H); cx.fillStyle='#fff'; s.stars.forEach(st=>{cx.globalAlpha=st.z/2.6;cx.fillRect(st.x,st.y,st.z,st.z);}); cx.globalAlpha=1;
-        s.objs.forEach(drawObj);
-        const px=s.px;
-        cx.fillStyle='#2a6aa6'; cx.beginPath(); cx.moveTo(px,SELY-PH/2); cx.lineTo(px-PW/2,SELY+PH/2); cx.lineTo(px+PW/2,SELY+PH/2); cx.closePath(); cx.fill();
-        cx.fillStyle='#a5d8ff'; cx.beginPath(); cx.arc(px,SELY,7,0,7); cx.fill();
-        if(s.laser>0){ cx.fillStyle='#ffd43b'; cx.fillRect(px-3,0,6,SELY-PH/2); } }
-      return { init, update, render };
+        cx.fillStyle='#0b1020'; cx.fillRect(0,0,W,H);
+        let ng=cx.createRadialGradient(W*0.25,H*0.22,10,W*0.25,H*0.22,150); ng.addColorStop(0,'rgba(177,151,252,.16)'); ng.addColorStop(1,'rgba(177,151,252,0)');
+        cx.fillStyle=ng; cx.fillRect(0,0,W,H);
+        ng=cx.createRadialGradient(W*0.8,H*0.68,10,W*0.8,H*0.68,170); ng.addColorStop(0,'rgba(102,217,232,.12)'); ng.addColorStop(1,'rgba(102,217,232,0)');
+        cx.fillStyle=ng; cx.fillRect(0,0,W,H);
+        cx.fillStyle='#fff'; s.stars.forEach(st=>{ cx.globalAlpha=st.z/2.6; cx.fillRect(st.x,st.y,st.z,st.z); }); cx.globalAlpha=1;
+        s.shots.forEach(sh=>{ cx.fillStyle='rgba(116,192,252,.45)'; cx.fillRect(sh.x-2.5,sh.y-11,5,12);
+          cx.fillStyle='#e7f5ff'; cx.fillRect(sh.x-1,sh.y-10,2,10); });
+        s.bombs.forEach(b=>{ cx.fillStyle='rgba(255,169,77,.35)'; cx.beginPath(); cx.arc(b.x,b.y-5,5,0,7); cx.fill();
+          cx.fillStyle='#ffa94d'; cx.beginPath(); cx.arc(b.x,b.y,3.5,0,7); cx.fill(); });
+        const bob=(Math.floor(s.elapsed*3)%2)?1.5:-1.5;
+        s.aliens.forEach(a=>{ if(a.alive) pix(ALIENS[a.r].map, alX(a), alY(a)+bob, AW/8, AH/6, ALIENS[a.r].col); });
+        if(!(s.invuln>0 && Math.floor(s.elapsed*14)%2)){
+          pix(SHIP_MAP, s.px-19, SHIP_Y-11, 38/11, 22/6, '#8ecae6');
+          const fl=5+Math.random()*7;
+          cx.fillStyle='#ff922b'; cx.beginPath(); cx.moveTo(s.px-5,SHIP_Y+11); cx.lineTo(s.px+5,SHIP_Y+11); cx.lineTo(s.px,SHIP_Y+11+fl); cx.closePath(); cx.fill();
+          cx.fillStyle='#ffd43b'; cx.beginPath(); cx.moveTo(s.px-2.5,SHIP_Y+11); cx.lineTo(s.px+2.5,SHIP_Y+11); cx.lineTo(s.px,SHIP_Y+11+fl*0.55); cx.closePath(); cx.fill();
+        }
+        s.parts.forEach(p=>{ cx.globalAlpha=Math.max(0,1-p.t/p.life); cx.fillStyle=p.col; cx.fillRect(p.x-p.r/2,p.y-p.r/2,p.r,p.r); }); cx.globalAlpha=1;
+        s.pops.forEach(p=>{ const k=Math.max(0,1-p.t/0.9); cx.globalAlpha=k; cx.textAlign='center';
+          if(p.big){ cx.fillStyle='#ffd43b'; cx.font='800 28px Plus Jakarta Sans,sans-serif'; cx.fillText(p.text,p.x,p.y-p.t*20); }
+          else { cx.fillStyle='#8ce99a'; cx.font='800 15px Plus Jakarta Sans,sans-serif'; cx.fillText(p.text,p.x,p.y-p.t*36); } });
+        cx.globalAlpha=1;
+      }
+      return { init, update, render, resume(){ s.bombs=[]; s.invuln=1.6; s.fy=Math.min(s.fy,SHIP_Y-220); s.state='run'; lastT=performance.now(); } };
     }
 
     /* ===== ANSWER RUNNER — classic side-on endless runner (the sprite is
@@ -435,26 +501,35 @@
     function RunnerGame(){
       const GROUND_Y=H-84, PLAYER_X=84;
       let s;
-      function init(){ s={objs:[],spawnT:0.9,elapsed:0,step:0,state:'run',vert:'run',vertT:0,invuln:1}; }
+      function init(){ s={objs:[],parts:[],pops:[],spawnT:0.9,dustT:0,dist:0,elapsed:0,step:0,state:'run',vert:'run',vertT:0,invuln:1}; }
       function spawnObstacle(){ const kind=Math.random()<0.5?'rock':'branch';
         const frame = kind==='rock' ? ROCK_FRAMES[rnd(ROCK_FRAMES.length)] : BRANCH_FRAMES[0];
         s.objs.push({kind, x:W+40, frame}); }
       function doJump(){ if(s.state==='run' && s.vert==='run'){ s.vert='jump'; s.vertT=0.55; } }
       function doDuck(){ if(s.state==='run' && s.vert==='run'){ s.vert='duck'; s.vertT=0.5; } }
       function crash(){ s.state='wait'; lives--; updateHud(); openCrash(); }
-      function update(dt){ if(s.state!=='run'){ return; }
+      function dust(x,y,n,spread){ for(let i=0;i<n;i++) s.parts.push({ x:x+(Math.random()-0.5)*10, y,
+        vx:-20-Math.random()*spread, vy:-15-Math.random()*30, t:0, life:0.35+Math.random()*0.2, r:2+Math.random()*2.5 }); }
+      function update(dt){
+        // Effects keep animating even while the question overlay is up.
+        s.parts=s.parts.filter(p=>(p.t+=dt)<p.life);
+        s.parts.forEach(p=>{ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=160*dt; });
+        s.pops=s.pops.filter(p=>(p.t+=dt)<0.7);
+        if(s.state!=='run'){ return; }
         s.elapsed+=dt; s.step+=dt;
         if(jumpQueued){ jumpQueued=false; doJump(); }
         if(duckQueued){ duckQueued=false; doDuck(); }
-        if(s.vertT>0){ s.vertT-=dt; if(s.vertT<=0) s.vert='run'; }
+        if(s.vertT>0){ s.vertT-=dt; if(s.vertT<=0){ if(s.vert==='jump') dust(PLAYER_X,GROUND_Y+2,7,60); s.vert='run'; } }
         if(s.invuln>0) s.invuln-=dt;
-        const speed=150+s.elapsed*14;
+        const speed=Math.min(420,150+s.elapsed*14);
+        s.dist+=speed*dt;
+        if(s.vert==='run'){ s.dustT-=dt; if(s.dustT<=0){ s.dustT=0.09; dust(PLAYER_X-14,GROUND_Y+2,1,40); } }
         for(let i=s.objs.length-1;i>=0;i--){ const o=s.objs[i]; o.x-=speed*dt;
           if(o.x<=PLAYER_X){
             const dodgedVertically = o.kind==='rock' ? s.vert==='jump' : s.vert==='duck';
             s.objs.splice(i,1);
             if(!dodgedVertically && s.invuln<=0){ crash(); return; }
-            arcadeScore++; updateHud();
+            arcadeScore++; updateHud(); s.pops.push({x:PLAYER_X+34,y:GROUND_Y-74,t:0});
           }
         }
         s.spawnT-=dt; if(s.spawnT<=0){ s.spawnT=1.05+Math.random()*0.55; spawnObstacle(); }
@@ -462,12 +537,24 @@
       function drawBackground(){
         const g=cx.createLinearGradient(0,0,0,GROUND_Y); g.addColorStop(0,'#bfe3ff'); g.addColorStop(1,'#e7f4ea');
         cx.fillStyle=g; cx.fillRect(0,0,W,GROUND_Y+30);
+        // Three parallax layers, all driven by distance actually travelled so
+        // the world visibly speeds up with the game: clouds slowest, far
+        // hills slow, near hills faster, ground dashes at full speed.
+        cx.fillStyle='rgba(255,255,255,.8)';
+        const cOff=(s.dist*0.04)%(W+140);
+        [[40,66,15],[170,108,12],[280,48,14]].forEach(([bx,by,r])=>{
+          const x=((bx-cOff)%(W+140)+(W+140))%(W+140)-70;
+          cx.beginPath(); cx.ellipse(x,by,r*1.6,r,0,0,7); cx.ellipse(x+r,by-r*0.5,r*1.1,r*0.75,0,0,7); cx.fill();
+        });
+        cx.fillStyle='#b5daae';
+        const fOff=(s.dist*0.1)%220;
+        for(let i=-1;i<4;i++){ const hx=i*220-fOff; cx.beginPath(); cx.arc(hx+110,GROUND_Y+30,125,Math.PI,0); cx.fill(); }
         cx.fillStyle='#8fc98f';
-        const hillOff=(s.elapsed*20)%160;
-        for(let i=-1;i<4;i++){ const hx=i*160-hillOff; cx.beginPath(); cx.arc(hx+80,GROUND_Y+10,90,Math.PI,0); cx.fill(); }
+        const nOff=(s.dist*0.25)%160;
+        for(let i=-1;i<4;i++){ const hx=i*160-nOff; cx.beginPath(); cx.arc(hx+80,GROUND_Y+10,90,Math.PI,0); cx.fill(); }
         cx.fillStyle='#6a9955'; cx.fillRect(0,GROUND_Y,W,H-GROUND_Y);
         cx.strokeStyle='rgba(255,255,255,.5)'; cx.lineWidth=3;
-        const dashOff=(s.elapsed*(150+s.elapsed*14))%36;
+        const dashOff=s.dist%36;
         cx.beginPath();
         for(let x=-36+dashOff;x<W;x+=36) cx.moveTo(W-x,GROUND_Y+10), cx.lineTo(W-x-20,GROUND_Y+10);
         cx.stroke();
@@ -476,10 +563,21 @@
         if(!OBSTACLE_SPRITE.ready) return;
         const m=7, f=o.frame, sw=f.w-m*2, sh=f.h-m*2;
         if(o.kind==='rock'){ const dw=50, dh=50*(sh/sw);
-          cx.drawImage(OBSTACLE_SPRITE.img, f.x+m, f.y+m, sw, sh, o.x-dw/2, GROUND_Y-dh, dw, dh);
+          // Boulders roll: rotation tied to horizontal travel over radius.
+          cx.save(); cx.translate(o.x, GROUND_Y-dh/2); cx.rotate(o.x/(dw/2));
+          cx.drawImage(OBSTACLE_SPRITE.img, f.x+m, f.y+m, sw, sh, -dw/2, -dh/2, dw, dh);
+          cx.restore();
         } else { const dw=70, dh=70*(sh/sw), hangY=GROUND_Y-70;
           cx.drawImage(OBSTACLE_SPRITE.img, f.x+m, f.y+m, sw, sh, o.x-dw/2, hangY-dh/2, dw, dh);
         }
+      }
+      function drawFx(){
+        s.parts.forEach(p=>{ cx.globalAlpha=Math.max(0,1-p.t/p.life)*0.6; cx.fillStyle='#8a7a63';
+          cx.beginPath(); cx.arc(p.x,p.y,p.r,0,7); cx.fill(); });
+        cx.globalAlpha=1;
+        s.pops.forEach(p=>{ cx.globalAlpha=Math.max(0,1-p.t/0.7); cx.fillStyle='#15824b';
+          cx.font='800 17px Plus Jakarta Sans,sans-serif'; cx.textAlign='center'; cx.fillText('+1', p.x, p.y-p.t*46); });
+        cx.globalAlpha=1;
       }
       function drawPlayer(){
         const x=PLAYER_X, groundY=GROUND_Y;
@@ -498,8 +596,87 @@
       }
       function render(){ drawBackground();
         s.objs.forEach(drawObstacle);
-        drawPlayer(); }
+        drawPlayer(); drawFx(); }
       return { init, update, render, resume(){ s.objs=s.objs.filter(o=>o.x>PLAYER_X-40); s.invuln=1.4; s.state='run'; lastT=performance.now(); } };
+    }
+
+    /* ===== BALLOON POP — a pure tap/accuracy game, distinct from the other
+       three which are all steer/dodge/jump reflex games. Four balloons rise
+       from the bottom, each labeled with an answer; tap the right one before
+       it floats off the top. No tap in time counts as a miss. */
+    function BalloonGame(){
+      const LANES=4;
+      const laneX=l=>(W/(LANES+1))*(l+1);
+      let s;
+      function spawnRound(){
+        const q=questions[qi];
+        $('qText2').textContent=q.question;
+        $('qLegend').innerHTML=q.options.map((o,k)=>`<div class="leg leg${k}"><b>${'ABCD'[k]}</b> ${esc(o)}</div>`).join('');
+        s.balloons=q.options.map((o,k)=>({ key:k, x:laneX(k), y:H+40+Math.random()*40, dx:0,
+          vy:58+Math.random()*20+s.elapsed*3, sway:Math.random()*Math.PI*2, popped:false }));
+        s.state='run';
+      }
+      function init(){ s={balloons:[],parts:[],elapsed:0,state:'run'}; tapQueued=false; spawnRound(); }
+      function burst(x,y,col){
+        for(let i=0;i<12;i++){ const a=Math.random()*Math.PI*2, sp=70+Math.random()*130;
+          s.parts.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-50,t:0,life:0.45+Math.random()*0.25,r:2.5+Math.random()*3,col}); }
+        s.parts.push({x,y,ring:true,t:0,life:0.35,col});
+      }
+      async function resolve(key){
+        s.state='wait';
+        const d=await submitAnswer(key==null?-1:key);
+        if(d.correct){ arcadeScore++; } else { lives--; } updateHud();
+        const fb=$('qFb'); fb.className='qfb show '+(d.correct?'right':'no');
+        fb.innerHTML = d.correct?`<b>Correct! ✅</b>${esc(d.explanation||'')}` : `<b>${key==null?"Time's up!":'Not quite'} ❌ — ${'ABCD'[d.correctIndex]} was right</b>${esc(d.explanation||'')}`;
+        setTimeout(()=>{ $('qFb').className='qfb'; if(advance()){ spawnRound(); } }, 1400);
+      }
+      function update(dt){ s.elapsed+=dt;
+        s.parts=s.parts.filter(p=>(p.t+=dt)<p.life);
+        s.parts.forEach(p=>{ if(!p.ring){ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=240*dt; } });
+        // Balloons keep drifting up during the feedback pause instead of
+        // freezing mid-air; the popped one is hidden, the rest float away.
+        s.balloons.forEach(b=>{ if(!b.popped){ b.dx=Math.sin(s.elapsed*2.4+b.sway)*8; b.y-=b.vy*dt; } });
+        if(s.state!=='run'){ tapQueued=false; return; }
+        if(tapQueued){ tapQueued=false;
+          const hit=s.balloons.find(b=>!b.popped && Math.hypot((b.x+b.dx)-tapX,b.y-tapY)<36);
+          if(hit){ hit.popped=true; burst(hit.x+hit.dx,hit.y,LCOL[hit.key]); resolve(hit.key); return; }
+          s.parts.push({x:tapX,y:tapY,ring:true,t:0,life:0.3,col:'rgba(255,255,255,.95)'});
+        }
+        if(s.balloons.every(b=>b.popped || b.y<=-40)) resolve(null);
+      }
+      function drawBalloon(b){
+        const x=b.x+b.dx, y=b.y, col=LCOL[b.key];
+        cx.strokeStyle='rgba(255,255,255,.7)'; cx.lineWidth=2;
+        cx.beginPath(); cx.moveTo(x,y+26); cx.quadraticCurveTo(x+6,y+50,x,y+70); cx.stroke();
+        const g=cx.createRadialGradient(x-9,y-12,4,x,y,28); g.addColorStop(0,'#fff'); g.addColorStop(0.15,col); g.addColorStop(1,col);
+        cx.fillStyle=g; cx.beginPath(); cx.ellipse(x,y,24,28,0,0,7); cx.fill();
+        cx.fillStyle=col; cx.beginPath(); cx.moveTo(x-5,y+26); cx.lineTo(x+5,y+26); cx.lineTo(x,y+34); cx.closePath(); cx.fill();
+        cx.fillStyle='#fff'; cx.font='800 22px Plus Jakarta Sans,sans-serif'; cx.textAlign='center'; cx.textBaseline='middle';
+        cx.fillText('ABCD'[b.key], x, y);
+        // About to escape off the top — pulse a red warning outline.
+        if(s.state==='run' && y<110){ cx.globalAlpha=0.35+0.35*Math.sin(s.elapsed*10);
+          cx.strokeStyle='#c0392b'; cx.lineWidth=3; cx.beginPath(); cx.ellipse(x,y,29,33,0,0,7); cx.stroke(); cx.globalAlpha=1; }
+      }
+      function drawParts(){
+        s.parts.forEach(p=>{ const k=Math.max(0,1-p.t/p.life);
+          if(p.ring){ cx.globalAlpha=k; cx.strokeStyle=p.col; cx.lineWidth=3;
+            cx.beginPath(); cx.arc(p.x,p.y,10+(1-k)*34,0,7); cx.stroke(); }
+          else { cx.globalAlpha=k; cx.fillStyle=p.col; cx.beginPath(); cx.arc(p.x,p.y,p.r,0,7); cx.fill(); } });
+        cx.globalAlpha=1;
+      }
+      function render(){
+        const g=cx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#bfe3ff'); g.addColorStop(1,'#eaf6ff');
+        cx.fillStyle=g; cx.fillRect(0,0,W,H);
+        cx.fillStyle='rgba(255,255,255,.85)';
+        const drift=(s.elapsed*8)%(W+120);
+        [[30,90,22],[130,140,18],[240,60,20]].forEach(([bx,by,r])=>{
+          const x=((bx-drift)%(W+120)+(W+120))%(W+120)-60;
+          cx.beginPath(); cx.ellipse(x,by,r*1.5,r,0,0,7); cx.ellipse(x+r,by-r*0.4,r*1.1,r*0.8,0,0,7); cx.fill();
+        });
+        s.balloons.forEach(b=>{ if(!b.popped) drawBalloon(b); });
+        drawParts();
+      }
+      return { init, update, render };
     }
 
     /* ===== controls (one shared moveDir for keys + buttons) ===== */
@@ -513,7 +690,8 @@
     $('jumpBtn').addEventListener('pointerdown',e=>{ e.preventDefault(); jumpQueued=true; });
     $('duckBtn').addEventListener('pointerdown',e=>{ e.preventDefault(); duckQueued=true; });
     function canvasX(e){ const r=cv.getBoundingClientRect(); return ((e.clientX-r.left)/r.width)*W; }
-    cv.addEventListener('pointerdown',e=>{ dragX=canvasX(e); cv.setPointerCapture(e.pointerId); if($('fireBtn').style.display!=='none') fireQueued=true; });
+    function canvasY(e){ const r=cv.getBoundingClientRect(); return ((e.clientY-r.top)/r.height)*H; }
+    cv.addEventListener('pointerdown',e=>{ dragX=canvasX(e); tapX=canvasX(e); tapY=canvasY(e); tapQueued=true; cv.setPointerCapture(e.pointerId); if($('fireBtn').style.display!=='none') fireQueued=true; });
     cv.addEventListener('pointermove',e=>{ if(dragX!=null) dragX=canvasX(e); });
     const endDrag=()=>{ dragX=null; }; cv.addEventListener('pointerup',endDrag); cv.addEventListener('pointercancel',endDrag);
 
