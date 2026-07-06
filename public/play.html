@@ -346,6 +346,14 @@
     const RUN_FRAMES=frameRow(27,[0,115,229,345,462,578,736,852,968,1085,1201,1315]);
     const JUMP_FRAMES=frameRow(275,[0,115,229,345,462,578]);
     const DUCK_FRAMES=frameRow(408,[0,115,229,345,462,578]);
+
+    // Obstacle sprite sheet — boulders (ground, jump) and a spiked overhead
+    // bar (duck), same frame-measuring approach as the runner sheet.
+    const OBSTACLE_SPRITE={ img:new Image(), ready:false };
+    OBSTACLE_SPRITE.img.onload=()=>OBSTACLE_SPRITE.ready=true;
+    OBSTACLE_SPRITE.img.src='/sprites/obstacles.png';
+    const ROCK_FRAMES=frameRow(275,[0,115,345,462,578]);
+    const BRANCH_FRAMES=[{x:229,y:656,w:94,h:94}];
     function blockCar(x,y,w,h,pal){ const CAR=['.111.','31113','12221','11111','.111.','12221','11111','31113'],cw=w/5,ch=h/8;
       for(let r=0;r<8;r++){const row=CAR[r];for(let c=0;c<5;c++){const k=row[c];if(k==='.')continue;cx.fillStyle=pal[k];cx.fillRect(x+c*cw,y+r*ch,cw+0.6,ch+0.6);}} }
 
@@ -428,7 +436,9 @@
       const GROUND_Y=H-84, PLAYER_X=84;
       let s;
       function init(){ s={objs:[],spawnT:0.9,elapsed:0,step:0,state:'run',vert:'run',vertT:0,invuln:1}; }
-      function spawnObstacle(){ s.objs.push({kind: Math.random()<0.5?'rock':'branch', x:W+40}); }
+      function spawnObstacle(){ const kind=Math.random()<0.5?'rock':'branch';
+        const frame = kind==='rock' ? ROCK_FRAMES[rnd(ROCK_FRAMES.length)] : BRANCH_FRAMES[0];
+        s.objs.push({kind, x:W+40, frame}); }
       function doJump(){ if(s.state==='run' && s.vert==='run'){ s.vert='jump'; s.vertT=0.55; } }
       function doDuck(){ if(s.state==='run' && s.vert==='run'){ s.vert='duck'; s.vertT=0.5; } }
       function crash(){ s.state='wait'; lives--; updateHud(); openCrash(); }
@@ -463,13 +473,12 @@
         cx.stroke();
       }
       function drawObstacle(o){
-        if(o.kind==='rock'){ const r=24;
-          cx.fillStyle='#7d7568'; cx.beginPath(); cx.ellipse(o.x,GROUND_Y-2,r*1.15,r*0.85,0,0,7); cx.fill();
-          cx.fillStyle='#948c7d'; cx.beginPath(); cx.ellipse(o.x-r*0.25,GROUND_Y-r*0.6,r*0.55,r*0.4,0,0,7); cx.fill();
-        } else { const w=64, h=14, hangY=GROUND_Y-70;
-          cx.strokeStyle='#5c4632'; cx.lineWidth=4; cx.beginPath(); cx.moveTo(o.x,hangY-30); cx.lineTo(o.x,hangY); cx.stroke();
-          cx.fillStyle='#8a5a34'; cx.fillRect(o.x-w/2,hangY-h/2,w,h);
-          cx.fillStyle='rgba(0,0,0,.18)'; cx.fillRect(o.x-w/2,hangY+h/2-3,w,3);
+        if(!OBSTACLE_SPRITE.ready) return;
+        const m=7, f=o.frame, sw=f.w-m*2, sh=f.h-m*2;
+        if(o.kind==='rock'){ const dw=50, dh=50*(sh/sw);
+          cx.drawImage(OBSTACLE_SPRITE.img, f.x+m, f.y+m, sw, sh, o.x-dw/2, GROUND_Y-dh, dw, dh);
+        } else { const dw=70, dh=70*(sh/sw), hangY=GROUND_Y-70;
+          cx.drawImage(OBSTACLE_SPRITE.img, f.x+m, f.y+m, sw, sh, o.x-dw/2, hangY-dh/2, dw, dh);
         }
       }
       function drawPlayer(){
