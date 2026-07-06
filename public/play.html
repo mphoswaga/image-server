@@ -145,7 +145,7 @@
       <div class="game-cards">
         <button class="game-pick" data-game="car"><span class="gi">🚗</span><span><b>Car Dodge</b><span>Steer and dodge traffic — crash to answer a question.</span></span></button>
         <button class="game-pick" data-game="space"><span class="gi">🚀</span><span><b>Space Blaster</b><span>Move and FIRE at the asteroid with the correct answer.</span></span></button>
-        <button class="game-pick" data-game="runner"><span class="gi">🏃</span><span><b>Answer Runner</b><span>Run through the gate with the correct answer.</span></span></button>
+        <button class="game-pick" data-game="runner"><span class="gi">🏃</span><span><b>Answer Runner</b><span>Dodge obstacles Temple Run-style, then steer into the correct gate.</span></span></button>
       </div>
     </div>
 
@@ -164,6 +164,10 @@
             <div id="qNextRow" style="display:none;margin-top:14px"><button id="nextBtn" class="btn primary">Keep driving →</button></div>
           </div>
         </div>
+      </div>
+      <div class="controls" id="vertControls" style="display:none">
+        <button id="jumpBtn" class="ctrl" aria-label="Jump">⬆</button>
+        <button id="duckBtn" class="ctrl" aria-label="Duck">⬇</button>
       </div>
       <div class="controls">
         <button id="leftBtn" class="ctrl" aria-label="Left">◀</button>
@@ -194,7 +198,7 @@
     const LCOL=['#1971c2','#e8833a','#2f9e44','#9c36b5'];
     let game=null, questions=[], answers=[], qi=0, score=0, lives=3, active=null, raf=0, lastT=0;
     let arcadeScore=0, activeGameType=null;
-    let keyDir=0, dragX=null, fireQueued=false;
+    let keyDir=0, dragX=null, fireQueued=false, jumpQueued=false, duckQueued=false;
     const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), rnd=n=>Math.floor(Math.random()*n);
     function show(id){ ['loading','authScreen','summaryScreen','pickerScreen','gameScreen','resultScreen'].forEach(s=>$(s).style.display=s===id?'block':'none'); }
 
@@ -279,7 +283,7 @@
       const hsLines=[];
       if(hs.car>0)   hsLines.push(`🚗 <b>Car Dodge:</b> ${hs.car} cars dodged`);
       if(hs.space>0) hsLines.push(`🚀 <b>Space Blaster:</b> ${hs.space} correct shots`);
-      if(hs.runner>0)hsLines.push(`🏃 <b>Answer Runner:</b> ${hs.runner} correct gates`);
+      if(hs.runner>0)hsLines.push(`🏃 <b>Answer Runner:</b> ${hs.runner} obstacles cleared`);
       if(hsLines.length){ $('sumHighScores').innerHTML='<div style="font-weight:700;margin-bottom:8px">🏆 Records — can you beat them?</div>'+hsLines.map(l=>`<div style="margin-bottom:4px">${l}</div>`).join(''); $('sumHighScores').style.display='block'; }
       else $('sumHighScores').style.display='none';
       show('summaryScreen');
@@ -295,7 +299,7 @@
       const d=await (await fetch('/api/game/'+GAME_ID+'/finish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answers:answers.map(a=>a==null?-1:a),arcadeScore,gameType:activeGameType})})).json();
 
       // Arcade score block
-      const typeLabel=activeGameType==='car'?'cars dodged':activeGameType==='space'?'correct shots':'correct gates';
+      const typeLabel=activeGameType==='car'?'cars dodged':activeGameType==='space'?'correct shots':'obstacles cleared';
       $('resArcade').innerHTML=`<div style="font-size:56px;font-weight:900;color:var(--accent);line-height:1">${arcadeScore}</div><div style="font-size:14px;color:var(--muted);margin-top:4px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">${typeLabel}</div>`;
 
       // High score comparison (anonymous — no names shown)
@@ -319,16 +323,28 @@
       const r=await fetch('/api/game/'+GAME_ID+'/play'); const d=await r.json();
       questions=d.questions||[]; answers=new Array(questions.length); qi=0; score=0; lives=3; arcadeScore=0; activeGameType=key;
       $('fireBtn').style.display = key==='space'?'flex':'none';
-      $('qBanner').style.display = key==='car'?'none':'block';
+      $('vertControls').style.display = key==='runner'?'flex':'none';
+      $('qBanner').style.display = (key==='car'||key==='runner')?'none':'block';
       $('qFb').className='qfb';
-      $('dragTip').textContent = key==='space'?'Move ◀ ▶ (or drag), then FIRE at the right answer — they speed up!' : key==='runner'?'Steer ◀ ▶ (or drag) into the gate with the correct answer!' : 'Dodge the cars — crash to answer. They speed up!';
-      active = key==='car' ? CarGame() : LaneGame(key);
+      $('dragTip').textContent = key==='space'?'Move ◀ ▶ (or drag), then FIRE at the right answer — they speed up!' : key==='runner'?'◀ ▶ to switch lanes, ⬆ to jump rocks, ⬇ to duck branches — hit one and answer to keep going!' : 'Dodge the cars — crash to answer. They speed up!';
+      active = key==='car' ? CarGame() : key==='runner' ? RunnerGame() : SpaceGame();
       show('gameScreen'); $('qOverlay').classList.remove('show'); active.init(); updateHud();
       lastT=performance.now(); cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
     }
     $('againBtn').addEventListener('click', ()=>show('pickerScreen'));
 
     const cv=$('gameCanvas'), cx=cv.getContext('2d'); const W=cv.width, H=cv.height;
+    cx.imageSmoothingEnabled=false;
+
+    // Runner sprite sheet — frame rects measured directly from the source
+    // image's bordered cells (94x94px each), not eyeballed.
+    const RUNNER_SPRITE={ img:new Image(), ready:false };
+    RUNNER_SPRITE.img.onload=()=>RUNNER_SPRITE.ready=true;
+    RUNNER_SPRITE.img.src='/sprites/runner.png';
+    const frameRow=(y,xs)=>xs.map(x=>({x,y,w:94,h:94}));
+    const RUN_FRAMES=frameRow(27,[0,115,229,345,462,578,736,852,968,1085,1201,1315]);
+    const JUMP_FRAMES=frameRow(275,[0,115,229,345,462,578]);
+    const DUCK_FRAMES=frameRow(408,[0,115,229,345,462,578]);
     function blockCar(x,y,w,h,pal){ const CAR=['.111.','31113','12221','11111','.111.','12221','11111','31113'],cw=w/5,ch=h/8;
       for(let r=0;r<8;r++){const row=CAR[r];for(let c=0;c<5;c++){const k=row[c];if(k==='.')continue;cx.fillStyle=pal[k];cx.fillRect(x+c*cw,y+r*ch,cw+0.6,ch+0.6);}} }
 
@@ -366,59 +382,134 @@
       $('nextBtn').textContent=(qi+1>=questions.length)?'See my result →':'Keep driving →'; $('qNextRow').style.display='block'; });
     $('nextBtn').addEventListener('click', ()=>{ $('qOverlay').classList.remove('show'); if(advance() && active && active.resume) active.resume(); });
 
-    /* ===== SPACE BLASTER + ANSWER RUNNER (shared lane game) ===== */
-    function LaneGame(theme){
+    /* ===== SPACE BLASTER (lane game) ===== */
+    function SpaceGame(){
       const SELY=H-78, PW=46, PH=52, OBJ=62;
       const lx=l=>(W/4)*l + W/8;
       let s;
       function init(){ s={px:lx(0),dir:0,objs:[],speed:80,elapsed:0,state:'run',laser:0,stars:[]};
-        if(theme==='space'){ for(let i=0;i<46;i++) s.stars.push({x:Math.random()*W,y:Math.random()*H,z:Math.random()*2+0.6}); }
+        for(let i=0;i<46;i++) s.stars.push({x:Math.random()*W,y:Math.random()*H,z:Math.random()*2+0.6});
         spawnRow(); showBanner(); }
       function showBanner(){ const q=questions[qi]; $('qText2').textContent=q.question;
         $('qLegend').innerHTML=q.options.map((o,k)=>`<div class="leg leg${k}"><b>${'ABCD'[k]}</b> ${esc(o)}</div>`).join(''); }
       function spawnRow(){ s.speed=70+s.elapsed*7; s.objs=questions[qi].options.map((o,k)=>({lane:k,y:-OBJ})); s.state='run'; }
       function curLane(){ let best=0,bd=1e9; for(let l=0;l<4;l++){const d=Math.abs(lx(l)-s.px);if(d<bd){bd=d;best=l;}} return best; }
-      async function pick(lane){ if(s.state!=='run') return; s.state='wait'; if(theme==='space') s.laser=0.18;
+      async function pick(lane){ if(s.state!=='run') return; s.state='wait'; s.laser=0.18;
         const d=await submitAnswer(lane); s.correctLane=d.correctIndex;
         if(d.correct){ arcadeScore++; } else { lives--; } updateHud();
         const fb=$('qFb'); fb.className='qfb show '+(d.correct?'right':'no');
         fb.innerHTML = d.correct?`<b>Correct! ✅</b>${esc(d.explanation||'')}` : `<b>Not quite ❌ — ${'ABCD'[d.correctIndex]} was right</b>${esc(d.explanation||'')}`;
         setTimeout(()=>{ $('qFb').className='qfb'; if(advance()){ spawnRow(); showBanner(); } }, 1500); }
       function update(dt){ s.elapsed+=dt; if(s.laser>0)s.laser-=dt;
-        if(theme==='space') s.stars.forEach(st=>{ st.y+=(30+s.elapsed*5)*st.z*dt; if(st.y>H){st.y=0;st.x=Math.random()*W;} });
+        s.stars.forEach(st=>{ st.y+=(30+s.elapsed*5)*st.z*dt; if(st.y>H){st.y=0;st.x=Math.random()*W;} });
         if(dragX!=null) s.px=clamp(dragX,24,W-24); else s.px=clamp(s.px+moveDir*250*dt,24,W-24);
         if(s.state!=='run') return;
         s.objs.forEach(o=>o.y+=s.speed*dt);
-        if(theme==='runner'){ if(s.objs[0].y >= SELY-OBJ/2){ pick(curLane()); } }
-        else { if(fireQueued){ fireQueued=false; pick(curLane()); } else if(s.objs[0].y > H+10){ pick(curLane()); } } }
+        if(fireQueued){ fireQueued=false; pick(curLane()); } else if(s.objs[0].y > H+10){ pick(curLane()); } }
       function drawObj(o){ const x=lx(o.lane), y=o.y+OBJ/2, col=LCOL[o.lane];
-        if(theme==='space'){ cx.fillStyle=col; cx.beginPath(); cx.arc(x,y,OBJ/2-3,0,7); cx.fill(); cx.fillStyle='rgba(255,255,255,.18)'; cx.beginPath(); cx.arc(x-7,y-7,OBJ/4,0,7); cx.fill(); }
-        else { cx.fillStyle=col; rr(x-OBJ/2+4,o.y,OBJ-8,OBJ-6,10); cx.fillStyle='rgba(255,255,255,.85)'; rr(x-OBJ/2+10,o.y+6,OBJ-20,OBJ-18,6); cx.fillStyle=col; }
+        cx.fillStyle=col; cx.beginPath(); cx.arc(x,y,OBJ/2-3,0,7); cx.fill(); cx.fillStyle='rgba(255,255,255,.18)'; cx.beginPath(); cx.arc(x-7,y-7,OBJ/4,0,7); cx.fill();
         cx.fillStyle='#fff'; cx.font='800 26px Plus Jakarta Sans,sans-serif'; cx.textAlign='center'; cx.textBaseline='middle'; cx.fillText('ABCD'[o.lane], x, y); }
-      function rr(x,y,w,h,r){ cx.beginPath(); cx.moveTo(x+r,y); cx.arcTo(x+w,y,x+w,y+h,r); cx.arcTo(x+w,y+h,x,y+h,r); cx.arcTo(x,y+h,x,y,r); cx.arcTo(x,y,x+w,y,r); cx.fill(); }
       function render(){
-        if(theme==='space'){ cx.fillStyle='#0b1020'; cx.fillRect(0,0,W,H); cx.fillStyle='#fff'; s.stars.forEach(st=>{cx.globalAlpha=st.z/2.6;cx.fillRect(st.x,st.y,st.z,st.z);}); cx.globalAlpha=1; }
-        else { cx.fillStyle='#2f3a30'; cx.fillRect(0,0,W,H); cx.fillStyle='#39404e'; cx.fillRect(20,0,W-40,H);
-          cx.fillStyle='rgba(255,255,255,.5)'; for(let l=1;l<4;l++){const x=(W/4)*l-2;for(let y=-40+((s.elapsed*s.speed)%40);y<H;y+=40)cx.fillRect(x,y,4,22);} }
+        cx.fillStyle='#0b1020'; cx.fillRect(0,0,W,H); cx.fillStyle='#fff'; s.stars.forEach(st=>{cx.globalAlpha=st.z/2.6;cx.fillRect(st.x,st.y,st.z,st.z);}); cx.globalAlpha=1;
         s.objs.forEach(drawObj);
-        // player
         const px=s.px;
-        if(theme==='space'){ cx.fillStyle='#2a6aa6'; cx.beginPath(); cx.moveTo(px,SELY-PH/2); cx.lineTo(px-PW/2,SELY+PH/2); cx.lineTo(px+PW/2,SELY+PH/2); cx.closePath(); cx.fill();
-          cx.fillStyle='#a5d8ff'; cx.beginPath(); cx.arc(px,SELY,7,0,7); cx.fill();
-          if(s.laser>0){ cx.fillStyle='#ffd43b'; cx.fillRect(px-3,0,6,SELY-PH/2); } }
-        else { blockCar(px-PW/2,SELY-PH/2,PW,PH+10,{'1':'#2a6aa6','2':'#a5d8ff','3':'#10161f'});
-          cx.strokeStyle='rgba(255,255,255,.4)'; cx.lineWidth=2; cx.beginPath(); cx.moveTo(20,SELY+PH/2+6); cx.lineTo(W-20,SELY+PH/2+6); cx.stroke(); } }
+        cx.fillStyle='#2a6aa6'; cx.beginPath(); cx.moveTo(px,SELY-PH/2); cx.lineTo(px-PW/2,SELY+PH/2); cx.lineTo(px+PW/2,SELY+PH/2); cx.closePath(); cx.fill();
+        cx.fillStyle='#a5d8ff'; cx.beginPath(); cx.arc(px,SELY,7,0,7); cx.fill();
+        if(s.laser>0){ cx.fillStyle='#ffd43b'; cx.fillRect(px-3,0,6,SELY-PH/2); } }
       return { init, update, render };
+    }
+
+    /* ===== ANSWER RUNNER — Temple Run-style endless runner:
+       perspective road, 3 lanes. Dodge obstacles left/right by changing lane,
+       or up/down by jumping over low rocks / ducking under overhead branches.
+       Hitting one triggers the question (reuses the crash overlay), same as
+       Car Dodge — but avoidance now needs both axes, not just steering. */
+    function RunnerGame(){
+      const LANES=3, HORIZON=H*0.34, PLANE_Y=H-86, LANE_W=78, cx0=W/2;
+      const laneBaseX=l=>cx0+(l-(LANES-1)/2)*LANE_W;
+      const projX=(l,t)=>cx0+(laneBaseX(l)-cx0)*t;
+      const projY=t=>HORIZON+t*t*(PLANE_Y-HORIZON+50);
+      const projScale=t=>0.16+0.84*t;
+      let s;
+      function init(){ s={lane:1,objs:[],spawnT:0.9,elapsed:0,step:0,state:'run',vert:'run',vertT:0,invuln:1,prevMove:0}; }
+      function spawnObstacle(){ s.objs.push({kind: Math.random()<0.5?'rock':'branch', lane:rnd(LANES), t:0}); }
+      function doJump(){ if(s.state==='run' && s.vert==='run'){ s.vert='jump'; s.vertT=0.55; } }
+      function doDuck(){ if(s.state==='run' && s.vert==='run'){ s.vert='duck'; s.vertT=0.5; } }
+      function crash(){ s.state='wait'; lives--; updateHud(); openCrash(); }
+      function update(dt){ if(s.state!=='run'){ return; }
+        s.elapsed+=dt; s.step+=dt;
+        if(jumpQueued){ jumpQueued=false; doJump(); }
+        if(duckQueued){ duckQueued=false; doDuck(); }
+        if(s.vertT>0){ s.vertT-=dt; if(s.vertT<=0) s.vert='run'; }
+        if(s.invuln>0) s.invuln-=dt;
+        if(moveDir>0.5 && s.prevMove<=0.5){ s.lane=clamp(s.lane+1,0,LANES-1); }
+        else if(moveDir<-0.5 && s.prevMove>=-0.5){ s.lane=clamp(s.lane-1,0,LANES-1); }
+        s.prevMove=moveDir;
+        const speed=0.36+s.elapsed*0.009;
+        for(let i=s.objs.length-1;i>=0;i--){ const o=s.objs[i]; o.t+=speed*dt;
+          if(o.t>=1){
+            const sameLane=o.lane===s.lane;
+            const dodgedVertically = o.kind==='rock' ? s.vert==='jump' : s.vert==='duck';
+            s.objs.splice(i,1);
+            if(sameLane && !dodgedVertically && s.invuln<=0){ crash(); return; }
+            arcadeScore++; updateHud();
+          }
+        }
+        s.spawnT-=dt; if(s.spawnT<=0){ s.spawnT=1.05+Math.random()*0.55; spawnObstacle(); }
+      }
+      function drawRoad(){
+        const g=cx.createLinearGradient(0,0,0,HORIZON); g.addColorStop(0,'#bfe3ff'); g.addColorStop(1,'#8fc9f2');
+        cx.fillStyle=g; cx.fillRect(0,0,W,HORIZON);
+        cx.fillStyle='#6a9955'; cx.fillRect(0,HORIZON,W,H-HORIZON);
+        cx.beginPath(); cx.moveTo(laneBaseX(0)-LANE_W*0.6, PLANE_Y+40); cx.lineTo(laneBaseX(LANES-1)+LANE_W*0.6, PLANE_Y+40);
+        cx.lineTo(cx0+5, HORIZON); cx.lineTo(cx0-5, HORIZON); cx.closePath();
+        const rg=cx.createLinearGradient(0,HORIZON,0,PLANE_Y+40); rg.addColorStop(0,'#8a7a63'); rg.addColorStop(1,'#5b5040');
+        cx.fillStyle=rg; cx.fill();
+        cx.strokeStyle='rgba(255,255,255,.5)'; cx.lineWidth=2;
+        for(let l=1;l<LANES;l++){ cx.beginPath(); cx.moveTo(cx0,HORIZON+2); cx.lineTo(laneBaseX(l-0.5), PLANE_Y+38); cx.stroke(); }
+      }
+      function drawObstacle(o){ const t=o.t, x=projX(o.lane,t), y=projY(t), sc=projScale(t);
+        cx.globalAlpha=Math.min(1,0.3+t);
+        if(o.kind==='rock'){ const r=26*sc;
+          cx.fillStyle='#7d7568'; cx.beginPath(); cx.ellipse(x,y,r*1.15,r*0.85,0,0,7); cx.fill();
+          cx.fillStyle='#948c7d'; cx.beginPath(); cx.ellipse(x-r*0.25,y-r*0.25,r*0.55,r*0.4,0,0,7); cx.fill();
+        } else { const w=LANE_W*0.92*sc, h=14*sc, hangY=y-70*sc;
+          cx.strokeStyle='#5c4632'; cx.lineWidth=Math.max(2,4*sc); cx.beginPath(); cx.moveTo(x,hangY); cx.lineTo(x,y-16*sc); cx.stroke();
+          cx.fillStyle='#8a5a34'; cx.fillRect(x-w/2,hangY-h/2,w,h);
+          cx.fillStyle='rgba(0,0,0,.18)'; cx.fillRect(x-w/2,hangY+h/2-3*sc,w,3*sc);
+        }
+        cx.globalAlpha=1; }
+      function drawPlayer(){
+        const x=cx0, groundY=PLANE_Y;
+        const jumpH = s.vert==='jump' ? Math.sin(Math.min(1,(0.55-s.vertT)/0.55)*Math.PI)*46 : 0;
+        const y = groundY - jumpH;
+        cx.fillStyle='rgba(0,0,0,.18)'; cx.beginPath(); cx.ellipse(x,groundY+6,20,6*Math.max(0.3,1-jumpH/60),0,0,7); cx.fill();
+        let f;
+        if(!RUNNER_SPRITE.ready){ f=null; }
+        else if(s.vert==='jump'){ const p=Math.min(1,(0.55-s.vertT)/0.55); f=JUMP_FRAMES[Math.min(JUMP_FRAMES.length-1,Math.floor(p*JUMP_FRAMES.length))]; }
+        else if(s.vert==='duck'){ f=DUCK_FRAMES[Math.floor(s.step*8)%DUCK_FRAMES.length]; }
+        else { f=RUN_FRAMES[Math.floor(s.step*12)%RUN_FRAMES.length]; }
+        if(f){ const m=7, sw=f.w-m*2, sh=f.h-m*2, dw=76, dh=76*(sh/sw);
+          cx.drawImage(RUNNER_SPRITE.img, f.x+m, f.y+m, sw, sh, x-dw/2, y-dh, dw, dh);
+          if(s.invuln>0 && Math.floor(s.elapsed*14)%2){ cx.globalAlpha=0.3; cx.fillStyle='#fff'; cx.beginPath(); cx.arc(x,y-dh/2,32,0,7); cx.fill(); cx.globalAlpha=1; }
+        }
+      }
+      function render(){ drawRoad();
+        [...s.objs].sort((a,b)=>a.t-b.t).forEach(drawObstacle);
+        drawPlayer(); }
+      return { init, update, render, resume(){ s.objs=s.objs.filter(o=>o.t<0.5); s.invuln=1.4; s.state='run'; lastT=performance.now(); } };
     }
 
     /* ===== controls (one shared moveDir for keys + buttons) ===== */
     let moveDir=0;
-    document.addEventListener('keydown',e=>{ if(e.key==='ArrowLeft'){moveDir=-1;e.preventDefault();} else if(e.key==='ArrowRight'){moveDir=1;e.preventDefault();} else if(e.key===' '||e.key==='ArrowUp'){fireQueued=true;e.preventDefault();} });
+    document.addEventListener('keydown',e=>{ if(e.key==='ArrowLeft'){moveDir=-1;e.preventDefault();} else if(e.key==='ArrowRight'){moveDir=1;e.preventDefault();} else if(e.key==='ArrowUp'){ if(activeGameType==='runner') jumpQueued=true; else fireQueued=true; e.preventDefault(); } else if(e.key===' '){fireQueued=true;e.preventDefault();} else if(e.key==='ArrowDown'){duckQueued=true;e.preventDefault();} });
     document.addEventListener('keyup',e=>{ if((e.key==='ArrowLeft'&&moveDir===-1)||(e.key==='ArrowRight'&&moveDir===1)) moveDir=0; });
     function bindHold(el,dir){ const on=e=>{ e.preventDefault(); moveDir=dir; }; const off=e=>{ if(e)e.preventDefault(); if(moveDir===dir) moveDir=0; };
       el.addEventListener('pointerdown',on); el.addEventListener('pointerup',off); el.addEventListener('pointerleave',off); el.addEventListener('pointercancel',off); }
     bindHold($('leftBtn'),-1); bindHold($('rightBtn'),1);
     $('fireBtn').addEventListener('pointerdown',e=>{ e.preventDefault(); fireQueued=true; });
+    $('jumpBtn').addEventListener('pointerdown',e=>{ e.preventDefault(); jumpQueued=true; });
+    $('duckBtn').addEventListener('pointerdown',e=>{ e.preventDefault(); duckQueued=true; });
     function canvasX(e){ const r=cv.getBoundingClientRect(); return ((e.clientX-r.left)/r.width)*W; }
     cv.addEventListener('pointerdown',e=>{ dragX=canvasX(e); cv.setPointerCapture(e.pointerId); if($('fireBtn').style.display!=='none') fireQueued=true; });
     cv.addEventListener('pointermove',e=>{ if(dragX!=null) dragX=canvasX(e); });
