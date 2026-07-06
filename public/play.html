@@ -145,7 +145,7 @@
       <div class="game-cards">
         <button class="game-pick" data-game="car"><span class="gi">🚗</span><span><b>Car Dodge</b><span>Steer and dodge traffic — crash to answer a question.</span></span></button>
         <button class="game-pick" data-game="space"><span class="gi">🚀</span><span><b>Space Blaster</b><span>Blast the alien fleet and dodge their bombs — get hit to answer a question.</span></span></button>
-        <button class="game-pick" data-game="runner"><span class="gi">🏃</span><span><b>Answer Runner</b><span>Jump rocks and duck branches — crash into one to answer a question.</span></span></button>
+        <button class="game-pick" data-game="runner"><span class="gi">🏃</span><span><b>Answer Runner</b><span>Jump rocks, duck branches, grab coins — crash and answer to keep running.</span></span></button>
         <button class="game-pick" data-game="balloon"><span class="gi">🎈</span><span><b>Balloon Pop</b><span>Tap the balloon with the correct answer before it floats away!</span></span></button>
       </div>
     </div>
@@ -284,7 +284,7 @@
       const hsLines=[];
       if(hs.car>0)   hsLines.push(`🚗 <b>Car Dodge:</b> ${hs.car} cars dodged`);
       if(hs.space>0) hsLines.push(`🚀 <b>Space Blaster:</b> ${hs.space} invaders blasted`);
-      if(hs.runner>0)hsLines.push(`🏃 <b>Answer Runner:</b> ${hs.runner} obstacles cleared`);
+      if(hs.runner>0)hsLines.push(`🏃 <b>Answer Runner:</b> ${hs.runner} points`);
       if(hs.balloon>0)hsLines.push(`🎈 <b>Balloon Pop:</b> ${hs.balloon} balloons popped`);
       if(hsLines.length){ $('sumHighScores').innerHTML='<div style="font-weight:700;margin-bottom:8px">🏆 Records — can you beat them?</div>'+hsLines.map(l=>`<div style="margin-bottom:4px">${l}</div>`).join(''); $('sumHighScores').style.display='block'; }
       else $('sumHighScores').style.display='none';
@@ -303,7 +303,7 @@
       const d=await (await fetch('/api/game/'+GAME_ID+'/finish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answers:answers.map(a=>a==null?-1:a),arcadeScore,gameType:activeGameType})})).json();
 
       // Arcade score block
-      const typeLabel=activeGameType==='car'?'cars dodged':activeGameType==='space'?'invaders blasted':activeGameType==='runner'?'obstacles cleared':'balloons popped';
+      const typeLabel=activeGameType==='car'?'cars dodged':activeGameType==='space'?'invaders blasted':activeGameType==='runner'?'points':'balloons popped';
       $('resArcade').innerHTML=`<div style="font-size:56px;font-weight:900;color:var(--accent);line-height:1">${arcadeScore}</div><div style="font-size:14px;color:var(--muted);margin-top:4px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">${typeLabel}</div>`;
 
       // High score comparison (anonymous — no names shown)
@@ -331,7 +331,7 @@
       $('lrControls').style.display = (key==='runner'||key==='balloon')?'none':'flex';
       $('qBanner').style.display = key==='balloon'?'block':'none';
       $('qFb').className='qfb';
-      $('dragTip').textContent = key==='space'?'Move ◀ ▶ (or drag), tap FIRE — blast the invaders, dodge their bombs!' : key==='runner'?'⬆ to jump rocks, ⬇ to duck branches — hit one and answer to keep going!' : key==='balloon'?'Tap the balloon with the correct answer — don\'t let them float away!' : 'Dodge the cars — crash to answer. They speed up!';
+      $('dragTip').textContent = key==='space'?'Move ◀ ▶ (or drag), tap FIRE — blast the invaders, dodge their bombs!' : key==='runner'?'⬆ jump rocks, ⬇ duck branches, grab coins — watch for runaway boulders!' : key==='balloon'?'Tap the balloon with the correct answer — don\'t let them float away!' : 'Dodge the cars — crash to answer. They speed up!';
       active = key==='car' ? CarGame() : key==='runner' ? RunnerGame() : key==='balloon' ? BalloonGame() : SpaceGame();
       show('gameScreen'); $('qOverlay').classList.remove('show'); active.init(); updateHud();
       lastT=performance.now(); cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
@@ -501,15 +501,28 @@
     function RunnerGame(){
       const GROUND_Y=H-84, PLAYER_X=84;
       let s;
-      function init(){ s={objs:[],parts:[],pops:[],spawnT:0.9,dustT:0,dist:0,elapsed:0,step:0,state:'run',vert:'run',vertT:0,invuln:1}; }
-      function spawnObstacle(){ const kind=Math.random()<0.5?'rock':'branch';
-        const frame = kind==='rock' ? ROCK_FRAMES[rnd(ROCK_FRAMES.length)] : BRANCH_FRAMES[0];
-        s.objs.push({kind, x:W+40, frame}); }
-      function doJump(){ if(s.state==='run' && s.vert==='run'){ s.vert='jump'; s.vertT=0.55; } }
-      function doDuck(){ if(s.state==='run' && s.vert==='run'){ s.vert='duck'; s.vertT=0.5; } }
+      function init(){ s={objs:[],coins:[],birds:[],parts:[],pops:[],spawnT:0.9,coinT:1.6,birdT:4,warnT:0,pairT:0,pairKind:null,
+        dustT:0,dist:0,elapsed:0,step:0,state:'run',vert:'run',vertT:0,invuln:1,lastAction:-9}; }
+      function spawnObstacle(kind){
+        kind = kind || (Math.random()<0.5?'rock':'branch');
+        const frame = kind==='branch' ? BRANCH_FRAMES[0] : ROCK_FRAMES[rnd(ROCK_FRAMES.length)];
+        s.objs.push({kind, x:W+40, frame});
+        // Occasionally chain the opposite obstacle right behind — a
+        // jump-then-duck (or duck-then-jump) combo.
+        if(kind!=='boulder' && s.pairT<=0 && s.warnT<=0 && Math.random()<0.25){ s.pairT=0.42; s.pairKind = kind==='rock'?'branch':'rock'; }
+      }
+      function spawnCoins(){
+        const air = Math.random()<0.5, base=W+60;
+        for(let i=0;i<3;i++) s.coins.push({ x:base+i*34, y: air ? GROUND_Y-92-(i===1?14:0) : GROUND_Y-38, ph:Math.random()*6 });
+      }
+      function doJump(){ if(s.state==='run' && s.vert==='run'){ s.vert='jump'; s.vertT=0.55; s.lastAction=s.elapsed; } }
+      function doDuck(){ if(s.state==='run' && s.vert==='run'){ s.vert='duck'; s.vertT=0.5; s.lastAction=s.elapsed; } }
       function crash(){ s.state='wait'; lives--; updateHud(); openCrash(); }
       function dust(x,y,n,spread){ for(let i=0;i<n;i++) s.parts.push({ x:x+(Math.random()-0.5)*10, y,
-        vx:-20-Math.random()*spread, vy:-15-Math.random()*30, t:0, life:0.35+Math.random()*0.2, r:2+Math.random()*2.5 }); }
+        vx:-20-Math.random()*spread, vy:-15-Math.random()*30, t:0, life:0.35+Math.random()*0.2, r:2+Math.random()*2.5, col:'#8a7a63' }); }
+      function sparkle(x,y){ for(let i=0;i<7;i++){ const a=Math.random()*Math.PI*2, sp=40+Math.random()*70;
+        s.parts.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-30,t:0,life:0.35+Math.random()*0.15,r:1.5+Math.random()*2,col:'#ffd43b'}); } }
+      function jumpHeight(){ return s.vert==='jump' ? Math.sin(Math.min(1,(0.55-s.vertT)/0.55)*Math.PI)*50 : 0; }
       function update(dt){
         // Effects keep animating even while the question overlay is up.
         s.parts=s.parts.filter(p=>(p.t+=dt)<p.life);
@@ -524,28 +537,61 @@
         const speed=Math.min(420,150+s.elapsed*14);
         s.dist+=speed*dt;
         if(s.vert==='run'){ s.dustT-=dt; if(s.dustT<=0){ s.dustT=0.09; dust(PLAYER_X-14,GROUND_Y+2,1,40); } }
-        for(let i=s.objs.length-1;i>=0;i--){ const o=s.objs[i]; o.x-=speed*dt;
+        // runaway boulder: brief "!" warning at the screen edge, then it
+        // barrels in faster than the world scrolls
+        if(s.warnT>0){ s.warnT-=dt; if(s.warnT<=0) spawnObstacle('boulder'); }
+        if(s.pairT>0){ s.pairT-=dt; if(s.pairT<=0 && s.pairKind){ spawnObstacle(s.pairKind); s.pairKind=null; } }
+        for(let i=s.objs.length-1;i>=0;i--){ const o=s.objs[i];
+          o.x-=(speed + (o.kind==='boulder'?95:0))*dt;
           if(o.x<=PLAYER_X){
-            const dodgedVertically = o.kind==='rock' ? s.vert==='jump' : s.vert==='duck';
+            const dodgedVertically = o.kind==='branch' ? s.vert==='duck' : s.vert==='jump';
             s.objs.splice(i,1);
             if(!dodgedVertically && s.invuln<=0){ crash(); return; }
-            arcadeScore++; updateHud(); s.pops.push({x:PLAYER_X+34,y:GROUND_Y-74,t:0});
+            // last-moment dodges score double
+            const perfect = s.elapsed-s.lastAction < 0.22;
+            arcadeScore += perfect?2:1; updateHud();
+            s.pops.push({x:PLAYER_X+34,y:GROUND_Y-74,t:0,text:perfect?'Perfect! +2':'+1',col:perfect?'#f08c00':'#15824b'});
           }
         }
-        s.spawnT-=dt; if(s.spawnT<=0){ s.spawnT=1.05+Math.random()*0.55; spawnObstacle(); }
+        // coins: run through ground trios, jump for air trios
+        const cy = GROUND_Y - jumpHeight() - 40;
+        for(let i=s.coins.length-1;i>=0;i--){ const c=s.coins[i]; c.x-=speed*dt;
+          if(c.x<-20){ s.coins.splice(i,1); continue; }
+          if(Math.abs(c.x-PLAYER_X)<18 && Math.abs(c.y-cy)<32){
+            s.coins.splice(i,1); arcadeScore++; updateHud(); sparkle(c.x,c.y);
+            s.pops.push({x:c.x,y:c.y-14,t:0,text:'+1',col:'#f08c00'});
+          }
+        }
+        s.spawnT-=dt; if(s.spawnT<=0){ s.spawnT=1.05+Math.random()*0.55;
+          if(s.warnT<=0 && Math.random()<0.14){ s.warnT=0.6; } else spawnObstacle(); }
+        s.coinT-=dt; if(s.coinT<=0){ s.coinT=2.2+Math.random()*1.6; spawnCoins(); }
+        s.birdT-=dt; if(s.birdT<=0){ s.birdT=5+Math.random()*4; s.birds.push({x:W+16,y:44+rnd(80),ph:Math.random()*6}); }
+        for(let i=s.birds.length-1;i>=0;i--){ const b=s.birds[i]; b.x-=(speed*0.35+30)*dt; if(b.x<-20) s.birds.splice(i,1); }
       }
       function drawBackground(){
-        const g=cx.createLinearGradient(0,0,0,GROUND_Y); g.addColorStop(0,'#bfe3ff'); g.addColorStop(1,'#e7f4ea');
+        // Sky drifts between midday blue and golden afternoon as you run.
+        const k=0.5+0.5*Math.sin(s.dist/2600);
+        const mix=(a,b)=>a.map((v,i)=>Math.round(v+(b[i]-v)*k));
+        const top=mix([191,227,255],[255,214,160]), bot=mix([231,244,234],[255,238,218]);
+        const g=cx.createLinearGradient(0,0,0,GROUND_Y);
+        g.addColorStop(0,`rgb(${top})`); g.addColorStop(1,`rgb(${bot})`);
         cx.fillStyle=g; cx.fillRect(0,0,W,GROUND_Y+30);
-        // Three parallax layers, all driven by distance actually travelled so
-        // the world visibly speeds up with the game: clouds slowest, far
-        // hills slow, near hills faster, ground dashes at full speed.
+        const sg=cx.createRadialGradient(W-52,54,4,W-52,54,46);
+        sg.addColorStop(0,'rgba(255,236,153,.95)'); sg.addColorStop(0.35,'rgba(255,222,109,.45)'); sg.addColorStop(1,'rgba(255,222,109,0)');
+        cx.fillStyle=sg; cx.fillRect(W-110,0,110,120);
+        // Parallax layers all driven by distance actually travelled so the
+        // world visibly speeds up with the game: clouds slowest, far hills
+        // slow, near hills faster, ground detail at full speed.
         cx.fillStyle='rgba(255,255,255,.8)';
         const cOff=(s.dist*0.04)%(W+140);
         [[40,66,15],[170,108,12],[280,48,14]].forEach(([bx,by,r])=>{
           const x=((bx-cOff)%(W+140)+(W+140))%(W+140)-70;
           cx.beginPath(); cx.ellipse(x,by,r*1.6,r,0,0,7); cx.ellipse(x+r,by-r*0.5,r*1.1,r*0.75,0,0,7); cx.fill();
         });
+        cx.strokeStyle='#42505f'; cx.lineWidth=2; cx.lineCap='round';
+        s.birds.forEach(b=>{ const f=Math.sin(s.elapsed*9+b.ph)*3;
+          cx.beginPath(); cx.moveTo(b.x-6,b.y); cx.quadraticCurveTo(b.x-3,b.y-4-f,b.x,b.y);
+          cx.quadraticCurveTo(b.x+3,b.y-4-f,b.x+6,b.y); cx.stroke(); });
         cx.fillStyle='#b5daae';
         const fOff=(s.dist*0.1)%220;
         for(let i=-1;i<4;i++){ const hx=i*220-fOff; cx.beginPath(); cx.arc(hx+110,GROUND_Y+30,125,Math.PI,0); cx.fill(); }
@@ -558,25 +604,45 @@
         cx.beginPath();
         for(let x=-36+dashOff;x<W;x+=36) cx.moveTo(W-x,GROUND_Y+10), cx.lineTo(W-x-20,GROUND_Y+10);
         cx.stroke();
+        // grass tufts + pebbles scrolling at full speed sell the ground motion
+        cx.strokeStyle='#57814b'; cx.lineWidth=2;
+        for(let gx=-(s.dist%47); gx<W; gx+=47){ cx.beginPath();
+          cx.moveTo(gx,GROUND_Y+24); cx.lineTo(gx-2,GROUND_Y+17);
+          cx.moveTo(gx+3,GROUND_Y+24); cx.lineTo(gx+4,GROUND_Y+16);
+          cx.moveTo(gx+6,GROUND_Y+24); cx.lineTo(gx+8,GROUND_Y+18); cx.stroke(); }
+        cx.fillStyle='#5b7a52';
+        for(let px=-(s.dist%61); px<W; px+=61){ cx.beginPath(); cx.ellipse(px+20,GROUND_Y+32,3,2,0,0,7); cx.fill(); }
+        // incoming runaway boulder warning
+        if(s.warnT>0 && Math.floor(s.elapsed*10)%2){ cx.fillStyle='#c0392b';
+          cx.font='800 26px Plus Jakarta Sans,sans-serif'; cx.textAlign='center'; cx.fillText('!', W-18, GROUND_Y-34); }
       }
       function drawObstacle(o){
         if(!OBSTACLE_SPRITE.ready) return;
         const m=7, f=o.frame, sw=f.w-m*2, sh=f.h-m*2;
-        if(o.kind==='rock'){ const dw=50, dh=50*(sh/sw);
+        if(o.kind==='branch'){ const dw=70, dh=70*(sh/sw), hangY=GROUND_Y-70;
+          cx.drawImage(OBSTACLE_SPRITE.img, f.x+m, f.y+m, sw, sh, o.x-dw/2, hangY-dh/2, dw, dh);
+        } else { const dw=o.kind==='boulder'?64:50, dh=dw*(sh/sw);
+          if(o.kind==='boulder'){ cx.strokeStyle='rgba(125,117,104,.5)'; cx.lineWidth=3;
+            cx.beginPath(); cx.moveTo(o.x+dw*0.7,GROUND_Y-dh*0.7); cx.lineTo(o.x+dw*1.15,GROUND_Y-dh*0.7);
+            cx.moveTo(o.x+dw*0.75,GROUND_Y-dh*0.3); cx.lineTo(o.x+dw*1.3,GROUND_Y-dh*0.3); cx.stroke(); }
           // Boulders roll: rotation tied to horizontal travel over radius.
           cx.save(); cx.translate(o.x, GROUND_Y-dh/2); cx.rotate(o.x/(dw/2));
           cx.drawImage(OBSTACLE_SPRITE.img, f.x+m, f.y+m, sw, sh, -dw/2, -dh/2, dw, dh);
           cx.restore();
-        } else { const dw=70, dh=70*(sh/sw), hangY=GROUND_Y-70;
-          cx.drawImage(OBSTACLE_SPRITE.img, f.x+m, f.y+m, sw, sh, o.x-dw/2, hangY-dh/2, dw, dh);
         }
       }
+      function drawCoin(c){
+        const spin=Math.abs(Math.cos(s.elapsed*5+c.ph)), rx=Math.max(2.2,8*spin);
+        cx.fillStyle='#f59f00'; cx.beginPath(); cx.ellipse(c.x,c.y,rx,9,0,0,7); cx.fill();
+        cx.fillStyle='#ffd43b'; cx.beginPath(); cx.ellipse(c.x,c.y,rx*0.65,6.2,0,0,7); cx.fill();
+        if(spin>0.7){ cx.fillStyle='rgba(255,255,255,.9)'; cx.beginPath(); cx.arc(c.x-rx*0.3,c.y-3,1.6,0,7); cx.fill(); }
+      }
       function drawFx(){
-        s.parts.forEach(p=>{ cx.globalAlpha=Math.max(0,1-p.t/p.life)*0.6; cx.fillStyle='#8a7a63';
+        s.parts.forEach(p=>{ cx.globalAlpha=Math.max(0,1-p.t/p.life)*(p.col==='#ffd43b'?0.95:0.6); cx.fillStyle=p.col;
           cx.beginPath(); cx.arc(p.x,p.y,p.r,0,7); cx.fill(); });
         cx.globalAlpha=1;
-        s.pops.forEach(p=>{ cx.globalAlpha=Math.max(0,1-p.t/0.7); cx.fillStyle='#15824b';
-          cx.font='800 17px Plus Jakarta Sans,sans-serif'; cx.textAlign='center'; cx.fillText('+1', p.x, p.y-p.t*46); });
+        s.pops.forEach(p=>{ cx.globalAlpha=Math.max(0,1-p.t/0.7); cx.fillStyle=p.col;
+          cx.font='800 17px Plus Jakarta Sans,sans-serif'; cx.textAlign='center'; cx.fillText(p.text, p.x, p.y-p.t*46); });
         cx.globalAlpha=1;
       }
       function drawPlayer(){
@@ -595,6 +661,7 @@
         }
       }
       function render(){ drawBackground();
+        s.coins.forEach(drawCoin);
         s.objs.forEach(drawObstacle);
         drawPlayer(); drawFx(); }
       return { init, update, render, resume(){ s.objs=s.objs.filter(o=>o.x>PLAYER_X-40); s.invuln=1.4; s.state='run'; lastT=performance.now(); } };
