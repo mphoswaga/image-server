@@ -8,7 +8,7 @@ const path = require('path');
 const { buildDeck, rebuildDeck, alternativeImage, findReusableImage, searchLibrary, getLibraryImage, listLibrary, addLibraryImages, libraryStats, getLibraryByTopic, recentLibraryImages, removeLibraryImage } = require('./generate');
 const quota = require('./quota');
 const { generateOneSlide } = require('./content');
-const { extractText, saveTemplate, listTemplates, getTemplate, renameTemplate, deleteTemplate, loadOriginalById, loadTemplate, loadOriginal, TYPES } = require('./template');
+const { extractText, extractPptxSlides, saveTemplate, listTemplates, getTemplate, renameTemplate, deleteTemplate, loadOriginalById, loadTemplate, loadOriginal, TYPES } = require('./template');
 const { generateLessonPlan, planToText } = require('./lesson-plan');
 const { fillDocx, fillXlsx } = require('./fill-template');
 const { animateBuffer } = require('./animate-pptx');
@@ -545,8 +545,16 @@ app.delete('/api/planning-sources/:id', requireAuth, (req, res) => {
 
 // Hard truncation limits — enforce here as a server-side backstop so malformed
 // or oversized requests can't inflate token budgets even if the UI is bypassed.
-const LIMITS = { subject: 60, topic: 80, objectives: 1500, focus: 400 };
+const LIMITS = { subject: 60, topic: 80, objectives: 1500, focus: 400, source: 24000 };
 function clip(val, max) { return String(val || '').slice(0, max); }
+// A raw lesson-plan / source-text block (from an uploaded plan or slides) can
+// ground generation instead of a structured {sections} plan. Prefer the
+// structured plan when present; otherwise fall back to the raw text.
+function resolvePlanText(body) {
+  const sections = body && body.lessonPlan && body.lessonPlan.sections;
+  if (Array.isArray(sections) && sections.length) return planToText(body.lessonPlan);
+  return clip(body && body.lessonPlanText, LIMITS.source);
+}
 
 // ── Lesson plan generation (objectives + stored template → plan) ──────────
 app.post('/api/lesson-plan', requireAuth, async (req, res) => {
@@ -571,6 +579,86 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
   }
 });
 
+// ── Import flows: teacher already has a lesson plan or slides ───────────────
+// Path A — "I have a lesson plan": upload it (Word/PDF/text), skip objectives,
+// and go straight to slides. The extracted plan text grounds the slides (and
+// the lesson pack afterwards) exactly like an accepted in-app plan would.
+app.post('/api/import/lesson-plan', requireAuth, upload.single('file'), async (req, res) => {
+  if (req.user.role === 'student') return res.status(403).json({ error: 'Teacher account required.' });
+  if (!req.file) return res.status(400).json({ error: 'Please choose your lesson-plan file.' });
+  const subject = clip(req.body.subject, LIMITS.subject);
+  const topic = clip(req.body.topic, LIMITS.topic);
+  if (!subject || !topic) return res.status(400).json({ error: 'Enter the subject and topic for this lesson.' });
+  try {
+    const planText = (await extractText(req.file.buffer, req.file.originalname) || '').trim();
+    if (!planText) return res.status(400).json({ error: "Couldn't read any text from that file — try a Word, PDF, or text export." });
+    const { slideCount, grade, tone, presetId } = req.body || {};
+    const focus = clip(req.body.focus, LIMITS.focus);
+    const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives: '', lessonPlanText: planText, skipAssemble: true, presetId: presetId || null });
+    const id = crypto.randomUUID();
+    decks.set(id, {
+      subject: String(subject).toLowerCase(), topic: String(topic).toLowerCase(),
+      grade: grade || 'middle school', tone, focus, band: built.band,
+      slides: built.slides, images: built.images, createdAt: Date.now(),
+      objectives: '', lessonPlanText: planText, presetId: presetId || null,
+    });
+    const filename = `${subject}-${topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
+    res.json({
+      deckId: id, filename, band: built.band, slideCount: built.slides.length, sourceText: planText,
+      slides: built.slides.map((s, i) => previewEntry(s, built.images[i])),
+    });
+  } catch (err) {
+    console.error('Import lesson plan failed:', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Path B — "I have slides": upload a .pptx. We parse it into a real deck the
+// teacher can see and edit on the system, and keep the slide text so the
+// lesson pack (worksheet/quiz/exit ticket) and games are grounded in exactly
+// what they uploaded. They can then optionally generate a lesson plan from it,
+// or go straight to the pack. No AI visuals are fetched (fast + no library
+// pollution); the teacher swaps in images per-slide if they want.
+app.post('/api/import/slides', requireAuth, upload.single('file'), async (req, res) => {
+  if (req.user.role === 'student') return res.status(403).json({ error: 'Teacher account required.' });
+  if (!req.file) return res.status(400).json({ error: 'Please choose your slides (.pptx) file.' });
+  const ext = (req.file.originalname || '').toLowerCase();
+  if (!ext.endsWith('.pptx')) return res.status(400).json({ error: 'Please upload PowerPoint slides (.pptx).' });
+  const subject = clip(req.body.subject, LIMITS.subject);
+  const topic = clip(req.body.topic, LIMITS.topic);
+  if (!subject || !topic) return res.status(400).json({ error: 'Enter the subject and topic for these slides.' });
+  try {
+    const parsed = await extractPptxSlides(req.file.buffer);
+    if (!parsed.length) return res.status(400).json({ error: "Couldn't read any slides from that file." });
+    // Map the parsed slides into the deck shape the UI + downloader expect.
+    const slides = parsed.map((p, i) => ({
+      type: i === 0 ? 'title' : (i === parsed.length - 1 ? 'recap' : 'content'),
+      title: p.title,
+      subtitle: i === 0 ? (p.bullets[0] || null) : null,
+      bullets: i === 0 ? [] : p.bullets.slice(0, 6),
+      example: null,
+      imageQuery: `${topic} ${p.title}`.slice(0, 80),
+    }));
+    const images = slides.map(() => null); // no image fetched on import
+    const sourceText = parsed.map(p => [p.title, ...p.bullets].join('\n')).join('\n\n').slice(0, LIMITS.source);
+    const id = crypto.randomUUID();
+    decks.set(id, {
+      subject: String(subject).toLowerCase(), topic: String(topic).toLowerCase(),
+      grade: req.body.grade || 'middle school', tone: req.body.tone || 'clear and engaging',
+      focus: '', band: null, slides, images, createdAt: Date.now(),
+      objectives: '', lessonPlanText: sourceText, imported: true, presetId: null,
+    });
+    const filename = `${subject}-${topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
+    res.json({
+      deckId: id, filename, band: null, slideCount: slides.length, sourceText,
+      slides: slides.map((s, i) => previewEntry(s, images[i])),
+    });
+  } catch (err) {
+    console.error('Import slides failed:', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // ── Lesson pack (worksheet, exit ticket, quiz) from the approved plan ───────
 const PACK_GEN    = { worksheet: generateWorksheet, 'exit-ticket': generateExitTicket, quiz: generateQuiz };
 const PACK_RENDER = { worksheet: worksheetDocx, 'exit-ticket': exitTicketDocx, quiz: quizDocx };
@@ -589,7 +677,7 @@ app.post('/api/pack/full', requireAuth, async (req, res) => {
   try {
     const u = unitId ? unit.getUnit(req.userId, unitId) : null;
     const unitBlock = u ? unit.buildUnitBlock(u, lessonIndex) : '';
-    const lessonPlanText = lessonPlan && lessonPlan.sections ? planToText(lessonPlan) : '';
+    const lessonPlanText = resolvePlanText(req.body);
     const ctx = { subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, unitBlock };
     const meta = { subject, topic, grade };
 
@@ -628,7 +716,7 @@ app.post('/api/pack/:type', requireAuth, async (req, res) => {
   try {
     const u = unitId ? unit.getUnit(req.userId, unitId) : null;
     const unitBlock = u ? unit.buildUnitBlock(u, lessonIndex) : '';
-    const lessonPlanText = lessonPlan && lessonPlan.sections ? planToText(lessonPlan) : '';
+    const lessonPlanText = resolvePlanText(req.body);
     const data = await gen({ subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, unitBlock, regenerate: !!regenerate });
     res.json({ type: req.params.type, data });
   } catch (err) {
@@ -1059,11 +1147,10 @@ app.post('/api/generate', requireAuth, async (req, res) => {
   try {
     const u = unitId ? unit.getUnit(req.userId, unitId) : null;
     const unitBlock = u ? unit.buildUnitBlock(u, lessonIndex) : '';
-    // If an accepted lesson plan was passed, the slides follow it; unit context
+    // If an accepted lesson plan (structured) or a raw plan/source text (from an
+    // uploaded plan or slides) was passed, the slides follow it; unit context
     // falls back into lessonPlanText so it still reaches the content generator.
-    const lessonPlanText = lessonPlan && lessonPlan.sections
-      ? planToText(lessonPlan)
-      : (unitBlock || '');
+    const lessonPlanText = resolvePlanText(req.body) || (unitBlock || '');
     const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives, lessonPlanText, extras: { regenerate: !!regenerate }, skipAssemble: true, presetId: presetId || null });
     const id = crypto.randomUUID();
     decks.set(id, {

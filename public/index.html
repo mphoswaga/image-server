@@ -651,6 +651,21 @@
       width: min(72vw, 760px);
       height: auto;
     }
+    /* Entry-mode selector: start fresh, or bring your own plan / slides */
+    .mode-select { max-width:700px; margin:0 auto 18px; display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+    .mode-card { display:flex; flex-direction:column; align-items:flex-start; gap:4px; text-align:left; padding:16px; border:1.5px solid var(--border); border-radius:14px; background:var(--card); cursor:pointer; font-family:inherit; transition:border-color .15s, box-shadow .15s, transform .06s; }
+    .mode-card:hover { border-color:var(--accent); transform:translateY(-1px); box-shadow:var(--sh); }
+    .mode-card.active { border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+    .mode-card .ic { width:22px; height:22px; color:var(--accent); }
+    .mode-card .mc-title { font-weight:700; font-size:15px; color:var(--ink,#1b2430); }
+    .mode-card .mc-sub { font-size:12.5px; color:var(--muted); line-height:1.35; }
+    @media (max-width:640px){ .mode-select { grid-template-columns:1fr; } }
+    /* Upload drop zone for the import panels */
+    .drop { border:2px dashed var(--border); border-radius:14px; padding:22px; cursor:pointer; transition:border-color .15s, background .15s; }
+    .drop:hover, .drop.drag { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 6%, transparent); }
+    .drop.filled { border-style:solid; border-color:var(--accent); }
+    .drop-inner { display:flex; align-items:center; justify-content:center; gap:10px; color:var(--muted); font-size:14px; font-weight:600; }
+    .drop-inner .ic { width:22px; height:22px; color:var(--accent); flex:none; }
   </style>
 </head>
 <body>
@@ -856,6 +871,89 @@
       <span class="st" data-step="2"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Lesson plan</span>
       <span class="st" data-step="3"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Slides</span>
     </div>
+
+    <!-- Entry mode: start fresh, or bring your own plan / slides -->
+    <div class="mode-select" id="modeSelect">
+      <button type="button" class="mode-card active" data-mode="plan">
+        <svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg>
+        <span class="mc-title">Start with objectives</span>
+        <span class="mc-sub">Type your objectives, or upload your pacing guide and just tick the ones you're teaching — we fill in the rest and build the plan, slides, worksheets &amp; games.</span>
+      </button>
+      <button type="button" class="mode-card" data-mode="havePlan">
+        <svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg>
+        <span class="mc-title">I already have a lesson plan</span>
+        <span class="mc-sub">Upload your plan (Word, PDF or text) and we build matching slides from it — no retyping. Worksheets &amp; games follow.</span>
+      </button>
+      <button type="button" class="mode-card" data-mode="haveSlides">
+        <svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg>
+        <span class="mc-title">I already have slides</span>
+        <span class="mc-sub">Upload your PowerPoint to show it here, then make worksheets, quizzes &amp; games from it — or write a lesson plan too.</span>
+      </button>
+    </div>
+
+    <!-- IMPORT A: teacher already has a lesson plan → slides -->
+    <section id="importPlanCard" class="card" style="display:none">
+      <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Start from your lesson plan</h2>
+      <p class="hint" style="margin-bottom:20px">Upload your existing lesson plan and we'll build matching slides straight away — no need to re-type objectives. Afterwards you can generate a worksheet, quiz, exit ticket and games from it.</p>
+      <div class="grid2">
+        <div><label for="ipSubject">Subject <span style="color:var(--err)">*</span></label><input id="ipSubject" list="subjectList" placeholder="e.g. Science, Mathematics" maxlength="60" /></div>
+        <div><label for="ipTopic">Topic <span style="color:var(--err)">*</span></label><input id="ipTopic" placeholder="e.g. Photosynthesis" maxlength="80" /></div>
+      </div>
+      <div class="grid3" style="margin-top:14px">
+        <div><label for="ipGrade">Grade level</label>
+          <select id="ipGrade">
+            <option>Grade R</option><option>Grade 1</option><option>Grade 2</option><option>Grade 3</option>
+            <option>Grade 4</option><option selected>Grade 5</option><option>Grade 6</option><option>Grade 7</option>
+            <option>Grade 8</option><option>Grade 9</option><option>Grade 10</option><option>Grade 11</option><option>Grade 12</option>
+          </select>
+        </div>
+        <div><label for="ipSlideCount">Content slides</label><input id="ipSlideCount" type="number" min="1" max="20" value="5" /></div>
+        <div><label for="ipTone">Tone</label>
+          <select id="ipTone">
+            <option value="clear and engaging">Clear &amp; engaging</option>
+            <option value="playful and fun">Playful &amp; fun</option>
+            <option value="formal and academic">Formal &amp; academic</option>
+            <option value="simple and gentle">Simple &amp; gentle</option>
+          </select>
+        </div>
+      </div>
+      <div class="drop" id="ipDrop" style="margin-top:16px">
+        <input id="ipFile" type="file" accept=".docx,.pdf,.txt,.md" style="display:none" />
+        <div class="drop-inner">
+          <svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg>
+          <span id="ipFileName">Choose your lesson plan — Word, PDF, or text</span>
+        </div>
+      </div>
+      <button id="importPlanBtn" class="btn primary full" type="button" style="margin-top:18px"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Create slides from my plan</button>
+    </section>
+
+    <!-- IMPORT B: teacher already has slides → plan and/or pack -->
+    <section id="importSlidesCard" class="card" style="display:none">
+      <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Start from your slides</h2>
+      <p class="hint" style="margin-bottom:20px">Upload your PowerPoint and your slides show up here on the system. From them we can write you a matching lesson plan, or skip straight to worksheets, quizzes and games — all based on what you uploaded.</p>
+      <div class="grid2">
+        <div><label for="isSubject">Subject <span style="color:var(--err)">*</span></label><input id="isSubject" list="subjectList" placeholder="e.g. Science, Mathematics" maxlength="60" /></div>
+        <div><label for="isTopic">Topic <span style="color:var(--err)">*</span></label><input id="isTopic" placeholder="e.g. The Water Cycle" maxlength="80" /></div>
+      </div>
+      <div style="margin-top:14px"><label for="isGrade">Grade level</label>
+        <select id="isGrade" style="max-width:220px">
+          <option>Grade R</option><option>Grade 1</option><option>Grade 2</option><option>Grade 3</option>
+          <option>Grade 4</option><option selected>Grade 5</option><option>Grade 6</option><option>Grade 7</option>
+          <option>Grade 8</option><option>Grade 9</option><option>Grade 10</option><option>Grade 11</option><option>Grade 12</option>
+        </select>
+      </div>
+      <div class="drop" id="isDrop" style="margin-top:16px">
+        <input id="isFile" type="file" accept=".pptx" style="display:none" />
+        <div class="drop-inner">
+          <svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg>
+          <span id="isFileName">Choose your slides — PowerPoint (.pptx)</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:18px">
+        <button id="importSlidesPlanBtn" class="btn accent" type="button" style="flex:1;min-width:220px"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Upload &amp; write a lesson plan</button>
+        <button id="importSlidesOnlyBtn" class="btn primary" type="button" style="flex:1;min-width:220px"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Upload &amp; go to worksheets</button>
+      </div>
+    </section>
 
     <!-- STAGE 1 -->
     <form id="composer" class="card" novalidate>
@@ -1361,7 +1459,24 @@
     let library={subjects:[],topicsBySubject:{}}, ctx=null, currentDeckId=null;
 
     function setStep(n){ document.querySelectorAll('.steps .st').forEach(el=>{ const s=+el.dataset.step; el.classList.toggle('active',s===n); el.classList.toggle('done',s<n); }); }
-    function show(stage){ composer.style.display=stage==='composer'?'block':'none'; planStage.style.display=stage==='plan'?'block':'none'; results.style.display=stage==='slides'?'block':'none'; }
+    // startMode: which stage-1 entry the teacher chose — plan fresh, upload a
+    // lesson plan, or upload slides. The mode selector + matching panel only
+    // show on the composer stage; the plan/slides stages take over as before.
+    let startMode='plan';
+    function show(stage){
+      const atComposer=stage==='composer';
+      composer.style.display=(atComposer && startMode==='plan')?'block':'none';
+      $('modeSelect').style.display=atComposer?'grid':'none';
+      $('importPlanCard').style.display=(atComposer && startMode==='havePlan')?'block':'none';
+      $('importSlidesCard').style.display=(atComposer && startMode==='haveSlides')?'block':'none';
+      planStage.style.display=stage==='plan'?'block':'none';
+      results.style.display=stage==='slides'?'block':'none';
+    }
+    function setStartMode(m){ startMode=m;
+      document.querySelectorAll('#modeSelect .mode-card').forEach(c=>c.classList.toggle('active',c.dataset.mode===m));
+      show('composer'); setStep(1);
+    }
+    document.querySelectorAll('#modeSelect .mode-card').forEach(c=>c.addEventListener('click',()=>setStartMode(c.dataset.mode)));
 
     function fillTopics(){ const key=$('subject').value.trim().toLowerCase(); const t=library.topicsBySubject[key]||[]; $('topicList').innerHTML=t.map(x=>`<option value="${x}">`).join(''); }
     async function loadLibrary(){
@@ -1657,6 +1772,82 @@
       }catch(err){ statusEl.className='status err'; statusEl.textContent=err.message; }
       $('planBtn').disabled=false;
     });
+
+    // ── Import flows: bring your own lesson plan or slides ────────────────────
+    // A small drop-zone helper: click to pick, drag-drop to fill, shows the name.
+    function wireDrop(dropId, fileId, nameId, defaultLabel){
+      const drop=$(dropId), file=$(fileId), name=$(nameId);
+      drop.addEventListener('click',()=>file.click());
+      const setName=()=>{ if(file.files[0]){ name.textContent=file.files[0].name; drop.classList.add('filled'); } else { name.textContent=defaultLabel; drop.classList.remove('filled'); } };
+      file.addEventListener('change',setName);
+      drop.addEventListener('dragover',e=>{ e.preventDefault(); drop.classList.add('drag'); });
+      drop.addEventListener('dragleave',()=>drop.classList.remove('drag'));
+      drop.addEventListener('drop',e=>{ e.preventDefault(); drop.classList.remove('drag'); if(e.dataTransfer.files[0]){ file.files=e.dataTransfer.files; setName(); } });
+    }
+    wireDrop('ipDrop','ipFile','ipFileName','Choose your lesson plan — Word, PDF, or text');
+    wireDrop('isDrop','isFile','isFileName','Choose your slides — PowerPoint (.pptx)');
+
+    // Path A — upload a lesson plan, skip objectives, go straight to slides.
+    $('importPlanBtn').addEventListener('click', async ()=>{
+      const subject=$('ipSubject').value.trim(), topic=$('ipTopic').value.trim(), file=$('ipFile').files[0];
+      if(!subject){ toast('Enter the subject.'); $('ipSubject').focus(); return; }
+      if(!topic){ toast('Enter the topic.'); $('ipTopic').focus(); return; }
+      if(!file){ toast('Choose your lesson-plan file.'); return; }
+      const b=$('importPlanBtn'); b.disabled=true; const orig=b.innerHTML;
+      statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>Reading your plan and building slides…';
+      const fd=new FormData();
+      fd.append('file',file); fd.append('subject',subject); fd.append('topic',topic);
+      fd.append('grade',$('ipGrade').value); fd.append('slideCount',$('ipSlideCount').value||'5');
+      fd.append('tone',$('ipTone').value); fd.append('presetId',selectedPresetId);
+      try{
+        const r=await fetch('/api/import/lesson-plan',{method:'POST',body:fd});
+        const d=await r.json(); if(!r.ok) throw new Error(d.error);
+        // Ground the lesson pack + games in the uploaded plan (no in-app plan to collect).
+        ctx={ subject, topic, grade:$('ipGrade').value||'middle school', slideCount:Number($('ipSlideCount').value)||5,
+          tone:$('ipTone').value, focus:'', objectives:'', lessonPlanText:d.sourceText||'' };
+        importedPlanText=d.sourceText||''; planTemplateId=null; planStage.querySelector('#planSections')&&($('planSections').innerHTML='');
+        currentDeckId=d.deckId; statusEl.innerHTML=''; renderDeck(d); show('slides'); setStep(3); results.scrollIntoView({behavior:'smooth'});
+      }catch(err){ statusEl.className='status err'; statusEl.textContent=err.message; }
+      b.disabled=false; b.innerHTML=orig;
+    });
+
+    // Path B — upload slides. Both buttons parse + show the deck; "plan" also
+    // writes a lesson plan from the slide content, "only" jumps to the pack.
+    let importedPlanText='';
+    async function importSlides(withPlan){
+      const subject=$('isSubject').value.trim(), topic=$('isTopic').value.trim(), file=$('isFile').files[0];
+      if(!subject){ toast('Enter the subject.'); $('isSubject').focus(); return; }
+      if(!topic){ toast('Enter the topic.'); $('isTopic').focus(); return; }
+      if(!file){ toast('Choose your slides (.pptx) file.'); return; }
+      const btn=withPlan?$('importSlidesPlanBtn'):$('importSlidesOnlyBtn');
+      btn.disabled=true; const orig=btn.innerHTML;
+      statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>Reading your slides…';
+      const fd=new FormData();
+      fd.append('file',file); fd.append('subject',subject); fd.append('topic',topic); fd.append('grade',$('isGrade').value);
+      try{
+        const r=await fetch('/api/import/slides',{method:'POST',body:fd});
+        const d=await r.json(); if(!r.ok) throw new Error(d.error);
+        ctx={ subject, topic, grade:$('isGrade').value||'middle school', slideCount:d.slideCount||5,
+          tone:'clear and engaging', focus:'', objectives:'', lessonPlanText:d.sourceText||'' };
+        importedPlanText=d.sourceText||''; currentDeckId=d.deckId;
+        renderDeck(d);
+        // Clear any prior plan so the lesson pack grounds on the slide content
+        // (an empty plan makes the server fall back to ctx.lessonPlanText).
+        planTemplateId=null; if($('planSections')) $('planSections').innerHTML='';
+        if(withPlan){
+          statusEl.innerHTML='<span class="spinner"></span>Writing a lesson plan from your slides…';
+          const pr=await fetch('/api/lesson-plan',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({subject,topic,grade:$('isGrade').value,objectives:d.sourceText})});
+          const pd=await pr.json();
+          if(pr.ok){ renderPlan(pd); }
+          else { toast(pd.error||'Could not write a plan — showing your slides.'); }
+        }
+        statusEl.innerHTML=''; show('slides'); setStep(3); results.scrollIntoView({behavior:'smooth'});
+      }catch(err){ statusEl.className='status err'; statusEl.textContent=err.message; }
+      btn.disabled=false; btn.innerHTML=orig;
+    }
+    $('importSlidesPlanBtn').addEventListener('click',()=>importSlides(true));
+    $('importSlidesOnlyBtn').addEventListener('click',()=>importSlides(false));
 
     function renderPlan(d){
       planTemplateId=d.templateId||null;
@@ -2090,7 +2281,7 @@
     // "Start over" discards the generated deck (and any edits) — two-step confirm.
     let restartArm=false, restartTmr=null;
     function doRestart(){ const b=$('restartBtn'); b.textContent='Start over'; b.classList.remove('warn'); restartArm=false; clearTimeout(restartTmr);
-      show('composer'); setStep(1); statusEl.innerHTML=''; window.scrollTo({top:0,behavior:'smooth'}); }
+      setStartMode('plan'); statusEl.innerHTML=''; window.scrollTo({top:0,behavior:'smooth'}); }
     $('restartBtn').addEventListener('click',()=>{
       const b=$('restartBtn');
       if(!restartArm){ restartArm=true; b.textContent='Discard deck?'; b.classList.add('warn');
@@ -2501,7 +2692,7 @@
       }catch{ $('usageCards').innerHTML='<span class="status err">Could not load usage.</span>'; }
     }
     function setActiveNav(id){ document.querySelectorAll('.nav-link').forEach(el=>el.classList.toggle('nav-active',el.id===id)); }
-    function goHome(){ hideAllPanels(); stepsEl.style.display='flex'; show('composer'); setStep(1); setActiveNav('homeBtn'); window.scrollTo({top:0,behavior:'smooth'}); }
+    function goHome(){ hideAllPanels(); stepsEl.style.display='flex'; setStartMode('plan'); setActiveNav('homeBtn'); window.scrollTo({top:0,behavior:'smooth'}); }
     $('homeBtn').onclick=goHome;
     $('adminBtn').onclick=openAdmin;
     $('adminBack').onclick=closeAdmin;

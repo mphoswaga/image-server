@@ -47,6 +47,32 @@ async function extractPptxText(buffer) {
   return texts.join('\n');
 }
 
+// Parse a .pptx into per-slide structure so an uploaded deck can be shown and
+// re-used. For each slide we split into paragraphs (<a:p>), take the first
+// non-empty paragraph as the title and the rest as bullet lines. This is a
+// heuristic (PowerPoint has no strict "title" marker we can rely on across
+// authoring tools) but works well for typical teaching decks.
+async function extractPptxSlides(buffer) {
+  const zip = await JSZip.loadAsync(buffer);
+  const slideFiles = Object.keys(zip.files)
+    .filter(name => /^ppt\/slides\/slide\d+\.xml$/.test(name))
+    .sort((a, b) => parseInt(a.match(/\d+/)[0], 10) - parseInt(b.match(/\d+/)[0], 10));
+  const slides = [];
+  for (const name of slideFiles) {
+    const xml = await zip.files[name].async('string');
+    // Each <a:p> is a paragraph; join its <a:t> runs into one line.
+    const paras = (xml.match(/<a:p\b[\s\S]*?<\/a:p>/g) || []).map(p => {
+      const runs = p.match(/<a:t[^>]*>([\s\S]*?)<\/a:t>/g) || [];
+      return runs.map(r => r.replace(/<[^>]+>/g, '')).join('')
+        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+        .trim();
+    }).filter(Boolean);
+    if (!paras.length) continue;
+    slides.push({ title: paras[0], bullets: paras.slice(1) });
+  }
+  return slides;
+}
+
 const nameFromFilename = f => String(f || '').replace(/\.[^.]+$/, '').trim();
 
 async function extractText(buffer, filename) {
@@ -170,7 +196,7 @@ function loadTemplate(userId) { return listTemplates(userId)[0] || null; }
 function loadOriginal(userId) { const t = loadTemplate(userId); return t ? loadOriginalById(userId, t.id) : null; }
 
 module.exports = {
-  extractText, SUPPORTED, TYPES,
+  extractText, extractPptxSlides, SUPPORTED, TYPES,
   listTemplates, getTemplate, saveTemplate, renameTemplate, deleteTemplate, loadOriginalById,
   loadTemplate, loadOriginal,
 };

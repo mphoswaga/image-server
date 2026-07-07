@@ -34,7 +34,7 @@ function placeVisual(pptx, slide, slideData, imgPath, accent, rect) {
     drawStepsDiagram(pptx, slide, { items: v.items, x: rect.x, y: rect.y, w: rect.w, h: rect.h, accent, isCycle: v.type === 'cycle' });
     return true;
   }
-  slide.addImage({ path: imgPath, x: rect.x, y: rect.y, w: rect.w, h: rect.h, sizing: { type: 'cover', w: rect.w, h: rect.h } });
+  if (imgPath) slide.addImage({ path: imgPath, x: rect.x, y: rect.y, w: rect.w, h: rect.h, sizing: { type: 'cover', w: rect.w, h: rect.h } });
   return false;
 }
 
@@ -304,10 +304,13 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
   slide.background = { color: thm.bg };
   const accent = t.accent;
   slide.addNotes(slideData.speakerNotes || '');
+  // Imported decks (teacher's own slides) carry no photo — skip the image
+  // placement so the layout still renders as clean text instead of crashing.
+  const addImg = (opts) => { if (imgPath) slide.addImage(opts); };
 
   switch (slideData.type) {
     case 'title': {
-      slide.addImage({ path: imgPath, x: 0, y: 0, w: 10, h: 5.625, sizing: { type: 'cover', w: 10, h: 5.625 } });
+      addImg({ path: imgPath, x: 0, y: 0, w: 10, h: 5.625, sizing: { type: 'cover', w: 10, h: 5.625 } });
       slide.addShape(pptx.ShapeType.rect, { x: 0, y: 3.6, w: 10, h: 2.025, fill: { color: thm.primary, transparency: 15 } });
       slide.addText(slideData.title, { x: 0.5, y: 3.75, w: 9, h: 0.9, fontFace: thm.font, fontSize: 40, bold: true, color: 'FFFFFF' });
       slide.addText(slideData.subtitle || '', { x: 0.5, y: 4.65, w: 9, h: 0.6, fontFace: thm.font, fontSize: 18, color: 'FFFFFF' });
@@ -320,7 +323,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
         slideData.bullets.map((b, i) => ({ text: `${i + 1}.  ${b}`, options: { color: 'FFFFFF', fontSize: Math.max(16, t.bulletSize - 2), paraSpaceAfter: 14, breakLine: true } })),
         { x: 0.5, y: 1.4, w: 4.5, h: 3.8, fontFace: thm.font, valign: 'top' }
       );
-      slide.addImage({ path: imgPath, x: 5.4, y: 0, w: 4.6, h: 5.625, sizing: { type: 'cover', w: 4.6, h: 5.625 } });
+      addImg({ path: imgPath, x: 5.4, y: 0, w: 4.6, h: 5.625, sizing: { type: 'cover', w: 4.6, h: 5.625 } });
       break;
     }
     case 'activity': {
@@ -331,7 +334,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
         slideData.bullets.map((b) => ({ text: b, options: { bullet: { code: '25B6' }, color: thm.text, fontSize: t.bulletSize, paraSpaceAfter: t.paraSpaceAfter } })),
         { x: 0.5, y: 1.9, w: 5, h: 3.3, fontFace: thm.font, valign: 'top' }
       );
-      slide.addImage({ path: imgPath, x: 5.8, y: 1.9, w: 3.7, h: 3.2, sizing: { type: 'cover', w: 3.7, h: 3.2 }, rounding: true });
+      addImg({ path: imgPath, x: 5.8, y: 1.9, w: 3.7, h: 3.2, sizing: { type: 'cover', w: 3.7, h: 3.2 }, rounding: true });
       break;
     }
     case 'recap': {
@@ -341,7 +344,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
         slideData.bullets.map(b => ({ text: b, options: { bullet: { code: '2713' }, color: thm.text, fontSize: t.bulletSize, paraSpaceAfter: t.paraSpaceAfter } })),
         { x: 0.5, y: 1.5, w: 5, h: 3.6, fontFace: thm.font, valign: 'top' }
       );
-      slide.addImage({ path: imgPath, x: 5.8, y: 1.4, w: 3.7, h: 3.5, sizing: { type: 'cover', w: 3.7, h: 3.5 } });
+      addImg({ path: imgPath, x: 5.8, y: 1.4, w: 3.7, h: 3.5, sizing: { type: 'cover', w: 3.7, h: 3.5 } });
       break;
     }
     case 'check': {
@@ -375,7 +378,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
       if (slideData.visual && slideData.visual.type === 'diagram') {
         slide.addText('DIAGRAM', { x: 0.5, y: 0.4, w: 9, h: 0.4, fontFace: thm.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
         slide.addText(slideData.title, { x: 0.5, y: 0.85, w: 9, h: 0.9, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
-        slide.addImage({ path: imgPath, x: 1.25, y: 1.9, w: 7.5, h: 3.55, sizing: { type: 'contain', w: 7.5, h: 3.55 } });
+        addImg({ path: imgPath, x: 1.25, y: 1.9, w: 7.5, h: 3.55, sizing: { type: 'contain', w: 7.5, h: 3.55 } });
         break;
       }
       // Keyboard shortcuts → keycap layout.
@@ -409,14 +412,14 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
         }
         if (!drew && isFlow) drawStepsHorizontal(pptx, slide, { items: v.items, x: 0.5, y: 2.9, w: 9, h: 2.2, accent, isCycle: v.type === 'cycle' });
         else if (!drew && !isFlow) {
-          slide.addImage({ path: imgPath, x: 3.15, y: 2.7, w: 3.7, h: 2.5, sizing: { type: 'cover', w: 3.7, h: 2.5 } });
+          addImg({ path: imgPath, x: 3.15, y: 2.7, w: 3.7, h: 2.5, sizing: { type: 'cover', w: 3.7, h: 2.5 } });
         }
         break;
       }
 
       // ── Layout variant: fullbleed — image fills slide, text on dark overlay ──
       if (layout === 'fullbleed') {
-        slide.addImage({ path: imgPath, x: 0, y: 0, w: 10, h: 5.625, sizing: { type: 'cover', w: 10, h: 5.625 } });
+        addImg({ path: imgPath, x: 0, y: 0, w: 10, h: 5.625, sizing: { type: 'cover', w: 10, h: 5.625 } });
         slide.addShape(pptx.ShapeType.rect, { x: 0, y: 2.6, w: 10, h: 3.025, fill: { color: '000000', transparency: 30 }, line: { type: 'none' } });
         slide.addText(slideData.title, { x: 0.5, y: 2.75, w: 9, h: 0.9, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: 'FFFFFF' });
         slide.addText(bulletItems(slideData.bullets, t, thm, multicolor), { x: 0.5, y: 3.75, w: 9, h: 1.6, fontFace: thm.font, fontSize: Math.max(13, t.bulletSize - 2), valign: 'top', paraSpaceAfter: 4 });
@@ -465,7 +468,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
         slide.addText(slideData.title, { x: 0.5, y: 0.2, w: 9, h: 1.65, fontFace: thm.font, fontSize: Math.min(t.titleSize + 4, 36), bold: true, color: 'FFFFFF', valign: 'middle' });
         slide.addShape(pptx.ShapeType.rect, { x: 0, y: 2.0, w: 10, h: 0.1, fill: { color: accent }, line: { type: 'none' } });
         slide.addText(bulletItems(slideData.bullets, t, thm, multicolor), { x: 0.5, y: 2.3, w: 5.5, h: 2.8, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
-        slide.addImage({ path: imgPath, x: 6.2, y: 2.2, w: 3.6, h: 3.0, sizing: { type: 'cover', w: 3.6, h: 3.0 }, rounding: true });
+        addImg({ path: imgPath, x: 6.2, y: 2.2, w: 3.6, h: 3.0, sizing: { type: 'cover', w: 3.6, h: 3.0 }, rounding: true });
         if (slideData.example) {
           slide.addShape(pptx.ShapeType.roundRect, { x: 0.5, y: 5.1, w: 5.5, h: 0.38, fill: { color: thm.soft }, line: { type: 'none' }, rectRadius: 0.06 });
           slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: thm.text } }],
@@ -492,7 +495,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
       if (layout === 'split') {
         const imageLeft = idx % 2 === 0;
         const img = imageLeft ? { x: 0, y: 0, w: 4.9, h: 5.625 } : { x: 5.1, y: 0, w: 4.9, h: 5.625 };
-        slide.addImage({ path: imgPath, ...img, sizing: { type: 'cover', w: img.w, h: img.h } });
+        addImg({ path: imgPath, ...img, sizing: { type: 'cover', w: img.w, h: img.h } });
         const tx = imageLeft ? 5.35 : 0.5;
         slide.addText(slideData.title, { x: tx, y: 0.6, w: 4.15, h: 1.0, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
         slide.addText(bulletItems(slideData.bullets, t, thm, multicolor), { x: tx, y: 1.85, w: 4.15, h: 2.6, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
@@ -513,7 +516,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
           slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: thm.text } }],
             { x: 0.5, y: 4.85, w: 5.8, h: 0.55, fontFace: thm.font, fontSize: Math.max(12, t.bulletSize - 4), valign: 'middle', italic: true });
         }
-        slide.addImage({ path: imgPath, x: 6.55, y: 1.5, w: 3.2, h: 3.7, sizing: { type: 'cover', w: 3.2, h: 3.7 }, rounding: true });
+        addImg({ path: imgPath, x: 6.55, y: 1.5, w: 3.2, h: 3.7, sizing: { type: 'cover', w: 3.2, h: 3.7 }, rounding: true });
         break;
       }
 
@@ -524,7 +527,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
 
       if (!hasFraction && !t.playful && slideData.layoutHint !== 'TEXT_HEAVY' && (state.photoN++ % 2 === 1)) {
         const img = imageLeft ? { x: 0, y: 0, w: 4.9, h: 5.625 } : { x: 5.1, y: 0, w: 4.9, h: 5.625 };
-        slide.addImage({ path: imgPath, ...img, sizing: { type: 'cover', w: img.w, h: img.h } });
+        addImg({ path: imgPath, ...img, sizing: { type: 'cover', w: img.w, h: img.h } });
         const tx = imageLeft ? 5.35 : 0.5;
         slide.addText(slideData.title, { x: tx, y: 0.6, w: 4.15, h: 1.0, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
         slide.addText(bulletItems(slideData.bullets, t, thm, multicolor), { x: tx, y: 1.85, w: 4.15, h: 2.6, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
@@ -579,7 +582,7 @@ function assembleDeck(slides, images, gradeTheme, preset) {
   const state = { photoN: 0 };
   slides.forEach((slideData, idx) => {
     const img = images[idx];
-    renderSlide(pptx, slideData, path.join(PUBLIC_DIR, img.relpath), gradeTheme, idx, state, preset);
+    renderSlide(pptx, slideData, img ? path.join(PUBLIC_DIR, img.relpath) : null, gradeTheme, idx, state, preset);
   });
   return pptx;
 }
