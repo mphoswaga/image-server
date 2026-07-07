@@ -1412,7 +1412,7 @@ app.post('/api/game/:id/finish', requireGameAccess, (req, res) => {
   const studentId = (req.gameSession && req.gameSession.studentId) || req.userId || 'unknown';
   const name = (req.gameSession && req.gameSession.name) || (req.user && (req.user.name || req.user.email)) || studentId;
   const arcadeScore = Math.max(0, parseInt(req.body.arcadeScore, 10) || 0);
-  const gameType = ['car', 'space', 'runner', 'balloon'].includes(req.body.gameType) ? req.body.gameType : null;
+  const gameType = ['car', 'space', 'runner', 'balloon', 'target'].includes(req.body.gameType) ? req.body.gameType : null;
   const prevHigh = gameType ? games.getHighScores(g.id)[gameType] : 0;
   games.recordResult(g.id, { studentId, name, score, total: g.questions.length, answers, arcadeScore, gameType });
   if (g.rosterId) {

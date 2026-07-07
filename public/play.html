@@ -143,10 +143,10 @@
       <h1>Choose your game</h1>
       <p class="sub">Same questions — your pick of game. Ready?</p>
       <div class="game-cards">
-        <button class="game-pick" data-game="car"><span class="gi">🚗</span><span><b>Car Dodge</b><span>Steer and dodge traffic — crash to answer a question.</span></span></button>
+        <button class="game-pick" data-game="car"><span class="gi">🚗</span><span><b>Car Dodge</b><span>Dodge traffic, grab coins, watch for trucks — crash to answer a question.</span></span></button>
         <button class="game-pick" data-game="space"><span class="gi">🚀</span><span><b>Space Blaster</b><span>Blast the alien fleet and dodge their bombs — get hit to answer a question.</span></span></button>
         <button class="game-pick" data-game="runner"><span class="gi">🏃</span><span><b>Answer Runner</b><span>Jump rocks, duck branches, grab coins — crash and answer to keep running.</span></span></button>
-        <button class="game-pick" data-game="balloon"><span class="gi">🎈</span><span><b>Balloon Pop</b><span>Tap the balloon with the correct answer before it floats away!</span></span></button>
+        <button class="game-pick" data-game="target"><span class="gi">🎯</span><span><b>Target Shot</b><span>Read at your own pace, then FIRE when the crosshair sweeps over the right answer!</span></span></button>
       </div>
     </div>
 
@@ -282,10 +282,10 @@
       // High score board (anonymous — no names, just the scores)
       const hs=game.highScores||{};
       const hsLines=[];
-      if(hs.car>0)   hsLines.push(`🚗 <b>Car Dodge:</b> ${hs.car} cars dodged`);
+      if(hs.car>0)   hsLines.push(`🚗 <b>Car Dodge:</b> ${hs.car} points`);
       if(hs.space>0) hsLines.push(`🚀 <b>Space Blaster:</b> ${hs.space} invaders blasted`);
       if(hs.runner>0)hsLines.push(`🏃 <b>Answer Runner:</b> ${hs.runner} points`);
-      if(hs.balloon>0)hsLines.push(`🎈 <b>Balloon Pop:</b> ${hs.balloon} balloons popped`);
+      if(hs.target>0)hsLines.push(`🎯 <b>Target Shot:</b> ${hs.target} points`);
       if(hsLines.length){ $('sumHighScores').innerHTML='<div style="font-weight:700;margin-bottom:8px">🏆 Records — can you beat them?</div>'+hsLines.map(l=>`<div style="margin-bottom:4px">${l}</div>`).join(''); $('sumHighScores').style.display='block'; }
       else $('sumHighScores').style.display='none';
       show('summaryScreen');
@@ -295,7 +295,7 @@
 
     /* ===== shared engine ===== */
     function updateHud(){ $('hudLives').innerHTML='❤️'.repeat(Math.max(0,lives))||'💀'; $('hudProg').textContent=`Q ${Math.min(qi+1,questions.length)}/${questions.length}`;
-      const icon=activeGameType==='space'?'🚀':activeGameType==='runner'?'🏃':activeGameType==='balloon'?'🎈':'🏎️';
+      const icon=activeGameType==='space'?'🚀':activeGameType==='runner'?'🏃':activeGameType==='target'?'🎯':'🏎️';
       $('hudScore').textContent=icon+' '+arcadeScore; }
     async function submitAnswer(choice){ answers[qi]=choice; const d=await (await fetch('/api/game/'+GAME_ID+'/answer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({questionIndex:qi,choice})})).json(); if(d.correct) score++; return d; }
     function advance(){ qi++; if(qi>=questions.length || lives<=0){ endGame(); return false; } updateHud(); return true; }
@@ -303,7 +303,7 @@
       const d=await (await fetch('/api/game/'+GAME_ID+'/finish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answers:answers.map(a=>a==null?-1:a),arcadeScore,gameType:activeGameType})})).json();
 
       // Arcade score block
-      const typeLabel=activeGameType==='car'?'cars dodged':activeGameType==='space'?'invaders blasted':activeGameType==='runner'?'points':'balloons popped';
+      const typeLabel=activeGameType==='space'?'invaders blasted':'points';
       $('resArcade').innerHTML=`<div style="font-size:56px;font-weight:900;color:var(--accent);line-height:1">${arcadeScore}</div><div style="font-size:14px;color:var(--muted);margin-top:4px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">${typeLabel}</div>`;
 
       // High score comparison (anonymous — no names shown)
@@ -326,13 +326,13 @@
       show('loading');
       const r=await fetch('/api/game/'+GAME_ID+'/play'); const d=await r.json();
       questions=d.questions||[]; answers=new Array(questions.length); qi=0; score=0; lives=3; arcadeScore=0; activeGameType=key;
-      $('fireBtn').style.display = key==='space'?'flex':'none';
+      $('fireBtn').style.display = (key==='space'||key==='target')?'flex':'none';
       $('vertControls').style.display = key==='runner'?'flex':'none';
-      $('lrControls').style.display = (key==='runner'||key==='balloon')?'none':'flex';
-      $('qBanner').style.display = key==='balloon'?'block':'none';
+      $('lrControls').style.display = (key==='runner'||key==='target')?'none':'flex';
+      $('qBanner').style.display = key==='target'?'block':'none';
       $('qFb').className='qfb';
-      $('dragTip').textContent = key==='space'?'Move ◀ ▶ (or drag), tap FIRE — blast the invaders, dodge their bombs!' : key==='runner'?'⬆ jump rocks, ⬇ duck branches, grab coins — watch for runaway boulders!' : key==='balloon'?'Tap the balloon with the correct answer — don\'t let them float away!' : 'Dodge the cars — crash to answer. They speed up!';
-      active = key==='car' ? CarGame() : key==='runner' ? RunnerGame() : key==='balloon' ? BalloonGame() : SpaceGame();
+      $('dragTip').textContent = key==='space'?'Move ◀ ▶ (or drag), tap FIRE — blast the invaders, dodge their bombs!' : key==='runner'?'⬆ jump rocks, ⬇ duck branches, grab coins — watch for runaway boulders!' : key==='target'?'Read the question, pick your answer, then FIRE (or tap) when the crosshair is over its target. Bullseye = +2!' : 'Dodge traffic ◀ ▶ (or drag), grab coins — watch for speeding trucks!';
+      active = key==='car' ? CarGame() : key==='runner' ? RunnerGame() : key==='target' ? TargetGame() : SpaceGame();
       show('gameScreen'); $('qOverlay').classList.remove('show'); active.init(); updateHud();
       lastT=performance.now(); cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
     }
@@ -358,28 +358,105 @@
     OBSTACLE_SPRITE.img.src='/sprites/obstacles.png';
     const ROCK_FRAMES=frameRow(275,[0,115,345,462,578]);
     const BRANCH_FRAMES=[{x:229,y:656,w:94,h:94}];
-    function blockCar(x,y,w,h,pal){ const CAR=['.111.','31113','12221','11111','.111.','12221','11111','31113'],cw=w/5,ch=h/8;
-      for(let r=0;r<8;r++){const row=CAR[r];for(let c=0;c<5;c++){const k=row[c];if(k==='.')continue;cx.fillStyle=pal[k];cx.fillRect(x+c*cw,y+r*ch,cw+0.6,ch+0.6);}} }
+    function blockMap(m,x,y,w,h,pal){ const cw=w/m[0].length, ch=h/m.length;
+      for(let r=0;r<m.length;r++){const row=m[r];for(let c=0;c<row.length;c++){const k=row[c];if(k==='.')continue;cx.fillStyle=pal[k];cx.fillRect(x+c*cw,y+r*ch,cw+0.6,ch+0.6);}} }
+    const CAR_MAP=['.111.','31113','12221','11111','.111.','12221','11111','31113'];
+    function blockCar(x,y,w,h,pal){ blockMap(CAR_MAP,x,y,w,h,pal); }
 
-    /* ===== CAR DODGE ===== */
+    /* ===== CAR DODGE — dodge traffic, grab coins, watch for speeding
+       trucks. Crashing opens the question overlay; near-misses and trucks
+       passed score double. */
     function CarGame(){
       const RX=26,RW=W-52,LN=3,LW=RW/LN,PW=46,PH=66,EW=58,EH=66; // cars wider than the gap → no safe spot on lane dividers
       const PP={'1':'#2a6aa6','2':'#a5d8ff','3':'#10161f'};
       const EP=[{'1':'#e8833a','2':'#ffe3c2','3':'#10161f'},{'1':'#c0392b','2':'#ffc9c9','3':'#10161f'},{'1':'#2f9e44','2':'#b2f2bb','3':'#10161f'},{'1':'#9c36b5','2':'#eebefa','3':'#10161f'}];
+      const TRUCK_MAP=['.111.','31113','31113','31113','31113','31113','11111','.111.','11111','12221','11111','31113'];
+      const TP={'1':'#5c6672','2':'#a5d8ff','3':'#10161f'}, TH=100;
       let s; const lc=l=>RX+l*LW+LW/2; const spd=()=>120+s.elapsed*9;
-      function init(){ s={px:W/2-PW/2,py:H-PH-14,dir:0,enemies:[],spawnT:0,dash:0,elapsed:0,invuln:1,paused:false}; }
-      function update(dt){ if(s.paused) return;
-        s.elapsed+=dt; s.dash=(s.dash+spd()*dt)%40; if(s.invuln>0)s.invuln-=dt;
+      function init(){ s={px:W/2-PW/2,py:H-PH-14,enemies:[],coins:[],parts:[],pops:[],spawnT:0,coinT:1.8,warnT:0,warnLane:0,exT:0,roadY:0,elapsed:0,invuln:1,paused:false}; }
+      function spawnCar(l,truck){ if(truck) s.enemies.push({x:lc(l)-EW/2,y:-TH,truck:true});
+        else s.enemies.push({x:lc(l)-EW/2,y:-EH,pal:EP[rnd(EP.length)]}); }
+      function sparkle(x,y){ for(let i=0;i<7;i++){ const a=Math.random()*Math.PI*2, v=40+Math.random()*70;
+        s.parts.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,t:0,life:0.35+Math.random()*0.15,r:1.5+Math.random()*2,col:'#ffd43b'}); } }
+      function update(dt){
+        // Effects keep animating even while the question overlay is up.
+        s.parts=s.parts.filter(p=>(p.t+=dt)<p.life);
+        s.parts.forEach(p=>{ p.x+=p.vx*dt; p.y+=p.vy*dt; });
+        s.pops=s.pops.filter(p=>(p.t+=dt)<0.7);
+        if(s.paused) return;
+        s.elapsed+=dt; if(s.invuln>0)s.invuln-=dt;
+        const sp=spd(); s.roadY+=sp*dt;
         if(dragX!=null) s.px=clamp(dragX-PW/2,RX,RX+RW-PW); else s.px=clamp(s.px+moveDir*230*dt,RX,RX+RW-PW);
-        s.spawnT-=dt; if(s.spawnT<=0){ s.spawnT=Math.max(.55,1.15-s.elapsed*.012); const l=rnd(LN); s.enemies.push({x:lc(l)-EW/2,y:-EH,pal:EP[rnd(EP.length)]}); }
-        const sp=spd();
-        for(let i=s.enemies.length-1;i>=0;i--){ const e=s.enemies[i]; e.y+=sp*dt; if(e.y>H){s.enemies.splice(i,1); arcadeScore++; updateHud(); continue;}
-          if(s.invuln<=0 && e.x<s.px+PW-4 && e.x+EW-4>s.px && e.y<s.py+PH-8 && e.y+EH-8>s.py){ s.enemies.splice(i,1); lives--; updateHud(); s.paused=true; openCrash(); return; } } }
-      function render(){ cx.fillStyle='#2f3a30'; cx.fillRect(0,0,W,H); cx.fillStyle='#39404e'; cx.fillRect(RX,0,RW,H);
+        // exhaust puffs trailing the player
+        s.exT-=dt; if(s.exT<=0){ s.exT=0.11; s.parts.push({x:s.px+PW/2+(Math.random()-0.5)*6,y:s.py+PH+3,
+          vx:(Math.random()-0.5)*12,vy:38+Math.random()*26,t:0,life:0.45,r:2.5+Math.random()*2,col:'#9aa3ad'}); }
+        // speeding truck: "!" warning over its lane, then it barrels in
+        if(s.warnT>0){ s.warnT-=dt; if(s.warnT<=0) spawnCar(s.warnLane,true); }
+        s.spawnT-=dt;
+        if(s.spawnT<=0){
+          s.spawnT=Math.max(.55,1.15-s.elapsed*.012);
+          const r=Math.random();
+          if(s.warnT<=0 && r<0.12){ s.warnT=0.6; s.warnLane=rnd(LN); }
+          else if(r<0.34){ const a=rnd(LN); let b=rnd(LN); while(b===a) b=rnd(LN); spawnCar(a); spawnCar(b); s.spawnT+=0.25; }
+          else spawnCar(rnd(LN));
+        }
+        s.coinT-=dt; if(s.coinT<=0){ s.coinT=2.4+Math.random()*1.8; const l=rnd(LN);
+          for(let i=0;i<3;i++) s.coins.push({x:lc(l),y:-20-i*42,ph:Math.random()*6}); }
+        for(let i=s.coins.length-1;i>=0;i--){ const c=s.coins[i]; c.y+=sp*dt;
+          if(c.y>H+20){ s.coins.splice(i,1); continue; }
+          if(Math.abs(c.x-(s.px+PW/2))<28 && Math.abs(c.y-(s.py+PH/2))<42){
+            s.coins.splice(i,1); arcadeScore++; updateHud(); sparkle(c.x,c.y);
+            s.pops.push({x:c.x,y:c.y-12,t:0,text:'+1',col:'#ffd43b'}); }
+        }
+        for(let i=s.enemies.length-1;i>=0;i--){ const e=s.enemies[i]; const eh=e.truck?TH:EH;
+          e.y+=(sp+(e.truck?85:0))*dt;
+          // near-miss: alongside the player with only a sliver of space
+          if(e.y+eh>s.py && e.y<s.py+PH){
+            const gap=Math.max(e.x-(s.px+PW), s.px-(e.x+EW));
+            if(gap>=0 && gap<14) e.near=true;
+          }
+          if(e.y>H){ s.enemies.splice(i,1);
+            const pts=(e.truck||e.near)?2:1;
+            arcadeScore+=pts; updateHud();
+            s.pops.push({x:clamp(e.x+EW/2,RX+24,RX+RW-24),y:H-32,t:0,text:e.truck?'Truck! +2':(e.near?'Close! +2':'+1'),col:pts>1?'#ffa94d':'#8ce99a'});
+            continue; }
+          if(s.invuln<=0 && e.x<s.px+PW-4 && e.x+EW-4>s.px && e.y<s.py+PH-8 && e.y+eh-8>s.py){ s.enemies.splice(i,1); lives--; updateHud(); s.paused=true; openCrash(); return; } }
+      }
+      function drawCoin(c){
+        const spin=Math.abs(Math.cos(s.elapsed*5+c.ph)), rx=Math.max(2.2,8*spin);
+        cx.fillStyle='#f59f00'; cx.beginPath(); cx.ellipse(c.x,c.y,rx,9,0,0,7); cx.fill();
+        cx.fillStyle='#ffd43b'; cx.beginPath(); cx.ellipse(c.x,c.y,rx*0.65,6.2,0,0,7); cx.fill();
+        if(spin>0.7){ cx.fillStyle='rgba(255,255,255,.9)'; cx.beginPath(); cx.arc(c.x-rx*0.3,c.y-3,1.6,0,7); cx.fill(); }
+      }
+      function render(){
+        cx.fillStyle='#2f3a30'; cx.fillRect(0,0,W,H);
+        // roadside trees scrolling with the road
+        for(let i=0;i<6;i++){
+          [[13,0],[W-13,48]].forEach(([tx,off])=>{
+            const yy=((i*96+s.roadY+off)%(H+96))-48;
+            cx.fillStyle='#243024'; cx.fillRect(tx-2,yy,4,10);
+            cx.fillStyle='#3e5c3a'; cx.beginPath(); cx.arc(tx,yy-4,9,0,7); cx.fill();
+            cx.fillStyle='#4a7042'; cx.beginPath(); cx.arc(tx-3,yy-7,5,0,7); cx.fill();
+          });
+        }
+        cx.fillStyle='#39404e'; cx.fillRect(RX,0,RW,H);
         cx.fillStyle='#cfd6e2'; cx.fillRect(RX-4,0,4,H); cx.fillRect(RX+RW,0,4,H);
-        cx.fillStyle='rgba(255,255,255,.55)'; for(let l=1;l<LN;l++){const x=RX+l*LW-2;for(let y=-40+s.dash;y<H;y+=40)cx.fillRect(x,y,4,22);}
-        s.enemies.forEach(e=>blockCar(e.x,e.y,EW,EH,e.pal));
-        if(!(s.invuln>0 && Math.floor(s.elapsed*12)%2)) blockCar(s.px,s.py,PW,PH,PP); }
+        cx.fillStyle='rgba(255,255,255,.55)'; for(let l=1;l<LN;l++){const x=RX+l*LW-2;for(let y=-40+(s.roadY%40);y<H;y+=40)cx.fillRect(x,y,4,22);}
+        s.coins.forEach(drawCoin);
+        s.enemies.forEach(e=> e.truck ? blockMap(TRUCK_MAP,e.x,e.y,EW,TH,TP) : blockCar(e.x,e.y,EW,EH,e.pal));
+        if(!(s.invuln>0 && Math.floor(s.elapsed*12)%2)) blockCar(s.px,s.py,PW,PH,PP);
+        s.parts.forEach(p=>{ cx.globalAlpha=Math.max(0,1-p.t/p.life)*(p.col==='#ffd43b'?0.95:0.5); cx.fillStyle=p.col;
+          cx.beginPath(); cx.arc(p.x,p.y,p.r,0,7); cx.fill(); });
+        cx.globalAlpha=1;
+        s.pops.forEach(p=>{ cx.globalAlpha=Math.max(0,1-p.t/0.7); cx.fillStyle=p.col;
+          cx.font='800 16px Plus Jakarta Sans,sans-serif'; cx.textAlign='center'; cx.fillText(p.text,p.x,p.y-p.t*42); });
+        cx.globalAlpha=1;
+        if(s.warnT>0 && Math.floor(s.elapsed*10)%2){ cx.fillStyle='#ff6b6b';
+          cx.font='800 24px Plus Jakarta Sans,sans-serif'; cx.textAlign='center'; cx.fillText('!', lc(s.warnLane), 26); }
+        // subtle late-afternoon tint that drifts with distance driven
+        const k=0.5+0.5*Math.sin(s.roadY/2600);
+        cx.fillStyle='rgba(255,150,60,'+(0.10*k).toFixed(3)+')'; cx.fillRect(0,0,W,H);
+      }
       return { init, update, render, resume(){ s.enemies=s.enemies.filter(e=>e.y<s.py-120); s.invuln=1.6; s.paused=false; lastT=performance.now(); } };
     }
     // car crash overlay
@@ -667,62 +744,67 @@
       return { init, update, render, resume(){ s.objs=s.objs.filter(o=>o.x>PLAYER_X-40); s.invuln=1.4; s.state='run'; lastT=performance.now(); } };
     }
 
-    /* ===== BALLOON POP — a pure tap/accuracy game, distinct from the other
-       three which are all steer/dodge/jump reflex games. Four balloons rise
-       from the bottom, each labeled with an answer; tap the right one before
-       it floats off the top. No tap in time counts as a miss. */
-    function BalloonGame(){
-      const LANES=4;
-      const laneX=l=>(W/(LANES+1))*(l+1);
+    /* ===== TARGET SHOT — a carnival shooting-gallery quiz. Replaced Balloon
+       Pop because moving balloons forced students to read the question and
+       answers under time pressure. Here the question and answer legend sit
+       completely still; only the crosshair moves. It sweeps the range on its
+       own, and you FIRE when it's over the target whose answer you chose.
+       Bullseye = double points; missing everything just speeds the sweep up
+       a little, so camping the perfect shot gets harder. */
+    function TargetGame(){
+      const R=44, BULL=16;
+      const SPOTS=[[W*0.28,150],[W*0.72,150],[W*0.28,300],[W*0.72,300]];
       let s;
       function spawnRound(){
         const q=questions[qi];
         $('qText2').textContent=q.question;
         $('qLegend').innerHTML=q.options.map((o,k)=>`<div class="leg leg${k}"><b>${'ABCD'[k]}</b> ${esc(o)}</div>`).join('');
-        s.balloons=q.options.map((o,k)=>({ key:k, x:laneX(k), y:H+40+Math.random()*40, dx:0,
-          vy:58+Math.random()*20+s.elapsed*3, sway:Math.random()*Math.PI*2, popped:false }));
-        s.state='run';
+        s.spd=0.9+qi*0.12; s.holes=[]; s.state='run';
       }
-      function init(){ s={balloons:[],parts:[],elapsed:0,state:'run'}; tapQueued=false; spawnRound(); }
+      function init(){ s={t:Math.random()*9,spd:1,holes:[],parts:[],pops:[],elapsed:0,state:'run'}; tapQueued=false; fireQueued=false; spawnRound(); }
+      // Lissajous sweep: incommensurate frequencies cover the whole range,
+      // so every target (and its bullseye) comes under the crosshair — the
+      // skill is purely in the timing.
+      function crossPos(){ return { x: W/2+(W/2-42)*Math.sin(1.31*s.t), y: 228+152*Math.sin(1.87*s.t+1.2) }; }
       function burst(x,y,col){
         for(let i=0;i<12;i++){ const a=Math.random()*Math.PI*2, sp=70+Math.random()*130;
-          s.parts.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-50,t:0,life:0.45+Math.random()*0.25,r:2.5+Math.random()*3,col}); }
+          s.parts.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-40,t:0,life:0.4+Math.random()*0.2,r:2+Math.random()*3,col}); }
         s.parts.push({x,y,ring:true,t:0,life:0.35,col});
       }
-      async function resolve(key){
+      async function resolve(key,bull){
         s.state='wait';
-        const d=await submitAnswer(key==null?-1:key);
-        if(d.correct){ arcadeScore++; } else { lives--; } updateHud();
+        const d=await submitAnswer(key);
+        if(d.correct){ arcadeScore+=bull?2:1; } else { lives--; } updateHud();
+        if(d.correct) s.pops.push({x:SPOTS[key][0],y:SPOTS[key][1]-R-10,t:0,text:bull?'Bullseye! +2':'+1',col:'#ffd43b'});
         const fb=$('qFb'); fb.className='qfb show '+(d.correct?'right':'no');
-        fb.innerHTML = d.correct?`<b>Correct! ✅</b>${esc(d.explanation||'')}` : `<b>${key==null?"Time's up!":'Not quite'} ❌ — ${'ABCD'[d.correctIndex]} was right</b>${esc(d.explanation||'')}`;
+        fb.innerHTML = d.correct?`<b>${bull?'Bullseye! 🎯 +2':'Correct! ✅'}</b>${esc(d.explanation||'')}` : `<b>Not quite ❌ — ${'ABCD'[d.correctIndex]} was right</b>${esc(d.explanation||'')}`;
         setTimeout(()=>{ $('qFb').className='qfb'; if(advance()){ spawnRound(); } }, 1400);
       }
       function update(dt){ s.elapsed+=dt;
         s.parts=s.parts.filter(p=>(p.t+=dt)<p.life);
         s.parts.forEach(p=>{ if(!p.ring){ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=240*dt; } });
-        // Balloons keep drifting up during the feedback pause instead of
-        // freezing mid-air; the popped one is hidden, the rest float away.
-        s.balloons.forEach(b=>{ if(!b.popped){ b.dx=Math.sin(s.elapsed*2.4+b.sway)*8; b.y-=b.vy*dt; } });
-        if(s.state!=='run'){ tapQueued=false; return; }
-        if(tapQueued){ tapQueued=false;
-          const hit=s.balloons.find(b=>!b.popped && Math.hypot((b.x+b.dx)-tapX,b.y-tapY)<36);
-          if(hit){ hit.popped=true; burst(hit.x+hit.dx,hit.y,LCOL[hit.key]); resolve(hit.key); return; }
-          s.parts.push({x:tapX,y:tapY,ring:true,t:0,life:0.3,col:'rgba(255,255,255,.95)'});
+        s.pops=s.pops.filter(p=>(p.t+=dt)<0.8);
+        if(s.state!=='run'){ tapQueued=false; fireQueued=false; return; }
+        s.t+=s.spd*dt;
+        if(tapQueued||fireQueued){ tapQueued=false; fireQueued=false;
+          const c=crossPos();
+          s.holes.push({x:c.x,y:c.y});
+          let hit=-1, dist=1e9;
+          SPOTS.forEach(([tx,ty],k)=>{ const d2=Math.hypot(c.x-tx,c.y-ty); if(d2<R && d2<dist){ dist=d2; hit=k; } });
+          if(hit>=0){ burst(c.x,c.y,LCOL[hit]); resolve(hit, dist<BULL); return; }
+          s.parts.push({x:c.x,y:c.y,ring:true,t:0,life:0.3,col:'rgba(255,255,255,.9)'});
+          s.spd*=1.08;
         }
-        if(s.balloons.every(b=>b.popped || b.y<=-40)) resolve(null);
       }
-      function drawBalloon(b){
-        const x=b.x+b.dx, y=b.y, col=LCOL[b.key];
-        cx.strokeStyle='rgba(255,255,255,.7)'; cx.lineWidth=2;
-        cx.beginPath(); cx.moveTo(x,y+26); cx.quadraticCurveTo(x+6,y+50,x,y+70); cx.stroke();
-        const g=cx.createRadialGradient(x-9,y-12,4,x,y,28); g.addColorStop(0,'#fff'); g.addColorStop(0.15,col); g.addColorStop(1,col);
-        cx.fillStyle=g; cx.beginPath(); cx.ellipse(x,y,24,28,0,0,7); cx.fill();
-        cx.fillStyle=col; cx.beginPath(); cx.moveTo(x-5,y+26); cx.lineTo(x+5,y+26); cx.lineTo(x,y+34); cx.closePath(); cx.fill();
-        cx.fillStyle='#fff'; cx.font='800 22px Plus Jakarta Sans,sans-serif'; cx.textAlign='center'; cx.textBaseline='middle';
-        cx.fillText('ABCD'[b.key], x, y);
-        // About to escape off the top — pulse a red warning outline.
-        if(s.state==='run' && y<110){ cx.globalAlpha=0.35+0.35*Math.sin(s.elapsed*10);
-          cx.strokeStyle='#c0392b'; cx.lineWidth=3; cx.beginPath(); cx.ellipse(x,y,29,33,0,0,7); cx.stroke(); cx.globalAlpha=1; }
+      function drawTarget(sp,k){
+        const x=sp[0], y=sp[1], col=LCOL[k];
+        cx.fillStyle='rgba(0,0,0,.22)'; cx.beginPath(); cx.ellipse(x,y+R+10,R*0.7,6,0,0,7); cx.fill();
+        cx.strokeStyle='#8a6d4a'; cx.lineWidth=5; cx.beginPath(); cx.moveTo(x,y+R); cx.lineTo(x,y+R+12); cx.stroke();
+        [[R,col],[R*0.72,'#fff'],[R*0.45,col],[BULL,'#fff']].forEach(([r,c])=>{
+          cx.fillStyle=c; cx.beginPath(); cx.arc(x,y,r,0,7); cx.fill(); });
+        cx.strokeStyle='rgba(0,0,0,.18)'; cx.lineWidth=2; cx.beginPath(); cx.arc(x,y,R,0,7); cx.stroke();
+        cx.fillStyle=col; cx.font='800 20px Plus Jakarta Sans,sans-serif'; cx.textAlign='center'; cx.textBaseline='middle';
+        cx.fillText('ABCD'[k], x, y);
       }
       function drawParts(){
         s.parts.forEach(p=>{ const k=Math.max(0,1-p.t/p.life);
@@ -732,16 +814,32 @@
         cx.globalAlpha=1;
       }
       function render(){
-        const g=cx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#bfe3ff'); g.addColorStop(1,'#eaf6ff');
+        const g=cx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#2b3a55'); g.addColorStop(1,'#41577a');
         cx.fillStyle=g; cx.fillRect(0,0,W,H);
-        cx.fillStyle='rgba(255,255,255,.85)';
-        const drift=(s.elapsed*8)%(W+120);
-        [[30,90,22],[130,140,18],[240,60,20]].forEach(([bx,by,r])=>{
-          const x=((bx-drift)%(W+120)+(W+120))%(W+120)-60;
-          cx.beginPath(); cx.ellipse(x,by,r*1.5,r,0,0,7); cx.ellipse(x+r,by-r*0.4,r*1.1,r*0.8,0,0,7); cx.fill();
-        });
-        s.balloons.forEach(b=>{ if(!b.popped) drawBalloon(b); });
+        // carnival canopy + twinkling string lights
+        for(let i=0;i<8;i++){ cx.fillStyle=i%2?'#e8574f':'#f6f0e4'; cx.fillRect(i*(W/8),0,W/8,24);
+          cx.beginPath(); cx.arc(i*(W/8)+W/16,24,W/16,0,Math.PI); cx.fill(); }
+        for(let i=0;i<9;i++){ const lx=i*(W/8), ly=54+6*Math.sin(i*1.7);
+          cx.fillStyle=(Math.floor(s.elapsed*2)+i)%2?'#ffd43b':'#fff3bf';
+          cx.beginPath(); cx.arc(lx,ly,3,0,7); cx.fill(); }
+        // wooden counter
+        cx.fillStyle='#6b4d2f'; cx.fillRect(0,H-58,W,58);
+        cx.fillStyle='#7d5b38'; cx.fillRect(0,H-58,W,10);
+        // bullet holes from this round's misses
+        s.holes.forEach(h=>{ cx.fillStyle='rgba(20,20,25,.55)'; cx.beginPath(); cx.arc(h.x,h.y,3.5,0,7); cx.fill();
+          cx.strokeStyle='rgba(255,255,255,.25)'; cx.lineWidth=1.5; cx.beginPath(); cx.arc(h.x,h.y,5.5,0,7); cx.stroke(); });
+        SPOTS.forEach(drawTarget);
         drawParts();
+        if(s.state==='run'){ const c=crossPos();
+          cx.strokeStyle='#ffd43b'; cx.lineWidth=2.5;
+          cx.beginPath(); cx.arc(c.x,c.y,13,0,7); cx.stroke();
+          cx.beginPath(); cx.moveTo(c.x-20,c.y); cx.lineTo(c.x-7,c.y); cx.moveTo(c.x+7,c.y); cx.lineTo(c.x+20,c.y);
+          cx.moveTo(c.x,c.y-20); cx.lineTo(c.x,c.y-7); cx.moveTo(c.x,c.y+7); cx.lineTo(c.x,c.y+20); cx.stroke();
+          cx.fillStyle='#ffd43b'; cx.beginPath(); cx.arc(c.x,c.y,2,0,7); cx.fill();
+        }
+        s.pops.forEach(p=>{ cx.globalAlpha=Math.max(0,1-p.t/0.8); cx.fillStyle=p.col;
+          cx.font='800 17px Plus Jakarta Sans,sans-serif'; cx.textAlign='center'; cx.fillText(p.text,p.x,p.y-p.t*40); });
+        cx.globalAlpha=1;
       }
       return { init, update, render };
     }
