@@ -22,6 +22,7 @@ const unit = require('./unit');
 const planningSource = require('./planning-source');
 const games = require('./games');
 const assignments = require('./assignments');
+const gradebook = require('./gradebook');
 const { gradeAnswer } = require('./auto-grade');
 const roster = require('./roster');
 const studentAccount = require('./student-account');
@@ -1518,14 +1519,55 @@ app.get('/api/game/:id/results', requireAuth, (req, res) => {
   if (g.teacherId !== req.userId) return res.status(403).json({ error: 'Not your game.' });
   const rosterData = g.rosterId ? roster.getRoster(req.userId, g.rosterId) : null;
   const rosterMap = rosterData ? Object.fromEntries(rosterData.students.map(s => [s.id, s.name])) : {};
-  const results = games.getResults(g.id)
+  const raw = games.getResults(g.id);
+  const results = raw
     .map(r => ({
       studentId: r.studentId,
       name: rosterMap[r.studentId] || r.name,
       score: r.score, total: r.total, at: r.at, attempts: r.attempts,
     }))
     .sort((a, b) => b.score - a.score || (a.at < b.at ? -1 : 1));
-  res.json({ lessonTitle: g.lessonTitle, questionCount: g.questions.length, roomCode: g.roomCode, results });
+  // Per-question breakdown: how many players got each question right (games
+  // carry real quiz questions, so surface what students missed — not just the
+  // leaderboard). A player's answers[i] is their chosen option index.
+  const questionStats = g.questions.map((q, i) => {
+    let correct = 0, answered = 0;
+    for (const r of raw) {
+      const a = (r.answers || [])[i];
+      if (a == null || a === -1) continue;
+      answered++;
+      if (a === q.correctIndex) correct++;
+    }
+    return { index: i, question: q.question, correct, answered, correctIndex: q.correctIndex, options: q.options || null };
+  });
+  // Who's on the roster but hasn't played yet, so the teacher can chase them.
+  const played = new Set(raw.map(r => r.studentId));
+  const notPlayed = rosterData ? rosterData.students.filter(s => !played.has(s.id)).map(s => ({ studentId: s.id, name: s.name })) : [];
+  res.json({ lessonTitle: g.lessonTitle, questionCount: g.questions.length, roomCode: g.roomCode, results, questionStats, notPlayed, rosterCount: rosterData ? rosterData.students.length : null });
+});
+
+// ── Gradebook: all a class's marks in one place (assignments + games) ───────
+app.get('/api/gradebook', requireAuth, (req, res) => {
+  if (req.user.role === 'student') return res.status(403).json({ error: 'Teachers only.' });
+  res.json({ classes: gradebook.listClasses(req.userId) });
+});
+
+app.get('/api/gradebook/:rosterId', requireAuth, (req, res) => {
+  if (req.user.role === 'student') return res.status(403).json({ error: 'Teachers only.' });
+  const gb = gradebook.buildGradebook(req.userId, req.params.rosterId);
+  if (!gb) return res.status(404).json({ error: 'Class not found.' });
+  res.json(gb);
+});
+
+app.get('/api/gradebook/:rosterId/export', requireAuth, (req, res) => {
+  if (req.user.role === 'student') return res.status(403).json({ error: 'Teachers only.' });
+  const gb = gradebook.buildGradebook(req.userId, req.params.rosterId);
+  if (!gb) return res.status(404).json({ error: 'Class not found.' });
+  const buf = gradebook.toWorkbook(gb);
+  const base = String(gb.name || 'marks').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'marks';
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${base}-marks.xlsx"`);
+  res.send(buf);
 });
 
 // Teacher: list my games.

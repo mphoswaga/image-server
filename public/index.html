@@ -666,6 +666,27 @@
     .drop.filled { border-style:solid; border-color:var(--accent); }
     .drop-inner { display:flex; align-items:center; justify-content:center; gap:10px; color:var(--muted); font-size:14px; font-weight:600; }
     .drop-inner .ic { width:22px; height:22px; color:var(--accent); flex:none; }
+    /* Gradebook (Marks) */
+    .gb-summary { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:16px; }
+    .gb-stat { flex:1; min-width:120px; border:1px solid var(--border); border-radius:12px; padding:12px 14px; background:var(--card); }
+    .gb-stat .v { font-size:24px; font-weight:800; color:var(--ink,#1b2430); line-height:1.1; }
+    .gb-stat .l { font-size:12px; color:var(--muted); font-weight:600; margin-top:2px; }
+    .gb-scroll { overflow-x:auto; border:1px solid var(--border); border-radius:12px; }
+    table.gb { border-collapse:collapse; width:100%; font-size:13px; }
+    table.gb th, table.gb td { padding:9px 10px; text-align:center; white-space:nowrap; border-bottom:1px solid var(--border); }
+    table.gb thead th { position:sticky; top:0; background:var(--bg,#f4f6fb); font-weight:700; font-size:12px; z-index:1; }
+    table.gb th.sticky, table.gb td.sticky { position:sticky; left:0; background:var(--card); text-align:left; font-weight:600; box-shadow:1px 0 0 var(--border); z-index:2; }
+    table.gb thead th.sticky { z-index:3; background:var(--bg,#f4f6fb); }
+    table.gb td.avg { font-weight:800; }
+    table.gb tfoot td { font-weight:700; border-top:2px solid var(--border); background:color-mix(in srgb, var(--accent) 5%, transparent); }
+    .gb-cell { display:inline-block; min-width:44px; padding:3px 7px; border-radius:7px; font-weight:700; font-size:12.5px; }
+    .gb-a { background:#e6f7ec; color:#1a7a45; } .gb-b { background:#eaf6ff; color:#1f6fb0; }
+    .gb-c { background:#fff5e6; color:#b26a00; } .gb-d { background:#fdecec; color:#c0392b; }
+    .gb-none { color:var(--muted); opacity:.6; }
+    .gb-th-type { font-size:10px; font-weight:600; opacity:.7; display:block; text-transform:uppercase; letter-spacing:.3px; }
+    .qstat-row { display:flex; align-items:center; gap:10px; padding:8px 0; border-top:1px solid var(--border); font-size:13px; }
+    .qstat-bar { flex:1; height:8px; border-radius:5px; background:#eee; overflow:hidden; }
+    .qstat-fill { height:100%; border-radius:5px; }
   </style>
 </head>
 <body>
@@ -811,6 +832,7 @@
       <button id="rostersBtn" class="nav-link"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg> Rosters</button>
       <button id="gamesBtn" class="nav-link"><svg class="ic" aria-hidden="true"><use href="#i-gamepad"/></svg> My games</button>
       <button id="assignmentsBtn" class="nav-link"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg> My assignments</button>
+      <button id="marksBtn" class="nav-link"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> Marks</button>
       <button id="adminBtn" class="nav-link" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-sliders"/></svg> Admin</button>
       <span class="nav-sep" style="margin:0 4px"></span>
       <button id="guideBtnNav" class="nav-link" style="color:var(--accent);font-weight:700" title="Quick start guide"><svg class="ic" aria-hidden="true"><use href="#i-compass"/></svg> Guide</button>
@@ -1296,6 +1318,21 @@
       </div>
       <div id="assignmentsList"></div>
       <div style="margin-top:28px;padding-top:18px;border-top:1px solid var(--border)"><button id="assignmentsBack" class="back-btn"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back to lesson planner</button></div>
+    </section>
+
+    <!-- MARKS / GRADEBOOK -->
+    <section id="marksPanel" class="card wide" style="display:none">
+      <div class="page-hd">
+        <button class="back-btn" id="marksBackTop"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back</button>
+        <div class="phd-icon" style="background:var(--accent-soft);color:var(--accent)"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg></div>
+        <div>
+          <h2>Marks</h2>
+          <p class="page-sub">Every class's marks in one place — assignments and games together, with class and student averages. Export to Excel for your school's system.</p>
+        </div>
+      </div>
+      <div id="marksClassBar" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px"></div>
+      <div id="marksBody"></div>
+      <div style="margin-top:28px;padding-top:18px;border-top:1px solid var(--border)"><button id="marksBack" class="back-btn"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back to lesson planner</button></div>
     </section>
 
     <!-- CLASS ROSTERS -->
@@ -2249,7 +2286,28 @@
       const tabBtn=(v,label)=>`<button type="button" class="view-tab-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-view="${v}" style="font-size:12.5px;font-weight:600;padding:6px 14px;border:1px solid ${view===v?'var(--primary)':'var(--border)'};border-radius:8px;background:${view===v?'var(--primary)':'#fff'};color:${view===v?'#fff':'var(--ink)'};cursor:pointer">${label}</button>`;
       const tabs=`<div style="display:flex;gap:8px;margin-bottom:10px">${tabBtn('student','By student')}${tabBtn('question','By question')}</div>`;
       if(!d.submissions||!d.submissions.length){ wrap.innerHTML=releaseBar+tabs+'<p class="hint" style="margin-top:8px">No students have submitted yet.</p>'; return; }
-      wrap.innerHTML=releaseBar+tabs+(view==='question'?renderByQuestion(d,assignId,wrapId):renderByStudent(d,assignId,wrapId));
+      wrap.innerHTML=releaseBar+assignmentSummary(d)+tabs+(view==='question'?renderByQuestion(d,assignId,wrapId):renderByStudent(d,assignId,wrapId));
+    }
+
+    // At-a-glance analytics for one assignment: class average, submission count,
+    // and the questions students found hardest — before the row-by-row grading.
+    function assignmentSummary(d){
+      const subs=d.submissions||[]; if(!subs.length) return '';
+      const pcts=subs.map(s=>s.maxMarks?s.totalMarks/s.maxMarks:0);
+      const avg=pcts.reduce((a,b)=>a+b,0)/pcts.length;
+      // per-question difficulty: mean of (marksAwarded/marks) across submissions
+      const qDiff=d.questions.map(q=>{
+        const vals=subs.map(s=>{ const g=(s.grades||{})[q.id]; return g&&q.marks?g.marksAwarded/q.marks:0; });
+        return { q, pct: vals.reduce((a,b)=>a+b,0)/vals.length };
+      }).sort((a,b)=>a.pct-b.pct);
+      const hardest=qDiff.slice(0,2).filter(x=>x.pct<0.85);
+      const stat=(v,l)=>`<div class="gb-stat"><div class="v">${v}</div><div class="l">${l}</div></div>`;
+      const hardestBlock=hardest.length?`<div style="margin-top:6px;font-size:12.5px;color:var(--muted)"><b style="color:#b26a00">Hardest:</b> ${hardest.map(h=>esc(stripMarksText(h.q.question))+' ('+Math.round(h.pct*100)+'%)').join(' · ')}</div>`:'';
+      return `<div class="gb-summary" style="margin-bottom:8px">
+        ${stat(Math.round(avg*100)+'%','Class average')}
+        ${stat(subs.length,'Submitted')}
+        ${stat(d.questions.length,'Questions')}
+      </div>${hardestBlock}`;
     }
 
     async function loadAssignmentResults(assignId, wrapId='assignSubmissions', view){
@@ -2786,8 +2844,34 @@
     const resultsTable=rs=> rs && rs.length
       ? '<div class="res-table"><div class="res-row"><span>Student</span><span class="sc">Score</span><span class="pc">%</span></div>'+rs.map(r=>`<div class="res-row"><span>${esc(r.name)}</span><span class="sc">${r.score}/${r.total}</span><span class="pc">${Math.round(r.score/r.total*100)}%</span></div>`).join('')+'</div>'
       : '<p class="hint" style="margin-top:8px">No students have played yet.</p>';
+    // Per-question breakdown for a game: which questions students missed, as a
+    // correct/answered bar. Mirrors what assignments show, so games aren't just
+    // a leaderboard. Plus the roster students who haven't played yet.
+    function gameBreakdown(d){
+      let html='';
+      if(d.questionStats && d.questionStats.length){
+        const rows=d.questionStats.map((q,i)=>{
+          const pct=q.answered?Math.round(q.correct/q.answered*100):0;
+          const col=pct>=80?'#2f9e44':pct>=50?'#f59f00':'#c0392b';
+          return `<div class="qstat-row">
+            <span style="flex:0 0 22px;font-weight:700;color:var(--muted)">Q${i+1}</span>
+            <span style="flex:2;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(q.question)}</span>
+            <div class="qstat-bar"><div class="qstat-fill" style="width:${pct}%;background:${col}"></div></div>
+            <span style="flex:0 0 74px;text-align:right;font-weight:600;color:${col}">${q.correct}/${q.answered} · ${pct}%</span>
+          </div>`;
+        }).join('');
+        html+=`<div style="margin-top:14px"><b style="font-size:13px;color:var(--primary)">Question breakdown</b>${rows}</div>`;
+      }
+      if(d.notPlayed && d.notPlayed.length){
+        html+=`<div style="margin-top:12px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:#fdf6ea">
+          <b style="font-size:12.5px;color:#b26a00">Not played yet (${d.notPlayed.length})</b>
+          <div style="font-size:12.5px;color:var(--muted);margin-top:3px">${d.notPlayed.map(s=>esc(s.name)).join(', ')}</div>
+        </div>`;
+      }
+      return html;
+    }
     async function loadGameResults(gid,elId){ const wrap=$(elId); if(!wrap) return;
-      try{ const d=await (await fetch('/api/game/'+gid+'/results')).json(); wrap.innerHTML=resultsTable(d.results); }
+      try{ const d=await (await fetch('/api/game/'+gid+'/results')).json(); wrap.innerHTML=resultsTable(d.results)+gameBreakdown(d); }
       catch{ wrap.innerHTML='<p class="hint">Could not load results.</p>'; }
     }
     function resetGameSection(){ $('makeGameBtn').disabled=false; $('makeGameBtn').innerHTML=`${ICON('i-spark')} Create student game`; $('gamePanel').style.display='none'; $('gamePanel').innerHTML=''; }
@@ -2818,7 +2902,7 @@
 
     // ---- "My games" view ----
     const gamesPanel=$('gamesPanel');
-    function hideAllPanels(){ composer.style.display='none'; planStage.style.display='none'; results.style.display='none'; adminPanel.style.display='none'; gamesPanel.style.display='none'; if($('rostersPanel')) $('rostersPanel').style.display='none'; if($('assignmentsPanel')) $('assignmentsPanel').style.display='none'; if($('progressWrap')) $('progressWrap').style.display='none'; stepsEl.style.display='none'; statusEl.innerHTML=''; }
+    function hideAllPanels(){ composer.style.display='none'; planStage.style.display='none'; results.style.display='none'; adminPanel.style.display='none'; gamesPanel.style.display='none'; if($('modeSelect')) $('modeSelect').style.display='none'; if($('importPlanCard')) $('importPlanCard').style.display='none'; if($('importSlidesCard')) $('importSlidesCard').style.display='none'; if($('rostersPanel')) $('rostersPanel').style.display='none'; if($('assignmentsPanel')) $('assignmentsPanel').style.display='none'; if($('marksPanel')) $('marksPanel').style.display='none'; if($('progressWrap')) $('progressWrap').style.display='none'; stepsEl.style.display='none'; statusEl.innerHTML=''; }
     function openGames(){ hideAllPanels(); gamesPanel.style.display='block'; loadMyGames(); loadRosters(true); setActiveNav('gamesBtn'); window.scrollTo({top:0,behavior:'smooth'}); }
     function closeGames(){ gamesPanel.style.display='none'; stepsEl.style.display='flex'; show('composer'); setStep(1); setActiveNav('homeBtn'); }
     $('gamesBtn').onclick=openGames; $('gamesBack').onclick=closeGames; $('gamesBackTop').onclick=closeGames;
@@ -2826,6 +2910,62 @@
     function openAssignments(){ hideAllPanels(); $('assignmentsPanel').style.display='block'; loadMyAssignments(); setActiveNav('assignmentsBtn'); window.scrollTo({top:0,behavior:'smooth'}); }
     function closeAssignments(){ $('assignmentsPanel').style.display='none'; stepsEl.style.display='flex'; show('composer'); setStep(1); setActiveNav('homeBtn'); }
     $('assignmentsBtn').onclick=openAssignments; $('assignmentsBack').onclick=closeAssignments; $('assignmentsBackTop').onclick=closeAssignments;
+
+    // ── Marks / gradebook ─────────────────────────────────────────────────────
+    let gbClasses=[], gbSelected=null;
+    function openMarks(){ hideAllPanels(); $('marksPanel').style.display='block'; loadGradebookClasses(); setActiveNav('marksBtn'); window.scrollTo({top:0,behavior:'smooth'}); }
+    function closeMarks(){ $('marksPanel').style.display='none'; stepsEl.style.display='flex'; show('composer'); setStep(1); setActiveNav('homeBtn'); }
+    $('marksBtn').onclick=openMarks; $('marksBack').onclick=closeMarks; $('marksBackTop').onclick=closeMarks;
+
+    const pctClass=p=>p>=0.8?'gb-a':p>=0.6?'gb-b':p>=0.4?'gb-c':'gb-d';
+    const pctTxt=p=>p==null?'—':Math.round(p*100)+'%';
+
+    async function loadGradebookClasses(){
+      $('marksBody').innerHTML='<span class="status"><span class="spinner"></span>Loading…</span>';
+      $('marksClassBar').innerHTML='';
+      try{
+        const d=await (await fetch('/api/gradebook')).json();
+        gbClasses=d.classes||[];
+        if(!gbClasses.length){ $('marksBody').innerHTML='<div class="empty-state"><svg class="ic" aria-hidden="true" style="width:36px;height:36px;opacity:.3"><use href="#i-users"/></svg><p>No marks yet</p><p style="font-size:13px;color:var(--muted)">Publish an assignment or create a game for one of your classes, and marks will collect here.</p></div>'; return; }
+        if(!gbSelected || !gbClasses.some(c=>c.rosterId===gbSelected)) gbSelected=gbClasses[0].rosterId;
+        renderClassBar();
+        loadGradebook(gbSelected);
+      }catch{ $('marksBody').innerHTML='<p class="hint">Could not load marks.</p>'; }
+    }
+    function renderClassBar(){
+      const bar=$('marksClassBar');
+      const chips=gbClasses.map(c=>`<button type="button" class="btn ghost gb-class-btn" data-rid="${esc(c.rosterId)}" style="font-size:13px;padding:8px 14px;${c.rosterId===gbSelected?'border-color:var(--primary);color:var(--primary);font-weight:700':''}">${esc(c.name)} <span style="color:var(--muted);font-weight:400">· ${c.assignments+c.games} assessment${c.assignments+c.games===1?'':'s'}</span></button>`).join('');
+      const sel=gbClasses.find(c=>c.rosterId===gbSelected);
+      const exportBtn=sel?`<a href="/api/gradebook/${esc(gbSelected)}/export" class="btn accent" style="margin-left:auto;font-size:13px;padding:8px 16px;text-decoration:none"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Export to Excel</a>`:'';
+      bar.innerHTML=chips+exportBtn;
+      bar.querySelectorAll('.gb-class-btn').forEach(b=>b.onclick=()=>{ gbSelected=b.dataset.rid; renderClassBar(); loadGradebook(gbSelected); });
+    }
+    async function loadGradebook(rosterId){
+      $('marksBody').innerHTML='<span class="status"><span class="spinner"></span>Loading marks…</span>';
+      try{
+        const g=await (await fetch('/api/gradebook/'+rosterId)).json();
+        renderGradebook(g);
+      }catch{ $('marksBody').innerHTML='<p class="hint">Could not load this class.</p>'; }
+    }
+    function renderGradebook(g){
+      if(!g.assessments.length){ $('marksBody').innerHTML='<div class="empty-state"><p>No assessments for this class yet</p><p style="font-size:13px;color:var(--muted)">Publish an assignment or create a game for this class to start collecting marks.</p></div>'; return; }
+      const doneCount=g.rows.filter(r=>r.done>0).length;
+      const summary=`<div class="gb-summary">
+        <div class="gb-stat"><div class="v">${pctTxt(g.classAverage)}</div><div class="l">Class average</div></div>
+        <div class="gb-stat"><div class="v">${g.assessments.length}</div><div class="l">Assessment${g.assessments.length===1?'':'s'}</div></div>
+        <div class="gb-stat"><div class="v">${g.students.length}</div><div class="l">Students</div></div>
+        <div class="gb-stat"><div class="v">${doneCount}/${g.students.length}</div><div class="l">Have taken part</div></div>
+      </div>`;
+      const head=`<tr><th class="sticky">Student</th>${g.assessments.map(a=>`<th title="${esc(a.title)}"><span class="gb-th-type">${a.kind==='game'?'🎮 Game':'📝 '+esc(a.type||'Task')}</span>${esc(a.title.length>18?a.title.slice(0,17)+'…':a.title)}</th>`).join('')}<th>Average</th></tr>`;
+      const body=g.rows.map(r=>`<tr>
+        <td class="sticky">${esc(r.name)}</td>
+        ${g.assessments.map(a=>{ const c=r.cells[a.id]; return `<td>${c?`<span class="gb-cell ${pctClass(c.pct)}">${c.mark}/${c.max}</span>`:'<span class="gb-none">—</span>'}</td>`; }).join('')}
+        <td class="avg">${r.average!=null?`<span class="gb-cell ${pctClass(r.average)}">${pctTxt(r.average)}</span>`:'<span class="gb-none">—</span>'}</td>
+      </tr>`).join('');
+      const foot=`<tr><td class="sticky">Class average</td>${g.assessments.map(a=>`<td>${pctTxt(a.average)}</td>`).join('')}<td>${pctTxt(g.classAverage)}</td></tr>`;
+      $('marksBody').innerHTML=summary+`<div class="gb-scroll"><table class="gb"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>
+        <p class="hint" style="margin-top:10px;font-size:12px">Marks combine assignments and games for this class. A dash means the student hasn't taken part yet.</p>`;
+    }
 
     async function loadMyAssignments(){
       const wrap=$('assignmentsList');
