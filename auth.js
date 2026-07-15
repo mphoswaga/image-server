@@ -55,8 +55,46 @@ async function signup(email, password, name, forceRole) {
 async function login(email, password) {
   const u = findByEmail(email);
   if (!u) return null;
+  if (!u.passwordHash) return null; // social-only account — must use its provider
   const ok = await bcrypt.compare(String(password || ''), u.passwordHash);
   return ok ? publicUser(u) : null;
+}
+
+// Sign in (or register) a teacher via a social provider (Google/Microsoft).
+// Resolution order:
+//   1. an account already linked to this exact provider identity
+//   2. an existing account with the same email → link this identity to it
+//      (the provider vouches for the email, so this safely unifies a teacher
+//       who first signed up with a password and later uses "Continue with …")
+//   3. otherwise create a new, password-less account
+function findByIdentity(users, key) {
+  return Object.values(users).find(u => u.identities && u.identities[key]) || null;
+}
+async function findOrCreateSocialUser({ provider, providerUserId, email, name }) {
+  email = String(email || '').trim().toLowerCase();
+  if (!provider || !providerUserId || !email) throw new Error('Incomplete profile from provider.');
+  const key = `${provider}:${providerUserId}`;
+  const users = loadUsers();
+
+  let u = findByIdentity(users, key) || (findByEmail(email) && users[findByEmail(email).id]);
+  if (u) {
+    u.identities = u.identities || {};
+    if (!u.identities[key]) u.identities[key] = { email, linkedAt: new Date().toISOString() };
+    if (!u.name && name) u.name = name;
+    saveUsers(users);
+    return publicUser(u);
+  }
+
+  const adminEmail = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+  const role = (Object.keys(users).length === 0 || (adminEmail && email === adminEmail)) ? 'admin' : 'teacher';
+  const id = crypto.randomUUID();
+  users[id] = {
+    id, email, name: (name || '').trim() || email.split('@')[0], role,
+    identities: { [key]: { email, linkedAt: new Date().toISOString() } },
+    createdAt: new Date().toISOString(),
+  };
+  saveUsers(users);
+  return publicUser(users[id]);
 }
 
 function publicUser(u) { return { id: u.id, email: u.email, name: u.name, role: u.role || 'teacher' }; }
@@ -201,4 +239,4 @@ function requireAdmin(req, res, next) {
   });
 }
 
-module.exports = { signup, login, issueToken, verifyToken, getUserById, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME, createPasswordResetToken, resetPasswordWithToken, addPasskey, listPasskeys, deletePasskey, findByCredentialId, updatePasskeyCounter };
+module.exports = { signup, login, findOrCreateSocialUser, issueToken, verifyToken, getUserById, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME, createPasswordResetToken, resetPasswordWithToken, addPasskey, listPasskeys, deletePasskey, findByCredentialId, updatePasskeyCounter };

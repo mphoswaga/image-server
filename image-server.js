@@ -37,9 +37,10 @@ function safeAnimate(buffer, band) {
   try { return animateBuffer(buffer, band); }
   catch (err) { console.log('animation skipped:', err.message); return buffer; }
 }
-const { signup, login, issueToken, verifyToken, getUserById, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME, createPasswordResetToken, resetPasswordWithToken, listPasskeys, deletePasskey } = require('./auth');
+const { signup, login, findOrCreateSocialUser, issueToken, verifyToken, getUserById, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME, createPasswordResetToken, resetPasswordWithToken, listPasskeys, deletePasskey } = require('./auth');
 const { sendEmail } = require('./email');
 const webauthn = require('./webauthn');
+const socialAuth = require('./social-auth');
 const { runWithUser } = require('./ai-client');
 const usage = require('./usage');
 const jwt = require('jsonwebtoken');
@@ -243,6 +244,46 @@ app.post('/api/webauthn/login/verify', async (req, res) => {
     setSession(res, userId);
     res.json({ user: getUserById(userId) });
   } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// ── Social login (Sign in with Google / Microsoft) ─────────────────────────
+// Which providers are configured (frontend shows only these buttons).
+app.get('/api/auth/providers', (req, res) => res.json({ providers: socialAuth.enabledProviders() }));
+
+const OAUTH_STATE_COOKIE = 'lc_social_state';
+const socialRedirectUri = (req, provider) => `${originFor(req)}/auth/${provider}/callback`;
+
+// Start sign-in: set a short-lived CSRF-state cookie and bounce to the provider.
+app.get('/auth/:provider', (req, res) => {
+  const provider = req.params.provider;
+  if (!socialAuth.isEnabled(provider)) return res.redirect('/?authError=' + encodeURIComponent('That sign-in method is not available.'));
+  const state = socialAuth.randomState();
+  res.cookie(OAUTH_STATE_COOKIE, `${provider}:${state}`, { httpOnly: true, sameSite: 'lax', maxAge: 10 * 60 * 1000 });
+  res.redirect(socialAuth.buildAuthUrl(provider, { redirectUri: socialRedirectUri(req, provider), state }));
+});
+
+// Provider redirects back here with ?code&state. Verify state, exchange the
+// code, find-or-create the teacher, set the session, and land them in the app.
+app.get('/auth/:provider/callback', async (req, res) => {
+  const provider = req.params.provider;
+  const fail = msg => res.redirect('/?authError=' + encodeURIComponent(msg));
+  try {
+    if (req.query.error) return fail(`${provider} sign-in was cancelled.`);
+    const cookie = req.cookies && req.cookies[OAUTH_STATE_COOKIE];
+    res.clearCookie(OAUTH_STATE_COOKIE);
+    if (!cookie || cookie !== `${provider}:${req.query.state}`) return fail('Sign-in session expired — please try again.');
+    if (!socialAuth.isEnabled(provider)) return fail('That sign-in method is not available.');
+    if (!req.query.code) return fail('No authorization code returned.');
+
+    const profile = await socialAuth.fetchProfile(provider, { code: req.query.code, redirectUri: socialRedirectUri(req, provider) });
+    const user = await findOrCreateSocialUser(profile);
+    setSession(res, user.id);
+    audit.log('social.login', { provider, userId: user.id, email: user.email, ip: req.ip });
+    res.redirect('/');
+  } catch (err) {
+    console.error('Social login failed:', err.message);
+    fail(err.message || 'Sign-in failed. Please try again.');
+  }
 });
 
 app.get('/api/config/apps', requireAuth, (req, res) => {
