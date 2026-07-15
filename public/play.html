@@ -69,13 +69,32 @@
     .leg0{background:var(--c1)} .leg1{background:var(--c2)} .leg2{background:var(--c3)} .leg3{background:var(--c4)}
     .qfb { margin:8px 16px 0; padding:9px 12px; border-radius:11px; font-size:13px; display:none; }
     .qfb.show { display:block; } .qfb.right { background:#ebfbee; color:#0f6b3d; } .qfb.no { background:#fff0ef; color:#a32820; } .qfb b { display:block; }
-    .stage { position:relative; width:100%; max-width:340px; margin:8px auto 0; }
-    #gameCanvas { width:100%; display:block; background:#39404e; touch-action:none; border-radius:4px; }
+    .stage { position:relative; width:100%; max-width:min(94vw, 46vh); margin:8px auto 0; }
+    #gameCanvas { width:100%; aspect-ratio:2/3; height:auto; display:block; background:#39404e; touch-action:none; border-radius:4px; image-rendering:pixelated; }
+    /* HUD action buttons (sound, fullscreen) + marquee */
+    .hud-right { display:flex; align-items:center; gap:10px; }
+    .hud-btn { background:none; border:none; cursor:pointer; font-size:18px; line-height:1; padding:2px 4px; border-radius:8px; opacity:.75; transition:opacity .15s, transform .06s; }
+    .hud-btn:hover { opacity:1; } .hud-btn:active { transform:scale(.9); }
+    .marquee { display:none; }
     .controls { display:flex; gap:14px; justify-content:center; align-items:center; padding:14px; }
     .ctrl { width:88px; height:56px; border-radius:15px; border:none; background:linear-gradient(135deg,var(--primary-2),var(--primary)); color:#fff; font-size:24px; font-weight:800; cursor:pointer; user-select:none; -webkit-user-select:none; touch-action:none; box-shadow:0 6px 14px rgba(31,78,121,.28); display:flex; align-items:center; justify-content:center; }
     .ctrl.fire { background:linear-gradient(135deg,#f0954a,var(--accent)); width:104px; font-size:17px; }
     .ctrl:active { transform:translateY(1px); filter:brightness(1.12); }
     .tip { text-align:center; font-size:12px; color:var(--muted); padding:0 14px 12px; }
+    /* Fullscreen: fill the screen, centre the play area, arcade backdrop */
+    #gameScreen:fullscreen { display:flex; flex-direction:column; justify-content:center; align-items:center; background:radial-gradient(circle at 50% 28%, #1a2740, #070b14); border-radius:0; padding:0 0 8px; }
+    #gameScreen:fullscreen .marquee { display:block; }
+    #gameScreen:fullscreen .hud { width:min(94vw,60vh); color:#e7edf5; }
+    #gameScreen:fullscreen .stage { max-width:min(94vw, 86vh); }
+    #gameScreen:fullscreen .tip { color:#8fa3bd; }
+    /* Arcade cabinet framing on wider screens */
+    @media (min-width:760px){
+      #gameScreen { max-width:540px; margin:0 auto; background:linear-gradient(180deg,#243149,#141c2c); border:1px solid #2b3a55; }
+      .marquee { display:block; text-align:center; font-family:'Fraunces',Georgia,serif; font-weight:700; letter-spacing:.4px; color:#ffd43b; text-shadow:0 0 12px rgba(255,212,59,.35); font-size:21px; padding:14px 16px 0; }
+      .hud { color:#e7edf5; } .hud .prog{ color:#9ec5ff; }
+      .stage { max-width:min(88vw, 54vh); border:7px solid #0a0f1a; border-radius:14px; box-shadow:0 0 0 2px #2b3a55, inset 0 0 44px rgba(0,0,0,.55); }
+      .tip { color:#8fa3bd; }
+    }
     /* car crash overlay */
     .q-overlay { position:absolute; inset:0; background:rgba(16,24,40,.82); display:none; align-items:center; justify-content:center; padding:12px; }
     .q-overlay.show { display:flex; }
@@ -151,7 +170,8 @@
     </div>
 
     <div id="gameScreen" class="card" style="display:none">
-      <div class="hud"><span class="lives" id="hudLives"></span><span class="prog" id="hudProg"></span><span class="score" id="hudScore"></span></div>
+      <div class="marquee" id="marquee"></div>
+      <div class="hud"><span class="lives" id="hudLives"></span><span class="prog" id="hudProg"></span><span class="hud-right"><span class="score" id="hudScore"></span><button id="muteBtn" class="hud-btn" title="Sound on/off" aria-label="Toggle sound">🔊</button><button id="fsBtn" class="hud-btn" title="Fullscreen" aria-label="Fullscreen">⛶</button></span></div>
       <div class="qbanner" id="qBanner"><p class="qt" id="qText2"></p><div class="legend" id="qLegend"></div></div>
       <div class="qfb" id="qFb"></div>
       <div class="stage">
@@ -299,7 +319,7 @@
       $('hudScore').textContent=icon+' '+arcadeScore; }
     async function submitAnswer(choice){ answers[qi]=choice; const d=await (await fetch('/api/game/'+GAME_ID+'/answer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({questionIndex:qi,choice})})).json(); if(d.correct) score++; return d; }
     function advance(){ qi++; if(qi>=questions.length || lives<=0){ endGame(); return false; } updateHud(); return true; }
-    async function endGame(){ active=null; cancelAnimationFrame(raf); show('loading');
+    async function endGame(){ active=null; cancelAnimationFrame(raf); SND.stopMusic(); show('loading');
       const d=await (await fetch('/api/game/'+GAME_ID+'/finish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answers:answers.map(a=>a==null?-1:a),arcadeScore,gameType:activeGameType})})).json();
 
       // Arcade score block
@@ -332,14 +352,80 @@
       $('qBanner').style.display = key==='target'?'block':'none';
       $('qFb').className='qfb';
       $('dragTip').textContent = key==='space'?'Move ◀ ▶ (or drag), tap FIRE — blast the invaders, dodge their bombs!' : key==='runner'?'⬆ jump rocks, ⬇ duck branches, grab coins — watch for runaway boulders!' : key==='target'?'Read the question, pick your answer, then FIRE (or tap) when the crosshair is over its target. Bullseye = +2!' : 'Dodge traffic ◀ ▶ (or drag), grab coins — watch for speeding trucks!';
+      const NAMES={ car:'🚗 Car Dodge', space:'🚀 Space Blaster', runner:'🏃 Answer Runner', target:'🎯 Target Shot' };
+      $('marquee').textContent = NAMES[key] || 'LessonCope Arcade';
       active = key==='car' ? CarGame() : key==='runner' ? RunnerGame() : key==='target' ? TargetGame() : SpaceGame();
-      show('gameScreen'); $('qOverlay').classList.remove('show'); active.init(); updateHud();
+      show('gameScreen'); fitCanvas(); $('qOverlay').classList.remove('show'); active.init(); updateHud();
+      SND.unlock(); SND.startMusic();
       lastT=performance.now(); cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
     }
     $('againBtn').addEventListener('click', ()=>show('pickerScreen'));
 
-    const cv=$('gameCanvas'), cx=cv.getContext('2d'); const W=cv.width, H=cv.height;
-    cx.imageSmoothingEnabled=false;
+    const cv=$('gameCanvas'), cx=cv.getContext('2d'); const W=320, H=480;
+    // Keep the game logic in a fixed 320×480 coordinate space, but size the
+    // backing store to the displayed size × device-pixel-ratio so it stays
+    // crisp when scaled up big (laptop, tablet, projector, fullscreen).
+    function fitCanvas(){ const r=cv.getBoundingClientRect(); if(!r.width||!r.height) return;
+      const dpr=Math.min(window.devicePixelRatio||1, 2);
+      cv.width=Math.max(1,Math.round(r.width*dpr)); cv.height=Math.max(1,Math.round(r.height*dpr));
+      cx.setTransform(cv.width/W,0,0,cv.height/H,0,0); cx.imageSmoothingEnabled=false;
+    }
+    window.addEventListener('resize', ()=>{ if($('gameScreen').style.display!=='none') fitCanvas(); });
+    // Fullscreen the whole game screen (projector / smartboard friendly).
+    $('fsBtn').addEventListener('click', ()=>{
+      const el=$('gameScreen');
+      if(document.fullscreenElement) (document.exitFullscreen||document.webkitExitFullscreen).call(document);
+      else (el.requestFullscreen||el.webkitRequestFullscreen).call(el);
+    });
+    document.addEventListener('fullscreenchange', ()=>{ $('fsBtn').textContent=document.fullscreenElement?'⨯':'⛶'; setTimeout(fitCanvas,80); });
+
+    // ── Sound: synthesized WebAudio SFX + a soft background loop. No files to
+    // load. Muted state persists; the audio context unlocks on first gesture
+    // (browser autoplay policy).
+    const SND=(function(){
+      let ctx=null, master=null, muted=localStorage.getItem('lc_muted')==='1';
+      let musicGain=null, musicTimer=null, step=0;
+      function ensure(){ if(ctx) return; try{ ctx=new (window.AudioContext||window.webkitAudioContext)();
+        master=ctx.createGain(); master.gain.value=muted?0:0.85; master.connect(ctx.destination); }catch(e){} }
+      function resume(){ ensure(); if(ctx&&ctx.state==='suspended') ctx.resume(); }
+      function blip({freq=440,dur=0.12,type='square',vol=0.3,slideTo=null,delay=0}){ if(!ctx||muted) return;
+        const t=ctx.currentTime+delay, o=ctx.createOscillator(), g=ctx.createGain();
+        o.type=type; o.frequency.setValueAtTime(freq,t);
+        if(slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(1,slideTo),t+dur);
+        g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol,t+0.012);
+        g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+        o.connect(g); g.connect(master); o.start(t); o.stop(t+dur+0.03); }
+      function noise({dur=0.2,vol=0.3,cut=1400}){ if(!ctx||muted) return;
+        const t=ctx.currentTime, n=ctx.createBufferSource();
+        const buf=ctx.createBuffer(1,Math.ceil(ctx.sampleRate*dur),ctx.sampleRate), d=buf.getChannelData(0);
+        for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*(1-i/d.length);
+        n.buffer=buf; const g=ctx.createGain(); g.gain.value=vol; const f=ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=cut;
+        n.connect(f); f.connect(g); g.connect(master); n.start(t); n.stop(t+dur); }
+      function stopMusic(){ if(musicTimer){ clearInterval(musicTimer); musicTimer=null; } if(musicGain){ try{musicGain.disconnect();}catch(e){} musicGain=null; } }
+      function startMusic(){ ensure(); if(muted||!ctx||musicTimer) return;
+        const scale=[0,3,5,7,10]; step=0;
+        musicGain=ctx.createGain(); musicGain.gain.value=0.04; musicGain.connect(master);
+        musicTimer=setInterval(()=>{ if(muted||!ctx) return;
+          const semi=scale[step%scale.length]+(Math.floor(step/scale.length)%2?12:0), freq=196*Math.pow(2,semi/12), t=ctx.currentTime;
+          const o=ctx.createOscillator(), g=ctx.createGain(); o.type='triangle'; o.frequency.value=freq;
+          g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.5,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+0.22);
+          o.connect(g); g.connect(musicGain); o.start(t); o.stop(t+0.24); step++;
+        }, 250); }
+      return {
+        unlock:resume, isMuted:()=>muted, startMusic, stopMusic,
+        toggleMute(){ muted=!muted; localStorage.setItem('lc_muted',muted?'1':'0'); if(master) master.gain.value=muted?0:0.85; if(muted) stopMusic(); return muted; },
+        shoot(){ blip({freq:820,slideTo:280,dur:0.11,type:'square',vol:0.16}); },
+        coin(){ blip({freq:880,dur:0.05,type:'square',vol:0.2}); blip({freq:1320,dur:0.08,type:'square',vol:0.2,delay:0.05}); },
+        jump(){ blip({freq:300,slideTo:680,dur:0.15,type:'square',vol:0.18}); },
+        hit(){ noise({dur:0.3,vol:0.32}); blip({freq:180,slideTo:60,dur:0.28,type:'sawtooth',vol:0.22}); },
+        blast(){ noise({dur:0.14,vol:0.24,cut:2200}); blip({freq:420,slideTo:120,dur:0.14,type:'square',vol:0.14}); },
+        correct(){ [523,659,784].forEach((f,i)=>blip({freq:f,dur:0.13,type:'triangle',vol:0.2,delay:i*0.08})); },
+        wrong(){ blip({freq:300,slideTo:150,dur:0.3,type:'sawtooth',vol:0.2}); },
+        win(){ [523,659,784,1046].forEach((f,i)=>blip({freq:f,dur:0.15,type:'triangle',vol:0.22,delay:i*0.09})); },
+      };
+    })();
+    $('muteBtn').textContent = SND.isMuted()?'🔇':'🔊';
+    $('muteBtn').addEventListener('click', ()=>{ const m=SND.toggleMute(); $('muteBtn').textContent=m?'🔇':'🔊'; if(!m) SND.startMusic(); });
 
     // Runner sprite sheet — frame rects measured directly from the source
     // image's bordered cells (94x94px each), not eyeballed.
@@ -405,7 +491,7 @@
         for(let i=s.coins.length-1;i>=0;i--){ const c=s.coins[i]; c.y+=sp*dt;
           if(c.y>H+20){ s.coins.splice(i,1); continue; }
           if(Math.abs(c.x-(s.px+PW/2))<28 && Math.abs(c.y-(s.py+PH/2))<42){
-            s.coins.splice(i,1); arcadeScore++; updateHud(); sparkle(c.x,c.y);
+            s.coins.splice(i,1); arcadeScore++; updateHud(); sparkle(c.x,c.y); SND.coin();
             s.pops.push({x:c.x,y:c.y-12,t:0,text:'+1',col:'#ffd43b'}); }
         }
         for(let i=s.enemies.length-1;i>=0;i--){ const e=s.enemies[i]; const eh=e.truck?TH:EH;
@@ -460,7 +546,7 @@
       return { init, update, render, resume(){ s.enemies=s.enemies.filter(e=>e.y<s.py-120); s.invuln=1.6; s.paused=false; lastT=performance.now(); } };
     }
     // car crash overlay
-    function openCrash(){ const q=questions[qi];
+    function openCrash(){ SND.hit(); const q=questions[qi];
       document.querySelector('#qOverlay .crash').textContent = activeGameType==='space' ? '💥 Ship hit! Answer to win your life back:' : '💥 Crash! Answer to win your life back:';
       $('qText').textContent=q.question;
       $('qOptions').innerHTML=q.options.map((o,k)=>`<button class="opt" data-k="${k}"><span class="k">${'ABCD'[k]}</span><span>${esc(o)}</span></button>`).join('');
@@ -470,7 +556,7 @@
       const d=await submitAnswer(+b.dataset.k);
       opts[d.correctIndex] && opts[d.correctIndex].classList.add('correct');
       const fb=$('qFeedback'); fb.className='feedback show '+(d.correct?'right':'no');
-      if(d.correct){ lives++; updateHud(); fb.innerHTML=`<b>Correct! ✅ +1 life</b>${esc(d.explanation||'')}`; } else { b.classList.add('wrong'); fb.innerHTML=`<b>Not quite ❌</b>${esc(d.explanation||'')}`; }
+      if(d.correct){ SND.correct(); lives++; updateHud(); fb.innerHTML=`<b>Correct! ✅ +1 life</b>${esc(d.explanation||'')}`; } else { SND.wrong(); b.classList.add('wrong'); fb.innerHTML=`<b>Not quite ❌</b>${esc(d.explanation||'')}`; }
       const verb=activeGameType==='space'?'Keep flying →':activeGameType==='runner'?'Keep running →':'Keep driving →';
       $('nextBtn').textContent=(qi+1>=questions.length)?'See my result →':verb; $('qNextRow').style.display='block'; });
     $('nextBtn').addEventListener('click', ()=>{ $('qOverlay').classList.remove('show'); if(advance() && active && active.resume) active.resume(); });
@@ -508,7 +594,7 @@
         s.elapsed+=dt; if(s.fireCool>0)s.fireCool-=dt; if(s.invuln>0)s.invuln-=dt;
         s.stars.forEach(st=>{ st.y+=(14+st.z*22)*dt; if(st.y>H){st.y=0;st.x=Math.random()*W;} });
         if(dragX!=null) s.px=clamp(dragX,24,W-24); else s.px=clamp(s.px+moveDir*250*dt,24,W-24);
-        if(fireQueued && s.fireCool<=0 && s.shots.length<3){ fireQueued=false; s.fireCool=0.3; s.shots.push({x:s.px,y:SHIP_Y-26}); }
+        if(fireQueued && s.fireCool<=0 && s.shots.length<3){ fireQueued=false; s.fireCool=0.3; s.shots.push({x:s.px,y:SHIP_Y-26}); SND.shoot(); }
         // formation march: speeds up per wave and as the fleet thins out
         const alive=s.aliens.filter(a=>a.alive), total=s.aliens.length;
         if(alive.length){
@@ -523,7 +609,7 @@
           let bi=s.bombs.findIndex(b=>Math.abs(b.x-sh.x)<9 && Math.abs(b.y-sh.y)<13);
           if(bi>=0){ boom(sh.x,sh.y,'#ffd43b'); s.bombs.splice(bi,1); s.shots.splice(i,1); continue; }
           const hit=alive.find(a=>a.alive && sh.x>alX(a)-2 && sh.x<alX(a)+AW+2 && sh.y>alY(a)-2 && sh.y<alY(a)+AH+6);
-          if(hit){ hit.alive=false; s.shots.splice(i,1); arcadeScore++; updateHud();
+          if(hit){ hit.alive=false; s.shots.splice(i,1); arcadeScore++; updateHud(); SND.blast();
             boom(alX(hit)+AW/2,alY(hit)+AH/2,ALIENS[hit.r].col);
             s.pops.push({x:alX(hit)+AW/2,y:alY(hit),t:0,text:'+1'}); }
         }
@@ -592,7 +678,7 @@
         const air = Math.random()<0.5, base=W+60;
         for(let i=0;i<3;i++) s.coins.push({ x:base+i*34, y: air ? GROUND_Y-92-(i===1?14:0) : GROUND_Y-38, ph:Math.random()*6 });
       }
-      function doJump(){ if(s.state==='run' && s.vert==='run'){ s.vert='jump'; s.vertT=0.55; s.lastAction=s.elapsed; } }
+      function doJump(){ if(s.state==='run' && s.vert==='run'){ s.vert='jump'; s.vertT=0.55; s.lastAction=s.elapsed; SND.jump(); } }
       function doDuck(){ if(s.state==='run' && s.vert==='run'){ s.vert='duck'; s.vertT=0.5; s.lastAction=s.elapsed; } }
       function crash(){ s.state='wait'; lives--; updateHud(); openCrash(); }
       function dust(x,y,n,spread){ for(let i=0;i<n;i++) s.parts.push({ x:x+(Math.random()-0.5)*10, y,
@@ -635,7 +721,7 @@
         for(let i=s.coins.length-1;i>=0;i--){ const c=s.coins[i]; c.x-=speed*dt;
           if(c.x<-20){ s.coins.splice(i,1); continue; }
           if(Math.abs(c.x-PLAYER_X)<18 && Math.abs(c.y-cy)<32){
-            s.coins.splice(i,1); arcadeScore++; updateHud(); sparkle(c.x,c.y);
+            s.coins.splice(i,1); arcadeScore++; updateHud(); sparkle(c.x,c.y); SND.coin();
             s.pops.push({x:c.x,y:c.y-14,t:0,text:'+1',col:'#f08c00'});
           }
         }
@@ -774,7 +860,7 @@
       async function resolve(key,bull){
         s.state='wait';
         const d=await submitAnswer(key);
-        if(d.correct){ arcadeScore+=bull?2:1; } else { lives--; } updateHud();
+        if(d.correct){ arcadeScore+=bull?2:1; bull?SND.win():SND.correct(); } else { lives--; SND.wrong(); } updateHud();
         if(d.correct) s.pops.push({x:SPOTS[key][0],y:SPOTS[key][1]-R-10,t:0,text:bull?'Bullseye! +2':'+1',col:'#ffd43b'});
         const fb=$('qFb'); fb.className='qfb show '+(d.correct?'right':'no');
         fb.innerHTML = d.correct?`<b>${bull?'Bullseye! 🎯 +2':'Correct! ✅'}</b>${esc(d.explanation||'')}` : `<b>Not quite ❌ — ${'ABCD'[d.correctIndex]} was right</b>${esc(d.explanation||'')}`;
@@ -786,7 +872,7 @@
         s.pops=s.pops.filter(p=>(p.t+=dt)<0.8);
         if(s.state!=='run'){ tapQueued=false; fireQueued=false; return; }
         s.t+=s.spd*dt;
-        if(tapQueued||fireQueued){ tapQueued=false; fireQueued=false;
+        if(tapQueued||fireQueued){ tapQueued=false; fireQueued=false; SND.shoot();
           const c=crossPos();
           s.holes.push({x:c.x,y:c.y});
           let hit=-1, dist=1e9;
