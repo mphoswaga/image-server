@@ -2020,26 +2020,33 @@ app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:r
   }
   if (!foundRoster) return res.status(404).json({ error: 'Roster not found.' });
 
-  const allGames = games.listTeacherGames(foundTeacherId);
+  const inRoster = id => foundRoster.students.find(s => s.id === id);
   const byStudent = new Map();
-  for (const g of allGames) {
+  const push = (sid, row) => { if (!byStudent.has(sid)) byStudent.set(sid, []); byStudent.get(sid).push(row); };
+  for (const g of games.listTeacherGames(foundTeacherId)) {
     for (const result of games.getResults(g.id)) {
-      if (!foundRoster.students.find(s => s.id === result.studentId)) continue;
-      if (!byStudent.has(result.studentId)) byStudent.set(result.studentId, []);
-      byStudent.get(result.studentId).push({
-        gameId: g.id, topic: g.topic, subject: g.subject,
+      if (!inRoster(result.studentId)) continue;
+      push(result.studentId, { kind: 'game', gameId: g.id, topic: g.topic, subject: g.subject,
         score: result.score, total: result.total,
         percentage: result.total > 0 ? Math.round((result.score / result.total) * 100) : 0,
-        at: result.at, updatedAt: result.at,
-      });
+        at: result.at, updatedAt: result.at });
     }
+  }
+  for (const a of gradebook.assignmentResultRows(foundTeacherId)) {
+    if (!inRoster(a.studentId)) continue;
+    push(a.studentId, { kind: 'assignment', type: a.type, assignmentId: a.assignmentId, topic: a.topic, subject: a.subject,
+      score: a.score, total: a.total, percentage: a.percentage, at: a.at, updatedAt: a.at });
   }
 
   const students = foundRoster.students.map(s => {
     const results = (byStudent.get(s.id) || []).sort((a, b) => (b.at || '').localeCompare(a.at || ''));
     const avgPct = results.length ? Math.round(results.reduce((sum, r) => sum + r.percentage, 0) / results.length) : null;
     const updatedAt = results.length ? results[0].at : foundRoster.createdAt;
-    return { id: s.id, name: s.name, gamesPlayed: results.length, averagePercentage: avgPct, updatedAt, results };
+    return { id: s.id, name: s.name,
+      assessmentsCompleted: results.length,
+      gamesPlayed: results.filter(r => r.kind === 'game').length,
+      assignmentsCompleted: results.filter(r => r.kind === 'assignment').length,
+      averagePercentage: avgPct, updatedAt, results };
   });
 
   res.json({
@@ -2058,11 +2065,32 @@ app.get('/api/v1/roster/:id/activities', requireApiAccess, requireScope('results
   }
   if (!foundRoster) return res.status(404).json({ error: 'Roster not found.' });
 
-  const activities = games.listTeacherGames(foundTeacherId)
+  const gameActivities = games.listTeacherGames(foundTeacherId)
     .filter(g => g.rosterId === foundRoster.id)
-    .map(g => ({ id: g.id, lessonTitle: g.lessonTitle, subject: g.subject, topic: g.topic, grade: g.grade, questionCount: (g.questions || []).length, createdAt: g.createdAt, roomCode: g.roomCode }));
+    .map(g => ({ kind: 'game', id: g.id, title: g.lessonTitle, subject: g.subject, topic: g.topic, grade: g.grade, questionCount: (g.questions || []).length, createdAt: g.createdAt, roomCode: g.roomCode }));
+  const assignmentActivities = assignments.listTeacherAssignments(foundTeacherId)
+    .filter(a => a.rosterId === foundRoster.id)
+    .map(a => ({ kind: 'assignment', type: a.type, id: a.id, title: a.title, subject: a.subject, topic: a.topic, grade: a.grade, submissions: a.submissions, createdAt: a.createdAt, roomCode: a.roomCode }));
+  const activities = [...gameActivities, ...assignmentActivities].sort((x, y) => (y.createdAt || '').localeCompare(x.createdAt || ''));
 
   res.json({ roster: { id: foundRoster.id, name: foundRoster.name }, activities });
+});
+
+// Per-student performance summary across games + assignments — purpose-built
+// for TeacherScope's report-comment generation: overall average plus per-
+// subject strengths and weaknesses. OAuth scopes it to the token's teacher;
+// admin keys summarize across all teachers.
+app.get('/api/v1/student/:studentId/summary', requireApiAccess, requireScope('results:read'), (req, res) => {
+  const teacherIds = req.oauthTeacherId ? [req.oauthTeacherId] : listAllUserIds();
+  const { name, rows } = gradebook.gatherStudentResults(teacherIds, req.params.studentId);
+  if (!rows.length && !name) return res.status(404).json({ error: 'No data for that student.' });
+  const summary = gradebook.summarizeStudent(rows);
+  res.json({
+    student: { id: req.params.studentId, name: name || null },
+    overall: summary.overall,
+    bySubject: summary.bySubject,
+    recent: rows.slice(0, 10),
+  });
 });
 
 // Incremental results sync with pagination — all game results for this teacher.
@@ -2079,7 +2107,7 @@ app.get('/api/v1/results', requireApiAccess, requireScope('results:read'), (req,
         if (updatedSince && r.at < updatedSince) continue;
         all.push({
           id: `${g.id}_${r.studentId}_${r.at}`,
-          gameId: g.id, rosterId: g.rosterId || null,
+          kind: 'game', gameId: g.id, rosterId: g.rosterId || null,
           studentId: r.studentId,
           subject: g.subject, topic: g.topic,
           score: r.score, total: r.total,
@@ -2087,6 +2115,12 @@ app.get('/api/v1/results', requireApiAccess, requireScope('results:read'), (req,
           at: r.at, updatedAt: r.at,
         });
       }
+    }
+    // Assignments (worksheets / exit tickets / quizzes) carry marks too — fold
+    // them into the same results feed so TeacherScope sees the full picture.
+    for (const a of gradebook.assignmentResultRows(tid)) {
+      if (updatedSince && a.at < updatedSince) continue;
+      all.push({ id: `${a.assignmentId}_${a.studentId}_${a.at}`, updatedAt: a.at, ...a });
     }
   }
 
@@ -2110,18 +2144,18 @@ app.get('/api/v1/students', requireApiAccess, requireScope('rosters:read'), (req
       : roster.listRosters(tid).map(r => roster.getRoster(tid, r.id)).filter(Boolean);
     if (!rosters.length) continue;
 
-    const allGames = games.listTeacherGames(tid);
     const byStudent = new Map();
-    for (const g of allGames) {
+    const push = (sid, row) => { if (!byStudent.has(sid)) byStudent.set(sid, []); byStudent.get(sid).push(row); };
+    for (const g of games.listTeacherGames(tid)) {
       for (const result of games.getResults(g.id)) {
-        if (!byStudent.has(result.studentId)) byStudent.set(result.studentId, []);
-        byStudent.get(result.studentId).push({
-          topic: g.topic, subject: g.subject,
+        push(result.studentId, { kind: 'game', topic: g.topic, subject: g.subject,
           score: result.score, total: result.total,
-          percentage: result.total > 0 ? Math.round((result.score / result.total) * 100) : 0,
-          at: result.at,
-        });
+          percentage: result.total > 0 ? Math.round((result.score / result.total) * 100) : 0, at: result.at });
       }
+    }
+    for (const a of gradebook.assignmentResultRows(tid)) {
+      push(a.studentId, { kind: 'assignment', type: a.type, topic: a.topic, subject: a.subject,
+        score: a.score, total: a.total, percentage: a.percentage, at: a.at });
     }
 
     for (const r of rosters) {

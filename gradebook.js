@@ -94,4 +94,96 @@ function toWorkbook(gb) {
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
 
-module.exports = { listClasses, buildGradebook, toWorkbook };
+// ── Shared helpers for the external (/api/v1) API ──────────────────────────
+// A single student's assessment history across games AND assignments, as a
+// flat list of comparable rows. `teacherIds` scopes the search (one teacher
+// for an OAuth token, all teachers for an admin key). Also surfaces the
+// student's display name (rosters are the only place names live).
+function gatherStudentResults(teacherIds, studentId) {
+  const rows = [];
+  let name = null;
+  for (const tid of teacherIds) {
+    for (const g of games.listTeacherGames(tid)) {
+      for (const r of games.getResults(g.id)) {
+        if (r.studentId !== studentId) continue;
+        if (r.name && !name) name = r.name;
+        rows.push({ kind: 'game', assessmentId: g.id, title: g.lessonTitle, subject: g.subject || null, topic: g.topic || null,
+          mark: r.score, max: r.total, percentage: r.total > 0 ? Math.round((r.score / r.total) * 100) : 0, at: r.at });
+      }
+    }
+    for (const a of assignments.listTeacherAssignments(tid)) {
+      for (const sub of assignments.getSubmissions(a.id)) {
+        if (sub.studentId !== studentId) continue;
+        if (sub.name && !name) name = sub.name;
+        rows.push({ kind: 'assignment', type: a.type, assessmentId: a.id, title: a.title, subject: a.subject || null, topic: a.topic || null,
+          mark: sub.totalMarks, max: sub.maxMarks, percentage: sub.maxMarks > 0 ? Math.round((sub.totalMarks / sub.maxMarks) * 100) : 0, at: sub.submittedAt || a.createdAt });
+      }
+    }
+  }
+  // roster name fallback (a student may have results under a display name only)
+  if (!name) {
+    for (const tid of teacherIds) {
+      for (const rs of roster.listRosters(tid)) {
+        const full = roster.getRoster(tid, rs.id);
+        const s = full && full.students.find(x => x.id === studentId);
+        if (s) { name = s.name; break; }
+      }
+      if (name) break;
+    }
+  }
+  rows.sort((a, b) => (b.at || '').localeCompare(a.at || ''));
+  return { name, rows };
+}
+
+// A performance summary purpose-built for report-comment generation: an
+// overall average plus per-subject strengths and weaknesses (which topics the
+// student does best/worst in), across games and assignments together.
+function summarizeStudent(rows) {
+  const pct = arr => (arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null);
+  const overall = {
+    averagePercentage: pct(rows.map(r => r.percentage)),
+    assessmentsCompleted: rows.length,
+    gamesPlayed: rows.filter(r => r.kind === 'game').length,
+    assignmentsCompleted: rows.filter(r => r.kind === 'assignment').length,
+  };
+  const bySubjectMap = {};
+  for (const r of rows) {
+    const subj = r.subject || 'general';
+    (bySubjectMap[subj] ||= { subject: subj, pcts: [], topics: {} });
+    bySubjectMap[subj].pcts.push(r.percentage);
+    const t = r.topic || r.title || 'general';
+    (bySubjectMap[subj].topics[t] ||= []).push(r.percentage);
+  }
+  const bySubject = Object.values(bySubjectMap).map(s => {
+    const topicAvgs = Object.entries(s.topics).map(([topic, ps]) => ({ topic, percentage: pct(ps) }));
+    topicAvgs.sort((a, b) => b.percentage - a.percentage);
+    return {
+      subject: s.subject,
+      averagePercentage: pct(s.pcts),
+      assessments: s.pcts.length,
+      strongest: topicAvgs[0] || null,
+      weakest: topicAvgs.length > 1 ? topicAvgs[topicAvgs.length - 1] : null,
+    };
+  }).sort((a, b) => b.averagePercentage - a.averagePercentage);
+  return { overall, bySubject };
+}
+
+// Per-teacher list of assignment result rows (mirrors the games shape used by
+// the existing /api/v1 endpoints), so assignments can be folded in alongside.
+function assignmentResultRows(teacherId) {
+  const out = [];
+  for (const a of assignments.listTeacherAssignments(teacherId)) {
+    for (const sub of assignments.getSubmissions(a.id)) {
+      out.push({
+        kind: 'assignment', type: a.type, assignmentId: a.id, rosterId: a.rosterId || null,
+        studentId: sub.studentId, subject: a.subject || null, topic: a.topic || null, title: a.title,
+        score: sub.totalMarks, total: sub.maxMarks,
+        percentage: sub.maxMarks > 0 ? Math.round((sub.totalMarks / sub.maxMarks) * 100) : 0,
+        at: sub.submittedAt || a.createdAt,
+      });
+    }
+  }
+  return out;
+}
+
+module.exports = { listClasses, buildGradebook, toWorkbook, gatherStudentResults, summarizeStudent, assignmentResultRows };
