@@ -546,7 +546,7 @@
       return { init, update, render, resume(){ s.enemies=s.enemies.filter(e=>e.y<s.py-120); s.invuln=1.6; s.paused=false; lastT=performance.now(); } };
     }
     // car crash overlay
-    function openCrash(){ SND.hit(); const q=questions[qi];
+    function openCrash(){ SND.hit(); SND.stopMusic(); const q=questions[qi];
       document.querySelector('#qOverlay .crash').textContent = activeGameType==='space' ? '💥 Ship hit! Answer to win your life back:' : '💥 Crash! Answer to win your life back:';
       $('qText').textContent=q.question;
       $('qOptions').innerHTML=q.options.map((o,k)=>`<button class="opt" data-k="${k}"><span class="k">${'ABCD'[k]}</span><span>${esc(o)}</span></button>`).join('');
@@ -559,7 +559,7 @@
       if(d.correct){ SND.correct(); lives++; updateHud(); fb.innerHTML=`<b>Correct! ✅ +1 life</b>${esc(d.explanation||'')}`; } else { SND.wrong(); b.classList.add('wrong'); fb.innerHTML=`<b>Not quite ❌</b>${esc(d.explanation||'')}`; }
       const verb=activeGameType==='space'?'Keep flying →':activeGameType==='runner'?'Keep running →':'Keep driving →';
       $('nextBtn').textContent=(qi+1>=questions.length)?'See my result →':verb; $('qNextRow').style.display='block'; });
-    $('nextBtn').addEventListener('click', ()=>{ $('qOverlay').classList.remove('show'); if(advance() && active && active.resume) active.resume(); });
+    $('nextBtn').addEventListener('click', ()=>{ $('qOverlay').classList.remove('show'); if(advance()){ SND.startMusic(); if(active && active.resume) active.resume(); } });
 
     /* ===== SPACE BLASTER — Space Invaders-style: a fleet of pixel aliens
        marches side to side and descends, dropping bombs. Blast them for
