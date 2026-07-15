@@ -579,11 +579,6 @@
     .section-divider h3 .ic { color:var(--accent); width:17px; height:17px; }
     .section-divider::after { content:''; flex:1; height:1px; background:var(--border); }
 
-    /* ── Guide FAB ── */
-    .guide-fab { position:fixed; bottom:28px; right:28px; z-index:30; display:none; align-items:center; gap:9px; background:linear-gradient(135deg,#2a6aa6,var(--primary)); color:#fff; border:none; border-radius:999px; padding:14px 24px; font-size:15px; font-weight:700; font-family:inherit; cursor:pointer; box-shadow:0 8px 28px rgba(31,78,121,.46); transition:transform .15s, box-shadow .15s; letter-spacing:-.1px; }
-    .guide-fab:hover { transform:translateY(-3px); box-shadow:0 14px 40px rgba(31,78,121,.56); }
-    .guide-fab .ic { width:20px; height:20px; }
-    @media(max-width:480px){ .guide-fab-label { display:none; } .guide-fab { padding:14px; border-radius:50%; } }
 
     /* ── Wizard ── */
     .wizard-overlay { position:fixed; inset:0; background:rgba(16,24,40,.62); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:20px; }
@@ -666,7 +661,7 @@
       height: auto;
     }
     /* Entry-mode selector: start fresh, or bring your own plan / slides */
-    .mode-select { max-width:700px; margin:0 auto 18px; display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+    .mode-select { max-width:880px; margin:0 auto 18px; display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
     .mode-card { display:flex; flex-direction:column; align-items:flex-start; gap:4px; text-align:left; padding:16px; border:1.5px solid var(--border); border-radius:14px; background:var(--card); cursor:pointer; font-family:inherit; transition:border-color .15s, box-shadow .15s, transform .06s; }
     .mode-card:hover { border-color:var(--accent); transform:translateY(-1px); box-shadow:var(--sh); }
     .mode-card.active { border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
@@ -928,7 +923,7 @@
     </div>
 
     <!-- IMPORT A: teacher already has a lesson plan → slides -->
-    <section id="importPlanCard" class="card" style="display:none">
+    <section id="importPlanCard" class="card wide" style="display:none">
       <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Start from your lesson plan</h2>
       <p class="hint" style="margin-bottom:20px">Upload your existing lesson plan and we'll build matching slides straight away — no need to re-type objectives. Afterwards you can generate a worksheet, quiz, exit ticket and games from it.</p>
       <div class="grid2">
@@ -964,7 +959,7 @@
     </section>
 
     <!-- IMPORT B: teacher already has slides → plan and/or pack -->
-    <section id="importSlidesCard" class="card" style="display:none">
+    <section id="importSlidesCard" class="card wide" style="display:none">
       <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Start from your slides</h2>
       <p class="hint" style="margin-bottom:20px">Upload your PowerPoint and your slides show up here on the system. From them we can write you a matching lesson plan, or skip straight to worksheets, quizzes and games — all based on what you uploaded.</p>
       <div class="grid2">
@@ -992,7 +987,7 @@
     </section>
 
     <!-- STAGE 1 -->
-    <form id="composer" class="card" novalidate>
+    <form id="composer" class="card wide" novalidate>
       <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Plan a lesson</h2>
       <p class="hint" style="margin-bottom:24px">Type your objectives and we'll write a matching lesson plan — or switch to <b>Import from plan</b> to pull them from your pacing guide.</p>
 
@@ -1450,11 +1445,6 @@
     </div>
   </div>
 
-  <!-- GUIDE FAB -->
-  <button id="guideFloat" class="guide-fab" aria-label="Open quick start guide">
-    <svg class="ic" aria-hidden="true"><use href="#i-compass"/></svg>
-    <span class="guide-fab-label">Quick Start</span>
-  </button>
 
   <!-- WIZARD OVERLAY -->
   <div id="wizardOverlay" class="wizard-overlay" style="display:none" role="dialog" aria-modal="true" aria-labelledby="wizardTitle">
@@ -1653,7 +1643,7 @@
           <div class="psrc-check">${sel?ICON('i-check'):''}</div>
           <div class="psc-icon"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg></div>
           <div class="psc-body"><div class="psc-name">${esc(s.fileName)}</div>
-          <div class="psc-meta">${esc(s.subject||'Unknown subject')} · ${s.itemCount} weeks · Grades: ${esc((s.gradesFound||[]).join(', ')||'—')}</div></div>
+          <div class="psc-meta">${s.subject?esc(s.subject)+' · ':''}${s.itemCount} weeks · Grades: ${esc((s.gradesFound||[]).join(', ')||'—')}</div></div>
           <button type="button" class="psc-del" data-del="${s.id}" title="Remove"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></button>
         </div>`;
       }).join('');
@@ -2730,8 +2720,7 @@
       $('greeting').innerHTML=first?`Welcome back, <span class="hi">${esc(first)}</span>`:'Plan a lesson';
       $('adminBtn').style.display = user.role==='admin' ? 'inline-flex' : 'none';
       setActiveNav('homeBtn');
-      // Show guide buttons
-      $('guideFloat').style.display='flex';
+      // Show the contextual guide button (nav "Guide" link is always available)
       $('guideHeroBtn').style.display='inline-flex';
       // Auto-open wizard on first visit
       if(!localStorage.getItem('lc_wizard_done')) setTimeout(openWizard, 600);
@@ -2739,7 +2728,7 @@
     }
     function showAuth(){
       authScreen.style.display='block'; nav.style.display='none'; appEl.style.display='none';
-      $('guideFloat').style.display='none'; $('guideHeroBtn').style.display='none';
+      $('guideHeroBtn').style.display='none';
       setMode('login');
     }
 
@@ -3666,7 +3655,7 @@
     $('wizardBackBtn').addEventListener('click',()=>{ if(wzStep>0){wzStep--;renderWzStep();} });
     $('wizardNextBtn').addEventListener('click',()=>{ if(wzStep<WZ_STEPS.length-1){wzStep++;renderWzStep();}else closeWizard(); });
     $('wizardOverlay').addEventListener('click',e=>{ if(e.target===$('wizardOverlay'))closeWizard(); });
-    ['guideFloat','guideBtnNav','guideHeroBtn'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('click',openWizard); });
+    ['guideBtnNav','guideHeroBtn'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('click',openWizard); });
 
     // ── Splash screen control ──
     (function(){
