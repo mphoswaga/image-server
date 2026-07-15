@@ -63,11 +63,15 @@
     .hero .tagline { color:var(--muted); font-size:15.5px; margin-top:12px; max-width:560px; margin-left:auto; margin-right:auto; }
 
     /* Steps */
-    .steps { display:flex; justify-content:center; gap:10px; margin:0 0 26px; flex-wrap:wrap; }
-    .steps .st { display:inline-flex; align-items:center; gap:7px; padding:8px 15px; border-radius:999px; background:#fff; border:1px solid var(--border); font-weight:600; font-size:13.5px; color:var(--muted); box-shadow:var(--sh-sm); transition:.2s; }
-    .steps .st .ic { width:16px; height:16px; }
-    .steps .st.active { background:linear-gradient(135deg,var(--primary-2),var(--primary)); color:#fff; border-color:transparent; box-shadow:0 6px 16px rgba(31,78,121,.28); }
-    .steps .st.done { color:var(--ok); border-color:#bfe3cd; background:#f0faf4; }
+    /* Slim progress track — a quiet "where am I" indicator, deliberately
+       lighter than the entry-mode cards so the two don't read as one control. */
+    .steps { display:flex; justify-content:center; align-items:center; gap:0; margin:0 0 20px; flex-wrap:wrap; }
+    .steps .st { display:inline-flex; align-items:center; gap:7px; padding:0; background:none; border:none; box-shadow:none; font-weight:600; font-size:12.5px; color:var(--muted); transition:.2s; }
+    .steps .st .ic { width:15px; height:15px; padding:5px; box-sizing:content-box; border-radius:50%; background:#eef1f6; color:var(--muted); }
+    .steps .st.active { color:var(--primary); }
+    .steps .st.active .ic { background:linear-gradient(135deg,var(--primary-2),var(--primary)); color:#fff; box-shadow:0 4px 10px rgba(31,78,121,.25); }
+    .steps .st.done { color:var(--ok); } .steps .st.done .ic { background:#e6f6ec; color:var(--ok); }
+    .steps .st:not(:last-child)::after { content:''; width:32px; height:2px; background:var(--border); margin:0 12px; border-radius:2px; }
 
     /* Cards */
     .card { background:var(--card); border:1px solid var(--border); border-radius:var(--r-lg); box-shadow:var(--sh); padding:28px; max-width:700px; margin:0 auto; }
@@ -171,6 +175,16 @@
     .unit-del .ic { width:16px; height:16px; }
     .unit-lesson-row { display:flex; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap; }
     .unit-badge { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; padding:3px 9px; border-radius:999px; background:#e8f0fb; color:var(--primary-2); }
+
+    /* Optional, collapsed-by-default template block so the required steps lead */
+    .opt-tpl { margin:0 0 22px; border:1px dashed var(--border); border-radius:12px; background:#fbfcfe; }
+    .opt-tpl > summary { list-style:none; cursor:pointer; padding:13px 16px; display:flex; align-items:center; gap:8px; font-size:13.5px; font-weight:600; color:var(--muted); }
+    .opt-tpl > summary::-webkit-details-marker { display:none; }
+    .opt-tpl > summary::after { content:'▾'; margin-left:auto; transition:transform .2s; opacity:.6; }
+    .opt-tpl[open] > summary::after { transform:rotate(180deg); }
+    .opt-tpl > summary .ic { width:16px; height:16px; color:var(--accent); }
+    .opt-tag { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); background:#eef1f6; border-radius:999px; padding:2px 8px; }
+    .opt-tpl-body { padding:0 16px 16px; }
 
     /* ── Planning source: stepped composer ──────────────────────────────── */
     .ps-step { display:flex; gap:18px; margin-bottom:24px; padding-bottom:24px; border-bottom:1px solid var(--border); }
@@ -980,13 +994,13 @@
     <!-- STAGE 1 -->
     <form id="composer" class="card" novalidate>
       <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Plan a lesson</h2>
-      <p class="hint" style="margin-bottom:24px">Use your template, pacing guide, or weekly plan to generate a lesson plan that matches your school format.</p>
+      <p class="hint" style="margin-bottom:24px">Type your objectives and we'll write a matching lesson plan — or switch to <b>Import from plan</b> to pull them from your pacing guide.</p>
 
-      <!-- Step 1: Lesson plan template -->
-      <div class="ps-step">
-        <div class="ps-num">1</div>
-        <div class="ps-body">
-          <div class="ps-heading"><svg class="ic" aria-hidden="true" style="color:var(--accent)"><use href="#i-book-open"/></svg> Lesson plan template <span class="hint-i" tabindex="0" role="img" aria-label="Controls the output structure — upload your school's lesson-plan format (Word, PDF, Excel). Optional — without one we use a standard structure." data-tip="Controls the output structure — upload your school's lesson-plan format (Word, PDF, Excel). Optional — without one we use a standard structure.">i</span></div>
+      <!-- Optional: school lesson-plan template (collapsed so the required steps lead) -->
+      <details class="opt-tpl" id="tplDetails">
+        <summary><svg class="ic" aria-hidden="true"><use href="#i-book-open"/></svg> <span id="tplSummary">Match your school's lesson-plan template <span class="opt-tag">optional</span></span></summary>
+        <div class="opt-tpl-body">
+          <p class="hint" style="margin:0 0 10px">Upload your school's format (Word, PDF, Excel) and the plan follows its exact sections. Without one we use a standard structure.</p>
           <div id="tplList" class="tpl-list"><span class="info none">Loading your templates…</span></div>
           <div class="tpl-add">
             <input id="tplName" type="text" placeholder="Name (e.g. Observation plan)" aria-label="Template name" />
@@ -997,22 +1011,22 @@
             </select>
             <button type="button" class="act" id="tplAddBtn"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg> Add template</button>
           </div>
-          <p class="fmt-note"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Word, PDF, Excel or text. Optional — without one we use a standard structure.</p>
+          <p class="fmt-note"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Word, PDF, Excel or text.</p>
           <input id="tplFile" type="file" accept=".docx,.pdf,.xlsx,.xls,.txt,.md,.csv" style="display:none" />
         </div>
-      </div>
+      </details>
 
-      <!-- Step 2: Planning source -->
+      <!-- Step 1: Planning source -->
       <div class="ps-step">
-        <div class="ps-num">2</div>
+        <div class="ps-num">1</div>
         <div class="ps-body">
           <div class="ps-heading"><svg class="ic" aria-hidden="true" style="color:var(--accent)"><use href="#i-calendar"/></svg> Planning source <span class="hint-i" tabindex="0" role="img" aria-label="Upload your year plan, pacing guide, or weekly plan. LessonCope extracts weeks, units, objectives and success criteria — you just pick the week." data-tip="Upload your year plan, pacing guide, or weekly plan. LessonCope extracts weeks, units, objectives and success criteria — you just pick the week.">i</span></div>
           <div class="ps-tabs">
-            <button type="button" class="ps-tab active" data-ptab="import"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg> Import from plan</button>
-            <button type="button" class="ps-tab" data-ptab="manual"><svg class="ic" aria-hidden="true"><use href="#i-pencil"/></svg> Paste manually</button>
+            <button type="button" class="ps-tab" data-ptab="import"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg> Import from plan</button>
+            <button type="button" class="ps-tab active" data-ptab="manual"><svg class="ic" aria-hidden="true"><use href="#i-pencil"/></svg> Paste manually</button>
           </div>
           <!-- Import tab -->
-          <div id="ptab-import">
+          <div id="ptab-import" style="display:none">
             <p class="hint" style="margin:0 0 10px">Upload your year plan, pacing guide, or weekly plan. Objectives are extracted automatically for each week.</p>
             <div id="psrcList" class="psrc-list"><span class="info none">No plans uploaded yet — upload an Excel pacing guide to get started.</span></div>
             <div class="tpl-add"><button type="button" class="act" id="psrcAddBtn"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg> Upload a plan</button></div>
@@ -1020,7 +1034,7 @@
             <input id="psrcFile" type="file" accept=".xlsx,.xls" style="display:none"/>
           </div>
           <!-- Manual tab -->
-          <div id="ptab-manual" style="display:none">
+          <div id="ptab-manual">
             <div class="grid2" style="margin-top:4px">
               <div><label for="subject">Subject <span class="hint-i" tabindex="0" role="img" aria-label="The subject area — e.g. Maths, English, ICT." data-tip="The subject area.">i</span></label><input id="subject" list="subjectList" autocomplete="off" placeholder="e.g. Mathematics, ICT, English" maxlength="60" /><datalist id="subjectList"></datalist><div id="subjErr" class="field-err">Add a subject.</div></div>
               <div><label for="topic">Topic <span class="hint-i" tabindex="0" role="img" aria-label="The specific topic, e.g. adding fractions or the water cycle." data-tip="The specific topic.">i</span></label><input id="topic" list="topicList" autocomplete="off" placeholder="e.g. What is a Computer?" maxlength="80" /><datalist id="topicList"></datalist><div id="topicErr" class="field-err">Add a topic.</div></div>
@@ -1030,9 +1044,9 @@
         </div>
       </div>
 
-      <!-- Step 3: Select week or lesson (import mode only) -->
+      <!-- Select week or lesson (import mode only) -->
       <div class="ps-step" id="weekStep" style="display:none">
-        <div class="ps-num">3</div>
+        <div class="ps-num">2</div>
         <div class="ps-body">
           <div class="ps-heading"><svg class="ic" aria-hidden="true" style="color:var(--accent)"><use href="#i-target"/></svg> Select week or lesson</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
@@ -1058,7 +1072,7 @@
 
       <!-- Step 4: Objectives -->
       <div class="ps-step">
-        <div class="ps-num" id="objStepNum">3</div>
+        <div class="ps-num" id="objStepNum">2</div>
         <div class="ps-body">
           <div class="ps-heading" id="objStepLabel"><svg class="ic" aria-hidden="true" style="color:var(--accent)"><use href="#i-clipboard"/></svg> Lesson objectives <span style="color:var(--err)">*</span></div>
           <!-- Import mode: pulled from plan -->
@@ -1081,7 +1095,7 @@
 
       <!-- Step 5: Lesson settings -->
       <div class="ps-step">
-        <div class="ps-num" id="settingsStepNum">4</div>
+        <div class="ps-num" id="settingsStepNum">3</div>
         <div class="ps-body">
           <div class="ps-heading"><svg class="ic" aria-hidden="true" style="color:var(--accent)"><use href="#i-sliders"/></svg> Lesson settings</div>
           <div class="grid3">
@@ -1543,10 +1557,20 @@
     // Template packs: save several lesson-plan formats, pick one per lesson.
     let templates=[], selectedTemplateId=null, planTemplateId=null;
     const TYPE_LABEL={detailed:'Detailed',observation:'Observation',weekly:'Weekly',intervention:'Intervention',substitute:'Substitute',custom:'Custom'};
+    // Reflect the active template in the collapsed disclosure's summary so a
+    // returning teacher can see one is applied without expanding it.
+    function updateTplSummary(){
+      const sum=$('tplSummary'); if(!sum) return;
+      const t=templates.find(x=>x.id===selectedTemplateId);
+      sum.innerHTML = t
+        ? `Using template: <b>${esc(t.name)}</b> <span class="opt-tag">change</span>`
+        : `Match your school's lesson-plan template <span class="opt-tag">optional</span>`;
+    }
     function renderTemplates(){
       const list=$('tplList');
-      if(!templates.length){ selectedTemplateId=null; list.innerHTML=`<span class="info none">No templates yet — add your school's lesson-plan formats below (or skip to use a standard structure).</span>`; return; }
+      if(!templates.length){ selectedTemplateId=null; list.innerHTML=`<span class="info none">No templates yet — add your school's lesson-plan formats below (or skip to use a standard structure).</span>`; updateTplSummary(); return; }
       if(!selectedTemplateId || !templates.some(t=>t.id===selectedTemplateId)) selectedTemplateId=templates[0].id;
+      updateTplSummary();
       list.innerHTML=templates.map(t=>{
         const sel=t.id===selectedTemplateId, d=new Date(t.uploadedAt).toLocaleDateString();
         const warn=t.hasOriginal?'':' · <span style="color:var(--err)">re-upload for exact-format download</span>';
@@ -1597,15 +1621,15 @@
       return bad;
     }
     // ── Planning source ────────────────────────────────────────────────────
-    let planMode='import', planningSources=[], selectedPsrcId=null, pulledItemData=null;
+    let planMode='manual', planningSources=[], selectedPsrcId=null, pulledItemData=null;
     let pulledObjectives=[], allAvailableWeeks=[], allWeekItems=[], carouselOffset=0;
     let selGrade=null, selWeekNum=null;
     const CAROUSEL_VIS=5;
 
     function updateStepNums(){
       const weekVis=$('weekStep').style.display!=='none';
-      $('objStepNum').textContent=weekVis?'4':'3';
-      $('settingsStepNum').textContent=weekVis?'5':'4';
+      $('objStepNum').textContent=weekVis?'3':'2';
+      $('settingsStepNum').textContent=weekVis?'4':'3';
     }
     function switchPlanTab(tab){
       planMode=tab;
