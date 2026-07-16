@@ -346,11 +346,11 @@ app.post('/api/billing/checkout', requireAuth, async (req, res) => {
   } catch (err) { console.error('Checkout failed:', err.message); res.status(400).json({ error: err.message }); }
 });
 
-// Stripe webhook — the source of truth for completed purchases. Verifies the
-// signature, then credits the buyer (idempotent on Stripe's event id).
+// Payment webhook — the source of truth for completed purchases. Verifies the
+// signature, then credits the buyer (idempotent on the transaction reference).
 app.post('/api/billing/webhook', (req, res) => {
   let event;
-  try { event = billing.constructEvent(req.body, req.headers['stripe-signature']); }
+  try { event = billing.constructEvent(req.body, req.headers['x-paystack-signature']); }
   catch (err) { console.error('Webhook signature check failed:', err.message); return res.status(400).send(`Webhook Error: ${err.message}`); }
   try {
     if (event.type === 'checkout.session.completed') {
@@ -359,11 +359,26 @@ app.post('/api/billing/webhook', (req, res) => {
       const amount = parseInt((s.metadata && s.metadata.credits) || '0', 10);
       if (email && amount > 0) {
         const { credited, balance } = credits.grantOnce(event.id, email, amount, 'purchase');
-        audit.log('credits.purchase', { email, amount, credited, balance, sessionId: s.id });
+        audit.log('credits.purchase', { email, amount, credited, balance, ref: s.id, via: 'webhook' });
       }
     }
     res.json({ received: true });
   } catch (err) { console.error('Webhook handling failed:', err.message); res.status(500).json({ error: 'handler failed' }); }
+});
+
+// Verify a transaction on the return redirect — belt-and-braces crediting even
+// if the webhook is delayed or not configured (grantOnce keeps it single-count).
+app.get('/api/billing/verify', requireAuth, async (req, res) => {
+  const reference = req.query.reference;
+  if (!reference) return res.status(400).json({ error: 'Missing reference.' });
+  try {
+    const t = await billing.verifyTransaction(String(reference));
+    if (t.success && t.email && t.credits > 0) {
+      const { credited, balance } = credits.grantOnce(t.reference, t.email, t.credits, 'purchase');
+      if (credited) audit.log('credits.purchase', { email: t.email, amount: t.credits, balance, ref: t.reference, via: 'verify' });
+    }
+    res.json({ status: t.success ? 'success' : 'pending', balance: credits.getBalance(req.user.email) });
+  } catch (err) { console.error('Verify failed:', err.message); res.status(400).json({ error: err.message }); }
 });
 
 app.get('/api/config/apps', requireAuth, (req, res) => {

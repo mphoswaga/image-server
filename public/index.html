@@ -3031,7 +3031,7 @@
       try{
         const r=await fetch('/api/billing/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({packId:b.dataset.pack})});
         const d=await r.json(); if(!r.ok) throw new Error(d.error);
-        window.location.href=d.url; // Stripe hosted checkout (Google Pay / Apple Pay / cards)
+        window.location.href=d.url; // Paystack hosted checkout (cards, EFT, wallets)
       }catch(err){ toast(err.message); b.disabled=false; b.textContent='Buy'; }
     });
     function openCredits(){ hideAllPanels(); $('creditsPanel').style.display='block'; renderCredits(); setActiveNav('creditsBtn'); window.scrollTo({top:0,behavior:'smooth'}); refreshCredits().then(renderCredits); }
@@ -3039,12 +3039,19 @@
     $('creditsBtn').onclick=openCredits; $('creditsBack').onclick=closeCredits; $('creditsBackTop').onclick=closeCredits;
     // If a generation was blocked for lack of credits, bring the teacher here.
     function outOfCredits(){ toast('You\'re out of credits — top up to keep generating.'); openCredits(); }
-    // Handle the return from Stripe Checkout.
+    // Handle the return from the payment page — verify the transaction, then
+    // reflect the new balance.
     (function(){
-      const b=new URLSearchParams(location.search).get('billing');
-      if(b==='success'){ toast('Payment received — credits added!','ok'); setTimeout(refreshCredits, 400); }
-      else if(b==='cancel'){ toast('Checkout cancelled.'); }
-      if(b){ history.replaceState(null,'',location.pathname); }
+      const q=new URLSearchParams(location.search); const b=q.get('billing');
+      if(!b) return;
+      const ref=q.get('reference')||q.get('trxref');
+      history.replaceState(null,'',location.pathname);
+      if(b==='return' && ref){
+        fetch('/api/billing/verify?reference='+encodeURIComponent(ref)).then(r=>r.json()).then(d=>{
+          toast(d.status==='success'?'Payment received — credits added!':'Payment not completed yet.', d.status==='success'?'ok':'err');
+          refreshCredits();
+        }).catch(()=>refreshCredits());
+      } else if(b==='cancel'){ toast('Checkout cancelled.'); }
     })();
 
     const pctClass=p=>p>=0.8?'gb-a':p>=0.6?'gb-b':p>=0.4?'gb-c':'gb-d';

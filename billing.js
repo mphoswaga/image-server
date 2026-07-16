@@ -1,32 +1,45 @@
-// Stripe billing for credit packs. LessonScope is the billing hub — it runs
-// the checkout and receives the webhook; credits.js holds the shared balance.
+// Billing adapter — Paystack (South Africa / Africa). LessonScope is the
+// billing hub; credits.js holds the shared balance. Kept behind the SAME small
+// interface the server expects (isConfigured / getPacks / createCheckoutSession
+// / verifyTransaction / constructEvent), so switching processors later is a
+// one-file change.
 //
-// Google Pay / Apple Pay / cards all come for free: we use Stripe's hosted
-// Checkout, which shows the wallet buttons automatically for eligible devices
-// (no direct Google Pay API work needed). Packs are priced ad-hoc via
-// price_data, so there are no Products to pre-create in the dashboard.
+// Paystack is plain REST + an HMAC-signed webhook, so there's no SDK: we use
+// fetch + crypto. Crediting is doubly safe — the webhook (charge.success) AND
+// the verify-on-return both call credits.grantOnce, which is idempotent, so a
+// teacher is credited exactly once even if the webhook is delayed or unset.
 //
-// Everything is credential-gated: with no STRIPE_SECRET_KEY the module reports
-// "not configured" and the app just doesn't offer purchasing.
+// Credential-gated: with no PAYSTACK_SECRET_KEY the app just doesn't offer
+// purchasing.
+const crypto = require('crypto');
 
-// Editable pack catalogue. unit_amount is in the smallest currency unit (cents).
-const CURRENCY = (process.env.BILLING_CURRENCY || 'usd').toLowerCase();
+// Editable pack catalogue. amount is in the currency's subunit (cents for ZAR).
+const CURRENCY = (process.env.BILLING_CURRENCY || 'zar').toLowerCase();
 const PACKS = [
-  { id: 'credits-10',  credits: 10,  amount: 500  },
-  { id: 'credits-30',  credits: 30,  amount: 1200 },
-  { id: 'credits-100', credits: 100, amount: 3500 },
+  { id: 'credits-10',  credits: 10,  amount: 9000  },  // R90
+  { id: 'credits-30',  credits: 30,  amount: 24000 },  // R240
+  { id: 'credits-100', credits: 100, amount: 75000 },  // R750
 ];
 
-let _stripe = null;
-function stripe() {
-  if (!process.env.STRIPE_SECRET_KEY) throw new Error('Stripe is not configured.');
-  if (!_stripe) _stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-  return _stripe;
+const API = 'https://api.paystack.co';
+const secret = () => process.env.PAYSTACK_SECRET_KEY;
+function isConfigured() { return !!secret(); }
+
+async function paystack(method, pathname, body) {
+  if (!secret()) throw new Error('Payments are not set up yet.');
+  const res = await fetch(API + pathname, {
+    method,
+    headers: { Authorization: `Bearer ${secret()}`, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.status === false) throw new Error(data.message || `Paystack error (${res.status})`);
+  return data;
 }
-function isConfigured() { return !!process.env.STRIPE_SECRET_KEY; }
 
 function getPack(id) { return PACKS.find(p => p.id === id) || null; }
 function fmtPrice(amount) {
+  if (CURRENCY === 'zar') return `R${(amount / 100).toFixed(2)}`;
   try { return new Intl.NumberFormat('en', { style: 'currency', currency: CURRENCY.toUpperCase() }).format(amount / 100); }
   catch { return `${(amount / 100).toFixed(2)} ${CURRENCY.toUpperCase()}`; }
 }
@@ -34,33 +47,55 @@ function getPacks() {
   return PACKS.map(p => ({ id: p.id, credits: p.credits, amount: p.amount, currency: CURRENCY, priceLabel: fmtPrice(p.amount) }));
 }
 
-// Create a hosted Checkout session for a pack. The teacher's email + the credit
-// amount ride along in metadata so the webhook knows who to credit.
-async function createCheckoutSession({ packId, email, successUrl, cancelUrl }) {
+// Start a hosted Paystack checkout; returns the URL to redirect the teacher to.
+// The teacher's email + credit amount ride in metadata so the webhook/verify
+// know who to credit.
+async function createCheckoutSession({ packId, email, successUrl }) {
   const pack = getPack(packId);
   if (!pack) throw new Error('Unknown credit pack.');
-  const session = await stripe().checkout.sessions.create({
-    mode: 'payment',
-    customer_email: email || undefined,
-    line_items: [{
-      quantity: 1,
-      price_data: {
-        currency: CURRENCY,
-        product_data: { name: `${pack.credits} LessonScope + TeacherScope credits` },
-        unit_amount: pack.amount,
-      },
-    }],
-    metadata: { email: (email || '').toLowerCase(), credits: String(pack.credits), packId: pack.id },
-    success_url: `${successUrl}?billing=success`,
-    cancel_url: `${cancelUrl}?billing=cancel`,
+  if (!email) throw new Error('An email is required to check out.');
+  const data = await paystack('POST', '/transaction/initialize', {
+    email,
+    amount: pack.amount,
+    currency: CURRENCY.toUpperCase(),
+    callback_url: `${successUrl}?billing=return`,
+    metadata: { email: email.toLowerCase(), credits: String(pack.credits), packId: pack.id },
   });
-  return session.url;
+  return data.data.authorization_url;
 }
 
-// Verify a webhook payload came from Stripe (HMAC signature) and return the event.
+// Confirm a transaction server-side (used on the return redirect). Returns the
+// purchase details when paid, so the caller can (idempotently) grant credits.
+async function verifyTransaction(reference) {
+  const data = await paystack('GET', `/transaction/verify/${encodeURIComponent(reference)}`);
+  const t = data.data || {};
+  const meta = t.metadata || {};
+  return {
+    success: t.status === 'success',
+    reference: t.reference || reference,
+    email: (meta.email || (t.customer && t.customer.email) || '').toLowerCase(),
+    credits: parseInt(meta.credits || '0', 10),
+  };
+}
+
+// Verify a webhook came from Paystack (HMAC-SHA512 of the raw body with the
+// secret key) and normalise it to the shape the server's handler expects.
 function constructEvent(rawBody, signature) {
-  if (!process.env.STRIPE_WEBHOOK_SECRET) throw new Error('Stripe webhook secret is not configured.');
-  return stripe().webhooks.constructEvent(rawBody, signature, process.env.STRIPE_WEBHOOK_SECRET);
+  if (!secret()) throw new Error('Payments are not set up yet.');
+  const hash = crypto.createHmac('sha512', secret()).update(rawBody).digest('hex');
+  if (!signature || hash !== signature) throw new Error('Invalid webhook signature.');
+  const evt = JSON.parse(rawBody.toString('utf8'));
+  const t = evt.data || {};
+  const meta = t.metadata || {};
+  return {
+    id: t.reference || evt.id,
+    type: evt.event === 'charge.success' ? 'checkout.session.completed' : evt.event,
+    data: { object: {
+      id: t.reference,
+      metadata: { email: (meta.email || '').toLowerCase(), credits: meta.credits },
+      customer_details: { email: t.customer && t.customer.email },
+    } },
+  };
 }
 
-module.exports = { CURRENCY, PACKS, isConfigured, getPack, getPacks, createCheckoutSession, constructEvent };
+module.exports = { CURRENCY, PACKS, isConfigured, getPack, getPacks, createCheckoutSession, verifyTransaction, constructEvent };
