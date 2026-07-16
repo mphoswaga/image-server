@@ -575,6 +575,15 @@
 
     /* ── Credits ── */
     .credits-badge { display:inline-flex; align-items:center; justify-content:center; min-width:19px; height:18px; padding:0 6px; border-radius:999px; background:var(--accent); color:#fff; font-size:11px; font-weight:800; margin-left:2px; }
+    /* Cost pill shown on paid action buttons (only when billing is live). */
+    .cost-pill { display:inline-flex; align-items:center; gap:3px; margin-left:6px; padding:1px 7px; border-radius:999px; background:var(--accent-soft,#fff3e8); color:var(--accent); font-size:10.5px; font-weight:800; letter-spacing:.2px; vertical-align:middle; }
+    .cost-pill.free { background:#eef7f0; color:#1f9d55; }
+    .cost-note { display:flex; flex-wrap:wrap; gap:6px 14px; align-items:center; font-size:12.5px; color:var(--muted); margin:2px 0 14px; }
+    .cost-note b { color:var(--ink); font-weight:700; }
+    .cost-note .chip { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:999px; background:#fff; border:1px solid var(--border); }
+    .cost-note .chip .amt { color:var(--accent); font-weight:800; }
+    .topup { padding:16px 18px; border-radius:14px; border:1px solid var(--border); background:linear-gradient(135deg,var(--accent-soft,#fff3e8),#fff); }
+    .topup h4 { margin:0 0 4px; font-size:15px; } .topup p { margin:0 0 12px; font-size:13px; color:var(--muted); }
     .credits-balance { display:flex; align-items:center; gap:16px; padding:20px 24px; border-radius:16px; background:linear-gradient(135deg,var(--accent-soft,#fff3e8),#fff); border:1px solid var(--border); margin-bottom:22px; }
     .credits-balance .big { font-family:'Fraunces',Georgia,serif; font-size:42px; font-weight:700; color:var(--accent); line-height:1; }
     .credits-balance .lbl { font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:700; }
@@ -1186,6 +1195,7 @@
       </div>
       <p class="edit-tip"><svg class="ic" aria-hidden="true" style="color:var(--accent)"><use href="#i-pencil"/></svg> Click any text to <b>edit it</b> · use <b>Replace</b> to search images · <b>Regenerate</b> before downloading.</p>
       <div id="quotaPill" class="quota-pill" style="display:none"></div>
+      <div id="deckCostNote" class="cost-note" style="display:none"></div>
       <div id="deck" class="deck"></div>
 
       <!-- Lesson pack: student-facing materials from this same lesson -->
@@ -1379,6 +1389,7 @@
         </div>
       </div>
       <div id="creditsBalanceCard" class="credits-balance"></div>
+      <div id="creditsTopup" style="margin:0 0 18px"></div>
       <div id="creditsPacks" class="credits-packs"></div>
       <div id="creditsHistoryWrap" style="margin-top:24px"></div>
       <div style="margin-top:28px;padding-top:18px;border-top:1px solid var(--border)"><button id="creditsBack" class="back-btn"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back to lesson planner</button></div>
@@ -1893,7 +1904,7 @@
       try{
         const r=await fetch('/api/import/lesson-plan',{method:'POST',body:fd});
         const d=await r.json();
-        if(r.status===402 && d.needCredits){ statusEl.innerHTML=''; b.disabled=false; b.innerHTML=orig; outOfCredits(); return; }
+        if(creditBlocked(r,d)){ statusEl.innerHTML=''; b.disabled=false; b.innerHTML=orig; return; }
         if(!r.ok) throw new Error(d.error);
         // Ground the lesson pack + games in the uploaded plan (no in-app plan to collect).
         ctx={ subject, topic, grade:$('ipGrade').value||'middle school', slideCount:Number($('ipSlideCount').value)||5,
@@ -1987,7 +1998,7 @@
       try{
         const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...ctx,lessonPlan,presetId:selectedPresetId})});
         const d=await r.json();
-        if(r.status===402 && d.needCredits){ clearInterval(tmr); statusEl.innerHTML=''; $('acceptBtn').disabled=false; outOfCredits(); return; }
+        if(creditBlocked(r,d)){ clearInterval(tmr); statusEl.innerHTML=''; $('acceptBtn').disabled=false; return; }
         if(!r.ok) throw new Error(d.error);
         currentDeckId=d.deckId; clearInterval(tmr); statusEl.innerHTML=''; renderDeck(d); show('slides'); setStep(3); results.scrollIntoView({behavior:'smooth'}); refreshCredits();
       }catch(err){ clearInterval(tmr); statusEl.className='status err'; statusEl.textContent=err.message; }
@@ -2030,10 +2041,10 @@
         const bl=`<ul>${s.bullets.map(b=>`<li contenteditable data-field="bullet">${esc(b)}</li>`).join('')}</ul>`;
         const ex=s.example?`<div class="example"><div class="box"><b>${ICON('i-spark')}Example</b><span contenteditable data-field="example">${esc(s.example)}</span></div></div>`:'';
         // Example/task slides can get an accurate AI-generated illustration.
-        const aiBtn=(s.type==='content'||s.type==='activity')?`<button data-action="ai" data-i="${i}" title="Generate an accurate AI illustration">${AI_HTML}</button>`:'';
-        const regenBtn=s.type==='content'?`<button data-action="regen" data-i="${i}">${REGEN_HTML}</button>`:'';
+        const aiBtn=(s.type==='content'||s.type==='activity')?`<button data-action="ai" data-i="${i}" title="Generate an accurate AI illustration — ${costWords('ai-image')}">${AI_HTML}${costPill('ai-image')}</button>`:'';
+        const regenBtn=s.type==='content'?`<button data-action="regen" data-i="${i}" title="${billingLive()?`First ${pricesState.fairUse.freeRegensPerLesson} regenerations per lesson are free, then 1 credit`:'Regenerate this slide'}">${REGEN_HTML}</button>`:'';
         // a photo content slide can be turned into a labelled diagram
-        const diaBtn=(s.type==='content'&&!s.fraction&&!s.visual&&!s.labelled)?`<button data-action="diagram" data-i="${i}" title="Turn this into a labelled diagram">${DIA_HTML}</button>`:'';
+        const diaBtn=(s.type==='content'&&!s.fraction&&!s.visual&&!s.labelled)?`<button data-action="diagram" data-i="${i}" title="Turn this into a labelled diagram — ${costWords('diagram')}">${DIA_HTML}${costPill('diagram')}</button>`:'';
         const actions=(aiBtn||regenBtn||diaBtn)?`<div class="card-actions">${regenBtn}${diaBtn}${aiBtn}</div>`:'';
         const diff=s.differentiation?`<div class="diff"><div><b style="color:#15824b">Support</b> ${esc(s.differentiation.support)}</div><div><b style="color:#1f4e79">Stretch</b> ${esc(s.differentiation.stretch)}</div></div>`:'';
         const sc=(s.shortcuts&&s.shortcuts.length)?`<div class="shortcuts">${s.shortcuts.map(x=>`<div class="sc-row"><span class="sc-act">${esc(x.action)}</span><span class="sc-keys">${String(x.keys).split('+').map(k=>k.trim()).filter(Boolean).map((k,n)=>(n>0?'<span class="sc-plus">+</span>':'')+'<kbd class="keycap">'+esc(k)+'</kbd>').join('')}</span></div>`).join('')}</div>`:'';
@@ -2050,6 +2061,22 @@
       $('packPreview').innerHTML=''; // reset lesson-pack for the new deck
       resetGameSection(); // reset the student-game box for the new deck
       loadQuota(); // show remaining AI-visual budget + gate the AI buttons
+      applyCostBadges(); // credit pills + cost note (only when billing is live)
+    }
+    // Strip any existing pill, then append the current cost pill for `action`.
+    function setBtnCost(el,action){ if(!el) return; el.querySelectorAll('.cost-pill').forEach(x=>x.remove()); const p=costPill(action); if(p) el.insertAdjacentHTML('beforeend',p); }
+    // Show credit costs on the deck's paid buttons + a one-line summary note.
+    // Everything here is a no-op visually when billing is off / user is admin.
+    function applyCostBadges(){
+      const note=$('deckCostNote');
+      if(billingLive()){
+        note.style.display='flex';
+        const rows=[['ai-image','AI image'],['diagram','Diagram'],['pack-item','Worksheet / quiz / exit'],['lesson-pack-full','Full pack'],['game','Student game']];
+        note.innerHTML=`<b>Credit costs:</b>`+rows.map(([a,l])=>`<span class="chip">${l} <span class="amt">${priceOf(a)} cr</span></span>`).join('')+`<span class="chip">Regenerate <span class="amt">${pricesState.fairUse.freeRegensPerLesson} free, then 1 cr</span></span>`;
+      } else { note.style.display='none'; note.innerHTML=''; }
+      document.querySelectorAll('#packSection .pack-actions [data-pack]').forEach(b=>setBtnCost(b,'pack-item'));
+      setBtnCost($('fullPackBtn'),'lesson-pack-full');
+      setBtnCost($('makeGameBtn'),'game');
     }
     deckEl.addEventListener('click', async (e)=>{
       const b=e.target.closest('button[data-action]'); if(!b) return;
@@ -2058,20 +2085,27 @@
       if(b.dataset.action==='swap'){ openPicker(i); return;
       } else if(b.dataset.action==='ai'){ b.disabled=true; b.innerHTML='<span class="spinner"></span>Generating…';
         try{ const r=await fetch(`/api/slide/${currentDeckId}/ai-image`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})}); const d=await r.json();
-          if(r.status===403&&d.limitReached){ quotaReached(); toast(d.error); }
+          if(creditBlocked(r,d)){}
+          else if(r.status===403&&d.limitReached){ quotaReached(); toast(d.error); }
           else if(!r.ok){ throw new Error(d.error); }
-          else { card.querySelector('.thumb img').src=d.image; setBadge('ai-generated'); applyQuota(d); }
-        }catch(err){ toast(err.message); } b.disabled=false; b.innerHTML=AI_HTML; updateAiButtons();
+          else { card.querySelector('.thumb img').src=d.image; setBadge('ai-generated'); applyQuota(d); refreshCredits(); }
+        }catch(err){ toast(err.message); } b.disabled=false; b.innerHTML=AI_HTML+costPill('ai-image'); updateAiButtons();
       } else if(b.dataset.action==='diagram'){ b.disabled=true; b.innerHTML='<span class="spinner"></span>Drawing diagram…';
         try{ const r=await fetch(`/api/slide/${currentDeckId}/diagram`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})}); const d=await r.json();
-          if(r.status===403&&d.limitReached){ quotaReached(); toast(d.error); }
+          if(creditBlocked(r,d)){}
+          else if(r.status===403&&d.limitReached){ quotaReached(); toast(d.error); }
           else if(!r.ok){ throw new Error(d.error); }
           else if(d.labelled){ const nm=d.labelled.replace(/-/g,' ');
             card.querySelector('.thumb').outerHTML=`<div class="thumb" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#f0faf4;color:#2f9e44">${ICON('i-target')}<b style="text-transform:capitalize;font-size:14px">${esc(nm)} diagram</b><span class="badge ai">animated labels</span></div>`;
-          } else if(d.image){ const img=card.querySelector('.thumb img'); if(img){ img.src=d.image; setBadge('svg-diagram'); } applyQuota(d); }
-        }catch(err){ toast(err.message); } b.disabled=false; b.innerHTML=DIA_HTML; updateAiButtons();
+          } else if(d.image){ const img=card.querySelector('.thumb img'); if(img){ img.src=d.image; setBadge('svg-diagram'); } applyQuota(d); refreshCredits(); }
+        }catch(err){ toast(err.message); } b.disabled=false; b.innerHTML=DIA_HTML+costPill('diagram'); updateAiButtons();
       } else if(b.dataset.action==='regen'){ b.disabled=true; b.innerHTML='<span class="spinner"></span>Regenerating…';
-        try{ const r=await fetch(`/api/slide/${currentDeckId}/regenerate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})}); const d=await r.json(); if(!r.ok) throw new Error(d.error); card.outerHTML=cardHTML(d.slide,i);
+        try{ const r=await fetch(`/api/slide/${currentDeckId}/regenerate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})}); const d=await r.json();
+          if(creditBlocked(r,d)){ b.disabled=false; b.innerHTML=REGEN_HTML; return; }
+          if(!r.ok) throw new Error(d.error);
+          // Fair-use feedback: free until the allowance runs out, then 1 credit.
+          if(billingLive()){ if(d.charged>0){ toast('Used 1 credit for this regeneration.'); refreshCredits(); } else { const left=Math.max(0,(d.freeRegens||0)-(d.regensUsed||0)); toast(left>0?`${left} free regeneration${left>1?'s':''} left for this lesson.`:'That was your last free regeneration — the next costs 1 credit.'); } }
+          card.outerHTML=cardHTML(d.slide,i);
         }catch(err){ toast(err.message); b.disabled=false; b.innerHTML=REGEN_HTML; }
       }
     });
@@ -2221,7 +2255,7 @@
       const gen=e.target.closest('button[data-pack]');
       if(gen){ const type=gen.dataset.pack; gen.disabled=true; const o=gen.innerHTML; gen.innerHTML='<span class="spinner"></span>Generating…'; $('packPreview').innerHTML='';
         try{ const r=await fetch('/api/pack/'+type,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...ctx,lessonPlan:collectPlan()})});
-          const d=await r.json(); if(!r.ok) throw new Error(d.error); renderPack(type,d.data);
+          const d=await r.json(); if(creditBlocked(r,d)){} else if(!r.ok) throw new Error(d.error); else { renderPack(type,d.data); refreshCredits(); }
         }catch(err){ toast(err.message); } gen.disabled=false; gen.innerHTML=o; return; }
       const dl=e.target.closest('#packDlBtn');
       if(dl){ dl.disabled=true; const o=dl.innerHTML; dl.innerHTML='<span class="spinner"></span>Preparing…';
@@ -2385,11 +2419,11 @@
       try{
         const r=await fetch('/api/pack/full',{method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify({...ctx,lessonPlan:collectPlan()})});
-        if(!r.ok){const x=await r.json().catch(()=>({error:'Download failed'}));throw new Error(x.error);}
+        if(!r.ok){const x=await r.json().catch(()=>({error:'Download failed'})); if(creditBlocked(r,x)){ btn.disabled=false; btn.innerHTML=orig; return; } throw new Error(x.error);}
         const blob=await r.blob(),url=URL.createObjectURL(blob),a=document.createElement('a');
         const cd=r.headers.get('Content-Disposition')||'',m=cd.match(/filename="([^"]+)"/);
         a.href=url; a.download=m?m[1]:'lesson-pack.zip'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-        toast('Lesson pack downloaded!','ok');
+        toast('Lesson pack downloaded!','ok'); refreshCredits();
       }catch(err){ toast(err.message); }
       btn.disabled=false; btn.innerHTML=orig;
     });
@@ -2961,7 +2995,8 @@
       const questionCount=Math.min(20,Math.max(4,parseInt($('gameQCount').value,10)||6));
       const cutoffAt=$('gameCutoff').value||null;
       try{ const r=await fetch('/api/game',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deckId:currentDeckId,rosterId,questionCount,cutoffAt})});
-        const d=await r.json(); if(!r.ok) throw new Error(d.error);
+        const d=await r.json(); if(creditBlocked(r,d)){ b.disabled=false; b.innerHTML=o; return; } if(!r.ok) throw new Error(d.error);
+        refreshCredits();
         const url=location.origin+d.path;
         const joinUrl=location.origin+'/join';
         $('gamePanel').style.display='block';
@@ -2997,23 +3032,49 @@
     $('marksBtn').onclick=openMarks; $('marksBack').onclick=closeMarks; $('marksBackTop').onclick=closeMarks;
 
     // ── Credits (shared wallet) ──────────────────────────────────────────────
-    let creditsState=null;
+    let creditsState=null, pricesState=null;
+    // The credit price table (single source of truth from the server) drives
+    // every cost badge, so the UI can never disagree with what's charged.
+    async function loadPrices(){ try{ pricesState=await (await fetch('/api/credit-prices')).json(); }catch{ pricesState=null; } }
+    function priceOf(action){ return (pricesState && pricesState.prices && pricesState.prices[action]) || 0; }
+    // Are credits actually charged for this teacher right now? (billing on, not admin)
+    function billingLive(){ return !!(pricesState && pricesState.billingEnabled && !pricesState.unlimited); }
+    // A cost pill for a paid button — empty when the action is free, billing is
+    // off, or the user is an admin (so we never show "0 credits" everywhere).
+    function costPill(action){ if(!billingLive()) return ''; const n=priceOf(action); if(!n) return ''; return `<span class="cost-pill" title="Uses ${n} credit${n>1?'s':''}">${n} cr</span>`; }
+    function costWords(action){ const n=priceOf(action); return n?`${n} credit${n>1?'s':''}`:'Free'; }
+    // Handle a credit block on any paid response. Returns true if it took over.
+    function creditBlocked(r,d){
+      if(r && r.status===402 && d && d.needCredits){ outOfCredits(d); return true; }
+      if(d && d.walletUnavailable){ toast(d.error||'Credits are temporarily unavailable — try again in a moment.'); return true; }
+      return false;
+    }
     // Fetch balance; reveal the Credits nav item only when billing is on or
     // purchasing is available, and keep the nav badge current.
     async function refreshCredits(){
+      await loadPrices();
       try{ creditsState=await (await fetch('/api/credits')).json(); }catch{ creditsState=null; }
       const show=creditsState && (creditsState.billingEnabled || creditsState.purchasable);
       $('creditsBtn').style.display = show ? 'inline-flex' : 'none';
       const badge=$('creditsNavBadge');
       if(show && !creditsState.unlimited){ badge.textContent=creditsState.balance; badge.style.display='inline-flex'; }
       else badge.style.display='none';
+      // Keep the primary deck-creation buttons' cost pills current.
+      setBtnCost($('acceptBtn'),'slide-deck');
+      setBtnCost($('importPlanBtn'),'import-plan');
     }
     function renderCredits(){
       const d=creditsState||{};
       $('creditsBalanceCard').innerHTML = d.unlimited
         ? `<div><div class="big">∞</div><div class="lbl">Unlimited (admin)</div></div>`
         : `<div><div class="big">${d.balance||0}</div><div class="lbl">credits left</div></div>
-           <div style="font-size:13px;color:var(--muted);max-width:340px">${d.billingEnabled?'Each generated lesson or comment set uses 1 credit.':`Billing is off right now — generating is free. You start with ${d.freeCredits} free credits.`}</div>`;
+           <div style="font-size:13px;color:var(--muted);max-width:360px">${d.billingEnabled?'Spend credits to generate. A slide deck is 1 credit, a full lesson pack 3, an AI image 2, a diagram 1.':`Billing is off right now — generating is free. You start with ${d.freeCredits} free credits.`}</div>`;
+      // Top-up prompt — EducScope owns the shared wallet. Placeholder link until
+      // EducScope's billing is live (the local packs below still work meanwhile).
+      const acct=(pricesState&&pricesState.accountUrl)||'';
+      $('creditsTopup').innerHTML = (d.billingEnabled && !d.unlimited)
+        ? `<div class="topup"><h4>Top up your EducScope wallet</h4><p>Credits are shared across LessonScope and TeacherScope — you buy them once in your EducScope account.</p>${acct?`<a class="btn primary" href="${esc(acct)}" target="_blank" rel="noopener">Go to EducScope to top up</a>`:`<span class="hint">EducScope billing is coming soon — you'll top up from your account there.</span>`}</div>`
+        : '';
       // Packs (only when Stripe is configured)
       fetch('/api/billing/packs').then(r=>r.json()).then(p=>{
         if(!p.configured || d.unlimited){ $('creditsPacks').innerHTML = d.unlimited?'':'<p class="hint">Purchasing isn\'t available yet.</p>'; return; }
@@ -3038,7 +3099,12 @@
     function closeCredits(){ $('creditsPanel').style.display='none'; stepsEl.style.display='flex'; show('composer'); setStep(1); setActiveNav('homeBtn'); }
     $('creditsBtn').onclick=openCredits; $('creditsBack').onclick=closeCredits; $('creditsBackTop').onclick=closeCredits;
     // If a generation was blocked for lack of credits, bring the teacher here.
-    function outOfCredits(){ toast('You\'re out of credits — top up to keep generating.'); openCredits(); }
+    // `info` (from the 402 body) carries the needed cost + current balance.
+    function outOfCredits(info){
+      const cost=info&&info.cost;
+      toast(`You're out of credits${cost?` — this needs ${cost} credit${cost>1?'s':''}`:''}. Top up to keep generating.`);
+      openCredits();
+    }
     // Handle the return from the payment page — verify the transaction, then
     // reflect the new balance.
     (function(){
@@ -3303,7 +3369,8 @@
       fd.append('cutoffAt',$('pptxCutoff').value||'');
       try{
         const r=await fetch('/api/game/from-pptx',{method:'POST',body:fd});
-        const d=await r.json(); if(!r.ok) throw new Error(d.error);
+        const d=await r.json(); if(creditBlocked(r,d)){ btn.disabled=false; btn.innerHTML=orig; return; } if(!r.ok) throw new Error(d.error);
+        refreshCredits();
         showGamePanel($('pptxResult'),d,$('pptxRosterPick').value);
         btn.innerHTML=`${ICON('i-check')} Game created`;
         loadMyGames();

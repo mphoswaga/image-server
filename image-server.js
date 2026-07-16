@@ -43,7 +43,9 @@ const webauthn = require('./webauthn');
 const socialAuth = require('./social-auth');
 const credits = require('./credits');
 const billing = require('./billing');
-const { runWithUser } = require('./ai-client');
+const wallet = require('./wallet');
+const prices = require('./credit-prices');
+const { runWithUser, usageSnapshot, usageSince } = require('./ai-client');
 const usage = require('./usage');
 const jwt = require('jsonwebtoken');
 
@@ -300,21 +302,94 @@ app.get('/auth/:provider/callback', async (req, res) => {
 // deliberate switch — deploying the code changes nothing for live teachers.
 const billingOn = () => process.env.BILLING_ENABLED === 'true';
 
-// Returns a 402-style block object if the teacher can't generate, else null.
-// Admins and (when billing is off) everyone pass freely. First use grants the
-// free trial credits.
-function creditBlock(req) {
-  if (!billingOn() || req.user.role === 'admin') return null;
-  const email = req.user.email;
-  credits.ensureFreeGrant(email);
-  if (credits.getBalance(email) <= 0) {
-    return { error: 'You are out of credits. Top up to keep generating.', needCredits: true, balance: 0 };
-  }
-  return null;
+// Credit lifecycle — every paid AI action is reserve → run → capture (success)
+// or release (failure), routed through the EducScope wallet (wallet.js). The
+// app never deducts credits directly; it only names an `action` and lets the
+// wallet price/hold/settle it. A failed generation is always released, so it
+// never costs a teacher a credit.
+
+// The organization a teacher's credits belong to. Email is the identity both
+// LessonScope and TeacherScope already share; swap for a real EducScope org id
+// here when the wallet API is live — nothing else changes.
+function orgId(req) { return String(req.user.email || '').trim().toLowerCase(); }
+
+// A stable idempotency key so a retried request never reserves twice. A client
+// may supply its own Idempotency-Key header (the UI will send a fresh one per
+// click, so a network retry of that click dedupes). Otherwise we derive one:
+// from an explicit `seed` when the caller has a natural per-attempt identity
+// (e.g. deck+slide+regen-count), else from the user + action + request body.
+function idemKey(req, action, seed) {
+  const supplied = req.get('Idempotency-Key');
+  if (supplied) return String(supplied).slice(0, 100);
+  const basis = seed != null ? String(seed) : JSON.stringify(req.body || {});
+  const h = crypto.createHash('sha256').update(`${req.userId}:${action}:${basis}`).digest('hex');
+  return `${action}:${h.slice(0, 32)}`;
 }
-// Call after a successful billable generation.
-function chargeCredit(req, reason = 'lesson') {
-  if (billingOn() && req.user.role !== 'admin') credits.consume(req.user.email, 1, reason);
+
+// Credits an action costs THIS request: nothing when billing is off or for
+// admins (so live teachers stay free until EducScope flips billing on),
+// otherwise the published price.
+function costOf(req, action) { return (billingOn() && req.user.role !== 'admin') ? prices.priceFor(action) : 0; }
+
+// Reserve before doing the work. Returns { reservation, block } — if `block` is
+// set, the route should `res.status(402).json(block)` and do nothing else.
+// opts.credits sets an explicit price (used by fair-use regeneration); omit it
+// to use the published price. opts.idemSeed gives the reservation a natural
+// per-attempt identity so intentional repeats stay distinct (see idemKey).
+async function reserve(req, action, opts = {}) {
+  if (req.user.role !== 'admin') credits.ensureFreeGrant(req.user.email);
+  const amount = opts.credits != null
+    ? ((billingOn() && req.user.role !== 'admin') ? Math.max(0, opts.credits) : 0)
+    : costOf(req, action);
+  try {
+    const reservation = await wallet.reserveCredits({
+      organizationId: orgId(req), product: 'lessonscope', action,
+      credits: amount, idempotencyKey: idemKey(req, action, opts.idemSeed),
+      metadata: { userId: req.userId, email: req.user.email },
+    });
+    reservation._before = usageSnapshot();   // baseline to diff this action's AI usage against
+    return { reservation, block: null };
+  } catch (e) {
+    if (e.needCredits) return { reservation: null, block: { error: 'You are out of credits. Top up to keep generating.', needCredits: true, balance: e.balance, action, cost: prices.priceFor(action) } };
+    console.error('Credit reserve failed:', e.message);
+    // A wallet OUTAGE: fail open in local/beta, fail closed once the remote
+    // EducScope wallet is live (never give paid AI away when the ledger is down).
+    if (wallet.failClosed()) return { reservation: null, block: { error: 'Credits are temporarily unavailable — please try again in a moment.', walletUnavailable: true } };
+    return { reservation: null, block: null };
+  }
+}
+
+// Capture after the work succeeds — attaches the model/token/cost this action
+// actually incurred and logs the full metadata record.
+async function capture(req, reservation, action, resultRef) {
+  if (!reservation) return;
+  const u = usageSince(reservation._before) || {};
+  const meta = {
+    provider: 'openai',
+    model: (u.models && u.models[0]) || null,
+    inputTokens: u.promptTokens || 0,
+    outputTokens: u.completionTokens || 0,
+    estimatedCostCents: Math.round((u.costUSD || 0) * 100),
+    resultRef: resultRef || null,
+  };
+  try { await wallet.captureReservation({ reservationId: reservation.reservationId, ...meta }); }
+  catch (e) { console.error('Credit capture failed:', e.message); }
+  audit.log('credits.capture', {
+    userId: req.userId, organizationId: orgId(req), product: 'lessonscope', action,
+    reservationId: reservation.reservationId, credits: reservation.credits, ...meta, status: 'success',
+  });
+}
+
+// Release when the work fails — the teacher keeps their credit.
+async function release(req, reservation, action, reason) {
+  if (!reservation) return;
+  try { await wallet.releaseReservation({ reservationId: reservation.reservationId, reason: reason || 'failed' }); }
+  catch (e) { console.error('Credit release failed:', e.message); }
+  audit.log('credits.release', {
+    userId: req.userId, organizationId: orgId(req), product: 'lessonscope', action,
+    reservationId: reservation.reservationId, credits: reservation.credits,
+    status: 'failed', errorReason: String(reason || '').slice(0, 300),
+  });
 }
 
 // This teacher's balance + history (drives the Credits panel).
@@ -328,6 +403,20 @@ app.get('/api/credits', requireAuth, (req, res) => {
     purchasable: billing.isConfigured(),
     freeCredits: credits.FREE_CREDITS,
     history: admin ? [] : credits.getHistory(req.user.email),
+  });
+});
+
+// The credit price table (single source of truth) so the UI can show a cost
+// badge next to each generation button. billingEnabled tells the UI whether
+// those costs actually apply yet.
+app.get('/api/credit-prices', requireAuth, (req, res) => {
+  res.json({
+    ...prices.publicTable(),
+    billingEnabled: billingOn(),
+    unlimited: req.user.role === 'admin',
+    // Where "top up" sends teachers. EducScope owns purchasing; until its wallet
+    // is live this is a placeholder the local Credits page still backs up.
+    accountUrl: process.env.EDUCSCOPE_ACCOUNT_URL || '',
   });
 });
 
@@ -729,11 +818,11 @@ app.post('/api/import/lesson-plan', requireAuth, upload.single('file'), async (r
   const subject = clip(req.body.subject, LIMITS.subject);
   const topic = clip(req.body.topic, LIMITS.topic);
   if (!subject || !topic) return res.status(400).json({ error: 'Enter the subject and topic for this lesson.' });
-  const block = creditBlock(req);
+  const { reservation, block } = await reserve(req, 'import-plan');
   if (block) return res.status(402).json(block);
   try {
     const planText = (await extractText(req.file.buffer, req.file.originalname) || '').trim();
-    if (!planText) return res.status(400).json({ error: "Couldn't read any text from that file — try a Word, PDF, or text export." });
+    if (!planText) { await release(req, reservation, 'import-plan', 'unreadable file'); return res.status(400).json({ error: "Couldn't read any text from that file — try a Word, PDF, or text export." }); }
     const { slideCount, grade, tone, presetId } = req.body || {};
     const focus = clip(req.body.focus, LIMITS.focus);
     const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives: '', lessonPlanText: planText, skipAssemble: true, presetId: presetId || null });
@@ -744,13 +833,14 @@ app.post('/api/import/lesson-plan', requireAuth, upload.single('file'), async (r
       slides: built.slides, images: built.images, createdAt: Date.now(),
       objectives: '', lessonPlanText: planText, presetId: presetId || null,
     });
-    chargeCredit(req, 'lesson');
+    await capture(req, reservation, 'import-plan', id);
     const filename = `${subject}-${topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
     res.json({
       deckId: id, filename, band: built.band, slideCount: built.slides.length, sourceText: planText,
       slides: built.slides.map((s, i) => previewEntry(s, built.images[i])),
     });
   } catch (err) {
+    await release(req, reservation, 'import-plan', err.message);
     console.error('Import lesson plan failed:', err.message);
     res.status(400).json({ error: err.message });
   }
@@ -817,6 +907,8 @@ app.post('/api/pack/full', requireAuth, async (req, res) => {
   const topic = clip(req.body.topic, LIMITS.topic);
   const objectives = clip(req.body.objectives, LIMITS.objectives);
   if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
+  const { reservation, block } = await reserve(req, 'lesson-pack-full');
+  if (block) return res.status(402).json(block);
   try {
     const u = unitId ? unit.getUnit(req.userId, unitId) : null;
     const unitBlock = u ? unit.buildUnitBlock(u, lessonIndex) : '';
@@ -839,10 +931,12 @@ app.post('/api/pack/full', requireAuth, async (req, res) => {
     zip.file(`${base}-quiz.docx`, qBuf);
     const zipBuf = zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
 
+    await capture(req, reservation, 'lesson-pack-full', base);
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${base}-lesson-pack.zip"`);
     res.send(zipBuf);
   } catch (err) {
+    await release(req, reservation, 'lesson-pack-full', err.message);
     console.error('Full pack failed:', err.message);
     res.status(400).json({ error: err.message });
   }
@@ -856,13 +950,17 @@ app.post('/api/pack/:type', requireAuth, async (req, res) => {
   const topic = clip(req.body.topic, LIMITS.topic);
   const objectives = clip(req.body.objectives, LIMITS.objectives);
   if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
+  const { reservation, block } = await reserve(req, 'pack-item');
+  if (block) return res.status(402).json(block);
   try {
     const u = unitId ? unit.getUnit(req.userId, unitId) : null;
     const unitBlock = u ? unit.buildUnitBlock(u, lessonIndex) : '';
     const lessonPlanText = resolvePlanText(req.body);
     const data = await gen({ subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, unitBlock, regenerate: !!regenerate });
+    await capture(req, reservation, 'pack-item', req.params.type);
     res.json({ type: req.params.type, data });
   } catch (err) {
+    await release(req, reservation, 'pack-item', err.message);
     console.error('Pack generation failed:', err.message);
     res.status(400).json({ error: err.message });
   }
@@ -1287,7 +1385,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
   const objectives = clip(req.body.objectives, LIMITS.objectives);
   const focus = clip(req.body.focus, LIMITS.focus);
   if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
-  const block = creditBlock(req);
+  const { reservation, block } = await reserve(req, 'slide-deck');
   if (block) return res.status(402).json(block);
   try {
     const u = unitId ? unit.getUnit(req.userId, unitId) : null;
@@ -1305,13 +1403,14 @@ app.post('/api/generate', requireAuth, async (req, res) => {
       objectives: objectives || '', lessonPlanText, // kept so the student game can be grounded in this lesson
       presetId: presetId || null,
     });
-    chargeCredit(req, 'lesson'); // 1 credit per generated lesson (no-op unless billing on)
+    await capture(req, reservation, 'slide-deck', id);   // 1 credit per lesson (no-op unless billing on)
     const filename = `${subject}-${topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
     res.json({
       deckId: id, filename, band: built.band, slideCount: built.slides.length,
       slides: built.slides.map((s, i) => previewEntry(s, built.images[i])),
     });
   } catch (err) {
+    await release(req, reservation, 'slide-deck', err.message);
     console.error('Generate failed:', err.message);
     res.status(400).json({ error: err.message });
   }
@@ -1391,9 +1490,11 @@ app.post('/api/slide/:id/ai-image', requireAuth, async (req, res) => {
   if (!Number.isInteger(i) || i < 0 || i >= deck.slides.length) return res.status(400).json({ error: 'bad index' });
   const slide = deck.slides[i];
   const concept = (slide.example || slide.imageQuery || slide.title || '').trim();
+  let reservation = null;
   try {
     // Reuse a previously AI-generated image for this concept instead of paying
-    // to regenerate it (unless it's the one already on this slide).
+    // to regenerate it (unless it's the one already on this slide). Reuse is
+    // free — no AI call, so no credits.
     const reuse = findReusableImage({
       subject: deck.subject, topic: deck.topic, query: concept,
       minScore: 3, source: 'ai-generated',
@@ -1403,21 +1504,26 @@ app.post('/api/slide/:id/ai-image', requireAuth, async (req, res) => {
       deck.images[i] = reuse;
       return res.json({ image: '/' + reuse.relpath, imageSource: 'ai-generated', reused: true });
     }
-    // Paid generation — enforce the monthly AI-visual cap (admins exempt).
-    // NOTE: Wikimedia is NOT tried here — the teacher explicitly clicked "AI image"
-    // and expects a generated illustration, not a stock photo.
+    // Paid generation — enforce the monthly AI-visual cap (abuse guard, admins
+    // exempt) AND reserve credits (2). NOTE: Wikimedia is NOT tried here — the
+    // teacher clicked "AI image" and expects a generated illustration.
     const isAdmin = req.user.role === 'admin';
     const q = quota.status(req.userId, isAdmin);
     if (!q.unlimited && q.remaining <= 0) {
       return res.status(403).json({ error: `You've used all ${q.limit} AI visuals this month — search the stock library instead, or they reset next month.`, limitReached: true, remaining: 0, limit: q.limit });
     }
+    const r = await reserve(req, 'ai-image');
+    if (r.block) return res.status(402).json(r.block);
+    reservation = r.reservation;
     const entry = await generateImage({ subject: deck.subject, topic: deck.topic, concept, grade: deck.grade });
     addLibraryImages([entry]);   // cache for reuse + matching
     deck.images[i] = entry;
     quota.consume(req.userId);
+    await capture(req, reservation, 'ai-image', entry.relpath);
     const after = quota.status(req.userId, isAdmin);
     res.json({ image: '/' + entry.relpath, imageSource: 'ai-generated', reused: false, remaining: after.remaining, limit: after.limit });
   } catch (err) {
+    await release(req, reservation, 'ai-image', err.message);
     console.error('AI image failed:', err.message);
     res.status(400).json({ error: err.message });
   }
@@ -1430,8 +1536,10 @@ app.post('/api/slide/:id/diagram', requireAuth, async (req, res) => {
   const i = Number(req.body.index);
   if (!Number.isInteger(i) || i < 0 || i >= deck.slides.length) return res.status(400).json({ error: 'bad index' });
   const slide = deck.slides[i];
+  let reservation = null;
   try {
-    // Curated diagram available for this topic? Render the animated vector one.
+    // Curated diagram available for this topic? Render the animated vector one
+    // (local, free — no AI, no credits).
     const curated = detectLabelledDiagram(`${slide.title} ${slide.imageQuery || ''} ${slide.example || ''}`);
     if (curated) {
       slide.visual = { type: 'none', items: [] }; // let the title-based curated detection drive it
@@ -1441,15 +1549,20 @@ app.post('/api/slide/:id/diagram', requireAuth, async (req, res) => {
     const reuse = findReusableImage({ subject: deck.subject, topic: deck.topic, query: concept, minScore: 3, source: 'svg-diagram', exclude: deck.images.map(im => im.relpath) });
     let entry = reuse, remaining, limit;
     if (!entry) {
-      // Generating a new diagram is a paid AI visual — enforce the cap.
+      // Generating a new diagram is a paid AI visual — enforce the cap (abuse
+      // guard) AND reserve credits (1).
       const isAdmin = req.user.role === 'admin';
       const q = quota.status(req.userId, isAdmin);
       if (!q.unlimited && q.remaining <= 0) {
         return res.status(403).json({ error: `You've used all ${q.limit} AI visuals this month — search the stock library instead, or they reset next month.`, limitReached: true, remaining: 0, limit: q.limit });
       }
+      const r = await reserve(req, 'diagram');
+      if (r.block) return res.status(402).json(r.block);
+      reservation = r.reservation;
       entry = await generateDiagram({ subject: deck.subject, topic: deck.topic, concept });
       addLibraryImages([entry]);
       quota.consume(req.userId);
+      await capture(req, reservation, 'diagram', entry.relpath);
       const after = quota.status(req.userId, isAdmin);
       remaining = after.remaining; limit = after.limit;
     }
@@ -1458,6 +1571,7 @@ app.post('/api/slide/:id/diagram', requireAuth, async (req, res) => {
     const src = entry.source === 'wikimedia' ? 'wikimedia' : 'svg-diagram';
     res.json({ image: '/' + entry.relpath, imageSource: src, remaining, limit });
   } catch (err) {
+    await release(req, reservation, 'diagram', err.message);
     console.error('Diagram failed:', err.message);
     res.status(400).json({ error: err.message });
   }
@@ -1471,6 +1585,12 @@ app.post('/api/slide/:id/regenerate', requireAuth, async (req, res) => {
   if (!Number.isInteger(i) || i < 0 || i >= deck.slides.length) return res.status(400).json({ error: 'bad index' });
   if (deck.slides[i].type !== 'content') return res.status(400).json({ error: 'Only content slides can be regenerated.' });
 
+  // Fair-use: the first FREE_REGENS regenerations of a lesson are free; after
+  // that another small batch costs REGEN_BATCH_COST. The counter is per-deck.
+  const used = deck.regenCount || 0;
+  const cost = used < prices.FREE_REGENS ? 0 : prices.REGEN_BATCH_COST;
+  const { reservation, block } = await reserve(req, 'slide-regenerate', { credits: cost, idemSeed: `${req.params.id}:${i}:${used}` });
+  if (block) return res.status(402).json(block);
   try {
     const avoidTitles = deck.slides.filter((s, j) => s.type === 'content' && j !== i).map(s => s.title);
     const fresh = await generateOneSlide({ subject: deck.subject, topic: deck.topic, grade: deck.grade, tone: deck.tone, focus: deck.focus, avoidTitles });
@@ -1478,8 +1598,11 @@ app.post('/api/slide/:id/regenerate', requireAuth, async (req, res) => {
     deck.slides[i] = fresh;
     const alt = alternativeImage({ subject: deck.subject, topic: deck.topic, imageQuery: fresh.imageQuery, exclude: deck.images.map(im => im.relpath) });
     if (alt) deck.images[i] = alt;
-    res.json({ slide: previewEntry(deck.slides[i], deck.images[i]) });
+    deck.regenCount = used + 1;
+    await capture(req, reservation, 'slide-regenerate', `${req.params.id}:${i}`);
+    res.json({ slide: previewEntry(deck.slides[i], deck.images[i]), regensUsed: deck.regenCount, freeRegens: prices.FREE_REGENS, charged: cost });
   } catch (err) {
+    await release(req, reservation, 'slide-regenerate', err.message);
     console.error('Regenerate failed:', err.message);
     res.status(400).json({ error: err.message });
   }
@@ -1517,14 +1640,18 @@ app.post('/api/game', requireAuth, async (req, res) => {
   const deck = decks.get(req.body && req.body.deckId);
   if (!deck) return res.status(404).json({ error: 'Deck expired — regenerate the deck, then create the game.' });
   const questionCount = Math.min(20, Math.max(4, parseInt(req.body && req.body.questionCount, 10) || 6));
+  const { reservation, block } = await reserve(req, 'game');
+  if (block) return res.status(402).json(block);
   try {
     const game = await generateGame({ subject: deck.subject, topic: deck.topic, grade: deck.grade, tone: deck.tone, objectives: deck.objectives || '', lessonPlanText: deck.lessonPlanText || '', questionCount });
     const lessonTitle = (deck.slides.find(s => s.type === 'title') || {}).title || deck.topic;
     const rosterId = (req.body && req.body.rosterId) || null;
     const cutoffAt = (req.body && req.body.cutoffAt) || null;
     const rec = games.createGame({ teacherId: req.userId, teacherName: req.user.name, lessonTitle, subject: deck.subject, topic: deck.topic, grade: deck.grade, game, rosterId, cutoffAt });
+    await capture(req, reservation, 'game', rec.id);
     res.json({ gameId: rec.id, path: `/play/${rec.id}`, questionCount: rec.questions.length, roomCode: rec.roomCode });
   } catch (err) {
+    await release(req, reservation, 'game', err.message);
     console.error('Game creation failed:', err.message);
     res.status(400).json({ error: err.message });
   }
@@ -1541,12 +1668,16 @@ app.post('/api/game/from-pptx', requireAuth, upload.single('file'), async (req, 
   const questionCount = Math.min(20, Math.max(4, parseInt(req.body && req.body.questionCount, 10) || 6));
   const rosterId = (req.body && req.body.rosterId) || null;
   const cutoffAt = (req.body && req.body.cutoffAt) || null;
+  const { reservation, block } = await reserve(req, 'game');
+  if (block) return res.status(402).json(block);
   try {
     const lessonPlanText = await extractText(req.file.buffer, req.file.originalname);
     const game = await generateGame({ subject, topic, grade, objectives: '', lessonPlanText, questionCount });
     const rec = games.createGame({ teacherId: req.userId, teacherName: req.user.name, lessonTitle: topic, subject, topic, grade, game, rosterId, cutoffAt });
+    await capture(req, reservation, 'game', rec.id);
     res.json({ gameId: rec.id, path: `/play/${rec.id}`, questionCount: rec.questions.length, roomCode: rec.roomCode });
   } catch (err) {
+    await release(req, reservation, 'game', err.message);
     console.error('Game from pptx failed:', err.message);
     res.status(400).json({ error: err.message });
   }

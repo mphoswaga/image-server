@@ -1,5 +1,27 @@
 # Credits & billing
 
+> **Direction (EducScope wallet):** EducScope is becoming the billing/wallet home
+> base. LessonScope no longer deducts credits directly — every paid AI action
+> goes through the wallet client ([wallet.js](wallet.js)) as **reserve → run →
+> capture (success) / release (failure)**, so a failed generation never costs a
+> teacher a credit. Prices live in one place ([credit-prices.js](credit-prices.js)).
+>
+> The wallet has two interchangeable backends behind one interface:
+> - **remote** — set `EDUCSCOPE_WALLET_URL` (and `EDUCSCOPE_WALLET_KEY`) to call
+>   EducScope's wallet API. This is the destination once EducScope ships it.
+> - **local fallback** — used until then: the per-email wallet below plus a
+>   reservations ledger (`DATA_DIR/reservations.json`). Swapping to remote is a
+>   config change, not a code change.
+>
+> Prices (credits): full pack 3 · slide deck 1 · import-plan 1 · pack item 1 ·
+> game 1 · AI diagram 1 · AI image 2. Free: import/parse slides, lesson plan
+> (beta), auto-grade, pacing-guide parse. Regenerating a slide is free the first
+> `FREE_REGENS_PER_LESSON` (default 3) times per lesson, then 1 credit.
+> AI images/diagrams also keep the monthly `AI_VISUAL_LIMIT` cap as an abuse
+> guard on top of credits. The Lemon Squeezy pieces below still power local
+> top-ups until EducScope owns purchasing.
+
+
 A single **credit wallet**, keyed by the teacher's email, shared across
 LessonScope and TeacherScope. Teachers buy credit packs through **Lemon Squeezy**
 (a global Merchant of Record) and spend 1 credit per generated lesson

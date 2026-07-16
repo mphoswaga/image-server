@@ -1,0 +1,75 @@
+# LessonScope wallet / credit env vars (for later)
+
+Reference for when we wire LessonScope to the EducScope wallet. **Nothing here
+is set yet** — the app runs exactly as before with all of these unset (billing
+off, local fallback, free generation). Values verified against the code.
+
+## 1. Turning billing on (the switch)
+
+| Var | Default (unset) | Set it to | Notes |
+|---|---|---|---|
+| `BILLING_ENABLED` | off (free) | `true` | The master switch. Strict `=== 'true'` — any other value = off. Flip ON only when the wallet (remote or local) is ready to actually charge. |
+
+## 2. EducScope wallet (remote backend — the destination)
+
+Set these once EducScope's wallet API is live. With `EDUCSCOPE_WALLET_URL`
+set, `wallet.js` uses the remote backend and **fails closed** on an outage.
+
+| Var | Default (unset) | Set it to | Notes |
+|---|---|---|---|
+| `EDUCSCOPE_WALLET_URL` | empty → local fallback | e.g. `https://wallet.educscope.com/api` | Base URL of EducScope's wallet API. Presence of this var is what switches remote mode on. |
+| `EDUCSCOPE_WALLET_KEY` | empty (no auth header) | service token | Bearer token LessonScope sends to the wallet API. Pair with the URL. |
+| `WALLET_FAIL_CLOSED` | follows mode: **open** locally, **closed** when remote URL set | `true` / `false` | Override the outage behaviour. `true` = block generation if the wallet is unreachable; `false` = allow it. Leave unset to use the sensible per-mode default. |
+
+## 3. Top-up link (UI)
+
+| Var | Default (unset) | Set it to | Notes |
+|---|---|---|---|
+| `EDUCSCOPE_ACCOUNT_URL` | empty → "coming soon" text, no link | e.g. `https://educscope.com/account` | Where the "Top up" button points. **Optional / fallback-safe** — empty just hides the link. |
+
+## 4. Local fallback credit vars (used until EducScope owns the wallet)
+
+These drive the local wallet (`credits.js` + reservations ledger) and the
+pricing/quota knobs. All optional — sensible defaults baked in.
+
+| Var | Default | Purpose |
+|---|---|---|
+| `FREE_CREDITS` | `3` | One-time free credit grant per new teacher (first use). Integer ≥ 0. |
+| `FREE_REGENS_PER_LESSON` | `3` | Fair-use: free slide-regenerations per lesson before a regen costs 1 credit. |
+| `AI_VISUAL_LIMIT` | `50` | Monthly per-teacher cap on AI images + diagrams — kept as an **abuse guard on top of credits** (admins exempt). |
+
+## 5. Local purchasing (Lemon Squeezy — TEMPORARY / FALLBACK ONLY)
+
+> ⚠️ **Temporary.** These exist only as a stop-gap so LessonScope *could* sell
+> credits before EducScope's wallet is live. **EducScope owns purchasing long
+> term** — once its wallet API is the seller of record, leave these unset and
+> plan to remove this path. Do not build on it.
+
+Optional. Without these, LessonScope simply doesn't offer purchasing; balances
+still work. See `BILLING.md` for the full setup.
+
+| Var | Purpose |
+|---|---|
+| `LEMONSQUEEZY_API_KEY` | Lemon Squeezy API key |
+| `LEMONSQUEEZY_STORE_ID` | numeric store id |
+| `LEMONSQUEEZY_VARIANT_ID` | the single "Credits" product variant |
+| `LEMONSQUEEZY_WEBHOOK_SECRET` | signing secret for the `order_created` webhook |
+| `BILLING_CURRENCY` | store currency (default `usd`); buyers still see local currency |
+
+## 6. Cost-tracking overrides (optional, cosmetic)
+
+`usage.js` accepts `PRICE_GPT_4O_MINI_IN`, `PRICE_GPT_4O_MINI_OUT`,
+`PRICE_GPT_4O_IN`, `PRICE_GPT_4O_OUT`, `PRICE_GPT_IMAGE_1`, `PRICE_DALL_E_3` to
+match OpenAI's live prices for the admin usage/cost report. No effect on credit
+charging.
+
+---
+
+### Minimal "go live" set, in order
+1. EducScope ships the wallet API → set `EDUCSCOPE_WALLET_URL` (+ `EDUCSCOPE_WALLET_KEY`).
+2. Set `EDUCSCOPE_ACCOUNT_URL` so top-up links resolve.
+3. Test cross-app reserve/capture/release with `BILLING_ENABLED` still **off** (reserves 0, logs the lifecycle).
+4. Flip `BILLING_ENABLED=true` to actually charge.
+
+`WALLET_FAIL_CLOSED` defaults correctly for each mode — only set it if you want
+to override.
