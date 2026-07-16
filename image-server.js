@@ -106,6 +106,10 @@ function requireStudentAccess(req, res, next) {
 }
 
 const app = express();
+// Behind Railway's TLS-terminating proxy: honour X-Forwarded-Proto/For so
+// req.protocol is 'https' (needed to build correct OAuth/passkey redirect
+// URIs) and req.ip is the real client address for audit logs.
+app.set('trust proxy', true);
 const PORT = process.env.PORT || 4000;
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
