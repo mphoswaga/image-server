@@ -44,7 +44,7 @@ setInterval(() => {
 
 // ── Client registry ────────────────────────────────────────────────────────
 
-const ALL_SCOPES = ['profile:read', 'rosters:read', 'results:read'];
+const ALL_SCOPES = ['profile:read', 'rosters:read', 'results:read', 'credits:read', 'credits:write'];
 
 // Create a new OAuth client. Returns { clientId, clientSecret (plaintext, show once) }.
 async function registerClient({ name, redirectUris, allowedScopes }) {

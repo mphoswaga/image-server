@@ -41,6 +41,8 @@ const { signup, login, findOrCreateSocialUser, issueToken, verifyToken, getUserB
 const { sendEmail } = require('./email');
 const webauthn = require('./webauthn');
 const socialAuth = require('./social-auth');
+const credits = require('./credits');
+const billing = require('./billing');
 const { runWithUser } = require('./ai-client');
 const usage = require('./usage');
 const jwt = require('jsonwebtoken');
@@ -113,6 +115,9 @@ app.set('trust proxy', true);
 const PORT = process.env.PORT || 4000;
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
+// Stripe webhook needs the raw body for signature verification, so its parser
+// must run BEFORE express.json (which would otherwise consume the stream).
+app.use('/api/billing/webhook', express.raw({ type: '*/*' }));
 app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser());
 
@@ -288,6 +293,77 @@ app.get('/auth/:provider/callback', async (req, res) => {
     console.error('Social login failed:', err.message);
     fail(err.message || 'Sign-in failed. Please try again.');
   }
+});
+
+// ── Credits & billing (shared wallet across LessonScope + TeacherScope) ─────
+// Enforcement is OFF unless BILLING_ENABLED=true, so turning this on is a
+// deliberate switch — deploying the code changes nothing for live teachers.
+const billingOn = () => process.env.BILLING_ENABLED === 'true';
+
+// Returns a 402-style block object if the teacher can't generate, else null.
+// Admins and (when billing is off) everyone pass freely. First use grants the
+// free trial credits.
+function creditBlock(req) {
+  if (!billingOn() || req.user.role === 'admin') return null;
+  const email = req.user.email;
+  credits.ensureFreeGrant(email);
+  if (credits.getBalance(email) <= 0) {
+    return { error: 'You are out of credits. Top up to keep generating.', needCredits: true, balance: 0 };
+  }
+  return null;
+}
+// Call after a successful billable generation.
+function chargeCredit(req, reason = 'lesson') {
+  if (billingOn() && req.user.role !== 'admin') credits.consume(req.user.email, 1, reason);
+}
+
+// This teacher's balance + history (drives the Credits panel).
+app.get('/api/credits', requireAuth, (req, res) => {
+  const admin = req.user.role === 'admin';
+  if (!admin) credits.ensureFreeGrant(req.user.email);
+  res.json({
+    balance: admin ? null : credits.getBalance(req.user.email),
+    unlimited: admin,
+    billingEnabled: billingOn(),
+    purchasable: billing.isConfigured(),
+    freeCredits: credits.FREE_CREDITS,
+    history: admin ? [] : credits.getHistory(req.user.email),
+  });
+});
+
+// Which packs are on sale (only when Stripe is configured).
+app.get('/api/billing/packs', requireAuth, (req, res) => {
+  res.json({ configured: billing.isConfigured(), enabled: billingOn(), currency: billing.CURRENCY, packs: billing.getPacks() });
+});
+
+// Start a hosted Stripe Checkout for a pack; returns the URL to redirect to.
+app.post('/api/billing/checkout', requireAuth, async (req, res) => {
+  if (!billing.isConfigured()) return res.status(400).json({ error: 'Payments are not set up yet.' });
+  try {
+    const origin = originFor(req);
+    const url = await billing.createCheckoutSession({ packId: req.body && req.body.packId, email: req.user.email, successUrl: origin + '/', cancelUrl: origin + '/' });
+    res.json({ url });
+  } catch (err) { console.error('Checkout failed:', err.message); res.status(400).json({ error: err.message }); }
+});
+
+// Stripe webhook — the source of truth for completed purchases. Verifies the
+// signature, then credits the buyer (idempotent on Stripe's event id).
+app.post('/api/billing/webhook', (req, res) => {
+  let event;
+  try { event = billing.constructEvent(req.body, req.headers['stripe-signature']); }
+  catch (err) { console.error('Webhook signature check failed:', err.message); return res.status(400).send(`Webhook Error: ${err.message}`); }
+  try {
+    if (event.type === 'checkout.session.completed') {
+      const s = event.data.object;
+      const email = (s.metadata && s.metadata.email) || (s.customer_details && s.customer_details.email) || '';
+      const amount = parseInt((s.metadata && s.metadata.credits) || '0', 10);
+      if (email && amount > 0) {
+        const { credited, balance } = credits.grantOnce(event.id, email, amount, 'purchase');
+        audit.log('credits.purchase', { email, amount, credited, balance, sessionId: s.id });
+      }
+    }
+    res.json({ received: true });
+  } catch (err) { console.error('Webhook handling failed:', err.message); res.status(500).json({ error: 'handler failed' }); }
 });
 
 app.get('/api/config/apps', requireAuth, (req, res) => {
@@ -635,6 +711,8 @@ app.post('/api/import/lesson-plan', requireAuth, upload.single('file'), async (r
   const subject = clip(req.body.subject, LIMITS.subject);
   const topic = clip(req.body.topic, LIMITS.topic);
   if (!subject || !topic) return res.status(400).json({ error: 'Enter the subject and topic for this lesson.' });
+  const block = creditBlock(req);
+  if (block) return res.status(402).json(block);
   try {
     const planText = (await extractText(req.file.buffer, req.file.originalname) || '').trim();
     if (!planText) return res.status(400).json({ error: "Couldn't read any text from that file — try a Word, PDF, or text export." });
@@ -648,6 +726,7 @@ app.post('/api/import/lesson-plan', requireAuth, upload.single('file'), async (r
       slides: built.slides, images: built.images, createdAt: Date.now(),
       objectives: '', lessonPlanText: planText, presetId: presetId || null,
     });
+    chargeCredit(req, 'lesson');
     const filename = `${subject}-${topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
     res.json({
       deckId: id, filename, band: built.band, slideCount: built.slides.length, sourceText: planText,
@@ -1190,6 +1269,8 @@ app.post('/api/generate', requireAuth, async (req, res) => {
   const objectives = clip(req.body.objectives, LIMITS.objectives);
   const focus = clip(req.body.focus, LIMITS.focus);
   if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
+  const block = creditBlock(req);
+  if (block) return res.status(402).json(block);
   try {
     const u = unitId ? unit.getUnit(req.userId, unitId) : null;
     const unitBlock = u ? unit.buildUnitBlock(u, lessonIndex) : '';
@@ -1206,6 +1287,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
       objectives: objectives || '', lessonPlanText, // kept so the student game can be grounded in this lesson
       presetId: presetId || null,
     });
+    chargeCredit(req, 'lesson'); // 1 credit per generated lesson (no-op unless billing on)
     const filename = `${subject}-${topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
     res.json({
       deckId: id, filename, band: built.band, slideCount: built.slides.length,
@@ -2024,6 +2106,33 @@ app.get('/api/v1/me', requireApiAccess, requireScope('profile:read'), (req, res)
   const user = getUserById(req.oauthTeacherId);
   if (!user) return res.status(404).json({ error: 'Teacher not found.' });
   res.json({ id: user.id, email: user.email, name: user.name });
+});
+
+// ── Shared credit wallet for TeacherScope ──────────────────────────────────
+// The teacher is identified by the OAuth token; the wallet is keyed by their
+// email so it's the same balance they see in LessonScope.
+function oauthTeacherEmail(req) {
+  const u = req.oauthTeacherId && getUserById(req.oauthTeacherId);
+  return u ? u.email : null;
+}
+app.get('/api/v1/credits', requireApiAccess, requireScope('credits:read'), (req, res) => {
+  const email = oauthTeacherEmail(req);
+  if (!email) return res.status(400).json({ error: 'Use an OAuth token (admin keys have no teacher identity).' });
+  credits.ensureFreeGrant(email);
+  res.json({ balance: credits.getBalance(email), billingEnabled: process.env.BILLING_ENABLED === 'true' });
+});
+// TeacherScope deducts here when it generates for this teacher. When billing is
+// off it succeeds without deducting, so TeacherScope needs no special-casing.
+app.post('/api/v1/credits/consume', requireApiAccess, requireScope('credits:write'), (req, res) => {
+  const email = oauthTeacherEmail(req);
+  if (!email) return res.status(400).json({ error: 'Use an OAuth token (admin keys have no teacher identity).' });
+  const amount = Math.max(1, Math.min(50, parseInt((req.body && req.body.amount), 10) || 1));
+  const reason = (req.body && String(req.body.reason || 'teacherscope')).slice(0, 40);
+  if (process.env.BILLING_ENABLED !== 'true') return res.json({ ok: true, charged: 0, balance: credits.getBalance(email), billingEnabled: false });
+  credits.ensureFreeGrant(email);
+  const result = credits.consume(email, amount, reason);
+  if (!result.ok) return res.status(402).json({ ok: false, error: 'Insufficient credits.', balance: result.balance, needCredits: true });
+  res.json({ ok: true, charged: amount, balance: result.balance, billingEnabled: true });
 });
 
 // Rosters: OAuth returns this teacher's only; admin key returns all.
