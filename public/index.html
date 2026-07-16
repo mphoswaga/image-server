@@ -3031,7 +3031,7 @@
       try{
         const r=await fetch('/api/billing/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({packId:b.dataset.pack})});
         const d=await r.json(); if(!r.ok) throw new Error(d.error);
-        window.location.href=d.url; // Paystack hosted checkout (cards, EFT, wallets)
+        window.location.href=d.url; // Lemon Squeezy hosted checkout (local currency, cards, Google Pay, PayPal)
       }catch(err){ toast(err.message); b.disabled=false; b.textContent='Buy'; }
     });
     function openCredits(){ hideAllPanels(); $('creditsPanel').style.display='block'; renderCredits(); setActiveNav('creditsBtn'); window.scrollTo({top:0,behavior:'smooth'}); refreshCredits().then(renderCredits); }
@@ -3046,11 +3046,10 @@
       if(!b) return;
       const ref=q.get('reference')||q.get('trxref');
       history.replaceState(null,'',location.pathname);
-      if(b==='return' && ref){
-        fetch('/api/billing/verify?reference='+encodeURIComponent(ref)).then(r=>r.json()).then(d=>{
-          toast(d.status==='success'?'Payment received — credits added!':'Payment not completed yet.', d.status==='success'?'ok':'err');
-          refreshCredits();
-        }).catch(()=>refreshCredits());
+      if(b==='return'){
+        toast('Payment complete — your credits will appear in a moment.','ok');
+        refreshCredits(); setTimeout(refreshCredits, 3000); // catch the async webhook credit
+        if(ref){ fetch('/api/billing/verify?reference='+encodeURIComponent(ref)).then(r=>r.json()).then(()=>refreshCredits()).catch(()=>{}); }
       } else if(b==='cancel'){ toast('Checkout cancelled.'); }
     })();
 

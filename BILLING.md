@@ -1,56 +1,68 @@
 # Credits & billing
 
 A single **credit wallet**, keyed by the teacher's email, shared across
-LessonScope and TeacherScope. Teachers buy credit packs through **Paystack**
-(South Africa) and spend 1 credit per generated lesson (LessonScope) or comment
-set (TeacherScope).
+LessonScope and TeacherScope. Teachers buy credit packs through **Lemon Squeezy**
+(a global Merchant of Record) and spend 1 credit per generated lesson
+(LessonScope) or comment set (TeacherScope).
+
+Lemon Squeezy is the seller of record, so teachers **anywhere** — Africa,
+Vietnam, the Middle East — pay in **their own local currency** with local
+methods (cards, Google Pay, PayPal, …), Lemon Squeezy remits VAT/sales tax
+globally, and it pays *you* out via PayPal or Wise.
 
 Enforcement is **off by default** — set `BILLING_ENABLED=true` only when you're
 ready to charge. Until then everything generates for free, exactly as before.
 
-> Switching processor later (Payfast, Stripe, etc.) is a one-file change:
+> Switching processor later (Paddle, Paystack, Stripe, …) is a one-file change:
 > `billing.js` is the only place the processor lives. Everything else — the
 > wallet, gating, UI, and the `/api/v1/credits` API — stays the same.
 
-## 1. Paystack setup (once)
+## 1. Lemon Squeezy setup (once)
 
-1. Create a Paystack account at https://dashboard.paystack.com (South African
-   business).
-2. **API key**: Settings → API Keys & Webhooks → copy the **Secret key**
-   (`sk_live_…`, or `sk_test_…` while testing).
-3. **Webhook**: on the same page, set the **Webhook URL** to
-   `https://lesson.educscope.com/api/billing/webhook`.
-   (Paystack signs webhooks with your secret key — there's no separate webhook
-   secret to copy. Crediting also happens on the return redirect, so it still
-   works even before the webhook is set.)
-4. Make sure **ZAR** is your account currency (or set `BILLING_CURRENCY`).
+1. Create a store at https://app.lemonsqueezy.com.
+2. **Product**: create **one** product/variant called e.g. "LessonScope Credits"
+   (any price — we override it per pack at checkout). Note its **variant ID**
+   (Products → your product → the variant's ID).
+3. **API key**: Settings → API → create a key.
+4. **Store ID**: Settings → Stores (the numeric ID).
+5. **Webhook**: Settings → Webhooks → **+**:
+   - Callback URL: `https://lesson.educscope.com/api/billing/webhook`
+   - Signing secret: make one up (a long random string) — you'll set it as
+     `LEMONSQUEEZY_WEBHOOK_SECRET`.
+   - Events: **order_created**.
 
 ## 2. Railway variables (LessonScope service)
 
 ```
-PAYSTACK_SECRET_KEY = sk_live_…      # or sk_test_… while testing
+LEMONSQUEEZY_API_KEY         = eyJ0…              # from Settings → API
+LEMONSQUEEZY_STORE_ID        = 12345
+LEMONSQUEEZY_VARIANT_ID      = 67890              # the "Credits" variant
+LEMONSQUEEZY_WEBHOOK_SECRET  = <the signing secret you set on the webhook>
 # optional:
-BILLING_CURRENCY    = zar            # any currency your Paystack account supports
-FREE_CREDITS        = 3              # one-time trial per teacher
-BILLING_ENABLED     = true           # flip ON to actually charge
+BILLING_CURRENCY             = usd                # store currency; buyers see local
+FREE_CREDITS                 = 3                  # one-time trial per teacher
+BILLING_ENABLED              = true               # flip ON to actually charge
 ```
 
-- With just `PAYSTACK_SECRET_KEY` set (and `BILLING_ENABLED` unset), teachers can
-  **buy** credits but generation is still free — good for a soft launch.
+- With the four Lemon Squeezy vars set (and `BILLING_ENABLED` unset), teachers
+  can **buy** credits but generation is still free — good for a soft launch.
 - Set `BILLING_ENABLED=true` to start spending credits on generation.
 
 ## 3. Pack prices
 
-Edit the `PACKS` array in `billing.js` (amounts are in the currency subunit —
-cents for ZAR):
+Edit the `PACKS` array in `billing.js` (amounts are in the store-currency
+subunit — USD cents):
 
 ```js
 const PACKS = [
-  { id: 'credits-10',  credits: 10,  amount: 9000  },  // R90
-  { id: 'credits-30',  credits: 30,  amount: 24000 },  // R240
-  { id: 'credits-100', credits: 100, amount: 75000 },  // R750
+  { id: 'credits-10',  credits: 10,  amount: 500  },  // $5
+  { id: 'credits-30',  credits: 30,  amount: 1200 },  // $12
+  { id: 'credits-100', credits: 100, amount: 3500 },  // $35
 ];
 ```
+
+One product/variant serves all three — the checkout overrides the price per pack
+via `custom_price`.
 
 ## 4. Wiring TeacherScope to the shared wallet
 
@@ -87,7 +99,8 @@ Behaviour notes:
   without deducting — so TeacherScope needs no special-casing for the pre-launch
   period. Just call it and respect a `402`.
 - On `402`, block the generation and point the teacher to buy credits (either
-  LessonScope's Credits page, or a Paystack checkout you create the same way).
+  LessonScope's Credits page, or a Lemon Squeezy checkout you create the same
+  way).
 
 That's the whole integration: request two scopes, call `consume` on generate,
 handle `402`.
