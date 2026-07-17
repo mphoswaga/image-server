@@ -37,7 +37,7 @@ function safeAnimate(buffer, band) {
   try { return animateBuffer(buffer, band); }
   catch (err) { console.log('animation skipped:', err.message); return buffer; }
 }
-const { signup, login, findOrCreateSocialUser, issueToken, verifyToken, getUserById, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME, createPasswordResetToken, resetPasswordWithToken, listPasskeys, deletePasskey } = require('./auth');
+const { signup, login, findOrCreateSocialUser, issueToken, verifyToken, getUserById, userHasEducScopeIdentity, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME, createPasswordResetToken, resetPasswordWithToken, listPasskeys, deletePasskey } = require('./auth');
 const { sendEmail } = require('./email');
 const webauthn = require('./webauthn');
 const socialAuth = require('./social-auth');
@@ -272,7 +272,24 @@ app.post('/api/password-reset/confirm', async (req, res) => {
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
-app.get('/api/me', requireAuth, (req, res) => res.json({ user: req.user }));
+app.get('/api/me', requireAuth, async (req, res) => {
+  // Suite-wide sign-out propagation: if this account signs in via EducScope
+  // and the shared EducScope session has ended (signed out in another app),
+  // end the local session too. EducScope being unreachable is NOT a sign-out —
+  // fail open and keep the local session.
+  if (educscope.configured() && userHasEducScopeIdentity(req.userId)) {
+    try {
+      const account = await educscope.fetchAccount(req);
+      if (!account.authenticated) {
+        res.clearCookie(COOKIE_NAME);
+        educscope.clearSharedSession(res);
+        educscope.bust(req.userId);
+        return res.status(401).json({ error: 'Signed out of EducScope.', needLogin: true, loginUrl: account.loginUrl || educscope.loginUrl() });
+      }
+    } catch {}
+  }
+  res.json({ user: req.user });
+});
 
 // ── Passkeys (WebAuthn) ──────────────────────────────────────────────────
 // The app is reachable on more than one domain (a railway.app URL and a

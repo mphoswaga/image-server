@@ -108,6 +108,14 @@ function getUserById(id) {
   return u ? publicUser(u) : null;
 }
 
+// Whether this account was ever signed in via EducScope. Used to propagate a
+// suite-wide sign-out: only EducScope-linked accounts get signed out locally
+// when the shared EducScope session has ended.
+function userHasEducScopeIdentity(id) {
+  const u = loadUsers()[id];
+  return !!(u && u.identities && Object.keys(u.identities).some(k => k.startsWith('educscope:')));
+}
+
 async function verifyPassword(userId, password) {
   const u = loadUsers()[userId];
   if (!u || !u.passwordHash) return false;
@@ -239,4 +247,4 @@ function requireAdmin(req, res, next) {
   });
 }
 
-module.exports = { signup, login, findOrCreateSocialUser, issueToken, verifyToken, getUserById, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME, createPasswordResetToken, resetPasswordWithToken, addPasskey, listPasskeys, deletePasskey, findByCredentialId, updatePasskeyCounter };
+module.exports = { signup, login, findOrCreateSocialUser, issueToken, verifyToken, getUserById, userHasEducScopeIdentity, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME, createPasswordResetToken, resetPasswordWithToken, addPasskey, listPasskeys, deletePasskey, findByCredentialId, updatePasskeyCounter };
