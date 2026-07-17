@@ -233,7 +233,14 @@ app.post('/api/educscope/token', async (req, res) => {
   }
 });
 
-app.post('/api/logout', (req, res) => { res.clearCookie(COOKIE_NAME); res.json({ ok: true }); });
+app.post('/api/logout', (req, res) => {
+  res.clearCookie(COOKIE_NAME);
+  // Also end the shared EducScope session — without this the session bridge
+  // re-signs the teacher in on the very next page load ("sign out doesn't work").
+  educscope.clearSharedSession(res);
+  educscope.bust(req.userId);
+  res.json({ ok: true });
+});
 
 // Always responds the same way whether or not the email has an account —
 // otherwise this endpoint could be used to test which emails are registered.

@@ -119,4 +119,28 @@ async function resolveIdentity(req, { fresh = false } = {}) {
   return identity;
 }
 
-module.exports = { configured, resolveIdentity, fetchAccount, verifyBridgeToken, loginUrl, accountMeUrl, bust };
+// Full suite sign-out: when a teacher logs out of LessonScope, also expire the
+// shared EducScope session cookie — otherwise the session bridge signs them
+// straight back in on the next page load. Running on lesson.educscope.com (a
+// subdomain) we are allowed to expire the parent-domain (.educscope.com)
+// cookie; locally both apps share the "localhost" cookie host, so the
+// host-only clear covers dev.
+function clearSharedSession(res) {
+  if (!accountMeUrl()) return;
+  const name = process.env.EDUCSCOPE_SESSION_COOKIE || 'es_session';
+  const base = { path: '/', httpOnly: true, sameSite: 'lax', expires: new Date(0) };
+  res.cookie(name, '', base);                       // host-only (local dev)
+  const explicit = process.env.EDUCSCOPE_COOKIE_DOMAIN;
+  let domain = explicit || '';
+  if (!domain) {
+    try {
+      const host = new URL(accountMeUrl()).hostname;
+      if (host && host !== 'localhost' && !/^\d+(\.\d+){3}$/.test(host)) {
+        domain = '.' + host.split('.').slice(-2).join('.');   // educscope.com -> .educscope.com
+      }
+    } catch {}
+  }
+  if (domain) res.cookie(name, '', { ...base, domain });
+}
+
+module.exports = { configured, resolveIdentity, fetchAccount, verifyBridgeToken, loginUrl, accountMeUrl, bust, clearSharedSession };
