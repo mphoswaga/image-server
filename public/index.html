@@ -2041,10 +2041,10 @@
         const bl=`<ul>${s.bullets.map(b=>`<li contenteditable data-field="bullet">${esc(b)}</li>`).join('')}</ul>`;
         const ex=s.example?`<div class="example"><div class="box"><b>${ICON('i-spark')}Example</b><span contenteditable data-field="example">${esc(s.example)}</span></div></div>`:'';
         // Example/task slides can get an accurate AI-generated illustration.
-        const aiBtn=(s.type==='content'||s.type==='activity')?`<button data-action="ai" data-i="${i}" title="Generate an accurate AI illustration — ${costWords('ai-image')}">${AI_HTML}${costPill('ai-image')}</button>`:'';
+        const aiBtn=(s.type==='content'||s.type==='activity')?`<button data-action="ai" data-i="${i}" title="Generate an accurate AI illustration — ${costWords('lessonscope.generate_ai_image')}">${AI_HTML}${costPill('lessonscope.generate_ai_image')}</button>`:'';
         const regenBtn=s.type==='content'?`<button data-action="regen" data-i="${i}" title="${billingLive()?`First ${pricesState.fairUse.freeRegensPerLesson} regenerations per lesson are free, then 1 credit`:'Regenerate this slide'}">${REGEN_HTML}</button>`:'';
         // a photo content slide can be turned into a labelled diagram
-        const diaBtn=(s.type==='content'&&!s.fraction&&!s.visual&&!s.labelled)?`<button data-action="diagram" data-i="${i}" title="Turn this into a labelled diagram — ${costWords('diagram')}">${DIA_HTML}${costPill('diagram')}</button>`:'';
+        const diaBtn=(s.type==='content'&&!s.fraction&&!s.visual&&!s.labelled)?`<button data-action="diagram" data-i="${i}" title="Turn this into a labelled diagram — ${costWords('lessonscope.generate_diagram')}">${DIA_HTML}${costPill('lessonscope.generate_diagram')}</button>`:'';
         const actions=(aiBtn||regenBtn||diaBtn)?`<div class="card-actions">${regenBtn}${diaBtn}${aiBtn}</div>`:'';
         const diff=s.differentiation?`<div class="diff"><div><b style="color:#15824b">Support</b> ${esc(s.differentiation.support)}</div><div><b style="color:#1f4e79">Stretch</b> ${esc(s.differentiation.stretch)}</div></div>`:'';
         const sc=(s.shortcuts&&s.shortcuts.length)?`<div class="shortcuts">${s.shortcuts.map(x=>`<div class="sc-row"><span class="sc-act">${esc(x.action)}</span><span class="sc-keys">${String(x.keys).split('+').map(k=>k.trim()).filter(Boolean).map((k,n)=>(n>0?'<span class="sc-plus">+</span>':'')+'<kbd class="keycap">'+esc(k)+'</kbd>').join('')}</span></div>`).join('')}</div>`:'';
@@ -2071,12 +2071,12 @@
       const note=$('deckCostNote');
       if(billingLive()){
         note.style.display='flex';
-        const rows=[['ai-image','AI image'],['diagram','Diagram'],['pack-item','Worksheet / quiz / exit'],['lesson-pack-full','Full pack'],['game','Student game']];
+        const rows=[['lessonscope.generate_ai_image','AI image'],['lessonscope.generate_diagram','Diagram'],['lessonscope.generate_pack_item','Worksheet / quiz / exit'],['lessonscope.generate_lesson_pack','Full pack'],['lessonscope.generate_game','Student game']];
         note.innerHTML=`<b>Credit costs:</b>`+rows.map(([a,l])=>`<span class="chip">${l} <span class="amt">${priceOf(a)} cr</span></span>`).join('')+`<span class="chip">Regenerate <span class="amt">${pricesState.fairUse.freeRegensPerLesson} free, then 1 cr</span></span>`;
       } else { note.style.display='none'; note.innerHTML=''; }
-      document.querySelectorAll('#packSection .pack-actions [data-pack]').forEach(b=>setBtnCost(b,'pack-item'));
-      setBtnCost($('fullPackBtn'),'lesson-pack-full');
-      setBtnCost($('makeGameBtn'),'game');
+      document.querySelectorAll('#packSection .pack-actions [data-pack]').forEach(b=>setBtnCost(b,'lessonscope.generate_pack_item'));
+      setBtnCost($('fullPackBtn'),'lessonscope.generate_lesson_pack');
+      setBtnCost($('makeGameBtn'),'lessonscope.generate_game');
     }
     deckEl.addEventListener('click', async (e)=>{
       const b=e.target.closest('button[data-action]'); if(!b) return;
@@ -2089,7 +2089,7 @@
           else if(r.status===403&&d.limitReached){ quotaReached(); toast(d.error); }
           else if(!r.ok){ throw new Error(d.error); }
           else { card.querySelector('.thumb img').src=d.image; setBadge('ai-generated'); applyQuota(d); refreshCredits(); }
-        }catch(err){ toast(err.message); } b.disabled=false; b.innerHTML=AI_HTML+costPill('ai-image'); updateAiButtons();
+        }catch(err){ toast(err.message); } b.disabled=false; b.innerHTML=AI_HTML+costPill('lessonscope.generate_ai_image'); updateAiButtons();
       } else if(b.dataset.action==='diagram'){ b.disabled=true; b.innerHTML='<span class="spinner"></span>Drawing diagram…';
         try{ const r=await fetch(`/api/slide/${currentDeckId}/diagram`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})}); const d=await r.json();
           if(creditBlocked(r,d)){}
@@ -2098,7 +2098,7 @@
           else if(d.labelled){ const nm=d.labelled.replace(/-/g,' ');
             card.querySelector('.thumb').outerHTML=`<div class="thumb" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#f0faf4;color:#2f9e44">${ICON('i-target')}<b style="text-transform:capitalize;font-size:14px">${esc(nm)} diagram</b><span class="badge ai">animated labels</span></div>`;
           } else if(d.image){ const img=card.querySelector('.thumb img'); if(img){ img.src=d.image; setBadge('svg-diagram'); } applyQuota(d); refreshCredits(); }
-        }catch(err){ toast(err.message); } b.disabled=false; b.innerHTML=DIA_HTML+costPill('diagram'); updateAiButtons();
+        }catch(err){ toast(err.message); } b.disabled=false; b.innerHTML=DIA_HTML+costPill('lessonscope.generate_diagram'); updateAiButtons();
       } else if(b.dataset.action==='regen'){ b.disabled=true; b.innerHTML='<span class="spinner"></span>Regenerating…';
         try{ const r=await fetch(`/api/slide/${currentDeckId}/regenerate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})}); const d=await r.json();
           if(creditBlocked(r,d)){ b.disabled=false; b.innerHTML=REGEN_HTML; return; }
@@ -3060,8 +3060,8 @@
       if(show && !creditsState.unlimited){ badge.textContent=creditsState.balance; badge.style.display='inline-flex'; }
       else badge.style.display='none';
       // Keep the primary deck-creation buttons' cost pills current.
-      setBtnCost($('acceptBtn'),'slide-deck');
-      setBtnCost($('importPlanBtn'),'import-plan');
+      setBtnCost($('acceptBtn'),'lessonscope.generate_slide_deck');
+      setBtnCost($('importPlanBtn'),'lessonscope.import_plan_to_slides');
     }
     function renderCredits(){
       const d=creditsState||{};

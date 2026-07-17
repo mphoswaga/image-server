@@ -7,38 +7,41 @@
 // Prices come from the EducScope wallet handoff. LessonScope never subtracts
 // credits itself — it only names an `action`, and wallet.js reserves this many.
 
+// Canonical action names (EducScope wallet contract, shared across apps).
 // action key → credits. Any action not listed here is free.
 const PRICES = {
-  'lesson-pack-full': 3,   // full lesson pack (worksheet + exit ticket + quiz)
-  'slide-deck': 1,         // slide deck only  (POST /api/generate)
-  'import-plan': 1,        // import a lesson plan → slides
-  'pack-item': 1,          // worksheet / exit ticket / quiz on its own
-  'game': 1,               // classroom game only
-  'diagram': 1,            // AI diagram for a slide
-  'ai-image': 2,           // AI image for a slide
+  'lessonscope.generate_lesson_pack': 3,    // full lesson pack (worksheet + exit ticket + quiz)
+  'lessonscope.generate_slide_deck': 1,     // slide deck only  (POST /api/generate)
+  'lessonscope.import_plan_to_slides': 1,   // import a lesson plan → slides
+  'lessonscope.generate_pack_item': 1,      // worksheet / exit ticket / quiz on its own
+  'lessonscope.generate_game': 1,           // classroom game only
+  'lessonscope.generate_diagram': 1,        // AI diagram for a slide
+  'lessonscope.generate_ai_image': 2,       // AI image for a slide
+  // lessonscope.regenerate_slide is priced by fair-use (see FREE_REGENS), not here.
 };
 
 // Human labels for the UI badge / history (keep in sync with PRICES).
 const LABELS = {
-  'lesson-pack-full': 'Full lesson pack',
-  'slide-deck': 'Slide deck',
-  'import-plan': 'Import plan → slides',
-  'pack-item': 'Worksheet / quiz / exit ticket',
-  'game': 'Classroom game',
-  'diagram': 'AI diagram',
-  'ai-image': 'AI image',
+  'lessonscope.generate_lesson_pack': 'Full lesson pack',
+  'lessonscope.generate_slide_deck': 'Slide deck',
+  'lessonscope.import_plan_to_slides': 'Import plan → slides',
+  'lessonscope.generate_pack_item': 'Worksheet / quiz / exit ticket',
+  'lessonscope.generate_game': 'Classroom game',
+  'lessonscope.generate_diagram': 'AI diagram',
+  'lessonscope.generate_ai_image': 'AI image',
+  'lessonscope.regenerate_slide': 'Regenerate slide',
 };
 
 // Explicitly-free actions, documented so the UI can label them "Free" rather
 // than leave them ambiguous.
 const FREE = {
-  'import-slides': 'Parsing an existing file is free',
-  'lesson-plan': 'Included in the pack — free during beta',
-  'slide-regenerate': 'Free within fair-use (3 regenerations per lesson)',
-  'auto-grade': 'Free (grading is batched)',
-  'parse-pacing-guide': 'Free',
-  'query-rewrite': 'Free',
-  'caption': 'Free',
+  'lessonscope.regenerate_slide': 'Free within fair-use (3 regenerations per lesson)',
+  'lessonscope.import_slides': 'Parsing an existing file is free',
+  'lessonscope.generate_lesson_plan': 'Included in the pack — free during beta',
+  'lessonscope.auto_grade': 'Free (grading is batched)',
+  'lessonscope.parse_pacing_guide': 'Free',
+  'lessonscope.rewrite_image_query': 'Free',
+  'lessonscope.caption_image': 'Free',
 };
 
 // Fair-use: regenerating one slide is free the first FREE_REGENS times per

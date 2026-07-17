@@ -18,8 +18,13 @@
 > (beta), auto-grade, pacing-guide parse. Regenerating a slide is free the first
 > `FREE_REGENS_PER_LESSON` (default 3) times per lesson, then 1 credit.
 > AI images/diagrams also keep the monthly `AI_VISUAL_LIMIT` cap as an abuse
-> guard on top of credits. The Lemon Squeezy pieces below still power local
-> top-ups until EducScope owns purchasing.
+> guard on top of credits.
+>
+> **Lemon Squeezy belongs to EducScope only.** LessonScope (and TeacherScope)
+> are wallet *clients* — they call the wallet API and must NOT implement a
+> payment processor. The Lemon Squeezy pieces documented below are a
+> **temporary local fallback** for pre-EducScope top-ups; leave them unset and
+> plan to remove them once EducScope owns purchasing. Do not build on them.
 
 
 A single **credit wallet**, keyed by the teacher's email, shared across

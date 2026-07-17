@@ -818,11 +818,11 @@ app.post('/api/import/lesson-plan', requireAuth, upload.single('file'), async (r
   const subject = clip(req.body.subject, LIMITS.subject);
   const topic = clip(req.body.topic, LIMITS.topic);
   if (!subject || !topic) return res.status(400).json({ error: 'Enter the subject and topic for this lesson.' });
-  const { reservation, block } = await reserve(req, 'import-plan');
+  const { reservation, block } = await reserve(req, 'lessonscope.import_plan_to_slides');
   if (block) return res.status(402).json(block);
   try {
     const planText = (await extractText(req.file.buffer, req.file.originalname) || '').trim();
-    if (!planText) { await release(req, reservation, 'import-plan', 'unreadable file'); return res.status(400).json({ error: "Couldn't read any text from that file — try a Word, PDF, or text export." }); }
+    if (!planText) { await release(req, reservation, 'lessonscope.import_plan_to_slides', 'unreadable file'); return res.status(400).json({ error: "Couldn't read any text from that file — try a Word, PDF, or text export." }); }
     const { slideCount, grade, tone, presetId } = req.body || {};
     const focus = clip(req.body.focus, LIMITS.focus);
     const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives: '', lessonPlanText: planText, skipAssemble: true, presetId: presetId || null });
@@ -833,14 +833,14 @@ app.post('/api/import/lesson-plan', requireAuth, upload.single('file'), async (r
       slides: built.slides, images: built.images, createdAt: Date.now(),
       objectives: '', lessonPlanText: planText, presetId: presetId || null,
     });
-    await capture(req, reservation, 'import-plan', id);
+    await capture(req, reservation, 'lessonscope.import_plan_to_slides', id);
     const filename = `${subject}-${topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
     res.json({
       deckId: id, filename, band: built.band, slideCount: built.slides.length, sourceText: planText,
       slides: built.slides.map((s, i) => previewEntry(s, built.images[i])),
     });
   } catch (err) {
-    await release(req, reservation, 'import-plan', err.message);
+    await release(req, reservation, 'lessonscope.import_plan_to_slides', err.message);
     console.error('Import lesson plan failed:', err.message);
     res.status(400).json({ error: err.message });
   }
@@ -907,7 +907,7 @@ app.post('/api/pack/full', requireAuth, async (req, res) => {
   const topic = clip(req.body.topic, LIMITS.topic);
   const objectives = clip(req.body.objectives, LIMITS.objectives);
   if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
-  const { reservation, block } = await reserve(req, 'lesson-pack-full');
+  const { reservation, block } = await reserve(req, 'lessonscope.generate_lesson_pack');
   if (block) return res.status(402).json(block);
   try {
     const u = unitId ? unit.getUnit(req.userId, unitId) : null;
@@ -931,12 +931,12 @@ app.post('/api/pack/full', requireAuth, async (req, res) => {
     zip.file(`${base}-quiz.docx`, qBuf);
     const zipBuf = zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
 
-    await capture(req, reservation, 'lesson-pack-full', base);
+    await capture(req, reservation, 'lessonscope.generate_lesson_pack', base);
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${base}-lesson-pack.zip"`);
     res.send(zipBuf);
   } catch (err) {
-    await release(req, reservation, 'lesson-pack-full', err.message);
+    await release(req, reservation, 'lessonscope.generate_lesson_pack', err.message);
     console.error('Full pack failed:', err.message);
     res.status(400).json({ error: err.message });
   }
@@ -950,17 +950,17 @@ app.post('/api/pack/:type', requireAuth, async (req, res) => {
   const topic = clip(req.body.topic, LIMITS.topic);
   const objectives = clip(req.body.objectives, LIMITS.objectives);
   if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
-  const { reservation, block } = await reserve(req, 'pack-item');
+  const { reservation, block } = await reserve(req, 'lessonscope.generate_pack_item');
   if (block) return res.status(402).json(block);
   try {
     const u = unitId ? unit.getUnit(req.userId, unitId) : null;
     const unitBlock = u ? unit.buildUnitBlock(u, lessonIndex) : '';
     const lessonPlanText = resolvePlanText(req.body);
     const data = await gen({ subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, unitBlock, regenerate: !!regenerate });
-    await capture(req, reservation, 'pack-item', req.params.type);
+    await capture(req, reservation, 'lessonscope.generate_pack_item', req.params.type);
     res.json({ type: req.params.type, data });
   } catch (err) {
-    await release(req, reservation, 'pack-item', err.message);
+    await release(req, reservation, 'lessonscope.generate_pack_item', err.message);
     console.error('Pack generation failed:', err.message);
     res.status(400).json({ error: err.message });
   }
@@ -1385,7 +1385,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
   const objectives = clip(req.body.objectives, LIMITS.objectives);
   const focus = clip(req.body.focus, LIMITS.focus);
   if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
-  const { reservation, block } = await reserve(req, 'slide-deck');
+  const { reservation, block } = await reserve(req, 'lessonscope.generate_slide_deck');
   if (block) return res.status(402).json(block);
   try {
     const u = unitId ? unit.getUnit(req.userId, unitId) : null;
@@ -1403,14 +1403,14 @@ app.post('/api/generate', requireAuth, async (req, res) => {
       objectives: objectives || '', lessonPlanText, // kept so the student game can be grounded in this lesson
       presetId: presetId || null,
     });
-    await capture(req, reservation, 'slide-deck', id);   // 1 credit per lesson (no-op unless billing on)
+    await capture(req, reservation, 'lessonscope.generate_slide_deck', id);   // 1 credit per lesson (no-op unless billing on)
     const filename = `${subject}-${topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
     res.json({
       deckId: id, filename, band: built.band, slideCount: built.slides.length,
       slides: built.slides.map((s, i) => previewEntry(s, built.images[i])),
     });
   } catch (err) {
-    await release(req, reservation, 'slide-deck', err.message);
+    await release(req, reservation, 'lessonscope.generate_slide_deck', err.message);
     console.error('Generate failed:', err.message);
     res.status(400).json({ error: err.message });
   }
@@ -1512,18 +1512,18 @@ app.post('/api/slide/:id/ai-image', requireAuth, async (req, res) => {
     if (!q.unlimited && q.remaining <= 0) {
       return res.status(403).json({ error: `You've used all ${q.limit} AI visuals this month — search the stock library instead, or they reset next month.`, limitReached: true, remaining: 0, limit: q.limit });
     }
-    const r = await reserve(req, 'ai-image');
+    const r = await reserve(req, 'lessonscope.generate_ai_image');
     if (r.block) return res.status(402).json(r.block);
     reservation = r.reservation;
     const entry = await generateImage({ subject: deck.subject, topic: deck.topic, concept, grade: deck.grade });
     addLibraryImages([entry]);   // cache for reuse + matching
     deck.images[i] = entry;
     quota.consume(req.userId);
-    await capture(req, reservation, 'ai-image', entry.relpath);
+    await capture(req, reservation, 'lessonscope.generate_ai_image', entry.relpath);
     const after = quota.status(req.userId, isAdmin);
     res.json({ image: '/' + entry.relpath, imageSource: 'ai-generated', reused: false, remaining: after.remaining, limit: after.limit });
   } catch (err) {
-    await release(req, reservation, 'ai-image', err.message);
+    await release(req, reservation, 'lessonscope.generate_ai_image', err.message);
     console.error('AI image failed:', err.message);
     res.status(400).json({ error: err.message });
   }
@@ -1556,13 +1556,13 @@ app.post('/api/slide/:id/diagram', requireAuth, async (req, res) => {
       if (!q.unlimited && q.remaining <= 0) {
         return res.status(403).json({ error: `You've used all ${q.limit} AI visuals this month — search the stock library instead, or they reset next month.`, limitReached: true, remaining: 0, limit: q.limit });
       }
-      const r = await reserve(req, 'diagram');
+      const r = await reserve(req, 'lessonscope.generate_diagram');
       if (r.block) return res.status(402).json(r.block);
       reservation = r.reservation;
       entry = await generateDiagram({ subject: deck.subject, topic: deck.topic, concept });
       addLibraryImages([entry]);
       quota.consume(req.userId);
-      await capture(req, reservation, 'diagram', entry.relpath);
+      await capture(req, reservation, 'lessonscope.generate_diagram', entry.relpath);
       const after = quota.status(req.userId, isAdmin);
       remaining = after.remaining; limit = after.limit;
     }
@@ -1571,7 +1571,7 @@ app.post('/api/slide/:id/diagram', requireAuth, async (req, res) => {
     const src = entry.source === 'wikimedia' ? 'wikimedia' : 'svg-diagram';
     res.json({ image: '/' + entry.relpath, imageSource: src, remaining, limit });
   } catch (err) {
-    await release(req, reservation, 'diagram', err.message);
+    await release(req, reservation, 'lessonscope.generate_diagram', err.message);
     console.error('Diagram failed:', err.message);
     res.status(400).json({ error: err.message });
   }
@@ -1589,7 +1589,7 @@ app.post('/api/slide/:id/regenerate', requireAuth, async (req, res) => {
   // that another small batch costs REGEN_BATCH_COST. The counter is per-deck.
   const used = deck.regenCount || 0;
   const cost = used < prices.FREE_REGENS ? 0 : prices.REGEN_BATCH_COST;
-  const { reservation, block } = await reserve(req, 'slide-regenerate', { credits: cost, idemSeed: `${req.params.id}:${i}:${used}` });
+  const { reservation, block } = await reserve(req, 'lessonscope.regenerate_slide', { credits: cost, idemSeed: `${req.params.id}:${i}:${used}` });
   if (block) return res.status(402).json(block);
   try {
     const avoidTitles = deck.slides.filter((s, j) => s.type === 'content' && j !== i).map(s => s.title);
@@ -1599,10 +1599,10 @@ app.post('/api/slide/:id/regenerate', requireAuth, async (req, res) => {
     const alt = alternativeImage({ subject: deck.subject, topic: deck.topic, imageQuery: fresh.imageQuery, exclude: deck.images.map(im => im.relpath) });
     if (alt) deck.images[i] = alt;
     deck.regenCount = used + 1;
-    await capture(req, reservation, 'slide-regenerate', `${req.params.id}:${i}`);
+    await capture(req, reservation, 'lessonscope.regenerate_slide', `${req.params.id}:${i}`);
     res.json({ slide: previewEntry(deck.slides[i], deck.images[i]), regensUsed: deck.regenCount, freeRegens: prices.FREE_REGENS, charged: cost });
   } catch (err) {
-    await release(req, reservation, 'slide-regenerate', err.message);
+    await release(req, reservation, 'lessonscope.regenerate_slide', err.message);
     console.error('Regenerate failed:', err.message);
     res.status(400).json({ error: err.message });
   }
@@ -1640,7 +1640,7 @@ app.post('/api/game', requireAuth, async (req, res) => {
   const deck = decks.get(req.body && req.body.deckId);
   if (!deck) return res.status(404).json({ error: 'Deck expired — regenerate the deck, then create the game.' });
   const questionCount = Math.min(20, Math.max(4, parseInt(req.body && req.body.questionCount, 10) || 6));
-  const { reservation, block } = await reserve(req, 'game');
+  const { reservation, block } = await reserve(req, 'lessonscope.generate_game');
   if (block) return res.status(402).json(block);
   try {
     const game = await generateGame({ subject: deck.subject, topic: deck.topic, grade: deck.grade, tone: deck.tone, objectives: deck.objectives || '', lessonPlanText: deck.lessonPlanText || '', questionCount });
@@ -1648,10 +1648,10 @@ app.post('/api/game', requireAuth, async (req, res) => {
     const rosterId = (req.body && req.body.rosterId) || null;
     const cutoffAt = (req.body && req.body.cutoffAt) || null;
     const rec = games.createGame({ teacherId: req.userId, teacherName: req.user.name, lessonTitle, subject: deck.subject, topic: deck.topic, grade: deck.grade, game, rosterId, cutoffAt });
-    await capture(req, reservation, 'game', rec.id);
+    await capture(req, reservation, 'lessonscope.generate_game', rec.id);
     res.json({ gameId: rec.id, path: `/play/${rec.id}`, questionCount: rec.questions.length, roomCode: rec.roomCode });
   } catch (err) {
-    await release(req, reservation, 'game', err.message);
+    await release(req, reservation, 'lessonscope.generate_game', err.message);
     console.error('Game creation failed:', err.message);
     res.status(400).json({ error: err.message });
   }
@@ -1668,16 +1668,16 @@ app.post('/api/game/from-pptx', requireAuth, upload.single('file'), async (req, 
   const questionCount = Math.min(20, Math.max(4, parseInt(req.body && req.body.questionCount, 10) || 6));
   const rosterId = (req.body && req.body.rosterId) || null;
   const cutoffAt = (req.body && req.body.cutoffAt) || null;
-  const { reservation, block } = await reserve(req, 'game');
+  const { reservation, block } = await reserve(req, 'lessonscope.generate_game');
   if (block) return res.status(402).json(block);
   try {
     const lessonPlanText = await extractText(req.file.buffer, req.file.originalname);
     const game = await generateGame({ subject, topic, grade, objectives: '', lessonPlanText, questionCount });
     const rec = games.createGame({ teacherId: req.userId, teacherName: req.user.name, lessonTitle: topic, subject, topic, grade, game, rosterId, cutoffAt });
-    await capture(req, reservation, 'game', rec.id);
+    await capture(req, reservation, 'lessonscope.generate_game', rec.id);
     res.json({ gameId: rec.id, path: `/play/${rec.id}`, questionCount: rec.questions.length, roomCode: rec.roomCode });
   } catch (err) {
-    await release(req, reservation, 'game', err.message);
+    await release(req, reservation, 'lessonscope.generate_game', err.message);
     console.error('Game from pptx failed:', err.message);
     res.status(400).json({ error: err.message });
   }

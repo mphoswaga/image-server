@@ -17,9 +17,13 @@ set, `wallet.js` uses the remote backend and **fails closed** on an outage.
 
 | Var | Default (unset) | Set it to | Notes |
 |---|---|---|---|
-| `EDUCSCOPE_WALLET_URL` | empty → local fallback | e.g. `https://wallet.educscope.com/api` | Base URL of EducScope's wallet API. Presence of this var is what switches remote mode on. |
-| `EDUCSCOPE_WALLET_KEY` | empty (no auth header) | service token | Bearer token LessonScope sends to the wallet API. Pair with the URL. |
+| `EDUCSCOPE_WALLET_URL` | empty → local fallback | e.g. `https://wallet.educscope.com/api` | **Canonical.** Base URL of EducScope's wallet API. Presence of this var is what switches remote mode on. |
+| `EDUCSCOPE_WALLET_KEY` | empty (no auth header) | service token | **Canonical.** Bearer token LessonScope sends to the wallet API. Pair with the URL. |
 | `WALLET_FAIL_CLOSED` | follows mode: **open** locally, **closed** when remote URL set | `true` / `false` | Override the outage behaviour. `true` = block generation if the wallet is unreachable; `false` = allow it. Leave unset to use the sensible per-mode default. |
+
+> **Aliases:** `EDUCSCOPE_WALLET_API_URL` / `EDUCSCOPE_WALLET_API_KEY` are still
+> read as backward-compatible fallbacks, but the **canonical** names above win
+> and should be the only ones used going forward.
 
 ## 3. Top-up link (UI)
 
@@ -64,6 +68,36 @@ match OpenAI's live prices for the admin usage/cost report. No effect on credit
 charging.
 
 ---
+
+## 7. Canonical action names + prices (EducScope wallet contract)
+
+Shared naming across apps. LessonScope's are the single source of truth in
+`credit-prices.js`; every reserve/capture uses these exact `action` strings.
+
+| Action | Credits |
+|---|---|
+| `lessonscope.generate_lesson_pack` | 3 |
+| `lessonscope.generate_slide_deck` | 1 |
+| `lessonscope.import_plan_to_slides` | 1 |
+| `lessonscope.generate_pack_item` | 1 (worksheet / exit ticket / quiz) |
+| `lessonscope.generate_game` | 1 |
+| `lessonscope.generate_diagram` | 1 |
+| `lessonscope.generate_ai_image` | 2 |
+| `lessonscope.regenerate_slide` | first 3 per lesson free, then 1 / batch |
+
+Free (no charge): import/parse existing slides, lesson plan (beta), auto-grade,
+pacing-guide parse, image-query rewrite, captioning.
+
+**TeacherScope** (owned by that app/agent, listed here for the shared contract):
+`teacherscope.generate_class_comments` (≤30 students 10, ≤60 students 18, then
++ one 30-student block each), `teacherscope.generate_class_insights` (3),
+`teacherscope.rewrite_comment` (free within fair use), `teacherscope.map_objectives`
+(free). Uploads, parsing, exports, dashboards, approvals, login: free.
+
+Every reserve → capture logs this usage metadata: user id, organization id (if
+available), product (`lessonscope`/`teacherscope`), action, credits charged,
+reservation id, model/provider, input tokens, output tokens, estimated provider
+cost, result reference, success/failure status.
 
 ### Minimal "go live" set, in order
 1. EducScope ships the wallet API → set `EDUCSCOPE_WALLET_URL` (+ `EDUCSCOPE_WALLET_KEY`).

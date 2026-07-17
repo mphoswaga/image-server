@@ -39,8 +39,10 @@ class InsufficientCreditsError extends Error {
 //   POST {base}/reservations                 (reserve)
 //   POST {base}/reservations/{id}/capture
 //   POST {base}/reservations/{id}/release
-const remoteBase = () => (process.env.EDUCSCOPE_WALLET_URL || '').replace(/\/$/, '');
-const remoteKey = () => process.env.EDUCSCOPE_WALLET_KEY || '';
+// Canonical names: EDUCSCOPE_WALLET_URL / EDUCSCOPE_WALLET_KEY. The *_API_*
+// forms are accepted only as backward-compatible aliases (canonical wins).
+const remoteBase = () => (process.env.EDUCSCOPE_WALLET_URL || process.env.EDUCSCOPE_WALLET_API_URL || '').replace(/\/$/, '');
+const remoteKey = () => process.env.EDUCSCOPE_WALLET_KEY || process.env.EDUCSCOPE_WALLET_API_KEY || '';
 function remoteConfigured() { return !!remoteBase(); }
 
 // Whether a wallet OUTAGE (not "out of credits" — an actual error reaching the
