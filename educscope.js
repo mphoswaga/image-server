@@ -22,6 +22,11 @@ function accountMeUrl() {
   try { return new URL(walletBase()).origin + '/api/account/me'; } catch { return ''; }
 }
 
+function bridgeVerifyUrl() {
+  if (process.env.EDUCSCOPE_BRIDGE_VERIFY_URL) return process.env.EDUCSCOPE_BRIDGE_VERIFY_URL;
+  try { return new URL(accountMeUrl()).origin + '/api/account/bridge-token/verify'; } catch { return ''; }
+}
+
 // Where an unauthenticated teacher is sent to sign in.
 function loginUrl() {
   const base = process.env.EDUCSCOPE_ACCOUNT_URL || '';
@@ -69,6 +74,22 @@ async function fetchAccount(req) {
   return { authenticated: true, loginUrl: loginUrl(), profile };
 }
 
+async function verifyBridgeToken(token) {
+  const url = bridgeVerifyUrl();
+  if (!url) return { authenticated: false, loginUrl: loginUrl() };
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+  if (res.status === 401 || res.status === 403) return { authenticated: false, loginUrl: loginUrl() };
+  if (!res.ok) throw new Error(`bridge-token ${res.status}`);
+  const d = await res.json().catch(() => ({}));
+  const profile = extractProfile(d);
+  if (!profile) throw new Error('bridge-token missing user profile');
+  return { authenticated: true, loginUrl: loginUrl(), profile };
+}
+
 // Short per-session cache so we don't call account/me on every action. Keyed by
 // the LessonScope session user id; busted after a capture/release so the next
 // balance read is fresh.
@@ -98,4 +119,4 @@ async function resolveIdentity(req, { fresh = false } = {}) {
   return identity;
 }
 
-module.exports = { configured, resolveIdentity, fetchAccount, loginUrl, accountMeUrl, bust };
+module.exports = { configured, resolveIdentity, fetchAccount, verifyBridgeToken, loginUrl, accountMeUrl, bust };

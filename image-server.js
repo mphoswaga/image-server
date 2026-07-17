@@ -202,6 +202,37 @@ app.get('/api/educscope/session', async (req, res) => {
   }
 });
 
+app.post('/api/educscope/token', async (req, res) => {
+  if (!educscope.configured()) {
+    return res.json({ authenticated: false, loginUrl: educscope.loginUrl(), reason: 'educscope_not_configured' });
+  }
+  try {
+    const account = await educscope.verifyBridgeToken(req.body && req.body.token);
+    if (!account.authenticated) {
+      return res.status(401).json({ authenticated: false, loginUrl: account.loginUrl || educscope.loginUrl() });
+    }
+    const { profile } = account;
+    const user = await findOrCreateSocialUser({
+      provider: 'educscope',
+      providerUserId: profile.userId,
+      email: profile.email,
+      name: profile.name,
+    });
+    setSession(res, user.id);
+    audit.log('educscope.token_session', {
+      userId: user.id,
+      email: user.email,
+      educscopeUserId: profile.userId,
+      organizationId: profile.organizationId,
+      ip: req.ip,
+    });
+    res.json({ authenticated: true, loginUrl: account.loginUrl || educscope.loginUrl(), user });
+  } catch (err) {
+    console.error('EducScope token bridge failed:', err.message);
+    res.status(502).json({ authenticated: false, loginUrl: educscope.loginUrl(), error: 'EducScope sign-in is not available right now.' });
+  }
+});
+
 app.post('/api/logout', (req, res) => { res.clearCookie(COOKIE_NAME); res.json({ ok: true }); });
 
 // Always responds the same way whether or not the email has an account —

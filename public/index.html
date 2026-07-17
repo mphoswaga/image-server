@@ -2507,9 +2507,31 @@
         const url=new URL(educscopeLoginUrl||fallback);
         url.searchParams.set('mode',mode);
         url.searchParams.set('popup','1');
+        url.searchParams.set('returnOrigin',window.location.origin);
         return url.toString();
       }catch{
-        return `${fallback}?mode=${encodeURIComponent(mode)}&popup=1`;
+        return `${fallback}?mode=${encodeURIComponent(mode)}&popup=1&returnOrigin=${encodeURIComponent(window.location.origin)}`;
+      }
+    }
+    async function completeEducScopeTokenLogin(token,popup=null){
+      if(!token) return false;
+      try{
+        const r=await fetch('/api/educscope/token',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          credentials:'include',
+          body:JSON.stringify({token})
+        });
+        const d=await r.json().catch(()=>({}));
+        if(!r.ok||!d.authenticated||!d.user) throw new Error(d.error||'EducScope sign-in was not completed.');
+        try{ popup?.close(); }catch{}
+        $('authErr').textContent='';
+        enterApp(d.user);
+        return true;
+      }catch{
+        $('authErr').style.color='var(--err)';
+        $('authErr').textContent='EducScope sign-in was not completed.';
+        return false;
       }
     }
     function openEducScopeAuth(mode){
@@ -2519,10 +2541,19 @@
       $('authErr').style.color='var(--muted)';
       $('authErr').textContent='Waiting for EducScope sign-in...';
       let tries=0;
+      const onMessage=async event=>{
+        if(event.origin!=='https://educscope.com') return;
+        if(event.data?.type!=='educscope-auth-complete') return;
+        window.removeEventListener('message',onMessage);
+        clearInterval(timer);
+        await completeEducScopeTokenLogin(event.data.token,popup);
+      };
+      window.addEventListener('message',onMessage);
       const timer=setInterval(async()=>{
         tries+=1;
         const user=await syncEducScopeSession();
         if(user){
+          window.removeEventListener('message',onMessage);
           clearInterval(timer);
           try{ popup.close(); }catch{}
           $('authErr').textContent='';
@@ -2530,6 +2561,7 @@
           return;
         }
         if(popup.closed && tries>2){
+          window.removeEventListener('message',onMessage);
           clearInterval(timer);
           $('authErr').style.color='var(--err)';
           $('authErr').textContent='EducScope sign-in was not completed.';
