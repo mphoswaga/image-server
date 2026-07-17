@@ -827,16 +827,19 @@
         </div>
       </div>
       <div class="sub">Lesson plans &amp; decks, in your school's format.</div>
-      <div id="educscopeAuthBox" style="display:none;margin:14px 0;padding:14px;border:1.5px solid var(--border);border-radius:14px;background:linear-gradient(135deg,var(--primary-soft),#fff)">
+      <div id="educscopeAuthBox" style="margin:14px 0 0;padding:16px;border:1.5px solid var(--border);border-radius:14px;background:linear-gradient(135deg,var(--primary-soft),#fff)">
         <div style="font-weight:800;color:var(--ink);margin-bottom:4px">Use your EducScope account</div>
-        <div style="font-size:13px;color:var(--muted);line-height:1.45;margin-bottom:10px">Sign in once for EducScope, LessonScope, and TeacherScope. Local LessonScope login still works during the transition.</div>
-        <button id="educscopeLoginBtn" type="button" class="btn primary full">Continue with EducScope</button>
+        <div style="font-size:13px;color:var(--muted);line-height:1.45;margin-bottom:12px">Sign in once for EducScope, LessonScope, and TeacherScope. Your password is only entered on EducScope.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <button id="educscopeLoginBtn" type="button" class="btn primary full">Log in</button>
+          <button id="educscopeSignupBtn" type="button" class="btn ghost full">Sign up</button>
+        </div>
       </div>
-      <div class="tabs">
+      <div class="tabs" style="display:none">
         <button id="tabLogin" class="active" type="button">Log in</button>
         <button id="tabSignup" type="button">Sign up</button>
       </div>
-      <form id="authForm">
+      <form id="authForm" style="display:none">
         <div id="nameRow" style="display:none">
           <label for="auName">Name</label>
           <input id="auName" type="text" placeholder="Your name" autocomplete="name" />
@@ -2498,7 +2501,43 @@
     }
     $('tabLogin').onclick=()=>setMode('login');
     $('tabSignup').onclick=()=>setMode('signup');
-    $('educscopeLoginBtn')?.addEventListener('click',()=>{ if(educscopeLoginUrl) location.href=educscopeLoginUrl; });
+    function educscopeAuthUrl(mode){
+      const fallback='https://educscope.com/account';
+      try{
+        const url=new URL(educscopeLoginUrl||fallback);
+        url.searchParams.set('mode',mode);
+        url.searchParams.set('popup','1');
+        return url.toString();
+      }catch{
+        return `${fallback}?mode=${encodeURIComponent(mode)}&popup=1`;
+      }
+    }
+    function openEducScopeAuth(mode){
+      const url=educscopeAuthUrl(mode);
+      const popup=window.open(url,'educscope_auth','width=520,height=720,menubar=no,toolbar=no,location=yes,status=no,resizable=yes,scrollbars=yes');
+      if(!popup){ location.href=url; return; }
+      $('authErr').style.color='var(--muted)';
+      $('authErr').textContent='Waiting for EducScope sign-in...';
+      let tries=0;
+      const timer=setInterval(async()=>{
+        tries+=1;
+        const user=await syncEducScopeSession();
+        if(user){
+          clearInterval(timer);
+          try{ popup.close(); }catch{}
+          $('authErr').textContent='';
+          enterApp(user);
+          return;
+        }
+        if(popup.closed && tries>2){
+          clearInterval(timer);
+          $('authErr').style.color='var(--err)';
+          $('authErr').textContent='EducScope sign-in was not completed.';
+        }
+      },1200);
+    }
+    $('educscopeLoginBtn')?.addEventListener('click',()=>openEducScopeAuth('login'));
+    $('educscopeSignupBtn')?.addEventListener('click',()=>openEducScopeAuth('signup'));
 
     $('authForm').addEventListener('submit', async (e)=>{
       e.preventDefault(); const btn=$('authBtn'); btn.disabled=true; $('authErr').textContent='';
@@ -4011,9 +4050,6 @@
         const r=await fetch('/api/educscope/session',{credentials:'include'});
         const d=await r.json().catch(()=>({}));
         educscopeLoginUrl=d.loginUrl||educscopeLoginUrl||'';
-        if(educscopeLoginUrl){
-          $('educscopeAuthBox').style.display='block';
-        }
         if(r.ok && d.authenticated && d.user) return d.user;
       }catch{}
       return null;
