@@ -25,6 +25,31 @@ set, `wallet.js` uses the remote backend and **fails closed** on an outage.
 > read as backward-compatible fallbacks, but the **canonical** names above win
 > and should be the only ones used going forward.
 
+### Shared session (identity + org id)
+
+LessonScope runs on `lesson.educscope.com`; EducScope sets its session cookie on
+`COOKIE_DOMAIN=.educscope.com`, so that cookie reaches LessonScope. The server
+resolves the signed-in teacher by **forwarding that cookie** to EducScope's
+account API and reading back the **trusted** `user.id` + `organization.id`. That
+`organization.id` is the only id used for wallet reserve/capture/release — never
+an org id from the browser.
+
+- Account API URL is derived from `EDUCSCOPE_WALLET_URL`'s origin as
+  `…/api/account/me`. Override with `EDUCSCOPE_ACCOUNT_API_URL` if it ever differs.
+- A 401 from `/api/account/me` → the UI sends the teacher to
+  `EDUCSCOPE_ACCOUNT_URL?mode=login`.
+- Balance shown in LessonScope is EducScope's `wallet.available` (remote mode);
+  the local `credits.js` wallet is used only when `EDUCSCOPE_WALLET_URL` is unset.
+
+Production values:
+
+```
+BILLING_ENABLED=true
+EDUCSCOPE_WALLET_URL=https://educscope.com/api/wallet
+EDUCSCOPE_ACCOUNT_URL=https://educscope.com/account
+EDUCSCOPE_WALLET_KEY=<shared key from EducScope Railway — set in Railway, not here>
+```
+
 ## 3. Top-up link (UI)
 
 | Var | Default (unset) | Set it to | Notes |

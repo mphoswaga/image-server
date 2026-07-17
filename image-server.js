@@ -44,6 +44,7 @@ const socialAuth = require('./social-auth');
 const credits = require('./credits');
 const billing = require('./billing');
 const wallet = require('./wallet');
+const educscope = require('./educscope');
 const prices = require('./credit-prices');
 const { runWithUser, usageSnapshot, usageSince } = require('./ai-client');
 const usage = require('./usage');
@@ -308,10 +309,12 @@ const billingOn = () => process.env.BILLING_ENABLED === 'true';
 // wallet price/hold/settle it. A failed generation is always released, so it
 // never costs a teacher a credit.
 
-// The organization a teacher's credits belong to. Email is the identity both
-// LessonScope and TeacherScope already share; swap for a real EducScope org id
-// here when the wallet API is live — nothing else changes.
-function orgId(req) { return String(req.user.email || '').trim().toLowerCase(); }
+// The organization a teacher's credits belong to. In remote (production) mode
+// this is the TRUSTED EducScope organization.id resolved server-side and stashed
+// on the request by reserve(); in local/beta mode it falls back to the teacher's
+// email (the identity the local wallet keys on).
+function orgIdFallback(req) { return String(req.user.email || '').trim().toLowerCase(); }
+function orgId(req) { return req._orgId || orgIdFallback(req); }
 
 // A stable idempotency key so a retried request never reserves twice. A client
 // may supply its own Idempotency-Key header (the UI will send a fresh one per
@@ -337,15 +340,34 @@ function costOf(req, action) { return (billingOn() && req.user.role !== 'admin')
 // to use the published price. opts.idemSeed gives the reservation a natural
 // per-attempt identity so intentional repeats stay distinct (see idemKey).
 async function reserve(req, action, opts = {}) {
-  if (req.user.role !== 'admin') credits.ensureFreeGrant(req.user.email);
+  // Resolve the trusted EducScope org id server-side (remote mode). If the
+  // teacher isn't signed into EducScope, block with a login prompt.
+  let organizationId, educscopeUserId = null;
+  try {
+    const ident = await educscope.resolveIdentity(req);
+    if (ident.unauthenticated) {
+      return { reservation: null, block: { error: 'Sign in to EducScope to keep generating.', needLogin: true, loginUrl: ident.loginUrl } };
+    }
+    organizationId = ident.local ? orgIdFallback(req) : ident.organizationId;
+    educscopeUserId = ident.userId || null;
+  } catch (e) {
+    console.error('EducScope identity failed:', e.message);
+    // Can't resolve the org: fail closed in remote mode, open in local/beta.
+    if (wallet.failClosed()) return { reservation: null, block: { error: 'Credits are temporarily unavailable — please try again in a moment.', walletUnavailable: true } };
+    organizationId = orgIdFallback(req);
+  }
+  req._orgId = organizationId;
+  // Local free-trial grant applies only to the local wallet — EducScope owns
+  // credits in remote mode, so don't touch a local ledger there.
+  if (!educscope.configured() && req.user.role !== 'admin') credits.ensureFreeGrant(req.user.email);
   const amount = opts.credits != null
     ? ((billingOn() && req.user.role !== 'admin') ? Math.max(0, opts.credits) : 0)
     : costOf(req, action);
   try {
     const reservation = await wallet.reserveCredits({
-      organizationId: orgId(req), product: 'lessonscope', action,
+      organizationId, product: 'lessonscope', action,
       credits: amount, idempotencyKey: idemKey(req, action, opts.idemSeed),
-      metadata: { userId: req.userId, email: req.user.email },
+      metadata: { userId: req.userId, educscopeUserId, email: req.user.email },
     });
     reservation._before = usageSnapshot();   // baseline to diff this action's AI usage against
     return { reservation, block: null };
@@ -374,6 +396,7 @@ async function capture(req, reservation, action, resultRef) {
   };
   try { await wallet.captureReservation({ reservationId: reservation.reservationId, ...meta }); }
   catch (e) { console.error('Credit capture failed:', e.message); }
+  educscope.bust(req.userId);   // balance changed → next read re-fetches from EducScope
   audit.log('credits.capture', {
     userId: req.userId, organizationId: orgId(req), product: 'lessonscope', action,
     reservationId: reservation.reservationId, credits: reservation.credits, ...meta, status: 'success',
@@ -385,6 +408,7 @@ async function release(req, reservation, action, reason) {
   if (!reservation) return;
   try { await wallet.releaseReservation({ reservationId: reservation.reservationId, reason: reason || 'failed' }); }
   catch (e) { console.error('Credit release failed:', e.message); }
+  educscope.bust(req.userId);   // hold released → next read re-fetches from EducScope
   audit.log('credits.release', {
     userId: req.userId, organizationId: orgId(req), product: 'lessonscope', action,
     reservationId: reservation.reservationId, credits: reservation.credits,
@@ -392,9 +416,30 @@ async function release(req, reservation, action, reason) {
   });
 }
 
-// This teacher's balance + history (drives the Credits panel).
-app.get('/api/credits', requireAuth, (req, res) => {
+// This teacher's balance + history (drives the Credits panel). In remote mode
+// the balance is EducScope's wallet.available (resolved server-side from the
+// shared session); a missing/expired EducScope session returns { needLogin }.
+app.get('/api/credits', requireAuth, async (req, res) => {
   const admin = req.user.role === 'admin';
+  if (educscope.configured()) {
+    try {
+      const ident = await educscope.resolveIdentity(req, { fresh: true });
+      if (ident.unauthenticated) return res.json({ needLogin: true, loginUrl: ident.loginUrl, billingEnabled: billingOn(), source: 'educscope' });
+      return res.json({
+        balance: admin ? null : ident.available,
+        unlimited: admin,
+        billingEnabled: billingOn(),
+        source: 'educscope',
+        organizationId: ident.organizationId,
+        accountUrl: process.env.EDUCSCOPE_ACCOUNT_URL || '',
+        history: [],
+      });
+    } catch (e) {
+      console.error('EducScope balance failed:', e.message);
+      return res.json({ walletUnavailable: true, billingEnabled: billingOn(), source: 'educscope' });
+    }
+  }
+  // Local/beta wallet (unchanged).
   if (!admin) credits.ensureFreeGrant(req.user.email);
   res.json({
     balance: admin ? null : credits.getBalance(req.user.email),
@@ -402,6 +447,7 @@ app.get('/api/credits', requireAuth, (req, res) => {
     billingEnabled: billingOn(),
     purchasable: billing.isConfigured(),
     freeCredits: credits.FREE_CREDITS,
+    source: 'local',
     history: admin ? [] : credits.getHistory(req.user.email),
   });
 });

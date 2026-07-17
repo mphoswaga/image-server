@@ -3043,8 +3043,15 @@
     // off, or the user is an admin (so we never show "0 credits" everywhere).
     function costPill(action){ if(!billingLive()) return ''; const n=priceOf(action); if(!n) return ''; return `<span class="cost-pill" title="Uses ${n} credit${n>1?'s':''}">${n} cr</span>`; }
     function costWords(action){ const n=priceOf(action); return n?`${n} credit${n>1?'s':''}`:'Free'; }
+    // Send the teacher to EducScope to sign in (shared account/wallet).
+    function goToEducScopeLogin(url){
+      const dest=url||(pricesState&&pricesState.accountUrl?pricesState.accountUrl+'?mode=login':'');
+      toast('Please sign in to EducScope to continue.');
+      if(dest) setTimeout(()=>{ window.location.href=dest; }, 900);
+    }
     // Handle a credit block on any paid response. Returns true if it took over.
     function creditBlocked(r,d){
+      if(d && d.needLogin){ goToEducScopeLogin(d.loginUrl); return true; }
       if(r && r.status===402 && d && d.needCredits){ outOfCredits(d); return true; }
       if(d && d.walletUnavailable){ toast(d.error||'Credits are temporarily unavailable — try again in a moment.'); return true; }
       return false;
@@ -3054,10 +3061,12 @@
     async function refreshCredits(){
       await loadPrices();
       try{ creditsState=await (await fetch('/api/credits')).json(); }catch{ creditsState=null; }
-      const show=creditsState && (creditsState.billingEnabled || creditsState.purchasable);
+      const c=creditsState||{};
+      const show=c.billingEnabled || c.purchasable || c.source==='educscope';
       $('creditsBtn').style.display = show ? 'inline-flex' : 'none';
       const badge=$('creditsNavBadge');
-      if(show && !creditsState.unlimited){ badge.textContent=creditsState.balance; badge.style.display='inline-flex'; }
+      // Show a numeric balance badge only when we actually have a number.
+      if(show && !c.unlimited && typeof c.balance==='number'){ badge.textContent=c.balance; badge.style.display='inline-flex'; }
       else badge.style.display='none';
       // Keep the primary deck-creation buttons' cost pills current.
       setBtnCost($('acceptBtn'),'lessonscope.generate_slide_deck');
@@ -3065,18 +3074,30 @@
     }
     function renderCredits(){
       const d=creditsState||{};
+      const acct=(pricesState&&pricesState.accountUrl)||d.accountUrl||'';
+      // Not signed into EducScope (shared account) → sign-in prompt, nothing else.
+      if(d.needLogin){
+        $('creditsBalanceCard').innerHTML=`<div style="max-width:420px"><div class="lbl">EducScope account</div><div style="font-size:14px;margin-top:6px">Sign in to your EducScope account to see your credit balance and generate.</div></div>`;
+        $('creditsTopup').innerHTML=`<div class="topup"><h4>Sign in to EducScope</h4><p>Your account, wallet, and credits live in EducScope — shared across LessonScope and TeacherScope.</p><a class="btn primary" href="${esc(d.loginUrl||(acct?acct+'?mode=login':'#'))}">Sign in to EducScope</a></div>`;
+        $('creditsPacks').innerHTML=''; $('creditsHistoryWrap').innerHTML=''; return;
+      }
+      // EducScope wallet temporarily unreachable.
+      if(d.walletUnavailable){
+        $('creditsBalanceCard').innerHTML=`<div><div class="lbl">Balance</div><div style="font-size:14px;margin-top:6px;color:var(--muted)">EducScope wallet is temporarily unavailable — please try again in a moment.</div></div>`;
+        $('creditsTopup').innerHTML=''; $('creditsPacks').innerHTML=''; $('creditsHistoryWrap').innerHTML=''; return;
+      }
+      const remote = d.source==='educscope';
       $('creditsBalanceCard').innerHTML = d.unlimited
         ? `<div><div class="big">∞</div><div class="lbl">Unlimited (admin)</div></div>`
         : `<div><div class="big">${d.balance||0}</div><div class="lbl">credits left</div></div>
-           <div style="font-size:13px;color:var(--muted);max-width:360px">${d.billingEnabled?'Spend credits to generate. A slide deck is 1 credit, a full lesson pack 3, an AI image 2, a diagram 1.':`Billing is off right now — generating is free. You start with ${d.freeCredits} free credits.`}</div>`;
-      // Top-up prompt — EducScope owns the shared wallet. Placeholder link until
-      // EducScope's billing is live (the local packs below still work meanwhile).
-      const acct=(pricesState&&pricesState.accountUrl)||'';
+           <div style="font-size:13px;color:var(--muted);max-width:360px">${d.billingEnabled?'Spend credits to generate. A slide deck is 1 credit, a full lesson pack 3, an AI image 2, a diagram 1.'+(remote?' Balance is your shared EducScope wallet.':''):`Billing is off right now — generating is free. You start with ${d.freeCredits} free credits.`}</div>`;
+      // Top-up prompt — EducScope owns the shared wallet.
       $('creditsTopup').innerHTML = (d.billingEnabled && !d.unlimited)
         ? `<div class="topup"><h4>Top up your EducScope wallet</h4><p>Credits are shared across LessonScope and TeacherScope — you buy them once in your EducScope account.</p>${acct?`<a class="btn primary" href="${esc(acct)}" target="_blank" rel="noopener">Go to EducScope to top up</a>`:`<span class="hint">EducScope billing is coming soon — you'll top up from your account there.</span>`}</div>`
         : '';
-      // Packs (only when Stripe is configured)
-      fetch('/api/billing/packs').then(r=>r.json()).then(p=>{
+      // Local Stripe packs (fallback only). EducScope owns purchasing in remote mode.
+      if(remote){ $('creditsPacks').innerHTML=''; }
+      else fetch('/api/billing/packs').then(r=>r.json()).then(p=>{
         if(!p.configured || d.unlimited){ $('creditsPacks').innerHTML = d.unlimited?'':'<p class="hint">Purchasing isn\'t available yet.</p>'; return; }
         $('creditsPacks').innerHTML = p.packs.map(pk=>`<div class="credit-pack"><div class="n">${pk.credits} <small>credits</small></div><div class="price">${esc(pk.priceLabel)}</div><button type="button" class="btn primary full buy-pack" data-pack="${pk.id}">Buy</button></div>`).join('');
       }).catch(()=>{});
