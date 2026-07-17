@@ -340,8 +340,21 @@ function costOf(req, action) { return (billingOn() && req.user.role !== 'admin')
 // to use the published price. opts.idemSeed gives the reservation a natural
 // per-attempt identity so intentional repeats stay distinct (see idemKey).
 async function reserve(req, action, opts = {}) {
-  // Resolve the trusted EducScope org id server-side (remote mode). If the
-  // teacher isn't signed into EducScope, block with a login prompt.
+  // Local free-trial grant is a local-wallet concept; no-op in remote mode.
+  if (!educscope.configured() && req.user.role !== 'admin') credits.ensureFreeGrant(req.user.email);
+
+  const amount = opts.credits != null
+    ? ((billingOn() && req.user.role !== 'admin') ? Math.max(0, opts.credits) : 0)
+    : costOf(req, action);
+
+  // Nothing to charge (billing OFF, admin, or a free action) → skip the wallet
+  // AND the EducScope session check entirely; generation proceeds freely. This
+  // is what keeps a billing-OFF deploy completely non-blocking — the login /
+  // session behaviour is still verifiable via the read-only Credits panel.
+  if (amount === 0) return { reservation: null, block: null };
+
+  // Paid action (billing on): resolve the TRUSTED EducScope org id server-side.
+  // A teacher not signed into EducScope is prompted to log in.
   let organizationId, educscopeUserId = null;
   try {
     const ident = await educscope.resolveIdentity(req);
@@ -357,12 +370,6 @@ async function reserve(req, action, opts = {}) {
     organizationId = orgIdFallback(req);
   }
   req._orgId = organizationId;
-  // Local free-trial grant applies only to the local wallet — EducScope owns
-  // credits in remote mode, so don't touch a local ledger there.
-  if (!educscope.configured() && req.user.role !== 'admin') credits.ensureFreeGrant(req.user.email);
-  const amount = opts.credits != null
-    ? ((billingOn() && req.user.role !== 'admin') ? Math.max(0, opts.credits) : 0)
-    : costOf(req, action);
   try {
     const reservation = await wallet.reserveCredits({
       organizationId, product: 'lessonscope', action,
