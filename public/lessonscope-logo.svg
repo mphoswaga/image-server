@@ -1,0 +1,45 @@
+<svg width="100%" viewBox="0 0 680 460" role="img" xmlns="http://www.w3.org/2000/svg">
+  <title>LessonScope logo</title>
+  <desc>LessonScope — Where lessons level up.</desc>
+
+  <defs>
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a3a6b"/>
+      <stop offset="100%" stop-color="#3ec96e"/>
+    </linearGradient>
+    <linearGradient id="b1" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3060c8"/>
+      <stop offset="100%" stop-color="#1a3a6b"/>
+    </linearGradient>
+    <linearGradient id="b2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#27b87e"/>
+      <stop offset="100%" stop-color="#1a7a5a"/>
+    </linearGradient>
+    <linearGradient id="b3" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3ec96e"/>
+      <stop offset="100%" stop-color="#22a858"/>
+    </linearGradient>
+  </defs>
+
+  <circle cx="340" cy="150" r="110" fill="none" stroke="url(#ringGrad)" stroke-width="14"/>
+
+  <path d="M 252 150 A 88 88 0 0 1 428 150" fill="none" stroke="#dde4f2" stroke-width="6" stroke-linecap="round"/>
+  <path d="M 268 150 A 72 72 0 0 1 412 150" fill="none" stroke="#dde4f2" stroke-width="5" stroke-linecap="round"/>
+  <path d="M 283 150 A 57 57 0 0 1 397 150" fill="none" stroke="#dde4f2" stroke-width="4" stroke-linecap="round"/>
+
+  <line x1="340" y1="150" x2="292" y2="84" stroke="#1a3a6b" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="340" cy="150" r="7" fill="#27b87e" stroke="white" stroke-width="2"/>
+
+  <rect x="306" y="156" width="19" height="33" rx="3" fill="url(#b1)"/>
+  <rect x="330" y="141" width="19" height="48" rx="3" fill="url(#b2)"/>
+  <rect x="354" y="122" width="19" height="67" rx="3" fill="url(#b3)"/>
+
+  <text text-anchor="middle" x="340" y="316" font-family="Georgia, 'Times New Roman', serif" font-size="74" font-weight="700" letter-spacing="-2">
+    <tspan fill="#1a3a6b">Lesson</tspan><tspan fill="#3ec96e">Scope</tspan>
+  </text>
+
+  <line x1="152" y1="362" x2="212" y2="362" stroke="#3060c8" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="468" y1="362" x2="528" y2="362" stroke="#3ec96e" stroke-width="2.5" stroke-linecap="round"/>
+
+  <text text-anchor="middle" x="340" y="368" font-family="Georgia, 'Times New Roman', serif" font-size="19" font-weight="400" fill="#1a3a6b" letter-spacing="2" font-style="italic">Where lessons level up.</text>
+</svg>
