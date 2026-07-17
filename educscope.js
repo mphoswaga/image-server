@@ -28,6 +28,47 @@ function loginUrl() {
   return base ? `${base}${base.includes('?') ? '&' : '?'}mode=login` : '';
 }
 
+function cleanText(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function cleanEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function extractProfile(d = {}) {
+  const account = d.user || d.account || d.profile || d;
+  const organization = d.organization || d.org || d.currentOrganization || account.organization || {};
+  const userId = cleanText(
+    account.id || account.user_id || account.userId || account.sub || d.user_id || d.userId || d.educscope_user_id
+  );
+  const organizationId = cleanText(
+    organization.id || organization.organization_id || organization.organizationId || account.organization_id || account.organizationId || d.organization_id || d.organizationId || d.educscope_organization_id
+  );
+  const email = cleanEmail(account.email || d.email);
+  const name = cleanText(account.display_name || account.displayName || account.name || d.display_name || d.displayName || d.name);
+  if (!userId || !email) return null;
+  return {
+    userId,
+    organizationId,
+    email,
+    name: name || email.split('@')[0],
+    available: (d.wallet && typeof d.wallet.available === 'number') ? d.wallet.available : null,
+  };
+}
+
+async function fetchAccount(req) {
+  const url = accountMeUrl();
+  if (!url) return { authenticated: false, loginUrl: loginUrl() };
+  const res = await fetch(url, { headers: { Cookie: req.headers.cookie || '', Accept: 'application/json' }, redirect: 'manual' });
+  if (res.status === 401 || res.status === 403) return { authenticated: false, loginUrl: loginUrl() };
+  if (!res.ok) throw new Error(`account/me ${res.status}`);
+  const d = await res.json().catch(() => ({}));
+  const profile = extractProfile(d);
+  if (!profile) throw new Error('account/me missing user profile');
+  return { authenticated: true, loginUrl: loginUrl(), profile };
+}
+
 // Short per-session cache so we don't call account/me on every action. Keyed by
 // the LessonScope session user id; busted after a capture/release so the next
 // balance read is fresh.
@@ -44,21 +85,17 @@ async function resolveIdentity(req, { fresh = false } = {}) {
   if (!configured()) return { local: true };
   const key = req.userId || (req.ip || 'anon');
   if (!fresh) { const c = _cache.get(key); if (c && Date.now() - c.at < TTL_MS) return c.identity; }
-  const url = accountMeUrl();
-  if (!url) return { local: true };
-  const res = await fetch(url, { headers: { Cookie: req.headers.cookie || '', Accept: 'application/json' }, redirect: 'manual' });
-  if (res.status === 401 || res.status === 403) return { unauthenticated: true, loginUrl: loginUrl() };
-  if (!res.ok) throw new Error(`account/me ${res.status}`);
-  const d = await res.json().catch(() => ({}));
-  const organizationId = d && d.organization && d.organization.id;
-  if (!organizationId) throw new Error('account/me missing organization.id');
+  const account = await fetchAccount(req);
+  if (!account.authenticated) return { unauthenticated: true, loginUrl: account.loginUrl };
+  const { profile } = account;
+  if (!profile.organizationId) throw new Error('account/me missing organization.id');
   const identity = {
-    organizationId: String(organizationId),
-    userId: (d.user && d.user.id != null) ? String(d.user.id) : null,
-    available: (d.wallet && typeof d.wallet.available === 'number') ? d.wallet.available : null,
+    organizationId: profile.organizationId,
+    userId: profile.userId,
+    available: profile.available,
   };
   _cache.set(key, { at: Date.now(), identity });
   return identity;
 }
 
-module.exports = { configured, resolveIdentity, loginUrl, accountMeUrl, bust };
+module.exports = { configured, resolveIdentity, fetchAccount, loginUrl, accountMeUrl, bust };

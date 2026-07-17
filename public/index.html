@@ -827,6 +827,11 @@
         </div>
       </div>
       <div class="sub">Lesson plans &amp; decks, in your school's format.</div>
+      <div id="educscopeAuthBox" style="display:none;margin:14px 0;padding:14px;border:1.5px solid var(--border);border-radius:14px;background:linear-gradient(135deg,var(--primary-soft),#fff)">
+        <div style="font-weight:800;color:var(--ink);margin-bottom:4px">Use your EducScope account</div>
+        <div style="font-size:13px;color:var(--muted);line-height:1.45;margin-bottom:10px">Sign in once for EducScope, LessonScope, and TeacherScope. Local LessonScope login still works during the transition.</div>
+        <button id="educscopeLoginBtn" type="button" class="btn primary full">Continue with EducScope</button>
+      </div>
       <div class="tabs">
         <button id="tabLogin" class="active" type="button">Log in</button>
         <button id="tabSignup" type="button">Sign up</button>
@@ -2482,6 +2487,7 @@
 
     // ---- auth ----
     const authScreen=$('authScreen'), nav=$('nav'), appEl=$('app');
+    let educscopeLoginUrl='';
     let mode='login';
     function setMode(m){ mode=m;
       $('tabLogin').classList.toggle('active',m==='login'); $('tabSignup').classList.toggle('active',m==='signup');
@@ -2492,6 +2498,7 @@
     }
     $('tabLogin').onclick=()=>setMode('login');
     $('tabSignup').onclick=()=>setMode('signup');
+    $('educscopeLoginBtn')?.addEventListener('click',()=>{ if(educscopeLoginUrl) location.href=educscopeLoginUrl; });
 
     $('authForm').addEventListener('submit', async (e)=>{
       e.preventDefault(); const btn=$('authBtn'); btn.disabled=true; $('authErr').textContent='';
@@ -3999,7 +4006,22 @@
       } else { videoEnded=true; }
     })();
 
+    async function syncEducScopeSession(){
+      try{
+        const r=await fetch('/api/educscope/session',{credentials:'include'});
+        const d=await r.json().catch(()=>({}));
+        educscopeLoginUrl=d.loginUrl||educscopeLoginUrl||'';
+        if(educscopeLoginUrl){
+          $('educscopeAuthBox').style.display='block';
+        }
+        if(r.ok && d.authenticated && d.user) return d.user;
+      }catch{}
+      return null;
+    }
+
     (async function init(){
+      const bridgedUser=await syncEducScopeSession();
+      if(bridgedUser){ enterApp(bridgedUser); window._splashAuthReady?.(); return; }
       try{ const r=await fetch('/api/me'); if(r.ok){ const {user}=await r.json(); enterApp(user); window._splashAuthReady?.(); return; } }catch{}
       showAuth(); window._splashAuthReady?.();
     })();
