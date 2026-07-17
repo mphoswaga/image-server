@@ -316,6 +316,24 @@ const billingOn = () => process.env.BILLING_ENABLED === 'true';
 function orgIdFallback(req) { return String(req.user.email || '').trim().toLowerCase(); }
 function orgId(req) { return req._orgId || orgIdFallback(req); }
 
+function optionalLocalAuth(req, _res, next) {
+  try {
+    const token = req.cookies && req.cookies[COOKIE_NAME];
+    const uid = token && verifyToken(token);
+    const user = uid && getUserById(uid);
+    if (user) {
+      req.userId = uid;
+      req.user = user;
+    }
+  } catch {}
+  next();
+}
+
+function requireCreditsPanelAccess(req, res, next) {
+  if (educscope.configured()) return optionalLocalAuth(req, res, next);
+  return requireAuth(req, res, next);
+}
+
 // A stable idempotency key so a retried request never reserves twice. A client
 // may supply its own Idempotency-Key header (the UI will send a fresh one per
 // click, so a network retry of that click dedupes). Otherwise we derive one:
@@ -426,8 +444,8 @@ async function release(req, reservation, action, reason) {
 // This teacher's balance + history (drives the Credits panel). In remote mode
 // the balance is EducScope's wallet.available (resolved server-side from the
 // shared session); a missing/expired EducScope session returns { needLogin }.
-app.get('/api/credits', requireAuth, async (req, res) => {
-  const admin = req.user.role === 'admin';
+app.get('/api/credits', requireCreditsPanelAccess, async (req, res) => {
+  const admin = req.user && req.user.role === 'admin';
   if (educscope.configured()) {
     try {
       const ident = await educscope.resolveIdentity(req, { fresh: true });
@@ -462,11 +480,11 @@ app.get('/api/credits', requireAuth, async (req, res) => {
 // The credit price table (single source of truth) so the UI can show a cost
 // badge next to each generation button. billingEnabled tells the UI whether
 // those costs actually apply yet.
-app.get('/api/credit-prices', requireAuth, (req, res) => {
+app.get('/api/credit-prices', requireCreditsPanelAccess, (req, res) => {
   res.json({
     ...prices.publicTable(),
     billingEnabled: billingOn(),
-    unlimited: req.user.role === 'admin',
+    unlimited: !!(req.user && req.user.role === 'admin'),
     // Where "top up" sends teachers. EducScope owns purchasing; until its wallet
     // is live this is a placeholder the local Credits page still backs up.
     accountUrl: process.env.EDUCSCOPE_ACCOUNT_URL || '',
