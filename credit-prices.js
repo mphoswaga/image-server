@@ -15,8 +15,8 @@ const PRICES = {
   'lessonscope.import_plan_to_slides': 1,   // import a lesson plan → slides
   'lessonscope.generate_pack_item': 1,      // worksheet / exit ticket / quiz on its own
   'lessonscope.generate_game': 1,           // classroom game only
-  'lessonscope.generate_diagram': 1,        // AI diagram for a slide
-  'lessonscope.generate_ai_image': 2,       // AI image for a slide
+  'lessonscope.generate_diagram': 2,        // AI diagram for a slide
+  'lessonscope.generate_ai_image': 3,       // AI image for a slide
   // lessonscope.regenerate_slide is priced by fair-use (see FREE_REGENS), not here.
 };
 

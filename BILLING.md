@@ -14,7 +14,7 @@
 >   config change, not a code change.
 >
 > Prices (credits): full pack 3 · slide deck 1 · import-plan 1 · pack item 1 ·
-> game 1 · AI diagram 1 · AI image 2. Free: import/parse slides, lesson plan
+> game 1 · AI diagram 2 · AI image 3. Free: import/parse slides, lesson plan
 > (beta), auto-grade, pacing-guide parse. Regenerating a slide is free the first
 > `FREE_REGENS_PER_LESSON` (default 3) times per lesson, then 1 credit.
 > AI images/diagrams also keep the monthly `AI_VISUAL_LIMIT` cap as an abuse
@@ -82,9 +82,9 @@ subunit — USD cents):
 
 ```js
 const PACKS = [
-  { id: 'credits-10',  credits: 10,  amount: 500  },  // $5
-  { id: 'credits-30',  credits: 30,  amount: 1200 },  // $12
-  { id: 'credits-100', credits: 100, amount: 3500 },  // $35
+  { id: 'starter', credits: 80, amount: 900 },       // $9
+  { id: 'teacher', credits: 220, amount: 1900 },     // $19
+  { id: 'power',   credits: 500, amount: 3900 },     // $39
 ];
 ```
 

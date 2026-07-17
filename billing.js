@@ -16,9 +16,9 @@ const crypto = require('crypto');
 // Lemon Squeezy localises the displayed price/currency to each buyer.
 const CURRENCY = (process.env.BILLING_CURRENCY || 'usd').toLowerCase();
 const PACKS = [
-  { id: 'credits-10',  credits: 10,  amount: 500  },  // $5
-  { id: 'credits-30',  credits: 30,  amount: 1200 },  // $12
-  { id: 'credits-100', credits: 100, amount: 3500 },  // $35
+  { id: 'starter', credits: 80, amount: 900 },       // $9
+  { id: 'teacher', credits: 220, amount: 1900 },     // $19
+  { id: 'power',   credits: 500, amount: 3900 },     // $39
 ];
 
 const API = 'https://api.lemonsqueezy.com/v1';

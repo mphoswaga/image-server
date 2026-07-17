@@ -106,8 +106,8 @@ Shared naming across apps. LessonScope's are the single source of truth in
 | `lessonscope.import_plan_to_slides` | 1 |
 | `lessonscope.generate_pack_item` | 1 (worksheet / exit ticket / quiz) |
 | `lessonscope.generate_game` | 1 |
-| `lessonscope.generate_diagram` | 1 |
-| `lessonscope.generate_ai_image` | 2 |
+| `lessonscope.generate_diagram` | 2 |
+| `lessonscope.generate_ai_image` | 3 |
 | `lessonscope.regenerate_slide` | first 3 per lesson free, then 1 / batch |
 
 Free (no charge): import/parse existing slides, lesson plan (beta), auto-grade,

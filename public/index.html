@@ -3090,7 +3090,7 @@
       $('creditsBalanceCard').innerHTML = d.unlimited
         ? `<div><div class="big">∞</div><div class="lbl">Unlimited (admin)</div></div>`
         : `<div><div class="big">${d.balance||0}</div><div class="lbl">credits left</div></div>
-           <div style="font-size:13px;color:var(--muted);max-width:360px">${d.billingEnabled?'Spend credits to generate. A slide deck is 1 credit, a full lesson pack 3, an AI image 2, a diagram 1.'+(remote?' Balance is your shared EducScope wallet.':''):`Billing is off right now — generating is free. You start with ${d.freeCredits} free credits.`}</div>`;
+           <div style="font-size:13px;color:var(--muted);max-width:360px">${d.billingEnabled?'Spend credits to generate. A slide deck is 1 credit, a full lesson pack 3, an AI image 3, a diagram 2.'+(remote?' Balance is your shared EducScope wallet.':''):`Billing is off right now — generating is free. You start with ${d.freeCredits} free credits.`}</div>`;
       // Top-up prompt — EducScope owns the shared wallet.
       $('creditsTopup').innerHTML = (d.billingEnabled && !d.unlimited)
         ? `<div class="topup"><h4>Top up your EducScope wallet</h4><p>Credits are shared across LessonScope and TeacherScope — you buy them once in your EducScope account.</p>${acct?`<a class="btn primary" href="${esc(acct)}" target="_blank" rel="noopener">Go to EducScope to top up</a>`:`<span class="hint">EducScope billing is coming soon — you'll top up from your account there.</span>`}</div>`
