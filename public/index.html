@@ -3161,6 +3161,28 @@
       return combos.sort((x,y)=>x.price-y.price||x.packs.length-y.packs.length||x.credits-y.credits);
     }
     function bestCreditTopup(shortfall){ if(shortfall<=0) return null; const combos=creditPackCombos(); return combos.find(c=>c.credits>=shortfall)||combos[combos.length-1]||null; }
+    function educscopeAccountUrl(mode){
+      const base=(pricesState&&pricesState.accountUrl)||(creditsState&&creditsState.accountUrl)||'https://educscope.com/account';
+      try{
+        const url=new URL(base);
+        if(mode) url.searchParams.set('mode',mode);
+        if(mode) url.searchParams.set('popup','1');
+        return url.toString();
+      }catch{
+        return mode ? `${base}?mode=${encodeURIComponent(mode)}&popup=1` : base;
+      }
+    }
+    function openEducScopeCreditsPopup(mode){
+      const url=educscopeAccountUrl(mode);
+      const popup=window.open(url,'educscope_credits','width=560,height=760,menubar=no,toolbar=no,location=yes,status=no,resizable=yes,scrollbars=yes');
+      if(!popup){ window.location.href=url; return; }
+      toast(mode==='login'?'Complete EducScope sign-in in the popup.':'Open your EducScope wallet in the popup.','ok');
+      const timer=setInterval(()=>{
+        if(!popup.closed) return;
+        clearInterval(timer);
+        refreshCredits().then(renderCredits).catch(()=>{});
+      },1200);
+    }
     function updateCreditEstimator(){
       if(!$('lessonCreditEstimator')) return;
       const val=id=>Math.max(0,Number($(id)?.value||0)||0);
@@ -3184,9 +3206,8 @@
     }
     // Send the teacher to EducScope to sign in (shared account/wallet).
     function goToEducScopeLogin(url){
-      const dest=url||(pricesState&&pricesState.accountUrl?pricesState.accountUrl+'?mode=login':'');
       toast('Please sign in to EducScope to continue.');
-      if(dest) setTimeout(()=>{ window.location.href=dest; }, 900);
+      setTimeout(()=>openEducScopeCreditsPopup('login'), 500);
     }
     // Handle a credit block on any paid response. Returns true if it took over.
     function creditBlocked(r,d){
@@ -3218,7 +3239,7 @@
       // Not signed into EducScope (shared account) → sign-in prompt, nothing else.
       if(d.needLogin){
         $('creditsBalanceCard').innerHTML=`<div style="max-width:420px"><div class="lbl">EducScope account</div><div style="font-size:14px;margin-top:6px">Sign in to your EducScope account to see your credit balance and generate.</div></div>`;
-        $('creditsTopup').innerHTML=`<div class="topup"><h4>Sign in to EducScope</h4><p>Your account, wallet, and credits live in EducScope — shared across LessonScope and TeacherScope.</p><a class="btn primary" href="${esc(d.loginUrl||(acct?acct+'?mode=login':'#'))}">Sign in to EducScope</a></div>`;
+        $('creditsTopup').innerHTML=`<div class="topup"><h4>Sign in to EducScope</h4><p>Your account, wallet, and credits live in EducScope — shared across LessonScope and TeacherScope.</p><button class="btn primary" type="button" data-educscope-credits="login">Sign in to EducScope</button></div>`;
         $('creditsPacks').innerHTML=''; $('creditsHistoryWrap').innerHTML=''; return;
       }
       // EducScope wallet temporarily unreachable.
@@ -3233,14 +3254,10 @@
            <div style="font-size:13px;color:var(--muted);max-width:360px">${d.billingEnabled?'Spend credits to generate. A slide deck is 1 credit, the worksheet + quiz + exit ticket resource pack is 3, an AI image is 3, and a diagram is 2.'+(remote?' Balance is your shared EducScope wallet.':''):`Billing is off right now — generating is free. You start with ${d.freeCredits} free credits.`}</div>`;
       // Top-up prompt — EducScope owns the shared wallet.
       $('creditsTopup').innerHTML = (d.billingEnabled && !d.unlimited)
-        ? `<div class="topup"><h4>Top up your EducScope wallet</h4><p>Credits are shared across LessonScope and TeacherScope — you buy them once in your EducScope account.</p>${acct?`<a class="btn primary" href="${esc(acct)}" target="_blank" rel="noopener">Go to EducScope to top up</a>`:`<span class="hint">EducScope billing is coming soon — you'll top up from your account there.</span>`}</div>`
+        ? `<div class="topup"><h4>Top up your EducScope wallet</h4><p>Credits are shared across LessonScope and TeacherScope — you buy them once in your EducScope account.</p><button class="btn primary" type="button" data-educscope-credits="wallet">Buy credits in EducScope</button></div>`
         : '';
-      // Local Stripe packs (fallback only). EducScope owns purchasing in remote mode.
-      if(remote){ $('creditsPacks').innerHTML=''; }
-      else fetch('/api/billing/packs').then(r=>r.json()).then(p=>{
-        if(!p.configured || d.unlimited){ $('creditsPacks').innerHTML = d.unlimited?'':'<p class="hint">Purchasing isn\'t available yet.</p>'; return; }
-        $('creditsPacks').innerHTML = p.packs.map(pk=>`<div class="credit-pack"><div class="n">${pk.credits} <small>credits</small></div><div class="price">${esc(pk.priceLabel)}</div><button type="button" class="btn primary full buy-pack" data-pack="${pk.id}">Buy</button></div>`).join('');
-      }).catch(()=>{});
+      // EducScope owns all purchasing; LessonScope only displays the shared balance.
+      $('creditsPacks').innerHTML='';
       // History
       const h=d.history||[];
       $('creditsHistoryWrap').innerHTML = h.length
@@ -3260,6 +3277,10 @@
         const d=await r.json(); if(!r.ok) throw new Error(d.error);
         window.location.href=d.url; // Lemon Squeezy hosted checkout (local currency, cards, Google Pay, PayPal)
       }catch(err){ toast(err.message); b.disabled=false; b.textContent='Buy'; }
+    });
+    $('creditsTopup').addEventListener('click', e=>{
+      const b=e.target.closest('[data-educscope-credits]'); if(!b) return;
+      openEducScopeCreditsPopup(b.dataset.educscopeCredits==='login'?'login':'');
     });
     function openCredits(){ hideAllPanels(); $('creditsPanel').style.display='block'; renderCredits(); setActiveNav('creditsBtn'); window.scrollTo({top:0,behavior:'smooth'}); refreshCredits().then(renderCredits); }
     function closeCredits(){ $('creditsPanel').style.display='none'; stepsEl.style.display='flex'; show('composer'); setStep(1); setActiveNav('homeBtn'); }
