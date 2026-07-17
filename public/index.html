@@ -923,7 +923,7 @@
               <div class="app-tile-icon lesson"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg></div>
               <span class="app-tile-name">LessonScope</span>
             </a>
-            <a id="teacherScopeLink" href="https://curriculum-comment-generator-production-801b.up.railway.app" target="_blank" rel="noopener noreferrer" class="app-tile" role="menuitem">
+            <a id="teacherScopeLink" href="https://curriculum-comment-generator-production-801b.up.railway.app" class="app-tile" role="menuitem">
               <div class="app-tile-icon teacher"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg></div>
               <span class="app-tile-name">TeacherScope</span>
             </a>
@@ -3104,7 +3104,7 @@
           ${d.roomCode?`<div style="margin-bottom:14px"><p style="font-size:13px;font-weight:600;margin-bottom:6px">Room Code — show this on the board:</p><div style="font-size:36px;font-weight:900;letter-spacing:6px;color:var(--primary);background:#e8f0fb;display:inline-block;padding:10px 20px;border-radius:10px">${esc(d.roomCode)}</div><p class="hint" style="margin-top:6px">Students go to <b>${esc(joinUrl)}</b> and type this code.</p></div>`:''}
           <div class="game-link"><input id="gameUrl" readonly value="${esc(url)}"><button type="button" class="btn ghost" id="copyGameBtn" style="width:auto;padding:10px 14px">${ICON('i-doc')} Copy link</button></div>
           <p class="hint" style="margin:10px 0 2px">${d.questionCount} questions · ${rosterId?'roster attached':'no roster — free-form names'}.</p>
-          ${d.roomCode&&rosterId?`<a href="/api/game/${esc(d.gameId)}/qr-sheet" target="_blank" style="font-size:13px;font-weight:600;color:var(--primary);display:inline-flex;align-items:center;gap:4px;margin-bottom:8px">${ICON('i-image')} Print QR cards</a>`:''}
+          ${d.roomCode&&rosterId?`<a href="/api/game/${esc(d.gameId)}/qr-sheet" style="font-size:13px;font-weight:600;color:var(--primary);display:inline-flex;align-items:center;gap:4px;margin-bottom:8px">${ICON('i-image')} Print QR cards</a>`:''}
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px"><b style="font-size:14px;color:var(--primary)">Results</b><button type="button" id="refreshResBtn" style="font-size:12.5px;font-weight:600;padding:6px 11px;border:1px solid var(--border);border-radius:9px;background:#fff;color:var(--primary);cursor:pointer;display:inline-flex;align-items:center;gap:6px">${ICON('i-refresh')} Refresh</button></div>
           <div id="gameResults"></div>`;
         $('copyGameBtn').addEventListener('click',()=>copyLink(url));
@@ -3454,7 +3454,7 @@
           </div>
           <div class="gc-body">
             <div class="game-link"><input readonly value="${esc(url)}"><button type="button" class="btn ghost gcopy" data-url="${esc(url)}" style="width:auto;padding:9px 13px">${ICON('i-doc')} Copy</button></div>
-            ${g.rosterId?`<a href="/api/game/${esc(g.id)}/qr-sheet" target="_blank" style="font-size:12.5px;font-weight:600;color:var(--primary);display:inline-flex;align-items:center;gap:4px;margin-top:8px">${ICON('i-image')} Print QR cards</a>`:''}
+            ${g.rosterId?`<a href="/api/game/${esc(g.id)}/qr-sheet" style="font-size:12.5px;font-weight:600;color:var(--primary);display:inline-flex;align-items:center;gap:4px;margin-top:8px">${ICON('i-image')} Print QR cards</a>`:''}
             <div class="gc-actions" style="margin-top:10px">
               <button type="button" class="btn ghost gc-extend-btn" data-id="${esc(g.id)}" data-row="${extRowId}" style="font-size:12px;padding:6px 12px;width:auto">Extend deadline</button>
             </div>
