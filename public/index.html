@@ -3198,10 +3198,13 @@
       try{
         const url=new URL(base);
         if(mode) url.searchParams.set('mode',mode);
-        if(mode) url.searchParams.set('popup','1');
+        // Always ask for the slim popup view (auth forms or wallet + packs only).
+        url.searchParams.set('popup','1');
+        url.searchParams.set('returnOrigin',window.location.origin);
         return url.toString();
       }catch{
-        return mode ? `${base}?mode=${encodeURIComponent(mode)}&popup=1` : base;
+        const qs=`popup=1&returnOrigin=${encodeURIComponent(window.location.origin)}`;
+        return mode ? `${base}?mode=${encodeURIComponent(mode)}&${qs}` : `${base}?${qs}`;
       }
     }
     function openEducScopeCreditsPopup(mode){
