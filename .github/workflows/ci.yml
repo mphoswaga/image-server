@@ -18,6 +18,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      # No install needed — node --check and the HTML guard only parse source.
+      # No install needed — node --check, the HTML guard, and the wallet tests
+      # only use Node built-ins + local files (no node_modules, network, or DB).
       - name: Syntax-check server files and inline front-end scripts
         run: npm run check
+      - name: Wallet money-path tests (reserve/capture/release, idempotency)
+        run: npm test
