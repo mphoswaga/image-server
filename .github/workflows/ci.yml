@@ -1,0 +1,23 @@
+name: CI
+
+# Runs on every push and PR to main. Syntax-checks the server JS and every
+# inline front-end <script>, so a stray token that would freeze the page (the
+# whole app is in one big inline script) fails here before it can ship.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    name: Syntax check (server + inline HTML scripts)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # No install needed — node --check and the HTML guard only parse source.
+      - name: Syntax-check server files and inline front-end scripts
+        run: npm run check
