@@ -538,6 +538,10 @@ app.get('/api/credits', requireCreditsPanelAccess, async (req, res) => {
       if (ident.unauthenticated) return res.json({ needLogin: true, loginUrl: ident.loginUrl, billingEnabled: billingOn(), source: 'educscope' });
       return res.json({
         balance: admin ? null : ident.available,
+        wallet: admin ? null : ident.wallet,
+        subscription: admin ? null : ident.wallet?.subscription || null,
+        included: admin ? null : ident.wallet?.included || null,
+        purchased: admin ? null : ident.wallet?.purchased || null,
         unlimited: admin,
         billingEnabled: billingOn(),
         source: 'educscope',

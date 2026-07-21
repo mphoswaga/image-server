@@ -59,6 +59,7 @@ function extractProfile(d = {}) {
     email,
     name: name || email.split('@')[0],
     available: (d.wallet && typeof d.wallet.available === 'number') ? d.wallet.available : null,
+    wallet: d.wallet && typeof d.wallet === 'object' ? d.wallet : null,
   };
 }
 
@@ -114,6 +115,7 @@ async function resolveIdentity(req, { fresh = false } = {}) {
     organizationId: profile.organizationId,
     userId: profile.userId,
     available: profile.available,
+    wallet: profile.wallet,
   };
   _cache.set(key, { at: Date.now(), identity });
   return identity;

@@ -905,7 +905,7 @@
       <button id="gamesBtn" class="nav-link"><svg class="ic" aria-hidden="true"><use href="#i-gamepad"/></svg> My games</button>
       <button id="assignmentsBtn" class="nav-link"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg> My assignments</button>
       <button id="marksBtn" class="nav-link"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> Marks</button>
-      <button id="creditsBtn" class="nav-link" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Credits <span id="creditsNavBadge" class="credits-badge" style="display:none"></span></button>
+      <button id="creditsBtn" class="nav-link" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> <span id="creditsNavLabel">Usage</span> <span id="creditsNavBadge" class="credits-badge" style="display:none"></span></button>
       <button id="adminBtn" class="nav-link" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-sliders"/></svg> Admin</button>
       <span class="nav-sep" style="margin:0 4px"></span>
       <button id="guideBtnNav" class="nav-link" style="color:var(--accent);font-weight:700" title="Quick start guide"><svg class="ic" aria-hidden="true"><use href="#i-compass"/></svg> Guide</button>
@@ -1415,28 +1415,28 @@
         <button class="back-btn" id="creditsBackTop"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back</button>
         <div class="phd-icon" style="background:var(--accent-soft);color:var(--accent)"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg></div>
         <div>
-          <h2>Credits</h2>
-          <p class="page-sub">One balance, shared across LessonScope and TeacherScope. Spend a credit to generate a lesson or a set of comments.</p>
+          <h2>Plan &amp; usage</h2>
+          <p class="page-sub">Your EducScope plan and monthly AI usage are shared across LessonScope and TeacherScope.</p>
         </div>
       </div>
       <div id="creditsBalanceCard" class="credits-balance"></div>
       <div id="creditsTopup" style="margin:0 0 18px"></div>
       <div id="lessonCreditEstimator" class="credit-estimator">
         <div>
-          <h4>Estimate your monthly credits</h4>
-          <p>Use your teaching rhythm to decide how much to top up in EducScope.</p>
+          <h4>Find your monthly plan</h4>
+          <p>Use your teaching rhythm to find the smallest EducScope plan that fits.</p>
         </div>
         <div class="credit-estimator-grid">
           <label><span>Lessons per week</span><input id="lsEstLessons" type="number" min="0" max="80" value="17"></label>
-          <label><span>Per lesson</span><select id="lsEstType"><option value="3">Resource pack - 3 credits</option><option value="1">Slides only - 1 credit</option><option value="4">Slides + resource pack - 4 credits</option><option value="5">Slides + resource pack + game - 5 credits</option></select></label>
+          <label><span>Per lesson</span><select id="lsEstType"><option value="3">Resource pack - 3 units</option><option value="1">Slides only - 1 unit</option><option value="4">Slides + resource pack - 4 units</option><option value="5">Slides + resource pack + game - 5 units</option></select></label>
           <label><span>Comment batches per month</span><input id="lsEstBatches" type="number" min="0" max="80" value="0"></label>
           <label><span>Average students</span><input id="lsEstStudents" type="number" min="0" max="120" value="30"></label>
           <label><span>AI images per month</span><input id="lsEstImages" type="number" min="0" max="200" value="0"></label>
           <label><span>AI diagrams per month</span><input id="lsEstDiagrams" type="number" min="0" max="200" value="0"></label>
         </div>
         <div class="credit-estimator-result">
-          <div><strong id="lsEstTotal">0 credits</strong><span id="lsEstBreakdown">Estimate appears here.</span></div>
-          <div><strong id="lsEstPack">Teacher pack</strong><span id="lsEstPackReason">Suggested top-up appears here.</span></div>
+          <div><strong id="lsEstTotal">Calculating...</strong><span id="lsEstBreakdown">Estimate appears here.</span></div>
+          <div><strong id="lsEstPack">Teacher — $19/month</strong><span id="lsEstPackReason">Suggested plan appears here.</span></div>
         </div>
       </div>
       <div id="creditsPacks" class="credits-packs"></div>
@@ -2091,7 +2091,7 @@
         const ex=s.example?`<div class="example"><div class="box"><b>${ICON('i-spark')}Example</b><span contenteditable data-field="example">${esc(s.example)}</span></div></div>`:'';
         // Example/task slides can get an accurate AI-generated illustration.
         const aiBtn=(s.type==='content'||s.type==='activity')?`<button data-action="ai" data-i="${i}" title="Generate an accurate AI illustration — ${costWords('lessonscope.generate_ai_image')}">${AI_HTML}${costPill('lessonscope.generate_ai_image')}</button>`:'';
-        const regenBtn=s.type==='content'?`<button data-action="regen" data-i="${i}" title="${billingLive()?`First ${pricesState.fairUse.freeRegensPerLesson} regenerations per lesson are free, then 1 credit`:'Regenerate this slide'}">${REGEN_HTML}</button>`:'';
+        const regenBtn=s.type==='content'?`<button data-action="regen" data-i="${i}" title="${billingLive()?`First ${pricesState.fairUse.freeRegensPerLesson} regenerations per lesson are free, then 1 usage unit`:'Regenerate this slide'}">${REGEN_HTML}</button>`:'';
         // a photo content slide can be turned into a labelled diagram
         const diaBtn=(s.type==='content'&&!s.fraction&&!s.visual&&!s.labelled)?`<button data-action="diagram" data-i="${i}" title="Turn this into a labelled diagram — ${costWords('lessonscope.generate_diagram')}">${DIA_HTML}${costPill('lessonscope.generate_diagram')}</button>`:'';
         const actions=(aiBtn||regenBtn||diaBtn)?`<div class="card-actions">${regenBtn}${diaBtn}${aiBtn}</div>`:'';
@@ -2153,7 +2153,7 @@
           if(creditBlocked(r,d)){ b.disabled=false; b.innerHTML=REGEN_HTML; return; }
           if(!r.ok) throw new Error(d.error);
           // Fair-use feedback: free until the allowance runs out, then 1 credit.
-          if(billingLive()){ if(d.charged>0){ toast('Used 1 credit for this regeneration.'); refreshCredits(); } else { const left=Math.max(0,(d.freeRegens||0)-(d.regensUsed||0)); toast(left>0?`${left} free regeneration${left>1?'s':''} left for this lesson.`:'That was your last free regeneration — the next costs 1 credit.'); } }
+          if(billingLive()){ if(d.charged>0){ toast('Used 1 monthly usage unit for this regeneration.'); refreshCredits(); } else { const left=Math.max(0,(d.freeRegens||0)-(d.regensUsed||0)); toast(left>0?`${left} free regeneration${left>1?'s':''} left for this lesson.`:'That was your last free regeneration — the next uses 1 monthly unit.'); } }
           card.outerHTML=cardHTML(d.slide,i);
         }catch(err){ toast(err.message); b.disabled=false; b.innerHTML=REGEN_HTML; }
       }
@@ -3165,10 +3165,10 @@
 
     // ── Credits (shared wallet) ──────────────────────────────────────────────
     let creditsState=null, pricesState=null;
-    const CREDIT_PACKS=[
-      {name:'Starter',credits:80,price:9},
-      {name:'Teacher',credits:220,price:19},
-      {name:'Power Teacher',credits:500,price:39}
+    const SUBSCRIPTION_PLANS=[
+      {name:'Teacher',credits:250,price:19},
+      {name:'Teacher Plus',credits:400,price:29},
+      {name:'Power Teacher',credits:500,price:35}
     ];
     // The credit price table (single source of truth from the server) drives
     // every cost badge, so the UI can never disagree with what's charged.
@@ -3178,21 +3178,10 @@
     function billingLive(){ return !!(pricesState && pricesState.billingEnabled && !pricesState.unlimited); }
     // A cost pill for a paid button — empty when the action is free, billing is
     // off, or the user is an admin (so we never show "0 credits" everywhere).
-    function costPill(action){ if(!billingLive()) return ''; const n=priceOf(action); if(!n) return ''; return `<span class="cost-pill" title="Uses ${n} credit${n>1?'s':''}">${n} cr</span>`; }
-    function costWords(action){ const n=priceOf(action); return n?`${n} credit${n>1?'s':''}`:'Free'; }
+    function costPill(action){ if(!billingLive()) return ''; const n=priceOf(action); if(!n) return ''; return `<span class="cost-pill" title="Uses ${n} monthly usage unit${n>1?'s':''}">${n} u</span>`; }
+    function costWords(action){ const n=priceOf(action); return n?`${n} usage unit${n>1?'s':''}`:'Free'; }
     function creditStudentBatchCost(count){ const n=Number(count)||0; if(n<=0) return 0; if(n<=30) return 10; if(n<=60) return 18; return 18+Math.ceil((n-60)/30)*8; }
-    function creditPackCombos(){
-      const combos=[];
-      for(let a=0;a<CREDIT_PACKS.length;a++){
-        combos.push({packs:[CREDIT_PACKS[a]],credits:CREDIT_PACKS[a].credits,price:CREDIT_PACKS[a].price});
-        for(let b=a;b<CREDIT_PACKS.length;b++){
-        const packs=[CREDIT_PACKS[a],CREDIT_PACKS[b]];
-        combos.push({packs,credits:packs.reduce((s,p)=>s+p.credits,0),price:packs.reduce((s,p)=>s+p.price,0)});
-        }
-      }
-      return combos.sort((x,y)=>x.price-y.price||x.packs.length-y.packs.length||x.credits-y.credits);
-    }
-    function bestCreditTopup(shortfall){ if(shortfall<=0) return null; const combos=creditPackCombos(); return combos.find(c=>c.credits>=shortfall)||combos[combos.length-1]||null; }
+    function bestSubscriptionPlan(total){ return SUBSCRIPTION_PLANS.find(p=>p.credits>=total)||SUBSCRIPTION_PLANS[SUBSCRIPTION_PLANS.length-1]||null; }
     function educscopeAccountUrl(mode){
       const base=(pricesState&&pricesState.accountUrl)||(creditsState&&creditsState.accountUrl)||'https://educscope.com/account';
       try{
@@ -3226,17 +3215,16 @@
       const teacherCredits=val('lsEstBatches')*creditStudentBatchCost(val('lsEstStudents'));
       const visualCredits=val('lsEstImages')*3+val('lsEstDiagrams')*2;
       const total=lessonCredits+teacherCredits+visualCredits;
-      const balance=Math.max(0,Number((creditsState&&creditsState.balance)||0)||0);
-      const shortfall=Math.max(0,total-balance);
-      const topup=bestCreditTopup(shortfall);
-      $('lsEstTotal').textContent=`${total} credit${total===1?'':'s'}`;
-      $('lsEstBreakdown').textContent=`${lessons} lessons = ${lessonCredits}. TeacherScope comments = ${teacherCredits}. Visual extras = ${visualCredits}.`;
-      if(!topup){
-        $('lsEstPack').textContent=balance?'Current balance covers this':'No top-up needed';
-        $('lsEstPackReason').textContent=balance?`Your ${balance} available credits cover this estimate.`:'This estimate is 0 credits.';
+      const plan=bestSubscriptionPlan(total);
+      $('lsEstTotal').textContent=total?`${total} monthly usage units`:'No paid AI usage yet';
+      $('lsEstBreakdown').textContent=`${lessons} lessons use about ${lessonCredits}. TeacherScope comments use about ${teacherCredits}. Visual extras use about ${visualCredits}.`;
+      if(!plan){
+        $('lsEstPack').textContent='No plan selected';
+        $('lsEstPackReason').textContent='Add a workload above to receive a recommendation.';
       } else {
-        $('lsEstPack').textContent=`${topup.packs.map(p=>p.name).join(' + ')} - ${topup.credits} credits`;
-        $('lsEstPackReason').textContent=`About $${topup.price} covers ${shortfall} more credits${topup.credits>shortfall?`, leaving ${topup.credits-shortfall} spare`:''}.`;
+        const over=Math.max(0,total-plan.credits);
+        $('lsEstPack').textContent=`${plan.name} — $${plan.price}/month`;
+        $('lsEstPackReason').textContent=over?`Your estimate is about ${over} units above this plan, so occasional extra usage may be needed.`:`Its monthly allowance covers this estimate with about ${plan.credits-total} units of room.`;
       }
     }
     // Send the teacher to EducScope to sign in (shared account/wallet).
@@ -3259,9 +3247,14 @@
       const c=creditsState||{};
       const show=c.billingEnabled || c.purchasable || c.source==='educscope';
       $('creditsBtn').style.display = show ? 'inline-flex' : 'none';
+      const navLabel=$('creditsNavLabel');
       const badge=$('creditsNavBadge');
-      // Show a numeric balance badge only when we actually have a number.
-      if(show && !c.unlimited && typeof c.balance==='number'){ badge.textContent=c.balance; badge.style.display='inline-flex'; }
+      const subscription=c.subscription;
+      if(navLabel) navLabel.textContent=subscription&&subscription.hasAccess?subscription.planName:'Usage';
+      // Active subscribers see remaining included usage; trial/pay-as-you-go
+      // teachers see their shared wallet balance.
+      if(show && !c.unlimited && subscription&&subscription.hasAccess){ badge.textContent=subscription.remaining; badge.style.display='inline-flex'; }
+      else if(show && !c.unlimited && typeof c.balance==='number'){ badge.textContent=c.balance; badge.style.display='inline-flex'; }
       else badge.style.display='none';
       // Keep the primary deck-creation buttons' cost pills current.
       setBtnCost($('acceptBtn'),'lessonscope.generate_slide_deck');
@@ -3273,8 +3266,8 @@
       const acct=(pricesState&&pricesState.accountUrl)||d.accountUrl||'';
       // Not signed into EducScope (shared account) → sign-in prompt, nothing else.
       if(d.needLogin){
-        $('creditsBalanceCard').innerHTML=`<div style="max-width:420px"><div class="lbl">EducScope account</div><div style="font-size:14px;margin-top:6px">Sign in to your EducScope account to see your credit balance and generate.</div></div>`;
-        $('creditsTopup').innerHTML=`<div class="topup"><h4>Sign in to EducScope</h4><p>Your account, wallet, and credits live in EducScope — shared across LessonScope and TeacherScope.</p><button class="btn primary" type="button" data-educscope-credits="login">Sign in to EducScope</button></div>`;
+        $('creditsBalanceCard').innerHTML=`<div style="max-width:420px"><div class="lbl">EducScope account</div><div style="font-size:14px;margin-top:6px">Sign in to see your plan and shared monthly usage.</div></div>`;
+        $('creditsTopup').innerHTML=`<div class="topup"><h4>Sign in to EducScope</h4><p>One account manages your plan and usage across LessonScope and TeacherScope.</p><button class="btn primary" type="button" data-educscope-credits="login">Sign in to EducScope</button></div>`;
         $('creditsPacks').innerHTML=''; $('creditsHistoryWrap').innerHTML=''; return;
       }
       // EducScope wallet temporarily unreachable.
@@ -3283,13 +3276,17 @@
         $('creditsTopup').innerHTML=''; $('creditsPacks').innerHTML=''; $('creditsHistoryWrap').innerHTML=''; return;
       }
       const remote = d.source==='educscope';
+      const subscription=d.subscription;
       $('creditsBalanceCard').innerHTML = d.unlimited
         ? `<div><div class="big">∞</div><div class="lbl">Unlimited (admin)</div></div>`
-        : `<div><div class="big">${d.balance||0}</div><div class="lbl">credits left</div></div>
-           <div style="font-size:13px;color:var(--muted);max-width:360px">${d.billingEnabled?'Spend credits to generate. A slide deck is 1 credit, the worksheet + quiz + exit ticket resource pack is 3, an AI image is 3, and a diagram is 2.'+(remote?' Balance is your shared EducScope wallet.':''):`Billing is off right now — generating is free. You start with ${d.freeCredits} free credits.`}</div>`;
-      // Top-up prompt — EducScope owns the shared wallet.
+        : subscription&&subscription.hasAccess
+          ? `<div><div class="big">${Math.max(0,100-(subscription.percentUsed||0))}%</div><div class="lbl">monthly usage remaining</div></div>
+             <div style="font-size:13px;color:var(--muted);max-width:400px"><b>${esc(subscription.planName)} plan</b><br>${subscription.remaining} of ${subscription.monthlyAllowance} included units remain${subscription.periodEndsAt?` until ${new Date(subscription.periodEndsAt).toLocaleDateString()}`:''}. Extra usage: ${d.purchased?.available||0}.</div>`
+          : `<div><div class="big">${d.balance||0}</div><div class="lbl">usage units available</div></div>
+             <div style="font-size:13px;color:var(--muted);max-width:360px">${d.billingEnabled?'Choose a monthly plan in EducScope, or use available trial and extra usage.'+(remote?' This balance is shared across both apps.':''):`Billing is off right now — generating is free. You start with ${d.freeCredits} trial units.`}</div>`;
+      // EducScope owns subscriptions and extra usage.
       $('creditsTopup').innerHTML = (d.billingEnabled && !d.unlimited)
-        ? `<div class="topup"><h4>Top up your EducScope wallet</h4><p>Credits are shared across LessonScope and TeacherScope — you buy them once in your EducScope account.</p><button class="btn primary" type="button" data-educscope-credits="wallet">Buy credits in EducScope</button></div>`
+        ? `<div class="topup"><h4>${subscription&&subscription.hasAccess?'Manage your plan':'Choose an EducScope plan'}</h4><p>Subscriptions include every tool. One-time extra usage remains available when you need it.</p><button class="btn primary" type="button" data-educscope-credits="wallet">Open plan &amp; usage</button></div>`
         : '';
       // EducScope owns all purchasing; LessonScope only displays the shared balance.
       $('creditsPacks').innerHTML='';
@@ -3324,7 +3321,7 @@
     // `info` (from the 402 body) carries the needed cost + current balance.
     function outOfCredits(info){
       const cost=info&&info.cost;
-      toast(`You're out of credits${cost?` — this needs ${cost} credit${cost>1?'s':''}`:''}. Top up to keep generating.`);
+      toast(`Your included usage is finished${cost?` — this action needs ${cost} unit${cost>1?'s':''}`:''}. Upgrade or add extra usage to keep generating.`);
       openCredits();
     }
     // Handle the return from the payment page — verify the transaction, then
@@ -3335,7 +3332,7 @@
       const ref=q.get('reference')||q.get('trxref');
       history.replaceState(null,'',location.pathname);
       if(b==='return'){
-        toast('Payment complete — your credits will appear in a moment.','ok');
+        toast('Payment complete — your extra usage will appear in a moment.','ok');
         refreshCredits(); setTimeout(refreshCredits, 3000); // catch the async webhook credit
         if(ref){ fetch('/api/billing/verify?reference='+encodeURIComponent(ref)).then(r=>r.json()).then(()=>refreshCredits()).catch(()=>{}); }
       } else if(b==='cancel'){ toast('Checkout cancelled.'); }
