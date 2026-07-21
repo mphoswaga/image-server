@@ -3251,9 +3251,9 @@
       const badge=$('creditsNavBadge');
       const subscription=c.subscription;
       if(navLabel) navLabel.textContent=subscription&&subscription.hasAccess?subscription.planName:'Usage';
-      // Active subscribers see remaining included usage; trial/pay-as-you-go
-      // teachers see their shared wallet balance.
-      if(show && !c.unlimited && subscription&&subscription.hasAccess){ badge.textContent=subscription.remaining; badge.style.display='inline-flex'; }
+      // Always show the complete shared balance. For subscribers this combines
+      // monthly subscription credits with any purchased extra credits.
+      if(show && !c.unlimited && typeof c.available==='number'){ badge.textContent=c.available; badge.style.display='inline-flex'; }
       else if(show && !c.unlimited && typeof c.balance==='number'){ badge.textContent=c.balance; badge.style.display='inline-flex'; }
       else badge.style.display='none';
       // Keep the primary deck-creation buttons' cost pills current.
@@ -3266,7 +3266,7 @@
       const acct=(pricesState&&pricesState.accountUrl)||d.accountUrl||'';
       // Not signed into EducScope (shared account) → sign-in prompt, nothing else.
       if(d.needLogin){
-        $('creditsBalanceCard').innerHTML=`<div style="max-width:420px"><div class="lbl">EducScope account</div><div style="font-size:14px;margin-top:6px">Sign in to see your plan and shared monthly usage.</div></div>`;
+        $('creditsBalanceCard').innerHTML=`<div style="max-width:420px"><div class="lbl">EducScope account</div><div style="font-size:14px;margin-top:6px">Sign in to see your subscription and shared credit balance.</div></div>`;
         $('creditsTopup').innerHTML=`<div class="topup"><h4>Sign in to EducScope</h4><p>One account manages your plan and usage across LessonScope and TeacherScope.</p><button class="btn primary" type="button" data-educscope-credits="login">Sign in to EducScope</button></div>`;
         $('creditsPacks').innerHTML=''; $('creditsHistoryWrap').innerHTML=''; return;
       }
@@ -3280,9 +3280,9 @@
       $('creditsBalanceCard').innerHTML = d.unlimited
         ? `<div><div class="big">∞</div><div class="lbl">Unlimited (admin)</div></div>`
         : subscription&&subscription.hasAccess
-          ? `<div><div class="big">${Math.max(0,100-(subscription.percentUsed||0))}%</div><div class="lbl">monthly usage remaining</div></div>
-             <div style="font-size:13px;color:var(--muted);max-width:400px"><b>${esc(subscription.planName)} plan</b><br>${subscription.remaining} of ${subscription.monthlyAllowance} included units remain${subscription.periodEndsAt?` until ${new Date(subscription.periodEndsAt).toLocaleDateString()}`:''}. Extra usage: ${d.purchased?.available||0}.</div>`
-          : `<div><div class="big">${d.balance||0}</div><div class="lbl">usage units available</div></div>
+          ? `<div><div class="big">${d.available||0}</div><div class="lbl">credits available</div></div>
+             <div style="font-size:13px;color:var(--muted);max-width:400px"><b>${esc(subscription.planName)} subscription</b><br>${subscription.remaining} of ${subscription.monthlyAllowance} subscription credits remain${subscription.periodEndsAt?` until ${new Date(subscription.periodEndsAt).toLocaleDateString()}`:''}. Extra credits: ${d.purchased?.available||0}.</div>`
+          : `<div><div class="big">${d.available??d.balance??0}</div><div class="lbl">credits available</div></div>
              <div style="font-size:13px;color:var(--muted);max-width:360px">${d.billingEnabled?'Choose a monthly plan in EducScope, or use available trial and extra usage.'+(remote?' This balance is shared across both apps.':''):`Billing is off right now — generating is free. You start with ${d.freeCredits} trial units.`}</div>`;
       // EducScope owns subscriptions and extra usage.
       $('creditsTopup').innerHTML = (d.billingEnabled && !d.unlimited)
