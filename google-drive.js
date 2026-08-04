@@ -7,8 +7,9 @@ const TOKEN_PATH = path.join(DATA_DIR, 'google-drive-tokens.json');
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
-const UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink';
+const UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,webViewLink,webContentLink';
 const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+const GOOGLE_SLIDES_MIME = 'application/vnd.google-apps.presentation';
 
 function configured() {
   return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
@@ -120,26 +121,28 @@ async function refreshAccessToken(userId) {
   return data.access_token;
 }
 
-function multipartBody(metadata, buffer) {
+function multipartBody(metadata, buffer, mediaMime = PPTX_MIME) {
   const boundary = `ls_drive_${crypto.randomBytes(12).toString('hex')}`;
   const head = Buffer.from(
     `--${boundary}\r\n` +
     'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
     `${JSON.stringify(metadata)}\r\n` +
     `--${boundary}\r\n` +
-    `Content-Type: ${PPTX_MIME}\r\n\r\n`,
+    `Content-Type: ${mediaMime}\r\n\r\n`,
     'utf8'
   );
   const tail = Buffer.from(`\r\n--${boundary}--\r\n`, 'utf8');
   return { boundary, body: Buffer.concat([head, Buffer.from(buffer), tail]) };
 }
 
-async function uploadPptx(userId, { filename, buffer }) {
+async function uploadPptx(userId, { filename, buffer, convertToSlides = false }) {
   if (!configured()) throw new Error('Google Drive export is not configured yet.');
   const accessToken = await refreshAccessToken(userId);
   const cleanName = String(filename || 'LessonScope deck.pptx').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 160);
-  const metadata = { name: cleanName.endsWith('.pptx') ? cleanName : `${cleanName}.pptx`, mimeType: PPTX_MIME };
-  const { boundary, body } = multipartBody(metadata, buffer);
+  const metadata = convertToSlides
+    ? { name: cleanName.replace(/\.pptx$/i, ''), mimeType: GOOGLE_SLIDES_MIME }
+    : { name: cleanName.endsWith('.pptx') ? cleanName : `${cleanName}.pptx`, mimeType: PPTX_MIME };
+  const { boundary, body } = multipartBody(metadata, buffer, PPTX_MIME);
   const res = await fetch(UPLOAD_URL, {
     method: 'POST',
     headers: {
@@ -158,6 +161,7 @@ async function uploadPptx(userId, { filename, buffer }) {
 module.exports = {
   DRIVE_SCOPE,
   PPTX_MIME,
+  GOOGLE_SLIDES_MIME,
   configured,
   connected,
   randomState,

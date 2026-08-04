@@ -2134,6 +2134,7 @@
         <div class="result-actions">
           <button id="downloadBtn" class="btn accent"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Download .pptx</button>
           <button id="driveExportBtn" class="btn ghost"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg> Save to Google Drive</button>
+          <button id="slidesExportBtn" class="btn ghost"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Save to Google Slides</button>
           <button id="restartBtn" class="btn ghost">Start over</button>
         </div>
       </div>
@@ -3144,28 +3145,32 @@
         const blob=await r.blob(), url=URL.createObjectURL(blob), a=document.createElement('a'); a.href=url; a.download=$('deckTitle').textContent+'.pptx'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
       }catch(err){ toast(err.message); } dl.disabled=false; dl.innerHTML=orig;
     });
-    $('driveExportBtn').addEventListener('click', async ()=>{
+    async function exportToGoogle(target){
       if(!currentDeckId) return;
-      const btn=$('driveExportBtn'), orig=btn.innerHTML;
+      const isSlides=target==='slides';
+      const btn=$(isSlides?'slidesExportBtn':'driveExportBtn'), orig=btn.innerHTML;
       btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Saving…';
       try{
         $('driveExportStatus').style.display='none';
-        const r=await fetch(`/api/google-drive/export/${currentDeckId}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({edits:collectEdits()})});
-        const d=await r.json().catch(()=>({error:'Google Drive export failed'}));
+        const endpoint=isSlides?'/api/google-slides/export/':'/api/google-drive/export/';
+        const r=await fetch(`${endpoint}${currentDeckId}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({edits:collectEdits()})});
+        const d=await r.json().catch(()=>({error:isSlides?'Google Slides export failed':'Google Drive export failed'}));
         if(r.status===409 && d.needsConnection && d.connectUrl){
           toast('Connect Google Drive once, then export again.','ok');
           window.location.href=d.connectUrl;
           return;
         }
-        if(!r.ok) throw new Error(d.error||'Google Drive export failed.');
+        if(!r.ok) throw new Error(d.error||(isSlides?'Google Slides export failed.':'Google Drive export failed.'));
         const link=d.file&&d.file.webViewLink;
         const status=$('driveExportStatus');
         status.style.display='block';
-        status.innerHTML=`${ICON('i-check')} Saved to Google Drive${link?` · <a href="${esc(link)}" target="_blank" rel="noopener">Open file</a>`:''}`;
-        toast('Saved to Google Drive.','ok');
+        status.innerHTML=`${ICON('i-check')} Saved to ${isSlides?'Google Slides':'Google Drive'}${link?` · <a href="${esc(link)}" target="_blank" rel="noopener">Open file</a>`:''}`;
+        toast(`Saved to ${isSlides?'Google Slides':'Google Drive'}.`,'ok');
       }catch(err){ toast(err.message); btn.disabled=false; btn.innerHTML=orig; return; }
       btn.disabled=false; btn.innerHTML=orig;
-    });
+    }
+    $('driveExportBtn').addEventListener('click',()=>exportToGoogle('drive'));
+    $('slidesExportBtn').addEventListener('click',()=>exportToGoogle('slides'));
     // ---- AI-visual budget (monthly cap) ----
     let aiQuota=null;
     async function loadQuota(){ try{ aiQuota=await (await fetch('/api/quota')).json(); }catch{ aiQuota=null; } renderQuotaPill(); updateAiButtons(); }

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { multipartBody, PPTX_MIME, configured, buildAuthUrl } = require('../google-drive');
+const { multipartBody, PPTX_MIME, GOOGLE_SLIDES_MIME, configured, buildAuthUrl } = require('../google-drive');
 
 test('Google Drive config is off unless both OAuth credentials are present', () => {
   const oldId = process.env.GOOGLE_CLIENT_ID;
@@ -50,4 +50,11 @@ test('multipart upload body contains metadata and pptx bytes', () => {
   assert.match(text, new RegExp(`Content-Type: ${PPTX_MIME.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
   assert.match(text, /pptx-binary/);
   assert.match(text, new RegExp(`--${boundary}--`));
+});
+
+test('multipart body can request Google Slides conversion while uploading pptx bytes', () => {
+  const { body } = multipartBody({ name: 'Lesson', mimeType: GOOGLE_SLIDES_MIME }, Buffer.from('pptx-binary'), PPTX_MIME);
+  const text = body.toString('utf8');
+  assert.match(text, new RegExp(`"mimeType":"${GOOGLE_SLIDES_MIME.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));
+  assert.match(text, new RegExp(`Content-Type: ${PPTX_MIME.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
 });

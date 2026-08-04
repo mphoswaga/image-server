@@ -23,6 +23,10 @@ const { getPreset } = require('./slide-presets');
 //   1. a fraction → pizza diagram (maths)
 //   2. an LLM-chosen steps/cycle process → step-flow diagram (any subject)
 function placeVisual(pptx, slide, slideData, imgPath, accent, rect) {
+  if (imgPath && typeof imgPath === 'object' && imgPath.data) {
+    slide.addImage({ ...imgPath, x: rect.x, y: rect.y, w: rect.w, h: rect.h, sizing: { type: 'cover', w: rect.w, h: rect.h } });
+    return false;
+  }
   const frac = parseFraction(slideData.example) || parseFraction(slideData.title) || parseFraction(slideData.imageQuery);
   if (frac) {
     const size = Math.min(rect.w, rect.h - 0.6);
@@ -40,9 +44,8 @@ function placeVisual(pptx, slide, slideData, imgPath, accent, rect) {
 
 function addYoutubeMedia(pptx, slide, video, thm) {
   if (!video || !video.url) return;
-  // Keynote removes PowerPoint online-media objects, so export the approved
-  // video as a normal clickable link. That keeps decks portable while still
-  // letting teachers open the reviewed YouTube video from the slide.
+  // The card always has a thumbnail + link. Supported PowerPoint versions also
+  // get an online-media object so the video can play from inside the deck.
   const title = String(video.title || 'YouTube lesson video').trim().slice(0, 74);
   const channel = String(video.channelTitle || 'YouTube').trim().slice(0, 36);
   const x = 0.58, y = 4.74, w = 8.84, h = 0.68;
@@ -54,6 +57,9 @@ function addYoutubeMedia(pptx, slide, video, thm) {
   });
   if (video.thumbnailData) {
     slide.addImage({ data: video.thumbnailData, x: x + 0.14, y: y + 0.12, w: 0.82, h: 0.44, sizing: { type: 'cover', w: 0.82, h: 0.44 } });
+    if (process.env.POWERPOINT_ONLINE_VIDEO !== 'false' && video.embedUrl) {
+      slide.addMedia({ type: 'online', link: video.embedUrl, x: x + 0.14, y: y + 0.12, w: 0.82, h: 0.44, objectName: 'Lesson video' });
+    }
   } else {
     slide.addShape(pptx.ShapeType.roundRect, {
       x: x + 0.18, y: y + 0.15, w: 0.74, h: 0.38,
@@ -423,13 +429,20 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
   const slide = pptx.addSlide();
   slide.background = { color: thm.bg };
   const accent = t.accent;
+  const imgSource = slideData.youtube && slideData.youtube.thumbnailData
+    ? { data: slideData.youtube.thumbnailData }
+    : (imgPath ? { path: imgPath } : null);
   const modelNote = slideData.modelLabel && slideData.modelLabel !== 'Standard lesson'
     ? `Teaching model: ${slideData.modelLabel}${slideData.modelStageLabel ? `\nLesson stage: ${slideData.modelStageLabel}` : ''}\n\n`
     : '';
   slide.addNotes(modelNote + (slideData.speakerNotes || ''));
   // Imported decks (teacher's own slides) carry no photo — skip the image
   // placement so the layout still renders as clean text instead of crashing.
-  const addImg = (opts) => { if (imgPath) slide.addImage(opts); };
+  const addImg = (opts) => {
+    if (!imgSource) return;
+    const { path: _path, data: _data, ...rest } = opts;
+    slide.addImage({ ...imgSource, ...rest });
+  };
 
   switch (slideData.type) {
     case 'title': {
@@ -477,7 +490,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
       slide.addText('QUICK CHECK', { x: 0.5, y: 0.4, w: 9, h: 0.4, fontFace: thm.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
       slide.addText(slideData.title, { x: 0.5, y: 0.85, w: 9, h: 0.9, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
       slide.addText(bulletItems(slideData.bullets, t, thm, multicolor), { x: 0.5, y: 2.05, w: 5, h: 3.1, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
-      placeVisual(pptx, slide, slideData, imgPath, accent, { x: 5.8, y: 1.9, w: 3.7, h: 3.2 });
+      placeVisual(pptx, slide, slideData, imgSource, accent, { x: 5.8, y: 1.9, w: 3.7, h: 3.2 });
       break;
     }
     default: { // content
@@ -579,7 +592,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
         slide.addShape(pptx.ShapeType.ellipse, { x: 0.2, y: 2.4, w: 1.5, h: 1.5, fill: { color: accent, transparency: 78 }, line: { type: 'none' } });
         slide.addText(slideData.title, { x: 2.15, y: 0.3, w: 7.6, h: 0.9, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
         slide.addText(bulletItems(slideData.bullets, t, thm, multicolor), { x: 2.15, y: 1.35, w: 4.5, h: 3.0, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
-        placeVisual(pptx, slide, slideData, imgPath, accent, { x: 6.85, y: 1.0, w: 2.85, h: 3.8 });
+        placeVisual(pptx, slide, slideData, imgSource, accent, { x: 6.85, y: 1.0, w: 2.85, h: 3.8 });
         if (slideData.example) {
           slide.addShape(pptx.ShapeType.roundRect, { x: 2.15, y: 4.5, w: 7.6, h: 0.85, fill: { color: thm.soft }, line: { type: 'none' }, rectRadius: 0.08 });
           slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: thm.text } }],
@@ -608,7 +621,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
         slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 1.25, fill: { color: thm.primary }, line: { type: 'none' } });
         slide.addText(slideData.title, { x: 0.5, y: 0.15, w: 9, h: 0.95, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: 'FFFFFF' });
         slide.addText(bulletItems(slideData.bullets, t, thm, multicolor), { x: 0.5, y: 1.45, w: 5.0, h: 3.7, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
-        placeVisual(pptx, slide, slideData, imgPath, accent, { x: 5.8, y: 1.45, w: 3.8, h: 3.7 });
+        placeVisual(pptx, slide, slideData, imgSource, accent, { x: 5.8, y: 1.45, w: 3.8, h: 3.7 });
         if (slideData.example) {
           slide.addShape(pptx.ShapeType.roundRect, { x: 0.5, y: 5.1, w: 5.0, h: 0.38, fill: { color: soft.accentSoft }, line: { type: 'none' }, rectRadius: 0.06 });
           slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: thm.text } }],
@@ -695,7 +708,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
           { text: slideData.example, options: { color: thm.text } },
         ], { x: textX + 0.15, y: 4.55, w: 4.6, h: 0.75, fontFace: thm.font, fontSize: Math.max(12, t.bulletSize - 4), valign: 'middle', italic: true });
       }
-      placeVisual(pptx, slide, slideData, imgPath, accent, { x: imgX, y: 1.35, w: 3.9, h: 4.0 });
+      placeVisual(pptx, slide, slideData, imgSource, accent, { x: imgX, y: 1.35, w: 3.9, h: 4.0 });
     }
   }
   addYoutubeMedia(pptx, slide, slideData.youtube, thm);

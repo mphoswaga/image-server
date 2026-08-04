@@ -2024,13 +2024,12 @@ app.post('/api/download/:id', requireAuth, async (req, res) => {
   }
 });
 
-// Google Drive export — same rebuilt .pptx, uploaded to the teacher's Drive.
-app.post('/api/google-drive/export/:id', requireAuth, async (req, res) => {
+async function exportDeckToGoogle(req, res, { convertToSlides = false } = {}) {
   const deck = decks.get(req.params.id);
   if (!deck) return res.status(404).json({ error: 'Deck not found or expired — generate it again.' });
   if (!googleDrive.configured()) {
     return res.status(501).json({
-      error: 'Google Drive export is not configured yet.',
+      error: 'Google export is not configured yet.',
       setupRequired: true,
     });
   }
@@ -2044,21 +2043,34 @@ app.post('/api/google-drive/export/:id', requireAuth, async (req, res) => {
   try {
     const filename = deckFilename(deck);
     const buffer = await deckPptxBuffer(deck, req.body.edits);
-    const file = await googleDrive.uploadPptx(req.userId, { filename, buffer });
-    audit.log('google_drive.export', { userId: req.userId, deckId: req.params.id, fileId: file.id, filename, ip: req.ip });
+    const file = await googleDrive.uploadPptx(req.userId, { filename, buffer, convertToSlides });
+    audit.log(convertToSlides ? 'google_slides.export' : 'google_drive.export', { userId: req.userId, deckId: req.params.id, fileId: file.id, filename, ip: req.ip });
     res.json({
       ok: true,
+      kind: convertToSlides ? 'slides' : 'pptx',
       file: {
         id: file.id,
         name: file.name || filename,
+        mimeType: file.mimeType,
         webViewLink: file.webViewLink,
         webContentLink: file.webContentLink,
       },
     });
   } catch (err) {
-    console.error('Google Drive export failed:', err.message);
+    console.error(`${convertToSlides ? 'Google Slides' : 'Google Drive'} export failed:`, err.message);
     res.status(400).json({ error: err.message });
   }
+}
+
+// Google Drive export — same rebuilt .pptx, uploaded to the teacher's Drive.
+app.post('/api/google-drive/export/:id', requireAuth, async (req, res) => {
+  return exportDeckToGoogle(req, res, { convertToSlides: false });
+});
+
+// Google Slides export — uploads the rebuilt .pptx and converts it into a
+// native Google Slides presentation in the teacher's Drive.
+app.post('/api/google-slides/export/:id', requireAuth, async (req, res) => {
+  return exportDeckToGoogle(req, res, { convertToSlides: true });
 });
 
 // ── Student game: create from a deck, play, store results ──────────────────
