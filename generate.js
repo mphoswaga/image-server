@@ -303,7 +303,10 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
   const slide = pptx.addSlide();
   slide.background = { color: thm.bg };
   const accent = t.accent;
-  slide.addNotes(slideData.speakerNotes || '');
+  const modelNote = slideData.modelLabel && slideData.modelLabel !== 'Standard lesson'
+    ? `Teaching model: ${slideData.modelLabel}${slideData.modelStageLabel ? `\nLesson stage: ${slideData.modelStageLabel}` : ''}\n\n`
+    : '';
+  slide.addNotes(modelNote + (slideData.speakerNotes || ''));
   // Imported decks (teacher's own slides) carry no photo — skip the image
   // placement so the layout still renders as clean text instead of crashing.
   const addImg = (opts) => { if (imgPath) slide.addImage(opts); };
@@ -313,7 +316,10 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
       addImg({ path: imgPath, x: 0, y: 0, w: 10, h: 5.625, sizing: { type: 'cover', w: 10, h: 5.625 } });
       slide.addShape(pptx.ShapeType.rect, { x: 0, y: 3.6, w: 10, h: 2.025, fill: { color: thm.primary, transparency: 15 } });
       slide.addText(slideData.title, { x: 0.5, y: 3.75, w: 9, h: 0.9, fontFace: thm.font, fontSize: 40, bold: true, color: 'FFFFFF' });
-      slide.addText(slideData.subtitle || '', { x: 0.5, y: 4.65, w: 9, h: 0.6, fontFace: thm.font, fontSize: 18, color: 'FFFFFF' });
+      const subtitle = slideData.modelLabel && slideData.modelLabel !== 'Standard lesson'
+        ? `${slideData.subtitle || ''} · ${slideData.modelLabel}`
+        : (slideData.subtitle || '');
+      slide.addText(subtitle, { x: 0.5, y: 4.65, w: 9, h: 0.6, fontFace: thm.font, fontSize: 18, color: 'FFFFFF' });
       break;
     }
     case 'objectives': {
@@ -591,7 +597,7 @@ function assembleDeck(slides, images, gradeTheme, preset) {
 // Returns { pptx, slides }. Caller decides how to output (writeFile / buffer).
 const slugify = s => String(s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-async function buildDeck({ subject, topic, slideCount = 4, grade = 'middle school', tone = 'clear and engaging', focus = '', objectives = '', lessonPlanText = '', extras = {}, skipAssemble = false, presetId = null }) {
+async function buildDeck({ subject, topic, slideCount = 4, grade = 'middle school', tone = 'clear and engaging', focus = '', objectives = '', lessonPlanText = '', teachingModelId = 'standard', extras = {}, skipAssemble = false, presetId = null }) {
   subject = slugify(subject);
   topic = slugify(topic);
   if (!subject || !topic) throw new Error('Subject and topic are required.');
@@ -601,7 +607,7 @@ async function buildDeck({ subject, topic, slideCount = 4, grade = 'middle schoo
 
   const preset = getPreset(presetId);
   const profile = gradeProfile(grade);
-  const slides = await generateContent(subject, topic, slideCount, grade, tone, focus, { objectives, lessonPlanText, ...extras });
+  const slides = await generateContent(subject, topic, slideCount, grade, tone, focus, { objectives, lessonPlanText, teachingModelId, ...extras });
   const images = await selectImages(slides, subject, topic);
   if (skipAssemble) return { slides, images, band: profile.band, preset };
   const pptx = assembleDeck(slides, images, profile.theme, preset);

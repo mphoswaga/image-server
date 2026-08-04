@@ -10,6 +10,7 @@ const quota = require('./quota');
 const { generateOneSlide } = require('./content');
 const { extractText, extractPptxSlides, saveTemplate, listTemplates, getTemplate, renameTemplate, deleteTemplate, loadOriginalById, loadTemplate, loadOriginal, TYPES } = require('./template');
 const { generateLessonPlan, planToText } = require('./lesson-plan');
+const { getTeachingModel, normalizeTeachingModelId, listTeachingModels } = require('./teaching-models');
 const { fillDocx, fillXlsx } = require('./fill-template');
 const { animateBuffer } = require('./animate-pptx');
 const { addImages, fetchWikimediaImages } = require('./admin-images');
@@ -736,6 +737,10 @@ app.get('/api/presets', requireAuth, (req, res) => {
   res.json({ presets: PRESETS.map(p => ({ id: p.id, name: p.name, group: p.group, layout: p.layout, dark: p.dark, bg: p.bg, primary: p.primary, accent: p.accent, soft: p.soft, text: p.text })) });
 });
 
+app.get('/api/teaching-models', requireAuth, (req, res) => {
+  res.json({ models: listTeachingModels(), defaultModelId: 'standard' });
+});
+
 // In-memory deck state so the editable preview can mutate before download.
 // Snapshotted to DATA_DIR periodically so an in-progress deck survives a
 // server restart/redeploy, not just the TTL below — a teacher mid-edit
@@ -779,6 +784,9 @@ setInterval(persistDecks, 30 * 1000).unref();
 function previewEntry(slide, image) {
   return {
     type: slide.type,
+    modelStage: slide.modelStage || null,
+    modelStageLabel: slide.modelStageLabel || null,
+    modelLabel: slide.modelLabel || null,
     title: slide.title,
     subtitle: slide.subtitle || null,
     bullets: slide.bullets || [],
@@ -1040,6 +1048,7 @@ function resolvePlanText(body) {
 // ── Lesson plan generation (objectives + stored template → plan) ──────────
 app.post('/api/lesson-plan', requireAuth, async (req, res) => {
   const { grade, tone, templateId, unitId, lessonIndex, regenerate } = req.body || {};
+  const teachingModelId = normalizeTeachingModelId(req.body && req.body.teachingModelId);
   const subject = clip(req.body.subject, LIMITS.subject);
   const topic = clip(req.body.topic, LIMITS.topic);
   const objectives = clip(req.body.objectives, LIMITS.objectives);
@@ -1051,9 +1060,9 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
     const unitBlock = u ? unit.buildUnitBlock(u, lessonIndex) : '';
     const plan = await generateLessonPlan({
       subject: subject.toLowerCase(), topic: topic.toLowerCase(),
-      grade, tone, objectives, templateText: tpl ? tpl.text : '', unitBlock, regenerate: !!regenerate,
+      grade, tone, objectives, templateText: tpl ? tpl.text : '', unitBlock, teachingModel: teachingModelId, regenerate: !!regenerate,
     });
-    res.json({ sections: plan.sections, usedTemplate: !!tpl, templateName: tpl ? tpl.name : null, templateId: tpl ? tpl.id : null });
+    res.json({ sections: plan.sections, teachingModelId, model: getTeachingModel(teachingModelId), usedTemplate: !!tpl, templateName: tpl ? tpl.name : null, templateId: tpl ? tpl.id : null });
   } catch (err) {
     console.error('Lesson plan failed:', err.message);
     res.status(400).json({ error: err.message });
@@ -1076,19 +1085,20 @@ app.post('/api/import/lesson-plan', requireAuth, upload.single('file'), async (r
     const planText = (await extractText(req.file.buffer, req.file.originalname) || '').trim();
     if (!planText) { await release(req, reservation, 'lessonscope.import_plan_to_slides', 'unreadable file'); return res.status(400).json({ error: "Couldn't read any text from that file — try a Word, PDF, or text export." }); }
     const { slideCount, grade, tone, presetId } = req.body || {};
+    const teachingModelId = normalizeTeachingModelId(req.body && req.body.teachingModelId);
     const focus = clip(req.body.focus, LIMITS.focus);
-    const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives: '', lessonPlanText: planText, skipAssemble: true, presetId: presetId || null });
+    const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives: '', lessonPlanText: planText, teachingModelId, skipAssemble: true, presetId: presetId || null });
     const id = crypto.randomUUID();
     decks.set(id, {
       subject: String(subject).toLowerCase(), topic: String(topic).toLowerCase(),
       grade: grade || 'middle school', tone, focus, band: built.band,
       slides: built.slides, images: built.images, createdAt: Date.now(),
-      objectives: '', lessonPlanText: planText, presetId: presetId || null,
+      objectives: '', lessonPlanText: planText, teachingModelId, presetId: presetId || null,
     });
     await capture(req, reservation, 'lessonscope.import_plan_to_slides', id);
     const filename = `${subject}-${topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
     res.json({
-      deckId: id, filename, band: built.band, slideCount: built.slides.length, sourceText: planText,
+      deckId: id, filename, band: built.band, slideCount: built.slides.length, teachingModelId, sourceText: planText,
       slides: built.slides.map((s, i) => previewEntry(s, built.images[i])),
     });
   } catch (err) {
@@ -1155,6 +1165,7 @@ const PACK_RENDER = { worksheet: worksheetDocx, 'exit-ticket': exitTicketDocx, q
 // this handler is ever reached.
 app.post('/api/pack/full', requireAuth, async (req, res) => {
   const { grade, tone, lessonPlan, unitId, lessonIndex } = req.body || {};
+  const teachingModelId = normalizeTeachingModelId(req.body && req.body.teachingModelId);
   const subject = clip(req.body.subject, LIMITS.subject);
   const topic = clip(req.body.topic, LIMITS.topic);
   const objectives = clip(req.body.objectives, LIMITS.objectives);
@@ -1165,7 +1176,7 @@ app.post('/api/pack/full', requireAuth, async (req, res) => {
     const u = unitId ? unit.getUnit(req.userId, unitId) : null;
     const unitBlock = u ? unit.buildUnitBlock(u, lessonIndex) : '';
     const lessonPlanText = resolvePlanText(req.body);
-    const ctx = { subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, unitBlock };
+    const ctx = { subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, unitBlock, teachingModelId };
     const meta = { subject, topic, grade };
 
     const [wData, etData, qData] = await Promise.all([
@@ -1198,6 +1209,7 @@ app.post('/api/pack/:type', requireAuth, async (req, res) => {
   const gen = PACK_GEN[req.params.type];
   if (!gen) return res.status(404).json({ error: 'Unknown lesson-pack item.' });
   const { grade, tone, lessonPlan, unitId, lessonIndex, regenerate } = req.body || {};
+  const teachingModelId = normalizeTeachingModelId(req.body && req.body.teachingModelId);
   const subject = clip(req.body.subject, LIMITS.subject);
   const topic = clip(req.body.topic, LIMITS.topic);
   const objectives = clip(req.body.objectives, LIMITS.objectives);
@@ -1208,7 +1220,7 @@ app.post('/api/pack/:type', requireAuth, async (req, res) => {
     const u = unitId ? unit.getUnit(req.userId, unitId) : null;
     const unitBlock = u ? unit.buildUnitBlock(u, lessonIndex) : '';
     const lessonPlanText = resolvePlanText(req.body);
-    const data = await gen({ subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, unitBlock, regenerate: !!regenerate });
+    const data = await gen({ subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, unitBlock, teachingModelId, regenerate: !!regenerate });
     await capture(req, reservation, 'lessonscope.generate_pack_item', req.params.type);
     res.json({ type: req.params.type, data });
   } catch (err) {
@@ -1638,6 +1650,7 @@ app.patch('/api/assignment/:id/grade', requireAuth, (req, res) => {
 // Generate a deck; store state; return preview metadata + download id.
 app.post('/api/generate', requireAuth, async (req, res) => {
   const { slideCount, grade, tone, lessonPlan, unitId, lessonIndex, regenerate, presetId } = req.body || {};
+  const teachingModelId = normalizeTeachingModelId(req.body && req.body.teachingModelId);
   const subject = clip(req.body.subject, LIMITS.subject);
   const topic = clip(req.body.topic, LIMITS.topic);
   const objectives = clip(req.body.objectives, LIMITS.objectives);
@@ -1652,19 +1665,20 @@ app.post('/api/generate', requireAuth, async (req, res) => {
     // uploaded plan or slides) was passed, the slides follow it; unit context
     // falls back into lessonPlanText so it still reaches the content generator.
     const lessonPlanText = resolvePlanText(req.body) || (unitBlock || '');
-    const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives, lessonPlanText, extras: { regenerate: !!regenerate }, skipAssemble: true, presetId: presetId || null });
+    const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives, lessonPlanText, teachingModelId, extras: { regenerate: !!regenerate }, skipAssemble: true, presetId: presetId || null });
     const id = crypto.randomUUID();
     decks.set(id, {
       subject: String(subject).toLowerCase(), topic: String(topic).toLowerCase(),
       grade: grade || 'middle school', tone, focus, band: built.band,
       slides: built.slides, images: built.images, createdAt: Date.now(),
       objectives: objectives || '', lessonPlanText, // kept so the student game can be grounded in this lesson
+      teachingModelId,
       presetId: presetId || null,
     });
     await capture(req, reservation, 'lessonscope.generate_slide_deck', id);   // 1 credit per lesson (no-op unless billing on)
     const filename = `${subject}-${topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
     res.json({
-      deckId: id, filename, band: built.band, slideCount: built.slides.length,
+      deckId: id, filename, band: built.band, slideCount: built.slides.length, teachingModelId,
       slides: built.slides.map((s, i) => previewEntry(s, built.images[i])),
     });
   } catch (err) {
@@ -1851,7 +1865,16 @@ app.post('/api/slide/:id/regenerate', requireAuth, async (req, res) => {
   if (block) return res.status(402).json(block);
   try {
     const avoidTitles = deck.slides.filter((s, j) => s.type === 'content' && j !== i).map(s => s.title);
-    const fresh = await generateOneSlide({ subject: deck.subject, topic: deck.topic, grade: deck.grade, tone: deck.tone, focus: deck.focus, avoidTitles });
+    const fresh = await generateOneSlide({
+      subject: deck.subject,
+      topic: deck.topic,
+      grade: deck.grade,
+      tone: deck.tone,
+      focus: deck.focus,
+      teachingModelId: deck.teachingModelId,
+      preferredStage: deck.slides[i].modelStage,
+      avoidTitles,
+    });
     fresh.side = deck.slides[i].side; // keep the image side for layout rhythm
     deck.slides[i] = fresh;
     const alt = alternativeImage({ subject: deck.subject, topic: deck.topic, imageQuery: fresh.imageQuery, exclude: deck.images.map(im => im.relpath) });

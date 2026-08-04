@@ -9,6 +9,7 @@
 // If OPENAI_API_KEY is missing, falls back to placeholder text.
 const { client: aiClient } = require('./ai-client');
 const { gradeProfile, ageFor } = require('./grade');
+const { getTeachingModel, normalizeTeachingModelId, modelPromptBlock, stageSchedule, stageLabel } = require('./teaching-models');
 
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
@@ -34,6 +35,7 @@ const DECK_SCHEMA = {
         type: 'object',
         properties: {
           title: { type: 'string' },
+          stageId: { type: 'string' },
           // Senior grade profile asks for up to 6 bullets — cap matches that, not
           // the lower grades' target (which the prompt still asks for directly).
           bullets: { type: 'array', items: { type: 'string' }, maxItems: 6 },
@@ -88,7 +90,7 @@ const DECK_SCHEMA = {
             additionalProperties: false,
           },
         },
-        required: ['title', 'bullets', 'layoutHint', 'example', 'speakerNotes', 'imageQuery', 'visual', 'vocab', 'shortcuts', 'worked'],
+        required: ['title', 'stageId', 'bullets', 'layoutHint', 'example', 'speakerNotes', 'imageQuery', 'visual', 'vocab', 'shortcuts', 'worked'],
         additionalProperties: false,
       },
     },
@@ -137,6 +139,7 @@ const ONE_SLIDE_SCHEMA = {
   type: 'object',
   properties: {
     title: { type: 'string' },
+    stageId: { type: 'string' },
     bullets: { type: 'array', items: { type: 'string' } },
     example: { type: 'string' },
     speakerNotes: { type: 'string' },
@@ -166,7 +169,7 @@ const ONE_SLIDE_SCHEMA = {
       additionalProperties: false,
     },
   },
-  required: ['title', 'bullets', 'example', 'speakerNotes', 'imageQuery', 'vocab', 'shortcuts', 'worked'],
+  required: ['title', 'stageId', 'bullets', 'example', 'speakerNotes', 'imageQuery', 'vocab', 'shortcuts', 'worked'],
   additionalProperties: false,
 };
 
@@ -174,6 +177,9 @@ function buildPrompt(subject, topic, grade, slideCount, tone, focus, extras = {}
   const pretty = topic.replace(/-/g, ' ');
   const focusLine = focus ? `\nSpecial focus / angle: ${focus}` : '';
   const p = gradeProfile(grade).content;
+  const teachingModel = getTeachingModel(extras.teachingModelId);
+  const schedule = stageSchedule(teachingModel, slideCount);
+  const scheduleLine = schedule.map((stageId, index) => `${index + 1}. ${stageLabel(teachingModel, stageId)}`).join('\n');
   const objectivesLine = extras.objectives
     ? `\nThe objectives slide MUST use these teacher-provided objectives:\n${extras.objectives}`
     : '';
@@ -187,13 +193,16 @@ Subject: ${subject}
 Topic: ${pretty}
 Grade level: ${grade}
 Tone: ${tone}${focusLine}${objectivesLine}${planBlock}
+${modelPromptBlock(teachingModel)}
 
 CALIBRATE THE DIFFICULTY CAREFULLY: pitch the content precisely at ${grade} (students are about ${age} years old). Use the vocabulary, examples, sentence length and concepts a typical ${grade} student is ready for. Do NOT oversimplify to a younger grade (e.g. Reception / Grade R / Kindergarten), and do NOT use content beyond ${grade}. Assume the student already mastered the previous grade's work and build on it — this lesson should feel right for ${grade}, neither too easy nor too hard.
 
 Produce a full lesson with this structure:
 - titleSlide: a punchy lesson title + one-line subtitle.
 - objectives: 3-4 short "students will be able to…" learning objectives.
-- slides: EXACTLY ${slideCount} content slides (this array MUST have exactly ${slideCount} items — count them). Each has a clear title, ${p.bullets} bullet points (${p.wordsPerBullet}), a concrete real-world "example" (one short sentence a student would relate to), and speaker notes (${p.notes}).
+- slides: EXACTLY ${slideCount} content slides (this array MUST have exactly ${slideCount} items — count them). Each has a clear title, a stageId from the selected model, ${p.bullets} bullet points (${p.wordsPerBullet}), a concrete real-world "example" (one short sentence a student would relate to), and speaker notes (${p.notes}). Use this exact content-slide stage schedule:
+${scheduleLine}
+The application will enforce this order after generation, so write each slide's content for its scheduled stage.
   VOCABULARY: if a slide introduces vocabulary, key words or terms, you MUST fill "vocab" with each term AND a short, clear definition written so a ${grade} student understands it (one simple sentence, plain words — actually explain what it means, e.g. {"term":"Cooperate","definition":"to work together with others to get something done"}). Never list a word without defining it. On non-vocabulary slides, "vocab" is an empty array []. Use the speaker notes to tell the teacher how to explain each term with an example.
   GAMES & ACTIVITIES: if a content slide presents a game or hands-on activity, do NOT write a vague teaser (e.g. "build a tower / work together"). Its bullets MUST contain the actual instructions: the GOAL (what students try to do / how to "win"), what's NEEDED, and the clear ordered RULES of how to play, so a teacher could run it without inventing anything. Put the same detail in the speaker notes. Do not name a game on one slide and leave its rules unstated.
   SHOW, DON'T JUST DESCRIBE — applies to EVERY subject, especially technical and practical ones. A student must be able to actually DO the task from the slide, not just understand it in the abstract. Never be vague about how to do something:
@@ -234,10 +243,12 @@ function truncateBullet(b, maxChars = 160) {
 }
 
 // Flatten the structured deck into the ordered slide array the pipeline renders.
-function flattenDeck(data) {
+function flattenDeck(data, teachingModelId = 'standard') {
+  const teachingModel = getTeachingModel(teachingModelId);
+  const schedule = stageSchedule(teachingModel, data.slides.length);
   const slides = [];
-  slides.push({ type: 'title', layout: 'title', title: data.titleSlide.title, subtitle: data.titleSlide.subtitle, imageQuery: data.titleSlide.imageQuery });
-  slides.push({ type: 'objectives', title: 'Learning Objectives', bullets: data.objectives.items, imageQuery: data.objectives.imageQuery });
+  slides.push({ type: 'title', layout: 'title', title: data.titleSlide.title, subtitle: data.titleSlide.subtitle, imageQuery: data.titleSlide.imageQuery, modelLabel: teachingModel.label });
+  slides.push({ type: 'objectives', title: 'Learning Objectives', bullets: data.objectives.items, imageQuery: data.objectives.imageQuery, modelLabel: teachingModel.label });
   data.slides.forEach((s, i) => {
     const vocab = Array.isArray(s.vocab) ? s.vocab.filter(v => v && v.term) : [];
     // On a vocabulary slide, the term–definition lines ARE the teaching content,
@@ -249,13 +260,16 @@ function flattenDeck(data) {
     slides.push({
       type: 'content', title: s.title, bullets, example: s.example,
       speakerNotes: s.speakerNotes, imageQuery: s.imageQuery, visual: s.visual, vocab, shortcuts, worked,
+      modelLabel: teachingModel.label,
+      modelStage: schedule[i] || teachingModel.stages[0].id,
+      modelStageLabel: stageLabel(teachingModel, schedule[i] || teachingModel.stages[0].id),
       side: i % 2 === 0 ? 'right' : 'left', // alternate image side for visual rhythm
       // Missing/unrecognised value (placeholder deck, older cached slide) falls
       // back to 'STANDARD' — today's behaviour, unchanged.
       layoutHint: s.layoutHint === 'TEXT_HEAVY' ? 'TEXT_HEAVY' : 'STANDARD',
     });
   });
-  if (data.check) slides.push({ type: 'check', title: data.check.question, bullets: data.check.answer, imageQuery: data.check.imageQuery });
+  if (data.check) slides.push({ type: 'check', title: data.check.question, bullets: data.check.answer, imageQuery: data.check.imageQuery, modelLabel: teachingModel.label });
   const diff = data.differentiation;
   const act = data.activity;
   // Build a fully runnable task: goal + what's needed + the actual rules/steps.
@@ -266,12 +280,14 @@ function flattenDeck(data) {
   const matLine = (Array.isArray(act.materials) && act.materials.length) ? `\nMaterials: ${act.materials.join(', ')}` : '';
   const actNotes = (act.goal ? `Goal: ${act.goal}${matLine}\n\n` : '') + (act.speakerNotes || '')
     + (diff ? `\n\nSupport (students who find it hard): ${diff.support}\nChallenge (fast finishers): ${diff.stretch}` : '');
-  slides.push({ type: 'activity', title: act.title || 'Your Turn', bullets: actBullets, speakerNotes: actNotes, imageQuery: act.imageQuery, differentiation: diff });
-  slides.push({ type: 'recap', title: 'Recap', bullets: data.recap.points, imageQuery: data.recap.imageQuery });
+  const activityStage = teachingModel.stages.find(stage => /practice|create|elaborate|investigate|independent|you_do/.test(stage.id)) || teachingModel.stages[teachingModel.stages.length - 1];
+  const reflectStage = teachingModel.stages.find(stage => /reflect|evaluate|check|share/.test(stage.id)) || teachingModel.stages[teachingModel.stages.length - 1];
+  slides.push({ type: 'activity', title: act.title || 'Your Turn', bullets: actBullets, speakerNotes: actNotes, imageQuery: act.imageQuery, differentiation: diff, modelStage: activityStage.id, modelStageLabel: stageLabel(teachingModel, activityStage.id), modelLabel: teachingModel.label });
+  slides.push({ type: 'recap', title: 'Recap', bullets: data.recap.points, imageQuery: data.recap.imageQuery, modelStage: reflectStage.id, modelStageLabel: stageLabel(teachingModel, reflectStage.id), modelLabel: teachingModel.label });
   return slides;
 }
 
-function placeholderDeck(subject, topic, slideCount) {
+function placeholderDeck(subject, topic, slideCount, teachingModelId = 'standard') {
   const pretty = topic.replace(/-/g, ' ');
   const cap = s => s.replace(/\b\w/g, c => c.toUpperCase());
   const q = `${subject} ${pretty}`;
@@ -280,6 +296,7 @@ function placeholderDeck(subject, topic, slideCount) {
     objectives: { items: [`Understand ${pretty}`, `Apply ${pretty}`, `Practise ${pretty}`], imageQuery: q },
     slides: Array.from({ length: slideCount }, (_, i) => ({
       title: `${cap(pretty)} — Key Idea ${i + 1}`,
+      stageId: 'teach',
       bullets: [`Placeholder point ${i + 1}.1`, `Placeholder point ${i + 1}.2`, `Placeholder point ${i + 1}.3`],
       example: `Example for ${pretty} idea ${i + 1}.`,
       speakerNotes: `Placeholder notes for ${pretty}, idea ${i + 1}.`,
@@ -291,7 +308,7 @@ function placeholderDeck(subject, topic, slideCount) {
     activity: { title: 'Your Turn', goal: `Practise ${pretty} together`, materials: [], instructions: [`Estimate first, then try a ${pretty} exercise`, 'Share with a partner'], speakerNotes: 'Placeholder activity notes.', imageQuery: q },
     recap: { points: [`${cap(pretty)} recap point 1`, 'recap point 2', 'recap point 3'], imageQuery: q },
     differentiation: { support: `Give a worked example of ${pretty}.`, stretch: `Try a harder ${pretty} problem.` },
-  });
+  }, teachingModelId);
 }
 
 async function callModel(schema, name, messages, max_tokens = 9000) {
@@ -308,9 +325,10 @@ async function callModel(schema, name, messages, max_tokens = 9000) {
 }
 
 async function generateContent(subject, topic, slideCount, grade = 'middle school', tone = 'clear and engaging', focus = '', extras = {}) {
+  const teachingModelId = normalizeTeachingModelId(extras.teachingModelId);
   if (!process.env.OPENAI_API_KEY) {
     console.log('No OPENAI_API_KEY set — using placeholder text. Add a key to .env for AI-written slides.');
-    return placeholderDeck(subject, topic, slideCount);
+    return placeholderDeck(subject, topic, slideCount, teachingModelId);
   }
   const { wrap } = require('./cache');
   return wrap('content', {
@@ -321,6 +339,7 @@ async function generateContent(subject, topic, slideCount, grade = 'middle schoo
     tone: String(tone || 'clear and engaging').trim(),
     focus: String(focus || '').trim(),
     lessonPlanText: String((extras && extras.lessonPlanText) || '').trim(),
+    teachingModelId,
     regenerate: !!(extras && extras.regenerate),
   }, async () => {
     const prompt = buildPrompt(subject, topic, grade, slideCount, tone, focus, extras);
@@ -333,27 +352,30 @@ async function generateContent(subject, topic, slideCount, grade = 'middle schoo
       console.log(`Model returned ${data.slides.length}/${slideCount} content slides, retrying (${attempt}/3)…`);
     }
     best.slides = best.slides.slice(0, slideCount);
-    return flattenDeck(best);
+    return flattenDeck(best, teachingModelId);
   });
 }
 
 // Regenerate a single content slide (for the editable preview's "regenerate").
-async function generateOneSlide({ subject, topic, grade, tone = 'clear and engaging', focus = '', avoidTitles = [] }) {
+async function generateOneSlide({ subject, topic, grade, tone = 'clear and engaging', focus = '', teachingModelId = 'standard', preferredStage = '', avoidTitles = [] }) {
+  const teachingModel = getTeachingModel(teachingModelId);
   if (!process.env.OPENAI_API_KEY) {
     const pretty = topic.replace(/-/g, ' ');
-    return { type: 'content', title: `${pretty} — new idea`, bullets: ['Placeholder A', 'Placeholder B'], example: 'Placeholder example.', speakerNotes: 'Placeholder notes.', imageQuery: `${subject} ${pretty}` };
+    return { type: 'content', modelStage: preferredStage || teachingModel.stages[0].id, title: `${pretty} — new idea`, bullets: ['Placeholder A', 'Placeholder B'], example: 'Placeholder example.', speakerNotes: 'Placeholder notes.', imageQuery: `${subject} ${pretty}` };
   }
   const p = gradeProfile(grade).content;
   const pretty = topic.replace(/-/g, ' ');
   const avoid = avoidTitles.length ? `\nDo NOT repeat these existing slide titles: ${avoidTitles.join('; ')}.` : '';
   const prompt = `Write ONE fresh content slide for a ${grade} lesson on "${pretty}" (${subject}). ${tone} tone.${focus ? ' Focus: ' + focus + '.' : ''}
+${modelPromptBlock(teachingModel)}
+The slide must use stageId "${preferredStage || teachingModel.stages[0].id}" so it fits the existing lesson sequence.
 Give a clear title, ${p.bullets} bullets (${p.wordsPerBullet}), a concrete real-world example sentence, speaker notes (${p.notes}), and a 2-4 keyword imageQuery. If the slide introduces vocabulary/key terms, fill "vocab" with each term and a short clear definition a ${grade} student understands; otherwise "vocab" is []. If it teaches keyboard shortcuts / tool buttons / key combos, fill "shortcuts" with each action and its EXACT keys (e.g. {"action":"Undo","keys":"Ctrl + Z"}); otherwise "shortcuts" is []. If it teaches how to DO/perform a method, calculation or technique, fill "worked" with a task + the actual ordered steps (real values); otherwise "worked" is {"task":"","steps":[]}. ${p.depth}${avoid}`;
   const s = await callModel(ONE_SLIDE_SCHEMA, 'one_slide', [{ role: 'user', content: prompt }], 1800);
   const vocab = Array.isArray(s.vocab) ? s.vocab.filter(v => v && v.term) : [];
   if (vocab.length) s.bullets = vocab.map(v => `${v.term} — ${v.definition}`);
   const shortcuts = Array.isArray(s.shortcuts) ? s.shortcuts.filter(x => x && x.action && x.keys) : [];
   const worked = (s.worked && s.worked.task && Array.isArray(s.worked.steps) && s.worked.steps.length) ? s.worked : null;
-  return { type: 'content', ...s, vocab, shortcuts, worked };
+  return { type: 'content', modelStage: s.stageId || preferredStage || teachingModel.stages[0].id, ...s, vocab, shortcuts, worked };
 }
 
 module.exports = { generateContent, generateOneSlide };

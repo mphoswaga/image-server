@@ -4,6 +4,7 @@
 // call, grade-calibrated the same way content.js calibrates the deck.
 const { client: aiClient } = require('./ai-client');
 const { ageFor } = require('./grade');
+const { getTeachingModel, modelPromptBlock, artifactPromptBlock } = require('./teaching-models');
 
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
@@ -42,11 +43,12 @@ function calibration(grade) {
   return `Pitch everything precisely at ${grade} (students about ${age} years old): vocabulary, reading level, and difficulty must suit ${grade} — assume they mastered the previous grade, and do NOT drift easier or harder.`;
 }
 
-function ctxBlock({ subject, topic, grade, objectives, lessonPlanText, unitBlock }) {
+function ctxBlock({ subject, topic, grade, objectives, lessonPlanText, unitBlock, teachingModelId }) {
   const pretty = String(topic || '').replace(/-/g, ' ');
+  const model = getTeachingModel(teachingModelId);
   const plan = lessonPlanText ? `\nApproved lesson plan (base the artifact on this):\n--- PLAN ---\n${String(lessonPlanText).slice(0, 5000)}\n--- END ---\n` : '';
   const unit = unitBlock ? `\n${String(unitBlock).slice(0, 1500)}\n` : '';
-  return `Subject: ${subject}\nTopic: ${pretty}\nGrade: ${grade}\nLesson objectives the artifact MUST assess/practise:\n${objectives}\n${unit}${plan}`;
+  return `Subject: ${subject}\nTopic: ${pretty}\nGrade: ${grade}\n${modelPromptBlock(model)}\nLesson objectives the artifact MUST assess/practise:\n${objectives}\n${unit}${plan}`;
 }
 
 async function callModel(schema, name, prompt, max_tokens = 3500) {
@@ -69,6 +71,7 @@ function ctxKey(type, ctx) {
     grade: String(ctx.grade || 'middle school').trim(),
     objectives: String(ctx.objectives || '').trim(),
     lessonPlanText: String(ctx.lessonPlanText || '').slice(0, 5000).trim(),
+    teachingModelId: String(ctx.teachingModelId || 'standard'),
     regenerate: !!ctx.regenerate,
   };
 }
@@ -79,6 +82,7 @@ async function generateWorksheet(ctx) {
   return wrap('worksheet', ctxKey('worksheet', ctx), async () => {
     const prompt = `You are an expert teacher creating a printable STUDENT WORKSHEET for this lesson.
 ${ctxBlock(ctx)}
+${artifactPromptBlock(ctx.teachingModelId, 'worksheet')}
 Produce:
 - title: a clear worksheet title.
 - focus: ONE sentence telling the student what they will practise.
@@ -99,6 +103,7 @@ async function generateExitTicket(ctx) {
   return wrap('exit-ticket', ctxKey('exit-ticket', ctx), async () => {
     const prompt = `Create a short EXIT TICKET (a quick end-of-lesson check students complete in a few minutes) for this lesson.
 ${ctxBlock(ctx)}
+${artifactPromptBlock(ctx.teachingModelId, 'exit ticket')}
 Produce:
 - title: a short title.
 - questions: 2-3 short questions tied DIRECTLY to the lesson objectives, answerable quickly.
@@ -170,6 +175,7 @@ async function generateQuiz(ctx) {
   return wrap('quiz', ctxKey('quiz', ctx), async () => {
     const prompt = `Create a printable QUIZ for this lesson — a mix of multiple-choice and short-answer questions the teacher can hand out and mark.
 ${ctxBlock(ctx)}
+${artifactPromptBlock(ctx.teachingModelId, 'quiz')}
 Produce:
 - title: a clear quiz title.
 - instructions: one sentence of instructions for the student (e.g. "Circle the correct letter for MCQ. Write your working for short-answer questions.").
@@ -243,6 +249,7 @@ async function generateGame(ctx) {
   return wrap('game', ctxKey('game', { ...ctx, questionCount: n }), async () => {
     const prompt = `Create a short REVISION GAME for students based on this lesson.
 ${ctxBlock(ctx)}
+${artifactPromptBlock(ctx.teachingModelId, 'revision game')}
 Produce:
 - overview: 2-3 sentences recapping what the lesson was about.
 - concepts: the 3-5 KEY ideas of the lesson, each with a short, clear explanation a student understands (so they can revise before playing).

@@ -347,6 +347,10 @@
     .plan-section input.heading { font-weight:700; color:var(--primary); border:none; background:none; padding:2px 0; font-size:15px; }
     .plan-section input.heading:hover { border-color:transparent; }
     .plan-section input.heading:focus { box-shadow:none; border-bottom:2px solid var(--accent); border-radius:0; background:none; }
+    .plan-stage { display:inline-flex; align-items:center; width:max-content; max-width:100%; margin-bottom:8px; padding:4px 9px; border-radius:999px; background:#eef7ff; color:var(--primary-2); font-size:11px; font-weight:800; letter-spacing:.2px; }
+    .model-flow { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:-2px 0 14px; color:var(--muted); font-size:11.5px; }
+    .model-flow .stage { display:inline-flex; align-items:center; padding:5px 8px; border:1px solid #dbe8f5; border-radius:999px; background:#f7fbff; color:var(--primary); font-weight:700; }
+    .model-flow .arrow { color:#9aa9b8; font-size:12px; }
     .plan-section textarea.content { border:1px solid var(--border); margin-top:8px; min-height:64px; font-size:14px; border-radius:10px; }
     .plan-actions, .result-actions { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
     .plan-actions .btn, .result-actions .btn { flex:1 1 190px; }
@@ -405,6 +409,7 @@
     @media (max-width:600px){ .picker-grid { grid-template-columns:repeat(2,1fr); } }
     .slide .body { padding:15px 17px 16px; flex:1; display:flex; flex-direction:column; }
     .kicker { display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; margin-bottom:7px; }
+    .model-stage { display:inline-flex; align-items:center; gap:5px; margin-left:6px; padding:3px 8px; border-radius:999px; background:#eef7ff; color:var(--primary-2); font-size:10px; letter-spacing:.2px; text-transform:none; }
     .kicker .ic { width:13px; height:13px; }
     .kicker.objectives { color:var(--primary); } .kicker.activity,.kicker.recap { color:var(--accent); } .kicker.title { color:var(--muted); }
     .slide h3 { margin:0 0 8px; font-size:16px; color:var(--ink); font-weight:700; }
@@ -1885,6 +1890,10 @@
           </select>
         </div>
       </div>
+      <label for="ipModel">Lesson structure</label>
+      <select id="ipModel">
+        <option value="standard">Standard lesson</option><option value="gradual_release">Gradual Release</option><option value="explicit_instruction">Explicit Instruction</option><option value="five_e">5E Inquiry</option><option value="inquiry">Inquiry-Based</option><option value="project_based">Project-Based Lesson</option>
+      </select>
       <div class="drop" id="ipDrop" style="margin-top:16px">
         <input id="ipFile" type="file" accept=".docx,.pdf,.txt,.md" style="display:none" />
         <div class="drop-inner">
@@ -1910,6 +1919,10 @@
           <option>Grade 8</option><option>Grade 9</option><option>Grade 10</option><option>Grade 11</option><option>Grade 12</option>
         </select>
       </div>
+      <label for="isModel">Lesson structure</label>
+      <select id="isModel">
+        <option value="standard">Standard lesson</option><option value="gradual_release">Gradual Release</option><option value="explicit_instruction">Explicit Instruction</option><option value="five_e">5E Inquiry</option><option value="inquiry">Inquiry-Based</option><option value="project_based">Project-Based Lesson</option>
+      </select>
       <div class="drop" id="isDrop" style="margin-top:16px">
         <input id="isFile" type="file" accept=".pptx" style="display:none" />
         <div class="drop-inner">
@@ -2048,6 +2061,17 @@
               </select>
             </div>
           </div>
+          <label for="teachingModel">Lesson structure <span class="hint-i" tabindex="0" role="img" aria-label="Choose the teaching model that should shape the lesson plan, activities, checks, and slides." data-tip="This changes the order and purpose of the lesson stages, not just the wording.">i</span></label>
+          <select id="teachingModel">
+            <option value="standard">Standard lesson</option>
+            <option value="gradual_release">Gradual Release</option>
+            <option value="explicit_instruction">Explicit Instruction</option>
+            <option value="five_e">5E Inquiry</option>
+            <option value="inquiry">Inquiry-Based</option>
+            <option value="project_based">Project-Based Lesson</option>
+          </select>
+          <p id="teachingModelHint" class="hint" style="margin:7px 0 12px;font-size:12.5px">A flexible lesson flow that works well for most topics and school templates.</p>
+          <div id="teachingModelFlow" class="model-flow" aria-live="polite"></div>
           <label for="focus">Lesson style or focus <span style="color:var(--muted);font-weight:400">(optional)</span> <span class="hint-i" tabindex="0" role="img" aria-label="An optional steer, e.g. use real-world examples, lots of group work." data-tip="e.g. use real-world examples; lots of group work">i</span></label>
           <textarea id="focus" rows="2" maxlength="400" placeholder="e.g. use real-world examples, group work, and simple classroom computer examples"></textarea>
           <div class="char-row"><span></span><span class="char-count" id="focusCount"></span></div>
@@ -2471,6 +2495,27 @@
     function badgeMeta(src){ if(src==='ai-generated') return {cls:'ai',label:'AI'}; if(src==='svg-diagram') return {cls:'ai',label:'diagram'}; if(src&&src!=='library') return {cls:'fetched',label:'fetched'}; return {cls:'',label:'library'}; }
     const composer=$('composer'), planStage=$('planStage'), results=$('results'), statusEl=$('status');
     let library={subjects:[],topicsBySubject:{}}, ctx=null, currentDeckId=null;
+    let teachingModelsById={standard:{id:'standard',label:'Standard lesson',description:'A flexible lesson flow that works well for most topics and school templates.'}}, selectedTeachingModelId='standard';
+
+    function updateTeachingModelHint(){
+      const model=teachingModelsById[$('teachingModel').value]||teachingModelsById.standard;
+      selectedTeachingModelId=model.id;
+      $('teachingModelHint').textContent=model.whenToUse||model.description||'';
+      $('teachingModelFlow').innerHTML=(model.stages||[]).map((stage,index)=>`${index?'<span class="arrow" aria-hidden="true">→</span>':''}<span class="stage">${esc(stage.label)}</span>`).join('');
+    }
+    $('teachingModel').addEventListener('change',updateTeachingModelHint);
+    async function loadTeachingModels(){
+      try{
+        const d=await fetch('/api/teaching-models').then(r=>r.json());
+        if(d.models&&d.models.length){
+          teachingModelsById=Object.fromEntries(d.models.map(m=>[m.id,m]));
+          const current=selectedTeachingModelId;
+          const options=d.models.map(m=>`<option value="${esc(m.id)}">${esc(m.label)}</option>`).join('');
+          ['teachingModel','ipModel','isModel'].forEach(id=>{ if($(id)){ $(id).innerHTML=options; $(id).value=teachingModelsById[current]?current:(d.defaultModelId||'standard'); } });
+        }
+      }catch{}
+      updateTeachingModelHint();
+    }
 
     function setStep(n){ document.querySelectorAll('.steps .st').forEach(el=>{ const s=+el.dataset.step; el.classList.toggle('active',s===n); el.classList.toggle('done',s<n); }); }
     // startMode: which stage-1 entry the teacher chose — plan fresh, upload a
@@ -2785,6 +2830,7 @@
       }
       ctx={ subject, topic, grade:$('grade').value||'middle school',
         slideCount:Number($('slideCount').value)||5, tone:$('tone').value, focus:$('focus').value.trim(), objectives,
+        teachingModelId:$('teachingModel').value||'standard',
         templateId:selectedTemplateId,
         successCriteria:(planMode==='import'&&pulledItemData)?pulledItemData.successCriteria:[],
         resources:(planMode==='import'&&pulledItemData)?pulledItemData.resources:[] };
@@ -2822,7 +2868,8 @@
       const fd=new FormData();
       fd.append('file',file); fd.append('subject',subject); fd.append('topic',topic);
       fd.append('grade',$('ipGrade').value); fd.append('slideCount',$('ipSlideCount').value||'5');
-      fd.append('tone',$('ipTone').value); fd.append('presetId',selectedPresetId);
+      const teachingModelId=$('ipModel').value||'standard';
+      fd.append('tone',$('ipTone').value); fd.append('teachingModelId',teachingModelId); fd.append('presetId',selectedPresetId);
       try{
         const r=await fetch('/api/import/lesson-plan',{method:'POST',body:fd});
         const d=await r.json();
@@ -2830,7 +2877,7 @@
         if(!r.ok) throw new Error(d.error);
         // Ground the lesson pack + games in the uploaded plan (no in-app plan to collect).
         ctx={ subject, topic, grade:$('ipGrade').value||'middle school', slideCount:Number($('ipSlideCount').value)||5,
-          tone:$('ipTone').value, focus:'', objectives:'', lessonPlanText:d.sourceText||'' };
+          tone:$('ipTone').value, focus:'', objectives:'', teachingModelId, lessonPlanText:d.sourceText||'' };
         importedPlanText=d.sourceText||''; planTemplateId=null; planStage.querySelector('#planSections')&&($('planSections').innerHTML='');
         currentDeckId=d.deckId; statusEl.innerHTML=''; renderDeck(d); show('slides'); setStep(3); results.scrollIntoView({behavior:'smooth'}); refreshCredits();
       }catch(err){ statusEl.className='status err'; statusEl.textContent=err.message; }
@@ -2850,11 +2897,12 @@
       statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>Reading your slides…';
       const fd=new FormData();
       fd.append('file',file); fd.append('subject',subject); fd.append('topic',topic); fd.append('grade',$('isGrade').value);
+      const teachingModelId=$('isModel').value||'standard'; fd.append('teachingModelId',teachingModelId);
       try{
         const r=await fetch('/api/import/slides',{method:'POST',body:fd});
         const d=await r.json(); if(!r.ok) throw new Error(d.error);
         ctx={ subject, topic, grade:$('isGrade').value||'middle school', slideCount:d.slideCount||5,
-          tone:'clear and engaging', focus:'', objectives:'', lessonPlanText:d.sourceText||'' };
+          tone:'clear and engaging', focus:'', objectives:'', teachingModelId, lessonPlanText:d.sourceText||'' };
         importedPlanText=d.sourceText||''; currentDeckId=d.deckId;
         renderDeck(d);
         // Clear any prior plan so the lesson pack grounds on the slide content
@@ -2863,7 +2911,7 @@
         if(withPlan){
           statusEl.innerHTML='<span class="spinner"></span>Writing a lesson plan from your slides…';
           const pr=await fetch('/api/lesson-plan',{method:'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({subject,topic,grade:$('isGrade').value,objectives:d.sourceText})});
+            body:JSON.stringify({subject,topic,grade:$('isGrade').value,teachingModelId,objectives:d.sourceText})});
           const pd=await pr.json();
           if(pr.ok){ renderPlan(pd); }
           else { toast(pd.error||'Could not write a plan — showing your slides.'); }
@@ -2877,9 +2925,14 @@
 
     function renderPlan(d){
       planTemplateId=d.templateId||null;
-      $('planSrc').textContent=d.usedTemplate?`· matching ${d.templateName}`:'· standard structure (no template)';
+      if(d.model) teachingModelsById[d.model.id]=d.model;
+      const model=teachingModelsById[d.teachingModelId||ctx?.teachingModelId||'standard']||teachingModelsById.standard;
+      const modelNote=model?`· ${model.label}`:'';
+      const templateNote=d.usedTemplate?` · matching ${d.templateName}`:' · model structure';
+      $('planSrc').textContent=modelNote+templateNote;
       $('planSections').innerHTML=d.sections.map((s,i)=>`
-        <div class="plan-section" data-i="${i}">
+        <div class="plan-section" data-i="${i}" data-stage="${esc(s.stageId||'')}">
+          ${s.stageId&&model?.stages?.find(stage=>stage.id===s.stageId)?`<span class="plan-stage">${esc(model.stages.find(stage=>stage.id===s.stageId).label)}</span>`:''}
           <input class="heading" value="${esc(s.heading)}" />
           <textarea class="content" rows="3">${esc(s.content)}</textarea>
         </div>`).join('');
@@ -2887,7 +2940,7 @@
     }
     function collectPlan(){
       return { sections:[...planStage.querySelectorAll('.plan-section')].map(el=>({
-        heading:el.querySelector('.heading').value.trim(), content:el.querySelector('.content').value.trim()
+        heading:el.querySelector('.heading').value.trim(), content:el.querySelector('.content').value.trim(), stageId:el.dataset.stage||undefined
       })) };
     }
 
@@ -2929,6 +2982,11 @@
 
     const KICKER={ title:['title','i-pencil','Title slide'], objectives:['objectives','i-target','Learning Objectives'], check:['activity','i-target','Quick Check'], activity:['activity','i-spark','Your Turn'], recap:['recap','i-check','Recap'] };
     const deckEl=$('deck');
+    function modelStageLabel(stageId){
+      if(!stageId) return '';
+      for(const model of Object.values(teachingModelsById)){ const stage=model.stages&&model.stages.find(s=>s.id===stageId); if(stage) return stage.label; }
+      return stageId.replace(/_/g,' ');
+    }
     function svgPie(num,den){
       const cx=50,cy=50,r=46; let p='';
       for(let k=0;k<den;k++){
@@ -2956,7 +3014,8 @@
         const swap=s.image?`<button class="swap-btn" data-action="swap" data-i="${i}">${SWAP_HTML}</button>`:'';
         thumb=s.image?`<div class="thumb"><img src="${esc(s.image)}" loading="lazy">${badge}${swap}</div>`:'';
       }
-      const k=KICKER[s.type]; const kicker=k?`<span class="kicker ${k[0]}">${ICON(k[1])}${k[2]}</span>`:'';
+      const k=KICKER[s.type]; const kicker=k?`<span class="kicker ${k[0]}">${ICON(k[1])}${k[2]}${s.modelStage?`<span class="model-stage">${esc(modelStageLabel(s.modelStage))}</span>`:''}</span>`:'';
+      const stageKicker=!k&&s.modelStage?`<span class="kicker"><span class="model-stage">${esc(modelStageLabel(s.modelStage))}</span></span>`:'';
       let body;
       if(s.type==='title'){ body=`${kicker}<h3 contenteditable data-field="title">${esc(s.title)}</h3><p class="sub" contenteditable data-field="subtitle">${esc(s.subtitle)}</p>`; }
       else{
@@ -2971,14 +3030,15 @@
         const diff=s.differentiation?`<div class="diff"><div><b style="color:#15824b">Support</b> ${esc(s.differentiation.support)}</div><div><b style="color:#1f4e79">Stretch</b> ${esc(s.differentiation.stretch)}</div></div>`:'';
         const sc=(s.shortcuts&&s.shortcuts.length)?`<div class="shortcuts">${s.shortcuts.map(x=>`<div class="sc-row"><span class="sc-act">${esc(x.action)}</span><span class="sc-keys">${String(x.keys).split('+').map(k=>k.trim()).filter(Boolean).map((k,n)=>(n>0?'<span class="sc-plus">+</span>':'')+'<kbd class="keycap">'+esc(k)+'</kbd>').join('')}</span></div>`).join('')}</div>`:'';
         const wk=(s.worked&&s.worked.steps&&s.worked.steps.length)?`<div class="worked">${s.worked.task?`<div class="wtask">${esc(s.worked.task)}</div>`:''}<ol>${s.worked.steps.map(st=>`<li>${esc(st)}</li>`).join('')}</ol></div>`:'';
-        body=`${kicker}<h3 contenteditable data-field="title">${esc(s.title)}</h3>${bl}${sc}${wk}${ex}${diff}${actions}`;
+        body=`${kicker||stageKicker}<h3 contenteditable data-field="title">${esc(s.title)}</h3>${bl}${sc}${wk}${ex}${diff}${actions}`;
       }
       return `<div class="slide" data-index="${i}">${thumb}<div class="body">${body}</div></div>`;
     }
     const BAND={ early:'Early grades · big colourful text', middle:'Middle grades · balanced', senior:'Senior grades · detailed' };
     function renderDeck(d){
       $('deckTitle').textContent=d.filename.replace('.pptx','');
-      $('deckCount').innerHTML=`· ${d.slideCount} slides ${d.band?`<span class="band-pill">${ICON('i-target')}${BAND[d.band]||d.band}</span>`:''}`;
+      const model=teachingModelsById[d.teachingModelId];
+      $('deckCount').innerHTML=`· ${d.slideCount} slides ${model?`<span class="band-pill">${ICON('i-target')}${esc(model.label)}</span>`:''} ${d.band?`<span class="band-pill">${ICON('i-target')}${BAND[d.band]||d.band}</span>`:''}`;
       deckEl.className='deck'+(d.band?' band-'+d.band:''); deckEl.innerHTML=d.slides.map((s,i)=>cardHTML(s,i)).join('');
       $('packPreview').innerHTML=''; // reset lesson-pack for the new deck
       resetGameSection(); // reset the student-game box for the new deck
@@ -3817,7 +3877,7 @@
       $('guideHeroBtn').style.display='inline-flex';
       // Auto-open wizard on first visit
       if(!localStorage.getItem('lc_wizard_done')) setTimeout(openWizard, 600);
-      loadLibrary(); loadTemplates(); loadRosters(true); loadPlanningSources(); loadAppConfig(); loadPresets(); refreshCredits();
+      loadLibrary(); loadTemplates(); loadRosters(true); loadPlanningSources(); loadAppConfig(); loadPresets(); loadTeachingModels(); refreshCredits();
     }
     function showAuth(){
       authScreen.style.display='block'; nav.style.display='none'; if(mainNavMenu) mainNavMenu.style.display='none'; appEl.style.display='none';
