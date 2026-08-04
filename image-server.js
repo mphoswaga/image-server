@@ -448,8 +448,9 @@ const DRIVE_RETURN_COOKIE = 'lc_drive_return';
 function publicOriginFor(req) {
   const configured = process.env.GOOGLE_REDIRECT_ORIGIN || process.env.PUBLIC_SITE_URL || process.env.APP_URL;
   if (configured) return String(configured).replace(/\/+$/, '');
-  if (process.env.NODE_ENV === 'production') return 'https://lesson.educscope.com';
-  return originFor(req);
+  const host = String(req.get('host') || req.hostname || '').toLowerCase();
+  if (host.includes('localhost') || host.startsWith('127.0.0.1') || host.startsWith('[::1]')) return originFor(req);
+  return 'https://lesson.educscope.com';
 }
 const driveRedirectUri = req => `${publicOriginFor(req)}/integrations/google-drive/callback`;
 
