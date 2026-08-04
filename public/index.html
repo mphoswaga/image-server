@@ -515,6 +515,136 @@
     @media(max-width:720px){ .nav { gap:10px; padding-inline:12px; } .nav-links { max-width:calc(100vw - 175px); } .nav-link { min-height:38px; padding:8px 10px; white-space:nowrap; } .app-sw-menu { right:16px; } .nav-name { display:none; } }
     .app-tile-name { font-size:12px; font-weight:700; color:var(--ink); text-align:center; line-height:1.3; }
 
+    .app-menu {
+      position:fixed;
+      top:92px;
+      left:18px;
+      width:104px;
+      max-height:54px;
+      display:grid;
+      gap:8px;
+      padding:7px;
+      border:1px solid rgba(197,222,216,.72);
+      border-radius:999px;
+      background:radial-gradient(circle at 18% 10%,rgba(110,231,216,.22),transparent 32%),rgba(255,255,255,.96);
+      box-shadow:var(--sh);
+      overflow:hidden;
+      z-index:1100;
+      transition:width .24s,max-height .24s,border-radius .24s,box-shadow .24s,transform .24s;
+    }
+    .app-menu:hover,
+    .app-menu:focus-within {
+      width:232px;
+      max-height:calc(100vh - 116px);
+      border-radius:16px;
+      box-shadow:var(--sh-lg);
+      transform:translateX(2px);
+    }
+    .app-menu-title {
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      min-width:0;
+      padding:8px 10px;
+      color:#0f766e;
+      font-size:12px;
+      font-weight:850;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      white-space:nowrap;
+      cursor:default;
+    }
+    .app-menu-title .ic { width:18px; height:18px; }
+    .app-menu:hover .app-menu-title,
+    .app-menu:focus-within .app-menu-title { justify-content:flex-start; }
+    .app-menu-label {
+      opacity:0;
+      transform:translateX(-6px);
+      transition:opacity .16s,transform .16s;
+    }
+    .app-menu:hover .app-menu-label,
+    .app-menu:focus-within .app-menu-label {
+      opacity:1;
+      transform:translateX(0);
+    }
+    .app-menu:not(:hover):not(:focus-within) .nav-link {
+      min-height:0;
+      height:0;
+      padding-top:0;
+      padding-bottom:0;
+      border-width:0;
+      opacity:0;
+      pointer-events:none;
+      overflow:hidden;
+    }
+    .app-menu .nav-link {
+      width:100%;
+      min-height:42px;
+      display:flex;
+      align-items:center;
+      gap:12px;
+      border:1px solid transparent;
+      border-radius:12px;
+      background:transparent;
+      color:#233136;
+      cursor:pointer;
+      font-size:14px;
+      font-weight:800;
+      padding:9px 10px;
+      text-align:left;
+      white-space:nowrap;
+      transition:background .16s,border-color .16s,color .16s,transform .16s;
+    }
+    .app-menu .nav-link:hover,
+    .app-menu .nav-link:focus-visible,
+    .app-menu .nav-link.nav-active {
+      background:linear-gradient(135deg,rgba(223,245,241,.95),rgba(255,255,255,.85));
+      border-color:#a9ded6;
+      color:#0f766e;
+      outline:none;
+      transform:translateX(2px);
+    }
+    .app-menu .nav-link.nav-active { box-shadow:inset 3px 0 0 var(--accent); }
+    .app-menu .nav-link .ic { width:20px; height:20px; flex:0 0 20px; }
+    .app-menu .credits-badge { margin-left:auto; }
+    @media(max-width:760px){
+      .app-menu {
+        top:auto;
+        right:12px;
+        bottom:12px;
+        left:12px;
+        width:auto;
+        max-height:none;
+        display:flex !important;
+        overflow-x:auto;
+        border-radius:18px;
+        z-index:1000;
+      }
+      .app-menu:hover,
+      .app-menu:focus-within {
+        width:auto;
+        max-height:none;
+        transform:none;
+      }
+      .app-menu-title { display:none; }
+      .app-menu:not(:hover):not(:focus-within) .nav-link,
+      .app-menu .nav-link {
+        width:auto;
+        flex:0 0 auto;
+        min-height:42px;
+        height:auto;
+        padding:9px 12px;
+        border-width:1px;
+        opacity:1;
+        pointer-events:auto;
+      }
+      .app-menu-label {
+        opacity:1;
+        transform:none;
+      }
+    }
+
     /* ── Page headers (top of panels) ── */
     .page-hd { display:flex; align-items:center; gap:12px; margin-bottom:24px; padding-bottom:18px; border-bottom:1px solid var(--border); }
     .page-hd h2 { margin:0; font-size:21px; font-weight:800; color:var(--ink); flex:1; }
@@ -1429,19 +1559,6 @@
         <div class="ls-wm"><span class="ls-les">Lesson</span><span class="ls-sc">Scope</span></div>
       </div>
     </span>
-    <button id="navMenuBtn" class="nav-menu-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="mainNavMenu"><svg class="ic" aria-hidden="true"><use href="#i-apps"/></svg> Menu</button>
-    <span class="nav-links" id="mainNavMenu">
-      <button id="homeBtn" class="nav-link"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Plan</button>
-      <button id="rostersBtn" class="nav-link"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg> Rosters</button>
-      <button id="gamesBtn" class="nav-link"><svg class="ic" aria-hidden="true"><use href="#i-gamepad"/></svg> My games</button>
-      <button id="assignmentsBtn" class="nav-link"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg> My assignments</button>
-      <button id="marksBtn" class="nav-link"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> Marks</button>
-      <button id="creditsBtn" class="nav-link" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> <span id="creditsNavLabel">Usage</span> <span id="creditsNavBadge" class="credits-badge" style="display:none"></span></button>
-      <button id="adminBtn" class="nav-link" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-sliders"/></svg> Admin</button>
-      <span class="nav-sep" style="margin:0 4px"></span>
-      <button id="guideBtnNav" class="nav-link" style="color:var(--accent);font-weight:700" title="Quick start guide"><svg class="ic" aria-hidden="true"><use href="#i-compass"/></svg> Guide</button>
-    </span>
-    <span class="nav-sep"></span>
     <span class="nav-user">
       <div class="app-sw" id="appSw">
         <button class="app-sw-btn" id="appSwBtn" title="Teacher suite" aria-haspopup="true" aria-expanded="false">
@@ -1466,6 +1583,21 @@
       <button id="passkeysNavBtn" class="logout" title="Manage passkeys" style="background:none"><svg class="ic" aria-hidden="true"><use href="#i-key"/></svg></button>
       <button id="logoutBtn" class="logout"><svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg> Log out</button>
     </span>
+  </nav>
+
+  <nav class="app-menu" id="mainNavMenu" aria-label="Main navigation" tabindex="0" style="display:none">
+    <div class="app-menu-title">
+      <svg class="ic" aria-hidden="true"><use href="#i-apps"/></svg>
+      <span>Menu</span>
+    </div>
+    <button id="homeBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg><span class="app-menu-label">Plan</span></button>
+    <button id="rostersBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg><span class="app-menu-label">Rosters</span></button>
+    <button id="gamesBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-gamepad"/></svg><span class="app-menu-label">My games</span></button>
+    <button id="assignmentsBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg><span class="app-menu-label">My assignments</span></button>
+    <button id="marksBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg><span class="app-menu-label">Marks</span></button>
+    <button id="creditsBtn" class="nav-link" type="button" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg><span id="creditsNavLabel" class="app-menu-label">Usage</span><span id="creditsNavBadge" class="credits-badge" style="display:none"></span></button>
+    <button id="adminBtn" class="nav-link" type="button" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-sliders"/></svg><span class="app-menu-label">Admin</span></button>
+    <button id="guideBtnNav" class="nav-link" type="button" style="color:var(--accent);font-weight:800" title="Quick start guide"><svg class="ic" aria-hidden="true"><use href="#i-compass"/></svg><span class="app-menu-label">Guide</span></button>
   </nav>
 
   <div id="passkeysModal" style="display:none;position:fixed;inset:0;background:rgba(20,24,33,.5);z-index:2000;align-items:center;justify-content:center">
@@ -3021,7 +3153,7 @@
     });
 
     // ---- auth ----
-    const authScreen=$('authScreen'), nav=$('nav'), appEl=$('app');
+    const authScreen=$('authScreen'), nav=$('nav'), appEl=$('app'), mainNavMenu=$('mainNavMenu');
     let educscopeLoginUrl='';
     let mode='login';
     function setMode(m){ mode=m;
@@ -3464,7 +3596,7 @@
 
     function enterApp(user){
       appReady=true;
-      authScreen.style.display='none'; nav.style.display='flex'; appEl.style.display='block';
+      authScreen.style.display='none'; nav.style.display='flex'; if(mainNavMenu) mainNavMenu.style.display='grid'; appEl.style.display='block';
       disableStartupClickShield();
       $('navName').textContent=user.name||user.email;
       $('navAvatar').textContent=(user.name||user.email||'?').trim().charAt(0).toUpperCase();
@@ -3479,7 +3611,7 @@
       loadLibrary(); loadTemplates(); loadRosters(true); loadPlanningSources(); loadAppConfig(); loadPresets(); refreshCredits();
     }
     function showAuth(){
-      authScreen.style.display='block'; nav.style.display='none'; appEl.style.display='none';
+      authScreen.style.display='block'; nav.style.display='none'; if(mainNavMenu) mainNavMenu.style.display='none'; appEl.style.display='none';
       disableStartupClickShield();
       $('guideHeroBtn').style.display='none';
       setMode('login');
