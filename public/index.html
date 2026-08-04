@@ -3525,10 +3525,9 @@
       const isOpen=$('nav')?.classList.toggle('menu-open') || false;
       $('navMenuBtn').setAttribute('aria-expanded', String(isOpen));
     }
-    $('navMenuBtn')?.addEventListener('pointerdown', toggleMainNavMenu, { capture:true });
-    $('navMenuBtn')?.addEventListener('click', e=>{ e.preventDefault(); e.stopPropagation(); });
-    $('mainNavMenu')?.addEventListener('click', e=>{ if(e.target.closest('.nav-link')) closeMainNavMenu(); e.stopPropagation(); });
-    document.addEventListener('pointerdown', e=>{ if(!$('nav')?.contains(e.target)) closeMainNavMenu(); }, { capture:true });
+    $('navMenuBtn')?.addEventListener('click', toggleMainNavMenu);
+    $('mainNavMenu')?.addEventListener('click', e=>{ if(e.target.closest('.nav-link')) closeMainNavMenu(); });
+    document.addEventListener('click', e=>{ if(!$('nav')?.contains(e.target)) closeMainNavMenu(); });
     $('homeBtn').onclick=goHome;
     $('adminBtn').onclick=openAdmin;
     $('adminBack').onclick=closeAdmin;
