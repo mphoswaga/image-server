@@ -835,11 +835,11 @@
           <button id="educscopeSignupBtn" type="button" class="btn ghost full">Sign up</button>
         </div>
       </div>
-      <div class="tabs" style="display:none">
+      <div class="tabs" style="display:none" aria-hidden="true" data-legacy-local-auth="true">
         <button id="tabLogin" class="active" type="button">Log in</button>
         <button id="tabSignup" type="button">Sign up</button>
       </div>
-      <form id="authForm" style="display:none">
+      <form id="authForm" style="display:none" aria-hidden="true" data-legacy-local-auth="true">
         <div id="nameRow" style="display:none">
           <label for="auName">Name</label>
           <input id="auName" type="text" placeholder="Your name" autocomplete="name" />
@@ -860,7 +860,7 @@
         </div>
       </form>
 
-      <form id="resetRequestForm" style="display:none">
+      <form id="resetRequestForm" style="display:none" aria-hidden="true" data-legacy-local-auth="true">
         <p class="sub" style="margin-bottom:14px">Enter your email and we'll send you a reset link.</p>
         <label for="resetEmail">Email</label>
         <input id="resetEmail" type="email" placeholder="you@school.edu" autocomplete="email" required />
@@ -870,7 +870,7 @@
         <button id="backToLoginBtn" type="button" style="background:none;border:none;color:var(--muted);font-size:12.5px;cursor:pointer;padding:8px 0 0;display:block;text-align:center;width:100%">Back to log in</button>
       </form>
 
-      <form id="resetConfirmForm" style="display:none">
+      <form id="resetConfirmForm" style="display:none" aria-hidden="true" data-legacy-local-auth="true">
         <p class="sub" style="margin-bottom:14px">Choose a new password.</p>
         <label for="newPass">New password</label>
         <input id="newPass" type="password" placeholder="At least 6 characters" autocomplete="new-password" required />

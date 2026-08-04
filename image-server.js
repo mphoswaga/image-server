@@ -144,7 +144,20 @@ const setSession = (res, userId) => res.cookie(COOKIE_NAME, issueToken(userId), 
   httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000,
 });
 
+function educscopeOnlyAuthEnabled() {
+  return educscope.configured() && process.env.LESSONSCOPE_LOCAL_AUTH_ENABLED !== 'true';
+}
+
+function educscopeOnlyResponse(res) {
+  return res.status(403).json({
+    error: 'Use your EducScope account to sign in.',
+    educscopeRequired: true,
+    loginUrl: educscope.loginUrl(),
+  });
+}
+
 app.post('/api/signup', async (req, res) => {
+  if (educscopeOnlyAuthEnabled()) return educscopeOnlyResponse(res);
   try {
     const { email, password, name } = req.body || {};
     const user = await signup(email, password, name);
@@ -164,6 +177,7 @@ app.post('/api/student/signup', async (req, res) => {
 });
 
 app.post('/api/login', async (req, res) => {
+  if (educscopeOnlyAuthEnabled()) return educscopeOnlyResponse(res);
   const { email, password } = req.body || {};
   const user = await login(email, password);
   if (!user) return res.status(401).json({ error: 'Incorrect email or password.' });
@@ -245,6 +259,14 @@ app.post('/api/logout', (req, res) => {
 // Always responds the same way whether or not the email has an account —
 // otherwise this endpoint could be used to test which emails are registered.
 app.post('/api/password-reset/request', async (req, res) => {
+  if (educscopeOnlyAuthEnabled()) {
+    return res.json({
+      ok: true,
+      message: 'EducScope manages password reset for the whole suite.',
+      educscopeRequired: true,
+      loginUrl: educscope.loginUrl(),
+    });
+  }
   const email = String(req.body && req.body.email || '').trim();
   if (!email) return res.status(400).json({ error: 'Enter your email address.' });
   try {
@@ -265,6 +287,13 @@ app.post('/api/password-reset/request', async (req, res) => {
 });
 
 app.post('/api/password-reset/confirm', async (req, res) => {
+  if (educscopeOnlyAuthEnabled()) {
+    return res.status(403).json({
+      error: 'EducScope handles password reset for LessonScope.',
+      educscopeRequired: true,
+      loginUrl: educscope.loginUrl(),
+    });
+  }
   const { token, password } = req.body || {};
   try {
     await resetPasswordWithToken(token, password);
@@ -330,6 +359,7 @@ app.post('/api/webauthn/register/verify', requireAuth, async (req, res) => {
 // the browser shows the teacher which of their passkeys to use, so no email
 // needs to be typed first.
 app.get('/api/webauthn/login/options', async (req, res) => {
+  if (educscopeOnlyAuthEnabled()) return educscopeOnlyResponse(res);
   try {
     const { options, requestId } = await webauthn.getLoginOptions(rpIDFor(req));
     res.json({ options, requestId });
@@ -337,6 +367,7 @@ app.get('/api/webauthn/login/options', async (req, res) => {
 });
 
 app.post('/api/webauthn/login/verify', async (req, res) => {
+  if (educscopeOnlyAuthEnabled()) return educscopeOnlyResponse(res);
   try {
     const userId = await webauthn.verifyLogin(req.body && req.body.requestId, req.body && req.body.response, rpIDFor(req), originFor(req));
     setSession(res, userId);
@@ -346,13 +377,17 @@ app.post('/api/webauthn/login/verify', async (req, res) => {
 
 // ── Social login (Sign in with Google / Microsoft) ─────────────────────────
 // Which providers are configured (frontend shows only these buttons).
-app.get('/api/auth/providers', (req, res) => res.json({ providers: socialAuth.enabledProviders() }));
+app.get('/api/auth/providers', (req, res) => {
+  if (educscopeOnlyAuthEnabled()) return res.json({ providers: [] });
+  res.json({ providers: socialAuth.enabledProviders() });
+});
 
 const OAUTH_STATE_COOKIE = 'lc_social_state';
 const socialRedirectUri = (req, provider) => `${originFor(req)}/auth/${provider}/callback`;
 
 // Start sign-in: set a short-lived CSRF-state cookie and bounce to the provider.
 app.get('/auth/:provider', (req, res) => {
+  if (educscopeOnlyAuthEnabled()) return res.redirect(educscope.loginUrl() || '/');
   const provider = req.params.provider;
   if (!socialAuth.isEnabled(provider)) return res.redirect('/?authError=' + encodeURIComponent('That sign-in method is not available.'));
   const state = socialAuth.randomState();
@@ -363,6 +398,7 @@ app.get('/auth/:provider', (req, res) => {
 // Provider redirects back here with ?code&state. Verify state, exchange the
 // code, find-or-create the teacher, set the session, and land them in the app.
 app.get('/auth/:provider/callback', async (req, res) => {
+  if (educscopeOnlyAuthEnabled()) return res.redirect(educscope.loginUrl() || '/');
   const provider = req.params.provider;
   const fail = msg => res.redirect('/?authError=' + encodeURIComponent(msg));
   try {
