@@ -445,7 +445,13 @@ const OAUTH_STATE_COOKIE = 'lc_social_state';
 const socialRedirectUri = (req, provider) => `${originFor(req)}/auth/${provider}/callback`;
 const DRIVE_STATE_COOKIE = 'lc_drive_state';
 const DRIVE_RETURN_COOKIE = 'lc_drive_return';
-const driveRedirectUri = req => `${originFor(req)}/integrations/google-drive/callback`;
+function publicOriginFor(req) {
+  const configured = process.env.GOOGLE_REDIRECT_ORIGIN || process.env.PUBLIC_SITE_URL || process.env.APP_URL;
+  if (configured) return String(configured).replace(/\/+$/, '');
+  if (process.env.NODE_ENV === 'production') return 'https://lesson.educscope.com';
+  return originFor(req);
+}
+const driveRedirectUri = req => `${publicOriginFor(req)}/integrations/google-drive/callback`;
 
 // ── Google Drive export integration ────────────────────────────────────────
 app.get('/api/google-drive/status', requireAuth, (req, res) => {
@@ -453,6 +459,7 @@ app.get('/api/google-drive/status', requireAuth, (req, res) => {
     configured: googleDrive.configured(),
     connected: googleDrive.configured() && googleDrive.connected(req.userId),
     connectUrl: '/integrations/google-drive/connect',
+    redirectUri: driveRedirectUri(req),
   });
 });
 
