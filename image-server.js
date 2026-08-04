@@ -90,6 +90,31 @@ function requireGameAccess(req, res, next) {
   res.status(401).json({ error: 'Not authenticated.' });
 }
 
+// Assignment pages can recover from a missing assignment-scoped lc_game cookie
+// by verifying the longer-lived student identity cookie and reissuing lc_game.
+// Keep this separate from requireGameAccess so game routes still require a
+// session scoped to the current game.
+function requireAssignmentAccess(req, res, next) {
+  const gameTok = req.cookies && req.cookies[GAME_COOKIE];
+  if (gameTok) {
+    try {
+      const p = jwt.verify(gameTok, JWT_SECRET);
+      if (p.type === 'assignment') { req.gameSession = { studentId: p.studentId, assignmentId: p.assignmentId, name: p.name }; return next(); }
+      if (p.type === 'game') { req.gameSession = { studentId: p.studentId, gameId: p.gameId, name: p.name }; return next(); }
+    } catch {}
+  }
+  const student = optionalStudentSession(req);
+  if (student) { req.studentSession = student; return next(); }
+  const tok = req.cookies && req.cookies[COOKIE_NAME];
+  if (tok) {
+    try {
+      const p = verifyToken(tok);
+      if (p) { req.userId = p; req.user = getUserById(p) || {}; return next(); }
+    } catch {}
+  }
+  res.status(401).json({ error: 'Not authenticated.' });
+}
+
 // General student identity — NOT scoped to one game/assignment, unlike
 // lc_game above. Established once via /api/student/login (Student ID + PIN),
 // then reused to browse "my work" and join new games/assignments by Room
@@ -108,6 +133,36 @@ function requireStudentAccess(req, res, next) {
     } catch {}
   }
   res.status(401).json({ error: 'Not signed in.' });
+}
+
+function optionalStudentSession(req) {
+  const tok = req.cookies && req.cookies[STUDENT_COOKIE];
+  if (!tok) return null;
+  try {
+    const p = jwt.verify(tok, JWT_SECRET);
+    return p.type === 'student' ? { studentId: p.studentId, name: p.name } : null;
+  } catch {
+    return null;
+  }
+}
+
+function assignmentStudentSession(req, res, a) {
+  if (req.gameSession && req.gameSession.assignmentId === a.id) return req.gameSession;
+  if (req.gameSession && req.gameSession.assignmentId && req.gameSession.assignmentId !== a.id) return null;
+
+  const student = optionalStudentSession(req);
+  if (!student || !student.studentId) return null;
+
+  let displayName = student.name || student.studentId;
+  if (a.rosterId) {
+    const s = roster.findStudentInRoster(a.teacherId, a.rosterId, student.studentId);
+    if (!s) return null;
+    displayName = s.name;
+  }
+
+  const recovered = { studentId: student.studentId, assignmentId: a.id, name: displayName };
+  res.cookie(GAME_COOKIE, issueGameToken(recovered, 'assignment'), { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
+  return recovered;
 }
 
 const app = express();
@@ -1437,19 +1492,21 @@ app.post('/api/assignment/:id/pin/reset-request', (req, res) => {
 });
 
 // Student: assignment meta (no answer keys).
-app.get('/api/assignment/:id', requireGameAccess, (req, res) => {
+app.get('/api/assignment/:id', requireAssignmentAccess, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
-  if (req.gameSession && req.gameSession.assignmentId !== a.id) return res.status(403).json({ error: 'Session is for a different assignment.' });
+  const session = assignmentStudentSession(req, res, a);
+  if (req.gameSession && req.gameSession.assignmentId && !session) return res.status(403).json({ error: 'Session is for a different assignment.' });
   res.json({ id: a.id, type: a.type, title: a.title, subject: a.subject, topic: a.topic, grade: a.grade, teacherName: a.teacherName, hasRoster: !!a.rosterId, instructions: a.content.instructions, questionCount: a.content.questions.length });
 });
 
 // Student: the questions, WITHOUT answer keys/correctIndex.
-app.get('/api/assignment/:id/take', requireGameAccess, (req, res) => {
+app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
-  if (req.gameSession && req.gameSession.assignmentId !== a.id) return res.status(403).json({ error: 'Session is for a different assignment.' });
-  const already = req.gameSession && assignments.getSubmission(a.id, req.gameSession.studentId);
+  const session = assignmentStudentSession(req, res, a);
+  if (req.gameSession && req.gameSession.assignmentId && !session) return res.status(403).json({ error: 'Session is for a different assignment.' });
+  const already = session && assignments.getSubmission(a.id, session.studentId);
   res.json({
     title: a.title, instructions: a.content.instructions,
     questions: a.content.questions.map(q => ({ id: q.id, question: q.question, kind: q.kind, options: q.options || null, marks: q.marks })),
@@ -1459,17 +1516,18 @@ app.get('/api/assignment/:id/take', requireGameAccess, (req, res) => {
 
 // Student: submit answers — MCQ grades instantly; free-text checks the
 // teacher-confirmed verdict cache first, only calling AI on a genuine miss.
-app.post('/api/assignment/:id/submit', requireGameAccess, async (req, res) => {
-  // requireGameAccess also accepts a teacher's own login as a fallback for
+app.post('/api/assignment/:id/submit', requireAssignmentAccess, async (req, res) => {
+  // requireAssignmentAccess also accepts a teacher's own login as a fallback for
   // read-only routes, WITHOUT setting req.gameSession — submitting needs a
   // real student session, so reject explicitly instead of crashing below.
-  if (!req.gameSession || !req.gameSession.assignmentId) return res.status(401).json({ error: 'Your session has expired — rejoin using the Room Code or link, then try again.' });
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
-  if (req.gameSession.assignmentId !== a.id) return res.status(403).json({ error: 'Session is for a different assignment.' });
+  const session = assignmentStudentSession(req, res, a);
+  if (!session) return res.status(401).json({ error: 'Your session could not be confirmed — rejoin using the Room Code or link, then try again.' });
+  if (session.assignmentId !== a.id) return res.status(403).json({ error: 'Session is for a different assignment.' });
   const answers = (req.body && req.body.answers) || {};
-  const studentId = req.gameSession.studentId;
-  const name = req.gameSession.name || studentId;
+  const studentId = session.studentId;
+  const name = session.name || studentId;
 
   const grades = {};
   let totalMarks = 0, maxMarks = 0;
@@ -1518,12 +1576,13 @@ app.patch('/api/assignment/:id/release', requireAuth, (req, res) => {
 // Student: their own past submission — answers always visible, marks/
 // verdicts only once released or overdue. This is what a student hits when
 // they return to an assignment they've already submitted.
-app.get('/api/assignment/:id/my-results', requireGameAccess, (req, res) => {
-  if (!req.gameSession || !req.gameSession.assignmentId) return res.status(401).json({ error: 'Your session has expired — rejoin using the Room Code or link.' });
+app.get('/api/assignment/:id/my-results', requireAssignmentAccess, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
-  if (req.gameSession.assignmentId !== a.id) return res.status(403).json({ error: 'Session is for a different assignment.' });
-  const sub = assignments.getSubmission(a.id, req.gameSession.studentId);
+  const session = assignmentStudentSession(req, res, a);
+  if (!session) return res.status(401).json({ error: 'Your session could not be confirmed — rejoin using the Room Code or link.' });
+  if (session.assignmentId !== a.id) return res.status(403).json({ error: 'Session is for a different assignment.' });
+  const sub = assignments.getSubmission(a.id, session.studentId);
   if (!sub) return res.status(404).json({ error: 'No submission found.' });
   const released = assignments.isReleased(a);
   res.json({

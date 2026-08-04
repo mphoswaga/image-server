@@ -104,25 +104,39 @@
     const assignmentId = location.pathname.split('/').pop();
     let questions = [];
     const answers = {};
+    const draftKey = 'lessonscope_assignment_draft_' + assignmentId;
 
     function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
     // The generator sometimes bakes "(N marks)" into the question text itself;
     // strip it since the marks badge is always rendered separately below.
     function stripMarks(q) { return String(q || '').replace(/\s*\(\d+\s*marks?\)\s*$/i, ''); }
+    function saveDraft() {
+      try { localStorage.setItem(draftKey, JSON.stringify({ answers, savedAt: Date.now() })); } catch {}
+    }
+    function restoreDraft() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(draftKey) || '{}');
+        if (saved && saved.answers && typeof saved.answers === 'object') Object.assign(answers, saved.answers);
+      } catch {}
+    }
+    function clearDraft() {
+      try { localStorage.removeItem(draftKey); } catch {}
+    }
 
     function renderQuestions() {
       $('questions').innerHTML = questions.map((q, i) => {
         if (q.kind === 'mcq') {
+          const saved = Number(answers[q.id]);
           return `<div class="q">
             <div class="qtext">${i + 1}. ${esc(stripMarks(q.question))} <span class="marks">(${q.marks} mark${q.marks !== 1 ? 's' : ''})</span></div>
             <div class="opts" data-qid="${q.id}">
-              ${(q.options || []).map((o, j) => `<label class="opt" data-i="${j}"><input type="radio" name="${q.id}" value="${j}"> ${esc(o)}</label>`).join('')}
+              ${(q.options || []).map((o, j) => `<label class="opt${saved === j ? ' sel' : ''}" data-i="${j}"><input type="radio" name="${q.id}" value="${j}"${saved === j ? ' checked' : ''}> ${esc(o)}</label>`).join('')}
             </div>
           </div>`;
         }
         return `<div class="q">
           <div class="qtext">${i + 1}. ${esc(stripMarks(q.question))} <span class="marks">(${q.marks} mark${q.marks !== 1 ? 's' : ''})</span></div>
-          <textarea data-qid="${q.id}" placeholder="Type your answer…"></textarea>
+          <textarea data-qid="${q.id}" placeholder="Type your answer…">${esc(answers[q.id] || '')}</textarea>
         </div>`;
       }).join('');
 
@@ -134,10 +148,11 @@
           opt.classList.add('sel');
           opt.querySelector('input').checked = true;
           answers[box.dataset.qid] = Number(opt.dataset.i);
+          saveDraft();
         });
       });
       $('questions').querySelectorAll('textarea').forEach(ta => {
-        ta.addEventListener('input', () => { answers[ta.dataset.qid] = ta.value; });
+        ta.addEventListener('input', () => { answers[ta.dataset.qid] = ta.value; saveDraft(); });
       });
     }
 
@@ -202,6 +217,7 @@
           return;
         }
 
+        restoreDraft();
         renderQuestions();
         $('form').style.display = 'block';
       } catch (err) {
@@ -281,6 +297,7 @@
         });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error);
+        clearDraft();
         renderResults(d, answers);
       } catch (err) {
         $('submitErr').textContent = err.message;
