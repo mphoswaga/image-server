@@ -552,17 +552,20 @@
     .btn-del-confirm:disabled { opacity:.5; cursor:not-allowed; }
     .btn-del-cancel { display:inline-flex; align-items:center; font-size:13px; font-weight:600; font-family:inherit; color:var(--muted); background:none; border:1.5px solid var(--border); border-radius:9px; padding:9px 14px; cursor:pointer; transition:.12s; }
     .btn-del-cancel:hover { background:var(--primary-soft); color:var(--primary); border-color:var(--primary-2); }
-    .roster-verify { width:100%; max-width:560px; min-width:0; }
-    .roster-preview-wrap { overflow:auto; max-height:min(46vh, 360px); margin-bottom:14px; border:1px solid var(--border); border-radius:10px; background:#fff; }
-    .roster-preview-wrap table { min-width:520px; }
-    .roster-verify-actions { display:grid; grid-template-columns:repeat(2, minmax(128px, 1fr)); gap:10px; align-items:stretch; position:relative; z-index:1; }
-    .roster-verify-actions .btn { width:100% !important; min-height:44px; margin:0; white-space:normal; }
+    .roster-verify { width:100%; max-width:760px; min-width:0; }
+    .roster-preview-wrap { overflow:auto; max-height:min(62vh, 620px); margin-bottom:14px; border:1px solid var(--border); border-radius:10px; background:#fff; }
+    .roster-preview-wrap table { min-width:560px; }
+    .roster-verify-actions { display:flex; gap:10px; align-items:center; justify-content:flex-start; flex-wrap:wrap; position:relative; z-index:1; padding-top:2px; }
+    .roster-verify-actions .btn { width:auto !important; min-height:44px; margin:0; white-space:normal; }
+    .roster-verify-actions .btn.primary { min-width:160px; }
+    .roster-verify-actions .btn.ghost { min-width:112px; }
     .card.wide .roster-verify { max-width:100%; }
     #rosterName { max-width:min(100%, 620px) !important; }
     #rosterDropZone { max-width:min(100%, 720px) !important; }
     #rosterCsv { max-width:min(100%, 720px) !important; }
     @media (max-width:440px) {
-      .roster-verify-actions { grid-template-columns:1fr; }
+      .roster-verify-actions { align-items:stretch; }
+      .roster-verify-actions .btn { flex:1 1 100%; }
     }
 
     /* ── Game cards (My games panel) ── */
@@ -3995,19 +3998,20 @@
       const { headers, preview, totalRows, detectedIdCol, detectedNameCol, allRows } = data;
       rosterParsedRows = allRows;
       $('rosterRowCount').textContent = totalRows + ' student' + (totalRows===1?'':'s');
-      $('rosterPreviewNote').textContent = preview.length < totalRows ? `Showing the first ${preview.length} below; all ${totalRows} will be saved.` : 'All rows are shown below.';
+      const visibleRows = Array.isArray(allRows) && allRows.length ? allRows : preview;
+      $('rosterPreviewNote').textContent = visibleRows.length < totalRows ? `Showing ${visibleRows.length}; all ${totalRows} will be saved.` : `All ${totalRows} rows are shown below.`;
 
       // Populate column selectors
       const idSel=$('rosterIdCol'), nameSel=$('rosterNameCol');
       idSel.innerHTML   = headers.map(h=>`<option value="${esc(h)}" ${h===detectedIdCol?'selected':''}>${esc(h)}</option>`).join('');
       nameSel.innerHTML = '<option value="">(none)</option>' + headers.map(h=>`<option value="${esc(h)}" ${h===detectedNameCol?'selected':''}>${esc(h)}</option>`).join('');
 
-      rosterRenderPreview(headers, preview, detectedIdCol||headers[0], detectedNameCol||'');
+      rosterRenderPreview(headers, visibleRows, detectedIdCol||headers[0], detectedNameCol||'');
       $('rosterDropZone').style.display='none';
       $('rosterVerify').style.display='block';
 
       // Live re-render when columns change
-      const rerender=()=>rosterRenderPreview(headers, preview, idSel.value, nameSel.value);
+      const rerender=()=>rosterRenderPreview(headers, visibleRows, idSel.value, nameSel.value);
       idSel.onchange=rerender; nameSel.onchange=rerender;
     }
 
