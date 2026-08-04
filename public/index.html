@@ -155,7 +155,7 @@
     .invalid { border-color:var(--err) !important; box-shadow:0 0 0 4px rgba(192,57,43,.12) !important; }
 
     /* Toasts (replace native alert) */
-    .toast-wrap { position:fixed; top:70px; left:50%; transform:translateX(-50%); z-index:60; display:flex; flex-direction:column; gap:9px; align-items:center; pointer-events:none; width:max-content; max-width:92vw; }
+    .toast-wrap { position:fixed; top:70px; left:50%; transform:translateX(-50%); z-index:1200; display:flex; flex-direction:column; gap:9px; align-items:center; pointer-events:none; width:max-content; max-width:92vw; }
     .toast { pointer-events:auto; background:#fff; border:1px solid var(--border); border-left:4px solid var(--primary-2); box-shadow:var(--sh-lg); border-radius:12px; padding:11px 15px; font-size:14px; font-weight:600; color:var(--ink); display:flex; align-items:center; gap:9px; max-width:min(92vw,460px); animation:toastIn .22s ease; }
     .toast .ic { width:17px; height:17px; flex:none; }
     .toast.err { border-left-color:var(--err); color:var(--err); }
@@ -372,7 +372,7 @@
     .quota-pill b { color:var(--primary); } .quota-pill.low b { color:var(--err); }
 
     /* Image picker modal */
-    .modal { position:fixed; inset:0; background:rgba(16,24,40,.5); display:flex; align-items:center; justify-content:center; z-index:80; padding:20px; }
+    .modal { position:fixed; inset:0; background:rgba(16,24,40,.5); display:flex; align-items:center; justify-content:center; z-index:2000; padding:20px; }
     .modal-card { background:#fff; border-radius:18px; box-shadow:var(--sh-lg); width:680px; max-width:100%; max-height:86vh; display:flex; flex-direction:column; overflow:hidden; }
     .modal-head { display:flex; align-items:center; justify-content:space-between; padding:15px 20px; border-bottom:1px solid var(--border); font-size:16px; }
     .modal-x { border:none; background:none; font-size:26px; line-height:1; cursor:pointer; color:var(--muted); padding:0 4px; }
@@ -435,11 +435,10 @@
 
     /* Top nav */
     .nav {
-      position:sticky; top:0; z-index:2147482000; isolation:isolate; pointer-events:auto;
+      position:sticky; top:0; z-index:1000; pointer-events:auto;
       display:flex; align-items:center; justify-content:space-between; gap:16px;
       min-height:64px; padding:10px clamp(14px,2vw,28px);
-      background:linear-gradient(90deg,rgba(255,255,255,.96),rgba(247,252,251,.92));
-      backdrop-filter:saturate(180%) blur(18px); -webkit-backdrop-filter:saturate(180%) blur(18px);
+      background:linear-gradient(90deg,rgba(255,255,255,.99),rgba(247,252,251,.98));
       border-bottom:1px solid rgba(231,221,205,.92);
       box-shadow:0 8px 28px rgba(16,32,41,.045);
     }
@@ -502,7 +501,7 @@
     .app-sw-btn { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:12px; border:1px solid rgba(231,221,205,.96); background:#fff; color:var(--muted); cursor:pointer; box-shadow:var(--sh-sm); transition:.15s; padding:0; }
     .app-sw-btn:hover { border-color:rgba(22,163,74,.38); background:var(--accent-soft); color:var(--ok); transform:translateY(-1px); }
     .app-sw-btn .ic { width:16px; height:16px; fill:currentColor; stroke:none; }
-    .app-sw-menu { position:fixed; right:22px; top:68px; width:min(330px,calc(100vw - 32px)); background:radial-gradient(circle at 10% 0%,rgba(22,163,74,.12),transparent 34%),rgba(255,255,255,.98); border-radius:16px; box-shadow:0 18px 44px rgba(16,32,41,.14); border:1px solid rgba(231,221,205,.92); padding:12px; z-index:2147483000; pointer-events:auto; }
+    .app-sw-menu { position:fixed; right:22px; top:68px; width:min(330px,calc(100vw - 32px)); background:radial-gradient(circle at 10% 0%,rgba(22,163,74,.12),transparent 34%),rgba(255,255,255,.98); border-radius:16px; box-shadow:0 18px 44px rgba(16,32,41,.14); border:1px solid rgba(231,221,205,.92); padding:12px; z-index:1100; pointer-events:auto; }
     .app-sw-title { font-size:11px; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:.7px; padding:2px 4px 12px; }
     .app-sw-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
     .app-tile { display:flex; flex-direction:column; align-items:center; gap:9px; min-height:104px; padding:14px 8px 12px; border-radius:12px; border:1.5px solid transparent; text-decoration:none; color:var(--ink); transition:.15s; cursor:pointer; }
@@ -660,7 +659,7 @@
 
 
     /* ── Wizard ── */
-    .wizard-overlay { position:fixed; inset:0; background:rgba(16,24,40,.62); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:clamp(10px,2.5vw,20px); }
+    .wizard-overlay { position:fixed; inset:0; background:rgba(16,24,40,.62); backdrop-filter:blur(4px); z-index:2000; display:flex; align-items:center; justify-content:center; padding:clamp(10px,2.5vw,20px); }
     .modal[style*="display:none"],
     .wizard-overlay[style*="display:none"],
     #passkeysModal[style*="display:none"] { pointer-events:none !important; }
@@ -816,7 +815,7 @@
 
     /* ── Splash screen ── */
     #splash {
-      position: fixed; inset: 0; z-index: 99999;
+      position: fixed; inset: 0; z-index: 3000;
       background: #05111e;
       display: flex; align-items: center; justify-content: center;
       transition: opacity .75s cubic-bezier(.4,0,.2,1);
@@ -1469,7 +1468,7 @@
     </span>
   </nav>
 
-  <div id="passkeysModal" style="display:none;position:fixed;inset:0;background:rgba(20,24,33,.5);z-index:200;align-items:center;justify-content:center">
+  <div id="passkeysModal" style="display:none;position:fixed;inset:0;background:rgba(20,24,33,.5);z-index:2000;align-items:center;justify-content:center">
     <div style="background:#fff;border-radius:16px;padding:26px;width:100%;max-width:420px;max-height:80vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.25)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
         <h2 style="font-size:18px;font-weight:700">Passkeys</h2>
