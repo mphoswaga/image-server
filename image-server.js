@@ -1231,6 +1231,7 @@ app.get('/api/join', (req, res) => {
 // query-string endpoint and the session-based /api/student/my-work so
 // they can never drift out of sync.
 function gatherWork(studentId, includeFreeform) {
+  studentId = roster.normalizeStudentId(studentId);
   const matches = roster.findStudentAcrossAllTeachers(studentId);
   const work = [];
   let name = null;
@@ -1240,7 +1241,7 @@ function gatherWork(studentId, includeFreeform) {
     name = name || m.name;
     for (const g of games.listTeacherGames(m.teacherId)) {
       if (g.rosterId !== m.rosterId) continue;
-      const mine = games.getResults(g.id).find(r => r.studentId === studentId);
+      const mine = games.getResults(g.id).find(r => roster.normalizeStudentId(r.studentId) === studentId);
       if (mine) work.push({ kind: 'game', id: g.id, title: g.lessonTitle, subject: g.subject, topic: g.topic, teacherName: teacher.name || '', score: mine.score, total: mine.total, at: mine.at, path: '/play/' + g.id, verified: true });
     }
     for (const a of assignments.listTeacherAssignments(m.teacherId)) {
@@ -1288,7 +1289,7 @@ function gatherWork(studentId, includeFreeform) {
 }
 
 app.get('/api/my-work', (req, res) => {
-  const studentId = String(req.query.studentId || '').trim();
+  const studentId = roster.normalizeStudentId(req.query.studentId);
   if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
   const pin = req.query.pin ? String(req.query.pin).trim() : '';
   const includeFreeform = req.query.includeFreeform === '1' || req.query.includeFreeform === 'true';
@@ -1315,7 +1316,7 @@ app.get('/api/my-work', (req, res) => {
 // Single endpoint for both first-time setup and returning verification —
 // same pattern as /api/assignment/:id/enter, just not scoped to one activity.
 app.post('/api/student/login', (req, res) => {
-  const studentId = String(req.body && req.body.studentId || '').trim();
+  const studentId = roster.normalizeStudentId(req.body && req.body.studentId);
   if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
   const pin = req.body && req.body.pin ? String(req.body.pin).trim() : '';
 
@@ -1338,7 +1339,7 @@ app.post('/api/student/login', (req, res) => {
 });
 
 app.post('/api/student/pin/reset-request', (req, res) => {
-  const studentId = String(req.body && req.body.studentId || '').trim();
+  const studentId = roster.normalizeStudentId(req.body && req.body.studentId);
   if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
   const ok = studentAccount.requestPinReset(studentId);
   if (!ok) return res.status(404).json({ error: 'No account found for this ID yet.' });
@@ -1399,7 +1400,7 @@ app.post('/api/student/join-room', requireStudentAccess, (req, res) => {
 app.post('/api/assignment/:id/enter', async (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
-  const studentId = String(req.body && req.body.studentId || '').trim();
+  const studentId = roster.normalizeStudentId(req.body && req.body.studentId);
   if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
   const pin = req.body && req.body.pin ? String(req.body.pin).trim() : '';
   let displayName = studentId;
@@ -1428,7 +1429,7 @@ app.post('/api/assignment/:id/enter', async (req, res) => {
 app.post('/api/assignment/:id/pin/reset-request', (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a || !a.rosterId) return res.status(404).json({ error: 'Assignment not found.' });
-  const studentId = String(req.body && req.body.studentId || '').trim();
+  const studentId = roster.normalizeStudentId(req.body && req.body.studentId);
   if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
   const ok = studentAccount.requestPinReset(studentId);
   if (!ok) return res.status(404).json({ error: 'No account found for this ID yet.' });
@@ -1557,7 +1558,8 @@ app.patch('/api/assignment/:id/grade', requireAuth, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
   if (a.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assignment.' });
-  const { studentId, questionId, marksAwarded, verdict, rationale } = req.body || {};
+  const { questionId, marksAwarded, verdict, rationale } = req.body || {};
+  const studentId = roster.normalizeStudentId(req.body && req.body.studentId);
   const sub = assignments.getSubmission(a.id, studentId);
   if (!sub) return res.status(404).json({ error: 'Submission not found.' });
   const q = a.content.questions.find(q => q.id === questionId);
@@ -1896,7 +1898,7 @@ app.patch('/api/game/:id/cutoff', requireAuth, (req, res) => {
 app.post('/api/game/:id/enter', async (req, res) => {
   const g = games.getGame(req.params.id);
   if (!g) return res.status(404).json({ error: 'Game not found.' });
-  const studentId = String(req.body && req.body.studentId || '').trim();
+  const studentId = roster.normalizeStudentId(req.body && req.body.studentId);
   if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
   const pin = req.body && req.body.pin ? String(req.body.pin).trim() : '';
   let displayName = studentId;
@@ -1926,7 +1928,7 @@ app.post('/api/game/:id/enter', async (req, res) => {
 app.post('/api/game/:id/pin/reset-request', (req, res) => {
   const g = games.getGame(req.params.id);
   if (!g || !g.rosterId) return res.status(404).json({ error: 'Game not found.' });
-  const studentId = String(req.body && req.body.studentId || '').trim();
+  const studentId = roster.normalizeStudentId(req.body && req.body.studentId);
   if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
   const ok = studentAccount.requestPinReset(studentId);
   if (!ok) return res.status(404).json({ error: 'No account found for this ID yet.' });
@@ -1991,12 +1993,12 @@ app.get('/api/game/:id/results', requireAuth, (req, res) => {
   if (!g) return res.status(404).json({ error: 'Game not found.' });
   if (g.teacherId !== req.userId) return res.status(403).json({ error: 'Not your game.' });
   const rosterData = g.rosterId ? roster.getRoster(req.userId, g.rosterId) : null;
-  const rosterMap = rosterData ? Object.fromEntries(rosterData.students.map(s => [s.id, s.name])) : {};
+  const rosterMap = rosterData ? Object.fromEntries(rosterData.students.map(s => [roster.normalizeStudentId(s.id), s.name])) : {};
   const raw = games.getResults(g.id);
   const results = raw
     .map(r => ({
       studentId: r.studentId,
-      name: rosterMap[r.studentId] || r.name,
+      name: rosterMap[roster.normalizeStudentId(r.studentId)] || r.name,
       score: r.score, total: r.total, at: r.at, attempts: r.attempts,
     }))
     .sort((a, b) => b.score - a.score || (a.at < b.at ? -1 : 1));
@@ -2014,8 +2016,8 @@ app.get('/api/game/:id/results', requireAuth, (req, res) => {
     return { index: i, question: q.question, correct, answered, correctIndex: q.correctIndex, options: q.options || null };
   });
   // Who's on the roster but hasn't played yet, so the teacher can chase them.
-  const played = new Set(raw.map(r => r.studentId));
-  const notPlayed = rosterData ? rosterData.students.filter(s => !played.has(s.id)).map(s => ({ studentId: s.id, name: s.name })) : [];
+  const played = new Set(raw.map(r => roster.normalizeStudentId(r.studentId)));
+  const notPlayed = rosterData ? rosterData.students.filter(s => !played.has(roster.normalizeStudentId(s.id))).map(s => ({ studentId: s.id, name: s.name })) : [];
   res.json({ lessonTitle: g.lessonTitle, questionCount: g.questions.length, roomCode: g.roomCode, results, questionStats, notPlayed, rosterCount: rosterData ? rosterData.students.length : null });
 });
 
@@ -2114,9 +2116,10 @@ app.get('/api/roster/:id', requireAuth, (req, res) => {
 // student must actually be in one of THIS teacher's rosters (even though the
 // account itself is global, a teacher can only act on students they teach).
 app.patch('/api/roster/:rosterId/student/:studentId/pin-reset', requireAuth, (req, res) => {
-  const s = roster.findStudentInRoster(req.userId, req.params.rosterId, req.params.studentId);
+  const studentId = roster.normalizeStudentId(req.params.studentId);
+  const s = roster.findStudentInRoster(req.userId, req.params.rosterId, studentId);
   if (!s) return res.status(404).json({ error: 'Student not found in this roster.' });
-  studentAccount.approvePinReset(req.params.studentId);
+  studentAccount.approvePinReset(studentId);
   res.json({ ok: true });
 });
 
@@ -2138,16 +2141,17 @@ app.get('/api/roster/:id/progress', requireAuth, (req, res) => {
   const r = roster.getRoster(req.userId, req.params.id);
   if (!r) return res.status(404).json({ error: 'Roster not found.' });
 
-  const rosterMap = new Map(r.students.map(s => [s.id, s.name]));
+  const rosterMap = new Map(r.students.map(s => [roster.normalizeStudentId(s.id), s.name]));
   const allGames  = games.listTeacherGames(req.userId);
 
   // Collect results keyed by studentId.
   const byStudent = new Map();
   for (const g of allGames) {
     for (const result of games.getResults(g.id)) {
-      if (!rosterMap.has(result.studentId)) continue;
-      if (!byStudent.has(result.studentId)) byStudent.set(result.studentId, []);
-      byStudent.get(result.studentId).push({
+      const studentId = roster.normalizeStudentId(result.studentId);
+      if (!rosterMap.has(studentId)) continue;
+      if (!byStudent.has(studentId)) byStudent.set(studentId, []);
+      byStudent.get(studentId).push({
         gameId: g.id,
         lessonTitle: g.lessonTitle || g.topic,
         topic: g.topic,
@@ -2162,7 +2166,7 @@ app.get('/api/roster/:id/progress', requireAuth, (req, res) => {
   }
 
   const students = r.students.map(s => {
-    const results = (byStudent.get(s.id) || []).sort((a, b) => (b.at || '').localeCompare(a.at || ''));
+    const results = (byStudent.get(roster.normalizeStudentId(s.id)) || []).sort((a, b) => (b.at || '').localeCompare(a.at || ''));
     const gamesPlayed = results.length;
     const avgPct = gamesPlayed ? Math.round(results.reduce((sum, r) => sum + r.pct, 0) / gamesPlayed) : null;
     const lastAt = results.length ? results[0].at : null;
@@ -2520,9 +2524,13 @@ app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:r
   }
   if (!foundRoster) return res.status(404).json({ error: 'Roster not found.' });
 
-  const inRoster = id => foundRoster.students.find(s => s.id === id);
+  const inRoster = id => foundRoster.students.find(s => roster.normalizeStudentId(s.id) === roster.normalizeStudentId(id));
   const byStudent = new Map();
-  const push = (sid, row) => { if (!byStudent.has(sid)) byStudent.set(sid, []); byStudent.get(sid).push(row); };
+  const push = (studentId, row) => {
+    const sid = roster.normalizeStudentId(studentId);
+    if (!byStudent.has(sid)) byStudent.set(sid, []);
+    byStudent.get(sid).push(row);
+  };
   for (const g of games.listTeacherGames(foundTeacherId)) {
     for (const result of games.getResults(g.id)) {
       if (!inRoster(result.studentId)) continue;
@@ -2539,7 +2547,7 @@ app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:r
   }
 
   const students = foundRoster.students.map(s => {
-    const results = (byStudent.get(s.id) || []).sort((a, b) => (b.at || '').localeCompare(a.at || ''));
+    const results = (byStudent.get(roster.normalizeStudentId(s.id)) || []).sort((a, b) => (b.at || '').localeCompare(a.at || ''));
     const avgPct = results.length ? Math.round(results.reduce((sum, r) => sum + r.percentage, 0) / results.length) : null;
     const updatedAt = results.length ? results[0].at : foundRoster.createdAt;
     return { id: s.id, name: s.name,
@@ -2582,11 +2590,12 @@ app.get('/api/v1/roster/:id/activities', requireApiAccess, requireScope('results
 // admin keys summarize across all teachers.
 app.get('/api/v1/student/:studentId/summary', requireApiAccess, requireScope('results:read'), (req, res) => {
   const teacherIds = req.oauthTeacherId ? [req.oauthTeacherId] : listAllUserIds();
-  const { name, rows } = gradebook.gatherStudentResults(teacherIds, req.params.studentId);
+  const studentId = roster.normalizeStudentId(req.params.studentId);
+  const { name, rows } = gradebook.gatherStudentResults(teacherIds, studentId);
   if (!rows.length && !name) return res.status(404).json({ error: 'No data for that student.' });
   const summary = gradebook.summarizeStudent(rows);
   res.json({
-    student: { id: req.params.studentId, name: name || null },
+    student: { id: studentId, name: name || null },
     overall: summary.overall,
     bySubject: summary.bySubject,
     recent: rows.slice(0, 10),
@@ -2645,7 +2654,11 @@ app.get('/api/v1/students', requireApiAccess, requireScope('rosters:read'), (req
     if (!rosters.length) continue;
 
     const byStudent = new Map();
-    const push = (sid, row) => { if (!byStudent.has(sid)) byStudent.set(sid, []); byStudent.get(sid).push(row); };
+    const push = (studentId, row) => {
+      const sid = roster.normalizeStudentId(studentId);
+      if (!byStudent.has(sid)) byStudent.set(sid, []);
+      byStudent.get(sid).push(row);
+    };
     for (const g of games.listTeacherGames(tid)) {
       for (const result of games.getResults(g.id)) {
         push(result.studentId, { kind: 'game', topic: g.topic, subject: g.subject,
@@ -2660,7 +2673,7 @@ app.get('/api/v1/students', requireApiAccess, requireScope('rosters:read'), (req
 
     for (const r of rosters) {
       for (const s of r.students) {
-        out.push({ id: s.id, name: s.name, rosterId: r.id, rosterName: r.name, teacherId: tid, results: byStudent.get(s.id) || [] });
+        out.push({ id: s.id, name: s.name, rosterId: r.id, rosterName: r.name, teacherId: tid, results: byStudent.get(roster.normalizeStudentId(s.id)) || [] });
       }
     }
   }

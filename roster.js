@@ -10,6 +10,10 @@ const path = require('path');
 const crypto = require('crypto');
 const { DATA_DIR, writeJsonAtomic } = require('./storage');
 
+function normalizeStudentId(value) {
+  return String(value || '').trim().replace(/\s+/g, '').toUpperCase();
+}
+
 function rosterDir(teacherId) {
   return path.join(DATA_DIR, 'users', teacherId, 'rosters');
 }
@@ -26,9 +30,10 @@ function parseCSV(text) {
   for (const line of lines) {
     const comma = line.indexOf(',');
     if (comma === -1) continue;
-    const id = line.slice(0, comma).trim();
+    const rawId = line.slice(0, comma).trim();
     const name = line.slice(comma + 1).trim().replace(/^"|"$/g, '');
-    if (!id || id.toLowerCase() === 'studentid' || id.toLowerCase() === 'id') continue;
+    if (!rawId || rawId.toLowerCase() === 'studentid' || rawId.toLowerCase() === 'id') continue;
+    const id = normalizeStudentId(rawId);
     if (id) out.push({ id, name: name || id });
   }
   return out;
@@ -36,7 +41,15 @@ function parseCSV(text) {
 
 function saveRoster(teacherId, { name, students, csvText }) {
   fs.mkdirSync(rosterDir(teacherId), { recursive: true });
-  const parsedStudents = csvText ? parseCSV(csvText) : (Array.isArray(students) ? students : []);
+  const inputStudents = csvText ? parseCSV(csvText) : (Array.isArray(students) ? students : []);
+  const seen = new Set();
+  const parsedStudents = [];
+  for (const s of inputStudents) {
+    const id = normalizeStudentId(s && s.id);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    parsedStudents.push({ id, name: String((s && s.name) || id).trim() || id });
+  }
   if (!parsedStudents.length) throw new Error('No valid students found. Use format: studentId,name');
   const id = crypto.randomUUID().split('-')[0];
   const record = {
@@ -77,12 +90,13 @@ function deleteRoster(teacherId, id) {
 // Find a student by ID across all of a teacher's rosters.
 // Returns { id, name, rosterId } or null.
 function findStudent(teacherId, studentId) {
+  studentId = normalizeStudentId(studentId);
   const dir = rosterDir(teacherId);
   if (!fs.existsSync(dir)) return null;
   for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.json'))) {
     try {
       const r = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
-      const s = r.students.find(s => s.id === studentId);
+      const s = r.students.find(s => normalizeStudentId(s.id) === studentId);
       if (s) return { id: s.id, name: s.name, rosterId: r.id };
     } catch {}
   }
@@ -94,6 +108,7 @@ function findStudent(teacherId, studentId) {
 // no-login "my work" lookup: a student types their ID once and sees every
 // class/roster it appears in, across however many teachers use this ID.
 function findStudentAcrossAllTeachers(studentId) {
+  studentId = normalizeStudentId(studentId);
   const usersDir = path.join(DATA_DIR, 'users');
   if (!fs.existsSync(usersDir)) return [];
   const matches = [];
@@ -103,7 +118,7 @@ function findStudentAcrossAllTeachers(studentId) {
     for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.json'))) {
       try {
         const r = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
-        const s = r.students.find(s => s.id === studentId);
+        const s = r.students.find(s => normalizeStudentId(s.id) === studentId);
         if (s) matches.push({ teacherId, rosterId: r.id, rosterName: r.name, name: s.name });
       } catch {}
     }
@@ -113,9 +128,10 @@ function findStudentAcrossAllTeachers(studentId) {
 
 // Find student within a specific roster. Returns { id, name } or null.
 function findStudentInRoster(teacherId, rosterId, studentId) {
+  studentId = normalizeStudentId(studentId);
   const r = getRoster(teacherId, rosterId);
   if (!r) return null;
-  return r.students.find(s => s.id === studentId) || null;
+  return r.students.find(s => normalizeStudentId(s.id) === studentId) || null;
 }
 
 // ── File parsing (CSV + Excel) for roster import ────────────────────────────
@@ -180,7 +196,7 @@ function parseRosterFile(buffer, filename) {
 function buildStudentsFromMapping(rows, idCol, nameCol) {
   const out = [];
   for (const row of rows) {
-    const id = (row[idCol] || '').trim();
+    const id = normalizeStudentId(row[idCol]);
     const name = nameCol ? (row[nameCol] || '').trim() : '';
     if (id) out.push({ id, name: name || id });
   }
@@ -190,5 +206,5 @@ function buildStudentsFromMapping(rows, idCol, nameCol) {
 module.exports = {
   saveRoster, getRoster, listRosters, deleteRoster,
   findStudent, findStudentInRoster, findStudentAcrossAllTeachers, parseCSV,
-  parseRosterFile, buildStudentsFromMapping,
+  parseRosterFile, buildStudentsFromMapping, normalizeStudentId,
 };

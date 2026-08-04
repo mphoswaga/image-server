@@ -27,6 +27,7 @@ function listClasses(userId) {
 // A percentage in [0,1] from a mark/max, guarding divide-by-zero.
 const pctOf = (mark, max) => (max > 0 ? mark / max : 0);
 const mean = arr => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
+const sid = value => roster.normalizeStudentId(value);
 
 // The full students × assessments matrix for one class.
 function buildGradebook(userId, rosterId) {
@@ -39,29 +40,31 @@ function buildGradebook(userId, rosterId) {
 
   const assessments = [];
   const cells = {}; // studentId -> { assessmentId -> { mark, max, pct } }
-  students.forEach(s => { cells[s.id] = {}; });
+  students.forEach(s => { cells[sid(s.id)] = {}; });
 
   for (const a of asgs) {
-    const byStu = Object.fromEntries(assignments.getSubmissions(a.id).map(x => [x.studentId, x]));
+    const byStu = Object.fromEntries(assignments.getSubmissions(a.id).map(x => [sid(x.studentId), x]));
     const pcts = [];
     students.forEach(s => {
-      const sub = byStu[s.id];
+      const studentId = sid(s.id);
+      const sub = byStu[studentId];
       if (!sub) return;
       const max = sub.maxMarks || 0, pct = pctOf(sub.totalMarks, max);
-      cells[s.id][a.id] = { mark: sub.totalMarks, max, pct };
+      cells[studentId][a.id] = { mark: sub.totalMarks, max, pct };
       pcts.push(pct);
     });
     assessments.push({ id: a.id, kind: 'assignment', type: a.type, title: a.title, at: a.createdAt, average: mean(pcts), done: pcts.length });
   }
 
   for (const g of gms) {
-    const byStu = Object.fromEntries(games.getResults(g.id).map(x => [x.studentId, x]));
+    const byStu = Object.fromEntries(games.getResults(g.id).map(x => [sid(x.studentId), x]));
     const pcts = [];
     students.forEach(s => {
-      const r = byStu[s.id];
+      const studentId = sid(s.id);
+      const r = byStu[studentId];
       if (!r) return;
       const max = r.total || 0, pct = pctOf(r.score, max);
-      cells[s.id][g.id] = { mark: r.score, max, pct };
+      cells[studentId][g.id] = { mark: r.score, max, pct };
       pcts.push(pct);
     });
     assessments.push({ id: g.id, kind: 'game', type: 'game', title: g.lessonTitle, at: g.createdAt, average: mean(pcts), done: pcts.length });
@@ -70,9 +73,10 @@ function buildGradebook(userId, rosterId) {
   assessments.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 
   const rows = students.map(s => {
-    const c = cells[s.id];
+    const studentId = sid(s.id);
+    const c = cells[studentId];
     const pcts = Object.values(c).map(x => x.pct);
-    return { studentId: s.id, name: s.name, cells: c, average: mean(pcts), done: pcts.length };
+    return { studentId, name: s.name, cells: c, average: mean(pcts), done: pcts.length };
   });
 
   const classAverage = mean(rows.map(r => r.average).filter(x => x != null));
@@ -100,12 +104,13 @@ function toWorkbook(gb) {
 // for an OAuth token, all teachers for an admin key). Also surfaces the
 // student's display name (rosters are the only place names live).
 function gatherStudentResults(teacherIds, studentId) {
+  studentId = sid(studentId);
   const rows = [];
   let name = null;
   for (const tid of teacherIds) {
     for (const g of games.listTeacherGames(tid)) {
       for (const r of games.getResults(g.id)) {
-        if (r.studentId !== studentId) continue;
+        if (sid(r.studentId) !== studentId) continue;
         if (r.name && !name) name = r.name;
         rows.push({ kind: 'game', assessmentId: g.id, title: g.lessonTitle, subject: g.subject || null, topic: g.topic || null,
           mark: r.score, max: r.total, percentage: r.total > 0 ? Math.round((r.score / r.total) * 100) : 0, at: r.at });
@@ -113,7 +118,7 @@ function gatherStudentResults(teacherIds, studentId) {
     }
     for (const a of assignments.listTeacherAssignments(tid)) {
       for (const sub of assignments.getSubmissions(a.id)) {
-        if (sub.studentId !== studentId) continue;
+        if (sid(sub.studentId) !== studentId) continue;
         if (sub.name && !name) name = sub.name;
         rows.push({ kind: 'assignment', type: a.type, assessmentId: a.id, title: a.title, subject: a.subject || null, topic: a.topic || null,
           mark: sub.totalMarks, max: sub.maxMarks, percentage: sub.maxMarks > 0 ? Math.round((sub.totalMarks / sub.maxMarks) * 100) : 0, at: sub.submittedAt || a.createdAt });
@@ -125,7 +130,7 @@ function gatherStudentResults(teacherIds, studentId) {
     for (const tid of teacherIds) {
       for (const rs of roster.listRosters(tid)) {
         const full = roster.getRoster(tid, rs.id);
-        const s = full && full.students.find(x => x.id === studentId);
+        const s = full && full.students.find(x => sid(x.id) === studentId);
         if (s) { name = s.name; break; }
       }
       if (name) break;

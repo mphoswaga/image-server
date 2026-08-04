@@ -12,6 +12,7 @@ const ROOMS_PATH = path.join(GAMES_DIR, '_rooms.json');
 const gamePath = id => path.join(GAMES_DIR, `${id}.json`);
 const resultsPath = id => path.join(GAMES_DIR, `${id}.results.json`);
 const isGameFile = f => f.endsWith('.json') && !f.endsWith('.results.json') && f !== '_rooms.json';
+const normalizeStudentId = value => String(value || '').trim().replace(/\s+/g, '').toUpperCase();
 
 // 6-char room code using unambiguous chars (no 0/O/1/I/L).
 const ROOM_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
@@ -70,9 +71,10 @@ function loadResults(id) {
 
 // Upsert a student's attempt — keep latest quiz score, keep BEST arcade score per game type.
 function recordResult(id, { studentId, name, score, total, answers, arcadeScore, gameType }) {
+  studentId = normalizeStudentId(studentId);
   const results = loadResults(id);
   const at = new Date().toISOString();
-  const existing = results.find(r => r.studentId === studentId);
+  const existing = results.find(r => normalizeStudentId(r.studentId) === studentId);
   if (existing) {
     const as = existing.arcadeScores || {};
     if (gameType) as[gameType] = Math.max(as[gameType] || 0, arcadeScore || 0);
@@ -122,4 +124,4 @@ function updateGameCutoff(id, cutoffAt) {
   return g;
 }
 
-module.exports = { createGame, getGame, recordResult, getResults, getHighScores, listTeacherGames, getRoomCode, updateGameCutoff };
+module.exports = { createGame, getGame, recordResult, getResults, getHighScores, listTeacherGames, getRoomCode, updateGameCutoff, normalizeStudentId };

@@ -1,7 +1,16 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const XLSX = require('xlsx');
+
+process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ls-roster-'));
+
 const roster = require('../roster');
+const assignments = require('../assignments');
+const games = require('../games');
+const gradebook = require('../gradebook');
 
 function workbookBuffer(rows) {
   const wb = XLSX.utils.book_new();
@@ -29,4 +38,80 @@ test('roster import prefers Student code over row number and keeps all rows', ()
     { id: 'VS072970', name: 'Nguyen B' },
     { id: 'VS114657', name: 'Nguyen C' },
   ]);
+});
+
+test('roster save normalizes and deduplicates student IDs', () => {
+  const teacherId = `teacher-${Date.now()}`;
+  const saved = roster.saveRoster(teacherId, {
+    name: '2B2',
+    students: [
+      { id: ' vs068922 ', name: 'Nguyen A' },
+      { id: 'VS068922', name: 'Duplicate A' },
+      { id: 'vs 072970', name: 'Nguyen B' },
+    ],
+  });
+
+  assert.deepEqual(saved.students, [
+    { id: 'VS068922', name: 'Nguyen A' },
+    { id: 'VS072970', name: 'Nguyen B' },
+  ]);
+  assert.deepEqual(roster.findStudentInRoster(teacherId, saved.id, 'vs068922'), { id: 'VS068922', name: 'Nguyen A' });
+});
+
+test('activity results match rosters when student IDs use different casing', () => {
+  const teacherId = `teacher-results-${Date.now()}`;
+  const saved = roster.saveRoster(teacherId, {
+    name: '2B2',
+    students: [{ id: 'VS068922', name: 'Nguyen A' }],
+  });
+
+  const assignment = assignments.createAssignment({
+    teacherId,
+    type: 'quiz',
+    subject: 'ICT',
+    topic: 'Flowcharts',
+    grade: '4',
+    rosterId: saved.id,
+    data: {
+      title: 'Flowcharts Quiz',
+      mcq: [{ question: 'Start symbol?', options: ['Oval', 'Square'], correctIndex: 0 }],
+    },
+  });
+  assignments.saveSubmission(assignment.id, {
+    studentId: ' vs068922 ',
+    name: 'Nguyen A',
+    answers: {},
+    grades: [],
+    totalMarks: 1,
+    maxMarks: 1,
+    submittedAt: '2026-01-01T00:00:00.000Z',
+  });
+
+  const game = games.createGame({
+    teacherId,
+    lessonTitle: 'Flowcharts Game',
+    subject: 'ICT',
+    topic: 'Flowcharts',
+    grade: '4',
+    rosterId: saved.id,
+    game: {
+      questions: [{ question: 'Start symbol?', options: ['Oval', 'Square'], correctIndex: 0 }],
+    },
+  });
+  games.recordResult(game.id, {
+    studentId: 'vs068922',
+    name: 'Nguyen A',
+    score: 1,
+    total: 1,
+    answers: [0],
+    arcadeScore: 10,
+    gameType: 'car',
+  });
+
+  assert.equal(assignments.getSubmission(assignment.id, 'VS068922').studentId, 'VS068922');
+  assert.equal(games.getResults(game.id)[0].studentId, 'VS068922');
+
+  const gb = gradebook.buildGradebook(teacherId, saved.id);
+  assert.equal(gb.rows[0].done, 2);
+  assert.equal(gb.rows[0].average, 1);
 });

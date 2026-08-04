@@ -15,6 +15,7 @@ const recPath = id => path.join(DIR, `${id}.json`);
 const subsPath = id => path.join(DIR, `${id}.submissions.json`);
 const verdictsPath = id => path.join(DIR, `${id}.verdicts.json`);
 const isAssignmentFile = f => f.endsWith('.json') && !f.endsWith('.submissions.json') && !f.endsWith('.verdicts.json') && f !== '_rooms.json';
+const normalizeStudentId = value => String(value || '').trim().replace(/\s+/g, '').toUpperCase();
 
 // 6-char room code using unambiguous chars (no 0/O/1/I/L) — same alphabet as games.js.
 const ROOM_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
@@ -118,14 +119,18 @@ function loadSubmissions(id) {
   try { return JSON.parse(fs.readFileSync(subsPath(String(id)), 'utf8')); } catch { return []; }
 }
 function saveSubmission(id, sub) {
+  sub = { ...sub, studentId: normalizeStudentId(sub.studentId) };
   const subs = loadSubmissions(id);
-  const i = subs.findIndex(s => s.studentId === sub.studentId);
+  const i = subs.findIndex(s => normalizeStudentId(s.studentId) === sub.studentId);
   if (i >= 0) subs[i] = sub; else subs.push(sub);
   writeJsonAtomic(subsPath(id), subs);
   return subs;
 }
 function getSubmissions(id) { return loadSubmissions(id); }
-function getSubmission(id, studentId) { return loadSubmissions(id).find(s => s.studentId === studentId) || null; }
+function getSubmission(id, studentId) {
+  const target = normalizeStudentId(studentId);
+  return loadSubmissions(id).find(s => normalizeStudentId(s.studentId) === target) || null;
+}
 
 // ── Verdict cache: per-question list of gradings, some teacher-confirmed ───
 function loadVerdicts(id) {
@@ -184,6 +189,6 @@ module.exports = {
   createAssignment, getAssignment, updateAssignmentCutoff, getRoomCode,
   releaseResults, isReleased,
   saveSubmission, getSubmissions, getSubmission,
-  findConfirmedVerdict, recordVerdict, normalizeAnswer,
+  findConfirmedVerdict, recordVerdict, normalizeAnswer, normalizeStudentId,
   listTeacherAssignments,
 };
