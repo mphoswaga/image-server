@@ -40,6 +40,15 @@ test('pagination can still assemble a valid pptx buffer', async () => {
       bullets: denseBullets,
       example: 'The app should create another slide instead of letting the text spill out.',
       imageQuery: 'teacher explaining a lesson',
+      youtube: {
+        url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        title: 'Computational thinking video',
+        channelTitle: 'Teacher channel',
+        thumbnailData: `data:image/png;base64,${Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lS0uVwAAAABJRU5ErkJggg==',
+          'base64'
+        ).toString('base64')}`,
+      },
     }],
     images: [null],
   });

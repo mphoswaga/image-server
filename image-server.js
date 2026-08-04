@@ -18,7 +18,7 @@ const { generateImage } = require('./ai-image');
 const { parseFraction, detectLabelledDiagram } = require('./concept-diagram');
 const { generateDiagram } = require('./svg-diagram');
 const { generateWorksheet, generateExitTicket, generateQuiz, generateGame } = require('./lesson-pack');
-const { normalizeVideo, suggestVideos } = require('./youtube');
+const { normalizeVideo, suggestVideos, thumbnailDataUrl } = require('./youtube');
 const { worksheetDocx, exitTicketDocx, quizDocx } = require('./docgen');
 const unit = require('./unit');
 const planningSource = require('./planning-source');
@@ -1768,7 +1768,7 @@ app.post('/api/slide/:id/swap-image', requireAuth, (req, res) => {
 
 // Attach one teacher-approved YouTube video to a slide. This is free and
 // stores only the validated video metadata, not a downloaded media file.
-app.post('/api/slide/:id/youtube', requireAuth, (req, res) => {
+app.post('/api/slide/:id/youtube', requireAuth, async (req, res) => {
   const deck = decks.get(req.params.id);
   if (!deck) return res.status(404).json({ error: 'Deck expired — generate again.' });
   const i = Number(req.body.index);
@@ -1780,6 +1780,11 @@ app.post('/api/slide/:id/youtube', requireAuth, (req, res) => {
     startSeconds: req.body.startSeconds,
   });
   if (!video) return res.status(400).json({ error: 'Enter a valid YouTube video link.' });
+  try {
+    video.thumbnailData = await thumbnailDataUrl(video);
+  } catch (err) {
+    console.log('YouTube thumbnail not embedded:', err.message);
+  }
   deck.slides[i].youtube = video;
   persistDecks();
   res.json({ slide: previewEntry(deck.slides[i], deck.images[i]) });

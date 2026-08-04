@@ -63,7 +63,21 @@ function normalizeVideo(value, extra = {}) {
     description: cleanText(extra.description),
     reason: cleanText(extra.reason, 'Related to this lesson topic.'),
     startSeconds: Math.max(0, Math.floor(Number(extra.startSeconds) || 0)),
+    thumbnailData: typeof extra.thumbnailData === 'string' ? extra.thumbnailData : null,
   };
+}
+
+async function thumbnailDataUrl(video, { maxBytes = 900_000 } = {}) {
+  const url = typeof video === 'string' ? thumbnailUrl(video) : video && video.thumbnail;
+  if (!url) return null;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Could not fetch YouTube thumbnail (${res.status}).`);
+  const contentType = (res.headers.get('content-type') || 'image/jpeg').split(';')[0].trim().toLowerCase();
+  if (!/^image\/(jpeg|jpg|png|webp)$/.test(contentType)) throw new Error('YouTube thumbnail was not an image.');
+  const arrayBuffer = await res.arrayBuffer();
+  if (arrayBuffer.byteLength > maxBytes) throw new Error('YouTube thumbnail was too large.');
+  const buffer = Buffer.from(arrayBuffer);
+  return `data:${contentType === 'image/jpg' ? 'image/jpeg' : contentType};base64,${buffer.toString('base64')}`;
 }
 
 function searchQuery({ subject = '', topic = '', grade = '', stage = '' } = {}) {
@@ -110,4 +124,4 @@ async function suggestVideos({ subject, topic, grade, stage, limit = 5 } = {}) {
   return { suggestions, configured: true, query };
 }
 
-module.exports = { extractVideoId, normalizeVideoId, normalizeVideo, canonicalUrl, embedUrl, thumbnailUrl, searchQuery, suggestVideos };
+module.exports = { extractVideoId, normalizeVideoId, normalizeVideo, canonicalUrl, embedUrl, thumbnailUrl, thumbnailDataUrl, searchQuery, suggestVideos };

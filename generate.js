@@ -52,17 +52,21 @@ function addYoutubeMedia(pptx, slide, video, thm) {
     line: { color: 'FECACA', width: 1 },
     rectRadius: 0.08,
   });
-  slide.addShape(pptx.ShapeType.roundRect, {
-    x: x + 0.18, y: y + 0.15, w: 0.74, h: 0.38,
-    fill: { color: 'FF0033' },
-    line: { type: 'none' },
-    rectRadius: 0.08,
-  });
-  slide.addText('▶', {
-    x: x + 0.42, y: y + 0.19, w: 0.22, h: 0.24,
-    fontFace: thm.font, fontSize: 10, bold: true, color: 'FFFFFF',
-    align: 'center', valign: 'middle',
-  });
+  if (video.thumbnailData) {
+    slide.addImage({ data: video.thumbnailData, x: x + 0.14, y: y + 0.12, w: 0.82, h: 0.44, sizing: { type: 'cover', w: 0.82, h: 0.44 } });
+  } else {
+    slide.addShape(pptx.ShapeType.roundRect, {
+      x: x + 0.18, y: y + 0.15, w: 0.74, h: 0.38,
+      fill: { color: 'FF0033' },
+      line: { type: 'none' },
+      rectRadius: 0.08,
+    });
+    slide.addText('▶', {
+      x: x + 0.42, y: y + 0.19, w: 0.22, h: 0.24,
+      fontFace: thm.font, fontSize: 10, bold: true, color: 'FFFFFF',
+      align: 'center', valign: 'middle',
+    });
+  }
   slide.addText(title, {
     x: x + 1.08, y: y + 0.12, w: 6.8, h: 0.22, fontFace: thm.font, fontSize: 9.5,
     bold: true, color: 'B42318', margin: 0.02, breakLine: false, fit: 'shrink',

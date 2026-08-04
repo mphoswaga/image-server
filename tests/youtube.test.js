@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { extractVideoId, normalizeVideoId, normalizeVideo, embedUrl, searchQuery, suggestVideos } = require('../youtube');
+const { extractVideoId, normalizeVideoId, normalizeVideo, embedUrl, searchQuery, suggestVideos, thumbnailDataUrl } = require('../youtube');
 
 test('YouTube parser accepts common video URL formats', () => {
   const id = 'dQw4w9WgXcQ';
@@ -38,5 +38,20 @@ test('suggestions fail safely when the YouTube API is not configured', async () 
   } finally {
     if (previous === undefined) delete process.env.YOUTUBE_API_KEY;
     else process.env.YOUTUBE_API_KEY = previous;
+  }
+});
+
+test('thumbnailDataUrl stores a small thumbnail as a data URL', async () => {
+  const oldFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    headers: new Map([['content-type', 'image/jpeg']]),
+    arrayBuffer: async () => Buffer.from('fake-jpeg'),
+  });
+  try {
+    const data = await thumbnailDataUrl(normalizeVideo('https://youtu.be/dQw4w9WgXcQ'));
+    assert.equal(data, `data:image/jpeg;base64,${Buffer.from('fake-jpeg').toString('base64')}`);
+  } finally {
+    global.fetch = oldFetch;
   }
 });
