@@ -38,12 +38,45 @@ function placeVisual(pptx, slide, slideData, imgPath, accent, rect) {
   return false;
 }
 
-function addYoutubeMedia(slide, video, thm) {
-  if (!video || !video.embedUrl || !video.url) return;
-  slide.addMedia({ type: 'online', link: video.embedUrl, x: 7.55, y: 4.92, w: 1.25, h: 0.5, objectName: 'Lesson video' });
-  slide.addText('Watch video', {
-    x: 8.8, y: 4.92, w: 1.0, h: 0.5, fontFace: thm.font, fontSize: 9.5,
-    bold: true, color: thm.primary, align: 'center', valign: 'middle',
+function addYoutubeMedia(pptx, slide, video, thm) {
+  if (!video || !video.url) return;
+  // Keynote removes PowerPoint online-media objects, so export the approved
+  // video as a normal clickable link. That keeps decks portable while still
+  // letting teachers open the reviewed YouTube video from the slide.
+  const title = String(video.title || 'YouTube lesson video').trim().slice(0, 74);
+  const channel = String(video.channelTitle || 'YouTube').trim().slice(0, 36);
+  const x = 0.58, y = 4.74, w = 8.84, h = 0.68;
+  slide.addShape(pptx.ShapeType.roundRect, {
+    x, y, w, h,
+    fill: { color: 'FFF1F2' },
+    line: { color: 'FECACA', width: 1 },
+    rectRadius: 0.08,
+  });
+  slide.addShape(pptx.ShapeType.roundRect, {
+    x: x + 0.18, y: y + 0.15, w: 0.74, h: 0.38,
+    fill: { color: 'FF0033' },
+    line: { type: 'none' },
+    rectRadius: 0.08,
+  });
+  slide.addText('▶', {
+    x: x + 0.42, y: y + 0.19, w: 0.22, h: 0.24,
+    fontFace: thm.font, fontSize: 10, bold: true, color: 'FFFFFF',
+    align: 'center', valign: 'middle',
+  });
+  slide.addText(title, {
+    x: x + 1.08, y: y + 0.12, w: 6.8, h: 0.22, fontFace: thm.font, fontSize: 9.5,
+    bold: true, color: 'B42318', margin: 0.02, breakLine: false, fit: 'shrink',
+    hyperlink: { url: video.url },
+  });
+  slide.addText(`${channel} · Teacher review required`, {
+    x: x + 1.08, y: y + 0.36, w: 5.7, h: 0.18, fontFace: thm.font, fontSize: 7.6,
+    color: 'B42318', margin: 0.02, breakLine: false, fit: 'shrink',
+  });
+  slide.addText('Open video', {
+    x: x + 7.6, y: y + 0.18, w: 1.0, h: 0.3, fontFace: thm.font, fontSize: 8.6,
+    bold: true, color: 'FFFFFF', align: 'center', valign: 'middle',
+    fill: { color: 'B42318' },
+    line: { type: 'none' },
     hyperlink: { url: video.url },
   });
 }
@@ -588,7 +621,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
       placeVisual(pptx, slide, slideData, imgPath, accent, { x: imgX, y: 1.35, w: 3.9, h: 4.0 });
     }
   }
-  addYoutubeMedia(slide, slideData.youtube, thm);
+  addYoutubeMedia(pptx, slide, slideData.youtube, thm);
 }
 
 function assembleDeck(slides, images, gradeTheme, preset) {

@@ -36,6 +36,7 @@ const { DATA_DIR, writeJsonAtomic } = require('./storage');
 
 // Add transitions/animations; never let it break the download.
 function safeAnimate(buffer, band) {
+  if (process.env.POWERPOINT_ANIMATIONS === 'false') return buffer;
   try { return animateBuffer(buffer, band); }
   catch (err) { console.log('animation skipped:', err.message); return buffer; }
 }
