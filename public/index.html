@@ -3157,7 +3157,8 @@
         const d=await r.json().catch(()=>({error:isSlides?'Google Slides export failed':'Google Drive export failed'}));
         if(r.status===409 && d.needsConnection && d.connectUrl){
           toast('Connect Google Drive once, then export again.','ok');
-          window.location.href=d.connectUrl;
+          const sep=d.connectUrl.includes('?')?'&':'?';
+          window.location.href=`${d.connectUrl}${sep}deckId=${encodeURIComponent(currentDeckId)}&export=${isSlides?'slides':'drive'}`;
           return;
         }
         if(!r.ok) throw new Error(d.error||(isSlides?'Google Slides export failed.':'Google Drive export failed.'));
@@ -3168,6 +3169,23 @@
         toast(`Saved to ${isSlides?'Google Slides':'Google Drive'}.`,'ok');
       }catch(err){ toast(err.message); btn.disabled=false; btn.innerHTML=orig; return; }
       btn.disabled=false; btn.innerHTML=orig;
+    }
+    async function restoreGoogleExport(deckId, exportTarget){
+      try{
+        const r=await fetch(`/api/deck/${encodeURIComponent(deckId)}`);
+        const d=await r.json().catch(()=>({error:'Could not reopen your deck.'}));
+        if(!r.ok) throw new Error(d.error||'Could not reopen your deck.');
+        currentDeckId=d.deckId;
+        renderDeck(d);
+        show('slides');
+        setStep(3);
+        results.scrollIntoView({behavior:'smooth', block:'start'});
+        refreshCredits();
+        toast(`Google connected. Saving to ${exportTarget==='slides'?'Google Slides':'Google Drive'}…`,'ok');
+        setTimeout(()=>exportToGoogle(exportTarget),500);
+      }catch(err){
+        toast(err.message||'Google connected. Reopen your deck and export again.');
+      }
     }
     $('driveExportBtn').addEventListener('click',()=>exportToGoogle('drive'));
     $('slidesExportBtn').addEventListener('click',()=>exportToGoogle('slides'));
@@ -3672,9 +3690,14 @@
       const e=q.get('authError');
       const driveErr=q.get('driveError');
       const drive=q.get('drive');
+      const deckId=q.get('deckId');
+      const exportTarget=q.get('export');
       if(e){ const el=$('authErr'); if(el) el.textContent=e; }
       if(driveErr) setTimeout(()=>toast(driveErr),200);
       if(drive==='connected') setTimeout(()=>toast('Google Drive connected. You can export your deck now.','ok'),200);
+      if(drive==='connected' && deckId && (exportTarget==='drive'||exportTarget==='slides')){
+        setTimeout(()=>restoreGoogleExport(deckId, exportTarget),350);
+      }
       if(e||driveErr||drive) history.replaceState(null,'',location.pathname);
     })();
 

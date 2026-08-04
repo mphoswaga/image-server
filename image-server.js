@@ -444,6 +444,7 @@ app.get('/api/auth/providers', (req, res) => {
 const OAUTH_STATE_COOKIE = 'lc_social_state';
 const socialRedirectUri = (req, provider) => `${originFor(req)}/auth/${provider}/callback`;
 const DRIVE_STATE_COOKIE = 'lc_drive_state';
+const DRIVE_RETURN_COOKIE = 'lc_drive_return';
 const driveRedirectUri = req => `${originFor(req)}/integrations/google-drive/callback`;
 
 // ── Google Drive export integration ────────────────────────────────────────
@@ -459,11 +460,20 @@ app.get('/integrations/google-drive/connect', requireAuth, (req, res) => {
   if (!googleDrive.configured()) return res.redirect('/?driveError=' + encodeURIComponent('Google Drive export is not configured yet.'));
   const state = googleDrive.randomState();
   res.cookie(DRIVE_STATE_COOKIE, state, { httpOnly: true, sameSite: 'lax', maxAge: 10 * 60 * 1000 });
+  const deckId = String(req.query.deckId || '').trim().slice(0, 96);
+  const exportTarget = req.query.export === 'slides' ? 'slides' : req.query.export === 'drive' ? 'drive' : '';
+  if (deckId && exportTarget) {
+    res.cookie(DRIVE_RETURN_COOKIE, JSON.stringify({ deckId, exportTarget }), { httpOnly: true, sameSite: 'lax', maxAge: 10 * 60 * 1000 });
+  }
   res.redirect(googleDrive.buildAuthUrl({ redirectUri: driveRedirectUri(req), state }));
 });
 
 app.get('/integrations/google-drive/callback', requireAuth, async (req, res) => {
-  const fail = msg => res.redirect('/?driveError=' + encodeURIComponent(msg || 'Google Drive connection failed.'));
+  const fail = msg => {
+    res.clearCookie(DRIVE_STATE_COOKIE);
+    res.clearCookie(DRIVE_RETURN_COOKIE);
+    return res.redirect('/?driveError=' + encodeURIComponent(msg || 'Google Drive connection failed.'));
+  };
   try {
     if (req.query.error) return fail('Google Drive connection was cancelled.');
     const cookie = req.cookies && req.cookies[DRIVE_STATE_COOKIE];
@@ -473,7 +483,16 @@ app.get('/integrations/google-drive/callback', requireAuth, async (req, res) => 
     const tokens = await googleDrive.exchangeCode({ code: req.query.code, redirectUri: driveRedirectUri(req) });
     googleDrive.saveConnection(req.userId, tokens);
     audit.log('google_drive.connect', { userId: req.userId, ip: req.ip });
-    res.redirect('/?drive=connected');
+    let returnTo = '/?drive=connected';
+    const rawReturn = req.cookies && req.cookies[DRIVE_RETURN_COOKIE];
+    res.clearCookie(DRIVE_RETURN_COOKIE);
+    try {
+      const parsed = JSON.parse(rawReturn || '{}');
+      if (parsed && parsed.deckId && (parsed.exportTarget === 'drive' || parsed.exportTarget === 'slides')) {
+        returnTo += `&deckId=${encodeURIComponent(String(parsed.deckId))}&export=${encodeURIComponent(parsed.exportTarget)}`;
+      }
+    } catch {}
+    res.redirect(returnTo);
   } catch (err) {
     console.error('Google Drive connect failed:', err.message);
     fail(err.message);
@@ -2022,6 +2041,20 @@ app.post('/api/download/:id', requireAuth, async (req, res) => {
     console.error('Download/rebuild failed:', err.message);
     res.status(400).json({ error: err.message });
   }
+});
+
+app.get('/api/deck/:id', requireAuth, (req, res) => {
+  const deck = decks.get(req.params.id);
+  if (!deck) return res.status(404).json({ error: 'Deck not found or expired — generate it again.' });
+  res.json({
+    deckId: req.params.id,
+    filename: deckFilename(deck),
+    band: deck.band || null,
+    slideCount: deck.slides.length,
+    teachingModelId: deck.teachingModelId || null,
+    sourceText: deck.lessonPlanText || deck.sourceText || '',
+    slides: deck.slides.map((s, i) => previewEntry(s, deck.images[i])),
+  });
 });
 
 async function exportDeckToGoogle(req, res, { convertToSlides = false } = {}) {
