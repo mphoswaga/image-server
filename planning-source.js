@@ -27,6 +27,12 @@ function gradeFromSheetName(name) {
   return m ? 'Grade ' + m[1] : null;
 }
 
+function gradeFromText(text) {
+  const n = String(text || '').trim();
+  const m = n.match(/(?:stage|grade|gr\.?|g|form|year|yr)\s*(\d+)/i);
+  return m ? 'Grade ' + m[1] : null;
+}
+
 function detectSubject(text) {
   const f = String(text || '').toLowerCase();
   if (/ict|comput/.test(f))               return 'ICT';
@@ -87,13 +93,16 @@ function parseWeekNum(val) {
 
 function parseObjectiveLines(text) {
   if (!text) return [];
-  return String(text)
+  const normalized = String(text)
+    .replace(/\r/g, '\n')
+    .replace(/\s+(?=\d+[A-Za-z]{1,5}\.\d{2}\b)/g, '\n');
+  return normalized
     .split(/\n|;\s*/)
     .map(l => l.trim())
     .filter(l => l.length > 4)
     .map(line => {
-      // Detect optional code prefix: "3CS.01 Know that…"
-      const m = line.match(/^([A-Z][A-Z0-9]{0,5}\.?[A-Z0-9]{1,4})\s+(.{8,})/);
+      // Detect optional code prefix: "3CS.01 Know that…" or "3Rw.02 Read…"
+      const m = line.match(/^([A-Z0-9][A-Z0-9a-z]{0,5}\.?[A-Z0-9]{1,4})\s+(.{8,})/);
       return m ? { code: m[1], text: m[2] } : { code: null, text: line };
     });
 }
@@ -101,6 +110,131 @@ function parseObjectiveLines(text) {
 function parseLines(text) {
   if (!text) return [];
   return String(text).split(/\n|;\s*/).map(l => l.trim()).filter(Boolean);
+}
+
+function parseBulletLines(text) {
+  if (!text) return [];
+  return String(text)
+    .replace(/\r/g, '\n')
+    .split(/\n|;\s*|(?=\s*[-•]\s*)/)
+    .map(l => l.replace(/^[-•]\s*/, '').trim())
+    .filter(l => l.length > 4);
+}
+
+function unitNumberFromText(text) {
+  const m = String(text || '').match(/\bunit\s*(\d+)\b/i);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+function cleanUnitTitle(text) {
+  return String(text || '')
+    .replace(/\s+/g, ' ')
+    .replace(/^unit\s*\d+\s*:?\s*/i, '')
+    .trim();
+}
+
+function overviewUnitWeeks(sheet) {
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false, blankrows: false });
+  const out = new Map();
+  for (const row of rows) {
+    const week = parseWeekNum(row?.[0]);
+    if (week === null) continue;
+    const unitText = String(row?.[3] || row?.[2] || '').trim();
+    const unitNo = unitNumberFromText(unitText);
+    if (!unitNo) continue;
+    if (!out.has(unitNo)) out.set(unitNo, []);
+    out.get(unitNo).push(week);
+  }
+  return out;
+}
+
+function detectCambridgeHeader(rows) {
+  for (let i = 0; i < Math.min(rows.length, 8); i++) {
+    const row = rows[i] || [];
+    const unitCol = row.findIndex(c => /^unit\s*$/i.test(String(c || '').trim()));
+    const strandCol = row.findIndex(c => /^strand$/i.test(String(c || '').trim()));
+    const objectiveCol = row.findIndex(c => /learning\s+objectives?/i.test(String(c || '')));
+    const weekCols = [];
+    const resourceCols = [];
+    row.forEach((cell, col) => {
+      const text = String(cell || '');
+      const wm = text.match(/\bweek\s*(\d+)\b.*learning\s+outcomes?/i)
+              || text.match(/learning\s+outcomes?.*\bweek\s*(\d+)\b/i);
+      if (wm) weekCols.push({ localWeek: parseInt(wm[1], 10), col });
+      if (/\bweek\s*\d+\b.*resources?/i.test(text) || /resources?.*\bweek\s*\d+\b/i.test(text)) {
+        const rm = text.match(/\bweek\s*(\d+)\b/i);
+        if (rm) resourceCols.push({ localWeek: parseInt(rm[1], 10), col });
+      }
+    });
+    if (unitCol >= 0 && strandCol >= 0 && objectiveCol >= 0 && weekCols.length) {
+      return { rowIndex: i, unitCol, strandCol, objectiveCol, weekCols, resourceCols };
+    }
+  }
+  return null;
+}
+
+function parseCambridgeUnitSheet(sheet, sheetName, grade, overviewWeeks) {
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false, blankrows: false });
+  const hdr = detectCambridgeHeader(rows);
+  if (!hdr) return [];
+
+  const unitNo = unitNumberFromText(sheetName) || unitNumberFromText(rows[hdr.rowIndex + 1]?.[hdr.unitCol]);
+  if (!unitNo) return [];
+  const unitTitle = cleanUnitTitle(rows[hdr.rowIndex + 1]?.[hdr.unitCol] || sheetName);
+  const globalWeeks = overviewWeeks.get(unitNo) || [];
+  const curriculumObjectives = [];
+  const strands = new Set();
+  const itemsByLocalWeek = new Map();
+
+  for (let r = hdr.rowIndex + 1; r < rows.length; r++) {
+    const row = rows[r] || [];
+    const strand = String(row[hdr.strandCol] || '').trim();
+    if (strand) strands.add(strand);
+    curriculumObjectives.push(...parseObjectiveLines(row[hdr.objectiveCol]));
+
+    for (const wc of hdr.weekCols) {
+      const outcomes = parseBulletLines(row[wc.col]);
+      if (!outcomes.length) continue;
+      if (!itemsByLocalWeek.has(wc.localWeek)) {
+        const globalWeek = globalWeeks[wc.localWeek - 1] || ((globalWeeks[0] || 1) + wc.localWeek - 1);
+        const resourceCol = hdr.resourceCols.find(rc => rc.localWeek === wc.localWeek)?.col;
+        itemsByLocalWeek.set(wc.localWeek, {
+          id: iid(),
+          grade,
+          weekNumber: globalWeek,
+          startDate: null,
+          unitCode: `Unit ${unitNo}`,
+          unitTitle,
+          lessonTitle: `Week ${globalWeek}: ${unitTitle}`,
+          learningObjectives: [],
+          successCriteria: [],
+          resources: resourceCol !== undefined ? parseLines(row[resourceCol]) : [],
+          notes: null,
+          extractionConfidence: 0.88,
+        });
+      }
+      const item = itemsByLocalWeek.get(wc.localWeek);
+      for (const text of outcomes) item.learningObjectives.push({ code: null, text });
+      const resourceCol = hdr.resourceCols.find(rc => rc.localWeek === wc.localWeek)?.col;
+      if (resourceCol !== undefined) item.resources.push(...parseLines(row[resourceCol]));
+    }
+  }
+
+  const criteria = curriculumObjectives
+    .filter((o, idx, arr) => o.text && arr.findIndex(x => x.code === o.code && x.text === o.text) === idx)
+    .map(o => o.code ? `${o.code} ${o.text}` : o.text)
+    .slice(0, 16);
+  const strandList = Array.from(strands).slice(0, 12);
+
+  return Array.from(itemsByLocalWeek.values()).map(item => ({
+    ...item,
+    learningObjectives: item.learningObjectives
+      .filter((o, idx, arr) => o.text && arr.findIndex(x => x.text === o.text) === idx)
+      .slice(0, 14),
+    successCriteria: criteria,
+    resources: item.resources.filter((x, idx, arr) => x && arr.indexOf(x) === idx).slice(0, 10),
+    notes: strandList.length ? `Strands: ${strandList.join('; ')}` : null,
+  }));
 }
 
 // ── Sheet parser ─────────────────────────────────────────────────────────────
@@ -203,6 +337,8 @@ function subjectFromCells(sheet) {
         const s = detectSubject(m[1].trim());
         if (s) return s;
       }
+      const inferred = detectSubject(cell);
+      if (inferred) return inferred;
     }
   }
   return null;
@@ -223,12 +359,24 @@ function parseExcelSource(buffer, filename) {
     }
   }
 
+  const workbookGrade = gradeFromText(filename) || wb.SheetNames.map(gradeFromText).find(Boolean) || null;
+  const overviewSheetName = wb.SheetNames.find(n => /^overview$/i.test(String(n || '').trim()));
+  const overviewWeeks = overviewSheetName ? overviewUnitWeeks(wb.Sheets[overviewSheetName]) : new Map();
   for (const sheetName of wb.SheetNames) {
-    const grade = gradeFromSheetName(sheetName);
-    if (!grade) continue; // skip Overview / Summary sheets for item extraction
-    if (!gradesFound.includes(grade)) gradesFound.push(grade);
-    const sheetItems = parseSheet(wb.Sheets[sheetName], grade);
-    items.push(...sheetItems);
+    if (!unitNumberFromText(sheetName)) continue;
+    const sheetItems = parseCambridgeUnitSheet(wb.Sheets[sheetName], sheetName, workbookGrade, overviewWeeks);
+    if (sheetItems.length) items.push(...sheetItems);
+  }
+  if (items.length && workbookGrade && !gradesFound.includes(workbookGrade)) gradesFound.push(workbookGrade);
+
+  if (items.length === 0) {
+    for (const sheetName of wb.SheetNames) {
+      const grade = gradeFromSheetName(sheetName);
+      if (!grade) continue; // skip Overview / Summary sheets for item extraction
+      if (!gradesFound.includes(grade)) gradesFound.push(grade);
+      const sheetItems = parseSheet(wb.Sheets[sheetName], grade);
+      items.push(...sheetItems);
+    }
   }
 
   // Fallback: if no named grade sheets found, try all sheets without a grade label
