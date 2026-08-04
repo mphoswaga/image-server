@@ -878,6 +878,33 @@ function previewEntry(slide, image) {
   };
 }
 
+function makeVideoSlide(video, sourceSlide = {}) {
+  return {
+    type: 'video',
+    title: video.title || 'Lesson video',
+    bullets: [],
+    example: '',
+    imageQuery: '',
+    youtube: video,
+    modelStage: sourceSlide.modelStage || null,
+    modelStageLabel: sourceSlide.modelStageLabel || null,
+    modelLabel: sourceSlide.modelLabel || null,
+    speakerNotes: `Teacher-reviewed video for: ${sourceSlide.title || 'this lesson slide'}`,
+  };
+}
+
+function deckPreviewPayload(id, deck) {
+  return {
+    deckId: id,
+    filename: deckFilename(deck),
+    band: deck.band || null,
+    slideCount: deck.slides.length,
+    teachingModelId: deck.teachingModelId || null,
+    sourceText: deck.lessonPlanText || deck.sourceText || '',
+    slides: deck.slides.map((s, i) => previewEntry(s, deck.images[i])),
+  };
+}
+
 app.get('/api/library', (req, res) => res.json(listLibrary()));
 
 // Teacher-reviewed YouTube suggestions. Search is metadata-only: LessonScope
@@ -1800,6 +1827,7 @@ app.post('/api/slide/:id/youtube', requireAuth, async (req, res) => {
   if (!deck) return res.status(404).json({ error: 'Deck expired — generate again.' });
   const i = Number(req.body.index);
   if (!Number.isInteger(i) || i < 0 || i >= deck.slides.length) return res.status(400).json({ error: 'bad index' });
+  if (deck.slides[i].type === 'video') return res.status(400).json({ error: 'Choose a lesson-content slide, then add the video after it.' });
   const video = normalizeVideo(req.body.url || req.body.videoId, {
     title: clip(req.body.title, 180),
     channelTitle: clip(req.body.channelTitle, 120),
@@ -1812,9 +1840,17 @@ app.post('/api/slide/:id/youtube', requireAuth, async (req, res) => {
   } catch (err) {
     console.log('YouTube thumbnail not embedded:', err.message);
   }
-  deck.slides[i].youtube = video;
+  const existingNext = deck.slides[i + 1];
+  if (existingNext && existingNext.type === 'video' && existingNext.youtube) {
+    deck.slides[i + 1] = makeVideoSlide(video, deck.slides[i]);
+    deck.images[i + 1] = null;
+  } else {
+    deck.slides.splice(i + 1, 0, makeVideoSlide(video, deck.slides[i]));
+    deck.images.splice(i + 1, 0, null);
+  }
+  delete deck.slides[i].youtube;
   persistDecks();
-  res.json({ slide: previewEntry(deck.slides[i], deck.images[i]) });
+  res.json(deckPreviewPayload(req.params.id, deck));
 });
 
 app.delete('/api/slide/:id/youtube', requireAuth, (req, res) => {
@@ -1822,9 +1858,18 @@ app.delete('/api/slide/:id/youtube', requireAuth, (req, res) => {
   if (!deck) return res.status(404).json({ error: 'Deck expired — generate again.' });
   const i = Number(req.body.index);
   if (!Number.isInteger(i) || i < 0 || i >= deck.slides.length) return res.status(400).json({ error: 'bad index' });
-  delete deck.slides[i].youtube;
+  if (deck.slides[i].type === 'video') {
+    deck.slides.splice(i, 1);
+    deck.images.splice(i, 1);
+  } else {
+    delete deck.slides[i].youtube;
+    if (deck.slides[i + 1] && deck.slides[i + 1].type === 'video' && deck.slides[i + 1].youtube) {
+      deck.slides.splice(i + 1, 1);
+      deck.images.splice(i + 1, 1);
+    }
+  }
   persistDecks();
-  res.json({ slide: previewEntry(deck.slides[i], deck.images[i]) });
+  res.json(deckPreviewPayload(req.params.id, deck));
 });
 
 // Remaining AI-visual budget for this month (for the UI to show + gate buttons).

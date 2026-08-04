@@ -3033,7 +3033,9 @@
     function cardHTML(s,i){
       const bm=badgeMeta(s.imageSource);
       let thumb;
-      if(s.youtube){
+      if(s.type==='video'&&s.youtube){
+        thumb=`<div class="thumb"><img src="${esc(s.youtube.thumbnail)}" loading="lazy"><span class="badge" style="background:#ff0033;color:#fff">YouTube</span></div>`;
+      } else if(s.youtube){
         thumb=`<div class="thumb"><img src="${esc(s.youtube.thumbnail)}" loading="lazy"><span class="badge" style="background:#ff0033;color:#fff">YouTube</span></div>`;
       } else if(s.fraction){
         thumb=`<div class="thumb" style="display:flex;align-items:center;justify-content:center;background:#fffdf9">${svgPie(s.fraction.num,s.fraction.den)}<span class="badge ai">animated · ${s.fraction.num}/${s.fraction.den}</span></div>`;
@@ -3052,6 +3054,9 @@
       const stageKicker=!k&&s.modelStage?`<span class="kicker"><span class="model-stage">${esc(modelStageLabel(s.modelStage))}</span></span>`:'';
       let body;
       if(s.type==='title'){ body=`${kicker}<h3 contenteditable data-field="title">${esc(s.title)}</h3><p class="sub" contenteditable data-field="subtitle">${esc(s.subtitle)}</p>`; }
+      else if(s.type==='video'&&s.youtube){
+        body=`<span class="kicker activity">${ICON('i-play')}Lesson video</span><h3 contenteditable data-field="title">${esc(s.title||s.youtube.title||'Lesson video')}</h3><div class="youtube-chip"><img src="${esc(s.youtube.thumbnail)}" alt=""><span><a href="${esc(s.youtube.url)}" target="_blank" rel="noopener">${esc(s.youtube.title)}</a><br><span>${esc(s.youtube.channelTitle||'YouTube')} · Teacher review required</span></span><button type="button" data-action="remove-youtube" data-i="${i}" title="Remove video slide" aria-label="Remove video slide">×</button></div><div class="card-actions"><button data-action="remove-youtube" data-i="${i}" title="Remove this video slide">Remove video</button></div>`;
+      }
       else{
         const bl=`<ul>${s.bullets.map(b=>`<li contenteditable data-field="bullet">${esc(b)}</li>`).join('')}</ul>`;
         const ex=s.example?`<div class="example"><div class="box"><b>${ICON('i-spark')}Example</b><span contenteditable data-field="example">${esc(s.example)}</span></div></div>`:'';
@@ -3103,7 +3108,7 @@
       if(b.dataset.action==='swap'){ openPicker(i); return;
       } else if(b.dataset.action==='youtube'){ openYoutubePicker(i); return;
       } else if(b.dataset.action==='remove-youtube'){ b.disabled=true;
-        try{ const r=await fetch(`/api/slide/${currentDeckId}/youtube`,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})}); const d=await r.json(); if(!r.ok) throw new Error(d.error); card.outerHTML=cardHTML(d.slide,i); }
+        try{ const r=await fetch(`/api/slide/${currentDeckId}/youtube`,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})}); const d=await r.json(); if(!r.ok) throw new Error(d.error); renderDeck(d); }
         catch(err){ toast(err.message); b.disabled=false; }
         return;
       } else if(b.dataset.action==='ai'){ b.disabled=true; b.innerHTML='<span class="spinner"></span>Generating…';
@@ -3278,8 +3283,8 @@
       try{
         const r=await fetch(`/api/slide/${currentDeckId}/youtube`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
         const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not add video.');
-        const card=deckEl.querySelector(`.slide[data-index="${youtubeIndex}"]`); if(card) card.outerHTML=cardHTML(d.slide,youtubeIndex);
-        closeYoutubePicker(); toast('Video added to the slide. Review it before teaching.','ok');
+        renderDeck(d);
+        closeYoutubePicker(); toast('Video slide added. Review it before teaching.','ok');
       }catch(err){ toast(err.message); }
     }
     $('youtubeClose').addEventListener('click',closeYoutubePicker);

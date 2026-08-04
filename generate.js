@@ -44,46 +44,46 @@ function placeVisual(pptx, slide, slideData, imgPath, accent, rect) {
 
 function addYoutubeMedia(pptx, slide, video, thm) {
   if (!video || !video.url) return;
-  // The card always has a thumbnail + link. Supported PowerPoint versions also
+  // The slide always has a thumbnail + link. Supported PowerPoint versions also
   // get an online-media object so the video can play from inside the deck.
   const title = String(video.title || 'YouTube lesson video').trim().slice(0, 74);
   const channel = String(video.channelTitle || 'YouTube').trim().slice(0, 36);
-  const x = 0.58, y = 4.74, w = 8.84, h = 0.68;
+  const x = 0.72, y = 1.12, w = 8.56, h = 3.74;
   slide.addShape(pptx.ShapeType.roundRect, {
     x, y, w, h,
-    fill: { color: 'FFF1F2' },
+    fill: { color: 'FFF7F7' },
     line: { color: 'FECACA', width: 1 },
-    rectRadius: 0.08,
+    rectRadius: 0.12,
   });
   if (video.thumbnailData) {
-    slide.addImage({ data: video.thumbnailData, x: x + 0.14, y: y + 0.12, w: 0.82, h: 0.44, sizing: { type: 'cover', w: 0.82, h: 0.44 } });
+    slide.addImage({ data: video.thumbnailData, x: x + 0.28, y: y + 0.28, w: 4.58, h: 2.58, sizing: { type: 'cover', w: 4.58, h: 2.58 } });
     if (process.env.POWERPOINT_ONLINE_VIDEO !== 'false' && video.embedUrl) {
-      slide.addMedia({ type: 'online', link: video.embedUrl, x: x + 0.14, y: y + 0.12, w: 0.82, h: 0.44, objectName: 'Lesson video' });
+      slide.addMedia({ type: 'online', link: video.embedUrl, x: x + 0.28, y: y + 0.28, w: 4.58, h: 2.58, objectName: 'Lesson video' });
     }
   } else {
     slide.addShape(pptx.ShapeType.roundRect, {
-      x: x + 0.18, y: y + 0.15, w: 0.74, h: 0.38,
+      x: x + 0.28, y: y + 0.28, w: 4.58, h: 2.58,
       fill: { color: 'FF0033' },
       line: { type: 'none' },
-      rectRadius: 0.08,
+      rectRadius: 0.12,
     });
     slide.addText('▶', {
-      x: x + 0.42, y: y + 0.19, w: 0.22, h: 0.24,
-      fontFace: thm.font, fontSize: 10, bold: true, color: 'FFFFFF',
+      x: x + 2.28, y: y + 1.16, w: 0.55, h: 0.36,
+      fontFace: thm.font, fontSize: 24, bold: true, color: 'FFFFFF',
       align: 'center', valign: 'middle',
     });
   }
   slide.addText(title, {
-    x: x + 1.08, y: y + 0.12, w: 6.8, h: 0.22, fontFace: thm.font, fontSize: 9.5,
+    x: x + 5.08, y: y + 0.38, w: 3.06, h: 0.72, fontFace: thm.font, fontSize: 18,
     bold: true, color: 'B42318', margin: 0.02, breakLine: false, fit: 'shrink',
     hyperlink: { url: video.url },
   });
   slide.addText(`${channel} · Teacher review required`, {
-    x: x + 1.08, y: y + 0.36, w: 5.7, h: 0.18, fontFace: thm.font, fontSize: 7.6,
+    x: x + 5.08, y: y + 1.18, w: 3.06, h: 0.36, fontFace: thm.font, fontSize: 10.8,
     color: 'B42318', margin: 0.02, breakLine: false, fit: 'shrink',
   });
-  slide.addText('Open video', {
-    x: x + 7.6, y: y + 0.18, w: 1.0, h: 0.3, fontFace: thm.font, fontSize: 8.6,
+  slide.addText('Play video', {
+    x: x + 5.08, y: y + 2.28, w: 1.62, h: 0.44, fontFace: thm.font, fontSize: 12.5,
     bold: true, color: 'FFFFFF', align: 'center', valign: 'middle',
     fill: { color: 'B42318' },
     line: { type: 'none' },
@@ -359,9 +359,30 @@ function paginateSlides(slides, t, preset) {
   const layout = (preset && preset.layout) || 'classic';
   const out = [];
   (slides || []).forEach((slide, sourceIndex) => {
+    if (slide.type === 'video') {
+      out.push({ ...slide, _sourceIndex: sourceIndex });
+      return;
+    }
     const bullets = Array.isArray(slide.bullets) ? slide.bullets : [];
     const canSplit = ['content', 'objectives', 'activity', 'recap', 'check'].includes(slide.type || 'content') && bullets.length > 1;
-    if (!canSplit) { out.push({ ...slide, _sourceIndex: sourceIndex }); return; }
+    if (!canSplit) {
+      const { youtube, ...baseSlide } = slide || {};
+      out.push({ ...baseSlide, _sourceIndex: sourceIndex });
+      if (youtube) {
+        out.push({
+          type: 'video',
+          title: youtube.title || 'Lesson video',
+          bullets: [],
+          youtube,
+          modelStage: slide.modelStage || null,
+          modelStageLabel: slide.modelStageLabel || null,
+          modelLabel: slide.modelLabel || null,
+          speakerNotes: `Teacher-reviewed video for: ${slide.title || 'this slide'}`,
+          _sourceIndex: sourceIndex,
+        });
+      }
+      return;
+    }
     const chunks = chunkBulletsForSlide(slide, t, layout);
     chunks.forEach((chunk, idx) => {
       const continued = idx > 0;
@@ -378,6 +399,19 @@ function paginateSlides(slides, t, preset) {
         _sourceIndex: sourceIndex,
       });
     });
+    if (slide.youtube) {
+      out.push({
+        type: 'video',
+        title: slide.youtube.title || 'Lesson video',
+        bullets: [],
+        youtube: slide.youtube,
+        modelStage: slide.modelStage || null,
+        modelStageLabel: slide.modelStageLabel || null,
+        modelLabel: slide.modelLabel || null,
+        speakerNotes: `Teacher-reviewed video for: ${slide.title || 'this slide'}`,
+        _sourceIndex: sourceIndex,
+      });
+    }
   });
   return out;
 }
@@ -445,6 +479,13 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
   };
 
   switch (slideData.type) {
+    case 'video': {
+      slide.background = { color: 'FFF7F7' };
+      slide.addText('LESSON VIDEO', { x: 0.55, y: 0.34, w: 8.9, h: 0.34, fontFace: thm.font, fontSize: 13, bold: true, color: 'B42318', charSpacing: 2 });
+      slide.addText(slideData.title || (slideData.youtube && slideData.youtube.title) || 'Lesson video', { x: 0.55, y: 0.66, w: 8.9, h: 0.44, fontFace: thm.font, fontSize: 20, bold: true, color: thm.primary, fit: 'shrink' });
+      addYoutubeMedia(pptx, slide, slideData.youtube, thm);
+      break;
+    }
     case 'title': {
       addImg({ path: imgPath, x: 0, y: 0, w: 10, h: 5.625, sizing: { type: 'cover', w: 10, h: 5.625 } });
       slide.addShape(pptx.ShapeType.rect, { x: 0, y: 3.6, w: 10, h: 2.025, fill: { color: thm.primary, transparency: 15 } });
@@ -711,7 +752,6 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
       placeVisual(pptx, slide, slideData, imgSource, accent, { x: imgX, y: 1.35, w: 3.9, h: 4.0 });
     }
   }
-  addYoutubeMedia(pptx, slide, slideData.youtube, thm);
 }
 
 function assembleDeck(slides, images, gradeTheme, preset) {
