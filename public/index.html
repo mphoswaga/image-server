@@ -350,6 +350,18 @@
     .plan-section textarea.content { border:1px solid var(--border); margin-top:8px; min-height:64px; font-size:14px; border-radius:10px; }
     .plan-actions, .result-actions { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
     .plan-actions .btn, .result-actions .btn { flex:1 1 190px; }
+    .plan-actions {
+      display:grid;
+      grid-template-columns:repeat(3, minmax(0, 1fr));
+      align-items:stretch;
+    }
+    .plan-actions .btn {
+      width:100% !important;
+      min-width:0;
+    }
+    #acceptBtn {
+      grid-column:1 / -1;
+    }
 
     /* Slides preview */
     .edit-tip { text-align:center; color:var(--muted); font-size:13.5px; margin-bottom:18px; display:flex; align-items:center; justify-content:center; gap:7px; }
@@ -1405,6 +1417,203 @@
       }
       .roster-verify-actions .btn {
         width:100% !important;
+      }
+    }
+
+    /* Windows Chrome / mid-width laptop hardening.
+       Treat busy 15-inch browser windows as constrained workspaces: collapse
+       navigational and action surfaces before they can overlap content. */
+    html,
+    body {
+      max-width:100%;
+      overflow-x:hidden;
+    }
+    .wrap,
+    #app,
+    section,
+    form,
+    .card,
+    .card.wide,
+    .bar,
+    .plan-actions,
+    .result-actions,
+    .pack-actions,
+    .roster-verify,
+    .roster-preview-wrap,
+    .wizard-card,
+    .auth-card {
+      min-width:0;
+      max-width:100%;
+    }
+    .card.wide {
+      width:min(100%, 1120px);
+    }
+    .bar,
+    .plan-actions,
+    .result-actions,
+    .pack-actions {
+      align-items:stretch;
+    }
+    .plan-actions .btn,
+    .result-actions .btn,
+    .pack-actions .btn {
+      min-width:0;
+      overflow-wrap:anywhere;
+    }
+    .roster-preview-wrap {
+      width:100%;
+      max-height:min(54dvh, 560px);
+      overscroll-behavior:contain;
+    }
+    .roster-preview-wrap table {
+      width:max-content !important;
+      min-width:min(720px, 100%);
+    }
+    .roster-verify-actions {
+      position:static;
+      margin:12px 0 0;
+      padding:0;
+      background:transparent;
+      border-top:0;
+    }
+    .auth-suite-actions {
+      display:grid;
+      grid-template-columns:repeat(2, minmax(0, 1fr));
+    }
+    .auth-suite-actions .btn.full {
+      width:100% !important;
+      max-width:100%;
+    }
+    @media (max-width:1180px) {
+      .nav {
+        display:grid !important;
+        grid-template-columns:auto 1fr;
+        gap:10px 14px;
+        align-items:center;
+      }
+      .nav-user {
+        justify-self:end;
+        min-width:0;
+      }
+      .nav-links {
+        grid-column:1 / -1;
+        order:3;
+        width:100%;
+        max-width:100%;
+      }
+      .wrap {
+        padding-inline:clamp(14px, 2vw, 24px);
+      }
+      .card.wide {
+        width:100%;
+      }
+      .plan-actions {
+        display:grid;
+        grid-template-columns:repeat(2, minmax(0, 1fr));
+      }
+      .plan-actions .btn {
+        flex:none;
+        width:100% !important;
+      }
+      #acceptBtn {
+        grid-column:1 / -1;
+      }
+    }
+    @media (max-width:980px), (max-height:820px) {
+      #authScreen {
+        align-items:flex-start;
+        min-height:100dvh;
+      }
+      .auth-card {
+        width:min(100%, 520px);
+        margin-inline:auto;
+      }
+      .auth-card .ls-icon {
+        width:86px;
+        height:86px;
+      }
+      .auth-card .ls-wm {
+        font-size:36px;
+      }
+      .auth-card .sub {
+        margin:8px 0 16px;
+        line-height:1.45;
+      }
+    }
+    @media (max-width:860px), (max-height:760px) {
+      .app-menu {
+        top:auto;
+        right:12px;
+        bottom:12px;
+        left:12px;
+        width:auto;
+        max-height:none;
+        display:flex !important;
+        overflow-x:auto;
+        border-radius:18px;
+        z-index:1000;
+      }
+      .app-menu:hover,
+      .app-menu:focus-within {
+        width:auto;
+        max-height:none;
+        transform:none;
+      }
+      .app-menu-title {
+        display:none;
+      }
+      .app-menu:not(:hover):not(:focus-within) .nav-link,
+      .app-menu .nav-link {
+        width:auto;
+        flex:0 0 auto;
+        min-height:42px;
+        height:auto;
+        padding:9px 12px;
+        border-width:1px;
+        opacity:1;
+        pointer-events:auto;
+      }
+      .app-menu-label {
+        opacity:1;
+        transform:none;
+      }
+      .wrap {
+        padding-bottom:96px;
+      }
+      .wizard-card {
+        width:min(720px, calc(100vw - 24px));
+      }
+      .wizard-footer {
+        align-items:stretch;
+      }
+      .wizard-footer > div {
+        display:flex;
+        flex-wrap:wrap;
+        gap:10px;
+        justify-content:flex-end;
+      }
+      .wizard-footer .btn {
+        min-width:128px;
+      }
+    }
+    @media (max-width:720px) {
+      .plan-actions,
+      .result-actions,
+      .pack-actions,
+      .auth-suite-actions {
+        grid-template-columns:1fr;
+      }
+      .result-actions,
+      .pack-actions {
+        display:grid;
+      }
+      .result-actions .btn,
+      .pack-actions .btn,
+      .roster-verify-actions .btn {
+        width:100% !important;
+      }
+      .roster-preview-wrap table {
+        min-width:640px;
       }
     }
   </style>
