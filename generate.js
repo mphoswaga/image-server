@@ -299,6 +299,79 @@ function bulletItems(bullets, t, thm, multicolor) {
   });
 }
 
+function textLength(value) {
+  return String(value == null ? '' : value).trim().length;
+}
+
+function bulletCapacity(slide, t, layout) {
+  const type = slide.type || 'content';
+  const size = Number(t && t.bulletSize) || 18;
+  const density = size >= 24 ? 0.72 : size >= 18 ? 1 : 1.26;
+  let base = 440;
+  if (type === 'objectives') base = 260;
+  else if (type === 'activity' || type === 'recap' || type === 'check') base = 330;
+  else if (slide.layoutHint === 'TEXT_HEAVY') base = 560;
+  else if (layout === 'twocol') base = 620;
+  else if (layout === 'fullbleed') base = 310;
+  else if (layout === 'split' || layout === 'minimal' || layout === 'sidebar') base = 330;
+  else if (layout === 'banner' || layout === 'splash') base = 370;
+  return Math.max(150, Math.round(base * density));
+}
+
+function bulletLoad(slide, bullets) {
+  const titlePenalty = Math.max(0, textLength(slide.title) - 55) * 0.6;
+  const examplePenalty = slide.example ? Math.max(45, textLength(slide.example) * 0.75) : 0;
+  return bullets.reduce((sum, b) => sum + Math.max(22, textLength(b)), 0) + titlePenalty + examplePenalty;
+}
+
+function chunkBulletsForSlide(slide, t, layout) {
+  const bullets = Array.isArray(slide.bullets) ? slide.bullets.filter(b => textLength(b)) : [];
+  if (bullets.length <= 1) return [bullets];
+  const capacity = bulletCapacity(slide, t, layout);
+  if (bulletLoad(slide, bullets) <= capacity) return [bullets];
+
+  const chunks = [];
+  let current = [];
+  for (const bullet of bullets) {
+    const candidate = [...current, bullet];
+    if (current.length && bulletLoad(slide, candidate) > capacity) {
+      chunks.push(current);
+      current = [bullet];
+    } else {
+      current = candidate;
+    }
+  }
+  if (current.length) chunks.push(current);
+  return chunks;
+}
+
+function paginateSlides(slides, t, preset) {
+  const layout = (preset && preset.layout) || 'classic';
+  const out = [];
+  (slides || []).forEach((slide, sourceIndex) => {
+    const bullets = Array.isArray(slide.bullets) ? slide.bullets : [];
+    const canSplit = ['content', 'objectives', 'activity', 'recap', 'check'].includes(slide.type || 'content') && bullets.length > 1;
+    if (!canSplit) { out.push({ ...slide, _sourceIndex: sourceIndex }); return; }
+    const chunks = chunkBulletsForSlide(slide, t, layout);
+    chunks.forEach((chunk, idx) => {
+      const continued = idx > 0;
+      out.push({
+        ...slide,
+        title: continued && !/\(continued\)$/i.test(slide.title || '') ? `${slide.title || 'Slide'} (continued)` : slide.title,
+        bullets: chunk,
+        example: idx === chunks.length - 1 ? slide.example : '',
+        youtube: idx === 0 ? slide.youtube : null,
+        shortcuts: idx === 0 ? slide.shortcuts : null,
+        worked: idx === 0 ? slide.worked : null,
+        visual: idx === 0 ? slide.visual : null,
+        layoutHint: continued || chunks.length > 1 ? 'TEXT_HEAVY' : slide.layoutHint,
+        _sourceIndex: sourceIndex,
+      });
+    });
+  });
+  return out;
+}
+
 function addTitleBar(pptx, slide, title, t, accent, thm) {
   thm = thm || THEME;
   slide.addText(title, { x: 0.5, y: 0.35, w: 9, h: 0.9, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
@@ -630,8 +703,9 @@ function assembleDeck(slides, images, gradeTheme, preset) {
   pptx.layout = 'LAYOUT_16x9'; // 10 x 5.625 in
   pptx.defineSlideMaster({ title: 'LESSONCOPE', background: { color: thm.bg } });
   const state = { photoN: 0 };
-  slides.forEach((slideData, idx) => {
-    const img = images[idx];
+  const pages = paginateSlides(slides, gradeTheme, preset);
+  pages.forEach((slideData, idx) => {
+    const img = images[slideData._sourceIndex != null ? slideData._sourceIndex : idx];
     renderSlide(pptx, slideData, img ? path.join(PUBLIC_DIR, img.relpath) : null, gradeTheme, idx, state, preset);
   });
   return pptx;
@@ -652,10 +726,11 @@ async function buildDeck({ subject, topic, slideCount = 4, grade = 'middle schoo
   const preset = getPreset(presetId);
   const profile = gradeProfile(grade);
   const slides = await generateContent(subject, topic, slideCount, grade, tone, focus, { objectives, lessonPlanText, teachingModelId, ...extras });
-  const images = await selectImages(slides, subject, topic);
-  if (skipAssemble) return { slides, images, band: profile.band, preset };
-  const pptx = assembleDeck(slides, images, profile.theme, preset);
-  return { pptx, slides, images, band: profile.band, preset };
+  const safeSlides = paginateSlides(slides, profile.theme, preset).map(({ _sourceIndex, ...slide }) => slide);
+  const images = await selectImages(safeSlides, subject, topic);
+  if (skipAssemble) return { slides: safeSlides, images, band: profile.band, preset };
+  const pptx = assembleDeck(safeSlides, images, profile.theme, preset);
+  return { pptx, slides: safeSlides, images, band: profile.band, preset };
 }
 
 // ── CLI entrypoint (only when run directly, not when imported) ──────────────
@@ -798,7 +873,7 @@ function removeLibraryImage(relpath) {
   return true;
 }
 
-module.exports = { buildDeck, rebuildDeck, alternativeImage, findReusableImage, searchLibrary, getLibraryImage, listLibrary, validateSelection, selectImages, addLibraryImages, libraryStats, getLibraryByTopic, recentLibraryImages, removeLibraryImage };
+module.exports = { buildDeck, rebuildDeck, paginateSlides, alternativeImage, findReusableImage, searchLibrary, getLibraryImage, listLibrary, validateSelection, selectImages, addLibraryImages, libraryStats, getLibraryByTopic, recentLibraryImages, removeLibraryImage };
 
 if (require.main === module) {
   main().catch(err => {
