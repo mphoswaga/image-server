@@ -863,6 +863,421 @@
     .qstat-row { display:flex; align-items:center; gap:10px; padding:8px 0; border-top:1px solid var(--border); font-size:13px; }
     .qstat-bar { flex:1; height:8px; border-radius:5px; background:#eee; overflow:hidden; }
     .qstat-fill { height:100%; border-radius:5px; }
+
+    /* ── EducScope-connected polish pass ─────────────────────────────────── */
+    body {
+      background:
+        linear-gradient(180deg,rgba(238,248,245,.92) 0,rgba(246,249,252,.96) 390px,rgba(255,253,248,.9) 100%),
+        radial-gradient(940px 620px at 8% -6%, rgba(22,163,74,.16) 0, transparent 52%),
+        radial-gradient(860px 560px at 100% 0%, rgba(29,78,216,.14) 0, transparent 54%),
+        #f6f9fc;
+    }
+    .wrap {
+      max-width:1280px;
+      padding-top:28px;
+    }
+    .nav {
+      min-height:70px;
+      padding:10px clamp(16px,2.4vw,34px);
+      background:rgba(255,255,255,.86);
+      border-bottom:1px solid rgba(196,214,226,.7);
+      box-shadow:0 10px 34px rgba(7,20,39,.055);
+    }
+    .nav .ls-icon {
+      width:40px;
+      height:40px;
+    }
+    .nav .ls-wm {
+      font-size:21px;
+    }
+    .nav-links {
+      gap:4px;
+      padding:5px;
+      background:rgba(241,248,247,.82);
+      border:1px solid rgba(197,222,216,.72);
+      max-width:64vw;
+    }
+    .nav-link {
+      min-height:38px;
+      padding:8px 13px;
+      color:#334155;
+      border-radius:10px;
+      font-size:13px;
+      font-weight:800;
+    }
+    .nav-link:hover {
+      color:#0f766e;
+      background:#fff;
+      border-color:rgba(20,184,166,.18);
+      box-shadow:var(--sh-sm);
+      transform:none;
+    }
+    .nav-link.nav-active {
+      color:#0f2b5c;
+      background:#fff;
+      border-color:rgba(15,43,92,.1);
+      box-shadow:0 8px 20px rgba(15,43,92,.08);
+    }
+    .app-sw-btn,
+    .nav .logout,
+    .nav .avatar {
+      box-shadow:0 6px 18px rgba(15,43,92,.08);
+    }
+    .hero {
+      text-align:left;
+      width:min(100%,1120px);
+      margin:0 auto 20px;
+      padding:4px 4px 0;
+    }
+    .suite-kicker {
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      margin:0 0 9px;
+      color:#0f766e;
+      font-size:11.5px;
+      font-weight:900;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+    }
+    .suite-kicker::before {
+      content:'';
+      width:7px;
+      height:7px;
+      border-radius:50%;
+      background:var(--spark);
+    }
+    .hero .greeting {
+      font-family:'Plus Jakarta Sans',-apple-system,"Segoe UI",Roboto,sans-serif;
+      font-size:clamp(30px,4vw,52px);
+      line-height:1.03;
+      letter-spacing:0;
+      max-width:760px;
+    }
+    .hero .tagline {
+      margin:14px 0 0;
+      max-width:720px;
+      color:#526173;
+      font-size:clamp(15px,1.5vw,18px);
+      line-height:1.65;
+    }
+    .hero #guideHeroBtn {
+      background:#fff;
+      border-color:rgba(197,222,216,.9);
+      box-shadow:var(--sh-sm);
+    }
+    .steps {
+      justify-content:flex-start;
+      width:min(100%,1120px);
+      margin:0 auto 18px;
+      padding:10px 4px;
+    }
+    .steps .st {
+      font-weight:800;
+      color:#64748b;
+    }
+    .steps .st.active {
+      color:#0f2b5c;
+    }
+    .card,
+    .mode-card,
+    .game-card,
+    .gb-stat,
+    .credit-pack,
+    .credit-estimator,
+    .topup {
+      border-color:rgba(197,222,216,.76);
+      box-shadow:0 1px 2px rgba(16,24,40,.04),0 18px 42px rgba(16,32,41,.07);
+    }
+    .card {
+      border-radius:16px;
+      background:
+        radial-gradient(circle at 100% 0%,rgba(22,163,74,.055),transparent 30%),
+        linear-gradient(145deg,rgba(255,255,255,.98),rgba(250,253,252,.94));
+    }
+    .card.wide {
+      max-width:1120px;
+    }
+    .card-title,
+    .page-hd h2 {
+      letter-spacing:0;
+    }
+    .page-hd {
+      margin-bottom:22px;
+      border-bottom-color:rgba(197,222,216,.8);
+    }
+    .page-sub,
+    .hint {
+      color:#64748b;
+    }
+    .mode-select {
+      max-width:1120px;
+      gap:14px;
+      margin-bottom:20px;
+    }
+    .mode-card {
+      min-height:168px;
+      padding:18px;
+      border-radius:16px;
+      background:#fff;
+    }
+    .mode-card .ic {
+      width:38px;
+      height:38px;
+      padding:9px;
+      border-radius:12px;
+      background:#ecfdf5;
+      color:#0f9f64;
+      box-sizing:content-box;
+    }
+    .mode-card .mc-title {
+      margin-top:7px;
+      font-size:15.5px;
+      color:#172033;
+    }
+    .mode-card .mc-sub {
+      color:#64748b;
+      line-height:1.48;
+    }
+    .mode-card.active {
+      border-color:#16a34a;
+      box-shadow:0 0 0 3px rgba(22,163,74,.11),0 20px 42px rgba(16,32,41,.08);
+    }
+    .ps-step {
+      border-bottom-color:rgba(197,222,216,.8);
+    }
+    .ps-num,
+    .phd-icon,
+    .roster-icon,
+    .psc-icon,
+    .utc-icon {
+      box-shadow:0 8px 18px rgba(15,43,92,.08);
+    }
+    .ps-tabs {
+      background:#f1f8f7;
+      border-color:rgba(197,222,216,.95);
+      padding:4px;
+      border-radius:12px;
+      overflow:visible;
+    }
+    .ps-tab {
+      border-radius:9px;
+      color:#526173;
+      font-weight:800;
+    }
+    .ps-tab.active {
+      background:#fff;
+      color:#0f2b5c;
+      box-shadow:var(--sh-sm);
+    }
+    select,
+    input,
+    textarea {
+      border-color:#d7e2e1;
+      background:#fff;
+    }
+    select:focus,
+    input:focus,
+    textarea:focus {
+      border-color:#13a370;
+      box-shadow:0 0 0 4px rgba(19,163,112,.13);
+    }
+    .btn {
+      border-radius:10px;
+    }
+    .btn.primary,
+    .btn-progress {
+      background:linear-gradient(135deg,#0f766e,#0f2b5c);
+    }
+    .btn.accent {
+      background:linear-gradient(135deg,#0f9f64,#16a34a);
+    }
+    .btn.ghost {
+      border-color:#d7e2e1;
+    }
+    details.panel-add {
+      border-color:rgba(197,222,216,.9);
+      background:rgba(255,255,255,.58);
+    }
+    details.panel-add summary {
+      color:#0f766e;
+    }
+    details.panel-add summary:hover {
+      background:#effbf6;
+    }
+    .roster-row {
+      border-color:#d7e2e1;
+      border-radius:12px;
+      background:#fff;
+    }
+    .roster-verify {
+      max-width:100%;
+      background:#fff;
+      border:1px solid #d7e2e1;
+      border-radius:14px;
+      padding:14px;
+      box-shadow:var(--sh-sm);
+    }
+    .roster-preview-wrap {
+      max-height:min(64vh,680px);
+      border-color:#d7e2e1;
+    }
+    .roster-preview-wrap table {
+      min-width:720px;
+    }
+    .roster-verify-actions {
+      position:sticky;
+      bottom:0;
+      margin:0 -14px -14px;
+      padding:12px 14px;
+      background:linear-gradient(180deg,rgba(255,255,255,.82),#fff 34%);
+      border-top:1px solid #e2e8f0;
+    }
+    .roster-verify-actions .btn {
+      flex:0 1 auto;
+      min-width:132px;
+    }
+    #rosterName,
+    #rosterDropZone,
+    #rosterCsv {
+      max-width:100% !important;
+    }
+    #rosterDropZone,
+    #pptxDrop,
+    .drop {
+      border-color:#cdddda !important;
+      background:linear-gradient(135deg,#ffffff,#f5fbfa) !important;
+      border-radius:14px !important;
+    }
+    #rosterDropZone:hover,
+    #pptxDrop:hover,
+    .drop:hover,
+    .drop.drag {
+      border-color:#16a34a !important;
+      background:#f0fdf4 !important;
+    }
+    .credits-balance {
+      background:
+        radial-gradient(circle at 95% 5%,rgba(65,232,148,.24),transparent 34%),
+        radial-gradient(circle at 0% 100%,rgba(20,184,166,.16),transparent 36%),
+        linear-gradient(135deg,#071427,#10203c);
+      border-color:rgba(148,163,184,.28);
+    }
+    #authScreen {
+      align-items:center;
+      background:
+        radial-gradient(760px 520px at 100% 0%,rgba(29,78,216,.22),transparent 54%),
+        radial-gradient(760px 520px at 0% 100%,rgba(22,163,74,.18),transparent 48%),
+        linear-gradient(135deg,#071427,#10203c);
+    }
+    .auth-card {
+      width:min(100%,560px);
+      border-color:rgba(170,219,255,.16);
+      background:rgba(255,255,255,.97);
+    }
+    .auth-card .sub {
+      color:#526173;
+      font-size:15px;
+    }
+    .auth-suite-box {
+      border-color:rgba(22,163,74,.22);
+      background:radial-gradient(circle at 100% 0%,rgba(22,163,74,.12),transparent 34%),#f8fffb;
+    }
+    @media (max-width:1100px) {
+      .nav {
+        display:grid !important;
+        grid-template-columns:auto 1fr auto;
+      }
+      .nav-links {
+        grid-column:1 / -1;
+        order:3;
+        max-width:100%;
+        width:100%;
+      }
+    }
+    @media (max-width:760px) {
+      .nav {
+        display:grid !important;
+        grid-template-columns:auto auto;
+        justify-content:space-between;
+      }
+      .nav > .nav-sep {
+        display:none;
+      }
+      .nav-menu-btn {
+        display:inline-flex;
+        justify-self:end;
+      }
+      .nav-links {
+        display:none;
+        grid-column:1 / -1;
+        flex-direction:column;
+        align-items:stretch;
+        border-radius:14px;
+        max-height:calc(100dvh - 92px);
+        overflow:auto;
+      }
+      .nav.menu-open .nav-links {
+        display:flex;
+      }
+      .nav-links .nav-link {
+        width:100%;
+        justify-content:flex-start;
+      }
+      .nav-user {
+        grid-column:1 / -1;
+        width:100%;
+        justify-self:end;
+        justify-content:flex-end;
+        padding-top:4px;
+      }
+      .steps {
+        width:100%;
+      }
+      .hero {
+        width:100%;
+      }
+      .mode-card {
+        min-height:0;
+      }
+    }
+    @media (max-width:560px) {
+      .wrap {
+        padding-inline:14px;
+      }
+      .card {
+        padding:18px 14px;
+      }
+      .hero .greeting {
+        font-size:30px;
+      }
+      .auth-card {
+        border-radius:18px;
+      }
+      .nav {
+        gap:8px 10px;
+      }
+      .nav-user {
+        gap:6px;
+      }
+      .nav .logout {
+        min-height:34px;
+        padding:7px 10px;
+      }
+      #passkeysNavBtn {
+        width:34px;
+        min-width:34px;
+        padding-inline:0;
+      }
+      .app-sw-btn,
+      .nav .avatar {
+        width:34px;
+        height:34px;
+      }
+      .roster-verify-actions .btn {
+        width:100% !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1069,6 +1484,7 @@
 
   <div class="wrap" id="app" style="display:none">
     <div class="hero">
+      <div class="suite-kicker">EducScope suite</div>
       <h1 id="greeting" class="greeting">Plan a lesson</h1>
       <div class="tagline">Paste your objectives — get a lesson plan that matches your template, then a matching deck.</div>
       <div style="margin-top:14px">
