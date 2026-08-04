@@ -2133,10 +2133,12 @@
         <div class="meta"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Your deck is ready — <b id="deckTitle"></b> <span id="deckCount" style="color:var(--muted)"></span></div>
         <div class="result-actions">
           <button id="downloadBtn" class="btn accent"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Download .pptx</button>
+          <button id="driveExportBtn" class="btn ghost"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg> Save to Google Drive</button>
           <button id="restartBtn" class="btn ghost">Start over</button>
         </div>
       </div>
       <p class="edit-tip"><svg class="ic" aria-hidden="true" style="color:var(--accent)"><use href="#i-pencil"/></svg> Click any text to <b>edit it</b> · use <b>Replace</b> to search images · <b>Regenerate</b> before downloading.</p>
+      <p id="driveExportStatus" class="edit-tip" style="display:none"></p>
       <div id="quotaPill" class="quota-pill" style="display:none"></div>
       <div id="deckCostNote" class="cost-note" style="display:none"></div>
       <div id="deck" class="deck"></div>
@@ -3142,6 +3144,28 @@
         const blob=await r.blob(), url=URL.createObjectURL(blob), a=document.createElement('a'); a.href=url; a.download=$('deckTitle').textContent+'.pptx'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
       }catch(err){ toast(err.message); } dl.disabled=false; dl.innerHTML=orig;
     });
+    $('driveExportBtn').addEventListener('click', async ()=>{
+      if(!currentDeckId) return;
+      const btn=$('driveExportBtn'), orig=btn.innerHTML;
+      btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Saving…';
+      try{
+        $('driveExportStatus').style.display='none';
+        const r=await fetch(`/api/google-drive/export/${currentDeckId}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({edits:collectEdits()})});
+        const d=await r.json().catch(()=>({error:'Google Drive export failed'}));
+        if(r.status===409 && d.needsConnection && d.connectUrl){
+          toast('Connect Google Drive once, then export again.','ok');
+          window.location.href=d.connectUrl;
+          return;
+        }
+        if(!r.ok) throw new Error(d.error||'Google Drive export failed.');
+        const link=d.file&&d.file.webViewLink;
+        const status=$('driveExportStatus');
+        status.style.display='block';
+        status.innerHTML=`${ICON('i-check')} Saved to Google Drive${link?` · <a href="${esc(link)}" target="_blank" rel="noopener">Open file</a>`:''}`;
+        toast('Saved to Google Drive.','ok');
+      }catch(err){ toast(err.message); btn.disabled=false; btn.innerHTML=orig; return; }
+      btn.disabled=false; btn.innerHTML=orig;
+    });
     // ---- AI-visual budget (monthly cap) ----
     let aiQuota=null;
     async function loadQuota(){ try{ aiQuota=await (await fetch('/api/quota')).json(); }catch{ aiQuota=null; } renderQuotaPill(); updateAiButtons(); }
@@ -3639,9 +3663,14 @@
     })();
     // Surface an error bounced back from the OAuth callback (?authError=…).
     (function(){
-      const e=new URLSearchParams(location.search).get('authError');
-      if(e){ const el=$('authErr'); if(el) el.textContent=e;
-        history.replaceState(null,'',location.pathname); }
+      const q=new URLSearchParams(location.search);
+      const e=q.get('authError');
+      const driveErr=q.get('driveError');
+      const drive=q.get('drive');
+      if(e){ const el=$('authErr'); if(el) el.textContent=e; }
+      if(driveErr) setTimeout(()=>toast(driveErr),200);
+      if(drive==='connected') setTimeout(()=>toast('Google Drive connected. You can export your deck now.','ok'),200);
+      if(e||driveErr||drive) history.replaceState(null,'',location.pathname);
     })();
 
     $('passkeyLoginBtn').addEventListener('click', async ()=>{

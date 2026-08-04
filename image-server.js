@@ -43,6 +43,7 @@ const { signup, login, findOrCreateSocialUser, issueToken, verifyToken, getUserB
 const { sendEmail } = require('./email');
 const webauthn = require('./webauthn');
 const socialAuth = require('./social-auth');
+const googleDrive = require('./google-drive');
 const credits = require('./credits');
 const billing = require('./billing');
 const wallet = require('./wallet');
@@ -441,6 +442,48 @@ app.get('/api/auth/providers', (req, res) => {
 
 const OAUTH_STATE_COOKIE = 'lc_social_state';
 const socialRedirectUri = (req, provider) => `${originFor(req)}/auth/${provider}/callback`;
+const DRIVE_STATE_COOKIE = 'lc_drive_state';
+const driveRedirectUri = req => `${originFor(req)}/integrations/google-drive/callback`;
+
+// ── Google Drive export integration ────────────────────────────────────────
+app.get('/api/google-drive/status', requireAuth, (req, res) => {
+  res.json({
+    configured: googleDrive.configured(),
+    connected: googleDrive.configured() && googleDrive.connected(req.userId),
+    connectUrl: '/integrations/google-drive/connect',
+  });
+});
+
+app.get('/integrations/google-drive/connect', requireAuth, (req, res) => {
+  if (!googleDrive.configured()) return res.redirect('/?driveError=' + encodeURIComponent('Google Drive export is not configured yet.'));
+  const state = googleDrive.randomState();
+  res.cookie(DRIVE_STATE_COOKIE, state, { httpOnly: true, sameSite: 'lax', maxAge: 10 * 60 * 1000 });
+  res.redirect(googleDrive.buildAuthUrl({ redirectUri: driveRedirectUri(req), state }));
+});
+
+app.get('/integrations/google-drive/callback', requireAuth, async (req, res) => {
+  const fail = msg => res.redirect('/?driveError=' + encodeURIComponent(msg || 'Google Drive connection failed.'));
+  try {
+    if (req.query.error) return fail('Google Drive connection was cancelled.');
+    const cookie = req.cookies && req.cookies[DRIVE_STATE_COOKIE];
+    res.clearCookie(DRIVE_STATE_COOKIE);
+    if (!cookie || cookie !== req.query.state) return fail('Google Drive connection expired. Please try again.');
+    if (!req.query.code) return fail('No authorization code returned from Google.');
+    const tokens = await googleDrive.exchangeCode({ code: req.query.code, redirectUri: driveRedirectUri(req) });
+    googleDrive.saveConnection(req.userId, tokens);
+    audit.log('google_drive.connect', { userId: req.userId, ip: req.ip });
+    res.redirect('/?drive=connected');
+  } catch (err) {
+    console.error('Google Drive connect failed:', err.message);
+    fail(err.message);
+  }
+});
+
+app.post('/api/google-drive/disconnect', requireAuth, (req, res) => {
+  const disconnected = googleDrive.deleteConnection(req.userId);
+  if (disconnected) audit.log('google_drive.disconnect', { userId: req.userId, ip: req.ip });
+  res.json({ ok: true, connected: false });
+});
 
 // Start sign-in: set a short-lived CSRF-state cookie and bounce to the provider.
 app.get('/auth/:provider', (req, res) => {
@@ -1938,27 +1981,76 @@ app.post('/api/slide/:id/regenerate', requireAuth, async (req, res) => {
   }
 });
 
+function applyDeckEdits(deck, edits) {
+  for (const edit of (edits || [])) {
+    const s = deck.slides[edit.index];
+    if (!s) continue;
+    if (typeof edit.title === 'string') s.title = edit.title;
+    if (Array.isArray(edit.bullets)) s.bullets = edit.bullets.filter(b => b.trim());
+    if (typeof edit.example === 'string') s.example = edit.example;
+    if (typeof edit.subtitle === 'string') s.subtitle = edit.subtitle;
+  }
+}
+
+async function deckPptxBuffer(deck, edits) {
+  applyDeckEdits(deck, edits);
+  const pptx = rebuildDeck({ slides: deck.slides, images: deck.images, grade: deck.grade, presetId: deck.presetId || null });
+  return safeAnimate(await pptx.write({ outputType: 'nodebuffer' }), deck.band);
+}
+
+function deckFilename(deck) {
+  return `${deck.subject}-${deck.topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
+}
+
 // Download — merges any text edits from the client, rebuilds, streams the file.
 app.post('/api/download/:id', requireAuth, async (req, res) => {
   const deck = decks.get(req.params.id);
   if (!deck) return res.status(404).json({ error: 'Deck not found or expired — generate it again.' });
   try {
-    for (const edit of (req.body.edits || [])) {
-      const s = deck.slides[edit.index];
-      if (!s) continue;
-      if (typeof edit.title === 'string') s.title = edit.title;
-      if (Array.isArray(edit.bullets)) s.bullets = edit.bullets.filter(b => b.trim());
-      if (typeof edit.example === 'string') s.example = edit.example;
-      if (typeof edit.subtitle === 'string') s.subtitle = edit.subtitle;
-    }
-    const pptx = rebuildDeck({ slides: deck.slides, images: deck.images, grade: deck.grade, presetId: deck.presetId || null });
-    const buffer = safeAnimate(await pptx.write({ outputType: 'nodebuffer' }), deck.band);
-    const filename = `${deck.subject}-${deck.topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
+    const buffer = await deckPptxBuffer(deck, req.body.edits);
+    const filename = deckFilename(deck);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(buffer);
   } catch (err) {
     console.error('Download/rebuild failed:', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Google Drive export — same rebuilt .pptx, uploaded to the teacher's Drive.
+app.post('/api/google-drive/export/:id', requireAuth, async (req, res) => {
+  const deck = decks.get(req.params.id);
+  if (!deck) return res.status(404).json({ error: 'Deck not found or expired — generate it again.' });
+  if (!googleDrive.configured()) {
+    return res.status(501).json({
+      error: 'Google Drive export is not configured yet.',
+      setupRequired: true,
+    });
+  }
+  if (!googleDrive.connected(req.userId)) {
+    return res.status(409).json({
+      error: 'Connect Google Drive before exporting.',
+      needsConnection: true,
+      connectUrl: '/integrations/google-drive/connect',
+    });
+  }
+  try {
+    const filename = deckFilename(deck);
+    const buffer = await deckPptxBuffer(deck, req.body.edits);
+    const file = await googleDrive.uploadPptx(req.userId, { filename, buffer });
+    audit.log('google_drive.export', { userId: req.userId, deckId: req.params.id, fileId: file.id, filename, ip: req.ip });
+    res.json({
+      ok: true,
+      file: {
+        id: file.id,
+        name: file.name || filename,
+        webViewLink: file.webViewLink,
+        webContentLink: file.webContentLink,
+      },
+    });
+  } catch (err) {
+    console.error('Google Drive export failed:', err.message);
     res.status(400).json({ error: err.message });
   }
 });
