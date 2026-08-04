@@ -38,6 +38,16 @@ function placeVisual(pptx, slide, slideData, imgPath, accent, rect) {
   return false;
 }
 
+function addYoutubeMedia(slide, video, thm) {
+  if (!video || !video.embedUrl || !video.url) return;
+  slide.addMedia({ type: 'online', link: video.embedUrl, x: 7.55, y: 4.92, w: 1.25, h: 0.5, objectName: 'Lesson video' });
+  slide.addText('Watch video', {
+    x: 8.8, y: 4.92, w: 1.0, h: 0.5, fontFace: thm.font, fontSize: 9.5,
+    bold: true, color: thm.primary, align: 'center', valign: 'middle',
+    hyperlink: { url: video.url },
+  });
+}
+
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const OUTPUT_DIR = path.join(__dirname, 'output');
 const LIBRARY_PATH = path.join(PUBLIC_DIR, 'library.json');
@@ -578,6 +588,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
       placeVisual(pptx, slide, slideData, imgPath, accent, { x: imgX, y: 1.35, w: 3.9, h: 4.0 });
     }
   }
+  addYoutubeMedia(slide, slideData.youtube, thm);
 }
 
 function assembleDeck(slides, images, gradeTheme, preset) {

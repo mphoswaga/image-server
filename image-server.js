@@ -18,6 +18,7 @@ const { generateImage } = require('./ai-image');
 const { parseFraction, detectLabelledDiagram } = require('./concept-diagram');
 const { generateDiagram } = require('./svg-diagram');
 const { generateWorksheet, generateExitTicket, generateQuiz, generateGame } = require('./lesson-pack');
+const { normalizeVideo, suggestVideos } = require('./youtube');
 const { worksheetDocx, exitTicketDocx, quizDocx } = require('./docgen');
 const unit = require('./unit');
 const planningSource = require('./planning-source');
@@ -798,6 +799,7 @@ function previewEntry(slide, image) {
     fraction: parseFraction(slide.example) || parseFraction(slide.title) || parseFraction(slide.imageQuery) || null,
     // a step/cycle process diagram (any subject)
     visual: (slide.visual && (slide.visual.type === 'steps' || slide.visual.type === 'cycle') && Array.isArray(slide.visual.items) && slide.visual.items.length >= 2) ? slide.visual : null,
+    youtube: slide.youtube || null,
     differentiation: slide.differentiation || null,
     shortcuts: (Array.isArray(slide.shortcuts) && slide.shortcuts.length) ? slide.shortcuts : null,
     worked: (slide.worked && slide.worked.task && Array.isArray(slide.worked.steps) && slide.worked.steps.length) ? slide.worked : null,
@@ -806,6 +808,24 @@ function previewEntry(slide, image) {
 }
 
 app.get('/api/library', (req, res) => res.json(listLibrary()));
+
+// Teacher-reviewed YouTube suggestions. Search is metadata-only: LessonScope
+// never downloads or proxies a YouTube video.
+app.get('/api/youtube/suggestions', requireAuth, async (req, res) => {
+  try {
+    const result = await suggestVideos({
+      subject: clip(req.query.subject, LIMITS.subject),
+      topic: clip(req.query.topic, LIMITS.topic),
+      grade: clip(req.query.grade, 80),
+      stage: clip(req.query.stage, 80),
+      limit: req.query.limit,
+    });
+    res.json(result);
+  } catch (err) {
+    console.error('YouTube suggestion failed:', err.message);
+    res.status(502).json({ error: 'YouTube suggestions are temporarily unavailable.' });
+  }
+});
 
 // ── Admin: grow the image library ─────────────────────────────────────────
 app.get('/api/admin/stats', requireAdmin, (req, res) => res.json(libraryStats()));
@@ -1700,6 +1720,35 @@ app.post('/api/slide/:id/swap-image', requireAuth, (req, res) => {
   if (!alt) return res.status(409).json({ error: 'No other image available for this topic.' });
   deck.images[i] = alt;
   res.json({ image: '/' + alt.relpath, imageSource: alt.source || 'library' });
+});
+
+// Attach one teacher-approved YouTube video to a slide. This is free and
+// stores only the validated video metadata, not a downloaded media file.
+app.post('/api/slide/:id/youtube', requireAuth, (req, res) => {
+  const deck = decks.get(req.params.id);
+  if (!deck) return res.status(404).json({ error: 'Deck expired — generate again.' });
+  const i = Number(req.body.index);
+  if (!Number.isInteger(i) || i < 0 || i >= deck.slides.length) return res.status(400).json({ error: 'bad index' });
+  const video = normalizeVideo(req.body.url || req.body.videoId, {
+    title: clip(req.body.title, 180),
+    channelTitle: clip(req.body.channelTitle, 120),
+    reason: clip(req.body.reason, 180),
+    startSeconds: req.body.startSeconds,
+  });
+  if (!video) return res.status(400).json({ error: 'Enter a valid YouTube video link.' });
+  deck.slides[i].youtube = video;
+  persistDecks();
+  res.json({ slide: previewEntry(deck.slides[i], deck.images[i]) });
+});
+
+app.delete('/api/slide/:id/youtube', requireAuth, (req, res) => {
+  const deck = decks.get(req.params.id);
+  if (!deck) return res.status(404).json({ error: 'Deck expired — generate again.' });
+  const i = Number(req.body.index);
+  if (!Number.isInteger(i) || i < 0 || i >= deck.slides.length) return res.status(400).json({ error: 'bad index' });
+  delete deck.slides[i].youtube;
+  persistDecks();
+  res.json({ slide: previewEntry(deck.slides[i], deck.images[i]) });
 });
 
 // Remaining AI-visual budget for this month (for the UI to show + gate buttons).
