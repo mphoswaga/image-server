@@ -123,7 +123,7 @@ function findStudentInRoster(teacherId, rosterId, studentId) {
 const xlsx = require('xlsx');
 
 // Header-name patterns that suggest a student-ID column.
-const ID_PATTERNS = /^(student[\s_-]?id|stud[\s_-]?id|learner[\s_-]?id|pupil[\s_-]?id|roll[\s_-]?no|reg[\s_-]?no|admission[\s_-]?no|id|no|number|student[\s_-]?no|learner[\s_-]?no)$/i;
+const ID_PATTERNS = /^(student[\s_-]?(id|code|no|number)|stud[\s_-]?(id|code|no)|learner[\s_-]?(id|code|no|number)|pupil[\s_-]?(id|code|no)|roll[\s_-]?no|reg[\s_-]?no|admission[\s_-]?no|id|code|no|number)$/i;
 // Header-name patterns that suggest a display-name column.
 const NAME_PATTERNS = /^(full[\s_-]?name|first[\s_-]?name|last[\s_-]?name|given[\s_-]?name|student[\s_-]?name|learner[\s_-]?name|pupil[\s_-]?name|surname|name|display[\s_-]?name)$/i;
 
