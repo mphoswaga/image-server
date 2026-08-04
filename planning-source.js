@@ -5,7 +5,10 @@ const XLSX = require('xlsx');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const { client: aiClient } = require('./ai-client');
 const { DATA_DIR, writeJsonAtomic } = require('./storage');
+
+const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
 function uid()  { return 'ps_' + crypto.randomBytes(8).toString('hex'); }
 function iid()  { return 'pi_' + crypto.randomBytes(6).toString('hex'); }
@@ -237,6 +240,188 @@ function parseCambridgeUnitSheet(sheet, sheetName, grade, overviewWeeks) {
   }));
 }
 
+const AI_LAYOUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    subject: { type: 'string' },
+    gradesFound: { type: 'array', items: { type: 'string' } },
+    items: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          grade: { type: ['string', 'null'] },
+          weekNumber: { type: 'integer' },
+          startDate: { type: ['string', 'null'] },
+          unitCode: { type: ['string', 'null'] },
+          unitTitle: { type: 'string' },
+          lessonTitle: { type: ['string', 'null'] },
+          learningObjectives: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                code: { type: ['string', 'null'] },
+                text: { type: 'string' },
+              },
+              required: ['code', 'text'],
+              additionalProperties: false,
+            },
+          },
+          successCriteria: { type: 'array', items: { type: 'string' } },
+          resources: { type: 'array', items: { type: 'string' } },
+          notes: { type: ['string', 'null'] },
+          extractionConfidence: { type: 'number' },
+        },
+        required: [
+          'grade', 'weekNumber', 'startDate', 'unitCode', 'unitTitle',
+          'lessonTitle', 'learningObjectives', 'successCriteria',
+          'resources', 'notes', 'extractionConfidence',
+        ],
+        additionalProperties: false,
+      },
+    },
+    warnings: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['subject', 'gradesFound', 'items', 'warnings'],
+  additionalProperties: false,
+};
+
+function extractionScore(parsed) {
+  const items = parsed?.items || [];
+  const objectiveCount = items.reduce((sum, item) => sum + ((item.learningObjectives || []).length), 0);
+  const itemsWithObjectives = items.filter(item => (item.learningObjectives || []).length > 0).length;
+  return {
+    items: items.length,
+    objectiveCount,
+    itemsWithObjectives,
+    objectiveCoverage: items.length ? itemsWithObjectives / items.length : 0,
+    hasGrade: Boolean((parsed?.gradesFound || []).length || items.some(item => item.grade)),
+    hasSubject: Boolean(parsed?.subject),
+  };
+}
+
+function shouldUseAiAssist(parsed) {
+  const score = extractionScore(parsed);
+  if (score.items === 0) return true;
+  if (score.objectiveCount === 0) return true;
+  if (score.items >= 4 && score.objectiveCoverage < 0.35) return true;
+  return false;
+}
+
+function workbookPreview(wb) {
+  const parts = [];
+  parts.push(`Sheets: ${wb.SheetNames.join(' | ')}`);
+  for (const sheetName of wb.SheetNames.slice(0, 14)) {
+    const ws = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false, blankrows: false });
+    parts.push(`\n## ${sheetName} ${ws['!ref'] || ''}`);
+    const merges = (ws['!merges'] || []).slice(0, 12).map(m => XLSX.utils.encode_range(m));
+    if (merges.length) parts.push(`Merged ranges: ${merges.join(', ')}`);
+    let emitted = 0;
+    for (let r = 0; r < rows.length && emitted < 34; r++) {
+      const row = rows[r] || [];
+      const cells = row.slice(0, 12)
+        .map((value, c) => {
+          const text = String(value || '').replace(/\s+/g, ' ').trim();
+          return text ? `${XLSX.utils.encode_col(c)}=${text.slice(0, 160)}` : null;
+        })
+        .filter(Boolean);
+      if (!cells.length) continue;
+      parts.push(`R${r + 1}: ${cells.join(' | ')}`);
+      emitted++;
+    }
+  }
+  return parts.join('\n').slice(0, 24000);
+}
+
+function normalizeAiItems(result, fallback) {
+  const fallbackGrade = (fallback?.gradesFound || [])[0] || null;
+  const items = [];
+  for (const item of (result?.items || [])) {
+    const weekNumber = parseWeekNum(item.weekNumber);
+    if (weekNumber === null) continue;
+    const objectives = (item.learningObjectives || [])
+      .map(obj => typeof obj === 'string' ? { code: null, text: obj } : obj)
+      .map(obj => ({ code: obj?.code || null, text: String(obj?.text || '').trim() }))
+      .filter(obj => obj.text.length > 4)
+      .slice(0, 16);
+    if (!objectives.length) continue;
+    items.push({
+      id: iid(),
+      grade: item.grade || fallbackGrade,
+      weekNumber,
+      startDate: item.startDate || null,
+      unitCode: item.unitCode || null,
+      unitTitle: String(item.unitTitle || item.lessonTitle || `Week ${weekNumber}`).trim(),
+      lessonTitle: item.lessonTitle || null,
+      learningObjectives: objectives,
+      successCriteria: (item.successCriteria || []).map(String).map(s => s.trim()).filter(Boolean).slice(0, 16),
+      resources: (item.resources || []).map(String).map(s => s.trim()).filter(Boolean).slice(0, 12),
+      notes: item.notes || null,
+      extractionConfidence: Math.max(0.35, Math.min(0.95, Number(item.extractionConfidence) || 0.72)),
+    });
+  }
+  items.sort((a, b) => a.weekNumber - b.weekNumber || String(a.unitTitle).localeCompare(String(b.unitTitle)));
+  return items;
+}
+
+async function parseExcelSourceWithAi(buffer, filename) {
+  const parsed = parseExcelSource(buffer, filename);
+  if (!shouldUseAiAssist(parsed)) return { ...parsed, extractionMode: 'rules' };
+  if (!process.env.OPENAI_API_KEY) return { ...parsed, extractionMode: 'rules_weak_no_ai' };
+
+  try {
+    const wb = XLSX.read(buffer, { type: 'buffer' });
+    const prompt = `You are helping LessonScope import a teacher pacing guide spreadsheet.
+
+The deterministic parser produced weak output:
+${JSON.stringify(extractionScore(parsed))}
+
+Convert the workbook preview below into weekly planning items for the app.
+
+Rules:
+- Return only real teaching weeks/lessons that contain usable learning objectives or outcomes.
+- Use global week numbers if an overview maps units to school weeks.
+- Infer grade from "Stage 3" as "Grade 3", "Year 5" as "Grade 5", etc.
+- Infer subject only when clear from sheet names or strands, e.g. Reading/Writing means English.
+- learningObjectives should be teacher-friendly outcomes for the selected week, not empty headings.
+- successCriteria may include curriculum objective codes or broader criteria.
+- Keep each week compact: no more than 16 objectives and 12 resources.
+- If the structure is uncertain, include a warning but still extract the best usable data.
+
+Filename: ${filename}
+
+Workbook preview:
+${workbookPreview(wb)}`;
+    const response = await aiClient().chat.completions.create({
+      model: MODEL,
+      max_tokens: 7000,
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_schema', json_schema: { name: 'planning_source_layout', strict: true, schema: AI_LAYOUT_SCHEMA } },
+    });
+    const text = response.choices[0]?.message?.content;
+    if (!text) throw new Error('AI layout assist returned no content.');
+    const ai = JSON.parse(text);
+    const aiItems = normalizeAiItems(ai, parsed);
+    if (!aiItems.length) return { ...parsed, extractionMode: 'rules_ai_empty', warnings: ai.warnings || [] };
+    const gradesFound = (ai.gradesFound || [])
+      .map(g => gradeFromText(g) || String(g || '').trim())
+      .filter(Boolean);
+    const uniqueGrades = Array.from(new Set([...gradesFound, ...(parsed.gradesFound || []), ...aiItems.map(i => i.grade).filter(Boolean)]));
+    return {
+      items: aiItems,
+      gradesFound: uniqueGrades,
+      subject: detectSubject(ai.subject) || ai.subject || parsed.subject || null,
+      extractionMode: 'ai_layout_assist',
+      warnings: ai.warnings || [],
+    };
+  } catch (err) {
+    console.error('Planning source AI layout assist failed:', err.message);
+    return { ...parsed, extractionMode: 'rules_ai_failed', warnings: [err.message] };
+  }
+}
+
 // ── Sheet parser ─────────────────────────────────────────────────────────────
 
 function parseSheet(sheet, grade) {
@@ -457,6 +642,6 @@ function queryItems(userId, sourceId, { grade, week } = {}) {
 }
 
 module.exports = {
-  parseExcelSource, savePlanningSource, listPlanningSources,
+  parseExcelSource, parseExcelSourceWithAi, savePlanningSource, listPlanningSources,
   getPlanningSource, deletePlanningSource, queryItems,
 };

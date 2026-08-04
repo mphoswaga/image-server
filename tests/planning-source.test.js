@@ -41,3 +41,41 @@ test('Cambridge-style unit pacing guide extracts weekly outcomes', () => {
   assert.equal(parsed.items[1].weekNumber, 2);
   assert.equal(parsed.items[1].learningObjectives[1].text, 'Record interesting words');
 });
+
+test('AI-capable parser does not call AI when rules extract strong data', async () => {
+  const buffer = workbookBuffer({
+    'Grade 4': [
+      ['Week', 'Unit', 'Objectives', 'Resources'],
+      [1, 'Algorithms', 'Identify inputs and outputs; Create a simple flowchart', 'Worksheet 1'],
+    ],
+  });
+
+  const parsed = await planningSource.parseExcelSourceWithAi(buffer, 'ICT Grade 4.xlsx');
+
+  assert.equal(parsed.extractionMode, 'rules');
+  assert.equal(parsed.subject, 'ICT');
+  assert.deepEqual(parsed.gradesFound, ['Grade 4']);
+  assert.equal(parsed.items.length, 1);
+  assert.equal(parsed.items[0].learningObjectives.length, 2);
+});
+
+test('AI-capable parser safely returns weak rule output when no API key is available', async () => {
+  const oldKey = process.env.OPENAI_API_KEY;
+  delete process.env.OPENAI_API_KEY;
+  try {
+    const buffer = workbookBuffer({
+      Overview: [
+        ['WK', 'Dates', 'Unit/ Topic'],
+        [1, '17 Aug', 'Unit 1: Overview only'],
+      ],
+    });
+
+    const parsed = await planningSource.parseExcelSourceWithAi(buffer, 'Stage 3 Plan.xlsx');
+
+    assert.equal(parsed.extractionMode, 'rules_weak_no_ai');
+    assert.equal(parsed.items.length, 1);
+    assert.equal(parsed.items[0].learningObjectives.length, 0);
+  } finally {
+    if (oldKey) process.env.OPENAI_API_KEY = oldKey;
+  }
+});

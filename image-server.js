@@ -933,10 +933,10 @@ app.post('/api/planning-sources', requireAuth, upload.single('file'), async (req
   const ext = path.extname(originalname).toLowerCase();
   if (ext !== '.xlsx' && ext !== '.xls') return res.status(400).json({ error: 'Only Excel files (.xlsx / .xls) are supported for planning sources.' });
   try {
-    const { items, gradesFound, subject } = planningSource.parseExcelSource(buffer, originalname);
-    if (!items.length) return res.status(400).json({ error: 'No weekly data could be extracted. Check that your file has a Grade sheet with Week, Unit, and Objectives columns.' });
+    const { items, gradesFound, subject, extractionMode, warnings } = await planningSource.parseExcelSourceWithAi(buffer, originalname);
+    if (!items.length) return res.status(400).json({ error: 'No weekly data could be extracted. Check that your file has weekly/unit planning information or try a clearer export from Excel.' });
     const rec = await planningSource.savePlanningSource(req.userId, { fileName: originalname, items, gradesFound, subject, sourceType: req.body.sourceType || 'pacing_guide' });
-    res.json({ source: { id: rec.id, fileName: rec.fileName, sourceType: rec.sourceType, subject: rec.subject, gradesFound: rec.gradesFound, uploadedAt: rec.uploadedAt, itemCount: items.length } });
+    res.json({ source: { id: rec.id, fileName: rec.fileName, sourceType: rec.sourceType, subject: rec.subject, gradesFound: rec.gradesFound, uploadedAt: rec.uploadedAt, itemCount: items.length, extractionMode, warnings: warnings || [] } });
   } catch (err) {
     console.error('Planning source parse failed:', err.message);
     res.status(400).json({ error: err.message });
