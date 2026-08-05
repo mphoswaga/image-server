@@ -37,7 +37,9 @@ function findShapes(xml) {
   const pics = doc.getElementsByTagName('p:pic');
   let picId = null;
   if (pics.length) { const idEl = pics[0].getElementsByTagName('p:cNvPr')[0]; if (idEl) picId = idEl.getAttribute('id'); }
-  return { bulletsId, titleId, picId, fills };
+  // bulletsMax is the paragraph count of the shape we picked as the bullets box
+  // — one paragraph per bullet, so it's how many reveal steps to emit.
+  return { bulletsId, titleId, picId, fills, bulletParas: bulletsId ? bulletsMax : 0 };
 }
 
 // Auto-playing entrance (after the previous step) — used to fill diagram slices.
@@ -56,19 +58,27 @@ function autoEntrance(cId, spid, filter) {
     + `</p:childTnLst></p:cTn></p:par>`;
 }
 
-// One on-click fade entrance for the bullets shape (build-by-paragraph makes it
-// step one bullet per click).
-function clickBullets(cId, spid) {
+// One on-click fade entrance for a SINGLE paragraph of the bullets shape.
+//
+// Targeting the whole shape and relying on <p:bldP build="p"/> to expand it into
+// per-paragraph steps works in PowerPoint, but Google Slides' importer ignores
+// bldLst — it saw one animation on one text box and revealed every bullet at
+// once. Naming the paragraph range explicitly (p:txEl/p:pRg) is understood by
+// both: PowerPoint steps through the paragraphs, and Slides maps it onto its
+// own "by paragraph" animation.
+function clickParagraph(cId, spid, paraIndex) {
+  const target = `<p:tgtEl><p:spTgt spid="${spid}"><p:txEl><p:pRg st="${paraIndex}" end="${paraIndex}"/></p:txEl></p:spTgt></p:tgtEl>`;
   return `<p:par><p:cTn id="${cId}" fill="hold"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst><p:childTnLst>`
     + `<p:par><p:cTn id="${cId + 1}" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>`
     + `<p:par><p:cTn id="${cId + 2}" presetID="10" presetClass="entr" presetSubtype="0" fill="hold" grpId="0" nodeType="clickEffect"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>`
-    + `<p:animEffect transition="in" filter="fade"><p:cBhvr><p:cTn id="${cId + 3}" dur="500"/><p:tgtEl><p:spTgt spid="${spid}"/></p:tgtEl></p:cBhvr></p:animEffect>`
-    + `<p:set><p:cBhvr><p:cTn id="${cId + 4}" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn><p:tgtEl><p:spTgt spid="${spid}"/></p:tgtEl><p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst></p:cBhvr><p:to><p:strVal val="visible"/></p:to></p:set>`
+    // p:set before p:animEffect, the order PowerPoint itself writes.
+    + `<p:set><p:cBhvr><p:cTn id="${cId + 3}" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn>${target}<p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst></p:cBhvr><p:to><p:strVal val="visible"/></p:to></p:set>`
+    + `<p:animEffect transition="in" filter="fade"><p:cBhvr><p:cTn id="${cId + 4}" dur="500"/>${target}</p:cBhvr></p:animEffect>`
     + `</p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par>`;
 }
 
 function buildTimingAndTransition(xml, { entrance }) {
-  const { bulletsId, titleId, picId, fills } = findShapes(xml);
+  const { bulletsId, titleId, picId, fills, bulletParas } = findShapes(xml);
   const transition = `<p:transition spd="slow"><p:fade/></p:transition>`;
   if (!bulletsId && !fills.length && !(entrance && (picId || titleId))) return transition; // transition only
 
@@ -79,9 +89,13 @@ function buildTimingAndTransition(xml, { entrance }) {
   if (entrance && picId) { autoBlocks.push(autoEntrance(id, picId, 'zoom')); id += 3; }
   if (entrance && titleId && titleId !== bulletsId) { autoBlocks.push(autoEntrance(id, titleId, 'fade')); id += 3; }
 
+  // One click step per bullet, so the class sees exactly the point being taught.
   const clickBlocks = [];
   const bld = [];
-  if (bulletsId) { clickBlocks.push(clickBullets(id, bulletsId)); id += 5; bld.push(`<p:bldP spid="${bulletsId}" grpId="0" build="p"/>`); }
+  if (bulletsId) {
+    for (let p = 0; p < Math.max(1, bulletParas); p++) { clickBlocks.push(clickParagraph(id, bulletsId, p)); id += 5; }
+    bld.push(`<p:bldP spid="${bulletsId}" grpId="0" build="p"/>`);
+  }
 
   const mainSeqChildren = autoBlocks.join('') + clickBlocks.join('');
   const timing =
