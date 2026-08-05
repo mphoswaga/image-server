@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { extractVideoId, normalizeVideoId, normalizeVideo, embedUrl, searchQuery, suggestVideos, thumbnailDataUrl } = require('../youtube');
+const { extractVideoId, normalizeVideoId, normalizeVideo, embedUrl, searchQuery, lessonTerms, relevance, isoDurationToSeconds, suggestVideos, thumbnailDataUrl } = require('../youtube');
 
 test('YouTube parser accepts common video URL formats', () => {
   const id = 'dQw4w9WgXcQ';
@@ -26,7 +26,47 @@ test('normalized video stores safe canonical and embed URLs', () => {
 });
 
 test('suggestion query includes teaching context without exposing student data', () => {
-  assert.equal(searchQuery({ subject: 'science', topic: 'water cycle', grade: 'Grade 5', stage: 'Explore' }), 'science water cycle Grade 5 Explore educational lesson');
+  const q = searchQuery({ subject: 'science', topic: 'water-cycle', grade: 'Grade 5', title: 'The Water Cycle', bullets: ['Evaporation turns water into vapour.'] });
+  assert.match(q, /science/);
+  assert.match(q, /water/);
+  assert.match(q, /Grade 5/);
+  assert.doesNotMatch(q, /-/); // slugs are de-hyphenated before searching
+});
+
+test('search terms come from what the slide teaches, not the internal topic slug', () => {
+  // A themed lesson name is meaningful in LessonScope and invisible on YouTube;
+  // the bullets name the concepts a video should actually be about.
+  const terms = lessonTerms({
+    topic: 'data-cafe',
+    title: 'I Do: Introduction to Spreadsheets',
+    bullets: ['Row — a horizontal line of cells in a spreadsheet.', 'Column — a vertical line of cells in a spreadsheet.'],
+  });
+  assert.ok(terms.includes('spreadsheet'), `expected 'spreadsheet' in ${JSON.stringify(terms)}`);
+  assert.ok(terms.includes('cells'), `expected 'cells' in ${JSON.stringify(terms)}`);
+  assert.ok(!terms.includes('cafe'), 'themed topic name should not drive the search');
+  // Teaching-model jargon must never become a search term.
+  assert.ok(!terms.some(t => ['introduction', 'reflect', 'lesson', 'today'].includes(t)), JSON.stringify(terms));
+});
+
+test('lesson terms fall back to the topic when the slide has no usable content', () => {
+  assert.deepEqual(lessonTerms({ topic: 'photosynthesis', title: '', bullets: [] }), ['photosynthesis']);
+});
+
+test('relevance is measured against the lesson, not assumed', () => {
+  const terms = ['spreadsheet', 'cells', 'rows'];
+  const good = relevance({ title: 'Spreadsheet basics: rows, columns and cells', description: '' }, terms);
+  assert.equal(good.score, 1);
+  assert.deepEqual(good.hits, terms);
+  const bad = relevance({ title: 'WHY I HATE MATH #Shorts', description: 'funny skit' }, terms);
+  assert.equal(bad.score, 0);
+  assert.deepEqual(bad.hits, []);
+});
+
+test('Shorts and over-long videos are excluded by duration', () => {
+  assert.equal(isoDurationToSeconds('PT5S'), 5);
+  assert.equal(isoDurationToSeconds('PT4M13S'), 253);
+  assert.equal(isoDurationToSeconds('PT1H2M'), 3720);
+  assert.equal(isoDurationToSeconds('garbage'), 0);
 });
 
 test('suggestions fail safely when the YouTube API is not configured', async () => {

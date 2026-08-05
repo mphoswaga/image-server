@@ -917,11 +917,18 @@ app.get('/api/library', (req, res) => res.json(listLibrary()));
 // never downloads or proxies a YouTube video.
 app.get('/api/youtube/suggestions', requireAuth, async (req, res) => {
   try {
+    // Search on what the slide actually teaches. The topic can be a themed
+    // lesson name ("data-cafe") that means nothing on YouTube, whereas the
+    // slide's own title and bullets name the real concepts.
+    const deck = decks.get(String(req.query.deckId || ''));
+    const slide = deck && deck.slides ? deck.slides[Number(req.query.index)] : null;
     const result = await suggestVideos({
       subject: clip(req.query.subject, LIMITS.subject),
       topic: clip(req.query.topic, LIMITS.topic),
       grade: clip(req.query.grade, 80),
-      stage: clip(req.query.stage, 80),
+      title: clip(slide && slide.title, 200),
+      bullets: slide && Array.isArray(slide.bullets) ? slide.bullets.slice(0, 8).map(b => clip(b, 300)) : [],
+      objectives: clip(deck && deck.objectives, LIMITS.objectives),
       limit: req.query.limit,
     });
     res.json(result);

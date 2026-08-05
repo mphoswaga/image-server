@@ -3328,18 +3328,16 @@
     }
     function closeYoutubePicker(){ $('youtubePicker').style.display='none'; youtubeIndex=null; }
     function youtubeSuggestionHTML(v){
-      return `<article class="youtube-card"><img src="${esc(v.thumbnail)}" alt=""><div><h4>${esc(v.title)}</h4><p>${esc(v.channelTitle||'YouTube')}${v.duration?' · '+esc(v.duration):''}</p><p>${esc(v.reason||'Related to this lesson.')}</p><button type="button" class="btn primary" data-yt-add="${esc(v.videoId)}" data-yt-title="${esc(v.title)}" data-yt-channel="${esc(v.channelTitle||'YouTube')}" data-yt-reason="${esc(v.reason||'Related to this lesson.')}">Add to slide</button></div></article>`;
+      return `<article class="youtube-card"><img src="${esc(v.thumbnail)}" alt=""><div><h4>${esc(v.title)}</h4><p>${esc(v.channelTitle||'YouTube')}${v.duration?' · '+esc(v.duration):''}</p><p>${esc(v.reason||'Review before showing.')}</p><button type="button" class="btn primary" data-yt-add="${esc(v.videoId)}" data-yt-title="${esc(v.title)}" data-yt-channel="${esc(v.channelTitle||'YouTube')}" data-yt-reason="${esc(v.reason||'Review before showing.')}">Add to slide</button></div></article>`;
     }
     async function loadYoutubeSuggestions(){
-      const card=deckEl.querySelector(`.slide[data-index="${youtubeIndex}"]`);
-      const stage=card?.querySelector('.model-stage')?.textContent||'';
-      const q=new URLSearchParams({subject:ctx.subject||'',topic:ctx.topic||'',grade:ctx.grade||'',stage});
-      $('youtubeHint').textContent='Suggestions use the topic, grade, and lesson stage. Review every video before showing it to students.';
+      const q=new URLSearchParams({subject:ctx.subject||'',topic:ctx.topic||'',grade:ctx.grade||'',deckId:currentDeckId||'',index:String(youtubeIndex)});
+      $('youtubeHint').textContent='Suggestions are matched to what this slide teaches. Review every video before showing it to students.';
       try{
         const r=await fetch('/api/youtube/suggestions?'+q); const d=await r.json();
         if(!r.ok) throw new Error(d.error||'Video search failed.');
         if(!d.configured){ $('youtubeHint').textContent=d.message+' You can still paste a YouTube link above.'; $('youtubeGrid').innerHTML='<div class="pg-msg">Paste a link to add a teacher-approved video.</div>'; return; }
-        $('youtubeGrid').innerHTML=(d.suggestions||[]).length?(d.suggestions||[]).map(youtubeSuggestionHTML).join(''):'<div class="pg-msg">No suitable videos found. Try adding a link manually.</div>';
+        $('youtubeGrid').innerHTML=(d.suggestions||[]).length?(d.suggestions||[]).map(youtubeSuggestionHTML).join(''):`<div class="pg-msg">${esc(d.message||'No suitable videos found. Try adding a link manually.')}</div>`;
       }catch(err){ $('youtubeGrid').innerHTML=`<div class="pg-msg">${esc(err.message)}</div>`; }
     }
     async function attachYoutube(video){
