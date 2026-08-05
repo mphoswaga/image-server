@@ -4113,7 +4113,9 @@
       loadLibrary(); loadTemplates(); loadRosters(true); loadPlanningSources(); loadAppConfig(); loadPresets(); loadTeachingModels(); refreshCredits();
     }
     function showAuth(){
-      authScreen.style.display='block'; nav.style.display='none'; if(mainNavMenu) mainNavMenu.style.display='none'; appEl.style.display='none';
+      // flex, not block — #authScreen centres the card with align-items/
+      // justify-content, and an inline display:block silently kills both.
+      authScreen.style.display='flex'; nav.style.display='none'; if(mainNavMenu) mainNavMenu.style.display='none'; appEl.style.display='none';
       disableStartupClickShield();
       $('guideHeroBtn').style.display='none';
       setMode('login');
