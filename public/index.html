@@ -1923,7 +1923,7 @@
         <option value="standard">Standard lesson</option><option value="gradual_release">Gradual Release</option><option value="explicit_instruction">Explicit Instruction</option><option value="five_e">5E Inquiry</option><option value="inquiry">Inquiry-Based</option><option value="project_based">Project-Based Lesson</option>
       </select>
       <div class="drop" id="ipDrop" style="margin-top:16px">
-        <input id="ipFile" type="file" accept=".docx,.pdf,.txt,.md" style="display:none" />
+        <input id="ipFile" aria-label="Choose a lesson plan file to import" type="file" accept=".docx,.pdf,.txt,.md" style="display:none" />
         <div class="drop-inner">
           <svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg>
           <span id="ipFileName">Choose your lesson plan — Word, PDF, or text</span>
@@ -1952,7 +1952,7 @@
         <option value="standard">Standard lesson</option><option value="gradual_release">Gradual Release</option><option value="explicit_instruction">Explicit Instruction</option><option value="five_e">5E Inquiry</option><option value="inquiry">Inquiry-Based</option><option value="project_based">Project-Based Lesson</option>
       </select>
       <div class="drop" id="isDrop" style="margin-top:16px">
-        <input id="isFile" type="file" accept=".pptx" style="display:none" />
+        <input id="isFile" aria-label="Choose a slides file to import" type="file" accept=".pptx" style="display:none" />
         <div class="drop-inner">
           <svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg>
           <span id="isFileName">Choose your slides — PowerPoint (.pptx)</span>
@@ -1985,7 +1985,7 @@
             <button type="button" class="act" id="tplAddBtn"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg> Add template</button>
           </div>
           <p class="fmt-note"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Word, PDF, Excel or text.</p>
-          <input id="tplFile" type="file" accept=".docx,.pdf,.xlsx,.xls,.txt,.md,.csv" style="display:none" />
+          <input id="tplFile" aria-label="Choose a lesson plan template file" type="file" accept=".docx,.pdf,.xlsx,.xls,.txt,.md,.csv" style="display:none" />
         </div>
       </details>
 
@@ -2004,7 +2004,7 @@
             <div id="psrcList" class="psrc-list"><span class="info none">No plans uploaded yet — upload an Excel pacing guide to get started.</span></div>
             <div class="tpl-add"><button type="button" class="act" id="psrcAddBtn"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg> Upload a plan</button></div>
             <p class="fmt-note"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Excel (.xlsx) — year plan, pacing guide, or weekly plan with grade sheets. Grades, weeks and objectives are extracted automatically.</p>
-            <input id="psrcFile" type="file" accept=".xlsx,.xls" style="display:none"/>
+            <input id="psrcFile" aria-label="Choose a planning source file" type="file" accept=".xlsx,.xls" style="display:none"/>
           </div>
           <!-- Manual tab -->
           <div id="ptab-manual">
@@ -2027,8 +2027,8 @@
             <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Topic / Unit title <span style="color:var(--err)">*</span></label><input id="wkTopic" type="text" style="font-size:13px" placeholder="Auto-filled from your plan — or type it"/></div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-            <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Grade</label><select id="wkGrade" style="font-size:13px"><option value="">— Select grade —</option></select></div>
-            <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Week</label><select id="wkWeek" style="font-size:13px"><option value="">— Select week —</option></select></div>
+            <div><label for="wkGrade" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Grade</label><select id="wkGrade" style="font-size:13px"><option value="">— Select grade —</option></select></div>
+            <div><label for="wkWeek" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Week</label><select id="wkWeek" style="font-size:13px"><option value="">— Select week —</option></select></div>
           </div>
           <div id="unitTitleCard" class="utc-card" style="display:none">
             <div class="utc-icon"><svg class="ic" aria-hidden="true"><use href="#i-book-open"/></svg></div>
@@ -2071,7 +2071,7 @@
                 <button type="button" class="act" id="materialsAddBtn"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg> Add materials</button>
                 <button type="button" class="btn ghost" id="materialsClearBtn" style="font-size:12px;padding:7px 12px;display:none">Clear</button>
               </div>
-              <input id="materialsFile" type="file" multiple accept=".docx,.pdf,.xlsx,.xls,.csv,.txt,.md,.pptx,.ppt,.png,.jpg,.jpeg,.webp" style="display:none" />
+              <input id="materialsFile" aria-label="Choose extra teaching materials to upload" type="file" multiple accept=".docx,.pdf,.xlsx,.xls,.csv,.txt,.md,.pptx,.ppt,.png,.jpg,.jpeg,.webp" style="display:none" />
               <div id="materialsSummary" class="materials-summary"><span class="materials-chip">No extra materials added.</span></div>
               <div id="materialsPreview" class="materials-preview" style="display:none"></div>
             </div>
@@ -2282,25 +2282,25 @@
           <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Subject</label><input id="pptxSubject" type="text" placeholder="e.g. maths" style="width:100%;box-sizing:border-box" /></div>
           <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Topic</label><input id="pptxTopic" type="text" placeholder="e.g. fractions" style="width:100%;box-sizing:border-box" /></div>
           <div>
-            <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Grade</label>
+            <label for="pptxGrade" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Grade</label>
             <select id="pptxGrade" style="width:100%;font-size:13px;padding:8px 10px;box-sizing:border-box">
               <option>Grade R</option><option>Grade 1</option><option>Grade 2</option><option>Grade 3</option><option>Grade 4</option><option selected>Grade 5</option><option>Grade 6</option><option>Grade 7</option><option>Grade 8</option><option>Grade 9</option><option>Grade 10</option><option>Grade 11</option><option>Grade 12</option>
             </select>
           </div>
-          <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Questions (4–20)</label><input id="pptxQCount" type="number" min="4" max="20" value="6" style="width:100%;box-sizing:border-box;font-size:13px;padding:8px 10px" /></div>
-          <div style="grid-column:1/-1"><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Class roster <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+          <div><label for="pptxQCount" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Questions (4–20)</label><input id="pptxQCount" type="number" min="4" max="20" value="6" style="width:100%;box-sizing:border-box;font-size:13px;padding:8px 10px" /></div>
+          <div style="grid-column:1/-1"><label for="pptxRosterPick" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Class roster <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
             <select id="pptxRosterPick" style="width:100%;font-size:13px;padding:8px 10px;box-sizing:border-box">
               <option value="">— No roster (free-form names) —</option>
             </select>
           </div>
-          <div style="grid-column:1/-1"><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Close game at <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+          <div style="grid-column:1/-1"><label for="pptxCutoff" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Close game at <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
             <input id="pptxCutoff" type="datetime-local" style="width:100%;font-size:13px;padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;background:#fff;box-sizing:border-box" />
           </div>
         </div>
         <div id="pptxDrop" style="border:2px dashed var(--border);border-radius:12px;padding:22px;text-align:center;cursor:pointer;color:var(--muted);font-size:13px;margin-bottom:10px;transition:border-color .15s">
           <svg class="ic" aria-hidden="true" style="font-size:22px;display:block;margin:0 auto 6px"><use href="#i-image"/></svg>
           Drop your <b>.pptx</b> here or <span style="color:var(--primary);font-weight:600">click to browse</span>
-          <input id="pptxFileInput" type="file" accept=".pptx,.ppt" style="display:none" />
+          <input id="pptxFileInput" aria-label="Choose a PowerPoint file" type="file" accept=".pptx,.ppt" style="display:none" />
         </div>
         <div id="pptxFileName" style="font-size:12.5px;color:var(--primary);font-weight:600;margin-bottom:10px;display:none"></div>
         <button id="pptxCreateBtn" class="btn accent" style="width:auto"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Create game from presentation</button>
@@ -2310,10 +2310,10 @@
 
       <div class="games-filter">
         <input id="gamesSearch" type="text" placeholder="Search by topic…" autocomplete="off" />
-        <select id="gamesClassFilter">
+        <select id="gamesClassFilter" aria-label="Filter games by class">
           <option value="all">All classes</option>
         </select>
-        <select id="gamesStatusFilter">
+        <select id="gamesStatusFilter" aria-label="Filter games by status">
           <option value="all">All games</option>
           <option value="live">Live</option>
           <option value="closed">Closed</option>
@@ -2409,7 +2409,7 @@
             <svg class="ic" aria-hidden="true" style="width:28px;height:28px;color:var(--primary);margin-bottom:8px"><use href="#i-doc"/></svg>
             <p style="margin:0;font-size:14px;font-weight:600">Drop file here or click to browse</p>
             <p style="margin:4px 0 0;font-size:12px;color:var(--muted)">Excel (.xlsx, .xls) or CSV — any column layout</p>
-            <input id="rosterFileInput" type="file" accept=".csv,.xls,.xlsx,.txt" style="display:none" />
+            <input id="rosterFileInput" aria-label="Choose a class roster file" type="file" accept=".csv,.xls,.xlsx,.txt" style="display:none" />
           </div>
 
           <!-- Step 2: verify columns (shown after parse) -->
@@ -2417,11 +2417,11 @@
             <p style="font-size:13px;margin:0 0 10px"><strong id="rosterRowCount"></strong> rows detected. Confirm which columns contain the Student ID and the student's name. <span id="rosterPreviewNote" style="color:var(--muted)"></span></p>
             <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px">
               <div style="display:flex;flex-direction:column;gap:4px">
-                <label style="font-size:12px;font-weight:600">Student ID column</label>
+                <label for="rosterIdCol" style="font-size:12px;font-weight:600">Student ID column</label>
                 <select id="rosterIdCol" style="font-size:13px;padding:8px 10px;border-radius:8px;border:1.5px solid var(--border)"></select>
               </div>
               <div style="display:flex;flex-direction:column;gap:4px">
-                <label style="font-size:12px;font-weight:600">Name column</label>
+                <label for="rosterNameCol" style="font-size:12px;font-weight:600">Name column</label>
                 <select id="rosterNameCol" style="font-size:13px;padding:8px 10px;border-radius:8px;border:1.5px solid var(--border)"><option value="">(none — use ID as display name)</option></select>
               </div>
             </div>
