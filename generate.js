@@ -192,8 +192,22 @@ function persistNewImage(entry) {
 
 // Pick one image per slide. Uses a content match when strong enough; otherwise
 // fetches a fresh Unsplash photo, caches it into the library, and uses that.
-async function selectImages(slides, subject, topic) {
+async function selectImages(slides, subject, topic, sourceImages = []) {
   let pool = LIBRARY.images.filter(img => img.subject === subject && img.topic === topic);
+  const uploadedImages = (Array.isArray(sourceImages) ? sourceImages : [])
+    .filter(img => img && img.relpath)
+    .map(img => ({
+      relpath: img.relpath,
+      subject,
+      topic,
+      caption: img.caption || img.filename || 'Teacher uploaded source material',
+      keywords: Array.isArray(img.keywords) ? img.keywords : Array.from(tokenize(`${img.caption || ''} ${img.filename || ''}`)),
+      tags: Array.isArray(img.tags) ? img.tags : ['teacher-upload', 'source-material'],
+      source: 'teacher-upload',
+    }));
+  if (uploadedImages.length) {
+    pool = [...uploadedImages, ...pool.filter(img => !uploadedImages.some(up => up.relpath === img.relpath))];
+  }
 
   // Brand-new subject/topic — fetch a starter set from Unsplash.
   // Wikimedia is intentionally excluded here: its unfiltered corpus returns
@@ -772,7 +786,7 @@ function assembleDeck(slides, images, gradeTheme, preset) {
 // Returns { pptx, slides }. Caller decides how to output (writeFile / buffer).
 const slugify = s => String(s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-async function buildDeck({ subject, topic, slideCount = 4, grade = 'middle school', tone = 'clear and engaging', focus = '', objectives = '', lessonPlanText = '', teachingModelId = 'standard', extras = {}, skipAssemble = false, presetId = null }) {
+async function buildDeck({ subject, topic, slideCount = 4, grade = 'middle school', tone = 'clear and engaging', focus = '', objectives = '', lessonPlanText = '', sourceMaterialText = '', sourceImages = [], teachingModelId = 'standard', extras = {}, skipAssemble = false, presetId = null }) {
   subject = slugify(subject);
   topic = slugify(topic);
   if (!subject || !topic) throw new Error('Subject and topic are required.');
@@ -782,9 +796,9 @@ async function buildDeck({ subject, topic, slideCount = 4, grade = 'middle schoo
 
   const preset = getPreset(presetId);
   const profile = gradeProfile(grade);
-  const slides = await generateContent(subject, topic, slideCount, grade, tone, focus, { objectives, lessonPlanText, teachingModelId, ...extras });
+  const slides = await generateContent(subject, topic, slideCount, grade, tone, focus, { objectives, lessonPlanText, sourceMaterialText, teachingModelId, ...extras });
   const safeSlides = paginateSlides(slides, profile.theme, preset).map(({ _sourceIndex, ...slide }) => slide);
-  const images = await selectImages(safeSlides, subject, topic);
+  const images = await selectImages(safeSlides, subject, topic, sourceImages);
   if (skipAssemble) return { slides: safeSlides, images, band: profile.band, preset };
   const pptx = assembleDeck(safeSlides, images, profile.theme, preset);
   return { pptx, slides: safeSlides, images, band: profile.band, preset };

@@ -30,7 +30,7 @@ function planSchema(model) {
   };
 }
 
-function buildPrompt({ subject, topic, grade, tone, objectives, templateText, unitBlock, teachingModel }) {
+function buildPrompt({ subject, topic, grade, tone, objectives, templateText, unitBlock, sourceMaterialText, teachingModel }) {
   const pretty = topic.replace(/-/g, ' ');
   const depth = gradeProfile(grade).content.depth;
   const model = getTeachingModel(teachingModel);
@@ -44,6 +44,9 @@ ${templateText.slice(0, 6000)}
     : model.id === 'standard'
       ? 'No template was provided. Use a standard, well-structured lesson plan with these sections in order: Lesson Overview, Learning Objectives, Starter / Hook, Main Teaching, Guided Practice / Activity, Plenary / Exit Card, Resources & Differentiation.'
       : `No template was provided. Use one section for each important stage of the selected teaching model, in this order: ${model.stages.map(stage => stage.label).join(', ')}. Include a short lesson overview and learning objectives where they fit naturally.`;
+  const sourceBlock = sourceMaterialText
+    ? `\nThe teacher uploaded OPTIONAL SOURCE MATERIALS below (textbook extract, notes, PDF text, spreadsheet data, or similar). Use these to make the lesson accurate to what students are supposed to learn. Prefer this material over generic examples when it is relevant, but do not copy long passages verbatim and do not mention uploaded files to students.\n\n--- SOURCE MATERIALS START ---\n${String(sourceMaterialText).slice(0, 5000)}\n--- SOURCE MATERIALS END ---\n`
+    : '';
 
   return `You are an experienced teacher writing a complete lesson plan.
 
@@ -53,6 +56,7 @@ Grade level: ${grade}
 Tone: ${tone}
 ${modelPromptBlock(model)}
 ${unitSection}
+${sourceBlock}
 Learning objectives provided by the teacher (the plan MUST address these):
 ${objectives}
 
@@ -100,7 +104,7 @@ function placeholderPlan(objectives, teachingModel) {
   };
 }
 
-async function generateLessonPlan({ subject, topic, grade = 'middle school', tone = 'clear and engaging', objectives, templateText, unitBlock = '', teachingModel = 'standard', regenerate = false }) {
+async function generateLessonPlan({ subject, topic, grade = 'middle school', tone = 'clear and engaging', objectives, templateText, unitBlock = '', sourceMaterialText = '', teachingModel = 'standard', regenerate = false }) {
   const teachingModelId = normalizeTeachingModelId(teachingModel);
   const model = getTeachingModel(teachingModelId);
   if (!process.env.OPENAI_API_KEY) {
@@ -116,6 +120,7 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     objectives: String(objectives || '').trim(),
     templateText: String(templateText || '').slice(0, 6000).trim(),
     unitBlock: String(unitBlock || '').slice(0, 2000).trim(),
+    sourceMaterialText: String(sourceMaterialText || '').slice(0, 5000).trim(),
     teachingModelId,
     regenerate,
   }, async () => {
@@ -123,7 +128,7 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     const response = await client.chat.completions.create({
       model: MODEL,
       max_tokens: 6000,
-      messages: [{ role: 'user', content: buildPrompt({ subject, topic, grade, tone, objectives, templateText, unitBlock, teachingModel: teachingModelId }) }],
+      messages: [{ role: 'user', content: buildPrompt({ subject, topic, grade, tone, objectives, templateText, unitBlock, sourceMaterialText, teachingModel: teachingModelId }) }],
       response_format: { type: 'json_schema', json_schema: { name: 'lesson_plan', strict: true, schema: planSchema(model) } },
     });
     const text = response.choices[0]?.message?.content;

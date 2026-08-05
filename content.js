@@ -186,13 +186,16 @@ function buildPrompt(subject, topic, grade, slideCount, tone, focus, extras = {}
   const planBlock = extras.lessonPlanText
     ? `\nIMPORTANT: Base this slide deck on the APPROVED LESSON PLAN below. Turn its flow and steps into slides, in order, so the slides match the plan the teacher accepted:\n--- LESSON PLAN ---\n${String(extras.lessonPlanText).slice(0, 6000)}\n--- END ---\n`
     : '';
+  const sourceBlock = extras.sourceMaterialText
+    ? `\nThe teacher also uploaded OPTIONAL SOURCE MATERIALS (for example textbook pages, notes, PDFs, spreadsheets, or reference extracts). Use these to make the explanations, vocabulary, examples and scope more accurate. Do not mention "the uploaded material" to students; just teach the content correctly. If the material conflicts with generic knowledge, prefer the teacher's material.\n--- SOURCE MATERIALS ---\n${String(extras.sourceMaterialText).slice(0, 5000)}\n--- END SOURCE MATERIALS ---\n`
+    : '';
   const age = ageFor(grade);
   return `You are an expert teacher creating a complete, classroom-ready lesson deck.
 
 Subject: ${subject}
 Topic: ${pretty}
 Grade level: ${grade}
-Tone: ${tone}${focusLine}${objectivesLine}${planBlock}
+Tone: ${tone}${focusLine}${objectivesLine}${planBlock}${sourceBlock}
 ${modelPromptBlock(teachingModel)}
 
 CALIBRATE THE DIFFICULTY CAREFULLY: pitch the content precisely at ${grade} (students are about ${age} years old). Use the vocabulary, examples, sentence length and concepts a typical ${grade} student is ready for. Do NOT oversimplify to a younger grade (e.g. Reception / Grade R / Kindergarten), and do NOT use content beyond ${grade}. Assume the student already mastered the previous grade's work and build on it — this lesson should feel right for ${grade}, neither too easy nor too hard.
@@ -339,6 +342,7 @@ async function generateContent(subject, topic, slideCount, grade = 'middle schoo
     tone: String(tone || 'clear and engaging').trim(),
     focus: String(focus || '').trim(),
     lessonPlanText: String((extras && extras.lessonPlanText) || '').trim(),
+    sourceMaterialText: String((extras && extras.sourceMaterialText) || '').trim(),
     teachingModelId,
     regenerate: !!(extras && extras.regenerate),
   }, async () => {

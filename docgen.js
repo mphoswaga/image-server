@@ -139,4 +139,44 @@ function quizDocx(data, meta = {}) {
   return Packer.toBuffer(doc(c));
 }
 
-module.exports = { worksheetDocx, exitTicketDocx, quizDocx };
+function homeworkDocx(data, meta = {}) {
+  const c = [];
+  c.push(title(data.title || 'Homework'), subtitle(metaSubtitle(meta)));
+
+  // Student fills in their own due date next to their name.
+  c.push(new Paragraph({ spacing: { after: 220 }, children: [
+    new TextRun({ text: 'Name: ', bold: true, color: GREY, size: 20 }),
+    new TextRun({ text: '__________________      ', color: GREY, size: 20 }),
+    new TextRun({ text: 'Due: ', bold: true, color: GREY, size: 20 }),
+    new TextRun({ text: '________________', color: GREY, size: 20 }),
+  ] }));
+
+  if (data.instructions) c.push(body(data.instructions, { italics: true, after: 60 }));
+  if (data.estimatedMinutes) {
+    c.push(new Paragraph({ spacing: { after: 160 },
+      children: [new TextRun({ text: `Estimated time: about ${data.estimatedMinutes} minutes`, color: GREY, size: 20, italics: true })] }));
+  }
+
+  if (Array.isArray(data.recap) && data.recap.length) {
+    c.push(heading('Before you start — quick recap'));
+    data.recap.forEach(r => c.push(body(`•  ${r}`, { after: 60 })));
+  }
+
+  if (Array.isArray(data.tasks) && data.tasks.length) {
+    c.push(heading('Tasks'));
+    data.tasks.forEach((q, i) => { c.push(numbered(i + 1, q)); c.push(writeLine()); c.push(writeLine()); });
+  }
+
+  if (data.applyTask) {
+    c.push(heading('Apply it'));
+    c.push(numbered('★', data.applyTask)); c.push(writeLine()); c.push(writeLine());
+  }
+
+  if (Array.isArray(data.answerKey) && data.answerKey.length) {
+    c.push(answerKeyHeading());
+    data.answerKey.forEach((a, i) => c.push(numbered(i + 1, a, { after: 40 })));
+  }
+  return Packer.toBuffer(doc(c));
+}
+
+module.exports = { worksheetDocx, exitTicketDocx, quizDocx, homeworkDocx };

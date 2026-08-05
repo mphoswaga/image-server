@@ -203,6 +203,61 @@ function placeholderQuiz({ topic }) {
   };
 }
 
+// ── Homework: independent take-home reinforcement ──────────────────────────
+// Distinct from the worksheet: the worksheet is graduated in-class practice
+// with a worked example the teacher walks through; homework is done alone at
+// home, so it carries its own short recap (no teacher on hand), home-friendly
+// tasks (no special equipment), one real-world application, and a time budget.
+
+const HOMEWORK_SCHEMA = {
+  type: 'object',
+  properties: {
+    title: { type: 'string' },
+    instructions: { type: 'string' },                 // one line to the student
+    estimatedMinutes: { type: 'integer' },            // realistic time budget
+    recap: { type: 'array', items: { type: 'string' } },  // 2-3 reminders so they can work unaided
+    tasks: { type: 'array', items: { type: 'string' } },  // 4-6 home-doable, graduated
+    applyTask: { type: 'string' },                    // one real-world / creative application
+    answerKey: { type: 'array', items: { type: 'string' } }, // tasks in order, then applyTask last
+  },
+  required: ['title', 'instructions', 'estimatedMinutes', 'recap', 'tasks', 'applyTask', 'answerKey'],
+  additionalProperties: false,
+};
+
+async function generateHomework(ctx) {
+  if (!process.env.OPENAI_API_KEY) return placeholderHomework(ctx);
+  const { wrap } = require('./cache');
+  return wrap('homework', ctxKey('homework', ctx), async () => {
+    const prompt = `Create take-home HOMEWORK for this lesson — work a student completes ON THEIR OWN at home to reinforce what they learned in class.
+${ctxBlock(ctx)}
+${artifactPromptBlock(ctx.teachingModelId, 'homework')}
+Produce:
+- title: a clear homework title.
+- instructions: ONE sentence telling the student what to do (they will fill in their own due date).
+- estimatedMinutes: a realistic number of minutes this should take a ${ctx.grade} student.
+- recap: 2-3 short reminders of the key ideas, so the student can complete the work WITHOUT the teacher present.
+- tasks: 4-6 tasks of GRADUATED difficulty (easiest first) that a student can do at home with everyday materials only — no special equipment, no internet required.
+- applyTask: ONE real-world or creative task that connects the topic to the student's own life.
+- answerKey: the expected answer to each task IN THE SAME ORDER, then the applyTask's answer LAST (for open tasks, describe what a good response includes).
+${calibration(ctx.grade)}
+Plain text only — no markdown symbols.`;
+    return callModel(HOMEWORK_SCHEMA, 'homework', prompt, 3500);
+  });
+}
+
+function placeholderHomework({ topic }) {
+  const t = String(topic || 'the topic').replace(/-/g, ' ');
+  return {
+    title: `${t} — Homework`,
+    instructions: `Complete these tasks at home to practise ${t}.`,
+    estimatedMinutes: 20,
+    recap: [`${t} — remember the main idea from today's lesson.`, 'Set OPENAI_API_KEY for real content.'],
+    tasks: Array.from({ length: 4 }, (_, i) => `Homework task ${i + 1} about ${t}.`),
+    applyTask: `Find one example of ${t} in your own home or daily life and describe it.`,
+    answerKey: [...Array.from({ length: 4 }, (_, i) => `Answer ${i + 1}.`), 'Answers vary — accept any relevant real example.'],
+  };
+}
+
 // ── Student game: lesson summary + multiple-choice questions ────────────────
 const GAME_SCHEMA = {
   type: 'object',
@@ -270,4 +325,4 @@ function placeholderGame({ topic, questionCount }) {
   });
 }
 
-module.exports = { generateWorksheet, generateExitTicket, generateQuiz, generateGame };
+module.exports = { generateWorksheet, generateExitTicket, generateQuiz, generateHomework, generateGame };

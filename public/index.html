@@ -190,6 +190,19 @@
     .opt-tpl > summary .ic { width:16px; height:16px; color:var(--accent); }
     .opt-tag { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); background:#eef1f6; border-radius:999px; padding:2px 8px; }
     .opt-tpl-body { padding:0 16px 16px; }
+    .materials-box { margin:14px 0 2px; border:1px dashed var(--border); border-radius:12px; background:#fbfcfe; overflow:hidden; }
+    .materials-box > summary { list-style:none; cursor:pointer; padding:13px 16px; display:flex; align-items:center; gap:8px; font-size:13.5px; font-weight:600; color:var(--muted); }
+    .materials-box > summary::-webkit-details-marker { display:none; }
+    .materials-box > summary::after { content:'▾'; margin-left:auto; transition:transform .2s; opacity:.6; }
+    .materials-box[open] > summary::after { transform:rotate(180deg); }
+    .materials-box > summary .ic { width:16px; height:16px; color:var(--accent); }
+    .materials-body { padding:0 16px 16px; }
+    .materials-actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px; }
+    .materials-summary { margin-top:10px; display:flex; flex-wrap:wrap; gap:8px; font-size:12.5px; color:var(--muted); }
+    .materials-chip { display:inline-flex; align-items:center; gap:5px; border:1px solid var(--border); border-radius:999px; padding:5px 9px; background:#fff; max-width:100%; }
+    .materials-chip strong { color:var(--ink); }
+    .materials-chip.warn { border-color:#fed7aa; background:#fff7ed; color:#9a3412; }
+    .materials-preview { margin-top:10px; padding:10px 12px; border-radius:10px; background:#f7fafc; color:var(--muted); font-size:12.5px; line-height:1.45; max-height:110px; overflow:auto; white-space:pre-wrap; }
 
     /* ── Planning source: stepped composer ──────────────────────────────── */
     .ps-step { display:flex; gap:18px; margin-bottom:24px; padding-bottom:24px; border-bottom:1px solid var(--border); }
@@ -2050,6 +2063,19 @@
             <textarea id="objectives" rows="4" maxlength="1500" placeholder="Paste what students should be able to do, e.g.&#10;• Identify the numerator and denominator&#10;• Compare two fractions&#10;• Add fractions with the same denominator"></textarea>
             <div class="char-row"><div id="objErr" class="field-err">Please add at least one objective.</div><span class="char-count" id="objCount"></span></div>
           </div>
+          <details class="materials-box" id="materialsDetails">
+            <summary><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg> Extra teaching materials <span class="opt-tag">optional</span></summary>
+            <div class="materials-body">
+              <p class="hint" style="margin:0">Upload textbook extracts, notes, PDFs, spreadsheets, slides, or images. LessonScope will use the readable content to make the lesson more accurate.</p>
+              <div class="materials-actions">
+                <button type="button" class="act" id="materialsAddBtn"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg> Add materials</button>
+                <button type="button" class="btn ghost" id="materialsClearBtn" style="font-size:12px;padding:7px 12px;display:none">Clear</button>
+              </div>
+              <input id="materialsFile" type="file" multiple accept=".docx,.pdf,.xlsx,.xls,.csv,.txt,.md,.pptx,.ppt,.png,.jpg,.jpeg,.webp" style="display:none" />
+              <div id="materialsSummary" class="materials-summary"><span class="materials-chip">No extra materials added.</span></div>
+              <div id="materialsPreview" class="materials-preview" style="display:none"></div>
+            </div>
+          </details>
         </div>
       </div>
 
@@ -2152,10 +2178,11 @@
           <button type="button" class="btn ghost" data-pack="worksheet"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Worksheet</button>
           <button type="button" class="btn ghost" data-pack="exit-ticket"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg> Exit ticket</button>
           <button type="button" class="btn ghost" data-pack="quiz"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> Quiz</button>
+          <button type="button" class="btn ghost" data-pack="homework"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg> Homework</button>
         </div>
         <div id="packPreview"></div>
         <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
-          <button type="button" id="fullPackBtn" class="btn accent"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Generate full pack <span style="font-size:12px;font-weight:400;opacity:.8">(.zip — worksheet + exit ticket + quiz)</span></button>
+          <button type="button" id="fullPackBtn" class="btn accent"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Generate full pack <span style="font-size:12px;font-weight:400;opacity:.8">(.zip — worksheet + exit ticket + quiz + homework)</span></button>
         </div>
       </section>
 
@@ -2524,10 +2551,46 @@
     const REGEN_HTML=`${ICON('i-refresh')}Regenerate`;
     const AI_HTML=`${ICON('i-spark')}AI image`;
     const DIA_HTML=`${ICON('i-target')}Make diagram`;
-    function badgeMeta(src){ if(src==='ai-generated') return {cls:'ai',label:'AI'}; if(src==='svg-diagram') return {cls:'ai',label:'diagram'}; if(src&&src!=='library') return {cls:'fetched',label:'fetched'}; return {cls:'',label:'library'}; }
+    function badgeMeta(src){ if(src==='ai-generated') return {cls:'ai',label:'AI'}; if(src==='svg-diagram') return {cls:'ai',label:'diagram'}; if(src==='teacher-upload') return {cls:'fetched',label:'your material'}; if(src&&src!=='library') return {cls:'fetched',label:'fetched'}; return {cls:'',label:'library'}; }
     const composer=$('composer'), planStage=$('planStage'), results=$('results'), statusEl=$('status');
     let library={subjects:[],topicsBySubject:{}}, ctx=null, currentDeckId=null;
     let teachingModelsById={standard:{id:'standard',label:'Standard lesson',description:'A flexible lesson flow that works well for most topics and school templates.'}}, selectedTeachingModelId='standard';
+    let sourceMaterialText='', sourceMaterialImages=[];
+
+    function renderSourceMaterials(summary){
+      const box=$('materialsSummary'), preview=$('materialsPreview'), clear=$('materialsClearBtn');
+      if(!sourceMaterialText && !sourceMaterialImages.length){
+        box.innerHTML='<span class="materials-chip">No extra materials added.</span>';
+        preview.style.display='none'; preview.textContent=''; clear.style.display='none'; return;
+      }
+      const chips=[];
+      if(sourceMaterialText) chips.push(`<span class="materials-chip"><strong>${Math.round(sourceMaterialText.length/100)/10}k</strong> chars of source text</span>`);
+      if(sourceMaterialImages.length) chips.push(`<span class="materials-chip"><strong>${sourceMaterialImages.length}</strong> uploaded image${sourceMaterialImages.length>1?'s':''}</span>`);
+      (summary?.skipped||[]).slice(0,3).forEach(w=>chips.push(`<span class="materials-chip warn">${esc(w)}</span>`));
+      box.innerHTML=chips.join('');
+      preview.style.display=sourceMaterialText?'block':'none';
+      preview.textContent=sourceMaterialText.slice(0,700)+(sourceMaterialText.length>700?'…':'');
+      clear.style.display='inline-flex';
+    }
+    async function uploadSourceMaterials(files){
+      if(!files || !files.length) return;
+      const btn=$('materialsAddBtn'), orig=btn.innerHTML;
+      btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Reading materials…';
+      const fd=new FormData();
+      [...files].slice(0,8).forEach(f=>fd.append('files',f,f.name));
+      try{
+        const r=await fetch('/api/source-materials/preview',{method:'POST',body:fd});
+        const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not read those materials.');
+        sourceMaterialText=[sourceMaterialText,d.text||''].filter(Boolean).join('\n\n').slice(0,24000);
+        sourceMaterialImages=[...sourceMaterialImages,...(d.images||[])].slice(0,12);
+        renderSourceMaterials(d);
+        toast('Extra materials added to this lesson.','ok');
+      }catch(err){ toast(err.message); }
+      btn.disabled=false; btn.innerHTML=orig; $('materialsFile').value='';
+    }
+    $('materialsAddBtn').addEventListener('click',()=>$('materialsFile').click());
+    $('materialsFile').addEventListener('change',e=>uploadSourceMaterials(e.target.files));
+    $('materialsClearBtn').addEventListener('click',()=>{ sourceMaterialText=''; sourceMaterialImages=[]; renderSourceMaterials(); });
 
     function updateTeachingModelHint(){
       const model=teachingModelsById[$('teachingModel').value]||teachingModelsById.standard;
@@ -2863,6 +2926,7 @@
       ctx={ subject, topic, grade:$('grade').value||'middle school',
         slideCount:Number($('slideCount').value)||5, tone:$('tone').value, focus:$('focus').value.trim(), objectives,
         teachingModelId:$('teachingModel').value||'standard',
+        sourceMaterialText, sourceMaterialImages,
         templateId:selectedTemplateId,
         successCriteria:(planMode==='import'&&pulledItemData)?pulledItemData.successCriteria:[],
         resources:(planMode==='import'&&pulledItemData)?pulledItemData.resources:[] };
@@ -3325,6 +3389,13 @@
         if(data.mcq&&data.mcq.length) h+=`<b>Section A:</b> ${data.mcq.map((q,i)=>`${i+1}. ${OPT[q.correctIndex]}`).join(' · ')}<br>`;
         if(data.shortAnswer&&data.shortAnswer.length) h+=`<b>Section B:</b><ol style="padding-left:18px;margin:4px 0">${data.shortAnswer.map(q=>`<li>${esc(q.answer)}</li>`).join('')}</ol>`;
         h+=`</div>`;
+      }else if(type==='homework'){
+        if(data.instructions!=null) h+=`<p class="pd-focus" contenteditable data-f="hwInstr">${esc(data.instructions)}</p>`;
+        if(data.estimatedMinutes) h+=`<p class="info">Estimated time: about <span contenteditable data-f="hwMins">${esc(String(data.estimatedMinutes))}</span> minutes</p>`;
+        if(data.recap) h+=`<h4>Before you start — recap</h4>${packList(data.recap,'recap')}`;
+        if(data.tasks) h+=`<h4>Tasks</h4>${packList(data.tasks,'task')}`;
+        if(data.applyTask!=null) h+=`<h4>Apply it</h4><ol><li contenteditable data-f="applyTask">${esc(data.applyTask)}</li></ol>`;
+        if(data.answerKey) h+=`<h4>Answer key (teacher)</h4><div class="ak">${packList(data.answerKey,'ak')}</div>`;
       }else{
         if(data.questions) h+=`<h4>Questions</h4>${packList(data.questions,'q')}`;
         if(data.answerKey) h+=`<h4>Answer key (teacher)</h4><div class="ak">${packList(data.answerKey,'ak')}</div>`;
@@ -3360,6 +3431,11 @@
       if(d.example){ d.example.problem=one('exP'); d.example.solution=one('exS'); }
       if(d.questions) d.questions=many('q');
       if(d.challenge!=null) d.challenge=one('challenge');
+      if(d.instructions!=null&&packType==='homework') d.instructions=one('hwInstr')||d.instructions;
+      if(d.estimatedMinutes){ const m=parseInt(one('hwMins'),10); if(m) d.estimatedMinutes=m; }
+      if(d.recap) d.recap=many('recap');
+      if(d.tasks) d.tasks=many('task');
+      if(d.applyTask!=null) d.applyTask=one('applyTask');
       if(d.answerKey) d.answerKey=many('ak');
       return d;
     }

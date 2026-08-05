@@ -17,9 +17,9 @@ const { addImages, fetchWikimediaImages } = require('./admin-images');
 const { generateImage } = require('./ai-image');
 const { parseFraction, detectLabelledDiagram } = require('./concept-diagram');
 const { generateDiagram } = require('./svg-diagram');
-const { generateWorksheet, generateExitTicket, generateQuiz, generateGame } = require('./lesson-pack');
+const { generateWorksheet, generateExitTicket, generateQuiz, generateHomework, generateGame } = require('./lesson-pack');
 const { normalizeVideo, suggestVideos, thumbnailDataUrl } = require('./youtube');
-const { worksheetDocx, exitTicketDocx, quizDocx } = require('./docgen');
+const { worksheetDocx, exitTicketDocx, quizDocx, homeworkDocx } = require('./docgen');
 const unit = require('./unit');
 const planningSource = require('./planning-source');
 const games = require('./games');
@@ -54,6 +54,7 @@ const { runWithUser, usageSnapshot, usageSince } = require('./ai-client');
 const usage = require('./usage');
 const jwt = require('jsonwebtoken');
 
+const PUBLIC_DIR = path.join(__dirname, 'public');
 const GAME_COOKIE = 'lc_game';
 const JWT_SECRET = (() => {
   try { return require('fs').readFileSync(require('path').join(require('./storage').DATA_DIR, '.session-secret'), 'utf8').trim(); } catch { return process.env.JWT_SECRET || 'dev-secret'; }
@@ -1154,6 +1155,34 @@ app.delete('/api/planning-sources/:id', requireAuth, (req, res) => {
 // or oversized requests can't inflate token budgets even if the UI is bypassed.
 const LIMITS = { subject: 60, topic: 80, objectives: 1500, focus: 400, source: 24000 };
 function clip(val, max) { return String(val || '').slice(0, max); }
+const MATERIAL_IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
+const MATERIAL_DOC_EXTS = new Set(['.docx', '.pdf', '.xlsx', '.xls', '.csv', '.txt', '.md', '.pptx', '.ppt']);
+const MATERIAL_DIR = path.join(PUBLIC_DIR, 'lesson-materials');
+function safeBaseName(name) {
+  return String(name || 'material').replace(/\.[^.]+$/, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').slice(0, 48) || 'material';
+}
+function sourceMaterialText(body) {
+  return clip(body && body.sourceMaterialText, LIMITS.source);
+}
+function sourceMaterialImages(body) {
+  const arr = Array.isArray(body && body.sourceMaterialImages) ? body.sourceMaterialImages : [];
+  return arr.filter(img => {
+    const rel = String(img && img.relpath || '');
+    return rel.startsWith('lesson-materials/') && !rel.includes('..');
+  }).map(img => ({
+    relpath: String(img.relpath),
+    filename: clip(img.filename, 120),
+    caption: clip(img.caption || img.filename || 'Teacher uploaded source material', 220),
+    keywords: Array.isArray(img.keywords) ? img.keywords.slice(0, 20).map(k => clip(k, 40)) : [],
+    source: 'teacher-upload',
+  }));
+}
+function mergeSourceIntoPlanText(planText, materialText) {
+  const plan = clip(planText, LIMITS.source);
+  const material = clip(materialText, 6000);
+  if (!material) return plan;
+  return clip(`${plan}\n\n--- OPTIONAL TEACHER SOURCE MATERIALS ---\n${material}\n--- END SOURCE MATERIALS ---`, LIMITS.source);
+}
 // A raw lesson-plan / source-text block (from an uploaded plan or slides) can
 // ground generation instead of a structured {sections} plan. Prefer the
 // structured plan when present; otherwise fall back to the raw text.
@@ -1162,6 +1191,53 @@ function resolvePlanText(body) {
   if (Array.isArray(sections) && sections.length) return planToText(body.lessonPlan);
   return clip(body && body.lessonPlanText, LIMITS.source);
 }
+
+app.post('/api/source-materials/preview', requireAuth, upload.array('files', 8), async (req, res) => {
+  if (req.user.role === 'student') return res.status(403).json({ error: 'Teacher account required.' });
+  const files = req.files || [];
+  if (!files.length) return res.status(400).json({ error: 'Choose at least one file.' });
+  const textParts = [];
+  const images = [];
+  const skipped = [];
+  fs.mkdirSync(MATERIAL_DIR, { recursive: true });
+  for (const file of files) {
+    const filename = file.originalname || 'material';
+    const ext = path.extname(filename).toLowerCase();
+    try {
+      if (MATERIAL_IMAGE_EXTS.has(ext)) {
+        const id = crypto.randomUUID();
+        const savedName = `${safeBaseName(req.userId)}-${id}-${safeBaseName(filename)}${ext === '.jpeg' ? '.jpg' : ext}`;
+        const relpath = path.posix.join('lesson-materials', savedName);
+        fs.writeFileSync(path.join(PUBLIC_DIR, relpath), file.buffer);
+        images.push({
+          relpath,
+          filename,
+          caption: `${safeBaseName(filename).replace(/-/g, ' ')} teacher uploaded source image`,
+          keywords: safeBaseName(filename).split('-').filter(Boolean).slice(0, 12),
+          source: 'teacher-upload',
+        });
+      } else if (MATERIAL_DOC_EXTS.has(ext)) {
+        const text = (await extractText(file.buffer, filename) || '').trim();
+        if (text) textParts.push(`# ${filename}\n${text.slice(0, 7000)}`);
+        else skipped.push(`${filename}: no readable text found`);
+      } else {
+        skipped.push(`${filename}: unsupported file type`);
+      }
+    } catch (err) {
+      skipped.push(`${filename}: ${err.message}`);
+    }
+  }
+  if (!textParts.length && !images.length) {
+    return res.status(400).json({ error: skipped[0] || 'No readable material found.' });
+  }
+  res.json({
+    ok: true,
+    fileCount: files.length,
+    text: clip(textParts.join('\n\n'), LIMITS.source),
+    images,
+    skipped,
+  });
+});
 
 // ── Lesson plan generation (objectives + stored template → plan) ──────────
 app.post('/api/lesson-plan', requireAuth, async (req, res) => {
@@ -1178,7 +1254,7 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
     const unitBlock = u ? unit.buildUnitBlock(u, lessonIndex) : '';
     const plan = await generateLessonPlan({
       subject: subject.toLowerCase(), topic: topic.toLowerCase(),
-      grade, tone, objectives, templateText: tpl ? tpl.text : '', unitBlock, teachingModel: teachingModelId, regenerate: !!regenerate,
+      grade, tone, objectives, templateText: tpl ? tpl.text : '', unitBlock, sourceMaterialText: sourceMaterialText(req.body), teachingModel: teachingModelId, regenerate: !!regenerate,
     });
     res.json({ sections: plan.sections, teachingModelId, model: getTeachingModel(teachingModelId), usedTemplate: !!tpl, templateName: tpl ? tpl.name : null, templateId: tpl ? tpl.id : null });
   } catch (err) {
@@ -1205,18 +1281,21 @@ app.post('/api/import/lesson-plan', requireAuth, upload.single('file'), async (r
     const { slideCount, grade, tone, presetId } = req.body || {};
     const teachingModelId = normalizeTeachingModelId(req.body && req.body.teachingModelId);
     const focus = clip(req.body.focus, LIMITS.focus);
-    const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives: '', lessonPlanText: planText, teachingModelId, skipAssemble: true, presetId: presetId || null });
+    const materialText = sourceMaterialText(req.body);
+    const materialImages = sourceMaterialImages(req.body);
+    const groundedPlanText = mergeSourceIntoPlanText(planText, materialText);
+    const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives: '', lessonPlanText: groundedPlanText, sourceMaterialText: materialText, sourceImages: materialImages, teachingModelId, skipAssemble: true, presetId: presetId || null });
     const id = crypto.randomUUID();
     decks.set(id, {
       subject: String(subject).toLowerCase(), topic: String(topic).toLowerCase(),
       grade: grade || 'middle school', tone, focus, band: built.band,
       slides: built.slides, images: built.images, createdAt: Date.now(),
-      objectives: '', lessonPlanText: planText, teachingModelId, presetId: presetId || null,
+      objectives: '', lessonPlanText: groundedPlanText, sourceMaterialText: materialText, sourceMaterialImages: materialImages, teachingModelId, presetId: presetId || null,
     });
     await capture(req, reservation, 'lessonscope.import_plan_to_slides', id);
     const filename = `${subject}-${topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
     res.json({
-      deckId: id, filename, band: built.band, slideCount: built.slides.length, teachingModelId, sourceText: planText,
+      deckId: id, filename, band: built.band, slideCount: built.slides.length, teachingModelId, sourceText: groundedPlanText,
       slides: built.slides.map((s, i) => previewEntry(s, built.images[i])),
     });
   } catch (err) {
@@ -1273,8 +1352,8 @@ app.post('/api/import/slides', requireAuth, upload.single('file'), async (req, r
 });
 
 // ── Lesson pack (worksheet, exit ticket, quiz) from the approved plan ───────
-const PACK_GEN    = { worksheet: generateWorksheet, 'exit-ticket': generateExitTicket, quiz: generateQuiz };
-const PACK_RENDER = { worksheet: worksheetDocx, 'exit-ticket': exitTicketDocx, quiz: quizDocx };
+const PACK_GEN    = { worksheet: generateWorksheet, 'exit-ticket': generateExitTicket, quiz: generateQuiz, homework: generateHomework };
+const PACK_RENDER = { worksheet: worksheetDocx, 'exit-ticket': exitTicketDocx, quiz: quizDocx, homework: homeworkDocx };
 
 // Full lesson pack: all three artifacts in parallel → zip download.
 // Registered BEFORE '/api/pack/:type' — Express matches routes in
@@ -1297,11 +1376,11 @@ app.post('/api/pack/full', requireAuth, async (req, res) => {
     const ctx = { subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, unitBlock, teachingModelId };
     const meta = { subject, topic, grade };
 
-    const [wData, etData, qData] = await Promise.all([
-      generateWorksheet(ctx), generateExitTicket(ctx), generateQuiz(ctx),
+    const [wData, etData, qData, hwData] = await Promise.all([
+      generateWorksheet(ctx), generateExitTicket(ctx), generateQuiz(ctx), generateHomework(ctx),
     ]);
-    const [wBuf, etBuf, qBuf] = await Promise.all([
-      worksheetDocx(wData, meta), exitTicketDocx(etData, meta), quizDocx(qData, meta),
+    const [wBuf, etBuf, qBuf, hwBuf] = await Promise.all([
+      worksheetDocx(wData, meta), exitTicketDocx(etData, meta), quizDocx(qData, meta), homeworkDocx(hwData, meta),
     ]);
 
     const PizZip = require('pizzip');
@@ -1310,6 +1389,7 @@ app.post('/api/pack/full', requireAuth, async (req, res) => {
     zip.file(`${base}-worksheet.docx`, wBuf);
     zip.file(`${base}-exit-ticket.docx`, etBuf);
     zip.file(`${base}-quiz.docx`, qBuf);
+    zip.file(`${base}-homework.docx`, hwBuf);
     const zipBuf = zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
 
     await capture(req, reservation, 'lessonscope.generate_lesson_pack', base);
@@ -1782,14 +1862,16 @@ app.post('/api/generate', requireAuth, async (req, res) => {
     // If an accepted lesson plan (structured) or a raw plan/source text (from an
     // uploaded plan or slides) was passed, the slides follow it; unit context
     // falls back into lessonPlanText so it still reaches the content generator.
-    const lessonPlanText = resolvePlanText(req.body) || (unitBlock || '');
-    const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives, lessonPlanText, teachingModelId, extras: { regenerate: !!regenerate }, skipAssemble: true, presetId: presetId || null });
+    const materialText = sourceMaterialText(req.body);
+    const materialImages = sourceMaterialImages(req.body);
+    const lessonPlanText = mergeSourceIntoPlanText(resolvePlanText(req.body) || (unitBlock || ''), materialText);
+    const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives, lessonPlanText, sourceMaterialText: materialText, sourceImages: materialImages, teachingModelId, extras: { regenerate: !!regenerate }, skipAssemble: true, presetId: presetId || null });
     const id = crypto.randomUUID();
     decks.set(id, {
       subject: String(subject).toLowerCase(), topic: String(topic).toLowerCase(),
       grade: grade || 'middle school', tone, focus, band: built.band,
       slides: built.slides, images: built.images, createdAt: Date.now(),
-      objectives: objectives || '', lessonPlanText, // kept so the student game can be grounded in this lesson
+      objectives: objectives || '', lessonPlanText, sourceMaterialText: materialText, sourceMaterialImages: materialImages, // kept so follow-up resources are grounded in this lesson
       teachingModelId,
       presetId: presetId || null,
     });
