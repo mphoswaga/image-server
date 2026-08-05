@@ -12,6 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const { client: aiClient } = require('./ai-client');
 
+const { resolveMedia } = require('./media');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const LIBRARY_PATH = path.join(PUBLIC_DIR, 'library.json');
 const MODEL = process.env.OPENAI_VISION_MODEL || 'gpt-4o-mini';
@@ -89,7 +90,9 @@ async function run() {
     const batch = todo.slice(i, i + CONCURRENCY);
     await Promise.all(batch.map(async img => {
       try {
-        const { caption, keywords } = await captionImage(path.join(PUBLIC_DIR, img.relpath));
+        const imgPath = resolveMedia(img.relpath);
+        if (!imgPath) throw new Error('file not found on disk');
+        const { caption, keywords } = await captionImage(imgPath);
         img.caption = caption;
         img.keywords = keywords;
         done++;

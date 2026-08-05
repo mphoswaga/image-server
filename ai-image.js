@@ -5,7 +5,7 @@ const { client: aiClient } = require('./ai-client');
 const fs = require('fs');
 const path = require('path');
 
-const PUBLIC_DIR = path.join(__dirname, 'public');
+const { mediaWriteDir } = require('./media');
 const MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1';
 const QUALITY = process.env.OPENAI_IMAGE_QUALITY || 'medium';
 const slug = s => String(s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -47,8 +47,7 @@ async function generateImage({ subject, topic, concept, grade = 'middle school' 
   }
 
   const subj = slug(subject), top = slug(topic);
-  const folder = path.join(PUBLIC_DIR, subj, top);
-  fs.mkdirSync(folder, { recursive: true });
+  const folder = mediaWriteDir(subj, top);
   const filename = `${subj}_${top}_ai_${(slug(concept).slice(0, 24) || 'image')}_${Date.now().toString(36)}.png`;
   fs.writeFileSync(path.join(folder, filename), Buffer.from(b64, 'base64'));
 

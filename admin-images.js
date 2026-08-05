@@ -6,8 +6,11 @@ const fs = require('fs');
 const path = require('path');
 const { captionImage } = require('./caption-library');
 
-const PUBLIC_DIR = path.join(__dirname, 'public');
+const { PUBLIC_DIR, mediaWriteDir } = require('./media');
 const slug = s => String(s).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+// Count existing files across BOTH the committed seed (public/) and the
+// persistent volume so new filenames stay unique and don't shadow seed images.
+const countFiles = (dir, match) => { try { return fs.readdirSync(dir).filter(match).length; } catch { return 0; } };
 
 async function addImages({ subject, topic, count = 10, query, onProgress, skipCaption = false }) {
   const key = process.env.UNSPLASH_ACCESS_KEY;
@@ -16,9 +19,9 @@ async function addImages({ subject, topic, count = 10, query, onProgress, skipCa
   if (!subject || !topic) throw new Error('Subject and topic are required.');
   count = Math.min(30, Math.max(1, parseInt(count, 10) || 10));
 
-  const folder = path.join(PUBLIC_DIR, subject, topic);
-  fs.mkdirSync(folder, { recursive: true });
-  const existing = fs.readdirSync(folder).filter(f => f.toLowerCase().endsWith('.jpg')).length;
+  const folder = mediaWriteDir(subject, topic);
+  const isJpg = f => f.toLowerCase().endsWith('.jpg');
+  const existing = countFiles(folder, isJpg) + countFiles(path.join(PUBLIC_DIR, subject, topic), isJpg);
 
   const searchQuery = (query && String(query).trim()) || `${subject} ${topic} education`;
   console.log(`[addImages] ${subject}/${topic} — searching Unsplash for: "${searchQuery}"`);
@@ -89,9 +92,9 @@ async function fetchWikimediaImages({ subject, topic, count = 8, query } = {}) {
   topic   = slug(topic   || 'general');
   count   = Math.min(20, Math.max(1, parseInt(count, 10) || 8));
 
-  const folder = path.join(PUBLIC_DIR, subject, topic);
-  fs.mkdirSync(folder, { recursive: true });
-  const existing = fs.readdirSync(folder).filter(f => f.startsWith('wm_')).length;
+  const folder = mediaWriteDir(subject, topic);
+  const isWm = f => f.startsWith('wm_');
+  const existing = countFiles(folder, isWm) + countFiles(path.join(PUBLIC_DIR, subject, topic), isWm);
 
   // Wikimedia Commons returns scanned PDFs when queries contain educational context
   // words or become too long. Strip those words and cap at 3 terms so the search

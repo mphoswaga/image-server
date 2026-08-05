@@ -2179,10 +2179,11 @@
           <button type="button" class="btn ghost" data-pack="exit-ticket"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg> Exit ticket</button>
           <button type="button" class="btn ghost" data-pack="quiz"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> Quiz</button>
           <button type="button" class="btn ghost" data-pack="homework"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg> Homework</button>
+          <button type="button" class="btn ghost" data-pack="activities"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg> Differentiated</button>
         </div>
         <div id="packPreview"></div>
         <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
-          <button type="button" id="fullPackBtn" class="btn accent"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Generate full pack <span style="font-size:12px;font-weight:400;opacity:.8">(.zip — worksheet + exit ticket + quiz + homework)</span></button>
+          <button type="button" id="fullPackBtn" class="btn accent"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Generate full pack <span style="font-size:12px;font-weight:400;opacity:.8">(.zip — worksheet + exit ticket + quiz + homework + differentiated)</span></button>
         </div>
       </section>
 
@@ -3396,13 +3397,22 @@
         if(data.tasks) h+=`<h4>Tasks</h4>${packList(data.tasks,'task')}`;
         if(data.applyTask!=null) h+=`<h4>Apply it</h4><ol><li contenteditable data-f="applyTask">${esc(data.applyTask)}</li></ol>`;
         if(data.answerKey) h+=`<h4>Answer key (teacher)</h4><div class="ak">${packList(data.answerKey,'ak')}</div>`;
+      }else if(type==='activities'){
+        if(data.focus!=null) h+=`<p class="pd-focus" contenteditable data-f="focus">${esc(data.focus)}</p>`;
+        (data.levels||[]).forEach((lv,li)=>{
+          h+=`<h4 contenteditable data-f="lvl${li}label" style="color:var(--navy)">${esc(lv.label||('Group '+(li+1)))}</h4>`;
+          if(lv.audience!=null) h+=`<p class="info" contenteditable data-f="lvl${li}aud" style="font-style:italic">${esc(lv.audience)}</p>`;
+          h+=packList(lv.tasks,'lvl'+li+'task');
+          if(lv.answerKey&&lv.answerKey.length) h+=`<div class="ak"><b>Answers</b>${packList(lv.answerKey,'lvl'+li+'ak')}</div>`;
+        });
       }else{
         if(data.questions) h+=`<h4>Questions</h4>${packList(data.questions,'q')}`;
         if(data.answerKey) h+=`<h4>Answer key (teacher)</h4><div class="ak">${packList(data.answerKey,'ak')}</div>`;
       }
+      const submittable=['worksheet','exit-ticket','quiz'].includes(type);
       h+=`<div class="pd-dl">
         <button type="button" class="btn accent" id="packDlBtn">${ICON('i-download')} Download .docx</button>
-        <button type="button" class="btn ghost" id="packPublishBtn" style="margin-left:8px">${ICON('i-spark')} Create online version</button>
+        ${submittable?`<button type="button" class="btn ghost" id="packPublishBtn" style="margin-left:8px">${ICON('i-spark')} Create online version</button>`:''}
       </div>
       <div id="assignPanel" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
         <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
@@ -3436,6 +3446,15 @@
       if(d.recap) d.recap=many('recap');
       if(d.tasks) d.tasks=many('task');
       if(d.applyTask!=null) d.applyTask=one('applyTask');
+      if(packType==='activities'&&Array.isArray(d.levels)){
+        d.levels=d.levels.map((lv,li)=>({
+          ...lv,
+          label: one('lvl'+li+'label')||lv.label,
+          audience: lv.audience!=null?one('lvl'+li+'aud'):lv.audience,
+          tasks: many('lvl'+li+'task'),
+          answerKey: (lv.answerKey&&lv.answerKey.length)?many('lvl'+li+'ak'):lv.answerKey,
+        }));
+      }
       if(d.answerKey) d.answerKey=many('ak');
       return d;
     }

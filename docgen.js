@@ -179,4 +179,32 @@ function homeworkDocx(data, meta = {}) {
   return Packer.toBuffer(doc(c));
 }
 
-module.exports = { worksheetDocx, exitTicketDocx, quizDocx, homeworkDocx };
+function activitiesDocx(data, meta = {}) {
+  const c = [];
+  c.push(title(data.title || 'Differentiated Activities'), subtitle(metaSubtitle(meta)));
+  if (data.focus) c.push(body(data.focus, { italics: true, after: 160 }));
+
+  const levels = Array.isArray(data.levels) ? data.levels : [];
+  // One self-contained student sheet per ability group — page break between
+  // them so the teacher can print and hand each group its own sheet.
+  levels.forEach((lv, li) => {
+    if (li > 0) c.push(new Paragraph({ pageBreakBefore: true, children: [] }));
+    c.push(new Paragraph({ spacing: { before: 60, after: 40 },
+      children: [new TextRun({ text: lv.label || `Group ${li + 1}`, bold: true, color: NAVY, size: 28 })] }));
+    if (lv.audience) c.push(body(lv.audience, { italics: true, after: 100 }));
+    c.push(nameDate());
+    (lv.tasks || []).forEach((q, i) => { c.push(numbered(i + 1, q)); c.push(writeLine()); c.push(writeLine()); });
+  });
+
+  // Teacher answer key: all three groups together on their own page.
+  if (levels.some(lv => Array.isArray(lv.answerKey) && lv.answerKey.length)) {
+    c.push(answerKeyHeading());
+    levels.forEach(lv => {
+      c.push(heading(lv.label || 'Group'));
+      (lv.answerKey || []).forEach((a, i) => c.push(numbered(i + 1, a, { after: 40 })));
+    });
+  }
+  return Packer.toBuffer(doc(c));
+}
+
+module.exports = { worksheetDocx, exitTicketDocx, quizDocx, homeworkDocx, activitiesDocx };

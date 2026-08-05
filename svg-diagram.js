@@ -7,7 +7,7 @@ const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
 
-const PUBLIC_DIR = path.join(__dirname, 'public');
+const { mediaWriteDir } = require('./media');
 const MODEL = process.env.OPENAI_DIAGRAM_MODEL || 'gpt-4o';
 const slug = s => String(s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
@@ -54,8 +54,7 @@ async function generateDiagram({ subject, topic, concept }) {
     .toBuffer();
 
   const subj = slug(subject), top = slug(topic);
-  const folder = path.join(PUBLIC_DIR, subj, top);
-  fs.mkdirSync(folder, { recursive: true });
+  const folder = mediaWriteDir(subj, top);
   const filename = `${subj}_${top}_diagram_${(slug(concept).slice(0, 24) || 'd')}_${Date.now().toString(36)}.png`;
   fs.writeFileSync(path.join(folder, filename), png);
 

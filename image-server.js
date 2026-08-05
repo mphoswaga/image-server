@@ -17,9 +17,9 @@ const { addImages, fetchWikimediaImages } = require('./admin-images');
 const { generateImage } = require('./ai-image');
 const { parseFraction, detectLabelledDiagram } = require('./concept-diagram');
 const { generateDiagram } = require('./svg-diagram');
-const { generateWorksheet, generateExitTicket, generateQuiz, generateHomework, generateGame } = require('./lesson-pack');
+const { generateWorksheet, generateExitTicket, generateQuiz, generateHomework, generateActivities, generateGame } = require('./lesson-pack');
 const { normalizeVideo, suggestVideos, thumbnailDataUrl } = require('./youtube');
-const { worksheetDocx, exitTicketDocx, quizDocx, homeworkDocx } = require('./docgen');
+const { worksheetDocx, exitTicketDocx, quizDocx, homeworkDocx, activitiesDocx } = require('./docgen');
 const unit = require('./unit');
 const planningSource = require('./planning-source');
 const games = require('./games');
@@ -54,6 +54,7 @@ const { runWithUser, usageSnapshot, usageSince } = require('./ai-client');
 const usage = require('./usage');
 const jwt = require('jsonwebtoken');
 
+const { MEDIA_DIR, resolveMedia } = require('./media');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const GAME_COOKIE = 'lc_game';
 const JWT_SECRET = (() => {
@@ -193,6 +194,10 @@ app.use((req, res, next) => {
   runWithUser(uid, () => next());
 });
 
+// Runtime images (Unsplash/AI/materials) live on the persistent volume and are
+// served first; committed starter images fall through to public/. Both map the
+// same root-relative relpaths, so an image URL resolves from whichever has it.
+app.use(express.static(MEDIA_DIR));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Health check for the host (Railway): confirms the process booted and the
@@ -959,7 +964,9 @@ app.delete('/api/admin/images', requireAdmin, (req, res) => {
   }
   const found = removeLibraryImage(relpath);
   if (!found) return res.status(404).json({ error: 'Image not found in library.' });
-  try { fs.unlinkSync(path.join(__dirname, 'public', relpath)); } catch { /* already gone */ }
+  // Remove the actual file wherever it lives (persistent volume or committed seed).
+  const onDisk = resolveMedia(relpath);
+  if (onDisk) { try { fs.unlinkSync(onDisk); } catch { /* already gone */ } }
   res.json({ ok: true });
 });
 
@@ -1157,7 +1164,7 @@ const LIMITS = { subject: 60, topic: 80, objectives: 1500, focus: 400, source: 2
 function clip(val, max) { return String(val || '').slice(0, max); }
 const MATERIAL_IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 const MATERIAL_DOC_EXTS = new Set(['.docx', '.pdf', '.xlsx', '.xls', '.csv', '.txt', '.md', '.pptx', '.ppt']);
-const MATERIAL_DIR = path.join(PUBLIC_DIR, 'lesson-materials');
+const MATERIAL_DIR = path.join(MEDIA_DIR, 'lesson-materials');
 function safeBaseName(name) {
   return String(name || 'material').replace(/\.[^.]+$/, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').slice(0, 48) || 'material';
 }
@@ -1208,7 +1215,7 @@ app.post('/api/source-materials/preview', requireAuth, upload.array('files', 8),
         const id = crypto.randomUUID();
         const savedName = `${safeBaseName(req.userId)}-${id}-${safeBaseName(filename)}${ext === '.jpeg' ? '.jpg' : ext}`;
         const relpath = path.posix.join('lesson-materials', savedName);
-        fs.writeFileSync(path.join(PUBLIC_DIR, relpath), file.buffer);
+        fs.writeFileSync(path.join(MEDIA_DIR, relpath), file.buffer);
         images.push({
           relpath,
           filename,
@@ -1352,8 +1359,11 @@ app.post('/api/import/slides', requireAuth, upload.single('file'), async (req, r
 });
 
 // ── Lesson pack (worksheet, exit ticket, quiz) from the approved plan ───────
-const PACK_GEN    = { worksheet: generateWorksheet, 'exit-ticket': generateExitTicket, quiz: generateQuiz, homework: generateHomework };
-const PACK_RENDER = { worksheet: worksheetDocx, 'exit-ticket': exitTicketDocx, quiz: quizDocx, homework: homeworkDocx };
+const PACK_GEN    = { worksheet: generateWorksheet, 'exit-ticket': generateExitTicket, quiz: generateQuiz, homework: generateHomework, activities: generateActivities };
+// Only question-based items become student-submittable online assignments;
+// homework and differentiated sheets are print-only (no question shape).
+const PACK_SUBMITTABLE = new Set(['worksheet', 'exit-ticket', 'quiz']);
+const PACK_RENDER = { worksheet: worksheetDocx, 'exit-ticket': exitTicketDocx, quiz: quizDocx, homework: homeworkDocx, activities: activitiesDocx };
 
 // Full lesson pack: all three artifacts in parallel → zip download.
 // Registered BEFORE '/api/pack/:type' — Express matches routes in
@@ -1376,11 +1386,11 @@ app.post('/api/pack/full', requireAuth, async (req, res) => {
     const ctx = { subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, unitBlock, teachingModelId };
     const meta = { subject, topic, grade };
 
-    const [wData, etData, qData, hwData] = await Promise.all([
-      generateWorksheet(ctx), generateExitTicket(ctx), generateQuiz(ctx), generateHomework(ctx),
+    const [wData, etData, qData, hwData, acData] = await Promise.all([
+      generateWorksheet(ctx), generateExitTicket(ctx), generateQuiz(ctx), generateHomework(ctx), generateActivities(ctx),
     ]);
-    const [wBuf, etBuf, qBuf, hwBuf] = await Promise.all([
-      worksheetDocx(wData, meta), exitTicketDocx(etData, meta), quizDocx(qData, meta), homeworkDocx(hwData, meta),
+    const [wBuf, etBuf, qBuf, hwBuf, acBuf] = await Promise.all([
+      worksheetDocx(wData, meta), exitTicketDocx(etData, meta), quizDocx(qData, meta), homeworkDocx(hwData, meta), activitiesDocx(acData, meta),
     ]);
 
     const PizZip = require('pizzip');
@@ -1390,6 +1400,7 @@ app.post('/api/pack/full', requireAuth, async (req, res) => {
     zip.file(`${base}-exit-ticket.docx`, etBuf);
     zip.file(`${base}-quiz.docx`, qBuf);
     zip.file(`${base}-homework.docx`, hwBuf);
+    zip.file(`${base}-differentiated-activities.docx`, acBuf);
     const zipBuf = zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
 
     await capture(req, reservation, 'lessonscope.generate_lesson_pack', base);
@@ -1450,6 +1461,7 @@ app.post('/api/pack/:type/download', requireAuth, async (req, res) => {
 // joinable assignment — same room-code/roster/cutoff pattern as games.
 app.post('/api/pack/:type/publish', requireAuth, (req, res) => {
   if (!PACK_GEN[req.params.type]) return res.status(404).json({ error: 'Unknown lesson-pack item.' });
+  if (!PACK_SUBMITTABLE.has(req.params.type)) return res.status(400).json({ error: 'This item is print-only — download it as a Word document instead.' });
   const { data, subject, topic, grade, rosterId, cutoffAt } = req.body || {};
   if (!data) return res.status(400).json({ error: 'Nothing to publish — generate the pack first.' });
   try {

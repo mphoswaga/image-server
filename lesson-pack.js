@@ -258,6 +258,74 @@ function placeholderHomework({ topic }) {
   };
 }
 
+// ── Differentiated activity sheets: one goal, three ability tiers ───────────
+// Not a worksheet variant — a SET of three separate printable sheets (Support
+// / Core / Stretch) for the SAME objective, so each ability group works at the
+// right level. The worksheet generator is left completely untouched.
+
+const DIFFERENTIATED_SCHEMA = {
+  type: 'object',
+  properties: {
+    title: { type: 'string' },
+    focus: { type: 'string' },                        // the shared learning goal
+    levels: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          label: { type: 'string' },                  // Support / Core / Stretch
+          audience: { type: 'string' },               // one line: who this sheet is for
+          tasks: { type: 'array', items: { type: 'string' } },     // 4-5, graduated within the tier
+          answerKey: { type: 'array', items: { type: 'string' } }, // answers in task order
+        },
+        required: ['label', 'audience', 'tasks', 'answerKey'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['title', 'focus', 'levels'],
+  additionalProperties: false,
+};
+
+async function generateActivities(ctx) {
+  if (!process.env.OPENAI_API_KEY) return placeholderActivities(ctx);
+  const { wrap } = require('./cache');
+  return wrap('activities', ctxKey('activities', ctx), async () => {
+    const prompt = `Create DIFFERENTIATED ACTIVITY SHEETS for this lesson — the SAME learning goal delivered as THREE separate sheets pitched at different ability groups, so every student works at the right level.
+${ctxBlock(ctx)}
+${artifactPromptBlock(ctx.teachingModelId, 'differentiated activity sheets')}
+Produce:
+- title: a clear title for the activity set.
+- focus: ONE sentence naming the shared learning goal all three groups work toward.
+- levels: EXACTLY THREE tiers, in this order:
+  1) label "Support" — audience: one line on who it's for; tasks: 4-5 well-scaffolded tasks (sentence starters, worked first step, smaller numbers) that build confidence; answerKey: the answer to each task in order.
+  2) label "Core" — audience: one line; tasks: 4-5 tasks at the expected ${ctx.grade} level; answerKey: answers in order.
+  3) label "Stretch" — audience: one line; tasks: 4-5 more demanding tasks (multi-step, reasoning, open-ended); answerKey: answers in order (for open tasks, describe what a strong response includes).
+All three tiers must assess the SAME objective — only the scaffolding and difficulty change.
+${calibration(ctx.grade)}
+Plain text only — no markdown symbols.`;
+    return callModel(DIFFERENTIATED_SCHEMA, 'differentiated_activities', prompt, 4500);
+  });
+}
+
+function placeholderActivities({ topic, grade }) {
+  const t = String(topic || 'the topic').replace(/-/g, ' ');
+  const mk = (label, audience) => ({
+    label, audience,
+    tasks: Array.from({ length: 4 }, (_, i) => `${label} task ${i + 1} about ${t}.`),
+    answerKey: Array.from({ length: 4 }, (_, i) => `Answer ${i + 1}.`),
+  });
+  return {
+    title: `${t} — Differentiated Activities`,
+    focus: `All groups work toward understanding ${t}.`,
+    levels: [
+      mk('Support', 'Students who need more scaffolding.'),
+      mk('Core', `Students working at the expected ${grade || 'grade'} level.`),
+      mk('Stretch', 'Students ready for a deeper challenge.'),
+    ],
+  };
+}
+
 // ── Student game: lesson summary + multiple-choice questions ────────────────
 const GAME_SCHEMA = {
   type: 'object',
@@ -325,4 +393,4 @@ function placeholderGame({ topic, questionCount }) {
   });
 }
 
-module.exports = { generateWorksheet, generateExitTicket, generateQuiz, generateHomework, generateGame };
+module.exports = { generateWorksheet, generateExitTicket, generateQuiz, generateHomework, generateActivities, generateGame };

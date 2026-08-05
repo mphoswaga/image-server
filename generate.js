@@ -91,10 +91,20 @@ function addYoutubeMedia(pptx, slide, video, thm) {
   });
 }
 
-const PUBLIC_DIR = path.join(__dirname, 'public');
+const { DATA_DIR } = require('./storage');
+const { MEDIA_DIR, mediaWriteDir, resolveMedia } = require('./media');
 const OUTPUT_DIR = path.join(__dirname, 'output');
-const LIBRARY_PATH = path.join(PUBLIC_DIR, 'library.json');
-const LIBRARY = require('./public/library.json');
+// The mutable library index lives on the persistent volume, seeded once from
+// the committed public/library.json so fresh deploys still ship starter images.
+const LIBRARY_PATH = path.join(DATA_DIR, 'library.json');
+const LIBRARY = (() => {
+  try { return JSON.parse(fs.readFileSync(LIBRARY_PATH, 'utf8')); }
+  catch {
+    const seed = require('./public/library.json');
+    try { fs.writeFileSync(LIBRARY_PATH, JSON.stringify(seed, null, 2)); } catch { /* first write may race; harmless */ }
+    return seed;
+  }
+})();
 
 // Minimum caption-overlap score to accept a library image; below this we treat
 // it as a gap and fetch a fresh photo from Unsplash.
@@ -270,7 +280,7 @@ async function selectImages(slides, subject, topic, sourceImages = []) {
     if (slide.imageQuery) {
       const rewrittenQ = await rewriteImageQuery(slide.imageQuery);
       console.log(`No strong match for "${slide.imageQuery}" → rewritten to "${rewrittenQ}" — fetching from Unsplash…`);
-      fetched = await fetchUnsplashImage({ query: rewrittenQ, subject, topic, publicDir: PUBLIC_DIR });
+      fetched = await fetchUnsplashImage({ query: rewrittenQ, subject, topic, publicDir: MEDIA_DIR });
     }
     if (fetched) {
       pool.push(fetched);
@@ -777,7 +787,7 @@ function assembleDeck(slides, images, gradeTheme, preset) {
   const pages = paginateSlides(slides, gradeTheme, preset);
   pages.forEach((slideData, idx) => {
     const img = images[slideData._sourceIndex != null ? slideData._sourceIndex : idx];
-    renderSlide(pptx, slideData, img ? path.join(PUBLIC_DIR, img.relpath) : null, gradeTheme, idx, state, preset);
+    renderSlide(pptx, slideData, img ? resolveMedia(img.relpath) : null, gradeTheme, idx, state, preset);
   });
   return pptx;
 }
