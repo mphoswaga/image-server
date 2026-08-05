@@ -505,10 +505,12 @@ function bulletPrefixEm(t) {
 }
 
 // Height in inches the whole bullet list needs inside a box of this width.
-function bulletsHeightIn(bullets, t, widthIn, fontSize) {
+// `leadEm` overrides the marker width for lists that use their own (the
+// numbered objectives list, the arrow/tick glyphs on activity and recap).
+function bulletsHeightIn(bullets, t, widthIn, fontSize, leadEm) {
   const usableW = Math.max(0.5, widthIn - INSET_X);
   const gapIn = (Number(t && t.paraSpaceAfter) || 0) / 72;
-  const lead = bulletPrefixEm(t);
+  const lead = leadEm != null ? leadEm : bulletPrefixEm(t);
   let total = 0;
   bullets.forEach((b, i) => {
     total += (wrappedLineCount(b, usableW, fontSize, lead) * fontSize * TITLE_LINE_EM) / 72;
@@ -517,14 +519,18 @@ function bulletsHeightIn(bullets, t, widthIn, fontSize) {
   return total;
 }
 
-function fitBulletSize(bullets, t, widthIn, heightIn, baseSize) {
+function fitBulletSize(bullets, t, widthIn, heightIn, baseSize, leadEm) {
   const usableH = Math.max(0.2, heightIn - INSET_Y);
   const floor = Math.max(12, Math.round(baseSize * BULLET_MIN_SCALE));
   for (let size = baseSize; size > floor; size--) {
-    if (bulletsHeightIn(bullets, t, widthIn, size) <= usableH) return size;
+    if (bulletsHeightIn(bullets, t, widthIn, size, leadEm) <= usableH) return size;
   }
   return floor;
 }
+
+// Marker widths for the slide types that build their own bullet runs.
+const LEAD_NUMBERED = 1.4; // "1.  "
+const LEAD_GLYPH = 1.1;    // ▶ / ✓ plus its hanging indent
 
 // Every bullet block goes through here so none can overflow its box.
 function addBullets(slide, bullets, t, thm, multicolor, opts) {
@@ -648,8 +654,11 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
     case 'objectives': {
       slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 5.4, h: 5.625, fill: { color: thm.primary } });
       slide.addText('LEARNING OBJECTIVES', { x: 0.5, y: 0.6, w: 4.4, h: 0.5, fontFace: thm.font, fontSize: 15, bold: true, color: soft.accentSoft, charSpacing: 2 });
+      // Pagination can split a list across slides but never within one bullet,
+      // so a single long objective still needs to shrink to fit.
+      const objSize = fitBulletSize(slideData.bullets, t, 4.5, 3.8, Math.max(16, t.bulletSize - 2), LEAD_NUMBERED);
       slide.addText(
-        slideData.bullets.map((b, i) => ({ text: `${i + 1}.  ${b}`, options: { color: 'FFFFFF', fontSize: Math.max(16, t.bulletSize - 2), paraSpaceAfter: 14, breakLine: true } })),
+        slideData.bullets.map((b, i) => ({ text: `${i + 1}.  ${b}`, options: { color: 'FFFFFF', fontSize: objSize, paraSpaceAfter: 14, breakLine: true } })),
         { x: 0.5, y: 1.4, w: 4.5, h: 3.8, fontFace: thm.font, valign: 'top' }
       );
       addImg({ path: imgPath, x: 5.4, y: 0, w: 4.6, h: 5.625, sizing: { type: 'cover', w: 4.6, h: 5.625 } });
@@ -659,8 +668,9 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
       slide.background = { color: soft.accentSoft };
       slide.addText('YOUR TURN', { x: 0.5, y: 0.45, w: 9, h: 0.4, fontFace: thm.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
       addTitle(slide, slideData.title || 'Activity', { x: 0.5, y: 0.85, w: 9, h: 0.8, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
+      const actSize = fitBulletSize(slideData.bullets, t, 5, 3.3, t.bulletSize, LEAD_GLYPH);
       slide.addText(
-        slideData.bullets.map((b) => ({ text: b, options: { bullet: { code: '25B6' }, color: thm.text, fontSize: t.bulletSize, paraSpaceAfter: t.paraSpaceAfter } })),
+        slideData.bullets.map((b) => ({ text: b, options: { bullet: { code: '25B6' }, color: thm.text, fontSize: actSize, paraSpaceAfter: t.paraSpaceAfter } })),
         { x: 0.5, y: 1.9, w: 5, h: 3.3, fontFace: thm.font, valign: 'top' }
       );
       addImg({ path: imgPath, x: 5.8, y: 1.9, w: 3.7, h: 3.2, sizing: { type: 'cover', w: 3.7, h: 3.2 }, rounding: true });
@@ -669,8 +679,9 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
     case 'recap': {
       slide.background = { color: soft.primarySoft };
       addTitleBar(pptx, slide, slideData.title || 'Recap', t, accent, thm);
+      const recapSize = fitBulletSize(slideData.bullets, t, 5, 3.6, t.bulletSize, LEAD_GLYPH);
       slide.addText(
-        slideData.bullets.map(b => ({ text: b, options: { bullet: { code: '2713' }, color: thm.text, fontSize: t.bulletSize, paraSpaceAfter: t.paraSpaceAfter } })),
+        slideData.bullets.map(b => ({ text: b, options: { bullet: { code: '2713' }, color: thm.text, fontSize: recapSize, paraSpaceAfter: t.paraSpaceAfter } })),
         { x: 0.5, y: 1.5, w: 5, h: 3.6, fontFace: thm.font, valign: 'top' }
       );
       addImg({ path: imgPath, x: 5.8, y: 1.4, w: 3.7, h: 3.5, sizing: { type: 'cover', w: 3.7, h: 3.5 } });
