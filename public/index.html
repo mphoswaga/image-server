@@ -88,6 +88,17 @@
     select:hover,input:hover,textarea:hover { border-color:#d2d7e0; }
     textarea { resize:vertical; }
     select:focus,input:focus,textarea:focus { outline:none; border-color:var(--primary-2); background:#fff; box-shadow:0 0 0 4px rgba(42,106,166,.14); }
+
+    /* One consistent keyboard-focus ring. :focus-visible only, so it appears
+       for keyboard and assistive-tech users without ringing every mouse click.
+       Form fields keep their own focus treatment above. */
+    button:focus-visible,
+    summary:focus-visible,
+    a:focus-visible,
+    [role="button"]:focus-visible,
+    [contenteditable]:focus-visible,
+    .hint-i:focus-visible { outline:3px solid var(--primary-2); outline-offset:2px; }
+
     .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
     .grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; }
 
@@ -182,18 +193,24 @@
     .unit-badge { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; padding:3px 9px; border-radius:999px; background:#e8f0fb; color:var(--primary-2); }
 
     /* Optional, collapsed-by-default template block so the required steps lead */
-    .opt-tpl { margin:0 0 22px; border:1px dashed var(--border); border-radius:12px; background:#fbfcfe; }
-    .opt-tpl > summary { list-style:none; cursor:pointer; padding:13px 16px; display:flex; align-items:center; gap:8px; font-size:13.5px; font-weight:600; color:var(--muted); }
+    .opt-tpl { margin:0 0 22px; border:1px dashed var(--border); border-radius:12px; background:#fbfcfe; transition:border-color .15s, background .15s, box-shadow .15s; }
+    .opt-tpl:hover { border-color:var(--accent); border-style:solid; background:var(--accent-soft); box-shadow:var(--sh-sm); }
+    .opt-tpl > summary { list-style:none; cursor:pointer; padding:13px 16px; display:flex; align-items:center; gap:8px; font-size:13.5px; font-weight:600; color:var(--muted); transition:color .15s; }
+    .opt-tpl:hover > summary { color:var(--ink); }
     .opt-tpl > summary::-webkit-details-marker { display:none; }
-    .opt-tpl > summary::after { content:'▾'; margin-left:auto; transition:transform .2s; opacity:.6; }
+    .opt-tpl > summary::after { content:'▾'; margin-left:auto; transition:transform .2s, opacity .15s; opacity:.6; }
+    .opt-tpl:hover > summary::after { opacity:1; }
     .opt-tpl[open] > summary::after { transform:rotate(180deg); }
     .opt-tpl > summary .ic { width:16px; height:16px; color:var(--accent); }
     .opt-tag { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); background:#eef1f6; border-radius:999px; padding:2px 8px; }
     .opt-tpl-body { padding:0 16px 16px; }
-    .materials-box { margin:14px 0 2px; border:1px dashed var(--border); border-radius:12px; background:#fbfcfe; overflow:hidden; }
-    .materials-box > summary { list-style:none; cursor:pointer; padding:13px 16px; display:flex; align-items:center; gap:8px; font-size:13.5px; font-weight:600; color:var(--muted); }
+    .materials-box { margin:14px 0 2px; border:1px dashed var(--border); border-radius:12px; background:#fbfcfe; overflow:hidden; transition:border-color .15s, background .15s, box-shadow .15s; }
+    .materials-box:hover { border-color:var(--accent); border-style:solid; background:var(--accent-soft); box-shadow:var(--sh-sm); }
+    .materials-box > summary { list-style:none; cursor:pointer; padding:13px 16px; display:flex; align-items:center; gap:8px; font-size:13.5px; font-weight:600; color:var(--muted); transition:color .15s; }
+    .materials-box:hover > summary { color:var(--ink); }
     .materials-box > summary::-webkit-details-marker { display:none; }
-    .materials-box > summary::after { content:'▾'; margin-left:auto; transition:transform .2s; opacity:.6; }
+    .materials-box > summary::after { content:'▾'; margin-left:auto; transition:transform .2s, opacity .15s; opacity:.6; }
+    .materials-box:hover > summary::after { opacity:1; }
     .materials-box[open] > summary::after { transform:rotate(180deg); }
     .materials-box > summary .ic { width:16px; height:16px; color:var(--accent); }
     .materials-body { padding:0 16px 16px; }
@@ -1005,6 +1022,7 @@
     .mode-select { max-width:880px; margin:0 auto 18px; display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
     .mode-card { display:flex; flex-direction:column; align-items:flex-start; gap:4px; text-align:left; padding:16px; border:1.5px solid var(--border); border-radius:14px; background:var(--card); cursor:pointer; font-family:inherit; transition:border-color .15s, box-shadow .15s, transform .06s; }
     .mode-card:hover { border-color:var(--accent); transform:translateY(-1px); box-shadow:var(--sh); }
+    .mode-card:active { transform:translateY(0); box-shadow:var(--sh-sm); }
     .mode-card.active { border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
     .mode-card .ic { width:22px; height:22px; color:var(--accent); }
     .mode-card .mc-title { font-weight:700; font-size:15px; color:var(--ink,#1b2430); }
