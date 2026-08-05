@@ -532,14 +532,32 @@ function addBullets(slide, bullets, t, thm, multicolor, opts) {
   slide.addText(bulletItems(bullets, t, thm, multicolor, size), { ...opts, fontSize: size });
 }
 
-function fitTitleSize(text, widthIn, heightIn, baseSize) {
+// Largest size at or below baseSize whose wrapped text fits the box, never
+// going below floorSize.
+function fitToBox(text, widthIn, heightIn, baseSize, floorSize) {
   const usableW = Math.max(0.5, widthIn - INSET_X);
   const usableH = Math.max(0.2, heightIn - INSET_Y);
-  const floor = Math.max(14, Math.round(baseSize * 0.55)); // stay legible from the back
-  for (let size = baseSize; size > floor; size--) {
+  for (let size = baseSize; size > floorSize; size--) {
     if ((wrappedLineCount(text, usableW, size) * size * TITLE_LINE_EM) / 72 <= usableH) return size;
   }
-  return floor;
+  return floorSize;
+}
+
+function fitTitleSize(text, widthIn, heightIn, baseSize) {
+  return fitToBox(text, widthIn, heightIn, baseSize, Math.max(14, Math.round(baseSize * 0.55))); // legible from the back
+}
+
+// The "Example" card. Same treatment as titles and bullets: at a young grade's
+// size a normal-length example wrapped to three lines and spilled out of its
+// rounded card. Supporting text, so it may shrink a little further than a title.
+function addExample(slide, text, opts, runColor) {
+  const label = 'Example  ';
+  const body = String(text || '');
+  const size = fitToBox(label + body, opts.w, opts.h, opts.fontSize, Math.max(11, Math.round(opts.fontSize * 0.6)));
+  slide.addText([
+    { text: label, options: { bold: true, color: opts.accent } },
+    { text: body, options: { color: runColor } },
+  ], { ...opts, accent: undefined, fontSize: size });
 }
 
 // Every slide title goes through here so none can overflow its box.
@@ -735,8 +753,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
         addTitle(slide, slideData.title, { x: 0.5, y: 2.75, w: 9, h: 0.9, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: 'FFFFFF' });
         addBullets(slide, slideData.bullets, t, thm, multicolor, { x: 0.5, y: 3.75, w: 9, h: 1.6, fontFace: thm.font, fontSize: Math.max(13, t.bulletSize - 2), valign: 'top', paraSpaceAfter: 4 });
         if (slideData.example) {
-          slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: 'E2E8F0' } }],
-            { x: 0.5, y: 5.18, w: 9, h: 0.32, fontFace: thm.font, fontSize: Math.max(11, t.bulletSize - 5), valign: 'middle', italic: true });
+          addExample(slide, slideData.example, { x: 0.5, y: 5.18, w: 9, h: 0.32, fontFace: thm.font, fontSize: Math.max(11, t.bulletSize - 5), valign: 'middle', italic: true, accent }, 'E2E8F0');
         }
         break;
       }
@@ -751,8 +768,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
         addBullets(slide, slideData.bullets.slice(half), t, thm, multicolor, { x: 5.1, y: 1.3, w: 4.4, h: 3.6, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
         if (slideData.example) {
           slide.addShape(pptx.ShapeType.roundRect, { x: 0.5, y: 5.0, w: 9, h: 0.4, fill: { color: thm.soft }, line: { type: 'none' }, rectRadius: 0.06 });
-          slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: thm.text } }],
-            { x: 0.65, y: 5.02, w: 8.7, h: 0.36, fontFace: thm.font, fontSize: Math.max(11, t.bulletSize - 5), valign: 'middle', italic: true });
+          addExample(slide, slideData.example, { x: 0.65, y: 5.02, w: 8.7, h: 0.36, fontFace: thm.font, fontSize: Math.max(11, t.bulletSize - 5), valign: 'middle', italic: true, accent }, thm.text);
         }
         break;
       }
@@ -767,8 +783,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
         placeVisual(pptx, slide, slideData, imgSource, accent, { x: 6.85, y: 1.0, w: 2.85, h: 3.8 });
         if (slideData.example) {
           slide.addShape(pptx.ShapeType.roundRect, { x: 2.15, y: 4.5, w: 7.6, h: 0.85, fill: { color: thm.soft }, line: { type: 'none' }, rectRadius: 0.08 });
-          slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: thm.text } }],
-            { x: 2.3, y: 4.55, w: 7.3, h: 0.75, fontFace: thm.font, fontSize: Math.max(12, t.bulletSize - 4), valign: 'middle', italic: true });
+          addExample(slide, slideData.example, { x: 2.3, y: 4.55, w: 7.3, h: 0.75, fontFace: thm.font, fontSize: Math.max(12, t.bulletSize - 4), valign: 'middle', italic: true, accent }, thm.text);
         }
         break;
       }
@@ -782,8 +797,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
         addImg({ path: imgPath, x: 6.2, y: 2.2, w: 3.6, h: 3.0, sizing: { type: 'cover', w: 3.6, h: 3.0 }, rounding: true });
         if (slideData.example) {
           slide.addShape(pptx.ShapeType.roundRect, { x: 0.5, y: 5.1, w: 5.5, h: 0.38, fill: { color: thm.soft }, line: { type: 'none' }, rectRadius: 0.06 });
-          slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: thm.text } }],
-            { x: 0.65, y: 5.12, w: 5.2, h: 0.34, fontFace: thm.font, fontSize: Math.max(11, t.bulletSize - 5), valign: 'middle', italic: true });
+          addExample(slide, slideData.example, { x: 0.65, y: 5.12, w: 5.2, h: 0.34, fontFace: thm.font, fontSize: Math.max(11, t.bulletSize - 5), valign: 'middle', italic: true, accent }, thm.text);
         }
         break;
       }
@@ -796,8 +810,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
         placeVisual(pptx, slide, slideData, imgSource, accent, { x: 5.8, y: 1.45, w: 3.8, h: 3.7 });
         if (slideData.example) {
           slide.addShape(pptx.ShapeType.roundRect, { x: 0.5, y: 5.1, w: 5.0, h: 0.38, fill: { color: soft.accentSoft }, line: { type: 'none' }, rectRadius: 0.06 });
-          slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: thm.text } }],
-            { x: 0.65, y: 5.12, w: 4.7, h: 0.34, fontFace: thm.font, fontSize: Math.max(11, t.bulletSize - 5), valign: 'middle', italic: true });
+          addExample(slide, slideData.example, { x: 0.65, y: 5.12, w: 4.7, h: 0.34, fontFace: thm.font, fontSize: Math.max(11, t.bulletSize - 5), valign: 'middle', italic: true, accent }, thm.text);
         }
         break;
       }
@@ -812,8 +825,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
         addBullets(slide, slideData.bullets, t, thm, multicolor, { x: tx, y: 1.85, w: 4.15, h: 2.6, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
         if (slideData.example) {
           slide.addShape(pptx.ShapeType.roundRect, { x: tx, y: 4.5, w: 4.15, h: 0.85, fill: { color: soft.accentSoft }, line: { type: 'none' }, rectRadius: 0.08 });
-          slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: thm.text } }],
-            { x: tx + 0.15, y: 4.55, w: 3.85, h: 0.75, fontFace: thm.font, fontSize: Math.max(12, t.bulletSize - 4), valign: 'middle', italic: true });
+          addExample(slide, slideData.example, { x: tx + 0.15, y: 4.55, w: 3.85, h: 0.75, fontFace: thm.font, fontSize: Math.max(12, t.bulletSize - 4), valign: 'middle', italic: true, accent }, thm.text);
         }
         break;
       }
@@ -824,8 +836,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
         slide.addShape(pptx.ShapeType.rect, { x: 0.5, y: 1.32, w: 2.0, h: 0.07, fill: { color: accent }, line: { type: 'none' } });
         addBullets(slide, slideData.bullets, t, thm, multicolor, { x: 0.5, y: 1.55, w: 5.8, h: 3.1, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
         if (slideData.example) {
-          slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: thm.text } }],
-            { x: 0.5, y: 4.85, w: 5.8, h: 0.55, fontFace: thm.font, fontSize: Math.max(12, t.bulletSize - 4), valign: 'middle', italic: true });
+          addExample(slide, slideData.example, { x: 0.5, y: 4.85, w: 5.8, h: 0.55, fontFace: thm.font, fontSize: Math.max(12, t.bulletSize - 4), valign: 'middle', italic: true, accent }, thm.text);
         }
         addImg({ path: imgPath, x: 6.55, y: 1.5, w: 3.2, h: 3.7, sizing: { type: 'cover', w: 3.2, h: 3.7 }, rounding: true });
         break;
@@ -844,8 +855,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
         addBullets(slide, slideData.bullets, t, thm, multicolor, { x: tx, y: 1.85, w: 4.15, h: 2.6, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
         if (slideData.example) {
           slide.addShape(pptx.ShapeType.roundRect, { x: tx, y: 4.5, w: 4.15, h: 0.85, fill: { color: soft.accentSoft }, line: { type: 'none' }, rectRadius: 0.08 });
-          slide.addText([{ text: 'Example  ', options: { bold: true, color: accent } }, { text: slideData.example, options: { color: thm.text } }],
-            { x: tx + 0.15, y: 4.55, w: 3.85, h: 0.75, fontFace: thm.font, fontSize: Math.max(12, t.bulletSize - 4), valign: 'middle', italic: true });
+          addExample(slide, slideData.example, { x: tx + 0.15, y: 4.55, w: 3.85, h: 0.75, fontFace: thm.font, fontSize: Math.max(12, t.bulletSize - 4), valign: 'middle', italic: true, accent }, thm.text);
         }
         break;
       }
@@ -863,10 +873,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
         addBullets(slide, slideData.bullets, t, thm, multicolor, { x: 0.5, y: 1.45, w: 9, h: 2.9, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
         if (slideData.example) {
           slide.addShape(pptx.ShapeType.roundRect, { x: 0.5, y: 4.6, w: 9, h: 0.75, fill: { color: soft.accentSoft }, line: { type: 'none' }, rectRadius: 0.08 });
-          slide.addText([
-            { text: 'Example  ', options: { bold: true, color: accent } },
-            { text: slideData.example, options: { color: thm.text } },
-          ], { x: 0.65, y: 4.65, w: 8.7, h: 0.65, fontFace: thm.font, fontSize: Math.max(12, t.bulletSize - 4), valign: 'middle', italic: true });
+          addExample(slide, slideData.example, { x: 0.65, y: 4.65, w: 8.7, h: 0.65, fontFace: thm.font, fontSize: Math.max(12, t.bulletSize - 4), valign: 'middle', italic: true, accent }, thm.text);
         }
         break;
       }
@@ -875,10 +882,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
       addBullets(slide, slideData.bullets, t, thm, multicolor, { x: textX, y: 1.45, w: 4.9, h: 2.9, fontFace: thm.font, fontSize: t.bulletSize, valign: 'top', paraSpaceAfter: t.paraSpaceAfter });
       if (slideData.example) {
         slide.addShape(pptx.ShapeType.roundRect, { x: textX, y: 4.5, w: 4.9, h: 0.85, fill: { color: soft.accentSoft }, line: { type: 'none' }, rectRadius: 0.08 });
-        slide.addText([
-          { text: 'Example  ', options: { bold: true, color: accent } },
-          { text: slideData.example, options: { color: thm.text } },
-        ], { x: textX + 0.15, y: 4.55, w: 4.6, h: 0.75, fontFace: thm.font, fontSize: Math.max(12, t.bulletSize - 4), valign: 'middle', italic: true });
+        addExample(slide, slideData.example, { x: textX + 0.15, y: 4.55, w: 4.6, h: 0.75, fontFace: thm.font, fontSize: Math.max(12, t.bulletSize - 4), valign: 'middle', italic: true, accent }, thm.text);
       }
       placeVisual(pptx, slide, slideData, imgSource, accent, { x: imgX, y: 1.35, w: 3.9, h: 4.0 });
     }
