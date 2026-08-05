@@ -224,7 +224,14 @@
     /* ── Planning source: stepped composer ──────────────────────────────── */
     .ps-step { display:flex; gap:18px; margin-bottom:24px; padding-bottom:24px; border-bottom:1px solid var(--border); }
     .ps-step:last-of-type { border-bottom:none; padding-bottom:0; margin-bottom:0; }
-    .ps-num { width:30px; height:30px; border-radius:50%; background:var(--primary); color:#fff; flex:none; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; margin-top:1px; }
+    .ps-num { width:30px; height:30px; border-radius:50%; background:var(--primary); color:#fff; flex:none; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; margin-top:1px; transition:background .25s ease, box-shadow .25s ease; }
+    /* A step turns green the moment its required fields are filled, so progress
+       through the form is visible rather than something you have to remember.
+       font-size:0 hides the numeral so ::after can show the tick in its place. */
+    .ps-num.done { background:var(--accent); font-size:0; box-shadow:0 0 0 4px color-mix(in srgb, var(--accent) 15%, transparent); }
+    .ps-num.done::after { content:'✓'; font-size:16px; font-weight:700; line-height:1; }
+    @media (prefers-reduced-motion:no-preference) { .ps-num.done { animation:stepDone .34s ease; } }
+    @keyframes stepDone { 0%{transform:scale(1)} 45%{transform:scale(1.16)} 100%{transform:scale(1)} }
     .ps-body { flex:1; min-width:0; }
     .ps-heading { font-size:15px; font-weight:700; color:var(--ink); margin:0 0 8px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
     .ps-tabs { display:flex; gap:0; margin:10px 0 14px; border:1.5px solid var(--border); border-radius:10px; overflow:hidden; width:fit-content; }
@@ -909,6 +916,11 @@
     .preset-section-label { font-size:13px; font-weight:700; color:var(--ink); margin-bottom:12px; display:flex; align-items:center; gap:7px; }
     .preset-section-label .ic { width:15px; height:15px; color:var(--accent); }
     .preset-select { width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:14px; color:var(--ink); background:#fff; cursor:pointer; appearance:auto; }
+    /* While a list is still being fetched, say so with motion rather than a
+       static label that is indistinguishable from something broken. */
+    .is-loading { background-image:linear-gradient(90deg,transparent 20%,rgba(29,78,216,.10) 50%,transparent 80%); background-size:220% 100%; animation:shimmer 1.2s linear infinite; }
+    @keyframes shimmer { from{background-position:220% 0} to{background-position:-220% 0} }
+    @media (prefers-reduced-motion:reduce) { .is-loading { animation:none; } }
     .preset-select:focus { outline:none; border-color:var(--primary); }
     .preset-browse-toggle { margin-top:8px; background:none; border:none; padding:0; font-size:12px; font-weight:600; color:var(--accent); cursor:pointer; display:flex; align-items:center; gap:4px; }
     .preset-browse-toggle .arrow { display:inline-block; transition:transform .2s; }
@@ -1221,6 +1233,19 @@
       background:#ecfdf5;
       color:#0f9f64;
       box-sizing:content-box;
+      transition:background .18s ease, color .18s ease, transform .18s ease;
+    }
+    /* The unselected options read as flat captions next to the active one, so
+       they don't look like the choices they are. Give them a real edge and a
+       resting shadow, and let the icon tile respond on hover. */
+    .mode-card:not(.active) {
+      border-color:#d8e2ee;
+      box-shadow:var(--sh-sm);
+    }
+    .mode-card:hover .ic {
+      background:var(--accent);
+      color:#fff;
+      transform:scale(1.05);
     }
     .mode-card .mc-title {
       margin-top:7px;
@@ -2009,7 +2034,7 @@
 
       <!-- Step 1: Planning source -->
       <div class="ps-step">
-        <div class="ps-num">1</div>
+        <div class="ps-num" id="sourceStepNum">1</div>
         <div class="ps-body">
           <div class="ps-heading"><svg class="ic" aria-hidden="true" style="color:var(--accent)"><use href="#i-calendar"/></svg> Planning source <span class="hint-i" tabindex="0" role="img" aria-label="Upload your year plan, pacing guide, or weekly plan. LessonCope extracts weeks, units, objectives and success criteria — you just pick the week." data-tip="Upload your year plan, pacing guide, or weekly plan. LessonCope extracts weeks, units, objectives and success criteria — you just pick the week.">i</span></div>
           <div class="ps-tabs">
@@ -2143,6 +2168,7 @@
         <select class="preset-select" id="presetSelect" aria-label="Slide theme">
           <option value="">Loading themes…</option>
         </select>
+        <button type="button" class="act" id="presetRetry" style="display:none;margin-top:8px;font-size:12.5px;padding:7px 12px"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg> Retry loading themes</button>
         <button type="button" class="preset-browse-toggle" id="presetBrowseToggle">
           <span class="arrow">▾</span> Browse all previews
         </button>
@@ -2752,7 +2778,30 @@
       const weekVis=$('weekStep').style.display!=='none';
       $('objStepNum').textContent=weekVis?'3':'2';
       $('settingsStepNum').textContent=weekVis?'4':'3';
+      refreshStepProgress();
     }
+
+    // Tick a step once the fields it actually requires are filled. The required
+    // set is the same one the Generate button validates (subject, topic,
+    // objectives), read from whichever pair of inputs the current mode uses.
+    // Step 3 is never ticked — its settings all ship with defaults, so marking
+    // it complete would claim the teacher did something they didn't.
+    function refreshStepProgress(){
+      const val=id=>{ const el=$(id); return el ? String(el.value||'').trim() : ''; };
+      let subject, topic, objectives;
+      if(planMode==='import'){
+        subject=val('wkSubject'); topic=val('wkTopic');
+        try{ objectives=(collectImportObjectives()||'').trim(); }catch{ objectives=''; }
+      }else{
+        subject=val('subject'); topic=val('topic'); objectives=val('objectives');
+      }
+      const set=(id,on)=>{ const el=$(id); if(el) el.classList.toggle('done', !!on); };
+      set('sourceStepNum', subject && topic);
+      set('objStepNum', !!objectives);
+    }
+    // One delegated listener covers every field in the composer, in both modes.
+    composer.addEventListener('input', refreshStepProgress);
+    composer.addEventListener('change', refreshStepProgress);
     function switchPlanTab(tab){
       planMode=tab;
       document.querySelectorAll('.ps-tab').forEach(b=>b.classList.toggle('active',b.dataset.ptab===tab));
@@ -2881,7 +2930,7 @@
         <span class="pull-text" contenteditable="true" data-i="${i}">${esc(o.text)}</span>
         <button type="button" class="pull-del" data-i="${i}" title="Remove">×</button>
       </div>`).join('');
-      $('pullList').querySelectorAll('.pull-cb').forEach(cb=>cb.addEventListener('change',()=>{ pulledObjectives[+cb.dataset.i].checked=cb.checked; }));
+      $('pullList').querySelectorAll('.pull-cb').forEach(cb=>cb.addEventListener('change',()=>{ pulledObjectives[+cb.dataset.i].checked=cb.checked; refreshStepProgress(); }));
       $('pullList').querySelectorAll('.pull-text').forEach(el=>el.addEventListener('blur',()=>{ pulledObjectives[+el.dataset.i].text=el.innerText.trim(); }));
       $('pullList').querySelectorAll('.pull-del').forEach(btn=>btn.addEventListener('click',()=>{ pulledObjectives.splice(+btn.dataset.i,1); renderPulledObjectives(); }));
     }
@@ -4101,11 +4150,31 @@
     }
 
     async function loadPresets() {
+      const sel = $('presetSelect');
+      if (sel) sel.classList.add('is-loading');
       try {
         const d = await fetch('/api/presets').then(r => r.json());
         if (d.presets && d.presets.length) renderPresetsSelect(d.presets);
-      } catch {}
+        else throw new Error('no presets returned');
+      } catch {
+        // Don't leave the picker saying "Loading themes…" forever — that reads
+        // as still-working when we've actually given up. Say so, and offer a
+        // retry instead of stranding the teacher.
+        if (sel && !sel.options.length || (sel && sel.options.length === 1 && !sel.options[0].value)) {
+          sel.innerHTML = '<option value="">Couldn\'t load themes — the default is used</option>';
+        }
+        const retry = $('presetRetry');
+        if (retry) retry.style.display = 'inline-flex';
+      } finally {
+        if (sel) sel.classList.remove('is-loading');
+      }
     }
+    $('presetRetry').addEventListener('click', () => {
+      const sel = $('presetSelect'), retry = $('presetRetry');
+      retry.style.display = 'none';
+      sel.innerHTML = '<option value="">Loading themes…</option>';
+      loadPresets();
+    });
     (()=>{
       const btn=$('appSwBtn'), menu=$('appSwMenu');
       btn.addEventListener('click', e=>{ e.stopPropagation(); const open=menu.style.display!=='none'; menu.style.display=open?'none':'block'; btn.setAttribute('aria-expanded',String(!open)); });
