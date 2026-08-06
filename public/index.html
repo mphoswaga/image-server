@@ -3123,7 +3123,9 @@
     $('backBtn').addEventListener('click',()=>{ show('composer'); setStep(1); statusEl.innerHTML=''; });
     $('regenPlanBtn').addEventListener('click', async ()=>{
       $('regenPlanBtn').disabled=true; statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>Rewriting the plan…';
-      try{ const r=await fetch('/api/lesson-plan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(ctx)});
+      // regenerate:true is what makes this actually re-run — without it the
+      // cache key matches the first call and the identical plan comes back.
+      try{ const r=await fetch('/api/lesson-plan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...ctx,regenerate:true})});
         const d=await r.json(); if(!r.ok) throw new Error(d.error); statusEl.innerHTML=''; renderPlan(d);
       }catch(err){ statusEl.className='status err'; statusEl.textContent=err.message; }
       $('regenPlanBtn').disabled=false;

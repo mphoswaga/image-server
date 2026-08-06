@@ -834,6 +834,11 @@ app.get('/api/teaching-models', requireAuth, (req, res) => {
 // a deploy while they were working.
 const decks = new Map(); // id -> { subject, topic, grade, tone, focus, slides, images, createdAt }
 const DECK_TTL = 6 * 60 * 60 * 1000; // 6 hours — covers a full teaching day of prep/interruptions
+// Fair-use counter for plan rewrites. A plan is iterated on BEFORE any deck
+// exists, so there is no deck to hang the count on — key it on the lesson the
+// teacher is working on instead. Purged on the same schedule as decks.
+const planRegens = new Map(); // `${userId}:${subject}:${topic}` -> { n, at }
+const planRegenKey = (userId, subject, topic) => `${userId}:${String(subject).toLowerCase()}:${String(topic).toLowerCase()}`;
 const DECKS_PATH = path.join(DATA_DIR, 'decks.json');
 
 function loadDecks() {
@@ -858,6 +863,7 @@ function purgeOldDecks() {
   const now = Date.now();
   let purged = false;
   for (const [id, d] of decks) if (now - d.createdAt > DECK_TTL) { decks.delete(id); purged = true; }
+  for (const [k, v] of planRegens) if (now - v.at > DECK_TTL) planRegens.delete(k);
   if (purged) persistDecks();
 }
 setInterval(purgeOldDecks, 12 * 60 * 1000).unref();
@@ -1273,7 +1279,17 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
   const objectives = clip(req.body.objectives, LIMITS.objectives);
   if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
   if (!objectives.trim()) return res.status(400).json({ error: 'Please paste the lesson objectives.' });
-  const { reservation, block } = await reserve(req, 'lessonscope.generate_lesson_plan');
+  // Writing the plan costs a credit; rewriting it is free within fair-use, the
+  // same deal slides get — landing on a plan that matches the school's format
+  // usually takes a pass or two, and that shouldn't cost a credit each time.
+  const isRewrite = !!regenerate;
+  const regenKey = planRegenKey(req.userId, subject, topic);
+  const used = isRewrite ? ((planRegens.get(regenKey) || {}).n || 0) : 0;
+  const action = isRewrite ? 'lessonscope.regenerate_lesson_plan' : 'lessonscope.generate_lesson_plan';
+  const opts = isRewrite
+    ? { credits: used < prices.FREE_REGENS ? 0 : prices.REGEN_BATCH_COST, idemSeed: `${regenKey}:${used}` }
+    : {};
+  const { reservation, block } = await reserve(req, action, opts);
   if (block) return res.status(402).json(block);
   try {
     const tpl = (templateId && getTemplate(req.userId, templateId)) || loadTemplate(req.userId);
@@ -1283,10 +1299,15 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
       subject: subject.toLowerCase(), topic: topic.toLowerCase(),
       grade, tone, objectives, templateText: tpl ? tpl.text : '', unitBlock, sourceMaterialText: sourceMaterialText(req.body), teachingModel: teachingModelId, regenerate: !!regenerate,
     });
-    await capture(req, reservation, 'lessonscope.generate_lesson_plan', `${subject}-${topic}`);
-    res.json({ sections: plan.sections, teachingModelId, model: getTeachingModel(teachingModelId), usedTemplate: !!tpl, templateName: tpl ? tpl.name : null, templateId: tpl ? tpl.id : null });
+    await capture(req, reservation, action, `${subject}-${topic}`);
+    if (isRewrite) planRegens.set(regenKey, { n: used + 1, at: Date.now() });
+    res.json({
+      sections: plan.sections, teachingModelId, model: getTeachingModel(teachingModelId),
+      usedTemplate: !!tpl, templateName: tpl ? tpl.name : null, templateId: tpl ? tpl.id : null,
+      rewritesUsed: isRewrite ? used + 1 : 0, freeRewrites: prices.FREE_REGENS,
+    });
   } catch (err) {
-    await release(req, reservation, 'lessonscope.generate_lesson_plan', err.message);
+    await release(req, reservation, action, err.message);
     console.error('Lesson plan failed:', err.message);
     res.status(400).json({ error: err.message });
   }

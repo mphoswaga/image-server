@@ -50,6 +50,10 @@ const LABELS = {
 // priceFor() throws rather than silently treating it as free.
 const FREE = {
   'lessonscope.regenerate_slide': 'Free within fair-use (3 regenerations per lesson)',
+  // Getting the plan to match a school's format usually takes a pass or two,
+  // and that iteration happens before any deck exists. Charging per attempt
+  // would tax the part of the flow teachers are most likely to repeat.
+  'lessonscope.regenerate_lesson_plan': 'Free within fair-use (3 rewrites per lesson)',
   'lessonscope.import_slides': 'Parsing an existing file is free',
   // Student-triggered on submit, not teacher-triggered. Billing a teacher per
   // student answer would scale their cost with class size rather than with what

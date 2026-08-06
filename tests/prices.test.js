@@ -75,6 +75,15 @@ test('slide-regeneration fair-use is 3 free then 1 credit', () => {
   assert.equal(prices.isFree('lessonscope.regenerate_slide'), true, 'regen is not in the paid table');
 });
 
+// Writing the plan is billed; rewriting it toward the school's format is not,
+// on the same fair-use terms slides get. Charging per attempt would tax the
+// step teachers repeat most.
+test('rewriting a lesson plan is fair-use, not a fresh charge each time', () => {
+  assert.equal(prices.isFree('lessonscope.regenerate_lesson_plan'), true);
+  assert.equal(prices.isFree('lessonscope.generate_lesson_plan'), false);
+  assert.match(prices.FREE['lessonscope.regenerate_lesson_plan'], /fair-use/i);
+});
+
 test('publicTable exposes everything the UI needs, no hardcoding', () => {
   const t = prices.publicTable();
   assert.deepEqual(t.prices, prices.PRICES);
