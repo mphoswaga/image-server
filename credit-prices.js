@@ -15,8 +15,8 @@
 // nothing — being free has to be a decision someone wrote down.
 const PRICES = {
   'lessonscope.generate_lesson_pack': 3,    // full lesson pack (worksheet + exit ticket + quiz)
-  'lessonscope.generate_slide_deck': 1,     // slide deck only  (POST /api/generate)
-  'lessonscope.import_plan_to_slides': 1,   // import a lesson plan → slides
+  'lessonscope.generate_slide_deck': 3,     // slide deck only  (POST /api/generate)
+  'lessonscope.import_plan_to_slides': 3,   // import a lesson plan → slides (same work as a deck)
   'lessonscope.generate_pack_item': 1,      // worksheet / exit ticket / quiz on its own
   'lessonscope.generate_game': 1,           // classroom game only
   'lessonscope.generate_diagram': 2,        // AI diagram for a slide
@@ -27,7 +27,7 @@ const PRICES = {
   // the largest unbilled AI call in the app. Override with LESSON_PLAN_CREDITS.
   'lessonscope.generate_lesson_plan': (() => {
     const v = parseInt(process.env.LESSON_PLAN_CREDITS, 10);
-    return Number.isFinite(v) && v >= 0 ? v : 1;
+    return Number.isFinite(v) && v >= 0 ? v : 2;
   })(),
   // lessonscope.regenerate_slide is priced by fair-use (see FREE_REGENS), not here.
 };
