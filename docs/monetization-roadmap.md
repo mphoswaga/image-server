@@ -136,3 +136,27 @@ Be generous (10, not 3): credits are not cash. The gate protects us, not the siz
   a charge for a no-op
 - Two billing guards: uncatalogued actions are refused rather than silently
   free, and an AI call that declares no action fails under test
+
+---
+
+## ⏳ PENDING — one SQL run against the EducScope Postgres
+
+Everything else is deployed and live. This is data hygiene, not a blocker:
+existing teachers are already grandfathered by account creation date, so
+nobody is locked out while it waits.
+
+```sql
+-- populate the verification column for accounts that predate the feature
+update users set email_verified_at = coalesce(email_verified_at, created_at)
+where email_verified_at is null;
+
+-- remove the throwaway account used to prove the Postgres signup path
+delete from users where email like 'verify-test-%@example.com';
+```
+
+Run it either way:
+- **Railway dashboard → Postgres → Data tab** — works from any network (HTTPS)
+- `railway run --service Postgres sh -c 'psql $DATABASE_PUBLIC_URL -f db/migrations/003_email_verification.sql'` — needs a network that allows the Postgres proxy port
+
+Then sign up once with a real address and confirm the emailed link grants
+30 credits. That is the one path nobody has yet proven end to end.
