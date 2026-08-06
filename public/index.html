@@ -2415,7 +2415,7 @@
         </div>
         <div class="credit-estimator-grid">
           <label><span>Lessons per week</span><input id="lsEstLessons" type="number" min="0" max="80" value="17"></label>
-          <label><span>Per lesson</span><select id="lsEstType"><option value="3">Resource pack - 3 units</option><option value="1">Slides only - 1 unit</option><option value="4">Slides + resource pack - 4 units</option><option value="5">Slides + resource pack + game - 5 units</option></select></label>
+          <label><span>Per lesson</span><select id="lsEstType"><option value="4">Resource pack - 4 units</option><option value="3">Slides only - 3 units</option><option value="7">Slides + resource pack - 7 units</option><option value="8">Slides + resource pack + game - 8 units</option></select></label>
           <label><span>Comment batches per month</span><input id="lsEstBatches" type="number" min="0" max="80" value="0"></label>
           <label><span>Average students</span><input id="lsEstStudents" type="number" min="0" max="120" value="30"></label>
           <label><span>AI images per month</span><input id="lsEstImages" type="number" min="0" max="200" value="0"></label>
@@ -4469,7 +4469,7 @@
       const lessons=Math.ceil(val('lsEstLessons')*4.33);
       const lessonCredits=lessons*val('lsEstType');
       const teacherCredits=val('lsEstBatches')*creditStudentBatchCost(val('lsEstStudents'));
-      const visualCredits=val('lsEstImages')*3+val('lsEstDiagrams')*2;
+      const visualCredits=val('lsEstImages')*5+val('lsEstDiagrams')*3;
       const total=lessonCredits+teacherCredits+visualCredits;
       const plan=bestSubscriptionPlan(total);
       $('lsEstTotal').textContent=total?`${total} monthly usage units`:'No paid AI usage yet';
