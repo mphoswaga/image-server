@@ -328,3 +328,95 @@ module.exports = {
   normaliseLabel, fieldRows, mapRowsToFields,
   cellText, columnHasContent, nextFreeLessonColumn, cloneWeekSheet,
 };
+
+// ── Per-teacher storage ────────────────────────────────────────────────────
+// The workbook is a living document: uploaded once, appended to all term, and
+// downloaded whenever the teacher wants it. It lives on the persistent volume
+// beside their templates (see media.js for why runtime writes never go to
+// public/).
+const fs = require('fs');
+const path = require('path');
+const { DATA_DIR, writeFileAtomic, writeJsonAtomic } = require('./storage');
+
+const plannerDir = userId => path.join(DATA_DIR, 'users', String(userId), 'week-planner');
+const plannerFile = userId => path.join(plannerDir(userId), 'planner.xlsx');
+const plannerMeta = userId => path.join(plannerDir(userId), 'planner.json');
+
+function hasPlanner(userId) {
+  try { return fs.existsSync(plannerFile(userId)); } catch { return false; }
+}
+
+function readPlannerMeta(userId) {
+  try { return JSON.parse(fs.readFileSync(plannerMeta(userId), 'utf8')); } catch { return null; }
+}
+
+async function loadPlanner(userId) {
+  if (!hasPlanner(userId)) return null;
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile(plannerFile(userId));
+  return wb;
+}
+
+async function savePlanner(userId, workbook, meta = {}) {
+  fs.mkdirSync(plannerDir(userId), { recursive: true });
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  writeFileAtomic(plannerFile(userId), buffer);
+  const info = detect(workbook);
+  writeJsonAtomic(plannerMeta(userId), {
+    ...(readPlannerMeta(userId) || {}),
+    ...meta,
+    updatedAt: new Date().toISOString(),
+    weeks: info.weeks || [],
+    fieldCount: (info.fields || []).length,
+  });
+  return buffer;
+}
+
+// Store a freshly uploaded workbook as this teacher's planner.
+async function installPlanner(userId, buffer, filename) {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buffer);
+  const info = detect(wb);
+  if (!info.isWeekPlanner) return { ok: false, reason: 'not_a_week_planner' };
+  fs.mkdirSync(plannerDir(userId), { recursive: true });
+  writeFileAtomic(plannerFile(userId), buffer);
+  writeJsonAtomic(plannerMeta(userId), {
+    filename: filename || 'lesson-plan.xlsx',
+    uploadedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    templateSheet: info.templateSheet,
+    weeks: info.weeks,
+    fieldCount: (info.fields || []).length,
+  });
+  return { ok: true, ...info };
+}
+
+// Append one generated lesson to the teacher's planner.
+async function recordLesson(userId, weekNumber, values) {
+  const wb = await loadPlanner(userId);
+  if (!wb) return { ok: false, reason: 'no_planner' };
+  const week = parseInt(weekNumber, 10);
+  if (!Number.isFinite(week) || week < 1) return { ok: false, reason: 'no_week' };
+  const result = addLesson(wb, week, values);
+  if (!result.ok) return result;
+  await savePlanner(userId, wb);
+  return result;
+}
+
+async function plannerBuffer(userId) {
+  if (!hasPlanner(userId)) return null;
+  return fs.readFileSync(plannerFile(userId));
+}
+
+function deletePlanner(userId) {
+  try { fs.rmSync(plannerDir(userId), { recursive: true, force: true }); return true; } catch { return false; }
+}
+
+module.exports.hasPlanner = hasPlanner;
+module.exports.readPlannerMeta = readPlannerMeta;
+module.exports.loadPlanner = loadPlanner;
+module.exports.savePlanner = savePlanner;
+module.exports.installPlanner = installPlanner;
+module.exports.recordLesson = recordLesson;
+module.exports.plannerBuffer = plannerBuffer;
+module.exports.deletePlanner = deletePlanner;

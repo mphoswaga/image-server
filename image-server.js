@@ -9,7 +9,7 @@ const { buildDeck, rebuildDeck, alternativeImage, findReusableImage, searchLibra
 const quota = require('./quota');
 const { generateOneSlide } = require('./content');
 const { extractText, extractPptxSlides, saveTemplate, listTemplates, getTemplate, renameTemplate, deleteTemplate, loadOriginalById, loadTemplate, loadOriginal, TYPES } = require('./template');
-const { generateLessonPlan, planToText } = require('./lesson-plan');
+const { TEMPLATE_PROMPT_LIMIT, generateLessonPlan, planToText } = require('./lesson-plan');
 const { getTeachingModel, normalizeTeachingModelId, listTeachingModels } = require('./teaching-models');
 const { fillDocx, fillXlsx } = require('./fill-template');
 const { animateBuffer } = require('./animate-pptx');
@@ -21,6 +21,7 @@ const { generateWorksheet, generateExitTicket, generateQuiz, generateHomework, g
 const { normalizeVideo, suggestVideos, thumbnailDataUrl } = require('./youtube');
 const { worksheetDocx, exitTicketDocx, quizDocx, homeworkDocx, activitiesDocx } = require('./docgen');
 const unit = require('./unit');
+const weekPlanner = require('./week-planner');
 const planningSource = require('./planning-source');
 const games = require('./games');
 const assignments = require('./assignments');
@@ -1041,9 +1042,40 @@ app.post('/api/templates', requireAuth, upload.single('file'), async (req, res) 
     } else {
       return res.status(400).json({ error: 'Upload a file or paste template text.' });
     }
+    // A week-tracker workbook is a different thing entirely: a living file with
+    // a tab per week that we append lessons to, rather than a document whose
+    // headings we mirror. Detect it here so the teacher just uploads their
+    // lesson plan and the app works out which kind it is.
+    if (buffer && /\.xlsx?$/i.test(filename || '')) {
+      try {
+        const installed = await weekPlanner.installPlanner(req.userId, buffer, filename);
+        if (installed.ok) {
+          return res.json({
+            weekPlanner: {
+              filename,
+              templateSheet: installed.templateSheet,
+              weeks: installed.weeks,
+              fieldCount: (installed.fields || []).length,
+            },
+          });
+        }
+      } catch (err) {
+        console.error('Week-planner detection failed:', err.message);  // fall through to a normal template
+      }
+    }
+
     if (!text || !text.trim()) return res.status(400).json({ error: 'Could not read any text from that file.' });
     const rec = saveTemplate(req.userId, { name: req.body && req.body.name, type: req.body && req.body.type, filename, text, buffer });
-    res.json({ template: publicTemplate(rec) });
+    // Only the first TEMPLATE_PROMPT_LIMIT characters reach the generator. Say
+    // so at upload: silently dropping the end of a long template means the
+    // teacher's later sections quietly stop appearing and nothing explains why.
+    const truncatedBy = Math.max(0, text.trim().length - TEMPLATE_PROMPT_LIMIT);
+    res.json({
+      template: publicTemplate(rec),
+      ...(truncatedBy ? {
+        warning: `This template is long, so only its first ${TEMPLATE_PROMPT_LIMIT.toLocaleString()} characters guide the lesson plan — about ${truncatedBy.toLocaleString()} characters at the end won't be used. Trim it to the sections you want mirrored for the best result.`,
+      } : {}),
+    });
   } catch (err) {
     console.error('Template upload failed:', err.message);
     res.status(400).json({ error: err.message });
@@ -1059,6 +1091,31 @@ app.patch('/api/templates/:id', requireAuth, (req, res) => {
 app.delete('/api/templates/:id', requireAuth, (req, res) => {
   const ok = deleteTemplate(req.userId, req.params.id);
   if (!ok) return res.status(404).json({ error: 'Template not found.' });
+  res.json({ ok: true });
+});
+
+// ── Week-tracker lesson plan ───────────────────────────────────────────────
+// The teacher's living workbook: a tab per week, a column per lesson. Uploaded
+// through /api/templates (detected there), appended to as lessons are
+// generated, and downloadable at any point with every week to date.
+app.get('/api/week-planner', requireAuth, (req, res) => {
+  const meta = weekPlanner.readPlannerMeta(req.userId);
+  res.json({ present: weekPlanner.hasPlanner(req.userId), ...(meta || {}) });
+});
+
+app.get('/api/week-planner/download', requireAuth, async (req, res) => {
+  const buffer = await weekPlanner.plannerBuffer(req.userId);
+  if (!buffer) return res.status(404).json({ error: 'No week-by-week lesson plan uploaded yet.' });
+  const meta = weekPlanner.readPlannerMeta(req.userId) || {};
+  const name = String(meta.filename || 'lesson-plan.xlsx').replace(/[^a-z0-9.\-_ ]/gi, '_');
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+  res.send(buffer);
+});
+
+app.delete('/api/week-planner', requireAuth, (req, res) => {
+  if (!weekPlanner.hasPlanner(req.userId)) return res.status(404).json({ error: 'Nothing to remove.' });
+  weekPlanner.deletePlanner(req.userId);
   res.json({ ok: true });
 });
 
@@ -1901,6 +1958,50 @@ app.patch('/api/assignment/:id/grade', requireAuth, (req, res) => {
   res.json({ ok: true, submission: sub });
 });
 
+// File a generated lesson into the teacher's week-by-week workbook, if they
+// keep one. Returns a small status the UI can show, or null when there's no
+// planner — never throws, because a bookkeeping failure must not fail a
+// generation the teacher has already been charged for.
+//
+// The week comes from the pacing-guide flow the teacher already uses to choose
+// what they're teaching; without one we don't guess, we just say so.
+async function addLessonToWeekPlanner(req, { subject, topic, objectives, lessonPlan, slides }) {
+  try {
+    if (!weekPlanner.hasPlanner(req.userId)) return null;
+
+    const body = req.body || {};
+    const week = parseInt(body.weekNumber ?? body.selWeekNum ?? body.week, 10);
+    if (!Number.isFinite(week) || week < 1) return { ok: false, reason: 'no_week' };
+
+    // Learning objectives and success criteria are the SCHOOL'S words, taken
+    // from the pacing guide. They are passed through untouched — never the
+    // generated "Learning Objectives" section, which rephrases for prose.
+    const values = weekPlanner.lessonValuesFrom({
+      subject,
+      topic,
+      unit: clip(body.unitName || body.unit, 200),
+      period: clip(body.period, 120),
+      objectives,                                   // verbatim
+      successCriteria: Array.isArray(body.successCriteria) ? body.successCriteria : [],
+      guideResources: Array.isArray(body.resources) ? body.resources : [],
+      planSections: (lessonPlan && Array.isArray(lessonPlan.sections)) ? lessonPlan.sections : [],
+      vocab: (Array.isArray(slides) ? slides : []).flatMap(s => (Array.isArray(s.vocab) ? s.vocab : [])),
+      redThread: clip(body.redThread, 500),
+    });
+
+    const result = await weekPlanner.recordLesson(req.userId, week, values);
+    if (result.ok) {
+      audit.log('week_planner.lesson_added', {
+        userId: req.userId, week, sheet: result.sheetName, column: result.column, ip: req.ip,
+      });
+    }
+    return result;
+  } catch (err) {
+    console.error('Week planner update failed:', err.message);
+    return { ok: false, reason: 'error' };
+  }
+}
+
 // Generate a deck; store state; return preview metadata + download id.
 app.post('/api/generate', requireAuth, async (req, res) => {
   const { slideCount, grade, tone, lessonPlan, unitId, lessonIndex, regenerate, presetId } = req.body || {};
@@ -1932,9 +2033,19 @@ app.post('/api/generate', requireAuth, async (req, res) => {
       presetId: presetId || null,
     });
     await capture(req, reservation, 'lessonscope.generate_slide_deck', id);   // 1 credit per lesson (no-op unless billing on)
+
+    // If this teacher keeps a week-by-week workbook, file the lesson into it.
+    // Never let a bookkeeping problem fail a generation the teacher has paid
+    // for — the deck is returned either way, with a note about what happened.
+    const weekPlannerResult = await addLessonToWeekPlanner(req, {
+      subject, topic, objectives, lessonPlan: req.body && req.body.lessonPlan,
+      slides: built.slides,
+    });
+
     const filename = `${subject}-${topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
     res.json({
       deckId: id, filename, band: built.band, slideCount: built.slides.length, teachingModelId,
+      weekPlanner: weekPlannerResult,
       slides: built.slides.map((s, i) => previewEntry(s, built.images[i])),
     });
   } catch (err) {

@@ -5,6 +5,10 @@ const { client: aiClient } = require('./ai-client');
 const { gradeProfile } = require('./grade');
 const { getTeachingModel, normalizeTeachingModelId, modelPromptBlock } = require('./teaching-models');
 
+// How much of an uploaded template reaches the prompt. Exported so the upload
+// endpoint can warn when a template exceeds it instead of silently dropping the end.
+const TEMPLATE_PROMPT_LIMIT = 6000;
+
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
 function planSchema(model) {
@@ -39,7 +43,7 @@ function buildPrompt({ subject, topic, grade, tone, objectives, templateText, un
     ? `The school's LESSON PLAN TEMPLATE is below. Reproduce its section headings and their order EXACTLY as they appear — same names, same sequence (e.g. Starter, Main Activity, Plenary, Exit Card, Resources, etc.). Fill each section with content written specifically for THIS lesson.
 
 --- TEMPLATE START ---
-${templateText.slice(0, 6000)}
+${templateText.slice(0, TEMPLATE_PROMPT_LIMIT)}
 --- TEMPLATE END ---`
     : model.id === 'standard'
       ? 'No template was provided. Use a standard, well-structured lesson plan with these sections in order: Lesson Overview, Learning Objectives, Starter / Hook, Main Teaching, Guided Practice / Activity, Plenary / Exit Card, Resources & Differentiation.'
@@ -118,7 +122,7 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     grade: String(grade || 'middle school').trim(),
     tone: String(tone || 'clear and engaging').trim(),
     objectives: String(objectives || '').trim(),
-    templateText: String(templateText || '').slice(0, 6000).trim(),
+    templateText: String(templateText || '').slice(0, TEMPLATE_PROMPT_LIMIT).trim(),
     unitBlock: String(unitBlock || '').slice(0, 2000).trim(),
     sourceMaterialText: String(sourceMaterialText || '').slice(0, 5000).trim(),
     teachingModelId,
@@ -142,4 +146,4 @@ function planToText(plan) {
   return (plan.sections || []).map(s => `## ${s.heading}${s.stageId ? ` [stage: ${s.stageId}]` : ''}\n${s.content}`).join('\n\n');
 }
 
-module.exports = { generateLessonPlan, planToText };
+module.exports = { TEMPLATE_PROMPT_LIMIT, generateLessonPlan, planToText };
