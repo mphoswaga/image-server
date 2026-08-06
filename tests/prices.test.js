@@ -17,6 +17,7 @@ const EXPECTED = {
   'lessonscope.generate_game': 1,
   'lessonscope.generate_diagram': 2,
   'lessonscope.generate_ai_image': 3,
+  'lessonscope.generate_lesson_plan': 1,
 };
 
 test('every paid action costs exactly its agreed price', () => {
@@ -33,12 +34,32 @@ test('no unexpected paid actions have crept in', () => {
   );
 });
 
-test('unknown and free actions cost nothing', () => {
-  assert.equal(prices.priceFor('lessonscope.generate_lesson_plan'), 0, 'lesson plan is free in beta');
+test('deliberately-free actions cost nothing', () => {
   assert.equal(prices.priceFor('lessonscope.import_slides'), 0, 'parsing is free');
-  assert.equal(prices.priceFor('totally.unknown_action'), 0, 'unknown actions never charge');
-  assert.equal(prices.isFree('lessonscope.generate_lesson_plan'), true);
+  assert.equal(prices.priceFor('lessonscope.auto_grade'), 0, 'grading rides on a paid assignment');
+  assert.equal(prices.priceFor('lessonscope.parse_pacing_guide'), 0, 'one-off upload');
+  assert.equal(prices.isFree('lessonscope.import_slides'), true);
   assert.equal(prices.isFree('lessonscope.generate_slide_deck'), false);
+  assert.equal(prices.isFree('lessonscope.generate_lesson_plan'), false, 'lesson plan is now billed');
+});
+
+// The guard. An action nobody catalogued used to cost 0 by default, which meant
+// a new AI feature could ship free and stay free until someone read the bill.
+test('an uncatalogued action is refused, not silently free', () => {
+  assert.throws(() => prices.priceFor('lessonscope.brand_new_thing'), /Unknown credit action/);
+  assert.throws(() => prices.isFree('lessonscope.brand_new_thing'), /Unknown credit action/);
+  assert.throws(() => prices.assertKnown('typo.in_action_name'), /Unknown credit action/);
+});
+
+test('every catalogued action is either priced or explicitly free, never both', () => {
+  const both = Object.keys(prices.PRICES).filter(a => a in prices.FREE);
+  assert.deepEqual(both, [], `these actions are listed as both priced and free: ${both.join(', ')}`);
+});
+
+test('every free action documents WHY it is free', () => {
+  for (const [action, reason] of Object.entries(prices.FREE)) {
+    assert.ok(reason && reason.length > 3, `${action} is free without a stated reason`);
+  }
 });
 
 test('every priced action has a UI label (prices and labels stay in sync)', () => {

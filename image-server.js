@@ -50,7 +50,7 @@ const billing = require('./billing');
 const wallet = require('./wallet');
 const educscope = require('./educscope');
 const prices = require('./credit-prices');
-const { runWithUser, usageSnapshot, usageSince } = require('./ai-client');
+const { runWithUser, usageSnapshot, usageSince, declareAction } = require('./ai-client');
 const usage = require('./usage');
 const jwt = require('jsonwebtoken');
 
@@ -613,7 +613,15 @@ function costOf(req, action) { return (billingOn() && req.user.role !== 'admin')
 // opts.credits sets an explicit price (used by fair-use regeneration); omit it
 // to use the published price. opts.idemSeed gives the reservation a natural
 // per-attempt identity so intentional repeats stay distinct (see idemKey).
+// Name a deliberately-free AI action, so the ai-client guard can tell "free on
+// purpose" apart from "nobody thought about billing". Throws via assertKnown if
+// the action isn't catalogued.
+function declareFree(action) { declareAction(prices.assertKnown(action)); }
+
 async function reserve(req, action, opts = {}) {
+  // Record what this request is doing before any AI call happens, so an
+  // undeclared call downstream is detectable (see ai-client assertDeclared).
+  declareAction(prices.assertKnown(action));
   // Local free-trial grant is a local-wallet concept; no-op in remote mode.
   if (!educscope.configured() && req.user.role !== 'admin') credits.ensureFreeGrant(req.user.email);
 
@@ -989,6 +997,7 @@ app.get('/api/admin/usage', requireAdmin, (req, res) => {
 });
 
 app.post('/api/admin/add-images', requireAdmin, async (req, res) => {
+  declareFree('lessonscope.caption_image');
   const { subject, topic, count } = req.body || {};
   if (!subject || !topic) return res.status(400).json({ error: 'Subject and topic are required.' });
   try {
@@ -1086,6 +1095,7 @@ app.post('/api/lesson-plan/download', requireAuth, (req, res) => {
 // The unit is then available as context for lesson plans and decks.
 
 app.post('/api/units', requireAuth, upload.single('file'), async (req, res) => {
+  declareFree('lessonscope.parse_unit');
   try {
     let text, filename;
     if (req.file) {
@@ -1124,6 +1134,7 @@ app.delete('/api/units/:id', requireAuth, (req, res) => {
 
 // ── Planning sources (pacing guides / year plans / weekly plans) ─────────────
 app.post('/api/planning-sources', requireAuth, upload.single('file'), async (req, res) => {
+  declareFree('lessonscope.parse_pacing_guide');
   if (!req.file) return res.status(400).json({ error: 'Upload an Excel file (.xlsx).' });
   const { originalname, buffer } = req.file;
   const ext = path.extname(originalname).toLowerCase();
@@ -1262,6 +1273,8 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
   const objectives = clip(req.body.objectives, LIMITS.objectives);
   if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
   if (!objectives.trim()) return res.status(400).json({ error: 'Please paste the lesson objectives.' });
+  const { reservation, block } = await reserve(req, 'lessonscope.generate_lesson_plan');
+  if (block) return res.status(402).json(block);
   try {
     const tpl = (templateId && getTemplate(req.userId, templateId)) || loadTemplate(req.userId);
     const u = unitId ? unit.getUnit(req.userId, unitId) : null;
@@ -1270,8 +1283,10 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
       subject: subject.toLowerCase(), topic: topic.toLowerCase(),
       grade, tone, objectives, templateText: tpl ? tpl.text : '', unitBlock, sourceMaterialText: sourceMaterialText(req.body), teachingModel: teachingModelId, regenerate: !!regenerate,
     });
+    await capture(req, reservation, 'lessonscope.generate_lesson_plan', `${subject}-${topic}`);
     res.json({ sections: plan.sections, teachingModelId, model: getTeachingModel(teachingModelId), usedTemplate: !!tpl, templateName: tpl ? tpl.name : null, templateId: tpl ? tpl.id : null });
   } catch (err) {
+    await release(req, reservation, 'lessonscope.generate_lesson_plan', err.message);
     console.error('Lesson plan failed:', err.message);
     res.status(400).json({ error: err.message });
   }
@@ -1746,6 +1761,7 @@ app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
 // Student: submit answers — MCQ grades instantly; free-text checks the
 // teacher-confirmed verdict cache first, only calling AI on a genuine miss.
 app.post('/api/assignment/:id/submit', requireAssignmentAccess, async (req, res) => {
+  declareFree('lessonscope.auto_grade');
   // requireAssignmentAccess also accepts a teacher's own login as a fallback for
   // read-only routes, WITHOUT setting req.gameSession — submitting needs a
   // real student session, so reject explicitly instead of crashing below.
@@ -1987,6 +2003,7 @@ const { rewriteImageQuery } = require('./query-rewrite');
 // Fallback: fetch fresh images from Unsplash for a query (free; captioned +
 // added to the library so they're reusable). Not an AI visual — not capped.
 app.post('/api/images/fetch', requireAuth, async (req, res) => {
+  declareFree('lessonscope.image_search');
   const { q, subject, topic, grade } = req.body || {};
   if (!q || !String(q).trim()) return res.status(400).json({ error: 'Type what you are looking for.' });
   try {

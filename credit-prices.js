@@ -8,7 +8,11 @@
 // credits itself — it only names an `action`, and wallet.js reserves this many.
 
 // Canonical action names (EducScope wallet contract, shared across apps).
-// action key → credits. Any action not listed here is free.
+// action key → credits.
+//
+// An action must appear in EITHER this map or FREE below. priceFor() throws on
+// anything else, so a new AI feature cannot reach production quietly costing
+// nothing — being free has to be a decision someone wrote down.
 const PRICES = {
   'lessonscope.generate_lesson_pack': 3,    // full lesson pack (worksheet + exit ticket + quiz)
   'lessonscope.generate_slide_deck': 1,     // slide deck only  (POST /api/generate)
@@ -17,6 +21,14 @@ const PRICES = {
   'lessonscope.generate_game': 1,           // classroom game only
   'lessonscope.generate_diagram': 2,        // AI diagram for a slide
   'lessonscope.generate_ai_image': 3,       // AI image for a slide
+  // A lesson plan is a standalone deliverable — a full structured generation the
+  // teacher can download as .docx without ever making slides — so it is priced
+  // like one. Was free "during beta" while nothing charged for it, which left it
+  // the largest unbilled AI call in the app. Override with LESSON_PLAN_CREDITS.
+  'lessonscope.generate_lesson_plan': (() => {
+    const v = parseInt(process.env.LESSON_PLAN_CREDITS, 10);
+    return Number.isFinite(v) && v >= 0 ? v : 1;
+  })(),
   // lessonscope.regenerate_slide is priced by fair-use (see FREE_REGENS), not here.
 };
 
@@ -29,19 +41,32 @@ const LABELS = {
   'lessonscope.generate_game': 'Classroom game',
   'lessonscope.generate_diagram': 'AI diagram',
   'lessonscope.generate_ai_image': 'AI image',
+  'lessonscope.generate_lesson_plan': 'Lesson plan',
   'lessonscope.regenerate_slide': 'Regenerate slide',
 };
 
-// Explicitly-free actions, documented so the UI can label them "Free" rather
-// than leave them ambiguous.
+// Explicitly-free actions. Every entry is a deliberate choice with a reason, not
+// an oversight — an AI action that is missing from BOTH maps is a bug, and
+// priceFor() throws rather than silently treating it as free.
 const FREE = {
   'lessonscope.regenerate_slide': 'Free within fair-use (3 regenerations per lesson)',
   'lessonscope.import_slides': 'Parsing an existing file is free',
-  'lessonscope.generate_lesson_plan': 'Included in the pack — free during beta',
-  'lessonscope.auto_grade': 'Free (grading is batched)',
-  'lessonscope.parse_pacing_guide': 'Free',
-  'lessonscope.rewrite_image_query': 'Free',
-  'lessonscope.caption_image': 'Free',
+  // Student-triggered on submit, not teacher-triggered. Billing a teacher per
+  // student answer would scale their cost with class size rather than with what
+  // they chose to generate; the assignment being graded was already paid for.
+  'lessonscope.auto_grade': 'Free — the assignment it grades was already paid for',
+  // One upload, reused across a whole term of lessons. Charging here taxes
+  // getting started, and every lesson it then feeds is charged normally.
+  'lessonscope.parse_pacing_guide': 'Free — a one-off upload that later generations pay for',
+  'lessonscope.parse_unit': 'Free — a one-off upload that later generations pay for',
+  // Bundled: runs inside a paid generation, never on its own.
+  'lessonscope.rewrite_image_query': 'Free — part of a generation you already paid for',
+  // Swapping a picture on a deck the teacher already paid to generate. Note this
+  // one is not cheap: it rewrites the query AND vision-captions each fetched
+  // image, so it is several AI calls per search.
+  'lessonscope.image_search': 'Free — picking a picture for a deck you already paid for',
+  // Admin-only, and admins are exempt from billing anyway.
+  'lessonscope.caption_image': 'Free — admin library maintenance',
 };
 
 // Fair-use: regenerating one slide is free the first FREE_REGENS times per
@@ -49,9 +74,22 @@ const FREE = {
 const FREE_REGENS = (() => { const v = parseInt(process.env.FREE_REGENS_PER_LESSON, 10); return Number.isFinite(v) && v >= 0 ? v : 3; })();
 const REGEN_BATCH_COST = 1;
 
-function priceFor(action) { return PRICES[action] || 0; }
-function isFree(action) { return !PRICES[action]; }
-function label(action) { return LABELS[action] || action; }
+// Every action must be catalogued as priced or deliberately free. Anything else
+// is a new feature that forgot to decide, and we refuse to guess — guessing
+// means it ships free and nobody notices until the bill arrives.
+function assertKnown(action) {
+  if (!(action in PRICES) && !(action in FREE)) {
+    throw new Error(
+      `Unknown credit action "${action}". Add it to PRICES (with a cost) or FREE ` +
+      `(with the reason it's free) in credit-prices.js before using it.`
+    );
+  }
+  return action;
+}
+
+function priceFor(action) { assertKnown(action); return PRICES[action] || 0; }
+function isFree(action) { assertKnown(action); return !PRICES[action]; }
+function label(action) { return LABELS[action] || FREE[action] || action; }
 
 // The shape GET /api/credit-prices returns — everything the UI needs to render
 // badges without hardcoding numbers.
@@ -64,4 +102,4 @@ function publicTable() {
   };
 }
 
-module.exports = { PRICES, LABELS, FREE, FREE_REGENS, REGEN_BATCH_COST, priceFor, isFree, label, publicTable };
+module.exports = { PRICES, LABELS, FREE, FREE_REGENS, REGEN_BATCH_COST, assertKnown, priceFor, isFree, label, publicTable };

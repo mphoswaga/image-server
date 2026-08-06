@@ -16,9 +16,37 @@ const raw = () => (_raw || (_raw = new OpenAI({ maxRetries: 6 })));
 const newAcc = () => ({ calls: 0, promptTokens: 0, completionTokens: 0, images: 0, costUSD: 0, models: {} });
 
 // Run fn (and everything it awaits) with the given user as the usage owner.
-function runWithUser(userId, fn) { return als.run({ userId: userId || null, usage: newAcc() }, fn); }
+function runWithUser(userId, fn) { return als.run({ userId: userId || null, usage: newAcc(), action: null }, fn); }
 const currentUser = () => (als.getStore() && als.getStore().userId) || null;
 const currentAcc = () => (als.getStore() && als.getStore().usage) || null;
+
+// ── Billing declaration ────────────────────────────────────────────────────
+// Catalogue guards only catch a *wrong* action name. The failure that actually
+// costs money is an endpoint that calls the AI having never declared an action
+// at all — exactly what /api/lesson-plan did. Every request that reaches the AI
+// must name the action it is doing, priced or deliberately free, and this is the
+// one place every call passes through.
+function declareAction(action) {
+  const store = als.getStore();
+  if (store) store.action = action;
+  return action;
+}
+const currentAction = () => (als.getStore() && als.getStore().action) || null;
+
+function assertDeclared(kind) {
+  // Outside a request (CLI tools, the offline captioner, tests exercising a
+  // generator directly) there is no wallet context to speak of, so nothing to
+  // enforce.
+  if (!als.getStore()) return;
+  if (currentAction()) return;
+  const msg = `Unbilled AI call: a ${kind} request ran without declaring a credit action. `
+    + `Call reserve(req, '<action>') for a paid feature, or declareFree('<action>') for a `
+    + `deliberately free one (see credit-prices.js).`;
+  // Fail loudly where it is cheap to fix; never break a teacher mid-lesson over
+  // a billing-policy slip in production.
+  if (process.env.NODE_ENV === 'test') throw new Error(msg);
+  console.error(msg);
+}
 
 // A copy of the request's cumulative AI usage so far (null outside a request).
 function usageSnapshot() {
@@ -48,11 +76,14 @@ function accrue(model, cost, pt, ct, img) {
 }
 
 // Thin wrapper exposing only the two surfaces the app uses, with recording.
+// The underlying SDK is built lazily inside each call, not here: constructing it
+// eagerly made client() throw on a missing API key before the billing guard
+// could run, which masked a billing mistake behind a credentials error.
 function client() {
-  const oc = raw();
   return {
     chat: { completions: { create: async (args) => {
-      const res = await oc.chat.completions.create(args);
+      assertDeclared('chat');
+      const res = await raw().chat.completions.create(args);
       try {
         const u = res && res.usage;
         if (u) {
@@ -64,7 +95,8 @@ function client() {
       return res;
     } } },
     images: { generate: async (args) => {
-      const res = await oc.images.generate(args);
+      assertDeclared('image');
+      const res = await raw().images.generate(args);
       try {
         const n = (res && res.data && res.data.length) || (args && args.n) || 1;
         const model = (args && args.model) || 'gpt-image-1';
@@ -76,4 +108,4 @@ function client() {
   };
 }
 
-module.exports = { client, runWithUser, currentUser, usageSnapshot, usageSince };
+module.exports = { client, runWithUser, currentUser, declareAction, currentAction, usageSnapshot, usageSince };
