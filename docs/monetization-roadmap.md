@@ -35,7 +35,7 @@ and the thing that makes a farmed account worth farming.
 
 ---
 
-## Step 1 — Grant credits on email verification, not signup  ⟵ START HERE
+## Step 1 — Grant credits on email verification, not signup  ✅ DONE 2026-08-06
 **Repo:** `website` · **Why first:** the only *unbounded* loss in the system.
 
 `createAccount` validates `email.includes('@')` and nothing else, then
@@ -69,7 +69,7 @@ the exposure instead of halving it.
 **Repo:** `image-agent`. The full pack is five documents (worksheet, exit ticket,
 quiz, homework, differentiated) and currently costs the same as a single deck.
 
-## Step 4 — Raise the trial grant to 30 credits  (requires step 1)
+## Step 4 — Raise the trial grant to 30 credits  ✅ DONE 2026-08-06
 **Repo:** `website` (`DEFAULT_TRIAL_CREDITS`).
 
 Counter-intuitive but this is the *make money* step. At current prices a
@@ -78,7 +78,7 @@ convince a teacher to change how they plan. 30 credits ≈ 6 lessons and costs u
 **under 5 cents**. We are not protecting revenue at 15; we are protecting cents
 while risking the conversion.
 
-## Step 5 — Subscriptions
+## Step 5 — Subscriptions  ⟵ NEXT
 **Repo:** `website`. Credit packs are the wrong model for a weekly-habit tool —
 every lesson becomes a purchase decision, which suppresses the habit we want.
 
