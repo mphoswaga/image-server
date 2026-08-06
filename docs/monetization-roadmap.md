@@ -78,15 +78,27 @@ convince a teacher to change how they plan. 30 credits ≈ 6 lessons and costs u
 **under 5 cents**. We are not protecting revenue at 15; we are protecting cents
 while risking the conversion.
 
-## Step 5 — Subscriptions  ⟵ NEXT
-**Repo:** `website`. Credit packs are the wrong model for a weekly-habit tool —
-every lesson becomes a purchase decision, which suppresses the habit we want.
+## Step 5 — Subscriptions  ✅ ALREADY LIVE (confirmed 2026-08-06)
+**Repo:** `website`. Built and in production for weeks — this was surveyed as
+'next' before confirming it was already running. Working end to end: plan
+catalogue, Lemon Squeezy checkout, signed webhooks, the `subscription_*` state
+machine, mid-period plan changes preserving consumed credits, and spending that
+drains the monthly allowance before purchased credits (correct — the allowance
+expires, the credits don't). Renewal resets the allowance idempotently via a
+`subscription_allowance_periods` ledger keyed on the period, so a replayed
+webhook can't double-grant.
 
-Our own analysis already sizes this: $19/mo · 250 credits · **$15.45
-contribution at 100% usage**. At current prices 250 credits = 50 lessons/month,
-about 2.5 per school day — a well-calibrated allowance. Packs become the top-up.
+**Allowances stay at 250/400/500.** They were sized against the old prices, so
+repricing cut what they buy by ~80% — but that correction was needed. At the old
+prices every realistic workload (even 2 fully-resourced lessons a day) fitted
+inside the cheapest tier, so the tiers were indistinguishable and nobody would
+ever upgrade. Now: 1 lesson/day fully resourced = 180 credits (Teacher $19),
+2/day fully resourced = 360 (Teacher Plus $29). The upgrade path is real.
 
-## Step 6 — Referral programme  (requires step 1)
+Only 3 subscribers existed at the time of the change, all test accounts, so no
+paying teacher was affected.
+
+## Step 6 — Referral programme  ⟵ NEXT (step 1 done, so unblocked)
 **Repo:** `website` (wallet lives there; LessonScope can only report the event).
 
 - **Reward:** 10 credits to the referrer, a few to the referee (two-sided converts better)
