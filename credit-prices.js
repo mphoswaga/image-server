@@ -14,13 +14,20 @@
 // anything else, so a new AI feature cannot reach production quietly costing
 // nothing — being free has to be a decision someone wrote down.
 const PRICES = {
-  'lessonscope.generate_lesson_pack': 3,    // full lesson pack (worksheet + exit ticket + quiz)
+  // Five documents (worksheet, exit ticket, quiz, homework, differentiated) —
+  // a discount on buying them singly, but no longer the same price as one deck.
+  'lessonscope.generate_lesson_pack': 4,
   'lessonscope.generate_slide_deck': 3,     // slide deck only  (POST /api/generate)
   'lessonscope.import_plan_to_slides': 3,   // import a lesson plan → slides (same work as a deck)
   'lessonscope.generate_pack_item': 1,      // worksheet / exit ticket / quiz on its own
   'lessonscope.generate_game': 1,           // classroom game only
-  'lessonscope.generate_diagram': 2,        // AI diagram for a slide
-  'lessonscope.generate_ai_image': 3,       // AI image for a slide
+  // Images and diagrams are the only actions where the AI cost is material: an
+  // image costs ~$0.04, roughly 15x a whole deck. At the old prices they ran at
+  // ~6x markup against 96x for a deck — the thinnest margin in the catalogue and
+  // the reason a farmed account was worth farming. Repricing also improves the
+  // subscription model's conservative cost basis (see docs/monetization-roadmap.md).
+  'lessonscope.generate_diagram': 3,        // AI diagram for a slide
+  'lessonscope.generate_ai_image': 5,       // AI image for a slide
   // A lesson plan is a standalone deliverable — a full structured generation the
   // teacher can download as .docx without ever making slides — so it is priced
   // like one. Was free "during beta" while nothing charged for it, which left it

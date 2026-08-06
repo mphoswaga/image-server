@@ -10,13 +10,13 @@ const prices = require('../credit-prices.js');
 
 // The canonical price list. Update BOTH this and credit-prices.js together.
 const EXPECTED = {
-  'lessonscope.generate_lesson_pack': 3,
+  'lessonscope.generate_lesson_pack': 4,
   'lessonscope.generate_slide_deck': 3,
   'lessonscope.import_plan_to_slides': 3,
   'lessonscope.generate_pack_item': 1,
   'lessonscope.generate_game': 1,
-  'lessonscope.generate_diagram': 2,
-  'lessonscope.generate_ai_image': 3,
+  'lessonscope.generate_diagram': 3,
+  'lessonscope.generate_ai_image': 5,
   'lessonscope.generate_lesson_plan': 2,
 };
 
