@@ -2415,7 +2415,9 @@
         </div>
         <div class="credit-estimator-grid">
           <label><span>Lessons per week</span><input id="lsEstLessons" type="number" min="0" max="80" value="17"></label>
-          <label><span>Per lesson</span><select id="lsEstType"><option value="4">Resource pack - 4 units</option><option value="3">Slides only - 3 units</option><option value="7">Slides + resource pack - 7 units</option><option value="8">Slides + resource pack + game - 8 units</option></select></label>
+          <!-- Options are built from the live price table in buildEstimatorOptions();
+               hardcoding them is how this estimator drifted out of date before. -->
+          <label><span>Per lesson</span><select id="lsEstType"></select></label>
           <label><span>Comment batches per month</span><input id="lsEstBatches" type="number" min="0" max="80" value="0"></label>
           <label><span>Average students</span><input id="lsEstStudents" type="number" min="0" max="120" value="30"></label>
           <label><span>AI images per month</span><input id="lsEstImages" type="number" min="0" max="200" value="0"></label>
@@ -4463,13 +4465,35 @@
         refreshCredits().then(renderCredits).catch(()=>{});
       },1200);
     }
+    // Build the "per lesson" choices from the live price table rather than
+    // hardcoding unit counts. Every bundle is spelled out in terms of the
+    // actions it actually charges, so a price change can never leave this
+    // estimator recommending a plan that won't cover the work.
+    function buildEstimatorOptions(){
+      const sel=$('lsEstType'); if(!sel) return;
+      const P=a=>priceOf('lessonscope.'+a);
+      const bundles=[
+        { label:'Lesson plan + slides', actions:['generate_lesson_plan','generate_slide_deck'] },
+        { label:'Lesson plan + slides + resource pack', actions:['generate_lesson_plan','generate_slide_deck','generate_lesson_pack'] },
+        { label:'Resource pack only', actions:['generate_lesson_pack'] },
+        { label:'Slides only', actions:['generate_slide_deck'] },
+        { label:'Everything, incl. student game', actions:['generate_lesson_plan','generate_slide_deck','generate_lesson_pack','generate_game'] },
+      ].map(b=>({ ...b, cost:b.actions.reduce((n,a)=>n+P(a),0) })).filter(b=>b.cost>0);
+      if(!bundles.length) return;                       // prices not loaded yet
+      const keep=sel.value;
+      sel.innerHTML=bundles.map(b=>`<option value="${b.cost}">${esc(b.label)} — ${b.cost} unit${b.cost===1?'':'s'}</option>`).join('');
+      // Default to the common flow (plan + slides + pack) unless a choice stands.
+      const preferred=String(bundles[1]?.cost ?? bundles[0].cost);
+      sel.value=[...sel.options].some(o=>o.value===keep) ? keep : preferred;
+    }
+
     function updateCreditEstimator(){
       if(!$('lessonCreditEstimator')) return;
       const val=id=>Math.max(0,Number($(id)?.value||0)||0);
       const lessons=Math.ceil(val('lsEstLessons')*4.33);
       const lessonCredits=lessons*val('lsEstType');
       const teacherCredits=val('lsEstBatches')*creditStudentBatchCost(val('lsEstStudents'));
-      const visualCredits=val('lsEstImages')*5+val('lsEstDiagrams')*3;
+      const visualCredits=val('lsEstImages')*priceOf('lessonscope.generate_ai_image')+val('lsEstDiagrams')*priceOf('lessonscope.generate_diagram');
       const total=lessonCredits+teacherCredits+visualCredits;
       const plan=bestSubscriptionPlan(total);
       $('lsEstTotal').textContent=total?`${total} monthly usage units`:'No paid AI usage yet';
@@ -4515,6 +4539,7 @@
       // Keep the primary deck-creation buttons' cost pills current.
       setBtnCost($('acceptBtn'),'lessonscope.generate_slide_deck');
       setBtnCost($('importPlanBtn'),'lessonscope.import_plan_to_slides');
+      buildEstimatorOptions();   // prices are loaded now, so the bundles can be priced
       updateCreditEstimator();
     }
     function renderCredits(){
