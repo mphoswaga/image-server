@@ -24,11 +24,11 @@ Cost to us per action (OpenAI, `usage.js` pricing table):
 | Slide deck | $0.0027 | 3 cr | 96× |
 | Lesson plan | $0.0028 | 2 cr | 62× |
 | Pack item | $0.0018 | 1 cr | 48× |
-| AI diagram | $0.0280 | 2 cr | **6×** |
-| AI image | $0.0400 | 3 cr | **6×** |
+| AI diagram | $0.0280 | 3 cr | 9× |
+| AI image | $0.0400 | 5 cr | 11× |
 
 Credit sale price: $0.078–$0.1125 (packs of 80/$9, 220/$19, 500/$39).
-Signup grant: 15 credits (`DEFAULT_TRIAL_CREDITS`, website repo).
+Signup grant: 30 credits, released on email verification (`DEFAULT_TRIAL_CREDITS`, website repo).
 
 **AI images cost 15× a whole deck.** They are simultaneously the thinnest margin
 and the thing that makes a farmed account worth farming.
