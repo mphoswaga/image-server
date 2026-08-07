@@ -1966,6 +1966,7 @@
     <!-- IMPORT A: teacher already has a lesson plan → slides -->
     <section id="importPlanCard" class="card wide" style="display:none">
       <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Start from your lesson plan</h2>
+      <div data-tpl-mount="mode:havePlan"></div>
       <p class="hint" style="margin-bottom:20px">Upload your existing lesson plan and we'll build matching slides straight away — no need to re-type objectives. Afterwards you can generate a worksheet, quiz, exit ticket and games from it.</p>
       <div class="grid2">
         <div><label for="ipSubject">Subject <span style="color:var(--err)">*</span></label><input id="ipSubject" list="subjectList" placeholder="e.g. Science, Mathematics" maxlength="60" /></div>
@@ -2008,6 +2009,7 @@
     <section id="importSlidesCard" class="card wide" style="display:none">
       <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Start from your slides</h2>
       <p class="hint" style="margin-bottom:20px">Upload your PowerPoint and your slides show up here on the system. From them we can write you a matching lesson plan, or skip straight to worksheets, quizzes and games — all based on what you uploaded.</p>
+      <div data-tpl-mount="mode:haveSlides"></div>
       <div class="grid2">
         <div><label for="isSubject">Subject <span style="color:var(--err)">*</span></label><input id="isSubject" list="subjectList" placeholder="e.g. Science, Mathematics" maxlength="60" /></div>
         <div><label for="isTopic">Topic <span style="color:var(--err)">*</span></label><input id="isTopic" placeholder="e.g. The Water Cycle" maxlength="80" /></div>
@@ -2042,7 +2044,10 @@
       <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Plan a lesson</h2>
       <p class="hint" style="margin-bottom:24px">Type your objectives and we'll write a matching lesson plan — or switch to <b>Import from plan</b> to pull them from your pacing guide.</p>
 
-      <!-- Optional: school lesson-plan template (collapsed so the required steps lead) -->
+      <!-- The school lesson-plan template. It moves to whichever start card is
+           showing (see placeTemplateRow) — every route out of this stage ends in
+           a lesson plan, so every route needs to be able to set the format. -->
+      <div data-tpl-mount="mode:plan"></div>
       <details class="opt-tpl" id="tplDetails">
         <summary><svg class="ic" aria-hidden="true"><use href="#i-book-open"/></svg> <span id="tplSummary">Your school's lesson-plan template <span class="opt-tag">recommended</span></span><span class="disclose-hint" aria-hidden="true"></span></summary>
         <div class="opt-tpl-body">
@@ -2740,6 +2745,7 @@
       if(weekPlannerState && weekPlannerState.present) renderSlotPickers();
     }
     function setStartMode(m){ startMode=m;
+      placeTemplateRow();
       if(weekPlannerState && weekPlannerState.present) setTimeout(renderSlotPickers,0);
       document.querySelectorAll('#modeSelect .mode-card').forEach(c=>c.classList.toggle('active',c.dataset.mode===m));
       show('composer'); setStep(1);
@@ -2841,6 +2847,16 @@
     // they set the lesson up, the review screen when they create slides or
     // download the plan, the pack screen when they arrived with their own
     // slides. One node, moved — so the week they chose survives the move.
+    // The template row belongs to whichever start card is on screen. It used to
+    // live on the objectives composer alone, so a teacher starting from their
+    // own slides or plan could not reach it at all — and requireTemplate() was
+    // flashing a row that was not on their screen.
+    function placeTemplateRow(){
+      const row=$('tplDetails'); if(!row) return;
+      const host=document.querySelector(`[data-tpl-mount="mode:${startMode}"]`);
+      if(host && row.parentElement!==host) host.appendChild(row);
+    }
+
     function placeSlotPicker(){
       const slot=$('wpSlot'); if(!slot) return;
       // On the first stage the visible card depends on how the teacher came in
@@ -2926,8 +2942,10 @@
       if(hasTemplate()) return true;
       if(!templateNudged){
         templateNudged=true;
+        placeTemplateRow();        // bring it to the card they are looking at
         const box=$('tplDetails');
-        if(box){ box.open=true;
+        if(box){ box.open=true; tplToggledByUser=true;
+          box.scrollIntoView({behavior:'smooth',block:'center'});
           box.classList.add('needs-template'); setTimeout(()=>box.classList.remove('needs-template'),2600); }
         toast(`No template yet, so ${what} will use a standard structure. Add your school's format above and rewrite the plan free to match its own fields.`);
       }
@@ -3419,6 +3437,7 @@
     $('wpLessonNum')?.addEventListener('change', ()=>{ if(ctx) ctx.lessonNumber=parseInt($('wpLessonNum').value,10)||undefined; });
 
     $('tplDetails')?.addEventListener('toggle', ()=>{ tplToggledByUser=true; });
+    placeTemplateRow();
 
     $('dlPlanBtn').addEventListener('click', ()=>downloadLessonPlan($('dlPlanBtn')));
     $('packPlanBtn')?.addEventListener('click', ()=>downloadLessonPlan($('packPlanBtn')));
