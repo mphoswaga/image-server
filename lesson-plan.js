@@ -58,7 +58,7 @@ Subject: ${subject}
 Topic: ${pretty}
 Grade level: ${grade}
 Tone: ${tone}
-${modelPromptBlock(model)}
+${modelPromptBlock(model, { structureFromTemplate: !!templateText })}
 ${unitSection}
 ${sourceBlock}
 Learning objectives provided by the teacher (the plan MUST address these):
@@ -68,14 +68,18 @@ ${templateBlock}
 
 Rules:
   - Output one section per template heading, in the same order, each as {heading, content, stageId}.
-  - stageId MUST be one of: ${model.stages.map(stage => stage.id).join(', ')}. Map each school-template heading to the closest teaching-model stage. Do not change the school's heading names or order.
-  - If there is no school template, create clear headings that follow the selected model stages in order.
+  - stageId MUST be one of: ${model.stages.map(stage => stage.id).join(', ')}. This is only a tag saying which part of the method a section serves — mapping a heading to a stage must NEVER change that heading's name, wording or position.
+  - ${templateText
+    ? 'A school template is provided, so it decides the sections outright: output exactly its headings, exactly once each, in its order — no extras, no renames, nothing merged or split, even if the teaching method would suggest a different arrangement.'
+    : 'There is no school template, so create clear headings that follow the selected model stages in order.'}
   - "content": write as short bullet points, ONE idea per line, separated by newlines. Plain text ONLY — no markdown symbols (no **, no #, no backticks) and do NOT manually number the lines. Keep each line concise and classroom-ready.
 - VOCABULARY: whenever you list key words or vocabulary, give each one a short, clear definition on the same line (e.g. "Cooperate: to work together to get something done") — never list a term without explaining what it means.
 - GAMES & ACTIVITIES: whenever the plan includes a game or activity, spell it out so another teacher could run it without guessing — state the goal (how to "win" / what success looks like), the materials needed, and the step-by-step rules of how to play. Never just name an activity.
 - ${depth}
   - Make the plan fully address the objectives above and be appropriate for ${grade}.
-  - The lesson must visibly feel like ${model.label}; do not merely mention the model in a note. The activities, teacher actions, student actions, checks, and closing must follow its sequence.`;
+  - ${templateText
+    ? `The teaching should feel like ${model.label} in HOW each section is written — the teacher actions, student actions, practice and checks. The section headings and their order come from the school's template ONLY; never add, rename or reorder a section to fit the method.`
+    : `The lesson must visibly feel like ${model.label}; do not merely mention the model in a note. The activities, teacher actions, student actions, checks, and closing must follow its sequence.`}`;
 }
 
 function placeholderPlan(objectives, teachingModel) {

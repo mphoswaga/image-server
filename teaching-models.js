@@ -103,9 +103,21 @@ function listTeachingModels() {
   }));
 }
 
-function modelPromptBlock(modelOrId) {
+// `structureFromTemplate` — the school's own template is deciding the sections.
+// A teaching model is a METHOD (how you teach), not a document layout. When a
+// school template exists it owns the headings and their order outright, and the
+// model only shapes how the teaching steps inside those sections are written.
+// Saying "keep this sequence visible in the lesson flow" in that case competes
+// with "reproduce the school's headings exactly" and the plan comes back in the
+// model's shape instead of the school's.
+function modelPromptBlock(modelOrId, { structureFromTemplate = false } = {}) {
   const model = typeof modelOrId === 'string' ? getTeachingModel(modelOrId) : (modelOrId || getTeachingModel());
   const stages = model.stages.map((stage, index) => `${index + 1}. ${stage.label} — ${stage.purpose}`).join('\n');
+  if (structureFromTemplate) {
+    return `Teaching method: ${model.label}\nPurpose: ${model.description}\n`
+      + `This is HOW to teach, not how to lay the document out. Use it to shape the teacher actions, student actions, practice and checks WITHIN the school's sections:\n${stages}\n`
+      + `Do NOT add, rename, reorder or merge sections to match this method. The school's template decides the sections; this method decides what happens inside them.`;
+  }
   return `Teaching model: ${model.label}\nPurpose: ${model.description}\nUse this sequence and keep it visible in the lesson flow:\n${stages}`;
 }
 

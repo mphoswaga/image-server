@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { listTeachingModels, getTeachingModel, normalizeTeachingModelId, artifactPromptBlock, stageSchedule } = require('../teaching-models');
+const { listTeachingModels, getTeachingModel, normalizeTeachingModelId, artifactPromptBlock, modelPromptBlock, stageSchedule } = require('../teaching-models');
 const { generateLessonPlan, planToText } = require('../lesson-plan');
 const { generateContent } = require('../content');
 
@@ -121,4 +121,26 @@ test('every teaching model keeps its plan and deck stages aligned', async () => 
     if (originalKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = originalKey;
   }
+});
+
+// A teaching model is a METHOD, not a document layout. When a school template
+// exists it owns the headings outright; the method only shapes what happens
+// inside those sections. Previously the prompt said both "keep this sequence
+// visible in the lesson flow" and "reproduce the school's headings exactly",
+// and the plan came back in the model's shape instead of the school's.
+test('a school template owns the structure; the method only shapes the teaching', () => {
+  const withTemplate = modelPromptBlock('gradual_release', { structureFromTemplate: true });
+  const alone = modelPromptBlock('gradual_release');
+
+  assert.match(withTemplate, /HOW to teach, not how to lay the document out/);
+  assert.match(withTemplate, /Do NOT add, rename, reorder or merge sections/);
+  assert.doesNotMatch(withTemplate, /keep it visible in the lesson flow/,
+    'must not also demand the model sequence be visible as structure');
+
+  // With no template the model legitimately supplies the shape.
+  assert.match(alone, /Use this sequence and keep it visible in the lesson flow/);
+  assert.doesNotMatch(alone, /Do NOT add, rename, reorder/);
+
+  // Either way the stages themselves are still described.
+  for (const block of [withTemplate, alone]) assert.match(block, /I Do/);
 });
