@@ -1988,6 +1988,7 @@
           <span id="ipFileName">Choose your lesson plan — Word, PDF, or text</span>
         </div>
       </div>
+      <div class="wp-slot-mount" data-wp-mount="mode:havePlan" style="margin-top:18px"></div>
       <button id="importPlanBtn" class="btn primary full" type="button" style="margin-top:18px"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Create slides from my plan</button>
     </section>
 
@@ -2017,6 +2018,7 @@
           <span id="isFileName">Choose your slides — PowerPoint (.pptx)</span>
         </div>
       </div>
+      <div class="wp-slot-mount" data-wp-mount="mode:haveSlides" style="margin-top:18px"></div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:18px">
         <button id="importSlidesPlanBtn" class="btn accent" type="button" style="flex:1;min-width:220px"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Upload &amp; write a lesson plan</button>
         <button id="importSlidesOnlyBtn" class="btn primary" type="button" style="flex:1;min-width:220px"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Upload &amp; go to worksheets</button>
@@ -2044,11 +2046,11 @@
             <!-- Where the next lesson gets filed. Shown rather than guessed:
                  the teacher knows which week they are planning, and a form that
                  holds several lessons a week needs to know which one too. -->
-            <div class="wp-slot-mount" data-wp-mount="composer"></div>
+            <div class="wp-slot-mount" data-wp-mount="mode:plan"></div>
             <div class="wp-slot" id="wpSlot">
               <label for="wpWeekNum">Filing into week</label>
               <input id="wpWeekNum" type="number" min="1" max="60" step="1" />
-              <span id="wpLessonWrap" style="display:none">
+              <span id="wpLessonWrap" style="display:none;align-items:center;gap:8px">
                 <label for="wpLessonNum">lesson</label>
                 <select id="wpLessonNum"></select>
               </span>
@@ -2229,7 +2231,7 @@
       </div>
       <p class="hint">Edit anything below. When it looks right, create the slides — they'll follow this plan.</p>
       <div id="planSections"></div>
-      <div class="wp-slot-mount" data-wp-mount="plan" style="margin-top:16px"></div>
+      <div class="wp-slot-mount" data-wp-mount="stage:plan" style="margin-top:16px"></div>
       <div class="plan-actions" style="margin-top:16px">
         <button id="acceptBtn" class="btn accent"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Accept &amp; create slides</button>
         <button id="dlPlanBtn" class="btn ghost"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Download lesson plan</button>
@@ -2269,7 +2271,7 @@
           <button type="button" class="btn ghost" data-pack="activities"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg> Differentiated</button>
         </div>
         <div id="packPreview"></div>
-        <div class="wp-slot-mount" data-wp-mount="slides" style="margin-top:14px"></div>
+        <div class="wp-slot-mount" data-wp-mount="stage:slides" style="margin-top:14px"></div>
         <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px;display:flex;gap:10px;flex-wrap:wrap">
           <button type="button" id="fullPackBtn" class="btn accent"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Generate full pack <span style="font-size:12px;font-weight:400;opacity:.8">(.zip — worksheet + exit ticket + quiz + homework + differentiated)</span></button>
           <!-- The teacher's own lesson plan, in their school's format — reachable
@@ -2725,6 +2727,7 @@
       if(weekPlannerState && weekPlannerState.present) renderSlotPickers();
     }
     function setStartMode(m){ startMode=m;
+      if(weekPlannerState && weekPlannerState.present) setTimeout(renderSlotPickers,0);
       document.querySelectorAll('#modeSelect .mode-card').forEach(c=>c.classList.toggle('active',c.dataset.mode===m));
       show('composer'); setStep(1);
     }
@@ -2810,8 +2813,11 @@
     // slides. One node, moved — so the week they chose survives the move.
     function placeSlotPicker(){
       const slot=$('wpSlot'); if(!slot) return;
-      const host=document.querySelector(`[data-wp-mount="${currentStage}"]`)
-              || document.querySelector('[data-wp-mount="composer"]');
+      // On the first stage the visible card depends on how the teacher came in
+      // — objectives, their own plan, or their own slides — so the start mode,
+      // not the stage, says which card is on screen.
+      const key=currentStage==='composer'?('mode:'+startMode):('stage:'+currentStage);
+      const host=document.querySelector(`[data-wp-mount="${key}"]`);
       if(host && slot.parentElement!==host) host.appendChild(slot);
     }
 
@@ -2827,7 +2833,7 @@
       }
       const perWeek=Math.max(1,parseInt(st.lessonsPerWeek,10)||1);
       const wrap=$('wpLessonWrap');
-      wrap.style.display=st.shape==='weekly-multi'?'':'none';
+      wrap.style.display=st.shape==='weekly-multi'?'inline-flex':'none';
       if(st.shape==='weekly-multi'){
         const sel=$('wpLessonNum'), keep=sel.value;
         const used=new Set(((st.weeks||[]).find(w=>w.week===parseInt(weekInput.value,10))||{}).lessonsUsed||[]);
