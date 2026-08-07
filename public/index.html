@@ -387,6 +387,11 @@
     .plan-section:hover { box-shadow:var(--sh); }
     .plan-section input.heading { font-weight:700; color:var(--primary); border:none; background:none; padding:2px 0; font-size:15px; }
     .plan-section input.heading:hover { border-color:transparent; }
+    /* Objectives and success criteria come from the pacing guide and are shown
+       for context only — the school's words, not ours to edit here. */
+    .plan-section.locked { background:#f7f9fc; border-color:#dbe4f0; }
+    .plan-section.locked input.heading, .plan-section.locked textarea.content { color:var(--muted); cursor:default; background:transparent; }
+    .plan-note { margin:6px 0 0; font-size:12px; color:var(--muted); font-style:italic; }
     .plan-section input.heading:focus { box-shadow:none; border-bottom:2px solid var(--accent); border-radius:0; background:none; }
     .plan-stage { display:inline-flex; align-items:center; width:max-content; max-width:100%; margin-bottom:8px; padding:4px 9px; border-radius:999px; background:#eef7ff; color:var(--primary-2); font-size:11px; font-weight:800; letter-spacing:.2px; }
     .model-flow { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:-2px 0 14px; color:var(--muted); font-size:11.5px; }
@@ -3158,13 +3163,17 @@
       if(d.model) teachingModelsById[d.model.id]=d.model;
       const model=teachingModelsById[d.teachingModelId||ctx?.teachingModelId||'standard']||teachingModelsById.standard;
       const modelNote=model?`· ${model.label}`:'';
-      const templateNote=d.usedTemplate?` · matching ${d.templateName}`:' · model structure';
+      // When the teacher keeps a week-by-week workbook the sections ARE their
+      // workbook's rows, so say that rather than "model structure".
+      const templateNote=d.usedTemplate?` · matching ${d.templateName}`
+        :(d.weekPlannerFields?' · your week-by-week plan':' · model structure');
       $('planSrc').textContent=modelNote+templateNote;
       $('planSections').innerHTML=d.sections.map((s,i)=>`
-        <div class="plan-section" data-i="${i}" data-stage="${esc(s.stageId||'')}">
+        <div class="plan-section${s.readOnly?' locked':''}" data-i="${i}" data-stage="${esc(s.stageId||'')}"${s.readOnly?' data-readonly="1"':''}>
           ${s.stageId&&model?.stages?.find(stage=>stage.id===s.stageId)?`<span class="plan-stage">${esc(model.stages.find(stage=>stage.id===s.stageId).label)}</span>`:''}
-          <input class="heading" value="${esc(s.heading)}" />
-          <textarea class="content" rows="3">${esc(s.content)}</textarea>
+          <input class="heading" value="${esc(s.heading)}"${s.readOnly?' readonly':''} />
+          <textarea class="content" rows="3"${s.readOnly?' readonly':''}>${esc(s.content)}</textarea>
+          ${s.note?`<p class="plan-note">${esc(s.note)}</p>`:''}
         </div>`).join('');
       planStage.querySelectorAll('textarea.content').forEach(t=>{ t.style.height='auto'; t.style.height=t.scrollHeight+'px'; t.addEventListener('input',()=>{t.style.height='auto';t.style.height=t.scrollHeight+'px';}); });
     }

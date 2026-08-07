@@ -1120,12 +1120,23 @@ app.delete('/api/week-planner', requireAuth, (req, res) => {
 });
 
 // Download the lesson plan filled into the ORIGINAL template (exact layout).
-app.post('/api/lesson-plan/download', requireAuth, (req, res) => {
+app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
   const sections = (req.body && req.body.sections) || [];
   const templateId = req.body && req.body.templateId;
   if (!sections.length) return res.status(400).json({ error: 'No lesson plan to download.' });
   const orig = templateId ? loadOriginalById(req.userId, templateId) : loadOriginal(req.userId);
   if (!orig) {
+    // A teacher on the week-by-week workbook has no single-document template to
+    // fill — their plan IS the workbook. Hand them that instead of telling them
+    // to re-upload something they never had.
+    const plannerBuf = await weekPlanner.plannerBuffer(req.userId).catch(() => null);
+    if (plannerBuf) {
+      const meta = weekPlanner.readPlannerMeta(req.userId) || {};
+      const name = String(meta.filename || 'lesson-plan.xlsx').replace(/[^a-z0-9.\-_ ]/gi, '_');
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+      return res.send(plannerBuf);
+    }
     return res.status(400).json({ error: 'No original template file is stored. Please re-upload your template — the app now keeps the original so it can fill it.' });
   }
   try {
@@ -1352,14 +1363,43 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
     const tpl = (templateId && getTemplate(req.userId, templateId)) || loadTemplate(req.userId);
     const u = unitId ? unit.getUnit(req.userId, unitId) : null;
     const unitBlock = u ? unit.buildUnitBlock(u, lessonIndex) : '';
+
+    // If the teacher keeps a week-by-week workbook, the plan they review must
+    // use THEIR row labels ("Intro (10m)", "SC", "Assessment"), not a generic
+    // structure — otherwise they are editing headings that never appear in the
+    // file they actually keep. Their own template wins if they picked one.
+    let plannerOutline = null;
+    let plannerTemplateText = '';
+    if (!tpl) {
+      try {
+        const wb = await weekPlanner.loadPlanner(req.userId);
+        if (wb) {
+          plannerOutline = weekPlanner.fieldOutline(wb);
+          plannerTemplateText = weekPlanner.templateTextFromWorkbook(wb);
+        }
+      } catch (err) { console.error('Week-planner outline failed:', err.message); }
+    }
+
     const plan = await generateLessonPlan({
       subject: subject.toLowerCase(), topic: topic.toLowerCase(),
-      grade, tone, objectives, templateText: tpl ? tpl.text : '', unitBlock, sourceMaterialText: sourceMaterialText(req.body), teachingModel: teachingModelId, regenerate: !!regenerate,
+      grade, tone, objectives, templateText: tpl ? tpl.text : plannerTemplateText, unitBlock, sourceMaterialText: sourceMaterialText(req.body), teachingModel: teachingModelId, regenerate: !!regenerate,
     });
     await capture(req, reservation, action, `${subject}-${topic}`);
     if (isRewrite) planRegens.set(regenKey, { n: used + 1, at: Date.now() });
+
+    // Show the workbook's fields in their own order, with the objectives and
+    // success criteria the school actually set — read-only, because they are
+    // copied from the pacing guide and must never be reworded.
+    const sections = plannerOutline
+      ? orderSectionsByOutline(plan.sections, plannerOutline, {
+          objectives,
+          successCriteria: Array.isArray(req.body.successCriteria) ? req.body.successCriteria : [],
+        })
+      : plan.sections;
+
     res.json({
-      sections: plan.sections, teachingModelId, model: getTeachingModel(teachingModelId),
+      sections, teachingModelId, model: getTeachingModel(teachingModelId),
+      weekPlannerFields: plannerOutline ? plannerOutline.map(f => f.label) : null,
       usedTemplate: !!tpl, templateName: tpl ? tpl.name : null, templateId: tpl ? tpl.id : null,
       rewritesUsed: isRewrite ? used + 1 : 0, freeRewrites: prices.FREE_REGENS,
     });
@@ -1957,6 +1997,62 @@ app.patch('/api/assignment/:id/grade', requireAuth, (req, res) => {
   assignments.saveSubmission(a.id, sub);
   res.json({ ok: true, submission: sub });
 });
+
+// Rebuild the plan's sections so the teacher reviews their OWN workbook fields,
+// in their own order and under their own labels.
+//
+// Objectives and success criteria come straight from the pacing guide and are
+// marked readOnly: they are the school's words and must not be reworded, so the
+// teacher sees them for context but cannot edit them into something else here.
+// Metadata rows (Subject, Unit, Topic, Period) are omitted — they're already
+// entered above — and Post lesson Reflection is omitted because it is written
+// after teaching.
+const OMIT_FROM_REVIEW = new Set(['subject', 'unit', 'topic', 'periodAndLength', 'postLessonReflection']);
+
+function orderSectionsByOutline(generated, outline, verbatim = {}) {
+  const list = Array.isArray(generated) ? generated : [];
+  const norm = s => String(s || '').replace(/\([^)]*\)/g, ' ').replace(/[^a-z0-9\s]/gi, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+  const taken = new Set();
+  const findGenerated = (label) => {
+    const want = norm(label);
+    let i = list.findIndex((s, idx) => !taken.has(idx) && norm(s.heading) === want);
+    if (i < 0) i = list.findIndex((s, idx) => !taken.has(idx) && (norm(s.heading).includes(want) || want.includes(norm(s.heading))));
+    if (i < 0) return null;
+    taken.add(i);
+    return list[i];
+  };
+
+  const out = [];
+  for (const field of outline) {
+    if (field.key && OMIT_FROM_REVIEW.has(field.key)) continue;
+
+    if (field.key === 'objectives' || field.key === 'successCriteria') {
+      const value = field.key === 'objectives'
+        ? String(verbatim.objectives || '').trim()
+        : (Array.isArray(verbatim.successCriteria) ? verbatim.successCriteria : []).filter(Boolean).join('\n');
+      if (!value) continue;
+      out.push({
+        heading: field.label,
+        content: value,
+        stageId: 'launch',
+        readOnly: true,
+        note: 'Taken from your pacing guide — kept exactly as written.',
+      });
+      continue;
+    }
+
+    const match = findGenerated(field.label);
+    // A row the model wrote nothing for (commonly Phonics on a non-phonics
+    // subject) is left out rather than shown as an empty box to fill.
+    if (!match || !String(match.content || '').trim()) continue;
+    out.push({ heading: field.label, content: match.content, stageId: match.stageId || 'teach' });
+  }
+
+  // Anything the model produced that didn't map to a row still gets shown, so
+  // nothing it wrote is silently thrown away.
+  list.forEach((s, idx) => { if (!taken.has(idx) && String(s.content || '').trim()) out.push(s); });
+  return out.length ? out : list;
+}
 
 // File a generated lesson into the teacher's week-by-week workbook, if they
 // keep one. Returns a small status the UI can show, or null when there's no

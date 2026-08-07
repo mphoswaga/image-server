@@ -420,3 +420,56 @@ module.exports.installPlanner = installPlanner;
 module.exports.recordLesson = recordLesson;
 module.exports.plannerBuffer = plannerBuffer;
 module.exports.deletePlanner = deletePlanner;
+
+// ── Driving the lesson plan from the workbook's own fields ─────────────────
+// The teacher reviews and edits the plan before slides are made. If their
+// workbook has rows called "Intro (10m)", "SC" and "Post lesson Reflection",
+// the review screen must show THOSE, not a generic structure — otherwise they
+// are editing headings that never appear in the file they actually keep.
+//
+// Fields the model must not author:
+//   objectives / successCriteria — the school's words, copied from the pacing
+//     guide (see lesson-plan-domain-rules); shown so the teacher can see them.
+//   postLessonReflection — written after teaching.
+//   subject / unit / topic / period — metadata already known from context.
+const NOT_AUTHORED = new Set([
+  'objectives', 'successCriteria', 'postLessonReflection',
+  'subject', 'unit', 'topic', 'periodAndLength',
+]);
+
+// The workbook's field labels in row order, with what each maps to.
+function fieldOutline(workbook) {
+  const info = detect(workbook);
+  if (!info.isWeekPlanner) return null;
+  const sheets = workbook.worksheets || [];
+  const model = sheets.find(s => weekNumberOf(s.name) !== null && !isTemplateSheet(s.name))
+    || sheets.find(s => isTemplateSheet(s.name));
+  if (!model) return null;
+
+  const byRow = {};
+  for (const [key, row] of Object.entries(mapRowsToFields(model))) byRow[row] = key;
+
+  const out = [];
+  model.eachRow({ includeEmpty: false }, (row, n) => {
+    if (n === TITLE_ROW) return;
+    const label = cellText(row.getCell(1).value).trim();
+    if (!label) return;
+    out.push({ row: n, label, key: byRow[n] || null, authored: byRow[n] ? !NOT_AUTHORED.has(byRow[n]) : true });
+  });
+  return out;
+}
+
+// A template block the lesson-plan prompt can mirror, built from the workbook's
+// own labels so the generated sections come back named exactly as the teacher's
+// rows. Only the rows the model should author are listed.
+function templateTextFromWorkbook(workbook) {
+  const outline = fieldOutline(workbook);
+  if (!outline || !outline.length) return '';
+  const authored = outline.filter(f => f.authored);
+  if (!authored.length) return '';
+  return authored.map(f => `${f.label}:`).join('\n');
+}
+
+module.exports.NOT_AUTHORED = NOT_AUTHORED;
+module.exports.fieldOutline = fieldOutline;
+module.exports.templateTextFromWorkbook = templateTextFromWorkbook;

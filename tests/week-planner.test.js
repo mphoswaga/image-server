@@ -77,3 +77,40 @@ test('week numbers are read from sheet names, and template sheets are not weeks'
   assert.ok(wp.isTemplateSheet('Template (Week 2)'), 'the example sheet is not a real week');
   assert.ok(!wp.isTemplateSheet('Week 2'));
 });
+
+test('the plan is driven by the workbook\'s own field labels', async () => {
+  const wb = new wp.ExcelJS.Workbook();
+  const sheet = wb.addWorksheet('Week 1');
+  sheet.getRow(1).getCell(2).value = 'WEEK 1';
+  ['Subject', 'Topic', 'LO', 'SC', 'Key vocabulary', 'Intro (10m)', 'Activities (50 m)', 'Post lesson Reflection & Next Step']
+    .forEach((label, i) => { sheet.getRow(i + 2).getCell(1).value = label; });
+
+  const outline = wp.fieldOutline(wb);
+  assert.ok(outline, 'a week workbook yields an outline');
+  const byLabel = Object.fromEntries(outline.map(f => [f.label, f]));
+
+  // The model writes the teaching content...
+  assert.equal(byLabel['Intro (10m)'].authored, true);
+  assert.equal(byLabel['Key vocabulary'].authored, true);
+  // ...but never the school's objectives, nor the teacher's own reflection.
+  assert.equal(byLabel['LO'].authored, false, 'objectives are the pacing guide\'s words');
+  assert.equal(byLabel['SC'].authored, false);
+  assert.equal(byLabel['Post lesson Reflection & Next Step'].authored, false, 'written after teaching');
+  assert.equal(byLabel['Subject'].authored, false, 'metadata already known');
+
+  // The prompt gets the teacher's labels, so sections come back named like
+  // their rows rather than a generic structure.
+  const text = wp.templateTextFromWorkbook(wb);
+  assert.match(text, /Intro \(10m\):/);
+  assert.match(text, /Activities \(50 m\):/);
+  assert.doesNotMatch(text, /\bLO:/, 'objectives are not for the model to write');
+  assert.doesNotMatch(text, /Reflection/, 'reflection is not for the model to write');
+});
+
+test('a workbook that is not a week tracker yields no outline', async () => {
+  const wb = new wp.ExcelJS.Workbook();
+  const s = wb.addWorksheet('Sheet1');
+  s.getRow(1).getCell(1).value = 'Just a spreadsheet';
+  assert.equal(wp.fieldOutline(wb), null);
+  assert.equal(wp.templateTextFromWorkbook(wb), '');
+});
