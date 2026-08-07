@@ -200,7 +200,18 @@
     .opt-tpl > summary { list-style:none; cursor:pointer; padding:13px 16px; display:flex; align-items:center; gap:8px; font-size:13.5px; font-weight:600; color:var(--muted); transition:color .15s; }
     .opt-tpl:hover > summary { color:var(--ink); }
     .opt-tpl > summary::-webkit-details-marker { display:none; }
-    .opt-tpl > summary::after { content:'▾'; margin-left:auto; transition:transform .2s, opacity .15s; opacity:.6; }
+    /* The chevron alone reads as decoration, so the summary says Show / Hide
+       in words. Nothing here is dead space the teacher can skip past. */
+    .opt-tpl > summary .disclose-hint { margin-left:auto; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--accent); }
+    .opt-tpl > summary .disclose-hint::before { content:'Show'; }
+    .opt-tpl[open] > summary .disclose-hint::before { content:'Hide'; }
+    .opt-tpl > summary::after { content:'▾'; margin-left:6px; transition:transform .2s, opacity .15s; opacity:.6; }
+    /* Nothing chosen yet: this is a step to take, not a footnote. */
+    .opt-tpl.unset { border-color:var(--accent); background:var(--accent-soft); }
+    .opt-tpl.unset > summary { color:var(--ink); }
+    .opt-tpl.unset .opt-tag { color:#fff; background:var(--accent); }
+    /* Already sorted: quieter, and it says so. */
+    .opt-tpl.settled > summary .ic { color:var(--ok); }
     .opt-tpl:hover > summary::after { opacity:1; }
     .opt-tpl[open] > summary::after { transform:rotate(180deg); }
     .opt-tpl > summary .ic { width:16px; height:16px; color:var(--accent); }
@@ -2033,7 +2044,7 @@
 
       <!-- Optional: school lesson-plan template (collapsed so the required steps lead) -->
       <details class="opt-tpl" id="tplDetails">
-        <summary><svg class="ic" aria-hidden="true"><use href="#i-book-open"/></svg> <span id="tplSummary">Your school's lesson-plan template <span class="opt-tag">recommended</span></span></summary>
+        <summary><svg class="ic" aria-hidden="true"><use href="#i-book-open"/></svg> <span id="tplSummary">Your school's lesson-plan template <span class="opt-tag">recommended</span></span><span class="disclose-hint" aria-hidden="true"></span></summary>
         <div class="opt-tpl-body">
           <p class="hint" style="margin:0 0 10px">Upload your school's format (Word, PowerPoint, PDF, Excel) and every lesson plan comes back in its exact fields — so you never retype one into your real form. Without one we use a standard structure.</p>
           <!-- Shown only when the teacher keeps a week-by-week workbook. -->
@@ -2765,12 +2776,28 @@
     const TYPE_LABEL={detailed:'Detailed',observation:'Observation',weekly:'Weekly',intervention:'Intervention',substitute:'Substitute',custom:'Custom'};
     // Reflect the active template in the collapsed disclosure's summary so a
     // returning teacher can see one is applied without expanding it.
+    // Has the teacher toggled the template row themselves? Once they have, it
+    // stays where they put it — the app opens it for them, it doesn't fight them.
+    let tplToggledByUser=false;
+
     function updateTplSummary(){
-      const sum=$('tplSummary'); if(!sum) return;
+      const sum=$('tplSummary'), box=$('tplDetails'); if(!sum) return;
       const t=templates.find(x=>x.id===selectedTemplateId);
+      const planner=!!(weekPlannerState && weekPlannerState.present);
       sum.innerHTML = t
         ? `Using template: <b>${esc(t.name)}</b> <span class="opt-tag">change</span>`
-        : `Match your school's lesson-plan template <span class="opt-tag">optional</span>`;
+        : planner
+          ? `Using your week-by-week plan${weekPlannerState.filename?`: <b>${esc(weekPlannerState.filename)}</b>`:''} <span class="opt-tag">change</span>`
+          : `Add your school's lesson-plan template <span class="opt-tag">so your plan comes back in your own format</span>`;
+      if(!box) return;
+      const settled=!!(t||planner);
+      box.classList.toggle('unset', !settled);
+      box.classList.toggle('settled', settled);
+      // Open when there is nothing set — that is the one case where a teacher
+      // who never opens this row exports a plan in a format that isn't theirs.
+      // Once something is set it collapses again, so it stops taking up the
+      // top of the page on every later lesson.
+      if(!tplToggledByUser) box.open=!settled;
     }
     function renderTemplates(){
       const list=$('tplList');
@@ -2796,7 +2823,7 @@
     async function loadWeekPlanner(){
       const box=$('weekPlannerBox'); if(!box) return;
       try{ weekPlannerState=await (await fetch('/api/week-planner')).json(); }catch{ weekPlannerState=null; }
-      if(!weekPlannerState || !weekPlannerState.present){ box.style.display='none'; return; }
+      if(!weekPlannerState || !weekPlannerState.present){ box.style.display='none'; updateTplSummary(); return; }
       const weeks=weekPlannerState.weeks||[];
       box.style.display='block';
       $('wpWeeks').textContent=weeks.length?`${weeks.length} week${weeks.length>1?'s':''}`:'no weeks yet';
@@ -2804,6 +2831,7 @@
         ? `${esc(weekPlannerState.filename||'Your plan')} — weeks ${weeks.map(w=>w.week).join(', ')}. Each lesson you generate is filed into its week automatically.`
         : `${esc(weekPlannerState.filename||'Your plan')} — each lesson you generate will be filed into its week automatically.`;
       renderSlotPickers();
+      updateTplSummary();   // the workbook counts as having a format sorted
     }
 
     // Show which week (and, when the school's form holds several lessons a week,
@@ -3389,6 +3417,8 @@
     // re-offer the lesson slots for the week they just named.
     $('wpWeekNum')?.addEventListener('input', (e)=>{ e.target.dataset.auto='0'; $('wpLessonNum').value=''; renderSlotPickers(); });
     $('wpLessonNum')?.addEventListener('change', ()=>{ if(ctx) ctx.lessonNumber=parseInt($('wpLessonNum').value,10)||undefined; });
+
+    $('tplDetails')?.addEventListener('toggle', ()=>{ tplToggledByUser=true; });
 
     $('dlPlanBtn').addEventListener('click', ()=>downloadLessonPlan($('dlPlanBtn')));
     $('packPlanBtn')?.addEventListener('click', ()=>downloadLessonPlan($('packPlanBtn')));
