@@ -236,20 +236,39 @@ function ensureWeekSheet(workbook, weekNumber) {
   return { sheet, created: true };
 }
 
-// The whole operation: put this lesson in the right week, in the next free
-// lesson slot. Returns what happened so the caller can tell the teacher.
+// A lesson already written into this week, identified by its topic. Filing the
+// same lesson twice — downloading the plan, then generating the slides — must
+// update that column rather than consume another slot and leave a duplicate.
+function findLessonColumn(sheet, fieldMap, topic) {
+  const want = String(topic || '').trim().toLowerCase();
+  if (!want || !fieldMap.topic) return null;
+  for (let col = FIRST_LESSON_COL; col <= LAST_LESSON_COL; col++) {
+    const cell = sheet.getRow(fieldMap.topic).getCell(col);
+    // A merged Topic describes the whole week, so it can't identify a lesson.
+    if (cell.isMerged) continue;
+    if (cellText(cell.value).trim().toLowerCase() === want) return col;
+  }
+  return null;
+}
+
+// The whole operation: put this lesson in the right week — updating the column
+// it already occupies if it has been filed before, otherwise taking the next
+// free slot. Returns what happened so the caller can tell the teacher.
 function addLesson(workbook, weekNumber, values) {
   const { sheet, created } = ensureWeekSheet(workbook, weekNumber);
   if (!sheet) return { ok: false, reason: 'no_week_sheet' };
   const fieldMap = mapRowsToFields(sheet);
   if (!Object.keys(fieldMap).length) return { ok: false, reason: 'no_fields' };
-  const col = nextFreeLessonColumn(sheet, fieldMap);
+
+  const existing = findLessonColumn(sheet, fieldMap, values.topic);
+  const col = existing || nextFreeLessonColumn(sheet, fieldMap);
   if (!col) return { ok: false, reason: 'week_full', sheetName: sheet.name };
   const written = writeLesson(sheet, col, values, fieldMap);
   return {
     ok: true,
     sheetName: sheet.name,
     weekCreated: created,
+    updated: !!existing,
     column: String.fromCharCode(64 + col),
     lessonNumber: col - FIRST_LESSON_COL + 1,
     fieldsWritten: written,
@@ -326,7 +345,7 @@ module.exports = {
   FIRST_LESSON_COL, LAST_LESSON_COL, TITLE_ROW,
   weekNumberOf, isTemplateSheet, detect,
   normaliseLabel, fieldRows, mapRowsToFields,
-  cellText, columnHasContent, nextFreeLessonColumn, cloneWeekSheet,
+  cellText, columnHasContent, nextFreeLessonColumn, cloneWeekSheet, findLessonColumn,
 };
 
 // ── Per-teacher storage ────────────────────────────────────────────────────

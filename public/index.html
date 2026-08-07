@@ -3186,7 +3186,10 @@
     $('dlPlanBtn').addEventListener('click', async ()=>{
       const b=$('dlPlanBtn'); b.disabled=true; const orig=b.innerHTML; b.innerHTML='<span class="spinner"></span>Filling your template…';
       try{
-        const r=await fetch('/api/lesson-plan/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...collectPlan(),templateId:planTemplateId})});
+        // Send the lesson's context too: for a week-by-week workbook the plan is
+        // filed into the right week before the file comes back, so the download
+        // contains the plan on screen rather than the empty workbook.
+        const r=await fetch('/api/lesson-plan/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...(ctx||{}),...collectPlan(),templateId:planTemplateId})});
         if(!r.ok){ const d=await r.json().catch(()=>({error:'Download failed'})); throw new Error(d.error); }
         const blob=await r.blob(), url=URL.createObjectURL(blob), a=document.createElement('a');
         const cd=r.headers.get('Content-Disposition')||''; const m=cd.match(/filename="([^"]+)"/);

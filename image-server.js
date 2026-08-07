@@ -1127,15 +1127,27 @@ app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
   const orig = templateId ? loadOriginalById(req.userId, templateId) : loadOriginal(req.userId);
   if (!orig) {
     // A teacher on the week-by-week workbook has no single-document template to
-    // fill — their plan IS the workbook. Hand them that instead of telling them
-    // to re-upload something they never had.
-    const plannerBuf = await weekPlanner.plannerBuffer(req.userId).catch(() => null);
-    if (plannerBuf) {
-      const meta = weekPlanner.readPlannerMeta(req.userId) || {};
-      const name = String(meta.filename || 'lesson-plan.xlsx').replace(/[^a-z0-9.\-_ ]/gi, '_');
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
-      return res.send(plannerBuf);
+    // fill — their plan IS the workbook. File THIS lesson into it first: asking
+    // for the plan at the review stage should hand back a workbook containing
+    // the plan on screen, not the empty file they uploaded. Filing is keyed on
+    // week + topic, so doing it here and again when the slides are generated
+    // updates the same column instead of leaving a duplicate.
+    if (weekPlanner.hasPlanner(req.userId)) {
+      await addLessonToWeekPlanner(req, {
+        subject: clip(req.body.subject, LIMITS.subject),
+        topic: clip(req.body.topic, LIMITS.topic),
+        objectives: clip(req.body.objectives, LIMITS.objectives),
+        lessonPlan: { sections },
+        slides: [],
+      });
+      const plannerBuf = await weekPlanner.plannerBuffer(req.userId).catch(() => null);
+      if (plannerBuf) {
+        const meta = weekPlanner.readPlannerMeta(req.userId) || {};
+        const name = String(meta.filename || 'lesson-plan.xlsx').replace(/[^a-z0-9.\-_ ]/gi, '_');
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+        return res.send(plannerBuf);
+      }
     }
     return res.status(400).json({ error: 'No original template file is stored. Please re-upload your template — the app now keeps the original so it can fill it.' });
   }
@@ -1394,6 +1406,9 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
       ? orderSectionsByOutline(plan.sections, plannerOutline, {
           objectives,
           successCriteria: Array.isArray(req.body.successCriteria) ? req.body.successCriteria : [],
+          subject, topic,
+          unit: clip(req.body.unitName || req.body.unit, 200),
+          period: clip(req.body.period, 120),
         })
       : plan.sections;
 
@@ -2007,7 +2022,12 @@ app.patch('/api/assignment/:id/grade', requireAuth, (req, res) => {
 // Metadata rows (Subject, Unit, Topic, Period) are omitted — they're already
 // entered above — and Post lesson Reflection is omitted because it is written
 // after teaching.
-const OMIT_FROM_REVIEW = new Set(['subject', 'unit', 'topic', 'periodAndLength', 'postLessonReflection']);
+// Nothing is omitted: the review is the teacher's own form, so every row of
+// their workbook appears, in order, under its own label. Rows the app fills
+// from context (Subject, Unit, Topic, Period) are shown so they can see the
+// whole plan; rows only they can write (Post lesson Reflection) appear empty
+// and editable, in case they want to note something before printing.
+const CONTEXT_FIELDS = { subject: 'subject', unit: 'unit', topic: 'topic', periodAndLength: 'period' };
 
 function orderSectionsByOutline(generated, outline, verbatim = {}) {
   const list = Array.isArray(generated) ? generated : [];
@@ -2024,7 +2044,30 @@ function orderSectionsByOutline(generated, outline, verbatim = {}) {
 
   const out = [];
   for (const field of outline) {
-    if (field.key && OMIT_FROM_REVIEW.has(field.key)) continue;
+    // Rows the app already knows — echoed back so the teacher sees the whole
+    // form, read-only because they are set higher up the page.
+    if (field.key && CONTEXT_FIELDS[field.key]) {
+      const value = String(verbatim[CONTEXT_FIELDS[field.key]] || '').trim();
+      out.push({
+        heading: field.label,
+        content: value,
+        stageId: 'launch',
+        readOnly: true,
+        note: value ? 'From the lesson details you entered above.' : 'Set this above and it will fill in here.',
+      });
+      continue;
+    }
+
+    // The teacher's own row — left for them to write after teaching.
+    if (field.key === 'postLessonReflection') {
+      out.push({
+        heading: field.label,
+        content: '',
+        stageId: 'reflect',
+        note: 'Yours to complete after you have taught the lesson — left blank on purpose.',
+      });
+      continue;
+    }
 
     if (field.key === 'objectives' || field.key === 'successCriteria') {
       const value = field.key === 'objectives'
@@ -2043,9 +2086,15 @@ function orderSectionsByOutline(generated, outline, verbatim = {}) {
 
     const match = findGenerated(field.label);
     // A row the model wrote nothing for (commonly Phonics on a non-phonics
-    // subject) is left out rather than shown as an empty box to fill.
-    if (!match || !String(match.content || '').trim()) continue;
-    out.push({ heading: field.label, content: match.content, stageId: match.stageId || 'teach' });
+    // subject) still appears — it is part of the teacher's form, and an empty
+    // box they can fill or ignore is more honest than quietly dropping a row
+    // they expect to see.
+    out.push({
+      heading: field.label,
+      content: (match && match.content) || '',
+      stageId: (match && match.stageId) || 'teach',
+      ...(match ? {} : { note: 'Not generated for this lesson — fill it in if your school needs it.' }),
+    });
   }
 
   // Anything the model produced that didn't map to a row still gets shown, so

@@ -114,3 +114,27 @@ test('a workbook that is not a week tracker yields no outline', async () => {
   assert.equal(wp.fieldOutline(wb), null);
   assert.equal(wp.templateTextFromWorkbook(wb), '');
 });
+
+test('filing the same lesson twice updates its column instead of duplicating', async () => {
+  // The plan is filed when the teacher downloads it at the review stage, and
+  // again when they generate the slides. That must not consume two lesson slots
+  // and leave the week showing the same lesson twice.
+  const wb = new wp.ExcelJS.Workbook();
+  const sheet = wb.addWorksheet('Week 1');
+  sheet.getRow(1).getCell(2).value = 'WEEK 1';
+  ['Subject', 'Topic', 'LO', 'Activities (50 m)'].forEach((l, i) => { sheet.getRow(i + 2).getCell(1).value = l; });
+
+  const lesson = topic => ({ subject: 'ICT', topic, objectives: 'LO1.', activities: 'Do the thing.' });
+
+  const first = wp.addLesson(wb, 1, lesson('Computer Systems'));
+  assert.equal(first.column, 'B');
+  assert.equal(first.updated, false);
+
+  const again = wp.addLesson(wb, 1, lesson('Computer Systems'));
+  assert.equal(again.column, 'B', 'same lesson returns to the same column');
+  assert.equal(again.updated, true);
+
+  const different = wp.addLesson(wb, 1, lesson('Spreadsheets'));
+  assert.equal(different.column, 'C', 'a different lesson still takes a new slot');
+  assert.equal(different.updated, false);
+});
