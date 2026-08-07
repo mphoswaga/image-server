@@ -195,7 +195,7 @@
     /* Optional, collapsed-by-default template block so the required steps lead */
     .opt-tpl { margin:0 0 22px; border:1px dashed var(--border); border-radius:12px; background:#fbfcfe; transition:border-color .15s, background .15s, box-shadow .15s; }
     /* Brief highlight when a lesson plan is asked for and no template exists. */
-    .opt-tpl.needs-template { border-color:var(--err); border-style:solid; box-shadow:0 0 0 4px rgba(192,57,43,.12); }
+    .opt-tpl.needs-template { border-color:var(--accent); border-style:solid; box-shadow:0 0 0 4px rgba(22,163,74,.14); }
     .opt-tpl:hover { border-color:var(--accent); border-style:solid; background:var(--accent-soft); box-shadow:var(--sh-sm); }
     .opt-tpl > summary { list-style:none; cursor:pointer; padding:13px 16px; display:flex; align-items:center; gap:8px; font-size:13.5px; font-weight:600; color:var(--muted); transition:color .15s; }
     .opt-tpl:hover > summary { color:var(--ink); }
@@ -2025,9 +2025,9 @@
 
       <!-- Optional: school lesson-plan template (collapsed so the required steps lead) -->
       <details class="opt-tpl" id="tplDetails">
-        <summary><svg class="ic" aria-hidden="true"><use href="#i-book-open"/></svg> <span id="tplSummary">Your school's lesson-plan template <span class="opt-tag">required for plans</span></span></summary>
+        <summary><svg class="ic" aria-hidden="true"><use href="#i-book-open"/></svg> <span id="tplSummary">Your school's lesson-plan template <span class="opt-tag">recommended</span></span></summary>
         <div class="opt-tpl-body">
-          <p class="hint" style="margin:0 0 10px">Upload your school's format (Word, PowerPoint, PDF, Excel) and every lesson plan comes back in its exact fields — so you never retype one into your real form. Needed before a plan can be written.</p>
+          <p class="hint" style="margin:0 0 10px">Upload your school's format (Word, PowerPoint, PDF, Excel) and every lesson plan comes back in its exact fields — so you never retype one into your real form. Without one we use a standard structure.</p>
           <!-- Shown only when the teacher keeps a week-by-week workbook. -->
           <div id="weekPlannerBox" class="week-planner" style="display:none">
             <div class="wp-head">
@@ -2807,15 +2807,26 @@
     function hasTemplate(){
       return (Array.isArray(templates) && templates.length>0) || !!(weekPlannerState && weekPlannerState.present);
     }
-    // Returns true if we may proceed. Otherwise points the teacher at the
-    // template panel — opened and scrolled to — instead of just refusing.
+    // Nudge, don't block. Refusing to write a plan until a template is uploaded
+    // lands hardest on a teacher's first minute in the app, possibly without
+    // their template to hand — which is exactly where people give up. And the
+    // usual argument for blocking (credits spent on a plan in the wrong shape)
+    // doesn't hold: rewriting a plan is free within fair-use, so adding the
+    // template afterwards and regenerating costs nothing.
+    //
+    // So: say plainly what they'll get and how to get better, show them where
+    // the template goes, and carry on. Once per session, so it never nags.
+    let templateNudged=false;
     function requireTemplate(what){
       if(hasTemplate()) return true;
-      const box=$('tplDetails');
-      if(box){ box.open=true; box.scrollIntoView({behavior:'smooth',block:'center'});
-        box.classList.add('needs-template'); setTimeout(()=>box.classList.remove('needs-template'),2600); }
-      toast(`Add your school's lesson-plan template first — ${what} will then follow its exact fields.`);
-      return false;
+      if(!templateNudged){
+        templateNudged=true;
+        const box=$('tplDetails');
+        if(box){ box.open=true;
+          box.classList.add('needs-template'); setTimeout(()=>box.classList.remove('needs-template'),2600); }
+        toast(`No template yet, so ${what} will use a standard structure. Add your school's format above and rewrite the plan free to match its own fields.`);
+      }
+      return true;
     }
     function confirmDel(btn){
       if(btn._armed){ clearTimeout(btn._t); return true; }
