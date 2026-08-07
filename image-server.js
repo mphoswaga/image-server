@@ -1121,8 +1121,55 @@ app.delete('/api/week-planner', requireAuth, (req, res) => {
 
 // Download the lesson plan filled into the ORIGINAL template (exact layout).
 app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
-  const sections = (req.body && req.body.sections) || [];
+  let sections = (req.body && req.body.sections) || [];
   const templateId = req.body && req.body.templateId;
+
+  // No plan on screen but a deck in hand — which is exactly where a teacher who
+  // started from their slides ends up. The deck already carries the lesson:
+  // titles, the points taught, examples, vocabulary and speaker notes. Write the
+  // plan from that rather than telling them to go back and make one.
+  let generatedFromDeck = null;
+  if (!sections.length && req.body && req.body.deckId) {
+    const deck = decks.get(String(req.body.deckId));
+    if (!deck) return res.status(404).json({ error: 'That lesson has expired — generate it again.' });
+    const source = deckAsPlanSource(deck);
+    if (!source.trim()) return res.status(400).json({ error: 'These slides have no text to build a plan from.' });
+
+    const { reservation, block } = await reserve(req, 'lessonscope.generate_lesson_plan');
+    if (block) return res.status(402).json(block);
+    try {
+      const tpl = (templateId && getTemplate(req.userId, templateId)) || loadTemplate(req.userId);
+      let outline = null, plannerText = '';
+      if (!tpl) {
+        const wb = await weekPlanner.loadPlanner(req.userId).catch(() => null);
+        if (wb) { outline = weekPlanner.fieldOutline(wb); plannerText = weekPlanner.templateTextFromWorkbook(wb); }
+      }
+      const plan = await generateLessonPlan({
+        subject: String(deck.subject || '').toLowerCase(),
+        topic: String(deck.topic || '').toLowerCase(),
+        grade: deck.grade, tone: deck.tone,
+        // The deck IS the lesson, so it grounds the plan. Real objectives are
+        // used when the deck has them; otherwise the slides speak for themselves.
+        objectives: String(deck.objectives || '').trim() || source,
+        templateText: tpl ? tpl.text : plannerText,
+        sourceMaterialText: source,
+        teachingModel: deck.teachingModelId,
+      });
+      await capture(req, reservation, 'lessonscope.generate_lesson_plan', `${deck.subject}-${deck.topic}`);
+      sections = outline
+        ? orderSectionsByOutline(plan.sections, outline, {
+            objectives: String(deck.objectives || '').trim(),
+            subject: deck.subject, topic: deck.topic,
+          })
+        : plan.sections;
+      generatedFromDeck = true;
+    } catch (err) {
+      await release(req, reservation, 'lessonscope.generate_lesson_plan', err.message);
+      console.error('Plan-from-deck failed:', err.message);
+      return res.status(400).json({ error: err.message });
+    }
+  }
+
   if (!sections.length) return res.status(400).json({ error: 'No lesson plan to download.' });
   const orig = templateId ? loadOriginalById(req.userId, templateId) : loadOriginal(req.userId);
   if (!orig) {
@@ -1133,12 +1180,15 @@ app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
     // week + topic, so doing it here and again when the slides are generated
     // updates the same column instead of leaving a duplicate.
     if (weekPlanner.hasPlanner(req.userId)) {
+      // When the plan came from a deck, the deck is the source of truth for what
+      // the lesson is — req.body carries only what the page happened to know.
+      const deck = req.body && req.body.deckId ? decks.get(String(req.body.deckId)) : null;
       await addLessonToWeekPlanner(req, {
-        subject: clip(req.body.subject, LIMITS.subject),
-        topic: clip(req.body.topic, LIMITS.topic),
-        objectives: clip(req.body.objectives, LIMITS.objectives),
+        subject: clip((deck && deck.subject) || req.body.subject, LIMITS.subject),
+        topic: clip((deck && deck.topic) || req.body.topic, LIMITS.topic),
+        objectives: clip((deck && deck.objectives) || req.body.objectives, LIMITS.objectives),
         lessonPlan: { sections },
-        slides: [],
+        slides: (deck && deck.slides) || [],
       });
       const plannerBuf = await weekPlanner.plannerBuffer(req.userId).catch(() => null);
       if (plannerBuf) {
@@ -2012,6 +2062,31 @@ app.patch('/api/assignment/:id/grade', requireAuth, (req, res) => {
   assignments.saveSubmission(a.id, sub);
   res.json({ ok: true, submission: sub });
 });
+
+// Everything a generated (or uploaded) deck already knows about the lesson,
+// laid out for the plan generator. A deck carries the whole lesson — titles,
+// the points taught, worked examples, vocabulary with definitions and the
+// teacher's speaker notes — so a plan written from it needs no second guess at
+// what the lesson is about.
+function deckAsPlanSource(deck) {
+  const parts = [];
+  for (const [i, s] of (deck.slides || []).entries()) {
+    if (!s || s.type === 'video') continue;
+    const bits = [];
+    if (s.title) bits.push(String(s.title));
+    if (Array.isArray(s.bullets) && s.bullets.length) bits.push(s.bullets.filter(Boolean).join('\n'));
+    if (s.example) bits.push(`Example: ${s.example}`);
+    if (Array.isArray(s.vocab) && s.vocab.length) {
+      bits.push(`Vocabulary: ${s.vocab.map(v => (v && v.term ? `${v.term}${v.definition ? ` — ${v.definition}` : ''}` : '')).filter(Boolean).join('; ')}`);
+    }
+    if (s.worked && Array.isArray(s.worked.steps) && s.worked.steps.length) {
+      bits.push(`Worked example: ${s.worked.task || ''} ${s.worked.steps.join(' ')}`.trim());
+    }
+    if (s.speakerNotes) bits.push(`Teacher notes: ${s.speakerNotes}`);
+    if (bits.length) parts.push(`Slide ${i + 1} — ${bits.join('\n')}`);
+  }
+  return parts.join('\n\n');
+}
 
 // Rebuild the plan's sections so the teacher reviews their OWN workbook fields,
 // in their own order and under their own labels.

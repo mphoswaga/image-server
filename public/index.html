@@ -3228,19 +3228,29 @@
     // again beside the lesson pack once the deck exists — teachers end up there
     // and shouldn't have to navigate back to get their own plan.
     async function downloadLessonPlan(btn){
-      if(!requireTemplate('your lesson plan')) return;
+      requireTemplate('your lesson plan');
       const plan=collectPlan();
-      if(!plan.sections.length){ toast('Write a lesson plan first — then it can be filled into your template.'); return; }
-      const orig=btn.innerHTML; btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Filling your template…';
+      // No plan on screen but a deck in hand — the teacher started from slides,
+      // or skipped straight to worksheets. The deck holds the lesson, so the
+      // server writes the plan from it. That is a real generation, so say so
+      // and what it costs rather than springing a charge on them.
+      if(!plan.sections.length){
+        if(!currentDeckId){ toast('Write a lesson plan first — then it can be filled into your template.'); return; }
+        const cost=priceOf('lessonscope.generate_lesson_plan');
+        const price=billingLive()&&cost?` (${cost} credit${cost===1?'':'s'})`:'';
+        if(!confirm(`No lesson plan has been written for this lesson yet.\n\nWrite one from your slides now and download it${price}?`)) return;
+      }
+      const orig=btn.innerHTML; btn.disabled=true;
+      btn.innerHTML=plan.sections.length?'<span class="spinner"></span>Filling your template…':'<span class="spinner"></span>Writing the plan from your slides…';
       try{
-        // Send the lesson's context too: for a week-by-week workbook the plan is
-        // filed into the right week before the file comes back, so the download
-        // contains the plan on screen rather than the empty workbook.
-        const r=await fetch('/api/lesson-plan/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...(ctx||{}),...plan,templateId:planTemplateId})});
+        // Context and deck id both go up: the deck lets the server write a plan
+        // when there isn't one, and file it into the right week.
+        const r=await fetch('/api/lesson-plan/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...(ctx||{}),...plan,deckId:currentDeckId||undefined,templateId:planTemplateId})});
         if(!r.ok){ const d=await r.json().catch(()=>({error:'Download failed'})); throw new Error(d.error); }
         const blob=await r.blob(), url=URL.createObjectURL(blob), a=document.createElement('a');
         const cd=r.headers.get('Content-Disposition')||''; const m=cd.match(/filename="([^"]+)"/);
         a.href=url; a.download=m?m[1]:'lesson-plan'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+        refreshCredits();
         if(weekPlannerState && weekPlannerState.present) loadWeekPlanner();
       }catch(err){ toast(err.message); }
       btn.disabled=false; btn.innerHTML=orig;
