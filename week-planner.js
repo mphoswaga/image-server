@@ -333,6 +333,13 @@ const SECTION_SOURCES = {
   assessment:      [/assessment/i, /check for understanding/i, /^check/i],
   differentiation: [/differentiat/i, /support.*stretch/i, /scaffold/i],
   resources:       [/resource/i, /material/i, /equipment/i],
+  // Both of these are the model's to write. Key vocabulary is normally lifted
+  // off the generated slides, but a deck the teacher imported carries no vocab
+  // list — the words are only in its text — so the plan's own section has to be
+  // able to fill the row. Red Thread reaches us from the pacing guide when
+  // there is one; from slides alone the model works it out.
+  keyVocabulary:   [/key vocab/i, /^vocab/i, /key word/i, /glossary/i],
+  redThread:       [/red thread/i],
 };
 
 function sectionText(sections, patterns) {
@@ -366,13 +373,14 @@ function lessonValuesFrom({
     unit: String(unit || '').trim(),
     topic: String(topic || '').replace(/-/g, ' ').trim(),
     periodAndLength: String(period || '').trim(),
-    redThread: String(redThread || '').trim(),
+    // The pacing guide's Red Thread wins; from slides alone the plan's own is used.
+    redThread: String(redThread || '').trim() || sectionText(planSections, SECTION_SOURCES.redThread),
 
     // Verbatim — see the note above. Do not route these through the model.
     objectives: asLines(objectives).trim(),
     successCriteria: asLines(successCriteria).trim(),
 
-    keyVocabulary: vocabText,
+    keyVocabulary: vocabText || sectionText(planSections, SECTION_SOURCES.keyVocabulary),
     // Prefer the pacing guide's own resource list; fall back to the plan's.
     resources: asLines(guideResources).trim() || sectionText(planSections, SECTION_SOURCES.resources),
 

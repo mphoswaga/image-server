@@ -184,3 +184,31 @@ test('the teacher chooses the lesson slot, and the week reports which are used',
   // An out-of-range slot is ignored rather than writing off the end of the form.
   assert.equal(wp.addLesson(wb, 3, lesson('Rows'), 9).lessonNumber, 1);
 });
+
+test('Red Thread and Key vocabulary are filled from the plan when nothing else supplies them', () => {
+  // A deck the teacher imported carries no vocab list — the words exist only in
+  // its text — and there is no pacing guide to state the Red Thread. Both rows
+  // used to come back blank even though the model had written those sections.
+  const v = wp.lessonValuesFrom({
+    subject: 'ICT', topic: 'using the mouse',
+    planSections: [
+      { heading: 'Red Thread', content: 'Precise input, built on in later ICT units.' },
+      { heading: 'Key vocabulary', content: 'Cursor — the arrow that shows where you point.' },
+    ],
+  });
+  assert.equal(v.redThread, 'Precise input, built on in later ICT units.');
+  assert.equal(v.keyVocabulary, 'Cursor — the arrow that shows where you point.');
+});
+
+test('the pacing guide and the real slide vocabulary still win over the plan\'s prose', () => {
+  const v = wp.lessonValuesFrom({
+    redThread: 'From the pacing guide.',
+    vocab: [{ term: 'Cursor', definition: 'the pointer' }],
+    planSections: [
+      { heading: 'Red Thread', content: 'the model\'s version' },
+      { heading: 'Key vocabulary', content: 'the model\'s version' },
+    ],
+  });
+  assert.equal(v.redThread, 'From the pacing guide.');
+  assert.equal(v.keyVocabulary, 'Cursor — the pointer');
+});

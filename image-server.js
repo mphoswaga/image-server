@@ -22,6 +22,7 @@ const { normalizeVideo, suggestVideos, thumbnailDataUrl } = require('./youtube')
 const { worksheetDocx, exitTicketDocx, quizDocx, homeworkDocx, activitiesDocx } = require('./docgen');
 const unit = require('./unit');
 const weekPlanner = require('./week-planner');
+const { objectivesFromDeck, criteriaFromDeck } = require('./deck-fields');
 const planningSource = require('./planning-source');
 const games = require('./games');
 const assignments = require('./assignments');
@@ -1157,7 +1158,7 @@ app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
         grade: deck.grade, tone: deck.tone,
         // The deck IS the lesson, so it grounds the plan. Real objectives are
         // used when the deck has them; otherwise the slides speak for themselves.
-        objectives: String(deck.objectives || '').trim() || source,
+        objectives: String(deck.objectives || '').trim() || objectivesFromDeck(deck) || source,
         templateText: tpl ? tpl.text : plannerText,
         sourceMaterialText: source,
         teachingModel: deck.teachingModelId,
@@ -1165,7 +1166,8 @@ app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
       await capture(req, reservation, 'lessonscope.generate_lesson_plan', `${deck.subject}-${deck.topic}`);
       sections = outline
         ? orderSectionsByOutline(plan.sections, outline, {
-            objectives: String(deck.objectives || '').trim(),
+            objectives: String(deck.objectives || '').trim() || objectivesFromDeck(deck),
+            successCriteria: criteriaFromDeck(deck).split('\n').filter(Boolean),
             subject: deck.subject, topic: deck.topic,
           })
         : plan.sections;
@@ -1193,7 +1195,10 @@ app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
       await addLessonToWeekPlanner(req, {
         subject: clip((deck && deck.subject) || req.body.subject, LIMITS.subject),
         topic: clip((deck && deck.topic) || req.body.topic, LIMITS.topic),
-        objectives: clip((deck && deck.objectives) || req.body.objectives, LIMITS.objectives),
+        objectives: clip((deck && deck.objectives) || req.body.objectives || (deck && objectivesFromDeck(deck)), LIMITS.objectives),
+        successCriteria: (Array.isArray(req.body.successCriteria) && req.body.successCriteria.length)
+          ? req.body.successCriteria
+          : (deck ? criteriaFromDeck(deck).split('\n').filter(Boolean) : []),
         lessonPlan: { sections },
         slides: (deck && deck.slides) || [],
       });
@@ -2192,7 +2197,7 @@ function orderSectionsByOutline(generated, outline, verbatim = {}) {
 //
 // The week comes from the pacing-guide flow the teacher already uses to choose
 // what they're teaching; without one we don't guess, we just say so.
-async function addLessonToWeekPlanner(req, { subject, topic, objectives, lessonPlan, slides }) {
+async function addLessonToWeekPlanner(req, { subject, topic, objectives, lessonPlan, slides, successCriteria }) {
   try {
     if (!weekPlanner.hasPlanner(req.userId)) return null;
 
@@ -2209,7 +2214,9 @@ async function addLessonToWeekPlanner(req, { subject, topic, objectives, lessonP
       unit: clip(body.unitName || body.unit, 200),
       period: clip(body.period, 120),
       objectives,                                   // verbatim
-      successCriteria: Array.isArray(body.successCriteria) ? body.successCriteria : [],
+      successCriteria: Array.isArray(successCriteria) && successCriteria.length
+        ? successCriteria
+        : (Array.isArray(body.successCriteria) ? body.successCriteria : []),
       guideResources: Array.isArray(body.resources) ? body.resources : [],
       planSections: (lessonPlan && Array.isArray(lessonPlan.sections)) ? lessonPlan.sections : [],
       vocab: (Array.isArray(slides) ? slides : []).flatMap(s => (Array.isArray(s.vocab) ? s.vocab : [])),
