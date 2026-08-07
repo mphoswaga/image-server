@@ -16,7 +16,7 @@ const { fetchUnsplashImage } = require('./fetch-image');
 const { rewriteImageQuery } = require('./query-rewrite');
 const { gradeProfile } = require('./grade');
 const { parseFraction, drawFractionPizza, drawStepsDiagram, drawStepsHorizontal, drawNumberLine, detectLabelledDiagram, drawLabelledDiagram } = require('./concept-diagram');
-const { getPreset } = require('./slide-presets');
+const { getPreset, rhythmFor } = require('./slide-presets');
 
 // Draw an animated concept diagram in the image area when one fits; otherwise
 // place the photo. Returns true if a diagram was drawn.
@@ -380,21 +380,50 @@ function chunkBulletsForSlide(slide, t, layout) {
   return chunks;
 }
 
+
+// Slide types that draw themselves. A title, an objectives card, an activity,
+// a recap, a check and a video each have their own render branch and never
+// read the layout — they are meant to look the same every time, because their
+// job is to be recognisable. Only ordinary teaching slides take a layout, so
+// only they advance the rhythm; otherwise an objectives card between two
+// content slides would silently eat a beat and let the two match.
+const SELF_STYLED_TYPES = new Set(['video', 'title', 'objectives', 'activity', 'recap', 'check']);
+const usesLayout = slide => !SELF_STYLED_TYPES.has((slide && slide.type) || 'content');
+
+// Which layout a slide renders in.
+//
+// Decided HERE, before pagination, because splitting bullets depends on the
+// box the layout gives them — choosing the layout later would fit the text to
+// one box and then draw it in another.
+function layoutForSlide(slide, position, rhythm) {
+  if (!slide) return rhythm[0];
+  // Already decided on an earlier pass — assembleDeck paginates again, and it
+  // must not re-deal the layouts the text was fitted to.
+  if (slide._layout) return slide._layout;
+  if (!usesLayout(slide)) return rhythm[0];
+
+  return rhythm[position % rhythm.length];
+}
+
 function paginateSlides(slides, t, preset) {
-  const layout = (preset && preset.layout) || 'classic';
+  const rhythm = rhythmFor(preset);
+  let position = 0;
   const out = [];
   (slides || []).forEach((slide, sourceIndex) => {
     if (slide.type === 'video') {
-      out.push({ ...slide, _sourceIndex: sourceIndex });
+      out.push({ ...slide, _layout: layoutForSlide(slide, position, rhythm), _sourceIndex: sourceIndex });
       return;
     }
+    const layout = layoutForSlide(slide, position, rhythm);
+    if (usesLayout(slide)) position++;
     const bullets = Array.isArray(slide.bullets) ? slide.bullets : [];
     const canSplit = ['content', 'objectives', 'activity', 'recap', 'check'].includes(slide.type || 'content') && bullets.length > 1;
     if (!canSplit) {
       const { youtube, ...baseSlide } = slide || {};
-      out.push({ ...baseSlide, _sourceIndex: sourceIndex });
+      out.push({ ...baseSlide, _layout: layout, _sourceIndex: sourceIndex });
       if (youtube) {
         out.push({
+          _layout: rhythm[0],
           type: 'video',
           title: youtube.title || 'Lesson video',
           bullets: [],
@@ -421,6 +450,8 @@ function paginateSlides(slides, t, preset) {
         worked: idx === 0 ? slide.worked : null,
         visual: idx === 0 ? slide.visual : null,
         layoutHint: continued || chunks.length > 1 ? 'TEXT_HEAVY' : slide.layoutHint,
+        // Continuations keep their parent's layout: they were split to fit it.
+        _layout: layout,
         _sourceIndex: sourceIndex,
       });
     });
@@ -612,7 +643,8 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
   // Derive theme colours, layout variant, and multicolor flag from the preset.
   const thm = preset || THEME;
   const soft = preset ? { accentSoft: preset.soft, primarySoft: preset.soft } : SOFT;
-  const layout = (preset && preset.layout) || 'classic';
+  // The layout pagination fitted this slide's text to (see layoutForSlide).
+  const layout = slideData._layout || (preset && preset.layout) || 'classic';
   const multicolor = !!(preset && preset.multicolor);
 
   const slide = pptx.addSlide();
@@ -1076,7 +1108,7 @@ function removeLibraryImage(relpath) {
   return true;
 }
 
-module.exports = { buildDeck, rebuildDeck, paginateSlides, alternativeImage, findReusableImage, searchLibrary, getLibraryImage, listLibrary, validateSelection, selectImages, addLibraryImages, libraryStats, getLibraryByTopic, recentLibraryImages, removeLibraryImage };
+module.exports = { buildDeck, rebuildDeck, paginateSlides, layoutForSlide, usesLayout, alternativeImage, findReusableImage, searchLibrary, getLibraryImage, listLibrary, validateSelection, selectImages, addLibraryImages, libraryStats, getLibraryByTopic, recentLibraryImages, removeLibraryImage };
 
 if (require.main === module) {
   main().catch(err => {

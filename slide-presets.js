@@ -73,8 +73,40 @@ const PRESETS = [
 
 const DEFAULT_PRESET_ID = 'ocean-classic';
 
+// ── Layout rhythm ───────────────────────────────────────────────────────────
+// A deck used to render every content slide in one layout, so ten slides in a
+// row were the same shape and the deck read as generated. A rhythm cycles three
+// layouts instead, keeping the preset's own colours and its own opening look.
+//
+// Three, deliberately: enough that consecutive slides differ, few enough that
+// the deck still feels like one deck. The first entry is always the preset's
+// existing layout, so every theme keeps the identity it had.
+//
+// Pairings avoid putting a text-heavy slide somewhere it cannot fit — fullbleed
+// holds very few bullets, so it never follows itself and layoutForSlide vetoes
+// it for long slides (see generate.js).
+const DEFAULT_RHYTHM = {
+  classic:   ['classic', 'twocol', 'splash'],
+  split:     ['split', 'twocol', 'minimal'],
+  banner:    ['banner', 'twocol', 'splash'],
+  minimal:   ['minimal', 'twocol', 'classic'],
+  fullbleed: ['fullbleed', 'classic', 'twocol'],
+  twocol:    ['twocol', 'classic', 'splash'],
+  sidebar:   ['sidebar', 'classic', 'twocol'],
+  splash:    ['splash', 'classic', 'twocol'],
+};
+
+// A preset may name its own rhythm; otherwise it gets the one for its layout.
+// Falling back to a single layout keeps any preset the map doesn't cover
+// rendering exactly as it does today.
+function rhythmFor(preset) {
+  const layout = (preset && preset.layout) || 'classic';
+  const rhythm = (preset && preset.rhythm) || DEFAULT_RHYTHM[layout] || [layout];
+  return rhythm.length ? rhythm : [layout];
+}
+
 function getPreset(id) {
   return PRESETS.find(p => p.id === id) || PRESETS[0];
 }
 
-module.exports = { PRESETS, DEFAULT_PRESET_ID, getPreset };
+module.exports = { PRESETS, DEFAULT_PRESET_ID, DEFAULT_RHYTHM, getPreset, rhythmFor };
