@@ -3227,6 +3227,28 @@
     // Downloading the plan is offered in two places: on the review screen, and
     // again beside the lesson pack once the deck exists — teachers end up there
     // and shouldn't have to navigate back to get their own plan.
+    // Which week of the workbook this lesson belongs to.
+    //
+    // The pacing-guide flow already knows — the teacher picked the week there.
+    // The other routes in (starting from slides, uploading a plan, pasting
+    // objectives) never ask, so the lesson had nowhere to be filed and the
+    // workbook came back untouched. Rather than guess a week and put a lesson
+    // in the wrong one, ask — defaulting to the week after the last one they
+    // have, which is nearly always the answer.
+    function resolveWeekNumber(){
+      if(!(weekPlannerState && weekPlannerState.present)) return undefined;  // no workbook: nothing to file
+      const known=(ctx && ctx.weekNumber) || (planMode==='import' && selWeekNum) || null;
+      if(known) return known;
+      const weeks=(weekPlannerState.weeks||[]).map(w=>w.week).filter(Number.isFinite);
+      const suggested=weeks.length?Math.max(...weeks)+1:1;
+      const answer=prompt('Which week of your lesson plan should this lesson go into?', String(suggested));
+      if(answer===null) return null;                       // cancelled
+      const n=parseInt(answer,10);
+      if(!Number.isFinite(n)||n<1){ toast('Enter a week number, for example 3.'); return null; }
+      if(ctx) ctx.weekNumber=n;                            // remember for this lesson
+      return n;
+    }
+
     async function downloadLessonPlan(btn){
       requireTemplate('your lesson plan');
       const plan=collectPlan();
@@ -3240,12 +3262,16 @@
         const price=billingLive()&&cost?` (${cost} credit${cost===1?'':'s'})`:'';
         if(!confirm(`No lesson plan has been written for this lesson yet.\n\nWrite one from your slides now and download it${price}?`)) return;
       }
+      // A week-by-week workbook needs to know which week to file this under.
+      // undefined means there's no workbook at all; null means they cancelled.
+      const weekNumber=resolveWeekNumber();
+      if(weekNumber===null) return;
       const orig=btn.innerHTML; btn.disabled=true;
       btn.innerHTML=plan.sections.length?'<span class="spinner"></span>Filling your template…':'<span class="spinner"></span>Writing the plan from your slides…';
       try{
         // Context and deck id both go up: the deck lets the server write a plan
         // when there isn't one, and file it into the right week.
-        const r=await fetch('/api/lesson-plan/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...(ctx||{}),...plan,deckId:currentDeckId||undefined,templateId:planTemplateId})});
+        const r=await fetch('/api/lesson-plan/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...(ctx||{}),...plan,weekNumber,deckId:currentDeckId||undefined,templateId:planTemplateId})});
         if(!r.ok){ const d=await r.json().catch(()=>({error:'Download failed'})); throw new Error(d.error); }
         const blob=await r.blob(), url=URL.createObjectURL(blob), a=document.createElement('a');
         const cd=r.headers.get('Content-Disposition')||''; const m=cd.match(/filename="([^"]+)"/);
@@ -3272,6 +3298,10 @@
     const STEPS=['Turning the plan into slides…','Finding & matching images (new topics are fetched + captioned)…','Assembling your deck…'];
     $('acceptBtn').addEventListener('click', async ()=>{
       const lessonPlan=collectPlan();
+      // Ask which week before starting, not after — a lesson generated without
+      // one has nowhere to be filed in the workbook. Cancelling here cancels
+      // the whole thing rather than generating something that can't be filed.
+      if(resolveWeekNumber()===null) return;
       $('acceptBtn').disabled=true; let i=0; statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>'+STEPS[0];
       const tmr=setInterval(()=>{ i=Math.min(i+1,STEPS.length-1); statusEl.innerHTML='<span class="spinner"></span>'+STEPS[i]; },1900);
       try{
