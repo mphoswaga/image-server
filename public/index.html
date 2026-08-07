@@ -396,8 +396,9 @@
     .plan-section input.heading:hover { border-color:transparent; }
     /* Objectives and success criteria come from the pacing guide and are shown
        for context only — the school's words, not ours to edit here. */
-    .plan-section.locked { background:#f7f9fc; border-color:#dbe4f0; }
-    .plan-section.locked input.heading, .plan-section.locked textarea.content { color:var(--muted); cursor:default; background:transparent; }
+    /* A row that maps onto the teacher's own form: its name is fixed, but
+       everything in the box is theirs to change before they export. */
+    .plan-section[data-field]:not([data-field='']) input.heading { color:var(--muted); cursor:default; background:transparent; }
     .plan-note { margin:6px 0 0; font-size:12px; color:var(--muted); font-style:italic; }
     .plan-section input.heading:focus { box-shadow:none; border-bottom:2px solid var(--accent); border-radius:0; background:none; }
     .plan-stage { display:inline-flex; align-items:center; width:max-content; max-width:100%; margin-bottom:8px; padding:4px 9px; border-radius:999px; background:#eef7ff; color:var(--primary-2); font-size:11px; font-weight:800; letter-spacing:.2px; }
@@ -2714,6 +2715,7 @@
     // lesson plan, or upload slides. The mode selector + matching panel only
     // show on the composer stage; the plan/slides stages take over as before.
     let startMode='plan';
+    let deckImported=false;   // these slides came from the teacher, not from us
     let currentStage='composer';
     function show(stage){
       currentStage=stage;
@@ -3253,7 +3255,8 @@
         const r=await fetch('/api/import/slides',{method:'POST',body:fd});
         const d=await r.json(); if(!r.ok) throw new Error(d.error);
         ctx={ subject, topic, grade:$('isGrade').value||'middle school', slideCount:d.slideCount||5,
-          tone:'clear and engaging', focus:'', objectives:'', teachingModelId, lessonPlanText:d.sourceText||'' };
+          tone:'clear and engaging', focus:'', objectives:(d.objectives||'').trim(), successCriteria:d.successCriteria||[],
+          teachingModelId, lessonPlanText:d.sourceText||'' };
         importedPlanText=d.sourceText||''; currentDeckId=d.deckId;
         renderDeck(d);
         // Clear any prior plan so the lesson pack grounds on the slide content
@@ -3262,12 +3265,16 @@
         if(withPlan){
           statusEl.innerHTML='<span class="spinner"></span>Writing a lesson plan from your slides…';
           const pr=await fetch('/api/lesson-plan',{method:'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({subject,topic,grade:$('isGrade').value,teachingModelId,objectives:d.sourceText})});
+            body:JSON.stringify({subject,topic,grade:$('isGrade').value,teachingModelId,
+              objectives:(d.objectives||'').trim()||d.sourceText, successCriteria:d.successCriteria||[]})});
           const pd=await pr.json();
           if(pr.ok){ renderPlan(pd); }
           else { toast(pd.error||'Could not write a plan — showing your slides.'); }
         }
-        statusEl.innerHTML=''; show('slides'); setStep(3); results.scrollIntoView({behavior:'smooth'});
+        deckImported=true;
+        statusEl.innerHTML='';
+        if(withPlan && $('planSections').children.length){ show('plan'); setStep(2); planStage.scrollIntoView({behavior:'smooth'}); }
+        else { show('slides'); setStep(3); results.scrollIntoView({behavior:'smooth'}); }
       }catch(err){ statusEl.className='status err'; statusEl.textContent=err.message; }
       btn.disabled=false; btn.innerHTML=orig;
     }
@@ -3276,6 +3283,11 @@
 
     function renderPlan(d){
       planTemplateId=d.templateId||null;
+      // Their own slides are already made — this screen is for the plan only.
+      $('acceptBtn').innerHTML=deckImported
+        ? ICON('i-layers')+' Save plan &amp; continue'
+        : ICON('i-layers')+' Accept &amp; create slides';
+      $('regenPlanBtn').style.display=deckImported?'none':'';
       if(d.model) teachingModelsById[d.model.id]=d.model;
       const model=teachingModelsById[d.teachingModelId||ctx?.teachingModelId||'standard']||teachingModelsById.standard;
       const modelNote=model?`· ${model.label}`:'';
@@ -3285,17 +3297,22 @@
         :(d.weekPlannerFields?' · your week-by-week plan':' · model structure');
       $('planSrc').textContent=modelNote+templateNote;
       $('planSections').innerHTML=d.sections.map((s,i)=>`
-        <div class="plan-section${s.readOnly?' locked':''}" data-i="${i}" data-stage="${esc(s.stageId||'')}"${s.readOnly?' data-readonly="1"':''}>
+        <div class="plan-section" data-i="${i}" data-stage="${esc(s.stageId||'')}" data-field="${esc(s.fieldKey||'')}">
           ${s.stageId&&model?.stages?.find(stage=>stage.id===s.stageId)?`<span class="plan-stage">${esc(model.stages.find(stage=>stage.id===s.stageId).label)}</span>`:''}
-          <input class="heading" value="${esc(s.heading)}"${s.readOnly?' readonly':''} />
-          <textarea class="content" rows="3"${s.readOnly?' readonly':''}>${esc(s.content)}</textarea>
+          <input class="heading" value="${esc(s.heading)}"${s.fieldKey?' readonly title="This is a row in your own lesson-plan form, so its name is fixed."':''} />
+          <textarea class="content" rows="3" placeholder="Type what should go in this row of your form…">${esc(s.content)}</textarea>
           ${s.note?`<p class="plan-note">${esc(s.note)}</p>`:''}
         </div>`).join('');
       planStage.querySelectorAll('textarea.content').forEach(t=>{ t.style.height='auto'; t.style.height=t.scrollHeight+'px'; t.addEventListener('input',()=>{t.style.height='auto';t.style.height=t.scrollHeight+'px';}); });
     }
     function collectPlan(){
       return { sections:[...planStage.querySelectorAll('.plan-section')].map(el=>({
-        heading:el.querySelector('.heading').value.trim(), content:el.querySelector('.content').value.trim(), stageId:el.dataset.stage||undefined
+        heading:el.querySelector('.heading').value.trim(),
+        content:el.querySelector('.content').value.trim(),
+        stageId:el.dataset.stage||undefined,
+        // Which row of the teacher's own form this box fills, so their edits
+        // land in that row rather than being re-derived from the slides.
+        fieldKey:el.dataset.field||undefined,
       })) };
     }
 
@@ -3377,6 +3394,8 @@
     $('packPlanBtn')?.addEventListener('click', ()=>downloadLessonPlan($('packPlanBtn')));
 
     $('backBtn').addEventListener('click',()=>{ show('composer'); setStep(1); statusEl.innerHTML=''; });
+    // Leaving the slides route means the next plan is ours to build slides from.
+    $('modeSelect')?.addEventListener('click',()=>{ deckImported=false; });
     $('regenPlanBtn').addEventListener('click', async ()=>{
       $('regenPlanBtn').disabled=true; statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>Rewriting the plan…';
       // regenerate:true is what makes this actually re-run — without it the
@@ -3395,6 +3414,7 @@
       // the whole thing rather than generating something that can't be filed.
       if(resolveWeekNumber()===null) return;
       resolveLessonNumber();
+      if(deckImported){ show('slides'); setStep(3); results.scrollIntoView({behavior:'smooth'}); return; }
       $('acceptBtn').disabled=true; let i=0; statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>'+STEPS[0];
       const tmr=setInterval(()=>{ i=Math.min(i+1,STEPS.length-1); statusEl.innerHTML='<span class="spinner"></span>'+STEPS[i]; },1900);
       try{

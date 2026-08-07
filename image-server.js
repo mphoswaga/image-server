@@ -1510,6 +1510,10 @@ app.post('/api/import/lesson-plan', requireAuth, upload.single('file'), async (r
     const groundedPlanText = mergeSourceIntoPlanText(planText, materialText);
     const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives: '', lessonPlanText: groundedPlanText, sourceMaterialText: materialText, sourceImages: materialImages, teachingModelId, skipAssemble: true, presetId: presetId || null });
     const id = crypto.randomUUID();
+    // The deck's own objectives slide, word for word. Storing it here means
+    // every route downstream sees the school's wording instead of nothing.
+    const liftedObjectives = objectivesFromDeck({ slides });
+    const liftedCriteria = criteriaFromDeck({ slides }).split('\n').filter(Boolean);
     decks.set(id, {
       subject: String(subject).toLowerCase(), topic: String(topic).toLowerCase(),
       grade: grade || 'middle school', tone, focus, band: built.band,
@@ -1562,11 +1566,12 @@ app.post('/api/import/slides', requireAuth, upload.single('file'), async (req, r
       subject: String(subject).toLowerCase(), topic: String(topic).toLowerCase(),
       grade: req.body.grade || 'middle school', tone: req.body.tone || 'clear and engaging',
       focus: '', band: null, slides, images, createdAt: Date.now(),
-      objectives: '', lessonPlanText: sourceText, imported: true, presetId: null,
+      objectives: liftedObjectives, lessonPlanText: sourceText, imported: true, presetId: null,
     });
     const filename = `${subject}-${topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
     res.json({
       deckId: id, filename, band: null, slideCount: slides.length, sourceText,
+      objectives: liftedObjectives, successCriteria: liftedCriteria,
       slides: slides.map((s, i) => previewEntry(s, images[i])),
     });
   } catch (err) {
@@ -2139,8 +2144,8 @@ function orderSectionsByOutline(generated, outline, verbatim = {}) {
         heading: field.label,
         content: value,
         stageId: 'launch',
-        readOnly: true,
-        note: value ? 'From the lesson details you entered above.' : 'Set this above and it will fill in here.',
+        fieldKey: field.key,
+        note: value ? 'From the lesson details you entered — edit if this lesson differs.' : 'Not set — type it here if your form needs it.',
       });
       continue;
     }
@@ -2151,7 +2156,8 @@ function orderSectionsByOutline(generated, outline, verbatim = {}) {
         heading: field.label,
         content: '',
         stageId: 'reflect',
-        note: 'Yours to complete after you have taught the lesson — left blank on purpose.',
+        fieldKey: field.key,
+        note: 'Left blank on purpose — yours to complete after you have taught. Anything you type here is kept.',
       });
       continue;
     }
@@ -2160,13 +2166,14 @@ function orderSectionsByOutline(generated, outline, verbatim = {}) {
       const value = field.key === 'objectives'
         ? String(verbatim.objectives || '').trim()
         : (Array.isArray(verbatim.successCriteria) ? verbatim.successCriteria : []).filter(Boolean).join('\n');
-      if (!value) continue;
       out.push({
         heading: field.label,
         content: value,
         stageId: 'launch',
-        readOnly: true,
-        note: 'Taken from your pacing guide — kept exactly as written.',
+        fieldKey: field.key,
+        note: value
+          ? 'Your own words, copied exactly — never rewritten by the app.'
+          : 'Not found in your pacing guide or slides — paste them here and they are kept word for word.',
       });
       continue;
     }
@@ -2180,6 +2187,7 @@ function orderSectionsByOutline(generated, outline, verbatim = {}) {
       heading: field.label,
       content: (match && match.content) || '',
       stageId: (match && match.stageId) || 'teach',
+      fieldKey: field.key || null,
       ...(match ? {} : { note: 'Not generated for this lesson — fill it in if your school needs it.' }),
     });
   }
@@ -2208,7 +2216,7 @@ async function addLessonToWeekPlanner(req, { subject, topic, objectives, lessonP
     // Learning objectives and success criteria are the SCHOOL'S words, taken
     // from the pacing guide. They are passed through untouched — never the
     // generated "Learning Objectives" section, which rephrases for prose.
-    const values = weekPlanner.lessonValuesFrom({
+    const derived = weekPlanner.lessonValuesFrom({
       subject,
       topic,
       unit: clip(body.unitName || body.unit, 200),
@@ -2223,10 +2231,18 @@ async function addLessonToWeekPlanner(req, { subject, topic, objectives, lessonP
       redThread: clip(body.redThread, 500),
     });
 
+    // Anything the teacher edited on the review screen wins over what the app
+    // derived, including a row they deliberately cleared. Rows they never saw
+    // keep their derived value.
+    const edited = weekPlanner.reviewedValues((lessonPlan && lessonPlan.sections) || []);
+    const values = { ...derived, ...edited };
+    // Their own reflection is kept; the model's would still be refused.
+    const allow = new Set(Object.keys(edited).filter(k => weekPlanner.NEVER_WRITE.has(k) && edited[k]));
+
     // Which lesson of the week — the teacher's call when their form holds
     // several; omitted means take the slot this lesson already has, else next free.
     const lessonNumber = parseInt(body.lessonNumber, 10);
-    const result = await weekPlanner.recordLesson(req.userId, week, values, Number.isFinite(lessonNumber) ? lessonNumber : undefined);
+    const result = await weekPlanner.recordLesson(req.userId, week, values, Number.isFinite(lessonNumber) ? lessonNumber : undefined, { allow });
     if (result.ok) {
       audit.log('week_planner.lesson_added', {
         userId: req.userId, week, sheet: result.sheetName, column: result.column, ip: req.ip,

@@ -212,3 +212,35 @@ test('the pacing guide and the real slide vocabulary still win over the plan\'s 
   assert.equal(v.redThread, 'From the pacing guide.');
   assert.equal(v.keyVocabulary, 'Cursor — the pointer');
 });
+
+test('what the teacher edited on the review screen is what gets written', () => {
+  // Every row on the review screen carries the workbook row it fills, so an
+  // edit lands in that row instead of being re-derived from the slides.
+  const edited = wp.reviewedValues([
+    { heading: 'Unit', content: 'Unit 3 — Input devices', fieldKey: 'unit' },
+    { heading: 'LO', content: 'LO1. The words I actually want.', fieldKey: 'objectives' },
+    { heading: 'Intro (10m)', content: '', fieldKey: 'intro' },        // cleared on purpose
+    { heading: 'Something the app invented', content: 'ignore me' },   // no row: not written
+  ]);
+  assert.equal(edited.unit, 'Unit 3 — Input devices');
+  assert.equal(edited.objectives, 'LO1. The words I actually want.');
+  assert.equal(edited.intro, '', 'a row they cleared stays cleared');
+  assert.ok(!('undefined' in edited));
+  assert.equal(Object.keys(edited).length, 3);
+});
+
+test('a reflection the teacher wrote themselves is kept; the app still never writes one', async () => {
+  const wb = new wp.ExcelJS.Workbook();
+  const sheet = wb.addWorksheet('Week 1');
+  ['Subject', 'Topic', 'LO', 'Post lesson Reflection & Next Step']
+    .forEach((l, i) => { sheet.getRow(i + 2).getCell(1).value = l; });
+  const values = { subject: 'ICT', topic: 'Mouse', postLessonReflection: 'They found dragging hard.' };
+
+  // Without the allowlist the row is refused, as it always has been.
+  wp.addLesson(wb, 1, values);
+  assert.equal(wp.cellText(sheet.getRow(5).getCell(2).value), '');
+
+  // With it — meaning the teacher typed it — it is kept.
+  wp.addLesson(wb, 1, values, 1, { allow: new Set(['postLessonReflection']) });
+  assert.equal(wp.cellText(sheet.getRow(5).getCell(2).value), 'They found dragging hard.');
+});

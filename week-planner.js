@@ -237,11 +237,11 @@ function cloneWeekSheet(workbook, modelSheet, newName, weekNumber) {
 // delete it.
 const NEVER_WRITE = new Set(['postLessonReflection']);
 
-function writeLesson(sheet, col, values, fieldMap) {
+function writeLesson(sheet, col, values, fieldMap, { allow } = {}) {
   const map = fieldMap || mapRowsToFields(sheet);
   const written = [];
   for (const [key, rowNumber] of Object.entries(map)) {
-    if (NEVER_WRITE.has(key)) continue;
+    if (NEVER_WRITE.has(key) && !(allow && allow.has(key))) continue;
     const value = values[key];
     if (value == null || String(value).trim() === '') continue;
     const cell = sheet.getRow(rowNumber).getCell(col);
@@ -294,7 +294,7 @@ function findLessonColumn(sheet, fieldMap, topic) {
 // The whole operation: put this lesson in the right week — updating the column
 // it already occupies if it has been filed before, otherwise taking the next
 // free slot. Returns what happened so the caller can tell the teacher.
-function addLesson(workbook, weekNumber, values, lessonNumber) {
+function addLesson(workbook, weekNumber, values, lessonNumber, options) {
   const { sheet, created } = ensureWeekSheet(workbook, weekNumber);
   if (!sheet) return { ok: false, reason: 'no_week_sheet' };
   const fieldMap = mapRowsToFields(sheet);
@@ -311,7 +311,7 @@ function addLesson(workbook, weekNumber, values, lessonNumber) {
   const existing = findLessonColumn(sheet, fieldMap, values.topic);
   const col = chosen || existing || nextFreeLessonColumn(sheet, fieldMap);
   if (!col) return { ok: false, reason: 'week_full', sheetName: sheet.name };
-  const written = writeLesson(sheet, col, values, fieldMap);
+  const written = writeLesson(sheet, col, values, fieldMap, options);
   return {
     ok: true,
     sheetName: sheet.name,
@@ -359,6 +359,16 @@ const asLines = v => (Array.isArray(v) ? v.filter(Boolean).join('\n') : String(v
 // guide — never from the generated "Learning Objectives" section, which may
 // legitimately rephrase for prose. A school's LOs are the school's words, and
 // the teacher's own template says to copy and paste them.
+function reviewedValues(sections) {
+  const out = {};
+  for (const section of (Array.isArray(sections) ? sections : [])) {
+    const key = section && section.fieldKey;
+    if (!key) continue;
+    out[key] = String(section.content == null ? '' : section.content).trim();
+  }
+  return out;
+}
+
 function lessonValuesFrom({
   subject = '', topic = '', unit = '', period = '',
   objectives = '', successCriteria = [], guideResources = [],
@@ -397,7 +407,7 @@ function lessonValuesFrom({
 module.exports = {
   ExcelJS,
   writeLesson, ensureWeekSheet, addLesson, LESSON_CONTENT_FIELDS, NEVER_WRITE,
-  lessonValuesFrom, sectionText, SECTION_SOURCES,
+  lessonValuesFrom, reviewedValues, sectionText, SECTION_SOURCES,
   FIRST_LESSON_COL, LAST_LESSON_COL, TITLE_ROW,
   weekNumberOf, isTemplateSheet, detect,
   normaliseLabel, fieldRows, mapRowsToFields,
@@ -482,12 +492,12 @@ async function refreshMeta(userId) {
   return patch;
 }
 
-async function recordLesson(userId, weekNumber, values, lessonNumber) {
+async function recordLesson(userId, weekNumber, values, lessonNumber, options) {
   const wb = await loadPlanner(userId);
   if (!wb) return { ok: false, reason: 'no_planner' };
   const week = parseInt(weekNumber, 10);
   if (!Number.isFinite(week) || week < 1) return { ok: false, reason: 'no_week' };
-  const result = addLesson(wb, week, values, lessonNumber);
+  const result = addLesson(wb, week, values, lessonNumber, options);
   if (!result.ok) return result;
   await savePlanner(userId, wb);
   return result;
