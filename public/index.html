@@ -194,6 +194,8 @@
 
     /* Optional, collapsed-by-default template block so the required steps lead */
     .opt-tpl { margin:0 0 22px; border:1px dashed var(--border); border-radius:12px; background:#fbfcfe; transition:border-color .15s, background .15s, box-shadow .15s; }
+    /* Brief highlight when a lesson plan is asked for and no template exists. */
+    .opt-tpl.needs-template { border-color:var(--err); border-style:solid; box-shadow:0 0 0 4px rgba(192,57,43,.12); }
     .opt-tpl:hover { border-color:var(--accent); border-style:solid; background:var(--accent-soft); box-shadow:var(--sh-sm); }
     .opt-tpl > summary { list-style:none; cursor:pointer; padding:13px 16px; display:flex; align-items:center; gap:8px; font-size:13.5px; font-weight:600; color:var(--muted); transition:color .15s; }
     .opt-tpl:hover > summary { color:var(--ink); }
@@ -2023,9 +2025,9 @@
 
       <!-- Optional: school lesson-plan template (collapsed so the required steps lead) -->
       <details class="opt-tpl" id="tplDetails">
-        <summary><svg class="ic" aria-hidden="true"><use href="#i-book-open"/></svg> <span id="tplSummary">Match your school's lesson-plan template <span class="opt-tag">optional</span></span></summary>
+        <summary><svg class="ic" aria-hidden="true"><use href="#i-book-open"/></svg> <span id="tplSummary">Your school's lesson-plan template <span class="opt-tag">required for plans</span></span></summary>
         <div class="opt-tpl-body">
-          <p class="hint" style="margin:0 0 10px">Upload your school's format (Word, PowerPoint, PDF, Excel) and the plan follows its exact sections. Without one we use a standard structure.</p>
+          <p class="hint" style="margin:0 0 10px">Upload your school's format (Word, PowerPoint, PDF, Excel) and every lesson plan comes back in its exact fields — so you never retype one into your real form. Needed before a plan can be written.</p>
           <!-- Shown only when the teacher keeps a week-by-week workbook. -->
           <div id="weekPlannerBox" class="week-planner" style="display:none">
             <div class="wp-head">
@@ -2248,8 +2250,12 @@
           <button type="button" class="btn ghost" data-pack="activities"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg> Differentiated</button>
         </div>
         <div id="packPreview"></div>
-        <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
+        <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px;display:flex;gap:10px;flex-wrap:wrap">
           <button type="button" id="fullPackBtn" class="btn accent"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Generate full pack <span style="font-size:12px;font-weight:400;opacity:.8">(.zip — worksheet + exit ticket + quiz + homework + differentiated)</span></button>
+          <!-- The teacher's own lesson plan, in their school's format — reachable
+               here as well as on the review screen, since this is where they end
+               up once the deck is made. -->
+          <button type="button" id="packPlanBtn" class="btn ghost"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Download lesson plan</button>
         </div>
       </section>
 
@@ -2793,6 +2799,24 @@
       try{ const d=await (await fetch('/api/templates')).json(); templates=d.templates||[]; renderTemplates(); }
       catch{ $('tplList').innerHTML='<span class="info none">Templates unavailable.</span>'; }
     }
+
+    // A lesson plan is only useful in the school's own format, so ask for the
+    // template before writing one rather than handing back a generic structure
+    // the teacher then has to retype into their real form. Either kind counts:
+    // a section document or a week-by-week workbook.
+    function hasTemplate(){
+      return (Array.isArray(templates) && templates.length>0) || !!(weekPlannerState && weekPlannerState.present);
+    }
+    // Returns true if we may proceed. Otherwise points the teacher at the
+    // template panel — opened and scrolled to — instead of just refusing.
+    function requireTemplate(what){
+      if(hasTemplate()) return true;
+      const box=$('tplDetails');
+      if(box){ box.open=true; box.scrollIntoView({behavior:'smooth',block:'center'});
+        box.classList.add('needs-template'); setTimeout(()=>box.classList.remove('needs-template'),2600); }
+      toast(`Add your school's lesson-plan template first — ${what} will then follow its exact fields.`);
+      return false;
+    }
     function confirmDel(btn){
       if(btn._armed){ clearTimeout(btn._t); return true; }
       btn._armed=true; btn.classList.add('warn'); btn.setAttribute('aria-label','Click again to delete');
@@ -3041,6 +3065,9 @@
 
     composer.addEventListener('submit', async (e)=>{
       e.preventDefault();
+      // The plan has to come back in the school's format to be usable, so ask
+      // for the template before writing one.
+      if(!requireTemplate('your lesson plan')) return;
       let subject, topic, objectives;
       if(planMode==='import'){
         const src=planningSources.find(s=>s.id===selectedPsrcId);
@@ -3123,6 +3150,9 @@
     // writes a lesson plan from the slide content, "only" jumps to the pack.
     let importedPlanText='';
     async function importSlides(withPlan){
+      // Writing a plan needs the school's format; going straight to worksheets
+      // doesn't, so only the plan path is gated.
+      if(withPlan && !requireTemplate('your lesson plan')) return;
       const subject=$('isSubject').value.trim(), topic=$('isTopic').value.trim(), file=$('isFile').files[0];
       if(!subject){ toast('Enter the subject.'); $('isSubject').focus(); return; }
       if(!topic){ toast('Enter the topic.'); $('isTopic').focus(); return; }
@@ -3183,20 +3213,29 @@
       })) };
     }
 
-    $('dlPlanBtn').addEventListener('click', async ()=>{
-      const b=$('dlPlanBtn'); b.disabled=true; const orig=b.innerHTML; b.innerHTML='<span class="spinner"></span>Filling your template…';
+    // Downloading the plan is offered in two places: on the review screen, and
+    // again beside the lesson pack once the deck exists — teachers end up there
+    // and shouldn't have to navigate back to get their own plan.
+    async function downloadLessonPlan(btn){
+      if(!requireTemplate('your lesson plan')) return;
+      const plan=collectPlan();
+      if(!plan.sections.length){ toast('Write a lesson plan first — then it can be filled into your template.'); return; }
+      const orig=btn.innerHTML; btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Filling your template…';
       try{
         // Send the lesson's context too: for a week-by-week workbook the plan is
         // filed into the right week before the file comes back, so the download
         // contains the plan on screen rather than the empty workbook.
-        const r=await fetch('/api/lesson-plan/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...(ctx||{}),...collectPlan(),templateId:planTemplateId})});
+        const r=await fetch('/api/lesson-plan/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...(ctx||{}),...plan,templateId:planTemplateId})});
         if(!r.ok){ const d=await r.json().catch(()=>({error:'Download failed'})); throw new Error(d.error); }
         const blob=await r.blob(), url=URL.createObjectURL(blob), a=document.createElement('a');
         const cd=r.headers.get('Content-Disposition')||''; const m=cd.match(/filename="([^"]+)"/);
         a.href=url; a.download=m?m[1]:'lesson-plan'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+        if(weekPlannerState && weekPlannerState.present) loadWeekPlanner();
       }catch(err){ toast(err.message); }
-      b.disabled=false; b.innerHTML=orig;
-    });
+      btn.disabled=false; btn.innerHTML=orig;
+    }
+    $('dlPlanBtn').addEventListener('click', ()=>downloadLessonPlan($('dlPlanBtn')));
+    $('packPlanBtn')?.addEventListener('click', ()=>downloadLessonPlan($('packPlanBtn')));
 
     $('backBtn').addEventListener('click',()=>{ show('composer'); setStep(1); statusEl.innerHTML=''; });
     $('regenPlanBtn').addEventListener('click', async ()=>{
