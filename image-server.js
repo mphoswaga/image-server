@@ -1098,9 +1098,16 @@ app.delete('/api/templates/:id', requireAuth, (req, res) => {
 // The teacher's living workbook: a tab per week, a column per lesson. Uploaded
 // through /api/templates (detected there), appended to as lessons are
 // generated, and downloadable at any point with every week to date.
-app.get('/api/week-planner', requireAuth, (req, res) => {
-  const meta = weekPlanner.readPlannerMeta(req.userId);
-  res.json({ present: weekPlanner.hasPlanner(req.userId), ...(meta || {}) });
+app.get('/api/week-planner', requireAuth, async (req, res) => {
+  const present = weekPlanner.hasPlanner(req.userId);
+  let meta = weekPlanner.readPlannerMeta(req.userId);
+  // Workbooks installed before the app recorded how many lessons a week holds
+  // have no shape in their meta. Read it back off the workbook once, so those
+  // teachers get the lesson selector without re-uploading.
+  if (present && meta && !meta.shape) {
+    try { meta = { ...meta, ...(await weekPlanner.refreshMeta(req.userId)) }; } catch {}
+  }
+  res.json({ present, ...(meta || {}) });
 });
 
 app.get('/api/week-planner/download', requireAuth, async (req, res) => {
@@ -2209,7 +2216,10 @@ async function addLessonToWeekPlanner(req, { subject, topic, objectives, lessonP
       redThread: clip(body.redThread, 500),
     });
 
-    const result = await weekPlanner.recordLesson(req.userId, week, values);
+    // Which lesson of the week — the teacher's call when their form holds
+    // several; omitted means take the slot this lesson already has, else next free.
+    const lessonNumber = parseInt(body.lessonNumber, 10);
+    const result = await weekPlanner.recordLesson(req.userId, week, values, Number.isFinite(lessonNumber) ? lessonNumber : undefined);
     if (result.ok) {
       audit.log('week_planner.lesson_added', {
         userId: req.userId, week, sheet: result.sheetName, column: result.column, ip: req.ip,

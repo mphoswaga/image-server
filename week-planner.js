@@ -36,6 +36,30 @@ function isTemplateSheet(name) {
   return /template/i.test(String(name || ''));
 }
 
+// How many lessons a week holds in THIS school's form. Some subjects plan one
+// lesson a week and only ever use column B; others lay five across B..F. The
+// template sheet shows the intended width — it is the blank example, drawn with
+// every column the school expects to fill — so a workbook whose weeks are
+// currently one column wide is still recognised as a five-lesson form.
+function lessonsPerWeek(workbook) {
+  const sheets = workbook.worksheets || [];
+  const model = sheets.find(s => isTemplateSheet(s.name)) || sheets.find(s => weekNumberOf(s.name) !== null);
+  if (!model) return 1;
+  let widest = FIRST_LESSON_COL;
+  model.eachRow({ includeEmpty: false }, (row) => {
+    row.eachCell({ includeEmpty: false }, (_cell, n) => { if (n > widest) widest = n; });
+  });
+  // Merges that span the lesson columns describe the whole week, and their
+  // width is the clearest statement of how many lessons the week holds.
+  for (const range of Object.keys(model._merges || {})) {
+    const m = String(range).match(/[A-Z]+\d+:([A-Z]+)\d+/);
+    if (!m) continue;
+    const end = m[1].split('').reduce((n, c) => n * 26 + (c.charCodeAt(0) - 64), 0);
+    if (end > widest) widest = end;
+  }
+  return Math.max(1, Math.min(LAST_LESSON_COL, widest) - FIRST_LESSON_COL + 1);
+}
+
 // A workbook is a week tracker when it has at least one sheet that names a week
 // AND a column of field labels. The label check keeps an ordinary spreadsheet
 // that merely mentions "week" from being mistaken for one.
@@ -46,11 +70,27 @@ function detect(workbook) {
   const model = weekSheets.find(s => !isTemplateSheet(s.name)) || weekSheets[0];
   const labels = fieldRows(model);
   if (Object.keys(labels).length < 4) return { isWeekPlanner: false };
+  const perWeek = lessonsPerWeek(workbook);
   return {
     isWeekPlanner: true,
+    // How the school's plan is shaped, so the app knows what to ask for:
+    //   'weekly'          one lesson per week — only the week is needed
+    //   'weekly-multi'    several lessons a week — week AND which lesson
+    // (A single-document template isn't a workbook at all and never gets here.)
+    shape: perWeek > 1 ? 'weekly-multi' : 'weekly',
+    lessonsPerWeek: perWeek,
     templateSheet: sheets.find(s => isTemplateSheet(s.name))?.name || null,
     weeks: sheets.filter(s => weekNumberOf(s.name) !== null && !isTemplateSheet(s.name))
-      .map(s => ({ name: s.name, week: weekNumberOf(s.name) }))
+      .map((s) => {
+        const map = mapRowsToFields(s);
+        // Which lesson slots in this week already hold a lesson, so the app can
+        // offer the next free one rather than making the teacher work it out.
+        const used = [];
+        for (let col = FIRST_LESSON_COL; col <= FIRST_LESSON_COL + perWeek - 1; col++) {
+          if (columnHasContent(s, col, map)) used.push(col - FIRST_LESSON_COL + 1);
+        }
+        return { name: s.name, week: weekNumberOf(s.name), lessonsUsed: used };
+      })
       .sort((a, b) => a.week - b.week),
     fields: Object.keys(labels),
   };
@@ -254,14 +294,22 @@ function findLessonColumn(sheet, fieldMap, topic) {
 // The whole operation: put this lesson in the right week — updating the column
 // it already occupies if it has been filed before, otherwise taking the next
 // free slot. Returns what happened so the caller can tell the teacher.
-function addLesson(workbook, weekNumber, values) {
+function addLesson(workbook, weekNumber, values, lessonNumber) {
   const { sheet, created } = ensureWeekSheet(workbook, weekNumber);
   if (!sheet) return { ok: false, reason: 'no_week_sheet' };
   const fieldMap = mapRowsToFields(sheet);
   if (!Object.keys(fieldMap).length) return { ok: false, reason: 'no_fields' };
 
+  // The teacher can say which lesson of the week this is — a week may hold
+  // several, and "the third lesson" is theirs to decide, not ours to infer.
+  // Failing that: the slot this lesson already occupies, else the next free one.
+  const perWeek = lessonsPerWeek(workbook);
+  const asked = parseInt(lessonNumber, 10);
+  const chosen = Number.isFinite(asked) && asked >= 1 && asked <= perWeek
+    ? FIRST_LESSON_COL + asked - 1
+    : null;
   const existing = findLessonColumn(sheet, fieldMap, values.topic);
-  const col = existing || nextFreeLessonColumn(sheet, fieldMap);
+  const col = chosen || existing || nextFreeLessonColumn(sheet, fieldMap);
   if (!col) return { ok: false, reason: 'week_full', sheetName: sheet.name };
   const written = writeLesson(sheet, col, values, fieldMap);
   return {
@@ -345,7 +393,7 @@ module.exports = {
   FIRST_LESSON_COL, LAST_LESSON_COL, TITLE_ROW,
   weekNumberOf, isTemplateSheet, detect,
   normaliseLabel, fieldRows, mapRowsToFields,
-  cellText, columnHasContent, nextFreeLessonColumn, cloneWeekSheet, findLessonColumn,
+  cellText, columnHasContent, nextFreeLessonColumn, cloneWeekSheet, findLessonColumn, lessonsPerWeek,
 };
 
 // ── Per-teacher storage ────────────────────────────────────────────────────
@@ -385,6 +433,8 @@ async function savePlanner(userId, workbook, meta = {}) {
     ...(readPlannerMeta(userId) || {}),
     ...meta,
     updatedAt: new Date().toISOString(),
+    shape: info.shape,
+    lessonsPerWeek: info.lessonsPerWeek,
     weeks: info.weeks || [],
     fieldCount: (info.fields || []).length,
   });
@@ -404,6 +454,8 @@ async function installPlanner(userId, buffer, filename) {
     uploadedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     templateSheet: info.templateSheet,
+    shape: info.shape,
+    lessonsPerWeek: info.lessonsPerWeek,
     weeks: info.weeks,
     fieldCount: (info.fields || []).length,
   });
@@ -411,12 +463,23 @@ async function installPlanner(userId, buffer, filename) {
 }
 
 // Append one generated lesson to the teacher's planner.
-async function recordLesson(userId, weekNumber, values) {
+// Re-read the shape off a stored workbook and write it into the meta.
+async function refreshMeta(userId) {
+  const wb = await loadPlanner(userId);
+  if (!wb) return {};
+  const info = detect(wb);
+  if (!info.isWeekPlanner) return {};
+  const patch = { shape: info.shape, lessonsPerWeek: info.lessonsPerWeek, weeks: info.weeks };
+  writeJsonAtomic(plannerMeta(userId), { ...(readPlannerMeta(userId) || {}), ...patch });
+  return patch;
+}
+
+async function recordLesson(userId, weekNumber, values, lessonNumber) {
   const wb = await loadPlanner(userId);
   if (!wb) return { ok: false, reason: 'no_planner' };
   const week = parseInt(weekNumber, 10);
   if (!Number.isFinite(week) || week < 1) return { ok: false, reason: 'no_week' };
-  const result = addLesson(wb, week, values);
+  const result = addLesson(wb, week, values, lessonNumber);
   if (!result.ok) return result;
   await savePlanner(userId, wb);
   return result;
@@ -436,6 +499,7 @@ module.exports.readPlannerMeta = readPlannerMeta;
 module.exports.loadPlanner = loadPlanner;
 module.exports.savePlanner = savePlanner;
 module.exports.installPlanner = installPlanner;
+module.exports.refreshMeta = refreshMeta;
 module.exports.recordLesson = recordLesson;
 module.exports.plannerBuffer = plannerBuffer;
 module.exports.deletePlanner = deletePlanner;

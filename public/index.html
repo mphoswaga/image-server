@@ -209,6 +209,10 @@
     .week-planner { border:1px solid var(--accent); background:var(--accent-soft); border-radius:12px; padding:12px 14px; margin:0 0 12px; }
     .week-planner .wp-head { display:flex; align-items:center; gap:8px; font-size:14px; color:var(--ink); }
     .week-planner .wp-head .ic { width:16px; height:16px; color:var(--ok); }
+    .week-planner .wp-slot { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0 0 10px; font-size:13px; }
+    .week-planner .wp-slot label { font-weight:600; color:var(--ink); }
+    .week-planner .wp-slot input, .week-planner .wp-slot select { width:auto; min-width:70px; font-size:13px; padding:6px 9px; }
+    .week-planner .wp-slot .info { color:var(--muted); font-size:12.5px; }
     .week-planner .wp-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     .materials-box { margin:14px 0 2px; border:1px dashed var(--border); border-radius:12px; background:#fbfcfe; overflow:hidden; transition:border-color .15s, background .15s, box-shadow .15s; }
     .materials-box:hover { border-color:var(--accent); border-style:solid; background:var(--accent-soft); box-shadow:var(--sh-sm); }
@@ -2036,6 +2040,18 @@
               <span class="opt-tag" id="wpWeeks"></span>
             </div>
             <p class="hint" id="wpHint" style="margin:6px 0 10px"></p>
+            <!-- Where the next lesson gets filed. Shown rather than guessed:
+                 the teacher knows which week they are planning, and a form that
+                 holds several lessons a week needs to know which one too. -->
+            <div class="wp-slot">
+              <label for="wpWeekNum">Filing into week</label>
+              <input id="wpWeekNum" type="number" min="1" max="60" step="1" />
+              <span id="wpLessonWrap" style="display:none">
+                <label for="wpLessonNum">lesson</label>
+                <select id="wpLessonNum"></select>
+              </span>
+              <span class="info" id="wpSlotNote"></span>
+            </div>
             <div class="wp-actions">
               <button type="button" class="act" id="wpDownloadBtn"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Download the full plan</button>
               <button type="button" class="btn ghost" id="wpRemoveBtn" style="font-size:12px;padding:7px 12px">Remove</button>
@@ -2775,6 +2791,40 @@
       $('wpHint').textContent=weeks.length
         ? `${esc(weekPlannerState.filename||'Your plan')} — weeks ${weeks.map(w=>w.week).join(', ')}. Each lesson you generate is filed into its week automatically.`
         : `${esc(weekPlannerState.filename||'Your plan')} — each lesson you generate will be filed into its week automatically.`;
+      renderSlotPickers();
+    }
+
+    // Show which week (and, when the school's form holds several lessons a week,
+    // which lesson) the next generated plan will be filed into. Pre-filled with
+    // the sensible choice so the common case is a glance, not a decision.
+    function renderSlotPickers(){
+      const weekInput=$('wpWeekNum'); if(!weekInput) return;
+      const st=weekPlannerState||{};
+      const weeks=(st.weeks||[]).map(w=>w.week).filter(Number.isFinite);
+      const known=(ctx&&ctx.weekNumber)||(planMode==='import'&&selWeekNum)||null;
+      if(!weekInput.value||weekInput.dataset.auto!=='0'){
+        weekInput.value=String(known||(weeks.length?Math.max(...weeks):1));
+        weekInput.dataset.auto='1';
+      }
+      const perWeek=Math.max(1,parseInt(st.lessonsPerWeek,10)||1);
+      const wrap=$('wpLessonWrap');
+      wrap.style.display=st.shape==='weekly-multi'?'':'none';
+      if(st.shape==='weekly-multi'){
+        const sel=$('wpLessonNum'), keep=sel.value;
+        const used=new Set(((st.weeks||[]).find(w=>w.week===parseInt(weekInput.value,10))||{}).lessonsUsed||[]);
+        sel.innerHTML=Array.from({length:perWeek},(_,i)=>{
+          const n=i+1;
+          return `<option value="${n}"${String(n)===keep?' selected':''}>${n}${used.has(n)?' (used)':''}</option>`;
+        }).join('');
+        if(!keep){
+          // Default to the first slot this week hasn't filled yet.
+          let free=1; while(free<perWeek&&used.has(free)) free++;
+          sel.value=String(free);
+        }
+      }
+      $('wpSlotNote').textContent=st.shape==='weekly-multi'
+        ? `Your form holds ${perWeek} lessons a week.`
+        : 'Your form holds one lesson a week.';
     }
     $('wpDownloadBtn')?.addEventListener('click',async()=>{
       const btn=$('wpDownloadBtn'), orig=btn.innerHTML;
@@ -3235,17 +3285,28 @@
     // workbook came back untouched. Rather than guess a week and put a lesson
     // in the wrong one, ask — defaulting to the week after the last one they
     // have, which is nearly always the answer.
+    // Where this lesson gets filed. Read off the visible pickers so nothing is
+    // decided behind the teacher's back; undefined means there's no workbook at
+    // all and null means the slot is unusable, which cancels the action.
     function resolveWeekNumber(){
-      if(!(weekPlannerState && weekPlannerState.present)) return undefined;  // no workbook: nothing to file
-      const known=(ctx && ctx.weekNumber) || (planMode==='import' && selWeekNum) || null;
-      if(known) return known;
-      const weeks=(weekPlannerState.weeks||[]).map(w=>w.week).filter(Number.isFinite);
-      const suggested=weeks.length?Math.max(...weeks)+1:1;
-      const answer=prompt('Which week of your lesson plan should this lesson go into?', String(suggested));
-      if(answer===null) return null;                       // cancelled
-      const n=parseInt(answer,10);
-      if(!Number.isFinite(n)||n<1){ toast('Enter a week number, for example 3.'); return null; }
-      if(ctx) ctx.weekNumber=n;                            // remember for this lesson
+      if(!(weekPlannerState && weekPlannerState.present)) return undefined;
+      renderSlotPickers();
+      const n=parseInt(($('wpWeekNum')||{}).value,10);
+      if(!Number.isFinite(n)||n<1){
+        toast('Choose which week this lesson belongs to, in "Your week-by-week plan".');
+        $('weekPlannerBox')?.scrollIntoView({behavior:'smooth',block:'center'});
+        return null;
+      }
+      if(ctx) ctx.weekNumber=n;
+      return n;
+    }
+
+    function resolveLessonNumber(){
+      if(!(weekPlannerState && weekPlannerState.present)) return undefined;
+      if(weekPlannerState.shape!=='weekly-multi') return undefined;  // one lesson a week: no choice to make
+      const n=parseInt(($('wpLessonNum')||{}).value,10);
+      if(!Number.isFinite(n)||n<1) return undefined;
+      if(ctx) ctx.lessonNumber=n;
       return n;
     }
 
@@ -3266,12 +3327,13 @@
       // undefined means there's no workbook at all; null means they cancelled.
       const weekNumber=resolveWeekNumber();
       if(weekNumber===null) return;
+      const lessonNumber=resolveLessonNumber();
       const orig=btn.innerHTML; btn.disabled=true;
       btn.innerHTML=plan.sections.length?'<span class="spinner"></span>Filling your template…':'<span class="spinner"></span>Writing the plan from your slides…';
       try{
         // Context and deck id both go up: the deck lets the server write a plan
         // when there isn't one, and file it into the right week.
-        const r=await fetch('/api/lesson-plan/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...(ctx||{}),...plan,weekNumber,deckId:currentDeckId||undefined,templateId:planTemplateId})});
+        const r=await fetch('/api/lesson-plan/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...(ctx||{}),...plan,weekNumber,lessonNumber,deckId:currentDeckId||undefined,templateId:planTemplateId})});
         if(!r.ok){ const d=await r.json().catch(()=>({error:'Download failed'})); throw new Error(d.error); }
         const blob=await r.blob(), url=URL.createObjectURL(blob), a=document.createElement('a');
         const cd=r.headers.get('Content-Disposition')||''; const m=cd.match(/filename="([^"]+)"/);
@@ -3281,6 +3343,11 @@
       }catch(err){ toast(err.message); }
       btn.disabled=false; btn.innerHTML=orig;
     }
+    // A teacher who picks the week themselves owns it — stop pre-filling, and
+    // re-offer the lesson slots for the week they just named.
+    $('wpWeekNum')?.addEventListener('input', (e)=>{ e.target.dataset.auto='0'; $('wpLessonNum').value=''; renderSlotPickers(); });
+    $('wpLessonNum')?.addEventListener('change', ()=>{ if(ctx) ctx.lessonNumber=parseInt($('wpLessonNum').value,10)||undefined; });
+
     $('dlPlanBtn').addEventListener('click', ()=>downloadLessonPlan($('dlPlanBtn')));
     $('packPlanBtn')?.addEventListener('click', ()=>downloadLessonPlan($('packPlanBtn')));
 
@@ -3302,6 +3369,7 @@
       // one has nowhere to be filed in the workbook. Cancelling here cancels
       // the whole thing rather than generating something that can't be filed.
       if(resolveWeekNumber()===null) return;
+      resolveLessonNumber();
       $('acceptBtn').disabled=true; let i=0; statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>'+STEPS[0];
       const tmr=setInterval(()=>{ i=Math.min(i+1,STEPS.length-1); statusEl.innerHTML='<span class="spinner"></span>'+STEPS[i]; },1900);
       try{

@@ -138,3 +138,49 @@ test('filing the same lesson twice updates its column instead of duplicating', a
   assert.equal(different.column, 'C', 'a different lesson still takes a new slot');
   assert.equal(different.updated, false);
 });
+
+test('the school\'s form declares how many lessons a week holds', async () => {
+  // Two shapes have to work: a subject planning one lesson a week (only column
+  // B), and one laying five across B..F. The blank "Template" sheet is drawn at
+  // the school's intended width, so a term whose weeks are only one column wide
+  // so far is still a five-lesson form.
+  const one = new wp.ExcelJS.Workbook();
+  const w1 = one.addWorksheet('Week 1');
+  ['Subject', 'Topic', 'LO', 'Activities'].forEach((l, i) => { w1.getRow(i + 2).getCell(1).value = l; });
+  w1.getRow(2).getCell(2).value = 'ICT';
+  assert.equal(wp.lessonsPerWeek(one), 1);
+  assert.equal(wp.detect(one).shape, 'weekly');
+
+  const many = new wp.ExcelJS.Workbook();
+  const tpl = many.addWorksheet('Template (Week 2)');
+  ['Subject', 'Topic', 'LO', 'Activities'].forEach((l, i) => { tpl.getRow(i + 2).getCell(1).value = l; });
+  tpl.getRow(2).getCell(6).value = '';                 // the form reaches column F
+  tpl.getRow(2).getCell(6).value = 'Lesson 5';
+  const w = many.addWorksheet('Week 1');
+  ['Subject', 'Topic', 'LO', 'Activities'].forEach((l, i) => { w.getRow(i + 2).getCell(1).value = l; });
+  assert.equal(wp.lessonsPerWeek(many), 5);
+  const info = wp.detect(many);
+  assert.equal(info.shape, 'weekly-multi', 'the app must ask which lesson, not guess');
+  assert.equal(info.weeks.length, 1, 'the blank template sheet is not a week of teaching');
+});
+
+test('the teacher chooses the lesson slot, and the week reports which are used', async () => {
+  const wb = new wp.ExcelJS.Workbook();
+  const tpl = wb.addWorksheet('Template (Week 2)');
+  ['Subject', 'Topic', 'LO', 'Activities'].forEach((l, i) => { tpl.getRow(i + 2).getCell(1).value = l; });
+  tpl.getRow(2).getCell(6).value = 'x';
+  const sheet = wb.addWorksheet('Week 3');
+  ['Subject', 'Topic', 'LO', 'Activities'].forEach((l, i) => { sheet.getRow(i + 2).getCell(1).value = l; });
+
+  const lesson = topic => ({ subject: 'ICT', topic, objectives: 'LO1.', activities: 'Do it.' });
+
+  // Asked for lesson 4 — it goes to lesson 4, not to the next free slot.
+  const put = wp.addLesson(wb, 3, lesson('Cells'), 4);
+  assert.equal(put.lessonNumber, 4);
+  assert.equal(put.column, 'E');
+
+  assert.deepEqual(wp.detect(wb).weeks[0].lessonsUsed, [4], 'the UI can offer the free slots');
+
+  // An out-of-range slot is ignored rather than writing off the end of the form.
+  assert.equal(wp.addLesson(wb, 3, lesson('Rows'), 9).lessonNumber, 1);
+});
