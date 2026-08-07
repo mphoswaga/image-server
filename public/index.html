@@ -209,10 +209,11 @@
     .week-planner { border:1px solid var(--accent); background:var(--accent-soft); border-radius:12px; padding:12px 14px; margin:0 0 12px; }
     .week-planner .wp-head { display:flex; align-items:center; gap:8px; font-size:14px; color:var(--ink); }
     .week-planner .wp-head .ic { width:16px; height:16px; color:var(--ok); }
-    .week-planner .wp-slot { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0 0 10px; font-size:13px; }
-    .week-planner .wp-slot label { font-weight:600; color:var(--ink); }
-    .week-planner .wp-slot input, .week-planner .wp-slot select { width:auto; min-width:70px; font-size:13px; padding:6px 9px; }
-    .week-planner .wp-slot .info { color:var(--muted); font-size:12.5px; }
+    .wp-slot { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0 0 10px; font-size:13px;
+      background:var(--surface-2, #f4f7fa); border:1px solid var(--border); border-radius:10px; padding:10px 12px; }
+    .wp-slot label { font-weight:600; color:var(--ink); }
+    .wp-slot input, .wp-slot select { width:auto; min-width:70px; font-size:13px; padding:6px 9px; }
+    .wp-slot .info { color:var(--muted); font-size:12.5px; }
     .week-planner .wp-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     .materials-box { margin:14px 0 2px; border:1px dashed var(--border); border-radius:12px; background:#fbfcfe; overflow:hidden; transition:border-color .15s, background .15s, box-shadow .15s; }
     .materials-box:hover { border-color:var(--accent); border-style:solid; background:var(--accent-soft); box-shadow:var(--sh-sm); }
@@ -2043,7 +2044,8 @@
             <!-- Where the next lesson gets filed. Shown rather than guessed:
                  the teacher knows which week they are planning, and a form that
                  holds several lessons a week needs to know which one too. -->
-            <div class="wp-slot">
+            <div class="wp-slot-mount" data-wp-mount="composer"></div>
+            <div class="wp-slot" id="wpSlot">
               <label for="wpWeekNum">Filing into week</label>
               <input id="wpWeekNum" type="number" min="1" max="60" step="1" />
               <span id="wpLessonWrap" style="display:none">
@@ -2227,6 +2229,7 @@
       </div>
       <p class="hint">Edit anything below. When it looks right, create the slides — they'll follow this plan.</p>
       <div id="planSections"></div>
+      <div class="wp-slot-mount" data-wp-mount="plan" style="margin-top:16px"></div>
       <div class="plan-actions" style="margin-top:16px">
         <button id="acceptBtn" class="btn accent"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Accept &amp; create slides</button>
         <button id="dlPlanBtn" class="btn ghost"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Download lesson plan</button>
@@ -2266,6 +2269,7 @@
           <button type="button" class="btn ghost" data-pack="activities"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg> Differentiated</button>
         </div>
         <div id="packPreview"></div>
+        <div class="wp-slot-mount" data-wp-mount="slides" style="margin-top:14px"></div>
         <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px;display:flex;gap:10px;flex-wrap:wrap">
           <button type="button" id="fullPackBtn" class="btn accent"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Generate full pack <span style="font-size:12px;font-weight:400;opacity:.8">(.zip — worksheet + exit ticket + quiz + homework + differentiated)</span></button>
           <!-- The teacher's own lesson plan, in their school's format — reachable
@@ -2708,7 +2712,9 @@
     // lesson plan, or upload slides. The mode selector + matching panel only
     // show on the composer stage; the plan/slides stages take over as before.
     let startMode='plan';
+    let currentStage='composer';
     function show(stage){
+      currentStage=stage;
       const atComposer=stage==='composer';
       composer.style.display=(atComposer && startMode==='plan')?'block':'none';
       $('modeSelect').style.display=atComposer?'grid':'none';
@@ -2716,6 +2722,7 @@
       $('importSlidesCard').style.display=(atComposer && startMode==='haveSlides')?'block':'none';
       planStage.style.display=stage==='plan'?'block':'none';
       results.style.display=stage==='slides'?'block':'none';
+      if(weekPlannerState && weekPlannerState.present) renderSlotPickers();
     }
     function setStartMode(m){ startMode=m;
       document.querySelectorAll('#modeSelect .mode-card').forEach(c=>c.classList.toggle('active',c.dataset.mode===m));
@@ -2797,8 +2804,20 @@
     // Show which week (and, when the school's form holds several lessons a week,
     // which lesson) the next generated plan will be filed into. Pre-filled with
     // the sensible choice so the common case is a glance, not a decision.
+    // The picker lives wherever the teacher currently is: the composer while
+    // they set the lesson up, the review screen when they create slides or
+    // download the plan, the pack screen when they arrived with their own
+    // slides. One node, moved — so the week they chose survives the move.
+    function placeSlotPicker(){
+      const slot=$('wpSlot'); if(!slot) return;
+      const host=document.querySelector(`[data-wp-mount="${currentStage}"]`)
+              || document.querySelector('[data-wp-mount="composer"]');
+      if(host && slot.parentElement!==host) host.appendChild(slot);
+    }
+
     function renderSlotPickers(){
       const weekInput=$('wpWeekNum'); if(!weekInput) return;
+      placeSlotPicker();
       const st=weekPlannerState||{};
       const weeks=(st.weeks||[]).map(w=>w.week).filter(Number.isFinite);
       const known=(ctx&&ctx.weekNumber)||(planMode==='import'&&selWeekNum)||null;
