@@ -1765,6 +1765,384 @@
       .lesson-flow-actions .btn { width:100%; }
       .lesson-flow-actions .flow-back { order:2; }
     }
+
+    /* ── LessonScope workspace system ─────────────────────────────────────
+       A stable application shell: persistent navigation, quiet surfaces and
+       one hierarchy shared by planning, review and delivery tools. */
+    :root {
+      --ink:#172033;
+      --muted:#667085;
+      --primary:#173b67;
+      --primary-2:#245fa6;
+      --accent:#159a63;
+      --accent-2:#35c987;
+      --spark:#f06449;
+      --bg:#f4f6f8;
+      --card:#ffffff;
+      --border:#dfe4e8;
+      --border-soft:#edf0f2;
+      --r:8px;
+      --r-lg:8px;
+      --sh-sm:0 1px 2px rgba(16,24,40,.05);
+      --sh:0 1px 2px rgba(16,24,40,.04),0 8px 24px rgba(16,24,40,.06);
+      --sh-lg:0 16px 44px rgba(16,24,40,.13);
+    }
+    body {
+      background:#f4f6f8;
+      background-attachment:scroll;
+    }
+    .nav {
+      min-height:64px;
+      height:64px;
+      padding:0 22px;
+      background:rgba(255,255,255,.98);
+      border-bottom:1px solid var(--border);
+      box-shadow:none;
+      backdrop-filter:saturate(140%) blur(12px);
+    }
+    .nav .ls-icon { width:34px; height:34px; }
+    .nav .ls-wm { font-size:20px; }
+    .nav .avatar,
+    .app-sw-btn,
+    .nav .logout { box-shadow:none; }
+    .nav .logout {
+      border-radius:8px;
+      min-height:36px;
+      background:#fff;
+      border-color:var(--border);
+    }
+    .app-sw-btn { border-radius:8px; border-color:var(--border); }
+
+    .app-menu {
+      top:80px;
+      bottom:20px;
+      left:20px;
+      width:216px;
+      max-height:none;
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      padding:12px;
+      overflow-y:auto;
+      overflow-x:hidden;
+      border:1px solid var(--border);
+      border-radius:8px;
+      background:#fff;
+      box-shadow:var(--sh-sm);
+      transition:none;
+      z-index:900;
+    }
+    .app-menu:hover,
+    .app-menu:focus-within {
+      width:216px;
+      max-height:none;
+      border-radius:8px;
+      box-shadow:var(--sh-sm);
+      transform:none;
+    }
+    .app-menu-title,
+    .app-menu:hover .app-menu-title,
+    .app-menu:focus-within .app-menu-title {
+      justify-content:flex-start;
+      padding:7px 9px 11px;
+      color:#7a8494;
+      font-size:10.5px;
+      letter-spacing:.1em;
+      border-bottom:1px solid var(--border-soft);
+      margin-bottom:5px;
+    }
+    .app-menu-title .ic { width:16px; height:16px; }
+    .app-menu-label,
+    .app-menu:hover .app-menu-label,
+    .app-menu:focus-within .app-menu-label {
+      opacity:1;
+      transform:none;
+    }
+    .app-menu:not(:hover):not(:focus-within) .nav-link,
+    .app-menu .nav-link {
+      width:100%;
+      min-height:42px;
+      height:auto;
+      padding:9px 10px;
+      border-width:1px;
+      border-radius:7px;
+      opacity:1;
+      pointer-events:auto;
+      overflow:visible;
+      color:#475467;
+      font-size:13.5px;
+      font-weight:700;
+      transform:none;
+    }
+    .app-menu .nav-link:hover,
+    .app-menu .nav-link:focus-visible {
+      color:var(--primary);
+      background:#f5f8fb;
+      border-color:#e4eaf0;
+      transform:none;
+    }
+    .app-menu .nav-link.nav-active {
+      color:#0d6f49;
+      background:#edf9f3;
+      border-color:#cdebdc;
+      box-shadow:inset 3px 0 0 var(--accent);
+      transform:none;
+    }
+    .app-menu .nav-link .ic { width:18px; height:18px; flex-basis:18px; }
+    .app-menu #guideBtnNav { margin-top:auto; color:#475467 !important; }
+
+    .wrap {
+      max-width:none;
+      width:auto;
+      margin-left:248px;
+      padding:28px clamp(22px,3vw,44px) 80px 20px;
+    }
+    .hero,
+    .steps,
+    .mode-select,
+    .card.wide,
+    #results,
+    #status { width:min(100%,1180px); max-width:1180px; }
+    .hero {
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto;
+      align-items:end;
+      gap:12px 24px;
+      margin:0 auto 10px;
+      padding:0;
+    }
+    .hero .suite-kicker { grid-column:1; margin-bottom:0; }
+    .hero .greeting {
+      grid-column:1;
+      font-size:clamp(30px,3.2vw,42px);
+      line-height:1.08;
+      max-width:none;
+    }
+    .hero .tagline {
+      grid-column:1;
+      margin:4px 0 0;
+      font-size:15px;
+      line-height:1.55;
+      max-width:720px;
+    }
+    .hero > div:last-child {
+      grid-column:2;
+      grid-row:1 / span 3;
+      align-self:center;
+      margin-top:0 !important;
+    }
+    .hero #guideHeroBtn { border-radius:8px !important; }
+    .steps {
+      justify-content:flex-start;
+      margin:0 auto 16px;
+      padding:10px 0;
+      border-bottom:1px solid var(--border);
+    }
+    .steps .st { font-size:12px; }
+    .steps .st .ic { padding:4px; }
+
+    .card,
+    .mode-card,
+    .game-card,
+    .gb-stat,
+    .credit-pack,
+    .credit-estimator,
+    .topup,
+    .bar,
+    .plan-section,
+    .slide,
+    details.panel-add,
+    .roster-row,
+    .roster-verify {
+      border-radius:8px;
+      border-color:var(--border);
+      box-shadow:var(--sh-sm);
+      background:#fff;
+    }
+    .card {
+      padding:clamp(22px,2.5vw,30px);
+      background:#fff;
+    }
+    .mode-select { gap:12px; margin:0 auto 18px; }
+    .mode-card {
+      min-height:154px;
+      padding:18px;
+      transition:border-color .16s,box-shadow .16s,background .16s;
+    }
+    .mode-card:hover {
+      transform:none;
+      border-color:#9cb5cc;
+      background:#fbfcfd;
+      box-shadow:var(--sh);
+    }
+    .mode-card.active {
+      border-color:#74cba2;
+      background:#f8fdfb;
+      box-shadow:inset 0 0 0 1px #74cba2;
+    }
+    .mode-card .ic {
+      width:22px;
+      height:22px;
+      padding:8px;
+      border-radius:7px;
+      background:#eaf8f1;
+      color:var(--accent);
+    }
+    .mode-card:hover .ic { transform:none; background:#dff4e9; color:#0d7e50; }
+    .mode-card .mc-title { margin-top:8px; font-size:15px; }
+    .mode-card .mc-sub { font-size:12.5px; line-height:1.5; }
+
+    .lesson-flow-head { margin-bottom:18px; }
+    .lesson-flow-head h2 { font-size:clamp(24px,2.5vw,30px); }
+    .lesson-flow-progress { margin-bottom:24px; }
+    .lesson-flow-step { padding-top:8px; }
+    .lesson-flow-page .ps-step + .ps-step { margin-top:20px; padding-top:20px; }
+    .lesson-flow-actions {
+      position:sticky;
+      bottom:0;
+      z-index:5;
+      margin:24px -30px -30px;
+      padding:14px 30px;
+      background:rgba(255,255,255,.96);
+      border-top:1px solid var(--border);
+      backdrop-filter:blur(10px);
+    }
+    select,input,textarea { border-radius:7px; border-color:#d9dee4; }
+    .ps-tabs { border-radius:8px; }
+    .ps-tab { border-radius:6px; }
+    .btn { border-radius:7px; min-height:42px; }
+    .btn.primary,
+    .btn-progress { background:#173b67; box-shadow:0 5px 14px rgba(23,59,103,.16); }
+    .btn.primary:hover:not(:disabled) { background:#102f55; box-shadow:0 7px 18px rgba(23,59,103,.22); }
+    .btn.accent { background:#159a63; box-shadow:0 5px 14px rgba(21,154,99,.16); }
+    .btn.accent:hover:not(:disabled) { background:#0e7d4e; box-shadow:0 7px 18px rgba(21,154,99,.22); }
+    .btn.ghost { border-color:var(--border); }
+
+    #planStage { padding-bottom:22px; }
+    #planStage > .bar { border-bottom:1px solid var(--border); border-radius:0; padding-bottom:14px !important; }
+    .plan-section { padding:15px; margin-bottom:10px; box-shadow:none; }
+    .plan-section:hover { border-color:#c6d1da; box-shadow:none; }
+    .plan-section textarea.content { border-radius:7px; background:#fbfcfd; }
+    .plan-actions {
+      position:sticky;
+      bottom:12px;
+      z-index:20;
+      padding:10px;
+      border:1px solid var(--border);
+      border-radius:8px;
+      background:rgba(255,255,255,.96);
+      box-shadow:var(--sh);
+      backdrop-filter:blur(10px);
+    }
+    .sequence-flow { border-radius:8px; background:#f3faf7; border-color:#cfe7db; }
+    .sequence-tab { border-radius:6px; }
+
+    #results > .bar {
+      position:sticky;
+      top:76px;
+      z-index:30;
+      padding:12px 14px;
+      border-color:var(--border);
+      background:rgba(255,255,255,.97);
+      box-shadow:var(--sh);
+      backdrop-filter:blur(12px);
+    }
+    .result-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; }
+    .result-actions .btn { flex:0 1 auto; min-width:0; font-size:13px; padding:10px 12px; }
+    .deck { gap:16px; }
+    .slide { box-shadow:var(--sh-sm); }
+    .slide:hover { transform:none; box-shadow:var(--sh); }
+    .slide .thumb { background:#edf0f3; }
+    .slide .body { padding:16px; }
+    .slide .card-actions { border-top-color:var(--border-soft); }
+    #packSection,#gameSection { box-shadow:var(--sh-sm); }
+
+    .page-hd { align-items:center; }
+    .page-hd h2 { font-size:22px; }
+    .phd-icon { width:40px; height:40px; border-radius:7px; box-shadow:none; }
+    .section-divider { margin-top:24px; }
+    .section-divider h3 { color:#344054; }
+    .toast,.modal-card,.wizard-card,.app-sw-menu { border-radius:8px; }
+
+    @media (max-width:1100px) {
+      .wrap { margin-left:0; padding:24px 18px 100px; }
+      .app-menu {
+        top:auto;
+        right:12px;
+        bottom:12px;
+        left:12px;
+        width:auto;
+        max-height:none;
+        display:flex;
+        flex-direction:row;
+        gap:5px;
+        padding:7px;
+        overflow-x:auto;
+        overflow-y:hidden;
+        border-radius:8px;
+        box-shadow:0 12px 32px rgba(16,24,40,.15);
+        z-index:1000;
+      }
+      .app-menu:hover,.app-menu:focus-within { width:auto; border-radius:8px; }
+      .app-menu-title { display:none; }
+      .app-menu:not(:hover):not(:focus-within) .nav-link,
+      .app-menu .nav-link { width:auto; flex:0 0 auto; min-height:40px; padding:8px 11px; }
+      .app-menu #guideBtnNav { margin-top:0; }
+      .hero,.steps,.mode-select,.card.wide,#results,#status { width:100%; }
+    }
+    @media (max-width:760px) {
+      .nav { height:auto; min-height:58px; padding:8px 12px; }
+      .nav-name { display:none; }
+      .hero { display:block; }
+      .hero .suite-kicker { margin-bottom:6px; }
+      .hero .greeting { font-size:30px; }
+      .hero .tagline { margin-top:8px; }
+      .hero > div:last-child { margin-top:12px !important; }
+      .steps { overflow-x:auto; flex-wrap:nowrap; }
+      .steps .st { flex:0 0 auto; white-space:nowrap; }
+      .steps .st:not(:last-child)::after { width:18px; margin-inline:8px; }
+      .mode-select { grid-template-columns:1fr; }
+      .mode-card { min-height:0; }
+      .lesson-flow-actions { position:static; margin:22px -14px -18px; padding:14px; }
+      .plan-actions { position:static; }
+      #results > .bar { position:static; }
+      .result-actions { display:grid; grid-template-columns:1fr 1fr; width:100%; }
+      .result-actions .btn { width:100%; }
+    }
+    @media (max-width:520px) {
+      .wrap { padding-inline:12px; }
+      .card { padding:18px 14px; }
+      .result-actions { grid-template-columns:1fr; }
+      .app-menu-label { display:none; }
+      .app-menu .nav-link { padding:9px 12px; }
+      .app-menu .nav-link .ic { width:19px; height:19px; }
+      .nav {
+        display:flex !important;
+        flex-wrap:nowrap;
+        gap:6px;
+      }
+      .nav .ls-icon { width:31px; height:31px; }
+      .nav .ls-wm { font-size:17px; }
+      .nav-user { margin-left:auto; gap:5px; flex:0 0 auto; }
+      .app-sw-btn,.nav .avatar,#passkeysNavBtn,#logoutBtn {
+        width:34px;
+        min-width:34px;
+        height:34px;
+        min-height:34px;
+        padding:0;
+        justify-content:center;
+      }
+      #logoutBtn { font-size:0; gap:0; }
+      #logoutBtn .ic { width:16px; height:16px; }
+      .steps { gap:12px; }
+      .steps .st { font-size:11.5px; gap:5px; }
+      .steps .st:not(:last-child)::after { display:none; }
+      .app-menu { justify-content:space-around; }
+      .app-menu:not(:hover):not(:focus-within) .nav-link,
+      .app-menu .nav-link { flex:1 0 40px; justify-content:center; padding-inline:10px; }
+    }
+    #mainNavMenu[style*="display:none"],
+    #mainNavMenu[style*="display: none"] { display:none !important; }
   </style>
 </head>
 <body>
@@ -4906,7 +5284,7 @@
 
     function enterApp(user){
       appReady=true;
-      authScreen.style.display='none'; nav.style.display='flex'; if(mainNavMenu) mainNavMenu.style.display='grid'; appEl.style.display='block';
+      authScreen.style.display='none'; nav.style.display='flex'; if(mainNavMenu) mainNavMenu.style.display='flex'; appEl.style.display='block';
       disableStartupClickShield();
       $('navName').textContent=user.name||user.email;
       $('navAvatar').textContent=(user.name||user.email||'?').trim().charAt(0).toUpperCase();
