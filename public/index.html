@@ -1726,6 +1726,35 @@
         min-width:640px;
       }
     }
+
+    /* Lesson creation is a focused wizard: one decision page at a time. */
+    .lesson-flow-head { margin-bottom:22px; }
+    .lesson-flow-eyebrow { color:var(--accent); font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; margin-bottom:7px; }
+    .lesson-flow-head h2 { margin:0; color:var(--primary); font-family:var(--font-display); font-size:clamp(24px,3vw,32px); letter-spacing:0; }
+    .lesson-flow-head p { margin:7px 0 0; color:var(--muted); font-size:14px; line-height:1.55; max-width:680px; }
+    .lesson-flow-progress { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:0 0 28px; }
+    .lesson-flow-step { appearance:none; border:0; border-top:3px solid var(--border); background:transparent; padding:10px 4px 0; color:var(--muted); font:inherit; text-align:left; cursor:pointer; min-width:0; }
+    .lesson-flow-step span { display:block; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; }
+    .lesson-flow-step strong { display:block; margin-top:3px; font-size:13px; color:inherit; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .lesson-flow-step.active { border-color:var(--accent); color:var(--primary); }
+    .lesson-flow-step.done { border-color:var(--ok); color:var(--ok); }
+    .lesson-flow-step:disabled { cursor:default; }
+    .lesson-flow-page { display:none; }
+    .lesson-flow-page.active { display:block; animation:lesson-page-in .24s ease both; }
+    @keyframes lesson-page-in { from { opacity:0; transform:translateY(7px); } to { opacity:1; transform:none; } }
+    .lesson-flow-page .ps-step { border:0; padding:0; margin:0; }
+    .lesson-flow-page .ps-step + .ps-step { border-top:1px solid var(--border); padding-top:24px; margin-top:24px; }
+    .lesson-flow-page .ps-num { display:none; }
+    .lesson-flow-actions { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:26px; padding-top:18px; border-top:1px solid var(--border); }
+    .lesson-flow-actions .btn { width:auto; min-width:150px; }
+    .mode-back { margin:0 0 18px; }
+    @media (max-width:640px) {
+      .lesson-flow-progress { gap:5px; }
+      .lesson-flow-step strong { font-size:11.5px; }
+      .lesson-flow-actions { display:grid; grid-template-columns:1fr; }
+      .lesson-flow-actions .btn { width:100%; }
+      .lesson-flow-actions .flow-back { order:2; }
+    }
   </style>
 </head>
 <body>
@@ -1945,9 +1974,9 @@
     </div>
 
     <div class="steps">
-      <span class="st active" data-step="1"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> Objectives</span>
-      <span class="st" data-step="2"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Lesson plan</span>
-      <span class="st" data-step="3"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Slides</span>
+      <span class="st active" data-step="1"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> Set up lesson</span>
+      <span class="st" data-step="2"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Review plan</span>
+      <span class="st" data-step="3"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Create slides</span>
     </div>
 
     <!-- Entry mode: start fresh, or bring your own plan / slides -->
@@ -1971,6 +2000,7 @@
 
     <!-- IMPORT A: teacher already has a lesson plan → slides -->
     <section id="importPlanCard" class="card wide" style="display:none">
+      <button type="button" class="back-btn mode-back" data-mode-back><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Choose a different starting point</button>
       <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Start from your lesson plan</h2>
       <div data-tpl-mount="mode:havePlan"></div>
       <p class="hint" style="margin-bottom:20px">Upload your existing lesson plan and we'll build matching slides straight away — no need to re-type objectives. Afterwards you can generate a worksheet, quiz, exit ticket and games from it.</p>
@@ -2013,6 +2043,7 @@
 
     <!-- IMPORT B: teacher already has slides → plan and/or pack -->
     <section id="importSlidesCard" class="card wide" style="display:none">
+      <button type="button" class="back-btn mode-back" data-mode-back><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Choose a different starting point</button>
       <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Start from your slides</h2>
       <p class="hint" style="margin-bottom:20px">Upload your PowerPoint and your slides show up here on the system. From them we can write you a matching lesson plan, or skip straight to worksheets, quizzes and games — all based on what you uploaded.</p>
       <div data-tpl-mount="mode:haveSlides"></div>
@@ -2046,14 +2077,23 @@
     </section>
 
     <!-- STAGE 1 -->
-    <form id="composer" class="card wide" novalidate>
-      <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Plan a lesson</h2>
-      <p class="hint" style="margin-bottom:24px">Type your objectives and we'll write a matching lesson plan — or switch to <b>Import from plan</b> to pull them from your pacing guide.</p>
+    <form id="composer" class="card wide" novalidate style="display:none">
+      <div class="lesson-flow-head">
+        <div class="lesson-flow-eyebrow" id="lessonFlowEyebrow">Step 1 of 3</div>
+        <h2 id="lessonFlowTitle">Choose the lesson source</h2>
+        <p id="lessonFlowSubtitle">Tell LessonScope what you are teaching, or select it from an existing pacing guide.</p>
+      </div>
+      <div class="lesson-flow-progress" aria-label="Lesson planning progress">
+        <button type="button" class="lesson-flow-step active" data-flow-step="1"><span>Step 1</span><strong>Lesson source</strong></button>
+        <button type="button" class="lesson-flow-step" data-flow-step="2" disabled><span>Step 2</span><strong>Learning content</strong></button>
+        <button type="button" class="lesson-flow-step" data-flow-step="3" disabled><span>Step 3</span><strong>Lesson setup</strong></button>
+      </div>
+
+      <div class="lesson-flow-page active" data-flow-page="1">
 
       <!-- The school lesson-plan template. It moves to whichever start card is
            showing (see placeTemplateRow) — every route out of this stage ends in
            a lesson plan, so every route needs to be able to set the format. -->
-      <div data-tpl-mount="mode:plan"></div>
       <details class="opt-tpl" id="tplDetails">
         <summary><svg class="ic" aria-hidden="true"><use href="#i-book-open"/></svg> <span id="tplSummary">Your school's lesson-plan template <span class="opt-tag">recommended</span></span><span class="disclose-hint" aria-hidden="true"></span></summary>
         <div class="opt-tpl-body">
@@ -2153,7 +2193,14 @@
         </div>
       </div>
 
+        <div class="lesson-flow-actions">
+          <button type="button" class="btn ghost flow-back" id="flowChooseStartBtn">← Starting point</button>
+          <button type="button" class="btn primary" id="flowSourceNextBtn">Continue to learning content →</button>
+        </div>
+      </div>
+
       <!-- Step 4: Objectives -->
+      <div class="lesson-flow-page" data-flow-page="2">
       <div class="ps-step">
         <div class="ps-num" id="objStepNum">2</div>
         <div class="ps-body">
@@ -2189,7 +2236,15 @@
         </div>
       </div>
 
+        <div class="lesson-flow-actions">
+          <button type="button" class="btn ghost flow-back" id="flowObjectivesBackBtn">← Lesson source</button>
+          <button type="button" class="btn primary" id="flowObjectivesNextBtn">Continue to lesson setup →</button>
+        </div>
+      </div>
+
       <!-- Step 5: Lesson settings -->
+      <div class="lesson-flow-page" data-flow-page="3">
+      <div data-tpl-mount="mode:plan"></div>
       <div class="ps-step">
         <div class="ps-num" id="settingsStepNum">3</div>
         <div class="ps-body">
@@ -2264,7 +2319,11 @@
         </div>
       </div>
 
-      <button id="planBtn" class="btn primary full" type="submit"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Generate lesson plan</button>
+        <div class="lesson-flow-actions">
+          <button type="button" class="btn ghost flow-back" id="flowSetupBackBtn">← Learning content</button>
+          <button id="planBtn" class="btn primary" type="submit"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Generate lesson plan</button>
+        </div>
+      </div>
     </form>
 
     <!-- STAGE 2 -->
@@ -2766,26 +2825,73 @@
     // lesson plan, or upload slides. The mode selector + matching panel only
     // show on the composer stage; the plan/slides stages take over as before.
     let startMode='plan';
+    let composerPage=0;
+    let composerMaxPage=1;
     let deckImported=false;   // these slides came from the teacher, not from us
     let currentStage='composer';
+    const COMPOSER_PAGE_COPY={
+      1:{title:'Choose the lesson source',subtitle:'Tell LessonScope what you are teaching, or select it from an existing pacing guide.',slug:'source'},
+      2:{title:'Confirm the learning content',subtitle:'Choose the objectives and add any textbook pages, notes, or other supporting material.',slug:'content'},
+      3:{title:'Set up the lesson',subtitle:'Choose the grade, teaching structure, lesson length, and slide style before generating.',slug:'setup'},
+    };
+    function renderComposerPage(){
+      if(composerPage<1) return;
+      const copy=COMPOSER_PAGE_COPY[composerPage]||COMPOSER_PAGE_COPY[1];
+      $('lessonFlowEyebrow').textContent=`Step ${composerPage} of 3`;
+      $('lessonFlowTitle').textContent=copy.title;
+      $('lessonFlowSubtitle').textContent=copy.subtitle;
+      document.querySelectorAll('.lesson-flow-page').forEach(page=>page.classList.toggle('active',+page.dataset.flowPage===composerPage));
+      document.querySelectorAll('.lesson-flow-step').forEach(step=>{
+        const n=+step.dataset.flowStep;
+        step.classList.toggle('active',n===composerPage);
+        step.classList.toggle('done',n<composerPage || (n<composerMaxPage && n!==composerPage));
+        step.disabled=n>composerMaxPage;
+        step.setAttribute('aria-current',n===composerPage?'step':'false');
+      });
+      setStep(1);
+    }
+    function setComposerPage(page,{push=true}={}){
+      const next=Math.min(3,Math.max(1,Number(page)||1));
+      composerPage=next;
+      composerMaxPage=Math.max(composerMaxPage,next);
+      renderComposerPage();
+      if(push){
+        const slug=COMPOSER_PAGE_COPY[next].slug;
+        history.pushState({lessonFlowPage:next},'',`#plan/${slug}`);
+      }
+      window.scrollTo({top:0,behavior:'smooth'});
+    }
     function show(stage){
       currentStage=stage;
       const atComposer=stage==='composer';
-      composer.style.display=(atComposer && startMode==='plan')?'block':'none';
-      $('modeSelect').style.display=atComposer?'grid':'none';
-      $('importPlanCard').style.display=(atComposer && startMode==='havePlan')?'block':'none';
-      $('importSlidesCard').style.display=(atComposer && startMode==='haveSlides')?'block':'none';
+      const choseStart=atComposer && composerPage>0;
+      composer.style.display=(choseStart && startMode==='plan')?'block':'none';
+      $('modeSelect').style.display=(atComposer && !choseStart)?'grid':'none';
+      $('importPlanCard').style.display=(choseStart && startMode==='havePlan')?'block':'none';
+      $('importSlidesCard').style.display=(choseStart && startMode==='haveSlides')?'block':'none';
       planStage.style.display=stage==='plan'?'block':'none';
       results.style.display=stage==='slides'?'block':'none';
+      if(choseStart && startMode==='plan') renderComposerPage();
       if(weekPlannerState && weekPlannerState.present) renderSlotPickers();
     }
-    function setStartMode(m){ startMode=m;
+    function setStartMode(m,begin=false){ startMode=m;
+      composerPage=begin?1:0;
+      composerMaxPage=1;
       placeTemplateRow();
       if(weekPlannerState && weekPlannerState.present) setTimeout(renderSlotPickers,0);
       document.querySelectorAll('#modeSelect .mode-card').forEach(c=>c.classList.toggle('active',c.dataset.mode===m));
       show('composer'); setStep(1);
+      if(begin){
+        history.pushState({lessonFlowPage:1,startMode:m},'',m==='plan'?'#plan/source':`#plan/${m}`);
+        window.scrollTo({top:0,behavior:'smooth'});
+      }
     }
-    document.querySelectorAll('#modeSelect .mode-card').forEach(c=>c.addEventListener('click',()=>setStartMode(c.dataset.mode)));
+    document.querySelectorAll('#modeSelect .mode-card').forEach(c=>c.addEventListener('click',()=>setStartMode(c.dataset.mode,true)));
+    document.querySelectorAll('[data-mode-back]').forEach(btn=>btn.addEventListener('click',()=>{
+      setStartMode('plan');
+      history.pushState({lessonFlowPage:0},'','#plan');
+      window.scrollTo({top:0,behavior:'smooth'});
+    }));
 
     function fillTopics(){ const key=$('subject').value.trim().toLowerCase(); const t=library.topicsBySubject[key]||[]; $('topicList').innerHTML=t.map(x=>`<option value="${x}">`).join(''); }
     async function loadLibrary(){
@@ -3062,6 +3168,58 @@
     // One delegated listener covers every field in the composer, in both modes.
     composer.addEventListener('input', refreshStepProgress);
     composer.addEventListener('change', refreshStepProgress);
+
+    function validateFlowSource(){
+      if(planMode==='import'){
+        const src=planningSources.find(source=>source.id===selectedPsrcId);
+        if(!src){ toast('Select a planning source, or choose Paste manually.'); return false; }
+        if(!selGrade || !selWeekNum){ toast('Choose the grade and week you are planning.'); return false; }
+        if(!$('wkSubject').value.trim()){ toast('Add the subject for this lesson.'); $('wkSubject').focus(); return false; }
+        if(!$('wkTopic').value.trim()){ toast('Add the topic or unit title for this lesson.'); $('wkTopic').focus(); return false; }
+        return true;
+      }
+      const subject=$('subject').value.trim(), topic=$('topic').value.trim();
+      const badSubject=fieldErr('subject','subjErr',!subject);
+      const badTopic=fieldErr('topic','topicErr',!topic);
+      if(badSubject || badTopic){
+        $(badSubject?'subject':'topic').focus();
+        return false;
+      }
+      return true;
+    }
+
+    function validateFlowObjectives(){
+      const objectives=planMode==='import' ? collectImportObjectives().trim() : $('objectives').value.trim();
+      if(objectives) return true;
+      if(planMode==='import') toast('Select at least one learning objective.');
+      else { fieldErr('objectives','objErr',true); $('objectives').focus(); }
+      return false;
+    }
+
+    $('flowChooseStartBtn').addEventListener('click',()=>{
+      composerPage=0; composerMaxPage=1; show('composer');
+      history.pushState({lessonFlowPage:0},'','#plan');
+      window.scrollTo({top:0,behavior:'smooth'});
+    });
+    $('flowSourceNextBtn').addEventListener('click',()=>{ if(validateFlowSource()) setComposerPage(2); });
+    $('flowObjectivesBackBtn').addEventListener('click',()=>setComposerPage(1));
+    $('flowObjectivesNextBtn').addEventListener('click',()=>{ if(validateFlowObjectives()) setComposerPage(3); });
+    $('flowSetupBackBtn').addEventListener('click',()=>setComposerPage(2));
+    document.querySelectorAll('.lesson-flow-step').forEach(step=>step.addEventListener('click',()=>{
+      const target=+step.dataset.flowStep;
+      if(target<=composerMaxPage && target!==composerPage) setComposerPage(target);
+    }));
+    window.addEventListener('popstate',e=>{
+      if(currentStage!=='composer') return;
+      const page=Number(e.state && e.state.lessonFlowPage);
+      if(page>=1 && page<=3){
+        startMode=(e.state && e.state.startMode)||startMode||'plan';
+        composerPage=page; composerMaxPage=Math.max(composerMaxPage,page); show('composer');
+      }else{
+        composerPage=0; show('composer');
+      }
+    });
+
     function switchPlanTab(tab){
       planMode=tab;
       document.querySelectorAll('.ps-tab').forEach(b=>b.classList.toggle('active',b.dataset.ptab===tab));
@@ -3240,19 +3398,19 @@
       let subject, topic, objectives;
       if(planMode==='import'){
         const src=planningSources.find(s=>s.id===selectedPsrcId);
-        if(!selectedPsrcId||!src){ toast('Select a planning source or switch to "Paste manually".'); return; }
-        if(!selWeekNum){ toast('Select a grade and week from your plan.'); return; }
+        if(!selectedPsrcId||!src){ setComposerPage(1,{push:false}); toast('Select a planning source or switch to "Paste manually".'); return; }
+        if(!selWeekNum){ setComposerPage(1,{push:false}); toast('Select a grade and week from your plan.'); return; }
         objectives=collectImportObjectives();
-        if(!objectives.trim()){ toast('Select at least one objective.'); return; }
+        if(!objectives.trim()){ setComposerPage(2,{push:false}); toast('Select at least one objective.'); return; }
         subject=$('wkSubject').value.trim()||src.subject||'';
         topic=$('wkTopic').value.trim();
-        if(!subject){ toast('Enter the subject (e.g. ICT, Mathematics) in the week selector.'); $('wkSubject').focus(); return; }
-        if(!topic){ toast('Enter the topic or unit title for this lesson in the week selector.'); $('wkTopic').focus(); return; }
+        if(!subject){ setComposerPage(1,{push:false}); toast('Enter the subject (e.g. ICT, Mathematics) in the week selector.'); $('wkSubject').focus(); return; }
+        if(!topic){ setComposerPage(1,{push:false}); toast('Enter the topic or unit title for this lesson in the week selector.'); $('wkTopic').focus(); return; }
       }else{
         subject=$('subject').value.trim(); topic=$('topic').value.trim(); objectives=$('objectives').value.trim();
         const bad=[fieldErr('subject','subjErr',!subject),fieldErr('topic','topicErr',!topic),fieldErr('objectives','objErr',!objectives)];
         const firstBad=['subject','topic','objectives'][bad.indexOf(true)];
-        if(firstBad){ $(firstBad).focus(); $(firstBad).scrollIntoView({behavior:'smooth',block:'center'}); return; }
+        if(firstBad){ setComposerPage(firstBad==='objectives'?2:1,{push:false}); $(firstBad).focus(); $(firstBad).scrollIntoView({behavior:'smooth',block:'center'}); return; }
       }
       ctx={ subject, topic, grade:$('grade').value||'middle school',
         slideCount:Number($('slideCount').value)||5, tone:$('tone').value, focus:$('focus').value.trim(), objectives,
@@ -3480,7 +3638,7 @@
     $('dlPlanBtn').addEventListener('click', ()=>downloadLessonPlan($('dlPlanBtn')));
     $('packPlanBtn')?.addEventListener('click', ()=>downloadLessonPlan($('packPlanBtn')));
 
-    $('backBtn').addEventListener('click',()=>{ show('composer'); setStep(1); statusEl.innerHTML=''; });
+    $('backBtn').addEventListener('click',()=>{ setComposerPage(3,{push:false}); show('composer'); setStep(1); statusEl.innerHTML=''; });
     // Leaving the slides route means the next plan is ours to build slides from.
     $('modeSelect')?.addEventListener('click',()=>{ deckImported=false; });
     $('regenPlanBtn').addEventListener('click', async ()=>{

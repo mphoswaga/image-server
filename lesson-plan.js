@@ -11,7 +11,18 @@ const TEMPLATE_PROMPT_LIMIT = 6000;
 
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
-function planSchema(model) {
+function planSchema(model, sequence = null, structuredSequence = false) {
+  const lessonCount = Math.min(5, Math.max(2, parseInt(sequence && sequence.lessonCount, 10) || 3));
+  const sectionProperties = {
+    heading: { type: 'string' },
+    content: { type: 'string' },
+    stageId: { type: 'string', enum: model.stages.map(stage => stage.id) },
+  };
+  const sectionRequired = ['heading', 'content', 'stageId'];
+  if (structuredSequence) {
+    sectionProperties.lesson = { type: 'integer', enum: Array.from({ length: lessonCount }, (_, index) => index + 1) };
+    sectionRequired.push('lesson');
+  }
   return {
     type: 'object',
     properties: {
@@ -19,12 +30,8 @@ function planSchema(model) {
         type: 'array',
         items: {
           type: 'object',
-          properties: {
-            heading: { type: 'string' },
-            content: { type: 'string' },
-            stageId: { type: 'string', enum: model.stages.map(stage => stage.id) },
-          },
-          required: ['heading', 'content', 'stageId'],
+          properties: sectionProperties,
+          required: sectionRequired,
           additionalProperties: false,
         },
       },
@@ -34,10 +41,20 @@ function planSchema(model) {
   };
 }
 
-function sequencePromptBlock(sequence, hasTemplate) {
+function sequencePromptBlock(sequence, hasTemplate, structuredSequence = false) {
   if (!sequence || !sequence.enabled) return '';
   const lessonCount = Math.min(5, Math.max(2, parseInt(sequence.lessonCount, 10) || 3));
   const periodMinutes = Math.min(180, Math.max(5, parseInt(sequence.periodMinutes, 10) || 35));
+  if (structuredSequence) {
+    return `\nWEEKLY LESSON SEQUENCE:
+Create exactly ${lessonCount} connected lessons for the same week, each lasting exactly ${periodMinutes} minutes.
+For EVERY school template heading, return one separate section for EACH lesson. Repeat the heading exactly and set its "lesson" property to the period number (1 through ${lessonCount}).
+For example, a template with 8 authored fields must produce ${lessonCount * 8} sections: all 8 fields for lesson 1, all 8 for lesson 2, and so on.
+Do not combine several lessons in one section. Do not write "continued" and do not put "Lesson N" markers inside content; the app adds those after validating the complete sequence.
+Every lesson must include a timing breakdown totalling ${periodMinutes} minutes, teacher actions, student practice, a check for understanding, and useful resources or homework in the relevant school fields.
+The lessons must build on each other and must not repeat the same lesson ${lessonCount} times.
+Keep every school heading exactly as supplied, including punctuation and timing notes.\n`;
+  }
   return `\nWEEKLY LESSON SEQUENCE:
 This is not one isolated lesson. Create exactly ${lessonCount} connected lessons for the same week.
 Each lesson is exactly ${periodMinutes} minutes.
@@ -50,7 +67,7 @@ The lessons must build on each other across the week. Do not repeat the same les
 ${hasTemplate ? 'Keep the school template headings exactly as given, but inside the relevant content fields separate the work into Lesson 1, Lesson 2, and so on with timings.' : 'Use clear headings and subheadings so the teacher can see the separate lessons.'}\n`;
 }
 
-function buildPrompt({ subject, topic, grade, tone, objectives, templateText, unitBlock, sourceMaterialText, teachingModel, sequence }) {
+function buildPrompt({ subject, topic, grade, tone, objectives, templateText, unitBlock, sourceMaterialText, teachingModel, sequence, structuredSequence = false }) {
   const pretty = topic.replace(/-/g, ' ');
   const depth = gradeProfile(grade).content.depth;
   const model = getTeachingModel(teachingModel);
@@ -67,7 +84,15 @@ ${templateText.slice(0, TEMPLATE_PROMPT_LIMIT)}
   const sourceBlock = sourceMaterialText
     ? `\nThe teacher uploaded OPTIONAL SOURCE MATERIALS below (textbook extract, notes, PDF text, spreadsheet data, or similar). Use these to make the lesson accurate to what students are supposed to learn. Prefer this material over generic examples when it is relevant, but do not copy long passages verbatim and do not mention uploaded files to students.\n\n--- SOURCE MATERIALS START ---\n${String(sourceMaterialText).slice(0, 5000)}\n--- SOURCE MATERIALS END ---\n`
     : '';
-  const sequenceBlock = sequencePromptBlock(sequence, !!templateText);
+  const sequenceBlock = sequencePromptBlock(sequence, !!templateText, structuredSequence);
+  const outputShapeRule = structuredSequence
+    ? 'Output one section per template heading PER LESSON, in lesson order, each as {heading, content, stageId, lesson}. The lesson number must match the period the content belongs to.'
+    : 'Output one section per template heading, in the same order, each as {heading, content, stageId}.';
+  const templateRule = templateText
+    ? (structuredSequence
+      ? 'A school template is provided, so it decides the fields outright: for every lesson output every authored template heading exactly once and in template order. Do not add, rename, merge or omit fields.'
+      : 'A school template is provided, so it decides the sections outright: output exactly its headings, exactly once each, in its order — no extras, no renames, nothing merged or split, even if the teaching method would suggest a different arrangement.')
+    : 'There is no school template, so create clear headings that follow the selected model stages in order.';
 
   return `You are an experienced teacher writing a complete lesson plan.
 
@@ -85,11 +110,9 @@ ${objectives}
 ${templateBlock}
 
 Rules:
-  - Output one section per template heading, in the same order, each as {heading, content, stageId}.
+  - ${outputShapeRule}
   - stageId MUST be one of: ${model.stages.map(stage => stage.id).join(', ')}. This is only a tag saying which part of the method a section serves — mapping a heading to a stage must NEVER change that heading's name, wording or position.
-  - ${templateText
-    ? 'A school template is provided, so it decides the sections outright: output exactly its headings, exactly once each, in its order — no extras, no renames, nothing merged or split, even if the teaching method would suggest a different arrangement.'
-    : 'There is no school template, so create clear headings that follow the selected model stages in order.'}
+  - ${templateRule}
   - "content": write as short bullet points, ONE idea per line, separated by newlines. Plain text ONLY — no markdown symbols (no **, no #, no backticks) and do NOT manually number the lines. Keep each line concise and classroom-ready.
 - VOCABULARY: whenever you list key words or vocabulary, give each one a short, clear definition on the same line (e.g. "Cooperate: to work together to get something done") — never list a term without explaining what it means.
 - GAMES & ACTIVITIES: whenever the plan includes a game or activity, spell it out so another teacher could run it without guessing — state the goal (how to "win" / what success looks like), the materials needed, and the step-by-step rules of how to play. Never just name an activity.
@@ -130,7 +153,7 @@ function placeholderPlan(objectives, teachingModel) {
   };
 }
 
-async function generateLessonPlan({ subject, topic, grade = 'middle school', tone = 'clear and engaging', objectives, templateText, unitBlock = '', sourceMaterialText = '', teachingModel = 'standard', sequence = null, regenerate = false }) {
+async function generateLessonPlan({ subject, topic, grade = 'middle school', tone = 'clear and engaging', objectives, templateText, unitBlock = '', sourceMaterialText = '', teachingModel = 'standard', sequence = null, structuredSequence = false, regenerate = false }) {
   const teachingModelId = normalizeTeachingModelId(teachingModel);
   const model = getTeachingModel(teachingModelId);
   const cleanSequence = sequence && sequence.enabled ? {
@@ -140,7 +163,13 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
   } : null;
   if (!process.env.OPENAI_API_KEY) {
     console.log('No OPENAI_API_KEY set — using placeholder lesson plan.');
-    return { ...placeholderPlan(objectives, teachingModelId), teachingModelId };
+    const placeholder = placeholderPlan(objectives, teachingModelId);
+    if (cleanSequence && structuredSequence) {
+      placeholder.sections = Array.from({ length: cleanSequence.lessonCount }, (_, lessonIndex) =>
+        placeholder.sections.map(section => ({ ...section, lesson: lessonIndex + 1 }))
+      ).flat();
+    }
+    return { ...placeholder, teachingModelId, sequence: cleanSequence };
   }
   const { wrap } = require('./cache');
   return wrap('lesson-plan', {
@@ -154,14 +183,15 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     sourceMaterialText: String(sourceMaterialText || '').slice(0, 5000).trim(),
     teachingModelId,
     sequence: cleanSequence,
+    structuredSequence: !!(cleanSequence && structuredSequence),
     regenerate,
   }, async () => {
     const client = aiClient();
     const response = await client.chat.completions.create({
       model: MODEL,
-      max_tokens: 6000,
-      messages: [{ role: 'user', content: buildPrompt({ subject, topic, grade, tone, objectives, templateText, unitBlock, sourceMaterialText, teachingModel: teachingModelId, sequence: cleanSequence }) }],
-      response_format: { type: 'json_schema', json_schema: { name: 'lesson_plan', strict: true, schema: planSchema(model) } },
+      max_tokens: cleanSequence && structuredSequence ? 12000 : 6000,
+      messages: [{ role: 'user', content: buildPrompt({ subject, topic, grade, tone, objectives, templateText, unitBlock, sourceMaterialText, teachingModel: teachingModelId, sequence: cleanSequence, structuredSequence: !!(cleanSequence && structuredSequence) }) }],
+      response_format: { type: 'json_schema', json_schema: { name: 'lesson_plan', strict: true, schema: planSchema(model, cleanSequence, !!(cleanSequence && structuredSequence)) } },
     });
     const text = response.choices[0]?.message?.content;
     if (!text) throw new Error('No lesson plan returned from the model');
@@ -174,4 +204,4 @@ function planToText(plan) {
   return (plan.sections || []).map(s => `## ${s.heading}${s.stageId ? ` [stage: ${s.stageId}]` : ''}\n${s.content}`).join('\n\n');
 }
 
-module.exports = { TEMPLATE_PROMPT_LIMIT, generateLessonPlan, planToText };
+module.exports = { TEMPLATE_PROMPT_LIMIT, generateLessonPlan, planToText, planSchema, sequencePromptBlock };

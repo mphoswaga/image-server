@@ -1,0 +1,35 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+const markup = html.slice(0, html.indexOf('<script>'));
+
+test('lesson creation exposes exactly three focused wizard pages', () => {
+  const pages = [...markup.matchAll(/data-flow-page="(\d+)"/g)].map(match => Number(match[1]));
+  assert.deepEqual(pages, [1, 2, 3]);
+  assert.match(markup, /id="composer"[^>]*style="display:none"/);
+  assert.match(markup, /id="flowSourceNextBtn"/);
+  assert.match(markup, /id="flowObjectivesNextBtn"/);
+  assert.match(markup, /id="flowSetupBackBtn"/);
+});
+
+test('the wizard preserves every field needed by the existing generation request', () => {
+  for (const id of [
+    'subject', 'topic', 'objectives', 'grade', 'slideCount', 'tone', 'teachingModel',
+    'sequenceEnabled', 'sequenceLessonCount', 'periodMinutes', 'focus', 'presetSelect', 'planBtn',
+  ]) {
+    const occurrences = [...markup.matchAll(new RegExp(`id="${id}"`, 'g'))].length;
+    assert.equal(occurrences, 1, `${id} should still exist exactly once`);
+  }
+  assert.match(html, /fetch\('\/api\/lesson-plan'/, 'the established lesson-plan endpoint remains wired');
+  assert.match(html, /lessonSequenceFromForm\(\)/, 'weekly sequence values remain part of the request');
+});
+
+test('import routes retain a visible return to the starting-point choice', () => {
+  assert.equal([...markup.matchAll(/data-mode-back/g)].length, 2);
+  assert.match(markup, /id="importPlanBtn"/);
+  assert.match(markup, /id="importSlidesPlanBtn"/);
+  assert.match(markup, /id="importSlidesOnlyBtn"/);
+});

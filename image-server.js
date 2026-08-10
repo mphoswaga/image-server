@@ -10,6 +10,7 @@ const quota = require('./quota');
 const { generateOneSlide } = require('./content');
 const { extractText, extractPptxSlides, saveTemplate, listTemplates, getTemplate, renameTemplate, deleteTemplate, loadOriginalById, loadTemplate, loadOriginal, templatePromptText, TYPES } = require('./template');
 const { TEMPLATE_PROMPT_LIMIT, generateLessonPlan, planToText } = require('./lesson-plan');
+const { sequenceDetails, groupSectionsByLesson, assertLessonFields, combineOrderedLessons } = require('./lesson-sequence');
 const { getTeachingModel, normalizeTeachingModelId, listTeachingModels } = require('./teaching-models');
 const { fillDocx, fillXlsx } = require('./fill-template');
 const { animateBuffer } = require('./animate-pptx');
@@ -1163,15 +1164,16 @@ app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
         sourceMaterialText: source,
         teachingModel: deck.teachingModelId,
         sequence: deck.lessonSequence || null,
+        structuredSequence: !!(outline && deck.lessonSequence && deck.lessonSequence.enabled),
       });
-      await capture(req, reservation, 'lessonscope.generate_lesson_plan', `${deck.subject}-${deck.topic}`);
       sections = outline
-        ? orderSectionsByOutline(plan.sections, outline, {
+        ? ((deck.lessonSequence && deck.lessonSequence.enabled) ? orderSequenceSectionsByOutline : orderSectionsByOutline)(plan.sections, outline, {
             objectives: String(deck.objectives || '').trim() || objectivesFromDeck(deck),
             successCriteria: criteriaFromDeck(deck).split('\n').filter(Boolean),
             subject: deck.subject, topic: deck.topic,
-          })
+          }, deck.lessonSequence)
         : plan.sections;
+      await capture(req, reservation, 'lessonscope.generate_lesson_plan', `${deck.subject}-${deck.topic}`);
       generatedFromDeck = true;
     } catch (err) {
       await release(req, reservation, 'lessonscope.generate_lesson_plan', err.message);
@@ -1480,23 +1482,24 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
 
     const plan = await generateLessonPlan({
       subject: subject.toLowerCase(), topic: topic.toLowerCase(),
-      grade, tone, objectives, templateText: tpl ? templatePromptText(req.userId, tpl) : plannerTemplateText, unitBlock, sourceMaterialText: sourceMaterialText(req.body), teachingModel: teachingModelId, sequence: lessonSequence, regenerate: !!regenerate,
+      grade, tone, objectives, templateText: tpl ? templatePromptText(req.userId, tpl) : plannerTemplateText, unitBlock, sourceMaterialText: sourceMaterialText(req.body), teachingModel: teachingModelId, sequence: lessonSequence, structuredSequence: !!(plannerOutline && lessonSequence), regenerate: !!regenerate,
     });
-    await capture(req, reservation, action, `${subject}-${topic}`);
-    if (isRewrite) planRegens.set(regenKey, { n: used + 1, at: Date.now() });
 
     // Show the workbook's fields in their own order, with the objectives and
     // success criteria the school actually set — read-only, because they are
     // copied from the pacing guide and must never be reworded.
     const sections = plannerOutline
-      ? orderSectionsByOutline(plan.sections, plannerOutline, {
+      ? (lessonSequence ? orderSequenceSectionsByOutline : orderSectionsByOutline)(plan.sections, plannerOutline, {
           objectives,
           successCriteria: Array.isArray(req.body.successCriteria) ? req.body.successCriteria : [],
           subject, topic,
           unit: clip(req.body.unitName || req.body.unit, 200),
           period: clip(req.body.period, 120),
-        })
+        }, lessonSequence)
       : plan.sections;
+
+    await capture(req, reservation, action, `${subject}-${topic}`);
+    if (isRewrite) planRegens.set(regenKey, { n: used + 1, at: Date.now() });
 
     res.json({
       sections, teachingModelId, model: getTeachingModel(teachingModelId),
@@ -2221,6 +2224,18 @@ function orderSectionsByOutline(generated, outline, verbatim = {}) {
   // nothing it wrote is silently thrown away.
   list.forEach((s, idx) => { if (!taken.has(idx) && String(s.content || '').trim()) out.push(s); });
   return out.length ? out : list;
+}
+
+function orderSequenceSectionsByOutline(generated, outline, verbatim, sequence) {
+  const groups = groupSectionsByLesson(generated, sequence);
+  assertLessonFields(groups, outline);
+  const { periodMinutes } = sequenceDetails(sequence);
+  const sequenceVerbatim = {
+    ...verbatim,
+    period: String(verbatim && verbatim.period || '').trim() || `${periodMinutes} minutes`,
+  };
+  const orderedLessons = groups.map(group => orderSectionsByOutline(group, outline, sequenceVerbatim));
+  return combineOrderedLessons(orderedLessons, outline, sequence);
 }
 
 // File a generated lesson into the teacher's week-by-week workbook, if they
