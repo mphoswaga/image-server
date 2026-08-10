@@ -45,3 +45,28 @@ test('import routes retain a visible return to the starting-point choice', () =>
   assert.match(markup, /id="importSlidesPlanBtn"/);
   assert.match(markup, /id="importSlidesOnlyBtn"/);
 });
+
+test('the complete guide covers the full teacher workflow and can resume', () => {
+  for (const topic of [
+    'Choose the right starting point',
+    'Add your school lesson-plan template',
+    'Import a pacing guide or year plan',
+    'Choose a teaching model',
+    'Add optional supporting materials',
+    'Plan one lesson or several periods',
+    'Generate, review, and edit the lesson plan',
+    'Create and review the slide deck',
+    'Build the lesson resource pack',
+    'Create and verify class rosters',
+    'Publish an online assignment',
+    'Create and run a student game',
+    'Review marks and class progress',
+    'Download or export your finished work',
+    'Understand your subscription and usage',
+  ]) {
+    assert.match(html, new RegExp(topic.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `guide should explain: ${topic}`);
+  }
+  assert.match(html, /sessionStorage\.getItem\('lc_wizard_step'\)/);
+  assert.match(html, /sessionStorage\.setItem\('lc_wizard_step'/);
+  assert.match(html, /wz-progress-label/);
+});

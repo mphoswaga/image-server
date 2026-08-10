@@ -909,7 +909,10 @@
     .wizard-card { background:#fff; border-radius:22px; box-shadow:0 20px 60px rgba(16,24,40,.28); width:min(560px, calc(100vw - 24px)); max-width:100%; max-height:calc(100dvh - 24px); display:flex; flex-direction:column; overflow:hidden; animation:wz-in .28s cubic-bezier(.22,1,.36,1); }
     @keyframes wz-in { from { opacity:0; transform:scale(.93) translateY(18px); } to { opacity:1; transform:none; } }
     .wizard-header { display:flex; align-items:center; justify-content:space-between; padding:20px 24px 0; }
-    .wizard-dots { display:flex; gap:7px; align-items:center; }
+    .wizard-dots { display:flex; gap:9px; align-items:center; min-width:0; flex:1; }
+    .wz-progress-label { flex:none; color:#475467; font-size:12px; font-weight:800; white-space:nowrap; }
+    .wz-progress-track { height:6px; flex:1; max-width:220px; overflow:hidden; border-radius:999px; background:#e8edf2; }
+    .wz-progress-fill { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,var(--primary),var(--ok)); transition:width .25s ease; }
     .wz-dot { width:8px; height:8px; border-radius:50%; background:#dde1ec; transition:.25s; flex:none; }
     .wz-dot.active { background:var(--primary); width:24px; border-radius:999px; }
     .wz-dot.done { background:var(--ok); }
@@ -926,6 +929,11 @@
     .wz-feat-icon { width:34px; height:34px; border-radius:10px; background:var(--primary-soft); display:flex; align-items:center; justify-content:center; flex:none; margin-top:1px; }
     .wz-feat-icon .ic { width:17px; height:17px; color:var(--primary); fill:none; }
     .wz-body { font-size:14.5px; color:var(--ink); line-height:1.68; margin:0 0 20px; }
+    .wz-section { margin:0 0 10px; color:#0f766e; font-size:11px; font-weight:900; text-align:center; text-transform:uppercase; letter-spacing:.08em; }
+    .wz-steps { display:grid; gap:10px; margin:0 0 18px; padding:0; list-style:none; counter-reset:wz-step; }
+    .wz-steps li { position:relative; min-height:42px; padding:10px 12px 10px 48px; border:1px solid #e4e9ef; border-radius:8px; background:#fbfcfd; color:#344054; font-size:13.5px; line-height:1.45; counter-increment:wz-step; }
+    .wz-steps li::before { content:counter(wz-step); position:absolute; top:9px; left:11px; display:grid; place-items:center; width:24px; height:24px; border-radius:6px; background:#e8f5f0; color:#08745f; font-size:12px; font-weight:900; }
+    .wz-steps strong { color:#172033; }
     .wz-tip { display:flex; align-items:flex-start; gap:10px; background:var(--accent-soft); border-radius:12px; padding:13px 15px; font-size:13.5px; color:var(--ink); line-height:1.5; }
     .wz-tip .ic { color:var(--accent); flex:none; margin-top:2px; }
     .wizard-footer { display:flex; align-items:center; justify-content:space-between; padding:16px 32px 26px; border-top:1px solid var(--border); gap:12px; flex:0 0 auto; background:#fff; }
@@ -2333,7 +2341,7 @@
     <button id="marksBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg><span class="app-menu-label">Marks</span></button>
     <button id="creditsBtn" class="nav-link" type="button" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg><span id="creditsNavLabel" class="app-menu-label">Usage</span><span id="creditsNavBadge" class="credits-badge" style="display:none"></span></button>
     <button id="adminBtn" class="nav-link" type="button" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-sliders"/></svg><span class="app-menu-label">Admin</span></button>
-    <button id="guideBtnNav" class="nav-link" type="button" style="color:var(--accent);font-weight:800" title="Quick start guide"><svg class="ic" aria-hidden="true"><use href="#i-compass"/></svg><span class="app-menu-label">Guide</span></button>
+    <button id="guideBtnNav" class="nav-link" type="button" style="color:var(--accent);font-weight:800" title="Complete LessonScope guide"><svg class="ic" aria-hidden="true"><use href="#i-compass"/></svg><span class="app-menu-label">Guide</span></button>
   </nav>
 
   <div id="passkeysModal" style="display:none;position:fixed;inset:0;background:rgba(20,24,33,.5);z-index:2000;align-items:center;justify-content:center">
@@ -2356,7 +2364,7 @@
       <div class="tagline">Paste your objectives — get a lesson plan that matches your template, then a matching deck.</div>
       <div style="margin-top:14px">
         <button id="guideHeroBtn" class="btn ghost" style="display:none;font-size:13.5px;padding:9px 18px;gap:8px;border-radius:999px">
-          <svg class="ic" aria-hidden="true"><use href="#i-compass"/></svg> Quick start guide
+          <svg class="ic" aria-hidden="true"><use href="#i-compass"/></svg> Complete guide
         </button>
       </div>
     </div>
@@ -3108,7 +3116,7 @@
       </div>
       <div class="wizard-body" id="wizardBodyEl"></div>
       <div class="wizard-footer">
-        <button class="wz-skip" id="wizardSkipBtn">Skip guide</button>
+        <button class="wz-skip" id="wizardSkipBtn">Close for now</button>
         <div style="display:flex;gap:10px">
           <button class="btn ghost" id="wizardBackBtn" style="padding:10px 18px">← Back</button>
           <button class="btn primary" id="wizardNextBtn" style="padding:10px 24px">Next →</button>
@@ -6373,75 +6381,249 @@
       navigator.clipboard.writeText(key).then(()=>toast('API key copied to clipboard','ok')).catch(()=>toast('Could not copy to clipboard'));
     });
 
-    // ── Quick Start Wizard ────────────────────────────────────────────────────
+    // ── Complete LessonScope Guide ───────────────────────────────────────────
     const WZ_STEPS=[
       { icon:'i-compass', iconBg:'#eaf2fa', iconColor:'var(--primary)',
-        title:'Welcome to LessonCope',
-        subtitle:'Create curriculum-aligned lessons — plan, slides, and student materials — in minutes.',
+        section:'Getting started', title:'Welcome to LessonScope',
+        subtitle:'This guide follows the same order as a real lesson: set up, review, create, share, and check learning.',
         features:[
-          {icon:'i-book-open',text:'Upload your school\'s lesson plan template once — every plan follows it exactly'},
-          {icon:'i-calendar',text:'Import your Excel pacing guide and pull objectives by week automatically'},
-          {icon:'i-spark',text:'AI generates a lesson plan, then illustrated slides, calibrated to your grade'},
-          {icon:'i-clipboard',text:'Worksheet, exit ticket, quiz, and a student game — all from the same lesson'},
+          {icon:'i-target',text:'Set up the lesson and choose exactly what students should learn'},
+          {icon:'i-doc',text:'Review and edit the lesson plan before anything else is created'},
+          {icon:'i-layers',text:'Create slides, classroom resources, assignments, and games from the approved plan'},
+          {icon:'i-award',text:'Track submissions and marks without rebuilding the lesson'},
         ],
+        tip:'Use Next and Back at your own pace. If you close the guide, LessonScope remembers this page for your next visit.',
       },
-      { icon:'i-book-open', iconBg:'#fdf0e3', iconColor:'var(--accent)',
-        title:'Step 1 — Your school\'s template',
-        subtitle:'Upload your lesson plan template once. Every plan you generate will follow its exact structure.',
-        body:'LessonCope reads your Word, PDF, or Excel template and mirrors its headings, sections, and layout. Save multiple templates — Observation, Weekly, Intervention — and pick one each time you plan.',
-        tip:'No template yet? LessonCope uses a built-in default structure so you can start right now.',
+      { icon:'i-key', iconBg:'#eef4ff', iconColor:'var(--primary)',
+        section:'Getting started', title:'Sign in and find your way around',
+        subtitle:'Your EducScope account opens LessonScope and keeps your work, subscription, and usage connected across the suite.',
+        steps:[
+          {label:'Sign in',text:'Choose Log in or Sign up. Your password is entered only on EducScope.'},
+          {label:'Switch apps',text:'Use the app-grid button in the top bar to move between EducScope, LessonScope, and TeacherScope.'},
+          {label:'Use the menu',text:'Plan starts new work. Rosters, My assignments, My games, Marks, and Usage keep completed work organised.'},
+        ],
+        tip:'If a session ends, sign in through EducScope again. Do not create a second LessonScope account.',
       },
-      { icon:'i-calendar', iconBg:'#f0faf4', iconColor:'#15824b',
-        title:'Step 2 — Import your pacing guide',
-        subtitle:'Upload an Excel year plan or pacing guide. Objectives are extracted week by week.',
-        body:'If your school has an Excel pacing guide with grade-named sheets (e.g. "ICT Grade 4"), upload it once in the Planning source step. Then just pick the week — the objectives fill in automatically, ready to tick and send to the AI.',
-        tip:'Works with merged cells, multi-grade workbooks, and subject labels in sheet names like "ICT Grade 2".',
+      { icon:'i-spark', iconBg:'#edf9f3', iconColor:'#08745f',
+        section:'Start a lesson', title:'Choose the right starting point',
+        subtitle:'The first screen offers three paths. Choose the one that matches what you already have.',
+        steps:[
+          {label:'Start with objectives',text:'Create a new lesson from typed objectives or objectives selected from a pacing guide.'},
+          {label:'I already have a lesson plan',text:'Upload a Word, PDF, or text plan and create matching slides without retyping it.'},
+          {label:'I already have slides',text:'Upload a PowerPoint, then create a lesson plan, worksheet, quiz, exit ticket, or game from it.'},
+        ],
+        tip:'You can return to this choice at any time with Choose a different starting point.',
       },
-      { icon:'i-clipboard', iconBg:'#f3efff', iconColor:'#7048e8',
-        title:'Step 3 — Objectives & settings',
-        subtitle:'Select pulled objectives or paste them, then set grade, slides, and tone.',
-        body:'In import mode: tick the objectives you want for this lesson. In manual mode: paste or type them. Then set the grade level (controls vocabulary and difficulty), the number of content slides, and the teaching tone.',
-        tip:'The "Lesson style" box is powerful — try "use real-world examples" or "lots of group work" to shape the whole plan.',
+      { icon:'i-book-open', iconBg:'#fff5e8', iconColor:'#c96a18',
+        section:'Set up the lesson', title:'Add your school lesson-plan template',
+        subtitle:'A template controls the document structure; the teaching model controls how learning unfolds inside it.',
+        steps:[
+          {label:'Upload once',text:'Add the school template in Word, PDF, or Excel format.'},
+          {label:'Check the fields',text:'LessonScope reads the headings and writes content under the school\'s own labels.'},
+          {label:'Choose each time',text:'Save more than one template for weekly plans, observations, interventions, or different schools.'},
+        ],
+        tip:'No template is required. The built-in format remains available whenever you need a quick lesson.',
       },
-      { icon:'i-spark', iconBg:'#eaf2fa', iconColor:'var(--primary)',
-        title:'Step 4 — Generate, review & share',
-        subtitle:'Hit Generate, review the plan, accept it, and your lesson resources are ready to download.',
-        body:'LessonCope generates the lesson plan first so you can edit it. Accept it — illustrated slides are created in seconds. Then generate a worksheet, exit ticket, quiz, or a Room Code student game — all from the same lesson, no extra input needed.',
-        tip:'Room Code games need no app or sign-up. Students go to /join, type the Room Code, and play on any device.',
+      { icon:'i-calendar', iconBg:'#edf9f3', iconColor:'#15824b',
+        section:'Set up the lesson', title:'Import a pacing guide or year plan',
+        subtitle:'Upload the curriculum document once, then select the correct week, unit, and objectives when planning.',
+        steps:[
+          {label:'Upload Excel',text:'Choose an .xlsx pacing guide, weekly plan, or year plan. LessonScope reads sheets, merged cells, grades, weeks, and outcomes.'},
+          {label:'Check the preview',text:'Confirm the detected grade, subject, week, learning objectives, and success criteria.'},
+          {label:'Select objectives',text:'Tick only the outcomes for this lesson. They are copied into the plan without being silently rewritten.'},
+        ],
+        tip:'For an unfamiliar layout, LessonScope first uses its structured parser and can use the AI-assisted fallback when needed.',
+      },
+      { icon:'i-target', iconBg:'#eef4ff', iconColor:'var(--primary)',
+        section:'Set up the lesson', title:'Complete the three setup pages',
+        subtitle:'The focused wizard asks for the lesson source, teaching details, and final settings on separate pages.',
+        steps:[
+          {label:'Source',text:'Choose the template and pacing source, or enter objectives manually.'},
+          {label:'Teaching details',text:'Set subject, topic, grade, lesson date, week, and the learning objectives.'},
+          {label:'Lesson design',text:'Choose the teaching model, tone, slide count, lesson style, number of periods, and minutes per period.'},
+        ],
+        tip:'Grade affects vocabulary and difficulty. Lesson style is the right place for instructions such as real-world examples or group work.',
+      },
+      { icon:'i-layers', iconBg:'#f4efff', iconColor:'#7048e8',
+        section:'Set up the lesson', title:'Choose a teaching model',
+        subtitle:'The selected model shapes both the plan stages and the order of the slides.',
+        steps:[
+          {label:'Standard',text:'A familiar opening, teaching, practice, assessment, and closure sequence.'},
+          {label:'Structured models',text:'Choose Gradual Release, Explicit Instruction, or 5E Inquiry when your school expects those stages.'},
+          {label:'Learner-led models',text:'Choose Inquiry-Based or Project-Based when exploration, investigation, and creation should lead the lesson.'},
+        ],
+        tip:'Your school template still owns the headings. The model shapes the teaching inside those headings.',
+      },
+      { icon:'i-upload', iconBg:'#fff5e8', iconColor:'#c96a18',
+        section:'Set up the lesson', title:'Add optional supporting materials',
+        subtitle:'Give LessonScope the exact source material students are expected to learn from.',
+        steps:[
+          {label:'Upload references',text:'Add relevant textbook extracts, PDFs, images, Excel sheets, or other provided lesson materials.'},
+          {label:'Keep it focused',text:'Upload only the pages or files needed for this lesson so the generated content stays accurate and relevant.'},
+          {label:'Review the result',text:'The materials improve context, but the teacher still approves the final lesson before slides are created.'},
+        ],
+        tip:'Supporting materials are optional. Do not upload student personal data or material you are not allowed to share.',
+      },
+      { icon:'i-calendar', iconBg:'#edf9f3', iconColor:'#15824b',
+        section:'Create the plan', title:'Plan one lesson or several periods',
+        subtitle:'A weekly topic can become one lesson or a staged sequence of separate timed lessons.',
+        steps:[
+          {label:'Set the sequence',text:'Enter the number of periods and the length of each period, such as three periods of 35 minutes.'},
+          {label:'Generate Lesson 1',text:'Review the first lesson before asking LessonScope to create Lesson 2 and then Lesson 3.'},
+          {label:'Keep continuity',text:'Later lessons receive the earlier lesson context so the sequence progresses instead of repeating itself.'},
+        ],
+        tip:'Single-lesson planning works exactly as before. Sequence controls appear only when more than one lesson is requested.',
+      },
+      { icon:'i-doc', iconBg:'#eef4ff', iconColor:'var(--primary)',
+        section:'Create the plan', title:'Generate, review, and edit the lesson plan',
+        subtitle:'The plan always appears before the slides so the teacher remains in control of the instructional content.',
+        steps:[
+          {label:'Generate',text:'LessonScope writes the plan using the selected objectives, template, model, timing, and supporting materials.'},
+          {label:'Review every section',text:'Edit any field directly. Check objectives, timing, differentiation, resources, assessment, and closure.'},
+          {label:'Download the update',text:'For a sequence, generate each lesson in order, then download the updated plan containing all completed lessons.'},
+        ],
+        tip:'What you edit on the review screen is what LessonScope uses for slides and writes into the downloaded template.',
+      },
+      { icon:'i-layers', iconBg:'#f4efff', iconColor:'#7048e8',
+        section:'Create slides', title:'Create and review the slide deck',
+        subtitle:'Accept the reviewed plan, then create slides that follow the same teaching model and lesson sequence.',
+        steps:[
+          {label:'Create Lesson 1 slides',text:'Review the deck before generating the slides for the next lesson in a sequence.'},
+          {label:'Improve individual slides',text:'Regenerate a slide, add an AI image or diagram, or replace its visual without rebuilding the whole deck.'},
+          {label:'Check the sequence',text:'Use the lesson tabs to move between decks. Long text is split into continuation slides instead of overflowing.'},
+        ],
+        tip:'Video suggestions appear on their own slide so they do not crowd instructional content.',
+      },
+      { icon:'i-image', iconBg:'#fff1f2', iconColor:'#d92d5b',
+        section:'Create slides', title:'Add visuals and educational videos',
+        subtitle:'Use media to support the teaching point, not simply decorate the deck.',
+        steps:[
+          {label:'Images',text:'Choose from stock images, search the web, or generate an AI image when a specific visual is needed.'},
+          {label:'Diagrams',text:'Create a diagram for processes, relationships, systems, or concepts that benefit from visual explanation.'},
+          {label:'YouTube',text:'Paste an approved link or request age-aware educational suggestions, then review the video before class.'},
+        ],
+        tip:'The exported PowerPoint keeps a visible linked thumbnail. Internet access is required when the teacher plays a YouTube video.',
+      },
+      { icon:'i-clipboard', iconBg:'#edf9f3', iconColor:'#15824b',
+        section:'Create resources', title:'Build the lesson resource pack',
+        subtitle:'Create student materials from the same approved lesson so questions, vocabulary, and difficulty remain aligned.',
+        steps:[
+          {label:'Choose one item',text:'Generate a worksheet, quiz, or exit ticket when that is all the lesson needs.'},
+          {label:'Create the full pack',text:'Generate the complete set together for a ready-to-teach lesson package.'},
+          {label:'Review before sharing',text:'Check instructions, marks, answer expectations, and accessibility for the class.'},
+        ],
+        tip:'Reuse and curated paths do not make a new AI call. Paid actions show their usage before the teacher confirms them.',
+      },
+      { icon:'i-users', iconBg:'#eef4ff', iconColor:'var(--primary)',
+        section:'Prepare the class', title:'Create and verify class rosters',
+        subtitle:'Rosters connect student names and IDs to assignments, games, submissions, and marks.',
+        steps:[
+          {label:'Upload or paste',text:'Import an Excel/CSV class list or paste CSV data manually.'},
+          {label:'Confirm the columns',text:'Choose the real student-ID and name columns, then inspect the complete preview before saving.'},
+          {label:'Protect matching',text:'Use stable student codes where possible so results match correctly even when names or letter casing differ.'},
+        ],
+        tip:'The preview may show a sample of rows, but the detected total tells you how many students will be stored.',
+      },
+      { icon:'i-clipboard', iconBg:'#fff5e8', iconColor:'#c96a18',
+        section:'Share with students', title:'Publish an online assignment',
+        subtitle:'Turn a worksheet or quiz into a student task that works from a link or room code.',
+        steps:[
+          {label:'Choose the class and task',text:'Select the correct roster and the generated resource you want students to complete.'},
+          {label:'Share access',text:'Give students the assignment link or room code. They do not need a teacher account.'},
+          {label:'Monitor submissions',text:'Open My assignments to see status, responses, and completed work.'},
+        ],
+        tip:'Students should rejoin with the same room information if their browser session is interrupted.',
+      },
+      { icon:'i-gamepad', iconBg:'#f4efff', iconColor:'#7048e8',
+        section:'Share with students', title:'Create and run a student game',
+        subtitle:'The same lesson questions can be played through different game formats without changing the learning goal.',
+        steps:[
+          {label:'Generate the game',text:'Create questions from the lesson or an imported PowerPoint.'},
+          {label:'Choose a format',text:'Select the game style that suits the class and the available devices.'},
+          {label:'Run with a room code',text:'Students open the join page, enter the code, and play without installing an app.'},
+        ],
+        tip:'Open My games to reuse, review, or manage games you have already created.',
+      },
+      { icon:'i-target', iconBg:'#edf9f3', iconColor:'#15824b',
+        section:'Check learning', title:'Review marks and class progress',
+        subtitle:'Marks brings assignment and activity results together by roster and student.',
+        steps:[
+          {label:'Choose a class',text:'Open Marks and select the roster whose results you want to review.'},
+          {label:'Inspect performance',text:'Compare scores, class averages, and question-level performance.'},
+          {label:'Respond to evidence',text:'Use the results to identify reteaching needs, support groups, or the next lesson objective.'},
+        ],
+        tip:'Check the roster mapping first if a submission does not appear under the expected student.',
+      },
+      { icon:'i-download', iconBg:'#eef4ff', iconColor:'var(--primary)',
+        section:'Save and present', title:'Download or export your finished work',
+        subtitle:'Choose the format that matches how the lesson will be taught, shared, or filed.',
+        steps:[
+          {label:'Download the plan',text:'Save the reviewed lesson plan in the school\'s selected template format.'},
+          {label:'Download PowerPoint',text:'Open the .pptx in PowerPoint or another compatible presentation app and review it before teaching.'},
+          {label:'Export to Google',text:'Use the Google Drive/Slides option, approve access, and open the converted presentation in Google Slides.'},
+        ],
+        tip:'Google export requires the teacher to authorize Google Drive access. Download remains available if Google is not connected.',
+      },
+      { icon:'i-award', iconBg:'#fff5e8', iconColor:'#c96a18',
+        section:'Account and usage', title:'Understand your subscription and usage',
+        subtitle:'EducScope owns the shared subscription and allowance used by LessonScope and TeacherScope.',
+        steps:[
+          {label:'Check Usage',text:'Open Usage to see the current plan and remaining allowance.'},
+          {label:'Know before creating',text:'Paid actions display their usage amount. Free actions do not show a zero-credit badge.'},
+          {label:'Manage the plan',text:'Subscription changes and additional usage open through the EducScope account popup.'},
+        ],
+        tip:'A failed paid generation releases its reservation, so the allowance is not consumed for unfinished work.',
+      },
+      { icon:'i-check', iconBg:'#edf9f3', iconColor:'#15824b',
+        section:'You are ready', title:'Your complete LessonScope workflow',
+        subtitle:'Plan with the curriculum, approve the teaching, create aligned resources, share them, and use the evidence to plan what comes next.',
+        features:[
+          {icon:'i-calendar',text:'Curriculum and school formats guide the lesson from the beginning'},
+          {icon:'i-pencil',text:'The teacher reviews and edits before slides or student materials are created'},
+          {icon:'i-users',text:'Rosters connect classwork, games, assignments, and marks'},
+          {icon:'i-apps',text:'EducScope keeps the account, subscription, and app suite connected'},
+        ],
+        tip:'You can reopen this Complete guide from the menu at any time.',
       },
     ];
     let wzStep=0;
 
     function openWizard(){
-      wzStep=0; renderWzStep();
+      const saved=Number(sessionStorage.getItem('lc_wizard_step'));
+      wzStep=Number.isInteger(saved)&&saved>=0&&saved<WZ_STEPS.length?saved:0;
+      renderWzStep();
       $('wizardOverlay').style.display='flex';
       document.body.style.overflow='hidden';
     }
-    function closeWizard(){
+    function closeWizard(complete=false){
       $('wizardOverlay').style.display='none';
       document.body.style.overflow='';
       localStorage.setItem('lc_wizard_done','1');
+      if(complete) sessionStorage.removeItem('lc_wizard_step');
+      else sessionStorage.setItem('lc_wizard_step',String(wzStep));
     }
     function renderWzStep(){
       const s=WZ_STEPS[wzStep], tot=WZ_STEPS.length;
-      $('wizardDots').innerHTML=WZ_STEPS.map((_,i)=>`<span class="wz-dot${i===wzStep?' active':i<wzStep?' done':''}"></span>`).join('');
-      let html=`<div class="wz-icon-wrap" style="background:${s.iconBg}"><svg class="wz-icon" aria-hidden="true" style="color:${s.iconColor}"><use href="#${s.icon}"/></svg></div><h3 class="wz-title" id="wizardTitle">${esc(s.title)}</h3><p class="wz-subtitle">${esc(s.subtitle)}</p>`;
+      sessionStorage.setItem('lc_wizard_step',String(wzStep));
+      $('wizardDots').innerHTML=`<span class="wz-progress-label">${wzStep+1} of ${tot}</span><span class="wz-progress-track" aria-hidden="true"><span class="wz-progress-fill" style="width:${((wzStep+1)/tot)*100}%"></span></span>`;
+      let html=`<div class="wz-icon-wrap" style="background:${s.iconBg}"><svg class="wz-icon" aria-hidden="true" style="color:${s.iconColor}"><use href="#${s.icon}"/></svg></div>${s.section?`<p class="wz-section">${esc(s.section)}</p>`:''}<h3 class="wz-title" id="wizardTitle">${esc(s.title)}</h3><p class="wz-subtitle">${esc(s.subtitle)}</p>`;
       if(s.features) html+=`<ul class="wz-features">`+s.features.map(f=>`<li><span class="wz-feat-icon">${ICON(f.icon)}</span><span>${esc(f.text)}</span></li>`).join('')+`</ul>`;
+      if(s.steps) html+=`<ol class="wz-steps">`+s.steps.map(item=>`<li><strong>${esc(item.label)}:</strong> ${esc(item.text)}</li>`).join('')+`</ol>`;
       if(s.body) html+=`<p class="wz-body">${esc(s.body)}</p>`;
       if(s.tip) html+=`<div class="wz-tip">${ICON('i-alert')}<span>${esc(s.tip)}</span></div>`;
       $('wizardBodyEl').innerHTML=html;
       const isLast=wzStep===tot-1;
       $('wizardBackBtn').style.visibility=wzStep===0?'hidden':'visible';
-      $('wizardNextBtn').textContent=isLast?'Start planning →':'Next →';
+      $('wizardNextBtn').textContent=isLast?'Finish guide':'Next →';
       $('wizardNextBtn').className=(isLast?'btn accent':'btn primary');
       $('wizardNextBtn').style.padding='10px 24px';
       $('wizardSkipBtn').style.display=isLast?'none':'inline';
     }
-    $('wizardCloseBtn').addEventListener('click',closeWizard);
-    $('wizardSkipBtn').addEventListener('click',closeWizard);
+    $('wizardCloseBtn').addEventListener('click',()=>closeWizard(false));
+    $('wizardSkipBtn').addEventListener('click',()=>closeWizard(false));
     $('wizardBackBtn').addEventListener('click',()=>{ if(wzStep>0){wzStep--;renderWzStep();} });
-    $('wizardNextBtn').addEventListener('click',()=>{ if(wzStep<WZ_STEPS.length-1){wzStep++;renderWzStep();}else closeWizard(); });
-    $('wizardOverlay').addEventListener('click',e=>{ if(e.target===$('wizardOverlay'))closeWizard(); });
+    $('wizardNextBtn').addEventListener('click',()=>{ if(wzStep<WZ_STEPS.length-1){wzStep++;renderWzStep();}else closeWizard(true); });
+    $('wizardOverlay').addEventListener('click',e=>{ if(e.target===$('wizardOverlay'))closeWizard(false); });
     ['guideBtnNav','guideHeroBtn'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('click',openWizard); });
 
     // ── Splash screen control ──
