@@ -189,13 +189,20 @@ function buildPrompt(subject, topic, grade, slideCount, tone, focus, extras = {}
   const sourceBlock = extras.sourceMaterialText
     ? `\nThe teacher also uploaded OPTIONAL SOURCE MATERIALS (for example textbook pages, notes, PDFs, spreadsheets, or reference extracts). Use these to make the explanations, vocabulary, examples and scope more accurate. Do not mention "the uploaded material" to students; just teach the content correctly. If the material conflicts with generic knowledge, prefer the teacher's material.\n--- SOURCE MATERIALS ---\n${String(extras.sourceMaterialText).slice(0, 5000)}\n--- END SOURCE MATERIALS ---\n`
     : '';
+  const seq = extras.lessonSequence && extras.lessonSequence.enabled ? {
+    lessonCount: Math.min(5, Math.max(2, parseInt(extras.lessonSequence.lessonCount, 10) || 3)),
+    periodMinutes: Math.min(180, Math.max(5, parseInt(extras.lessonSequence.periodMinutes, 10) || 35)),
+  } : null;
+  const sequenceBlock = seq
+    ? `\nThis deck supports a weekly lesson sequence: ${seq.lessonCount} connected lessons, ${seq.periodMinutes} minutes each. The approved lesson plan contains the period-by-period details. Make the slides follow those lessons in order, clearly signalling transitions such as "Lesson 1", "Lesson 2", and so on where helpful. Do not flatten the week into one repeated lesson.\n`
+    : '';
   const age = ageFor(grade);
   return `You are an expert teacher creating a complete, classroom-ready lesson deck.
 
 Subject: ${subject}
 Topic: ${pretty}
 Grade level: ${grade}
-Tone: ${tone}${focusLine}${objectivesLine}${planBlock}${sourceBlock}
+Tone: ${tone}${focusLine}${objectivesLine}${planBlock}${sourceBlock}${sequenceBlock}
 ${modelPromptBlock(teachingModel)}
 
 CALIBRATE THE DIFFICULTY CAREFULLY: pitch the content precisely at ${grade} (students are about ${age} years old). Use the vocabulary, examples, sentence length and concepts a typical ${grade} student is ready for. Do NOT oversimplify to a younger grade (e.g. Reception / Grade R / Kindergarten), and do NOT use content beyond ${grade}. Assume the student already mastered the previous grade's work and build on it — this lesson should feel right for ${grade}, neither too easy nor too hard.
@@ -343,6 +350,11 @@ async function generateContent(subject, topic, slideCount, grade = 'middle schoo
     focus: String(focus || '').trim(),
     lessonPlanText: String((extras && extras.lessonPlanText) || '').trim(),
     sourceMaterialText: String((extras && extras.sourceMaterialText) || '').trim(),
+    lessonSequence: extras && extras.lessonSequence ? {
+      enabled: !!extras.lessonSequence.enabled,
+      lessonCount: parseInt(extras.lessonSequence.lessonCount, 10) || 0,
+      periodMinutes: parseInt(extras.lessonSequence.periodMinutes, 10) || 0,
+    } : null,
     teachingModelId,
     regenerate: !!(extras && extras.regenerate),
   }, async () => {

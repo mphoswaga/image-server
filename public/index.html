@@ -242,6 +242,12 @@
     .materials-chip strong { color:var(--ink); }
     .materials-chip.warn { border-color:#fed7aa; background:#fff7ed; color:#9a3412; }
     .materials-preview { margin-top:10px; padding:10px 12px; border-radius:10px; background:#f7fafc; color:var(--muted); font-size:12.5px; line-height:1.45; max-height:110px; overflow:auto; white-space:pre-wrap; }
+    .sequence-grid { display:grid; grid-template-columns:minmax(0,1fr) 118px 142px; gap:10px; align-items:end; margin-top:10px; }
+    .sequence-toggle { display:flex; align-items:flex-start; gap:10px; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:#fff; min-height:58px; }
+    .sequence-toggle input { width:auto; margin-top:3px; }
+    .sequence-toggle strong { display:block; font-size:13.5px; color:var(--ink); }
+    .sequence-toggle span { display:block; margin-top:2px; font-size:12px; color:var(--muted); line-height:1.35; }
+    @media(max-width:760px){ .sequence-grid { grid-template-columns:1fr; } }
 
     /* ── Planning source: stepped composer ──────────────────────────────── */
     .ps-step { display:flex; gap:18px; margin-bottom:24px; padding-bottom:24px; border-bottom:1px solid var(--border); }
@@ -2217,6 +2223,26 @@
           </select>
           <p id="teachingModelHint" class="hint" style="margin:7px 0 12px;font-size:12.5px">A flexible lesson flow that works well for most topics and school templates.</p>
           <div id="teachingModelFlow" class="model-flow" aria-live="polite"></div>
+          <details class="materials-box" id="sequenceDetails">
+            <summary><svg class="ic" aria-hidden="true"><use href="#i-calendar"/></svg> Weekly lesson sequence <span class="opt-tag">optional</span></summary>
+            <div class="materials-body">
+              <p class="hint" style="margin:0">Use this when one topic needs several periods in the same week, such as 3 science lessons of 35 minutes each.</p>
+              <div class="sequence-grid">
+                <label class="sequence-toggle" for="sequenceEnabled">
+                  <input id="sequenceEnabled" type="checkbox" />
+                  <span><strong>Plan more than one lesson</strong><span>LessonScope will write a connected sequence instead of one isolated lesson.</span></span>
+                </label>
+                <div>
+                  <label for="sequenceLessonCount">Lessons</label>
+                  <input id="sequenceLessonCount" type="number" min="2" max="5" value="3" />
+                </div>
+                <div>
+                  <label for="periodMinutes">Minutes each</label>
+                  <input id="periodMinutes" type="number" min="5" max="180" value="35" />
+                </div>
+              </div>
+            </div>
+          </details>
           <label for="focus">Lesson style or focus <span style="color:var(--muted);font-weight:400">(optional)</span> <span class="hint-i" tabindex="0" role="img" aria-label="An optional steer, e.g. use real-world examples, lots of group work." data-tip="e.g. use real-world examples; lots of group work">i</span></label>
           <textarea id="focus" rows="2" maxlength="400" placeholder="e.g. use real-world examples, group work, and simple classroom computer examples"></textarea>
           <div class="char-row"><span></span><span class="char-count" id="focusCount"></span></div>
@@ -2705,6 +2731,15 @@
     $('materialsAddBtn').addEventListener('click',()=>$('materialsFile').click());
     $('materialsFile').addEventListener('change',e=>uploadSourceMaterials(e.target.files));
     $('materialsClearBtn').addEventListener('click',()=>{ sourceMaterialText=''; sourceMaterialImages=[]; renderSourceMaterials(); });
+
+    function lessonSequenceFromForm(){
+      const enabled=!!$('sequenceEnabled')?.checked;
+      const lessonCount=Math.min(5,Math.max(2,parseInt(($('sequenceLessonCount')||{}).value,10)||3));
+      const periodMinutes=Math.min(180,Math.max(5,parseInt(($('periodMinutes')||{}).value,10)||35));
+      return enabled
+        ? { sequenceEnabled:true, sequenceLessonCount:lessonCount, periodMinutes }
+        : { sequenceEnabled:false };
+    }
 
     function updateTeachingModelHint(){
       const model=teachingModelsById[$('teachingModel').value]||teachingModelsById.standard;
@@ -3222,6 +3257,7 @@
       ctx={ subject, topic, grade:$('grade').value||'middle school',
         slideCount:Number($('slideCount').value)||5, tone:$('tone').value, focus:$('focus').value.trim(), objectives,
         teachingModelId:$('teachingModel').value||'standard',
+        ...lessonSequenceFromForm(),
         sourceMaterialText, sourceMaterialImages,
         templateId:selectedTemplateId,
         successCriteria:(planMode==='import'&&pulledItemData)?pulledItemData.successCriteria:[],
@@ -3341,7 +3377,9 @@
       // workbook's rows, so say that rather than "model structure".
       const templateNote=d.usedTemplate?` · matching ${d.templateName}`
         :(d.weekPlannerFields?' · your week-by-week plan':' · model structure');
-      $('planSrc').textContent=modelNote+templateNote;
+      const seq=d.sequence||((ctx&&ctx.sequenceEnabled)?{lessonCount:ctx.sequenceLessonCount,periodMinutes:ctx.periodMinutes}:null);
+      const seqNote=seq?` · ${seq.lessonCount} lessons, ${seq.periodMinutes} min each`:'';
+      $('planSrc').textContent=modelNote+templateNote+seqNote;
       $('planSections').innerHTML=d.sections.map((s,i)=>`
         <div class="plan-section" data-i="${i}" data-stage="${esc(s.stageId||'')}" data-field="${esc(s.fieldKey||'')}">
           ${s.stageId&&model?.stages?.find(stage=>stage.id===s.stageId)?`<span class="plan-stage">${esc(model.stages.find(stage=>stage.id===s.stageId).label)}</span>`:''}

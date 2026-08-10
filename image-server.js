@@ -1162,6 +1162,7 @@ app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
         templateText: tpl ? tpl.text : plannerText,
         sourceMaterialText: source,
         teachingModel: deck.teachingModelId,
+        sequence: deck.lessonSequence || null,
       });
       await capture(req, reservation, 'lessonscope.generate_lesson_plan', `${deck.subject}-${deck.topic}`);
       sections = outline
@@ -1328,6 +1329,13 @@ app.delete('/api/planning-sources/:id', requireAuth, (req, res) => {
 // or oversized requests can't inflate token budgets even if the UI is bypassed.
 const LIMITS = { subject: 60, topic: 80, objectives: 1500, focus: 400, source: 24000 };
 function clip(val, max) { return String(val || '').slice(0, max); }
+function lessonSequenceFromBody(body) {
+  const enabled = body && (body.sequenceEnabled === true || body.sequenceEnabled === 'true' || body.sequenceEnabled === 'on');
+  if (!enabled) return null;
+  const lessonCount = Math.min(5, Math.max(2, parseInt(body.sequenceLessonCount, 10) || 3));
+  const periodMinutes = Math.min(180, Math.max(5, parseInt(body.periodMinutes, 10) || 35));
+  return { enabled: true, lessonCount, periodMinutes };
+}
 const MATERIAL_IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 const MATERIAL_DOC_EXTS = new Set(['.docx', '.pdf', '.xlsx', '.xls', '.csv', '.txt', '.md', '.pptx', '.ppt']);
 const MATERIAL_DIR = path.join(MEDIA_DIR, 'lesson-materials');
@@ -1419,6 +1427,7 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
   const subject = clip(req.body.subject, LIMITS.subject);
   const topic = clip(req.body.topic, LIMITS.topic);
   const objectives = clip(req.body.objectives, LIMITS.objectives);
+  const lessonSequence = lessonSequenceFromBody(req.body);
   if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
   if (!objectives.trim()) return res.status(400).json({ error: 'Please paste the lesson objectives.' });
   // Writing the plan costs a credit; rewriting it is free within fair-use, the
@@ -1456,7 +1465,7 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
 
     const plan = await generateLessonPlan({
       subject: subject.toLowerCase(), topic: topic.toLowerCase(),
-      grade, tone, objectives, templateText: tpl ? tpl.text : plannerTemplateText, unitBlock, sourceMaterialText: sourceMaterialText(req.body), teachingModel: teachingModelId, regenerate: !!regenerate,
+      grade, tone, objectives, templateText: tpl ? tpl.text : plannerTemplateText, unitBlock, sourceMaterialText: sourceMaterialText(req.body), teachingModel: teachingModelId, sequence: lessonSequence, regenerate: !!regenerate,
     });
     await capture(req, reservation, action, `${subject}-${topic}`);
     if (isRewrite) planRegens.set(regenKey, { n: used + 1, at: Date.now() });
@@ -1476,6 +1485,7 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
 
     res.json({
       sections, teachingModelId, model: getTeachingModel(teachingModelId),
+      sequence: lessonSequence,
       weekPlannerFields: plannerOutline ? plannerOutline.map(f => f.label) : null,
       usedTemplate: !!tpl, templateName: tpl ? tpl.name : null, templateId: tpl ? tpl.id : null,
       rewritesUsed: isRewrite ? used + 1 : 0, freeRewrites: prices.FREE_REGENS,
@@ -2263,6 +2273,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
   const topic = clip(req.body.topic, LIMITS.topic);
   const objectives = clip(req.body.objectives, LIMITS.objectives);
   const focus = clip(req.body.focus, LIMITS.focus);
+  const lessonSequence = lessonSequenceFromBody(req.body);
   if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
   const { reservation, block } = await reserve(req, 'lessonscope.generate_slide_deck');
   if (block) return res.status(402).json(block);
@@ -2275,13 +2286,14 @@ app.post('/api/generate', requireAuth, async (req, res) => {
     const materialText = sourceMaterialText(req.body);
     const materialImages = sourceMaterialImages(req.body);
     const lessonPlanText = mergeSourceIntoPlanText(resolvePlanText(req.body) || (unitBlock || ''), materialText);
-    const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives, lessonPlanText, sourceMaterialText: materialText, sourceImages: materialImages, teachingModelId, extras: { regenerate: !!regenerate }, skipAssemble: true, presetId: presetId || null });
+    const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives, lessonPlanText, sourceMaterialText: materialText, sourceImages: materialImages, teachingModelId, extras: { regenerate: !!regenerate, lessonSequence }, skipAssemble: true, presetId: presetId || null });
     const id = crypto.randomUUID();
     decks.set(id, {
       subject: String(subject).toLowerCase(), topic: String(topic).toLowerCase(),
       grade: grade || 'middle school', tone, focus, band: built.band,
       slides: built.slides, images: built.images, createdAt: Date.now(),
       objectives: objectives || '', lessonPlanText, sourceMaterialText: materialText, sourceMaterialImages: materialImages, // kept so follow-up resources are grounded in this lesson
+      lessonSequence,
       teachingModelId,
       presetId: presetId || null,
     });
@@ -2297,7 +2309,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
 
     const filename = `${subject}-${topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
     res.json({
-      deckId: id, filename, band: built.band, slideCount: built.slides.length, teachingModelId,
+      deckId: id, filename, band: built.band, slideCount: built.slides.length, teachingModelId, lessonSequence,
       weekPlanner: weekPlannerResult,
       slides: built.slides.map((s, i) => previewEntry(s, built.images[i])),
     });
