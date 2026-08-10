@@ -11,6 +11,7 @@ const path = require('path');
 const crypto = require('crypto');
 const mammoth = require('mammoth');
 const XLSX = require('xlsx');
+const { docxTemplateText } = require('./docx-fields');
 const { PDFParse } = require('pdf-parse');
 const JSZip = require('jszip');
 const { DATA_DIR, writeFileAtomic, writeJsonAtomic } = require('./storage');
@@ -191,6 +192,35 @@ function loadOriginalById(userId, id) {
   return { buffer: fs.readFileSync(p), ext: rec.ext, filename: rec.filename };
 }
 
+// What the lesson-plan prompt should mirror.
+//
+// NOT the template's raw text. A school form arrives with a worked example
+// already in it, and the model imitates that example instead of filling the
+// form — it writes a generic Starter / Main Activities / Plenary plan whose
+// headings then match nothing in the real document, so the filled download
+// comes back untouched. Sending the field NAMES only is what makes the plan
+// come back in the teacher's own fields.
+//
+// Derived from the stored original on demand rather than at upload time, so
+// templates saved before this existed get it without being re-uploaded.
+function templatePromptText(userId, tpl) {
+  if (!tpl) return '';
+  if (tpl.ext === '.docx') {
+    try {
+      const orig = loadOriginalById(userId, tpl.id);
+      if (orig) {
+        const fields = docxTemplateText(orig.buffer);
+        if (fields) return fields;
+      }
+    } catch (err) {
+      console.error('Template field extraction failed:', err.message);
+    }
+  }
+  // Anything else — PDF, PowerPoint, a .docx with no recognisable form —
+  // falls back to the extracted text, which is what shipped before.
+  return tpl.text || '';
+}
+
 // Backward-compatible helpers: "the default template" = most recently saved.
 function loadTemplate(userId) { return listTemplates(userId)[0] || null; }
 function loadOriginal(userId) { const t = loadTemplate(userId); return t ? loadOriginalById(userId, t.id) : null; }
@@ -198,5 +228,5 @@ function loadOriginal(userId) { const t = loadTemplate(userId); return t ? loadO
 module.exports = {
   extractText, extractPptxSlides, SUPPORTED, TYPES,
   listTemplates, getTemplate, saveTemplate, renameTemplate, deleteTemplate, loadOriginalById,
-  loadTemplate, loadOriginal,
+  loadTemplate, loadOriginal, templatePromptText,
 };

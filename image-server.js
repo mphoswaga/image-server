@@ -8,7 +8,7 @@ const path = require('path');
 const { buildDeck, rebuildDeck, alternativeImage, findReusableImage, searchLibrary, getLibraryImage, listLibrary, addLibraryImages, libraryStats, getLibraryByTopic, recentLibraryImages, removeLibraryImage } = require('./generate');
 const quota = require('./quota');
 const { generateOneSlide } = require('./content');
-const { extractText, extractPptxSlides, saveTemplate, listTemplates, getTemplate, renameTemplate, deleteTemplate, loadOriginalById, loadTemplate, loadOriginal, TYPES } = require('./template');
+const { extractText, extractPptxSlides, saveTemplate, listTemplates, getTemplate, renameTemplate, deleteTemplate, loadOriginalById, loadTemplate, loadOriginal, templatePromptText, TYPES } = require('./template');
 const { TEMPLATE_PROMPT_LIMIT, generateLessonPlan, planToText } = require('./lesson-plan');
 const { getTeachingModel, normalizeTeachingModelId, listTeachingModels } = require('./teaching-models');
 const { fillDocx, fillXlsx } = require('./fill-template');
@@ -1159,7 +1159,7 @@ app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
         // The deck IS the lesson, so it grounds the plan. Real objectives are
         // used when the deck has them; otherwise the slides speak for themselves.
         objectives: String(deck.objectives || '').trim() || objectivesFromDeck(deck) || source,
-        templateText: tpl ? tpl.text : plannerText,
+        templateText: tpl ? templatePromptText(req.userId, tpl) : plannerText,
         sourceMaterialText: source,
         teachingModel: deck.teachingModelId,
         sequence: deck.lessonSequence || null,
@@ -1479,7 +1479,7 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
 
     const plan = await generateLessonPlan({
       subject: subject.toLowerCase(), topic: topic.toLowerCase(),
-      grade, tone, objectives, templateText: tpl ? tpl.text : plannerTemplateText, unitBlock, sourceMaterialText: sourceMaterialText(req.body), teachingModel: teachingModelId, sequence: lessonSequence, regenerate: !!regenerate,
+      grade, tone, objectives, templateText: tpl ? templatePromptText(req.userId, tpl) : plannerTemplateText, unitBlock, sourceMaterialText: sourceMaterialText(req.body), teachingModel: teachingModelId, sequence: lessonSequence, regenerate: !!regenerate,
     });
     await capture(req, reservation, action, `${subject}-${topic}`);
     if (isRewrite) planRegens.set(regenKey, { n: used + 1, at: Date.now() });
