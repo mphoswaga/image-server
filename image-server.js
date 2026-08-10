@@ -1204,7 +1204,7 @@ app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
           : (deck ? criteriaFromDeck(deck).split('\n').filter(Boolean) : []),
         lessonPlan: { sections },
         slides: (deck && deck.slides) || [],
-        sequence: (deck && deck.lessonSequence) || null,
+        sequence: (deck && deck.lessonSequence) || lessonSequenceFromBody(req.body),
       });
       const plannerBuf = await weekPlanner.plannerBuffer(req.userId).catch(() => null);
       if (plannerBuf) {
@@ -1445,6 +1445,9 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
   const topic = clip(req.body.topic, LIMITS.topic);
   const objectives = clip(req.body.objectives, LIMITS.objectives);
   const lessonSequence = lessonSequenceFromBody(req.body);
+  const sequenceLessonNumber = lessonSequence
+    ? Math.min(lessonSequence.lessonCount, Math.max(1, parseInt(req.body.sequenceLessonNumber, 10) || 1))
+    : null;
   if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
   if (!objectives.trim()) return res.status(400).json({ error: 'Please paste the lesson objectives.' });
   // Writing the plan costs a credit; rewriting it is free within fair-use, the
@@ -1482,20 +1485,20 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
 
     const plan = await generateLessonPlan({
       subject: subject.toLowerCase(), topic: topic.toLowerCase(),
-      grade, tone, objectives, templateText: tpl ? templatePromptText(req.userId, tpl) : plannerTemplateText, unitBlock, sourceMaterialText: sourceMaterialText(req.body), teachingModel: teachingModelId, sequence: lessonSequence, structuredSequence: !!(plannerOutline && lessonSequence), regenerate: !!regenerate,
+      grade, tone, objectives, templateText: tpl ? templatePromptText(req.userId, tpl) : plannerTemplateText, unitBlock, sourceMaterialText: sourceMaterialText(req.body), teachingModel: teachingModelId, sequence: lessonSequence, structuredSequence: false, sequenceLessonNumber, previousLessonPlanText: clip(req.body.previousLessonPlanText, 8000), regenerate: !!regenerate,
     });
 
     // Show the workbook's fields in their own order, with the objectives and
     // success criteria the school actually set — read-only, because they are
     // copied from the pacing guide and must never be reworded.
     const sections = plannerOutline
-      ? (lessonSequence ? orderSequenceSectionsByOutline : orderSectionsByOutline)(plan.sections, plannerOutline, {
+      ? orderSectionsByOutline(plan.sections, plannerOutline, {
           objectives,
           successCriteria: Array.isArray(req.body.successCriteria) ? req.body.successCriteria : [],
           subject, topic,
           unit: clip(req.body.unitName || req.body.unit, 200),
           period: clip(req.body.period, 120),
-        }, lessonSequence)
+        })
       : plan.sections;
 
     await capture(req, reservation, action, `${subject}-${topic}`);
@@ -1503,7 +1506,7 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
 
     res.json({
       sections, teachingModelId, model: getTeachingModel(teachingModelId),
-      sequence: lessonSequence,
+      sequence: lessonSequence, sequenceLessonNumber,
       weekPlannerFields: plannerOutline ? plannerOutline.map(f => f.label) : null,
       usedTemplate: !!tpl, templateName: tpl ? tpl.name : null, templateId: tpl ? tpl.id : null,
       rewritesUsed: isRewrite ? used + 1 : 0, freeRewrites: prices.FREE_REGENS,

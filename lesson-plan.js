@@ -67,7 +67,22 @@ The lessons must build on each other across the week. Do not repeat the same les
 ${hasTemplate ? 'Keep the school template headings exactly as given, but inside the relevant content fields separate the work into Lesson 1, Lesson 2, and so on with timings.' : 'Use clear headings and subheadings so the teacher can see the separate lessons.'}\n`;
 }
 
-function buildPrompt({ subject, topic, grade, tone, objectives, templateText, unitBlock, sourceMaterialText, teachingModel, sequence, structuredSequence = false }) {
+function sequenceStepPromptBlock(sequence, lessonNumber, previousLessonPlanText = '') {
+  if (!sequence || !sequence.enabled || !lessonNumber) return '';
+  const lessonCount = Math.min(5, Math.max(2, parseInt(sequence.lessonCount, 10) || 3));
+  const periodMinutes = Math.min(180, Math.max(5, parseInt(sequence.periodMinutes, 10) || 35));
+  const step = Math.min(lessonCount, Math.max(1, parseInt(lessonNumber, 10) || 1));
+  const previous = String(previousLessonPlanText || '').slice(0, 8000).trim();
+  return `\nSTAGED WEEKLY LESSON SEQUENCE:
+Create ONLY Lesson ${step} of ${lessonCount}. Do not create, outline, preview, or append any other lesson in this response.
+This lesson lasts exactly ${periodMinutes} minutes. Its activities and timing must total ${periodMinutes} minutes.
+The complete sequence covers the same objectives across the week, but this response must contain a complete, classroom-ready plan for period ${step} only.
+${step > 1 ? `Build naturally on the earlier lesson plans below. Advance the learning instead of repeating them.\n\n--- EARLIER LESSONS START ---\n${previous || 'No earlier lesson summary was supplied.'}\n--- EARLIER LESSONS END ---` : 'Establish the foundations that later lessons can build on.'}
+Include teacher actions, student practice, a check for understanding, and useful resources or homework in the relevant fields.
+Do not put "Lesson ${step}" into school template headings; the app labels the step outside the plan.\n`;
+}
+
+function buildPrompt({ subject, topic, grade, tone, objectives, templateText, unitBlock, sourceMaterialText, teachingModel, sequence, structuredSequence = false, sequenceLessonNumber = null, previousLessonPlanText = '' }) {
   const pretty = topic.replace(/-/g, ' ');
   const depth = gradeProfile(grade).content.depth;
   const model = getTeachingModel(teachingModel);
@@ -84,7 +99,9 @@ ${templateText.slice(0, TEMPLATE_PROMPT_LIMIT)}
   const sourceBlock = sourceMaterialText
     ? `\nThe teacher uploaded OPTIONAL SOURCE MATERIALS below (textbook extract, notes, PDF text, spreadsheet data, or similar). Use these to make the lesson accurate to what students are supposed to learn. Prefer this material over generic examples when it is relevant, but do not copy long passages verbatim and do not mention uploaded files to students.\n\n--- SOURCE MATERIALS START ---\n${String(sourceMaterialText).slice(0, 5000)}\n--- SOURCE MATERIALS END ---\n`
     : '';
-  const sequenceBlock = sequencePromptBlock(sequence, !!templateText, structuredSequence);
+  const sequenceBlock = sequenceLessonNumber
+    ? sequenceStepPromptBlock(sequence, sequenceLessonNumber, previousLessonPlanText)
+    : sequencePromptBlock(sequence, !!templateText, structuredSequence);
   const outputShapeRule = structuredSequence
     ? 'Output one section per template heading PER LESSON, in lesson order, each as {heading, content, stageId, lesson}. The lesson number must match the period the content belongs to.'
     : 'Output one section per template heading, in the same order, each as {heading, content, stageId}.';
@@ -153,7 +170,7 @@ function placeholderPlan(objectives, teachingModel) {
   };
 }
 
-async function generateLessonPlan({ subject, topic, grade = 'middle school', tone = 'clear and engaging', objectives, templateText, unitBlock = '', sourceMaterialText = '', teachingModel = 'standard', sequence = null, structuredSequence = false, regenerate = false }) {
+async function generateLessonPlan({ subject, topic, grade = 'middle school', tone = 'clear and engaging', objectives, templateText, unitBlock = '', sourceMaterialText = '', teachingModel = 'standard', sequence = null, structuredSequence = false, sequenceLessonNumber = null, previousLessonPlanText = '', regenerate = false }) {
   const teachingModelId = normalizeTeachingModelId(teachingModel);
   const model = getTeachingModel(teachingModelId);
   const cleanSequence = sequence && sequence.enabled ? {
@@ -161,15 +178,18 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     lessonCount: Math.min(5, Math.max(2, parseInt(sequence.lessonCount, 10) || 3)),
     periodMinutes: Math.min(180, Math.max(5, parseInt(sequence.periodMinutes, 10) || 35)),
   } : null;
+  const cleanLessonNumber = cleanSequence && sequenceLessonNumber != null
+    ? Math.min(cleanSequence.lessonCount, Math.max(1, parseInt(sequenceLessonNumber, 10) || 1))
+    : null;
   if (!process.env.OPENAI_API_KEY) {
     console.log('No OPENAI_API_KEY set — using placeholder lesson plan.');
     const placeholder = placeholderPlan(objectives, teachingModelId);
-    if (cleanSequence && structuredSequence) {
+    if (cleanSequence && structuredSequence && !cleanLessonNumber) {
       placeholder.sections = Array.from({ length: cleanSequence.lessonCount }, (_, lessonIndex) =>
         placeholder.sections.map(section => ({ ...section, lesson: lessonIndex + 1 }))
       ).flat();
     }
-    return { ...placeholder, teachingModelId, sequence: cleanSequence };
+    return { ...placeholder, teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
   }
   const { wrap } = require('./cache');
   return wrap('lesson-plan', {
@@ -183,19 +203,21 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     sourceMaterialText: String(sourceMaterialText || '').slice(0, 5000).trim(),
     teachingModelId,
     sequence: cleanSequence,
-    structuredSequence: !!(cleanSequence && structuredSequence),
+    structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber),
+    sequenceLessonNumber: cleanLessonNumber,
+    previousLessonPlanText: String(previousLessonPlanText || '').slice(0, 8000).trim(),
     regenerate,
   }, async () => {
     const client = aiClient();
     const response = await client.chat.completions.create({
       model: MODEL,
-      max_tokens: cleanSequence && structuredSequence ? 12000 : 6000,
-      messages: [{ role: 'user', content: buildPrompt({ subject, topic, grade, tone, objectives, templateText, unitBlock, sourceMaterialText, teachingModel: teachingModelId, sequence: cleanSequence, structuredSequence: !!(cleanSequence && structuredSequence) }) }],
-      response_format: { type: 'json_schema', json_schema: { name: 'lesson_plan', strict: true, schema: planSchema(model, cleanSequence, !!(cleanSequence && structuredSequence)) } },
+      max_tokens: cleanSequence && structuredSequence && !cleanLessonNumber ? 12000 : 6000,
+      messages: [{ role: 'user', content: buildPrompt({ subject, topic, grade, tone, objectives, templateText, unitBlock, sourceMaterialText, teachingModel: teachingModelId, sequence: cleanSequence, structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber), sequenceLessonNumber: cleanLessonNumber, previousLessonPlanText }) }],
+      response_format: { type: 'json_schema', json_schema: { name: 'lesson_plan', strict: true, schema: planSchema(model, cleanSequence, !!(cleanSequence && structuredSequence && !cleanLessonNumber)) } },
     });
     const text = response.choices[0]?.message?.content;
     if (!text) throw new Error('No lesson plan returned from the model');
-    return { ...JSON.parse(text), teachingModelId, sequence: cleanSequence };
+    return { ...JSON.parse(text), teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
   });
 }
 
@@ -204,4 +226,4 @@ function planToText(plan) {
   return (plan.sections || []).map(s => `## ${s.heading}${s.stageId ? ` [stage: ${s.stageId}]` : ''}\n${s.content}`).join('\n\n');
 }
 
-module.exports = { TEMPLATE_PROMPT_LIMIT, generateLessonPlan, planToText, planSchema, sequencePromptBlock };
+module.exports = { TEMPLATE_PROMPT_LIMIT, generateLessonPlan, planToText, planSchema, sequencePromptBlock, sequenceStepPromptBlock, buildPrompt };

@@ -27,6 +27,18 @@ test('the wizard preserves every field needed by the existing generation request
   assert.match(html, /lessonSequenceFromForm\(\)/, 'weekly sequence values remain part of the request');
 });
 
+test('multi-lesson mode exposes staged plan and slide controls without replacing single-lesson controls', () => {
+  for (const id of [
+    'sequencePlanFlow', 'sequencePlanTabs', 'nextSequencePlanBtn',
+    'sequenceSlidesFlow', 'sequenceSlidesTabs', 'nextSequenceSlidesBtn',
+    'acceptBtn', 'dlPlanBtn', 'downloadBtn',
+  ]) {
+    assert.equal([...markup.matchAll(new RegExp(`id="${id}"`, 'g'))].length, 1, `${id} should exist exactly once`);
+  }
+  assert.match(html, /sequenceEnabled:false/, 'each staged deck disables the old all-at-once sequence generation');
+  assert.match(html, /if\(sequenceMode\(\)\)/, 'sequence behavior is isolated behind an explicit branch');
+});
+
 test('import routes retain a visible return to the starting-point choice', () => {
   assert.equal([...markup.matchAll(/data-mode-back/g)].length, 2);
   assert.match(markup, /id="importPlanBtn"/);

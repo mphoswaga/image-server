@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { getTeachingModel } = require('../teaching-models');
-const { planSchema, sequencePromptBlock } = require('../lesson-plan');
+const { planSchema, sequencePromptBlock, sequenceStepPromptBlock, buildPrompt } = require('../lesson-plan');
 const { groupSectionsByLesson, assertLessonFields, combineOrderedLessons } = require('../lesson-sequence');
 const weekPlanner = require('../week-planner');
 
@@ -26,6 +26,24 @@ test('non-workbook sequence instructions keep the existing marker format', () =>
   assert.match(prompt, /Clearly label the content for each period/);
   assert.match(prompt, /inside the relevant content fields separate the work/);
   assert.doesNotMatch(prompt, /"lesson" property/);
+});
+
+test('staged sequence prompt requests exactly one lesson and carries earlier context', () => {
+  const prompt = sequenceStepPromptBlock(sequence, 2, 'LESSON 1\nStarter: Recall prior knowledge');
+  assert.match(prompt, /Create ONLY Lesson 2 of 3/);
+  assert.match(prompt, /exactly 35 minutes/);
+  assert.match(prompt, /Advance the learning instead of repeating/);
+  assert.match(prompt, /Starter: Recall prior knowledge/);
+  assert.match(prompt, /Do not create, outline, preview, or append any other lesson/);
+});
+
+test('single lesson prompt remains free of staged sequence instructions', () => {
+  const prompt = buildPrompt({
+    subject: 'Science', topic: 'forces', grade: 'middle school', tone: 'clear',
+    objectives: 'Explain balanced forces', teachingModel: 'standard', sequence: null,
+  });
+  assert.doesNotMatch(prompt, /STAGED WEEKLY LESSON SEQUENCE/);
+  assert.doesNotMatch(prompt, /Create ONLY Lesson/);
 });
 
 test('an incomplete generated sequence is rejected before it can be filed', () => {

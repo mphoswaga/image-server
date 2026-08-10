@@ -437,6 +437,16 @@
     #acceptBtn {
       grid-column:1 / -1;
     }
+    .sequence-flow { display:none; margin:14px 0 18px; padding:14px 16px; border:1px solid #cfe3dd; border-radius:12px; background:#f4fbf8; }
+    .sequence-flow.visible { display:block; }
+    .sequence-flow-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    .sequence-flow-title { color:var(--primary); font-weight:800; }
+    .sequence-flow-note { margin:4px 0 0; color:var(--muted); font-size:13px; line-height:1.45; }
+    .sequence-tabs { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+    .sequence-tab { border:1px solid var(--border); background:#fff; color:var(--primary); border-radius:8px; padding:8px 11px; font:inherit; font-size:13px; font-weight:700; cursor:pointer; }
+    .sequence-tab.active { border-color:var(--accent); background:var(--accent-soft); color:var(--accent); }
+    .sequence-tab:disabled { color:var(--muted); cursor:not-allowed; background:#f4f6f8; }
+    .sequence-next { margin-top:12px; width:100%; }
 
     /* Slides preview */
     .edit-tip { text-align:center; color:var(--muted); font-size:13.5px; margin-bottom:18px; display:flex; align-items:center; justify-content:center; gap:7px; }
@@ -2332,6 +2342,11 @@
         <div class="meta"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> <b>Review your lesson plan</b> <span id="planSrc" style="color:var(--muted);font-size:13px"></span></div>
       </div>
       <p class="hint">Edit anything below. When it looks right, create the slides — they'll follow this plan.</p>
+      <div id="sequencePlanFlow" class="sequence-flow" aria-live="polite">
+        <div class="sequence-flow-head"><div><div id="sequencePlanTitle" class="sequence-flow-title"></div><p id="sequencePlanNote" class="sequence-flow-note"></p></div></div>
+        <div id="sequencePlanTabs" class="sequence-tabs"></div>
+        <button id="nextSequencePlanBtn" type="button" class="btn primary sequence-next"></button>
+      </div>
       <div id="planSections"></div>
       <div class="wp-slot-mount" data-wp-mount="stage:plan" style="margin-top:16px"></div>
       <div class="plan-actions" style="margin-top:16px">
@@ -2354,6 +2369,11 @@
           <button id="slidesExportBtn" class="btn ghost"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Save to Google Slides</button>
           <button id="restartBtn" class="btn ghost">Start over</button>
         </div>
+      </div>
+      <div id="sequenceSlidesFlow" class="sequence-flow" aria-live="polite">
+        <div class="sequence-flow-head"><div><div id="sequenceSlidesTitle" class="sequence-flow-title"></div><p id="sequenceSlidesNote" class="sequence-flow-note"></p></div></div>
+        <div id="sequenceSlidesTabs" class="sequence-tabs"></div>
+        <button id="nextSequenceSlidesBtn" type="button" class="btn accent sequence-next"></button>
       </div>
       <p class="edit-tip"><svg class="ic" aria-hidden="true" style="color:var(--accent)"><use href="#i-pencil"/></svg> Click any text to <b>edit it</b> · use <b>Replace</b> to search images · <b>Regenerate</b> before downloading.</p>
       <p id="driveExportStatus" class="edit-tip" style="display:none"></p>
@@ -2753,6 +2773,8 @@
     function badgeMeta(src){ if(src==='ai-generated') return {cls:'ai',label:'AI'}; if(src==='svg-diagram') return {cls:'ai',label:'diagram'}; if(src==='teacher-upload') return {cls:'fetched',label:'your material'}; if(src&&src!=='library') return {cls:'fetched',label:'fetched'}; return {cls:'',label:'library'}; }
     const composer=$('composer'), planStage=$('planStage'), results=$('results'), statusEl=$('status');
     let library={subjects:[],topicsBySubject:{}}, ctx=null, currentDeckId=null;
+    let sequencePlans=[], activeSequencePlanIndex=0, sequencePlanDownloaded=false;
+    let sequenceDecks=[], activeSequenceDeckIndex=0, sequenceStartLessonNumber=null;
     let teachingModelsById={standard:{id:'standard',label:'Standard lesson',description:'A flexible lesson flow that works well for most topics and school templates.'}}, selectedTeachingModelId='standard';
     let sourceMaterialText='', sourceMaterialImages=[];
 
@@ -3424,6 +3446,8 @@
         // from the pacing guide the teacher already picked from.
         weekNumber:(planMode==='import'&&selWeekNum)?selWeekNum:null,
         unitName:(planMode==='import'&&pulledItemData)?(pulledItemData.unit||pulledItemData.unitName||''):'' };
+      sequencePlans=[]; activeSequencePlanIndex=0; sequencePlanDownloaded=false;
+      sequenceDecks=[]; activeSequenceDeckIndex=0; sequenceStartLessonNumber=null;
       $('planBtn').disabled=true; statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>Writing a lesson plan that matches your template…';
       try{
         const r=await fetch('/api/lesson-plan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(ctx)});
@@ -3521,7 +3545,12 @@
     $('importSlidesPlanBtn').addEventListener('click',()=>importSlides(true));
     $('importSlidesOnlyBtn').addEventListener('click',()=>importSlides(false));
 
-    function renderPlan(d){
+    function sequenceMode(){ return !!(ctx&&ctx.sequenceEnabled&&Number(ctx.sequenceLessonCount)>1); }
+    function saveActiveSequencePlan(){
+      if(!sequenceMode()||!sequencePlans[activeSequencePlanIndex]) return;
+      sequencePlans[activeSequencePlanIndex]={...sequencePlans[activeSequencePlanIndex],...collectPlan()};
+    }
+    function paintPlan(d){
       planTemplateId=d.templateId||null;
       // Their own slides are already made — this screen is for the plan only.
       $('acceptBtn').innerHTML=deckImported
@@ -3547,6 +3576,47 @@
         </div>`).join('');
       planStage.querySelectorAll('textarea.content').forEach(t=>{ t.style.height='auto'; t.style.height=t.scrollHeight+'px'; t.addEventListener('input',()=>{t.style.height='auto';t.style.height=t.scrollHeight+'px';}); });
     }
+    function renderSequencePlanFlow(){
+      const flow=$('sequencePlanFlow');
+      if(!sequenceMode()){
+        flow.classList.remove('visible'); $('acceptBtn').disabled=false; $('dlPlanBtn').disabled=false;
+        $('dlPlanBtn').innerHTML=ICON('i-download')+' Download lesson plan';
+        return;
+      }
+      const total=Number(ctx.sequenceLessonCount)||3;
+      const ready=sequencePlans.filter(Boolean).length;
+      const complete=ready===total;
+      flow.classList.add('visible');
+      $('sequencePlanTitle').textContent=`Lesson plan ${activeSequencePlanIndex+1} of ${total}`;
+      $('sequencePlanNote').textContent=complete
+        ? (sequencePlanDownloaded?'Updated lesson plan downloaded. You can now create the slides one lesson at a time.':'All lesson plans are ready. Download the updated lesson plan, then continue to the slides.')
+        : `Review this plan, then generate lesson plan ${ready+1}. Each lesson is created separately so it can build on the one before it.`;
+      $('sequencePlanTabs').innerHTML=Array.from({length:total},(_,index)=>`<button type="button" class="sequence-tab${index===activeSequencePlanIndex?' active':''}" data-plan-index="${index}"${sequencePlans[index]?'':' disabled'}>Lesson ${index+1}${sequencePlans[index]?' ✓':''}</button>`).join('');
+      const next=$('nextSequencePlanBtn');
+      next.style.display=complete?'none':'';
+      next.innerHTML=complete?'':`${ICON('i-spark')}Generate lesson plan ${ready+1}`;
+      if(!complete) setBtnCost(next,'lessonscope.generate_lesson_plan');
+      $('acceptBtn').disabled=!complete;
+      $('acceptBtn').innerHTML=complete
+        ? ICON('i-layers')+' Create slides for lesson 1'
+        : ICON('i-layers')+` Finish all ${total} lesson plans first`;
+      $('dlPlanBtn').disabled=!complete;
+      $('dlPlanBtn').innerHTML=ICON('i-download')+(complete?' Download updated lesson plan':' Complete all plans to download');
+    }
+    function renderPlan(d){
+      if(sequenceMode()&&d.sequenceLessonNumber){
+        const index=Math.max(0,Number(d.sequenceLessonNumber)-1);
+        sequencePlans[index]={...d,sections:(d.sections||[]).map(section=>({...section}))};
+        activeSequencePlanIndex=index;
+      }
+      paintPlan(d);
+      renderSequencePlanFlow();
+    }
+    $('sequencePlanTabs').addEventListener('click',e=>{
+      const tab=e.target.closest('[data-plan-index]'); if(!tab||tab.disabled) return;
+      saveActiveSequencePlan(); activeSequencePlanIndex=Number(tab.dataset.planIndex);
+      paintPlan(sequencePlans[activeSequencePlanIndex]); renderSequencePlanFlow();
+    });
     function collectPlan(){
       return { sections:[...planStage.querySelectorAll('.plan-section')].map(el=>({
         heading:el.querySelector('.heading').value.trim(),
@@ -3557,6 +3627,44 @@
         fieldKey:el.dataset.field||undefined,
       })) };
     }
+    function earlierSequencePlansText(nextLessonNumber){
+      return sequencePlans.slice(0,Math.max(0,nextLessonNumber-1)).filter(Boolean).map((plan,index)=>[
+        `LESSON ${index+1}`,
+        ...(plan.sections||[]).map(section=>`${section.heading}: ${section.content}`),
+      ].join('\n')).join('\n\n').slice(0,8000);
+    }
+    function combinedSequencePlan(){
+      saveActiveSequencePlan();
+      const plans=sequencePlans.filter(Boolean);
+      if(!sequenceMode()||plans.length!==Number(ctx.sequenceLessonCount)) return collectPlan();
+      const total=Number(ctx.sequenceLessonCount), minutes=Number(ctx.periodMinutes)||35;
+      const shared=new Set(['subject','unit','topic','periodAndLength','redThread','objectives','successCriteria','postLessonReflection']);
+      const first=plans[0].sections||[];
+      return {sections:first.map((section,index)=>{
+        if(section.fieldKey&&shared.has(section.fieldKey)) return {...section};
+        const content=plans.map((plan,lessonIndex)=>{
+          const matching=(plan.sections||[]).find(item=>section.fieldKey&&item.fieldKey===section.fieldKey)||(plan.sections||[])[index];
+          return `Lesson ${lessonIndex+1} of ${total} (${minutes} minutes)\n${String(matching&&matching.content||'').trim()}`;
+        }).join('\n\n');
+        return {...section,content};
+      })};
+    }
+    $('nextSequencePlanBtn').addEventListener('click',async()=>{
+      saveActiveSequencePlan();
+      const next=sequencePlans.filter(Boolean).length+1, total=Number(ctx.sequenceLessonCount)||3;
+      if(next>total) return;
+      const btn=$('nextSequencePlanBtn');
+      btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Writing lesson plan '+next+'…';
+      statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>Building lesson '+next+' on the previous lesson…';
+      try{
+        const r=await fetch('/api/lesson-plan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...ctx,sequenceLessonNumber:next,previousLessonPlanText:earlierSequencePlansText(next)})});
+        const d=await r.json();
+        if(creditBlocked(r,d)){ statusEl.innerHTML=''; return; }
+        if(!r.ok) throw new Error(d.error);
+        statusEl.innerHTML=''; renderPlan(d); planStage.scrollIntoView({behavior:'smooth',block:'start'}); refreshCredits();
+      }catch(err){ statusEl.className='status err'; statusEl.textContent=err.message; }
+      finally{ btn.disabled=false; renderSequencePlanFlow(); }
+    });
 
     // Downloading the plan is offered in two places: on the review screen, and
     // again beside the lesson pack once the deck exists — teachers end up there
@@ -3596,7 +3704,9 @@
 
     async function downloadLessonPlan(btn){
       requireTemplate('your lesson plan');
-      const plan=collectPlan();
+      const plan=sequenceMode()&&sequencePlans.filter(Boolean).length===Number(ctx.sequenceLessonCount)
+        ? combinedSequencePlan()
+        : collectPlan();
       // No plan on screen but a deck in hand — the teacher started from slides,
       // or skipped straight to worksheets. The deck holds the lesson, so the
       // server writes the plan from it. That is a real generation, so say so
@@ -3622,6 +3732,9 @@
         const blob=await r.blob(), url=URL.createObjectURL(blob), a=document.createElement('a');
         const cd=r.headers.get('Content-Disposition')||''; const m=cd.match(/filename="([^"]+)"/);
         a.href=url; a.download=m?m[1]:'lesson-plan'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+        if(sequenceMode()&&sequencePlans.filter(Boolean).length===Number(ctx.sequenceLessonCount)){
+          sequencePlanDownloaded=true; renderSequencePlanFlow(); toast('Updated multi-lesson plan downloaded.','ok');
+        }
         refreshCredits();
         if(weekPlannerState && weekPlannerState.present) loadWeekPlanner();
       }catch(err){ toast(err.message); }
@@ -3645,21 +3758,85 @@
       $('regenPlanBtn').disabled=true; statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>Rewriting the plan…';
       // regenerate:true is what makes this actually re-run — without it the
       // cache key matches the first call and the identical plan comes back.
-      try{ const r=await fetch('/api/lesson-plan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...ctx,regenerate:true})});
+      try{ const r=await fetch('/api/lesson-plan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...ctx,regenerate:true,
+          ...(sequenceMode()?{sequenceLessonNumber:activeSequencePlanIndex+1,previousLessonPlanText:earlierSequencePlansText(activeSequencePlanIndex+1)}:{})})});
         const d=await r.json(); if(!r.ok) throw new Error(d.error); statusEl.innerHTML=''; renderPlan(d);
       }catch(err){ statusEl.className='status err'; statusEl.textContent=err.message; }
       $('regenPlanBtn').disabled=false;
     });
 
     const STEPS=['Turning the plan into slides…','Finding & matching images (new topics are fetched + captioned)…','Assembling your deck…'];
+    function applyEditsToDeck(deck,edits){
+      if(!deck||!Array.isArray(deck.slides)) return deck;
+      const byIndex=new Map((edits||[]).map(edit=>[edit.index,edit]));
+      return {...deck,slides:deck.slides.map((slide,index)=>({...slide,...(byIndex.get(index)||{})}))};
+    }
+    function saveActiveSequenceDeck(){
+      if(!sequenceMode()||!sequenceDecks[activeSequenceDeckIndex]) return;
+      sequenceDecks[activeSequenceDeckIndex]=applyEditsToDeck(sequenceDecks[activeSequenceDeckIndex],collectEdits());
+    }
+    function renderSequenceSlidesFlow(){
+      const flow=$('sequenceSlidesFlow');
+      if(!sequenceMode()){ flow.classList.remove('visible'); return; }
+      const total=Number(ctx.sequenceLessonCount)||3, ready=sequenceDecks.filter(Boolean).length;
+      flow.classList.add('visible');
+      $('sequenceSlidesTitle').textContent=`Slides for lesson ${activeSequenceDeckIndex+1} of ${total}`;
+      $('sequenceSlidesNote').textContent=ready===total
+        ? 'All lesson slide decks are ready. Use the lesson tabs to review and download each deck.'
+        : `Review or download this deck, then generate slides for lesson ${ready+1}.`;
+      $('sequenceSlidesTabs').innerHTML=Array.from({length:total},(_,index)=>`<button type="button" class="sequence-tab${index===activeSequenceDeckIndex?' active':''}" data-deck-index="${index}"${sequenceDecks[index]?'':' disabled'}>Lesson ${index+1}${sequenceDecks[index]?' ✓':''}</button>`).join('');
+      const next=$('nextSequenceSlidesBtn');
+      next.style.display=ready===total?'none':'';
+      next.innerHTML=ready===total?'':`${ICON('i-layers')}Generate slides for lesson ${ready+1}`;
+      if(ready!==total) setBtnCost(next,'lessonscope.generate_slide_deck');
+    }
+    function showSequenceDeck(index){
+      if(!sequenceDecks[index]) return;
+      saveActiveSequenceDeck(); activeSequenceDeckIndex=index;
+      currentDeckId=sequenceDecks[index].deckId; renderDeck(sequenceDecks[index]); renderSequenceSlidesFlow();
+    }
+    async function generateSequenceDeck(index,button){
+      const plan=sequencePlans[index]; if(!plan) throw new Error(`Lesson plan ${index+1} is not ready yet.`);
+      const total=Number(ctx.sequenceLessonCount)||3;
+      const original=button&&button.innerHTML; if(button){ button.disabled=true; button.innerHTML='<span class="spinner"></span>Generating slides for lesson '+(index+1)+'…'; }
+      let i=0; statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>'+STEPS[0];
+      const tmr=setInterval(()=>{ i=Math.min(i+1,STEPS.length-1); statusEl.innerHTML='<span class="spinner"></span>'+STEPS[i]; },1900);
+      try{
+        const body={...ctx,sequenceEnabled:false,lessonPlan:{sections:plan.sections},presetId:selectedPresetId,
+          lessonNumber:Number.isFinite(sequenceStartLessonNumber)?sequenceStartLessonNumber+index:undefined,
+          focus:[ctx.focus,`This is lesson ${index+1} of ${total}. Build slides only for this lesson plan.`].filter(Boolean).join(' ')};
+        const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        const d=await r.json();
+        if(creditBlocked(r,d)){ statusEl.innerHTML=''; return false; }
+        if(!r.ok) throw new Error(d.error);
+        sequenceDecks[index]=d; activeSequenceDeckIndex=index; currentDeckId=d.deckId;
+        statusEl.innerHTML=''; renderDeck(d); renderSequenceSlidesFlow(); show('slides'); setStep(3); results.scrollIntoView({behavior:'smooth'}); refreshCredits();
+        if(d.weekPlanner&&d.weekPlanner.ok) loadWeekPlanner();
+        return true;
+      } finally { clearInterval(tmr); if(button){ button.disabled=false; if(original) button.innerHTML=original; } renderSequenceSlidesFlow(); }
+    }
+    $('sequenceSlidesTabs').addEventListener('click',e=>{ const tab=e.target.closest('[data-deck-index]'); if(tab&&!tab.disabled) showSequenceDeck(Number(tab.dataset.deckIndex)); });
+    $('nextSequenceSlidesBtn').addEventListener('click',async()=>{
+      saveActiveSequenceDeck(); const next=sequenceDecks.filter(Boolean).length;
+      try{ await generateSequenceDeck(next,$('nextSequenceSlidesBtn')); }
+      catch(err){ statusEl.className='status err'; statusEl.textContent=err.message; }
+    });
     $('acceptBtn').addEventListener('click', async ()=>{
       const lessonPlan=collectPlan();
       // Ask which week before starting, not after — a lesson generated without
       // one has nowhere to be filed in the workbook. Cancelling here cancels
       // the whole thing rather than generating something that can't be filed.
       if(resolveWeekNumber()===null) return;
-      resolveLessonNumber();
+      const selectedLessonNumber=resolveLessonNumber();
       if(deckImported){ show('slides'); setStep(3); results.scrollIntoView({behavior:'smooth'}); return; }
+      if(sequenceMode()){
+        saveActiveSequencePlan();
+        if(sequencePlans.filter(Boolean).length!==Number(ctx.sequenceLessonCount)){ toast('Generate every lesson plan before creating slides.'); return; }
+        sequenceDecks=[]; activeSequenceDeckIndex=0; sequenceStartLessonNumber=Number.isFinite(selectedLessonNumber)?selectedLessonNumber:null;
+        try{ await generateSequenceDeck(0,$('acceptBtn')); }
+        catch(err){ statusEl.className='status err'; statusEl.textContent=err.message; }
+        return;
+      }
       $('acceptBtn').disabled=true; let i=0; statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>'+STEPS[0];
       const tmr=setInterval(()=>{ i=Math.min(i+1,STEPS.length-1); statusEl.innerHTML='<span class="spinner"></span>'+STEPS[i]; },1900);
       try{
@@ -3747,6 +3924,10 @@
     }
     const BAND={ early:'Early grades · big colourful text', middle:'Middle grades · balanced', senior:'Senior grades · detailed' };
     function renderDeck(d){
+      if(sequenceMode()&&sequenceDecks.length){
+        const index=sequenceDecks.findIndex(deck=>deck&&(deck.deckId===d.deckId||deck.deckId===currentDeckId));
+        if(index>=0) sequenceDecks[index]={...sequenceDecks[index],...d,deckId:d.deckId||sequenceDecks[index].deckId};
+      }
       $('deckTitle').textContent=d.filename.replace('.pptx','');
       const model=teachingModelsById[d.teachingModelId];
       $('deckCount').innerHTML=`· ${d.slideCount} slides ${model?`<span class="band-pill">${ICON('i-target')}${esc(model.label)}</span>`:''} ${d.band?`<span class="band-pill">${ICON('i-target')}${BAND[d.band]||d.band}</span>`:''}`;
@@ -3755,6 +3936,7 @@
       resetGameSection(); // reset the student-game box for the new deck
       loadQuota(); // show remaining AI-visual budget + gate the AI buttons
       applyCostBadges(); // credit pills + cost note (only when billing is live)
+      renderSequenceSlidesFlow();
     }
     // Strip any existing pill, then append the current cost pill for `action`.
     function setBtnCost(el,action){ if(!el) return; el.querySelectorAll('.cost-pill').forEach(x=>x.remove()); const p=costPill(action); if(p) el.insertAdjacentHTML('beforeend',p); }
@@ -4241,6 +4423,7 @@
     // "Start over" discards the generated deck (and any edits) — two-step confirm.
     let restartArm=false, restartTmr=null;
     function doRestart(){ const b=$('restartBtn'); b.textContent='Start over'; b.classList.remove('warn'); restartArm=false; clearTimeout(restartTmr);
+      sequencePlans=[]; sequenceDecks=[]; activeSequencePlanIndex=0; activeSequenceDeckIndex=0; sequencePlanDownloaded=false; sequenceStartLessonNumber=null;
       setStartMode('plan'); statusEl.innerHTML=''; window.scrollTo({top:0,behavior:'smooth'}); }
     $('restartBtn').addEventListener('click',()=>{
       const b=$('restartBtn');
