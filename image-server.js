@@ -1202,6 +1202,7 @@ app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
           : (deck ? criteriaFromDeck(deck).split('\n').filter(Boolean) : []),
         lessonPlan: { sections },
         slides: (deck && deck.slides) || [],
+        sequence: (deck && deck.lessonSequence) || null,
       });
       const plannerBuf = await weekPlanner.plannerBuffer(req.userId).catch(() => null);
       if (plannerBuf) {
@@ -2229,7 +2230,7 @@ function orderSectionsByOutline(generated, outline, verbatim = {}) {
 //
 // The week comes from the pacing-guide flow the teacher already uses to choose
 // what they're teaching; without one we don't guess, we just say so.
-async function addLessonToWeekPlanner(req, { subject, topic, objectives, lessonPlan, slides, successCriteria }) {
+async function addLessonToWeekPlanner(req, { subject, topic, objectives, lessonPlan, slides, successCriteria, sequence }) {
   try {
     if (!weekPlanner.hasPlanner(req.userId)) return null;
 
@@ -2266,7 +2267,31 @@ async function addLessonToWeekPlanner(req, { subject, topic, objectives, lessonP
     // Which lesson of the week — the teacher's call when their form holds
     // several; omitted means take the slot this lesson already has, else next free.
     const lessonNumber = parseInt(body.lessonNumber, 10);
-    const result = await weekPlanner.recordLesson(req.userId, week, values, Number.isFinite(lessonNumber) ? lessonNumber : undefined, { allow });
+    const slot = Number.isFinite(lessonNumber) ? lessonNumber : undefined;
+
+    // A weekly sequence is several lessons written as one document, because
+    // that is all a single-document template can hold. This workbook has a
+    // column per lesson, so they go in one per column — stacked in the first
+    // one they would waste the form and leave the teacher separating them by
+    // hand. Only when the form is actually wide enough; a one-lesson-a-week
+    // subject keeps the whole sequence together as before.
+    const seq = sequence || body.sequence || body.lessonSequence || null;
+    const meta = weekPlanner.readPlannerMeta(req.userId) || {};
+    if (seq && seq.enabled && meta.shape === 'weekly-multi') {
+      const perLesson = weekPlanner.splitSequence(values, seq.lessonCount);
+      if (perLesson) {
+        const filed = await weekPlanner.recordSequence(req.userId, week, perLesson, slot || 1, { allow });
+        if (filed.ok) {
+          audit.log('week_planner.sequence_added', {
+            userId: req.userId, week, sheet: filed.sheetName, columns: filed.columns,
+            filed: filed.lessonsFiled, requested: filed.requested, ip: req.ip,
+          });
+        }
+        return filed;
+      }
+    }
+
+    const result = await weekPlanner.recordLesson(req.userId, week, values, slot, { allow });
     if (result.ok) {
       audit.log('week_planner.lesson_added', {
         userId: req.userId, week, sheet: result.sheetName, column: result.column, ip: req.ip,
@@ -2319,6 +2344,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
     const weekPlannerResult = await addLessonToWeekPlanner(req, {
       subject, topic, objectives, lessonPlan: req.body && req.body.lessonPlan,
       slides: built.slides,
+      sequence: lessonSequence,
     });
 
     const filename = `${subject}-${topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');

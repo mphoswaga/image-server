@@ -359,6 +359,78 @@ const asLines = v => (Array.isArray(v) ? v.filter(Boolean).join('\n') : String(v
 // guide — never from the generated "Learning Objectives" section, which may
 // legitimately rephrase for prose. A school's LOs are the school's words, and
 // the teacher's own template says to copy and paste them.
+// ── Weekly sequences ───────────────────────────────────────────────────────
+// A sequence plan is several lessons written as one document: the model keeps
+// the school's field names and marks the periods inside them, because that is
+// the only thing it can do to a single-document template.
+//
+// A week workbook is not a single document. It has a column per lesson, so
+// three lessons belong in three columns — stacking them in the first one wastes
+// the form and leaves the teacher separating them by hand.
+const SEQUENCE_MARKER = /^\s*(?:\*\*)?\s*lesson\s+(\d+)\s*(?:of\s*\d+)?\s*(?:\([^)]*\))?\s*:?\s*(?:\*\*)?\s*$/i;
+
+// Fields that describe the WEEK rather than one period. They are repeated into
+// every lesson column instead of being carved up — and objectives especially,
+// which are the pacing guide's words and are never rewritten or split.
+const SHARED_FIELDS = new Set([
+  'subject', 'unit', 'topic', 'periodAndLength', 'redThread', 'objectives', 'successCriteria',
+]);
+
+// Text under "Lesson 2 …" belongs to lesson 2. Anything before the first
+// marker applies to all of them.
+function splitFieldByLesson(text) {
+  const byLesson = new Map();
+  const shared = [];
+  let current = null;
+  for (const line of String(text == null ? '' : text).split('\n')) {
+    const match = line.match(SEQUENCE_MARKER);
+    if (match) {
+      current = parseInt(match[1], 10);
+      if (!byLesson.has(current)) byLesson.set(current, []);
+      continue;
+    }
+    if (current === null) shared.push(line);
+    else byLesson.get(current).push(line);
+  }
+  return { shared: shared.join('\n').trim(), byLesson };
+}
+
+// One set of values per lesson. Returns null when the plan carries no period
+// markers at all — then it is one lesson and the caller files it as before.
+function splitSequence(values, lessonCount) {
+  // One lesson is not a sequence. Clamping up to two here would turn an
+  // ordinary single lesson into a two-column split the teacher never asked for.
+  const asked = parseInt(lessonCount, 10);
+  if (!Number.isFinite(asked) || asked < 2) return null;
+  const count = Math.min(LAST_LESSON_COL - FIRST_LESSON_COL + 1, asked);
+
+  const split = {};
+  let sawMarker = false;
+  for (const [key, value] of Object.entries(values || {})) {
+    if (SHARED_FIELDS.has(key)) continue;
+    const parts = splitFieldByLesson(value);
+    if (parts.byLesson.size) sawMarker = true;
+    split[key] = parts;
+  }
+  if (!sawMarker) return null;
+
+  const out = [];
+  for (let lesson = 1; lesson <= count; lesson++) {
+    const one = {};
+    for (const [key, value] of Object.entries(values || {})) {
+      if (SHARED_FIELDS.has(key)) { one[key] = value; continue; }
+      const parts = split[key];
+      const mine = (parts.byLesson.get(lesson) || []).join('\n').trim();
+      // A field the model did not split (say Resources, written once for the
+      // week) is repeated, because an empty Resources row in lessons 2 and 3
+      // reads as an oversight rather than as "same as lesson 1".
+      one[key] = mine || parts.shared;
+    }
+    out.push(one);
+  }
+  return out;
+}
+
 function reviewedValues(sections) {
   const out = {};
   for (const section of (Array.isArray(sections) ? sections : [])) {
@@ -408,6 +480,7 @@ module.exports = {
   ExcelJS,
   writeLesson, ensureWeekSheet, addLesson, LESSON_CONTENT_FIELDS, NEVER_WRITE,
   lessonValuesFrom, reviewedValues, sectionText, SECTION_SOURCES,
+  splitSequence, splitFieldByLesson, SEQUENCE_MARKER, SHARED_FIELDS,
   FIRST_LESSON_COL, LAST_LESSON_COL, TITLE_ROW,
   weekNumberOf, isTemplateSheet, detect,
   normaliseLabel, fieldRows, mapRowsToFields,
@@ -492,6 +565,34 @@ async function refreshMeta(userId) {
   return patch;
 }
 
+// File a sequence: lesson 1 into the chosen slot, the rest into the ones after
+// it. Stops at the width of the form rather than writing off the end.
+async function recordSequence(userId, weekNumber, valuesList, firstLesson, options) {
+  const wb = await loadPlanner(userId);
+  if (!wb) return { ok: false, reason: 'no_planner' };
+  const week = parseInt(weekNumber, 10);
+  if (!Number.isFinite(week) || week < 1) return { ok: false, reason: 'no_week' };
+
+  const perWeek = lessonsPerWeek(wb);
+  const start = Math.max(1, parseInt(firstLesson, 10) || 1);
+  const results = [];
+  for (let i = 0; i < valuesList.length; i++) {
+    const slot = start + i;
+    if (slot > perWeek) break;   // the week is full; say so rather than overwrite
+    const result = addLesson(wb, week, valuesList[i], slot, options);
+    if (!result.ok) return result;
+    results.push(result);
+  }
+  if (!results.length) return { ok: false, reason: 'week_full' };
+  await savePlanner(userId, wb);
+  return {
+    ...results[0],
+    lessonsFiled: results.length,
+    requested: valuesList.length,
+    columns: results.map(r => r.column),
+  };
+}
+
 async function recordLesson(userId, weekNumber, values, lessonNumber, options) {
   const wb = await loadPlanner(userId);
   if (!wb) return { ok: false, reason: 'no_planner' };
@@ -517,6 +618,7 @@ module.exports.readPlannerMeta = readPlannerMeta;
 module.exports.loadPlanner = loadPlanner;
 module.exports.savePlanner = savePlanner;
 module.exports.installPlanner = installPlanner;
+module.exports.recordSequence = recordSequence;
 module.exports.refreshMeta = refreshMeta;
 module.exports.recordLesson = recordLesson;
 module.exports.plannerBuffer = plannerBuffer;

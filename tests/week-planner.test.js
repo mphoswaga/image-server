@@ -244,3 +244,66 @@ test('a reflection the teacher wrote themselves is kept; the app still never wri
   wp.addLesson(wb, 1, values, 1, { allow: new Set(['postLessonReflection']) });
   assert.equal(wp.cellText(sheet.getRow(5).getCell(2).value), 'They found dragging hard.');
 });
+
+test('a weekly sequence is split into one lesson per column, not stacked in the first', () => {
+  // A sequence plan is several lessons written as ONE document, because that is
+  // all a single-document template can hold. This workbook has a column per
+  // lesson, so stacking all three in column B would waste the form and leave
+  // the teacher separating them by hand.
+  const values = {
+    subject: 'ICT', topic: 'using the mouse',
+    objectives: 'LO1. Use a mouse.',
+    intro: 'Lesson 1 of 3 (35 minutes)\nShow a mouse.\nLesson 2 of 3 (35 minutes)\nRecap clicking.\nLesson 3 of 3 (35 minutes)\nRecap dragging.',
+    activities: 'Lesson 1 of 3 (35 minutes)\nName the parts.\nLesson 2 of 3\nPractise clicking.\nLesson 3 of 3\nDrag files.',
+    resources: 'Desktop computers',
+  };
+  const split = wp.splitSequence(values, 3);
+  assert.equal(split.length, 3);
+  assert.deepEqual(split.map(s => s.intro), ['Show a mouse.', 'Recap clicking.', 'Recap dragging.']);
+  assert.deepEqual(split.map(s => s.activities), ['Name the parts.', 'Practise clicking.', 'Drag files.']);
+
+  // Week-level fields repeat rather than being carved up — and objectives above
+  // all, which are the pacing guide's words.
+  for (const one of split) {
+    assert.equal(one.objectives, 'LO1. Use a mouse.');
+    assert.equal(one.subject, 'ICT');
+    assert.equal(one.resources, 'Desktop computers', 'written once for the week, shown in every lesson');
+  }
+});
+
+test('a plan with no period markers is one lesson, as before', () => {
+  assert.equal(wp.splitSequence({ intro: 'Just one lesson.', activities: 'Do the thing.' }, 3), null);
+  assert.equal(wp.splitSequence({ intro: 'Lesson 1 of 3\nx' }, 1), null, 'a count below two is not a sequence');
+});
+
+test('period markers are recognised however the model writes them', () => {
+  for (const marker of ['Lesson 2 of 3 (35 minutes)', '**Lesson 2**', 'Lesson 2:', 'LESSON 2 OF 3', '  Lesson 2  ']) {
+    const { byLesson } = wp.splitFieldByLesson(`Lesson 1\nfirst\n${marker}\nsecond`);
+    assert.equal((byLesson.get(2) || []).join('').trim(), 'second', `missed "${marker}"`);
+  }
+});
+
+test('a sequence longer than the form stops at the last column instead of overflowing', async () => {
+  const wb = new wp.ExcelJS.Workbook();
+  const tpl = wb.addWorksheet('Template (Week 1)');
+  ['Subject', 'Topic', 'Intro'].forEach((l, i) => { tpl.getRow(i + 2).getCell(1).value = l; });
+  tpl.getRow(2).getCell(3).value = 'x';                 // a two-lesson-wide form
+  const sheet = wb.addWorksheet('Week 5');
+  ['Subject', 'Topic', 'Intro'].forEach((l, i) => { sheet.getRow(i + 2).getCell(1).value = l; });
+  assert.equal(wp.lessonsPerWeek(wb), 2);
+
+  const split = wp.splitSequence({
+    subject: 'ICT', topic: 'Mouse',
+    intro: 'Lesson 1\nfirst\nLesson 2\nsecond\nLesson 3\nthird',
+  }, 3);
+  assert.equal(split.length, 3, 'the plan really does hold three');
+
+  // Only two fit. Writing the third would land outside the teacher's form.
+  const written = [];
+  for (let i = 0; i < split.length; i++) {
+    if (i + 1 > wp.lessonsPerWeek(wb)) break;
+    written.push(wp.addLesson(wb, 5, split[i], i + 1).column);
+  }
+  assert.deepEqual(written, ['B', 'C']);
+  assert.equal(wp.cellText(sheet.getRow(4).getCell(4).value), '', 'nothing written past the form');
+});
