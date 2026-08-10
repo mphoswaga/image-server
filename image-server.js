@@ -1229,6 +1229,20 @@ app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
       return res.status(400).json({ error: `Exact-template download supports Word (.docx) and Excel (.xlsx). Your template is "${orig.ext}", which can't be refilled in place.` });
     }
     console.log(`Lesson plan filled ${out.filled}/${out.total} sections into ${orig.filename}`);
+    // Nothing matched: the file would come back byte-for-byte as uploaded, which
+    // reads as the app ignoring the lesson. Say so instead of shipping it — the
+    // plan itself is safe on screen, and a Word download still gets them their
+    // lesson while they sort the template out.
+    if (!out.filled) {
+      return res.status(422).json({
+        error: `None of the headings in "${orig.filename}" matched this lesson plan, so nothing could be filled in. `
+          + `The plan uses: ${sections.slice(0, 6).map(s => s.heading).filter(Boolean).join(', ')}. `
+          + `Rename your template's headings to match, or re-upload the template and rewrite the plan so it follows your form.`,
+        filled: 0,
+        total: out.total,
+        skipped: out.skipped,
+      });
+    }
     res.setHeader('Content-Type', mime);
     res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
     res.setHeader('X-Sections-Filled', `${out.filled}/${out.total}`);

@@ -1,9 +1,20 @@
 // Fills the ORIGINAL uploaded template (Word/Excel) with generated lesson-plan
 // content, preserving the exact layout — only the contents change.
 //
-// docx: find each section heading in the document; write its content into the
-// adjacent value cell (label|value tables) or append into the heading's own
-// cell, cloning existing paragraph styling so fonts/borders are untouched.
+// docx: find each section heading in the document, then fill it in whichever
+// way that template is built —
+//
+//   label | value table  → write into the value cell
+//   heading inside a cell → append under what is already there
+//   plain flowing document → insert paragraphs after the heading
+//
+// The last of those was missing, and a school form is as likely to be a
+// document with headings and space beneath as it is to be a table. Every
+// section was skipped for those templates and the file came back exactly as
+// uploaded, which reads as the app ignoring the lesson entirely.
+//
+// Existing paragraph styling is cloned throughout so fonts, bullets and
+// borders are untouched.
 const PizZip = require('pizzip');
 const { DOMParser, XMLSerializer } = require('@xmldom/xmldom');
 const XLSX = require('xlsx');
@@ -88,6 +99,10 @@ function stripNumPr(p) {
   const ns = p.getElementsByTagName('w:numPr');
   for (let i = ns.length - 1; i >= 0; i--) ns[i].parentNode.removeChild(ns[i]);
 }
+function stripBold(p) {
+  const bs = p.getElementsByTagName('w:b');
+  for (let i = bs.length - 1; i >= 0; i--) bs[i].parentNode.removeChild(bs[i]);
+}
 function makeRun(doc, text, bold) {
   const r = doc.createElement('w:r');
   if (bold) { const rpr = doc.createElement('w:rPr'); rpr.appendChild(doc.createElement('w:b')); r.appendChild(rpr); }
@@ -119,6 +134,39 @@ function appendCellContent(doc, cell, heading, rawText) {
     p.appendChild(makeRun(doc, line, false));
     cell.appendChild(p);
   }
+}
+
+// A template that is not a table: the heading is a paragraph in the body with
+// empty space (or example text) under it. Content goes in immediately after the
+// heading, styled like the paragraph that follows it so it looks native.
+function insertAfterHeading(doc, headingPara, rawText) {
+  const lines = smartLines(rawText);
+  if (!lines.length) return false;
+  const parent = headingPara.parentNode;
+  if (!parent) return false;
+
+  // Style from the next body paragraph when there is one — that is the slot the
+  // teacher would have typed into — otherwise from the heading, minus its bold.
+  let styleSrc = headingPara.nextSibling;
+  while (styleSrc && styleSrc.nodeName !== 'w:p') styleSrc = styleSrc.nextSibling;
+  const base = (styleSrc || headingPara).cloneNode(true);
+  stripRuns(base);
+  if (!styleSrc) stripBold(base);
+
+  // An empty placeholder paragraph under the heading is where the answer was
+  // meant to go, so use it rather than leaving a blank line above the content.
+  const placeholder = styleSrc && !elemText(styleSrc).trim() ? styleSrc : null;
+  const anchor = placeholder || headingPara;
+
+  let after = anchor.nextSibling;
+  for (const line of lines) {
+    const para = base.cloneNode(true);
+    para.appendChild(makeRun(doc, line, false));
+    if (after) parent.insertBefore(para, after);
+    else parent.appendChild(para);
+  }
+  if (placeholder) parent.removeChild(placeholder);
+  return true;
 }
 
 function findHeadingParagraph(paras, heading) {
@@ -163,6 +211,16 @@ function fillDocx(buffer, sections) {
       replaceCellContent(doc, cells[1], content);
       usedRows.add(row);
       lastFilledCell = cells[1];
+      filled++;
+    } else if (cell && !usedRows.has(row)) {
+      // The heading has its own cell but no value cell beside it — a stacked
+      // form rather than a two-column one. Its content belongs under it.
+      appendCellContent(doc, cell, sec.heading, content);
+      usedRows.add(row);
+      lastFilledCell = cell;
+      filled++;
+    } else if (hp && insertAfterHeading(doc, hp, content)) {
+      // A plain document: no table at all.
       filled++;
     } else if (lastFilledCell && content.trim().length > 40) {
       // Orphaned sub-section (e.g. Main activities / Plenary that live inside
