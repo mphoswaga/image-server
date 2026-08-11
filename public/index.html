@@ -460,7 +460,13 @@
     .badge .ic { width:12px; height:12px; }
     .badge.fetched { background:var(--accent); color:#fff; }
     .badge.ai { background:#7048e8; color:#fff; }
-    .swap-btn { position:absolute; bottom:9px; right:9px; font-size:12px; font-weight:600; padding:6px 11px; border-radius:9px; border:none; background:rgba(255,255,255,.94); color:var(--primary); cursor:pointer; display:inline-flex; align-items:center; gap:5px; box-shadow:var(--sh-sm); }
+    .thumb-actions { position:absolute; bottom:9px; right:9px; display:flex; gap:6px; align-items:center; }
+    .slide .thumb.thumb-empty { display:flex; align-items:center; justify-content:center;
+      background:repeating-linear-gradient(45deg,#f4f6f9,#f4f6f9 10px,#eef1f5 10px,#eef1f5 20px); }
+    .slide .thumb.thumb-empty .thumb-actions { position:static; }
+    .gif-btn { background:#6d28d9; color:#fff; }
+    .gif-btn:hover { background:#5b21b6; }
+    .swap-btn { position:static; font-size:12px; font-weight:600; padding:6px 11px; border-radius:9px; border:none; background:rgba(255,255,255,.94); color:var(--primary); cursor:pointer; display:inline-flex; align-items:center; gap:5px; box-shadow:var(--sh-sm); }
     .swap-btn:hover { background:#fff; }
     .swap-btn .ic { width:14px; height:14px; }
 
@@ -4305,8 +4311,15 @@
         thumb=`<div class="thumb" style="background:#fffdf9;display:flex;flex-direction:column;justify-content:center;gap:4px;padding:12px;aspect-ratio:16/9;overflow:hidden">${steps}<span class="badge ai">animated · ${esc(s.visual.type)}</span></div>`;
       } else {
         const badge=s.image?`<span class="badge ${bm.cls}">${ICON('i-image')}${bm.label}</span>`:'';
-        const swap=s.image?`<button class="swap-btn" data-action="swap" data-i="${i}">${SWAP_HTML}</button>`:'';
-        thumb=s.image?`<div class="thumb"><img src="${esc(s.image)}" loading="lazy">${badge}${swap}</div>`:'';
+        // GIFs sit beside Replace on the slide itself, because that is where a
+        // teacher is looking when they decide a picture should move.
+        const gifBtn=gifsAvailable?`<button class="swap-btn gif-btn" data-action="gif" data-i="${i}">${ICON('i-play')}GIF</button>`:'';
+        // A slide with no picture used to render no actions at all, so there was
+        // no way to add one — the only entry point was Replace, which only
+        // appears once a picture already exists.
+        thumb=s.image
+          ? `<div class="thumb"><img src="${esc(s.image)}" loading="lazy">${badge}<div class="thumb-actions">${gifBtn}<button class="swap-btn" data-action="swap" data-i="${i}">${SWAP_HTML}</button></div></div>`
+          : `<div class="thumb thumb-empty"><div class="thumb-actions">${gifBtn}<button class="swap-btn" data-action="swap" data-i="${i}">${ICON('i-image')}Add a picture</button></div></div>`;
       }
       const k=KICKER[s.type]; const kicker=k?`<span class="kicker ${k[0]}">${ICON(k[1])}${k[2]}${s.modelStage?`<span class="model-stage">${esc(modelStageLabel(s.modelStage))}</span>`:''}</span>`:'';
       const stageKicker=!k&&s.modelStage?`<span class="kicker"><span class="model-stage">${esc(modelStageLabel(s.modelStage))}</span></span>`:'';
@@ -4368,6 +4381,7 @@
       const b=e.target.closest('button[data-action]'); if(!b) return;
       const i=+b.dataset.i, card=deckEl.querySelector(`.slide[data-index="${i}"]`);
       function setBadge(src){ const bd=card.querySelector('.badge'); if(bd){ const m=badgeMeta(src); bd.innerHTML=ICON('i-image')+m.label; bd.className='badge '+m.cls; } }
+      if(b.dataset.action==='gif'){ openPicker(i,'gif'); return; }
       if(b.dataset.action==='swap'){ openPicker(i); return;
       } else if(b.dataset.action==='youtube'){ openYoutubePicker(i); return;
       } else if(b.dataset.action==='remove-youtube'){ b.disabled=true;
@@ -4473,10 +4487,15 @@
 
     // ---- image picker (stock first, web fetch fallback) ----
     let pickerIndex=null;
-    function openPicker(i){ pickerIndex=i;
+    // `source` decides which of the three the picker opens on. Arriving from
+    // the slide's GIF button and landing on stock photos would make the button
+    // a lie.
+    function openPicker(i,source){ pickerIndex=i;
       const card=deckEl.querySelector(`.slide[data-index="${i}"]`);
       const title=card&&card.querySelector('h3')?card.querySelector('h3').innerText.trim():'';
-      $('pickerQ').value=title||ctx.topic||''; $('imgPicker').style.display='flex'; runStock(); setTimeout(()=>$('pickerQ').focus(),50);
+      $('pickerQ').value=title||ctx.topic||''; $('imgPicker').style.display='flex';
+      if(source==='gif'&&gifsAvailable) runGifs(); else runStock();
+      setTimeout(()=>$('pickerQ').focus(),50);
     }
     function closePicker(){ $('imgPicker').style.display='none'; pickerIndex=null; }
     function pickerGridHTML(images,fromWeb){
