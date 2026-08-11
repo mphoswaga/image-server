@@ -15,6 +15,7 @@ const { getTeachingModel, normalizeTeachingModelId, listTeachingModels } = requi
 const { fillDocx, fillXlsx } = require('./fill-template');
 const { animateBuffer } = require('./animate-pptx');
 const { addImages, fetchWikimediaImages } = require('./admin-images');
+const { searchGifs, saveGif, giphyConfigured } = require('./giphy');
 const { generateImage } = require('./ai-image');
 const { parseFraction, detectLabelledDiagram } = require('./concept-diagram');
 const { generateDiagram } = require('./svg-diagram');
@@ -57,7 +58,7 @@ const { runWithUser, usageSnapshot, usageSince, declareAction } = require('./ai-
 const usage = require('./usage');
 const jwt = require('jsonwebtoken');
 
-const { MEDIA_DIR, resolveMedia } = require('./media');
+const { MEDIA_DIR, mediaWriteDir, resolveMedia } = require('./media');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const GAME_COOKIE = 'lc_game';
 const JWT_SECRET = (() => {
@@ -818,6 +819,9 @@ app.get('/api/billing/verify', requireAuth, async (req, res) => {
 app.get('/api/config/apps', requireAuth, (req, res) => {
   res.json({
     teacherScopeUrl: process.env.TEACHERSCOPE_APP_URL || 'https://curriculum-comment-generator-production-801b.up.railway.app',
+    // The picker hides its GIFs button without a key, rather than offering a
+    // search that can only fail.
+    gifs: giphyConfigured(),
   });
 });
 
@@ -2481,6 +2485,56 @@ app.post('/api/images/fetch', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('Image fetch failed:', err.message);
     res.status(400).json({ error: err.message });
+  }
+});
+
+// Subject and topic become folder names under the media volume, so they get
+// the same slug treatment the deck builder gives them.
+const slugForMedia = v => String(v || '').toLowerCase().trim()
+  .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+
+// ── GIFs ───────────────────────────────────────────────────────────────────
+// Search returns candidates only — nothing is downloaded until the teacher
+// picks one, because downloading twelve GIFs so they can look at them would
+// fill the volume with animations nobody chose.
+app.get('/api/gifs/search', requireAuth, async (req, res) => {
+  // A GIF is a picture for a deck they have already paid for, so it is the
+  // same free action as any other image search rather than a new price.
+  declareFree('lessonscope.image_search');
+  if (!giphyConfigured()) return res.json({ gifs: [], configured: false });
+  const q = String((req.query && req.query.q) || '').trim();
+  if (!q) return res.json({ gifs: [], configured: true });
+  const gifs = await searchGifs({ query: q, limit: 12 });
+  res.json({ gifs, configured: true });
+});
+
+// Download the chosen GIF into the media library. It comes back as a library
+// entry like any other image, so the existing set-image call places it.
+app.post('/api/gifs/pick', requireAuth, async (req, res) => {
+  declareFree('lessonscope.image_search');
+  if (!giphyConfigured()) return res.status(400).json({ error: 'GIF search is not configured.' });
+  const body = req.body || {};
+  if (!body.url) return res.status(400).json({ error: 'That GIF is missing its address.' });
+  try {
+    const entry = await saveGif({
+      gif: {
+        id: clip(body.id, 80),
+        title: clip(body.title, 120),
+        url: String(body.url),
+        credit: body.credit && typeof body.credit === 'object'
+          ? { name: clip(body.credit.name, 80), link: clip(body.credit.link, 300) }
+          : undefined,
+      },
+      subject: slugForMedia(body.subject) || 'search',
+      topic: slugForMedia(body.topic) || 'gifs',
+      publicDir: mediaWriteDir(),
+    });
+    if (!entry) return res.status(400).json({ error: 'That GIF could not be downloaded. Try another.' });
+    addLibraryImages([entry]);
+    res.json({ relpath: entry.relpath, image: '/' + entry.relpath, caption: entry.caption || '', source: 'giphy' });
+  } catch (err) {
+    console.error('GIF pick failed:', err.message);
+    res.status(400).json({ error: 'That GIF could not be saved. Try another.' });
   }
 });
 
