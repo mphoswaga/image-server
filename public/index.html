@@ -4119,6 +4119,23 @@
       return n;
     }
 
+    // The server already knows when a download came back partial or in the
+    // wrong shape, and said so in headers that nothing read. A form that filled
+    // 3 of its 12 rows opens looking almost empty, and without this the teacher
+    // has no way to tell that from "the app did nothing".
+    function reportPlanFill(response){
+      const warning=response.headers.get('X-Plan-Warning');
+      if(warning){ toast(warning); return; }
+      const filled=response.headers.get('X-Sections-Filled');
+      if(!filled) return;
+      const [done,total]=filled.split('/').map(n=>parseInt(n,10));
+      if(!Number.isFinite(done)||!Number.isFinite(total)||!total) return;
+      if(done>=total){ toast('Downloaded — every section filled into your template.','ok'); return; }
+      // Naming the count is the point: "some rows are empty" is not actionable,
+      // "9 of 12" tells them how much to check.
+      toast(`Downloaded, but only ${done} of ${total} sections matched your template's headings — the rest are blank.`);
+    }
+
     async function downloadLessonPlan(btn){
       requireTemplate('your lesson plan');
       const plan=sequenceMode()&&sequencePlans.filter(Boolean).length===Number(ctx.sequenceLessonCount)
@@ -4149,6 +4166,7 @@
         const blob=await r.blob(), url=URL.createObjectURL(blob), a=document.createElement('a');
         const cd=r.headers.get('Content-Disposition')||''; const m=cd.match(/filename="([^"]+)"/);
         a.href=url; a.download=m?m[1]:'lesson-plan'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+        reportPlanFill(r);
         if(sequenceMode()&&sequencePlans.filter(Boolean).length===Number(ctx.sequenceLessonCount)){
           sequencePlanDownloaded=true; renderSequencePlanFlow(); toast('Updated multi-lesson plan downloaded.','ok');
         }

@@ -49,7 +49,8 @@ entirely on AI images); typical ~$0.01. At 10,000 farmed accounts, ~$2,000 lost.
 **Do not** ship step 4 before this — a bigger grant on unverified signup doubles
 the exposure instead of halving it.
 
-## Step 2 — Reprice AI image 3 → 5, diagram 2 → 3
+## Step 2 — Reprice AI image 3 → 5, diagram 2 → 3  ✅ DONE
+(verified in `credit-prices.js` 2026-08-11: ai_image 5, diagram 3)
 **Repo:** `image-agent` (`credit-prices.js`) · one-line change, does three jobs:
 
 1. Margin 6× → 11×
@@ -65,7 +66,8 @@ the exposure instead of halving it.
 | $29 / 400cr | $21.57 | $23.71 |
 | $35 / 500cr | $25.91 | $28.58 |
 
-## Step 3 — Full pack 3 → 4 credits
+## Step 3 — Full pack 3 → 4 credits  ✅ DONE
+(verified in `credit-prices.js` 2026-08-11: generate_lesson_pack 4)
 **Repo:** `image-agent`. The full pack is five documents (worksheet, exit ticket,
 quiz, homework, differentiated) and currently costs the same as a single deck.
 
@@ -98,7 +100,13 @@ ever upgrade. Now: 1 lesson/day fully resourced = 180 credits (Teacher $19),
 Only 3 subscribers existed at the time of the change, all test accounts, so no
 paying teacher was affected.
 
-## Step 6 — Referral programme  ⟵ NEXT (step 1 done, so unblocked)
+## Step 6 — Referral programme  ⟵ the only step left, but see the note below
+
+> **Deliberately not started (2026-08-11).** Every other step is done, so this
+> is next on paper. It is a growth mechanism, and there is nothing yet to grow:
+> fourteen accounts, all of them testing. A referral scheme also wants real
+> usage patterns to calibrate its gate against, or the anti-farming rules are
+> guesses. Revisit once teachers are planning real lessons.
 **Repo:** `website` (wallet lives there; LessonScope can only report the event).
 
 - **Reward:** 10 credits to the referrer, a few to the referee (two-sided converts better)
@@ -139,11 +147,17 @@ Be generous (10, not 3): credits are not cash. The gate protects us, not the siz
 
 ---
 
-## ⏳ PENDING — one SQL run against the EducScope Postgres
+## ✅ DONE — the SQL, via migration 003
 
-Everything else is deployed and live. This is data hygiene, not a blocker:
-existing teachers are already grandfathered by account creation date, so
-nobody is locked out while it waits.
+Shipped as `db/migrations/003_email_verification.sql` and applied to the
+production database. The statement below is what it runs, kept for reference.
+
+⚠️ Not re-verified on 2026-08-11 — the database proxy was unreachable from the
+machine at the time. Re-check with:
+
+```sql
+select count(*) filter (where email_verified_at is null) as unverified from users;
+```
 
 ```sql
 -- populate the verification column for accounts that predate the feature
