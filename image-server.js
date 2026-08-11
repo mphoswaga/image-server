@@ -1163,6 +1163,9 @@ app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
   // titles, the points taught, examples, vocabulary and speaker notes. Write the
   // plan from that rather than telling them to go back and make one.
   let generatedFromDeck = null;
+  // Set when the plan could not be shaped to the teacher's own form. The body
+  // of this route is a file, so it travels as a header the client reads.
+  let planWarning = null;
   if (!sections.length && req.body && req.body.deckId) {
     const deck = decks.get(String(req.body.deckId));
     if (!deck) return res.status(404).json({ error: 'That lesson has expired — generate it again.' });
@@ -1174,9 +1177,19 @@ app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
     try {
       const tpl = (templateId && getTemplate(req.userId, templateId)) || loadTemplate(req.userId);
       let outline = null, plannerText = '';
+      let plannerUnreadable = false;
       if (!tpl) {
-        const wb = await weekPlanner.loadPlanner(req.userId).catch(() => null);
-        if (wb) { outline = weekPlanner.fieldOutline(wb); plannerText = weekPlanner.templateTextFromWorkbook(wb); }
+        // Swallowing this produced a plan in a shape the teacher never asked
+        // for — generic headings instead of their workbook's rows — with
+        // nothing to explain it. They still get a plan for their credit, but
+        // the response says the format could not be matched.
+        try {
+          const wb = await weekPlanner.loadPlanner(req.userId);
+          if (wb) { outline = weekPlanner.fieldOutline(wb); plannerText = weekPlanner.templateTextFromWorkbook(wb); }
+        } catch (err) {
+          plannerUnreadable = weekPlanner.hasPlanner(req.userId);
+          console.error('Week planner could not be read for the plan prompt:', err.message);
+        }
       }
       const plan = await generateLessonPlan({
         subject: String(deck.subject || '').toLowerCase(),
@@ -1200,6 +1213,7 @@ app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
         : plan.sections;
       await capture(req, reservation, 'lessonscope.generate_lesson_plan', `${deck.subject}-${deck.topic}`);
       generatedFromDeck = true;
+      if (plannerUnreadable) planWarning = 'Your week-by-week plan could not be read, so this plan uses a standard structure rather than your own fields.';
     } catch (err) {
       await release(req, reservation, 'lessonscope.generate_lesson_plan', err.message);
       console.error('Plan-from-deck failed:', err.message);
@@ -1231,12 +1245,23 @@ app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
         slides: (deck && deck.slides) || [],
         sequence: (deck && deck.lessonSequence) || lessonSequenceFromBody(req.body),
       });
-      const plannerBuf = await weekPlanner.plannerBuffer(req.userId).catch(() => null);
+      let plannerBuf = null;
+      try {
+        plannerBuf = await weekPlanner.plannerBuffer(req.userId);
+      } catch (err) {
+        // Distinguished from "nothing uploaded": telling someone to re-upload
+        // a template they can see in the app is worse than saying nothing.
+        console.error('Week planner could not be read for download:', err.message);
+        return res.status(500).json({
+          error: 'Your week-by-week plan is stored but could not be opened. Re-upload it to repair the file — your lessons so far are in the copy you last downloaded.',
+        });
+      }
       if (plannerBuf) {
         const meta = weekPlanner.readPlannerMeta(req.userId) || {};
         const name = String(meta.filename || 'lesson-plan.xlsx').replace(/[^a-z0-9.\-_ ]/gi, '_');
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+        if (planWarning) res.setHeader('X-Plan-Warning', planWarning);
         return res.send(plannerBuf);
       }
     }
@@ -1274,6 +1299,7 @@ app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
     res.setHeader('Content-Type', mime);
     res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
     res.setHeader('X-Sections-Filled', `${out.filled}/${out.total}`);
+    if (planWarning) res.setHeader('X-Plan-Warning', planWarning);
     res.send(out.buffer);
   } catch (err) {
     console.error('Lesson plan download failed:', err.message);

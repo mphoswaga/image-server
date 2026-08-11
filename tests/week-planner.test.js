@@ -307,3 +307,35 @@ test('a sequence longer than the form stops at the last column instead of overfl
   assert.deepEqual(written, ['B', 'C']);
   assert.equal(wp.cellText(sheet.getRow(4).getCell(4).value), '', 'nothing written past the form');
 });
+
+test('a stored workbook that cannot be opened is not the same as no workbook', async () => {
+  // These two disagree when a file is corrupt or half-written, and that
+  // disagreement is why swallowing the read error was dangerous: hasPlanner
+  // says the teacher has a form, loadPlanner cannot produce it, and the route
+  // used to quietly generate a plan in a shape they never asked for — charging
+  // them a credit for a generic structure with nothing to explain why.
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+
+  const previous = process.env.DATA_DIR;
+  process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lc-planner-'));
+  try {
+    // Re-require so the module picks up the throwaway data dir.
+    delete require.cache[require.resolve('../week-planner.js')];
+    delete require.cache[require.resolve('../storage.js')];
+    const planner = require('../week-planner.js');
+
+    const dir = path.join(process.env.DATA_DIR, 'users', 'u1', 'week-planner');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'planner.xlsx'), Buffer.from('not a spreadsheet at all'));
+    fs.writeFileSync(path.join(dir, 'planner.json'), JSON.stringify({ filename: 'plan.xlsx' }));
+
+    assert.equal(planner.hasPlanner('u1'), true, 'the file exists, so the teacher believes they have a form');
+    await assert.rejects(() => planner.loadPlanner('u1'), 'but it cannot be opened');
+  } finally {
+    process.env.DATA_DIR = previous;
+    delete require.cache[require.resolve('../week-planner.js')];
+    delete require.cache[require.resolve('../storage.js')];
+  }
+});
