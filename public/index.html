@@ -4485,6 +4485,17 @@
       try{
         const d=await (await fetch('/api/gifs/search?'+new URLSearchParams({q}))).json();
         if(!d.configured){ $('pickerGrid').innerHTML='<div class="pg-msg">GIF search is not set up yet.</div>'; return; }
+        // An hourly cap is not a failure the teacher caused, and it clears on
+        // its own — so say what happened and point at the sources that still work.
+        if(d.status==='rate_limited'){
+          $('pickerHint').textContent='GIF search has used up this hour\u2019s allowance.';
+          $('pickerGrid').innerHTML='<div class="pg-msg">GIF search has hit its limit for this hour. It works again shortly \u2014 meanwhile <b>Stock</b> and <b>Search the web</b> are unaffected.</div>';
+          return;
+        }
+        if(d.status==='unavailable'){
+          $('pickerGrid').innerHTML='<div class="pg-msg">GIPHY is not responding right now. Try <b>Stock</b> or <b>Search the web</b>.</div>';
+          return;
+        }
         gifResults=d.gifs||[];
         const gifs=gifResults;
         $('pickerGrid').innerHTML=gifs.length

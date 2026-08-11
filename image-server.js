@@ -2504,8 +2504,8 @@ app.get('/api/gifs/search', requireAuth, async (req, res) => {
   if (!giphyConfigured()) return res.json({ gifs: [], configured: false });
   const q = String((req.query && req.query.q) || '').trim();
   if (!q) return res.json({ gifs: [], configured: true });
-  const gifs = await searchGifs({ query: q, limit: 12 });
-  res.json({ gifs, configured: true });
+  const { gifs, status } = await searchGifs({ query: q, limit: 12 });
+  res.json({ gifs, configured: true, status });
 });
 
 // Download the chosen GIF into the media library. It comes back as a library

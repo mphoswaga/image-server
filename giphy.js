@@ -33,11 +33,17 @@ function giphyConfigured() {
 
 // Search only — nothing downloaded. Used to fill the picker grid, where the
 // teacher looks before choosing, so downloading every result would be waste.
+//
+// Returns a STATUS as well as the results, because "no GIFs" has several
+// causes and they need different words in front of a teacher. The one that
+// matters commercially is rate_limited: a beta key allows 100 calls an hour
+// across the whole app, and without this the button would just quietly stop
+// working and nobody would know why.
 async function searchGifs({ query, limit = 12 }) {
   const key = giphyKey();
-  if (!key) return [];
+  if (!key) return { gifs: [], status: 'not_configured' };
   const q = String(query || '').trim();
-  if (!q) return [];
+  if (!q) return { gifs: [], status: 'ok' };
 
   try {
     const res = await axios.get(SEARCH_URL, {
@@ -51,12 +57,20 @@ async function searchGifs({ query, limit = 12 }) {
       },
       timeout: 15000,
     });
-    return (res.data && Array.isArray(res.data.data) ? res.data.data : [])
+    const gifs = (res.data && Array.isArray(res.data.data) ? res.data.data : [])
       .map(toCandidate)
       .filter(Boolean);
+    return { gifs, status: 'ok' };
   } catch (err) {
+    // 429 is the hourly cap; GIPHY also answers 403 once a beta key is over
+    // its allowance, so both are reported as the same thing to the teacher.
+    const code = err.response && err.response.status;
+    if (code === 429 || code === 403) {
+      console.warn(`GIPHY rate limit reached (HTTP ${code}) searching "${q}" — the beta key allows 100 calls an hour.`);
+      return { gifs: [], status: 'rate_limited' };
+    }
     console.log(`GIPHY search failed for "${q}": ${err.message}`);
-    return [];
+    return { gifs: [], status: 'unavailable' };
   }
 }
 

@@ -57,7 +57,8 @@ test('the rating cannot be weakened by a caller', async () => {
 test('a result carries what the picker and the slide both need', async () => {
   process.env.GIPHY_API_KEY = 'test-key';
   nextResponse = { data: { data: [GIF] } };
-  const [gif] = await searchGifs({ query: 'water cycle' });
+  const { gifs: [gif], status } = await searchGifs({ query: 'water cycle' });
+  assert.equal(status, 'ok');
 
   assert.equal(gif.previewUrl, 'https://media.giphy.com/preview.gif', 'a light preview for the grid');
   assert.equal(gif.url, 'https://media.giphy.com/full.gif', 'and the full GIF for the slide');
@@ -70,7 +71,7 @@ test('a result carries what the picker and the slide both need', async () => {
 test('a result with no usable image is dropped rather than half-shown', async () => {
   process.env.GIPHY_API_KEY = 'test-key';
   nextResponse = { data: { data: [{ id: 'x', images: {} }, GIF] } };
-  const gifs = await searchGifs({ query: 'x' });
+  const { gifs } = await searchGifs({ query: 'x' });
   assert.equal(gifs.length, 1);
 });
 
@@ -78,21 +79,47 @@ test('without a key the feature is simply absent', async () => {
   delete process.env.GIPHY_API_KEY;
   assert.equal(giphyConfigured(), false, 'so the picker hides its GIFs button');
   calls.length = 0;
-  assert.deepEqual(await searchGifs({ query: 'water cycle' }), []);
+  assert.deepEqual(await searchGifs({ query: 'water cycle' }), { gifs: [], status: 'not_configured' });
   assert.equal(calls.length, 0, 'and no request is attempted');
 });
 
 test('an empty query is not sent to GIPHY', async () => {
   process.env.GIPHY_API_KEY = 'test-key';
   calls.length = 0;
-  assert.deepEqual(await searchGifs({ query: '   ' }), []);
+  assert.deepEqual(await searchGifs({ query: '   ' }), { gifs: [], status: 'ok' });
   assert.equal(calls.length, 0);
 });
 
 test('a GIPHY outage returns nothing rather than breaking the picker', async () => {
   process.env.GIPHY_API_KEY = 'test-key';
   nextResponse = Promise.reject(new Error('503 Service Unavailable'));
-  const gifs = await searchGifs({ query: 'x' }).catch(() => 'THREW');
-  assert.deepEqual(gifs, [], 'the teacher keeps their other two image sources');
+  const result = await searchGifs({ query: 'x' }).catch(() => 'THREW');
+  assert.deepEqual(result, { gifs: [], status: 'unavailable' }, 'the teacher keeps their other two image sources');
+  nextResponse = { data: { data: [] } };
+});
+
+test('hitting the hourly cap is reported as its own thing, not as "no results"', async () => {
+  // The beta key allows 100 calls an hour across the whole app. Without a
+  // distinct status the button would quietly return nothing and the teacher —
+  // and the person paying for the key — would have no idea why.
+  process.env.GIPHY_API_KEY = 'test-key';
+  for (const code of [429, 403]) {
+    const err = new Error(`Request failed with status code ${code}`);
+    err.response = { status: code };
+    nextResponse = Promise.reject(err);
+    const result = await searchGifs({ query: 'water cycle' });
+    assert.deepEqual(result, { gifs: [], status: 'rate_limited' }, `HTTP ${code} is the cap`);
+  }
+  nextResponse = { data: { data: [] } };
+});
+
+test('an ordinary outage is not mistaken for the cap', async () => {
+  // Telling a teacher to "wait an hour" when GIPHY is simply down would be
+  // wrong, and would hide a real outage from the logs.
+  process.env.GIPHY_API_KEY = 'test-key';
+  const err = new Error('socket hang up');
+  err.response = { status: 500 };
+  nextResponse = Promise.reject(err);
+  assert.equal((await searchGifs({ query: 'x' })).status, 'unavailable');
   nextResponse = { data: { data: [] } };
 });
