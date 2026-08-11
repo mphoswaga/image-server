@@ -1,5 +1,6 @@
 // Renders lesson-pack artifacts (worksheet, exit ticket) into clean, printable
 // .docx files with consistent LessonCope styling. Pure JS via the `docx` lib.
+const PizZip = require('pizzip');
 const { Document, Packer, Paragraph, TextRun, AlignmentType, BorderStyle } = require('docx');
 
 const NAVY = '1F4E79', ORANGE = 'C85A1B', INK = '1B2430', GREY = '697586', LINE = 'CBD5E1';
@@ -207,4 +208,36 @@ function activitiesDocx(data, meta = {}) {
   return Packer.toBuffer(doc(c));
 }
 
-module.exports = { worksheetDocx, exitTicketDocx, quizDocx, homeworkDocx, activitiesDocx };
+// The five handouts as one download.
+//
+// Its own function rather than inline in the route so the assembled file can
+// be opened in a test: a zip missing one of its five members still downloads,
+// still opens, and looks entirely normal until a teacher goes to hand out the
+// homework and finds it was never in there.
+//
+// Every member is named for what it is, because the teacher unzips this into a
+// folder beside four other lessons' worth of files.
+const PACK_MEMBERS = [
+  ['worksheet', 'worksheet'],
+  ['exitTicket', 'exit-ticket'],
+  ['quiz', 'quiz'],
+  ['homework', 'homework'],
+  ['activities', 'differentiated-activities'],
+];
+
+function lessonPackZip(base, parts) {
+  const name = String(base || 'lesson').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'lesson';
+  const zip = new PizZip();
+  const missing = [];
+  for (const [key, label] of PACK_MEMBERS) {
+    const buffer = parts[key];
+    if (!buffer || !buffer.length) { missing.push(label); continue; }
+    zip.file(`${name}-${label}.docx`, buffer);
+  }
+  // A pack that lost a member is a broken promise, not a smaller pack: the
+  // teacher paid for five and would have no way of knowing one was dropped.
+  if (missing.length) throw new Error(`The lesson pack could not be assembled — missing: ${missing.join(', ')}.`);
+  return zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
+}
+
+module.exports = { worksheetDocx, exitTicketDocx, quizDocx, homeworkDocx, activitiesDocx, lessonPackZip, PACK_MEMBERS };

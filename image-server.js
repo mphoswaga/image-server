@@ -21,7 +21,7 @@ const { parseFraction, detectLabelledDiagram } = require('./concept-diagram');
 const { generateDiagram } = require('./svg-diagram');
 const { generateWorksheet, generateExitTicket, generateQuiz, generateHomework, generateActivities, generateGame } = require('./lesson-pack');
 const { normalizeVideo, suggestVideos, thumbnailDataUrl } = require('./youtube');
-const { worksheetDocx, exitTicketDocx, quizDocx, homeworkDocx, activitiesDocx } = require('./docgen');
+const { worksheetDocx, exitTicketDocx, quizDocx, homeworkDocx, activitiesDocx , lessonPackZip } = require('./docgen');
 const unit = require('./unit');
 const weekPlanner = require('./week-planner');
 const { objectivesFromDeck, criteriaFromDeck } = require('./deck-fields');
@@ -1650,15 +1650,10 @@ app.post('/api/pack/full', requireAuth, async (req, res) => {
       worksheetDocx(wData, meta), exitTicketDocx(etData, meta), quizDocx(qData, meta), homeworkDocx(hwData, meta), activitiesDocx(acData, meta),
     ]);
 
-    const PizZip = require('pizzip');
-    const zip = new PizZip();
     const base = String(topic).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'lesson';
-    zip.file(`${base}-worksheet.docx`, wBuf);
-    zip.file(`${base}-exit-ticket.docx`, etBuf);
-    zip.file(`${base}-quiz.docx`, qBuf);
-    zip.file(`${base}-homework.docx`, hwBuf);
-    zip.file(`${base}-differentiated-activities.docx`, acBuf);
-    const zipBuf = zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
+    const zipBuf = lessonPackZip(base, {
+      worksheet: wBuf, exitTicket: etBuf, quiz: qBuf, homework: hwBuf, activities: acBuf,
+    });
 
     await capture(req, reservation, 'lessonscope.generate_lesson_pack', base);
     res.setHeader('Content-Type', 'application/zip');
