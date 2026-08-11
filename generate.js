@@ -38,7 +38,14 @@ function placeVisual(pptx, slide, slideData, imgPath, accent, rect) {
     drawStepsDiagram(pptx, slide, { items: v.items, x: rect.x, y: rect.y, w: rect.w, h: rect.h, accent, isCycle: v.type === 'cycle' });
     return true;
   }
-  if (imgPath) slide.addImage({ path: imgPath, x: rect.x, y: rect.y, w: rect.w, h: rect.h, sizing: { type: 'cover', w: rect.w, h: rect.h } });
+  // Callers pass the image as pptxgenjs wants it — {path} for a file on the
+  // volume, {data} for bytes we already hold — so it is spread, not re-wrapped.
+  // Wrapping produced {path:{path:'…'}}, which pptxgenjs rejects with a console
+  // error and then carries on, so the deck built normally with no picture in it.
+  if (imgPath) {
+    const source = typeof imgPath === 'object' ? imgPath : { path: imgPath };
+    slide.addImage({ ...source, x: rect.x, y: rect.y, w: rect.w, h: rect.h, sizing: { type: 'cover', w: rect.w, h: rect.h } });
+  }
   return false;
 }
 
