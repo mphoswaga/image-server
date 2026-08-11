@@ -74,6 +74,18 @@ async function searchGifs({ query, limit = 12 }) {
   }
 }
 
+// GIPHY titles carry their own attribution: "Gps Drought GIF by EarthScope
+// Consortium". That belongs in the credit field, not in a caption printed
+// under a slide — and about a third of results have no title left once it is
+// removed, which is why callers supply a fallback.
+function cleanTitle(raw) {
+  return String(raw || '')
+    .replace(/\s*GIF\s+by\s+.*$/i, '')   // "… GIF by Some Studio"
+    .replace(/\s*(?:animated\s+)?GIF\s*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // The two sizes that matter: a small still-ish preview for the grid, and the
 // full GIF that goes on the slide. GIPHY's `downsized` is capped at ~2MB, which
 // keeps a deck from ballooning when a teacher picks several.
@@ -84,7 +96,7 @@ function toCandidate(gif) {
   if (!full || !full.url) return null;
   return {
     id: gif.id,
-    title: String(gif.title || '').replace(/\s*GIF\s*$/i, '').trim(),
+    title: cleanTitle(gif.title),
     previewUrl: preview.url,
     url: full.url,
     width: Number(full.width) || null,
@@ -99,14 +111,20 @@ function toCandidate(gif) {
 // Download a chosen GIF into the media library, returning an entry of the same
 // shape the Unsplash fetcher returns so every downstream consumer — the deck
 // builder, the library index, the picker grid — treats it identically.
-async function saveGif({ gif, subject, topic, publicDir }) {
+async function saveGif({ gif, subject, topic, publicDir, query }) {
   if (!gif || !gif.url) return null;
+  // Roughly a third of GIPHY results have no title once their attribution
+  // suffix is removed. An untitled entry lands in the library as
+  // "subject_topic_gif_gif.gif" with no caption and no keywords — invisible
+  // to search and impossible to reuse. What the teacher typed is a better
+  // description of the picture than nothing.
+  const caption = cleanTitle(gif.title) || String(query || '').trim() || String(topic || '').replace(/-/g, ' ');
   const sub = String(subject || 'search');
   const top = String(topic || 'general');
   const folder = path.join(publicDir, sub, top);
   fs.mkdirSync(folder, { recursive: true });
 
-  const slug = String(gif.title || 'gif').toLowerCase()
+  const slug = String(caption || 'gif').toLowerCase()
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'gif';
   let filename, filepath, n = 1;
   do {
@@ -129,8 +147,8 @@ async function saveGif({ gif, subject, topic, publicDir }) {
     filename,
     relpath: path.posix.join(sub, top, filename),
     tags: [sub, top.replace(/-/g, ' ')],
-    caption: gif.title || '',
-    keywords: String(gif.title || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean),
+    caption,
+    keywords: caption.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean),
     source: 'giphy',
     animated: true,
     credit: gif.credit,
@@ -138,4 +156,4 @@ async function saveGif({ gif, subject, topic, publicDir }) {
   };
 }
 
-module.exports = { searchGifs, saveGif, giphyConfigured };
+module.exports = { searchGifs, saveGif, giphyConfigured, cleanTitle };

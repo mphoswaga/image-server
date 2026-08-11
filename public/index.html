@@ -4535,7 +4535,7 @@
       $('pickerGrid').innerHTML='<div class="pg-msg"><span class="spinner"></span>Adding the GIF…</div>';
       try{
         const r=await fetch('/api/gifs/pick',{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({...gif, subject:ctx.subject, topic:ctx.topic})});
+          body:JSON.stringify({...gif, q:$('pickerQ').value.trim(), subject:ctx.subject, topic:ctx.topic})});
         const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not add that GIF.');
         pickImage(d.relpath);
       }catch(err){ toast(err.message); runGifs(); }

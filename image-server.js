@@ -2567,6 +2567,7 @@ app.post('/api/gifs/pick', requireAuth, async (req, res) => {
           ? { name: clip(body.credit.name, 80), link: clip(body.credit.link, 300) }
           : undefined,
       },
+      query: clip(body.q, 120),
       subject: slugForMedia(body.subject) || 'search',
       topic: slugForMedia(body.topic) || 'gifs',
       publicDir: mediaWriteDir(),

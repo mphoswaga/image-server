@@ -21,7 +21,7 @@ Module._load = function (request, parent, isMain) {
   }
   return realLoad.apply(this, arguments);
 };
-const { searchGifs, giphyConfigured } = require('../giphy.js');
+const { searchGifs, giphyConfigured, cleanTitle } = require('../giphy.js');
 Module._load = realLoad;
 
 const GIF = {
@@ -122,4 +122,55 @@ test('an ordinary outage is not mistaken for the cap', async () => {
   nextResponse = Promise.reject(err);
   assert.equal((await searchGifs({ query: 'x' })).status, 'unavailable');
   nextResponse = { data: { data: [] } };
+});
+
+test('GIPHY\'s own attribution is stripped out of the caption', () => {
+  // Real titles from a live search. "GIF by EarthScope Consortium" is credit,
+  // and credit belongs in the credit field, not printed under a slide.
+  assert.equal(cleanTitle('Gps Drought GIF by EarthScope Consortium'), 'Gps Drought');
+  assert.equal(cleanTitle('Cutting Down Climate Change GIF by European Space Agency - ESA'), 'Cutting Down Climate Change');
+  assert.equal(cleanTitle('water cycle GIF'), 'water cycle');
+  assert.equal(cleanTitle('Canada Waterfall'), 'Canada Waterfall', 'a real title is left alone');
+});
+
+test('a GIF with no title takes the words the teacher searched for', async () => {
+  // About a third of live results have nothing left once attribution is
+  // removed. Untitled, they land in the library as "subject_topic_gif_gif.gif"
+  // with no caption and no keywords — unsearchable, and impossible to reuse.
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gif-caption-'));
+
+  process.env.GIPHY_API_KEY = 'test-key';
+  const { saveGif } = await import('../giphy.js');
+  // saveGif downloads, so point it at something local via the stubbed axios.
+  nextResponse = { data: Buffer.from('GIF89a fake') };
+
+  const entry = await saveGif({
+    gif: { title: 'GIF', url: 'https://media.giphy.com/x.gif', credit: { name: 'x', link: 'y' } },
+    subject: 'science', topic: 'water-cycle', query: 'water cycle', publicDir: dir,
+  });
+
+  assert.equal(entry.caption, 'water cycle');
+  assert.deepEqual(entry.keywords, ['water', 'cycle']);
+  assert.match(entry.filename, /water-cycle\.gif$/, 'and the filename says what it is');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('with neither a title nor a search term, the topic still names it', async () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gif-caption2-'));
+  process.env.GIPHY_API_KEY = 'test-key';
+  const { saveGif } = await import('../giphy.js');
+  nextResponse = { data: Buffer.from('GIF89a fake') };
+
+  const entry = await saveGif({
+    gif: { title: '', url: 'https://media.giphy.com/x.gif' },
+    subject: 'science', topic: 'water-cycle', publicDir: dir,
+  });
+  assert.equal(entry.caption, 'water cycle');
+  fs.rmSync(dir, { recursive: true, force: true });
 });
