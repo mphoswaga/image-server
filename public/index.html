@@ -4493,8 +4493,13 @@
     function openPicker(i,source){ pickerIndex=i;
       const card=deckEl.querySelector(`.slide[data-index="${i}"]`);
       const title=card&&card.querySelector('h3')?card.querySelector('h3').innerText.trim():'';
-      $('pickerQ').value=title||ctx.topic||''; $('imgPicker').style.display='flex';
-      if(source==='gif'&&gifsAvailable) runGifs(); else runStock();
+      // A slide title is a good photo query and a poor GIF one: "Create Your
+      // Own" returns logos and trainers. GIFs start from what the lesson is
+      // ABOUT, which is far likelier to have something worth showing.
+      const wantsGif=source==='gif'&&gifsAvailable;
+      $('pickerQ').value=(wantsGif?(ctx.topic||'').replace(/-/g,' '):(title||ctx.topic||'')).trim();
+      $('imgPicker').style.display='flex';
+      if(wantsGif) runGifs(); else runStock();
       setTimeout(()=>$('pickerQ').focus(),50);
     }
     function closePicker(){ $('imgPicker').style.display='none'; pickerIndex=null; }
@@ -4509,6 +4514,10 @@
     }
     // ---- animated GIFs (GIPHY) ----
     let gifsAvailable=false, gifResults=[];
+    // Which of the three sources the picker is showing. Enter used to always
+    // run Stock, so typing a GIF search and pressing Enter silently switched
+    // the teacher to photos.
+    let pickerSource='stock';
 
     // Results are candidates, not library images: nothing is downloaded until
     // the teacher picks one, so the grid carries the GIF's own address rather
@@ -4520,6 +4529,7 @@
     }
 
     async function runGifs(){
+      pickerSource='gif';
       showGiphyAttribution(true);
       const q=$('pickerQ').value.trim(); if(!q){ $('pickerQ').focus(); return; }
       $('pickerHint').textContent='Animated GIFs from GIPHY — safe search is always on. Chosen GIFs animate in PowerPoint and Google Slides.';
@@ -4560,14 +4570,14 @@
       }catch(err){ toast(err.message); runGifs(); }
     }
 
-    async function runStock(){ showGiphyAttribution(false); const q=$('pickerQ').value.trim();
+    async function runStock(){ pickerSource='stock'; showGiphyAttribution(false); const q=$('pickerQ').value.trim();
       $('pickerHint').textContent='Stock library — free and instant.';
       $('pickerGrid').innerHTML='<div class="pg-msg"><span class="spinner"></span>Searching…</div>';
       try{ const u=new URLSearchParams({q,subject:ctx.subject||'',topic:ctx.topic||''});
         const d=await (await fetch('/api/images/search?'+u)).json(); $('pickerGrid').innerHTML=pickerGridHTML(d.images,false);
       }catch{ $('pickerGrid').innerHTML='<div class="pg-msg">Search failed.</div>'; }
     }
-    async function runWeb(){ showGiphyAttribution(false); const q=$('pickerQ').value.trim(); if(!q){ $('pickerQ').focus(); return; }
+    async function runWeb(){ pickerSource='web'; showGiphyAttribution(false); const q=$('pickerQ').value.trim(); if(!q){ $('pickerQ').focus(); return; }
       $('pickerHint').textContent='Fresh images from the web (added to your library).';
       $('pickerGrid').innerHTML='<div class="pg-msg"><span class="spinner"></span>Fetching from the web…</div>';
       try{ const d=await (await fetch('/api/images/fetch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q,subject:ctx.subject,topic:ctx.topic,grade:ctx.grade})})).json();
@@ -4588,7 +4598,13 @@
     $('pickerWebBtn').addEventListener('click',runWeb);
     $('pickerGifBtn').addEventListener('click',runGifs);
     $('giphyLogo')?.addEventListener('error',e=>{ e.target.style.display='none'; });
-    $('pickerQ').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); runStock(); } });
+    // Enter repeats whichever source is showing. Anything else is a trap: you
+    // type a GIF search, press Enter, and get stock photos back.
+    $('pickerQ').addEventListener('keydown',e=>{
+      if(e.key!=='Enter') return;
+      e.preventDefault();
+      if(pickerSource==='gif') runGifs(); else if(pickerSource==='web') runWeb(); else runStock();
+    });
     $('pickerGrid').addEventListener('click',e=>{
       const pg=e.target.closest('.pg'); if(!pg) return;
       if(pg.dataset.gifIndex!=null) pickGif(pg.dataset.gifIndex); else pickImage(pg.dataset.rel);
