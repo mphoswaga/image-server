@@ -478,6 +478,7 @@
     .picker-search input { flex:1; min-width:150px; }
     .picker-search .btn { padding:10px 13px; font-size:13.5px; }
     .picker-hint { padding:2px 20px 6px; font-size:12px; color:var(--muted); }
+    .pg-source.src-gif { background:#6d28d9; }
     .picker-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:10px 20px 20px; overflow-y:auto; }
     .picker-grid .pg { aspect-ratio:4/3; border-radius:10px; overflow:hidden; cursor:pointer; border:2px solid transparent; background:#eef0f4; padding:0; position:relative; }
     .picker-grid .pg img { width:100%; height:100%; object-fit:cover; display:block; }
@@ -3086,6 +3087,7 @@
         <input id="pickerQ" type="text" placeholder="Search images…" aria-label="Search images" />
         <button type="button" class="btn ghost" id="pickerSearchBtn"><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg> Stock</button>
         <button type="button" class="btn ghost" id="pickerWebBtn"><svg class="ic" aria-hidden="true"><use href="#i-shuffle"/></svg> Search the web</button>
+        <button type="button" class="btn ghost" id="pickerGifBtn" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg> GIFs</button>
       </div>
       <div class="picker-hint" id="pickerHint">Stock library first — free and instant. No match? Try "Search the web".</div>
       <div id="pickerGrid" class="picker-grid"></div>
@@ -3128,7 +3130,14 @@
   <script>
     const $=id=>document.getElementById(id);
     const cap=s=>s.replace(/\b\w/g,c=>c.toUpperCase());
-    const esc=s=>String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+    // Quotes are escaped too, because esc() is used inside attributes as often
+    // as in text — src=, href=, title= — and the values come from third parties
+    // (image captions, YouTube titles, GIF titles). Left alone, a caption
+    // containing a quote ends the attribute early and anything after it becomes
+    // a new attribute on the element: on an <img>, an injected onerror runs.
+    // In text content &quot; and &#39; render as the characters, so escaping
+    // more is safe everywhere esc() is already used.
+    const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const ICON=id=>`<svg class="ic" aria-hidden="true"><use href="#${id}"/></svg>`;
 
     // Toast notifications (replace native alert): non-blocking, screen-reader announced.
@@ -4463,6 +4472,41 @@
         return `<button type="button" class="pg" data-rel="${esc(im.relpath)}" title="${esc(im.caption||'')}"><img src="${esc(im.image)}" loading="lazy"><span class="pg-source ${srcClass}">${srcLabel}</span></button>`;
       }).join('');
     }
+    // ---- animated GIFs (GIPHY) ----
+    let gifsAvailable=false, gifResults=[];
+
+    // Results are candidates, not library images: nothing is downloaded until
+    // the teacher picks one, so the grid carries the GIF's own address rather
+    // than a relpath like the other two sources do.
+    async function runGifs(){
+      const q=$('pickerQ').value.trim(); if(!q){ $('pickerQ').focus(); return; }
+      $('pickerHint').textContent='Animated GIFs from GIPHY — safe search is always on. Chosen GIFs animate in PowerPoint and Google Slides.';
+      $('pickerGrid').innerHTML='<div class="pg-msg"><span class="spinner"></span>Searching GIFs…</div>';
+      try{
+        const d=await (await fetch('/api/gifs/search?'+new URLSearchParams({q}))).json();
+        if(!d.configured){ $('pickerGrid').innerHTML='<div class="pg-msg">GIF search is not set up yet.</div>'; return; }
+        gifResults=d.gifs||[];
+        const gifs=gifResults;
+        $('pickerGrid').innerHTML=gifs.length
+          ? gifs.map((g,i)=>`<button type="button" class="pg" data-gif-index="${i}" title="${esc(g.title||'')}"><img src="${esc(g.previewUrl)}" loading="lazy"><span class="pg-source src-gif">GIF</span></button>`).join('')
+          : '<div class="pg-msg">No GIFs found for that. Try a simpler word.</div>';
+      }catch{ $('pickerGrid').innerHTML='<div class="pg-msg">GIF search failed.</div>'; }
+    }
+
+    // Download the chosen GIF into the library, then place it exactly as a
+    // photo is placed — one path for putting a picture on a slide.
+    async function pickGif(index){
+      const gif=gifResults[Number(index)];
+      if(!gif) return;
+      $('pickerGrid').innerHTML='<div class="pg-msg"><span class="spinner"></span>Adding the GIF…</div>';
+      try{
+        const r=await fetch('/api/gifs/pick',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({...gif, subject:ctx.subject, topic:ctx.topic})});
+        const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not add that GIF.');
+        pickImage(d.relpath);
+      }catch(err){ toast(err.message); runGifs(); }
+    }
+
     async function runStock(){ const q=$('pickerQ').value.trim();
       $('pickerHint').textContent='Stock library — free and instant.';
       $('pickerGrid').innerHTML='<div class="pg-msg"><span class="spinner"></span>Searching…</div>';
@@ -4489,8 +4533,12 @@
     $('imgPicker').addEventListener('click',e=>{ if(e.target===$('imgPicker')) closePicker(); });
     $('pickerSearchBtn').addEventListener('click',runStock);
     $('pickerWebBtn').addEventListener('click',runWeb);
+    $('pickerGifBtn').addEventListener('click',runGifs);
     $('pickerQ').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); runStock(); } });
-    $('pickerGrid').addEventListener('click',e=>{ const pg=e.target.closest('.pg'); if(pg) pickImage(pg.dataset.rel); });
+    $('pickerGrid').addEventListener('click',e=>{
+      const pg=e.target.closest('.pg'); if(!pg) return;
+      if(pg.dataset.gifIndex!=null) pickGif(pg.dataset.gifIndex); else pickImage(pg.dataset.rel);
+    });
 
     // ---- YouTube suggestions and teacher-approved slide media ----
     let youtubeIndex=null;
@@ -5099,7 +5147,11 @@
 
     // ---- App switcher ----
     async function loadAppConfig(){
-      try{ const d=await fetch('/api/config/apps').then(r=>r.json()); if(d.teacherScopeUrl) $('teacherScopeLink').href=d.teacherScopeUrl; }catch{}
+      try{ const d=await fetch('/api/config/apps').then(r=>r.json());
+        if(d.teacherScopeUrl) $('teacherScopeLink').href=d.teacherScopeUrl;
+        gifsAvailable=!!d.gifs;
+        if($('pickerGifBtn')) $('pickerGifBtn').style.display=gifsAvailable?'':'none';
+      }catch{}
     }
 
     // ── Preset picker (dropdown + collapsible gallery) ───────────────────────
