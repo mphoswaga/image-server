@@ -206,7 +206,28 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Health check for the host (Railway): confirms the process booted and the
 // port is bound. Must not depend on any API keys or external services.
-app.get('/healthz', (req, res) => res.json({ ok: true, uptime: process.uptime() }));
+// Which commit is actually serving this request.
+//
+// Pushed is not deployed. Work has sat unshipped here while it was looked for
+// in the browser, and there was no way to tell from outside — so the running
+// commit is now something you can read, and scripts/deployed.js compares it
+// against local main.
+//
+// Railway sets RAILWAY_GIT_COMMIT_SHA on every build. The git fallback is for
+// running locally, where the working tree is the answer.
+const RUNNING_COMMIT = (() => {
+  if (process.env.RAILWAY_GIT_COMMIT_SHA) return process.env.RAILWAY_GIT_COMMIT_SHA.slice(0, 40);
+  try {
+    return require('child_process').execSync('git rev-parse HEAD', { cwd: __dirname, encoding: 'utf8' }).trim();
+  } catch { return 'unknown'; }
+})();
+
+app.get('/healthz', (req, res) => res.json({
+  ok: true,
+  uptime: process.uptime(),
+  commit: RUNNING_COMMIT,
+  commitShort: RUNNING_COMMIT.slice(0, 7),
+}));
 
 // ── Auth ──────────────────────────────────────────────────────────────────
 const setSession = (res, userId) => res.cookie(COOKIE_NAME, issueToken(userId), {
