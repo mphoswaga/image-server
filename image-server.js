@@ -227,6 +227,14 @@ app.get('/healthz', (req, res) => res.json({
   uptime: process.uptime(),
   commit: RUNNING_COMMIT,
   commitShort: RUNNING_COMMIT.slice(0, 7),
+  // Which optional integrations this instance can actually use. Whether a key
+  // is present is not a secret, and without it "I cannot see the button" is a
+  // guessing game between a stale browser cache and a missing variable.
+  integrations: {
+    gifs: giphyConfigured(),
+    youtube: !!process.env.YOUTUBE_API_KEY,
+    images: !!process.env.UNSPLASH_ACCESS_KEY,
+  },
 }));
 
 // ── Auth ──────────────────────────────────────────────────────────────────
