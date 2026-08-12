@@ -19,6 +19,33 @@ const RESPONSE_SCHEMA = {
   required: ['answer', 'outOfScope', 'followUps'],
 };
 
+const EDIT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    summary: { type: 'string' },
+    edits: {
+      type: 'array',
+      maxItems: 18,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          index: { type: 'integer' },
+          heading: { type: 'string' },
+          content: { type: 'string' },
+          title: { type: 'string' },
+          subtitle: { type: 'string' },
+          bullets: { type: 'array', maxItems: 6, items: { type: 'string' } },
+          example: { type: 'string' },
+        },
+        required: ['index', 'heading', 'content', 'title', 'subtitle', 'bullets', 'example'],
+      },
+    },
+  },
+  required: ['summary', 'edits'],
+};
+
 function cleanText(value, max = MAX_MESSAGE) {
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
 }
@@ -54,6 +81,25 @@ function cleanHistory(value) {
     role: item && item.role === 'assistant' ? 'assistant' : 'user',
     content: cleanText(item && item.content, 900),
   })).filter(item => item.content);
+}
+
+function cleanTarget(value) {
+  if (!value || typeof value !== 'object') throw new Error('Select a plan section or slide first.');
+  const type = ['plan-section', 'slide', 'deck'].includes(value.type) ? value.type : '';
+  if (!type) throw new Error('That part of the lesson cannot be edited yet.');
+  const items = Array.isArray(value.items) ? value.items : [value];
+  return {
+    type,
+    items: items.slice(0, 18).map((item, position) => ({
+      index: Number.isInteger(Number(item.index)) ? Number(item.index) : position,
+      heading: cleanText(item.heading, 180),
+      content: cleanText(item.content, 4000),
+      title: cleanText(item.title, 240),
+      subtitle: cleanText(item.subtitle, 400),
+      bullets: (Array.isArray(item.bullets) ? item.bullets : []).slice(0, 8).map(bullet => cleanText(bullet, 500)),
+      example: cleanText(item.example, 900),
+    })),
+  };
 }
 
 async function answer({ message, context, history }) {
@@ -100,4 +146,53 @@ SAFETY AND CONTROL:
   };
 }
 
-module.exports = { answer, cleanContext };
+async function proposeEdit({ instruction, target, context }) {
+  const request = cleanText(instruction);
+  if (!request) throw new Error('Choose how you want this content improved.');
+  const safeTarget = cleanTarget(target);
+  const safeContext = cleanContext(context);
+  const response = await client().chat.completions.create({
+    model: MODEL,
+    temperature: 0.3,
+    messages: [
+      {
+        role: 'system',
+        content: `You are LessonScope Agent, an expert curriculum editor working directly on a teacher's lesson.
+
+Return replacement text for the supplied target. Make the requested change, preserve factual accuracy, align with the lesson objectives and grade, and retain the teacher's intended meaning.
+
+RULES:
+- plan-section: edit content only; preserve heading exactly.
+- slide or deck: keep every supplied index. Improve only editable text fields.
+- Keep slide titles concise, use no more than 5 bullets, and keep each bullet short enough for a projected 16:9 slide.
+- If content cannot fit comfortably, condense it rather than returning long paragraphs.
+- Leave a field as an empty string or empty array only when that field did not exist and should remain absent.
+- Do not add citations, unsupported facts, media, student data, markdown, or commentary inside fields.
+- The summary must briefly say what changed.`,
+      },
+      { role: 'system', content: `Lesson context: ${JSON.stringify(safeContext).slice(0, MAX_CONTEXT)}` },
+      { role: 'user', content: `Instruction: ${request}\n\nTarget (${safeTarget.type}):\n${JSON.stringify(safeTarget.items)}` },
+    ],
+    response_format: {
+      type: 'json_schema',
+      json_schema: { name: 'lessonscope_agent_edit', strict: true, schema: EDIT_SCHEMA },
+    },
+  });
+  const parsed = JSON.parse(response.choices[0].message.content);
+  const allowed = new Set(safeTarget.items.map(item => item.index));
+  return {
+    targetType: safeTarget.type,
+    summary: cleanAnswer(parsed.summary),
+    edits: (parsed.edits || []).filter(edit => allowed.has(edit.index)).map(edit => ({
+      index: edit.index,
+      heading: cleanText(edit.heading, 180),
+      content: cleanAnswer(edit.content).slice(0, 4000),
+      title: cleanText(edit.title, 240),
+      subtitle: cleanText(edit.subtitle, 400),
+      bullets: (edit.bullets || []).map(bullet => cleanText(bullet, 500)).filter(Boolean).slice(0, 6),
+      example: cleanText(edit.example, 900),
+    })),
+  };
+}
+
+module.exports = { answer, proposeEdit, cleanContext, cleanTarget };

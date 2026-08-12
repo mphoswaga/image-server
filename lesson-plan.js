@@ -26,6 +26,10 @@ function planSchema(model, sequence = null, structuredSequence = false) {
   return {
     type: 'object',
     properties: {
+      successCriteria: {
+        type: 'array',
+        items: { type: 'string' },
+      },
       sections: {
         type: 'array',
         items: {
@@ -36,7 +40,7 @@ function planSchema(model, sequence = null, structuredSequence = false) {
         },
       },
     },
-    required: ['sections'],
+    required: ['successCriteria', 'sections'],
     additionalProperties: false,
   };
 }
@@ -82,7 +86,7 @@ Include teacher actions, student practice, a check for understanding, and useful
 Do not put "Lesson ${step}" into school template headings; the app labels the step outside the plan.\n`;
 }
 
-function buildPrompt({ subject, topic, grade, tone, objectives, templateText, unitBlock, sourceMaterialText, teachingModel, sequence, structuredSequence = false, sequenceLessonNumber = null, previousLessonPlanText = '' }) {
+function buildPrompt({ subject, topic, grade, tone, objectives, successCriteria = [], templateText, unitBlock, sourceMaterialText, teachingModel, sequence, structuredSequence = false, sequenceLessonNumber = null, previousLessonPlanText = '' }) {
   const pretty = topic.replace(/-/g, ' ');
   const depth = gradeProfile(grade).content.depth;
   const model = getTeachingModel(teachingModel);
@@ -110,6 +114,15 @@ ${templateText.slice(0, TEMPLATE_PROMPT_LIMIT)}
       ? 'A school template is provided, so it decides the fields outright: for every lesson output every authored template heading exactly once and in template order. Do not add, rename, merge or omit fields.'
       : 'A school template is provided, so it decides the sections outright: output exactly its headings, exactly once each, in its order — no extras, no renames, nothing merged or split, even if the teaching method would suggest a different arrangement.')
     : 'There is no school template, so create clear headings that follow the selected model stages in order.';
+  const suppliedCriteria = (Array.isArray(successCriteria) ? successCriteria : [])
+    .map(value => String(value || '').trim()).filter(Boolean);
+  const criteriaBlock = suppliedCriteria.length
+    ? `The teacher/school supplied these SUCCESS CRITERIA. Return them exactly in successCriteria, without rewriting or adding to them:\n${suppliedCriteria.join('\n')}`
+    : `No success criteria were supplied. Create 2-5 concise, observable success criteria from the learning objectives. Every item must begin "I can..." and describe evidence a student can demonstrate by the end of this lesson; do not use vague verbs such as understand, know, or learn.`;
+  const modelDetailRule = model.id === 'gradual_release'
+    ? `GRADUAL RELEASE REQUIREMENT:
+In the main teaching/activity field, begin with "Teaching model: Gradual Release" and use these labels exactly: "I Do", "We Do", "You Do Together", and "You Do Alone". Under every label give concrete teacher actions, concrete student actions, the example/task or materials, and a check for understanding or transition. Do not reduce a phase to a single generic sentence. The closing/plenary must provide the Exit and Reflect phase.`
+    : '';
 
   return `You are an experienced teacher writing a complete lesson plan.
 
@@ -124,6 +137,8 @@ ${sequenceBlock}
 Learning objectives provided by the teacher (the plan MUST address these):
 ${objectives}
 
+${criteriaBlock}
+
 ${templateBlock}
 
 Rules:
@@ -133,11 +148,79 @@ Rules:
   - "content": write as short bullet points, ONE idea per line, separated by newlines. Plain text ONLY — no markdown symbols (no **, no #, no backticks) and do NOT manually number the lines. Keep each line concise and classroom-ready.
 - VOCABULARY: whenever you list key words or vocabulary, give each one a short, clear definition on the same line (e.g. "Cooperate: to work together to get something done") — never list a term without explaining what it means.
 - GAMES & ACTIVITIES: whenever the plan includes a game or activity, spell it out so another teacher could run it without guessing — state the goal (how to "win" / what success looks like), the materials needed, and the step-by-step rules of how to play. Never just name an activity.
+- SUCCESS CRITERIA: return the lesson's final criteria in the top-level successCriteria array. They must be usable in the downloaded plan even when the school template excluded this field from AI-authored headings.
+- ${modelDetailRule || `Make every teaching phase specific: state what the teacher does, what students do, the concrete example or task, and how understanding is checked.`}
 - ${depth}
   - Make the plan fully address the objectives above and be appropriate for ${grade}.
   - ${templateText
     ? `The teaching should feel like ${model.label} in HOW each section is written — the teacher actions, student actions, practice and checks. The section headings and their order come from the school's template ONLY; never add, rename or reorder a section to fit the method.`
     : `The lesson must visibly feel like ${model.label}; do not merely mention the model in a note. The activities, teacher actions, student actions, checks, and closing must follow its sequence.`}`;
+}
+
+function objectiveLines(objectives) {
+  return String(objectives || '').replace(/\r/g, '').split('\n')
+    .map(line => line.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())
+    .filter(Boolean);
+}
+
+function criterionFromObjective(objective) {
+  let text = String(objective || '').trim()
+    .replace(/^\s*[A-Z]{0,5}\d+(?:\.\d+)*\s*[:.)-]?\s*/i, '')
+    .replace(/[.!?]+$/, '');
+  const colon = text.indexOf(':');
+  if (colon >= 0 && text.slice(colon + 1).trim()) text = text.slice(colon + 1).trim();
+  text = text.replace(/^(?:students?\s+(?:will|can|should)\s+|learners?\s+(?:will|can|should)\s+)/i, '');
+  if (/^understand\b/i.test(text)) text = text.replace(/^understand\b/i, 'explain');
+  if (/^know\b/i.test(text)) text = text.replace(/^know\b/i, 'describe');
+  if (!text) return '';
+  return `I can ${text.charAt(0).toLowerCase()}${text.slice(1)}.`;
+}
+
+function deriveSuccessCriteria(objectives, limit = 5) {
+  return objectiveLines(objectives).map(criterionFromObjective).filter(Boolean).slice(0, limit);
+}
+
+function normalizeGeneratedCriteria(criteria, objectives) {
+  const generated = (Array.isArray(criteria) ? criteria : [])
+    .map(value => String(value || '').replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())
+    .filter(Boolean)
+    .map(value => {
+      const sentence = /^i can\b/i.test(value) ? value : `I can ${value.charAt(0).toLowerCase()}${value.slice(1)}`;
+      return /[.!?]$/.test(sentence) ? sentence : `${sentence}.`;
+    });
+  return generated.length ? generated.slice(0, 5) : deriveSuccessCriteria(objectives);
+}
+
+function ensureGradualReleaseVisible(sections) {
+  const list = Array.isArray(sections) ? sections.map(section => ({ ...section })) : [];
+  const activityIndex = list.findIndex(section => /activit|main teaching|teacher steps|lesson development/i.test(String(section.heading || '')));
+  if (activityIndex < 0) return list;
+  const section = list[activityIndex];
+  let content = String(section.content || '').trim();
+  if (!/^teaching model:\s*gradual release/im.test(content)) content = `Teaching model: Gradual Release\n${content}`.trim();
+  const required = [
+    ['I Do', 'Teacher: Model the target skill with a worked example and verbalise each decision.\nStudents: Watch, listen, and respond to a quick check.'],
+    ['We Do', 'Teacher: Guide a shared example with prompts and immediate feedback.\nStudents: Suggest each step and explain their reasoning.'],
+    ['You Do Together', 'Teacher: Monitor paired practice and address misconceptions.\nStudents: Complete a supported example together and compare their process with the success criteria.'],
+    ['You Do Alone', 'Teacher: Set an independent task and collect evidence of learning.\nStudents: Complete the task independently and self-check against the success criteria.'],
+  ];
+  for (const [label, fallback] of required) {
+    if (!new RegExp(`(?:^|\\n)${label.replace(/ /g, '\\s+')}\\s*(?:[:(]|$)`, 'i').test(content)) {
+      content += `\n${label}\n${fallback}`;
+    }
+  }
+  list[activityIndex] = { ...section, content: content.trim() };
+  return list;
+}
+
+function finalizeLessonPlan(raw, { objectives = '', suppliedSuccessCriteria = [], teachingModelId = 'standard' } = {}) {
+  const supplied = (Array.isArray(suppliedSuccessCriteria) ? suppliedSuccessCriteria : [])
+    .map(value => String(value || '').trim()).filter(Boolean);
+  const successCriteria = supplied.length ? supplied : normalizeGeneratedCriteria(raw && raw.successCriteria, objectives);
+  const sections = teachingModelId === 'gradual_release'
+    ? ensureGradualReleaseVisible(raw && raw.sections)
+    : (Array.isArray(raw && raw.sections) ? raw.sections : []);
+  return { ...(raw || {}), sections, successCriteria };
 }
 
 function placeholderPlan(objectives, teachingModel) {
@@ -170,7 +253,7 @@ function placeholderPlan(objectives, teachingModel) {
   };
 }
 
-async function generateLessonPlan({ subject, topic, grade = 'middle school', tone = 'clear and engaging', objectives, templateText, unitBlock = '', sourceMaterialText = '', teachingModel = 'standard', sequence = null, structuredSequence = false, sequenceLessonNumber = null, previousLessonPlanText = '', regenerate = false }) {
+async function generateLessonPlan({ subject, topic, grade = 'middle school', tone = 'clear and engaging', objectives, successCriteria = [], templateText, unitBlock = '', sourceMaterialText = '', teachingModel = 'standard', sequence = null, structuredSequence = false, sequenceLessonNumber = null, previousLessonPlanText = '', regenerate = false }) {
   const teachingModelId = normalizeTeachingModelId(teachingModel);
   const model = getTeachingModel(teachingModelId);
   const cleanSequence = sequence && sequence.enabled ? {
@@ -189,15 +272,16 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
         placeholder.sections.map(section => ({ ...section, lesson: lessonIndex + 1 }))
       ).flat();
     }
-    return { ...placeholder, teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
+    return { ...finalizeLessonPlan(placeholder, { objectives, suppliedSuccessCriteria: successCriteria, teachingModelId }), teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
   }
   const { wrap } = require('./cache');
-  return wrap('lesson-plan', {
+  const cachedOrGenerated = await wrap('lesson-plan', {
     subject: String(subject || '').toLowerCase().trim(),
     topic: String(topic || '').toLowerCase().trim(),
     grade: String(grade || 'middle school').trim(),
     tone: String(tone || 'clear and engaging').trim(),
     objectives: String(objectives || '').trim(),
+    successCriteria: (Array.isArray(successCriteria) ? successCriteria : []).map(String).map(value => value.trim()).filter(Boolean),
     templateText: String(templateText || '').slice(0, TEMPLATE_PROMPT_LIMIT).trim(),
     unitBlock: String(unitBlock || '').slice(0, 2000).trim(),
     sourceMaterialText: String(sourceMaterialText || '').slice(0, 5000).trim(),
@@ -212,13 +296,15 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     const response = await client.chat.completions.create({
       model: MODEL,
       max_tokens: cleanSequence && structuredSequence && !cleanLessonNumber ? 12000 : 6000,
-      messages: [{ role: 'user', content: buildPrompt({ subject, topic, grade, tone, objectives, templateText, unitBlock, sourceMaterialText, teachingModel: teachingModelId, sequence: cleanSequence, structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber), sequenceLessonNumber: cleanLessonNumber, previousLessonPlanText }) }],
+      messages: [{ role: 'user', content: buildPrompt({ subject, topic, grade, tone, objectives, successCriteria, templateText, unitBlock, sourceMaterialText, teachingModel: teachingModelId, sequence: cleanSequence, structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber), sequenceLessonNumber: cleanLessonNumber, previousLessonPlanText }) }],
       response_format: { type: 'json_schema', json_schema: { name: 'lesson_plan', strict: true, schema: planSchema(model, cleanSequence, !!(cleanSequence && structuredSequence && !cleanLessonNumber)) } },
     });
     const text = response.choices[0]?.message?.content;
     if (!text) throw new Error('No lesson plan returned from the model');
     return { ...JSON.parse(text), teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
   });
+  const finalized = finalizeLessonPlan(cachedOrGenerated, { objectives, suppliedSuccessCriteria: successCriteria, teachingModelId });
+  return { ...finalized, teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
 }
 
 // Render an accepted plan to a compact text block to feed into slide generation.
@@ -226,4 +312,8 @@ function planToText(plan) {
   return (plan.sections || []).map(s => `## ${s.heading}${s.stageId ? ` [stage: ${s.stageId}]` : ''}\n${s.content}`).join('\n\n');
 }
 
-module.exports = { TEMPLATE_PROMPT_LIMIT, generateLessonPlan, planToText, planSchema, sequencePromptBlock, sequenceStepPromptBlock, buildPrompt };
+module.exports = {
+  TEMPLATE_PROMPT_LIMIT, generateLessonPlan, planToText, planSchema,
+  sequencePromptBlock, sequenceStepPromptBlock, buildPrompt,
+  deriveSuccessCriteria, finalizeLessonPlan, ensureGradualReleaseVisible,
+};

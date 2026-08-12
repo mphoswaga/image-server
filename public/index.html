@@ -2219,6 +2219,15 @@
     .assistant-msg.assistant { margin-right:16px; color:#24324a; background:#f3f6f8; border:1px solid #e2e8ee; }
     .assistant-msg.scope { color:#805400; background:#fff8e8; border-color:#f0dfb1; }
     .assistant-typing { color:var(--muted); font-size:12px; padding:8px 2px; }
+    .assistant-proposal { margin:12px 0; padding:13px; border:1px solid #b9ddcb; border-radius:8px; background:#f5fcf8; }
+    .assistant-proposal strong { display:block; color:#145c3c; font-size:13px; margin-bottom:5px; }
+    .assistant-proposal p { color:#475467; font-size:12.5px; line-height:1.5; margin:0 0 9px; }
+    .assistant-preview { max-height:190px; overflow:auto; padding:9px; border:1px solid #dfe8e3; border-radius:7px; background:#fff; color:#344054; font-size:12px; line-height:1.45; white-space:pre-wrap; }
+    .assistant-proposal-actions { display:flex; gap:7px; margin-top:10px; }
+    .assistant-proposal-actions .btn { min-height:36px; padding:7px 11px; font-size:12px; width:auto; }
+    .assistant-inline { display:inline-flex; align-items:center; gap:6px; margin-top:8px; padding:6px 9px; border:1px solid #cfe4d9; border-radius:7px; background:#f5fcf8; color:#08784c; font:inherit; font-size:11.5px; font-weight:750; cursor:pointer; }
+    .assistant-inline:hover { background:#e9f8f1; border-color:#93cfaf; }
+    .assistant-inline .ic { width:14px; height:14px; }
     .assistant-custom-toggle { margin-top:12px; color:#536174; background:transparent; }
     .assistant-compose { display:none; gap:8px; padding:12px 16px 16px; border-top:1px solid var(--border); background:#fff; }
     .assistant-compose.visible { display:flex; }
@@ -3324,7 +3333,28 @@
         ['Check classroom readability','Check whether the slide wording is age-appropriate and readable for projection.'],
       ],
     };
-    let assistantHistory=[];
+    const ASSISTANT_EDIT_PRESETS={
+      'plan-section':[
+        ['Improve this section','Improve the clarity, usefulness, and teaching detail of this section.'],
+        ['Add practical detail','Add specific teacher actions, student actions, and practical classroom detail where suitable.'],
+        ['Align with objectives','Revise this section so it clearly supports the lesson objectives and success criteria.'],
+        ['Make it simpler','Make this section concise, clear, and easy for a teacher to follow during the lesson.'],
+      ],
+      slide:[
+        ['Make this slide concise','Shorten this slide so it is easy to read when projected without losing the key idea.'],
+        ['Improve the explanation','Rewrite this slide with a clearer, age-appropriate explanation of the concept.'],
+        ['Strengthen the example','Improve the example and bullets so students can connect the concept to something concrete.'],
+        ['Improve classroom readability','Use a short title and compact bullets that fit comfortably on one slide.'],
+      ],
+      deck:[
+        ['Make the whole deck concise','Edit every slide to remove repetition and keep projected text concise.'],
+        ['Improve the teaching flow','Edit the deck so each slide builds logically on the previous one while preserving its structure.'],
+        ['Use a consistent teaching voice','Edit all slides to use a clear, consistent, age-appropriate classroom voice.'],
+        ['Check every slide fits','Shorten overcrowded titles, bullets, and examples across the deck so every slide remains readable.'],
+      ],
+    };
+    let assistantHistory=[], assistantTarget=null, assistantProposalSeq=0;
+    const assistantProposals=new Map();
 
     function assistantStageKey(){
       if(currentStage==='plan') return 'plan';
@@ -3362,15 +3392,31 @@
         planText, slideText,
       };
     }
-    function renderAssistantChoices(items){
-      $('assistantChoices').innerHTML=(items||[]).map(([label,prompt])=>`<button type="button" class="assistant-choice" data-assistant-prompt="${esc(prompt)}">${ICON('i-spark')}${esc(label)}</button>`).join('');
+    function planAssistantTarget(index){
+      const section=document.querySelector(`#planSections .plan-section[data-i="${index}"]`); if(!section) return null;
+      return {type:'plan-section',items:[{index:Number(index),heading:section.querySelector('.heading')?.value||'',content:section.querySelector('.content')?.value||''}]};
+    }
+    function slideAssistantItem(card){
+      return {index:Number(card.dataset.index),title:card.querySelector('[data-field="title"]')?.innerText||'',subtitle:card.querySelector('[data-field="subtitle"]')?.innerText||'',bullets:[...card.querySelectorAll('[data-field="bullet"]')].map(el=>el.innerText.trim()).filter(Boolean),example:card.querySelector('[data-field="example"]')?.innerText||''};
+    }
+    function slideAssistantTarget(index){ const card=document.querySelector(`#deck .slide[data-index="${index}"]`); return card?{type:'slide',items:[slideAssistantItem(card)]}:null; }
+    function deckAssistantTarget(){ const cards=[...document.querySelectorAll('#deck .slide[data-index]')]; return cards.length?{type:'deck',items:cards.map(slideAssistantItem)}:null; }
+    function renderAssistantChoices(items,mode='ask'){
+      $('assistantChoices').innerHTML=(items||[]).map(([label,prompt])=>`<button type="button" class="assistant-choice" data-assistant-prompt="${esc(prompt)}" data-assistant-mode="${mode}">${ICON('i-spark')}${esc(label)}</button>`).join('');
     }
     function refreshAssistantContext(){
       const key=assistantStageKey();
-      $('assistantContext').textContent=assistantStageLabel(key);
-      renderAssistantChoices(ASSISTANT_PRESETS[key]||ASSISTANT_PRESETS.start);
+      if(assistantTarget){
+        const item=assistantTarget.items[0], label=assistantTarget.type==='plan-section'?`Plan section: ${item.heading||'Selected section'}`:assistantTarget.type==='slide'?`Editing slide ${item.index+1}: ${item.title||'Untitled'}`:`Editing all ${assistantTarget.items.length} slides`;
+        $('assistantContext').textContent=label;
+        renderAssistantChoices(ASSISTANT_EDIT_PRESETS[assistantTarget.type], 'edit');
+      }else{
+        $('assistantContext').textContent=assistantStageLabel(key);
+        renderAssistantChoices(ASSISTANT_PRESETS[key]||ASSISTANT_PRESETS.start);
+      }
     }
-    function openAssistant(){
+    function openAssistant(target=null){
+      assistantTarget=target||(currentStage==='slides'?deckAssistantTarget():null);
       refreshAssistantContext();
       $('assistantPanel').classList.add('open');
       $('assistantPanel').setAttribute('aria-hidden','false');
@@ -3392,6 +3438,67 @@
       $('assistantFeed').scrollTop=$('assistantFeed').scrollHeight;
       return div;
     }
+    function proposalPreview(proposal){
+      return proposal.edits.slice(0,4).map(edit=>{
+        if(proposal.targetType==='plan-section') return `${edit.heading}\n${edit.content}`;
+        return `Slide ${edit.index+1}: ${edit.title}${edit.subtitle?`\n${edit.subtitle}`:''}${edit.bullets.length?`\n• ${edit.bullets.join('\n• ')}`:''}${edit.example?`\nExample: ${edit.example}`:''}`;
+      }).join('\n\n')+(proposal.edits.length>4?`\n\n+ ${proposal.edits.length-4} more slides`: '');
+    }
+    function showAssistantProposal(proposal){
+      const id=String(++assistantProposalSeq); assistantProposals.set(id,proposal);
+      const card=document.createElement('div'); card.className='assistant-proposal'; card.dataset.proposalId=id;
+      card.innerHTML=`<strong>${ICON('i-check')}Ready to review</strong><p>${esc(proposal.summary)}</p><div class="assistant-preview">${esc(proposalPreview(proposal))}</div><div class="assistant-proposal-actions"><button type="button" class="btn accent" data-proposal-apply="${id}">${ICON('i-check')}Apply changes</button><button type="button" class="btn ghost" data-proposal-discard="${id}">Discard</button></div>`;
+      $('assistantFeed').appendChild(card); $('assistantFeed').scrollTop=$('assistantFeed').scrollHeight;
+    }
+    async function requestAssistantEdit(instruction){
+      if(!assistantTarget){ askAssistant(instruction); return; }
+      assistantMessage('user',instruction);
+      const pending=document.createElement('div'); pending.className='assistant-typing'; pending.innerHTML='<span class="spinner"></span> Preparing changes…'; $('assistantFeed').appendChild(pending);
+      try{
+        const r=await fetch('/api/assistant/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({instruction,target:assistantTarget,context:assistantContextData()})});
+        const d=await r.json(); if(!r.ok) throw new Error(d.error||'The assistant could not prepare that edit.');
+        pending.remove(); showAssistantProposal(d);
+      }catch(err){ pending.remove(); assistantMessage('assistant',err.message||'The assistant could not prepare that edit.',true); }
+    }
+    function applyAssistantProposal(id){
+      const proposal=assistantProposals.get(id); if(!proposal||proposal.applied) return;
+      proposal.before=[];
+      proposal.edits.forEach(edit=>{
+        if(proposal.targetType==='plan-section'){
+          const section=document.querySelector(`#planSections .plan-section[data-i="${edit.index}"]`), field=section?.querySelector('.content'); if(!field) return;
+          proposal.before.push({index:edit.index,content:field.value}); field.value=edit.content; field.style.height='auto'; field.style.height=field.scrollHeight+'px';
+          return;
+        }
+        const card=document.querySelector(`#deck .slide[data-index="${edit.index}"]`); if(!card) return;
+        proposal.before.push({index:edit.index,...slideAssistantItem(card)});
+        const title=card.querySelector('[data-field="title"]'), subtitle=card.querySelector('[data-field="subtitle"]'), example=card.querySelector('[data-field="example"]'), list=card.querySelector('ul');
+        if(title&&edit.title) title.innerText=edit.title;
+        if(subtitle&&edit.subtitle) subtitle.innerText=edit.subtitle;
+        if(example&&edit.example) example.innerText=edit.example;
+        if(list&&edit.bullets.length) list.innerHTML=edit.bullets.map(bullet=>`<li contenteditable data-field="bullet">${esc(bullet)}</li>`).join('');
+      });
+      proposal.applied=true; const card=document.querySelector(`[data-proposal-id="${id}"]`); if(card) card.querySelector('.assistant-proposal-actions').innerHTML=`<button type="button" class="btn ghost" data-proposal-undo="${id}">${ICON('i-refresh')}Undo changes</button>`;
+      const first=proposal.edits[0];
+      assistantTarget=proposal.targetType==='plan-section'?planAssistantTarget(first?.index):proposal.targetType==='slide'?slideAssistantTarget(first?.index):deckAssistantTarget();
+      refreshAssistantContext(); toast('Assistant changes applied.','ok');
+    }
+    function undoAssistantProposal(id){
+      const proposal=assistantProposals.get(id); if(!proposal||!proposal.applied) return;
+      proposal.before.forEach(before=>{
+        if(proposal.targetType==='plan-section'){
+          const field=document.querySelector(`#planSections .plan-section[data-i="${before.index}"] .content`); if(field){ field.value=before.content; field.style.height='auto'; field.style.height=field.scrollHeight+'px'; }
+          return;
+        }
+        const card=document.querySelector(`#deck .slide[data-index="${before.index}"]`); if(!card) return;
+        const title=card.querySelector('[data-field="title"]'), subtitle=card.querySelector('[data-field="subtitle"]'), example=card.querySelector('[data-field="example"]'), list=card.querySelector('ul');
+        if(title) title.innerText=before.title||''; if(subtitle) subtitle.innerText=before.subtitle||''; if(example) example.innerText=before.example||'';
+        if(list) list.innerHTML=(before.bullets||[]).map(bullet=>`<li contenteditable data-field="bullet">${esc(bullet)}</li>`).join('');
+      });
+      proposal.applied=false; const card=document.querySelector(`[data-proposal-id="${id}"]`); if(card) card.querySelector('.assistant-proposal-actions').innerHTML='<span style="font-size:12px;color:var(--muted)">Changes undone.</span>';
+      const first=proposal.before[0];
+      assistantTarget=proposal.targetType==='plan-section'?planAssistantTarget(first?.index):proposal.targetType==='slide'?slideAssistantTarget(first?.index):deckAssistantTarget();
+      refreshAssistantContext(); toast('Assistant changes undone.','ok');
+    }
     async function askAssistant(message){
       const question=String(message||'').trim(); if(!question) return;
       assistantMessage('user',question);
@@ -3411,9 +3518,14 @@
     }
     $('assistantBtn').addEventListener('click',()=>$('assistantPanel').classList.contains('open')?closeAssistant():openAssistant());
     $('assistantClose').addEventListener('click',closeAssistant);
-    $('assistantChoices').addEventListener('click',e=>{ const btn=e.target.closest('[data-assistant-prompt]'); if(btn) askAssistant(btn.dataset.assistantPrompt); });
+    $('assistantChoices').addEventListener('click',e=>{ const btn=e.target.closest('[data-assistant-prompt]'); if(btn) (btn.dataset.assistantMode==='edit'?requestAssistantEdit(btn.dataset.assistantPrompt):askAssistant(btn.dataset.assistantPrompt)); });
+    $('assistantFeed').addEventListener('click',e=>{ const apply=e.target.closest('[data-proposal-apply]'), discard=e.target.closest('[data-proposal-discard]'), undo=e.target.closest('[data-proposal-undo]'); if(apply) applyAssistantProposal(apply.dataset.proposalApply); else if(discard) discard.closest('.assistant-proposal')?.remove(); else if(undo) undoAssistantProposal(undo.dataset.proposalUndo); });
     $('assistantCustomToggle').addEventListener('click',()=>{ $('assistantCompose').classList.add('visible'); $('assistantInput').focus(); });
-    $('assistantCompose').addEventListener('submit',e=>{ e.preventDefault(); const input=$('assistantInput'), value=input.value; input.value=''; askAssistant(value); });
+    $('assistantCompose').addEventListener('submit',e=>{ e.preventDefault(); const input=$('assistantInput'), value=input.value; input.value=''; assistantTarget?requestAssistantEdit(value):askAssistant(value); });
+    document.addEventListener('click',e=>{
+      const planBtn=e.target.closest('[data-assistant-plan]'); if(planBtn){ openAssistant(planAssistantTarget(Number(planBtn.dataset.assistantPlan))); return; }
+      const slideBtn=e.target.closest('[data-assistant-slide]'); if(slideBtn){ openAssistant(slideAssistantTarget(Number(slideBtn.dataset.assistantSlide))); }
+    });
     document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&$('assistantPanel').classList.contains('open')) closeAssistant(); });
 
     function renderSourceMaterials(summary){
@@ -4249,6 +4361,7 @@
           ${s.stageId&&model?.stages?.find(stage=>stage.id===s.stageId)?`<span class="plan-stage">${esc(model.stages.find(stage=>stage.id===s.stageId).label)}</span>`:''}
           <input class="heading" value="${esc(s.heading)}"${s.fieldKey?' readonly title="This is a row in your own lesson-plan form, so its name is fixed."':''} />
           <textarea class="content" rows="3" placeholder="Type what should go in this row of your form…">${esc(s.content)}</textarea>
+          <button type="button" class="assistant-inline" data-assistant-plan="${i}">${ICON('i-spark')}Improve with Assistant</button>
           ${s.note?`<p class="plan-note">${esc(s.note)}</p>`:''}
         </div>`).join('');
       planStage.querySelectorAll('textarea.content').forEach(t=>{ t.style.height='auto'; t.style.height=t.scrollHeight+'px'; t.addEventListener('input',()=>{t.style.height='auto';t.style.height=t.scrollHeight+'px';}); });
@@ -4281,6 +4394,7 @@
       $('dlPlanBtn').innerHTML=ICON('i-download')+(complete?' Download updated lesson plan':' Complete all plans to download');
     }
     function renderPlan(d){
+      if(ctx&&Array.isArray(d.successCriteria)&&d.successCriteria.length) ctx.successCriteria=d.successCriteria.slice();
       if(sequenceMode()&&d.sequenceLessonNumber){
         const index=Math.max(0,Number(d.sequenceLessonNumber)-1);
         sequencePlans[index]={...d,sections:(d.sections||[]).map(section=>({...section}))};
@@ -4602,7 +4716,7 @@
       const k=KICKER[s.type]; const kicker=k?`<span class="kicker ${k[0]}">${ICON(k[1])}${k[2]}${s.modelStage?`<span class="model-stage">${esc(modelStageLabel(s.modelStage))}</span>`:''}</span>`:'';
       const stageKicker=!k&&s.modelStage?`<span class="kicker"><span class="model-stage">${esc(modelStageLabel(s.modelStage))}</span></span>`:'';
       let body;
-      if(s.type==='title'){ body=`${kicker}<h3 contenteditable data-field="title">${esc(s.title)}</h3><p class="sub" contenteditable data-field="subtitle">${esc(s.subtitle)}</p>`; }
+      if(s.type==='title'){ body=`${kicker}<h3 contenteditable data-field="title">${esc(s.title)}</h3><p class="sub" contenteditable data-field="subtitle">${esc(s.subtitle)}</p><div class="card-actions"><button type="button" data-assistant-slide="${i}">${ICON('i-spark')}Edit with Assistant</button></div>`; }
       else if(s.type==='video'&&s.youtube){
         body=`<span class="kicker activity">${ICON('i-play')}Lesson video</span><h3 contenteditable data-field="title">${esc(s.title||s.youtube.title||'Lesson video')}</h3><div class="youtube-chip"><img src="${esc(s.youtube.thumbnail)}" alt=""><span><a href="${esc(s.youtube.url)}" target="_blank" rel="noopener">${esc(s.youtube.title)}</a><br><span>${esc(s.youtube.channelTitle||'YouTube')} · Teacher review required</span></span><button type="button" data-action="remove-youtube" data-i="${i}" title="Remove video slide" aria-label="Remove video slide">×</button></div><div class="card-actions"><button data-action="remove-youtube" data-i="${i}" title="Remove this video slide">Remove video</button></div>`;
       }
@@ -4615,7 +4729,8 @@
         // a photo content slide can be turned into a labelled diagram
         const diaBtn=(s.type==='content'&&!s.fraction&&!s.visual&&!s.labelled)?`<button data-action="diagram" data-i="${i}" title="Turn this into a labelled diagram — ${costWords('lessonscope.generate_diagram')}">${DIA_HTML}${costPill('lessonscope.generate_diagram')}</button>`:'';
         const videoBtn=`<button data-action="youtube" data-i="${i}" title="Add or suggest a YouTube lesson video">${ICON('i-play')}Video</button>`;
-        const actions=(aiBtn||regenBtn||diaBtn||videoBtn)?`<div class="card-actions">${videoBtn}${regenBtn}${diaBtn}${aiBtn}</div>`:'';
+        const assistantBtn=`<button type="button" data-assistant-slide="${i}">${ICON('i-spark')}Edit with Assistant</button>`;
+        const actions=`<div class="card-actions">${assistantBtn}${videoBtn}${regenBtn}${diaBtn}${aiBtn}</div>`;
         const yt=s.youtube?`<div class="youtube-chip"><img src="${esc(s.youtube.thumbnail)}" alt=""><span><a href="${esc(s.youtube.url)}" target="_blank" rel="noopener">${esc(s.youtube.title)}</a><br><span>${esc(s.youtube.channelTitle||'YouTube')} · Teacher review required</span></span><button type="button" data-action="remove-youtube" data-i="${i}" title="Remove video" aria-label="Remove video">×</button></div>`:'';
         const diff=s.differentiation?`<div class="diff"><div><b style="color:#15824b">Support</b> ${esc(s.differentiation.support)}</div><div><b style="color:#1f4e79">Stretch</b> ${esc(s.differentiation.stretch)}</div></div>`:'';
         const sc=(s.shortcuts&&s.shortcuts.length)?`<div class="shortcuts">${s.shortcuts.map(x=>`<div class="sc-row"><span class="sc-act">${esc(x.action)}</span><span class="sc-keys">${String(x.keys).split('+').map(k=>k.trim()).filter(Boolean).map((k,n)=>(n>0?'<span class="sc-plus">+</span>':'')+'<kbd class="keycap">'+esc(k)+'</kbd>').join('')}</span></div>`).join('')}</div>`:'';

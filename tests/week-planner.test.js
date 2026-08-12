@@ -39,6 +39,23 @@ test('success criteria are verbatim too', () => {
   assert.equal(values().successCriteria, GUIDE_SC.join('\n'));
 });
 
+test('derived success criteria fill SC when the pacing guide supplied none', async () => {
+  const wb = new wp.ExcelJS.Workbook();
+  const sheet = wb.addWorksheet('Week 1');
+  sheet.getRow(1).getCell(2).value = 'WEEK 1';
+  ['Subject', 'LO', 'SC', 'Activities (50 m)'].forEach((label, index) => {
+    sheet.getRow(index + 2).getCell(1).value = label;
+  });
+  const result = wp.addLesson(wb, 1, wp.lessonValuesFrom({
+    subject: 'ICT',
+    objectives: 'Identify the monitor and keyboard.',
+    successCriteria: ['I can name the monitor and keyboard.'],
+    planSections: [{ heading: 'Activities (50 m)', content: 'Teaching model: Gradual Release\nI Do: Model the task.' }],
+  }));
+  assert.equal(result.ok, true);
+  assert.equal(sheet.getRow(4).getCell(2).value, 'I can name the monitor and keyboard.');
+});
+
 test('the pacing guide\'s resources win over the generated ones', () => {
   const v = values({
     guideResources: ['Laptops (one per pair)'],

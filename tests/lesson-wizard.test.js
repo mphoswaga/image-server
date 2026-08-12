@@ -25,6 +25,8 @@ test('the wizard preserves every field needed by the existing generation request
   }
   assert.match(html, /fetch\('\/api\/lesson-plan'/, 'the established lesson-plan endpoint remains wired');
   assert.match(html, /lessonSequenceFromForm\(\)/, 'weekly sequence values remain part of the request');
+  assert.match(html, /ctx\.successCriteria=d\.successCriteria\.slice\(\)/,
+    'generated success criteria must survive from plan review to workbook download');
 });
 
 test('multi-lesson mode exposes staged plan and slide controls without replacing single-lesson controls', () => {

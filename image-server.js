@@ -223,6 +223,21 @@ app.post('/api/assistant/message', requireAuth, async (req, res) => {
   }
 });
 
+app.post('/api/assistant/edit', requireAuth, async (req, res) => {
+  try {
+    declareFree('lessonscope.assistant_advice');
+    const proposal = await lessonAssistant.proposeEdit({
+      instruction: req.body && req.body.instruction,
+      target: req.body && req.body.target,
+      context: req.body && req.body.context,
+    });
+    res.json(proposal);
+  } catch (err) {
+    console.error('LessonScope assistant edit failed:', err.message);
+    res.status(400).json({ error: err.message || 'The assistant could not prepare that edit.' });
+  }
+});
+
 // Health check for the host (Railway): confirms the process booted and the
 // port is bound. Must not depend on any API keys or external services.
 // Which commit is actually serving this request.
@@ -1225,6 +1240,7 @@ app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
         // The deck IS the lesson, so it grounds the plan. Real objectives are
         // used when the deck has them; otherwise the slides speak for themselves.
         objectives: String(deck.objectives || '').trim() || objectivesFromDeck(deck) || source,
+        successCriteria: criteriaFromDeck(deck).split('\n').filter(Boolean),
         templateText: tpl ? templatePromptText(req.userId, tpl) : plannerText,
         sourceMaterialText: source,
         teachingModel: deck.teachingModelId,
@@ -1234,7 +1250,7 @@ app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
       sections = outline
         ? ((deck.lessonSequence && deck.lessonSequence.enabled) ? orderSequenceSectionsByOutline : orderSectionsByOutline)(plan.sections, outline, {
             objectives: String(deck.objectives || '').trim() || objectivesFromDeck(deck),
-            successCriteria: criteriaFromDeck(deck).split('\n').filter(Boolean),
+            successCriteria: plan.successCriteria,
             subject: deck.subject, topic: deck.topic,
           }, deck.lessonSequence)
         : plan.sections;
@@ -1563,7 +1579,9 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
 
     const plan = await generateLessonPlan({
       subject: subject.toLowerCase(), topic: topic.toLowerCase(),
-      grade, tone, objectives, templateText: tpl ? templatePromptText(req.userId, tpl) : plannerTemplateText, unitBlock, sourceMaterialText: sourceMaterialText(req.body), teachingModel: teachingModelId, sequence: lessonSequence, structuredSequence: false, sequenceLessonNumber, previousLessonPlanText: clip(req.body.previousLessonPlanText, 8000), regenerate: !!regenerate,
+      grade, tone, objectives,
+      successCriteria: Array.isArray(req.body.successCriteria) ? req.body.successCriteria : [],
+      templateText: tpl ? templatePromptText(req.userId, tpl) : plannerTemplateText, unitBlock, sourceMaterialText: sourceMaterialText(req.body), teachingModel: teachingModelId, sequence: lessonSequence, structuredSequence: false, sequenceLessonNumber, previousLessonPlanText: clip(req.body.previousLessonPlanText, 8000), regenerate: !!regenerate,
     });
 
     // Show the workbook's fields in their own order, with the objectives and
@@ -1572,7 +1590,7 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
     const sections = plannerOutline
       ? orderSectionsByOutline(plan.sections, plannerOutline, {
           objectives,
-          successCriteria: Array.isArray(req.body.successCriteria) ? req.body.successCriteria : [],
+          successCriteria: plan.successCriteria,
           subject, topic,
           unit: clip(req.body.unitName || req.body.unit, 200),
           period: clip(req.body.period, 120),
@@ -1583,7 +1601,7 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
     if (isRewrite) planRegens.set(regenKey, { n: used + 1, at: Date.now() });
 
     res.json({
-      sections, teachingModelId, model: getTeachingModel(teachingModelId),
+      sections, successCriteria: plan.successCriteria, teachingModelId, model: getTeachingModel(teachingModelId),
       sequence: lessonSequence, sequenceLessonNumber,
       weekPlannerFields: plannerOutline ? plannerOutline.map(f => f.label) : null,
       usedTemplate: !!tpl, templateName: tpl ? tpl.name : null, templateId: tpl ? tpl.id : null,

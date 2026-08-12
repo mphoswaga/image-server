@@ -1,7 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { listTeachingModels, getTeachingModel, normalizeTeachingModelId, artifactPromptBlock, modelPromptBlock, stageSchedule } = require('../teaching-models');
-const { generateLessonPlan, planToText } = require('../lesson-plan');
+const {
+  generateLessonPlan, planToText, planSchema, buildPrompt,
+  deriveSuccessCriteria, finalizeLessonPlan,
+} = require('../lesson-plan');
 const { generateContent } = require('../content');
 
 test('teaching model catalogue has stable ids and ordered stages', () => {
@@ -143,4 +146,71 @@ test('a school template owns the structure; the method only shapes the teaching'
 
   // Either way the stages themselves are still described.
   for (const block of [withTemplate, alone]) assert.match(block, /I Do/);
+});
+
+test('missing success criteria are derived as observable I can statements', () => {
+  const criteria = deriveSuccessCriteria([
+    'Understand Lab Expectations: Demonstrate safety rules and routine behaviours.',
+    'Identify Hardware Parts: Name and point to five core hardware components.',
+    'Navigate Core Keys: Locate and correctly use Spacebar, Backspace, and Enter.',
+  ].join('\n'));
+
+  assert.deepEqual(criteria, [
+    'I can demonstrate safety rules and routine behaviours.',
+    'I can name and point to five core hardware components.',
+    'I can locate and correctly use Spacebar, Backspace, and Enter.',
+  ]);
+});
+
+test('school success criteria always win without being rewritten', () => {
+  const supplied = ['SC 1: Open a folder independently.', 'Use the school checklist correctly.'];
+  const plan = finalizeLessonPlan({
+    successCriteria: ['I can use a computer.'],
+    sections: [],
+  }, {
+    objectives: 'Identify hardware parts.',
+    suppliedSuccessCriteria: supplied,
+    teachingModelId: 'standard',
+  });
+  assert.deepEqual(plan.successCriteria, supplied);
+});
+
+test('lesson-plan schema requires success criteria alongside sections', () => {
+  const schema = planSchema(getTeachingModel('gradual_release'));
+  assert.deepEqual(schema.required, ['successCriteria', 'sections']);
+  assert.equal(schema.properties.successCriteria.items.type, 'string');
+});
+
+test('Gradual Release stays visible and complete inside a school activity field', () => {
+  const plan = finalizeLessonPlan({
+    successCriteria: [],
+    sections: [{
+      heading: 'Activities (50 m)',
+      stageId: 'i_do',
+      content: 'I Do: Model one example.\nWe Do: Solve one together.',
+    }],
+  }, {
+    objectives: 'Execute Mouse Controls: Hold the mouse correctly and drag an item.',
+    teachingModelId: 'gradual_release',
+  });
+  const activity = plan.sections[0].content;
+  assert.match(activity, /^Teaching model: Gradual Release/m);
+  assert.match(activity, /(?:^|\n)I Do:/m);
+  assert.match(activity, /(?:^|\n)We Do:/m);
+  assert.match(activity, /(?:^|\n)You Do Together/m);
+  assert.match(activity, /(?:^|\n)You Do Alone/m);
+  assert.match(activity, /Teacher:/);
+  assert.match(activity, /Students:/);
+});
+
+test('Gradual Release prompt demands detailed teacher and student steps', () => {
+  const prompt = buildPrompt({
+    subject: 'ICT', topic: 'mouse skills', grade: 'Grade 1', tone: 'clear',
+    objectives: 'Use left-click and drag-and-drop.', successCriteria: [],
+    templateText: 'Activities (50 m):\nPlenary (10m):', teachingModel: 'gradual_release',
+  });
+  assert.match(prompt, /Teaching model: Gradual Release/);
+  assert.match(prompt, /I Do.*We Do.*You Do Together.*You Do Alone/s);
+  assert.match(prompt, /concrete teacher actions, concrete student actions/);
+  assert.match(prompt, /Every item must begin "I can\.\.\."/);
 });

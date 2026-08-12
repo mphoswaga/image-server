@@ -355,10 +355,9 @@ const asLines = v => (Array.isArray(v) ? v.filter(Boolean).join('\n') : String(v
 
 // Build the values for one lesson column.
 //
-// LO and SC are taken VERBATIM from what the teacher selected in the pacing
-// guide — never from the generated "Learning Objectives" section, which may
-// legitimately rephrase for prose. A school's LOs are the school's words, and
-// the teacher's own template says to copy and paste them.
+// LO is taken verbatim from the teacher's pacing guide. SC is also verbatim
+// when the guide supplies it; when it does not, lesson-plan.js derives explicit
+// "I can..." criteria from those objectives and passes them here.
 // ── Weekly sequences ───────────────────────────────────────────────────────
 // A sequence plan is several lessons written as one document: the model keeps
 // the school's field names and marks the periods inside them, because that is
@@ -458,7 +457,7 @@ function lessonValuesFrom({
     // The pacing guide's Red Thread wins; from slides alone the plan's own is used.
     redThread: String(redThread || '').trim() || sectionText(planSections, SECTION_SOURCES.redThread),
 
-    // Verbatim — see the note above. Do not route these through the model.
+    // The caller has already applied the supplied-first SC rule.
     objectives: asLines(objectives).trim(),
     successCriteria: asLines(successCriteria).trim(),
 
@@ -631,8 +630,9 @@ module.exports.deletePlanner = deletePlanner;
 // are editing headings that never appear in the file they actually keep.
 //
 // Fields the model must not author:
-//   objectives / successCriteria — the school's words, copied from the pacing
-//     guide (see lesson-plan-domain-rules); shown so the teacher can see them.
+//   objectives — the school's words, copied from the pacing guide.
+//   successCriteria — the school's words when supplied; otherwise criteria
+//     derived from those objectives by the lesson-plan quality pass.
 //   postLessonReflection — written after teaching.
 //   subject / unit / topic / period — metadata already known from context.
 const NOT_AUTHORED = new Set([
