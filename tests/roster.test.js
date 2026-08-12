@@ -143,3 +143,19 @@ test('a pasted essay cannot become a student name', () => {
   const long = roster.displayNameFrom('x'.repeat(500), 'FALLBACK');
   assert.equal(long.length, 60, 'capped so one row cannot wreck the results table');
 });
+
+test('a class list shows enough to find yourself and not enough to be a class list', () => {
+  // The join screen is public — a game link is shareable by definition — so the
+  // names on it belong to children who did not choose to be listed. First name
+  // and last initial lets a child find themselves in their own class without
+  // publishing a register.
+  const label = (name) => {
+    const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    const first = parts[0] || '';
+    return `${first}${parts.length > 1 ? ` ${parts[parts.length - 1][0].toUpperCase()}.` : ''}`;
+  };
+  assert.equal(label('Ama Okafor'), 'Ama O.');
+  assert.equal(label('Mpho Gift Mokoena'), 'Mpho M.', 'the LAST name is the surname, not the middle one');
+  assert.equal(label('Thandi'), 'Thandi', 'one name stays one name');
+  assert.doesNotMatch(label('Ama Okafor'), /Okafor/, 'the surname never reaches the page');
+});

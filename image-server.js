@@ -1981,6 +1981,65 @@ app.post('/api/student/join-room', requireStudentAccess, (req, res) => {
 });
 
 // Student: enter an assignment with their Student ID — issues a short-lived session.
+// A PIN protects one identity. Which identity depends on where the name came
+// from, and the difference matters:
+//
+//   ROSTER — the key is the school's own student ID, which is unique to a
+//   child across every class they are in, so one PIN follows them everywhere.
+//
+//   OPEN LINK — the key is a name someone typed, and names are not unique.
+//   Keyed globally, the first "Ama Okafor" anywhere would own that name for
+//   every teacher on the platform, and a child in another school could not
+//   join under their own name. So an open game's claims are scoped to that
+//   game and expire with it.
+function pinKeyFor(activityId, studentId, hasRoster) {
+  return hasRoster ? studentId : `open:${activityId}:${studentId}`;
+}
+
+// Names shown on a join screen belong to children, and a game link is
+// shareable by definition. First name and last initial is enough for a child
+// to find themselves in their own class and not enough to be a class list.
+function classListFor(teacherId, rosterId) {
+  const r = roster.getRoster(teacherId, rosterId);
+  if (!r || !Array.isArray(r.students)) return [];
+  return r.students.map((student) => {
+    const parts = String(student.name || '').trim().split(/\s+/).filter(Boolean);
+    const first = parts[0] || student.id;
+    const initial = parts.length > 1 ? ` ${parts[parts.length - 1][0].toUpperCase()}.` : '';
+    return { id: student.id, label: `${first}${initial}` };
+  });
+}
+
+// What the join screen needs, and nothing else.
+//
+// The full meta routes sit behind a session, which a student does not have
+// until they have joined — so the join screen could not find out whether a
+// class list existed and guessed "Student ID" for everyone. This carries the
+// class list and nothing that could be used to answer the questions.
+//
+// Deliberately public: the join screen is the one page that must work before
+// any session exists. Names are first-name-and-initial for that reason, and
+// no answers, questions or marks are included.
+app.get('/api/assignment/:id/join', (req, res) => {
+  const a = assignments.getAssignment(req.params.id);
+  if (!a) return res.status(404).json({ error: 'Assignment not found.' });
+  res.json({
+    title: a.title, teacherName: a.teacherName || null,
+    hasRoster: !!a.rosterId,
+    students: a.rosterId ? classListFor(a.teacherId, a.rosterId) : [],
+  });
+});
+
+app.get('/api/game/:id/join', (req, res) => {
+  const g = games.getGame(req.params.id);
+  if (!g) return res.status(404).json({ error: 'Game not found.' });
+  res.json({
+    lessonTitle: g.lessonTitle, teacherName: g.teacherName || null,
+    hasRoster: !!g.rosterId,
+    students: g.rosterId ? classListFor(g.teacherId, g.rosterId) : [],
+  });
+});
+
 app.post('/api/assignment/:id/enter', async (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
@@ -2000,6 +2059,20 @@ app.post('/api/assignment/:id/enter', async (req, res) => {
     } else {
       if (!pin) return res.status(428).json({ needsPin: true, name: displayName, error: 'Enter your PIN to continue.' });
       if (!studentAccount.verifyPin(studentId, pin)) return res.status(403).json({ error: 'Incorrect PIN.' });
+    }
+  } else {
+    // No roster: the name is a claim, so the first person to use it in this
+    // game sets its PIN and anyone using it afterwards has to know it. It stops
+    // a classmate typing your name; it cannot stop one who watched you type.
+    const key = pinKeyFor(a.id, studentId, false);
+    const pinState = studentAccount.getAccountState(key);
+    if (pinState === 'unset') {
+      if (!pin) return res.status(428).json({ needsPinSetup: true, name: displayName, error: 'Choose a 4-digit PIN. You will need it to come back.' });
+      if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
+      if (!studentAccount.setPin(key, pin)) return res.status(409).json({ error: 'That name was just taken — pick another, or ask your teacher.' });
+    } else {
+      if (!pin) return res.status(428).json({ needsPin: true, name: displayName, error: 'Enter your PIN to continue.' });
+      if (!studentAccount.verifyPin(key, pin)) return res.status(403).json({ error: 'Incorrect PIN. Ask your teacher if you have forgotten it.' });
     }
   }
   const token = issueGameToken({ assignmentId: a.id, studentId, name: displayName }, 'assignment');
@@ -2026,7 +2099,7 @@ app.get('/api/assignment/:id', requireAssignmentAccess, (req, res) => {
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
   const session = assignmentStudentSession(req, res, a);
   if (req.gameSession && req.gameSession.assignmentId && !session) return res.status(403).json({ error: 'Session is for a different assignment.' });
-  res.json({ id: a.id, type: a.type, title: a.title, subject: a.subject, topic: a.topic, grade: a.grade, teacherName: a.teacherName, hasRoster: !!a.rosterId, instructions: a.content.instructions, questionCount: a.content.questions.length });
+  res.json({ id: a.id, type: a.type, title: a.title, subject: a.subject, topic: a.topic, grade: a.grade, teacherName: a.teacherName, hasRoster: !!a.rosterId, students: a.rosterId ? classListFor(a.teacherId, a.rosterId) : [], instructions: a.content.instructions, questionCount: a.content.questions.length });
 });
 
 // Student: the questions, WITHOUT answer keys/correctIndex.
@@ -2921,6 +2994,20 @@ app.post('/api/game/:id/enter', async (req, res) => {
       if (!pin) return res.status(428).json({ needsPin: true, name: displayName, error: 'Enter your PIN to continue.' });
       if (!studentAccount.verifyPin(studentId, pin)) return res.status(403).json({ error: 'Incorrect PIN.' });
     }
+  } else {
+    // No roster: the name is a claim, so the first person to use it in this
+    // game sets its PIN and anyone using it afterwards has to know it. It stops
+    // a classmate typing your name; it cannot stop one who watched you type.
+    const key = pinKeyFor(g.id, studentId, false);
+    const pinState = studentAccount.getAccountState(key);
+    if (pinState === 'unset') {
+      if (!pin) return res.status(428).json({ needsPinSetup: true, name: displayName, error: 'Choose a 4-digit PIN. You will need it to come back.' });
+      if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
+      if (!studentAccount.setPin(key, pin)) return res.status(409).json({ error: 'That name was just taken — pick another, or ask your teacher.' });
+    } else {
+      if (!pin) return res.status(428).json({ needsPin: true, name: displayName, error: 'Enter your PIN to continue.' });
+      if (!studentAccount.verifyPin(key, pin)) return res.status(403).json({ error: 'Incorrect PIN. Ask your teacher if you have forgotten it.' });
+    }
   }
   const token = issueGameToken({ gameId: g.id, studentId, name: displayName });
   res.cookie(GAME_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
@@ -2947,7 +3034,7 @@ app.get('/api/game/:id', requireGameAccess, (req, res) => {
   // Students must hold a session for THIS game.
   if (req.gameSession && req.gameSession.gameId !== g.id) return res.status(403).json({ error: 'Session is for a different game.' });
   const hasRoster = !!g.rosterId;
-  res.json({ id: g.id, lessonTitle: g.lessonTitle, subject: g.subject, topic: g.topic, grade: g.grade, summary: g.summary, questionCount: (g.questions || []).length, teacherName: g.teacherName, hasRoster, highScores: games.getHighScores(g.id) });
+  res.json({ id: g.id, lessonTitle: g.lessonTitle, subject: g.subject, topic: g.topic, grade: g.grade, summary: g.summary, questionCount: (g.questions || []).length, teacherName: g.teacherName, hasRoster, students: hasRoster ? classListFor(g.teacherId, g.rosterId) : [], highScores: games.getHighScores(g.id) });
 });
 
 // Student: the questions, WITHOUT the correct answers.

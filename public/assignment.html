@@ -41,7 +41,12 @@
     .my-answer b { display:block; font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); font-weight:700; margin-bottom:2px; }
     .feedback { display:flex; gap:6px; margin-top:8px; font-size:13px; color:var(--muted); font-style:italic; }
     .feedback .fb-icon { flex-shrink:0; }
-  </style>
+    .name-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; margin:4px 0 6px; }
+  .name-grid button { padding:16px 12px; font-size:17px; font-weight:700; border-radius:12px;
+    border:2px solid #d9e1ea; background:#fff; color:#12263f; cursor:pointer; text-align:center; }
+  .name-grid button:hover { border-color:#16a34a; }
+  .name-grid button.is-picked { border-color:#16a34a; background:#ecfdf5; }
+</style>
 </head>
 <body>
   <div class="wrap">
@@ -51,6 +56,11 @@
       <h1>Join this assignment</h1>
       <p class="sub" id="authSub">Enter your Student ID to continue.</p>
       <form id="authForm" style="margin-top:16px">
+        <!-- A class list, tapped rather than typed. A seven-year-old can find
+             their own name in a list; typing a school ID correctly is another
+             matter, and a misspelling silently becomes a different person. -->
+        <div id="nameGrid" class="name-grid" style="display:none"></div>
+        <p id="nameGridHint" class="sub" style="display:none;margin:6px 0 0">Can't see your name? Ask your teacher.</p>
         <label for="auSid" id="sidLabel" style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Student ID</label>
         <input id="auSid" type="text" placeholder="e.g. STU-99432" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" maxlength="40" required style="width:100%;padding:12px 14px;font-size:15px;border:1.5px solid var(--border);border-radius:10px;margin-bottom:14px" />
 
@@ -197,6 +207,12 @@
         if (!metaRes.ok) throw new Error(meta.error || 'Could not load this assignment.');
         $('title').textContent = meta.title || 'Assignment';
         $('instructions').textContent = meta.instructions || '';
+        // The gated meta only arrives once they are in, so the join screen
+        // asks the public endpoint for the class list.
+        try {
+          const j = await (await fetch('/api/assignment/' + assignmentId + '/join')).json();
+          if (j.hasRoster) renderNameGrid(j.students);
+        } catch {}
         if (meta.hasRoster === false) {
           $('sidLabel').textContent = 'Your name';
           $('auSid').placeholder = 'First and last name';
@@ -233,6 +249,38 @@
     // Tracks which step we're on so a resubmit sends the right fields —
     // null (just Student ID) -> 'setup' (first-time PIN creation) or
     // 'enter' (existing PIN) once the server tells us which.
+    // Tap-a-name for a rostered class.
+    //
+    // A seven-year-old can find their own name in a list. Typing a school ID
+    // correctly is a different skill, and a misspelling does not fail loudly —
+    // it silently becomes a different person, so the child cannot get back to
+    // their own attempt and the teacher sees a stranger in their results.
+    //
+    // The PIN still follows, because a list is tappable by whoever is holding
+    // the device. The list makes the right name easy; the PIN makes it theirs.
+    function renderNameGrid(students) {
+      const grid = $('nameGrid');
+      if (!grid || !students || !students.length) return false;
+      grid.innerHTML = students.map(s =>
+        `<button type="button" data-sid="${String(s.id).replace(/"/g, '&quot;')}">${String(s.label).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}</button>`
+      ).join('');
+      grid.style.display = 'grid';
+      $('nameGridHint').style.display = 'block';
+      // The typed box is the fallback for a child who is not on the list.
+      $('auSid').style.display = 'none';
+      $('sidLabel').style.display = 'none';
+      grid.addEventListener('click', (e) => {
+        const b = e.target.closest('button[data-sid]');
+        if (!b) return;
+        [...grid.querySelectorAll('button')].forEach(x => x.classList.remove('is-picked'));
+        b.classList.add('is-picked');
+        $('auSid').value = b.dataset.sid;
+        // Straight to the PIN — the name is chosen, so there is nothing else
+        // on this screen for them to do.
+        $('authForm').requestSubmit ? $('authForm').requestSubmit() : $('authForm').dispatchEvent(new Event('submit', { cancelable: true }));
+      });
+      return true;
+    }
     let authStep = null;
 
     function showPinSetup() { authStep = 'setup'; $('pinSetupBlock').style.display = 'block'; $('pinEnterBlock').style.display = 'none'; $('auPinNew').focus(); }

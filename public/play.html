@@ -110,7 +110,12 @@
     .feedback.show { display:block; } .feedback.right { background:#ebfbee; color:#0f6b3d; } .feedback.no { background:#fff0ef; color:#a32820; } .feedback b { display:block; margin-bottom:3px; }
     .result-score { font-family:'Fraunces',Georgia,serif; font-size:52px; font-weight:700; color:var(--primary); text-align:center; margin:6px 0 0; }
     .result-of { text-align:center; color:var(--muted); margin:0 0 8px; } .result-msg { text-align:center; font-size:16px; margin:0 0 22px; }
-  </style>
+    .name-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; margin:4px 0 6px; }
+  .name-grid button { padding:16px 12px; font-size:17px; font-weight:700; border-radius:12px;
+    border:2px solid #d9e1ea; background:#fff; color:#12263f; cursor:pointer; text-align:center; }
+  .name-grid button:hover { border-color:#16a34a; }
+  .name-grid button.is-picked { border-color:#16a34a; background:#ecfdf5; }
+</style>
 </head>
 <body>
   <div class="wrap">
@@ -125,6 +130,11 @@
       <h1>Join the lesson game</h1>
       <p class="sub" id="authSub">Enter your Student ID to join.</p>
       <form id="authForm">
+        <!-- A class list, tapped rather than typed. A seven-year-old can find
+             their own name in a list; typing a school ID correctly is another
+             matter, and a misspelling silently becomes a different person. -->
+        <div id="nameGrid" class="name-grid" style="display:none"></div>
+        <p id="nameGridHint" class="sub" style="display:none;margin:6px 0 0">Can't see your name? Ask your teacher.</p>
         <label for="auSid" id="sidLabel">Student ID</label>
         <input id="auSid" type="text" placeholder="e.g. STU-99432" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" maxlength="40" required style="font-family:monospace;font-size:18px;letter-spacing:1px" />
 
@@ -225,6 +235,38 @@
 
     // ---- auth: Student ID entry ----
     // ?sid= param auto-fills and auto-submits (QR scan path).
+    // Tap-a-name for a rostered class.
+    //
+    // A seven-year-old can find their own name in a list. Typing a school ID
+    // correctly is a different skill, and a misspelling does not fail loudly —
+    // it silently becomes a different person, so the child cannot get back to
+    // their own attempt and the teacher sees a stranger in their results.
+    //
+    // The PIN still follows, because a list is tappable by whoever is holding
+    // the device. The list makes the right name easy; the PIN makes it theirs.
+    function renderNameGrid(students) {
+      const grid = $('nameGrid');
+      if (!grid || !students || !students.length) return false;
+      grid.innerHTML = students.map(s =>
+        `<button type="button" data-sid="${String(s.id).replace(/"/g, '&quot;')}">${String(s.label).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}</button>`
+      ).join('');
+      grid.style.display = 'grid';
+      $('nameGridHint').style.display = 'block';
+      // The typed box is the fallback for a child who is not on the list.
+      $('auSid').style.display = 'none';
+      $('sidLabel').style.display = 'none';
+      grid.addEventListener('click', (e) => {
+        const b = e.target.closest('button[data-sid]');
+        if (!b) return;
+        [...grid.querySelectorAll('button')].forEach(x => x.classList.remove('is-picked'));
+        b.classList.add('is-picked');
+        $('auSid').value = b.dataset.sid;
+        // Straight to the PIN — the name is chosen, so there is nothing else
+        // on this screen for them to do.
+        $('authForm').requestSubmit ? $('authForm').requestSubmit() : $('authForm').dispatchEvent(new Event('submit', { cancelable: true }));
+      });
+      return true;
+    }
     let _hasRoster = false;
     function setAuthLabels(hasRoster) {
       _hasRoster = hasRoster;
@@ -289,9 +331,14 @@
       show('loading');
       const r=await fetch('/api/game/'+GAME_ID);
       if(r.status===401){
-        // Pre-load game meta to know if it has a roster (to set correct label).
-        // We don't have auth yet, so we'll use a best-effort approach and show the entry form.
-        setAuthLabels(true); // default to Student ID label; updated after entry succeeds
+        // Ask the public join endpoint what this game expects. Guessing
+        // "Student ID" here meant a class that types names saw the wrong
+        // prompt, and a class list could never be shown at all.
+        try {
+          const j = await (await fetch('/api/game/' + GAME_ID + '/join')).json();
+          setAuthLabels(!!j.hasRoster);
+          if (j.hasRoster) renderNameGrid(j.students);
+        } catch { setAuthLabels(true); }
         // If ?sid= is already filled, attempt auto-submit.
         if (_sidParam && $('auSid').value) { show('authScreen'); $('authForm').requestSubmit(); return; }
         show('authScreen'); return;
@@ -299,6 +346,7 @@
       if(!r.ok){ const d=await r.json().catch(()=>({})); $('loading').innerHTML='<p class="center">'+esc(d.error||'Game not found.')+'</p>'; show('loading'); return; }
       game=await r.json();
       setAuthLabels(!!game.hasRoster);
+      if (game.hasRoster) renderNameGrid(game.students);
       $('sumMeta').textContent=`${game.subject} · ${game.topic} · ${game.grade||''}`;
       $('sumTitle').textContent=game.lessonTitle;
       $('sumOverview').textContent=game.summary.overview||'';
