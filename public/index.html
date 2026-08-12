@@ -195,6 +195,23 @@
     /* Optional, collapsed-by-default template block so the required steps lead */
     .opt-tpl { margin:0 0 22px; border:1px dashed var(--border); border-radius:12px; background:#fbfcfe; transition:border-color .15s, background .15s, box-shadow .15s; }
     /* Brief highlight when a lesson plan is asked for and no template exists. */
+    /* The field the teacher has to deal with next. Used two ways: a brief hint
+       when a card first appears, and a persistent pulse when an action was
+       blocked because this field is empty — the second stays until they type,
+       because it is answering "why did nothing happen?". */
+    @keyframes needsInput {
+      0%   { box-shadow:0 0 0 0 rgba(22,163,74,.45); }
+      70%  { box-shadow:0 0 0 7px rgba(22,163,74,0); }
+      100% { box-shadow:0 0 0 0 rgba(22,163,74,0); }
+    }
+    .needs-input { animation:needsInput 1.6s ease-out infinite; border-color:var(--accent) !important; }
+    .needs-input.is-hint { animation-iteration-count:2; }
+    /* Motion is decoration here; the ring is the message. Anyone who has asked
+       for less movement still needs to see WHICH field. */
+    @media (prefers-reduced-motion: reduce) {
+      .needs-input { animation:none; box-shadow:0 0 0 3px rgba(22,163,74,.35); }
+    }
+
     .opt-tpl.needs-template { border-color:var(--accent); border-style:solid; box-shadow:0 0 0 4px rgba(22,163,74,.14); }
     .opt-tpl:hover { border-color:var(--accent); border-style:solid; background:var(--accent-soft); box-shadow:var(--sh-sm); }
     .opt-tpl > summary { list-style:none; cursor:pointer; padding:13px 16px; display:flex; align-items:center; gap:8px; font-size:13.5px; font-weight:600; color:var(--muted); transition:color .15s; }
@@ -3318,6 +3335,12 @@
       composerMaxPage=1;
       placeTemplateRow();
       if(weekPlannerState && weekPlannerState.present) setTimeout(renderSlotPickers,0);
+      // Say where to start on the card they just chose.
+      setTimeout(()=>{
+        if(m==='haveSlides') hintFirstEmpty(['isSubject','isTopic','isFile']);
+        else if(m==='havePlan') hintFirstEmpty(['ipSubject','ipTopic','ipFile']);
+        else hintFirstEmpty(['subject','topic','objectives']);
+      },120);
       document.querySelectorAll('#modeSelect .mode-card').forEach(c=>c.classList.toggle('active',c.dataset.mode===m));
       show('composer'); setStep(1);
       if(begin){
@@ -3518,6 +3541,37 @@
     // So: say plainly what they'll get and how to get better, show them where
     // the template goes, and carry on. Once per session, so it never nags.
     let templateNudged=false;
+    // Point at the field standing between the teacher and what they clicked.
+    // Clears itself the moment they engage with it, so it never becomes wallpaper.
+    function nudge(el,{hint=false}={}){
+      if(typeof el==='string') el=$(el);
+      if(!el) return;
+      el.classList.add('needs-input');
+      el.classList.toggle('is-hint',hint);
+      const clear=()=>{
+        el.classList.remove('needs-input','is-hint');
+        el.removeEventListener('input',clear); el.removeEventListener('change',clear); el.removeEventListener('focus',clear);
+      };
+      el.addEventListener('input',clear); el.addEventListener('change',clear); el.addEventListener('focus',clear);
+      // A hint fades on its own; a blocked action keeps pulsing until answered.
+      if(hint) setTimeout(clear,3600);
+      if(!hint){
+        try{ el.scrollIntoView({behavior:'smooth',block:'center'}); }catch{}
+        if(el.focus) setTimeout(()=>el.focus(),120);
+      }
+    }
+
+    // The first thing still needed on the card in front of them. Hinted once when
+    // the card appears — enough to say "start here", not enough to nag.
+    function hintFirstEmpty(ids){
+      for(const id of ids){
+        const el=$(id);
+        if(!el) continue;
+        const empty=el.files ? !el.files.length : !String(el.value||'').trim();
+        if(empty){ nudge(el,{hint:true}); return; }
+      }
+    }
+
     function requireTemplate(what){
       if(hasTemplate()) return true;
       if(!templateNudged){
@@ -3891,9 +3945,9 @@
     // Path A — upload a lesson plan, skip objectives, go straight to slides.
     $('importPlanBtn').addEventListener('click', async ()=>{
       const subject=$('ipSubject').value.trim(), topic=$('ipTopic').value.trim(), file=$('ipFile').files[0];
-      if(!subject){ toast('Enter the subject.'); $('ipSubject').focus(); return; }
-      if(!topic){ toast('Enter the topic.'); $('ipTopic').focus(); return; }
-      if(!file){ toast('Choose your lesson-plan file.'); return; }
+      if(!subject){ toast('Enter the subject.'); nudge('ipSubject'); return; }
+      if(!topic){ toast('Enter the topic.'); nudge('ipTopic'); return; }
+      if(!file){ toast('Choose your lesson-plan file.'); nudge('ipDrop'); return; }
       const b=$('importPlanBtn'); b.disabled=true; const orig=b.innerHTML;
       statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>Reading your plan and building slides…';
       const fd=new FormData();
@@ -3923,9 +3977,9 @@
       // doesn't, so only the plan path is gated.
       if(withPlan && !requireTemplate('your lesson plan')) return;
       const subject=$('isSubject').value.trim(), topic=$('isTopic').value.trim(), file=$('isFile').files[0];
-      if(!subject){ toast('Enter the subject.'); $('isSubject').focus(); return; }
-      if(!topic){ toast('Enter the topic.'); $('isTopic').focus(); return; }
-      if(!file){ toast('Choose your slides (.pptx) file.'); return; }
+      if(!subject){ toast('Enter the subject.'); nudge('isSubject'); return; }
+      if(!topic){ toast('Enter the topic.'); nudge('isTopic'); return; }
+      if(!file){ toast('Choose your slides (.pptx) file.'); nudge('isDrop'); return; }
       const btn=withPlan?$('importSlidesPlanBtn'):$('importSlidesOnlyBtn');
       btn.disabled=true; const orig=btn.innerHTML;
       statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>Reading your slides…';
