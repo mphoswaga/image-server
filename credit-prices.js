@@ -78,6 +78,10 @@ const FREE = {
   'lessonscope.image_search': 'Free — picking a picture for a deck you already paid for',
   // Admin-only, and admins are exempt from billing anyway.
   'lessonscope.caption_image': 'Free — admin library maintenance',
+  // The guided assistant advises on the lesson currently being built. It does
+  // not generate paid artefacts or change teacher work on its own; existing
+  // generation buttons keep their normal prices and wallet lifecycle.
+  'lessonscope.assistant_advice': 'Included — guided curriculum-planning advice',
 };
 
 // Fair-use: regenerating one slide is free the first FREE_REGENS times per

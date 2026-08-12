@@ -54,6 +54,7 @@ const billing = require('./billing');
 const wallet = require('./wallet');
 const educscope = require('./educscope');
 const prices = require('./credit-prices');
+const lessonAssistant = require('./lesson-assistant');
 const { runWithUser, usageSnapshot, usageSince, declareAction } = require('./ai-client');
 const usage = require('./usage');
 const jwt = require('jsonwebtoken');
@@ -203,6 +204,24 @@ app.use((req, res, next) => {
 // same root-relative relpaths, so an image URL resolves from whichever has it.
 app.use(express.static(MEDIA_DIR));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Guided curriculum advice only. This endpoint cannot mutate plans, generate
+// paid artefacts, or access student records. Any future action-taking tool must
+// go through the existing reserve -> capture/release lifecycle instead.
+app.post('/api/assistant/message', requireAuth, async (req, res) => {
+  try {
+    declareFree('lessonscope.assistant_advice');
+    const reply = await lessonAssistant.answer({
+      message: req.body && req.body.message,
+      context: req.body && req.body.context,
+      history: req.body && req.body.history,
+    });
+    res.json(reply);
+  } catch (err) {
+    console.error('LessonScope assistant failed:', err.message);
+    res.status(400).json({ error: err.message || 'The assistant could not answer just now.' });
+  }
+});
 
 // Health check for the host (Railway): confirms the process booted and the
 // port is bound. Must not depend on any API keys or external services.

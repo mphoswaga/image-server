@@ -2180,6 +2180,58 @@
     }
     #mainNavMenu[style*="display:none"],
     #mainNavMenu[style*="display: none"] { display:none !important; }
+
+    /* Guided curriculum assistant. It docks beside the workspace on wide
+       screens and becomes a contained full-screen sheet on smaller devices. */
+    .assistant-panel {
+      position:fixed;
+      top:64px;
+      right:0;
+      bottom:0;
+      width:min(400px,calc(100vw - 24px));
+      display:flex;
+      flex-direction:column;
+      background:#fff;
+      border-left:1px solid var(--border);
+      box-shadow:-12px 0 32px rgba(16,24,40,.12);
+      z-index:1200;
+      transform:translateX(105%);
+      visibility:hidden;
+      transition:transform .22s ease,visibility .22s;
+    }
+    .assistant-panel.open { transform:translateX(0); visibility:visible; }
+    .assistant-head { display:flex; align-items:center; gap:11px; padding:16px 18px; border-bottom:1px solid var(--border); }
+    .assistant-mark { width:38px; height:38px; display:grid; place-items:center; flex:0 0 auto; color:#08784c; background:#e9f8f1; border-radius:8px; }
+    .assistant-mark .ic { width:20px; height:20px; }
+    .assistant-title { min-width:0; flex:1; }
+    .assistant-title strong { display:block; color:#17233b; font-size:15px; }
+    .assistant-title span { display:block; color:var(--muted); font-size:11.5px; margin-top:2px; }
+    .assistant-close { width:34px; height:34px; display:grid; place-items:center; border:1px solid var(--border); border-radius:7px; background:#fff; color:#475467; cursor:pointer; font-size:20px; }
+    .assistant-context { margin:12px 16px 0; padding:9px 11px; border:1px solid #d7eadf; border-radius:7px; color:#166340; background:#f3fbf7; font-size:12px; font-weight:700; }
+    .assistant-feed { flex:1; min-height:0; overflow-y:auto; padding:16px; }
+    .assistant-intro { color:#475467; font-size:13px; line-height:1.55; margin-bottom:14px; }
+    .assistant-choices { display:grid; gap:8px; }
+    .assistant-choice { width:100%; min-height:42px; padding:10px 12px; display:flex; align-items:center; gap:9px; text-align:left; border:1px solid #dce4ea; border-radius:7px; background:#fff; color:#173b67; font:inherit; font-size:13px; font-weight:700; cursor:pointer; }
+    .assistant-choice:hover,.assistant-choice:focus-visible { border-color:#80c9a6; background:#f5fcf8; }
+    .assistant-choice .ic { width:16px; height:16px; color:#159a63; flex:0 0 auto; }
+    .assistant-msg { margin:12px 0; padding:11px 12px; border-radius:8px; font-size:13px; line-height:1.55; white-space:pre-wrap; }
+    .assistant-msg.user { margin-left:34px; color:#fff; background:#173b67; }
+    .assistant-msg.assistant { margin-right:16px; color:#24324a; background:#f3f6f8; border:1px solid #e2e8ee; }
+    .assistant-msg.scope { color:#805400; background:#fff8e8; border-color:#f0dfb1; }
+    .assistant-typing { color:var(--muted); font-size:12px; padding:8px 2px; }
+    .assistant-custom-toggle { margin-top:12px; color:#536174; background:transparent; }
+    .assistant-compose { display:none; gap:8px; padding:12px 16px 16px; border-top:1px solid var(--border); background:#fff; }
+    .assistant-compose.visible { display:flex; }
+    .assistant-compose textarea { min-height:44px; max-height:108px; resize:none; flex:1; padding:10px 11px; font-size:13px; }
+    .assistant-send { width:44px; min-width:44px; height:44px; padding:0; display:grid; place-items:center; }
+    .assistant-send .ic { width:18px; height:18px; }
+    body.assistant-open #assistantBtn { color:#0d6f49; background:#edf9f3; border-color:#cdebdc; }
+    body.assistant-open .wrap { margin-right:400px; }
+    @media (max-width:1100px) {
+      body.assistant-open .wrap { margin-right:0; }
+      .assistant-panel { top:58px; width:100%; max-width:none; }
+      .assistant-compose { padding-bottom:82px; }
+    }
   </style>
 </head>
 <body>
@@ -2370,8 +2422,27 @@
     <button id="marksBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg><span class="app-menu-label">Marks</span></button>
     <button id="creditsBtn" class="nav-link" type="button" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg><span id="creditsNavLabel" class="app-menu-label">Usage</span><span id="creditsNavBadge" class="credits-badge" style="display:none"></span></button>
     <button id="adminBtn" class="nav-link" type="button" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-sliders"/></svg><span class="app-menu-label">Admin</span></button>
+    <button id="assistantBtn" class="nav-link" type="button" title="LessonScope Assistant" aria-controls="assistantPanel" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg><span class="app-menu-label">Assistant</span></button>
     <button id="guideBtnNav" class="nav-link" type="button" style="color:var(--accent);font-weight:800" title="Complete LessonScope guide"><svg class="ic" aria-hidden="true"><use href="#i-compass"/></svg><span class="app-menu-label">Guide</span></button>
   </nav>
+
+  <aside id="assistantPanel" class="assistant-panel" aria-hidden="true" aria-labelledby="assistantTitle">
+    <div class="assistant-head">
+      <span class="assistant-mark"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg></span>
+      <div class="assistant-title"><strong id="assistantTitle">LessonScope Assistant</strong><span>Curriculum planning help</span></div>
+      <button id="assistantClose" class="assistant-close" type="button" aria-label="Close assistant">&times;</button>
+    </div>
+    <div id="assistantContext" class="assistant-context">Planning a lesson</div>
+    <div id="assistantFeed" class="assistant-feed" aria-live="polite">
+      <p class="assistant-intro">Choose what you need help with. The assistant uses the lesson you are currently working on.</p>
+      <div id="assistantChoices" class="assistant-choices"></div>
+      <button id="assistantCustomToggle" class="assistant-choice assistant-custom-toggle" type="button"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg>Ask in your own words</button>
+    </div>
+    <form id="assistantCompose" class="assistant-compose">
+      <textarea id="assistantInput" maxlength="700" placeholder="Ask about this lesson, teaching approach, assessment, or resources"></textarea>
+      <button id="assistantSend" class="btn primary assistant-send" type="submit" aria-label="Send question"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+    </form>
+  </aside>
 
   <div id="passkeysModal" style="display:none;position:fixed;inset:0;background:rgba(20,24,33,.5);z-index:2000;align-items:center;justify-content:center">
     <div style="background:#fff;border-radius:16px;padding:26px;width:100%;max-width:420px;max-height:80vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.25)">
@@ -3216,6 +3287,135 @@
     let teachingModelsById={standard:{id:'standard',label:'Standard lesson',description:'A flexible lesson flow that works well for most topics and school templates.'}}, selectedTeachingModelId='standard';
     let sourceMaterialText='', sourceMaterialImages=[];
 
+    // ---- Guided curriculum assistant ----
+    const ASSISTANT_PRESETS={
+      start:[
+        ['Help me choose where to start','Explain which LessonScope starting option suits what I already have.'],
+        ['Plan a lesson sequence','Help me decide whether this topic should be one lesson or a sequence of lessons.'],
+        ['What should I prepare?','Tell me what curriculum information and teaching materials I should gather before planning.'],
+      ],
+      source:[
+        ['Help define my topic','Help me turn my subject and broad topic into a clear lesson focus.'],
+        ['Use my pacing guide','Explain how to choose useful objectives from my pacing guide for this lesson.'],
+        ['Check the lesson scope','Check whether my topic is realistic for one lesson and suggest a narrower scope if needed.'],
+      ],
+      content:[
+        ['Refine my objectives','Review the current objectives and suggest clearer, measurable versions.'],
+        ['Suggest success criteria','Draft concise success criteria aligned with the current objectives and grade.'],
+        ['Use my extra materials','Explain how the uploaded teaching materials could strengthen this lesson.'],
+        ['Check age appropriateness','Check whether the planned content suits the selected grade and suggest adjustments.'],
+      ],
+      setup:[
+        ['Recommend a teaching model','Recommend the best teaching model for this topic, grade, and objectives, with a short reason.'],
+        ['Divide it into periods','Suggest how to divide this lesson across the selected number and length of periods.'],
+        ['Add differentiation','Suggest practical support and extension strategies for this lesson.'],
+        ['Suggest assessment','Recommend suitable checks for understanding and a final assessment for this lesson.'],
+      ],
+      plan:[
+        ['Check objective alignment','Check whether the lesson plan activities and assessment align with its objectives.'],
+        ['Improve lesson flow','Suggest improvements to the order, pacing, and transitions in this lesson plan.'],
+        ['Strengthen differentiation','Suggest specific differentiation improvements for this lesson plan.'],
+        ['Check the timing','Check whether this plan is realistic for the selected lesson duration.'],
+      ],
+      slides:[
+        ['Check the slide sequence','Review the slide text and suggest a clearer teaching sequence.'],
+        ['Simplify slide content','Identify content that should be shortened, split, or explained more clearly.'],
+        ['Suggest useful visuals','Suggest which ideas need a diagram, image, video, table, or graphic organiser.'],
+        ['Check classroom readability','Check whether the slide wording is age-appropriate and readable for projection.'],
+      ],
+    };
+    let assistantHistory=[];
+
+    function assistantStageKey(){
+      if(currentStage==='plan') return 'plan';
+      if(currentStage==='slides') return 'slides';
+      if(currentStage==='composer'&&composerPage===1) return 'source';
+      if(currentStage==='composer'&&composerPage===2) return 'content';
+      if(currentStage==='composer'&&composerPage===3) return 'setup';
+      return 'start';
+    }
+    function assistantStageLabel(key){
+      return ({start:'Starting a lesson',source:'Lesson source',content:'Learning content',setup:'Lesson setup',plan:'Reviewing the lesson plan',slides:'Reviewing the slide deck'})[key]||'Planning a lesson';
+    }
+    function assistantValue(id){ const el=$(id); return el&&String(el.value||'').trim(); }
+    function assistantContextData(){
+      const key=assistantStageKey();
+      const model=teachingModelsById[assistantValue('teachingModel')||selectedTeachingModelId]||{};
+      const planText=key==='plan'?[...document.querySelectorAll('#planSections .plan-section')].map(section=>{
+        const heading=section.querySelector('.heading'), content=section.querySelector('.content');
+        return `${heading?heading.value:''}: ${content?content.value:''}`;
+      }).join('\n').slice(0,4500):'';
+      const slideText=key==='slides'?[...document.querySelectorAll('#deck .slide')].slice(0,18).map((slide,index)=>
+        `Slide ${index+1}: ${slide.innerText.replace(/Video|Regenerate|Make diagram|AI image/g,'').trim()}`
+      ).join('\n').slice(0,4500):'';
+      return {
+        stage:key, step:composerPage||'',
+        subject:assistantValue('subject')||(ctx&&ctx.subject)||'',
+        topic:assistantValue('topic')||(ctx&&ctx.topic)||'',
+        grade:assistantValue('grade')||(ctx&&ctx.grade)||'',
+        objectives:assistantValue('objectives')||(ctx&&ctx.objectives)||'',
+        focus:assistantValue('focus')||(ctx&&ctx.focus)||'',
+        teachingModel:model.label||'',
+        lessonCount:(ctx&&ctx.sequenceLessonCount)||assistantValue('sequenceLessonCount')||'',
+        periodMinutes:(ctx&&ctx.periodMinutes)||assistantValue('periodMinutes')||'',
+        sourceSummary:sourceMaterialText?sourceMaterialText.slice(0,1400):'',
+        planText, slideText,
+      };
+    }
+    function renderAssistantChoices(items){
+      $('assistantChoices').innerHTML=(items||[]).map(([label,prompt])=>`<button type="button" class="assistant-choice" data-assistant-prompt="${esc(prompt)}">${ICON('i-spark')}${esc(label)}</button>`).join('');
+    }
+    function refreshAssistantContext(){
+      const key=assistantStageKey();
+      $('assistantContext').textContent=assistantStageLabel(key);
+      renderAssistantChoices(ASSISTANT_PRESETS[key]||ASSISTANT_PRESETS.start);
+    }
+    function openAssistant(){
+      refreshAssistantContext();
+      $('assistantPanel').classList.add('open');
+      $('assistantPanel').setAttribute('aria-hidden','false');
+      document.body.classList.add('assistant-open');
+      $('assistantBtn').setAttribute('aria-expanded','true');
+      setTimeout(()=>$('assistantChoices').querySelector('button')?.focus(),220);
+    }
+    function closeAssistant(){
+      $('assistantPanel').classList.remove('open');
+      $('assistantPanel').setAttribute('aria-hidden','true');
+      document.body.classList.remove('assistant-open');
+      $('assistantBtn').setAttribute('aria-expanded','false');
+    }
+    function assistantMessage(role,text,outOfScope=false){
+      const div=document.createElement('div');
+      div.className=`assistant-msg ${role}${outOfScope?' scope':''}`;
+      div.textContent=text;
+      $('assistantFeed').appendChild(div);
+      $('assistantFeed').scrollTop=$('assistantFeed').scrollHeight;
+      return div;
+    }
+    async function askAssistant(message){
+      const question=String(message||'').trim(); if(!question) return;
+      assistantMessage('user',question);
+      const pending=document.createElement('div'); pending.className='assistant-typing'; pending.innerHTML='<span class="spinner"></span> Thinking about this lesson…';
+      $('assistantFeed').appendChild(pending); $('assistantFeed').scrollTop=$('assistantFeed').scrollHeight;
+      $('assistantSend').disabled=true;
+      try{
+        const r=await fetch('/api/assistant/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+          message:question, context:assistantContextData(), history:assistantHistory.slice(-6),
+        })});
+        const d=await r.json(); if(!r.ok) throw new Error(d.error||'The assistant could not answer just now.');
+        pending.remove(); assistantMessage('assistant',d.answer,d.outOfScope);
+        assistantHistory.push({role:'user',content:question},{role:'assistant',content:d.answer});
+        if(d.followUps&&d.followUps.length) renderAssistantChoices(d.followUps.map(item=>[item,item]));
+      }catch(err){ pending.remove(); assistantMessage('assistant',err.message||'The assistant could not answer just now.',true); }
+      $('assistantSend').disabled=false;
+    }
+    $('assistantBtn').addEventListener('click',()=>$('assistantPanel').classList.contains('open')?closeAssistant():openAssistant());
+    $('assistantClose').addEventListener('click',closeAssistant);
+    $('assistantChoices').addEventListener('click',e=>{ const btn=e.target.closest('[data-assistant-prompt]'); if(btn) askAssistant(btn.dataset.assistantPrompt); });
+    $('assistantCustomToggle').addEventListener('click',()=>{ $('assistantCompose').classList.add('visible'); $('assistantInput').focus(); });
+    $('assistantCompose').addEventListener('submit',e=>{ e.preventDefault(); const input=$('assistantInput'), value=input.value; input.value=''; askAssistant(value); });
+    document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&$('assistantPanel').classList.contains('open')) closeAssistant(); });
+
     function renderSourceMaterials(summary){
       const box=$('materialsSummary'), preview=$('materialsPreview'), clear=$('materialsClearBtn');
       if(!sourceMaterialText && !sourceMaterialImages.length){
@@ -3309,6 +3509,7 @@
         step.setAttribute('aria-current',n===composerPage?'step':'false');
       });
       setStep(1);
+      if($('assistantPanel').classList.contains('open')) refreshAssistantContext();
     }
     function setComposerPage(page,{push=true}={}){
       const next=Math.min(3,Math.max(1,Number(page)||1));
@@ -3333,6 +3534,7 @@
       results.style.display=stage==='slides'?'block':'none';
       if(choseStart && startMode==='plan') renderComposerPage();
       if(weekPlannerState && weekPlannerState.present) renderSlotPickers();
+      if($('assistantPanel').classList.contains('open')) refreshAssistantContext();
     }
     function setStartMode(m,begin=false){ startMode=m;
       composerPage=begin?1:0;
@@ -5510,6 +5712,7 @@
       authScreen.style.display='flex'; nav.style.display='none'; if(mainNavMenu) mainNavMenu.style.display='none'; appEl.style.display='none';
       disableStartupClickShield();
       $('guideHeroBtn').style.display='none';
+      closeAssistant();
       setMode('login');
     }
 
