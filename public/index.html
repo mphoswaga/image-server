@@ -6199,7 +6199,53 @@
           const item=document.createElement('div'); item.className='roster-row'; item.style.flexWrap='wrap';
           const icon=document.createElement('div'); icon.className='roster-icon'; icon.innerHTML=ICON('i-target');
           const info=document.createElement('div'); info.className='roster-info';
+          // The name is the thing most likely to need fixing — a class gets
+          // renamed mid-year, or was typed from a filename. Click it and edit
+          // in place rather than hunting for a settings screen.
           const nm=document.createElement('div'); nm.className='roster-name'; nm.textContent=r.name;
+          nm.title='Click to rename'; nm.tabIndex=0; nm.setAttribute('role','button');
+          nm.style.cursor='text';
+          const startRename=()=>{
+            if(nm.querySelector('input')) return;
+            // Read the label off the element, not the closure. The list is
+            // re-rendered after a successful rename, so a captured r.name can be
+            // stale — and restoring from a stale value blanked the row.
+            const current=(nm.textContent||r.name||'').trim();
+            const input=document.createElement('input');
+            input.type='text'; input.value=current; input.maxLength=80;
+            input.style.cssText='font:inherit;font-weight:700;padding:2px 6px;border:1.5px solid var(--accent);border-radius:7px;width:100%;max-width:260px';
+            nm.textContent=''; nm.appendChild(input); input.focus(); input.select();
+            let done=false;
+            const finish=async(save)=>{
+              if(done) return; done=true;
+              const next=input.value.trim();
+              // Nothing typed, or nothing changed — put it back and say nothing.
+              // Never restore to nothing: a cleared box means "changed my mind",
+              // not "delete the name".
+              if(!save||!next||next===current){ nm.textContent=current||r.name||'Class roster'; return; }
+              nm.textContent=next;
+              try{
+                const res=await fetch('/api/roster/'+encodeURIComponent(r.id),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:next})});
+                const d=await res.json(); if(!res.ok) throw new Error(d.error||'Could not rename.');
+                r.name=d.name; nm.textContent=d.name;
+                toast('Class renamed.','ok');
+                loadRosters(true);   // the class picker elsewhere shows the old name until this
+              }catch(err){ nm.textContent=current; toast(err.message); }
+            };
+            input.addEventListener('keydown',e=>{
+              if(e.key==='Enter'){ e.preventDefault(); finish(true); }
+              if(e.key==='Escape'){ e.preventDefault(); finish(false); }
+            });
+            input.addEventListener('blur',()=>finish(true));
+          };
+          nm.addEventListener('click',startRename);
+          // Only when the row itself has focus. Enter inside the editor bubbles
+          // up to here, and without this it closed the editor and instantly
+          // reopened it — so a keyboard user could never finish a rename.
+          nm.addEventListener('keydown',e=>{
+            if(e.target!==nm) return;
+            if(e.key==='Enter'){ e.preventDefault(); startRename(); }
+          });
           const ct=document.createElement('div'); ct.className='roster-count'; ct.textContent=r.count+' students';
           info.append(nm,ct);
           const actions=document.createElement('div'); actions.className='roster-actions';

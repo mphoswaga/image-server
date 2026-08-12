@@ -227,3 +227,57 @@ test('the mapped column is optional and survives being saved', () => {
   const without = roster.buildStudentsFromMapping(rows, 'ID', 'Learner');
   assert.ok(!('gender' in without[0]), 'no column mapped means nothing recorded');
 });
+
+test('renaming a class keeps its id, its students and their PINs', async () => {
+  // The id is what game results, assignments and PINs point at. A rename that
+  // minted a new one would be a new class wearing the old one's students —
+  // every result recorded so far would be orphaned.
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const previous = process.env.DATA_DIR;
+  process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lc-rename-'));
+  try {
+    for (const m of ['../roster.js', '../storage.js']) delete require.cache[require.resolve(m)];
+    const r = require('../roster.js');
+
+    const saved = r.saveRoster('t1', { name: '2B4', students: [
+      { id: 'ADM-1', name: 'Ama Okafor', gender: 'F' },
+      { id: 'ADM-2', name: 'Sam Dube' },
+    ] });
+
+    const renamed = r.renameRoster('t1', saved.id, '  Grade 2B4  ');
+    assert.equal(renamed.id, saved.id, 'the id must not change');
+    assert.equal(renamed.name, 'Grade 2B4', 'and the name is tidied, not stored with its spaces');
+    assert.deepEqual(renamed.students, saved.students, 'students untouched, gender included');
+    assert.deepEqual(r.findStudentInRoster('t1', saved.id, 'ADM-1'), saved.students[0], 'lookups still resolve');
+  } finally {
+    process.env.DATA_DIR = previous;
+    for (const m of ['../roster.js', '../storage.js']) delete require.cache[require.resolve(m)];
+  }
+});
+
+test('a rename is refused rather than half-applied', async () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const previous = process.env.DATA_DIR;
+  process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lc-rename2-'));
+  try {
+    for (const m of ['../roster.js', '../storage.js']) delete require.cache[require.resolve(m)];
+    const r = require('../roster.js');
+    const saved = r.saveRoster('t1', { name: 'Original', students: [{ id: 'S1', name: 'Ama' }] });
+
+    assert.equal(r.renameRoster('t1', saved.id, '   '), null, 'a blank name is not a name');
+    assert.equal(r.renameRoster('t1', 'no-such-roster', 'X'), null);
+    // Another teacher must not be able to rename a class that is not theirs.
+    assert.equal(r.renameRoster('t2', saved.id, 'Stolen'), null);
+    assert.equal(r.getRoster('t1', saved.id).name, 'Original', 'and none of that changed anything');
+
+    const capped = r.renameRoster('t1', saved.id, 'x'.repeat(300));
+    assert.equal(capped.name.length, 80, 'a pasted essay cannot become a class name');
+  } finally {
+    process.env.DATA_DIR = previous;
+    for (const m of ['../roster.js', '../storage.js']) delete require.cache[require.resolve(m)];
+  }
+});

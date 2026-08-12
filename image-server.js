@@ -3306,6 +3306,17 @@ app.patch('/api/roster/:rosterId/student/:studentId/pin-reset', requireAuth, (re
   res.json({ ok: true });
 });
 
+// Rename a class. Deliberately not a re-upload: the students, their PINs and
+// every result already recorded against this roster stay exactly as they are.
+app.patch('/api/roster/:id', requireAuth, (req, res) => {
+  const name = String((req.body && req.body.name) || '').trim();
+  if (!name) return res.status(400).json({ error: 'Give the class a name.' });
+  const updated = roster.renameRoster(req.userId, req.params.id, name);
+  if (!updated) return res.status(404).json({ error: 'Roster not found.' });
+  audit.log('roster.renamed', { userId: req.userId, rosterId: req.params.id, name, ip: req.ip });
+  res.json({ id: updated.id, name: updated.name, count: (updated.students || []).length });
+});
+
 app.delete('/api/roster/:id', requireAuth, async (req, res) => {
   const r = roster.getRoster(req.userId, req.params.id);
   if (!r) return res.status(404).json({ error: 'Roster not found.' });

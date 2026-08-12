@@ -113,6 +113,21 @@ function getRoster(teacherId, id) {
   catch { return null; }
 }
 
+// Rename a class without touching its students.
+//
+// The id stays the same on purpose: game results, assignments and PINs all
+// point at it, so a rename must not be a new roster wearing the old one's
+// students. "2B4" becoming "Grade 2B4" is a correction, not a new class.
+function renameRoster(teacherId, id, name) {
+  const record = getRoster(teacherId, id);
+  if (!record) return null;
+  const next = String(name || '').trim().slice(0, 80);
+  if (!next) return null;
+  record.name = next;
+  writeJsonAtomic(rosterPath(teacherId, id), record);
+  return record;
+}
+
 function listRosters(teacherId) {
   const dir = rosterDir(teacherId);
   if (!fs.existsSync(dir)) return [];
@@ -274,7 +289,7 @@ function buildStudentsFromMapping(rows, idCol, nameCol, genderCol) {
 }
 
 module.exports = {
-  displayNameFrom, normalizeGender,
+  displayNameFrom, normalizeGender, renameRoster,
   saveRoster, getRoster, listRosters, deleteRoster,
   findStudent, findStudentInRoster, findStudentAcrossAllTeachers, parseCSV,
   parseRosterFile, buildStudentsFromMapping, normalizeStudentId,
