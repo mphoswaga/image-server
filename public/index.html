@@ -6267,8 +6267,23 @@
         const d=await (await fetch('/api/roster/'+rosterId)).json();
         if(!d.students||!d.students.length){ panel.innerHTML='<p class="hint">No students in this roster.</p>'; return; }
         const pending=d.students.filter(s=>s.pinResetRequested).length;
-        panel.innerHTML=(pending?`<p class="hint" style="color:#b26a00;font-weight:600;margin-bottom:8px">${pending} student${pending!==1?'s':''} requested a PIN reset</p>`:'')
+        // The ones the teacher has no code for — including any the student
+        // chose themselves, which the teacher cannot read.
+        const missing=d.students.filter(s=>!s.pin).length;
+        rosterPins[rosterId]=d.students;
+        const header=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">`
+          +`<button type="button" class="pin-issue-btn" data-roster-id="${esc(rosterId)}" style="font-size:12px;font-weight:700;padding:6px 12px;border:0;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer">${missing?`Give PINs to ${missing} student${missing!==1?'s':''}`:'All students have a PIN'}</button>`
+          +`<button type="button" class="pin-print-btn" data-roster-id="${esc(rosterId)}" style="font-size:12px;font-weight:600;padding:6px 12px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer">Print the list</button>`
+          +`<span class="hint" style="margin:0">Keep this list. A child who forgets theirs just needs a new one.</span>`
+          +`</div>`;
+        panel.innerHTML=header+(pending?`<p class="hint" style="color:#b26a00;font-weight:600;margin-bottom:8px">${pending} student${pending!==1?'s':''} requested a PIN reset</p>`:'')
           +d.students.map(s=>{
+            // A PIN this teacher issued is shown; one the student chose is
+            // hash-only, so it reads "student's own" and can only be reset.
+            const code=s.pin
+              ? `<code style="font-size:15px;font-weight:800;letter-spacing:2px;background:#f1f5f9;padding:3px 9px;border-radius:7px">${esc(s.pin)}</code>`
+              : (s.pinState==='set' ? '<span style="font-size:11.5px;color:var(--muted)">student\u2019s own</span>' : '');
+            const newBtn=`<button type="button" class="pin-new-btn" data-roster-id="${esc(rosterId)}" data-student-id="${esc(s.id)}" style="font-size:11.5px;font-weight:600;padding:3px 10px;border:1px solid var(--border);border-radius:7px;background:#fff;cursor:pointer">New PIN</button>`;
             const setBadge=s.pinState==='set'
               ? '<span style="font-size:11.5px;color:var(--ok,#1f9d55);font-weight:600">PIN set</span>'
               : '<span style="font-size:11.5px;color:var(--muted)">No PIN yet</span>';
@@ -6277,13 +6292,65 @@
               : '';
             return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--border)">
               <div><span style="font-size:13px;font-weight:600">${esc(s.name)}</span> <span style="font-size:12px;color:var(--muted)">${esc(s.id)}</span></div>
-              <div style="display:flex;align-items:center;gap:8px">${setBadge}${resetRow}</div>
+              <div style="display:flex;align-items:center;gap:8px">${code}${code?'':setBadge}${newBtn}${resetRow}</div>
             </div>`;
           }).join('');
       }catch{ panel.innerHTML='<p class="hint err">Could not load PIN status.</p>'; }
     }
 
+    // The PINs a teacher has issued, per roster, so printing does not refetch.
+    const rosterPins={};
+
+    // A printable card per child rather than a table: these get cut up and
+    // handed out, or stuck in a book.
+    function printPinList(rosterId){
+      const students=rosterPins[rosterId]||[];
+      const cards=students.map(s=>`<div class="c"><b>${esc(s.name)}</b><span class="i">${esc(s.id)}</span><span class="p">${esc(s.pin||'—')}</span></div>`).join('');
+      const w=window.open('','_blank');
+      if(!w){ toast('Allow pop-ups to print the list.'); return; }
+      w.document.write(`<!doctype html><title>Class PINs</title><style>
+        body{font-family:system-ui,sans-serif;padding:18px}
+        h1{font-size:17px;margin:0 0 12px}
+        .g{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+        .c{border:1px dashed #999;border-radius:9px;padding:11px;display:flex;flex-direction:column;gap:3px}
+        .c b{font-size:15px}.c .i{font-size:11px;color:#666}
+        .c .p{font-size:26px;font-weight:800;letter-spacing:5px}
+        @media print{.no{display:none}}
+      </style><h1>Class PINs \u2014 keep this safe</h1>
+      <button class="no" onclick="print()">Print</button><div class="g">${cards}</div>`);
+      w.document.close();
+    }
+
     document.addEventListener('click', async e=>{
+      const issueBtn=e.target.closest('.pin-issue-btn');
+      if(issueBtn){
+        const rosterId=issueBtn.dataset.rosterId;
+        issueBtn.disabled=true; const o=issueBtn.textContent; issueBtn.textContent='Creating…';
+        try{
+          const r=await fetch('/api/roster/'+rosterId+'/pins',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+          const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not create PINs.');
+          const made=d.students.filter(x=>x.changed).length;
+          toast(made?`${made} PIN${made!==1?'s':''} created. Print the list and hand them out.`:'Everyone already had a PIN.','ok');
+          const panel=issueBtn.closest('[data-pin-panel]')||issueBtn.parentElement.parentElement;
+          loadRosterPins(rosterId,panel);
+        }catch(err){ toast(err.message); issueBtn.disabled=false; issueBtn.textContent=o; }
+        return;
+      }
+      const printBtn=e.target.closest('.pin-print-btn');
+      if(printBtn){ printPinList(printBtn.dataset.rosterId); return; }
+      const newBtn=e.target.closest('.pin-new-btn');
+      if(newBtn){
+        const {rosterId,studentId}=newBtn.dataset;
+        newBtn.disabled=true; newBtn.textContent='…';
+        try{
+          const r=await fetch(`/api/roster/${rosterId}/student/${encodeURIComponent(studentId)}/pin`,{method:'POST'});
+          const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not set a new PIN.');
+          toast(`${d.name}: ${d.pin}`,'ok');
+          const panel=newBtn.closest('[data-pin-panel]')||newBtn.parentElement.parentElement.parentElement;
+          loadRosterPins(rosterId,panel);
+        }catch(err){ toast(err.message); newBtn.disabled=false; newBtn.textContent='New PIN'; }
+        return;
+      }
       const clearBtn=e.target.closest('.pin-clear-btn');
       if(!clearBtn) return;
       const {rosterId,studentId}=clearBtn.dataset;

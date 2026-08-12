@@ -3199,8 +3199,55 @@ app.get('/api/roster/:id', requireAuth, (req, res) => {
     id: r.id, name: r.name, createdAt: r.createdAt,
     // PIN state now lives in a global per-Student-ID account (student-account.js),
     // not per-roster — a student's PIN is the same across every class they're in.
-    students: r.students.map(s => ({ id: s.id, name: s.name, pinState: studentAccount.getAccountState(s.id), pinResetRequested: studentAccount.getResetRequest(s.id) })),
+    // `pin` is present only for a PIN THIS teacher issued. One the student
+    // chose is hash-only and comes back null — resettable, never readable.
+    students: r.students.map(s => ({
+      id: s.id, name: s.name,
+      pinState: studentAccount.getAccountState(s.id),
+      pin: studentAccount.revealPin(s.id),
+      pinResetRequested: studentAccount.getResetRequest(s.id),
+    })),
   });
+});
+
+// Teacher: issue PINs for a whole class in one go.
+//
+// The teacher is the authority here: they generate the codes, keep the list,
+// and hand them out. `all=true` re-issues everyone (start of term, or a list
+// that went missing); the default only fills in students who have none, so
+// running it twice does not lock out a class that is already using theirs.
+app.post('/api/roster/:rosterId/pins', requireAuth, (req, res) => {
+  const r = roster.getRoster(req.userId, req.params.rosterId);
+  if (!r) return res.status(404).json({ error: 'Roster not found.' });
+  const all = !!(req.body && req.body.all);
+  const issued = [];
+  for (const student of r.students || []) {
+    // "Has a PIN" is not the question — "do I have their PIN" is. A student who
+    // set their own is invisible to the teacher, so leaving them out would mean
+    // the class list is incomplete exactly where it matters. Issuing replaces it,
+    // which is the point: the teacher is the authority for these codes now.
+    const readable = studentAccount.revealPin(student.id);
+    if (readable && !all) {
+      issued.push({ id: student.id, name: student.name, pin: readable, changed: false });
+      continue;
+    }
+    issued.push({ id: student.id, name: student.name, pin: studentAccount.issuePin(student.id), changed: true });
+  }
+  audit.log('roster.pins_issued', { userId: req.userId, rosterId: r.id, count: issued.filter(i => i.changed).length, all, ip: req.ip });
+  res.json({ students: issued });
+});
+
+// Teacher: give one student a new PIN and show it. This IS the reset — a
+// teacher standing in front of a class should not need a two-step approval
+// to help a child who has forgotten theirs back into the lesson.
+app.post('/api/roster/:rosterId/student/:studentId/pin', requireAuth, (req, res) => {
+  const studentId = roster.normalizeStudentId(req.params.studentId);
+  const student = roster.findStudentInRoster(req.userId, req.params.rosterId, studentId);
+  if (!student) return res.status(404).json({ error: 'Student not found in this roster.' });
+  const pin = studentAccount.issuePin(studentId);
+  if (!pin) return res.status(500).json({ error: 'Could not set a PIN. Try again.' });
+  audit.log('roster.pin_reset', { userId: req.userId, rosterId: req.params.rosterId, studentId, ip: req.ip });
+  res.json({ id: studentId, name: student.name, pin });
 });
 
 // Teacher: approve a student's PIN reset request — clears the PIN so their
