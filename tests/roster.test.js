@@ -115,3 +115,31 @@ test('activity results match rosters when student IDs use different casing', () 
   assert.equal(gb.rows[0].done, 2);
   assert.equal(gb.rows[0].average, 1);
 });
+
+test('a student who is not on a roster keeps the name they typed', () => {
+  // studentId is an identity KEY — upper-cased with spaces removed, so that one
+  // person is one person across attempts. Used as a NAME it produced results a
+  // teacher reads as AMAOKAFOR, which is what this separates.
+  assert.equal(roster.displayNameFrom('Mpho Mokoena', 'MPHOMOKOENA'), 'Mpho Mokoena');
+  assert.equal(roster.displayNameFrom('  ama   okafor ', 'AMAOKAFOR'), 'ama okafor', 'tidied, not mangled');
+  assert.equal(roster.displayNameFrom("O'Brien, Sarah", 'X'), "O'Brien, Sarah", 'real names have punctuation');
+});
+
+test('two spellings of one name are still one student', () => {
+  // The point of the key: a child who types their name differently on Tuesday
+  // must not appear twice in the teacher's results.
+  assert.equal(roster.normalizeStudentId('Mpho Mokoena'), roster.normalizeStudentId('mpho  MOKOENA'));
+});
+
+test('no name given falls back rather than leaving a blank row', () => {
+  // Older clients send no name at all; a result with an empty label is worse
+  // than an ugly one, because the teacher cannot tell whose it is.
+  assert.equal(roster.displayNameFrom('', 'AMAOKAFOR'), 'AMAOKAFOR');
+  assert.equal(roster.displayNameFrom('   ', 'AMAOKAFOR'), 'AMAOKAFOR');
+  assert.equal(roster.displayNameFrom(undefined, 'AMAOKAFOR'), 'AMAOKAFOR');
+});
+
+test('a pasted essay cannot become a student name', () => {
+  const long = roster.displayNameFrom('x'.repeat(500), 'FALLBACK');
+  assert.equal(long.length, 60, 'capped so one row cannot wreck the results table');
+});

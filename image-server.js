@@ -1987,7 +1987,7 @@ app.post('/api/assignment/:id/enter', async (req, res) => {
   const studentId = roster.normalizeStudentId(req.body && req.body.studentId);
   if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
   const pin = req.body && req.body.pin ? String(req.body.pin).trim() : '';
-  let displayName = studentId;
+  let displayName = roster.displayNameFrom(req.body && req.body.name, studentId);
   if (a.rosterId) {
     const s = roster.findStudentInRoster(a.teacherId, a.rosterId, studentId);
     if (!s) return res.status(403).json({ error: 'Student ID not found. Check with your teacher.' });
@@ -2906,7 +2906,7 @@ app.post('/api/game/:id/enter', async (req, res) => {
   const studentId = roster.normalizeStudentId(req.body && req.body.studentId);
   if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
   const pin = req.body && req.body.pin ? String(req.body.pin).trim() : '';
-  let displayName = studentId;
+  let displayName = roster.displayNameFrom(req.body && req.body.name, studentId);
   if (g.rosterId) {
     const teacher = getUserById(g.teacherId);
     const s = teacher ? roster.findStudentInRoster(g.teacherId, g.rosterId, studentId) : null;

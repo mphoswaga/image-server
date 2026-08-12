@@ -10,6 +10,21 @@ const path = require('path');
 const crypto = require('crypto');
 const { DATA_DIR, writeJsonAtomic } = require('./storage');
 
+// The other half of identifying a student: what to CALL them.
+//
+// normalizeStudentId makes an identity key — upper-cased, spaces removed — so
+// that "ama okafor" and "Ama Okafor" are one person across attempts. That is
+// right for a key and wrong for a name: used as one, a teacher opens their
+// results and reads AMAOKAFOR.
+//
+// So a student who is not on a roster has their typed name kept as written,
+// and only the key is normalised. Roster-backed classes ignore this entirely —
+// there the real name comes from the roster.
+function displayNameFrom(typed, fallback) {
+  const name = String(typed || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  return name || fallback;
+}
+
 function normalizeStudentId(value) {
   return String(value || '').trim().replace(/\s+/g, '').toUpperCase();
 }
@@ -204,6 +219,7 @@ function buildStudentsFromMapping(rows, idCol, nameCol) {
 }
 
 module.exports = {
+  displayNameFrom,
   saveRoster, getRoster, listRosters, deleteRoster,
   findStudent, findStudentInRoster, findStudentAcrossAllTeachers, parseCSV,
   parseRosterFile, buildStudentsFromMapping, normalizeStudentId,
