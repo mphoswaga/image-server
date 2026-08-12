@@ -42,14 +42,44 @@ function rosterPath(teacherId, id) {
 function parseCSV(text) {
   const lines = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const out = [];
+
+  // A header naming a gender column tells us the file really has three
+  // columns, and then a plain split is safe. Without one we are guessing, and
+  // the guess has to stay conservative: "S4,Okafor, Ama" is a name with a
+  // comma in it, not a gender called "Ama".
+  const headerCells = (lines[0] || '').split(',').map(c => c.replace(/^"|"$/g, '').trim().toLowerCase());
+  const headed = headerCells[0] === 'studentid' || headerCells[0] === 'id';
+  const genderIdx = headed ? headerCells.findIndex(c => c === 'gender' || c === 'sex') : -1;
   for (const line of lines) {
     const comma = line.indexOf(',');
     if (comma === -1) continue;
     const rawId = line.slice(0, comma).trim();
-    const name = line.slice(comma + 1).trim().replace(/^"|"$/g, '');
+    let rest = line.slice(comma + 1).trim().replace(/^"|"$/g, '');
+    let gender = '';
+
+    if (genderIdx > 0) {
+      // The header told us the shape, so every value is taken as written —
+      // including ones that are neither male nor female.
+      const cells = line.split(',').map(c => c.replace(/^"|"$/g, '').trim());
+      gender = normalizeGender(cells[genderIdx]);
+      const nameIdx = genderIdx === 1 ? -1 : 1;
+      rest = nameIdx > 0 ? (cells[nameIdx] || '') : '';
+    } else {
+      // No header to go on. Only split off a tail that is unmistakably a
+      // gender, so a name containing a comma survives intact.
+      const lastComma = rest.lastIndexOf(',');
+      if (lastComma !== -1) {
+        const tail = normalizeGender(rest.slice(lastComma + 1).replace(/^"|"$/g, ''));
+        if (tail === 'male' || tail === 'female') {
+          gender = tail;
+          rest = rest.slice(0, lastComma).trim().replace(/^"|"$/g, '');
+        }
+      }
+    }
+    const name = rest;
     if (!rawId || rawId.toLowerCase() === 'studentid' || rawId.toLowerCase() === 'id') continue;
     const id = normalizeStudentId(rawId);
-    if (id) out.push({ id, name: name || id });
+    if (id) out.push({ id, name: name || id, ...(gender ? { gender } : {}) });
   }
   return out;
 }
@@ -63,7 +93,8 @@ function saveRoster(teacherId, { name, students, csvText }) {
     const id = normalizeStudentId(s && s.id);
     if (!id || seen.has(id)) continue;
     seen.add(id);
-    parsedStudents.push({ id, name: String((s && s.name) || id).trim() || id });
+    const gender = normalizeGender(s && s.gender);
+    parsedStudents.push({ id, name: String((s && s.name) || id).trim() || id, ...(gender ? { gender } : {}) });
   }
   if (!parsedStudents.length) throw new Error('No valid students found. Use format: studentId,name');
   const id = crypto.randomUUID().split('-')[0];
@@ -201,25 +232,49 @@ function parseRosterFile(buffer, filename) {
     }).filter(r => headers.some(h => r[h]));
   }
 
+  // Schools label this column half a dozen ways. Detected but never assumed:
+  // the teacher confirms it, and (none) is a valid answer.
+  const detectedGenderCol = headers.find(h => /^(gender|sex)$/i.test(String(h).trim())) || null;
   const detectedIdCol = detectIdCol(headers) || headers[0] || null;
   const detectedNameCol = detectNameCol(headers) || (headers.length > 1 ? headers[1] : null);
 
-  return { headers, rows, totalRows: rows.length, detectedIdCol, detectedNameCol };
+  return { headers, rows, totalRows: rows.length, detectedIdCol, detectedNameCol, detectedGenderCol };
 }
 
 // Convert parsed rows to [{ id, name }] using teacher-confirmed column choices.
-function buildStudentsFromMapping(rows, idCol, nameCol) {
+// Gender as schools actually record it.
+//
+// Normalised to 'male'/'female' for the common spellings, because a class
+// list is rarely consistent — M, m, Male, boy, and B all turn up in the same
+// file. Anything else is kept as it was written rather than forced into one
+// of two buckets: schools record other values, and a system that silently
+// rewrites a child's record is worse than one that stores what it was told.
+//
+// Blank stays blank. Not recording it is a valid answer and the commonest one.
+const MALE = new Set(['m', 'male', 'boy', 'b', 'man']);
+const FEMALE = new Set(['f', 'female', 'girl', 'g', 'woman']);
+function normalizeGender(value) {
+  const raw = String(value == null ? '' : value).trim();
+  if (!raw) return '';
+  const key = raw.toLowerCase();
+  if (MALE.has(key)) return 'male';
+  if (FEMALE.has(key)) return 'female';
+  return raw.slice(0, 40);
+}
+
+function buildStudentsFromMapping(rows, idCol, nameCol, genderCol) {
   const out = [];
   for (const row of rows) {
     const id = normalizeStudentId(row[idCol]);
     const name = nameCol ? (row[nameCol] || '').trim() : '';
-    if (id) out.push({ id, name: name || id });
+    const gender = genderCol ? normalizeGender(row[genderCol]) : '';
+    if (id) out.push({ id, name: name || id, ...(gender ? { gender } : {}) });
   }
   return out;
 }
 
 module.exports = {
-  displayNameFrom,
+  displayNameFrom, normalizeGender,
   saveRoster, getRoster, listRosters, deleteRoster,
   findStudent, findStudentInRoster, findStudentAcrossAllTeachers, parseCSV,
   parseRosterFile, buildStudentsFromMapping, normalizeStudentId,

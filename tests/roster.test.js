@@ -182,3 +182,48 @@ test('a join list carries no school identifiers', () => {
   // And distinct per child.
   assert.notEqual(h, handle('game-1', 'ADM-90233'));
 });
+
+test('gender is normalised for the spellings schools actually use', () => {
+  // One class list will contain M, m, Male, boy and B for the same thing.
+  for (const v of ['M', 'm', 'Male', 'boy', 'B', 'MAN']) assert.equal(roster.normalizeGender(v), 'male', v);
+  for (const v of ['F', 'f', 'Female', 'girl', 'G', 'woman']) assert.equal(roster.normalizeGender(v), 'female', v);
+});
+
+test('a value that is neither is kept as written, not forced into a bucket', () => {
+  // Schools record other values, and rewriting a child's record to fit two
+  // options would be worse than storing what we were told.
+  assert.equal(roster.normalizeGender('Non-binary'), 'Non-binary');
+  assert.equal(roster.normalizeGender('prefer not to say'), 'prefer not to say');
+  assert.equal(roster.normalizeGender(''), '', 'and blank stays blank — not recording it is valid');
+  assert.equal(roster.normalizeGender('   '), '');
+});
+
+test('a header tells us the shape, so any value in that column is taken', () => {
+  const rows = roster.parseCSV('studentId,name,gender\nS1,Ama Okafor,F\nS2,Jean-Luc,Non-binary\nS3,Sam Dube,');
+  assert.equal(rows[0].gender, 'female');
+  assert.equal(rows[1].gender, 'Non-binary', 'not swallowed into the name');
+  assert.ok(!('gender' in rows[2]), 'blank means absent, not empty string');
+});
+
+test('without a header a name containing a comma still survives', () => {
+  // "S4,Okafor, Ama" is a surname-first name, not a gender called "Ama". With
+  // no header to go on the parser only splits off a tail it is sure about.
+  const rows = roster.parseCSV('S4,"Okafor, Ama"\nS5,"Dube, Sam",M');
+  assert.equal(rows[0].name, 'Okafor, Ama');
+  assert.ok(!rows[0].gender);
+  assert.equal(rows[1].name, 'Dube, Sam');
+  assert.equal(rows[1].gender, 'male');
+});
+
+test('the mapped column is optional and survives being saved', () => {
+  const rows = [
+    { ID: 'S1', Learner: 'Ama Okafor', Sex: 'F' },
+    { ID: 'S2', Learner: 'Sam Dube', Sex: '' },
+  ];
+  const withGender = roster.buildStudentsFromMapping(rows, 'ID', 'Learner', 'Sex');
+  assert.equal(withGender[0].gender, 'female');
+  assert.ok(!('gender' in withGender[1]));
+
+  const without = roster.buildStudentsFromMapping(rows, 'ID', 'Learner');
+  assert.ok(!('gender' in without[0]), 'no column mapped means nothing recorded');
+});

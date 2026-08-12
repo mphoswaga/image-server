@@ -3197,6 +3197,7 @@ app.post('/api/roster/preview', requireAuth, upload.single('file'), (req, res) =
       totalRows: result.totalRows,
       detectedIdCol: result.detectedIdCol,
       detectedNameCol: result.detectedNameCol,
+      detectedGenderCol: result.detectedGenderCol,
       allRows: result.rows,          // sent back by client on confirm
     });
   } catch (err) { res.status(400).json({ error: err.message }); }
@@ -3215,9 +3216,9 @@ app.post('/api/roster', requireAuth, (req, res, next) => {
     let r;
     if (req.body && typeof req.body === 'object' && req.body.rows) {
       // Verified file-upload path
-      const { rows, idCol, nameCol } = req.body;
+      const { rows, idCol, nameCol, genderCol } = req.body;
       if (!idCol) return res.status(400).json({ error: 'idCol is required.' });
-      const students = roster.buildStudentsFromMapping(rows, idCol, nameCol);
+      const students = roster.buildStudentsFromMapping(rows, idCol, nameCol, genderCol);
       if (!students.length) return res.status(400).json({ error: 'No valid students found in the selected columns.' });
       r = roster.saveRoster(req.userId, { name, students });
     } else {
@@ -3245,7 +3246,7 @@ app.get('/api/roster/:id', requireAuth, (req, res) => {
     // `pin` is present only for a PIN THIS teacher issued. One the student
     // chose is hash-only and comes back null — resettable, never readable.
     students: r.students.map(s => ({
-      id: s.id, name: s.name,
+      id: s.id, name: s.name, gender: s.gender || '',
       pinState: studentAccount.getAccountState(s.id),
       pin: studentAccount.revealPin(s.id),
       pinResetRequested: studentAccount.getResetRequest(s.id),

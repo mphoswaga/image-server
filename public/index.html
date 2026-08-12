@@ -3054,6 +3054,10 @@
                 <select id="rosterIdCol" style="font-size:13px;padding:8px 10px;border-radius:8px;border:1.5px solid var(--border)"></select>
               </div>
               <div style="display:flex;flex-direction:column;gap:4px">
+                <label for="rosterGenderCol" style="font-size:12px;font-weight:600">Gender column <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+                <select id="rosterGenderCol" style="font-size:13px;padding:8px 10px;border-radius:8px;border:1.5px solid var(--border)"></select>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:4px">
                 <label for="rosterNameCol" style="font-size:12px;font-weight:600">Name column</label>
                 <select id="rosterNameCol" style="font-size:13px;padding:8px 10px;border-radius:8px;border:1.5px solid var(--border)"><option value="">(none — use ID as display name)</option></select>
               </div>
@@ -6523,24 +6527,26 @@
     }
 
     function rosterShowVerify(data){
-      const { headers, preview, totalRows, detectedIdCol, detectedNameCol, allRows } = data;
+      const { headers, preview, totalRows, detectedIdCol, detectedNameCol, detectedGenderCol, allRows } = data;
       rosterParsedRows = allRows;
       $('rosterRowCount').textContent = totalRows + ' student' + (totalRows===1?'':'s');
       const visibleRows = Array.isArray(allRows) && allRows.length ? allRows : preview;
       $('rosterPreviewNote').textContent = visibleRows.length < totalRows ? `Showing ${visibleRows.length}; all ${totalRows} will be saved.` : `All ${totalRows} rows are shown below.`;
 
       // Populate column selectors
-      const idSel=$('rosterIdCol'), nameSel=$('rosterNameCol');
+      const idSel=$('rosterIdCol'), nameSel=$('rosterNameCol'), genderSel=$('rosterGenderCol');
       idSel.innerHTML   = headers.map(h=>`<option value="${esc(h)}" ${h===detectedIdCol?'selected':''}>${esc(h)}</option>`).join('');
       nameSel.innerHTML = '<option value="">(none)</option>' + headers.map(h=>`<option value="${esc(h)}" ${h===detectedNameCol?'selected':''}>${esc(h)}</option>`).join('');
 
+      // (none) first: not recording gender is a valid answer and the commonest.
+      genderSel.innerHTML = '<option value="">(none)</option>' + headers.map(h=>`<option value="${esc(h)}" ${h===detectedGenderCol?'selected':''}>${esc(h)}</option>`).join('');
       rosterRenderPreview(headers, visibleRows, detectedIdCol||headers[0], detectedNameCol||'');
       $('rosterDropZone').style.display='none';
       $('rosterVerify').style.display='block';
 
       // Live re-render when columns change
       const rerender=()=>rosterRenderPreview(headers, visibleRows, idSel.value, nameSel.value);
-      idSel.onchange=rerender; nameSel.onchange=rerender;
+      idSel.onchange=rerender; nameSel.onchange=rerender; genderSel.onchange=rerender;
     }
 
     async function rosterParseFile(file){
@@ -6580,10 +6586,11 @@
       const name=$('rosterName').value.trim()||'Class roster';
       const idCol=$('rosterIdCol').value;
       const nameCol=$('rosterNameCol').value||null;
+      const genderCol=$('rosterGenderCol').value||null;
       if(!idCol){ rosterErr('Please select the Student ID column.'); return; }
       $('rosterConfirmBtn').disabled=true;
       try{
-        const r=await fetch('/api/roster?name='+encodeURIComponent(name),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,rows:rosterParsedRows,idCol,nameCol})});
+        const r=await fetch('/api/roster?name='+encodeURIComponent(name),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,rows:rosterParsedRows,idCol,nameCol,genderCol})});
         const d=await r.json(); if(!r.ok) throw new Error(d.error);
         toast(`Roster "${d.name}" saved — ${d.count} students`,'ok');
         $('rosterName').value=''; rosterParsedRows=[];
