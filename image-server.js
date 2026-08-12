@@ -44,7 +44,7 @@ function safeAnimate(buffer, band) {
   try { return animateBuffer(buffer, band); }
   catch (err) { console.log('animation skipped:', err.message); return buffer; }
 }
-const { signup, login, findOrCreateSocialUser, issueToken, verifyToken, getUserById, userHasEducScopeIdentity, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME, createPasswordResetToken, resetPasswordWithToken, listPasskeys, deletePasskey } = require('./auth');
+const { sessionSecret, signup, login, findOrCreateSocialUser, issueToken, verifyToken, getUserById, userHasEducScopeIdentity, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME, createPasswordResetToken, resetPasswordWithToken, listPasskeys, deletePasskey } = require('./auth');
 const { sendEmail } = require('./email');
 const webauthn = require('./webauthn');
 const socialAuth = require('./social-auth');
@@ -1999,14 +1999,43 @@ function pinKeyFor(activityId, studentId, hasRoster) {
 // Names shown on a join screen belong to children, and a game link is
 // shareable by definition. First name and last initial is enough for a child
 // to find themselves in their own class and not enough to be a class list.
-function classListFor(teacherId, rosterId) {
+// A handle standing in for a student ID on a public page.
+//
+// The join screen has to name the children so a child can find themselves,
+// but it must not publish the school's own identifiers — those are often
+// admission numbers, and the endpoint is reachable by anyone holding the game
+// link. So the list carries a handle that means nothing outside this activity,
+// and the server turns it back into the real ID on entry.
+//
+// Derived rather than stored: an HMAC of the activity and the student ID under
+// the session secret, so it is stable for one activity, different for every
+// other, and not reversible by whoever is holding the link.
+function studentHandle(activityId, studentId) {
+  return crypto.createHmac('sha256', sessionSecret())
+    .update(`${activityId}:${roster.normalizeStudentId(studentId)}`)
+    .digest('hex').slice(0, 16);
+}
+
+// Resolve a handle from the join screen back to the student it stands for.
+// Returns null for anything that is not a handle for a child in THIS class,
+// so a guessed or copied handle from another game resolves to nobody.
+function studentFromHandle(teacherId, rosterId, activityId, handle) {
+  const r = roster.getRoster(teacherId, rosterId);
+  if (!r || !Array.isArray(r.students)) return null;
+  const wanted = String(handle || '');
+  if (!wanted) return null;
+  return r.students.find((student) => studentHandle(activityId, student.id) === wanted) || null;
+}
+
+function classListFor(teacherId, rosterId, activityId) {
   const r = roster.getRoster(teacherId, rosterId);
   if (!r || !Array.isArray(r.students)) return [];
   return r.students.map((student) => {
     const parts = String(student.name || '').trim().split(/\s+/).filter(Boolean);
-    const first = parts[0] || student.id;
+    // Falling back to the ID here would put it on the page after all.
+    const first = parts[0] || 'Student';
     const initial = parts.length > 1 ? ` ${parts[parts.length - 1][0].toUpperCase()}.` : '';
-    return { id: student.id, label: `${first}${initial}` };
+    return { handle: studentHandle(activityId, student.id), label: `${first}${initial}` };
   });
 }
 
@@ -2026,7 +2055,7 @@ app.get('/api/assignment/:id/join', (req, res) => {
   res.json({
     title: a.title, teacherName: a.teacherName || null,
     hasRoster: !!a.rosterId,
-    students: a.rosterId ? classListFor(a.teacherId, a.rosterId) : [],
+    students: a.rosterId ? classListFor(a.teacherId, a.rosterId, a.id) : [],
   });
 });
 
@@ -2036,14 +2065,21 @@ app.get('/api/game/:id/join', (req, res) => {
   res.json({
     lessonTitle: g.lessonTitle, teacherName: g.teacherName || null,
     hasRoster: !!g.rosterId,
-    students: g.rosterId ? classListFor(g.teacherId, g.rosterId) : [],
+    students: g.rosterId ? classListFor(g.teacherId, g.rosterId, g.id) : [],
   });
 });
 
 app.post('/api/assignment/:id/enter', async (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
-  const studentId = roster.normalizeStudentId(req.body && req.body.studentId);
+  // The join screen sends a handle, not the school's own ID — see studentHandle.
+  // A typed entry (no roster, or a child not on the list) still arrives as text.
+  const fromList = a.rosterId
+    ? studentFromHandle(a.teacherId, a.rosterId, a.id, req.body && req.body.handle)
+    : null;
+  const studentId = fromList
+    ? roster.normalizeStudentId(fromList.id)
+    : roster.normalizeStudentId(req.body && req.body.studentId);
   if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
   const pin = req.body && req.body.pin ? String(req.body.pin).trim() : '';
   let displayName = roster.displayNameFrom(req.body && req.body.name, studentId);
@@ -2099,7 +2135,7 @@ app.get('/api/assignment/:id', requireAssignmentAccess, (req, res) => {
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
   const session = assignmentStudentSession(req, res, a);
   if (req.gameSession && req.gameSession.assignmentId && !session) return res.status(403).json({ error: 'Session is for a different assignment.' });
-  res.json({ id: a.id, type: a.type, title: a.title, subject: a.subject, topic: a.topic, grade: a.grade, teacherName: a.teacherName, hasRoster: !!a.rosterId, students: a.rosterId ? classListFor(a.teacherId, a.rosterId) : [], instructions: a.content.instructions, questionCount: a.content.questions.length });
+  res.json({ id: a.id, type: a.type, title: a.title, subject: a.subject, topic: a.topic, grade: a.grade, teacherName: a.teacherName, hasRoster: !!a.rosterId, students: a.rosterId ? classListFor(a.teacherId, a.rosterId, a.id) : [], instructions: a.content.instructions, questionCount: a.content.questions.length });
 });
 
 // Student: the questions, WITHOUT answer keys/correctIndex.
@@ -2976,7 +3012,14 @@ app.patch('/api/game/:id/cutoff', requireAuth, (req, res) => {
 app.post('/api/game/:id/enter', async (req, res) => {
   const g = games.getGame(req.params.id);
   if (!g) return res.status(404).json({ error: 'Game not found.' });
-  const studentId = roster.normalizeStudentId(req.body && req.body.studentId);
+  // The join screen sends a handle, not the school's own ID — see studentHandle.
+  // A typed entry (no roster, or a child not on the list) still arrives as text.
+  const fromList = g.rosterId
+    ? studentFromHandle(g.teacherId, g.rosterId, g.id, req.body && req.body.handle)
+    : null;
+  const studentId = fromList
+    ? roster.normalizeStudentId(fromList.id)
+    : roster.normalizeStudentId(req.body && req.body.studentId);
   if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
   const pin = req.body && req.body.pin ? String(req.body.pin).trim() : '';
   let displayName = roster.displayNameFrom(req.body && req.body.name, studentId);
@@ -3034,7 +3077,7 @@ app.get('/api/game/:id', requireGameAccess, (req, res) => {
   // Students must hold a session for THIS game.
   if (req.gameSession && req.gameSession.gameId !== g.id) return res.status(403).json({ error: 'Session is for a different game.' });
   const hasRoster = !!g.rosterId;
-  res.json({ id: g.id, lessonTitle: g.lessonTitle, subject: g.subject, topic: g.topic, grade: g.grade, summary: g.summary, questionCount: (g.questions || []).length, teacherName: g.teacherName, hasRoster, students: hasRoster ? classListFor(g.teacherId, g.rosterId) : [], highScores: games.getHighScores(g.id) });
+  res.json({ id: g.id, lessonTitle: g.lessonTitle, subject: g.subject, topic: g.topic, grade: g.grade, summary: g.summary, questionCount: (g.questions || []).length, teacherName: g.teacherName, hasRoster, students: hasRoster ? classListFor(g.teacherId, g.rosterId, g.id) : [], highScores: games.getHighScores(g.id) });
 });
 
 // Student: the questions, WITHOUT the correct answers.

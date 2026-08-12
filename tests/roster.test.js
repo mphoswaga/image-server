@@ -159,3 +159,26 @@ test('a class list shows enough to find yourself and not enough to be a class li
   assert.equal(label('Thandi'), 'Thandi', 'one name stays one name');
   assert.doesNotMatch(label('Ama Okafor'), /Okafor/, 'the surname never reaches the page');
 });
+
+test('a join list carries no school identifiers', () => {
+  // The join screen is public. Names are reduced to a first name and an
+  // initial, and the school's own ID — often an admission number — must not
+  // travel at all. It is replaced by a handle that means nothing outside the
+  // one activity it was minted for.
+  const crypto = require('node:crypto');
+  const handle = (activityId, studentId) =>
+    crypto.createHmac('sha256', 'test-secret')
+      .update(`${activityId}:${roster.normalizeStudentId(studentId)}`)
+      .digest('hex').slice(0, 16);
+
+  const h = handle('game-1', 'ADM-88421');
+  assert.match(h, /^[0-9a-f]{16}$/);
+  assert.doesNotMatch(h, /ADM|88421/, 'the ID must not be recoverable by eye');
+
+  // Stable within an activity, so a tap resolves to the child who was listed.
+  assert.equal(h, handle('game-1', 'ADM-88421'));
+  // Different per activity, so a handle copied from one game is useless in another.
+  assert.notEqual(h, handle('game-2', 'ADM-88421'));
+  // And distinct per child.
+  assert.notEqual(h, handle('game-1', 'ADM-90233'));
+});

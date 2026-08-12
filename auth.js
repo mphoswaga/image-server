@@ -247,4 +247,8 @@ function requireAdmin(req, res, next) {
   });
 }
 
-module.exports = { signup, login, findOrCreateSocialUser, issueToken, verifyToken, getUserById, userHasEducScopeIdentity, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME, createPasswordResetToken, resetPasswordWithToken, addPasskey, listPasskeys, deletePasskey, findByCredentialId, updatePasskeyCounter };
+// Exposed so other modules can derive stable, unguessable handles without
+// minting key material of their own (see studentHandle in image-server.js).
+function sessionSecret() { return SECRET; }
+
+module.exports = { sessionSecret, signup, login, findOrCreateSocialUser, issueToken, verifyToken, getUserById, userHasEducScopeIdentity, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME, createPasswordResetToken, resetPasswordWithToken, addPasskey, listPasskeys, deletePasskey, findByCredentialId, updatePasskeyCounter };
