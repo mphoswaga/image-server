@@ -1092,7 +1092,7 @@ app.post('/api/admin/add-images', requireAdmin, async (req, res) => {
 });
 
 // ── Lesson-plan template packs (save many; pick one per lesson) ────────────
-const publicTemplate = t => ({ id: t.id, name: t.name, type: t.type, filename: t.filename, ext: t.ext, uploadedAt: t.uploadedAt, hasOriginal: !!t.hasOriginal });
+const publicTemplate = t => ({ id: t.id, name: t.name, type: t.type, grade: t.grade || '', filename: t.filename, ext: t.ext, uploadedAt: t.uploadedAt, hasOriginal: !!t.hasOriginal });
 
 app.get('/api/templates', requireAuth, (req, res) => {
   res.json({ templates: listTemplates(req.userId).map(publicTemplate), types: TYPES });
@@ -1134,7 +1134,7 @@ app.post('/api/templates', requireAuth, upload.single('file'), async (req, res) 
     }
 
     if (!text || !text.trim()) return res.status(400).json({ error: 'Could not read any text from that file.' });
-    const rec = saveTemplate(req.userId, { name: req.body && req.body.name, type: req.body && req.body.type, filename, text, buffer });
+    const rec = saveTemplate(req.userId, { name: req.body && req.body.name, type: req.body && req.body.type, grade: req.body && req.body.grade, filename, text, buffer });
     // Only the first TEMPLATE_PROMPT_LIMIT characters reach the generator. Say
     // so at upload: silently dropping the end of a long template means the
     // teacher's later sections quietly stop appearing and nothing explains why.
@@ -1152,7 +1152,7 @@ app.post('/api/templates', requireAuth, upload.single('file'), async (req, res) 
 });
 
 app.patch('/api/templates/:id', requireAuth, (req, res) => {
-  const rec = renameTemplate(req.userId, req.params.id, { name: req.body && req.body.name, type: req.body && req.body.type });
+  const rec = renameTemplate(req.userId, req.params.id, { name: req.body && req.body.name, type: req.body && req.body.type, grade: req.body && req.body.grade });
   if (!rec) return res.status(404).json({ error: 'Template not found.' });
   res.json({ template: publicTemplate(rec) });
 });

@@ -148,7 +148,7 @@ function getTemplate(userId, id) {
 }
 
 // Save a NEW template; returns its record (with generated id).
-function saveTemplate(userId, { name, type, filename, text, buffer }) {
+function saveTemplate(userId, { name, type, grade, filename, text, buffer }) {
   ensureMigrated(userId);
   const dir = templatesDir(userId);
   fs.mkdirSync(dir, { recursive: true });
@@ -159,6 +159,7 @@ function saveTemplate(userId, { name, type, filename, text, buffer }) {
     id,
     name: (name || '').trim() || nameFromFilename(filename) || 'Untitled template',
     type: TYPES.includes(type) ? type : 'custom',
+    grade: String(grade || '').trim().slice(0, 80),
     filename, ext, uploadedAt: new Date().toISOString(),
     text: (text || '').trim(), hasOriginal: !!buffer,
   };
@@ -166,11 +167,12 @@ function saveTemplate(userId, { name, type, filename, text, buffer }) {
   return rec;
 }
 
-function renameTemplate(userId, id, { name, type }) {
+function renameTemplate(userId, id, { name, type, grade }) {
   const rec = getTemplate(userId, id);
   if (!rec) return null;
   if (name != null && String(name).trim()) rec.name = String(name).trim();
   if (type != null && TYPES.includes(type)) rec.type = type;
+  if (grade != null) rec.grade = String(grade).trim().slice(0, 80);
   writeJsonAtomic(recPath(userId, id), rec);
   return rec;
 }

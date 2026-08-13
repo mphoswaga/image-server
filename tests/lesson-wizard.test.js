@@ -29,6 +29,17 @@ test('the wizard preserves every field needed by the existing generation request
     'generated success criteria must survive from plan review to workbook download');
 });
 
+test('saved templates can be named, assigned to a grade, selected, and edited', () => {
+  for (const id of ['tplList', 'tplName', 'tplGrade', 'tplType', 'tplAddBtn']) {
+    assert.equal([...markup.matchAll(new RegExp(`id="${id}"`, 'g'))].length, 1, `${id} should exist exactly once`);
+  }
+  assert.match(html, /TEMPLATE_PREF_PREFIX='lessonscope\.template\.'/);
+  assert.match(html, /syncTemplateToGrade\(\{force:true\}\)/);
+  assert.match(html, /data-edit=/);
+  assert.match(html, /fd\.append\('grade',grade\)/);
+  assert.match(html, /templateId:selectedTemplateId/);
+});
+
 test('multi-lesson mode exposes staged plan and slide controls without replacing single-lesson controls', () => {
   for (const id of [
     'sequencePlanFlow', 'sequencePlanTabs', 'nextSequencePlanBtn',

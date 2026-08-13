@@ -137,15 +137,25 @@
     .tpl-row.sel .ficon { background:#fff; }
     .tpl-row .meta { min-width:0; flex:1; }
     .tpl-row .nm { font-weight:700; color:var(--ink); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-    .tpl-row .sub { font-size:12px; color:var(--muted); }
+    .tpl-row .sub { font-size:12px; color:var(--muted); overflow-wrap:anywhere; }
     .tpl-chip { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; padding:2px 8px; border-radius:999px; background:var(--accent-soft); color:var(--accent); }
-    .tpl-del { border:none; background:none; color:var(--muted); cursor:pointer; padding:6px; border-radius:8px; flex:none; display:inline-flex; }
+    .tpl-grade-chip { background:#eef6ff; color:var(--primary-2); }
+    .tpl-actions { display:flex; align-items:center; gap:2px; flex:none; }
+    .tpl-edit, .tpl-del { border:none; background:none; color:var(--muted); cursor:pointer; padding:7px; border-radius:8px; flex:none; display:inline-flex; }
+    .tpl-edit:hover { color:var(--primary-2); background:var(--primary-soft); }
     .tpl-del:hover, .tpl-del.warn { color:var(--err); background:#fdf1ef; }
-    .tpl-del .ic { width:16px; height:16px; }
-    .tpl-add { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-    .tpl-add input { flex:1; min-width:170px; }
-    .tpl-add select { width:auto; flex:none; }
+    .tpl-edit .ic, .tpl-del .ic { width:16px; height:16px; }
+    .tpl-library-head { display:flex; justify-content:space-between; align-items:end; gap:12px; margin:2px 0 9px; }
+    .tpl-library-head strong { font-size:14px; color:var(--ink); }
+    .tpl-library-head span { font-size:12px; color:var(--muted); text-align:right; }
+    .tpl-add { display:grid; grid-template-columns:minmax(180px,1.4fr) minmax(150px,1fr) auto auto; gap:8px; align-items:end; padding-top:12px; border-top:1px solid var(--border); }
+    .tpl-add-field { min-width:0; }
+    .tpl-add-field label { font-size:11px; margin-bottom:5px; color:var(--muted); }
+    .tpl-add input { width:100%; min-width:0; }
+    .tpl-add select { width:auto; min-width:150px; }
     .tpl-add .act { white-space:nowrap; }
+    @media(max-width:780px){ .tpl-add { grid-template-columns:1fr 1fr; } .tpl-add .act { width:100%; } }
+    @media(max-width:520px){ .tpl-row { align-items:flex-start; } .tpl-row .ficon { display:none; } .tpl-add { grid-template-columns:1fr; } .tpl-add select { width:100%; } .tpl-library-head { align-items:flex-start; flex-direction:column; } .tpl-library-head span { text-align:left; } }
 
     .status { text-align:center; margin:22px auto 0; max-width:700px; min-height:22px; font-size:14px; color:var(--muted); }
     .status.err { color:var(--err); } .status.ok { color:var(--ok); }
@@ -2602,7 +2612,7 @@
       <details class="opt-tpl" id="tplDetails">
         <summary><svg class="ic" aria-hidden="true"><use href="#i-book-open"/></svg> <span id="tplSummary">Your school's lesson-plan template <span class="opt-tag">recommended</span></span><span class="disclose-hint" aria-hidden="true"></span></summary>
         <div class="opt-tpl-body">
-          <p class="hint" style="margin:0 0 10px">Upload your school's format (Word, PowerPoint, PDF, Excel) and every lesson plan comes back in its exact fields — so you never retype one into your real form. Without one we use a standard structure.</p>
+          <p class="hint" style="margin:0 0 10px">Save each lesson-plan format once, name it for its grade or class, then choose the right one for every lesson. Your download comes back in the selected template's fields. Without one we use a standard structure.</p>
           <!-- Shown only when the teacher keeps a week-by-week workbook. -->
           <div id="weekPlannerBox" class="week-planner" style="display:none">
             <div class="wp-head">
@@ -2629,9 +2639,11 @@
               <button type="button" class="btn ghost" id="wpRemoveBtn" style="font-size:12px;padding:7px 12px">Remove</button>
             </div>
           </div>
+          <div class="tpl-library-head"><strong>Saved lesson-plan templates</strong><span>Select the format for this lesson</span></div>
           <div id="tplList" class="tpl-list"><span class="info none">Loading your templates…</span></div>
           <div class="tpl-add">
-            <input id="tplName" type="text" placeholder="Name (e.g. Observation plan)" aria-label="Template name" />
+            <div class="tpl-add-field"><label for="tplName">Template name</label><input id="tplName" type="text" placeholder="e.g. Grade 5 ICT plan" aria-label="Template name" maxlength="100" /></div>
+            <div class="tpl-add-field"><label for="tplGrade">Grade or class</label><input id="tplGrade" type="text" list="tplGradeOptions" placeholder="e.g. Grade 5 or 5A" aria-label="Template grade or class" maxlength="80" /></div>
             <select id="tplType" aria-label="Template type">
               <option value="detailed">Detailed plan</option><option value="observation">Observation</option>
               <option value="weekly">Weekly plan</option><option value="intervention">Intervention</option>
@@ -2639,6 +2651,7 @@
             </select>
             <button type="button" class="act" id="tplAddBtn"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg> Add template</button>
           </div>
+          <datalist id="tplGradeOptions"><option value="Grade R"></option><option value="Grade 1"></option><option value="Grade 2"></option><option value="Grade 3"></option><option value="Grade 4"></option><option value="Grade 5"></option><option value="Grade 6"></option><option value="Grade 7"></option><option value="Grade 8"></option><option value="Grade 9"></option><option value="Grade 10"></option><option value="Grade 11"></option><option value="Grade 12"></option></datalist>
           <p class="fmt-note"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Word, PowerPoint, PDF, Excel or text — or an Excel workbook with a tab per week.</p>
           <input id="tplFile" aria-label="Choose a lesson plan template file" type="file" accept=".docx,.pdf,.xlsx,.xls,.txt,.md,.csv,.pptx,.ppt" style="display:none" />
         </div>
@@ -3652,6 +3665,7 @@
       composerPage=begin?1:0;
       composerMaxPage=1;
       placeTemplateRow();
+      syncTemplateToGrade({force:true}); renderTemplates();
       if(weekPlannerState && weekPlannerState.present) setTimeout(renderSlotPickers,0);
       // Say where to start on the card they just chose.
       setTimeout(()=>{
@@ -3701,18 +3715,39 @@
     // Template packs: save several lesson-plan formats, pick one per lesson.
     let templates=[], selectedTemplateId=null, planTemplateId=null;
     const TYPE_LABEL={detailed:'Detailed',observation:'Observation',weekly:'Weekly',intervention:'Intervention',substitute:'Substitute',custom:'Custom'};
+    const TEMPLATE_PREF_PREFIX='lessonscope.template.';
     // Reflect the active template in the collapsed disclosure's summary so a
     // returning teacher can see one is applied without expanding it.
     // Has the teacher toggled the template row themselves? Once they have, it
     // stays where they put it — the app opens it for them, it doesn't fight them.
     let tplToggledByUser=false;
 
+    function activeTemplateGrade(){
+      const id=startMode==='havePlan'?'ipGrade':startMode==='haveSlides'?'isGrade':'grade';
+      return String(($(id)||{}).value||'').trim();
+    }
+    function normalTemplateGrade(value){ return String(value||'').trim().toLowerCase().replace(/\s+/g,' '); }
+    function templatePreferenceKey(grade){ return TEMPLATE_PREF_PREFIX+(normalTemplateGrade(grade)||'general'); }
+    function rememberedTemplate(grade){ try{return localStorage.getItem(templatePreferenceKey(grade));}catch{return null;} }
+    function rememberTemplate(id,grade=activeTemplateGrade()){
+      try{ if(id) localStorage.setItem(templatePreferenceKey(grade),id); else localStorage.removeItem(templatePreferenceKey(grade)); }catch{}
+    }
+    function syncTemplateToGrade({force=false}={}){
+      if(!templates.length){ selectedTemplateId=null; return; }
+      if(!force && selectedTemplateId && templates.some(t=>t.id===selectedTemplateId)) return;
+      const grade=activeTemplateGrade(), remembered=rememberedTemplate(grade);
+      const saved=templates.find(t=>t.id===remembered);
+      const exact=templates.find(t=>t.grade && normalTemplateGrade(t.grade)===normalTemplateGrade(grade));
+      selectedTemplateId=(saved||exact||templates[0]).id;
+      rememberTemplate(selectedTemplateId,grade);
+    }
+
     function updateTplSummary(){
       const sum=$('tplSummary'), box=$('tplDetails'); if(!sum) return;
       const t=templates.find(x=>x.id===selectedTemplateId);
       const planner=!!(weekPlannerState && weekPlannerState.present);
       sum.innerHTML = t
-        ? `Using template: <b>${esc(t.name)}</b> <span class="opt-tag">change</span>`
+        ? `Using template: <b>${esc(t.name)}</b>${t.grade?` · ${esc(t.grade)}`:''} <span class="opt-tag">change</span>`
         : planner
           ? `Using your week-by-week plan${weekPlannerState.filename?`: <b>${esc(weekPlannerState.filename)}</b>`:''} <span class="opt-tag">change</span>`
           : `Add your school's lesson-plan template <span class="opt-tag">so your plan comes back in your own format</span>`;
@@ -3728,8 +3763,8 @@
     }
     function renderTemplates(){
       const list=$('tplList');
-      if(!templates.length){ selectedTemplateId=null; list.innerHTML=`<span class="info none">No templates yet — add your school's lesson-plan formats below (or skip to use a standard structure).</span>`; updateTplSummary(); return; }
-      if(!selectedTemplateId || !templates.some(t=>t.id===selectedTemplateId)) selectedTemplateId=templates[0].id;
+      if(!templates.length){ selectedTemplateId=null; list.innerHTML=`<span class="info none">No saved templates yet. Add the first grade or class format below; it will stay here for future lessons.</span>`; updateTplSummary(); return; }
+      syncTemplateToGrade();
       updateTplSummary();
       list.innerHTML=templates.map(t=>{
         const sel=t.id===selectedTemplateId, d=new Date(t.uploadedAt).toLocaleDateString();
@@ -3737,8 +3772,11 @@
         return `<div class="tpl-row${sel?' sel':''}" data-id="${t.id}" role="button" tabindex="0" aria-pressed="${sel}">
           <span class="pick">${sel?ICON('i-check'):''}</span>
           <span class="ficon">${ICON('i-doc')}</span>
-          <span class="meta"><span class="nm">${esc(t.name)} <span class="tpl-chip">${esc(TYPE_LABEL[t.type]||t.type)}</span></span><span class="sub">${esc(t.filename)} · saved ${d}${warn}</span></span>
-          <button type="button" class="tpl-del" data-del="${t.id}" aria-label="Delete ${esc(t.name)}">${ICON('i-trash')}</button>
+          <span class="meta"><span class="nm">${esc(t.name)} ${t.grade?`<span class="tpl-chip tpl-grade-chip">${esc(t.grade)}</span>`:''} <span class="tpl-chip">${esc(TYPE_LABEL[t.type]||t.type)}</span></span><span class="sub">${esc(t.filename)} · saved ${d}${warn}</span></span>
+          <span class="tpl-actions">
+            <button type="button" class="tpl-edit" data-edit="${t.id}" title="Rename or change grade" aria-label="Edit ${esc(t.name)}">${ICON('i-pencil')}</button>
+            <button type="button" class="tpl-del" data-del="${t.id}" title="Delete template" aria-label="Delete ${esc(t.name)}">${ICON('i-trash')}</button>
+          </span>
         </div>`;
       }).join('');
     }
@@ -3913,30 +3951,44 @@
       const del=e.target.closest('[data-del]');
       if(del){ e.stopPropagation(); if(!confirmDel(del)) return; const id=del.dataset.del;
         try{ const r=await fetch('/api/templates/'+id,{method:'DELETE'}); if(!r.ok){const x=await r.json().catch(()=>({}));throw new Error(x.error||'Delete failed');}
-          if(selectedTemplateId===id) selectedTemplateId=null; await loadTemplates(); toast('Template removed.','ok');
+          if(selectedTemplateId===id){ rememberTemplate(null); selectedTemplateId=null; } await loadTemplates(); toast('Template removed.','ok');
         }catch(err){ toast(err.message); } return; }
+      const edit=e.target.closest('[data-edit]');
+      if(edit){ e.stopPropagation(); const t=templates.find(item=>item.id===edit.dataset.edit); if(!t) return;
+        const name=prompt('Template name',t.name); if(name===null) return;
+        if(!name.trim()){ toast('Template name cannot be blank.'); return; }
+        const grade=prompt('Grade or class (leave blank for a general template)',t.grade||''); if(grade===null) return;
+        try{
+          const r=await fetch('/api/templates/'+t.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name.trim(),grade:grade.trim()})});
+          const d=await r.json(); if(!r.ok) throw new Error(d.error||'Update failed');
+          selectedTemplateId=t.id; await loadTemplates(); rememberTemplate(t.id); toast('Template updated.','ok');
+        }catch(err){ toast(err.message); }
+        return;
+      }
       const row=e.target.closest('.tpl-row'); if(!row) return;
-      selectedTemplateId=row.dataset.id; renderTemplates();
+      selectedTemplateId=row.dataset.id; rememberTemplate(selectedTemplateId); renderTemplates(); toast('Template selected for this lesson.','ok');
     });
-    $('tplAddBtn').addEventListener('click',()=>$('tplFile').click());
+    $('tplList').addEventListener('keydown',e=>{ if(e.target.closest('button')) return; const row=e.target.closest('.tpl-row'); if(row&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); row.click(); } });
+    $('tplAddBtn').addEventListener('click',()=>{ if(!$('tplGrade').value.trim()) $('tplGrade').value=activeTemplateGrade(); $('tplFile').click(); });
     $('tplFile').addEventListener('change', async (e)=>{
       const file=e.target.files[0]; if(!file) return;
-      const name=$('tplName').value.trim(), type=$('tplType').value;
+      const name=$('tplName').value.trim(), type=$('tplType').value, grade=$('tplGrade').value.trim();
       const btn=$('tplAddBtn'); btn.disabled=true; const orig=btn.innerHTML; btn.innerHTML='<span class="spinner"></span>Reading…';
-      try{ const fd=new FormData(); fd.append('file',file); if(name) fd.append('name',name); fd.append('type',type);
+      try{ const fd=new FormData(); fd.append('file',file); if(name) fd.append('name',name); if(grade) fd.append('grade',grade); fd.append('type',type);
         const r=await fetch('/api/templates',{method:'POST',body:fd}); const d=await r.json(); if(!r.ok) throw new Error(d.error);
-        $('tplName').value='';
+        $('tplName').value=''; $('tplGrade').value='';
         if(d.weekPlanner){
           // A week-by-week workbook, not a section template — different thing.
           await loadWeekPlanner();
           toast('Week-by-week lesson plan added — lessons will be filed into it automatically.','ok');
         } else {
-          selectedTemplateId=d.template.id; await loadTemplates();
+          selectedTemplateId=d.template.id; rememberTemplate(selectedTemplateId,grade||activeTemplateGrade()); await loadTemplates();
           toast(d.warning || 'Template added.', d.warning ? '' : 'ok');
         }
       }catch(err){ toast(err.message); }
       btn.disabled=false; btn.innerHTML=orig; e.target.value='';
     });
+    ['grade','ipGrade','isGrade'].forEach(id=>$(id)?.addEventListener('change',()=>{ syncTemplateToGrade({force:true}); renderTemplates(); }));
 
     // Inline required-field validation (clears as the teacher types).
     function fieldErr(inputId,errId,bad){
@@ -4118,6 +4170,7 @@
       $('unitTitleCard').style.display=''; $('utcTitle').textContent=item.unitTitle||'—'; $('utcBadge').textContent='WK '+wn;
       // Auto-set grade dropdown
       $('grade').value=selGrade;
+      syncTemplateToGrade({force:true}); renderTemplates();
       // Pull objectives
       pulledObjectives=(item.learningObjectives||[]).map((o,i)=>({...o,_id:i,checked:true}));
       renderPulledObjectives(true);
