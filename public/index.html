@@ -3745,11 +3745,11 @@
     function updateTplSummary(){
       const sum=$('tplSummary'), box=$('tplDetails'); if(!sum) return;
       const t=templates.find(x=>x.id===selectedTemplateId);
-      const planner=!!(weekPlannerState && weekPlannerState.present);
+      const planner=weekPlannerState && (weekPlannerState.planners||[]).find(p=>p.id===weekPlannerState.activeId);
       sum.innerHTML = t
         ? `Using template: <b>${esc(t.name)}</b>${t.grade?` · ${esc(t.grade)}`:''} <span class="opt-tag">change</span>`
         : planner
-          ? `Using your week-by-week plan${weekPlannerState.filename?`: <b>${esc(weekPlannerState.filename)}</b>`:''} <span class="opt-tag">change</span>`
+          ? `Using template: <b>${esc(planner.name||planner.filename||'Week-by-week plan')}</b>${planner.grade?` · ${esc(planner.grade)}`:''} <span class="opt-tag">change</span>`
           : `Add your school's lesson-plan template <span class="opt-tag">so your plan comes back in your own format</span>`;
       if(!box) return;
       const settled=!!(t||planner);
@@ -3763,10 +3763,26 @@
     }
     function renderTemplates(){
       const list=$('tplList');
-      if(!templates.length){ selectedTemplateId=null; list.innerHTML=`<span class="info none">No saved templates yet. Add the first grade or class format below; it will stay here for future lessons.</span>`; updateTplSummary(); return; }
-      syncTemplateToGrade();
+      const planners=(weekPlannerState&&weekPlannerState.planners)||[];
+      if(!templates.length&&!planners.length){ selectedTemplateId=null; list.innerHTML=`<span class="info none">No saved templates yet. Add the first grade or class format below; it will stay here for future lessons.</span>`; updateTplSummary(); return; }
+      // A selected week workbook remains selected until the teacher explicitly
+      // chooses a document template. This prevents loading the template list
+      // from silently switching the workbook they are planning into.
+      if(!planners.length) syncTemplateToGrade();
       updateTplSummary();
-      list.innerHTML=templates.map(t=>{
+      const workbookRows=planners.map(t=>{
+        const sel=!selectedTemplateId&&t.id===weekPlannerState.activeId, d=new Date(t.uploadedAt).toLocaleDateString();
+        return `<div class="tpl-row${sel?' sel':''}" data-id="${t.id}" data-kind="planner" role="button" tabindex="0" aria-pressed="${sel}">
+          <span class="pick">${sel?ICON('i-check'):''}</span>
+          <span class="ficon">${ICON('i-calendar')}</span>
+          <span class="meta"><span class="nm">${esc(t.name||t.filename||'Week-by-week plan')} ${t.grade?`<span class="tpl-chip tpl-grade-chip">${esc(t.grade)}</span>`:''} <span class="tpl-chip">Week-by-week workbook</span></span><span class="sub">${esc(t.filename)} · saved ${d} · lessons are filed into this workbook</span></span>
+          <span class="tpl-actions">
+            <button type="button" class="tpl-edit" data-wp-edit="${t.id}" title="Rename or change grade" aria-label="Edit ${esc(t.name||t.filename)}">${ICON('i-pencil')}</button>
+            <button type="button" class="tpl-del" data-wp-del="${t.id}" title="Delete template" aria-label="Delete ${esc(t.name||t.filename)}">${ICON('i-trash')}</button>
+          </span>
+        </div>`;
+      });
+      const documentRows=templates.map(t=>{
         const sel=t.id===selectedTemplateId, d=new Date(t.uploadedAt).toLocaleDateString();
         const warn=t.hasOriginal?'':' · <span style="color:var(--err)">re-upload for exact-format download</span>';
         return `<div class="tpl-row${sel?' sel':''}" data-id="${t.id}" role="button" tabindex="0" aria-pressed="${sel}">
@@ -3778,7 +3794,8 @@
             <button type="button" class="tpl-del" data-del="${t.id}" title="Delete template" aria-label="Delete ${esc(t.name)}">${ICON('i-trash')}</button>
           </span>
         </div>`;
-      }).join('');
+      });
+      list.innerHTML=[...workbookRows,...documentRows].join('');
     }
     // ── Week-by-week lesson plan ──────────────────────────────────────────
     // A workbook with a tab per week that the app appends each generated lesson
@@ -3788,7 +3805,7 @@
     async function loadWeekPlanner(){
       const box=$('weekPlannerBox'); if(!box) return;
       try{ weekPlannerState=await (await fetch('/api/week-planner')).json(); }catch{ weekPlannerState=null; }
-      if(!weekPlannerState || !weekPlannerState.present){ box.style.display='none'; updateTplSummary(); return; }
+      if(!weekPlannerState || !weekPlannerState.present){ box.style.display='none'; renderTemplates(); return; }
       const weeks=weekPlannerState.weeks||[];
       box.style.display='block';
       $('wpWeeks').textContent=weeks.length?`${weeks.length} week${weeks.length>1?'s':''}`:'no weeks yet';
@@ -3796,7 +3813,7 @@
         ? `${esc(weekPlannerState.filename||'Your plan')} — weeks ${weeks.map(w=>w.week).join(', ')}. Each lesson you generate is filed into its week automatically.`
         : `${esc(weekPlannerState.filename||'Your plan')} — each lesson you generate will be filed into its week automatically.`;
       renderSlotPickers();
-      updateTplSummary();   // the workbook counts as having a format sorted
+      renderTemplates();   // include every saved workbook in the same library
     }
 
     // Show which week (and, when the school's form holds several lessons a week,
@@ -3869,9 +3886,10 @@
       btn.disabled=false; btn.innerHTML=orig;
     });
     $('wpRemoveBtn')?.addEventListener('click',async()=>{
-      if(!confirm('Remove your week-by-week plan? Download it first if you want to keep it — this cannot be undone.')) return;
-      try{ const r=await fetch('/api/week-planner',{method:'DELETE'}); if(!r.ok) throw new Error((await r.json()).error);
-        toast('Week-by-week plan removed.','ok'); loadWeekPlanner();
+      const id=weekPlannerState&&weekPlannerState.activeId;
+      if(!id||!confirm('Remove this week-by-week plan? Download it first if you want to keep it — this cannot be undone.')) return;
+      try{ const r=await fetch('/api/week-planner/'+id,{method:'DELETE'}); if(!r.ok) throw new Error((await r.json()).error);
+        toast('Week-by-week plan removed.','ok'); selectedTemplateId=null; loadWeekPlanner();
       }catch(err){ toast(err.message); }
     });
 
@@ -3948,6 +3966,20 @@
       toast('Click the bin again to delete this template.','err'); return false;
     }
     $('tplList').addEventListener('click', async (e)=>{
+      const wpDel=e.target.closest('[data-wp-del]');
+      if(wpDel){ e.stopPropagation(); if(!confirmDel(wpDel)) return; const id=wpDel.dataset.wpDel;
+        try{ const r=await fetch('/api/week-planner/'+id,{method:'DELETE'}); if(!r.ok){const x=await r.json().catch(()=>({}));throw new Error(x.error||'Delete failed');}
+          await loadWeekPlanner(); toast('Template removed.','ok');
+        }catch(err){ toast(err.message); } return; }
+      const wpEdit=e.target.closest('[data-wp-edit]');
+      if(wpEdit){ e.stopPropagation(); const t=((weekPlannerState&&weekPlannerState.planners)||[]).find(item=>item.id===wpEdit.dataset.wpEdit); if(!t) return;
+        const name=prompt('Template name',t.name||t.filename||'Lesson plan'); if(name===null) return;
+        if(!name.trim()){ toast('Template name cannot be blank.'); return; }
+        const grade=prompt('Grade or class (leave blank for a general template)',t.grade||''); if(grade===null) return;
+        try{ const r=await fetch('/api/week-planner/'+t.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name.trim(),grade:grade.trim()})}); const d=await r.json(); if(!r.ok) throw new Error(d.error||'Update failed');
+          await loadWeekPlanner(); toast('Template updated.','ok');
+        }catch(err){ toast(err.message); } return;
+      }
       const del=e.target.closest('[data-del]');
       if(del){ e.stopPropagation(); if(!confirmDel(del)) return; const id=del.dataset.del;
         try{ const r=await fetch('/api/templates/'+id,{method:'DELETE'}); if(!r.ok){const x=await r.json().catch(()=>({}));throw new Error(x.error||'Delete failed');}
@@ -3966,6 +3998,12 @@
         return;
       }
       const row=e.target.closest('.tpl-row'); if(!row) return;
+      if(row.dataset.kind==='planner'){
+        try{ const r=await fetch('/api/week-planner/'+row.dataset.id+'/select',{method:'POST'}); const d=await r.json(); if(!r.ok) throw new Error(d.error||'Selection failed');
+          selectedTemplateId=null; rememberTemplate('planner:'+row.dataset.id); await loadWeekPlanner(); toast('Template selected for this lesson.','ok');
+        }catch(err){ toast(err.message); }
+        return;
+      }
       selectedTemplateId=row.dataset.id; rememberTemplate(selectedTemplateId); renderTemplates(); toast('Template selected for this lesson.','ok');
     });
     $('tplList').addEventListener('keydown',e=>{ if(e.target.closest('button')) return; const row=e.target.closest('.tpl-row'); if(row&&(e.key==='Enter'||e.key===' ')){ e.preventDefault(); row.click(); } });
@@ -3978,9 +4016,11 @@
         const r=await fetch('/api/templates',{method:'POST',body:fd}); const d=await r.json(); if(!r.ok) throw new Error(d.error);
         $('tplName').value=''; $('tplGrade').value='';
         if(d.weekPlanner){
-          // A week-by-week workbook, not a section template — different thing.
+          // It is a living workbook, but now lives beside every other saved
+          // format instead of replacing the teacher's previous workbook.
+          selectedTemplateId=null; rememberTemplate('planner:'+d.weekPlanner.id,grade||activeTemplateGrade());
           await loadWeekPlanner();
-          toast('Week-by-week lesson plan added — lessons will be filed into it automatically.','ok');
+          toast('Template saved and selected — your other templates are still available.','ok');
         } else {
           selectedTemplateId=d.template.id; rememberTemplate(selectedTemplateId,grade||activeTemplateGrade()); await loadTemplates();
           toast(d.warning || 'Template added.', d.warning ? '' : 'ok');
@@ -4282,6 +4322,10 @@
         ...lessonSequenceFromForm(),
         sourceMaterialText, sourceMaterialImages,
         templateId:selectedTemplateId,
+        // Ordinary document templates and living week workbooks share one
+        // chooser. Only the selected kind should receive this lesson.
+        useWeekPlanner:!selectedTemplateId&&!!(weekPlannerState&&weekPlannerState.present),
+        weekPlannerId:!selectedTemplateId&&weekPlannerState?weekPlannerState.activeId:null,
         successCriteria:(planMode==='import'&&pulledItemData)?pulledItemData.successCriteria:[],
         resources:(planMode==='import'&&pulledItemData)?pulledItemData.resources:[],
         // For a week-by-week workbook: which week this lesson belongs to, taken
@@ -4525,7 +4569,7 @@
     // decided behind the teacher's back; undefined means there's no workbook at
     // all and null means the slot is unusable, which cancels the action.
     function resolveWeekNumber(){
-      if(!(weekPlannerState && weekPlannerState.present)) return undefined;
+      if((ctx&&ctx.useWeekPlanner===false)||!(weekPlannerState && weekPlannerState.present)) return undefined;
       renderSlotPickers();
       const n=parseInt(($('wpWeekNum')||{}).value,10);
       if(!Number.isFinite(n)||n<1){
@@ -4538,7 +4582,7 @@
     }
 
     function resolveLessonNumber(){
-      if(!(weekPlannerState && weekPlannerState.present)) return undefined;
+      if((ctx&&ctx.useWeekPlanner===false)||!(weekPlannerState && weekPlannerState.present)) return undefined;
       if(weekPlannerState.shape!=='weekly-multi') return undefined;  // one lesson a week: no choice to make
       const n=parseInt(($('wpLessonNum')||{}).value,10);
       if(!Number.isFinite(n)||n<1) return undefined;

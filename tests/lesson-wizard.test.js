@@ -38,6 +38,9 @@ test('saved templates can be named, assigned to a grade, selected, and edited', 
   assert.match(html, /data-edit=/);
   assert.match(html, /fd\.append\('grade',grade\)/);
   assert.match(html, /templateId:selectedTemplateId/);
+  assert.match(html, /data-kind="planner"/);
+  assert.match(html, /\/api\/week-planner\/'\+row\.dataset\.id\+'\/select/);
+  assert.match(html, /Template saved and selected — your other templates are still available/);
 });
 
 test('multi-lesson mode exposes staged plan and slide controls without replacing single-lesson controls', () => {

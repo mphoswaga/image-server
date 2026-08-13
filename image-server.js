@@ -1117,10 +1117,16 @@ app.post('/api/templates', requireAuth, upload.single('file'), async (req, res) 
     // lesson plan and the app works out which kind it is.
     if (buffer && /\.xlsx?$/i.test(filename || '')) {
       try {
-        const installed = await weekPlanner.installPlanner(req.userId, buffer, filename);
+        const installed = await weekPlanner.installPlanner(req.userId, buffer, filename, {
+          name: req.body && req.body.name,
+          grade: req.body && req.body.grade,
+        });
         if (installed.ok) {
           return res.json({
             weekPlanner: {
+              id: installed.id,
+              name: installed.name,
+              grade: installed.grade || '',
               filename,
               templateSheet: installed.templateSheet,
               weeks: installed.weeks,
@@ -1168,6 +1174,8 @@ app.delete('/api/templates/:id', requireAuth, (req, res) => {
 // through /api/templates (detected there), appended to as lessons are
 // generated, and downloadable at any point with every week to date.
 app.get('/api/week-planner', requireAuth, async (req, res) => {
+  const planners = weekPlanner.listPlanners(req.userId);
+  const activeId = weekPlanner.activePlannerId(req.userId);
   const present = weekPlanner.hasPlanner(req.userId);
   let meta = weekPlanner.readPlannerMeta(req.userId);
   // Workbooks installed before the app recorded how many lessons a week holds
@@ -1176,13 +1184,33 @@ app.get('/api/week-planner', requireAuth, async (req, res) => {
   if (present && meta && !meta.shape) {
     try { meta = { ...meta, ...(await weekPlanner.refreshMeta(req.userId)) }; } catch {}
   }
-  res.json({ present, ...(meta || {}) });
+  res.json({ present, activeId, planners, ...(meta || {}) });
+});
+
+app.post('/api/week-planner/:id/select', requireAuth, async (req, res) => {
+  const planner = weekPlanner.selectPlanner(req.userId, req.params.id);
+  if (!planner) return res.status(404).json({ error: 'Lesson-plan template not found.' });
+  let meta = weekPlanner.readPlannerMeta(req.userId, planner.id);
+  if (meta && !meta.shape) {
+    try { meta = { ...meta, ...(await weekPlanner.refreshMeta(req.userId, planner.id)) }; } catch {}
+  }
+  res.json({ ok: true, planner: meta });
+});
+
+app.patch('/api/week-planner/:id', requireAuth, (req, res) => {
+  const planner = weekPlanner.updatePlanner(req.userId, req.params.id, {
+    name: req.body && req.body.name,
+    grade: req.body && req.body.grade,
+  });
+  if (!planner) return res.status(404).json({ error: 'Lesson-plan template not found.' });
+  res.json({ planner });
 });
 
 app.get('/api/week-planner/download', requireAuth, async (req, res) => {
-  const buffer = await weekPlanner.plannerBuffer(req.userId);
+  const id = req.query && req.query.id;
+  const buffer = await weekPlanner.plannerBuffer(req.userId, id);
   if (!buffer) return res.status(404).json({ error: 'No week-by-week lesson plan uploaded yet.' });
-  const meta = weekPlanner.readPlannerMeta(req.userId) || {};
+  const meta = weekPlanner.readPlannerMeta(req.userId, id) || {};
   const name = String(meta.filename || 'lesson-plan.xlsx').replace(/[^a-z0-9.\-_ ]/gi, '_');
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
@@ -1193,6 +1221,11 @@ app.delete('/api/week-planner', requireAuth, (req, res) => {
   if (!weekPlanner.hasPlanner(req.userId)) return res.status(404).json({ error: 'Nothing to remove.' });
   weekPlanner.deletePlanner(req.userId);
   res.json({ ok: true });
+});
+
+app.delete('/api/week-planner/:id', requireAuth, (req, res) => {
+  if (!weekPlanner.deletePlanner(req.userId, req.params.id)) return res.status(404).json({ error: 'Lesson-plan template not found.' });
+  res.json({ ok: true, activeId: weekPlanner.activePlannerId(req.userId) });
 });
 
 // Download the lesson plan filled into the ORIGINAL template (exact layout).
@@ -2450,6 +2483,7 @@ function orderSequenceSectionsByOutline(generated, outline, verbatim, sequence) 
 // what they're teaching; without one we don't guess, we just say so.
 async function addLessonToWeekPlanner(req, { subject, topic, objectives, lessonPlan, slides, successCriteria, sequence }) {
   try {
+    if (req.body && req.body.useWeekPlanner === false) return null;
     if (!weekPlanner.hasPlanner(req.userId)) return null;
 
     const body = req.body || {};

@@ -493,35 +493,104 @@ module.exports = {
 // public/).
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { DATA_DIR, writeFileAtomic, writeJsonAtomic } = require('./storage');
 
-const plannerDir = userId => path.join(DATA_DIR, 'users', String(userId), 'week-planner');
-const plannerFile = userId => path.join(plannerDir(userId), 'planner.xlsx');
-const plannerMeta = userId => path.join(plannerDir(userId), 'planner.json');
+const userDir = userId => path.join(DATA_DIR, 'users', String(userId));
+const legacyPlannerDir = userId => path.join(userDir(userId), 'week-planner');
+const legacyPlannerFile = userId => path.join(legacyPlannerDir(userId), 'planner.xlsx');
+const legacyPlannerMeta = userId => path.join(legacyPlannerDir(userId), 'planner.json');
+const plannerLibraryDir = userId => path.join(userDir(userId), 'week-planners');
+const plannerSelection = userId => path.join(plannerLibraryDir(userId), 'selected.json');
+const plannerLibraryMeta = userId => path.join(plannerLibraryDir(userId), 'library.json');
+const plannerDir = (userId, id) => path.join(plannerLibraryDir(userId), String(id));
+const plannerFile = (userId, id) => path.join(plannerDir(userId, id), 'planner.xlsx');
+const plannerMeta = (userId, id) => path.join(plannerDir(userId, id), 'planner.json');
+const nameFromFilename = filename => String(filename || 'lesson-plan.xlsx').replace(/\.[^.]+$/, '').trim() || 'Lesson plan';
 
-function hasPlanner(userId) {
-  try { return fs.existsSync(plannerFile(userId)); } catch { return false; }
+// Before the library existed every teacher had one workbook at week-planner/.
+// Copy it into the new collection on first access and leave the old files in
+// place as a rollback copy. No production workbook is moved or discarded.
+function ensurePlannerMigrated(userId) {
+  const root = plannerLibraryDir(userId);
+  if (fs.existsSync(plannerLibraryMeta(userId))) return;
+  let existing = [];
+  try { existing = fs.readdirSync(root, { withFileTypes: true }).filter(e => e.isDirectory()); } catch {}
+  if (existing.length) {
+    writeJsonAtomic(plannerLibraryMeta(userId), { legacyMigrationComplete: true });
+    return;
+  }
+  if (!fs.existsSync(legacyPlannerFile(userId))) return;
+  let old = {};
+  try { old = JSON.parse(fs.readFileSync(legacyPlannerMeta(userId), 'utf8')); } catch {}
+  const id = crypto.randomUUID();
+  fs.mkdirSync(plannerDir(userId, id), { recursive: true });
+  writeFileAtomic(plannerFile(userId, id), fs.readFileSync(legacyPlannerFile(userId)));
+  writeJsonAtomic(plannerMeta(userId, id), {
+    ...old,
+    id,
+    name: String(old.name || '').trim() || nameFromFilename(old.filename),
+    grade: String(old.grade || '').trim(),
+    migratedAt: new Date().toISOString(),
+  });
+  writeJsonAtomic(plannerSelection(userId), { activeId: id });
+  writeJsonAtomic(plannerLibraryMeta(userId), { legacyMigrationComplete: true, migratedId: id });
 }
 
-function readPlannerMeta(userId) {
-  try { return JSON.parse(fs.readFileSync(plannerMeta(userId), 'utf8')); } catch { return null; }
+function listPlanners(userId) {
+  ensurePlannerMigrated(userId);
+  let entries = [];
+  try { entries = fs.readdirSync(plannerLibraryDir(userId), { withFileTypes: true }); } catch { return []; }
+  return entries.filter(e => e.isDirectory()).map(e => {
+    try { return JSON.parse(fs.readFileSync(plannerMeta(userId, e.name), 'utf8')); } catch { return null; }
+  }).filter(Boolean).sort((a, b) => String(a.uploadedAt || '') < String(b.uploadedAt || '') ? 1 : -1);
 }
 
-async function loadPlanner(userId) {
-  if (!hasPlanner(userId)) return null;
+function activePlannerId(userId) {
+  const planners = listPlanners(userId);
+  if (!planners.length) return null;
+  let selected = null;
+  try { selected = JSON.parse(fs.readFileSync(plannerSelection(userId), 'utf8')).activeId; } catch {}
+  if (selected && planners.some(p => p.id === selected)) return selected;
+  writeJsonAtomic(plannerSelection(userId), { activeId: planners[0].id });
+  return planners[0].id;
+}
+
+function resolvePlannerId(userId, id) {
+  if (id != null && id !== '') return listPlanners(userId).some(p => p.id === id) ? id : null;
+  return activePlannerId(userId);
+}
+
+function hasPlanner(userId, id) {
+  const resolved = resolvePlannerId(userId, id);
+  try { return !!resolved && fs.existsSync(plannerFile(userId, resolved)); } catch { return false; }
+}
+
+function readPlannerMeta(userId, id) {
+  const resolved = resolvePlannerId(userId, id);
+  if (!resolved) return null;
+  try { return JSON.parse(fs.readFileSync(plannerMeta(userId, resolved), 'utf8')); } catch { return null; }
+}
+
+async function loadPlanner(userId, id) {
+  const resolved = resolvePlannerId(userId, id);
+  if (!resolved || !hasPlanner(userId, resolved)) return null;
   const wb = new ExcelJS.Workbook();
-  await wb.xlsx.readFile(plannerFile(userId));
+  await wb.xlsx.readFile(plannerFile(userId, resolved));
   return wb;
 }
 
-async function savePlanner(userId, workbook, meta = {}) {
-  fs.mkdirSync(plannerDir(userId), { recursive: true });
+async function savePlanner(userId, workbook, meta = {}, id) {
+  const resolved = resolvePlannerId(userId, id);
+  if (!resolved) throw new Error('No week-by-week lesson plan is selected.');
+  fs.mkdirSync(plannerDir(userId, resolved), { recursive: true });
   const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
-  writeFileAtomic(plannerFile(userId), buffer);
+  writeFileAtomic(plannerFile(userId, resolved), buffer);
   const info = detect(workbook);
-  writeJsonAtomic(plannerMeta(userId), {
-    ...(readPlannerMeta(userId) || {}),
+  writeJsonAtomic(plannerMeta(userId, resolved), {
+    ...(readPlannerMeta(userId, resolved) || {}),
     ...meta,
+    id: resolved,
     updatedAt: new Date().toISOString(),
     shape: info.shape,
     lessonsPerWeek: info.lessonsPerWeek,
@@ -532,14 +601,19 @@ async function savePlanner(userId, workbook, meta = {}) {
 }
 
 // Store a freshly uploaded workbook as this teacher's planner.
-async function installPlanner(userId, buffer, filename) {
+async function installPlanner(userId, buffer, filename, { name = '', grade = '' } = {}) {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buffer);
   const info = detect(wb);
   if (!info.isWeekPlanner) return { ok: false, reason: 'not_a_week_planner' };
-  fs.mkdirSync(plannerDir(userId), { recursive: true });
-  writeFileAtomic(plannerFile(userId), buffer);
-  writeJsonAtomic(plannerMeta(userId), {
+  ensurePlannerMigrated(userId);
+  const id = crypto.randomUUID();
+  fs.mkdirSync(plannerDir(userId, id), { recursive: true });
+  writeFileAtomic(plannerFile(userId, id), buffer);
+  const rec = {
+    id,
+    name: String(name || '').trim() || nameFromFilename(filename),
+    grade: String(grade || '').trim().slice(0, 80),
     filename: filename || 'lesson-plan.xlsx',
     uploadedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -548,19 +622,39 @@ async function installPlanner(userId, buffer, filename) {
     lessonsPerWeek: info.lessonsPerWeek,
     weeks: info.weeks,
     fieldCount: (info.fields || []).length,
-  });
-  return { ok: true, ...info };
+  };
+  writeJsonAtomic(plannerMeta(userId, id), rec);
+  writeJsonAtomic(plannerSelection(userId), { activeId: id });
+  writeJsonAtomic(plannerLibraryMeta(userId), { legacyMigrationComplete: true });
+  return { ok: true, ...rec, ...info };
+}
+
+function selectPlanner(userId, id) {
+  const rec = listPlanners(userId).find(p => p.id === id);
+  if (!rec) return null;
+  writeJsonAtomic(plannerSelection(userId), { activeId: id });
+  return rec;
+}
+
+function updatePlanner(userId, id, { name, grade } = {}) {
+  const rec = listPlanners(userId).find(p => p.id === id);
+  if (!rec) return null;
+  if (name != null && String(name).trim()) rec.name = String(name).trim().slice(0, 100);
+  if (grade != null) rec.grade = String(grade).trim().slice(0, 80);
+  writeJsonAtomic(plannerMeta(userId, id), rec);
+  return rec;
 }
 
 // Append one generated lesson to the teacher's planner.
 // Re-read the shape off a stored workbook and write it into the meta.
-async function refreshMeta(userId) {
-  const wb = await loadPlanner(userId);
+async function refreshMeta(userId, id) {
+  const resolved = resolvePlannerId(userId, id);
+  const wb = await loadPlanner(userId, resolved);
   if (!wb) return {};
   const info = detect(wb);
   if (!info.isWeekPlanner) return {};
   const patch = { shape: info.shape, lessonsPerWeek: info.lessonsPerWeek, weeks: info.weeks };
-  writeJsonAtomic(plannerMeta(userId), { ...(readPlannerMeta(userId) || {}), ...patch });
+  writeJsonAtomic(plannerMeta(userId, resolved), { ...(readPlannerMeta(userId, resolved) || {}), ...patch });
   return patch;
 }
 
@@ -603,20 +697,31 @@ async function recordLesson(userId, weekNumber, values, lessonNumber, options) {
   return result;
 }
 
-async function plannerBuffer(userId) {
-  if (!hasPlanner(userId)) return null;
-  return fs.readFileSync(plannerFile(userId));
+async function plannerBuffer(userId, id) {
+  const resolved = resolvePlannerId(userId, id);
+  if (!resolved || !hasPlanner(userId, resolved)) return null;
+  return fs.readFileSync(plannerFile(userId, resolved));
 }
 
-function deletePlanner(userId) {
-  try { fs.rmSync(plannerDir(userId), { recursive: true, force: true }); return true; } catch { return false; }
+function deletePlanner(userId, id) {
+  const resolved = resolvePlannerId(userId, id);
+  if (!resolved) return false;
+  try { fs.rmSync(plannerDir(userId, resolved), { recursive: true, force: true }); } catch { return false; }
+  const remaining = listPlanners(userId);
+  if (remaining.length) writeJsonAtomic(plannerSelection(userId), { activeId: remaining[0].id });
+  else { try { fs.unlinkSync(plannerSelection(userId)); } catch {} }
+  return true;
 }
 
 module.exports.hasPlanner = hasPlanner;
+module.exports.listPlanners = listPlanners;
+module.exports.activePlannerId = activePlannerId;
 module.exports.readPlannerMeta = readPlannerMeta;
 module.exports.loadPlanner = loadPlanner;
 module.exports.savePlanner = savePlanner;
 module.exports.installPlanner = installPlanner;
+module.exports.selectPlanner = selectPlanner;
+module.exports.updatePlanner = updatePlanner;
 module.exports.recordSequence = recordSequence;
 module.exports.refreshMeta = refreshMeta;
 module.exports.recordLesson = recordLesson;
