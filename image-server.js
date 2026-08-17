@@ -55,6 +55,7 @@ const wallet = require('./wallet');
 const educscope = require('./educscope');
 const prices = require('./credit-prices');
 const lessonAssistant = require('./lesson-assistant');
+const releaseManager = require('./release-manager');
 const { runWithUser, usageSnapshot, usageSince, declareAction } = require('./ai-client');
 const usage = require('./usage');
 const jwt = require('jsonwebtoken');
@@ -1070,6 +1071,45 @@ app.get('/api/admin/usage', requireAdmin, (req, res) => {
     return { userId: uid, email: who.email || uid, name: who.name || '', ...b };
   }).sort((a, b) => b.costUSD - a.costUSD);
   res.json({ totals: u.totals, byUser, byModel: u.byModel || {}, pricing: usage.PRICING, updatedAt: u.updatedAt });
+});
+
+// Application release history and protected code rollback. This restores only
+// repository code; persistent teacher data and the Railway volume are never
+// modified by these endpoints.
+app.get('/api/admin/releases', requireAdmin, async (req, res) => {
+  try { res.json({ releaseManager: await releaseManager.status() }); }
+  catch (err) {
+    console.error('Release history failed:', err.message);
+    res.status(500).json({ error: 'Could not load release history.' });
+  }
+});
+
+const rollbackAttempts = new Map();
+app.post('/api/admin/rollback', requireAdmin, async (req, res) => {
+  const now = Date.now();
+  const attempts = (rollbackAttempts.get(req.userId) || []).filter(at => now - at < 15 * 60 * 1000);
+  if (attempts.length >= 5) return res.status(429).json({ error: 'Too many rollback attempts. Try again in 15 minutes.' });
+  try {
+    const result = await releaseManager.rollback({
+      targetSha: req.body && req.body.targetSha,
+      verificationCode: req.body && req.body.verificationCode,
+      requestedBy: req.user && req.user.email,
+    });
+    rollbackAttempts.delete(req.userId);
+    audit.log('admin.code_rollback', {
+      userId: req.userId,
+      targetSha: result.target && result.target.sha,
+      rollbackCommitSha: result.rollbackCommitSha || null,
+      skipped: !!result.skipped,
+      ip: req.ip,
+    });
+    res.json(result);
+  } catch (err) {
+    attempts.push(now);
+    rollbackAttempts.set(req.userId, attempts);
+    audit.log('admin.code_rollback_failed', { userId: req.userId, error: err.message, ip: req.ip });
+    res.status(400).json({ error: err.message });
+  }
 });
 
 app.post('/api/admin/add-images', requireAdmin, async (req, res) => {

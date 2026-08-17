@@ -378,6 +378,27 @@
     .usage-models summary { cursor:pointer; font-size:13px; color:var(--primary); font-weight:600; }
     .usage-mrow { display:flex; justify-content:space-between; font-size:13px; padding:7px 2px; border-top:1px solid var(--border); }
     .usage-note { font-size:11.5px; color:var(--muted); margin-top:10px; }
+    .release-panel { margin:14px 0 24px; padding:18px 0; border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
+    .release-summary { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; margin-bottom:14px; }
+    .release-summary strong { display:block; color:var(--ink); font-size:14px; margin-bottom:3px; }
+    .release-summary p { margin:0; color:var(--muted); font-size:12.5px; line-height:1.5; }
+    .release-badge { flex:none; border-radius:999px; padding:6px 10px; background:var(--primary-soft); color:var(--primary); font-size:11px; font-weight:800; }
+    .release-badge.ready { background:#eaf8ef; color:#167647; }
+    .release-history { border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-bottom:14px; }
+    .release-row { display:grid; grid-template-columns:90px minmax(0,1fr) 110px; gap:12px; align-items:center; padding:9px 12px; border-top:1px solid var(--border); background:#fff; font-size:12.5px; }
+    .release-row:first-child { border-top:0; }
+    .release-row.current { background:#f1faf5; }
+    .release-row code { color:var(--primary); font-weight:800; }
+    .release-row span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .release-row time { color:var(--muted); text-align:right; }
+    .rollback-form { display:grid; grid-template-columns:minmax(220px,1fr) minmax(180px,.7fr) auto; gap:10px; align-items:end; }
+    .rollback-form label { display:grid; gap:5px; color:var(--ink); font-size:12px; font-weight:750; }
+    .rollback-form select,.rollback-form input { width:100%; min-width:0; }
+    .rollback-warning { margin:12px 0 0; padding:10px 12px; border-left:3px solid #d97706; background:#fff8eb; color:#7c4a03; font-size:12px; line-height:1.5; }
+    .rollback-status { min-height:18px; margin-top:9px; color:var(--muted); font-size:12px; }
+    .rollback-status.ok { color:var(--ok); font-weight:700; }
+    .rollback-status.err { color:var(--err); font-weight:700; }
+    @media(max-width:720px){ .release-summary { flex-direction:column; } .release-row { grid-template-columns:72px minmax(0,1fr); } .release-row time { display:none; } .rollback-form { grid-template-columns:1fr; } }
 
     /* Student game (teacher side) */
     .game-link { display:flex; gap:8px; align-items:center; flex-wrap:wrap; background:var(--primary-soft); border-radius:12px; padding:10px 12px; }
@@ -2946,6 +2967,23 @@
       <div id="usageByUser" class="usage-table"></div>
       <details class="usage-models"><summary>Cost by model</summary><div id="usageByModel"></div></details>
       <p class="usage-note">Prices are estimates from an editable table (usage.js, or <code>PRICE_*</code> env vars). Tune them to match your OpenAI bill.</p>
+
+      <div class="section-divider"><h3><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg> Updates and rollback</h3></div>
+      <p class="hint">Review the application version currently running and restore a recent known version if an update causes a problem.</p>
+      <div class="release-panel" id="releasePanel">
+        <div class="release-summary">
+          <div><strong id="releaseCurrent">Loading the running version…</strong><p id="releaseConfig">Checking protected rollback configuration.</p></div>
+          <span class="release-badge" id="releaseBadge">Checking</span>
+        </div>
+        <div class="release-history" id="releaseHistory"><div class="release-row"><span>Loading recent updates…</span></div></div>
+        <form class="rollback-form" id="rollbackForm">
+          <label>Version to restore<select id="rollbackTarget" aria-label="Version to restore"></select></label>
+          <label>Private rollback code<input id="rollbackCode" type="password" autocomplete="off" minlength="8" placeholder="Stored in Railway" /></label>
+          <button class="btn" id="rollbackBtn" type="submit" disabled><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg> Roll back code</button>
+        </form>
+        <div class="rollback-warning"><b>Code only:</b> rollback creates a new GitHub commit and Railway redeploys it. Teacher accounts, templates, lessons, submissions, and files on the persistent volume are not deleted or rewound.</div>
+        <div class="rollback-status" id="rollbackStatus">Choose a previous version only when a release has caused a verified problem.</div>
+      </div>
 
       <div class="section-divider"><h3><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg> Image library</h3></div>
       <p class="hint">Add more images to any subject &amp; topic. Each new image is fetched and <b>auto-captioned</b> for context, then indexed instantly.</p>
@@ -5932,7 +5970,7 @@
     const adminPanel=$('adminPanel'), hero=document.querySelector('.hero'), stepsEl=document.querySelector('.steps');
     function openAdmin(){
       hideAllPanels(); adminPanel.style.display='block';
-      loadUsage(); loadStats(); loadRecentImages(); loadAPIKeys(); setActiveNav('adminBtn'); window.scrollTo({top:0,behavior:'smooth'});
+      loadUsage(); loadReleases(); loadStats(); loadRecentImages(); loadAPIKeys(); setActiveNav('adminBtn'); window.scrollTo({top:0,behavior:'smooth'});
     }
     function closeAdmin(){ adminPanel.style.display='none'; stepsEl.style.display='flex'; show('composer'); setStep(1); setActiveNav('homeBtn'); }
 
@@ -5958,6 +5996,71 @@
         $('usageByModel').innerHTML=Object.entries(u.byModel||{}).map(([m,b])=>`<div class="usage-mrow"><span>${esc(m)}</span><span>${fmtN(b.calls)} calls${b.images?` · ${fmtN(b.images)} imgs`:''} · <b style="color:var(--accent)">${fmtUSD(b.costUSD)}</b></span></div>`).join('')||'<div class="usage-mrow"><span style="color:var(--muted)">No calls yet.</span></div>';
       }catch{ $('usageCards').innerHTML='<span class="status err">Could not load usage.</span>'; }
     }
+
+    let releaseManagerState=null;
+    function setRollbackStatus(message,tone=''){
+      const el=$('rollbackStatus');
+      el.className='rollback-status'+(tone?' '+tone:'');
+      el.textContent=message;
+    }
+    async function loadReleases(){
+      const button=$('rollbackBtn'), target=$('rollbackTarget');
+      button.disabled=true; target.replaceChildren();
+      try{
+        const r=await fetch('/api/admin/releases'), d=await r.json();
+        if(!r.ok) throw new Error(d.error||'Could not load release history.');
+        const manager=d.releaseManager||{}, commits=manager.recentCommits||[];
+        releaseManagerState=manager;
+        $('releaseCurrent').textContent=manager.currentShortSha?`Running LessonScope ${manager.currentShortSha}`:'Running version unavailable';
+        $('releaseBadge').textContent=manager.configured?'Rollback ready':'Setup required';
+        $('releaseBadge').className='release-badge'+(manager.configured?' ready':'');
+        const diag=manager.diagnostics||{}, missing=[];
+        if(!diag.tokenPresent) missing.push('GitHub token');
+        if(!diag.repositoryPresent) missing.push('repository');
+        if(!diag.verificationCodePresent) missing.push('private verification code');
+        else if(!diag.verificationCodeStrong) missing.push('verification code of at least 8 characters');
+        $('releaseConfig').textContent=manager.configured
+          ? `Protected rollback is configured for ${manager.branch||'main'}. History is read from ${manager.historySource||'GitHub'}.`
+          : `Viewing is available. Live rollback still needs ${missing.join(', ')||'its Railway secrets'}.`;
+        $('releaseHistory').innerHTML=commits.length?commits.map(item=>{
+          const current=item.sha===manager.currentSha;
+          return `<div class="release-row${current?' current':''}"><code>${esc(item.shortSha||String(item.sha||'').slice(0,7))}</code><span title="${esc(item.subject||'')}">${esc(item.subject||'Untitled update')}${current?' · running':''}</span><time>${item.createdAt?new Date(item.createdAt).toLocaleDateString():''}</time></div>`;
+        }).join(''):'<div class="release-row"><span>No recent versions are available.</span></div>';
+        commits.filter(item=>item.sha&&item.sha!==manager.currentSha).forEach(item=>{
+          const option=document.createElement('option'); option.value=item.sha;
+          option.textContent=`${item.shortSha||item.sha.slice(0,7)} — ${item.subject||'Untitled update'}`;
+          target.appendChild(option);
+        });
+        button.disabled=!manager.configured||!target.options.length;
+        setRollbackStatus(manager.configured
+          ? 'Choose a previous version and enter the private Railway rollback code.'
+          : 'Rollback is safely disabled until all required Railway variables are configured.');
+      }catch(err){
+        releaseManagerState=null; $('releaseCurrent').textContent='Release history unavailable';
+        $('releaseConfig').textContent=err.message; $('releaseBadge').textContent='Unavailable';
+        $('releaseHistory').innerHTML='<div class="release-row"><span>Could not load recent updates.</span></div>';
+        setRollbackStatus(err.message,'err');
+      }
+    }
+    $('rollbackForm')?.addEventListener('submit',async e=>{
+      e.preventDefault();
+      const target=$('rollbackTarget'), code=$('rollbackCode'), button=$('rollbackBtn');
+      const option=target.options[target.selectedIndex];
+      if(!target.value){ setRollbackStatus('Choose a previous version first.','err'); return; }
+      if(code.value.trim().length<8){ setRollbackStatus('Enter the private rollback code from Railway.','err'); code.focus(); return; }
+      const label=option?option.textContent:'the selected version';
+      if(!confirm(`Restore LessonScope code to ${label}?\n\nThis creates a new rollback commit and triggers a Railway deployment. Teacher data is not changed.`)) return;
+      const original=button.innerHTML; button.disabled=true; button.innerHTML='<span class="spinner"></span>Creating rollback…';
+      setRollbackStatus('Validating the version and creating a protected GitHub rollback commit…');
+      try{
+        const r=await fetch('/api/admin/rollback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({targetSha:target.value,verificationCode:code.value.trim()})});
+        const d=await r.json(); if(!r.ok) throw new Error(d.error||'Rollback failed.');
+        code.value='';
+        setRollbackStatus(d.skipped?'That version is already current.':`Rollback commit ${String(d.rollbackCommitSha||'').slice(0,7)} created. Railway is deploying it now.`,'ok');
+        toast(d.skipped?'The selected version is already live.':'Rollback commit created — Railway deployment has started.','ok');
+      }catch(err){ setRollbackStatus(`Rollback failed: ${err.message}`,'err'); }
+      finally{ button.innerHTML=original; button.disabled=!(releaseManagerState&&releaseManagerState.configured&&target.options.length); }
+    });
     function setActiveNav(id){ document.querySelectorAll('.nav-link').forEach(el=>el.classList.toggle('nav-active',el.id===id)); }
     function goHome(){ hideAllPanels(); stepsEl.style.display='flex'; setStartMode('plan'); setActiveNav('homeBtn'); window.scrollTo({top:0,behavior:'smooth'}); }
     function closeMainNavMenu(){ $('nav')?.classList.remove('menu-open'); $('navMenuBtn')?.setAttribute('aria-expanded','false'); }

@@ -86,3 +86,12 @@ test('the complete guide covers the full teacher workflow and can resume', () =>
   assert.match(html, /sessionStorage\.setItem\('lc_wizard_step'/);
   assert.match(html, /wz-progress-label/);
 });
+
+test('the admin panel exposes protected code rollback without implying data rollback', () => {
+  for (const id of ['releasePanel', 'releaseHistory', 'rollbackForm', 'rollbackTarget', 'rollbackCode', 'rollbackBtn', 'rollbackStatus']) {
+    assert.equal([...markup.matchAll(new RegExp(`id="${id}"`, 'g'))].length, 1, `${id} should exist exactly once`);
+  }
+  assert.match(html, /fetch\('\/api\/admin\/releases'/);
+  assert.match(html, /fetch\('\/api\/admin\/rollback'/);
+  assert.match(markup, /Teacher accounts, templates, lessons, submissions, and files[^<]+not deleted or rewound/);
+});
