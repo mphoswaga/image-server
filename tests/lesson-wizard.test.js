@@ -43,6 +43,19 @@ test('saved templates can be named, assigned to a grade, selected, and edited', 
   assert.match(html, /Template saved and selected — your other templates are still available/);
 });
 
+test('personal planning frameworks are reviewed before they can guide a lesson', () => {
+  for (const id of [
+    'planningFramework', 'frameworkManageBtn', 'frameworkModal', 'frameworkUploadBtn',
+    'frameworkFile', 'frameworkList', 'frameworkEditor',
+  ]) {
+    assert.equal([...markup.matchAll(new RegExp(`id="${id}"`, 'g'))].length, 1, `${id} should exist exactly once`);
+  }
+  assert.match(html, /fetch\('\/api\/planning-frameworks'/);
+  assert.match(html, /planningFrameworkId:selectedPlanningFrameworkId/);
+  assert.match(markup, /Lesson generation works exactly as before/);
+  assert.match(html, /Approve and activate/);
+});
+
 test('multi-lesson mode exposes staged plan and slide controls without replacing single-lesson controls', () => {
   for (const id of [
     'sequencePlanFlow', 'sequencePlanTabs', 'nextSequencePlanBtn',

@@ -56,6 +56,7 @@ const educscope = require('./educscope');
 const prices = require('./credit-prices');
 const lessonAssistant = require('./lesson-assistant');
 const releaseManager = require('./release-manager');
+const planningFramework = require('./planning-framework');
 const { runWithUser, usageSnapshot, usageSince, declareAction } = require('./ai-client');
 const usage = require('./usage');
 const jwt = require('jsonwebtoken');
@@ -1209,6 +1210,68 @@ app.delete('/api/templates/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Personal planning frameworks ──────────────────────────────────────────
+// Frameworks shape pedagogy; templates shape the exported document and source
+// materials provide lesson facts. Keeping these separate prevents a school
+// rubric from being mistaken for either a blank form or textbook content.
+const publicFramework = f => ({
+  id: f.id, ownerType: 'personal', name: f.name, type: f.type,
+  appliesTo: f.appliesTo, filename: f.filename, status: f.status,
+  active: !!f.active, summary: f.summary || '', requirements: f.requirements || [],
+  avoidances: f.avoidances || [], version: f.version || 1,
+  versionCount: 1 + ((f.versions || []).length), createdAt: f.createdAt, updatedAt: f.updatedAt,
+});
+
+app.get('/api/planning-frameworks', requireAuth, (req, res) => {
+  res.json({
+    frameworks: planningFramework.list(req.userId).map(publicFramework),
+    types: planningFramework.TYPES,
+    appliesTo: planningFramework.APPLIES_TO,
+    scope: 'personal',
+  });
+});
+
+app.post('/api/planning-frameworks', requireAuth, upload.single('file'), async (req, res) => {
+  if (req.user.role === 'student') return res.status(403).json({ error: 'Teacher account required.' });
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Choose a framework file.' });
+    declareFree('lessonscope.parse_planning_framework');
+    const filename = req.file.originalname || 'planning-framework';
+    const text = String(await extractText(req.file.buffer, filename) || '').trim();
+    if (!text) return res.status(400).json({ error: 'Could not read any text from that file.' });
+    const draft = await planningFramework.analyze(text);
+    const rec = planningFramework.create(req.userId, {
+      name: req.body && req.body.name,
+      type: req.body && req.body.type,
+      appliesTo: req.body && req.body.appliesTo,
+      filename, sourceText: text, buffer: req.file.buffer, draft,
+    });
+    audit.log('planning_framework.created', { userId: req.userId, frameworkId: rec.id, type: rec.type });
+    res.json({ framework: publicFramework(rec), needsReview: true });
+  } catch (err) {
+    console.error('Planning framework upload failed:', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.patch('/api/planning-frameworks/:id', requireAuth, (req, res) => {
+  try {
+    const rec = planningFramework.update(req.userId, req.params.id, req.body || {});
+    if (!rec) return res.status(404).json({ error: 'Planning framework not found.' });
+    audit.log('planning_framework.updated', { userId: req.userId, frameworkId: rec.id, active: rec.active, version: rec.version });
+    res.json({ framework: publicFramework(rec) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/planning-frameworks/:id', requireAuth, (req, res) => {
+  const ok = planningFramework.remove(req.userId, req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Planning framework not found.' });
+  audit.log('planning_framework.deleted', { userId: req.userId, frameworkId: req.params.id });
+  res.json({ ok: true });
+});
+
 // ── Week-tracker lesson plan ───────────────────────────────────────────────
 // The teacher's living workbook: a tab per week, a column per lesson. Uploaded
 // through /api/templates (detected there), appended to as lessons are
@@ -1631,6 +1694,9 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
   if (block) return res.status(402).json(block);
   try {
     const tpl = (templateId && getTemplate(req.userId, templateId)) || loadTemplate(req.userId);
+    const framework = req.body.planningFrameworkId
+      ? planningFramework.get(req.userId, req.body.planningFrameworkId)
+      : null;
     const u = unitId ? unit.getUnit(req.userId, unitId) : null;
     const unitBlock = u ? unit.buildUnitBlock(u, lessonIndex) : '';
 
@@ -1654,7 +1720,10 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
       subject: subject.toLowerCase(), topic: topic.toLowerCase(),
       grade, tone, objectives,
       successCriteria: Array.isArray(req.body.successCriteria) ? req.body.successCriteria : [],
-      templateText: tpl ? templatePromptText(req.userId, tpl) : plannerTemplateText, unitBlock, sourceMaterialText: sourceMaterialText(req.body), teachingModel: teachingModelId, sequence: lessonSequence, structuredSequence: false, sequenceLessonNumber, previousLessonPlanText: clip(req.body.previousLessonPlanText, 8000), regenerate: !!regenerate,
+      templateText: tpl ? templatePromptText(req.userId, tpl) : plannerTemplateText, unitBlock,
+      sourceMaterialText: sourceMaterialText(req.body), planningFrameworkText: planningFramework.promptText(framework),
+      teachingModel: teachingModelId, sequence: lessonSequence, structuredSequence: false,
+      sequenceLessonNumber, previousLessonPlanText: clip(req.body.previousLessonPlanText, 8000), regenerate: !!regenerate,
     });
 
     // Show the workbook's fields in their own order, with the objectives and
@@ -1678,6 +1747,7 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
       sequence: lessonSequence, sequenceLessonNumber,
       weekPlannerFields: plannerOutline ? plannerOutline.map(f => f.label) : null,
       usedTemplate: !!tpl, templateName: tpl ? tpl.name : null, templateId: tpl ? tpl.id : null,
+      planningFramework: framework && framework.active ? { id: framework.id, name: framework.name, version: framework.version } : null,
       rewritesUsed: isRewrite ? used + 1 : 0, freeRewrites: prices.FREE_REGENS,
     });
   } catch (err) {

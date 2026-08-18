@@ -70,6 +70,7 @@ const FREE = {
   // getting started, and every lesson it then feeds is charged normally.
   'lessonscope.parse_pacing_guide': 'Free — a one-off upload that later generations pay for',
   'lessonscope.parse_unit': 'Free — a one-off upload that later generations pay for',
+  'lessonscope.parse_planning_framework': 'Free — reviewed once and reused across paid lesson generations',
   // Bundled: runs inside a paid generation, never on its own.
   'lessonscope.rewrite_image_query': 'Free — part of a generation you already paid for',
   // Swapping a picture on a deck the teacher already paid to generate. Note this

@@ -86,7 +86,7 @@ Include teacher actions, student practice, a check for understanding, and useful
 Do not put "Lesson ${step}" into school template headings; the app labels the step outside the plan.\n`;
 }
 
-function buildPrompt({ subject, topic, grade, tone, objectives, successCriteria = [], templateText, unitBlock, sourceMaterialText, teachingModel, sequence, structuredSequence = false, sequenceLessonNumber = null, previousLessonPlanText = '' }) {
+function buildPrompt({ subject, topic, grade, tone, objectives, successCriteria = [], templateText, unitBlock, sourceMaterialText, planningFrameworkText = '', teachingModel, sequence, structuredSequence = false, sequenceLessonNumber = null, previousLessonPlanText = '' }) {
   const pretty = topic.replace(/-/g, ' ');
   const depth = gradeProfile(grade).content.depth;
   const model = getTeachingModel(teachingModel);
@@ -102,6 +102,9 @@ ${templateText.slice(0, TEMPLATE_PROMPT_LIMIT)}
       : `No template was provided. Use one section for each important stage of the selected teaching model, in this order: ${model.stages.map(stage => stage.label).join(', ')}. Include a short lesson overview and learning objectives where they fit naturally.`;
   const sourceBlock = sourceMaterialText
     ? `\nThe teacher uploaded OPTIONAL SOURCE MATERIALS below (textbook extract, notes, PDF text, spreadsheet data, or similar). Use these to make the lesson accurate to what students are supposed to learn. Prefer this material over generic examples when it is relevant, but do not copy long passages verbatim and do not mention uploaded files to students.\n\n--- SOURCE MATERIALS START ---\n${String(sourceMaterialText).slice(0, 5000)}\n--- SOURCE MATERIALS END ---\n`
+    : '';
+  const frameworkBlock = planningFrameworkText
+    ? `\nThe teacher approved the PLANNING FRAMEWORK below. It guides the quality of teaching, student thinking, assessment and reflection. Apply requirements where they are relevant to this lesson without changing supplied curriculum objectives, inventing school rules, adding new template headings, or mechanically forcing every strategy into every lesson.\n\n--- PLANNING FRAMEWORK START ---\n${String(planningFrameworkText).slice(0, 7000)}\n--- PLANNING FRAMEWORK END ---\n`
     : '';
   const sequenceBlock = sequenceLessonNumber
     ? sequenceStepPromptBlock(sequence, sequenceLessonNumber, previousLessonPlanText)
@@ -132,7 +135,7 @@ Grade level: ${grade}
 Tone: ${tone}
 ${modelPromptBlock(model, { structureFromTemplate: !!templateText })}
 ${unitSection}
-${sourceBlock}
+${sourceBlock}${frameworkBlock}
 ${sequenceBlock}
 Learning objectives provided by the teacher (the plan MUST address these):
 ${objectives}
@@ -253,7 +256,7 @@ function placeholderPlan(objectives, teachingModel) {
   };
 }
 
-async function generateLessonPlan({ subject, topic, grade = 'middle school', tone = 'clear and engaging', objectives, successCriteria = [], templateText, unitBlock = '', sourceMaterialText = '', teachingModel = 'standard', sequence = null, structuredSequence = false, sequenceLessonNumber = null, previousLessonPlanText = '', regenerate = false }) {
+async function generateLessonPlan({ subject, topic, grade = 'middle school', tone = 'clear and engaging', objectives, successCriteria = [], templateText, unitBlock = '', sourceMaterialText = '', planningFrameworkText = '', teachingModel = 'standard', sequence = null, structuredSequence = false, sequenceLessonNumber = null, previousLessonPlanText = '', regenerate = false }) {
   const teachingModelId = normalizeTeachingModelId(teachingModel);
   const model = getTeachingModel(teachingModelId);
   const cleanSequence = sequence && sequence.enabled ? {
@@ -285,6 +288,7 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     templateText: String(templateText || '').slice(0, TEMPLATE_PROMPT_LIMIT).trim(),
     unitBlock: String(unitBlock || '').slice(0, 2000).trim(),
     sourceMaterialText: String(sourceMaterialText || '').slice(0, 5000).trim(),
+    planningFrameworkText: String(planningFrameworkText || '').slice(0, 7000).trim(),
     teachingModelId,
     sequence: cleanSequence,
     structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber),
@@ -296,7 +300,7 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     const response = await client.chat.completions.create({
       model: MODEL,
       max_tokens: cleanSequence && structuredSequence && !cleanLessonNumber ? 12000 : 6000,
-      messages: [{ role: 'user', content: buildPrompt({ subject, topic, grade, tone, objectives, successCriteria, templateText, unitBlock, sourceMaterialText, teachingModel: teachingModelId, sequence: cleanSequence, structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber), sequenceLessonNumber: cleanLessonNumber, previousLessonPlanText }) }],
+      messages: [{ role: 'user', content: buildPrompt({ subject, topic, grade, tone, objectives, successCriteria, templateText, unitBlock, sourceMaterialText, planningFrameworkText, teachingModel: teachingModelId, sequence: cleanSequence, structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber), sequenceLessonNumber: cleanLessonNumber, previousLessonPlanText }) }],
       response_format: { type: 'json_schema', json_schema: { name: 'lesson_plan', strict: true, schema: planSchema(model, cleanSequence, !!(cleanSequence && structuredSequence && !cleanLessonNumber)) } },
     });
     const text = response.choices[0]?.message?.content;

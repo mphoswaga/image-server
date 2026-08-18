@@ -269,6 +269,43 @@
     .materials-chip strong { color:var(--ink); }
     .materials-chip.warn { border-color:#fed7aa; background:#fff7ed; color:#9a3412; }
     .materials-preview { margin-top:10px; padding:10px 12px; border-radius:10px; background:#f7fafc; color:var(--muted); font-size:12.5px; line-height:1.45; max-height:110px; overflow:auto; white-space:pre-wrap; }
+    .framework-picker { margin:16px 0 4px; padding:14px; border:1px solid #b9dfd0; border-radius:10px; background:#f2fbf7; }
+    .framework-picker-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+    .framework-picker-head strong { display:flex; align-items:center; gap:7px; font-size:13.5px; color:var(--ink); }
+    .framework-picker-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; }
+    .framework-picker select { margin:0; background:#fff; }
+    .framework-picker .hint { margin:8px 0 0; font-size:12px; }
+    .framework-modal { position:fixed; inset:0; z-index:2400; display:none; align-items:center; justify-content:center; padding:24px; background:rgba(10,26,45,.58); }
+    .framework-modal.open { display:flex; }
+    .framework-dialog { width:min(980px,100%); max-width:100%; min-width:0; max-height:min(820px,92vh); overflow:auto; border-radius:12px; background:#fff; box-shadow:0 28px 80px rgba(5,23,42,.3); }
+    .framework-dialog-head { position:sticky; top:0; z-index:2; display:flex; justify-content:space-between; gap:16px; align-items:flex-start; padding:20px 22px; border-bottom:1px solid var(--border); background:#fff; }
+    .framework-dialog-head h2 { margin:0; font-size:21px; color:var(--ink); }
+    .framework-dialog-head p { margin:4px 0 0; font-size:13px; color:var(--muted); }
+    .framework-close { width:36px; height:36px; border:1px solid var(--border); border-radius:8px; background:#fff; cursor:pointer; font-size:21px; color:var(--muted); }
+    .framework-layout { display:grid; grid-template-columns:330px minmax(0,1fr); min-height:500px; }
+    .framework-sidebar { min-width:0; padding:18px; border-right:1px solid var(--border); background:#f8fafc; }
+    .framework-upload { padding:14px; border:1px dashed #9bcdb9; border-radius:10px; background:#fff; }
+    .framework-upload input, .framework-upload select { margin-top:8px; }
+    .framework-list { display:grid; gap:8px; margin-top:14px; }
+    .framework-list-item { width:100%; padding:11px 12px; border:1px solid var(--border); border-radius:8px; background:#fff; text-align:left; cursor:pointer; }
+    .framework-list-item.selected { border-color:var(--accent); box-shadow:0 0 0 2px rgba(29,164,102,.12); }
+    .framework-list-item strong, .framework-list-item span { display:block; }
+    .framework-list-item span { margin-top:3px; font-size:11.5px; color:var(--muted); }
+    .framework-editor { min-width:0; padding:22px; }
+    .framework-editor .hint, .framework-list-item strong, .framework-list-item span { overflow-wrap:anywhere; }
+    .framework-editor-empty { display:grid; min-height:420px; place-items:center; color:var(--muted); text-align:center; }
+    .framework-editor-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .framework-status { display:inline-flex; align-items:center; padding:4px 8px; border-radius:999px; background:#fff3cd; color:#7c5700; font-size:11px; font-weight:800; }
+    .framework-status.active { background:#dcfce7; color:#166534; }
+    .framework-editor textarea { min-height:90px; resize:vertical; }
+    .framework-editor-actions { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-top:16px; padding-top:16px; border-top:1px solid var(--border); }
+    @media(max-width:760px){
+      .framework-picker-row,.framework-editor-grid { grid-template-columns:minmax(0,1fr); }
+      .framework-layout { grid-template-columns:minmax(0,1fr); width:100%; min-width:0; }
+      .framework-modal { padding:0; align-items:stretch; }
+      .framework-dialog { max-height:none; height:100%; border-radius:0; }
+      .framework-sidebar { border-right:0; border-bottom:1px solid var(--border); }
+    }
     .sequence-grid { display:grid; grid-template-columns:minmax(0,1fr) 118px 142px; gap:10px; align-items:end; margin-top:10px; }
     .sequence-toggle { display:flex; align-items:flex-start; gap:10px; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:#fff; min-height:58px; }
     .sequence-toggle input { width:auto; margin-top:3px; }
@@ -2497,6 +2534,34 @@
     </div>
   </div>
 
+  <div id="frameworkModal" class="framework-modal" role="dialog" aria-modal="true" aria-labelledby="frameworkModalTitle">
+    <div class="framework-dialog">
+      <div class="framework-dialog-head">
+        <div><h2 id="frameworkModalTitle">Personal planning frameworks</h2><p>Upload guidance once, review LessonScope's interpretation, then choose it when planning.</p></div>
+        <button id="frameworkCloseBtn" class="framework-close" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="framework-layout">
+        <aside class="framework-sidebar">
+          <div class="framework-upload">
+            <strong>Add a framework</strong>
+            <p class="hint" style="margin:4px 0 8px">Observation rubrics, teaching policies, assessment guidance, or your own planning principles.</p>
+            <input id="frameworkUploadName" type="text" maxlength="100" placeholder="Name, e.g. Observation rubric" aria-label="Framework name" />
+            <select id="frameworkUploadType" aria-label="Framework type">
+              <option value="observation">Observation rubric</option><option value="teaching">Teaching guidance</option><option value="assessment">Assessment framework</option><option value="inclusion">Inclusion guidance</option><option value="homework">Homework policy</option><option value="custom">Other</option>
+            </select>
+            <select id="frameworkUploadApplies" aria-label="When framework applies">
+              <option value="observation">Suggest for observation lessons</option><option value="all">Use for all lessons</option><option value="optional">Choose manually</option>
+            </select>
+            <input id="frameworkFile" type="file" accept=".docx,.pdf,.xlsx,.xls,.csv,.txt,.md,.pptx,.ppt" style="display:none" />
+            <button id="frameworkUploadBtn" class="btn primary full" type="button" style="margin-top:10px"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg> Upload and review</button>
+          </div>
+          <div id="frameworkList" class="framework-list"><span class="hint">Loading frameworks...</span></div>
+        </aside>
+        <div id="frameworkEditor" class="framework-editor"><div class="framework-editor-empty">Select a framework to review it, or upload the first one.</div></div>
+      </div>
+    </div>
+  </div>
+
   <div class="wrap" id="app" style="display:none">
     <div class="hero">
       <div class="suite-kicker">EducScope suite</div>
@@ -2817,6 +2882,14 @@
           </select>
           <p id="teachingModelHint" class="hint" style="margin:7px 0 12px;font-size:12.5px">A flexible lesson flow that works well for most topics and school templates.</p>
           <div id="teachingModelFlow" class="model-flow" aria-live="polite"></div>
+          <div class="framework-picker">
+            <div class="framework-picker-head"><strong><svg class="ic" aria-hidden="true"><use href="#i-compass"/></svg> Planning framework <span class="opt-tag">optional</span></strong><button id="frameworkManageBtn" type="button" class="btn ghost" style="font-size:12px;padding:6px 10px">Manage</button></div>
+            <div class="framework-picker-row">
+              <select id="planningFramework" aria-label="Planning framework"><option value="">LessonScope best practice</option></select>
+              <span id="frameworkSelectionStatus" class="framework-status active">Built-in</span>
+            </div>
+            <p id="frameworkSelectionHint" class="hint">No personal framework selected. Lesson generation works exactly as before.</p>
+          </div>
           <details class="materials-box" id="sequenceDetails">
             <summary><svg class="ic" aria-hidden="true"><use href="#i-calendar"/></svg> Weekly lesson sequence <span class="opt-tag">optional</span></summary>
             <div class="materials-body">
@@ -3643,6 +3716,92 @@
       updateTeachingModelHint();
     }
 
+    // Personal planning frameworks are reusable pedagogical guidance. They do
+    // not replace templates, objectives, teaching models, or source materials.
+    let planningFrameworks=[], selectedPlanningFrameworkId=null, editingFrameworkId=null;
+    const FRAMEWORK_PREF='lessonscope.planning-framework';
+    const FRAMEWORK_TYPE_LABEL={observation:'Observation rubric',teaching:'Teaching guidance',assessment:'Assessment framework',inclusion:'Inclusion guidance',homework:'Homework policy',custom:'Other'};
+    const FRAMEWORK_APPLIES_LABEL={all:'All lessons',observation:'Observation lessons',optional:'Choose manually'};
+    function frameworkPreference(){ try{return localStorage.getItem(FRAMEWORK_PREF);}catch{return null;} }
+    function rememberFramework(id){ try{localStorage.setItem(FRAMEWORK_PREF,id||'none');}catch{} }
+    function activeFrameworks(){ return planningFrameworks.filter(item=>item.active); }
+    function selectedObservationTemplate(){ const t=(typeof templates!=='undefined'&&templates.find(item=>item.id===selectedTemplateId)); return !!(t&&t.type==='observation'); }
+    function renderFrameworkPicker(){
+      const select=$('planningFramework'); if(!select) return;
+      const active=activeFrameworks();
+      const pref=frameworkPreference();
+      if(selectedPlanningFrameworkId&&!active.some(item=>item.id===selectedPlanningFrameworkId)) selectedPlanningFrameworkId=null;
+      if(!selectedPlanningFrameworkId&&pref&&pref!=='none'&&active.some(item=>item.id===pref)) selectedPlanningFrameworkId=pref;
+      if(!pref){
+        const suggested=selectedObservationTemplate()
+          ? active.find(item=>item.appliesTo==='observation')
+          : active.find(item=>item.appliesTo==='all');
+        selectedPlanningFrameworkId=suggested&&suggested.id||null;
+      }
+      select.innerHTML='<option value="">LessonScope best practice</option>'+active.map(item=>`<option value="${item.id}">${esc(item.name)} · ${esc(FRAMEWORK_APPLIES_LABEL[item.appliesTo]||'Personal')}</option>`).join('');
+      select.value=selectedPlanningFrameworkId||'';
+      const chosen=active.find(item=>item.id===select.value);
+      $('frameworkSelectionStatus').textContent=chosen?`Active · v${chosen.version}`:'Built-in';
+      $('frameworkSelectionStatus').className='framework-status active';
+      $('frameworkSelectionHint').textContent=chosen
+        ? chosen.summary
+        : active.length?'Choose a reviewed personal framework, or keep LessonScope best practice.':'No personal framework selected. Lesson generation works exactly as before.';
+    }
+    function renderFrameworkList(){
+      const list=$('frameworkList'); if(!list) return;
+      list.innerHTML=planningFrameworks.length?planningFrameworks.map(item=>`<button type="button" class="framework-list-item${item.id===editingFrameworkId?' selected':''}" data-framework-edit="${item.id}"><strong>${esc(item.name)}</strong><span>${esc(FRAMEWORK_TYPE_LABEL[item.type]||item.type)} · v${item.version} · ${item.active?'Active':'Needs review'}</span></button>`).join(''):'<span class="hint">No personal frameworks saved yet.</span>';
+    }
+    function renderFrameworkEditor(){
+      const host=$('frameworkEditor'), item=planningFrameworks.find(entry=>entry.id===editingFrameworkId);
+      if(!item){ host.innerHTML='<div class="framework-editor-empty">Select a framework to review it, or upload the first one.</div>'; renderFrameworkList(); return; }
+      host.innerHTML=`<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:16px"><div><h3 style="margin:0 0 4px;font-size:18px">Review before using</h3><span class="hint">${esc(item.filename||'Uploaded guidance')} · version ${item.version}</span></div><span class="framework-status${item.active?' active':''}">${item.active?'Active':'Needs review'}</span></div>
+        <div class="framework-editor-grid"><div><label for="frameworkEditName">Name</label><input id="frameworkEditName" value="${esc(item.name)}" maxlength="100" /></div><div><label for="frameworkEditType">Type</label><select id="frameworkEditType">${Object.entries(FRAMEWORK_TYPE_LABEL).map(([value,label])=>`<option value="${value}"${item.type===value?' selected':''}>${label}</option>`).join('')}</select></div></div>
+        <label for="frameworkEditApplies">When should LessonScope suggest it?</label><select id="frameworkEditApplies">${Object.entries(FRAMEWORK_APPLIES_LABEL).map(([value,label])=>`<option value="${value}"${item.appliesTo===value?' selected':''}>${label}</option>`).join('')}</select>
+        <label for="frameworkEditSummary">Framework summary</label><textarea id="frameworkEditSummary" rows="3">${esc(item.summary)}</textarea>
+        <label for="frameworkEditRequirements">Planning requirements <span class="hint">one requirement per line</span></label><textarea id="frameworkEditRequirements" rows="9">${esc((item.requirements||[]).join('\n'))}</textarea>
+        <label for="frameworkEditAvoidances">Practices to avoid <span class="hint">one per line</span></label><textarea id="frameworkEditAvoidances" rows="4">${esc((item.avoidances||[]).join('\n'))}</textarea>
+        <div class="framework-editor-actions"><button type="button" class="btn ghost" data-framework-delete="${item.id}" style="color:var(--err)">${ICON('i-trash')} Delete</button><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn ghost" data-framework-save="draft">Save for later</button><button type="button" class="btn primary" data-framework-save="active">${item.active?'Save changes':'Approve and activate'}</button></div></div>`;
+      renderFrameworkList();
+    }
+    async function loadFrameworks(){
+      try{ const d=await fetch('/api/planning-frameworks').then(r=>r.json()); planningFrameworks=d.frameworks||[]; }
+      catch{ planningFrameworks=[]; }
+      renderFrameworkPicker(); renderFrameworkList(); if(editingFrameworkId) renderFrameworkEditor();
+    }
+    function openFrameworkManager(){ $('frameworkModal').classList.add('open'); document.body.style.overflow='hidden'; renderFrameworkList(); renderFrameworkEditor(); }
+    function closeFrameworkManager(){ $('frameworkModal').classList.remove('open'); document.body.style.overflow=''; }
+    $('frameworkManageBtn').addEventListener('click',openFrameworkManager);
+    $('frameworkCloseBtn').addEventListener('click',closeFrameworkManager);
+    $('frameworkModal').addEventListener('click',e=>{ if(e.target===$('frameworkModal')) closeFrameworkManager(); });
+    $('planningFramework').addEventListener('change',e=>{ selectedPlanningFrameworkId=e.target.value||null; rememberFramework(selectedPlanningFrameworkId); renderFrameworkPicker(); });
+    $('frameworkUploadBtn').addEventListener('click',()=>$('frameworkFile').click());
+    $('frameworkFile').addEventListener('change',async e=>{
+      const file=e.target.files[0]; if(!file) return;
+      const btn=$('frameworkUploadBtn'), orig=btn.innerHTML; btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Reading and preparing review...';
+      try{
+        const fd=new FormData(); fd.append('file',file); fd.append('name',$('frameworkUploadName').value.trim()); fd.append('type',$('frameworkUploadType').value); fd.append('appliesTo',$('frameworkUploadApplies').value);
+        const r=await fetch('/api/planning-frameworks',{method:'POST',body:fd}), d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not upload that framework.');
+        editingFrameworkId=d.framework.id; $('frameworkUploadName').value=''; await loadFrameworks(); renderFrameworkEditor(); toast('Framework extracted. Review it before activating.','ok');
+      }catch(err){ toast(err.message); }
+      btn.disabled=false; btn.innerHTML=orig; e.target.value='';
+    });
+    $('frameworkList').addEventListener('click',e=>{ const row=e.target.closest('[data-framework-edit]'); if(!row) return; editingFrameworkId=row.dataset.frameworkEdit; renderFrameworkEditor(); });
+    $('frameworkEditor').addEventListener('click',async e=>{
+      const save=e.target.closest('[data-framework-save]'), del=e.target.closest('[data-framework-delete]');
+      if(del){
+        const item=planningFrameworks.find(entry=>entry.id===del.dataset.frameworkDelete); if(!item||!confirm(`Delete "${item.name}"? This removes the saved framework, not lessons already generated.`)) return;
+        try{ const r=await fetch('/api/planning-frameworks/'+item.id,{method:'DELETE'}), d=await r.json(); if(!r.ok) throw new Error(d.error); if(selectedPlanningFrameworkId===item.id){selectedPlanningFrameworkId=null;rememberFramework(null);} editingFrameworkId=null; await loadFrameworks(); renderFrameworkEditor(); toast('Framework removed.','ok'); }catch(err){ toast(err.message); }
+        return;
+      }
+      if(!save) return;
+      const item=planningFrameworks.find(entry=>entry.id===editingFrameworkId); if(!item) return;
+      const payload={name:$('frameworkEditName').value.trim(),type:$('frameworkEditType').value,appliesTo:$('frameworkEditApplies').value,summary:$('frameworkEditSummary').value.trim(),requirements:$('frameworkEditRequirements').value.split(/\n/),avoidances:$('frameworkEditAvoidances').value.split(/\n/),active:save.dataset.frameworkSave==='active'};
+      save.disabled=true;
+      try{ const r=await fetch('/api/planning-frameworks/'+item.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}), d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not save this framework.'); if(payload.active){selectedPlanningFrameworkId=item.id;rememberFramework(item.id);} else if(selectedPlanningFrameworkId===item.id){selectedPlanningFrameworkId=null;rememberFramework(null);} await loadFrameworks(); renderFrameworkEditor(); toast(payload.active?'Framework approved and ready to use.':'Framework saved for later.','ok'); }catch(err){ toast(err.message); }
+      save.disabled=false;
+    });
+    document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&$('frameworkModal').classList.contains('open')) closeFrameworkManager(); });
+
     function setStep(n){ document.querySelectorAll('.steps .st').forEach(el=>{ const s=+el.dataset.step; el.classList.toggle('active',s===n); el.classList.toggle('done',s<n); }); }
     // startMode: which stage-1 entry the teacher chose — plan fresh, upload a
     // lesson plan, or upload slides. The mode selector + matching panel only
@@ -3802,7 +3961,7 @@
     function renderTemplates(){
       const list=$('tplList');
       const planners=(weekPlannerState&&weekPlannerState.planners)||[];
-      if(!templates.length&&!planners.length){ selectedTemplateId=null; list.innerHTML=`<span class="info none">No saved templates yet. Add the first grade or class format below; it will stay here for future lessons.</span>`; updateTplSummary(); return; }
+      if(!templates.length&&!planners.length){ selectedTemplateId=null; list.innerHTML=`<span class="info none">No saved templates yet. Add the first grade or class format below; it will stay here for future lessons.</span>`; updateTplSummary(); renderFrameworkPicker(); return; }
       // A selected week workbook remains selected until the teacher explicitly
       // chooses a document template. This prevents loading the template list
       // from silently switching the workbook they are planning into.
@@ -3834,6 +3993,7 @@
         </div>`;
       });
       list.innerHTML=[...workbookRows,...documentRows].join('');
+      renderFrameworkPicker();
     }
     // ── Week-by-week lesson plan ──────────────────────────────────────────
     // A workbook with a tab per week that the app appends each generated lesson
@@ -4360,6 +4520,7 @@
         ...lessonSequenceFromForm(),
         sourceMaterialText, sourceMaterialImages,
         templateId:selectedTemplateId,
+        planningFrameworkId:selectedPlanningFrameworkId,
         // Ordinary document templates and living week workbooks share one
         // chooser. Only the selected kind should receive this lesson.
         useWeekPlanner:!selectedTemplateId&&!!(weekPlannerState&&weekPlannerState.present),
@@ -5954,7 +6115,7 @@
       $('guideHeroBtn').style.display='inline-flex';
       // Auto-open wizard on first visit
       if(!localStorage.getItem('lc_wizard_done')) setTimeout(openWizard, 600);
-      loadLibrary(); loadTemplates(); loadWeekPlanner(); loadRosters(true); loadPlanningSources(); loadAppConfig(); loadPresets(); loadTeachingModels(); refreshCredits();
+      loadLibrary(); loadTemplates(); loadWeekPlanner(); loadFrameworks(); loadRosters(true); loadPlanningSources(); loadAppConfig(); loadPresets(); loadTeachingModels(); refreshCredits();
     }
     function showAuth(){
       // flex, not block — #authScreen centres the card with align-items/
