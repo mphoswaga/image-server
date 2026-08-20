@@ -106,3 +106,14 @@ test('teacher preview is protected and explicitly avoids recorded attempts', () 
   assert.match(player, /Preview only - results not saved/);
   assert.match(report, /href="\/practice\/preview"/);
 });
+
+test('the learner quest keeps Byte and its connected game states', () => {
+  const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
+  const byte = fs.readFileSync(path.join(__dirname, '..', 'public', 'assets', 'byte-talking.gif'));
+  assert.equal(byte.subarray(0, 6).toString('ascii'), 'GIF89a');
+  assert.match(player, /Byte's Skill Lab/);
+  assert.match(player, /\/assets\/byte-talking\.gif/);
+  assert.match(player, /mission-transition/);
+  assert.match(player, /Watch Byte/);
+  assert.match(player, /Quest points/);
+});

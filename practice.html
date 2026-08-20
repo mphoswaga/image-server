@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>LessonScope Practice - Pointer Control</title>
+  <title>LessonScope Practice - Byte's Pointer Quest</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <style>
     :root {
@@ -111,6 +111,29 @@
     .device-note { display:none; margin:0 0 14px; padding:12px; background:var(--soft-orange); border-left:4px solid var(--orange); color:#7b421f; }
     .preview-note { display:none; margin:0 0 14px; padding:12px 16px; background:#fff8e5; border:1px solid #e3c76f; color:#654c10; font-size:14px; font-weight:700; }
     .mastery { display:inline-block; padding:6px 10px; border-radius:6px; background:var(--soft-green); color:var(--green-dark); font-weight:900; text-transform:capitalize; }
+    .quest-hero { display:grid; grid-template-columns:minmax(260px,.8fr) minmax(360px,1.2fr); align-items:center; gap:34px; text-align:left; }
+    .bot-stage { min-height:360px; position:relative; display:grid; place-items:center; border:1px solid #2d5380; background:#0b1a35; overflow:hidden; }
+    .bot-stage:before,.bot-stage:after { content:""; position:absolute; width:90px; height:90px; border:1px solid rgba(37,205,220,.25); transform:rotate(45deg); }
+    .bot-stage:before { left:-46px; top:35px; }.bot-stage:after { right:-46px; bottom:35px; }
+    .bot-image { width:min(310px,90%); aspect-ratio:1; object-fit:contain; border-radius:50%; background:#fff; border:5px solid #25cddc; box-shadow:0 0 0 10px rgba(37,205,220,.09),0 18px 44px rgba(0,0,0,.28); }
+    .bot-image.small { width:54px; height:54px; border-width:2px; box-shadow:none; }
+    .bot-image.complete { width:170px; height:170px; margin-bottom:18px; }
+    .live-chip { position:absolute; left:18px; top:18px; display:flex; align-items:center; gap:7px; color:#8cecf4; font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:.8px; }
+    .live-chip:before { content:""; width:9px; height:9px; border-radius:50%; background:#25cddc; box-shadow:0 0 0 5px rgba(37,205,220,.13); animation:livePulse 1.4s ease-in-out infinite; }
+    .speech { position:relative; padding:15px 17px; border:1px solid #4b78a8; background:#fff; color:var(--navy); font-size:17px; font-weight:800; box-shadow:0 10px 24px rgba(0,0,0,.16); }
+    .speech:before { content:""; position:absolute; left:-12px; top:22px; width:20px; height:20px; background:#fff; border-left:1px solid #4b78a8; border-bottom:1px solid #4b78a8; transform:rotate(45deg); }
+    .quest-copy h1 { color:#fff; font-size:clamp(34px,5vw,56px); }
+    .quest-copy .lead { color:#b8c9db; margin-left:0; }
+    .quest-kicker { color:#25cddc; font-size:12px; font-weight:900; text-transform:uppercase; letter-spacing:1px; }
+    .mission-transition { position:absolute; inset:0; z-index:30; display:none; place-items:center; background:rgba(5,14,32,.94); color:#fff; text-align:center; }
+    .mission-transition.show { display:grid; }
+    .transition-inner { animation:transitionIn .5s cubic-bezier(.2,.8,.2,1) both; }
+    .transition-inner img { width:135px; height:135px; object-fit:contain; border-radius:50%; background:#fff; border:4px solid #25cddc; }
+    .transition-inner b { display:block; margin-top:12px; color:#25cddc; font-size:12px; text-transform:uppercase; letter-spacing:1px; }
+    .transition-inner strong { display:block; font-size:30px; }
+    .badge-shelf { display:flex; justify-content:center; flex-wrap:wrap; gap:10px; margin:22px 0; }
+    .earned-badge { width:86px; padding:10px 6px; border:1px solid #2e5884; background:#102747; color:#fff; font-size:11px; font-weight:800; }
+    .earned-badge span { display:grid; place-items:center; width:36px; height:36px; margin:0 auto 6px; border-radius:50%; background:#25cddc; color:#07142c; font-size:15px; }
     .hidden { display:none !important; }
     @keyframes pulse { 50%{ box-shadow:0 0 0 12px rgba(234,180,59,.13); } }
     @keyframes demoMove { 0%{transform:translate(0,0)} 55%,75%{transform:translate(220px,-105px)} 100%{transform:translate(0,0)} }
@@ -118,6 +141,49 @@
     @keyframes wheelMove { 0%,100%{transform:translateY(-5px)} 50%{transform:translateY(9px)} }
     @keyframes burst { 0%{transform:scale(.35);opacity:0} 55%{transform:scale(1.08);opacity:1} 100%{transform:scale(1);opacity:1} }
     @keyframes pointsUp { from{transform:translateY(15px);opacity:0} 35%{opacity:1} to{transform:translateY(-38px);opacity:0} }
+    @keyframes livePulse { 50%{opacity:.45;transform:scale(.78)} }
+    @keyframes transitionIn { from{opacity:0;transform:translateY(18px) scale(.92)} to{opacity:1;transform:none} }
+
+    /* Immersive game shell. The evidence system remains the same; only the
+       learner-facing world is intentionally separate from the planner UI. */
+    body { background:#07142c; color:#e8f1f8; }
+    .topbar { background:#08162f; border-bottom:1px solid #24476f; }
+    .brand-mark { background:#25cddc; color:#07142c; }
+    .shell { width:min(1220px,calc(100% - 32px)); }
+    .status-row { color:#b8c9db; }
+    .student-name { color:#b8c9db; }
+    .save-state { color:#69e3a7; }
+    .progress { position:relative; gap:8px; }
+    .progress:before { content:""; position:absolute; left:9%; right:9%; top:19px; border-top:2px solid #29486d; }
+    .progress-step { position:relative; z-index:1; padding:37px 7px 9px; border:1px solid #29486d; background:#0c1d3b; color:#7890aa; }
+    .progress-step:before { content:""; position:absolute; left:50%; top:9px; width:18px; height:18px; border-radius:50%; transform:translateX(-50%); background:#29486d; border:3px solid #0c1d3b; }
+    .progress-step.current { border-color:#25cddc; background:#102747; color:#fff; box-shadow:0 0 20px rgba(37,205,220,.14); }
+    .progress-step.current:before { background:#25cddc; box-shadow:0 0 0 5px rgba(37,205,220,.12); }
+    .progress-step.done { border-color:#1eb878; background:#0d2c32; color:#8ef0ba; }
+    .progress-step.done:before { background:#1eb878; }
+    .gate,.intro,.completion { border:1px solid #29486d; background:#0a1933; box-shadow:0 22px 60px rgba(0,0,0,.34); }
+    .intro { display:block; min-height:600px; padding:38px; }
+    .intro-inner { width:100%; }
+    .quest-map { position:relative; }
+    .quest-map:before { content:""; position:absolute; left:8%; right:8%; top:26px; border-top:2px solid #29486d; }
+    .quest-stop { position:relative; z-index:1; border-color:#29486d; background:#0c1d3b; color:#b8c9db; text-align:center; }
+    .quest-stop strong { background:#25cddc; color:#07142c; }
+    .activity-facts { border-color:#29486d; background:#0c1d3b; }
+    .fact+.fact { border-color:#29486d; }.fact b { color:#fff; }.fact span { color:#9fb2c5; }
+    .coach { background:#0b1c38; border-color:#2a4d76; color:#fff; grid-template-columns:64px 1fr auto; }
+    .byte { width:56px; height:56px; border:0; background:transparent; }
+    .phase { color:#25cddc; }.coach-text { color:#fff; }
+    .workspace { background:#102442; border-color:#2a4d76; }
+    .workspace-head h2 { color:#fff; }.workspace-head p { color:#b8c9db; }
+    .skill-number { background:#16375a; color:#8cecf4; }
+    .game-hud { border-color:#2a4d76; background:#08162f; }
+    .mission-meter { background:#29486d; }.mission-meter span { background:#25cddc; }
+    .hud-stat { color:#89a0b8; }.hud-stat strong { color:#fff; }
+    .task-area { min-height:340px; border-color:#35658e; box-shadow:inset 0 0 45px rgba(13,38,66,.10); }
+    .controls { border-color:#2a4d76; background:#0b1c38; }
+    .completion h1 { color:#fff; }.completion .lead { color:#b8c9db; }
+    .completion-inner { color:#e8f1f8; }
+    .mastery { background:#123e37; color:#8ef0ba; }
     @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; scroll-behavior:auto !important; } }
     @media (max-width:760px) {
       .topbar { align-items:flex-start; padding:10px 14px; }
@@ -141,14 +207,19 @@
       .game-hud .hud-stat:last-child { grid-column:1/-1; text-align:left; }
       .tutorial { grid-template-columns:1fr; padding:18px; }
       .tutorial-visual { min-height:120px; }
+      .quest-hero { grid-template-columns:1fr; }
+      .bot-stage { min-height:280px; }
+      .bot-image { width:230px; }
+      .speech:before { display:none; }
+      .intro { padding:20px; }
     }
   </style>
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="brand-mark">LS</span><span>LessonScope Practice<small>Grade 2 Digital Explorer</small></span></div>
+    <div class="brand"><span class="brand-mark">LS</span><span>Byte's Skill Lab<small>LessonScope Practice</small></span></div>
     <div class="top-actions">
-      <button class="icon-btn" id="soundBtn" type="button" title="Read the instruction aloud">Listen <span>aloud</span></button>
+      <button class="icon-btn" id="soundBtn" type="button" title="Turn Byte's voice on or off">Voice <span>on</span></button>
       <button class="icon-btn" id="pauseBtn" type="button" title="Pause practice">Pause</button>
     </div>
   </header>
@@ -173,9 +244,10 @@
 
     <section class="intro hidden" id="intro">
       <div class="intro-inner">
-        <div class="byte-large">B</div>
-        <h1>Byte's Pointer Quest</h1>
-        <p class="lead">The computer lab has lost five skill badges. Complete each mission to bring them back.</p>
+        <div class="quest-hero">
+          <div class="bot-stage"><div class="live-chip">Byte online</div><img class="bot-image" src="/assets/byte-talking.gif" alt="Byte, the LessonScope robot guide" /></div>
+          <div class="quest-copy"><div class="quest-kicker">Mission briefing</div><h1>Byte's Pointer Quest</h1><p class="lead">The Skill Lab has lost five power badges. Learn each pointer move, clear the missions and bring the lab back online.</p><div class="speech">I will show you every move first. When you are ready, the mission becomes yours.</div></div>
+        </div>
         <div class="quest-map" aria-label="Five pointer missions">
           <div class="quest-stop"><strong>1</strong>Move</div><div class="quest-stop"><strong>2</strong>Click</div><div class="quest-stop"><strong>3</strong>Double-click</div><div class="quest-stop"><strong>4</strong>Drag</div><div class="quest-stop"><strong>5</strong>Scroll</div>
         </div>
@@ -190,7 +262,7 @@
 
     <section class="activity" id="activity">
       <div class="coach">
-        <div class="byte" aria-hidden="true">B</div>
+        <div class="byte"><img class="bot-image small" src="/assets/byte-talking.gif" alt="" /></div>
         <div><div class="phase" id="phaseLabel">Show me</div><div class="coach-text" id="coachText" aria-live="polite"></div></div>
         <button class="btn secondary" id="replayBtn" type="button">Replay</button>
       </div>
@@ -200,6 +272,7 @@
         <div class="task-area" id="taskArea"></div>
         <div class="feedback" id="feedback" role="status" aria-live="polite"></div>
         <div class="hint" id="hint" role="status" aria-live="polite"></div>
+        <div class="mission-transition" id="missionTransition"><div class="transition-inner"><img src="/assets/byte-talking.gif" alt="" /><b id="transitionKicker">Mission unlocked</b><strong id="transitionTitle"></strong></div></div>
         <div class="pause-layer" id="pauseLayer"><div><h2 style="color:#fff">Practice paused</h2><p>Your progress is safe.</p><button class="btn primary" id="resumeBtn" type="button">Continue</button></div></div>
       </div>
       <div class="controls">
@@ -210,11 +283,12 @@
 
     <section class="completion hidden" id="completion">
       <div class="completion-inner">
-        <div class="byte-large">OK</div>
+        <img class="bot-image complete" src="/assets/byte-talking.gif" alt="Byte celebrating" />
         <h1>Pointer Quest complete</h1>
         <p class="lead" id="completionLead">You moved, clicked, double-clicked, dragged and scrolled. Your teacher can now see the skills you practised.</p>
         <p id="masterySummary"></p>
         <p id="scoreSummary"></p>
+        <div class="badge-shelf" aria-label="Five earned skill badges"><div class="earned-badge"><span>1</span>Move</div><div class="earned-badge"><span>2</span>Click</div><div class="earned-badge"><span>3</span>Double-click</div><div class="earned-badge"><span>4</span>Drag</div><div class="earned-badge"><span>5</span>Scroll</div></div>
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:24px">
           <a class="btn primary" id="completionBack" href="/start">Back to my work</a>
           <button class="btn secondary" id="practiseAgainBtn" type="button">Practise again</button>
@@ -264,6 +338,7 @@
     let paused = false;
     let pendingSingleClick = null;
     let roundLocked = false;
+    let voiceEnabled = true;
 
     function esc(value) { return String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
     function checkpointKey() { return `ls-practice-pending-${attempt && attempt.id || 'none'}`; }
@@ -281,6 +356,7 @@
     }
 
     function playTone(frequency=620) {
+      if (!voiceEnabled) return;
       try {
         const Context=window.AudioContext||window.webkitAudioContext;
         if(!Context) return;
@@ -289,6 +365,14 @@
         gain.gain.setValueAtTime(.06,context.currentTime); gain.gain.exponentialRampToValueAtTime(.001,context.currentTime+.18);
         oscillator.connect(gain).connect(context.destination); oscillator.start(); oscillator.stop(context.currentTime+.18);
       } catch {}
+    }
+
+    function narrate(text) {
+      if (!voiceEnabled || !('speechSynthesis' in window) || !text) return;
+      speechSynthesis.cancel();
+      const speech=new SpeechSynthesisUtterance(text);
+      speech.rate=.88; speech.pitch=1.06;
+      speechSynthesis.speak(speech);
     }
 
     function celebrateHit(finalHit) {
@@ -367,6 +451,16 @@
       updateHud();
       renderTask();
       if (phase === 'show') $('nextBtn').disabled = false;
+      setTimeout(()=>narrate(`${phaseName()}. ${step[phase]}`),120);
+    }
+
+    function showMissionTransition(kicker='Mission unlocked') {
+      const step=currentStep();
+      $('transitionKicker').textContent=kicker;
+      $('transitionTitle').textContent=`Mission ${stepIndex+1}: ${step.title}`;
+      $('missionTransition').classList.add('show');
+      narrate(`${kicker}. ${step.title}.`);
+      setTimeout(()=>$('missionTransition').classList.remove('show'),900);
     }
 
     function registerWrong(message) {
@@ -467,7 +561,7 @@
       $('progress').innerHTML = steps.map((step,index) => `<div class="progress-step done">${index + 1}. ${esc(step.title)}</div>`).join('');
       const label = String(attempt.mastery || '').replaceAll('_',' ');
       $('masterySummary').innerHTML = `Overall result: <span class="mastery">${esc(label)}</span>`;
-      $('scoreSummary').innerHTML = `Quest points: <strong style="color:var(--navy);font-size:24px">${score}</strong>`;
+      $('scoreSummary').innerHTML = `Quest points: <strong style="color:#25cddc;font-size:24px">${score}</strong>`;
       setSave(previewMode ? 'Preview complete - no results were saved' : 'All progress saved');
     }
 
@@ -480,6 +574,7 @@
         stepIndex = attempt.currentStepIndex;
         phase = 'show';
         renderStep();
+        showMissionTransition();
       }
     });
 
@@ -496,7 +591,12 @@
       phase = 'show';
       renderStep();
     });
-    $('soundBtn').addEventListener('click', () => { if ('speechSynthesis' in window) { speechSynthesis.cancel(); const speech=new SpeechSynthesisUtterance($('coachText').textContent); speech.rate=.9; speechSynthesis.speak(speech); } });
+    $('soundBtn').addEventListener('click', () => {
+      voiceEnabled=!voiceEnabled;
+      $('soundBtn').innerHTML=voiceEnabled?'Voice <span>on</span>':'Voice <span>off</span>';
+      if (!voiceEnabled && 'speechSynthesis' in window) speechSynthesis.cancel();
+      if (voiceEnabled) narrate($('coachText').textContent || 'Byte is ready.');
+    });
     function setPaused(value) { paused=value; $('pauseLayer').classList.toggle('show',paused); $('pauseBtn').textContent=paused?'Continue':'Pause'; }
     $('pauseBtn').addEventListener('click', () => setPaused(!paused));
     $('resumeBtn').addEventListener('click', () => setPaused(false));
@@ -514,6 +614,7 @@
         $('intro').classList.add('hidden');
         setSave('Preview only - results not saved');
         renderStep();
+        showMissionTransition('Quest begins');
         return;
       }
       setSave('Preparing practice...');
@@ -533,6 +634,7 @@
       $('intro').classList.add('hidden');
       setSave(data.resumed ? 'Practice restored' : 'Practice started');
       renderStep();
+      showMissionTransition(data.resumed ? 'Quest restored' : 'Quest begins');
     }
 
     $('startBtn').addEventListener('click', () => beginAttempt(false).catch((error) => setSave(error.message,true)));
