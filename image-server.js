@@ -2177,6 +2177,18 @@ app.get('/api/practice/catalog', requirePracticeEnabled, (req, res) => {
   res.json({ activities: practice.listActivities() });
 });
 
+app.get('/api/practice/preview', requirePracticeEnabled, requireAuth, (req, res) => {
+  if (req.user && req.user.role === 'student') return res.status(403).json({ error: 'Teacher account required.' });
+  res.json({
+    preview: true,
+    teacher: {
+      id: req.userId,
+      name: req.user.name || req.user.displayName || req.user.email || 'Teacher',
+    },
+    activities: practice.listActivities(),
+  });
+});
+
 app.get('/api/practice/student/home', requirePracticeEnabled, requireStudentAccess, (req, res) => {
   res.json({
     student: { studentId: req.studentSession.studentId, name: req.studentSession.name },
@@ -3680,6 +3692,10 @@ app.get('/start', (req, res) => res.sendFile(path.join(__dirname, 'public', 'sta
 // Practical digital-skills player and teacher evidence view. The HTML lives
 // outside public/ so the feature flag cannot be bypassed with a direct file URL.
 app.get('/student/practice', requirePracticeEnabled, (req, res) => res.sendFile(path.join(__dirname, 'practice.html')));
+app.get('/practice/preview', requirePracticeEnabled, requireAuth, (req, res) => {
+  if (req.user && req.user.role === 'student') return res.status(403).send('Teacher account required.');
+  res.sendFile(path.join(__dirname, 'practice.html'));
+});
 app.get('/practice', requirePracticeEnabled, (req, res) => res.sendFile(path.join(__dirname, 'practice-teacher.html')));
 
 // Student play page (the shareable link target).

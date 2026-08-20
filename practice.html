@@ -86,6 +86,7 @@
     .pause-layer { position:absolute; inset:0; z-index:20; display:none; place-items:center; background:rgba(18,52,91,.88); color:#fff; text-align:center; padding:30px; }
     .pause-layer.show { display:grid; }
     .device-note { display:none; margin:0 0 14px; padding:12px; background:var(--soft-orange); border-left:4px solid var(--orange); color:#7b421f; }
+    .preview-note { display:none; margin:0 0 14px; padding:12px 16px; background:#fff8e5; border:1px solid #e3c76f; color:#654c10; font-size:14px; font-weight:700; }
     .mastery { display:inline-block; padding:6px 10px; border-radius:6px; background:var(--soft-green); color:var(--green-dark); font-weight:900; text-transform:capitalize; }
     .hidden { display:none !important; }
     @keyframes pulse { 50%{ box-shadow:0 0 0 12px rgba(234,180,59,.13); } }
@@ -121,6 +122,7 @@
   </header>
 
   <main class="shell">
+    <div class="preview-note" id="previewNote">Teacher preview: experience the activity exactly as a learner would. This run is temporary and will not appear in reports.</div>
     <div class="status-row">
       <div class="student-name" id="studentName"></div>
       <div class="save-state" id="saveState" role="status" aria-live="polite"></div>
@@ -174,10 +176,10 @@
       <div class="completion-inner">
         <div class="byte-large">OK</div>
         <h1>Pointer practice complete</h1>
-        <p class="lead">You moved, clicked, double-clicked, dragged and scrolled. Your teacher can now see the skills you practised.</p>
+        <p class="lead" id="completionLead">You moved, clicked, double-clicked, dragged and scrolled. Your teacher can now see the skills you practised.</p>
         <p id="masterySummary"></p>
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:24px">
-          <a class="btn primary" href="/start">Back to my work</a>
+          <a class="btn primary" id="completionBack" href="/start">Back to my work</a>
           <button class="btn secondary" id="practiseAgainBtn" type="button">Practise again</button>
         </div>
       </div>
@@ -186,6 +188,7 @@
 
   <script>
     const ACTIVITY_ID = 'g2-pointer-control';
+    const previewMode = location.pathname === '/practice/preview';
     const steps = [
       { id:'move-pointer', title:'Move the pointer', action:'pointer_enter', target:'blue-star',
         show:'Watch the pointer move to the blue star.', guided:'Move your pointer onto the glowing blue star.', independent:'Now move to the blue star by yourself.', success:'You moved the pointer to the target.',
@@ -313,6 +316,7 @@
     async function saveCheckpoint() {
       const step = currentStep();
       const payload = { checkpointId:checkpointId(step), stepId:step.id, attempts:Math.max(1,stats.attempts), hintsUsed:stats.hintsUsed, activeSeconds:Math.max(1,stats.activeSeconds), evidence:{ action:step.action, target:step.target } };
+      if (previewMode) return savePreviewCheckpoint(payload);
       localStorage.setItem(checkpointKey(), JSON.stringify(payload));
       setSave('Saving progress...');
       $('nextBtn').disabled = true;
@@ -336,7 +340,26 @@
       }
     }
 
+    function checkpointMastery(payload) {
+      if (payload.hintsUsed === 0 && payload.attempts <= 1) return 'independent';
+      if (payload.hintsUsed <= 2 && payload.attempts <= 4) return 'developing_independence';
+      return 'completed_with_support';
+    }
+
+    function savePreviewCheckpoint(payload) {
+      const checkpoint = { ...payload, mastery:checkpointMastery(payload), completedAt:new Date().toISOString() };
+      attempt.checkpoints.push(checkpoint);
+      attempt.currentStepIndex += 1;
+      const rank = { independent:3, developing_independence:2, completed_with_support:1 };
+      attempt.mastery = attempt.checkpoints.reduce((lowest,item) => rank[item.mastery] < rank[lowest] ? item.mastery : lowest, 'independent');
+      if (attempt.currentStepIndex >= steps.length) attempt.status = 'completed';
+      setSave('Preview only - results not saved');
+      $('nextBtn').disabled = false;
+      $('nextBtn').textContent = attempt.status === 'completed' ? 'See my result' : 'Continue';
+    }
+
     async function retryPending() {
+      if (previewMode) return true;
       const raw = localStorage.getItem(checkpointKey());
       if (!raw) return false;
       try {
@@ -356,7 +379,7 @@
       $('progress').innerHTML = steps.map((step,index) => `<div class="progress-step done">${index + 1}. ${esc(step.title)}</div>`).join('');
       const label = String(attempt.mastery || '').replaceAll('_',' ');
       $('masterySummary').innerHTML = `Overall result: <span class="mastery">${esc(label)}</span>`;
-      setSave('All progress saved');
+      setSave(previewMode ? 'Preview complete - no results were saved' : 'All progress saved');
     }
 
     $('nextBtn').addEventListener('click', async () => {
@@ -393,6 +416,15 @@
 
     async function beginAttempt(forceNew) {
       if (forceNew && attempt && attempt.status !== 'completed') return;
+      if (previewMode) {
+        attempt = { id:`preview-${Date.now()}`, activityId:ACTIVITY_ID, activityVersion:1, status:'in_progress', currentStepIndex:0, checkpoints:[], mastery:'not_started' };
+        stepIndex = 0;
+        phase = 'show';
+        $('intro').classList.add('hidden');
+        setSave('Preview only - results not saved');
+        renderStep();
+        return;
+      }
       setSave('Preparing practice...');
       const response = await fetch('/api/practice/attempts', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ activityId:ACTIVITY_ID }) });
       const data = await response.json();
@@ -417,13 +449,21 @@
     (async () => {
       if (matchMedia('(pointer:coarse)').matches) $('deviceNote').style.display='block';
       try {
-        const response = await fetch('/api/practice/student/home');
+        const response = await fetch(previewMode ? '/api/practice/preview' : '/api/practice/student/home');
         if (response.status === 401) { $('authGate').classList.remove('hidden'); return; }
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Practice is unavailable.');
         home = data;
-        $('studentName').textContent = `Practising as ${data.student.name}`;
-        const unfinished = data.attempts.find((item) => item.activityId === ACTIVITY_ID && item.status === 'in_progress');
+        if (previewMode) {
+          $('previewNote').style.display = 'block';
+          $('studentName').textContent = `Previewing as a student - ${data.teacher.name}`;
+          $('completionLead').textContent = 'You completed the learner experience. No preview progress or results were saved.';
+          $('completionBack').href = '/practice';
+          $('completionBack').textContent = 'Back to practice evidence';
+        } else {
+          $('studentName').textContent = `Practising as ${data.student.name}`;
+        }
+        const unfinished = previewMode ? null : data.attempts.find((item) => item.activityId === ACTIVITY_ID && item.status === 'in_progress');
         $('startBtn').textContent = unfinished ? 'Continue practice' : 'Start practice';
         $('intro').classList.remove('hidden');
         renderProgress();

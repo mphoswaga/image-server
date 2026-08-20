@@ -95,3 +95,14 @@ test('teacher result filtering returns only roster-owned student IDs', () => {
   const results = practice.teacherResults(['own-1']);
   assert.deepEqual(results.map((result) => result.studentId), ['OWN-1']);
 });
+
+test('teacher preview is protected and explicitly avoids recorded attempts', () => {
+  const server = fs.readFileSync(path.join(__dirname, '..', 'image-server.js'), 'utf8');
+  const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
+  const report = fs.readFileSync(path.join(__dirname, '..', 'practice-teacher.html'), 'utf8');
+  assert.match(server, /app\.get\('\/practice\/preview', requirePracticeEnabled, requireAuth/);
+  assert.match(server, /app\.get\('\/api\/practice\/preview', requirePracticeEnabled, requireAuth/);
+  assert.match(player, /if \(previewMode\) return savePreviewCheckpoint\(payload\)/);
+  assert.match(player, /Preview only - results not saved/);
+  assert.match(report, /href="\/practice\/preview"/);
+});

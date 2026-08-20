@@ -18,9 +18,11 @@
     .back { color:#fff; text-decoration:none; border:1px solid rgba(255,255,255,.25); border-radius:8px; padding:9px 12px; font-weight:700; }
     .shell { width:min(1180px,calc(100% - 32px)); margin:28px auto 48px; }
     .heading { display:flex; justify-content:space-between; gap:18px; align-items:flex-end; margin-bottom:20px; }
+    .heading-actions { display:flex; gap:8px; flex-wrap:wrap; }
     h1 { margin:0 0 5px; color:var(--navy); font-size:32px; }
     .sub { color:var(--muted); margin:0; }
-    .btn { min-height:42px; border-radius:8px; border:1px solid var(--line); background:#fff; color:var(--navy); padding:9px 14px; font-weight:800; cursor:pointer; }
+    .btn { display:inline-flex; align-items:center; justify-content:center; min-height:42px; border-radius:8px; border:1px solid var(--line); background:#fff; color:var(--navy); padding:9px 14px; font-weight:800; cursor:pointer; text-decoration:none; }
+    .btn.primary { border-color:var(--green); background:var(--green); color:#fff; }
     .cards { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:20px; }
     .card { background:#fff; border:1px solid var(--line); box-shadow:var(--shadow); padding:18px; border-top:3px solid var(--cyan); }
     .card:nth-child(2){border-color:var(--green)}.card:nth-child(3){border-color:var(--orange)}.card:nth-child(4){border-color:var(--navy)}
@@ -50,7 +52,7 @@
 <body>
   <header class="topbar"><div class="brand"><span class="brand-mark">LS</span><span>LessonScope Practice</span></div><a class="back" href="/">Back to planner</a></header>
   <main class="shell">
-    <div class="heading"><div><h1>Practice evidence</h1><p class="sub">See who practised Pointer Control and where support is still useful.</p></div><button class="btn" id="refreshBtn" type="button">Refresh</button></div>
+    <div class="heading"><div><h1>Practice evidence</h1><p class="sub">See who practised Pointer Control and where support is still useful.</p></div><div class="heading-actions"><a class="btn primary" href="/practice/preview">Preview as a student</a><button class="btn" id="refreshBtn" type="button">Refresh</button></div></div>
     <section class="cards" aria-label="Practice summary">
       <div class="card"><span>Rostered students</span><strong id="studentCount">-</strong></div>
       <div class="card"><span>Started</span><strong id="startedCount">-</strong></div>
