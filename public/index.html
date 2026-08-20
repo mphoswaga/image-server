@@ -2495,6 +2495,7 @@
     <button id="homeBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg><span class="app-menu-label">Plan</span></button>
     <button id="rostersBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg><span class="app-menu-label">Rosters</span></button>
     <button id="gamesBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-gamepad"/></svg><span class="app-menu-label">My games</span></button>
+    <a id="practiceBtn" class="nav-link" href="/practice" style="display:none;text-decoration:none"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg><span class="app-menu-label">Practice</span></a>
     <button id="assignmentsBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg><span class="app-menu-label">My assignments</span></button>
     <button id="marksBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg><span class="app-menu-label">Marks</span></button>
     <button id="creditsBtn" class="nav-link" type="button" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg><span id="creditsNavLabel" class="app-menu-label">Usage</span><span id="creditsNavBadge" class="credits-badge" style="display:none"></span></button>
@@ -5913,6 +5914,13 @@
       }catch{}
     }
 
+    async function loadPracticeStatus(){
+      try{
+        const d=await fetch('/api/practice/status').then(r=>r.json());
+        $('practiceBtn').style.display=d.enabled?'inline-flex':'none';
+      }catch{ $('practiceBtn').style.display='none'; }
+    }
+
     // ── Preset picker (dropdown + collapsible gallery) ───────────────────────
     let selectedPresetId = 'ocean-classic';
 
@@ -6115,7 +6123,7 @@
       $('guideHeroBtn').style.display='inline-flex';
       // Auto-open wizard on first visit
       if(!localStorage.getItem('lc_wizard_done')) setTimeout(openWizard, 600);
-      loadLibrary(); loadTemplates(); loadWeekPlanner(); loadFrameworks(); loadRosters(true); loadPlanningSources(); loadAppConfig(); loadPresets(); loadTeachingModels(); refreshCredits();
+      loadLibrary(); loadTemplates(); loadWeekPlanner(); loadFrameworks(); loadRosters(true); loadPlanningSources(); loadAppConfig(); loadPracticeStatus(); loadPresets(); loadTeachingModels(); refreshCredits();
     }
     function showAuth(){
       // flex, not block — #authScreen centres the card with align-items/

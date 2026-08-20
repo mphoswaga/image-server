@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>LessonScope Practice - Teacher Evidence</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <style>
+    :root { --navy:#12345b; --green:#18a568; --green-dark:#0d7b4d; --cyan:#1aa8c4; --orange:#f07b3d; --ink:#192436; --muted:#66758a; --line:#d9e3ec; --bg:#f3f7fa; --white:#fff; --soft-green:#e9f8f1; --soft-cyan:#e9f7fa; --soft-orange:#fff3eb; --shadow:0 16px 40px rgba(24,47,73,.09); }
+    * { box-sizing:border-box; }
+    html,body { margin:0; min-height:100%; }
+    body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--bg); color:var(--ink); line-height:1.45; }
+    button,a,select { font:inherit; }
+    button:focus-visible,a:focus-visible,select:focus-visible { outline:3px solid rgba(26,168,196,.32); outline-offset:2px; }
+    .topbar { min-height:64px; display:flex; align-items:center; justify-content:space-between; gap:18px; padding:10px 24px; background:var(--navy); color:#fff; }
+    .brand { display:flex; align-items:center; gap:11px; font-size:18px; font-weight:800; }
+    .brand-mark { width:36px; height:36px; display:grid; place-items:center; border-radius:8px; background:var(--green); font-size:15px; }
+    .back { color:#fff; text-decoration:none; border:1px solid rgba(255,255,255,.25); border-radius:8px; padding:9px 12px; font-weight:700; }
+    .shell { width:min(1180px,calc(100% - 32px)); margin:28px auto 48px; }
+    .heading { display:flex; justify-content:space-between; gap:18px; align-items:flex-end; margin-bottom:20px; }
+    h1 { margin:0 0 5px; color:var(--navy); font-size:32px; }
+    .sub { color:var(--muted); margin:0; }
+    .btn { min-height:42px; border-radius:8px; border:1px solid var(--line); background:#fff; color:var(--navy); padding:9px 14px; font-weight:800; cursor:pointer; }
+    .cards { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:20px; }
+    .card { background:#fff; border:1px solid var(--line); box-shadow:var(--shadow); padding:18px; border-top:3px solid var(--cyan); }
+    .card:nth-child(2){border-color:var(--green)}.card:nth-child(3){border-color:var(--orange)}.card:nth-child(4){border-color:var(--navy)}
+    .card span { display:block; color:var(--muted); font-size:12px; font-weight:700; }
+    .card strong { display:block; color:var(--navy); font-size:28px; margin-top:5px; }
+    .filters { display:flex; align-items:center; gap:10px; padding:14px; background:#fff; border:1px solid var(--line); border-bottom:0; }
+    label { color:var(--muted); font-size:13px; font-weight:700; }
+    select { min-height:38px; border:1px solid var(--line); border-radius:8px; background:#fff; padding:7px 34px 7px 10px; color:var(--ink); }
+    .table-wrap { overflow:auto; background:#fff; border:1px solid var(--line); box-shadow:var(--shadow); }
+    table { width:100%; border-collapse:collapse; min-width:860px; }
+    th,td { text-align:left; padding:12px; border-bottom:1px solid var(--line); vertical-align:top; font-size:13px; }
+    th { background:var(--navy); color:#fff; font-size:12px; }
+    tbody tr:hover { background:#f7fafc; }
+    .student { color:var(--navy); font-weight:800; }
+    .meta { color:var(--muted); font-size:11px; margin-top:3px; }
+    .pill { display:inline-block; padding:5px 8px; border-radius:6px; background:var(--soft-cyan); color:var(--navy); font-size:11px; font-weight:800; text-transform:capitalize; }
+    .pill.independent { background:var(--soft-green); color:var(--green-dark); }
+    .pill.completed_with_support { background:var(--soft-orange); color:#8c4b25; }
+    .skill-list { display:flex; flex-wrap:wrap; gap:4px; }
+    .skill { padding:3px 6px; border:1px solid var(--line); border-radius:5px; color:var(--muted); font-size:10px; }
+    .skill.done { border-color:#9edbbf; color:var(--green-dark); background:var(--soft-green); }
+    .empty,.loading,.error { padding:46px 24px; text-align:center; color:var(--muted); background:#fff; border:1px solid var(--line); }
+    .error { color:#a13c2e; }
+    @media(max-width:820px){ .cards{grid-template-columns:repeat(2,1fr)} .heading{align-items:flex-start;flex-direction:column} .filters{align-items:flex-start;flex-direction:column} .shell{width:min(100% - 20px,1180px)} }
+  </style>
+</head>
+<body>
+  <header class="topbar"><div class="brand"><span class="brand-mark">LS</span><span>LessonScope Practice</span></div><a class="back" href="/">Back to planner</a></header>
+  <main class="shell">
+    <div class="heading"><div><h1>Practice evidence</h1><p class="sub">See who practised Pointer Control and where support is still useful.</p></div><button class="btn" id="refreshBtn" type="button">Refresh</button></div>
+    <section class="cards" aria-label="Practice summary">
+      <div class="card"><span>Rostered students</span><strong id="studentCount">-</strong></div>
+      <div class="card"><span>Started</span><strong id="startedCount">-</strong></div>
+      <div class="card"><span>Completed</span><strong id="completedCount">-</strong></div>
+      <div class="card"><span>Independent</span><strong id="independentCount">-</strong></div>
+    </section>
+    <section id="loading" class="loading">Loading practice evidence...</section>
+    <section id="content" hidden>
+      <div class="filters"><label for="rosterFilter">Class</label><select id="rosterFilter"><option value="">All classes</option></select><label for="masteryFilter">Result</label><select id="masteryFilter"><option value="">All results</option><option value="independent">Independent</option><option value="developing_independence">Developing independence</option><option value="completed_with_support">Completed with support</option><option value="not_started">In progress</option></select></div>
+      <div class="table-wrap"><table><thead><tr><th>Student</th><th>Class</th><th>Status</th><th>Skill evidence</th><th>Attempts</th><th>Hints</th><th>Active time</th><th>Last update</th></tr></thead><tbody id="resultsBody"></tbody></table></div>
+      <div class="empty" id="empty" hidden>No practice evidence matches these filters.</div>
+    </section>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const stepNames = { 'move-pointer':'Move', 'single-click':'Click', 'double-click':'Double-click', 'drag-drop':'Drag', 'scroll-find':'Scroll' };
+    let data = { students:[], results:[] };
+    const esc = (value) => String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const fmtTime = (seconds) => { const n=Number(seconds)||0; const m=Math.floor(n/60),s=n%60; return m ? `${m}m ${s}s` : `${s}s`; };
+    const fmtDate = (value) => value ? new Date(value).toLocaleString(undefined,{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '-';
+    const label = (value) => String(value || 'not_started').replaceAll('_',' ');
+
+    function latestPerStudent(results) {
+      const latest = new Map();
+      for (const result of results) if (!latest.has(result.studentId)) latest.set(result.studentId,result);
+      return [...latest.values()];
+    }
+    function refreshCards() {
+      const latest=latestPerStudent(data.results);
+      $('studentCount').textContent=data.students.length;
+      $('startedCount').textContent=latest.length;
+      $('completedCount').textContent=latest.filter((r)=>r.status==='completed').length;
+      $('independentCount').textContent=latest.filter((r)=>r.mastery==='independent').length;
+    }
+    function render() {
+      const rosterId=$('rosterFilter').value, mastery=$('masteryFilter').value;
+      let results=latestPerStudent(data.results);
+      if(rosterId) results=results.filter((r)=>(r.rosters||[]).some((item)=>item.id===rosterId));
+      if(mastery) results=results.filter((r)=>(mastery==='not_started' ? r.status!=='completed' : r.mastery===mastery));
+      $('resultsBody').innerHTML=results.map((result)=>{
+        const attempts=(result.checkpoints||[]).reduce((sum,item)=>sum+(item.attempts||0),0);
+        const hints=(result.checkpoints||[]).reduce((sum,item)=>sum+(item.hintsUsed||0),0);
+        const seconds=(result.checkpoints||[]).reduce((sum,item)=>sum+(item.activeSeconds||0),0);
+        const completed=new Set((result.checkpoints||[]).map((item)=>item.stepId));
+        const skills=Object.entries(stepNames).map(([id,name])=>`<span class="skill ${completed.has(id)?'done':''}">${esc(name)}</span>`).join('');
+        return `<tr><td><div class="student">${esc(result.studentName||result.studentId)}</div><div class="meta">${esc(result.studentId)}</div></td><td>${esc((result.rosters||[]).map((r)=>r.name).join(', ')||'-')}</td><td><span class="pill ${esc(result.mastery)}">${esc(result.status==='completed'?label(result.mastery):'In progress')}</span></td><td><div class="skill-list">${skills}</div></td><td>${attempts}</td><td>${hints}</td><td>${fmtTime(seconds)}</td><td>${fmtDate(result.updatedAt)}</td></tr>`;
+      }).join('');
+      $('empty').hidden=results.length>0;
+    }
+    async function load() {
+      $('loading').hidden=false; $('content').hidden=true;
+      try {
+        const response=await fetch('/api/practice/results');
+        if(response.status===401){ location.href='/'; return; }
+        const payload=await response.json();
+        if(!response.ok) throw new Error(payload.error||'Practice evidence could not be loaded.');
+        data=payload;
+        const rosters=new Map();
+        for(const student of data.students||[]) for(const roster of student.rosters||[]) rosters.set(roster.id,roster.name);
+        $('rosterFilter').innerHTML='<option value="">All classes</option>'+[...rosters].sort((a,b)=>a[1].localeCompare(b[1])).map(([id,name])=>`<option value="${esc(id)}">${esc(name)}</option>`).join('');
+        refreshCards(); render(); $('loading').hidden=true; $('content').hidden=false;
+      }catch(error){ $('loading').className='error'; $('loading').textContent=error.message; }
+    }
+    $('rosterFilter').addEventListener('change',render);
+    $('masteryFilter').addEventListener('change',render);
+    $('refreshBtn').addEventListener('click',load);
+    load();
+  </script>
+</body>
+</html>

@@ -9,7 +9,7 @@
     "index": "node index-library.js",
     "caption": "node caption-library.js",
     "test": "NODE_ENV=test node --test tests/*.test.js",
-    "check:html": "node scripts/check-html-scripts.mjs public/index.html public/assignment.html public/join.html public/my-work.html public/oauth-consent.html public/play.html public/start.html",
+    "check:html": "node scripts/check-html-scripts.mjs public/index.html public/assignment.html public/join.html public/my-work.html public/oauth-consent.html public/play.html public/start.html practice.html practice-teacher.html",
     "check:server": "for f in *.js; do node --check \"$f\" || exit 1; done",
     "check": "npm run check:server && npm run check:html",
     "deployed": "node scripts/deployed.js"

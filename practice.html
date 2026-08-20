@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>LessonScope Practice - Pointer Control</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <style>
+    :root {
+      --navy:#12345b; --navy-2:#1d568d; --green:#18a568; --green-dark:#0d7b4d;
+      --cyan:#1aa8c4; --orange:#f07b3d; --gold:#eab43b; --ink:#192436;
+      --muted:#66758a; --line:#d9e3ec; --bg:#f3f7fa; --white:#fff;
+      --soft-green:#e9f8f1; --soft-cyan:#e9f7fa; --soft-orange:#fff3eb;
+      --shadow:0 16px 40px rgba(24,47,73,.10);
+    }
+    * { box-sizing:border-box; }
+    html,body { margin:0; min-height:100%; }
+    body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:var(--ink); background:var(--bg); line-height:1.45; }
+    button { font:inherit; }
+    button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline:3px solid rgba(26,168,196,.35); outline-offset:3px; }
+    .topbar { min-height:64px; background:var(--navy); color:#fff; display:flex; align-items:center; justify-content:space-between; gap:18px; padding:10px 24px; }
+    .brand { display:flex; align-items:center; gap:11px; font-size:18px; font-weight:800; white-space:nowrap; }
+    .brand-mark { width:36px; height:36px; display:grid; place-items:center; border-radius:8px; background:var(--green); font-size:15px; }
+    .brand small { display:block; color:#a9ddeb; font-size:10px; text-transform:uppercase; letter-spacing:.8px; }
+    .top-actions { display:flex; gap:8px; }
+    .icon-btn { min-height:40px; padding:8px 12px; border:1px solid rgba(255,255,255,.22); border-radius:8px; background:rgba(255,255,255,.08); color:#fff; font-weight:700; cursor:pointer; }
+    .icon-btn:hover { background:rgba(255,255,255,.14); }
+    .shell { width:min(1180px,calc(100% - 32px)); margin:22px auto 44px; }
+    .status-row { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:14px; }
+    .student-name { color:var(--muted); font-size:14px; }
+    .save-state { font-size:13px; color:var(--green-dark); font-weight:700; min-height:20px; }
+    .progress { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:7px; margin-bottom:16px; }
+    .progress-step { min-width:0; padding:9px 8px; border-top:3px solid var(--line); color:var(--muted); font-size:12px; font-weight:700; text-align:center; }
+    .progress-step.current { border-color:var(--cyan); color:var(--navy); background:var(--soft-cyan); }
+    .progress-step.done { border-color:var(--green); color:var(--green-dark); background:var(--soft-green); }
+    .gate,.intro,.completion { min-height:520px; display:grid; place-items:center; background:#fff; border:1px solid var(--line); box-shadow:var(--shadow); padding:34px; }
+    .intro-inner,.gate-inner,.completion-inner { width:min(680px,100%); text-align:center; }
+    .byte-large { width:84px; height:84px; margin:0 auto 18px; border-radius:50%; display:grid; place-items:center; background:var(--soft-cyan); border:2px solid var(--cyan); color:var(--navy); font-size:29px; font-weight:900; }
+    h1 { margin:0 0 10px; color:var(--navy); font-size:clamp(28px,4vw,42px); line-height:1.1; }
+    h2 { margin:0; color:var(--navy); font-size:24px; line-height:1.2; }
+    .lead { margin:0 auto 22px; max-width:620px; color:var(--muted); font-size:17px; }
+    .activity-facts { display:grid; grid-template-columns:repeat(3,1fr); border:1px solid var(--line); margin:22px auto; text-align:left; }
+    .fact { padding:14px; min-width:0; }
+    .fact+.fact { border-left:1px solid var(--line); }
+    .fact b { display:block; color:var(--navy); font-size:13px; }
+    .fact span { color:var(--muted); font-size:12px; }
+    .btn { display:inline-flex; align-items:center; justify-content:center; min-height:46px; padding:11px 18px; border-radius:8px; border:1px solid transparent; font-weight:800; cursor:pointer; text-decoration:none; }
+    .btn.primary { background:var(--green); color:#fff; box-shadow:0 8px 20px rgba(24,165,104,.22); }
+    .btn.primary:hover { background:var(--green-dark); }
+    .btn.secondary { background:#fff; color:var(--navy); border-color:var(--line); }
+    .btn:disabled { cursor:not-allowed; opacity:.48; box-shadow:none; }
+    .activity { display:none; }
+    .coach { display:grid; grid-template-columns:52px 1fr auto; align-items:center; gap:14px; padding:14px 16px; background:#fff; border:1px solid var(--line); border-bottom:0; }
+    .byte { width:48px; height:48px; border-radius:50%; display:grid; place-items:center; background:var(--soft-cyan); border:2px solid var(--cyan); color:var(--navy); font-weight:900; }
+    .phase { color:var(--cyan); font-size:11px; text-transform:uppercase; letter-spacing:.8px; font-weight:900; }
+    .coach-text { font-size:16px; font-weight:700; color:var(--navy); }
+    .workspace { position:relative; min-height:430px; background:#fff; border:1px solid var(--line); padding:24px; overflow:hidden; }
+    .workspace-head { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:18px; }
+    .workspace-head p { margin:5px 0 0; color:var(--muted); }
+    .skill-number { flex:none; padding:5px 9px; border-radius:6px; background:var(--soft-green); color:var(--green-dark); font-size:12px; font-weight:800; }
+    .task-area { min-height:295px; position:relative; display:grid; place-items:center; border:1px solid #cbd9e5; background:#f8fbfd; overflow:hidden; }
+    .target { border:0; cursor:pointer; user-select:none; }
+    .target.guided { box-shadow:0 0 0 7px rgba(234,180,59,.28); animation:pulse 1.25s ease-in-out infinite; }
+    .target-star { width:86px; height:86px; display:grid; place-items:center; color:#fff; background:var(--navy-2); clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 94%,50% 72%,21% 94%,32% 57%,2% 35%,39% 35%); font-size:0; }
+    .target-circle { width:92px; height:92px; border-radius:50%; background:var(--green); color:#fff; font-weight:900; }
+    .folder { width:126px; min-height:88px; border:2px solid #9b741f; border-radius:6px; background:#f5c85d; color:#553e0a; display:grid; place-items:center; padding:14px 8px 8px; font-weight:800; position:relative; }
+    .folder:before { content:""; position:absolute; left:8px; top:-13px; width:52px; height:14px; border:2px solid #9b741f; border-bottom:0; border-radius:5px 5px 0 0; background:#f5c85d; }
+    .drag-layout { width:min(620px,100%); display:grid; grid-template-columns:1fr 1fr; align-items:center; justify-items:center; gap:42px; }
+    .file { width:110px; min-height:118px; border:2px solid #9eb5c8; border-radius:6px; background:#fff; padding:18px 8px 8px; display:grid; place-items:center; text-align:center; color:var(--navy); font-weight:800; cursor:grab; box-shadow:0 8px 20px rgba(28,52,77,.09); }
+    .file:active { cursor:grabbing; }
+    .dropzone { width:180px; min-height:150px; display:grid; place-items:center; border:2px dashed #8aa0b5; border-radius:8px; background:#edf3f7; }
+    .dropzone.over,.dropzone.guided { border-color:var(--gold); background:#fff8e5; }
+    .scroll-window { width:min(650px,100%); height:265px; overflow:auto; border:1px solid #aebdca; background:#fff; padding:16px; }
+    .scroll-spacer { height:360px; color:var(--muted); text-align:center; padding-top:18px; background:linear-gradient(#fff,#edf5f8); }
+    .gold-target { width:100%; min-height:70px; border:2px solid #b98a19; border-radius:8px; background:#fff6d8; color:#674d0e; font-weight:900; cursor:pointer; }
+    .decoys { position:absolute; inset:0; pointer-events:none; }
+    .decoy { position:absolute; width:44px; height:44px; border-radius:50%; background:#dce7ef; pointer-events:auto; cursor:pointer; border:1px solid #c6d4df; }
+    .decoy:nth-child(1){left:11%;top:18%}.decoy:nth-child(2){right:13%;top:22%}.decoy:nth-child(3){left:21%;bottom:13%}.decoy:nth-child(4){right:20%;bottom:16%}
+    .demo-pointer { position:absolute; width:24px; height:32px; left:26%; top:65%; background:var(--ink); clip-path:polygon(0 0,0 100%,28% 69%,45% 100%,60% 92%,43% 61%,78% 61%); animation:demoMove 2.3s ease-in-out infinite; z-index:5; }
+    .feedback { min-height:42px; margin-top:13px; padding:10px 12px; background:var(--soft-green); border-left:4px solid var(--green); color:var(--green-dark); font-size:14px; font-weight:700; display:none; }
+    .feedback.show { display:block; }
+    .hint { min-height:42px; margin-top:10px; padding:10px 12px; background:#fff8e5; border-left:4px solid var(--gold); color:#654c10; font-size:14px; display:none; }
+    .hint.show { display:block; }
+    .controls { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; background:#fff; border:1px solid var(--line); border-top:0; }
+    .control-left,.control-right { display:flex; gap:8px; align-items:center; }
+    .pause-layer { position:absolute; inset:0; z-index:20; display:none; place-items:center; background:rgba(18,52,91,.88); color:#fff; text-align:center; padding:30px; }
+    .pause-layer.show { display:grid; }
+    .device-note { display:none; margin:0 0 14px; padding:12px; background:var(--soft-orange); border-left:4px solid var(--orange); color:#7b421f; }
+    .mastery { display:inline-block; padding:6px 10px; border-radius:6px; background:var(--soft-green); color:var(--green-dark); font-weight:900; text-transform:capitalize; }
+    .hidden { display:none !important; }
+    @keyframes pulse { 50%{ box-shadow:0 0 0 12px rgba(234,180,59,.13); } }
+    @keyframes demoMove { 0%{transform:translate(0,0)} 55%,75%{transform:translate(220px,-105px)} 100%{transform:translate(0,0)} }
+    @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; scroll-behavior:auto !important; } }
+    @media (max-width:760px) {
+      .topbar { align-items:flex-start; padding:10px 14px; }
+      .brand small { display:none; }
+      .icon-btn span { display:none; }
+      .shell { width:min(100% - 20px,1180px); margin-top:12px; }
+      .progress { overflow-x:auto; grid-template-columns:repeat(5,145px); padding-bottom:5px; }
+      .coach { grid-template-columns:42px 1fr; }
+      .coach .btn { display:none; }
+      .byte { width:40px; height:40px; }
+      .workspace { padding:16px; min-height:480px; }
+      .workspace-head { flex-direction:column; }
+      .drag-layout { grid-template-columns:1fr; gap:28px; }
+      .controls { align-items:stretch; flex-direction:column; }
+      .control-left,.control-right { width:100%; }
+      .control-left .btn,.control-right .btn { flex:1; }
+      .activity-facts { grid-template-columns:1fr; }
+      .fact+.fact { border-left:0; border-top:1px solid var(--line); }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">LS</span><span>LessonScope Practice<small>Grade 2 Digital Explorer</small></span></div>
+    <div class="top-actions">
+      <button class="icon-btn" id="soundBtn" type="button" title="Read the instruction aloud">Listen <span>aloud</span></button>
+      <button class="icon-btn" id="pauseBtn" type="button" title="Pause practice">Pause</button>
+    </div>
+  </header>
+
+  <main class="shell">
+    <div class="status-row">
+      <div class="student-name" id="studentName"></div>
+      <div class="save-state" id="saveState" role="status" aria-live="polite"></div>
+    </div>
+    <div class="device-note" id="deviceNote">This practice teaches mouse and keyboard skills. Use a laptop or desktop computer for the full activity.</div>
+    <div class="progress" id="progress" aria-label="Activity progress"></div>
+
+    <section class="gate hidden" id="authGate">
+      <div class="gate-inner">
+        <div class="byte-large">B</div>
+        <h1>Sign in to practise</h1>
+        <p class="lead">Use your LessonScope Student ID and PIN. Your progress will stay connected to your class.</p>
+        <a class="btn primary" href="/start?next=%2Fstudent%2Fpractice">Student sign in</a>
+      </div>
+    </section>
+
+    <section class="intro hidden" id="intro">
+      <div class="intro-inner">
+        <div class="byte-large">B</div>
+        <h1>Pointer Control</h1>
+        <p class="lead">Learn to move, click, double-click, drag and scroll. Byte will show you first, then it will be your turn.</p>
+        <div class="activity-facts">
+          <div class="fact"><b>Grade</b><span>Grade 2 foundation</span></div>
+          <div class="fact"><b>Time</b><span>About 10 minutes</span></div>
+          <div class="fact"><b>You need</b><span>A mouse or trackpad</span></div>
+        </div>
+        <button class="btn primary" id="startBtn" type="button">Start practice</button>
+      </div>
+    </section>
+
+    <section class="activity" id="activity">
+      <div class="coach">
+        <div class="byte" aria-hidden="true">B</div>
+        <div><div class="phase" id="phaseLabel">Show me</div><div class="coach-text" id="coachText" aria-live="polite"></div></div>
+        <button class="btn secondary" id="replayBtn" type="button">Replay</button>
+      </div>
+      <div class="workspace" id="workspace">
+        <div class="workspace-head"><div><h2 id="skillTitle"></h2><p id="skillInstruction"></p></div><div class="skill-number" id="skillNumber"></div></div>
+        <div class="task-area" id="taskArea"></div>
+        <div class="feedback" id="feedback" role="status" aria-live="polite"></div>
+        <div class="hint" id="hint" role="status" aria-live="polite"></div>
+        <div class="pause-layer" id="pauseLayer"><div><h2 style="color:#fff">Practice paused</h2><p>Your progress is safe.</p><button class="btn primary" id="resumeBtn" type="button">Continue</button></div></div>
+      </div>
+      <div class="controls">
+        <div class="control-left"><button class="btn secondary" id="hintBtn" type="button">Help me</button></div>
+        <div class="control-right"><button class="btn primary" id="nextBtn" type="button" disabled>Practise with help</button></div>
+      </div>
+    </section>
+
+    <section class="completion hidden" id="completion">
+      <div class="completion-inner">
+        <div class="byte-large">OK</div>
+        <h1>Pointer practice complete</h1>
+        <p class="lead">You moved, clicked, double-clicked, dragged and scrolled. Your teacher can now see the skills you practised.</p>
+        <p id="masterySummary"></p>
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:24px">
+          <a class="btn primary" href="/start">Back to my work</a>
+          <button class="btn secondary" id="practiseAgainBtn" type="button">Practise again</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const ACTIVITY_ID = 'g2-pointer-control';
+    const steps = [
+      { id:'move-pointer', title:'Move the pointer', action:'pointer_enter', target:'blue-star',
+        show:'Watch the pointer move to the blue star.', guided:'Move your pointer onto the glowing blue star.', independent:'Now move to the blue star by yourself.', success:'You moved the pointer to the target.',
+        hints:['Move the mouse or slide one finger on the trackpad.','Look for the blue star in the middle.','Follow the pointer demonstration, then try again.'] },
+      { id:'single-click', title:'Single-click', action:'single_click', target:'green-circle',
+        show:'Watch one quick press select the green circle.', guided:'Click the glowing green circle one time.', independent:'Select the green circle with one click.', success:'That was one clear click.',
+        hints:['Press and release the left mouse button once.','The green circle is the correct target.','Watch one click again, then try it yourself.'] },
+      { id:'double-click', title:'Double-click', action:'double_click', target:'blue-folder',
+        show:'Watch two quick clicks open the folder.', guided:'Double-click the glowing folder.', independent:'Open the folder with two quick clicks.', success:'You opened the folder with a double-click.',
+        hints:['Use two quick clicks without moving the pointer.','The yellow folder is the correct target.','Watch the two-click rhythm, then try again.'] },
+      { id:'drag-drop', title:'Drag and drop', action:'drag_drop', target:'homework-folder',
+        show:'Watch the file move into the Homework folder.', guided:'Drag the file into the glowing Homework folder.', independent:'Move the file into Homework by yourself.', success:'You held, moved and released the file.',
+        hints:['Press and hold the file while you move it.','Move the file into the Homework folder.','Watch the complete drag, then try again.'] },
+      { id:'scroll-find', title:'Scroll and find', action:'scroll_find', target:'gold-star',
+        show:'Watch the page scroll down to reveal the gold star.', guided:'Scroll down and click the glowing gold star.', independent:'Find the gold star below and click it.', success:'You scrolled to find something that was out of view.',
+        hints:['Use the mouse wheel or move the scrollbar down.','The gold star is near the bottom of the panel.','Watch the scroll demonstration, then find it yourself.'] },
+    ];
+    const $ = (id) => document.getElementById(id);
+    let home = null;
+    let attempt = null;
+    let stepIndex = 0;
+    let phase = 'show';
+    let guidedComplete = false;
+    let independentSaved = false;
+    let stats = { attempts:0, hintsUsed:0, activeSeconds:0 };
+    let paused = false;
+    let pendingSingleClick = null;
+
+    function esc(value) { return String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+    function checkpointKey() { return `ls-practice-pending-${attempt && attempt.id || 'none'}`; }
+    function checkpointId(step) { return `${attempt.id}:${attempt.activityVersion}:${step.id}`; }
+    function setSave(text, error) { $('saveState').textContent = text || ''; $('saveState').style.color = error ? '#b13d2e' : ''; }
+    function phaseName() { return phase === 'show' ? 'Show me' : phase === 'guided' ? 'Help me practise' : 'My turn'; }
+    function currentStep() { return steps[stepIndex]; }
+
+    function renderProgress() {
+      $('progress').innerHTML = steps.map((step, index) => `<div class="progress-step ${index < stepIndex ? 'done' : index === stepIndex ? 'current' : ''}">${index + 1}. ${esc(step.title)}</div>`).join('');
+    }
+
+    function taskTargetClass() { return phase === 'guided' ? ' guided' : ''; }
+    function decoys() { return phase === 'independent' ? '<div class="decoys"><button class="decoy" aria-label="Not the target"></button><button class="decoy" aria-label="Not the target"></button><button class="decoy" aria-label="Not the target"></button><button class="decoy" aria-label="Not the target"></button></div>' : ''; }
+
+    function renderTask() {
+      const step = currentStep();
+      const area = $('taskArea');
+      if (step.id === 'move-pointer') {
+        area.innerHTML = `${decoys()}<div class="target target-star${taskTargetClass()}" id="skillTarget" tabindex="0" aria-label="Blue star"></div>${phase === 'show' ? '<div class="demo-pointer"></div>' : ''}`;
+        if (phase !== 'show') $('skillTarget').addEventListener('pointerenter', () => completeInteraction('pointer_enter','blue-star'));
+      } else if (step.id === 'single-click') {
+        area.innerHTML = `${decoys()}${phase === 'show' ? '<div class="demo-pointer" style="animation-name:demoMove"></div>' : ''}<button class="target target-circle${taskTargetClass()}" id="skillTarget" type="button">Click me</button>`;
+        if (phase !== 'show') $('skillTarget').addEventListener('click', (event) => { event.stopPropagation(); completeInteraction('single_click','green-circle'); });
+      } else if (step.id === 'double-click') {
+        area.innerHTML = `${decoys()}<button class="target folder${taskTargetClass()}" id="skillTarget" type="button">School Work</button>`;
+        if (phase !== 'show') {
+          $('skillTarget').addEventListener('click', (event) => {
+            event.stopPropagation();
+            clearTimeout(pendingSingleClick);
+            pendingSingleClick = setTimeout(() => registerWrong('That was one click. Try two quick clicks.'), 360);
+          });
+          $('skillTarget').addEventListener('dblclick', (event) => { event.preventDefault(); event.stopPropagation(); clearTimeout(pendingSingleClick); completeInteraction('double_click','blue-folder'); });
+        }
+      } else if (step.id === 'drag-drop') {
+        area.innerHTML = `<div class="drag-layout"><div class="file" id="dragFile" draggable="${phase !== 'show'}">My Work<div style="font-size:12px;color:#718095">document</div></div><div class="dropzone${taskTargetClass()}" id="dropTarget"><div class="folder">Homework</div></div></div>${phase === 'show' ? '<div class="demo-pointer"></div>' : ''}`;
+        if (phase !== 'show') {
+          $('dragFile').addEventListener('dragstart', (event) => event.dataTransfer.setData('text/plain','my-work'));
+          $('dropTarget').addEventListener('dragover', (event) => { event.preventDefault(); $('dropTarget').classList.add('over'); });
+          $('dropTarget').addEventListener('dragleave', () => $('dropTarget').classList.remove('over'));
+          $('dropTarget').addEventListener('drop', (event) => { event.preventDefault(); $('dropTarget').classList.remove('over'); if (event.dataTransfer.getData('text/plain') === 'my-work') completeInteraction('drag_drop','homework-folder'); else registerWrong('Keep holding the file until it is inside Homework.'); });
+        }
+      } else {
+        area.innerHTML = `<div class="scroll-window" id="scrollWindow"><div style="font-weight:800;color:var(--navy)">The gold star is below.</div><div class="scroll-spacer">Scroll down to keep looking.</div><button class="gold-target${taskTargetClass()}" id="skillTarget" type="button">Gold star found</button></div>`;
+        if (phase === 'show') setTimeout(() => { const pane=$('scrollWindow'); if(pane) pane.scrollTo({top:pane.scrollHeight,behavior:'smooth'}); }, 350);
+        else $('skillTarget').addEventListener('click', (event) => { event.stopPropagation(); const pane=$('scrollWindow'); if (pane.scrollTop < 180) registerWrong('Scroll down before choosing the star.'); else completeInteraction('scroll_find','gold-star'); });
+      }
+      if (phase === 'independent') area.addEventListener('click', (event) => { if (!event.target.closest('#skillTarget') && !event.target.closest('#scrollWindow')) registerWrong('Try the task again. You can ask Byte for help.'); });
+    }
+
+    function renderStep() {
+      clearTimeout(pendingSingleClick);
+      const step = currentStep();
+      guidedComplete = false;
+      independentSaved = false;
+      stats = { attempts:0, hintsUsed:0, activeSeconds:0 };
+      $('activity').style.display = 'block';
+      $('phaseLabel').textContent = phaseName();
+      $('coachText').textContent = step[phase];
+      $('skillTitle').textContent = step.title;
+      $('skillInstruction').textContent = step[phase];
+      $('skillNumber').textContent = `Skill ${stepIndex + 1} of ${steps.length}`;
+      $('feedback').className = 'feedback'; $('feedback').textContent = '';
+      $('hint').className = 'hint'; $('hint').textContent = '';
+      $('hintBtn').disabled = phase === 'show';
+      $('replayBtn').hidden = phase === 'independent';
+      $('nextBtn').disabled = phase !== 'show';
+      $('nextBtn').textContent = phase === 'show' ? 'Practise with help' : phase === 'guided' ? 'My turn' : 'Saving progress';
+      renderProgress();
+      renderTask();
+      if (phase === 'show') $('nextBtn').disabled = false;
+    }
+
+    function registerWrong(message) {
+      if (phase === 'show' || guidedComplete || independentSaved) return;
+      stats.attempts += 1;
+      $('feedback').textContent = message;
+      $('feedback').className = 'feedback show';
+    }
+
+    async function completeInteraction(action, target) {
+      if (phase === 'show' || guidedComplete || independentSaved) return;
+      const step = currentStep();
+      if (action !== step.action || target !== step.target) return registerWrong('Try the skill again.');
+      stats.attempts += 1;
+      $('feedback').textContent = step.success;
+      $('feedback').className = 'feedback show';
+      if (phase === 'guided') {
+        guidedComplete = true;
+        $('nextBtn').disabled = false;
+        $('nextBtn').textContent = 'My turn';
+        return;
+      }
+      independentSaved = true;
+      await saveCheckpoint();
+    }
+
+    async function saveCheckpoint() {
+      const step = currentStep();
+      const payload = { checkpointId:checkpointId(step), stepId:step.id, attempts:Math.max(1,stats.attempts), hintsUsed:stats.hintsUsed, activeSeconds:Math.max(1,stats.activeSeconds), evidence:{ action:step.action, target:step.target } };
+      localStorage.setItem(checkpointKey(), JSON.stringify(payload));
+      setSave('Saving progress...');
+      $('nextBtn').disabled = true;
+      try {
+        const response = await fetch(`/api/practice/attempts/${encodeURIComponent(attempt.id)}/checkpoints`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Progress could not be saved.');
+        attempt = data.attempt;
+        localStorage.removeItem(checkpointKey());
+        setSave('Progress saved');
+        $('nextBtn').disabled = false;
+        $('nextBtn').textContent = attempt.status === 'completed' ? 'See my result' : 'Continue';
+      } catch (error) {
+        independentSaved = false;
+        setSave('Progress is waiting to save', true);
+        $('feedback').textContent = `${error.message} Choose Retry save.`;
+        $('feedback').className = 'feedback show';
+        $('nextBtn').disabled = false;
+        $('nextBtn').textContent = 'Retry save';
+        $('nextBtn').dataset.retry = '1';
+      }
+    }
+
+    async function retryPending() {
+      const raw = localStorage.getItem(checkpointKey());
+      if (!raw) return false;
+      try {
+        const response = await fetch(`/api/practice/attempts/${encodeURIComponent(attempt.id)}/checkpoints`, { method:'POST', headers:{'Content-Type':'application/json'}, body:raw });
+        const data = await response.json();
+        if (!response.ok) return false;
+        attempt = data.attempt;
+        localStorage.removeItem(checkpointKey());
+        setSave('Progress restored');
+        return true;
+      } catch { return false; }
+    }
+
+    function showCompletion() {
+      $('activity').style.display = 'none';
+      $('completion').classList.remove('hidden');
+      $('progress').innerHTML = steps.map((step,index) => `<div class="progress-step done">${index + 1}. ${esc(step.title)}</div>`).join('');
+      const label = String(attempt.mastery || '').replaceAll('_',' ');
+      $('masterySummary').innerHTML = `Overall result: <span class="mastery">${esc(label)}</span>`;
+      setSave('All progress saved');
+    }
+
+    $('nextBtn').addEventListener('click', async () => {
+      if ($('nextBtn').dataset.retry === '1') { delete $('nextBtn').dataset.retry; independentSaved = true; await saveCheckpoint(); return; }
+      if (phase === 'show') { phase = 'guided'; renderStep(); return; }
+      if (phase === 'guided' && guidedComplete) { phase = 'independent'; renderStep(); return; }
+      if (phase === 'independent' && independentSaved) {
+        if (attempt.status === 'completed') return showCompletion();
+        stepIndex = attempt.currentStepIndex;
+        phase = 'show';
+        renderStep();
+      }
+    });
+
+    $('hintBtn').addEventListener('click', () => {
+      if (phase === 'show' || independentSaved) return;
+      const step = currentStep();
+      stats.hintsUsed = Math.min(3, stats.hintsUsed + 1);
+      $('hint').textContent = step.hints[stats.hintsUsed - 1];
+      $('hint').className = 'hint show';
+      if (stats.hintsUsed >= 2) $('skillTarget')?.classList.add('guided');
+    });
+    $('replayBtn').addEventListener('click', () => {
+      if (phase === 'independent') return;
+      phase = 'show';
+      renderStep();
+    });
+    $('soundBtn').addEventListener('click', () => { if ('speechSynthesis' in window) { speechSynthesis.cancel(); const speech=new SpeechSynthesisUtterance($('coachText').textContent); speech.rate=.9; speechSynthesis.speak(speech); } });
+    function setPaused(value) { paused=value; $('pauseLayer').classList.toggle('show',paused); $('pauseBtn').textContent=paused?'Continue':'Pause'; }
+    $('pauseBtn').addEventListener('click', () => setPaused(!paused));
+    $('resumeBtn').addEventListener('click', () => setPaused(false));
+    $('practiseAgainBtn').addEventListener('click', async () => { $('completion').classList.add('hidden'); await beginAttempt(true); });
+    setInterval(() => { if (!paused && !document.hidden && $('activity').style.display === 'block') stats.activeSeconds += 1; }, 1000);
+
+    async function beginAttempt(forceNew) {
+      if (forceNew && attempt && attempt.status !== 'completed') return;
+      setSave('Preparing practice...');
+      const response = await fetch('/api/practice/attempts', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ activityId:ACTIVITY_ID }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Practice could not start.');
+      attempt = data.attempt;
+      stepIndex = attempt.currentStepIndex;
+      if (attempt.status === 'completed') {
+        // createAttempt only resumes unfinished attempts, so a completed result
+        // here means an idempotent response raced with the final checkpoint.
+        return showCompletion();
+      }
+      await retryPending();
+      stepIndex = attempt.currentStepIndex;
+      phase = 'show';
+      $('intro').classList.add('hidden');
+      setSave(data.resumed ? 'Practice restored' : 'Practice started');
+      renderStep();
+    }
+
+    $('startBtn').addEventListener('click', () => beginAttempt(false).catch((error) => setSave(error.message,true)));
+
+    (async () => {
+      if (matchMedia('(pointer:coarse)').matches) $('deviceNote').style.display='block';
+      try {
+        const response = await fetch('/api/practice/student/home');
+        if (response.status === 401) { $('authGate').classList.remove('hidden'); return; }
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Practice is unavailable.');
+        home = data;
+        $('studentName').textContent = `Practising as ${data.student.name}`;
+        const unfinished = data.attempts.find((item) => item.activityId === ACTIVITY_ID && item.status === 'in_progress');
+        $('startBtn').textContent = unfinished ? 'Continue practice' : 'Start practice';
+        $('intro').classList.remove('hidden');
+        renderProgress();
+      } catch (error) {
+        $('authGate').classList.remove('hidden');
+        $('authGate').querySelector('.lead').textContent = error.message;
+      }
+    })();
+  </script>
+</body>
+</html>

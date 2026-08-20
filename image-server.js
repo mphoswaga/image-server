@@ -57,6 +57,7 @@ const prices = require('./credit-prices');
 const lessonAssistant = require('./lesson-assistant');
 const releaseManager = require('./release-manager');
 const planningFramework = require('./planning-framework');
+const practice = require('./practice');
 const { runWithUser, usageSnapshot, usageSince, declareAction } = require('./ai-client');
 const usage = require('./usage');
 const jwt = require('jsonwebtoken');
@@ -157,6 +158,11 @@ function optionalStudentSession(req) {
   } catch {
     return null;
   }
+}
+
+function requirePracticeEnabled(req, res, next) {
+  if (!practice.enabled()) return res.status(404).json({ error: 'LessonScope Practice is not enabled.' });
+  next();
 }
 
 function assignmentStudentSession(req, res, a) {
@@ -2160,6 +2166,72 @@ app.post('/api/student/join-room', requireStudentAccess, (req, res) => {
   res.json({ type: 'assignment', id: assignmentId, path: '/assignment/' + assignmentId });
 });
 
+// LessonScope Practice is an isolated, feature-flagged student experience.
+// It reuses the verified roster Student ID/PIN session but keeps its evidence
+// model separate from knowledge games and graded assignments.
+app.get('/api/practice/status', (req, res) => {
+  res.json({ enabled: practice.enabled(), studentPath: '/student/practice', teacherPath: '/practice' });
+});
+
+app.get('/api/practice/catalog', requirePracticeEnabled, (req, res) => {
+  res.json({ activities: practice.listActivities() });
+});
+
+app.get('/api/practice/student/home', requirePracticeEnabled, requireStudentAccess, (req, res) => {
+  res.json({
+    student: { studentId: req.studentSession.studentId, name: req.studentSession.name },
+    activities: practice.listActivities(),
+    attempts: practice.studentSummary(req.studentSession.studentId),
+  });
+});
+
+app.post('/api/practice/attempts', requirePracticeEnabled, requireStudentAccess, (req, res) => {
+  try {
+    const result = practice.createAttempt({
+      studentId: req.studentSession.studentId,
+      studentName: req.studentSession.name,
+      activityId: req.body && req.body.activityId,
+    });
+    res.status(result.resumed ? 200 : 201).json(result);
+  } catch (err) {
+    res.status(err.code === 'activity_not_found' ? 404 : 400).json({ error: err.message });
+  }
+});
+
+app.post('/api/practice/attempts/:id/checkpoints', requirePracticeEnabled, requireStudentAccess, (req, res) => {
+  try {
+    const result = practice.checkpointAttempt(req.params.id, req.studentSession.studentId, req.body || {});
+    res.json(result);
+  } catch (err) {
+    const status = err.code === 'forbidden' ? 403
+      : err.code === 'attempt_not_found' ? 404
+        : err.code === 'step_out_of_order' || err.code === 'attempt_complete' ? 409
+          : 400;
+    res.status(status).json({ error: err.message, code: err.code || 'invalid_checkpoint' });
+  }
+});
+
+app.get('/api/practice/results', requirePracticeEnabled, requireAuth, (req, res) => {
+  if (req.user && req.user.role === 'student') return res.status(403).json({ error: 'Teacher account required.' });
+  const rosterRecords = roster.listRosters(req.userId)
+    .map((summary) => roster.getRoster(req.userId, summary.id))
+    .filter(Boolean);
+  const students = new Map();
+  for (const classRoster of rosterRecords) {
+    for (const student of classRoster.students || []) {
+      const id = roster.normalizeStudentId(student.id);
+      if (!students.has(id)) students.set(id, { id, name: student.name, rosters: [] });
+      students.get(id).rosters.push({ id: classRoster.id, name: classRoster.name });
+    }
+  }
+  const results = practice.teacherResults([...students.keys()]).map((result) => ({
+    ...result,
+    studentName: (students.get(result.studentId) || {}).name || result.studentName,
+    rosters: (students.get(result.studentId) || {}).rosters || [],
+  }));
+  res.json({ activities: practice.listActivities(), students: [...students.values()], results });
+});
+
 // Student: enter an assignment with their Student ID — issues a short-lived session.
 // A PIN protects one identity. Which identity depends on where the name came
 // from, and the difference matters:
@@ -3604,6 +3676,11 @@ app.get('/my-work', (req, res) => res.sendFile(path.join(__dirname, 'public', 'm
 // The ONE link to hand students: Student ID -> PIN setup/verify -> browse
 // past work + join new games/assignments by Room Code, all on one page.
 app.get('/start', (req, res) => res.sendFile(path.join(__dirname, 'public', 'start.html')));
+
+// Practical digital-skills player and teacher evidence view. The HTML lives
+// outside public/ so the feature flag cannot be bypassed with a direct file URL.
+app.get('/student/practice', requirePracticeEnabled, (req, res) => res.sendFile(path.join(__dirname, 'practice.html')));
+app.get('/practice', requirePracticeEnabled, (req, res) => res.sendFile(path.join(__dirname, 'practice-teacher.html')));
 
 // Student play page (the shareable link target).
 app.get('/play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'play.html')));

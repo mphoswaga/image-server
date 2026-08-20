@@ -31,6 +31,10 @@
     .greet { font-size:20px; font-weight:800; margin-bottom:4px; }
     .greet-sub { color:var(--muted); font-size:14px; margin-bottom:20px; }
     .join-card { background:#fff; border-radius:14px; box-shadow:var(--sh); padding:20px; margin-bottom:20px; }
+    .practice-card { display:none; background:#eaf8f2; border:1px solid #9edbbc; border-radius:14px; padding:18px 20px; margin-bottom:14px; }
+    .practice-card b { display:block; color:#116b47; font-size:16px; margin-bottom:3px; }
+    .practice-card p { color:#486b5b; font-size:13px; margin:0 0 10px; }
+    .practice-card a { display:inline-block; color:#0f714a; font-size:13px; font-weight:800; text-decoration:none; }
     .join-row { display:flex; gap:10px; }
     .join-row input { margin-bottom:0; text-transform:uppercase; letter-spacing:3px; font-family:ui-monospace,monospace; font-weight:700; }
     .join-row button { width:auto; padding:13px 20px; white-space:nowrap; }
@@ -93,6 +97,12 @@
       <div class="greet" id="greet"></div>
       <p class="greet-sub">Here's your LessonScope space.</p>
 
+      <div class="practice-card" id="practiceCard">
+        <b>Digital Skills Practice</b>
+        <p>Build confidence with mouse, keyboard and safe-computing skills.</p>
+        <a href="/student/practice">Open Practice &rarr;</a>
+      </div>
+
       <div class="join-card">
         <label for="roomCode" style="margin-bottom:8px">Join something new</label>
         <div class="join-row">
@@ -111,6 +121,8 @@
 
   <script>
     const $ = id => document.getElementById(id);
+    const nextParam = new URLSearchParams(location.search).get('next');
+    const returnTo = nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//') ? nextParam : '';
     const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const typeLabel = { worksheet: 'Worksheet', 'exit-ticket': 'Exit ticket', quiz: 'Quiz', game: 'Game' };
     const fmtDate = iso => { if (!iso) return ''; const d = new Date(iso); return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); };
@@ -141,10 +153,12 @@
     }
 
     async function showDashboard(name) {
+      if (returnTo) { location.replace(returnTo); return; }
       $('loading').style.display = 'none';
       $('authCard').style.display = 'none';
       $('greet').textContent = `Hi ${name}!`;
       $('dashboard').style.display = 'block';
+      fetch('/api/practice/status').then(r => r.json()).then(d => { if (d.enabled) $('practiceCard').style.display = 'block'; }).catch(() => {});
       try {
         const r = await fetch('/api/student/my-work');
         const d = await r.json();
