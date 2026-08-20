@@ -112,8 +112,12 @@ test('the learner quest keeps Byte and its connected game states', () => {
   const byte = fs.readFileSync(path.join(__dirname, '..', 'public', 'assets', 'byte-talking.gif'));
   assert.equal(byte.subarray(0, 6).toString('ascii'), 'GIF89a');
   assert.match(player, /Byte's Skill Lab/);
+  assert.match(player, /Byte and the Blackout/);
+  assert.match(player, /Foundation World/);
   assert.match(player, /\/assets\/byte-talking\.gif/);
   assert.match(player, /mission-transition/);
-  assert.match(player, /Watch Byte/);
-  assert.match(player, /Quest points/);
+  assert.match(player, /Signal Trail/);
+  assert.match(player, /Keyboard Kingdom/);
+  assert.match(player, /Arcade score/);
+  assert.doesNotMatch(player, /phase === 'guided'/);
 });

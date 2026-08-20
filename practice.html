@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>LessonScope Practice - Byte's Pointer Quest</title>
+  <title>LessonScope Practice - Byte and the Blackout</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <style>
     :root {
@@ -14,6 +14,7 @@
       --shadow:0 16px 40px rgba(24,47,73,.10);
     }
     * { box-sizing:border-box; }
+    [hidden] { display:none !important; }
     html,body { margin:0; min-height:100%; }
     body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:var(--ink); background:var(--bg); line-height:1.45; }
     button { font:inherit; }
@@ -61,12 +62,12 @@
     .workspace-head { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:12px; }
     .workspace-head p { margin:5px 0 0; color:var(--muted); }
     .skill-number { flex:none; padding:5px 9px; border-radius:6px; background:var(--soft-green); color:var(--green-dark); font-size:12px; font-weight:800; }
-    .game-hud { display:grid; grid-template-columns:1fr auto auto; gap:12px; align-items:center; margin-bottom:12px; padding:10px 12px; border:1px solid var(--line); background:#f8fbfd; }
+    .game-hud { display:grid; grid-template-columns:minmax(150px,1fr) repeat(3,auto); gap:12px; align-items:center; margin-bottom:12px; padding:10px 12px; border:1px solid var(--line); background:#f8fbfd; }
     .mission-meter { height:10px; overflow:hidden; border-radius:10px; background:#dce7ef; }
     .mission-meter span { display:block; width:0; height:100%; background:var(--green); transition:width .28s ease; }
     .hud-stat { min-width:92px; color:var(--muted); font-size:11px; font-weight:700; text-align:right; }
     .hud-stat strong { display:block; color:var(--navy); font-size:17px; }
-    .task-area { min-height:310px; position:relative; display:grid; place-items:center; border:1px solid #b7cadd; background:linear-gradient(180deg,#eaf7fb 0 35%,#dff1e8 35% 100%); overflow:hidden; }
+    .task-area { min-height:310px; position:relative; display:grid; place-items:center; border:1px solid #b7cadd; background:linear-gradient(180deg,#eaf7fb 0 35%,#dff1e8 35% 100%); overflow:hidden; isolation:isolate; }
     .task-area:before { content:""; position:absolute; left:0; right:0; top:35%; border-top:1px solid rgba(18,52,91,.10); }
     .target { border:0; cursor:pointer; user-select:none; }
     .target.guided { box-shadow:0 0 0 7px rgba(234,180,59,.28); animation:pulse 1.25s ease-in-out infinite; }
@@ -83,6 +84,27 @@
     .scroll-window { width:min(650px,100%); height:265px; overflow:auto; border:1px solid #aebdca; background:#fff; padding:16px; }
     .scroll-spacer { height:360px; color:var(--muted); text-align:center; padding-top:18px; background:linear-gradient(#fff,#edf5f8); }
     .gold-target { width:100%; min-height:70px; border:2px solid #b98a19; border-radius:8px; background:#fff6d8; color:#674d0e; font-weight:900; cursor:pointer; }
+    .room-label { position:absolute; z-index:4; left:14px; top:14px; padding:7px 10px; border:1px solid rgba(255,255,255,.24); background:rgba(5,14,32,.78); color:#fff; font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:.8px; }
+    .room-move-pointer { background:radial-gradient(circle at 50% 48%,rgba(37,205,220,.20),transparent 28%),linear-gradient(155deg,#07142c,#12345b); }
+    .room-single-click { background:radial-gradient(circle at 50% 55%,rgba(30,184,120,.25),transparent 30%),linear-gradient(150deg,#07142c,#153f43); }
+    .room-double-click { background:linear-gradient(150deg,#15132f,#3a2455); }
+    .room-drag-drop { background:linear-gradient(180deg,#14213c 0 62%,#263650 62%); }
+    .room-scroll-find { background:linear-gradient(145deg,#08162f,#183963); }
+    .room-move-pointer:after,.room-single-click:after,.room-double-click:after,.room-drag-drop:after,.room-scroll-find:after { content:""; position:absolute; z-index:-1; inset:0; opacity:.45; background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px); background-size:34px 34px; }
+    .signal-beacon { filter:drop-shadow(0 0 14px rgba(37,205,220,.85)); }
+    .reactor-core { border:4px solid #9df6c6; box-shadow:0 0 0 10px rgba(30,184,120,.14),0 0 30px rgba(30,184,120,.65); animation:reactorPulse 1.1s ease-in-out infinite; }
+    .vault-door { border-color:#8cecf4; background:#244e75; color:#fff; box-shadow:0 0 26px rgba(37,205,220,.22); }
+    .vault-door:before { border-color:#8cecf4; background:#244e75; }
+    .cargo-crate { border-color:#f4b862; background:#fff3db; color:#694318; box-shadow:0 10px 24px rgba(0,0,0,.24); }
+    .charging-dock { border-color:#25cddc; background:rgba(37,205,220,.10); color:#fff; }
+    .charging-dock .folder { border-color:#25cddc; background:#123e52; color:#fff; }
+    .charging-dock .folder:before { border-color:#25cddc; background:#123e52; }
+    .tower-window { border:2px solid #4b78a8; background:#0b1c38; color:#fff; box-shadow:0 15px 36px rgba(0,0,0,.28); }
+    .tower-window .scroll-spacer { color:#8ca4bc; background:linear-gradient(#0b1c38,#173b61); }
+    .next-world { margin:22px auto 0; padding:16px 18px; max-width:640px; border:1px solid #2e5884; background:#102747; text-align:left; }
+    .next-world b { display:block; color:#8cecf4; font-size:12px; text-transform:uppercase; letter-spacing:.8px; }
+    .next-world strong { display:block; margin:3px 0; color:#fff; font-size:20px; }
+    .next-world span { color:#b8c9db; font-size:14px; }
     .decoys { position:absolute; inset:0; pointer-events:none; }
     .decoy { position:absolute; width:44px; height:44px; border-radius:50%; background:#dce7ef; pointer-events:auto; cursor:pointer; border:1px solid #c6d4df; }
     .decoy:nth-child(1){left:11%;top:18%}.decoy:nth-child(2){right:13%;top:22%}.decoy:nth-child(3){left:21%;bottom:13%}.decoy:nth-child(4){right:20%;bottom:16%}
@@ -142,6 +164,7 @@
     @keyframes burst { 0%{transform:scale(.35);opacity:0} 55%{transform:scale(1.08);opacity:1} 100%{transform:scale(1);opacity:1} }
     @keyframes pointsUp { from{transform:translateY(15px);opacity:0} 35%{opacity:1} to{transform:translateY(-38px);opacity:0} }
     @keyframes livePulse { 50%{opacity:.45;transform:scale(.78)} }
+    @keyframes reactorPulse { 50%{box-shadow:0 0 0 15px rgba(30,184,120,.08),0 0 42px rgba(30,184,120,.8)} }
     @keyframes transitionIn { from{opacity:0;transform:translateY(18px) scale(.92)} to{opacity:1;transform:none} }
 
     /* Immersive game shell. The evidence system remains the same; only the
@@ -203,8 +226,9 @@
       .activity-facts { grid-template-columns:1fr; }
       .quest-map { grid-template-columns:repeat(5,128px); overflow-x:auto; padding-bottom:5px; }
       .fact+.fact { border-left:0; border-top:1px solid var(--line); }
-      .game-hud { grid-template-columns:1fr auto; }
-      .game-hud .hud-stat:last-child { grid-column:1/-1; text-align:left; }
+      .game-hud { grid-template-columns:1fr 1fr 1fr; }
+      .game-hud .mission-meter { grid-column:1/-1; }
+      .hud-stat { min-width:0; text-align:center; }
       .tutorial { grid-template-columns:1fr; padding:18px; }
       .tutorial-visual { min-height:120px; }
       .quest-hero { grid-template-columns:1fr; }
@@ -246,17 +270,17 @@
       <div class="intro-inner">
         <div class="quest-hero">
           <div class="bot-stage"><div class="live-chip">Byte online</div><img class="bot-image" src="/assets/byte-talking.gif" alt="Byte, the LessonScope robot guide" /></div>
-          <div class="quest-copy"><div class="quest-kicker">Mission briefing</div><h1>Byte's Pointer Quest</h1><p class="lead">The Skill Lab has lost five power badges. Learn each pointer move, clear the missions and bring the lab back online.</p><div class="speech">I will show you every move first. When you are ready, the mission becomes yours.</div></div>
+          <div class="quest-copy"><div class="quest-kicker">Foundation World · Chapter 1</div><h1>Byte and the Blackout</h1><p class="lead">A digital storm has shut down Byte City. Clear five arcade rooms, restore the power and unlock the road to Keyboard Kingdom.</p><div class="speech">Watch my quick mission briefing, then jump straight into the arcade. Every room you clear lights the city back up.</div></div>
         </div>
         <div class="quest-map" aria-label="Five pointer missions">
-          <div class="quest-stop"><strong>1</strong>Move</div><div class="quest-stop"><strong>2</strong>Click</div><div class="quest-stop"><strong>3</strong>Double-click</div><div class="quest-stop"><strong>4</strong>Drag</div><div class="quest-stop"><strong>5</strong>Scroll</div>
+          <div class="quest-stop"><strong>1</strong>Signal Trail</div><div class="quest-stop"><strong>2</strong>Reactor Rush</div><div class="quest-stop"><strong>3</strong>Vault Breaker</div><div class="quest-stop"><strong>4</strong>Cargo Rescue</div><div class="quest-stop"><strong>5</strong>Signal Tower</div>
         </div>
         <div class="activity-facts">
-          <div class="fact"><b>Grade</b><span>Grade 2 foundation</span></div>
+          <div class="fact"><b>World</b><span>Foundation for Grade 2 and Grade 3</span></div>
           <div class="fact"><b>Time</b><span>About 10 minutes</span></div>
           <div class="fact"><b>You need</b><span>A mouse or trackpad</span></div>
         </div>
-        <button class="btn primary" id="startBtn" type="button">Start the quest</button>
+        <button class="btn primary" id="startBtn" type="button">Begin the rescue</button>
       </div>
     </section>
 
@@ -268,7 +292,7 @@
       </div>
       <div class="workspace" id="workspace">
         <div class="workspace-head"><div><h2 id="skillTitle"></h2><p id="skillInstruction"></p></div><div class="skill-number" id="skillNumber"></div></div>
-        <div class="game-hud"><div class="mission-meter" aria-label="Mission progress"><span id="missionMeter"></span></div><div class="hud-stat">Mission<strong id="roundValue">0 / 1</strong></div><div class="hud-stat">Quest points<strong id="scoreValue">0</strong></div></div>
+        <div class="game-hud"><div class="mission-meter" aria-label="Mission progress"><span id="missionMeter"></span></div><div class="hud-stat">Room target<strong id="roundValue">0 / 1</strong></div><div class="hud-stat">City power<strong id="cityPowerValue">0%</strong></div><div class="hud-stat">Arcade score<strong id="scoreValue">0</strong></div></div>
         <div class="task-area" id="taskArea"></div>
         <div class="feedback" id="feedback" role="status" aria-live="polite"></div>
         <div class="hint" id="hint" role="status" aria-live="polite"></div>
@@ -284,11 +308,12 @@
     <section class="completion hidden" id="completion">
       <div class="completion-inner">
         <img class="bot-image complete" src="/assets/byte-talking.gif" alt="Byte celebrating" />
-        <h1>Pointer Quest complete</h1>
+        <h1>Byte City is online</h1>
         <p class="lead" id="completionLead">You moved, clicked, double-clicked, dragged and scrolled. Your teacher can now see the skills you practised.</p>
         <p id="masterySummary"></p>
         <p id="scoreSummary"></p>
-        <div class="badge-shelf" aria-label="Five earned skill badges"><div class="earned-badge"><span>1</span>Move</div><div class="earned-badge"><span>2</span>Click</div><div class="earned-badge"><span>3</span>Double-click</div><div class="earned-badge"><span>4</span>Drag</div><div class="earned-badge"><span>5</span>Scroll</div></div>
+        <div class="badge-shelf" aria-label="Five earned skill badges"><div class="earned-badge"><span>1</span>Signal Trail</div><div class="earned-badge"><span>2</span>Reactor Rush</div><div class="earned-badge"><span>3</span>Vault Breaker</div><div class="earned-badge"><span>4</span>Cargo Rescue</div><div class="earned-badge"><span>5</span>Signal Tower</div></div>
+        <div class="next-world"><b>New world unlocked</b><strong>Keyboard Kingdom</strong><span>Every learner begins in Foundation World. Grade 2 explorers can keep advancing, while Grade 3 learners continue towards Expert World.</span></div>
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:24px">
           <a class="btn primary" id="completionBack" href="/start">Back to my work</a>
           <button class="btn secondary" id="practiseAgainBtn" type="button">Practise again</button>
@@ -301,28 +326,28 @@
     const ACTIVITY_ID = 'g2-pointer-control';
     const previewMode = location.pathname === '/practice/preview';
     const steps = [
-      { id:'move-pointer', title:'Move the pointer', action:'pointer_enter', target:'blue-star',
-        show:'Watch the pointer move to the blue star.', guided:'Move your pointer onto the glowing blue star.', independent:'Now move to the blue star by yourself.', success:'You moved the pointer to the target.',
+      { id:'move-pointer', title:'Signal Trail', action:'pointer_enter', target:'blue-star',
+        show:'Byte is trapped outside the city. Watch how pointer movement reconnects a signal beacon.', independent:'Guide the signal through all three beacons to open the city gate.', success:'The city gate has power again.',
         hints:['Move the mouse or slide one finger on the trackpad.','Look for the blue star in the middle.','Follow the pointer demonstration, then try again.'] },
-      { id:'single-click', title:'Single-click', action:'single_click', target:'green-circle',
-        show:'Watch one quick press select the green circle.', guided:'Click the glowing green circle one time.', independent:'Select the green circle with one click.', success:'That was one clear click.',
+      { id:'single-click', title:'Reactor Rush', action:'single_click', target:'green-circle',
+        show:'The power reactor is asleep. Watch one clean click activate a power cell.', independent:'Activate three power cells with one click each.', success:'The reactor is running.',
         hints:['Press and release the left mouse button once.','The green circle is the correct target.','Watch one click again, then try it yourself.'] },
-      { id:'double-click', title:'Double-click', action:'double_click', target:'blue-folder',
-        show:'Watch two quick clicks open the folder.', guided:'Double-click the glowing folder.', independent:'Open the folder with two quick clicks.', success:'You opened the folder with a double-click.',
+      { id:'double-click', title:'Vault Breaker', action:'double_click', target:'blue-folder',
+        show:'Two archive vaults hold the city map. Watch two quick clicks unlock a vault door.', independent:'Double-click both vault doors before the map signal fades.', success:'The city map is recovered.',
         hints:['Use two quick clicks without moving the pointer.','The yellow folder is the correct target.','Watch the two-click rhythm, then try again.'] },
-      { id:'drag-drop', title:'Drag and drop', action:'drag_drop', target:'homework-folder',
-        show:'Watch the file move into the Homework folder.', guided:'Drag the file into the glowing Homework folder.', independent:'Move the file into Homework by yourself.', success:'You held, moved and released the file.',
+      { id:'drag-drop', title:'Cargo Rescue', action:'drag_drop', target:'homework-folder',
+        show:'Supply crates are blocking the data dock. Watch how to hold, move and release one safely.', independent:'Drag both supply crates into the charging dock.', success:'The data dock is clear.',
         hints:['Press and hold the file while you move it.','Move the file into the Homework folder.','Watch the complete drag, then try again.'] },
-      { id:'scroll-find', title:'Scroll and find', action:'scroll_find', target:'gold-star',
-        show:'Watch the page scroll down to reveal the gold star.', guided:'Scroll down and click the glowing gold star.', independent:'Find the gold star below and click it.', success:'You scrolled to find something that was out of view.',
+      { id:'scroll-find', title:'Signal Tower', action:'scroll_find', target:'gold-star',
+        show:'The final antenna is hidden on another tower floor. Watch scrolling reveal what is outside the screen.', independent:'Scroll through the tower and activate the hidden antenna.', success:'The tower is broadcasting. Byte City is online.',
         hints:['Use the mouse wheel or move the scrollbar down.','The gold star is near the bottom of the panel.','Watch the scroll demonstration, then find it yourself.'] },
     ];
     const tutorials = {
-      'move-pointer': { title:'Move without pressing', action:'Slide the mouse, or one finger on the trackpad.', detail:'Keep every button up. Guide the pointer until it touches the star.', visual:'move' },
-      'single-click': { title:'Press once', action:'Press and release the left button one time.', detail:'One quick click chooses an item. Do not hold the button down.', visual:'click' },
-      'double-click': { title:'Press twice quickly', action:'Click-click without moving the mouse.', detail:'The two clicks must be close together to open the folder.', visual:'double' },
-      'drag-drop': { title:'Hold, move, release', action:'Hold the left button on the file while you move it.', detail:'Let go only when the file is inside the Homework folder.', visual:'drag' },
-      'scroll-find': { title:'Move the page', action:'Roll the wheel down, or slide two fingers up on a trackpad.', detail:'Scrolling reveals things that are below the visible page.', visual:'scroll' },
+      'move-pointer': { title:'Reconnect the beacons', action:'Slide the mouse, or one finger on the trackpad.', detail:'Do not press a button. Touch each signal beacon with the pointer.', visual:'move' },
+      'single-click': { title:'Wake the reactor', action:'Press and release the left button one time.', detail:'One clean click powers one cell. Do not hold the button down.', visual:'click' },
+      'double-click': { title:'Break the vault locks', action:'Click-click without moving the mouse.', detail:'Two quick clicks open one archive vault.', visual:'double' },
+      'drag-drop': { title:'Move the supply crates', action:'Hold the left button on the crate while you move it.', detail:'Release only when the crate is inside the charging dock.', visual:'drag' },
+      'scroll-find': { title:'Search the tower floors', action:'Roll the wheel down, or slide two fingers up on a trackpad.', detail:'Scrolling reveals the antenna hidden outside the screen.', visual:'scroll' },
     };
     const missionGoals = { 'move-pointer':3, 'single-click':3, 'double-click':2, 'drag-drop':2, 'scroll-find':1 };
     const $ = (id) => document.getElementById(id);
@@ -330,7 +355,6 @@
     let attempt = null;
     let stepIndex = 0;
     let phase = 'show';
-    let guidedComplete = false;
     let independentSaved = false;
     let stats = { attempts:0, hintsUsed:0, activeSeconds:0 };
     let roundProgress = 0;
@@ -344,7 +368,7 @@
     function checkpointKey() { return `ls-practice-pending-${attempt && attempt.id || 'none'}`; }
     function checkpointId(step) { return `${attempt.id}:${attempt.activityVersion}:${step.id}`; }
     function setSave(text, error) { $('saveState').textContent = text || ''; $('saveState').style.color = error ? '#b13d2e' : ''; }
-    function phaseName() { return phase === 'show' ? 'Watch Byte' : phase === 'guided' ? 'Try together' : 'Your mission'; }
+    function phaseName() { return phase === 'show' ? 'Mission briefing' : 'Arcade mission'; }
     function currentStep() { return steps[stepIndex]; }
     function roundGoal() { return phase === 'independent' ? missionGoals[currentStep().id] : 1; }
 
@@ -352,6 +376,7 @@
       const goal = roundGoal();
       $('roundValue').textContent = `${Math.min(roundProgress,goal)} / ${goal}`;
       $('scoreValue').textContent = score;
+      $('cityPowerValue').textContent = `${Math.min(100,Math.round((stepIndex*20)+(roundProgress/goal)*20))}%`;
       $('missionMeter').style.width = `${Math.min(100,(roundProgress/goal)*100)}%`;
     }
 
@@ -378,7 +403,7 @@
     function celebrateHit(finalHit) {
       const pop=document.createElement('div');
       pop.className=finalHit?'burst':'points-pop';
-      pop.textContent=finalHit?'Mission clear':`+${phase==='guided'?25:100}`;
+      pop.textContent=finalHit?'Room clear':'+100';
       $('taskArea').appendChild(pop);
       setTimeout(()=>pop.remove(),finalHit?720:800);
     }
@@ -387,12 +412,13 @@
       $('progress').innerHTML = steps.map((step, index) => `<div class="progress-step ${index < stepIndex ? 'done' : index === stepIndex ? 'current' : ''}">${index + 1}. ${esc(step.title)}</div>`).join('');
     }
 
-    function taskTargetClass() { return phase === 'guided' ? ' guided' : ''; }
-    function decoys() { return phase === 'independent' ? '<div class="decoys"><button class="decoy" aria-label="Not the target"></button><button class="decoy" aria-label="Not the target"></button><button class="decoy" aria-label="Not the target"></button><button class="decoy" aria-label="Not the target"></button></div>' : ''; }
+    function taskTargetClass() { return ''; }
+    function decoys() { return phase === 'independent' ? '<div class="decoys"><button class="decoy" aria-label="Inactive city node"></button><button class="decoy" aria-label="Inactive city node"></button><button class="decoy" aria-label="Inactive city node"></button><button class="decoy" aria-label="Inactive city node"></button></div>' : ''; }
 
     function renderTask() {
       const step = currentStep();
       const area = $('taskArea');
+      area.className = `task-area ${phase === 'show' ? 'briefing-room' : `room-${step.id}`}`;
       roundLocked = false;
       if (phase === 'show') {
         const tutorial=tutorials[step.id];
@@ -402,13 +428,13 @@
       const positions=[['22%','20%'],['67%','18%'],['46%','62%']];
       const position=positions[roundProgress%positions.length];
       if (step.id === 'move-pointer') {
-        area.innerHTML = `${decoys()}<div class="target target-star${taskTargetClass()}" id="skillTarget" tabindex="0" aria-label="Blue star" style="position:absolute;left:${position[0]};top:${position[1]}"></div>`;
+        area.innerHTML = `<div class="room-label">Signal Trail · Beacon ${roundProgress+1}</div>${decoys()}<div class="target target-star signal-beacon${taskTargetClass()}" id="skillTarget" tabindex="0" aria-label="Signal beacon" style="position:absolute;left:${position[0]};top:${position[1]}"></div>`;
         $('skillTarget').addEventListener('pointerenter', () => completeInteraction('pointer_enter','blue-star'));
       } else if (step.id === 'single-click') {
-        area.innerHTML = `${decoys()}<button class="target target-circle${taskTargetClass()}" id="skillTarget" style="position:absolute;left:${position[0]};top:${position[1]}" type="button">Power orb</button>`;
+        area.innerHTML = `<div class="room-label">Reactor Rush · Cell ${roundProgress+1}</div>${decoys()}<button class="target target-circle reactor-core${taskTargetClass()}" id="skillTarget" style="position:absolute;left:${position[0]};top:${position[1]}" type="button">Power</button>`;
         $('skillTarget').addEventListener('click', (event) => { event.stopPropagation(); completeInteraction('single_click','green-circle'); });
       } else if (step.id === 'double-click') {
-        area.innerHTML = `${decoys()}<button class="target folder${taskTargetClass()}" id="skillTarget" type="button">School Work</button>`;
+        area.innerHTML = `<div class="room-label">Vault Breaker · Lock ${roundProgress+1}</div>${decoys()}<button class="target folder vault-door${taskTargetClass()}" id="skillTarget" type="button">Locked map</button>`;
         $('skillTarget').addEventListener('click', (event) => {
           event.stopPropagation();
           clearTimeout(pendingSingleClick);
@@ -416,13 +442,13 @@
         });
         $('skillTarget').addEventListener('dblclick', (event) => { event.preventDefault(); event.stopPropagation(); clearTimeout(pendingSingleClick); completeInteraction('double_click','blue-folder'); });
       } else if (step.id === 'drag-drop') {
-        area.innerHTML = `<div class="drag-layout"><div class="file" id="dragFile" draggable="true">Mission file ${roundProgress+1}<div style="font-size:12px;color:#718095">document</div></div><div class="dropzone${taskTargetClass()}" id="dropTarget"><div class="folder">Homework</div></div></div>`;
+        area.innerHTML = `<div class="room-label">Cargo Rescue · Crate ${roundProgress+1}</div><div class="drag-layout"><div class="file cargo-crate" id="dragFile" draggable="true">Power crate ${roundProgress+1}<div style="font-size:12px;color:#8b6539">Hold and move</div></div><div class="dropzone charging-dock${taskTargetClass()}" id="dropTarget"><div class="folder">Charging dock</div></div></div>`;
         $('dragFile').addEventListener('dragstart', (event) => event.dataTransfer.setData('text/plain','my-work'));
         $('dropTarget').addEventListener('dragover', (event) => { event.preventDefault(); $('dropTarget').classList.add('over'); });
         $('dropTarget').addEventListener('dragleave', () => $('dropTarget').classList.remove('over'));
         $('dropTarget').addEventListener('drop', (event) => { event.preventDefault(); $('dropTarget').classList.remove('over'); if (event.dataTransfer.getData('text/plain') === 'my-work') completeInteraction('drag_drop','homework-folder'); else registerWrong('Keep holding the file until it is inside Homework.'); });
       } else {
-        area.innerHTML = `<div class="scroll-window" id="scrollWindow"><div style="font-weight:800;color:var(--navy)">The gold star is below.</div><div class="scroll-spacer">Scroll down to keep looking.</div><button class="gold-target${taskTargetClass()}" id="skillTarget" type="button">Gold star found</button></div>`;
+        area.innerHTML = `<div class="room-label">Signal Tower · Final floor</div><div class="scroll-window tower-window" id="scrollWindow"><div style="font-weight:800;color:#8cecf4">Antenna signal detected below</div><div class="scroll-spacer">Scroll through the dark tower floors.</div><button class="gold-target${taskTargetClass()}" id="skillTarget" type="button">Activate antenna</button></div>`;
         $('skillTarget').addEventListener('click', (event) => { event.stopPropagation(); const pane=$('scrollWindow'); if (pane.scrollTop < 180) registerWrong('Scroll down before choosing the star.'); else completeInteraction('scroll_find','gold-star'); });
       }
       if (phase === 'independent') area.addEventListener('click', (event) => { if (!event.target.closest('#skillTarget') && !event.target.closest('#scrollWindow')) registerWrong('Try the task again. You can ask Byte for help.'); });
@@ -431,7 +457,6 @@
     function renderStep() {
       clearTimeout(pendingSingleClick);
       const step = currentStep();
-      guidedComplete = false;
       independentSaved = false;
       stats = { attempts:0, hintsUsed:0, activeSeconds:0 };
       roundProgress = 0;
@@ -446,7 +471,7 @@
       $('hintBtn').disabled = phase === 'show';
       $('replayBtn').hidden = phase === 'independent';
       $('nextBtn').disabled = phase !== 'show';
-      $('nextBtn').textContent = phase === 'show' ? 'Try with Byte' : phase === 'guided' ? 'Start my mission' : 'Complete the mission';
+      $('nextBtn').textContent = phase === 'show' ? 'Enter the arcade' : 'Clear the room';
       renderProgress();
       updateHud();
       renderTask();
@@ -454,7 +479,7 @@
       setTimeout(()=>narrate(`${phaseName()}. ${step[phase]}`),120);
     }
 
-    function showMissionTransition(kicker='Mission unlocked') {
+    function showMissionTransition(kicker='New room unlocked') {
       const step=currentStep();
       $('transitionKicker').textContent=kicker;
       $('transitionTitle').textContent=`Mission ${stepIndex+1}: ${step.title}`;
@@ -464,19 +489,19 @@
     }
 
     function registerWrong(message) {
-      if (phase === 'show' || guidedComplete || independentSaved) return;
+      if (phase === 'show' || independentSaved) return;
       stats.attempts += 1;
       $('feedback').textContent = message;
       $('feedback').className = 'feedback show';
     }
 
     async function completeInteraction(action, target) {
-      if (phase === 'show' || guidedComplete || independentSaved || roundLocked) return;
+      if (phase === 'show' || independentSaved || roundLocked) return;
       const step = currentStep();
       if (action !== step.action || target !== step.target) return registerWrong('Try the skill again.');
       roundLocked = true;
       roundProgress += 1;
-      score += phase === 'guided' ? 25 : 100;
+      score += 100;
       const finalHit=roundProgress >= roundGoal();
       $('feedback').textContent = finalHit ? step.success : `Great move. ${roundGoal()-roundProgress} more to clear this mission.`;
       $('feedback').className = 'feedback show';
@@ -485,12 +510,6 @@
       celebrateHit(finalHit);
       if (!finalHit) { setTimeout(renderTask,420); return; }
       stats.attempts += 1;
-      if (phase === 'guided') {
-        guidedComplete = true;
-        $('nextBtn').disabled = false;
-        $('nextBtn').textContent = 'Start my mission';
-        return;
-      }
       independentSaved = true;
       await saveCheckpoint();
     }
@@ -561,14 +580,13 @@
       $('progress').innerHTML = steps.map((step,index) => `<div class="progress-step done">${index + 1}. ${esc(step.title)}</div>`).join('');
       const label = String(attempt.mastery || '').replaceAll('_',' ');
       $('masterySummary').innerHTML = `Overall result: <span class="mastery">${esc(label)}</span>`;
-      $('scoreSummary').innerHTML = `Quest points: <strong style="color:#25cddc;font-size:24px">${score}</strong>`;
+      $('scoreSummary').innerHTML = `Arcade score: <strong style="color:#25cddc;font-size:24px">${score}</strong>`;
       setSave(previewMode ? 'Preview complete - no results were saved' : 'All progress saved');
     }
 
     $('nextBtn').addEventListener('click', async () => {
       if ($('nextBtn').dataset.retry === '1') { delete $('nextBtn').dataset.retry; independentSaved = true; await saveCheckpoint(); return; }
-      if (phase === 'show') { phase = 'guided'; renderStep(); return; }
-      if (phase === 'guided' && guidedComplete) { phase = 'independent'; renderStep(); return; }
+      if (phase === 'show') { phase = 'independent'; renderStep(); return; }
       if (phase === 'independent' && independentSaved) {
         if (attempt.status === 'completed') return showCompletion();
         stepIndex = attempt.currentStepIndex;
@@ -614,7 +632,7 @@
         $('intro').classList.add('hidden');
         setSave('Preview only - results not saved');
         renderStep();
-        showMissionTransition('Quest begins');
+        showMissionTransition('City gate opened');
         return;
       }
       setSave('Preparing practice...');
@@ -634,7 +652,7 @@
       $('intro').classList.add('hidden');
       setSave(data.resumed ? 'Practice restored' : 'Practice started');
       renderStep();
-      showMissionTransition(data.resumed ? 'Quest restored' : 'Quest begins');
+      showMissionTransition(data.resumed ? 'Mission restored' : 'City gate opened');
     }
 
     $('startBtn').addEventListener('click', () => beginAttempt(false).catch((error) => setSave(error.message,true)));
@@ -657,7 +675,7 @@
           $('studentName').textContent = `Practising as ${data.student.name}`;
         }
         const unfinished = previewMode ? null : data.attempts.find((item) => item.activityId === ACTIVITY_ID && item.status === 'in_progress');
-        $('startBtn').textContent = unfinished ? 'Continue the quest' : 'Start the quest';
+        $('startBtn').textContent = unfinished ? 'Continue the rescue' : 'Begin the rescue';
         $('intro').classList.remove('hidden');
         renderProgress();
       } catch (error) {
