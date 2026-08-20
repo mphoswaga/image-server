@@ -92,7 +92,8 @@
     .room-drag-drop { background:linear-gradient(180deg,#14213c 0 62%,#263650 62%); }
     .room-scroll-find { background:linear-gradient(145deg,#08162f,#183963); }
     .room-keyboard-defense { background:#020617; }
-    .room-move-pointer:after,.room-single-click:after,.room-double-click:after,.room-context-command:after,.room-drag-drop:after,.room-scroll-find:after,.room-keyboard-defense:after { content:""; position:absolute; z-index:-1; inset:0; opacity:.45; background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px); background-size:34px 34px; }
+    .room-key-patrol,.room-word-blaster,.room-capital-charge,.room-sentence-engine,.room-repair-bay { background:linear-gradient(145deg,#090b24,#29205b); }
+    .room-move-pointer:after,.room-single-click:after,.room-double-click:after,.room-context-command:after,.room-drag-drop:after,.room-scroll-find:after,.room-keyboard-defense:after,.room-key-patrol:after,.room-word-blaster:after,.room-capital-charge:after,.room-sentence-engine:after,.room-repair-bay:after { content:""; position:absolute; z-index:-1; inset:0; opacity:.45; background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px); background-size:34px 34px; }
     .arcade-grid { width:min(680px,calc(100% - 30px)); height:290px; display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr); gap:14px; padding:12px; }
     .arcade-pad { position:relative; display:grid; place-items:center; min-width:0; border:2px solid #29486d; border-radius:50%; background:#071225; box-shadow:inset 0 8px 15px rgba(0,0,0,.65); }
     button.arcade-pad { cursor:pointer; }
@@ -128,6 +129,16 @@
     .signal-word .typed { color:#69e3a7; text-shadow:0 0 9px rgba(105,227,167,.8); }
     .defense-cannon { position:absolute; z-index:3; left:50%; bottom:13px; width:72px; height:35px; transform:translateX(-50%); border:3px solid #69e3a7; border-radius:35px 35px 6px 6px; background:#12623e; box-shadow:0 0 24px rgba(105,227,167,.55); }
     .defense-line { position:absolute; left:0; right:0; bottom:54px; height:3px; background:linear-gradient(90deg,transparent,#f05b6b,transparent); box-shadow:0 0 10px #f05b6b; }
+    .key-arena { width:min(720px,calc(100% - 30px)); min-height:285px; display:grid; place-items:center; gap:22px; padding:34px; border:2px solid #6657ad; background:radial-gradient(circle at center,rgba(168,85,247,.20),transparent 54%),#090b24; }
+    .key-prompt { color:#c9bfff; font-size:15px; font-weight:800; text-align:center; }
+    .key-row { display:flex; justify-content:center; flex-wrap:wrap; gap:12px; }
+    .arcade-key { min-width:72px; min-height:70px; display:grid; place-items:center; border:2px solid #4d4478; border-radius:8px; background:#151735; color:#766f9a; font-size:27px; font-weight:900; box-shadow:0 8px 0 #08091b; }
+    .arcade-key.active { border-color:#c69cff; background:#603b8b; color:#fff; box-shadow:0 8px 0 #251b3d,0 0 30px rgba(198,156,255,.55); animation:keyGlow 1s ease-in-out infinite; }
+    .typing-card { width:min(670px,calc(100% - 34px)); padding:28px; border:2px solid #6657ad; background:#0b102b; text-align:center; box-shadow:0 16px 36px rgba(0,0,0,.32); }
+    .typing-target { margin:14px 0; color:#fff; font-size:clamp(24px,4vw,40px); font-weight:900; letter-spacing:3px; overflow-wrap:anywhere; }
+    .typing-target .typed { color:#69e3a7; text-shadow:0 0 10px rgba(105,227,167,.7); }
+    .typing-target .wrong { color:#f05b6b; text-decoration:line-through; }
+    .typing-status { color:#a9b9ce; font-size:14px; }
     .conveyor { width:min(700px,calc(100% - 34px)); min-height:230px; display:grid; grid-template-columns:1fr 1fr; align-items:center; justify-items:center; gap:30px; padding:30px; position:relative; border:2px solid #4c607c; background:linear-gradient(180deg,#17243b 0 60%,#273951 60%); overflow:hidden; }
     .conveyor:after { content:""; position:absolute; z-index:-1; left:-20%; right:-20%; bottom:16%; height:44px; border-top:4px dashed #8da3ba; border-bottom:4px dashed #8da3ba; animation:conveyorMove 1.2s linear infinite; }
     .combo-hot { color:#f8c342 !important; text-shadow:0 0 12px rgba(248,195,66,.55); }
@@ -207,6 +218,7 @@
     @keyframes sparkBurst { from{opacity:1;transform:translate(0,0) scale(1)} to{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.2)} }
     @keyframes wrongShake { 25%{transform:translateX(-7px)} 50%{transform:translateX(7px)} 75%{transform:translateX(-4px)} }
     @keyframes signalDescend { from{top:18px} to{top:150px} }
+    @keyframes keyGlow { 50%{transform:translateY(3px);box-shadow:0 5px 0 #251b3d,0 0 40px rgba(198,156,255,.8)} }
     @keyframes transitionIn { from{opacity:0;transform:translateY(18px) scale(.92)} to{opacity:1;transform:none} }
 
     /* Immersive game shell. The evidence system remains the same; only the
@@ -219,6 +231,7 @@
     .student-name { color:#b8c9db; }
     .save-state { color:#69e3a7; }
     .progress { position:relative; gap:8px; }
+    body.campaign-g3 .progress { grid-template-columns:repeat(5,minmax(0,1fr)); }
     .progress:before { content:""; position:absolute; left:9%; right:9%; top:19px; border-top:2px solid #29486d; }
     .progress-step { position:relative; z-index:1; padding:37px 7px 9px; border:1px solid #29486d; background:#0c1d3b; color:#7890aa; }
     .progress-step:before { content:""; position:absolute; left:50%; top:9px; width:18px; height:18px; border-radius:50%; transform:translateX(-50%); background:#29486d; border:3px solid #0c1d3b; }
@@ -230,6 +243,7 @@
     .intro { display:block; min-height:600px; padding:38px; }
     .intro-inner { width:100%; }
     .quest-map { position:relative; }
+    body.campaign-g3 .quest-map { grid-template-columns:repeat(5,1fr); }
     .quest-map:before { content:""; position:absolute; left:8%; right:8%; top:26px; border-top:2px solid #29486d; }
     .quest-stop { position:relative; z-index:1; border-color:#29486d; background:#0c1d3b; color:#b8c9db; text-align:center; }
     .quest-stop strong { background:#25cddc; color:#07142c; }
@@ -256,6 +270,7 @@
       .icon-btn span { display:none; }
       .shell { width:min(100% - 20px,1180px); margin-top:12px; }
       .progress { overflow-x:auto; grid-template-columns:repeat(7,145px); padding-bottom:5px; }
+      body.campaign-g3 .progress { grid-template-columns:repeat(5,145px); }
       .coach { grid-template-columns:42px 1fr; }
       .coach .btn { display:none; }
       .byte { width:40px; height:40px; }
@@ -267,6 +282,7 @@
       .control-left .btn,.control-right .btn { flex:1; }
       .activity-facts { grid-template-columns:1fr; }
       .quest-map { grid-template-columns:repeat(7,128px); overflow-x:auto; padding-bottom:5px; }
+      body.campaign-g3 .quest-map { grid-template-columns:repeat(5,128px); }
       .fact+.fact { border-left:0; border-top:1px solid var(--line); }
       .game-hud { grid-template-columns:repeat(4,1fr); }
       .game-hud .mission-meter { grid-column:1/-1; }
@@ -318,15 +334,15 @@
       <div class="intro-inner">
         <div class="quest-hero">
           <div class="bot-stage"><div class="live-chip">Byte online</div><img class="bot-image" src="/assets/byte-talking.gif" alt="Byte, the LessonScope robot guide" /></div>
-          <div class="quest-copy"><div class="quest-kicker">Foundation World · Chapter 1</div><h1>Byte and the Blackout</h1><p class="lead">A digital storm has shut down Byte City. Beat seven arcade missions, restore the power and unlock Advanced Keyboard Kingdom.</p><div class="speech">This is a real rescue mission. Chase, whack, unlock, command, drag, climb and type your way through the city.</div></div>
+          <div class="quest-copy"><div class="quest-kicker" id="questKicker">Foundation World · Chapter 1</div><h1 id="questTitle">Byte and the Blackout</h1><p class="lead" id="questLead">A digital storm has shut down Byte City. Beat seven arcade missions, restore the power and unlock Advanced Keyboard Kingdom.</p><div class="speech" id="questSpeech">This is a real rescue mission. Chase, whack, unlock, command, drag, climb and type your way through the city.</div></div>
         </div>
-        <div class="quest-map" aria-label="Seven arcade missions">
+        <div class="quest-map" id="questMap" aria-label="Seven arcade missions">
           <div class="quest-stop"><strong>1</strong>Signal Trail</div><div class="quest-stop"><strong>2</strong>Reactor Rush</div><div class="quest-stop"><strong>3</strong>Vault Breaker</div><div class="quest-stop"><strong>4</strong>Command Deck</div><div class="quest-stop"><strong>5</strong>Cargo Rescue</div><div class="quest-stop"><strong>6</strong>Signal Tower</div><div class="quest-stop"><strong>7</strong>Sky Shield</div>
         </div>
         <div class="activity-facts">
-          <div class="fact"><b>World</b><span>Foundation for Grade 2 and Grade 3</span></div>
-          <div class="fact"><b>Time</b><span>About 15 minutes</span></div>
-          <div class="fact"><b>You need</b><span>A keyboard and mouse or trackpad</span></div>
+          <div class="fact"><b>World</b><span id="factWorld">Foundation for Grade 2 and Grade 3</span></div>
+          <div class="fact"><b>Time</b><span id="factTime">About 15 minutes</span></div>
+          <div class="fact"><b>You need</b><span id="factDevice">A keyboard and mouse or trackpad</span></div>
         </div>
         <button class="btn primary" id="startBtn" type="button">Begin the rescue</button>
       </div>
@@ -356,12 +372,12 @@
     <section class="completion hidden" id="completion">
       <div class="completion-inner">
         <img class="bot-image complete" src="/assets/byte-talking.gif" alt="Byte celebrating" />
-        <h1>Byte City is online</h1>
+        <h1 id="completionTitle">Byte City is online</h1>
         <p class="lead" id="completionLead">You moved, clicked, double-clicked, dragged and scrolled. Your teacher can now see the skills you practised.</p>
         <p id="masterySummary"></p>
         <p id="scoreSummary"></p>
-        <div class="badge-shelf" aria-label="Seven earned skill badges"><div class="earned-badge"><span>1</span>Signal Trail</div><div class="earned-badge"><span>2</span>Reactor Rush</div><div class="earned-badge"><span>3</span>Vault Breaker</div><div class="earned-badge"><span>4</span>Command Deck</div><div class="earned-badge"><span>5</span>Cargo Rescue</div><div class="earned-badge"><span>6</span>Signal Tower</div><div class="earned-badge"><span>7</span>Sky Shield</div></div>
-        <div class="next-world"><b>New world unlocked</b><strong>Advanced Keyboard Kingdom</strong><span>Every learner begins in Foundation World. Grade 2 explorers can keep advancing, while Grade 3 learners continue towards Expert World.</span></div>
+        <div class="badge-shelf" id="badgeShelf" aria-label="Earned skill badges"></div>
+        <div class="next-world" id="nextWorld"><b>New world unlocked</b><strong id="nextWorldTitle">Advanced Keyboard Kingdom</strong><span id="nextWorldCopy">Continue into the Grade 3 keyboard campaign.</span><a class="btn primary" id="continueWorldBtn" href="#" style="margin-top:14px">Continue to Grade 3</a></div>
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:24px">
           <a class="btn primary" id="completionBack" href="/start">Back to my work</a>
           <button class="btn secondary" id="practiseAgainBtn" type="button">Practise again</button>
@@ -371,9 +387,9 @@
   </main>
 
   <script>
-    const ACTIVITY_ID = 'g2-pointer-control';
     const previewMode = location.pathname === '/practice/preview';
-    const steps = [
+    const requestedWorld = new URLSearchParams(location.search).get('world') === 'g3' ? 'g3' : 'foundation';
+    const foundationSteps = [
       { id:'move-pointer', title:'Signal Trail', action:'pointer_enter', target:'blue-star',
         show:'Signal bugs are flashing across the grid. Chase them with the pointer before they jump away.', independent:'Chase and tag five signal bugs to open the city gate.', success:'The city gate has power again.',
         hints:['Move the mouse or slide one finger on the trackpad.','Look for the blue star in the middle.','Follow the pointer demonstration, then try again.'] },
@@ -396,6 +412,30 @@
         show:'Signal ships are falling towards Byte City. Type the word under each ship to fire the sky shield.', independent:'Type three falling signal words to defend the restored city.', success:'The sky shield is active. Byte City is safe.',
         hints:['Read the glowing word under the signal ship.','Press one letter at a time in the same order.','The green letters show what you have already typed.'] },
     ];
+    const grade3Steps = [
+      { id:'key-patrol', title:'Key Patrol', action:'home_keys', target:'home-row',
+        show:'Keyboard Kingdom is dark. Wake the home-row keys in the order Byte shows you.', independent:'Hit the four glowing home-row keys to open the kingdom gate.', success:'The home-row gate is open.',
+        hints:['Find A, S, D and F on the middle keyboard row.','Press only the glowing key.','Keep both hands close to the middle row.'] },
+      { id:'word-blaster', title:'Word Blaster', action:'type_word', target:'shield-word',
+        show:'Code clouds are falling over the kingdom. Type each whole word to blast it away.', independent:'Type three falling words before they reach the castle shield.', success:'The code clouds are gone.',
+        hints:['Read the whole glowing word first.','Type the letters from left to right.','Green letters are already correct.'] },
+      { id:'capital-charge', title:'Capital Charge', action:'shift_letter', target:'capital-signal',
+        show:'The capital towers need a stronger signal. Hold Shift while pressing the glowing letter.', independent:'Charge three capital letters using Shift.', success:'The capital towers are charged.',
+        hints:['Hold either Shift key down.','Keep holding Shift while pressing the letter.','A capital letter is bigger than a lowercase letter.'] },
+      { id:'sentence-engine', title:'Sentence Engine', action:'type_sentence', target:'sentence-signal',
+        show:'The sentence engine needs spaces and a full stop, not only letters.', independent:'Type the complete sentence exactly as it appears.', success:'The sentence engine is running.',
+        hints:['Use the spacebar between words.','The green part is already correct.','Finish with the full-stop key.'] },
+      { id:'repair-bay', title:'Repair Bay', action:'repair_word', target:'repaired-code',
+        show:'Broken words have the wrong middle letter. Use Backspace, then type the correct letters.', independent:'Repair three broken words to restore the kingdom code.', success:'Keyboard Kingdom is restored.',
+        hints:['Use Backspace to remove the wrong letters.','Stop deleting when the beginning matches.','Then type the missing correct letters.'] },
+    ];
+    const campaigns = {
+      foundation:{ id:'g2-pointer-control', version:2, steps:foundationSteps, kicker:'Foundation World · Chapter 1', title:'Byte and the Blackout', lead:'A digital storm has shut down Byte City. Beat seven arcade missions, restore the power and unlock Advanced Keyboard Kingdom.', speech:'This is a real rescue mission. Chase, whack, unlock, command, drag, climb and type your way through the city.', world:'Foundation for Grade 2 and Grade 3', time:'About 15 minutes', device:'A keyboard and mouse or trackpad', completion:'Byte City is online', completionLead:'You restored every district and opened the road to Grade 3.', start:'Begin the rescue', resume:'Continue the rescue', nextTitle:'Advanced Keyboard Kingdom', nextCopy:'Continue into five playable Grade 3 keyboard missions.', nextLabel:'Continue to Grade 3' },
+      g3:{ id:'g3-keyboard-kingdom', version:1, steps:grade3Steps, kicker:'Grade 3 World · Chapter 2', title:'Byte and the Broken Code', lead:'A scrambled code has locked Keyboard Kingdom. Master keys, words, capitals, sentences and editing to restore it.', speech:'Your Grade 2 skills opened the gate. Now the keyboard is your arcade controller.', world:'Grade 3 keyboard adventure', time:'About 12 minutes', device:'A computer keyboard', completion:'Keyboard Kingdom restored', completionLead:'You mastered the Grade 3 keyboard campaign and earned access to the future Expert World.', start:'Enter Keyboard Kingdom', resume:'Continue Keyboard Kingdom', nextTitle:'Expert World', nextCopy:'Your Foundation and Grade 3 worlds are complete. Expert missions will continue the adventure.', nextLabel:'' },
+    };
+    const campaign = campaigns[requestedWorld];
+    const ACTIVITY_ID = campaign.id;
+    const steps = campaign.steps;
     const tutorials = {
       'move-pointer': { title:'Chase the flashing bug', action:'Move the pointer onto it. Do not click.', detail:'Each bug jumps to a new pad. Tag five to clear the room.', visual:'move' },
       'single-click': { title:'Whack with one click', action:'Press and release the left button one time.', detail:'Wait for a green bug to pop up, then click it once.', visual:'click' },
@@ -404,9 +444,38 @@
       'drag-drop': { title:'Rescue the moving cargo', action:'Hold the crate, move it to the dock, then release.', detail:'Do not let go until the crate is inside the charging dock.', visual:'drag' },
       'scroll-find': { title:'Climb the signal tower', action:'Scroll down until the antenna switch appears.', detail:'Activate the switch, then climb the next floor.', visual:'scroll' },
       'keyboard-defense': { title:'Type to fire the shield', action:'Read the falling word and type its letters in order.', detail:'Correct letters turn green. Finish three words to save the city.', visual:'type' },
+      'key-patrol': { title:'Wake the home row', action:'Press the glowing A, S, D or F key.', detail:'One key lights at a time. Follow the sequence.', visual:'type' },
+      'word-blaster': { title:'Blast a whole word', action:'Type every letter from left to right.', detail:'Correct letters turn green as the cloud falls.', visual:'type' },
+      'capital-charge': { title:'Hold Shift for capitals', action:'Hold Shift and press the glowing letter.', detail:'Do both actions together to make one capital.', visual:'type' },
+      'sentence-engine': { title:'Build a complete sentence', action:'Type letters, spaces and the final full stop.', detail:'Copy the sentence exactly as it appears.', visual:'type' },
+      'repair-bay': { title:'Delete, then repair', action:'Use Backspace to remove the mistake, then type the fix.', detail:'Keep the correct beginning of each word.', visual:'type' },
     };
-    const missionGoals = { 'move-pointer':5, 'single-click':6, 'double-click':4, 'context-command':3, 'drag-drop':3, 'scroll-find':3, 'keyboard-defense':3 };
+    const missionGoals = { 'move-pointer':5, 'single-click':6, 'double-click':4, 'context-command':3, 'drag-drop':3, 'scroll-find':3, 'keyboard-defense':3, 'key-patrol':4, 'word-blaster':3, 'capital-charge':3, 'sentence-engine':1, 'repair-bay':3 };
+    const keyboardStepIds = new Set(['keyboard-defense','key-patrol','word-blaster','capital-charge','sentence-engine','repair-bay']);
     const $ = (id) => document.getElementById(id);
+
+    function applyCampaignCopy() {
+      document.body.classList.toggle('campaign-g3',requestedWorld==='g3');
+      document.title=`LessonScope Practice - ${campaign.title}`;
+      $('questKicker').textContent=campaign.kicker;
+      $('questTitle').textContent=campaign.title;
+      $('questLead').textContent=campaign.lead;
+      $('questSpeech').textContent=campaign.speech;
+      $('factWorld').textContent=campaign.world;
+      $('factTime').textContent=campaign.time;
+      $('factDevice').textContent=campaign.device;
+      $('completionTitle').textContent=campaign.completion;
+      $('completionLead').textContent=campaign.completionLead;
+      $('questMap').innerHTML=steps.map((step,index)=>`<div class="quest-stop"><strong>${index+1}</strong>${esc(step.title)}</div>`).join('');
+      $('questMap').setAttribute('aria-label',`${steps.length} arcade missions`);
+      $('badgeShelf').innerHTML=steps.map((step,index)=>`<div class="earned-badge"><span>${index+1}</span>${esc(step.title)}</div>`).join('');
+      $('nextWorldTitle').textContent=campaign.nextTitle;
+      $('nextWorldCopy').textContent=campaign.nextCopy;
+      $('continueWorldBtn').hidden=!campaign.nextLabel;
+      $('continueWorldBtn').textContent=campaign.nextLabel || '';
+      $('continueWorldBtn').href=previewMode?'/practice/preview?world=g3':'/student/practice?world=g3';
+      $('startBtn').textContent=campaign.start;
+    }
     let home = null;
     let attempt = null;
     let stepIndex = 0;
@@ -422,6 +491,8 @@
     let roundLocked = false;
     let voiceEnabled = true;
     let activeKeyHandler = null;
+
+    applyCampaignCopy();
 
     function esc(value) { return String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
     function checkpointKey() { return `ls-practice-pending-${attempt && attempt.id || 'none'}`; }
@@ -565,7 +636,7 @@
       } else if (step.id === 'scroll-find') {
         area.innerHTML = `<div class="room-label">Signal Tower · Floor ${roundProgress+1} of ${roundGoal()}</div><div class="scroll-window tower-window" id="scrollWindow"><div style="font-weight:800;color:#8cecf4">Signal is ${roundProgress===0?'below':roundProgress===1?'much deeper':'on the final floor'}</div><div class="scroll-spacer" style="height:${330+(roundProgress*100)}px">Scroll to climb the tower.</div><button class="gold-target${taskTargetClass()}" id="skillTarget" type="button">Activate floor ${roundProgress+1}</button></div>`;
         $('skillTarget').addEventListener('click', (event) => { event.stopPropagation(); const pane=$('scrollWindow'), bottom=pane.scrollHeight-pane.clientHeight-30; if (pane.scrollTop < bottom) registerWrong('Keep scrolling. The antenna switch is farther down.'); else completeInteraction('scroll_find','gold-star'); });
-      } else {
+      } else if (step.id === 'keyboard-defense') {
         const words=['BYTE','STAR','CODE'], word=words[roundProgress%words.length];
         let typedCount=0;
         area.innerHTML = `<div class="room-label">Sky Shield · Signal ${roundProgress+1} of ${roundGoal()}</div><div class="space-arena" id="spaceArena" tabindex="0" aria-label="Type ${word} to stop the falling signal"><div class="falling-signal" id="skillTarget"><div class="signal-ship"></div><div class="signal-word" id="signalWord">${keyboardWord(word,typedCount)}</div></div><div class="defense-line"></div><div class="defense-cannon"></div></div>`;
@@ -578,8 +649,61 @@
         };
         window.addEventListener('keydown',activeKeyHandler);
         $('spaceArena').focus({preventScroll:true});
+      } else if (step.id === 'key-patrol') {
+        const sequence=['A','S','D','F'], targetKey=sequence[roundProgress%sequence.length];
+        area.innerHTML=`<div class="room-label">Key Patrol · Key ${roundProgress+1} of ${roundGoal()}</div><div class="key-arena" id="keyArena" tabindex="0"><div class="key-prompt">Press the glowing home-row key</div><div class="key-row">${sequence.map((key)=>`<span class="arcade-key${key===targetKey?' active':''}" ${key===targetKey?'id="skillTarget"':''}>${key}</span>`).join('')}</div></div>`;
+        activeKeyHandler=(event)=>{
+          if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
+          if (event.key.toUpperCase() !== targetKey) return registerWrong(`Find the glowing ${targetKey} key.`);
+          clearActiveInput(); completeInteraction('home_keys','home-row');
+        };
+        window.addEventListener('keydown',activeKeyHandler); $('keyArena').focus({preventScroll:true});
+      } else if (step.id === 'word-blaster') {
+        const words=['PLAY','CODE','STAR'], word=words[roundProgress%words.length]; let typedCount=0;
+        area.innerHTML=`<div class="room-label">Word Blaster · Cloud ${roundProgress+1} of ${roundGoal()}</div><div class="space-arena" id="spaceArena" tabindex="0" aria-label="Type ${word}"><div class="falling-signal" id="skillTarget"><div class="signal-ship"></div><div class="signal-word" id="signalWord">${keyboardWord(word,0)}</div></div><div class="defense-line"></div><div class="defense-cannon"></div></div>`;
+        activeKeyHandler=(event)=>{
+          if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
+          if (event.key.toUpperCase() !== word[typedCount]) return registerWrong(`Find the next letter: ${word[typedCount]}`);
+          typedCount += 1; $('signalWord').innerHTML=keyboardWord(word,typedCount); playTone(540+(typedCount*40)); burstParticles($('signalWord'),'#69e3a7');
+          if (typedCount === word.length) { clearActiveInput(); completeInteraction('type_word','shield-word'); }
+        };
+        window.addEventListener('keydown',activeKeyHandler); $('spaceArena').focus({preventScroll:true});
+      } else if (step.id === 'capital-charge') {
+        const letters=['B','K','M'], letter=letters[roundProgress%letters.length];
+        area.innerHTML=`<div class="room-label">Capital Charge · Tower ${roundProgress+1} of ${roundGoal()}</div><div class="key-arena" id="keyArena" tabindex="0"><div class="key-prompt">Hold Shift and press ${letter}</div><div class="key-row"><span class="arcade-key active" style="min-width:130px">Shift</span><span class="arcade-key active" id="skillTarget">${letter}</span></div></div>`;
+        activeKeyHandler=(event)=>{
+          if (event.key==='Shift') return;
+          if (event.key.toUpperCase() !== letter || !event.shiftKey) return registerWrong(`Hold Shift while you press ${letter}.`);
+          clearActiveInput(); completeInteraction('shift_letter','capital-signal');
+        };
+        window.addEventListener('keydown',activeKeyHandler); $('keyArena').focus({preventScroll:true});
+      } else if (step.id === 'sentence-engine') {
+        const sentence='I CAN CODE.'; let typedCount=0;
+        area.innerHTML=`<div class="room-label">Sentence Engine · Final line</div><div class="typing-card" id="typingCard" tabindex="0"><div class="key-prompt">Type this complete sentence</div><div class="typing-target" id="skillTarget">${keyboardWord(sentence,0)}</div><div class="typing-status">Spaces and the full stop count.</div></div>`;
+        activeKeyHandler=(event)=>{
+          if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
+          if (event.key.toUpperCase() !== sentence[typedCount]) return registerWrong(`Next: ${sentence[typedCount]===' '?'space':sentence[typedCount]}`);
+          typedCount += 1; $('skillTarget').innerHTML=keyboardWord(sentence,typedCount); playTone(500+(typedCount*18));
+          if (typedCount === sentence.length) { clearActiveInput(); completeInteraction('type_sentence','sentence-signal'); }
+        };
+        window.addEventListener('keydown',activeKeyHandler); $('typingCard').focus({preventScroll:true});
+      } else if (step.id === 'repair-bay') {
+        const repairs=[['COT','CAT'],['HAT','HIT'],['BUG','BAG']], [wrong,correct]=repairs[roundProgress%repairs.length]; let value=wrong;
+        const shared=(()=>{let index=0;while(index<wrong.length&&wrong[index]===correct[index])index+=1;return index;})();
+        area.innerHTML=`<div class="room-label">Repair Bay · Word ${roundProgress+1} of ${roundGoal()}</div><div class="typing-card" id="typingCard" tabindex="0"><div class="key-prompt">Repair the broken word to make <strong>${correct}</strong></div><div class="typing-target" id="skillTarget"></div><div class="typing-status">Use Backspace first, then type the missing letters.</div></div>`;
+        const renderRepair=()=>{ const matching=Array.from(value).findIndex((char,index)=>char!==correct[index]), split=matching===-1?value.length:matching; $('skillTarget').innerHTML=`<span class="typed">${esc(value.slice(0,split))}</span><span class="wrong">${esc(value.slice(split))}</span>`; };
+        renderRepair();
+        activeKeyHandler=(event)=>{
+          if (event.key==='Backspace') { event.preventDefault(); if(value.length>shared){value=value.slice(0,-1);renderRepair();playTone(260);return;} return registerWrong('The correct beginning must stay. Now type the missing letter.'); }
+          if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
+          const expected=correct[value.length];
+          if (event.key.toUpperCase()!==expected) return registerWrong(`Type ${expected} next.`);
+          value += expected; renderRepair(); playTone(560);
+          if (value===correct) { clearActiveInput(); completeInteraction('repair_word','repaired-code'); }
+        };
+        window.addEventListener('keydown',activeKeyHandler); $('typingCard').focus({preventScroll:true});
       }
-      if (phase === 'independent' && step.id !== 'keyboard-defense') area.addEventListener('click', (event) => { if (!event.target.closest('#skillTarget') && !event.target.closest('#scrollWindow') && !event.target.closest('#commandMenu') && !event.target.closest('#commandFolder')) registerWrong('Try the task again. You can ask Byte for help.'); });
+      if (phase === 'independent' && !keyboardStepIds.has(step.id)) area.addEventListener('click', (event) => { if (!event.target.closest('#skillTarget') && !event.target.closest('#scrollWindow') && !event.target.closest('#commandMenu') && !event.target.closest('#commandFolder')) registerWrong('Try the task again. You can ask Byte for help.'); });
     }
 
     function renderStep() {
@@ -768,7 +892,7 @@
       score = 0;
       updateHud();
       if (previewMode) {
-        attempt = { id:`preview-${Date.now()}`, activityId:ACTIVITY_ID, activityVersion:2, status:'in_progress', currentStepIndex:0, checkpoints:[], mastery:'not_started' };
+        attempt = { id:`preview-${Date.now()}`, activityId:ACTIVITY_ID, activityVersion:campaign.version, status:'in_progress', currentStepIndex:0, checkpoints:[], mastery:'not_started' };
         stepIndex = 0;
         phase = 'show';
         $('intro').classList.add('hidden');
@@ -817,7 +941,7 @@
           $('studentName').textContent = `Practising as ${data.student.name}`;
         }
         const unfinished = previewMode ? null : data.attempts.find((item) => item.activityId === ACTIVITY_ID && item.status === 'in_progress');
-        $('startBtn').textContent = unfinished ? 'Continue the rescue' : 'Begin the rescue';
+        $('startBtn').textContent = unfinished ? campaign.resume : campaign.start;
         $('intro').classList.remove('hidden');
         renderProgress();
       } catch (error) {

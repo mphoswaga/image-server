@@ -15,6 +15,11 @@ const evidenceByStep = {
   'drag-drop': { action: 'drag_drop', target: 'homework-folder' },
   'scroll-find': { action: 'scroll_find', target: 'gold-star' },
   'keyboard-defense': { action: 'type_word', target: 'byte-signal' },
+  'key-patrol': { action: 'home_keys', target: 'home-row' },
+  'word-blaster': { action: 'type_word', target: 'shield-word' },
+  'capital-charge': { action: 'shift_letter', target: 'capital-signal' },
+  'sentence-engine': { action: 'type_sentence', target: 'sentence-signal' },
+  'repair-bay': { action: 'repair_word', target: 'repaired-code' },
 };
 
 function checkpoint(attempt, stepId, overrides = {}) {
@@ -30,7 +35,7 @@ function checkpoint(attempt, stepId, overrides = {}) {
 }
 
 test('catalog exposes the latest arcade activity without evidence secrets', () => {
-  const [activity] = practice.listActivities();
+  const activity = practice.listActivities().find((item) => item.id === 'g2-pointer-control');
   assert.equal(activity.id, 'g2-pointer-control');
   assert.equal(activity.version, 2);
   assert.equal(activity.gradeBand, 'Grades 2-3');
@@ -39,6 +44,18 @@ test('catalog exposes the latest arcade activity without evidence secrets', () =
   ]);
   assert.equal('action' in activity.steps[0], false);
   assert.equal('target' in activity.steps[0], false);
+});
+
+test('Grade 3 continues into its own recorded keyboard campaign', () => {
+  const activity = practice.listActivities().find((item) => item.id === 'g3-keyboard-kingdom');
+  assert.equal(activity.version, 1);
+  assert.equal(activity.gradeBand, 'Grade 3');
+  assert.deepEqual(activity.steps.map((step) => step.id), [
+    'key-patrol', 'word-blaster', 'capital-charge', 'sentence-engine', 'repair-bay',
+  ]);
+  const { attempt } = practice.createAttempt({ studentId: 'G3-1', studentName: 'Gina', activityId: activity.id });
+  for (const step of activity.steps) checkpoint(attempt, step.id);
+  assert.equal(practice.loadAttempt(attempt.id).status, 'completed');
 });
 
 test('an unfinished activity resumes instead of creating duplicate attempts', () => {

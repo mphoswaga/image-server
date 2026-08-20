@@ -11,6 +11,22 @@ const ATTEMPTS_DIR = path.join(PRACTICE_DIR, 'attempts');
 
 const ACTIVITIES = Object.freeze([
   Object.freeze({
+    id: 'g3-keyboard-kingdom',
+    version: 1,
+    gradeBand: 'Grade 3',
+    title: 'Advanced Keyboard Kingdom',
+    description: 'Defend Keyboard Kingdom with keys, words, capitals, sentences and editing.',
+    estimatedMinutes: 12,
+    device: 'computer',
+    steps: Object.freeze([
+      Object.freeze({ id: 'key-patrol', title: 'Key Patrol', action: 'home_keys', target: 'home-row' }),
+      Object.freeze({ id: 'word-blaster', title: 'Word Blaster', action: 'type_word', target: 'shield-word' }),
+      Object.freeze({ id: 'capital-charge', title: 'Capital Charge', action: 'shift_letter', target: 'capital-signal' }),
+      Object.freeze({ id: 'sentence-engine', title: 'Sentence Engine', action: 'type_sentence', target: 'sentence-signal' }),
+      Object.freeze({ id: 'repair-bay', title: 'Repair Bay', action: 'repair_word', target: 'repaired-code' }),
+    ]),
+  }),
+  Object.freeze({
     id: 'g2-pointer-control',
     version: 2,
     gradeBand: 'Grades 2-3',
