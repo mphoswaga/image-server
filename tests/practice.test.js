@@ -11,8 +11,10 @@ const evidenceByStep = {
   'move-pointer': { action: 'pointer_enter', target: 'blue-star' },
   'single-click': { action: 'single_click', target: 'green-circle' },
   'double-click': { action: 'double_click', target: 'blue-folder' },
+  'context-command': { action: 'context_command', target: 'archive-open' },
   'drag-drop': { action: 'drag_drop', target: 'homework-folder' },
   'scroll-find': { action: 'scroll_find', target: 'gold-star' },
+  'keyboard-defense': { action: 'type_word', target: 'byte-signal' },
 };
 
 function checkpoint(attempt, stepId, overrides = {}) {
@@ -27,13 +29,13 @@ function checkpoint(attempt, stepId, overrides = {}) {
   });
 }
 
-test('catalog exposes a versioned Grade 2 pointer activity without evidence secrets', () => {
+test('catalog exposes the latest arcade activity without evidence secrets', () => {
   const [activity] = practice.listActivities();
   assert.equal(activity.id, 'g2-pointer-control');
-  assert.equal(activity.version, 1);
-  assert.equal(activity.gradeBand, 'Grade 2');
+  assert.equal(activity.version, 2);
+  assert.equal(activity.gradeBand, 'Grades 2-3');
   assert.deepEqual(activity.steps.map((step) => step.id), [
-    'move-pointer', 'single-click', 'double-click', 'drag-drop', 'scroll-find',
+    'move-pointer', 'single-click', 'double-click', 'context-command', 'drag-drop', 'scroll-find', 'keyboard-defense',
   ]);
   assert.equal('action' in activity.steps[0], false);
   assert.equal('target' in activity.steps[0], false);
@@ -49,7 +51,7 @@ test('an unfinished activity resumes instead of creating duplicate attempts', ()
 
 test('a learner cannot skip a skill or submit mismatched evidence', () => {
   const { attempt } = practice.createAttempt({ studentId: 'STU-2', studentName: 'Ben', activityId: 'g2-pointer-control' });
-  assert.throws(() => checkpoint(attempt, 'double-click'), /Move the pointer/i);
+  assert.throws(() => checkpoint(attempt, 'double-click'), /Signal Trail/i);
   assert.throws(() => checkpoint(attempt, 'move-pointer', { evidence: { action: 'single_click', target: 'blue-star' } }), /could not be confirmed/i);
   assert.equal(practice.loadAttempt(attempt.id).currentStepIndex, 0);
 });
@@ -68,17 +70,25 @@ test('checkpoints are idempotent and preserve the first result', () => {
   assert.equal(retry.checkpoint.mastery, 'independent');
 });
 
-test('all five ordered checkpoints complete the activity and calculate mastery', () => {
+test('all seven ordered checkpoints complete the activity and calculate mastery', () => {
   const { attempt } = practice.createAttempt({ studentId: 'STU-4', studentName: 'Dara', activityId: 'g2-pointer-control' });
   checkpoint(attempt, 'move-pointer');
   checkpoint(attempt, 'single-click');
   checkpoint(attempt, 'double-click', { attempts: 3, hintsUsed: 1 });
+  checkpoint(attempt, 'context-command');
   checkpoint(attempt, 'drag-drop');
-  const final = checkpoint(attempt, 'scroll-find');
+  checkpoint(attempt, 'scroll-find');
+  const final = checkpoint(attempt, 'keyboard-defense');
   assert.equal(final.attempt.status, 'completed');
-  assert.equal(final.attempt.currentStepIndex, 5);
+  assert.equal(final.attempt.currentStepIndex, 7);
   assert.equal(final.attempt.mastery, 'developing_independence');
   assert.ok(final.attempt.completedAt);
+});
+
+test('the legacy activity remains available for unfinished version 1 attempts', () => {
+  const legacy = practice.getActivity('g2-pointer-control', 1);
+  assert.equal(legacy.version, 1);
+  assert.equal(legacy.steps.length, 5);
 });
 
 test('students cannot write checkpoints into another learner attempt', () => {
@@ -119,5 +129,8 @@ test('the learner quest keeps Byte and its connected game states', () => {
   assert.match(player, /Signal Trail/);
   assert.match(player, /Keyboard Kingdom/);
   assert.match(player, /Arcade score/);
+  assert.match(player, /arcade-grid/);
+  assert.match(player, /burstParticles/);
+  assert.match(player, /Combo/);
   assert.doesNotMatch(player, /phase === 'guided'/);
 });

@@ -30,7 +30,7 @@
     .status-row { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:14px; }
     .student-name { color:var(--muted); font-size:14px; }
     .save-state { font-size:13px; color:var(--green-dark); font-weight:700; min-height:20px; }
-    .progress { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:7px; margin-bottom:16px; }
+    .progress { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:7px; margin-bottom:16px; }
     .progress-step { min-width:0; padding:9px 8px; border-top:3px solid var(--line); color:var(--muted); font-size:12px; font-weight:700; text-align:center; }
     .progress-step.current { border-color:var(--cyan); color:var(--navy); background:var(--soft-cyan); }
     .progress-step.done { border-color:var(--green); color:var(--green-dark); background:var(--soft-green); }
@@ -40,7 +40,7 @@
     h1 { margin:0 0 10px; color:var(--navy); font-size:clamp(28px,4vw,42px); line-height:1.1; }
     h2 { margin:0; color:var(--navy); font-size:24px; line-height:1.2; }
     .lead { margin:0 auto 22px; max-width:620px; color:var(--muted); font-size:17px; }
-    .quest-map { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin:22px auto; }
+    .quest-map { display:grid; grid-template-columns:repeat(7,1fr); gap:8px; margin:22px auto; }
     .quest-stop { min-width:0; padding:12px 7px; border:1px solid var(--line); background:#f8fbfd; color:var(--navy); font-size:12px; font-weight:800; }
     .quest-stop strong { display:grid; place-items:center; width:28px; height:28px; margin:0 auto 6px; border-radius:50%; background:var(--navy); color:#fff; }
     .activity-facts { display:grid; grid-template-columns:repeat(3,1fr); border:1px solid var(--line); margin:18px auto 22px; text-align:left; }
@@ -62,12 +62,12 @@
     .workspace-head { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:12px; }
     .workspace-head p { margin:5px 0 0; color:var(--muted); }
     .skill-number { flex:none; padding:5px 9px; border-radius:6px; background:var(--soft-green); color:var(--green-dark); font-size:12px; font-weight:800; }
-    .game-hud { display:grid; grid-template-columns:minmax(150px,1fr) repeat(3,auto); gap:12px; align-items:center; margin-bottom:12px; padding:10px 12px; border:1px solid var(--line); background:#f8fbfd; }
+    .game-hud { display:grid; grid-template-columns:minmax(150px,1fr) repeat(4,auto); gap:12px; align-items:center; margin-bottom:12px; padding:10px 12px; border:1px solid var(--line); background:#f8fbfd; }
     .mission-meter { height:10px; overflow:hidden; border-radius:10px; background:#dce7ef; }
     .mission-meter span { display:block; width:0; height:100%; background:var(--green); transition:width .28s ease; }
     .hud-stat { min-width:92px; color:var(--muted); font-size:11px; font-weight:700; text-align:right; }
     .hud-stat strong { display:block; color:var(--navy); font-size:17px; }
-    .task-area { min-height:310px; position:relative; display:grid; place-items:center; border:1px solid #b7cadd; background:linear-gradient(180deg,#eaf7fb 0 35%,#dff1e8 35% 100%); overflow:hidden; isolation:isolate; }
+    .task-area { min-height:350px; position:relative; display:grid; place-items:center; border:1px solid #b7cadd; background:linear-gradient(180deg,#eaf7fb 0 35%,#dff1e8 35% 100%); overflow:hidden; isolation:isolate; }
     .task-area:before { content:""; position:absolute; left:0; right:0; top:35%; border-top:1px solid rgba(18,52,91,.10); }
     .target { border:0; cursor:pointer; user-select:none; }
     .target.guided { box-shadow:0 0 0 7px rgba(234,180,59,.28); animation:pulse 1.25s ease-in-out infinite; }
@@ -88,19 +88,51 @@
     .room-move-pointer { background:radial-gradient(circle at 50% 48%,rgba(37,205,220,.20),transparent 28%),linear-gradient(155deg,#07142c,#12345b); }
     .room-single-click { background:radial-gradient(circle at 50% 55%,rgba(30,184,120,.25),transparent 30%),linear-gradient(150deg,#07142c,#153f43); }
     .room-double-click { background:linear-gradient(150deg,#15132f,#3a2455); }
+    .room-context-command { background:linear-gradient(145deg,#07142c,#173b61); }
     .room-drag-drop { background:linear-gradient(180deg,#14213c 0 62%,#263650 62%); }
     .room-scroll-find { background:linear-gradient(145deg,#08162f,#183963); }
-    .room-move-pointer:after,.room-single-click:after,.room-double-click:after,.room-drag-drop:after,.room-scroll-find:after { content:""; position:absolute; z-index:-1; inset:0; opacity:.45; background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px); background-size:34px 34px; }
-    .signal-beacon { filter:drop-shadow(0 0 14px rgba(37,205,220,.85)); }
-    .reactor-core { border:4px solid #9df6c6; box-shadow:0 0 0 10px rgba(30,184,120,.14),0 0 30px rgba(30,184,120,.65); animation:reactorPulse 1.1s ease-in-out infinite; }
-    .vault-door { border-color:#8cecf4; background:#244e75; color:#fff; box-shadow:0 0 26px rgba(37,205,220,.22); }
-    .vault-door:before { border-color:#8cecf4; background:#244e75; }
+    .room-keyboard-defense { background:#020617; }
+    .room-move-pointer:after,.room-single-click:after,.room-double-click:after,.room-context-command:after,.room-drag-drop:after,.room-scroll-find:after,.room-keyboard-defense:after { content:""; position:absolute; z-index:-1; inset:0; opacity:.45; background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px); background-size:34px 34px; }
+    .arcade-grid { width:min(680px,calc(100% - 30px)); height:290px; display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr); gap:14px; padding:12px; }
+    .arcade-pad { position:relative; display:grid; place-items:center; min-width:0; border:2px solid #29486d; border-radius:50%; background:#071225; box-shadow:inset 0 8px 15px rgba(0,0,0,.65); }
+    button.arcade-pad { cursor:pointer; }
+    .arcade-pad.active { border-color:#25cddc; box-shadow:inset 0 8px 15px rgba(0,0,0,.55),0 0 24px rgba(37,205,220,.32); }
+    .arcade-target { width:68px; height:68px; position:relative; display:grid; place-items:center; border:3px solid #8cecf4; border-radius:50%; background:radial-gradient(circle at 35% 30%,#f05ba9,#8c1f65); color:#fff; font-size:11px; font-weight:900; text-transform:uppercase; box-shadow:0 0 26px rgba(240,91,169,.72); animation:targetPop .18s cubic-bezier(.18,.9,.3,1.35) both; }
+    .arcade-target:before,.arcade-target:after { content:""; position:absolute; top:20px; width:9px; height:9px; border-radius:50%; background:#fff; box-shadow:0 0 8px #fff; }
+    .arcade-target:before { left:17px; }.arcade-target:after { right:17px; }
+    .cursor-core { background:radial-gradient(circle at 35% 30%,#50e9ff,#166eaa); box-shadow:0 0 28px rgba(37,205,220,.85); pointer-events:auto; }
+    .reactor-core { background:radial-gradient(circle at 35% 30%,#72f2ad,#0d8154); border-color:#b8ffd8; box-shadow:0 0 28px rgba(30,184,120,.78); }
+    .vault-grid { width:min(690px,calc(100% - 34px)); display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
+    .vault-slot { min-height:150px; display:grid; place-items:center; border:1px solid #583b79; background:rgba(10,13,34,.72); }
+    .vault-door { width:130px; min-height:92px; border:3px solid #6b4c91; border-radius:8px; background:#1e183c; color:#755d96; font-weight:900; cursor:default; box-shadow:inset 0 0 20px rgba(0,0,0,.44); }
+    .vault-door.active { border-color:#c69cff; background:#4f2a75; color:#fff; cursor:pointer; box-shadow:0 0 28px rgba(198,156,255,.56),inset 0 0 18px rgba(255,255,255,.08); animation:targetPop .18s cubic-bezier(.18,.9,.3,1.35) both; }
+    .vault-door.active:after { content:"×2"; display:grid; place-items:center; width:34px; height:34px; margin:7px auto 0; border-radius:50%; background:#f8c342; color:#251541; font-size:13px; }
     .cargo-crate { border-color:#f4b862; background:#fff3db; color:#694318; box-shadow:0 10px 24px rgba(0,0,0,.24); }
     .charging-dock { border-color:#25cddc; background:rgba(37,205,220,.10); color:#fff; }
     .charging-dock .folder { border-color:#25cddc; background:#123e52; color:#fff; }
     .charging-dock .folder:before { border-color:#25cddc; background:#123e52; }
     .tower-window { border:2px solid #4b78a8; background:#0b1c38; color:#fff; box-shadow:0 15px 36px rgba(0,0,0,.28); }
     .tower-window .scroll-spacer { color:#8ca4bc; background:linear-gradient(#0b1c38,#173b61); }
+    .command-desktop { width:min(720px,calc(100% - 30px)); height:290px; position:relative; border:2px solid #38628a; background-color:#08162f; background-image:radial-gradient(circle,rgba(255,255,255,.11) 1px,transparent 1px); background-size:22px 22px; }
+    .command-folder { position:absolute; left:17%; top:28%; width:132px; min-height:105px; display:grid; place-items:center; gap:4px; padding:14px; border:2px solid #25cddc; border-radius:10px; background:#12345b; color:#fff; font-weight:900; cursor:context-menu; box-shadow:0 0 26px rgba(37,205,220,.35); }
+    .command-folder:before { content:"DATA"; display:grid; place-items:center; width:62px; height:45px; border:3px solid #8cecf4; border-radius:5px; color:#8cecf4; font-size:12px; }
+    .context-menu { position:absolute; z-index:8; display:none; width:170px; padding:6px 0; border:1px solid #25cddc; background:#0c1d3b; box-shadow:0 14px 34px rgba(0,0,0,.6),0 0 18px rgba(37,205,220,.25); }
+    .context-menu.show { display:block; animation:targetPop .14s ease both; }
+    .context-item { width:100%; padding:11px 14px; border:0; background:transparent; color:#dce8f3; text-align:left; font-weight:800; cursor:pointer; }
+    .context-item:hover,.context-item:focus-visible { background:#25cddc; color:#07142c; }
+    .space-arena { width:min(720px,calc(100% - 30px)); height:290px; position:relative; overflow:hidden; border:2px solid #354f78; background:radial-gradient(ellipse at bottom,#171844,#020617 72%); }
+    .space-arena:before { content:""; position:absolute; inset:0; background-image:radial-gradient(circle,#fff 1px,transparent 1px); background-size:47px 47px; opacity:.35; }
+    .falling-signal { position:absolute; z-index:2; left:50%; top:18px; transform:translateX(-50%); display:grid; place-items:center; gap:5px; animation:signalDescend 7s linear infinite alternate; }
+    .signal-ship { width:74px; height:38px; border:3px solid #f05ba9; border-radius:50% 50% 14px 14px; background:#6b235b; box-shadow:0 0 24px rgba(240,91,169,.65); }
+    .signal-word { padding:7px 15px; border:2px solid #25cddc; border-radius:18px; background:#08162f; color:#fff; font-size:20px; font-weight:900; letter-spacing:3px; box-shadow:0 0 18px rgba(37,205,220,.32); }
+    .signal-word .typed { color:#69e3a7; text-shadow:0 0 9px rgba(105,227,167,.8); }
+    .defense-cannon { position:absolute; z-index:3; left:50%; bottom:13px; width:72px; height:35px; transform:translateX(-50%); border:3px solid #69e3a7; border-radius:35px 35px 6px 6px; background:#12623e; box-shadow:0 0 24px rgba(105,227,167,.55); }
+    .defense-line { position:absolute; left:0; right:0; bottom:54px; height:3px; background:linear-gradient(90deg,transparent,#f05b6b,transparent); box-shadow:0 0 10px #f05b6b; }
+    .conveyor { width:min(700px,calc(100% - 34px)); min-height:230px; display:grid; grid-template-columns:1fr 1fr; align-items:center; justify-items:center; gap:30px; padding:30px; position:relative; border:2px solid #4c607c; background:linear-gradient(180deg,#17243b 0 60%,#273951 60%); overflow:hidden; }
+    .conveyor:after { content:""; position:absolute; z-index:-1; left:-20%; right:-20%; bottom:16%; height:44px; border-top:4px dashed #8da3ba; border-bottom:4px dashed #8da3ba; animation:conveyorMove 1.2s linear infinite; }
+    .combo-hot { color:#f8c342 !important; text-shadow:0 0 12px rgba(248,195,66,.55); }
+    .fx-particle { position:absolute; z-index:20; width:8px; height:8px; border-radius:2px; background:var(--spark,#25cddc); pointer-events:none; animation:sparkBurst .62s ease-out forwards; }
+    .task-area.wrong-shake { animation:wrongShake .28s ease; }
     .next-world { margin:22px auto 0; padding:16px 18px; max-width:640px; border:1px solid #2e5884; background:#102747; text-align:left; }
     .next-world b { display:block; color:#8cecf4; font-size:12px; text-transform:uppercase; letter-spacing:.8px; }
     .next-world strong { display:block; margin:3px 0; color:#fff; font-size:20px; }
@@ -114,7 +146,11 @@
     .mouse-demo { width:82px; height:116px; position:relative; border:4px solid var(--navy); border-radius:42px; background:#fff; }
     .mouse-demo:before { content:""; position:absolute; left:50%; top:0; bottom:52%; border-left:3px solid var(--navy); }
     .mouse-button { position:absolute; width:33px; height:43px; top:5px; left:5px; border-radius:27px 4px 8px 4px; background:var(--cyan); animation:mousePress 1.35s ease-in-out infinite; }
+    .mouse-button.right { left:auto; right:5px; border-radius:4px 27px 4px 8px; background:#a855f7; }
     .mouse-wheel { position:absolute; width:11px; height:28px; left:31px; top:39px; border-radius:8px; background:var(--orange); animation:wheelMove 1.35s ease-in-out infinite; }
+    .keyboard-demo { width:160px; display:grid; grid-template-columns:repeat(4,1fr); gap:7px; }
+    .demo-key { min-height:38px; display:grid; place-items:center; border:2px solid var(--navy); border-radius:5px; background:#fff; color:var(--navy); font-weight:900; box-shadow:0 5px 0 #b8c9db; animation:keyPress 1.5s ease-in-out infinite; }
+    .demo-key:nth-child(2){animation-delay:.2s}.demo-key:nth-child(3){animation-delay:.4s}.demo-key:nth-child(4){animation-delay:.6s}
     .tutorial-copy { text-align:left; }
     .tutorial-copy b { display:block; margin-bottom:6px; color:var(--cyan); font-size:12px; text-transform:uppercase; letter-spacing:.8px; }
     .tutorial-copy h3 { margin:0 0 8px; color:var(--navy); font-size:23px; }
@@ -160,11 +196,17 @@
     @keyframes pulse { 50%{ box-shadow:0 0 0 12px rgba(234,180,59,.13); } }
     @keyframes demoMove { 0%{transform:translate(0,0)} 55%,75%{transform:translate(220px,-105px)} 100%{transform:translate(0,0)} }
     @keyframes mousePress { 0%,45%,100%{transform:translateY(0);opacity:.65} 55%,70%{transform:translateY(5px);opacity:1} }
+    @keyframes keyPress { 0%,20%,100%{transform:none;background:#fff} 30%,48%{transform:translateY(4px);background:#9df6c6} }
     @keyframes wheelMove { 0%,100%{transform:translateY(-5px)} 50%{transform:translateY(9px)} }
     @keyframes burst { 0%{transform:scale(.35);opacity:0} 55%{transform:scale(1.08);opacity:1} 100%{transform:scale(1);opacity:1} }
     @keyframes pointsUp { from{transform:translateY(15px);opacity:0} 35%{opacity:1} to{transform:translateY(-38px);opacity:0} }
     @keyframes livePulse { 50%{opacity:.45;transform:scale(.78)} }
     @keyframes reactorPulse { 50%{box-shadow:0 0 0 15px rgba(30,184,120,.08),0 0 42px rgba(30,184,120,.8)} }
+    @keyframes targetPop { from{opacity:0;transform:scale(.2) translateY(15px)} to{opacity:1;transform:none} }
+    @keyframes conveyorMove { to{transform:translateX(60px)} }
+    @keyframes sparkBurst { from{opacity:1;transform:translate(0,0) scale(1)} to{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.2)} }
+    @keyframes wrongShake { 25%{transform:translateX(-7px)} 50%{transform:translateX(7px)} 75%{transform:translateX(-4px)} }
+    @keyframes signalDescend { from{top:18px} to{top:150px} }
     @keyframes transitionIn { from{opacity:0;transform:translateY(18px) scale(.92)} to{opacity:1;transform:none} }
 
     /* Immersive game shell. The evidence system remains the same; only the
@@ -213,7 +255,7 @@
       .brand small { display:none; }
       .icon-btn span { display:none; }
       .shell { width:min(100% - 20px,1180px); margin-top:12px; }
-      .progress { overflow-x:auto; grid-template-columns:repeat(5,145px); padding-bottom:5px; }
+      .progress { overflow-x:auto; grid-template-columns:repeat(7,145px); padding-bottom:5px; }
       .coach { grid-template-columns:42px 1fr; }
       .coach .btn { display:none; }
       .byte { width:40px; height:40px; }
@@ -224,11 +266,17 @@
       .control-left,.control-right { width:100%; }
       .control-left .btn,.control-right .btn { flex:1; }
       .activity-facts { grid-template-columns:1fr; }
-      .quest-map { grid-template-columns:repeat(5,128px); overflow-x:auto; padding-bottom:5px; }
+      .quest-map { grid-template-columns:repeat(7,128px); overflow-x:auto; padding-bottom:5px; }
       .fact+.fact { border-left:0; border-top:1px solid var(--line); }
-      .game-hud { grid-template-columns:1fr 1fr 1fr; }
+      .game-hud { grid-template-columns:repeat(4,1fr); }
       .game-hud .mission-meter { grid-column:1/-1; }
       .hud-stat { min-width:0; text-align:center; }
+      .arcade-grid { height:320px; gap:8px; padding:8px; }
+      .arcade-target { width:58px; height:58px; }
+      .vault-grid { grid-template-columns:repeat(2,1fr); gap:9px; }
+      .vault-slot { min-height:105px; }
+      .vault-door { width:100px; min-height:72px; }
+      .conveyor { grid-template-columns:1fr; }
       .tutorial { grid-template-columns:1fr; padding:18px; }
       .tutorial-visual { min-height:120px; }
       .quest-hero { grid-template-columns:1fr; }
@@ -270,15 +318,15 @@
       <div class="intro-inner">
         <div class="quest-hero">
           <div class="bot-stage"><div class="live-chip">Byte online</div><img class="bot-image" src="/assets/byte-talking.gif" alt="Byte, the LessonScope robot guide" /></div>
-          <div class="quest-copy"><div class="quest-kicker">Foundation World · Chapter 1</div><h1>Byte and the Blackout</h1><p class="lead">A digital storm has shut down Byte City. Clear five arcade rooms, restore the power and unlock the road to Keyboard Kingdom.</p><div class="speech">Watch my quick mission briefing, then jump straight into the arcade. Every room you clear lights the city back up.</div></div>
+          <div class="quest-copy"><div class="quest-kicker">Foundation World · Chapter 1</div><h1>Byte and the Blackout</h1><p class="lead">A digital storm has shut down Byte City. Beat seven arcade missions, restore the power and unlock Advanced Keyboard Kingdom.</p><div class="speech">This is a real rescue mission. Chase, whack, unlock, command, drag, climb and type your way through the city.</div></div>
         </div>
-        <div class="quest-map" aria-label="Five pointer missions">
-          <div class="quest-stop"><strong>1</strong>Signal Trail</div><div class="quest-stop"><strong>2</strong>Reactor Rush</div><div class="quest-stop"><strong>3</strong>Vault Breaker</div><div class="quest-stop"><strong>4</strong>Cargo Rescue</div><div class="quest-stop"><strong>5</strong>Signal Tower</div>
+        <div class="quest-map" aria-label="Seven arcade missions">
+          <div class="quest-stop"><strong>1</strong>Signal Trail</div><div class="quest-stop"><strong>2</strong>Reactor Rush</div><div class="quest-stop"><strong>3</strong>Vault Breaker</div><div class="quest-stop"><strong>4</strong>Command Deck</div><div class="quest-stop"><strong>5</strong>Cargo Rescue</div><div class="quest-stop"><strong>6</strong>Signal Tower</div><div class="quest-stop"><strong>7</strong>Sky Shield</div>
         </div>
         <div class="activity-facts">
           <div class="fact"><b>World</b><span>Foundation for Grade 2 and Grade 3</span></div>
-          <div class="fact"><b>Time</b><span>About 10 minutes</span></div>
-          <div class="fact"><b>You need</b><span>A mouse or trackpad</span></div>
+          <div class="fact"><b>Time</b><span>About 15 minutes</span></div>
+          <div class="fact"><b>You need</b><span>A keyboard and mouse or trackpad</span></div>
         </div>
         <button class="btn primary" id="startBtn" type="button">Begin the rescue</button>
       </div>
@@ -292,7 +340,7 @@
       </div>
       <div class="workspace" id="workspace">
         <div class="workspace-head"><div><h2 id="skillTitle"></h2><p id="skillInstruction"></p></div><div class="skill-number" id="skillNumber"></div></div>
-        <div class="game-hud"><div class="mission-meter" aria-label="Mission progress"><span id="missionMeter"></span></div><div class="hud-stat">Room target<strong id="roundValue">0 / 1</strong></div><div class="hud-stat">City power<strong id="cityPowerValue">0%</strong></div><div class="hud-stat">Arcade score<strong id="scoreValue">0</strong></div></div>
+        <div class="game-hud"><div class="mission-meter" aria-label="Mission progress"><span id="missionMeter"></span></div><div class="hud-stat">Room target<strong id="roundValue">0 / 1</strong></div><div class="hud-stat">Combo<strong id="comboValue">0×</strong></div><div class="hud-stat">City power<strong id="cityPowerValue">0%</strong></div><div class="hud-stat">Arcade score<strong id="scoreValue">0</strong></div></div>
         <div class="task-area" id="taskArea"></div>
         <div class="feedback" id="feedback" role="status" aria-live="polite"></div>
         <div class="hint" id="hint" role="status" aria-live="polite"></div>
@@ -312,8 +360,8 @@
         <p class="lead" id="completionLead">You moved, clicked, double-clicked, dragged and scrolled. Your teacher can now see the skills you practised.</p>
         <p id="masterySummary"></p>
         <p id="scoreSummary"></p>
-        <div class="badge-shelf" aria-label="Five earned skill badges"><div class="earned-badge"><span>1</span>Signal Trail</div><div class="earned-badge"><span>2</span>Reactor Rush</div><div class="earned-badge"><span>3</span>Vault Breaker</div><div class="earned-badge"><span>4</span>Cargo Rescue</div><div class="earned-badge"><span>5</span>Signal Tower</div></div>
-        <div class="next-world"><b>New world unlocked</b><strong>Keyboard Kingdom</strong><span>Every learner begins in Foundation World. Grade 2 explorers can keep advancing, while Grade 3 learners continue towards Expert World.</span></div>
+        <div class="badge-shelf" aria-label="Seven earned skill badges"><div class="earned-badge"><span>1</span>Signal Trail</div><div class="earned-badge"><span>2</span>Reactor Rush</div><div class="earned-badge"><span>3</span>Vault Breaker</div><div class="earned-badge"><span>4</span>Command Deck</div><div class="earned-badge"><span>5</span>Cargo Rescue</div><div class="earned-badge"><span>6</span>Signal Tower</div><div class="earned-badge"><span>7</span>Sky Shield</div></div>
+        <div class="next-world"><b>New world unlocked</b><strong>Advanced Keyboard Kingdom</strong><span>Every learner begins in Foundation World. Grade 2 explorers can keep advancing, while Grade 3 learners continue towards Expert World.</span></div>
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:24px">
           <a class="btn primary" id="completionBack" href="/start">Back to my work</a>
           <button class="btn secondary" id="practiseAgainBtn" type="button">Practise again</button>
@@ -327,29 +375,37 @@
     const previewMode = location.pathname === '/practice/preview';
     const steps = [
       { id:'move-pointer', title:'Signal Trail', action:'pointer_enter', target:'blue-star',
-        show:'Byte is trapped outside the city. Watch how pointer movement reconnects a signal beacon.', independent:'Guide the signal through all three beacons to open the city gate.', success:'The city gate has power again.',
+        show:'Signal bugs are flashing across the grid. Chase them with the pointer before they jump away.', independent:'Chase and tag five signal bugs to open the city gate.', success:'The city gate has power again.',
         hints:['Move the mouse or slide one finger on the trackpad.','Look for the blue star in the middle.','Follow the pointer demonstration, then try again.'] },
       { id:'single-click', title:'Reactor Rush', action:'single_click', target:'green-circle',
-        show:'The power reactor is asleep. Watch one clean click activate a power cell.', independent:'Activate three power cells with one click each.', success:'The reactor is running.',
+        show:'Power bugs are popping out of the reactor. Whack each one with a single click.', independent:'Whack six power bugs with one clean click each.', success:'The reactor is running.',
         hints:['Press and release the left mouse button once.','The green circle is the correct target.','Watch one click again, then try it yourself.'] },
       { id:'double-click', title:'Vault Breaker', action:'double_click', target:'blue-folder',
-        show:'Two archive vaults hold the city map. Watch two quick clicks unlock a vault door.', independent:'Double-click both vault doors before the map signal fades.', success:'The city map is recovered.',
+        show:'The city map is behind four flashing vault doors. Each lock needs a fast click-click.', independent:'Break four flashing vault locks with double-clicks.', success:'The city map is recovered.',
         hints:['Use two quick clicks without moving the pointer.','The yellow folder is the correct target.','Watch the two-click rhythm, then try again.'] },
+      { id:'context-command', title:'Command Deck', action:'context_command', target:'archive-open',
+        show:'The command deck is locked. Right-click the data folder, then choose Open from its command menu.', independent:'Use a right-click command three times to recover the city files.', success:'The command deck is responding.',
+        hints:['Press the right mouse button on the data folder.','Choose Open from the menu that appears.','Right-click first, then use a normal click on Open.'] },
       { id:'drag-drop', title:'Cargo Rescue', action:'drag_drop', target:'homework-folder',
-        show:'Supply crates are blocking the data dock. Watch how to hold, move and release one safely.', independent:'Drag both supply crates into the charging dock.', success:'The data dock is clear.',
+        show:'Power crates are arriving on the conveyor. Grab each crate and dock it safely.', independent:'Rescue three power crates by dragging them into the charging dock.', success:'The data dock is clear.',
         hints:['Press and hold the file while you move it.','Move the file into the Homework folder.','Watch the complete drag, then try again.'] },
       { id:'scroll-find', title:'Signal Tower', action:'scroll_find', target:'gold-star',
-        show:'The final antenna is hidden on another tower floor. Watch scrolling reveal what is outside the screen.', independent:'Scroll through the tower and activate the hidden antenna.', success:'The tower is broadcasting. Byte City is online.',
+        show:'Three antenna switches are hidden on different tower floors. Scroll to hunt them down.', independent:'Climb three tower floors and activate every hidden antenna.', success:'The tower is broadcasting. One final threat remains.',
         hints:['Use the mouse wheel or move the scrollbar down.','The gold star is near the bottom of the panel.','Watch the scroll demonstration, then find it yourself.'] },
+      { id:'keyboard-defense', title:'Sky Shield', action:'type_word', target:'byte-signal',
+        show:'Signal ships are falling towards Byte City. Type the word under each ship to fire the sky shield.', independent:'Type three falling signal words to defend the restored city.', success:'The sky shield is active. Byte City is safe.',
+        hints:['Read the glowing word under the signal ship.','Press one letter at a time in the same order.','The green letters show what you have already typed.'] },
     ];
     const tutorials = {
-      'move-pointer': { title:'Reconnect the beacons', action:'Slide the mouse, or one finger on the trackpad.', detail:'Do not press a button. Touch each signal beacon with the pointer.', visual:'move' },
-      'single-click': { title:'Wake the reactor', action:'Press and release the left button one time.', detail:'One clean click powers one cell. Do not hold the button down.', visual:'click' },
-      'double-click': { title:'Break the vault locks', action:'Click-click without moving the mouse.', detail:'Two quick clicks open one archive vault.', visual:'double' },
-      'drag-drop': { title:'Move the supply crates', action:'Hold the left button on the crate while you move it.', detail:'Release only when the crate is inside the charging dock.', visual:'drag' },
-      'scroll-find': { title:'Search the tower floors', action:'Roll the wheel down, or slide two fingers up on a trackpad.', detail:'Scrolling reveals the antenna hidden outside the screen.', visual:'scroll' },
+      'move-pointer': { title:'Chase the flashing bug', action:'Move the pointer onto it. Do not click.', detail:'Each bug jumps to a new pad. Tag five to clear the room.', visual:'move' },
+      'single-click': { title:'Whack with one click', action:'Press and release the left button one time.', detail:'Wait for a green bug to pop up, then click it once.', visual:'click' },
+      'double-click': { title:'Break a lock with click-click', action:'Press the left button twice quickly.', detail:'Only the bright vault is active. Break four locks.', visual:'double' },
+      'context-command': { title:'Open the command menu', action:'Right-click the data folder, then choose Open.', detail:'The right button opens choices. Use a normal click to select one.', visual:'right' },
+      'drag-drop': { title:'Rescue the moving cargo', action:'Hold the crate, move it to the dock, then release.', detail:'Do not let go until the crate is inside the charging dock.', visual:'drag' },
+      'scroll-find': { title:'Climb the signal tower', action:'Scroll down until the antenna switch appears.', detail:'Activate the switch, then climb the next floor.', visual:'scroll' },
+      'keyboard-defense': { title:'Type to fire the shield', action:'Read the falling word and type its letters in order.', detail:'Correct letters turn green. Finish three words to save the city.', visual:'type' },
     };
-    const missionGoals = { 'move-pointer':3, 'single-click':3, 'double-click':2, 'drag-drop':2, 'scroll-find':1 };
+    const missionGoals = { 'move-pointer':5, 'single-click':6, 'double-click':4, 'context-command':3, 'drag-drop':3, 'scroll-find':3, 'keyboard-defense':3 };
     const $ = (id) => document.getElementById(id);
     let home = null;
     let attempt = null;
@@ -359,10 +415,13 @@
     let stats = { attempts:0, hintsUsed:0, activeSeconds:0 };
     let roundProgress = 0;
     let score = 0;
+    let combo = 0;
+    let lastSlot = -1;
     let paused = false;
     let pendingSingleClick = null;
     let roundLocked = false;
     let voiceEnabled = true;
+    let activeKeyHandler = null;
 
     function esc(value) { return String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
     function checkpointKey() { return `ls-practice-pending-${attempt && attempt.id || 'none'}`; }
@@ -376,7 +435,10 @@
       const goal = roundGoal();
       $('roundValue').textContent = `${Math.min(roundProgress,goal)} / ${goal}`;
       $('scoreValue').textContent = score;
-      $('cityPowerValue').textContent = `${Math.min(100,Math.round((stepIndex*20)+(roundProgress/goal)*20))}%`;
+      $('comboValue').textContent = `${combo}×`;
+      $('comboValue').classList.toggle('combo-hot',combo >= 3);
+      const roomPower=100/steps.length;
+      $('cityPowerValue').textContent = `${Math.min(100,Math.round((stepIndex*roomPower)+(roundProgress/goal)*roomPower))}%`;
       $('missionMeter').style.width = `${Math.min(100,(roundProgress/goal)*100)}%`;
     }
 
@@ -400,10 +462,10 @@
       speechSynthesis.speak(speech);
     }
 
-    function celebrateHit(finalHit) {
+    function celebrateHit(finalHit, points=100) {
       const pop=document.createElement('div');
       pop.className=finalHit?'burst':'points-pop';
-      pop.textContent=finalHit?'Room clear':'+100';
+      pop.textContent=finalHit?'Room clear':`+${points}`;
       $('taskArea').appendChild(pop);
       setTimeout(()=>pop.remove(),finalHit?720:800);
     }
@@ -413,53 +475,122 @@
     }
 
     function taskTargetClass() { return ''; }
-    function decoys() { return phase === 'independent' ? '<div class="decoys"><button class="decoy" aria-label="Inactive city node"></button><button class="decoy" aria-label="Inactive city node"></button><button class="decoy" aria-label="Inactive city node"></button><button class="decoy" aria-label="Inactive city node"></button></div>' : ''; }
+
+    function nextSlot(count) {
+      let slot = Math.floor(Math.random() * count);
+      if (count > 1 && slot === lastSlot) slot = (slot + 1 + Math.floor(Math.random() * (count - 1))) % count;
+      lastSlot = slot;
+      return slot;
+    }
+
+    function burstParticles(target, color='#25cddc') {
+      if (!target) return;
+      const area=$('taskArea'), areaRect=area.getBoundingClientRect(), rect=target.getBoundingClientRect();
+      const x=rect.left-areaRect.left+rect.width/2, y=rect.top-areaRect.top+rect.height/2;
+      for (let index=0; index<18; index += 1) {
+        const particle=document.createElement('span'), angle=(Math.PI*2*index)/18, distance=45+Math.random()*65;
+        particle.className='fx-particle'; particle.style.left=`${x}px`; particle.style.top=`${y}px`; particle.style.setProperty('--spark',color);
+        particle.style.setProperty('--dx',`${Math.cos(angle)*distance}px`); particle.style.setProperty('--dy',`${Math.sin(angle)*distance}px`);
+        area.appendChild(particle); setTimeout(()=>particle.remove(),700);
+      }
+    }
+
+    function arcadeGrid(activeSlot, mode) {
+      return `<div class="arcade-grid">${Array.from({length:9},(_,index) => {
+        if (index !== activeSlot) return `<button class="arcade-pad" type="button" aria-label="Empty arcade pad"></button>`;
+        if (mode === 'move') return `<div class="arcade-pad active"><div class="arcade-target cursor-core" id="skillTarget" tabindex="0" aria-label="Flashing signal bug">Tag</div></div>`;
+        return `<button class="arcade-pad active" id="skillTarget" type="button" aria-label="Power bug"><span class="arcade-target reactor-core">Zap</span></button>`;
+      }).join('')}</div>`;
+    }
+
+    function clearActiveInput() {
+      if (activeKeyHandler) window.removeEventListener('keydown',activeKeyHandler);
+      activeKeyHandler = null;
+    }
+
+    function keyboardWord(word, typedCount) {
+      return `<span class="typed">${esc(word.slice(0,typedCount))}</span>${esc(word.slice(typedCount))}`;
+    }
 
     function renderTask() {
       const step = currentStep();
       const area = $('taskArea');
+      clearActiveInput();
       area.className = `task-area ${phase === 'show' ? 'briefing-room' : `room-${step.id}`}`;
       roundLocked = false;
       if (phase === 'show') {
         const tutorial=tutorials[step.id];
-        area.innerHTML=`<div class="tutorial"><div class="tutorial-visual"><div class="mouse-demo"><span class="mouse-button" style="${tutorial.visual==='scroll'?'opacity:.2':''}"></span><span class="mouse-wheel" style="${tutorial.visual==='scroll'?'':'opacity:.28'}"></span></div><div class="demo-pointer" style="${tutorial.visual==='move'||tutorial.visual==='drag'?'':'display:none'}"></div></div><div class="tutorial-copy"><b>First, watch how</b><h3>${esc(tutorial.title)}</h3><p>${esc(tutorial.action)}</p><small>${esc(tutorial.detail)}</small></div></div>`;
+        const visual=tutorial.visual==='type'
+          ? '<div class="keyboard-demo"><span class="demo-key">B</span><span class="demo-key">Y</span><span class="demo-key">T</span><span class="demo-key">E</span></div>'
+          : `<div class="mouse-demo"><span class="mouse-button${tutorial.visual==='right'?' right':''}" style="${tutorial.visual==='scroll'?'opacity:.2':''}"></span><span class="mouse-wheel" style="${tutorial.visual==='scroll'?'':'opacity:.28'}"></span></div><div class="demo-pointer" style="${tutorial.visual==='move'||tutorial.visual==='drag'?'':'display:none'}"></div>`;
+        area.innerHTML=`<div class="tutorial"><div class="tutorial-visual">${visual}</div><div class="tutorial-copy"><b>Byte's 5-second briefing</b><h3>${esc(tutorial.title)}</h3><p>${esc(tutorial.action)}</p><small>${esc(tutorial.detail)}</small></div></div>`;
         return;
       }
-      const positions=[['22%','20%'],['67%','18%'],['46%','62%']];
-      const position=positions[roundProgress%positions.length];
       if (step.id === 'move-pointer') {
-        area.innerHTML = `<div class="room-label">Signal Trail · Beacon ${roundProgress+1}</div>${decoys()}<div class="target target-star signal-beacon${taskTargetClass()}" id="skillTarget" tabindex="0" aria-label="Signal beacon" style="position:absolute;left:${position[0]};top:${position[1]}"></div>`;
+        area.innerHTML = `<div class="room-label">Signal Trail · Bug ${roundProgress+1} of ${roundGoal()}</div>${arcadeGrid(nextSlot(9),'move')}`;
         $('skillTarget').addEventListener('pointerenter', () => completeInteraction('pointer_enter','blue-star'));
       } else if (step.id === 'single-click') {
-        area.innerHTML = `<div class="room-label">Reactor Rush · Cell ${roundProgress+1}</div>${decoys()}<button class="target target-circle reactor-core${taskTargetClass()}" id="skillTarget" style="position:absolute;left:${position[0]};top:${position[1]}" type="button">Power</button>`;
+        area.innerHTML = `<div class="room-label">Reactor Rush · Bug ${roundProgress+1} of ${roundGoal()}</div>${arcadeGrid(nextSlot(9),'click')}`;
         $('skillTarget').addEventListener('click', (event) => { event.stopPropagation(); completeInteraction('single_click','green-circle'); });
       } else if (step.id === 'double-click') {
-        area.innerHTML = `<div class="room-label">Vault Breaker · Lock ${roundProgress+1}</div>${decoys()}<button class="target folder vault-door${taskTargetClass()}" id="skillTarget" type="button">Locked map</button>`;
+        const active=nextSlot(6);
+        area.innerHTML = `<div class="room-label">Vault Breaker · Lock ${roundProgress+1} of ${roundGoal()}</div><div class="vault-grid">${Array.from({length:6},(_,index)=>`<div class="vault-slot"><button class="vault-door${index===active?' active':''}" ${index===active?'id="skillTarget"':''} type="button">${index===active?'Break lock':'Offline'}</button></div>`).join('')}</div>`;
         $('skillTarget').addEventListener('click', (event) => {
           event.stopPropagation();
           clearTimeout(pendingSingleClick);
           pendingSingleClick = setTimeout(() => registerWrong('That was one click. Try click-click quickly.'), 360);
         });
         $('skillTarget').addEventListener('dblclick', (event) => { event.preventDefault(); event.stopPropagation(); clearTimeout(pendingSingleClick); completeInteraction('double_click','blue-folder'); });
+      } else if (step.id === 'context-command') {
+        const positions=[['17%','25%'],['58%','18%'],['36%','52%']], position=positions[roundProgress%positions.length];
+        area.innerHTML = `<div class="room-label">Command Deck · File ${roundProgress+1} of ${roundGoal()}</div><div class="command-desktop" id="commandDesktop"><div class="command-folder" id="commandFolder" style="left:${position[0]};top:${position[1]}">City archive</div><div class="context-menu" id="commandMenu"><button class="context-item" id="skillTarget" type="button">Open archive</button><button class="context-item" type="button">Rename</button><button class="context-item" type="button">Delete</button></div></div>`;
+        const desktop=$('commandDesktop'), folder=$('commandFolder'), menu=$('commandMenu');
+        desktop.addEventListener('contextmenu',(event)=>event.preventDefault());
+        folder.addEventListener('contextmenu',(event)=>{
+          event.preventDefault(); event.stopPropagation();
+          const desktopRect=desktop.getBoundingClientRect();
+          menu.style.left=`${Math.min(desktop.clientWidth-180,event.clientX-desktopRect.left)}px`;
+          menu.style.top=`${Math.min(desktop.clientHeight-130,event.clientY-desktopRect.top)}px`;
+          menu.classList.add('show'); playTone(430);
+        });
+        folder.addEventListener('click',(event)=>{ event.stopPropagation(); registerWrong('Use the right mouse button to open the command menu.'); });
+        $('skillTarget').addEventListener('click',(event)=>{ event.stopPropagation(); completeInteraction('context_command','archive-open'); });
+        menu.querySelectorAll('.context-item:not(#skillTarget)').forEach((button)=>button.addEventListener('click',(event)=>{ event.stopPropagation(); registerWrong('Choose Open archive for this mission.'); }));
       } else if (step.id === 'drag-drop') {
-        area.innerHTML = `<div class="room-label">Cargo Rescue · Crate ${roundProgress+1}</div><div class="drag-layout"><div class="file cargo-crate" id="dragFile" draggable="true">Power crate ${roundProgress+1}<div style="font-size:12px;color:#8b6539">Hold and move</div></div><div class="dropzone charging-dock${taskTargetClass()}" id="dropTarget"><div class="folder">Charging dock</div></div></div>`;
+        area.innerHTML = `<div class="room-label">Cargo Rescue · Crate ${roundProgress+1} of ${roundGoal()}</div><div class="conveyor"><div class="file cargo-crate" id="dragFile" draggable="true">Power crate ${roundProgress+1}<div style="font-size:12px;color:#8b6539">Grab me</div></div><div class="dropzone charging-dock${taskTargetClass()}" id="dropTarget"><div class="folder">Charging dock</div></div></div>`;
         $('dragFile').addEventListener('dragstart', (event) => event.dataTransfer.setData('text/plain','my-work'));
         $('dropTarget').addEventListener('dragover', (event) => { event.preventDefault(); $('dropTarget').classList.add('over'); });
         $('dropTarget').addEventListener('dragleave', () => $('dropTarget').classList.remove('over'));
         $('dropTarget').addEventListener('drop', (event) => { event.preventDefault(); $('dropTarget').classList.remove('over'); if (event.dataTransfer.getData('text/plain') === 'my-work') completeInteraction('drag_drop','homework-folder'); else registerWrong('Keep holding the file until it is inside Homework.'); });
+      } else if (step.id === 'scroll-find') {
+        area.innerHTML = `<div class="room-label">Signal Tower · Floor ${roundProgress+1} of ${roundGoal()}</div><div class="scroll-window tower-window" id="scrollWindow"><div style="font-weight:800;color:#8cecf4">Signal is ${roundProgress===0?'below':roundProgress===1?'much deeper':'on the final floor'}</div><div class="scroll-spacer" style="height:${330+(roundProgress*100)}px">Scroll to climb the tower.</div><button class="gold-target${taskTargetClass()}" id="skillTarget" type="button">Activate floor ${roundProgress+1}</button></div>`;
+        $('skillTarget').addEventListener('click', (event) => { event.stopPropagation(); const pane=$('scrollWindow'), bottom=pane.scrollHeight-pane.clientHeight-30; if (pane.scrollTop < bottom) registerWrong('Keep scrolling. The antenna switch is farther down.'); else completeInteraction('scroll_find','gold-star'); });
       } else {
-        area.innerHTML = `<div class="room-label">Signal Tower · Final floor</div><div class="scroll-window tower-window" id="scrollWindow"><div style="font-weight:800;color:#8cecf4">Antenna signal detected below</div><div class="scroll-spacer">Scroll through the dark tower floors.</div><button class="gold-target${taskTargetClass()}" id="skillTarget" type="button">Activate antenna</button></div>`;
-        $('skillTarget').addEventListener('click', (event) => { event.stopPropagation(); const pane=$('scrollWindow'); if (pane.scrollTop < 180) registerWrong('Scroll down before choosing the star.'); else completeInteraction('scroll_find','gold-star'); });
+        const words=['BYTE','STAR','CODE'], word=words[roundProgress%words.length];
+        let typedCount=0;
+        area.innerHTML = `<div class="room-label">Sky Shield · Signal ${roundProgress+1} of ${roundGoal()}</div><div class="space-arena" id="spaceArena" tabindex="0" aria-label="Type ${word} to stop the falling signal"><div class="falling-signal" id="skillTarget"><div class="signal-ship"></div><div class="signal-word" id="signalWord">${keyboardWord(word,typedCount)}</div></div><div class="defense-line"></div><div class="defense-cannon"></div></div>`;
+        activeKeyHandler=(event)=>{
+          if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
+          const key=event.key.toUpperCase();
+          if (key !== word[typedCount]) return registerWrong(`Find the next letter: ${word[typedCount]}`);
+          typedCount += 1; $('signalWord').innerHTML=keyboardWord(word,typedCount); playTone(520+(typedCount*45)); burstParticles($('signalWord'),'#69e3a7');
+          if (typedCount === word.length) { clearActiveInput(); completeInteraction('type_word','byte-signal'); }
+        };
+        window.addEventListener('keydown',activeKeyHandler);
+        $('spaceArena').focus({preventScroll:true});
       }
-      if (phase === 'independent') area.addEventListener('click', (event) => { if (!event.target.closest('#skillTarget') && !event.target.closest('#scrollWindow')) registerWrong('Try the task again. You can ask Byte for help.'); });
+      if (phase === 'independent' && step.id !== 'keyboard-defense') area.addEventListener('click', (event) => { if (!event.target.closest('#skillTarget') && !event.target.closest('#scrollWindow') && !event.target.closest('#commandMenu') && !event.target.closest('#commandFolder')) registerWrong('Try the task again. You can ask Byte for help.'); });
     }
 
     function renderStep() {
       clearTimeout(pendingSingleClick);
+      clearActiveInput();
       const step = currentStep();
       independentSaved = false;
       stats = { attempts:0, hintsUsed:0, activeSeconds:0 };
       roundProgress = 0;
+      combo = 0;
+      lastSlot = -1;
       $('activity').style.display = 'block';
       $('phaseLabel').textContent = phaseName();
       $('coachText').textContent = step[phase];
@@ -491,6 +622,12 @@
     function registerWrong(message) {
       if (phase === 'show' || independentSaved) return;
       stats.attempts += 1;
+      combo = 0;
+      updateHud();
+      $('taskArea').classList.remove('wrong-shake');
+      void $('taskArea').offsetWidth;
+      $('taskArea').classList.add('wrong-shake');
+      playTone(145);
       $('feedback').textContent = message;
       $('feedback').className = 'feedback show';
     }
@@ -500,14 +637,18 @@
       const step = currentStep();
       if (action !== step.action || target !== step.target) return registerWrong('Try the skill again.');
       roundLocked = true;
+      const hitTarget=$('skillTarget') || $('dropTarget');
       roundProgress += 1;
-      score += 100;
+      combo += 1;
+      const points=100+Math.min(5,combo-1)*20;
+      score += points;
       const finalHit=roundProgress >= roundGoal();
-      $('feedback').textContent = finalHit ? step.success : `Great move. ${roundGoal()-roundProgress} more to clear this mission.`;
+      $('feedback').textContent = finalHit ? step.success : `${combo >= 3 ? `${combo}× combo! ` : ''}${roundGoal()-roundProgress} more to clear this room.`;
       $('feedback').className = 'feedback show';
       updateHud();
       playTone(finalHit?760:620);
-      celebrateHit(finalHit);
+      burstParticles(hitTarget,finalHit?'#f8c342':'#25cddc');
+      celebrateHit(finalHit,points);
       if (!finalHit) { setTimeout(renderTask,420); return; }
       stats.attempts += 1;
       independentSaved = true;
@@ -529,7 +670,7 @@
         localStorage.removeItem(checkpointKey());
         setSave('Progress saved');
         $('nextBtn').disabled = false;
-        $('nextBtn').textContent = attempt.status === 'completed' ? 'See my result' : 'Continue';
+        $('nextBtn').textContent = attempt.status === 'completed' ? 'See my result' : 'Unlock next room';
       } catch (error) {
         independentSaved = false;
         setSave('Progress is waiting to save', true);
@@ -556,7 +697,7 @@
       if (attempt.currentStepIndex >= steps.length) attempt.status = 'completed';
       setSave('Preview only - results not saved');
       $('nextBtn').disabled = false;
-      $('nextBtn').textContent = attempt.status === 'completed' ? 'See my result' : 'Continue';
+      $('nextBtn').textContent = attempt.status === 'completed' ? 'See my result' : 'Unlock next room';
     }
 
     async function retryPending() {
@@ -575,6 +716,7 @@
     }
 
     function showCompletion() {
+      clearActiveInput();
       $('activity').style.display = 'none';
       $('completion').classList.remove('hidden');
       $('progress').innerHTML = steps.map((step,index) => `<div class="progress-step done">${index + 1}. ${esc(step.title)}</div>`).join('');
@@ -626,7 +768,7 @@
       score = 0;
       updateHud();
       if (previewMode) {
-        attempt = { id:`preview-${Date.now()}`, activityId:ACTIVITY_ID, activityVersion:1, status:'in_progress', currentStepIndex:0, checkpoints:[], mastery:'not_started' };
+        attempt = { id:`preview-${Date.now()}`, activityId:ACTIVITY_ID, activityVersion:2, status:'in_progress', currentStepIndex:0, checkpoints:[], mastery:'not_started' };
         stepIndex = 0;
         phase = 'show';
         $('intro').classList.add('hidden');

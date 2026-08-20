@@ -12,6 +12,26 @@ const ATTEMPTS_DIR = path.join(PRACTICE_DIR, 'attempts');
 const ACTIVITIES = Object.freeze([
   Object.freeze({
     id: 'g2-pointer-control',
+    version: 2,
+    gradeBand: 'Grades 2-3',
+    title: 'Byte City Foundation Arcade',
+    description: 'Complete a connected mouse and keyboard arcade adventure.',
+    estimatedMinutes: 15,
+    device: 'computer',
+    steps: Object.freeze([
+      Object.freeze({ id: 'move-pointer', title: 'Signal Trail', action: 'pointer_enter', target: 'blue-star' }),
+      Object.freeze({ id: 'single-click', title: 'Reactor Rush', action: 'single_click', target: 'green-circle' }),
+      Object.freeze({ id: 'double-click', title: 'Vault Breaker', action: 'double_click', target: 'blue-folder' }),
+      Object.freeze({ id: 'context-command', title: 'Command Deck', action: 'context_command', target: 'archive-open' }),
+      Object.freeze({ id: 'drag-drop', title: 'Cargo Rescue', action: 'drag_drop', target: 'homework-folder' }),
+      Object.freeze({ id: 'scroll-find', title: 'Signal Tower', action: 'scroll_find', target: 'gold-star' }),
+      Object.freeze({ id: 'keyboard-defense', title: 'Sky Shield', action: 'type_word', target: 'byte-signal' }),
+    ]),
+  }),
+  // Version 1 remains available so previously started attempts can still be
+  // validated and reported after the arcade campaign launches.
+  Object.freeze({
+    id: 'g2-pointer-control',
     version: 1,
     gradeBand: 'Grade 2',
     title: 'Pointer Control',
@@ -46,12 +66,18 @@ function publicActivity(activity) {
 }
 
 function listActivities() {
-  return ACTIVITIES.map(publicActivity);
+  const latest = new Map();
+  for (const activity of ACTIVITIES) {
+    const saved = latest.get(activity.id);
+    if (!saved || activity.version > saved.version) latest.set(activity.id, activity);
+  }
+  return Array.from(latest.values()).map(publicActivity);
 }
 
 function getActivity(id, version) {
-  return ACTIVITIES.find((activity) => activity.id === String(id)
-    && (version == null || activity.version === Number(version))) || null;
+  const matches = ACTIVITIES.filter((activity) => activity.id === String(id)
+    && (version == null || activity.version === Number(version)));
+  return matches.sort((a, b) => b.version - a.version)[0] || null;
 }
 
 function attemptPath(id) {

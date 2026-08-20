@@ -68,7 +68,7 @@
   </main>
   <script>
     const $ = (id) => document.getElementById(id);
-    const stepNames = { 'move-pointer':'Move', 'single-click':'Click', 'double-click':'Double-click', 'drag-drop':'Drag', 'scroll-find':'Scroll' };
+    const stepNames = { 'move-pointer':'Pointer chase', 'single-click':'Single-click', 'double-click':'Double-click', 'context-command':'Right-click', 'drag-drop':'Drag', 'scroll-find':'Scroll', 'keyboard-defense':'Typing' };
     let data = { students:[], results:[] };
     const esc = (value) => String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const fmtTime = (seconds) => { const n=Number(seconds)||0; const m=Math.floor(n/60),s=n%60; return m ? `${m}m ${s}s` : `${s}s`; };
