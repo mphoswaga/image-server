@@ -34,12 +34,15 @@
     .progress-step.current { border-color:var(--cyan); color:var(--navy); background:var(--soft-cyan); }
     .progress-step.done { border-color:var(--green); color:var(--green-dark); background:var(--soft-green); }
     .gate,.intro,.completion { min-height:520px; display:grid; place-items:center; background:#fff; border:1px solid var(--line); box-shadow:var(--shadow); padding:34px; }
-    .intro-inner,.gate-inner,.completion-inner { width:min(680px,100%); text-align:center; }
+    .intro-inner,.gate-inner,.completion-inner { width:min(760px,100%); text-align:center; }
     .byte-large { width:84px; height:84px; margin:0 auto 18px; border-radius:50%; display:grid; place-items:center; background:var(--soft-cyan); border:2px solid var(--cyan); color:var(--navy); font-size:29px; font-weight:900; }
     h1 { margin:0 0 10px; color:var(--navy); font-size:clamp(28px,4vw,42px); line-height:1.1; }
     h2 { margin:0; color:var(--navy); font-size:24px; line-height:1.2; }
     .lead { margin:0 auto 22px; max-width:620px; color:var(--muted); font-size:17px; }
-    .activity-facts { display:grid; grid-template-columns:repeat(3,1fr); border:1px solid var(--line); margin:22px auto; text-align:left; }
+    .quest-map { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin:22px auto; }
+    .quest-stop { min-width:0; padding:12px 7px; border:1px solid var(--line); background:#f8fbfd; color:var(--navy); font-size:12px; font-weight:800; }
+    .quest-stop strong { display:grid; place-items:center; width:28px; height:28px; margin:0 auto 6px; border-radius:50%; background:var(--navy); color:#fff; }
+    .activity-facts { display:grid; grid-template-columns:repeat(3,1fr); border:1px solid var(--line); margin:18px auto 22px; text-align:left; }
     .fact { padding:14px; min-width:0; }
     .fact+.fact { border-left:1px solid var(--line); }
     .fact b { display:block; color:var(--navy); font-size:13px; }
@@ -55,13 +58,20 @@
     .phase { color:var(--cyan); font-size:11px; text-transform:uppercase; letter-spacing:.8px; font-weight:900; }
     .coach-text { font-size:16px; font-weight:700; color:var(--navy); }
     .workspace { position:relative; min-height:430px; background:#fff; border:1px solid var(--line); padding:24px; overflow:hidden; }
-    .workspace-head { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:18px; }
+    .workspace-head { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:12px; }
     .workspace-head p { margin:5px 0 0; color:var(--muted); }
     .skill-number { flex:none; padding:5px 9px; border-radius:6px; background:var(--soft-green); color:var(--green-dark); font-size:12px; font-weight:800; }
-    .task-area { min-height:295px; position:relative; display:grid; place-items:center; border:1px solid #cbd9e5; background:#f8fbfd; overflow:hidden; }
+    .game-hud { display:grid; grid-template-columns:1fr auto auto; gap:12px; align-items:center; margin-bottom:12px; padding:10px 12px; border:1px solid var(--line); background:#f8fbfd; }
+    .mission-meter { height:10px; overflow:hidden; border-radius:10px; background:#dce7ef; }
+    .mission-meter span { display:block; width:0; height:100%; background:var(--green); transition:width .28s ease; }
+    .hud-stat { min-width:92px; color:var(--muted); font-size:11px; font-weight:700; text-align:right; }
+    .hud-stat strong { display:block; color:var(--navy); font-size:17px; }
+    .task-area { min-height:310px; position:relative; display:grid; place-items:center; border:1px solid #b7cadd; background:linear-gradient(180deg,#eaf7fb 0 35%,#dff1e8 35% 100%); overflow:hidden; }
+    .task-area:before { content:""; position:absolute; left:0; right:0; top:35%; border-top:1px solid rgba(18,52,91,.10); }
     .target { border:0; cursor:pointer; user-select:none; }
     .target.guided { box-shadow:0 0 0 7px rgba(234,180,59,.28); animation:pulse 1.25s ease-in-out infinite; }
-    .target-star { width:86px; height:86px; display:grid; place-items:center; color:#fff; background:var(--navy-2); clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 94%,50% 72%,21% 94%,32% 57%,2% 35%,39% 35%); font-size:0; }
+    .target-star { width:86px; height:86px; display:grid; place-items:center; color:#fff; background:var(--navy-2); clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 94%,50% 72%,21% 94%,32% 57%,2% 35%,39% 35%); font-size:0; transition:left .25s ease,top .25s ease,transform .18s ease; }
+    .target-star:after { content:""; position:absolute; inset:-16px; border:2px dashed rgba(29,86,141,.28); border-radius:50%; }
     .target-circle { width:92px; height:92px; border-radius:50%; background:var(--green); color:#fff; font-weight:900; }
     .folder { width:126px; min-height:88px; border:2px solid #9b741f; border-radius:6px; background:#f5c85d; color:#553e0a; display:grid; place-items:center; padding:14px 8px 8px; font-weight:800; position:relative; }
     .folder:before { content:""; position:absolute; left:8px; top:-13px; width:52px; height:14px; border:2px solid #9b741f; border-bottom:0; border-radius:5px 5px 0 0; background:#f5c85d; }
@@ -77,6 +87,19 @@
     .decoy { position:absolute; width:44px; height:44px; border-radius:50%; background:#dce7ef; pointer-events:auto; cursor:pointer; border:1px solid #c6d4df; }
     .decoy:nth-child(1){left:11%;top:18%}.decoy:nth-child(2){right:13%;top:22%}.decoy:nth-child(3){left:21%;bottom:13%}.decoy:nth-child(4){right:20%;bottom:16%}
     .demo-pointer { position:absolute; width:24px; height:32px; left:26%; top:65%; background:var(--ink); clip-path:polygon(0 0,0 100%,28% 69%,45% 100%,60% 92%,43% 61%,78% 61%); animation:demoMove 2.3s ease-in-out infinite; z-index:5; }
+    .tutorial { width:min(720px,calc(100% - 28px)); display:grid; grid-template-columns:180px 1fr; gap:24px; align-items:center; padding:24px; border:2px solid var(--cyan); background:#fff; box-shadow:0 12px 28px rgba(18,52,91,.12); z-index:2; }
+    .tutorial-visual { min-height:150px; display:grid; place-items:center; position:relative; background:var(--soft-cyan); border:1px solid #b8e2ea; }
+    .mouse-demo { width:82px; height:116px; position:relative; border:4px solid var(--navy); border-radius:42px; background:#fff; }
+    .mouse-demo:before { content:""; position:absolute; left:50%; top:0; bottom:52%; border-left:3px solid var(--navy); }
+    .mouse-button { position:absolute; width:33px; height:43px; top:5px; left:5px; border-radius:27px 4px 8px 4px; background:var(--cyan); animation:mousePress 1.35s ease-in-out infinite; }
+    .mouse-wheel { position:absolute; width:11px; height:28px; left:31px; top:39px; border-radius:8px; background:var(--orange); animation:wheelMove 1.35s ease-in-out infinite; }
+    .tutorial-copy { text-align:left; }
+    .tutorial-copy b { display:block; margin-bottom:6px; color:var(--cyan); font-size:12px; text-transform:uppercase; letter-spacing:.8px; }
+    .tutorial-copy h3 { margin:0 0 8px; color:var(--navy); font-size:23px; }
+    .tutorial-copy p { margin:0 0 8px; color:var(--ink); font-size:17px; font-weight:700; }
+    .tutorial-copy small { display:block; color:var(--muted); font-size:13px; }
+    .burst { position:absolute; z-index:8; width:110px; height:110px; display:grid; place-items:center; border-radius:50%; background:var(--green); color:#fff; font-size:20px; font-weight:900; animation:burst .62s ease both; pointer-events:none; }
+    .points-pop { position:absolute; z-index:9; color:var(--green-dark); font-size:24px; font-weight:900; animation:pointsUp .75s ease both; pointer-events:none; }
     .feedback { min-height:42px; margin-top:13px; padding:10px 12px; background:var(--soft-green); border-left:4px solid var(--green); color:var(--green-dark); font-size:14px; font-weight:700; display:none; }
     .feedback.show { display:block; }
     .hint { min-height:42px; margin-top:10px; padding:10px 12px; background:#fff8e5; border-left:4px solid var(--gold); color:#654c10; font-size:14px; display:none; }
@@ -91,6 +114,10 @@
     .hidden { display:none !important; }
     @keyframes pulse { 50%{ box-shadow:0 0 0 12px rgba(234,180,59,.13); } }
     @keyframes demoMove { 0%{transform:translate(0,0)} 55%,75%{transform:translate(220px,-105px)} 100%{transform:translate(0,0)} }
+    @keyframes mousePress { 0%,45%,100%{transform:translateY(0);opacity:.65} 55%,70%{transform:translateY(5px);opacity:1} }
+    @keyframes wheelMove { 0%,100%{transform:translateY(-5px)} 50%{transform:translateY(9px)} }
+    @keyframes burst { 0%{transform:scale(.35);opacity:0} 55%{transform:scale(1.08);opacity:1} 100%{transform:scale(1);opacity:1} }
+    @keyframes pointsUp { from{transform:translateY(15px);opacity:0} 35%{opacity:1} to{transform:translateY(-38px);opacity:0} }
     @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; scroll-behavior:auto !important; } }
     @media (max-width:760px) {
       .topbar { align-items:flex-start; padding:10px 14px; }
@@ -108,7 +135,12 @@
       .control-left,.control-right { width:100%; }
       .control-left .btn,.control-right .btn { flex:1; }
       .activity-facts { grid-template-columns:1fr; }
+      .quest-map { grid-template-columns:repeat(5,128px); overflow-x:auto; padding-bottom:5px; }
       .fact+.fact { border-left:0; border-top:1px solid var(--line); }
+      .game-hud { grid-template-columns:1fr auto; }
+      .game-hud .hud-stat:last-child { grid-column:1/-1; text-align:left; }
+      .tutorial { grid-template-columns:1fr; padding:18px; }
+      .tutorial-visual { min-height:120px; }
     }
   </style>
 </head>
@@ -142,14 +174,17 @@
     <section class="intro hidden" id="intro">
       <div class="intro-inner">
         <div class="byte-large">B</div>
-        <h1>Pointer Control</h1>
-        <p class="lead">Learn to move, click, double-click, drag and scroll. Byte will show you first, then it will be your turn.</p>
+        <h1>Byte's Pointer Quest</h1>
+        <p class="lead">The computer lab has lost five skill badges. Complete each mission to bring them back.</p>
+        <div class="quest-map" aria-label="Five pointer missions">
+          <div class="quest-stop"><strong>1</strong>Move</div><div class="quest-stop"><strong>2</strong>Click</div><div class="quest-stop"><strong>3</strong>Double-click</div><div class="quest-stop"><strong>4</strong>Drag</div><div class="quest-stop"><strong>5</strong>Scroll</div>
+        </div>
         <div class="activity-facts">
           <div class="fact"><b>Grade</b><span>Grade 2 foundation</span></div>
           <div class="fact"><b>Time</b><span>About 10 minutes</span></div>
           <div class="fact"><b>You need</b><span>A mouse or trackpad</span></div>
         </div>
-        <button class="btn primary" id="startBtn" type="button">Start practice</button>
+        <button class="btn primary" id="startBtn" type="button">Start the quest</button>
       </div>
     </section>
 
@@ -161,6 +196,7 @@
       </div>
       <div class="workspace" id="workspace">
         <div class="workspace-head"><div><h2 id="skillTitle"></h2><p id="skillInstruction"></p></div><div class="skill-number" id="skillNumber"></div></div>
+        <div class="game-hud"><div class="mission-meter" aria-label="Mission progress"><span id="missionMeter"></span></div><div class="hud-stat">Mission<strong id="roundValue">0 / 1</strong></div><div class="hud-stat">Quest points<strong id="scoreValue">0</strong></div></div>
         <div class="task-area" id="taskArea"></div>
         <div class="feedback" id="feedback" role="status" aria-live="polite"></div>
         <div class="hint" id="hint" role="status" aria-live="polite"></div>
@@ -175,9 +211,10 @@
     <section class="completion hidden" id="completion">
       <div class="completion-inner">
         <div class="byte-large">OK</div>
-        <h1>Pointer practice complete</h1>
+        <h1>Pointer Quest complete</h1>
         <p class="lead" id="completionLead">You moved, clicked, double-clicked, dragged and scrolled. Your teacher can now see the skills you practised.</p>
         <p id="masterySummary"></p>
+        <p id="scoreSummary"></p>
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:24px">
           <a class="btn primary" id="completionBack" href="/start">Back to my work</a>
           <button class="btn secondary" id="practiseAgainBtn" type="button">Practise again</button>
@@ -206,6 +243,14 @@
         show:'Watch the page scroll down to reveal the gold star.', guided:'Scroll down and click the glowing gold star.', independent:'Find the gold star below and click it.', success:'You scrolled to find something that was out of view.',
         hints:['Use the mouse wheel or move the scrollbar down.','The gold star is near the bottom of the panel.','Watch the scroll demonstration, then find it yourself.'] },
     ];
+    const tutorials = {
+      'move-pointer': { title:'Move without pressing', action:'Slide the mouse, or one finger on the trackpad.', detail:'Keep every button up. Guide the pointer until it touches the star.', visual:'move' },
+      'single-click': { title:'Press once', action:'Press and release the left button one time.', detail:'One quick click chooses an item. Do not hold the button down.', visual:'click' },
+      'double-click': { title:'Press twice quickly', action:'Click-click without moving the mouse.', detail:'The two clicks must be close together to open the folder.', visual:'double' },
+      'drag-drop': { title:'Hold, move, release', action:'Hold the left button on the file while you move it.', detail:'Let go only when the file is inside the Homework folder.', visual:'drag' },
+      'scroll-find': { title:'Move the page', action:'Roll the wheel down, or slide two fingers up on a trackpad.', detail:'Scrolling reveals things that are below the visible page.', visual:'scroll' },
+    };
+    const missionGoals = { 'move-pointer':3, 'single-click':3, 'double-click':2, 'drag-drop':2, 'scroll-find':1 };
     const $ = (id) => document.getElementById(id);
     let home = null;
     let attempt = null;
@@ -214,15 +259,45 @@
     let guidedComplete = false;
     let independentSaved = false;
     let stats = { attempts:0, hintsUsed:0, activeSeconds:0 };
+    let roundProgress = 0;
+    let score = 0;
     let paused = false;
     let pendingSingleClick = null;
+    let roundLocked = false;
 
     function esc(value) { return String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
     function checkpointKey() { return `ls-practice-pending-${attempt && attempt.id || 'none'}`; }
     function checkpointId(step) { return `${attempt.id}:${attempt.activityVersion}:${step.id}`; }
     function setSave(text, error) { $('saveState').textContent = text || ''; $('saveState').style.color = error ? '#b13d2e' : ''; }
-    function phaseName() { return phase === 'show' ? 'Show me' : phase === 'guided' ? 'Help me practise' : 'My turn'; }
+    function phaseName() { return phase === 'show' ? 'Watch Byte' : phase === 'guided' ? 'Try together' : 'Your mission'; }
     function currentStep() { return steps[stepIndex]; }
+    function roundGoal() { return phase === 'independent' ? missionGoals[currentStep().id] : 1; }
+
+    function updateHud() {
+      const goal = roundGoal();
+      $('roundValue').textContent = `${Math.min(roundProgress,goal)} / ${goal}`;
+      $('scoreValue').textContent = score;
+      $('missionMeter').style.width = `${Math.min(100,(roundProgress/goal)*100)}%`;
+    }
+
+    function playTone(frequency=620) {
+      try {
+        const Context=window.AudioContext||window.webkitAudioContext;
+        if(!Context) return;
+        const context=new Context(), oscillator=context.createOscillator(), gain=context.createGain();
+        oscillator.frequency.value=frequency; oscillator.type='sine';
+        gain.gain.setValueAtTime(.06,context.currentTime); gain.gain.exponentialRampToValueAtTime(.001,context.currentTime+.18);
+        oscillator.connect(gain).connect(context.destination); oscillator.start(); oscillator.stop(context.currentTime+.18);
+      } catch {}
+    }
+
+    function celebrateHit(finalHit) {
+      const pop=document.createElement('div');
+      pop.className=finalHit?'burst':'points-pop';
+      pop.textContent=finalHit?'Mission clear':`+${phase==='guided'?25:100}`;
+      $('taskArea').appendChild(pop);
+      setTimeout(()=>pop.remove(),finalHit?720:800);
+    }
 
     function renderProgress() {
       $('progress').innerHTML = steps.map((step, index) => `<div class="progress-step ${index < stepIndex ? 'done' : index === stepIndex ? 'current' : ''}">${index + 1}. ${esc(step.title)}</div>`).join('');
@@ -234,34 +309,37 @@
     function renderTask() {
       const step = currentStep();
       const area = $('taskArea');
+      roundLocked = false;
+      if (phase === 'show') {
+        const tutorial=tutorials[step.id];
+        area.innerHTML=`<div class="tutorial"><div class="tutorial-visual"><div class="mouse-demo"><span class="mouse-button" style="${tutorial.visual==='scroll'?'opacity:.2':''}"></span><span class="mouse-wheel" style="${tutorial.visual==='scroll'?'':'opacity:.28'}"></span></div><div class="demo-pointer" style="${tutorial.visual==='move'||tutorial.visual==='drag'?'':'display:none'}"></div></div><div class="tutorial-copy"><b>First, watch how</b><h3>${esc(tutorial.title)}</h3><p>${esc(tutorial.action)}</p><small>${esc(tutorial.detail)}</small></div></div>`;
+        return;
+      }
+      const positions=[['22%','20%'],['67%','18%'],['46%','62%']];
+      const position=positions[roundProgress%positions.length];
       if (step.id === 'move-pointer') {
-        area.innerHTML = `${decoys()}<div class="target target-star${taskTargetClass()}" id="skillTarget" tabindex="0" aria-label="Blue star"></div>${phase === 'show' ? '<div class="demo-pointer"></div>' : ''}`;
-        if (phase !== 'show') $('skillTarget').addEventListener('pointerenter', () => completeInteraction('pointer_enter','blue-star'));
+        area.innerHTML = `${decoys()}<div class="target target-star${taskTargetClass()}" id="skillTarget" tabindex="0" aria-label="Blue star" style="position:absolute;left:${position[0]};top:${position[1]}"></div>`;
+        $('skillTarget').addEventListener('pointerenter', () => completeInteraction('pointer_enter','blue-star'));
       } else if (step.id === 'single-click') {
-        area.innerHTML = `${decoys()}${phase === 'show' ? '<div class="demo-pointer" style="animation-name:demoMove"></div>' : ''}<button class="target target-circle${taskTargetClass()}" id="skillTarget" type="button">Click me</button>`;
-        if (phase !== 'show') $('skillTarget').addEventListener('click', (event) => { event.stopPropagation(); completeInteraction('single_click','green-circle'); });
+        area.innerHTML = `${decoys()}<button class="target target-circle${taskTargetClass()}" id="skillTarget" style="position:absolute;left:${position[0]};top:${position[1]}" type="button">Power orb</button>`;
+        $('skillTarget').addEventListener('click', (event) => { event.stopPropagation(); completeInteraction('single_click','green-circle'); });
       } else if (step.id === 'double-click') {
         area.innerHTML = `${decoys()}<button class="target folder${taskTargetClass()}" id="skillTarget" type="button">School Work</button>`;
-        if (phase !== 'show') {
-          $('skillTarget').addEventListener('click', (event) => {
-            event.stopPropagation();
-            clearTimeout(pendingSingleClick);
-            pendingSingleClick = setTimeout(() => registerWrong('That was one click. Try two quick clicks.'), 360);
-          });
-          $('skillTarget').addEventListener('dblclick', (event) => { event.preventDefault(); event.stopPropagation(); clearTimeout(pendingSingleClick); completeInteraction('double_click','blue-folder'); });
-        }
+        $('skillTarget').addEventListener('click', (event) => {
+          event.stopPropagation();
+          clearTimeout(pendingSingleClick);
+          pendingSingleClick = setTimeout(() => registerWrong('That was one click. Try click-click quickly.'), 360);
+        });
+        $('skillTarget').addEventListener('dblclick', (event) => { event.preventDefault(); event.stopPropagation(); clearTimeout(pendingSingleClick); completeInteraction('double_click','blue-folder'); });
       } else if (step.id === 'drag-drop') {
-        area.innerHTML = `<div class="drag-layout"><div class="file" id="dragFile" draggable="${phase !== 'show'}">My Work<div style="font-size:12px;color:#718095">document</div></div><div class="dropzone${taskTargetClass()}" id="dropTarget"><div class="folder">Homework</div></div></div>${phase === 'show' ? '<div class="demo-pointer"></div>' : ''}`;
-        if (phase !== 'show') {
-          $('dragFile').addEventListener('dragstart', (event) => event.dataTransfer.setData('text/plain','my-work'));
-          $('dropTarget').addEventListener('dragover', (event) => { event.preventDefault(); $('dropTarget').classList.add('over'); });
-          $('dropTarget').addEventListener('dragleave', () => $('dropTarget').classList.remove('over'));
-          $('dropTarget').addEventListener('drop', (event) => { event.preventDefault(); $('dropTarget').classList.remove('over'); if (event.dataTransfer.getData('text/plain') === 'my-work') completeInteraction('drag_drop','homework-folder'); else registerWrong('Keep holding the file until it is inside Homework.'); });
-        }
+        area.innerHTML = `<div class="drag-layout"><div class="file" id="dragFile" draggable="true">Mission file ${roundProgress+1}<div style="font-size:12px;color:#718095">document</div></div><div class="dropzone${taskTargetClass()}" id="dropTarget"><div class="folder">Homework</div></div></div>`;
+        $('dragFile').addEventListener('dragstart', (event) => event.dataTransfer.setData('text/plain','my-work'));
+        $('dropTarget').addEventListener('dragover', (event) => { event.preventDefault(); $('dropTarget').classList.add('over'); });
+        $('dropTarget').addEventListener('dragleave', () => $('dropTarget').classList.remove('over'));
+        $('dropTarget').addEventListener('drop', (event) => { event.preventDefault(); $('dropTarget').classList.remove('over'); if (event.dataTransfer.getData('text/plain') === 'my-work') completeInteraction('drag_drop','homework-folder'); else registerWrong('Keep holding the file until it is inside Homework.'); });
       } else {
         area.innerHTML = `<div class="scroll-window" id="scrollWindow"><div style="font-weight:800;color:var(--navy)">The gold star is below.</div><div class="scroll-spacer">Scroll down to keep looking.</div><button class="gold-target${taskTargetClass()}" id="skillTarget" type="button">Gold star found</button></div>`;
-        if (phase === 'show') setTimeout(() => { const pane=$('scrollWindow'); if(pane) pane.scrollTo({top:pane.scrollHeight,behavior:'smooth'}); }, 350);
-        else $('skillTarget').addEventListener('click', (event) => { event.stopPropagation(); const pane=$('scrollWindow'); if (pane.scrollTop < 180) registerWrong('Scroll down before choosing the star.'); else completeInteraction('scroll_find','gold-star'); });
+        $('skillTarget').addEventListener('click', (event) => { event.stopPropagation(); const pane=$('scrollWindow'); if (pane.scrollTop < 180) registerWrong('Scroll down before choosing the star.'); else completeInteraction('scroll_find','gold-star'); });
       }
       if (phase === 'independent') area.addEventListener('click', (event) => { if (!event.target.closest('#skillTarget') && !event.target.closest('#scrollWindow')) registerWrong('Try the task again. You can ask Byte for help.'); });
     }
@@ -272,19 +350,21 @@
       guidedComplete = false;
       independentSaved = false;
       stats = { attempts:0, hintsUsed:0, activeSeconds:0 };
+      roundProgress = 0;
       $('activity').style.display = 'block';
       $('phaseLabel').textContent = phaseName();
       $('coachText').textContent = step[phase];
       $('skillTitle').textContent = step.title;
       $('skillInstruction').textContent = step[phase];
-      $('skillNumber').textContent = `Skill ${stepIndex + 1} of ${steps.length}`;
+      $('skillNumber').textContent = `Mission ${stepIndex + 1} of ${steps.length}`;
       $('feedback').className = 'feedback'; $('feedback').textContent = '';
       $('hint').className = 'hint'; $('hint').textContent = '';
       $('hintBtn').disabled = phase === 'show';
       $('replayBtn').hidden = phase === 'independent';
       $('nextBtn').disabled = phase !== 'show';
-      $('nextBtn').textContent = phase === 'show' ? 'Practise with help' : phase === 'guided' ? 'My turn' : 'Saving progress';
+      $('nextBtn').textContent = phase === 'show' ? 'Try with Byte' : phase === 'guided' ? 'Start my mission' : 'Complete the mission';
       renderProgress();
+      updateHud();
       renderTask();
       if (phase === 'show') $('nextBtn').disabled = false;
     }
@@ -297,16 +377,24 @@
     }
 
     async function completeInteraction(action, target) {
-      if (phase === 'show' || guidedComplete || independentSaved) return;
+      if (phase === 'show' || guidedComplete || independentSaved || roundLocked) return;
       const step = currentStep();
       if (action !== step.action || target !== step.target) return registerWrong('Try the skill again.');
-      stats.attempts += 1;
-      $('feedback').textContent = step.success;
+      roundLocked = true;
+      roundProgress += 1;
+      score += phase === 'guided' ? 25 : 100;
+      const finalHit=roundProgress >= roundGoal();
+      $('feedback').textContent = finalHit ? step.success : `Great move. ${roundGoal()-roundProgress} more to clear this mission.`;
       $('feedback').className = 'feedback show';
+      updateHud();
+      playTone(finalHit?760:620);
+      celebrateHit(finalHit);
+      if (!finalHit) { setTimeout(renderTask,420); return; }
+      stats.attempts += 1;
       if (phase === 'guided') {
         guidedComplete = true;
         $('nextBtn').disabled = false;
-        $('nextBtn').textContent = 'My turn';
+        $('nextBtn').textContent = 'Start my mission';
         return;
       }
       independentSaved = true;
@@ -379,6 +467,7 @@
       $('progress').innerHTML = steps.map((step,index) => `<div class="progress-step done">${index + 1}. ${esc(step.title)}</div>`).join('');
       const label = String(attempt.mastery || '').replaceAll('_',' ');
       $('masterySummary').innerHTML = `Overall result: <span class="mastery">${esc(label)}</span>`;
+      $('scoreSummary').innerHTML = `Quest points: <strong style="color:var(--navy);font-size:24px">${score}</strong>`;
       setSave(previewMode ? 'Preview complete - no results were saved' : 'All progress saved');
     }
 
@@ -416,6 +505,8 @@
 
     async function beginAttempt(forceNew) {
       if (forceNew && attempt && attempt.status !== 'completed') return;
+      score = 0;
+      updateHud();
       if (previewMode) {
         attempt = { id:`preview-${Date.now()}`, activityId:ACTIVITY_ID, activityVersion:1, status:'in_progress', currentStepIndex:0, checkpoints:[], mastery:'not_started' };
         stepIndex = 0;
@@ -464,7 +555,7 @@
           $('studentName').textContent = `Practising as ${data.student.name}`;
         }
         const unfinished = previewMode ? null : data.attempts.find((item) => item.activityId === ACTIVITY_ID && item.status === 'in_progress');
-        $('startBtn').textContent = unfinished ? 'Continue practice' : 'Start practice';
+        $('startBtn').textContent = unfinished ? 'Continue the quest' : 'Start the quest';
         $('intro').classList.remove('hidden');
         renderProgress();
       } catch (error) {
