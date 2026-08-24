@@ -327,6 +327,8 @@
         <h1>Sign in to practise</h1>
         <p class="lead">Use your LessonScope Student ID and PIN. Your progress will stay connected to your class.</p>
         <a class="btn primary" href="/start?next=%2Fstudent%2Fpractice">Student sign in</a>
+        <a class="btn secondary" href="/student/practice/guest" style="margin-top:10px">Practise as a guest</a>
+        <p style="margin-top:10px;color:var(--muted);font-size:13px">Guest progress is temporary and is not added to teacher reports.</p>
       </div>
     </section>
 
@@ -388,6 +390,8 @@
 
   <script>
     const previewMode = location.pathname === '/practice/preview';
+    const guestMode = location.pathname === '/student/practice/guest';
+    const ephemeralMode = previewMode || guestMode;
     const requestedWorld = new URLSearchParams(location.search).get('world') === 'g3' ? 'g3' : 'foundation';
     const foundationSteps = [
       { id:'move-pointer', title:'Signal Trail', action:'pointer_enter', target:'blue-star',
@@ -473,7 +477,7 @@
       $('nextWorldCopy').textContent=campaign.nextCopy;
       $('continueWorldBtn').hidden=!campaign.nextLabel;
       $('continueWorldBtn').textContent=campaign.nextLabel || '';
-      $('continueWorldBtn').href=previewMode?'/practice/preview?world=g3':'/student/practice?world=g3';
+      $('continueWorldBtn').href=previewMode?'/practice/preview?world=g3':guestMode?'/student/practice/guest?world=g3':'/student/practice?world=g3';
       $('startBtn').textContent=campaign.start;
     }
     let home = null;
@@ -782,7 +786,7 @@
     async function saveCheckpoint() {
       const step = currentStep();
       const payload = { checkpointId:checkpointId(step), stepId:step.id, attempts:Math.max(1,stats.attempts), hintsUsed:stats.hintsUsed, activeSeconds:Math.max(1,stats.activeSeconds), evidence:{ action:step.action, target:step.target } };
-      if (previewMode) return savePreviewCheckpoint(payload);
+      if (ephemeralMode) return saveEphemeralCheckpoint(payload);
       localStorage.setItem(checkpointKey(), JSON.stringify(payload));
       setSave('Saving progress...');
       $('nextBtn').disabled = true;
@@ -812,20 +816,20 @@
       return 'completed_with_support';
     }
 
-    function savePreviewCheckpoint(payload) {
+    function saveEphemeralCheckpoint(payload) {
       const checkpoint = { ...payload, mastery:checkpointMastery(payload), completedAt:new Date().toISOString() };
       attempt.checkpoints.push(checkpoint);
       attempt.currentStepIndex += 1;
       const rank = { independent:3, developing_independence:2, completed_with_support:1 };
       attempt.mastery = attempt.checkpoints.reduce((lowest,item) => rank[item.mastery] < rank[lowest] ? item.mastery : lowest, 'independent');
       if (attempt.currentStepIndex >= steps.length) attempt.status = 'completed';
-      setSave('Preview only - results not saved');
+      setSave(guestMode ? 'Guest practice - results not saved' : 'Preview only - results not saved');
       $('nextBtn').disabled = false;
       $('nextBtn').textContent = attempt.status === 'completed' ? 'See my result' : 'Unlock next room';
     }
 
     async function retryPending() {
-      if (previewMode) return true;
+      if (ephemeralMode) return true;
       const raw = localStorage.getItem(checkpointKey());
       if (!raw) return false;
       try {
@@ -847,7 +851,7 @@
       const label = String(attempt.mastery || '').replaceAll('_',' ');
       $('masterySummary').innerHTML = `Overall result: <span class="mastery">${esc(label)}</span>`;
       $('scoreSummary').innerHTML = `Arcade score: <strong style="color:#25cddc;font-size:24px">${score}</strong>`;
-      setSave(previewMode ? 'Preview complete - no results were saved' : 'All progress saved');
+      setSave(ephemeralMode ? `${guestMode ? 'Guest practice' : 'Preview'} complete - no results were saved` : 'All progress saved');
     }
 
     $('nextBtn').addEventListener('click', async () => {
@@ -891,12 +895,12 @@
       if (forceNew && attempt && attempt.status !== 'completed') return;
       score = 0;
       updateHud();
-      if (previewMode) {
-        attempt = { id:`preview-${Date.now()}`, activityId:ACTIVITY_ID, activityVersion:campaign.version, status:'in_progress', currentStepIndex:0, checkpoints:[], mastery:'not_started' };
+      if (ephemeralMode) {
+        attempt = { id:`${guestMode?'guest':'preview'}-${Date.now()}`, activityId:ACTIVITY_ID, activityVersion:campaign.version, status:'in_progress', currentStepIndex:0, checkpoints:[], mastery:'not_started' };
         stepIndex = 0;
         phase = 'show';
         $('intro').classList.add('hidden');
-        setSave('Preview only - results not saved');
+        setSave(guestMode ? 'Guest practice - results not saved' : 'Preview only - results not saved');
         renderStep();
         showMissionTransition('City gate opened');
         return;
@@ -926,6 +930,17 @@
     (async () => {
       if (matchMedia('(pointer:coarse)').matches) $('deviceNote').style.display='block';
       try {
+        if (guestMode) {
+          $('previewNote').style.display = 'block';
+          $('previewNote').textContent = 'Guest practice: play every mission without signing in. This run is temporary and will not appear in teacher reports.';
+          $('studentName').textContent = 'Playing as a guest';
+          $('completionLead').textContent = 'You completed the guest adventure. No progress or results were saved.';
+          $('completionBack').href = '/start';
+          $('completionBack').textContent = 'Back to student start';
+          $('intro').classList.remove('hidden');
+          renderProgress();
+          return;
+        }
         const response = await fetch(previewMode ? '/api/practice/preview' : '/api/practice/student/home');
         if (response.status === 401) { $('authGate').classList.remove('hidden'); return; }
         const data = await response.json();

@@ -22,6 +22,8 @@
     .btn { display:block; width:100%; padding:14px; font-size:15px; font-weight:700; border:none; border-radius:12px; cursor:pointer; background:var(--primary); color:#fff; transition:.15s; }
     .btn:disabled { opacity:.6; cursor:not-allowed; }
     .btn.ghost { background:#fff; border:1.5px solid var(--border); color:var(--ink); }
+    .guest-practice { display:none; margin-top:18px; padding-top:18px; border-top:1px solid var(--border); text-align:center; }
+    .guest-practice p { margin:8px 0 0; color:var(--muted); font-size:12.5px; line-height:1.4; }
     .err { color:var(--err); font-size:13px; margin-top:10px; min-height:18px; }
     .ok-msg { color:var(--ok); font-size:13px; margin-top:10px; }
     .link-btn { background:none; border:none; color:var(--muted); font-size:12.5px; cursor:pointer; padding:0 0 14px; display:block; text-align:left; }
@@ -91,6 +93,10 @@
         <div class="err" id="authErr"></div>
         <div class="ok-msg" id="forgotMsg"></div>
       </form>
+      <div class="guest-practice" id="guestPractice">
+        <a class="btn ghost" href="/student/practice/guest">Practise without signing in</a>
+        <p>Your guest practice is temporary and will not appear in teacher reports.</p>
+      </div>
     </div>
 
     <div id="dashboard">
@@ -235,6 +241,10 @@
 
     // On load: already signed in (lc_student cookie still valid)? Skip straight to the dashboard.
     (async () => {
+      fetch('/api/practice/status')
+        .then(r => r.json())
+        .then(d => { if (d.enabled) $('guestPractice').style.display = 'block'; })
+        .catch(() => {});
       try {
         const r = await fetch('/api/student/me');
         if (r.ok) { const d = await r.json(); await showDashboard(d.name); return; }

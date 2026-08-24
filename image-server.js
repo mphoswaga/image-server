@@ -2170,7 +2170,12 @@ app.post('/api/student/join-room', requireStudentAccess, (req, res) => {
 // It reuses the verified roster Student ID/PIN session but keeps its evidence
 // model separate from knowledge games and graded assignments.
 app.get('/api/practice/status', (req, res) => {
-  res.json({ enabled: practice.enabled(), studentPath: '/student/practice', teacherPath: '/practice' });
+  res.json({
+    enabled: practice.enabled(),
+    studentPath: '/student/practice',
+    guestPath: '/student/practice/guest',
+    teacherPath: '/practice',
+  });
 });
 
 app.get('/api/practice/catalog', requirePracticeEnabled, (req, res) => {
@@ -3692,6 +3697,7 @@ app.get('/start', (req, res) => res.sendFile(path.join(__dirname, 'public', 'sta
 // Practical digital-skills player and teacher evidence view. The HTML lives
 // outside public/ so the feature flag cannot be bypassed with a direct file URL.
 app.get('/student/practice', requirePracticeEnabled, (req, res) => res.sendFile(path.join(__dirname, 'practice.html')));
+app.get('/student/practice/guest', requirePracticeEnabled, (req, res) => res.sendFile(path.join(__dirname, 'practice.html')));
 app.get('/practice/preview', requirePracticeEnabled, requireAuth, (req, res) => {
   if (req.user && req.user.role === 'student') return res.status(403).send('Teacher account required.');
   res.sendFile(path.join(__dirname, 'practice.html'));
