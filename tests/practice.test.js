@@ -142,7 +142,7 @@ test('guest practice is public but never writes recorded student evidence', () =
   const teacherLogin = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
   assert.match(server, /app\.get\('\/student\/practice\/guest', requirePracticeEnabled/);
   assert.match(player, /const guestMode = location\.pathname === '\/student\/practice\/guest'/);
-  assert.match(player, /Guest practice: play every mission without signing in/);
+  assert.match(player, /Guest play · Progress is not saved/);
   assert.match(player, /guestMode\?'\/student\/practice\/guest\?world=g3'/);
   assert.match(start, /href="\/student\/practice\/guest">Practise without signing in/);
   assert.match(teacherLogin, /href="\/student\/practice\/guest">Student guest practice/);
@@ -165,4 +165,17 @@ test('the learner quest keeps Byte and its connected game states', () => {
   assert.match(player, /burstParticles/);
   assert.match(player, /Combo/);
   assert.doesNotMatch(player, /phase === 'guided'/);
+});
+
+test('Grade 2 play uses animated demonstrations and save-before-auto-advance', () => {
+  const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
+  assert.match(player, /function tutorialVisual\(stepId\)/);
+  assert.match(player, /Watch Byte/);
+  assert.match(player, /function signalTrail\(slot\)/);
+  assert.match(player, /function reactorBoard\(slot\)/);
+  assert.match(player, /class=\"tower-floor\"/);
+  assert.match(player, /function scheduleAutoAdvance\(\)/);
+  assert.match(player, /setTimeout\(advanceAfterCheckpoint,2600\)/);
+  assert.match(player, /localStorage\.removeItem\(checkpointKey\(\)\);\s*setSave\('Progress saved'\);\s*scheduleAutoAdvance\(\)/);
+  assert.match(player, /if \(ephemeralMode\) return saveEphemeralCheckpoint\(payload\)/);
 });
