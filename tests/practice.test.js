@@ -185,15 +185,26 @@ test('the learner quest keeps Byte and its connected game states', () => {
   assert.doesNotMatch(player, /phase === 'guided'/);
 });
 
-test('the opening and first three arcade rooms use their illustrated backgrounds', () => {
+test('every Grade 2 district and finale uses its illustrated background', () => {
   const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
-  for (const asset of ['bg_byte_city_blackout.jpeg', 'bg_signal_trail.jpeg', 'bg_reactor_room.jpeg', 'bg_vault_room.jpeg']) {
+  for (const asset of [
+    'bg_byte_city_blackout.jpeg',
+    'bg_signal_trail.jpeg',
+    'bg_reactor_room.jpeg',
+    'bg_vault_room.jpeg',
+    'bg_command_deck.jpeg',
+    'bg_cargo_station.jpeg',
+    'bg_signal_tower.jpeg',
+    'bg_message_relay.jpeg',
+    'bg_sky_shield.jpeg',
+    'bg_byte_city_restored.jpeg'
+  ]) {
     assert.match(player, new RegExp(`/assets/practice/${asset}`));
     assert.equal(fs.existsSync(path.join(__dirname, '..', 'public', 'assets', 'practice', asset)), true);
   }
-  assert.match(player, /briefing-move-pointer/);
-  assert.match(player, /briefing-single-click/);
-  assert.match(player, /briefing-double-click/);
+  for (const mission of ['move-pointer', 'single-click', 'double-click', 'context-command', 'drag-drop', 'scroll-find', 'copy-paste-menu', 'keyboard-defense']) {
+    assert.match(player, new RegExp(`briefing-${mission}`));
+  }
 });
 
 test('Grade 2 play uses animated demonstrations and save-before-auto-advance', () => {
