@@ -147,7 +147,7 @@ test('teacher preview is protected and explicitly avoids recorded attempts', () 
   assert.match(server, /app\.get\('\/practice\/preview', requirePracticeEnabled, requireAuth/);
   assert.match(server, /app\.get\('\/api\/practice\/preview', requirePracticeEnabled, requireAuth/);
   assert.match(player, /const ephemeralMode = previewMode \|\| guestMode/);
-  assert.match(player, /if \(ephemeralMode\) return saveEphemeralCheckpoint\(payload\)/);
+  assert.match(player, /if \(ephemeralMode\) return liveRoom \? saveLiveCheckpoint\(payload\) : saveEphemeralCheckpoint\(payload\)/);
   assert.match(player, /Preview only - results not saved/);
   assert.match(report, /href="\/practice\/preview"/);
 });
@@ -159,7 +159,11 @@ test('guest practice is public but never writes recorded student evidence', () =
   const teacherLogin = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
   assert.match(server, /app\.get\('\/student\/practice\/guest', requirePracticeEnabled/);
   assert.match(player, /const guestMode = location\.pathname === '\/student\/practice\/guest'/);
-  assert.match(player, /Guest play · Progress is not saved/);
+  assert.match(player, /Guest play · Choose a class room or play on your own/);
+  assert.match(player, /Solo guest play · Progress is not saved/);
+  assert.match(player, /id="guestEntry"/);
+  assert.match(player, /function joinLiveRoom\(\)/);
+  assert.match(player, /function chooseSoloGuest\(\)/);
   assert.match(player, /guestMode\?'\/student\/practice\/guest\?world=g3'/);
   assert.match(start, /href="\/student\/practice\/guest">Practise without signing in/);
   assert.match(teacherLogin, /href="\/student\/practice\/guest">Student guest practice/);
@@ -217,7 +221,7 @@ test('Grade 2 play uses animated demonstrations and save-before-auto-advance', (
   assert.match(player, /function scheduleAutoAdvance\(\)/);
   assert.match(player, /setTimeout\(advanceAfterCheckpoint,2600\)/);
   assert.match(player, /localStorage\.removeItem\(checkpointKey\(\)\);\s*setSave\('Progress saved'\);\s*scheduleAutoAdvance\(\)/);
-  assert.match(player, /if \(ephemeralMode\) return saveEphemeralCheckpoint\(payload\)/);
+  assert.match(player, /if \(ephemeralMode\) return liveRoom \? saveLiveCheckpoint\(payload\) : saveEphemeralCheckpoint\(payload\)/);
 });
 
 test('both arcade worlds provide sustained, varied practice', () => {

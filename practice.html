@@ -48,6 +48,22 @@
     .fact+.fact { border-left:1px solid var(--line); }
     .fact b { display:block; color:var(--navy); font-size:13px; }
     .fact span { color:var(--muted); font-size:12px; }
+    .guest-entry { width:min(620px,100%); margin:18px auto 0; padding:18px; border:1px solid #79e8ef; border-radius:12px; background:rgba(7,20,44,.92); color:#fff; text-align:left; }
+    .guest-entry h2 { color:#fff; font-size:20px; }
+    .guest-entry p { margin:4px 0 14px; color:#b8c9db; font-size:13px; }
+    .join-fields { display:grid; grid-template-columns:1fr 1fr auto; gap:8px; align-items:end; }
+    .join-field label { display:block; margin-bottom:5px; color:#a9ddeb; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.6px; }
+    .join-field input { width:100%; min-height:46px; padding:10px 12px; border:1px solid #466989; border-radius:8px; background:#fff; color:var(--navy); font:800 16px/1 inherit; }
+    .join-field.code input { text-transform:uppercase; letter-spacing:3px; }
+    .join-error { min-height:20px; margin-top:8px; color:#ffd28a; font-size:13px; font-weight:700; }
+    .solo-choice { display:flex; align-items:center; justify-content:center; gap:10px; margin-top:12px; color:#9fb2c5; font-size:12px; }
+    .solo-choice button { border:0; background:transparent; color:#8cecf4; font-weight:800; text-decoration:underline; cursor:pointer; }
+    .live-strip { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 10px; padding:9px 12px; border:1px solid #2a4d76; border-radius:10px; background:#0c1d3b; color:#dce8f3; }
+    .live-strip strong { color:#8cecf4; white-space:nowrap; }
+    .live-mini-board { display:flex; justify-content:flex-end; gap:6px; min-width:0; overflow:hidden; }
+    .live-mini-player { display:flex; align-items:center; gap:5px; min-width:0; padding:5px 8px; border-radius:6px; background:#16375a; font-size:11px; font-weight:800; }
+    .live-mini-player.me { background:#12623e; color:#fff; }
+    .live-mini-player span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:90px; }
     .btn { display:inline-flex; align-items:center; justify-content:center; min-height:46px; padding:11px 18px; border-radius:8px; border:1px solid transparent; font-weight:800; cursor:pointer; text-decoration:none; }
     .btn.primary { background:var(--green); color:#fff; box-shadow:0 8px 20px rgba(24,165,104,.22); }
     .btn.primary:hover { background:var(--green-dark); }
@@ -454,6 +470,9 @@
       body.playing .shell { padding-bottom:86px; }
       body.playing .controls { position:fixed; z-index:55; left:10px; right:10px; bottom:10px; width:auto; padding:8px; border:1px solid #2a4d76; border-radius:12px; box-shadow:0 14px 40px rgba(0,0,0,.55); }
       .activity-facts { grid-template-columns:1fr; }
+      .join-fields { grid-template-columns:1fr; }
+      .live-strip { align-items:flex-start; flex-direction:column; }
+      .live-mini-board { width:100%; justify-content:flex-start; overflow-x:auto; padding-bottom:2px; }
       .quest-map { grid-template-columns:repeat(var(--mission-count,8),128px); overflow-x:auto; padding-bottom:5px; }
       .fact+.fact { border-left:0; border-top:1px solid var(--line); }
       .game-hud { grid-template-columns:repeat(4,1fr); }
@@ -505,6 +524,7 @@
     </div>
     <div class="device-note" id="deviceNote">This practice teaches mouse and keyboard skills. Use a laptop or desktop computer for the full activity.</div>
     <div class="progress" id="progress" aria-label="Activity progress"></div>
+    <section class="live-strip" id="liveStrip" aria-label="Live class leaderboard" hidden><strong id="liveStripTitle">Live room</strong><div class="live-mini-board" id="liveMiniBoard"></div></section>
 
     <section class="gate hidden" id="authGate">
       <div class="gate-inner">
@@ -530,6 +550,17 @@
           <div class="fact"><b>World</b><span id="factWorld">Foundation for Grade 2 and Grade 3</span></div>
           <div class="fact"><b>Time</b><span id="factTime">About 15 minutes</span></div>
           <div class="fact"><b>You need</b><span id="factDevice">A keyboard and mouse or trackpad</span></div>
+        </div>
+        <div class="guest-entry" id="guestEntry" hidden>
+          <h2>Join your class arcade</h2>
+          <p>Enter the room code from your teacher and a first name or nickname. It will disappear when the room ends.</p>
+          <div class="join-fields">
+            <div class="join-field code"><label for="roomCodeInput">Room code</label><input id="roomCodeInput" maxlength="6" autocomplete="off" inputmode="text" /></div>
+            <div class="join-field"><label for="nicknameInput">Your name</label><input id="nicknameInput" maxlength="24" autocomplete="name" /></div>
+            <button class="btn primary" id="joinRoomBtn" type="button">Join game</button>
+          </div>
+          <div class="join-error" id="joinRoomError" role="alert"></div>
+          <div class="solo-choice">No class code? <button id="soloGuestBtn" type="button">Play on my own</button></div>
         </div>
         <button class="btn primary" id="startBtn" type="button">Begin the rescue</button>
       </div>
@@ -577,7 +608,9 @@
     const previewMode = location.pathname === '/practice/preview';
     const guestMode = location.pathname === '/student/practice/guest';
     const ephemeralMode = previewMode || guestMode;
-    const requestedWorld = new URLSearchParams(location.search).get('world') === 'g3' ? 'g3' : 'foundation';
+    const query = new URLSearchParams(location.search);
+    const requestedWorld = query.get('world') === 'g3' ? 'g3' : 'foundation';
+    const requestedSessionCode = String(query.get('session') || '').replace(/[^a-z0-9]/gi,'').toUpperCase().slice(0,6);
     const foundationSteps = [
       { id:'move-pointer', title:'Signal Trail', action:'pointer_enter', target:'blue-star',
         show:'Watch Byte follow the blue bug. No clicking.', independent:'Touch 8 blue bugs. Do not click.', success:'The city gate has power again!',
@@ -693,10 +726,89 @@
     let autoAdvanceTimer = null;
     let taskAreaClickHandler = null;
     let taskAreaPointerDownHandler = null;
+    let liveRoom = null;
+    let liveParticipant = null;
+    let liveParticipantToken = '';
+    let livePollTimer = null;
 
     applyCampaignCopy();
 
     function esc(value) { return String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+    function liveStorageKey(code) { return `ls-live-practice-${String(code || '').toUpperCase()}`; }
+    function roomWorld(room) { return room && room.activity && room.activity.id === 'g3-keyboard-kingdom' ? 'g3' : 'foundation'; }
+    function liveSessionUrl(code, world=requestedWorld) { return `/student/practice/guest?session=${encodeURIComponent(code)}${world === 'g3' ? '&world=g3' : ''}`; }
+
+    function renderLiveBoard(room) {
+      if (!room || !liveParticipant) { $('liveStrip').hidden=true; return; }
+      $('liveStrip').hidden=false;
+      $('liveStripTitle').textContent=`Room ${room.code} · ${liveParticipant.name}`;
+      let players=(room.leaderboard||[]).slice(0,5);
+      const me=(room.leaderboard||[]).find((player)=>player.id===liveParticipant.id);
+      if(me&&!players.some((player)=>player.id===me.id)) players=[...players.slice(0,4),me];
+      $('liveMiniBoard').innerHTML=players.length
+        ? players.map((player)=>`<div class="live-mini-player ${player.id===liveParticipant.id?'me':''}"><b>${player.rank}</b><span>${esc(player.name)}</span><small>${player.score}</small></div>`).join('')
+        : '<span>Waiting for players...</span>';
+    }
+
+    function activateLiveRoom(saved) {
+      liveRoom=saved.room;
+      liveParticipant=saved.participant;
+      liveParticipantToken=saved.token;
+      try { sessionStorage.setItem(liveStorageKey(liveRoom.code),JSON.stringify(saved)); } catch {}
+      $('guestEntry').hidden=true;
+      $('startBtn').hidden=false;
+      $('studentName').textContent=`Playing as ${liveParticipant.name} · Room ${liveRoom.code}`;
+      $('previewNote').textContent='Live class game · Nickname and score disappear when the room ends';
+      $('completionLead').textContent='You completed the live class adventure. Your temporary score is on the room leaderboard.';
+      renderLiveBoard(liveRoom);
+      clearInterval(livePollTimer);
+      livePollTimer=setInterval(()=>{ if(!document.hidden) refreshLiveRoom(); },3000);
+    }
+
+    async function refreshLiveRoom() {
+      if(!liveRoom) return;
+      try {
+        const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(liveRoom.code)}`);
+        if(!response.ok) throw new Error('Room ended');
+        const payload=await response.json();
+        liveRoom=payload.room;
+        renderLiveBoard(liveRoom);
+      }catch{
+        clearInterval(livePollTimer);
+        liveRoom=null;
+        liveParticipant=null;
+        liveParticipantToken='';
+        $('liveStrip').hidden=true;
+        $('previewNote').textContent='Solo guest play · Progress is not saved';
+        setSave('The live room has ended. You can finish this game on your own.',true);
+      }
+    }
+
+    async function joinLiveRoom() {
+      const code=String($('roomCodeInput').value||'').replace(/[^a-z0-9]/gi,'').toUpperCase().slice(0,6);
+      const name=String($('nicknameInput').value||'').trim();
+      $('joinRoomError').textContent='';
+      $('joinRoomBtn').disabled=true;
+      try {
+        const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(code)}/join`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
+        const payload=await response.json();
+        if(!response.ok) throw new Error(payload.error||'The room could not be joined.');
+        const saved={room:payload.room,participant:payload.participant,token:payload.token};
+        try { sessionStorage.setItem(liveStorageKey(payload.room.code),JSON.stringify(saved)); } catch {}
+        const world=roomWorld(payload.room);
+        if(world!==requestedWorld){ location.href=liveSessionUrl(payload.room.code,world); return; }
+        history.replaceState(null,'',liveSessionUrl(payload.room.code,world));
+        activateLiveRoom(saved);
+      }catch(error){ $('joinRoomError').textContent=error.message; $('joinRoomBtn').disabled=false; }
+    }
+
+    function chooseSoloGuest() {
+      liveRoom=null; liveParticipant=null; liveParticipantToken='';
+      $('guestEntry').hidden=true;
+      $('startBtn').hidden=false;
+      $('studentName').textContent='Playing on my own';
+      $('previewNote').textContent='Solo guest play · Progress is not saved';
+    }
     function checkpointKey() { return `ls-practice-pending-${attempt && attempt.id || 'none'}`; }
     function checkpointId(step) { return `${attempt.id}:${attempt.activityVersion}:${step.id}`; }
     function setSave(text, error) { $('saveState').textContent = text || ''; $('saveState').style.color = error ? '#b13d2e' : ''; }
@@ -1138,7 +1250,7 @@
     async function saveCheckpoint() {
       const step = currentStep();
       const payload = { checkpointId:checkpointId(step), stepId:step.id, attempts:Math.max(1,stats.attempts), hintsUsed:stats.hintsUsed, activeSeconds:Math.max(1,stats.activeSeconds), evidence:{ action:step.action, target:step.target } };
-      if (ephemeralMode) return saveEphemeralCheckpoint(payload);
+      if (ephemeralMode) return liveRoom ? saveLiveCheckpoint(payload) : saveEphemeralCheckpoint(payload);
       localStorage.setItem(checkpointKey(), JSON.stringify(payload));
       setSave('Saving progress...');
       $('nextBtn').disabled = true;
@@ -1161,6 +1273,32 @@
       }
     }
 
+    async function saveLiveCheckpoint(payload) {
+      setSave(`Updating room ${liveRoom.code}...`);
+      $('nextBtn').disabled=true;
+      try {
+        const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(liveRoom.code)}/checkpoints`,{
+          method:'POST',
+          headers:{'Content-Type':'application/json','X-Practice-Participant':liveParticipantToken},
+          body:JSON.stringify({...payload,arcadeScore:score}),
+        });
+        const data=await response.json();
+        if(!response.ok) throw new Error(data.error||'The leaderboard could not be updated.');
+        liveRoom=data.room;
+        renderLiveBoard(liveRoom);
+        saveEphemeralCheckpoint(payload);
+        setSave(`Room ${liveRoom.code} updated`);
+      }catch(error){
+        independentSaved=false;
+        setSave('Leaderboard update is waiting',true);
+        $('feedback').textContent=`${error.message} Choose Retry save.`;
+        $('feedback').className='feedback show';
+        $('nextBtn').disabled=false;
+        $('nextBtn').textContent='Retry save';
+        $('nextBtn').dataset.retry='1';
+      }
+    }
+
     function checkpointMastery(payload) {
       if (payload.hintsUsed === 0 && payload.attempts <= 1) return 'independent';
       if (payload.hintsUsed <= 2 && payload.attempts <= 4) return 'developing_independence';
@@ -1174,7 +1312,7 @@
       const rank = { independent:3, developing_independence:2, completed_with_support:1 };
       attempt.mastery = attempt.checkpoints.reduce((lowest,item) => rank[item.mastery] < rank[lowest] ? item.mastery : lowest, 'independent');
       if (attempt.currentStepIndex >= steps.length) attempt.status = 'completed';
-      setSave(guestMode ? 'Guest practice - results not saved' : 'Preview only - results not saved');
+      setSave(liveRoom ? `Room ${liveRoom.code} updated` : guestMode ? 'Guest practice - results not saved' : 'Preview only - results not saved');
       scheduleAutoAdvance();
     }
 
@@ -1204,7 +1342,9 @@
       const label = String(attempt.mastery || '').replaceAll('_',' ');
       $('masterySummary').innerHTML = `Overall result: <span class="mastery">${esc(label)}</span>`;
       $('scoreSummary').innerHTML = `Arcade score: <strong style="color:#25cddc;font-size:24px">${score}</strong>`;
-      setSave(ephemeralMode ? `${guestMode ? 'Guest practice' : 'Preview'} complete - no results were saved` : 'All progress saved');
+      $('practiseAgainBtn').hidden=Boolean(liveRoom);
+      const me=liveRoom&&liveParticipant?(liveRoom.leaderboard||[]).find((player)=>player.id===liveParticipant.id):null;
+      setSave(liveRoom ? `Live room complete${me?` - position ${me.rank}`:''}` : ephemeralMode ? `${guestMode ? 'Guest practice' : 'Preview'} complete - no results were saved` : 'All progress saved');
     }
 
     $('nextBtn').addEventListener('click', async () => {
@@ -1254,7 +1394,7 @@
         stepIndex = 0;
         phase = 'show';
         $('intro').classList.add('hidden');
-        setSave(guestMode ? 'Guest practice - results not saved' : 'Preview only - results not saved');
+        setSave(liveRoom ? `Live room ${liveRoom.code}` : guestMode ? 'Guest practice - results not saved' : 'Preview only - results not saved');
         renderStep();
         showMissionTransition('City gate opened');
         return;
@@ -1280,6 +1420,10 @@
     }
 
     $('startBtn').addEventListener('click', () => beginAttempt(false).catch((error) => setSave(error.message,true)));
+    $('joinRoomBtn').addEventListener('click',joinLiveRoom);
+    $('soloGuestBtn').addEventListener('click',chooseSoloGuest);
+    $('roomCodeInput').addEventListener('input',()=>{ $('roomCodeInput').value=String($('roomCodeInput').value||'').replace(/[^a-z0-9]/gi,'').toUpperCase().slice(0,6); });
+    $('nicknameInput').addEventListener('keydown',(event)=>{ if(event.key==='Enter') joinLiveRoom(); });
 
     (async () => {
       if (matchMedia('(pointer:coarse)').matches) $('deviceNote').style.display='block';
@@ -1287,13 +1431,27 @@
         if (guestMode) {
           document.body.classList.add('intro-screen');
           $('previewNote').style.display = 'block';
-          $('previewNote').textContent = 'Guest play · Progress is not saved';
-          $('studentName').textContent = 'Playing as a guest';
+          $('previewNote').textContent = 'Guest play · Choose a class room or play on your own';
+          $('studentName').textContent = 'Choose how to play';
           $('completionLead').textContent = 'You completed the guest adventure. No progress or results were saved.';
           $('completionBack').href = '/start';
           $('completionBack').textContent = 'Back to student start';
           $('intro').classList.remove('hidden');
+          $('guestEntry').hidden=false;
+          $('startBtn').hidden=true;
+          $('roomCodeInput').value=requestedSessionCode;
           renderProgress();
+          if(requestedSessionCode){
+            try {
+              const saved=JSON.parse(sessionStorage.getItem(liveStorageKey(requestedSessionCode))||'null');
+              if(saved&&saved.token&&saved.participant){
+                const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(requestedSessionCode)}`);
+                const payload=await response.json();
+                if(response.ok&&roomWorld(payload.room)===requestedWorld){ activateLiveRoom({...saved,room:payload.room}); return; }
+              }
+            }catch{}
+            $('nicknameInput').focus();
+          }else $('roomCodeInput').focus();
           return;
         }
         const response = await fetch(previewMode ? '/api/practice/preview' : '/api/practice/student/home');

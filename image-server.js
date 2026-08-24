@@ -58,6 +58,7 @@ const lessonAssistant = require('./lesson-assistant');
 const releaseManager = require('./release-manager');
 const planningFramework = require('./planning-framework');
 const practice = require('./practice');
+const practiceLive = require('./practice-live');
 const { runWithUser, usageSnapshot, usageSince, declareAction } = require('./ai-client');
 const usage = require('./usage');
 const jwt = require('jsonwebtoken');
@@ -2180,6 +2181,67 @@ app.get('/api/practice/status', (req, res) => {
 
 app.get('/api/practice/catalog', requirePracticeEnabled, (req, res) => {
   res.json({ activities: practice.listActivities() });
+});
+
+app.get('/api/practice/live-sessions', requirePracticeEnabled, requireAuth, (req, res) => {
+  if (req.user && req.user.role === 'student') return res.status(403).json({ error: 'Teacher account required.' });
+  res.json({ rooms: practiceLive.teacherRooms(req.userId) });
+});
+
+app.post('/api/practice/live-sessions', requirePracticeEnabled, requireAuth, (req, res) => {
+  if (req.user && req.user.role === 'student') return res.status(403).json({ error: 'Teacher account required.' });
+  try {
+    const room = practiceLive.createRoom({
+      teacherId: req.userId,
+      activityId: req.body && req.body.activityId,
+    });
+    const world = room.activity && room.activity.id === 'g3-keyboard-kingdom' ? '&world=g3' : '';
+    res.status(201).json({ room, joinPath: `/student/practice/guest?session=${room.code}${world}` });
+  } catch (err) {
+    res.status(err.code === 'activity_not_found' ? 404 : 400).json({ error: err.message, code: err.code || 'room_create_failed' });
+  }
+});
+
+app.delete('/api/practice/live-sessions/:code', requirePracticeEnabled, requireAuth, (req, res) => {
+  if (req.user && req.user.role === 'student') return res.status(403).json({ error: 'Teacher account required.' });
+  try {
+    res.json({ room: practiceLive.closeRoom(req.params.code, req.userId) });
+  } catch (err) {
+    const status = err.code === 'forbidden' ? 403 : err.code === 'room_not_found' ? 404 : 400;
+    res.status(status).json({ error: err.message, code: err.code || 'room_close_failed' });
+  }
+});
+
+app.get('/api/practice/live-sessions/:code', requirePracticeEnabled, (req, res) => {
+  try {
+    res.json({ room: practiceLive.getRoom(req.params.code) });
+  } catch (err) {
+    const status = err.code === 'room_not_found' ? 404 : err.code === 'room_closed' ? 410 : 400;
+    res.status(status).json({ error: err.message, code: err.code || 'room_unavailable' });
+  }
+});
+
+app.post('/api/practice/live-sessions/:code/join', requirePracticeEnabled, (req, res) => {
+  try {
+    res.status(201).json(practiceLive.joinRoom(req.params.code, req.body && req.body.name));
+  } catch (err) {
+    const status = err.code === 'room_not_found' ? 404 : err.code === 'room_closed' ? 410 : 400;
+    res.status(status).json({ error: err.message, code: err.code || 'room_join_failed' });
+  }
+});
+
+app.post('/api/practice/live-sessions/:code/checkpoints', requirePracticeEnabled, (req, res) => {
+  try {
+    const token = req.get('X-Practice-Participant') || '';
+    res.json(practiceLive.checkpointRoom(req.params.code, token, req.body || {}));
+  } catch (err) {
+    const status = err.code === 'participant_not_found' ? 401
+      : err.code === 'room_not_found' ? 404
+        : err.code === 'room_closed' ? 410
+          : err.code === 'step_out_of_order' || err.code === 'attempt_complete' ? 409
+            : 400;
+    res.status(status).json({ error: err.message, code: err.code || 'invalid_checkpoint' });
+  }
 });
 
 app.get('/api/practice/preview', requirePracticeEnabled, requireAuth, (req, res) => {
