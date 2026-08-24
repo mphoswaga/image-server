@@ -139,11 +139,14 @@ test('guest practice is public but never writes recorded student evidence', () =
   const server = fs.readFileSync(path.join(__dirname, '..', 'image-server.js'), 'utf8');
   const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
   const start = fs.readFileSync(path.join(__dirname, '..', 'public', 'start.html'), 'utf8');
+  const teacherLogin = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
   assert.match(server, /app\.get\('\/student\/practice\/guest', requirePracticeEnabled/);
   assert.match(player, /const guestMode = location\.pathname === '\/student\/practice\/guest'/);
   assert.match(player, /Guest practice: play every mission without signing in/);
   assert.match(player, /guestMode\?'\/student\/practice\/guest\?world=g3'/);
   assert.match(start, /href="\/student\/practice\/guest">Practise without signing in/);
+  assert.match(teacherLogin, /href="\/student\/practice\/guest">Student guest practice/);
+  assert.match(teacherLogin, /if\(\$\('authGuestPractice'\)\) \$\('authGuestPractice'\)\.style\.display=d\.enabled\?'block':'none'/);
 });
 
 test('the learner quest keeps Byte and its connected game states', () => {

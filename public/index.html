@@ -1103,6 +1103,9 @@
     .auth-suite-box { margin:14px 0 0; padding:16px; border:1.5px solid var(--border); border-radius:14px; background:linear-gradient(135deg,var(--primary-soft),#fff); }
     .auth-suite-actions { display:flex; gap:10px; align-items:stretch; }
     .auth-suite-actions .btn.full { flex:1 1 0; min-width:0; width:auto; margin-top:0; white-space:normal; }
+    .auth-guest-practice { display:none; margin-top:14px; padding-top:14px; border-top:1px solid var(--border); text-align:center; }
+    .auth-guest-practice .btn { width:100%; margin:0; text-decoration:none; }
+    .auth-guest-practice p { margin:7px 0 0; color:var(--muted); font-size:12.5px; line-height:1.4; }
     @media (max-width:520px), (max-height:700px) {
       .auth-card .ls-icon { width:88px; height:88px; }
       .auth-card .ls-wm { font-size:38px; }
@@ -2397,6 +2400,10 @@
           <button id="educscopeLoginBtn" type="button" class="btn primary full">Log in</button>
           <button id="educscopeSignupBtn" type="button" class="btn ghost full">Sign up</button>
         </div>
+      </div>
+      <div class="auth-guest-practice" id="authGuestPractice">
+        <a class="btn ghost full" href="/student/practice/guest">Student guest practice</a>
+        <p>No login required. Guest progress is not saved.</p>
       </div>
       <div class="tabs" style="display:none" aria-hidden="true" data-legacy-local-auth="true">
         <button id="tabLogin" class="active" type="button">Log in</button>
@@ -5918,7 +5925,11 @@
       try{
         const d=await fetch('/api/practice/status').then(r=>r.json());
         $('practiceBtn').style.display=d.enabled?'inline-flex':'none';
-      }catch{ $('practiceBtn').style.display='none'; }
+        if($('authGuestPractice')) $('authGuestPractice').style.display=d.enabled?'block':'none';
+      }catch{
+        $('practiceBtn').style.display='none';
+        if($('authGuestPractice')) $('authGuestPractice').style.display='none';
+      }
     }
 
     // ── Preset picker (dropdown + collapsible gallery) ───────────────────────
@@ -6133,6 +6144,7 @@
       $('guideHeroBtn').style.display='none';
       closeAssistant();
       setMode('login');
+      loadPracticeStatus();
     }
 
     // ---- admin ----
