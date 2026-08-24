@@ -40,6 +40,7 @@ function detectSubject(text) {
   const f = String(text || '').toLowerCase();
   if (/ict|comput/.test(f))               return 'ICT';
   if (/\bmath|maths|numeracy/.test(f))    return 'Mathematics';
+  if (/global\s+perspective/.test(f))     return 'Global Perspectives';
   if (/\benglish|literacy|reading/.test(f)) return 'English';
   if (/science/.test(f))                  return 'Science';
   if (/social\s+stud|ss\b/.test(f))       return 'Social Studies';
@@ -122,6 +123,18 @@ function parseBulletLines(text) {
     .split(/\n|;\s*|(?=\s*[-•]\s*)/)
     .map(l => l.replace(/^[-•]\s*/, '').trim())
     .filter(l => l.length > 4);
+}
+
+function splitTopicSuccessCriteria(text) {
+  const source = String(text || '').replace(/\r/g, '\n').trim();
+  const marker = /\b(?:example\s+)?success\s+criteria\b(?:\s*\(\s*i\s+can(?:\.{3}|…)?\s*\))?\s*:*/i;
+  const match = marker.exec(source);
+  if (!match) return { title: source, criteria: [] };
+  const title = source.slice(0, match.index).replace(/[\s:–—-]+$/g, '').trim();
+  const criteria = parseBulletLines(source.slice(match.index + match[0].length))
+    .map(line => line.replace(/^\(?\s*i\s+can(?:\.{3}|…)?\s*\)?\s*:*/i, 'I can ').trim())
+    .filter(line => !/^i can\s*$/i.test(line));
+  return { title, criteria };
 }
 
 function unitNumberFromText(text) {
@@ -305,7 +318,7 @@ function shouldUseAiAssist(parsed) {
   const score = extractionScore(parsed);
   if (score.items === 0) return true;
   if (score.objectiveCount === 0) return true;
-  if (score.items >= 4 && score.objectiveCoverage < 0.35) return true;
+  if (score.items >= 4 && score.objectiveCoverage < 0.2) return true;
   return false;
 }
 
@@ -366,6 +379,40 @@ function normalizeAiItems(result, fallback) {
   return items;
 }
 
+function mergeParsedItems(ruleItems, aiItems) {
+  const merged = (ruleItems || []).map(item => ({
+    ...item,
+    learningObjectives: [...(item.learningObjectives || [])],
+    successCriteria: [...(item.successCriteria || [])],
+    resources: [...(item.resources || [])],
+  }));
+
+  for (const aiItem of (aiItems || [])) {
+    let existing = merged.find(item => item.grade === aiItem.grade && item.weekNumber === aiItem.weekNumber);
+    if (!existing) {
+      const weekMatches = merged.filter(item => item.weekNumber === aiItem.weekNumber && (!item.grade || !aiItem.grade));
+      if (weekMatches.length === 1) existing = weekMatches[0];
+    }
+    if (!existing) {
+      merged.push(aiItem);
+      continue;
+    }
+    if (!existing.learningObjectives.length && aiItem.learningObjectives.length) existing.learningObjectives = aiItem.learningObjectives;
+    if (!existing.successCriteria.length && aiItem.successCriteria.length) existing.successCriteria = aiItem.successCriteria;
+    if (!existing.resources.length && aiItem.resources.length) existing.resources = aiItem.resources;
+    if (!existing.unitTitle && aiItem.unitTitle) existing.unitTitle = aiItem.unitTitle;
+    if (!existing.lessonTitle && aiItem.lessonTitle) existing.lessonTitle = aiItem.lessonTitle;
+    if (!existing.notes && aiItem.notes) existing.notes = aiItem.notes;
+    existing.extractionConfidence = Math.max(existing.extractionConfidence || 0, aiItem.extractionConfidence || 0);
+  }
+
+  return merged.sort((a, b) => {
+    const gradeA = parseInt(String(a.grade || '').replace(/\D/g, ''), 10) || 0;
+    const gradeB = parseInt(String(b.grade || '').replace(/\D/g, ''), 10) || 0;
+    return gradeA - gradeB || a.weekNumber - b.weekNumber || String(a.unitTitle).localeCompare(String(b.unitTitle));
+  });
+}
+
 async function parseExcelSourceWithAi(buffer, filename) {
   const parsed = parseExcelSource(buffer, filename);
   if (!shouldUseAiAssist(parsed)) return { ...parsed, extractionMode: 'rules' };
@@ -405,15 +452,16 @@ ${workbookPreview(wb)}`;
     const ai = JSON.parse(text);
     const aiItems = normalizeAiItems(ai, parsed);
     if (!aiItems.length) return { ...parsed, extractionMode: 'rules_ai_empty', warnings: ai.warnings || [] };
+    const mergedItems = mergeParsedItems(parsed.items, aiItems);
     const gradesFound = (ai.gradesFound || [])
       .map(g => gradeFromText(g) || String(g || '').trim())
       .filter(Boolean);
     const uniqueGrades = Array.from(new Set([...gradesFound, ...(parsed.gradesFound || []), ...aiItems.map(i => i.grade).filter(Boolean)]));
     return {
-      items: aiItems,
+      items: mergedItems,
       gradesFound: uniqueGrades,
       subject: detectSubject(ai.subject) || ai.subject || parsed.subject || null,
-      extractionMode: 'ai_layout_assist',
+      extractionMode: parsed.items.length ? 'rules_ai_enriched' : 'ai_layout_assist',
       warnings: ai.warnings || [],
     };
   } catch (err) {
@@ -444,7 +492,8 @@ function parseSheet(sheet, grade) {
     if (weekNum !== null) lastWeek = weekNum;
 
     const unitRaw = get('unit');
-    if (unitRaw) lastUnit = unitRaw;
+    const topicSuccess = splitTopicSuccessCriteria(unitRaw);
+    if (unitRaw) lastUnit = topicSuccess.title || unitRaw;
 
     const dateRaw = get('date');
     if (dateRaw) lastDate = dateRaw;
@@ -460,7 +509,10 @@ function parseSheet(sheet, grade) {
     if (!objText && !unitRaw && !lessonRaw) continue;
 
     const objectives      = parseObjectiveLines(objText);
-    const successCriteria = parseLines(scText);
+    const successCriteria = topicSuccess.criteria.length ? topicSuccess.criteria : parseLines(scText);
+    if (!objectives.length && topicSuccess.criteria.length) {
+      objectives.push(...topicSuccess.criteria.map(text => ({ code: null, text })));
+    }
     const resources       = parseLines(resText);
 
     // Split "C3.2 What is a Computer?" → unitCode + unitTitle
@@ -643,5 +695,5 @@ function queryItems(userId, sourceId, { grade, week } = {}) {
 
 module.exports = {
   parseExcelSource, parseExcelSourceWithAi, savePlanningSource, listPlanningSources,
-  getPlanningSource, deletePlanningSource, queryItems,
+  getPlanningSource, deletePlanningSource, queryItems, mergeParsedItems,
 };

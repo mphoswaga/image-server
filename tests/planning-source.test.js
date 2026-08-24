@@ -79,3 +79,60 @@ test('AI-capable parser safely returns weak rule output when no API key is avail
     if (oldKey) process.env.OPENAI_API_KEY = oldKey;
   }
 });
+
+test('WK headers expose every teaching week instead of stopping after week 1', () => {
+  const buffer = workbookBuffer({
+    'Grade 2': [
+      ['WK', 'Dates', 'Notes', 'Unit/ Topic', 'Learning Objectives', 'Success Criteria'],
+      [1, '17 Aug', '', 'Number sense', 'Count objects accurately', 'I can count objects'],
+      [2, '24 Aug', '', 'Place value', 'Compose two-digit numbers', 'I can compose numbers'],
+      [3, '31 Aug', '', 'Comparing', 'Compare and order numbers', 'I can order numbers'],
+      [4, '7 Sep', '', 'Patterns', 'Continue number patterns', 'I can continue a pattern'],
+    ],
+  });
+
+  const parsed = planningSource.parseExcelSource(buffer, 'Maths pacing guide.xlsx');
+
+  assert.deepEqual(parsed.items.map(item => item.weekNumber), [1, 2, 3, 4]);
+  assert.equal(parsed.items[3].unitTitle, 'Patterns');
+});
+
+test('Topic and Success Criteria columns become usable Global Perspectives objectives', () => {
+  const buffer = workbookBuffer({
+    'Grade 3': [
+      ['Grade 3 Advanced Cambridge Program - Global Perspectives'],
+      ['WK', 'Dates', 'Notes', 'Topic / Success Criteria', 'Recommended Activities & Resources'],
+      [1, '17 Aug', '', 'Who do I live with? Example Success Criteria (I can...): • I can describe the people I live with. • I can explain how families can be different.', 'Create a family-group poster.'],
+      [2, '24 Aug', '', 'Which groups do we belong to? Example Success Criteria (I can...): • I can identify groups in my community. • I can compare different groups.', 'Create a community map.'],
+    ],
+  });
+
+  const parsed = planningSource.parseExcelSource(buffer, 'Global Perspectives Pacing Guide.xlsx');
+
+  assert.equal(parsed.subject, 'Global Perspectives');
+  assert.deepEqual(parsed.items.map(item => item.weekNumber), [1, 2]);
+  assert.equal(parsed.items[0].unitTitle, 'Who do I live with?');
+  assert.deepEqual(parsed.items[0].successCriteria, [
+    'I can describe the people I live with.',
+    'I can explain how families can be different.',
+  ]);
+  assert.deepEqual(parsed.items[0].learningObjectives.map(item => item.text), parsed.items[0].successCriteria);
+});
+
+test('AI enrichment can fill gaps without deleting rule-extracted weeks', () => {
+  const rules = [1, 2, 3].map(weekNumber => ({
+    id: `rule-${weekNumber}`, grade: 'Grade 2', weekNumber,
+    unitTitle: `Rule week ${weekNumber}`, learningObjectives: [], successCriteria: [], resources: [],
+  }));
+  const ai = [{
+    id: 'ai-1', grade: 'Grade 2', weekNumber: 1,
+    unitTitle: 'AI week 1', learningObjectives: [{ code: null, text: 'Enriched objective' }],
+    successCriteria: ['I can show it'], resources: [], extractionConfidence: 0.8,
+  }];
+
+  const merged = planningSource.mergeParsedItems(rules, ai);
+
+  assert.deepEqual(merged.map(item => item.weekNumber), [1, 2, 3]);
+  assert.equal(merged[0].learningObjectives[0].text, 'Enriched objective');
+  assert.equal(merged[1].unitTitle, 'Rule week 2');
+});
