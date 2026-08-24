@@ -28,11 +28,32 @@ const ACTIVITIES = Object.freeze([
   }),
   Object.freeze({
     id: 'g2-pointer-control',
+    version: 3,
+    gradeBand: 'Grades 2-3',
+    title: 'Byte City Foundation Arcade',
+    description: 'Complete a connected mouse, clipboard and keyboard arcade adventure.',
+    estimatedMinutes: 25,
+    device: 'computer',
+    steps: Object.freeze([
+      Object.freeze({ id: 'move-pointer', title: 'Signal Trail', action: 'pointer_enter', target: 'blue-star' }),
+      Object.freeze({ id: 'single-click', title: 'Reactor Rush', action: 'single_click', target: 'green-circle' }),
+      Object.freeze({ id: 'double-click', title: 'Vault Breaker', action: 'double_click', target: 'blue-folder' }),
+      Object.freeze({ id: 'context-command', title: 'Command Deck', action: 'context_command', target: 'archive-open' }),
+      Object.freeze({ id: 'drag-drop', title: 'Cargo Rescue', action: 'drag_drop', target: 'homework-folder' }),
+      Object.freeze({ id: 'scroll-find', title: 'Signal Tower', action: 'scroll_find', target: 'gold-star' }),
+      Object.freeze({ id: 'copy-paste', title: 'Message Relay', action: 'copy_paste', target: 'relay-console' }),
+      Object.freeze({ id: 'keyboard-defense', title: 'Sky Shield', action: 'type_word', target: 'byte-signal' }),
+    ]),
+  }),
+  // Version 2 remains available for seven-mission attempts that started
+  // before the clipboard mission was added.
+  Object.freeze({
+    id: 'g2-pointer-control',
     version: 2,
     gradeBand: 'Grades 2-3',
     title: 'Byte City Foundation Arcade',
     description: 'Complete a connected mouse and keyboard arcade adventure.',
-    estimatedMinutes: 15,
+    estimatedMinutes: 20,
     device: 'computer',
     steps: Object.freeze([
       Object.freeze({ id: 'move-pointer', title: 'Signal Trail', action: 'pointer_enter', target: 'blue-star' }),

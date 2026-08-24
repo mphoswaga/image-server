@@ -30,7 +30,7 @@
     .status-row { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:14px; }
     .student-name { color:var(--muted); font-size:14px; }
     .save-state { font-size:13px; color:var(--green-dark); font-weight:700; min-height:20px; }
-    .progress { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:7px; margin-bottom:16px; }
+    .progress { display:grid; grid-template-columns:repeat(var(--mission-count,8),minmax(0,1fr)); gap:7px; margin-bottom:16px; }
     .progress-step { min-width:0; padding:9px 8px; border-top:3px solid var(--line); color:var(--muted); font-size:12px; font-weight:700; text-align:center; }
     .progress-step.current { border-color:var(--cyan); color:var(--navy); background:var(--soft-cyan); }
     .progress-step.done { border-color:var(--green); color:var(--green-dark); background:var(--soft-green); }
@@ -40,7 +40,7 @@
     h1 { margin:0 0 10px; color:var(--navy); font-size:clamp(28px,4vw,42px); line-height:1.1; }
     h2 { margin:0; color:var(--navy); font-size:24px; line-height:1.2; }
     .lead { margin:0 auto 22px; max-width:620px; color:var(--muted); font-size:17px; }
-    .quest-map { display:grid; grid-template-columns:repeat(7,1fr); gap:8px; margin:22px auto; }
+    .quest-map { display:grid; grid-template-columns:repeat(var(--mission-count,8),1fr); gap:8px; margin:22px auto; }
     .quest-stop { min-width:0; padding:12px 7px; border:1px solid var(--line); background:#f8fbfd; color:var(--navy); font-size:12px; font-weight:800; }
     .quest-stop strong { display:grid; place-items:center; width:28px; height:28px; margin:0 auto 6px; border-radius:50%; background:var(--navy); color:#fff; }
     .activity-facts { display:grid; grid-template-columns:repeat(3,1fr); border:1px solid var(--line); margin:18px auto 22px; text-align:left; }
@@ -91,9 +91,10 @@
     .room-context-command { background:linear-gradient(145deg,#07142c,#173b61); }
     .room-drag-drop { background:linear-gradient(180deg,#14213c 0 62%,#263650 62%); }
     .room-scroll-find { background:linear-gradient(145deg,#08162f,#183963); }
+    .room-copy-paste { background:radial-gradient(circle at 50% 45%,rgba(240,91,169,.18),transparent 35%),linear-gradient(145deg,#111738,#342057); }
     .room-keyboard-defense { background:#020617; }
     .room-key-patrol,.room-word-blaster,.room-capital-charge,.room-sentence-engine,.room-repair-bay { background:linear-gradient(145deg,#090b24,#29205b); }
-    .room-move-pointer:after,.room-single-click:after,.room-double-click:after,.room-context-command:after,.room-drag-drop:after,.room-scroll-find:after,.room-keyboard-defense:after,.room-key-patrol:after,.room-word-blaster:after,.room-capital-charge:after,.room-sentence-engine:after,.room-repair-bay:after { content:""; position:absolute; z-index:-1; inset:0; opacity:.45; background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px); background-size:34px 34px; }
+    .room-move-pointer:after,.room-single-click:after,.room-double-click:after,.room-context-command:after,.room-drag-drop:after,.room-scroll-find:after,.room-copy-paste:after,.room-keyboard-defense:after,.room-key-patrol:after,.room-word-blaster:after,.room-capital-charge:after,.room-sentence-engine:after,.room-repair-bay:after { content:""; position:absolute; z-index:-1; inset:0; opacity:.45; background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px); background-size:34px 34px; }
     .arcade-grid { width:min(680px,calc(100% - 30px)); height:290px; display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr); gap:14px; padding:12px; }
     .arcade-pad { position:relative; display:grid; place-items:center; min-width:0; border:2px solid #29486d; border-radius:50%; background:#071225; box-shadow:inset 0 8px 15px rgba(0,0,0,.65); }
     button.arcade-pad { cursor:pointer; }
@@ -231,7 +232,6 @@
     .student-name { color:#b8c9db; }
     .save-state { color:#69e3a7; }
     .progress { position:relative; gap:8px; }
-    body.campaign-g3 .progress { grid-template-columns:repeat(5,minmax(0,1fr)); }
     .progress:before { content:""; position:absolute; left:9%; right:9%; top:19px; border-top:2px solid #29486d; }
     .progress-step { position:relative; z-index:1; padding:37px 7px 9px; border:1px solid #29486d; background:#0c1d3b; color:#7890aa; }
     .progress-step:before { content:""; position:absolute; left:50%; top:9px; width:18px; height:18px; border-radius:50%; transform:translateX(-50%); background:#29486d; border:3px solid #0c1d3b; }
@@ -243,7 +243,6 @@
     .intro { display:block; min-height:600px; padding:38px; }
     .intro-inner { width:100%; }
     .quest-map { position:relative; }
-    body.campaign-g3 .quest-map { grid-template-columns:repeat(5,1fr); }
     .quest-map:before { content:""; position:absolute; left:8%; right:8%; top:26px; border-top:2px solid #29486d; }
     .quest-stop { position:relative; z-index:1; border-color:#29486d; background:#0c1d3b; color:#b8c9db; text-align:center; }
     .quest-stop strong { background:#25cddc; color:#07142c; }
@@ -270,10 +269,8 @@
     body.intro-screen .progress,body.intro-screen .status-row { display:none; }
     body.playing .status-row { margin-bottom:8px; }
     body.playing .student-name { display:none; }
-    body.playing .progress { grid-template-columns:repeat(7,minmax(38px,54px)); justify-content:center; gap:12px; margin:0 auto 12px; }
-    body.playing.campaign-g3 .progress { grid-template-columns:repeat(5,minmax(38px,54px)); }
-    body.playing .progress:before { left:calc(50% - 214px); right:calc(50% - 214px); top:21px; }
-    body.playing.campaign-g3 .progress:before { left:calc(50% - 150px); right:calc(50% - 150px); }
+    body.playing .progress { grid-template-columns:repeat(var(--mission-count,8),minmax(38px,54px)); justify-content:center; gap:12px; margin:0 auto 12px; }
+    body.playing .progress:before { left:5%; right:5%; top:21px; }
     body.playing .progress-step { min-height:44px; padding:0; border:0; background:transparent; color:transparent; font-size:0; box-shadow:none; }
     body.playing .progress-step:before { top:10px; width:22px; height:22px; border:4px solid #07142c; }
     body.playing .progress-step.current,
@@ -324,6 +321,10 @@
     .demo-type .demo-object { width:150px; height:74px; border-radius:12px; background:#5b2574; border-color:#f05ba9; font-size:22px; letter-spacing:5px; }
     .demo-type .demo-object:after { content:"BYTE"; animation:demoType 2s steps(4) infinite; overflow:hidden; width:0; white-space:nowrap; color:#8ef0ba; }
     .demo-type .demo-cursor { display:none; }
+    .demo-copy .demo-object { width:158px; height:68px; border-radius:8px; background:#fff; color:#12345b; overflow:hidden; }
+    .demo-copy .demo-object:before { content:"BYTE MESSAGE"; position:absolute; z-index:2; padding:4px; background:#7dd3fc; }
+    .demo-copy .demo-object:after { content:"⌘C  →  ⌘V"; position:absolute; bottom:4px; color:#a855f7; font-size:12px; }
+    .demo-copy .demo-cursor { animation:demoSelect 2.4s ease-in-out infinite; }
     .signal-trail { width:min(760px,calc(100% - 28px)); height:310px; position:relative; border:2px solid #27628a; border-radius:22px; overflow:hidden; background:radial-gradient(circle at 72% 22%,rgba(37,205,220,.24),transparent 20%),linear-gradient(150deg,#07142c,#12345b); }
     .signal-trail:before { content:""; position:absolute; left:-5%; right:-5%; top:50%; height:92px; transform:rotate(-8deg); border-top:8px solid #1f527f; border-bottom:8px solid #1f527f; background:#0b1c38; }
     .city-block { position:absolute; width:120px; height:92px; bottom:24px; border:2px solid #2b5d89; background:#102747; box-shadow:inset 0 0 0 10px #0b1c38; }
@@ -342,6 +343,18 @@
     .tower-floor span { display:grid; place-items:center; width:100px; height:72px; border:4px solid #4b78a8; background:#08162f; }
     .tower-arrow { position:sticky; z-index:4; left:18px; top:14px; display:inline-flex; padding:7px 10px; border-radius:999px; background:#f8c342; color:#251541; font-size:12px; font-weight:900; animation:arrowBounce 1s ease-in-out infinite; }
     .antenna-switch { width:180px; min-height:92px; margin:40px auto 24px; border:4px solid #f8c342; border-radius:50%; background:#fff4bd; color:#5f4300; font-size:18px; box-shadow:0 0 28px rgba(248,195,66,.65); }
+    .copy-station { width:min(760px,calc(100% - 28px)); display:grid; grid-template-columns:1fr auto 1fr; align-items:stretch; gap:18px; padding:24px; border:2px solid #7351a0; border-radius:18px; background:rgba(9,12,35,.82); box-shadow:0 18px 36px rgba(0,0,0,.28); }
+    .relay-panel { min-height:190px; display:flex; flex-direction:column; justify-content:center; gap:14px; padding:20px; border:2px solid #4b3e78; border-radius:12px; background:#151735; }
+    .relay-panel b { color:#c9bfff; font-size:12px; text-transform:uppercase; letter-spacing:.8px; }
+    .relay-message { padding:18px 12px; border:3px solid #25cddc; border-radius:8px; background:#fff; color:#12345b; font-size:clamp(18px,2.5vw,28px); font-weight:900; text-align:center; user-select:text; cursor:text; }
+    .relay-message.selected { background:#7dd3fc; border-color:#fff; box-shadow:0 0 28px rgba(125,211,252,.7); }
+    .relay-arrow { display:grid; place-items:center; color:#f8c342; font-size:32px; font-weight:900; }
+    .relay-destination { width:100%; min-height:88px; resize:none; padding:16px; border:3px dashed #a855f7; border-radius:8px; background:#0b102b; color:#fff; font:900 20px/1.3 inherit; text-align:center; caret-color:#f8c342; }
+    .relay-destination:focus { border-style:solid; box-shadow:0 0 28px rgba(168,85,247,.48); outline:none; }
+    .relay-keys { display:flex; justify-content:center; gap:8px; color:#fff; }
+    .relay-key { min-width:46px; padding:8px; border:2px solid #6657ad; border-radius:6px; background:#29205b; font-weight:900; box-shadow:0 5px 0 #08091b; }
+    .relay-choice { color:#c9bfff; font-size:12px; font-weight:800; text-align:center; }
+    .relay-status { min-height:24px; color:#8ef0ba; font-size:13px; font-weight:800; text-align:center; }
     .room-clear-card { position:absolute; z-index:25; inset:0; display:grid; place-items:center; padding:20px; background:rgba(5,14,32,.88); animation:clearIn .25s ease both; }
     .room-clear-inner { width:min(440px,92%); padding:26px; border:3px solid #69e3a7; border-radius:18px; background:#0d2c32; color:#fff; text-align:center; box-shadow:0 0 45px rgba(105,227,167,.35); }
     .room-clear-inner img { width:92px; height:92px; object-fit:contain; border-radius:50%; background:#fff; border:3px solid #25cddc; }
@@ -359,6 +372,7 @@
     @keyframes demoTower { 0%,25%{transform:translateY(48px)} 75%,100%{transform:translateY(-54px)} }
     @keyframes demoWheel { 50%{transform:translateY(18px)} }
     @keyframes demoType { 0%{width:0} 75%,100%{width:78px} }
+    @keyframes demoSelect { 0%,20%,100%{transform:translate(0,0)} 48%,75%{transform:translate(118px,-42px)} }
     @keyframes bugFloat { to{transform:translateY(-8px) scale(1.04)} }
     @keyframes arrowBounce { 50%{transform:translateY(6px)} }
     @keyframes clearIn { from{opacity:0} to{opacity:1} }
@@ -408,8 +422,7 @@
       .brand small { display:none; }
       .icon-btn span { display:none; }
       .shell { width:min(100% - 20px,1180px); margin-top:12px; }
-      .progress { overflow-x:auto; grid-template-columns:repeat(7,145px); padding-bottom:5px; }
-      body.campaign-g3 .progress { grid-template-columns:repeat(5,145px); }
+      .progress { overflow-x:auto; grid-template-columns:repeat(var(--mission-count,8),145px); padding-bottom:5px; }
       .coach { grid-template-columns:42px 1fr; }
       .coach .btn { display:none; }
       .byte { width:40px; height:40px; }
@@ -422,8 +435,7 @@
       body.playing .shell { padding-bottom:86px; }
       body.playing .controls { position:fixed; z-index:55; left:10px; right:10px; bottom:10px; width:auto; padding:8px; border:1px solid #2a4d76; border-radius:12px; box-shadow:0 14px 40px rgba(0,0,0,.55); }
       .activity-facts { grid-template-columns:1fr; }
-      .quest-map { grid-template-columns:repeat(7,128px); overflow-x:auto; padding-bottom:5px; }
-      body.campaign-g3 .quest-map { grid-template-columns:repeat(5,128px); }
+      .quest-map { grid-template-columns:repeat(var(--mission-count,8),128px); overflow-x:auto; padding-bottom:5px; }
       .fact+.fact { border-left:0; border-top:1px solid var(--line); }
       .game-hud { grid-template-columns:repeat(4,1fr); }
       .game-hud .mission-meter { grid-column:1/-1; }
@@ -434,6 +446,9 @@
       .vault-slot { min-height:105px; }
       .vault-door { width:100px; min-height:72px; }
       .conveyor { grid-template-columns:1fr; }
+      .copy-station { grid-template-columns:1fr; gap:10px; padding:14px; }
+      .relay-arrow { transform:rotate(90deg); font-size:24px; }
+      .relay-panel { min-height:145px; }
       .tutorial { grid-template-columns:1fr; padding:18px; }
       .tutorial-visual { min-height:170px; }
       .quest-hero { grid-template-columns:1fr; }
@@ -441,8 +456,7 @@
       .bot-image { width:230px; }
       .speech:before { display:none; }
       .intro { padding:20px; }
-      body.playing .progress { grid-template-columns:repeat(7,42px); justify-content:flex-start; overflow-x:auto; }
-      body.playing.campaign-g3 .progress { grid-template-columns:repeat(5,42px); }
+      body.playing .progress { grid-template-columns:repeat(var(--mission-count,8),42px); justify-content:flex-start; overflow-x:auto; }
       body.playing .progress:before { display:none; }
       body.playing .coach { grid-template-columns:48px 1fr; }
       body.playing .game-hud { grid-template-columns:1fr repeat(3,62px); gap:6px; }
@@ -488,10 +502,10 @@
       <div class="intro-inner">
         <div class="quest-hero">
           <div class="bot-stage"><div class="live-chip">Byte online</div><img class="bot-image" src="/assets/byte-talking.gif" alt="Byte, the LessonScope robot guide" /></div>
-          <div class="quest-copy"><div class="quest-kicker" id="questKicker">Foundation World · Chapter 1</div><h1 id="questTitle">Byte and the Blackout</h1><p class="lead" id="questLead">A digital storm has shut down Byte City. Beat seven arcade missions, restore the power and unlock Advanced Keyboard Kingdom.</p><div class="speech" id="questSpeech">This is a real rescue mission. Chase, whack, unlock, command, drag, climb and type your way through the city.</div></div>
+          <div class="quest-copy"><div class="quest-kicker" id="questKicker">Foundation World · Chapter 1</div><h1 id="questTitle">Byte and the Blackout</h1><p class="lead" id="questLead">A digital storm has shut down Byte City. Beat eight arcade missions, restore the power and unlock Advanced Keyboard Kingdom.</p><div class="speech" id="questSpeech">Chase, click, drag, scroll, copy, paste and type your way through the city.</div></div>
         </div>
-        <div class="quest-map" id="questMap" aria-label="Seven arcade missions">
-          <div class="quest-stop"><strong>1</strong>Signal Trail</div><div class="quest-stop"><strong>2</strong>Reactor Rush</div><div class="quest-stop"><strong>3</strong>Vault Breaker</div><div class="quest-stop"><strong>4</strong>Command Deck</div><div class="quest-stop"><strong>5</strong>Cargo Rescue</div><div class="quest-stop"><strong>6</strong>Signal Tower</div><div class="quest-stop"><strong>7</strong>Sky Shield</div>
+        <div class="quest-map" id="questMap" aria-label="Eight arcade missions">
+          <div class="quest-stop"><strong>1</strong>Signal Trail</div><div class="quest-stop"><strong>2</strong>Reactor Rush</div><div class="quest-stop"><strong>3</strong>Vault Breaker</div><div class="quest-stop"><strong>4</strong>Command Deck</div><div class="quest-stop"><strong>5</strong>Cargo Rescue</div><div class="quest-stop"><strong>6</strong>Signal Tower</div><div class="quest-stop"><strong>7</strong>Message Relay</div><div class="quest-stop"><strong>8</strong>Sky Shield</div>
         </div>
         <div class="activity-facts">
           <div class="fact"><b>World</b><span id="factWorld">Foundation for Grade 2 and Grade 3</span></div>
@@ -564,6 +578,9 @@
       { id:'scroll-find', title:'Signal Tower', action:'scroll_find', target:'gold-star',
         show:'Watch Byte scroll down the tower.', independent:'Scroll down. Turn on 4 antennas.', success:'The tower is sending a signal!',
         hints:['Keep the pointer inside the tower.','Roll the mouse wheel down.','Find the large gold antenna button.'] },
+      { id:'copy-paste', title:'Message Relay', action:'copy_paste', target:'relay-console',
+        show:'Watch Byte highlight, copy and paste a message.', independent:'Send 3 messages using shortcuts or the right-click menu.', success:'Every city station has the message!',
+        hints:['Drag across the whole blue message.','Use Ctrl+C, Command+C, or right-click and choose Copy.','Click the empty box, then use Ctrl+V, Command+V, or right-click and choose Paste.'] },
       { id:'keyboard-defense', title:'Sky Shield', action:'type_word', target:'byte-signal',
         show:'Watch Byte type the glowing word.', independent:'Type 5 words to stop the ships.', success:'The sky shield is on. City saved!',
         hints:['Read the glowing word.','Type one letter at a time.','Green letters are already correct.'] },
@@ -586,7 +603,7 @@
         hints:['Use Backspace to remove the wrong letters.','Stop deleting when the beginning matches.','Then type the missing correct letters.'] },
     ];
     const campaigns = {
-      foundation:{ id:'g2-pointer-control', version:2, steps:foundationSteps, kicker:'Foundation World · Chapter 1', title:'Byte and the Blackout', lead:'A digital storm has shut down Byte City. Beat seven arcade missions, restore the power and unlock Advanced Keyboard Kingdom.', speech:'This is a real rescue mission. Chase, whack, unlock, command, drag, climb and type your way through the city.', world:'Foundation for Grade 2 and Grade 3', time:'About 20–25 minutes', device:'A keyboard and mouse or trackpad', completion:'Byte City is online', completionLead:'You restored every district and opened the road to Grade 3.', start:'Begin the rescue', resume:'Continue the rescue', nextTitle:'Advanced Keyboard Kingdom', nextCopy:'Continue into five playable Grade 3 keyboard missions.', nextLabel:'Continue to Grade 3' },
+      foundation:{ id:'g2-pointer-control', version:3, steps:foundationSteps, kicker:'Foundation World · Chapter 1', title:'Byte and the Blackout', lead:'A digital storm has shut down Byte City. Beat eight arcade missions, restore the power and unlock Advanced Keyboard Kingdom.', speech:'Chase, click, drag, scroll, copy, paste and type your way through the city.', world:'Foundation for Grade 2 and Grade 3', time:'About 25–30 minutes', device:'A keyboard and mouse or trackpad', completion:'Byte City is online', completionLead:'You restored every district and opened the road to Grade 3.', start:'Begin the rescue', resume:'Continue the rescue', nextTitle:'Advanced Keyboard Kingdom', nextCopy:'Continue into five playable Grade 3 keyboard missions.', nextLabel:'Continue to Grade 3' },
       g3:{ id:'g3-keyboard-kingdom', version:1, steps:grade3Steps, kicker:'Grade 3 World · Chapter 2', title:'Byte and the Broken Code', lead:'A scrambled code has locked Keyboard Kingdom. Master keys, words, capitals, sentences and editing to restore it.', speech:'Your Grade 2 skills opened the gate. Now the keyboard is your arcade controller.', world:'Grade 3 keyboard adventure', time:'About 18–20 minutes', device:'A computer keyboard', completion:'Keyboard Kingdom restored', completionLead:'You mastered the Grade 3 keyboard campaign and earned access to the future Expert World.', start:'Enter Keyboard Kingdom', resume:'Continue Keyboard Kingdom', nextTitle:'Expert World', nextCopy:'Your Foundation and Grade 3 worlds are complete. Expert missions will continue the adventure.', nextLabel:'' },
     };
     const campaign = campaigns[requestedWorld];
@@ -599,6 +616,7 @@
       'context-command': { title:'Open the folder', action:'Right-click. Then choose Open.', detail:'Use the right button first.', visual:'right' },
       'drag-drop': { title:'Move the power box', action:'Hold, move, then let go.', detail:'Drop it inside the glowing dock.', visual:'drag' },
       'scroll-find': { title:'Climb the tower', action:'Scroll down to the gold switch.', detail:'Keep the pointer inside the tower.', visual:'scroll' },
+      'copy-paste': { title:'Send the message', action:'Highlight. Copy. Paste.', detail:'Use the keyboard shortcuts or the right-click menu.', visual:'copy' },
       'keyboard-defense': { title:'Fire the sky shield', action:'Type the glowing word.', detail:'Green letters are correct.', visual:'type' },
       'key-patrol': { title:'Wake the home row', action:'Press the glowing A, S, D or F key.', detail:'One key lights at a time. Follow the sequence.', visual:'type' },
       'word-blaster': { title:'Blast a whole word', action:'Type every letter from left to right.', detail:'Correct letters turn green as the cloud falls.', visual:'type' },
@@ -606,13 +624,14 @@
       'sentence-engine': { title:'Build a complete sentence', action:'Type letters, spaces and the final full stop.', detail:'Copy the sentence exactly as it appears.', visual:'type' },
       'repair-bay': { title:'Delete, then repair', action:'Use Backspace to remove the mistake, then type the fix.', detail:'Keep the correct beginning of each word.', visual:'type' },
     };
-    const missionGoals = { 'move-pointer':8, 'single-click':8, 'double-click':6, 'context-command':5, 'drag-drop':5, 'scroll-find':4, 'keyboard-defense':5, 'key-patrol':8, 'word-blaster':5, 'capital-charge':5, 'sentence-engine':2, 'repair-bay':5 };
-    const keyboardStepIds = new Set(['keyboard-defense','key-patrol','word-blaster','capital-charge','sentence-engine','repair-bay']);
+    const missionGoals = { 'move-pointer':8, 'single-click':8, 'double-click':6, 'context-command':5, 'drag-drop':5, 'scroll-find':4, 'copy-paste':3, 'keyboard-defense':5, 'key-patrol':8, 'word-blaster':5, 'capital-charge':5, 'sentence-engine':2, 'repair-bay':5 };
+    const keyboardStepIds = new Set(['copy-paste','keyboard-defense','key-patrol','word-blaster','capital-charge','sentence-engine','repair-bay']);
     const $ = (id) => document.getElementById(id);
 
     function applyCampaignCopy() {
       document.body.classList.toggle('campaign-g3',requestedWorld==='g3');
       document.body.classList.toggle('guest-session',guestMode);
+      document.body.style.setProperty('--mission-count',steps.length);
       document.title=`LessonScope Practice - ${campaign.title}`;
       $('questKicker').textContent=campaign.kicker;
       $('questTitle').textContent=campaign.title;
@@ -809,6 +828,80 @@
         const floors=3+roundProgress;
         area.innerHTML = `<div class="room-label">Signal Tower · Floor ${roundProgress+1} of ${roundGoal()}</div><div class="scroll-window tower-window" id="scrollWindow"><div class="tower-arrow">SCROLL DOWN ↓</div>${Array.from({length:floors},(_,index)=>`<div class="tower-floor"><span>FLOOR ${index+1}</span></div>`).join('')}<button class="antenna-switch" id="skillTarget" type="button">★ TURN ON</button></div>`;
         $('skillTarget').addEventListener('click', (event) => { event.stopPropagation(); const pane=$('scrollWindow'), bottom=pane.scrollHeight-pane.clientHeight-30; if (pane.scrollTop < bottom) registerWrong('Keep scrolling. The antenna switch is farther down.'); else completeInteraction('scroll_find','gold-star'); });
+      } else if (step.id === 'copy-paste') {
+        const messages=['POWER THE CITY','BYTE IS READY','SAVE THE SIGNAL'];
+        const message=messages[roundProgress%messages.length];
+        const modifier=/Mac|iPhone|iPad/.test(navigator.platform)?'Command':'Ctrl';
+        let selected=false, copied=false;
+        area.innerHTML = `<div class="room-label">Message Relay · Message ${roundProgress+1} of ${roundGoal()}</div><div class="copy-station"><div class="relay-panel"><b>1. Highlight every word</b><div class="relay-message" id="relaySource">${esc(message)}</div><div class="relay-keys"><span class="relay-key">${modifier}</span><span class="relay-key">C</span></div><div class="relay-choice">or right-click → Copy</div><div class="relay-status" id="relayStatus">Drag across the whole message.</div></div><div class="relay-arrow" aria-hidden="true">→</div><div class="relay-panel"><b>2. Paste the message here</b><textarea class="relay-destination" id="relayDestination" placeholder="PASTE HERE" aria-label="Paste the copied message here" autocomplete="off" spellcheck="false"></textarea><div class="relay-keys"><span class="relay-key">${modifier}</span><span class="relay-key">V</span></div><div class="relay-choice">or right-click → Paste</div></div></div>`;
+        const source=$('relaySource'), destination=$('relayDestination'), status=$('relayStatus');
+        const normalized=(value)=>String(value||'').replace(/\s+/g,' ').trim();
+        const selectedMessage=()=>normalized(window.getSelection()?.toString())===message;
+        const markCopied=()=>{
+          if (copied) return;
+          copied=true;
+          status.textContent=`Copied! Click the empty box, then press ${modifier}+V or right-click and choose Paste.`;
+          playTone(620);
+          narrate(`Copied! Click the empty box, then paste with ${modifier} and V or the right-click menu.`);
+        };
+        const finishPaste=()=>{
+          destination.value=message;
+          clearActiveInput();
+          completeInteraction('copy_paste','relay-console');
+        };
+        source.addEventListener('pointerup',()=>{
+          const selection=normalized(window.getSelection()?.toString());
+          if (!selectedMessage()) {
+            if (selection) registerWrong('Highlight the whole message, from the first word to the last.');
+            return;
+          }
+          selected=true;
+          source.classList.add('selected');
+          status.textContent=`Great! Press ${modifier}+C or right-click and choose Copy.`;
+          playTone(520);
+          narrate(`Great! Now copy with ${modifier} and C or the right-click menu.`);
+        });
+        source.addEventListener('copy',(event)=>{
+          if (!selected || !selectedMessage()) {
+            event.preventDefault();
+            return registerWrong('Highlight the whole message before you copy it.');
+          }
+          markCopied();
+        });
+        destination.addEventListener('beforeinput',(event)=>{
+          if (event.inputType!=='insertFromPaste') event.preventDefault();
+        });
+        destination.addEventListener('paste',(event)=>{
+          event.preventDefault();
+          if (!copied) return registerWrong('Copy the highlighted message first.');
+          const pasted=normalized(event.clipboardData?.getData('text/plain'));
+          if (pasted && pasted!==message) return registerWrong('Paste the message you highlighted in the blue box.');
+          finishPaste();
+        });
+        activeKeyHandler=(event)=>{
+          const shortcut=event.ctrlKey||event.metaKey;
+          const key=event.key.toLowerCase();
+          if (shortcut && key==='c') {
+            if (!selected) {
+              event.preventDefault();
+              return registerWrong('Highlight the whole message before you copy it.');
+            }
+            markCopied();
+            return;
+          }
+          if (shortcut && key==='v') {
+            event.preventDefault();
+            if (!copied) return registerWrong('Copy the highlighted message first.');
+            if (document.activeElement!==destination) return registerWrong('Click the empty paste box first.');
+            finishPaste();
+            return;
+          }
+          if (document.activeElement===destination && event.key.length===1 && !shortcut) {
+            event.preventDefault();
+            registerWrong('Use paste instead of typing the message again.');
+          }
+        };
+        window.addEventListener('keydown',activeKeyHandler);
       } else if (step.id === 'keyboard-defense') {
         const words=['BYTE','STAR','CODE','POWER','SHIELD'], word=words[roundProgress%words.length];
         let typedCount=0;
