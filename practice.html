@@ -30,6 +30,10 @@
     .status-row { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:14px; }
     .student-name { color:var(--muted); font-size:14px; }
     .save-state { font-size:13px; color:var(--green-dark); font-weight:700; min-height:20px; }
+    .teacher-stage-jump { display:flex; align-items:center; gap:10px; margin:0 0 14px; padding:11px 12px; border:1px solid #2a4d76; background:#0c1d3b; color:#dce8f3; }
+    .teacher-stage-jump label { flex:none; color:#8cecf4; font-size:12px; font-weight:900; text-transform:uppercase; letter-spacing:.6px; }
+    .teacher-stage-jump select { min-width:240px; min-height:40px; flex:1; border:1px solid #466989; border-radius:7px; background:#fff; color:#12345b; padding:8px 34px 8px 10px; font:700 14px/1.2 inherit; }
+    .teacher-stage-jump .btn { min-height:40px; padding:8px 14px; }
     .progress { display:grid; grid-template-columns:repeat(var(--mission-count,8),minmax(0,1fr)); gap:7px; margin-bottom:16px; }
     .progress-step { min-width:0; padding:9px 8px; border-top:3px solid var(--line); color:var(--muted); font-size:12px; font-weight:700; text-align:center; }
     .progress-step.current { border-color:var(--cyan); color:var(--navy); background:var(--soft-cyan); }
@@ -147,6 +151,29 @@
     .signal-word .typed { color:#69e3a7; text-shadow:0 0 9px rgba(105,227,167,.8); }
     .defense-cannon { position:absolute; z-index:3; left:50%; bottom:13px; width:72px; height:35px; transform:translateX(-50%); border:3px solid #69e3a7; border-radius:35px 35px 6px 6px; background:#12623e; box-shadow:0 0 24px rgba(105,227,167,.55); }
     .defense-line { position:absolute; left:0; right:0; bottom:54px; height:3px; background:linear-gradient(90deg,transparent,#f05b6b,transparent); box-shadow:0 0 10px #f05b6b; }
+    .word-blaster-arena { width:min(760px,calc(100% - 30px)); height:290px; position:relative; overflow:hidden; border:2px solid #8f75d9; background:radial-gradient(circle at 50% 115%,rgba(37,205,220,.28),transparent 36%),linear-gradient(180deg,#160d38 0%,#0a1532 64%,#10284b 100%); box-shadow:0 18px 40px rgba(0,0,0,.42),inset 0 0 60px rgba(168,85,247,.12); outline:none; }
+    .word-blaster-arena:before { content:""; position:absolute; inset:0; opacity:.55; background-image:radial-gradient(circle,#d7ccff 1px,transparent 1.5px),linear-gradient(rgba(100,91,180,.10) 1px,transparent 1px),linear-gradient(90deg,rgba(100,91,180,.10) 1px,transparent 1px); background-size:53px 53px,38px 38px,38px 38px; animation:blasterStars 8s linear infinite; }
+    .blaster-wave { position:absolute; z-index:8; left:14px; top:13px; display:flex; align-items:center; gap:8px; padding:7px 10px; border:1px solid #6657ad; background:rgba(8,14,40,.82); color:#d8d0ff; font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:.7px; }
+    .blaster-wave strong { color:#f8c342; }
+    .blaster-target { position:absolute; z-index:6; left:var(--target-left,50%); top:24px; transform:translateX(-50%); display:grid; justify-items:center; gap:4px; animation:blasterDive var(--wave-speed,7s) ease-in-out infinite alternate; }
+    .blaster-target:before { content:""; width:86px; height:38px; border:3px solid #f05ba9; border-radius:50% 50% 12px 12px; background:radial-gradient(circle at 50% 25%,#ff9bd0 0 8%,transparent 9%),linear-gradient(180deg,#8b367f,#431b5e); box-shadow:0 0 24px rgba(240,91,169,.74); }
+    .blaster-target:after { content:""; position:absolute; top:34px; width:3px; height:22px; background:#f05ba9; box-shadow:0 0 12px #f05ba9; }
+    .blaster-target.hit { filter:brightness(1.45); transform:translateX(-50%) scale(1.07); }
+    .blaster-target.explode { animation:none; opacity:0; transform:translateX(-50%) scale(1.8) rotate(12deg); transition:opacity .28s ease,transform .28s ease; }
+    .blaster-word { min-width:112px; padding:8px 16px; border:2px solid #25cddc; border-radius:18px; background:#07142c; color:#fff; text-align:center; font-size:21px; font-weight:900; letter-spacing:3px; box-shadow:0 0 20px rgba(37,205,220,.42); }
+    .blaster-word .typed { color:#69e3a7; text-shadow:0 0 10px rgba(105,227,167,.85); }
+    .blaster-decoy { position:absolute; z-index:2; width:52px; height:28px; border:2px solid #493c7c; border-radius:50%; background:#211845; opacity:.72; box-shadow:0 0 15px rgba(102,87,173,.4); animation:decoyDrift 5s ease-in-out infinite alternate; }
+    .blaster-decoy.one { left:12%; top:37%; }.blaster-decoy.two { right:10%; top:23%; animation-delay:-2.2s }.blaster-decoy.three { right:25%; top:55%; animation-delay:-3.4s }
+    .blaster-castle { position:absolute; z-index:3; left:50%; bottom:0; width:230px; height:64px; transform:translateX(-50%); border:3px solid #25cddc; border-bottom:0; background:linear-gradient(90deg,#12345b 0 28%,#1d4771 28% 72%,#12345b 72%); box-shadow:0 0 34px rgba(37,205,220,.36); }
+    .blaster-castle:before,.blaster-castle:after { content:""; position:absolute; bottom:0; width:42px; height:82px; border:3px solid #25cddc; border-bottom:0; background:#102b52; }
+    .blaster-castle:before { left:-3px }.blaster-castle:after { right:-3px }
+    .blaster-laser { position:absolute; z-index:5; left:50%; bottom:55px; width:4px; height:0; transform:translateX(-50%); background:#69e3a7; box-shadow:0 0 14px 4px rgba(105,227,167,.7); opacity:0; transform-origin:bottom; }
+    .blaster-laser.fire { height:150px; opacity:1; transition:height .08s ease-out; }
+    .blaster-shield { position:absolute; z-index:9; right:14px; top:13px; display:flex; align-items:center; gap:5px; padding:7px 10px; border:1px solid #6657ad; background:rgba(8,14,40,.82); color:#c9bfff; font-size:11px; font-weight:900; text-transform:uppercase; }
+    .shield-cell { display:inline-block; width:12px; height:12px; margin-left:5px; border:1px solid #69e3a7; transform:rotate(45deg); background:#69e3a7; box-shadow:0 0 9px rgba(105,227,167,.7); }
+    .shield-cell.empty { background:transparent; border-color:#5b527e; box-shadow:none; }
+    .blaster-command { position:absolute; z-index:9; left:14px; right:14px; bottom:8px; display:flex; justify-content:space-between; gap:12px; color:#c9d8e8; font-size:11px; font-weight:800; pointer-events:none; }
+    .blaster-command b { color:#8cecf4; }
     .key-arena { width:min(720px,calc(100% - 30px)); min-height:285px; display:grid; place-items:center; gap:22px; padding:34px; border:2px solid #6657ad; background:radial-gradient(circle at center,rgba(168,85,247,.20),transparent 54%),#090b24; }
     .key-prompt { color:#c9bfff; font-size:15px; font-weight:800; text-align:center; }
     .key-row { display:flex; justify-content:center; flex-wrap:wrap; gap:12px; }
@@ -238,6 +265,9 @@
     @keyframes sparkBurst { from{opacity:1;transform:translate(0,0) scale(1)} to{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.2)} }
     @keyframes wrongShake { 25%{transform:translateX(-7px)} 50%{transform:translateX(7px)} 75%{transform:translateX(-4px)} }
     @keyframes signalDescend { from{top:18px} to{top:150px} }
+    @keyframes blasterDive { from{top:28px;transform:translateX(-50%) scale(.92)} to{top:142px;transform:translateX(-50%) scale(1.08)} }
+    @keyframes blasterStars { to{background-position:0 53px,0 38px,38px 0} }
+    @keyframes decoyDrift { from{transform:translate(-8px,-5px)} to{transform:translate(18px,12px)} }
     @keyframes keyGlow { 50%{transform:translateY(3px);box-shadow:0 5px 0 #251b3d,0 0 40px rgba(198,156,255,.8)} }
     @keyframes transitionIn { from{opacity:0;transform:translateY(18px) scale(.92)} to{opacity:1;transform:none} }
 
@@ -472,6 +502,8 @@
       .activity-facts { grid-template-columns:1fr; }
       .join-fields { grid-template-columns:1fr; }
       .live-strip { align-items:flex-start; flex-direction:column; }
+      .teacher-stage-jump { align-items:stretch; flex-direction:column; }
+      .teacher-stage-jump select,.teacher-stage-jump .btn { width:100%; }
       .live-mini-board { width:100%; justify-content:flex-start; overflow-x:auto; padding-bottom:2px; }
       .quest-map { grid-template-columns:repeat(var(--mission-count,8),128px); overflow-x:auto; padding-bottom:5px; }
       .fact+.fact { border-left:0; border-top:1px solid var(--line); }
@@ -518,6 +550,7 @@
 
   <main class="shell">
     <div class="preview-note" id="previewNote">Teacher preview: experience the activity exactly as a learner would. This run is temporary and will not appear in reports.</div>
+    <div class="teacher-stage-jump" id="teacherStageJump" hidden><label for="stageJumpSelect">Teacher test stage</label><select id="stageJumpSelect" aria-label="Choose a stage to test"></select><button class="btn primary" id="stageJumpBtn" type="button">Open stage</button></div>
     <div class="status-row">
       <div class="student-name" id="studentName"></div>
       <div class="save-state" id="saveState" role="status" aria-live="polite"></div>
@@ -610,6 +643,7 @@
     const ephemeralMode = previewMode || guestMode;
     const query = new URLSearchParams(location.search);
     const requestedWorld = query.get('world') === 'g3' ? 'g3' : 'foundation';
+    const requestedStage = String(query.get('stage') || '').trim();
     const requestedSessionCode = String(query.get('session') || '').replace(/[^a-z0-9]/gi,'').toUpperCase().slice(0,6);
     const foundationSteps = [
       { id:'move-pointer', title:'Signal Trail', action:'pointer_enter', target:'blue-star',
@@ -645,7 +679,7 @@
         show:'Keyboard Kingdom is dark. Wake the home-row keys in the order Byte shows you.', independent:'Hit eight glowing home-row keys to open the kingdom gate.', success:'The home-row gate is open.',
         hints:['Look along the middle keyboard row.','Press only the glowing key.','Keep both hands close to the middle row.'] },
       { id:'word-blaster', title:'Word Blaster', action:'type_word', target:'shield-word',
-        show:'Code clouds are falling over the kingdom. Type each whole word to blast it away.', independent:'Type five falling words before they reach the castle shield.', success:'The code clouds are gone.',
+        show:'Enemy code ships are diving toward the castle. Type each glowing word to fire the blaster.', independent:'Clear seven faster waves and defeat the KEYBOARD boss ship.', success:'The code fleet is gone. The castle shield is safe!',
         hints:['Read the whole glowing word first.','Type the letters from left to right.','Green letters are already correct.'] },
       { id:'capital-charge', title:'Capital Charge', action:'shift_letter', target:'capital-signal',
         show:'The capital towers need a stronger signal. Hold Shift while pressing the glowing letter.', independent:'Charge five capital letters using Shift.', success:'The capital towers are charged.',
@@ -664,6 +698,7 @@
     const campaign = campaigns[requestedWorld];
     const ACTIVITY_ID = campaign.id;
     const steps = campaign.steps;
+    const requestedStageIndex = previewMode ? steps.findIndex((step)=>step.id===requestedStage) : -1;
     const tutorials = {
       'move-pointer': { title:'Follow the blue bug', action:'Move onto it. Do not click.', detail:'Watch the pointer follow the glow.', visual:'move' },
       'single-click': { title:'Click the green bug', action:'Click one time.', detail:'Press and let go once.', visual:'click' },
@@ -680,7 +715,7 @@
       'sentence-engine': { title:'Build a complete sentence', action:'Type letters, spaces and the final full stop.', detail:'Copy the sentence exactly as it appears.', visual:'type' },
       'repair-bay': { title:'Delete, then repair', action:'Use Backspace to remove the mistake, then type the fix.', detail:'Keep the correct beginning of each word.', visual:'type' },
     };
-    const missionGoals = { 'move-pointer':8, 'single-click':8, 'double-click':6, 'context-command':5, 'drag-drop':5, 'scroll-find':4, 'copy-paste-menu':3, 'keyboard-defense':5, 'copy-paste-shortcut':3, 'key-patrol':8, 'word-blaster':5, 'capital-charge':5, 'sentence-engine':2, 'repair-bay':5 };
+    const missionGoals = { 'move-pointer':8, 'single-click':8, 'double-click':6, 'context-command':5, 'drag-drop':5, 'scroll-find':4, 'copy-paste-menu':3, 'keyboard-defense':5, 'copy-paste-shortcut':3, 'key-patrol':8, 'word-blaster':7, 'capital-charge':5, 'sentence-engine':2, 'repair-bay':5 };
     const keyboardStepIds = new Set(['copy-paste-menu','copy-paste-shortcut','keyboard-defense','key-patrol','word-blaster','capital-charge','sentence-engine','repair-bay']);
     const $ = (id) => document.getElementById(id);
 
@@ -707,6 +742,12 @@
       $('continueWorldBtn').textContent=campaign.nextLabel || '';
       $('continueWorldBtn').href=previewMode?'/practice/preview?world=g3':guestMode?'/student/practice/guest?world=g3':'/student/practice?world=g3';
       $('startBtn').textContent=campaign.start;
+      if (previewMode) {
+        const groups=[['foundation','Foundation World',foundationSteps],['g3','Grade 3 World',grade3Steps]];
+        $('teacherStageJump').hidden=false;
+        $('stageJumpSelect').innerHTML=groups.map(([world,label,worldSteps])=>`<optgroup label="${esc(label)}">${worldSteps.map((step,index)=>`<option value="${world}:${esc(step.id)}">${index+1}. ${esc(step.title)}</option>`).join('')}</optgroup>`).join('');
+        $('stageJumpSelect').value=`${requestedWorld}:${requestedStageIndex>=0?requestedStage:steps[0].id}`;
+      }
     }
     let home = null;
     let attempt = null;
@@ -1090,15 +1131,47 @@
         };
         window.addEventListener('keydown',activeKeyHandler); $('keyArena').focus({preventScroll:true});
       } else if (step.id === 'word-blaster') {
-        const words=['PLAY','CODE','STAR','BYTE','GAME'], word=words[roundProgress%words.length]; let typedCount=0;
-        area.innerHTML=`<div class="room-label">Word Blaster · Cloud ${roundProgress+1} of ${roundGoal()}</div><div class="space-arena" id="spaceArena" tabindex="0" aria-label="Type ${word}"><div class="falling-signal" id="skillTarget"><div class="signal-ship"></div><div class="signal-word" id="signalWord">${keyboardWord(word,0)}</div></div><div class="defense-line"></div><div class="defense-cannon"></div></div>`;
+        const waves=[
+          { word:'BUG', label:'Warm-up drone', speed:8.2, left:28 },
+          { word:'BYTE', label:'Scout cloud', speed:7.6, left:66 },
+          { word:'CODE', label:'Code cloud', speed:7, left:43 },
+          { word:'POWER', label:'Power raider', speed:6.5, left:72 },
+          { word:'CASTLE', label:'Castle jammer', speed:6, left:31 },
+          { word:'SIGNAL', label:'Signal ship', speed:5.5, left:60 },
+          { word:'KEYBOARD', label:'Boss ship', speed:5, left:50 },
+        ];
+        const wave=waves[roundProgress%waves.length], word=wave.word;
+        let typedCount=0, shield=3;
+        const shieldCells=()=>Array.from({length:3},(_,index)=>`<span class="shield-cell${index>=shield?' empty':''}"></span>`).join('');
+        area.innerHTML=`<div class="word-blaster-arena" id="wordBlasterArena" tabindex="0" aria-label="Type ${word} to blast the ${wave.label}"><div class="blaster-wave">${roundProgress===roundGoal()-1?'<strong>Boss wave</strong>':'Incoming'} · ${esc(wave.label)} · ${roundProgress+1}/${roundGoal()}</div><div class="blaster-shield"><span>Shield</span><span id="shieldCells">${shieldCells()}</span></div><span class="blaster-decoy one"></span><span class="blaster-decoy two"></span><span class="blaster-decoy three"></span><div class="blaster-target" id="skillTarget" style="--target-left:${wave.left}%;--wave-speed:${wave.speed}s"><div class="blaster-word" id="signalWord">${keyboardWord(word,0)}</div></div><div class="blaster-laser" id="blasterLaser"></div><div class="blaster-castle"></div><div class="blaster-command"><span>Type: <b>${esc(word)}</b></span><span id="letterCount">0 / ${word.length} letters</span></div></div>`;
         activeKeyHandler=(event)=>{
           if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
-          if (event.key.toUpperCase() !== word[typedCount]) return registerWrong(`Find the next letter: ${word[typedCount]}`);
-          typedCount += 1; $('signalWord').innerHTML=keyboardWord(word,typedCount); playTone(540+(typedCount*40)); burstParticles($('signalWord'),'#69e3a7');
-          if (typedCount === word.length) { clearActiveInput(); completeInteraction('type_word','shield-word'); }
+          event.preventDefault();
+          if (event.key.toUpperCase() !== word[typedCount]) {
+            shield -= 1;
+            if ($('shieldCells')) $('shieldCells').innerHTML=shieldCells();
+            if (shield === 0) {
+              shield=3;
+              setTimeout(()=>{ if($('shieldCells')) $('shieldCells').innerHTML=shieldCells(); },420);
+              return registerWrong(`Shield recharged. Find ${word[typedCount]} and keep blasting.`);
+            }
+            return registerWrong(`Shield hit. Find the next letter: ${word[typedCount]}`);
+          }
+          typedCount += 1;
+          $('signalWord').innerHTML=keyboardWord(word,typedCount);
+          $('letterCount').textContent=`${typedCount} / ${word.length} letters`;
+          const laser=$('blasterLaser'), target=$('skillTarget');
+          laser.classList.remove('fire'); void laser.offsetWidth; laser.classList.add('fire');
+          target.classList.add('hit');
+          setTimeout(()=>{ laser?.classList.remove('fire'); target?.classList.remove('hit'); },130);
+          playTone(540+(typedCount*40)); burstParticles($('signalWord'),'#69e3a7');
+          if (typedCount === word.length) {
+            clearActiveInput();
+            target.classList.add('explode');
+            setTimeout(()=>completeInteraction('type_word','shield-word'),280);
+          }
         };
-        window.addEventListener('keydown',activeKeyHandler); $('spaceArena').focus({preventScroll:true});
+        window.addEventListener('keydown',activeKeyHandler); $('wordBlasterArena').focus({preventScroll:true});
       } else if (step.id === 'capital-charge') {
         const letters=['B','K','M','R','T'], letter=letters[roundProgress%letters.length];
         area.innerHTML=`<div class="room-label">Capital Charge · Tower ${roundProgress+1} of ${roundGoal()}</div><div class="key-arena" id="keyArena" tabindex="0"><div class="key-prompt">Hold Shift and press ${letter}</div><div class="key-row"><span class="arcade-key active" style="min-width:130px">Shift</span><span class="arcade-key active" id="skillTarget">${letter}</span></div></div>`;
@@ -1383,6 +1456,11 @@
     $('pauseBtn').addEventListener('click', () => setPaused(!paused));
     $('resumeBtn').addEventListener('click', () => setPaused(false));
     $('practiseAgainBtn').addEventListener('click', async () => { $('completion').classList.add('hidden'); await beginAttempt(true); });
+    $('stageJumpBtn').addEventListener('click',()=>{
+      const [world,stage]=String($('stageJumpSelect').value||'').split(':');
+      if(!stage) return;
+      location.href=`/practice/preview?${world==='g3'?'world=g3&':''}stage=${encodeURIComponent(stage)}`;
+    });
     setInterval(() => { if (!paused && !document.hidden && $('activity').style.display === 'block') stats.activeSeconds += 1; }, 1000);
 
     async function beginAttempt(forceNew) {
@@ -1390,8 +1468,9 @@
       score = 0;
       updateHud();
       if (ephemeralMode) {
-        attempt = { id:`${guestMode?'guest':'preview'}-${Date.now()}`, activityId:ACTIVITY_ID, activityVersion:campaign.version, status:'in_progress', currentStepIndex:0, checkpoints:[], mastery:'not_started' };
-        stepIndex = 0;
+        const startIndex=previewMode&&requestedStageIndex>=0?requestedStageIndex:0;
+        attempt = { id:`${guestMode?'guest':'preview'}-${Date.now()}`, activityId:ACTIVITY_ID, activityVersion:campaign.version, status:'in_progress', currentStepIndex:startIndex, checkpoints:[], mastery:'not_started' };
+        stepIndex = startIndex;
         phase = 'show';
         $('intro').classList.add('hidden');
         setSave(liveRoom ? `Live room ${liveRoom.code}` : guestMode ? 'Guest practice - results not saved' : 'Preview only - results not saved');
@@ -1465,6 +1544,7 @@
           $('completionLead').textContent = 'You completed the learner experience. No preview progress or results were saved.';
           $('completionBack').href = '/practice';
           $('completionBack').textContent = 'Back to practice evidence';
+          if(requestedStageIndex>=0){ await beginAttempt(false); return; }
         } else {
           $('studentName').textContent = `Practising as ${data.student.name}`;
         }

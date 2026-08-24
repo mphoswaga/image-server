@@ -150,6 +150,12 @@ test('teacher preview is protected and explicitly avoids recorded attempts', () 
   assert.match(player, /if \(ephemeralMode\) return liveRoom \? saveLiveCheckpoint\(payload\) : saveEphemeralCheckpoint\(payload\)/);
   assert.match(player, /Preview only - results not saved/);
   assert.match(report, /href="\/practice\/preview"/);
+  assert.match(report, /id="previewStageSelect"/);
+  assert.match(report, /id="previewStageBtn"/);
+  assert.match(player, /id="teacherStageJump"/);
+  assert.match(player, /const requestedStageIndex = previewMode/);
+  assert.match(player, /previewMode&&requestedStageIndex>=0\?requestedStageIndex:0/);
+  assert.match(player, /\/practice\/preview\?\$\{world==='g3'/);
 });
 
 test('guest practice is public but never writes recorded student evidence', () => {
@@ -228,7 +234,10 @@ test('both arcade worlds provide sustained, varied practice', () => {
   const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
   assert.match(player, /'move-pointer':8, 'single-click':8, 'double-click':6/);
   assert.match(player, /'context-command':5, 'drag-drop':5, 'scroll-find':4, 'copy-paste-menu':3, 'keyboard-defense':5/);
-  assert.match(player, /'copy-paste-shortcut':3, 'key-patrol':8, 'word-blaster':5, 'capital-charge':5, 'sentence-engine':2, 'repair-bay':5/);
+  assert.match(player, /'copy-paste-shortcut':3, 'key-patrol':8, 'word-blaster':7, 'capital-charge':5, 'sentence-engine':2, 'repair-bay':5/);
+  assert.match(player, /'BUG'.*'BYTE'.*'CODE'.*'POWER'.*'CASTLE'.*'SIGNAL'.*'KEYBOARD'/s);
+  assert.match(player, /class="blaster-shield"/);
+  assert.match(player, /Boss wave/);
   assert.match(player, /\['BYTE','STAR','CODE','POWER','SHIELD'\]/);
   assert.match(player, /\['I CAN CODE\.','BYTE IS READY\.'\]/);
   assert.match(player, /\['PEN','PIN'\],\['DOG','DIG'\]/);

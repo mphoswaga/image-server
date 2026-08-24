@@ -19,6 +19,7 @@
     .shell { width:min(1180px,calc(100% - 32px)); margin:28px auto 48px; }
     .heading { display:flex; justify-content:space-between; gap:18px; align-items:flex-end; margin-bottom:20px; }
     .heading-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .heading-actions select { min-width:220px; }
     h1 { margin:0 0 5px; color:var(--navy); font-size:32px; }
     .sub { color:var(--muted); margin:0; }
     .btn { display:inline-flex; align-items:center; justify-content:center; min-height:42px; border-radius:8px; border:1px solid var(--line); background:#fff; color:var(--navy); padding:9px 14px; font-weight:800; cursor:pointer; text-decoration:none; }
@@ -70,7 +71,7 @@
 <body>
   <header class="topbar"><div class="brand"><span class="brand-mark">LS</span><span>LessonScope Practice</span></div><a class="back" href="/">Back to planner</a></header>
   <main class="shell">
-    <div class="heading"><div><h1>Practice evidence</h1><p class="sub">See who practised Pointer Control and where support is still useful.</p></div><div class="heading-actions"><a class="btn primary" href="/practice/preview">Preview as a student</a><button class="btn" id="refreshBtn" type="button">Refresh</button></div></div>
+    <div class="heading"><div><h1>Practice evidence</h1><p class="sub">See who practised Pointer Control and where support is still useful.</p></div><div class="heading-actions"><a class="btn primary" href="/practice/preview">Preview full game</a><select id="previewStageSelect" aria-label="Choose a practice stage to test"><optgroup label="Foundation World"><option value="foundation:move-pointer">1. Signal Trail</option><option value="foundation:single-click">2. Reactor Rush</option><option value="foundation:double-click">3. Vault Breaker</option><option value="foundation:context-command">4. Command Deck</option><option value="foundation:drag-drop">5. Cargo Rescue</option><option value="foundation:scroll-find">6. Signal Tower</option><option value="foundation:copy-paste-menu">7. Message Relay</option><option value="foundation:keyboard-defense">8. Sky Shield</option></optgroup><optgroup label="Grade 3 World"><option value="g3:copy-paste-shortcut">1. Rapid Relay</option><option value="g3:key-patrol">2. Key Patrol</option><option value="g3:word-blaster">3. Word Blaster</option><option value="g3:capital-charge">4. Capital Charge</option><option value="g3:sentence-engine">5. Sentence Engine</option><option value="g3:repair-bay">6. Repair Bay</option></optgroup></select><button class="btn" id="previewStageBtn" type="button">Test stage</button><button class="btn" id="refreshBtn" type="button">Refresh</button></div></div>
     <section class="live-room" aria-labelledby="liveRoomTitle">
       <div class="live-head">
         <div><h2 id="liveRoomTitle">Live class arcade</h2><p>Create a temporary room. Learners join with a nickname and the board disappears after eight hours.</p></div>
@@ -109,6 +110,11 @@
     const fmtTime = (seconds) => { const n=Number(seconds)||0; const m=Math.floor(n/60),s=n%60; return m ? `${m}m ${s}s` : `${s}s`; };
     const fmtDate = (value) => value ? new Date(value).toLocaleString(undefined,{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '-';
     const label = (value) => String(value || 'not_started').replaceAll('_',' ');
+    $('previewStageBtn').addEventListener('click',()=>{
+      const [world,stage]=String($('previewStageSelect').value||'').split(':');
+      if(!stage) return;
+      location.href=`/practice/preview?${world==='g3'?'world=g3&':''}stage=${encodeURIComponent(stage)}`;
+    });
 
     function renderLiveRoom(room) {
       liveRoom=room||null;
