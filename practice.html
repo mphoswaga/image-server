@@ -104,8 +104,8 @@
     .arcade-target:before { left:17px; }.arcade-target:after { right:17px; }
     .cursor-core { background:radial-gradient(circle at 35% 30%,#50e9ff,#166eaa); box-shadow:0 0 28px rgba(37,205,220,.85); pointer-events:auto; }
     .reactor-core { background:radial-gradient(circle at 35% 30%,#72f2ad,#0d8154); border-color:#b8ffd8; box-shadow:0 0 28px rgba(30,184,120,.78); }
-    .vault-grid { width:min(690px,calc(100% - 34px)); display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
-    .vault-slot { min-height:150px; display:grid; place-items:center; border:1px solid #583b79; background:rgba(10,13,34,.72); }
+    .vault-grid { width:min(720px,calc(100% - 34px)); min-height:310px; display:grid; grid-template-columns:repeat(3,1fr); gap:18px; padding:18px; border:2px solid #8f69ba; background-image:linear-gradient(rgba(14,8,35,.22),rgba(14,8,35,.58)),url('/assets/practice/bg_vault_room.jpeg'); background-position:center; background-size:cover; box-shadow:0 18px 40px rgba(0,0,0,.4),0 0 24px rgba(198,156,255,.16); }
+    .vault-slot { min-height:128px; display:grid; place-items:center; border:1px solid rgba(198,156,255,.58); background:rgba(10,13,34,.62); backdrop-filter:blur(2px); }
     .vault-door { width:130px; min-height:92px; border:3px solid #6b4c91; border-radius:8px; background:#1e183c; color:#755d96; font-weight:900; cursor:default; box-shadow:inset 0 0 20px rgba(0,0,0,.44); }
     .vault-door.active { border-color:#c69cff; background:#4f2a75; color:#fff; cursor:pointer; box-shadow:0 0 28px rgba(198,156,255,.56),inset 0 0 18px rgba(255,255,255,.08); animation:targetPop .18s cubic-bezier(.18,.9,.3,1.35) both; }
     .vault-door.active:after { content:"×2"; display:grid; place-items:center; width:34px; height:34px; margin:7px auto 0; border-radius:50%; background:#f8c342; color:#251541; font-size:13px; }
@@ -183,6 +183,8 @@
     .mastery { display:inline-block; padding:6px 10px; border-radius:6px; background:var(--soft-green); color:var(--green-dark); font-weight:900; text-transform:capitalize; }
     .quest-hero { display:grid; grid-template-columns:minmax(260px,.8fr) minmax(360px,1.2fr); align-items:center; gap:34px; text-align:left; }
     .bot-stage { min-height:360px; position:relative; display:grid; place-items:center; border:1px solid #2d5380; background:#0b1a35; overflow:hidden; }
+    body.intro-screen:not(.campaign-g3) .bot-stage { background-image:linear-gradient(rgba(5,14,32,.24),rgba(5,14,32,.58)),url('/assets/practice/bg_byte_city_blackout.jpeg'); background-position:center; background-size:cover; }
+    body.intro-screen:not(.campaign-g3) .bot-stage .bot-image { width:min(245px,72%); background:rgba(255,255,255,.96); }
     .bot-stage:before,.bot-stage:after { content:""; position:absolute; width:90px; height:90px; border:1px solid rgba(37,205,220,.25); transform:rotate(45deg); }
     .bot-stage:before { left:-46px; top:35px; }.bot-stage:after { right:-46px; bottom:35px; }
     .bot-image { width:min(310px,90%); aspect-ratio:1; object-fit:contain; border-radius:50%; background:#fff; border:5px solid #25cddc; box-shadow:0 0 0 10px rgba(37,205,220,.09),0 18px 44px rgba(0,0,0,.28); }
@@ -291,7 +293,10 @@
     .briefing-room { background:linear-gradient(145deg,#dff8fb,#eaf8ef 58%,#fff5df); }
     .briefing-room:before { display:none; }
     .tutorial { width:min(820px,calc(100% - 28px)); grid-template-columns:220px 1fr; gap:28px; padding:20px; border:0; border-radius:18px; box-shadow:0 18px 46px rgba(18,52,91,.18); }
-    .tutorial-visual { min-height:210px; border:0; border-radius:14px; overflow:hidden; background:#0b1c38; }
+    .tutorial-visual { min-height:210px; border:0; border-radius:14px; overflow:hidden; background:#0b1c38; background-position:center; background-size:cover; }
+    .briefing-move-pointer .tutorial-visual { background-image:linear-gradient(rgba(5,14,32,.22),rgba(5,14,32,.48)),url('/assets/practice/bg_signal_trail.jpeg'); }
+    .briefing-single-click .tutorial-visual { background-image:linear-gradient(rgba(5,14,32,.18),rgba(5,14,32,.52)),url('/assets/practice/bg_reactor_room.jpeg'); }
+    .briefing-double-click .tutorial-visual { background-image:linear-gradient(rgba(16,8,35,.24),rgba(16,8,35,.58)),url('/assets/practice/bg_vault_room.jpeg'); }
     .tutorial-copy b { color:#0a92ad; }
     .tutorial-copy h3 { font-size:clamp(23px,3vw,34px); }
     .tutorial-copy p { font-size:clamp(18px,2.3vw,24px); line-height:1.25; }
@@ -326,16 +331,16 @@
     .demo-copy-menu .demo-object:after { content:"RIGHT-CLICK"; position:absolute; bottom:4px; color:#a855f7; font-size:11px; }
     .demo-copy-shortcut .demo-object:after { content:"CTRL+C  →  CTRL+V"; position:absolute; bottom:4px; color:#a855f7; font-size:11px; }
     .demo-copy-menu .demo-cursor,.demo-copy-shortcut .demo-cursor { animation:demoSelect 2.4s ease-in-out infinite; }
-    .signal-trail { width:min(760px,calc(100% - 28px)); height:310px; position:relative; border:2px solid #27628a; border-radius:22px; overflow:hidden; background:radial-gradient(circle at 72% 22%,rgba(37,205,220,.24),transparent 20%),linear-gradient(150deg,#07142c,#12345b); }
-    .signal-trail:before { content:""; position:absolute; left:-5%; right:-5%; top:50%; height:92px; transform:rotate(-8deg); border-top:8px solid #1f527f; border-bottom:8px solid #1f527f; background:#0b1c38; }
-    .city-block { position:absolute; width:120px; height:92px; bottom:24px; border:2px solid #2b5d89; background:#102747; box-shadow:inset 0 0 0 10px #0b1c38; }
+    .signal-trail { width:min(760px,calc(100% - 28px)); height:310px; position:relative; border:2px solid #79e8ef; border-radius:22px; overflow:hidden; background-image:linear-gradient(rgba(5,14,32,.12),rgba(5,14,32,.36)),url('/assets/practice/bg_signal_trail.jpeg'); background-position:center; background-size:cover; box-shadow:0 18px 40px rgba(0,0,0,.35),0 0 24px rgba(37,205,220,.18); }
+    .signal-trail:before { display:none; }
+    .city-block { display:none; }
     .city-block.one { left:8%; }.city-block.two { right:8%; height:135px; }
     .signal-bug { position:absolute; z-index:5; width:78px; height:78px; display:grid; place-items:center; border:4px solid #8cecf4; border-radius:50%; background:radial-gradient(circle at 35% 30%,#50e9ff,#166eaa); color:#fff; font-size:12px; font-weight:900; box-shadow:0 0 30px rgba(37,205,220,.9); transition:left .22s ease,top .22s ease; animation:bugFloat .85s ease-in-out infinite alternate; }
     .signal-bug:before { content:""; position:absolute; width:14px; height:14px; left:16px; top:21px; border-radius:50%; background:#fff; box-shadow:32px 0 #fff; }
     .signal-bug.guided,.reactor-bug.guided,.vault-door.guided,.command-folder.guided,.antenna-switch.guided { box-shadow:0 0 0 8px rgba(248,195,66,.28),0 0 34px rgba(248,195,66,.72); }
-    .reactor-board { width:min(700px,calc(100% - 28px)); height:310px; position:relative; display:grid; place-items:center; border:2px solid #277264; border-radius:50% 50% 18px 18px; background:radial-gradient(circle,#174b45 0 18%,#0b2528 19% 35%,#07142c 36%); overflow:hidden; }
+    .reactor-board { width:min(700px,calc(100% - 28px)); height:310px; position:relative; display:grid; place-items:center; border:2px solid #69e3a7; border-radius:50% 50% 18px 18px; background-image:linear-gradient(rgba(5,14,32,.16),rgba(5,14,32,.48)),url('/assets/practice/bg_reactor_room.jpeg'); background-position:center; background-size:cover; overflow:hidden; box-shadow:0 18px 40px rgba(0,0,0,.38),0 0 24px rgba(30,184,120,.18); }
     .reactor-core-ring { position:absolute; width:170px; height:170px; border:10px solid #1e725e; border-radius:50%; box-shadow:0 0 36px rgba(30,184,120,.34),inset 0 0 30px rgba(30,184,120,.25); animation:reactorPulse 1.3s ease-in-out infinite; }
-    .reactor-port { position:absolute; width:90px; height:90px; display:grid; place-items:center; border:3px solid #366b6a; border-radius:50%; background:#071225; }
+    .reactor-port { position:absolute; width:90px; height:90px; display:grid; place-items:center; border:3px solid #4d8c87; border-radius:50%; background:rgba(7,18,37,.82); backdrop-filter:blur(2px); }
     .reactor-port.active { border-color:#69e3a7; box-shadow:0 0 28px rgba(30,184,120,.65); }
     .reactor-port:nth-child(2){left:12%;top:15%}.reactor-port:nth-child(3){right:12%;top:15%}.reactor-port:nth-child(4){left:12%;bottom:12%}.reactor-port:nth-child(5){right:12%;bottom:12%}.reactor-port:nth-child(6){left:calc(50% - 45px);top:10px}.reactor-port:nth-child(7){left:calc(50% - 45px);bottom:10px}
     .reactor-bug { width:62px; height:62px; display:grid; place-items:center; border:3px solid #b8ffd8; border-radius:14px 14px 28px 28px; background:#18a568; color:#fff; font-size:11px; font-weight:900; box-shadow:0 0 24px rgba(30,184,120,.8); animation:targetPop .18s cubic-bezier(.18,.9,.3,1.35) both,bugFloat .7s ease-in-out infinite alternate; }
@@ -796,7 +801,7 @@
       if (taskAreaPointerDownHandler) area.removeEventListener('pointerdown',taskAreaPointerDownHandler);
       taskAreaClickHandler = null;
       taskAreaPointerDownHandler = null;
-      area.className = `task-area ${phase === 'show' ? 'briefing-room' : `room-${step.id}`}`;
+      area.className = `task-area ${phase === 'show' ? `briefing-room briefing-${step.id}` : `room-${step.id}`}`;
       roundLocked = false;
       if (phase === 'show') {
         const tutorial=tutorials[step.id];

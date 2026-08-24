@@ -185,6 +185,17 @@ test('the learner quest keeps Byte and its connected game states', () => {
   assert.doesNotMatch(player, /phase === 'guided'/);
 });
 
+test('the opening and first three arcade rooms use their illustrated backgrounds', () => {
+  const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
+  for (const asset of ['bg_byte_city_blackout.jpeg', 'bg_signal_trail.jpeg', 'bg_reactor_room.jpeg', 'bg_vault_room.jpeg']) {
+    assert.match(player, new RegExp(`/assets/practice/${asset}`));
+    assert.equal(fs.existsSync(path.join(__dirname, '..', 'public', 'assets', 'practice', asset)), true);
+  }
+  assert.match(player, /briefing-move-pointer/);
+  assert.match(player, /briefing-single-click/);
+  assert.match(player, /briefing-double-click/);
+});
+
 test('Grade 2 play uses animated demonstrations and save-before-auto-advance', () => {
   const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
   assert.match(player, /function tutorialVisual\(stepId\)/);
