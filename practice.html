@@ -677,6 +677,8 @@
     let voiceEnabled = true;
     let activeKeyHandler = null;
     let autoAdvanceTimer = null;
+    let taskAreaClickHandler = null;
+    let taskAreaPointerDownHandler = null;
 
     applyCampaignCopy();
 
@@ -790,6 +792,10 @@
       const step = currentStep();
       const area = $('taskArea');
       clearActiveInput();
+      if (taskAreaClickHandler) area.removeEventListener('click',taskAreaClickHandler);
+      if (taskAreaPointerDownHandler) area.removeEventListener('pointerdown',taskAreaPointerDownHandler);
+      taskAreaClickHandler = null;
+      taskAreaPointerDownHandler = null;
       area.className = `task-area ${phase === 'show' ? 'briefing-room' : `room-${step.id}`}`;
       roundLocked = false;
       if (phase === 'show') {
@@ -899,7 +905,8 @@
           });
           $('relayCopyCommand').addEventListener('click',(event)=>{ event.stopPropagation(); hideMenus(); markCopied(); });
           $('relayPasteCommand').addEventListener('click',(event)=>{ event.stopPropagation(); hideMenus(); finishPaste(); });
-          area.addEventListener('pointerdown',(event)=>{ if (!event.target.closest('.relay-context-menu')) hideMenus(); });
+          taskAreaPointerDownHandler=(event)=>{ if (!event.target.closest('.relay-context-menu')) hideMenus(); };
+          area.addEventListener('pointerdown',taskAreaPointerDownHandler);
           activeKeyHandler=(event)=>{
             if (!(event.ctrlKey||event.metaKey)) return;
             if (!['c','v'].includes(event.key.toLowerCase())) return;
@@ -1001,7 +1008,10 @@
         };
         window.addEventListener('keydown',activeKeyHandler); $('typingCard').focus({preventScroll:true});
       }
-      if (phase === 'independent' && !keyboardStepIds.has(step.id)) area.addEventListener('click', (event) => { if (!event.target.closest('#skillTarget') && !event.target.closest('#scrollWindow') && !event.target.closest('#commandMenu') && !event.target.closest('#commandFolder')) registerWrong('Try the task again. You can ask Byte for help.'); });
+      if (phase === 'independent' && !keyboardStepIds.has(step.id)) {
+        taskAreaClickHandler=(event)=>{ if (!event.target.closest('#skillTarget') && !event.target.closest('#scrollWindow') && !event.target.closest('#commandMenu') && !event.target.closest('#commandFolder')) registerWrong('Try the task again. You can ask Byte for help.'); };
+        area.addEventListener('click',taskAreaClickHandler);
+      }
     }
 
     function renderStep() {

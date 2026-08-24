@@ -222,6 +222,14 @@ test('Grade 2 Message Relay uses a consistent right-click Copy and Paste menu', 
   assert.match(player, /This mission uses the right-click Copy and Paste menu/);
 });
 
+test('mission changes remove stale game-area click handlers before highlighting', () => {
+  const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
+  assert.match(player, /if \(taskAreaClickHandler\) area\.removeEventListener\('click',taskAreaClickHandler\)/);
+  assert.match(player, /if \(taskAreaPointerDownHandler\) area\.removeEventListener\('pointerdown',taskAreaPointerDownHandler\)/);
+  assert.match(player, /taskAreaClickHandler = null/);
+  assert.match(player, /taskAreaPointerDownHandler = null/);
+});
+
 test('Grade 3 Rapid Relay requires copy and paste keyboard shortcuts', () => {
   const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
   assert.match(player, /shortcut && key==='c'/);
