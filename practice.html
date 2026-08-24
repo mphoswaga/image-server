@@ -91,10 +91,10 @@
     .room-context-command { background:linear-gradient(145deg,#07142c,#173b61); }
     .room-drag-drop { background:linear-gradient(180deg,#14213c 0 62%,#263650 62%); }
     .room-scroll-find { background:linear-gradient(145deg,#08162f,#183963); }
-    .room-copy-paste { background:radial-gradient(circle at 50% 45%,rgba(240,91,169,.18),transparent 35%),linear-gradient(145deg,#111738,#342057); }
+    .room-copy-paste-menu,.room-copy-paste-shortcut { background:radial-gradient(circle at 50% 45%,rgba(240,91,169,.18),transparent 35%),linear-gradient(145deg,#111738,#342057); }
     .room-keyboard-defense { background:#020617; }
     .room-key-patrol,.room-word-blaster,.room-capital-charge,.room-sentence-engine,.room-repair-bay { background:linear-gradient(145deg,#090b24,#29205b); }
-    .room-move-pointer:after,.room-single-click:after,.room-double-click:after,.room-context-command:after,.room-drag-drop:after,.room-scroll-find:after,.room-copy-paste:after,.room-keyboard-defense:after,.room-key-patrol:after,.room-word-blaster:after,.room-capital-charge:after,.room-sentence-engine:after,.room-repair-bay:after { content:""; position:absolute; z-index:-1; inset:0; opacity:.45; background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px); background-size:34px 34px; }
+    .room-move-pointer:after,.room-single-click:after,.room-double-click:after,.room-context-command:after,.room-drag-drop:after,.room-scroll-find:after,.room-copy-paste-menu:after,.room-copy-paste-shortcut:after,.room-keyboard-defense:after,.room-key-patrol:after,.room-word-blaster:after,.room-capital-charge:after,.room-sentence-engine:after,.room-repair-bay:after { content:""; position:absolute; z-index:-1; inset:0; opacity:.45; background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px); background-size:34px 34px; }
     .arcade-grid { width:min(680px,calc(100% - 30px)); height:290px; display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr); gap:14px; padding:12px; }
     .arcade-pad { position:relative; display:grid; place-items:center; min-width:0; border:2px solid #29486d; border-radius:50%; background:#071225; box-shadow:inset 0 8px 15px rgba(0,0,0,.65); }
     button.arcade-pad { cursor:pointer; }
@@ -321,10 +321,11 @@
     .demo-type .demo-object { width:150px; height:74px; border-radius:12px; background:#5b2574; border-color:#f05ba9; font-size:22px; letter-spacing:5px; }
     .demo-type .demo-object:after { content:"BYTE"; animation:demoType 2s steps(4) infinite; overflow:hidden; width:0; white-space:nowrap; color:#8ef0ba; }
     .demo-type .demo-cursor { display:none; }
-    .demo-copy .demo-object { width:158px; height:68px; border-radius:8px; background:#fff; color:#12345b; overflow:hidden; }
-    .demo-copy .demo-object:before { content:"BYTE MESSAGE"; position:absolute; z-index:2; padding:4px; background:#7dd3fc; }
-    .demo-copy .demo-object:after { content:"⌘C  →  ⌘V"; position:absolute; bottom:4px; color:#a855f7; font-size:12px; }
-    .demo-copy .demo-cursor { animation:demoSelect 2.4s ease-in-out infinite; }
+    .demo-copy-menu .demo-object,.demo-copy-shortcut .demo-object { width:158px; height:68px; border-radius:8px; background:#fff; color:#12345b; overflow:hidden; }
+    .demo-copy-menu .demo-object:before,.demo-copy-shortcut .demo-object:before { content:"BYTE MESSAGE"; position:absolute; z-index:2; padding:4px; background:#7dd3fc; }
+    .demo-copy-menu .demo-object:after { content:"RIGHT-CLICK"; position:absolute; bottom:4px; color:#a855f7; font-size:11px; }
+    .demo-copy-shortcut .demo-object:after { content:"CTRL+C  →  CTRL+V"; position:absolute; bottom:4px; color:#a855f7; font-size:11px; }
+    .demo-copy-menu .demo-cursor,.demo-copy-shortcut .demo-cursor { animation:demoSelect 2.4s ease-in-out infinite; }
     .signal-trail { width:min(760px,calc(100% - 28px)); height:310px; position:relative; border:2px solid #27628a; border-radius:22px; overflow:hidden; background:radial-gradient(circle at 72% 22%,rgba(37,205,220,.24),transparent 20%),linear-gradient(150deg,#07142c,#12345b); }
     .signal-trail:before { content:""; position:absolute; left:-5%; right:-5%; top:50%; height:92px; transform:rotate(-8deg); border-top:8px solid #1f527f; border-bottom:8px solid #1f527f; background:#0b1c38; }
     .city-block { position:absolute; width:120px; height:92px; bottom:24px; border:2px solid #2b5d89; background:#102747; box-shadow:inset 0 0 0 10px #0b1c38; }
@@ -355,6 +356,10 @@
     .relay-key { min-width:46px; padding:8px; border:2px solid #6657ad; border-radius:6px; background:#29205b; font-weight:900; box-shadow:0 5px 0 #08091b; }
     .relay-choice { color:#c9bfff; font-size:12px; font-weight:800; text-align:center; }
     .relay-status { min-height:24px; color:#8ef0ba; font-size:13px; font-weight:800; text-align:center; }
+    .relay-context-menu { position:fixed; z-index:80; min-width:170px; display:none; padding:7px; border:2px solid #25cddc; border-radius:8px; background:#fff; box-shadow:0 16px 34px rgba(0,0,0,.35); }
+    .relay-context-menu.show { display:block; }
+    .relay-context-command { width:100%; min-height:48px; padding:10px 14px; border:0; border-radius:5px; background:#e9fbfd; color:#12345b; font-size:16px; font-weight:900; text-align:left; cursor:pointer; }
+    .relay-context-command:hover,.relay-context-command:focus { background:#c9f4f7; outline:2px solid #25cddc; }
     .room-clear-card { position:absolute; z-index:25; inset:0; display:grid; place-items:center; padding:20px; background:rgba(5,14,32,.88); animation:clearIn .25s ease both; }
     .room-clear-inner { width:min(440px,92%); padding:26px; border:3px solid #69e3a7; border-radius:18px; background:#0d2c32; color:#fff; text-align:center; box-shadow:0 0 45px rgba(105,227,167,.35); }
     .room-clear-inner img { width:92px; height:92px; object-fit:contain; border-radius:50%; background:#fff; border:3px solid #25cddc; }
@@ -578,14 +583,17 @@
       { id:'scroll-find', title:'Signal Tower', action:'scroll_find', target:'gold-star',
         show:'Watch Byte scroll down the tower.', independent:'Scroll down. Turn on 4 antennas.', success:'The tower is sending a signal!',
         hints:['Keep the pointer inside the tower.','Roll the mouse wheel down.','Find the large gold antenna button.'] },
-      { id:'copy-paste', title:'Message Relay', action:'copy_paste', target:'relay-console',
-        show:'Watch Byte highlight, copy and paste a message.', independent:'Send 3 messages using shortcuts or the right-click menu.', success:'Every city station has the message!',
-        hints:['Drag across the whole blue message.','Use Ctrl+C, Command+C, or right-click and choose Copy.','Click the empty box, then use Ctrl+V, Command+V, or right-click and choose Paste.'] },
+      { id:'copy-paste-menu', title:'Message Relay', action:'context_copy_paste', target:'relay-console',
+        show:'Watch Byte highlight a message, then use the right-click Copy and Paste menu.', independent:'Send 3 messages using the right-click menu.', success:'Every city station has the message!',
+        hints:['Drag across the whole blue message.','Right-click the highlighted message and choose Copy.','Right-click the empty box and choose Paste.'] },
       { id:'keyboard-defense', title:'Sky Shield', action:'type_word', target:'byte-signal',
         show:'Watch Byte type the glowing word.', independent:'Type 5 words to stop the ships.', success:'The sky shield is on. City saved!',
         hints:['Read the glowing word.','Type one letter at a time.','Green letters are already correct.'] },
     ];
     const grade3Steps = [
+      { id:'copy-paste-shortcut', title:'Rapid Relay', action:'shortcut_copy_paste', target:'shortcut-console',
+        show:'Message Relay is moving faster. Highlight the message, then use the copy and paste keyboard shortcuts.', independent:'Send 3 messages using keyboard shortcuts.', success:'The rapid relay is online.',
+        hints:['Drag across the whole blue message.','Press Ctrl+C on Windows or Command+C on Mac.','Click the empty box, then press Ctrl+V or Command+V.'] },
       { id:'key-patrol', title:'Key Patrol', action:'home_keys', target:'home-row',
         show:'Keyboard Kingdom is dark. Wake the home-row keys in the order Byte shows you.', independent:'Hit eight glowing home-row keys to open the kingdom gate.', success:'The home-row gate is open.',
         hints:['Look along the middle keyboard row.','Press only the glowing key.','Keep both hands close to the middle row.'] },
@@ -603,8 +611,8 @@
         hints:['Use Backspace to remove the wrong letters.','Stop deleting when the beginning matches.','Then type the missing correct letters.'] },
     ];
     const campaigns = {
-      foundation:{ id:'g2-pointer-control', version:3, steps:foundationSteps, kicker:'Foundation World · Chapter 1', title:'Byte and the Blackout', lead:'A digital storm has shut down Byte City. Beat eight arcade missions, restore the power and unlock Advanced Keyboard Kingdom.', speech:'Chase, click, drag, scroll, copy, paste and type your way through the city.', world:'Foundation for Grade 2 and Grade 3', time:'About 25–30 minutes', device:'A keyboard and mouse or trackpad', completion:'Byte City is online', completionLead:'You restored every district and opened the road to Grade 3.', start:'Begin the rescue', resume:'Continue the rescue', nextTitle:'Advanced Keyboard Kingdom', nextCopy:'Continue into five playable Grade 3 keyboard missions.', nextLabel:'Continue to Grade 3' },
-      g3:{ id:'g3-keyboard-kingdom', version:1, steps:grade3Steps, kicker:'Grade 3 World · Chapter 2', title:'Byte and the Broken Code', lead:'A scrambled code has locked Keyboard Kingdom. Master keys, words, capitals, sentences and editing to restore it.', speech:'Your Grade 2 skills opened the gate. Now the keyboard is your arcade controller.', world:'Grade 3 keyboard adventure', time:'About 18–20 minutes', device:'A computer keyboard', completion:'Keyboard Kingdom restored', completionLead:'You mastered the Grade 3 keyboard campaign and earned access to the future Expert World.', start:'Enter Keyboard Kingdom', resume:'Continue Keyboard Kingdom', nextTitle:'Expert World', nextCopy:'Your Foundation and Grade 3 worlds are complete. Expert missions will continue the adventure.', nextLabel:'' },
+      foundation:{ id:'g2-pointer-control', version:4, steps:foundationSteps, kicker:'Foundation World · Chapter 1', title:'Byte and the Blackout', lead:'A digital storm has shut down Byte City. Beat eight arcade missions, restore the power and unlock Advanced Keyboard Kingdom.', speech:'Chase, click, drag, scroll, use menus and type your way through the city.', world:'Foundation for Grade 2 and Grade 3', time:'About 25–30 minutes', device:'A keyboard and mouse or trackpad', completion:'Byte City is online', completionLead:'You restored every district and opened the road to Grade 3.', start:'Begin the rescue', resume:'Continue the rescue', nextTitle:'Advanced Keyboard Kingdom', nextCopy:'Continue into six playable Grade 3 keyboard missions.', nextLabel:'Continue to Grade 3' },
+      g3:{ id:'g3-keyboard-kingdom', version:2, steps:grade3Steps, kicker:'Grade 3 World · Chapter 2', title:'Byte and the Broken Code', lead:'A scrambled code has locked Keyboard Kingdom. Master shortcuts, keys, words, capitals, sentences and editing to restore it.', speech:'Your Grade 2 skills opened the gate. Now the keyboard is your arcade controller.', world:'Grade 3 keyboard adventure', time:'About 22–25 minutes', device:'A computer keyboard', completion:'Keyboard Kingdom restored', completionLead:'You mastered the Grade 3 keyboard campaign and earned access to the future Expert World.', start:'Enter Keyboard Kingdom', resume:'Continue Keyboard Kingdom', nextTitle:'Expert World', nextCopy:'Your Foundation and Grade 3 worlds are complete. Expert missions will continue the adventure.', nextLabel:'' },
     };
     const campaign = campaigns[requestedWorld];
     const ACTIVITY_ID = campaign.id;
@@ -616,7 +624,8 @@
       'context-command': { title:'Open the folder', action:'Right-click. Then choose Open.', detail:'Use the right button first.', visual:'right' },
       'drag-drop': { title:'Move the power box', action:'Hold, move, then let go.', detail:'Drop it inside the glowing dock.', visual:'drag' },
       'scroll-find': { title:'Climb the tower', action:'Scroll down to the gold switch.', detail:'Keep the pointer inside the tower.', visual:'scroll' },
-      'copy-paste': { title:'Send the message', action:'Highlight. Copy. Paste.', detail:'Use the keyboard shortcuts or the right-click menu.', visual:'copy' },
+      'copy-paste-menu': { title:'Send the message with menus', action:'Highlight. Right-click. Copy. Right-click. Paste.', detail:'Choose Copy and Paste from the menu.', visual:'copy-menu' },
+      'copy-paste-shortcut': { title:'Send the message faster', action:'Highlight. Copy. Paste.', detail:'Use Ctrl on Windows or Command on Mac.', visual:'copy-shortcut' },
       'keyboard-defense': { title:'Fire the sky shield', action:'Type the glowing word.', detail:'Green letters are correct.', visual:'type' },
       'key-patrol': { title:'Wake the home row', action:'Press the glowing A, S, D or F key.', detail:'One key lights at a time. Follow the sequence.', visual:'type' },
       'word-blaster': { title:'Blast a whole word', action:'Type every letter from left to right.', detail:'Correct letters turn green as the cloud falls.', visual:'type' },
@@ -624,8 +633,8 @@
       'sentence-engine': { title:'Build a complete sentence', action:'Type letters, spaces and the final full stop.', detail:'Copy the sentence exactly as it appears.', visual:'type' },
       'repair-bay': { title:'Delete, then repair', action:'Use Backspace to remove the mistake, then type the fix.', detail:'Keep the correct beginning of each word.', visual:'type' },
     };
-    const missionGoals = { 'move-pointer':8, 'single-click':8, 'double-click':6, 'context-command':5, 'drag-drop':5, 'scroll-find':4, 'copy-paste':3, 'keyboard-defense':5, 'key-patrol':8, 'word-blaster':5, 'capital-charge':5, 'sentence-engine':2, 'repair-bay':5 };
-    const keyboardStepIds = new Set(['copy-paste','keyboard-defense','key-patrol','word-blaster','capital-charge','sentence-engine','repair-bay']);
+    const missionGoals = { 'move-pointer':8, 'single-click':8, 'double-click':6, 'context-command':5, 'drag-drop':5, 'scroll-find':4, 'copy-paste-menu':3, 'keyboard-defense':5, 'copy-paste-shortcut':3, 'key-patrol':8, 'word-blaster':5, 'capital-charge':5, 'sentence-engine':2, 'repair-bay':5 };
+    const keyboardStepIds = new Set(['copy-paste-menu','copy-paste-shortcut','keyboard-defense','key-patrol','word-blaster','capital-charge','sentence-engine','repair-bay']);
     const $ = (id) => document.getElementById(id);
 
     function applyCampaignCopy() {
@@ -753,7 +762,7 @@
 
     function tutorialVisual(stepId) {
       const kind = tutorials[stepId].visual;
-      const menu = kind === 'right' ? '<div class="demo-menu">OPEN</div>' : '';
+      const menu = kind === 'right' ? '<div class="demo-menu">OPEN</div>' : kind === 'copy-menu' ? '<div class="demo-menu">COPY</div>' : '';
       const dock = kind === 'drag' ? '<div class="demo-dock" aria-hidden="true"></div>' : '';
       return `<div class="demo-scene demo-${kind}" aria-hidden="true"><div class="demo-object"></div>${dock}${menu}<div class="demo-cursor"></div></div>`;
     }
@@ -828,26 +837,30 @@
         const floors=3+roundProgress;
         area.innerHTML = `<div class="room-label">Signal Tower · Floor ${roundProgress+1} of ${roundGoal()}</div><div class="scroll-window tower-window" id="scrollWindow"><div class="tower-arrow">SCROLL DOWN ↓</div>${Array.from({length:floors},(_,index)=>`<div class="tower-floor"><span>FLOOR ${index+1}</span></div>`).join('')}<button class="antenna-switch" id="skillTarget" type="button">★ TURN ON</button></div>`;
         $('skillTarget').addEventListener('click', (event) => { event.stopPropagation(); const pane=$('scrollWindow'), bottom=pane.scrollHeight-pane.clientHeight-30; if (pane.scrollTop < bottom) registerWrong('Keep scrolling. The antenna switch is farther down.'); else completeInteraction('scroll_find','gold-star'); });
-      } else if (step.id === 'copy-paste') {
+      } else if (step.id === 'copy-paste-menu' || step.id === 'copy-paste-shortcut') {
         const messages=['POWER THE CITY','BYTE IS READY','SAVE THE SIGNAL'];
         const message=messages[roundProgress%messages.length];
         const modifier=/Mac|iPhone|iPad/.test(navigator.platform)?'Command':'Ctrl';
+        const menuMode=step.id==='copy-paste-menu';
         let selected=false, copied=false;
-        area.innerHTML = `<div class="room-label">Message Relay · Message ${roundProgress+1} of ${roundGoal()}</div><div class="copy-station"><div class="relay-panel"><b>1. Highlight every word</b><div class="relay-message" id="relaySource">${esc(message)}</div><div class="relay-keys"><span class="relay-key">${modifier}</span><span class="relay-key">C</span></div><div class="relay-choice">or right-click → Copy</div><div class="relay-status" id="relayStatus">Drag across the whole message.</div></div><div class="relay-arrow" aria-hidden="true">→</div><div class="relay-panel"><b>2. Paste the message here</b><textarea class="relay-destination" id="relayDestination" placeholder="PASTE HERE" aria-label="Paste the copied message here" autocomplete="off" spellcheck="false"></textarea><div class="relay-keys"><span class="relay-key">${modifier}</span><span class="relay-key">V</span></div><div class="relay-choice">or right-click → Paste</div></div></div>`;
+        const sourceControl=menuMode?'<div class="relay-choice">Right-click the blue message → Copy</div>':`<div class="relay-keys"><span class="relay-key">${modifier}</span><span class="relay-key">C</span></div>`;
+        const destinationControl=menuMode?'<div class="relay-choice">Right-click this empty box → Paste</div>':`<div class="relay-keys"><span class="relay-key">${modifier}</span><span class="relay-key">V</span></div>`;
+        const contextMenus=menuMode?'<div class="relay-context-menu" id="relayCopyMenu" role="menu"><button class="relay-context-command" id="relayCopyCommand" type="button" role="menuitem">Copy</button></div><div class="relay-context-menu" id="relayPasteMenu" role="menu"><button class="relay-context-command" id="relayPasteCommand" type="button" role="menuitem">Paste</button></div>':'';
+        area.innerHTML = `<div class="room-label">${menuMode?'Message Relay':'Rapid Relay'} · Message ${roundProgress+1} of ${roundGoal()}</div><div class="copy-station"><div class="relay-panel"><b>1. Highlight every word</b><div class="relay-message" id="relaySource">${esc(message)}</div>${sourceControl}<div class="relay-status" id="relayStatus">Drag across the whole message.</div></div><div class="relay-arrow" aria-hidden="true">→</div><div class="relay-panel"><b>2. Paste the message here</b><textarea class="relay-destination" id="relayDestination" placeholder="PASTE HERE" aria-label="Paste the copied message here" autocomplete="off" spellcheck="false"></textarea>${destinationControl}</div></div>${contextMenus}`;
         const source=$('relaySource'), destination=$('relayDestination'), status=$('relayStatus');
         const normalized=(value)=>String(value||'').replace(/\s+/g,' ').trim();
         const selectedMessage=()=>normalized(window.getSelection()?.toString())===message;
         const markCopied=()=>{
           if (copied) return;
           copied=true;
-          status.textContent=`Copied! Click the empty box, then press ${modifier}+V or right-click and choose Paste.`;
+          status.textContent=menuMode?'Copied! Right-click the empty box and choose Paste.':`Copied! Click the empty box, then press ${modifier}+V.`;
           playTone(620);
-          narrate(`Copied! Click the empty box, then paste with ${modifier} and V or the right-click menu.`);
+          narrate(menuMode?'Copied! Right-click the empty box and choose Paste.':`Copied! Click the empty box, then press ${modifier} and V.`);
         };
         const finishPaste=()=>{
           destination.value=message;
           clearActiveInput();
-          completeInteraction('copy_paste','relay-console');
+          completeInteraction(step.action,step.target);
         };
         source.addEventListener('pointerup',()=>{
           const selection=normalized(window.getSelection()?.toString());
@@ -857,50 +870,69 @@
           }
           selected=true;
           source.classList.add('selected');
-          status.textContent=`Great! Press ${modifier}+C or right-click and choose Copy.`;
+          status.textContent=menuMode?'Great! Right-click the blue message and choose Copy.':`Great! Now press ${modifier}+C.`;
           playTone(520);
-          narrate(`Great! Now copy with ${modifier} and C or the right-click menu.`);
-        });
-        source.addEventListener('copy',(event)=>{
-          if (!selected || !selectedMessage()) {
-            event.preventDefault();
-            return registerWrong('Highlight the whole message before you copy it.');
-          }
-          markCopied();
+          narrate(menuMode?'Great! Right-click the blue message and choose Copy.':`Great! Now press ${modifier} and C.`);
         });
         destination.addEventListener('beforeinput',(event)=>{
-          if (event.inputType!=='insertFromPaste') event.preventDefault();
-        });
-        destination.addEventListener('paste',(event)=>{
           event.preventDefault();
-          if (!copied) return registerWrong('Copy the highlighted message first.');
-          const pasted=normalized(event.clipboardData?.getData('text/plain'));
-          if (pasted && pasted!==message) return registerWrong('Paste the message you highlighted in the blue box.');
-          finishPaste();
         });
-        activeKeyHandler=(event)=>{
-          const shortcut=event.ctrlKey||event.metaKey;
-          const key=event.key.toLowerCase();
-          if (shortcut && key==='c') {
-            if (!selected) {
-              event.preventDefault();
-              return registerWrong('Highlight the whole message before you copy it.');
-            }
-            markCopied();
-            return;
-          }
-          if (shortcut && key==='v') {
-            event.preventDefault();
+        if (menuMode) {
+          const copyMenu=$('relayCopyMenu'), pasteMenu=$('relayPasteMenu');
+          const hideMenus=()=>{ copyMenu.classList.remove('show'); pasteMenu.classList.remove('show'); };
+          const showMenu=(menu,event)=>{
+            hideMenus();
+            menu.style.left=`${Math.min(innerWidth-185,Math.max(8,event.clientX))}px`;
+            menu.style.top=`${Math.min(innerHeight-70,Math.max(8,event.clientY))}px`;
+            menu.classList.add('show');
+            menu.querySelector('button').focus({preventScroll:true});
+          };
+          source.addEventListener('contextmenu',(event)=>{
+            event.preventDefault(); event.stopPropagation();
+            if (!selected || !selectedMessage()) return registerWrong('Highlight the whole message before you right-click.');
+            showMenu(copyMenu,event);
+          });
+          destination.addEventListener('contextmenu',(event)=>{
+            event.preventDefault(); event.stopPropagation();
             if (!copied) return registerWrong('Copy the highlighted message first.');
-            if (document.activeElement!==destination) return registerWrong('Click the empty paste box first.');
-            finishPaste();
-            return;
-          }
-          if (document.activeElement===destination && event.key.length===1 && !shortcut) {
+            showMenu(pasteMenu,event);
+          });
+          $('relayCopyCommand').addEventListener('click',(event)=>{ event.stopPropagation(); hideMenus(); markCopied(); });
+          $('relayPasteCommand').addEventListener('click',(event)=>{ event.stopPropagation(); hideMenus(); finishPaste(); });
+          area.addEventListener('pointerdown',(event)=>{ if (!event.target.closest('.relay-context-menu')) hideMenus(); });
+          activeKeyHandler=(event)=>{
+            if (!(event.ctrlKey||event.metaKey)) return;
+            if (!['c','v'].includes(event.key.toLowerCase())) return;
             event.preventDefault();
-            registerWrong('Use paste instead of typing the message again.');
-          }
-        };
+            registerWrong('This mission uses the right-click Copy and Paste menu.');
+          };
+        } else {
+          source.addEventListener('contextmenu',(event)=>{ event.preventDefault(); registerWrong(`Use ${modifier}+C for the Grade 3 speed mission.`); });
+          destination.addEventListener('contextmenu',(event)=>{ event.preventDefault(); registerWrong(`Use ${modifier}+V for the Grade 3 speed mission.`); });
+          activeKeyHandler=(event)=>{
+            const shortcut=event.ctrlKey||event.metaKey;
+            const key=event.key.toLowerCase();
+            if (shortcut && key==='c') {
+              if (!selected || !selectedMessage()) {
+                event.preventDefault();
+                return registerWrong('Highlight the whole message before you copy it.');
+              }
+              markCopied();
+              return;
+            }
+            if (shortcut && key==='v') {
+              event.preventDefault();
+              if (!copied) return registerWrong('Copy the highlighted message first.');
+              if (document.activeElement!==destination) return registerWrong('Click the empty paste box first.');
+              finishPaste();
+              return;
+            }
+            if (document.activeElement===destination && event.key.length===1 && !shortcut) {
+              event.preventDefault();
+              registerWrong('Use the paste shortcut instead of typing the message again.');
+            }
+          };
+        }
         window.addEventListener('keydown',activeKeyHandler);
       } else if (step.id === 'keyboard-defense') {
         const words=['BYTE','STAR','CODE','POWER','SHIELD'], word=words[roundProgress%words.length];

@@ -12,6 +12,24 @@ const ATTEMPTS_DIR = path.join(PRACTICE_DIR, 'attempts');
 const ACTIVITIES = Object.freeze([
   Object.freeze({
     id: 'g3-keyboard-kingdom',
+    version: 2,
+    gradeBand: 'Grade 3',
+    title: 'Advanced Keyboard Kingdom',
+    description: 'Use keyboard shortcuts, keys, words, capitals, sentences and editing to restore the kingdom.',
+    estimatedMinutes: 20,
+    device: 'computer',
+    steps: Object.freeze([
+      Object.freeze({ id: 'copy-paste-shortcut', title: 'Rapid Relay', action: 'shortcut_copy_paste', target: 'shortcut-console' }),
+      Object.freeze({ id: 'key-patrol', title: 'Key Patrol', action: 'home_keys', target: 'home-row' }),
+      Object.freeze({ id: 'word-blaster', title: 'Word Blaster', action: 'type_word', target: 'shield-word' }),
+      Object.freeze({ id: 'capital-charge', title: 'Capital Charge', action: 'shift_letter', target: 'capital-signal' }),
+      Object.freeze({ id: 'sentence-engine', title: 'Sentence Engine', action: 'type_sentence', target: 'sentence-signal' }),
+      Object.freeze({ id: 'repair-bay', title: 'Repair Bay', action: 'repair_word', target: 'repaired-code' }),
+    ]),
+  }),
+  // Version 1 remains available for five-mission Grade 3 attempts.
+  Object.freeze({
+    id: 'g3-keyboard-kingdom',
     version: 1,
     gradeBand: 'Grade 3',
     title: 'Advanced Keyboard Kingdom',
@@ -26,6 +44,27 @@ const ACTIVITIES = Object.freeze([
       Object.freeze({ id: 'repair-bay', title: 'Repair Bay', action: 'repair_word', target: 'repaired-code' }),
     ]),
   }),
+  Object.freeze({
+    id: 'g2-pointer-control',
+    version: 4,
+    gradeBand: 'Grades 2-3',
+    title: 'Byte City Foundation Arcade',
+    description: 'Complete a connected mouse, right-click menu and keyboard arcade adventure.',
+    estimatedMinutes: 25,
+    device: 'computer',
+    steps: Object.freeze([
+      Object.freeze({ id: 'move-pointer', title: 'Signal Trail', action: 'pointer_enter', target: 'blue-star' }),
+      Object.freeze({ id: 'single-click', title: 'Reactor Rush', action: 'single_click', target: 'green-circle' }),
+      Object.freeze({ id: 'double-click', title: 'Vault Breaker', action: 'double_click', target: 'blue-folder' }),
+      Object.freeze({ id: 'context-command', title: 'Command Deck', action: 'context_command', target: 'archive-open' }),
+      Object.freeze({ id: 'drag-drop', title: 'Cargo Rescue', action: 'drag_drop', target: 'homework-folder' }),
+      Object.freeze({ id: 'scroll-find', title: 'Signal Tower', action: 'scroll_find', target: 'gold-star' }),
+      Object.freeze({ id: 'copy-paste-menu', title: 'Message Relay', action: 'context_copy_paste', target: 'relay-console' }),
+      Object.freeze({ id: 'keyboard-defense', title: 'Sky Shield', action: 'type_word', target: 'byte-signal' }),
+    ]),
+  }),
+  // Version 3 remains available for attempts using the combined clipboard
+  // mission that accepted both shortcuts and the browser menu.
   Object.freeze({
     id: 'g2-pointer-control',
     version: 3,

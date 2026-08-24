@@ -14,8 +14,10 @@ const evidenceByStep = {
   'context-command': { action: 'context_command', target: 'archive-open' },
   'drag-drop': { action: 'drag_drop', target: 'homework-folder' },
   'scroll-find': { action: 'scroll_find', target: 'gold-star' },
+  'copy-paste-menu': { action: 'context_copy_paste', target: 'relay-console' },
   'copy-paste': { action: 'copy_paste', target: 'relay-console' },
   'keyboard-defense': { action: 'type_word', target: 'byte-signal' },
+  'copy-paste-shortcut': { action: 'shortcut_copy_paste', target: 'shortcut-console' },
   'key-patrol': { action: 'home_keys', target: 'home-row' },
   'word-blaster': { action: 'type_word', target: 'shield-word' },
   'capital-charge': { action: 'shift_letter', target: 'capital-signal' },
@@ -38,10 +40,10 @@ function checkpoint(attempt, stepId, overrides = {}) {
 test('catalog exposes the latest arcade activity without evidence secrets', () => {
   const activity = practice.listActivities().find((item) => item.id === 'g2-pointer-control');
   assert.equal(activity.id, 'g2-pointer-control');
-  assert.equal(activity.version, 3);
+  assert.equal(activity.version, 4);
   assert.equal(activity.gradeBand, 'Grades 2-3');
   assert.deepEqual(activity.steps.map((step) => step.id), [
-    'move-pointer', 'single-click', 'double-click', 'context-command', 'drag-drop', 'scroll-find', 'copy-paste', 'keyboard-defense',
+    'move-pointer', 'single-click', 'double-click', 'context-command', 'drag-drop', 'scroll-find', 'copy-paste-menu', 'keyboard-defense',
   ]);
   assert.equal('action' in activity.steps[0], false);
   assert.equal('target' in activity.steps[0], false);
@@ -49,10 +51,10 @@ test('catalog exposes the latest arcade activity without evidence secrets', () =
 
 test('Grade 3 continues into its own recorded keyboard campaign', () => {
   const activity = practice.listActivities().find((item) => item.id === 'g3-keyboard-kingdom');
-  assert.equal(activity.version, 1);
+  assert.equal(activity.version, 2);
   assert.equal(activity.gradeBand, 'Grade 3');
   assert.deepEqual(activity.steps.map((step) => step.id), [
-    'key-patrol', 'word-blaster', 'capital-charge', 'sentence-engine', 'repair-bay',
+    'copy-paste-shortcut', 'key-patrol', 'word-blaster', 'capital-charge', 'sentence-engine', 'repair-bay',
   ]);
   const { attempt } = practice.createAttempt({ studentId: 'G3-1', studentName: 'Gina', activityId: activity.id });
   for (const step of activity.steps) checkpoint(attempt, step.id);
@@ -96,7 +98,7 @@ test('all eight ordered checkpoints complete the activity and calculate mastery'
   checkpoint(attempt, 'context-command');
   checkpoint(attempt, 'drag-drop');
   checkpoint(attempt, 'scroll-find');
-  checkpoint(attempt, 'copy-paste');
+  checkpoint(attempt, 'copy-paste-menu');
   const final = checkpoint(attempt, 'keyboard-defense');
   assert.equal(final.attempt.status, 'completed');
   assert.equal(final.attempt.currentStepIndex, 8);
@@ -104,13 +106,23 @@ test('all eight ordered checkpoints complete the activity and calculate mastery'
   assert.ok(final.attempt.completedAt);
 });
 
-test('both legacy activity versions remain available for unfinished attempts', () => {
+test('all legacy Foundation versions remain available for unfinished attempts', () => {
+  const combinedClipboard = practice.getActivity('g2-pointer-control', 3);
+  assert.equal(combinedClipboard.version, 3);
+  assert.equal(combinedClipboard.steps.length, 8);
   const previous = practice.getActivity('g2-pointer-control', 2);
   assert.equal(previous.version, 2);
   assert.equal(previous.steps.length, 7);
   const legacy = practice.getActivity('g2-pointer-control', 1);
   assert.equal(legacy.version, 1);
   assert.equal(legacy.steps.length, 5);
+});
+
+test('the original Grade 3 campaign remains available for unfinished attempts', () => {
+  const legacy = practice.getActivity('g3-keyboard-kingdom', 1);
+  assert.equal(legacy.version, 1);
+  assert.equal(legacy.steps.length, 5);
+  assert.equal(legacy.steps.some((step) => step.id === 'copy-paste-shortcut'), false);
 });
 
 test('students cannot write checkpoints into another learner attempt', () => {
@@ -189,26 +201,33 @@ test('Grade 2 play uses animated demonstrations and save-before-auto-advance', (
 test('both arcade worlds provide sustained, varied practice', () => {
   const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
   assert.match(player, /'move-pointer':8, 'single-click':8, 'double-click':6/);
-  assert.match(player, /'context-command':5, 'drag-drop':5, 'scroll-find':4, 'copy-paste':3, 'keyboard-defense':5/);
-  assert.match(player, /'key-patrol':8, 'word-blaster':5, 'capital-charge':5, 'sentence-engine':2, 'repair-bay':5/);
+  assert.match(player, /'context-command':5, 'drag-drop':5, 'scroll-find':4, 'copy-paste-menu':3, 'keyboard-defense':5/);
+  assert.match(player, /'copy-paste-shortcut':3, 'key-patrol':8, 'word-blaster':5, 'capital-charge':5, 'sentence-engine':2, 'repair-bay':5/);
   assert.match(player, /\['BYTE','STAR','CODE','POWER','SHIELD'\]/);
   assert.match(player, /\['I CAN CODE\.','BYTE IS READY\.'\]/);
   assert.match(player, /\['PEN','PIN'\],\['DOG','DIG'\]/);
   assert.match(player, /About 25–30 minutes/);
-  assert.match(player, /About 18–20 minutes/);
+  assert.match(player, /About 22–25 minutes/);
 });
 
-test('Message Relay accepts keyboard shortcuts and native right-click copy/paste', () => {
+test('Grade 2 Message Relay uses a consistent right-click Copy and Paste menu', () => {
   const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
   assert.match(player, /window\.getSelection\(\)/);
+  assert.match(player, /id="relayCopyMenu"/);
+  assert.match(player, /id="relayPasteMenu"/);
+  assert.match(player, /source\.addEventListener\('contextmenu'/);
+  assert.match(player, /destination\.addEventListener\('contextmenu'/);
+  assert.match(player, /relayCopyCommand/);
+  assert.match(player, /relayPasteCommand/);
+  assert.match(player, /This mission uses the right-click Copy and Paste menu/);
+});
+
+test('Grade 3 Rapid Relay requires copy and paste keyboard shortcuts', () => {
+  const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
   assert.match(player, /shortcut && key==='c'/);
   assert.match(player, /shortcut && key==='v'/);
-  assert.match(player, /source\.addEventListener\('copy'/);
-  assert.match(player, /destination\.addEventListener\('paste'/);
-  assert.match(player, /event\.clipboardData\?\.getData\('text\/plain'\)/);
-  assert.match(player, /right-click → Copy/);
-  assert.match(player, /right-click → Paste/);
   assert.match(player, /document\.activeElement!==destination/);
-  assert.match(player, /completeInteraction\('copy_paste','relay-console'\)/);
-  assert.match(player, /Use paste instead of typing the message again/);
+  assert.match(player, /Use the paste shortcut instead of typing the message again/);
+  assert.match(player, /Use \$\{modifier\}\+C for the Grade 3 speed mission/);
+  assert.match(player, /Use \$\{modifier\}\+V for the Grade 3 speed mission/);
 });
