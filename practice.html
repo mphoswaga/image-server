@@ -547,47 +547,47 @@
     const requestedWorld = new URLSearchParams(location.search).get('world') === 'g3' ? 'g3' : 'foundation';
     const foundationSteps = [
       { id:'move-pointer', title:'Signal Trail', action:'pointer_enter', target:'blue-star',
-        show:'Watch Byte follow the blue bug. No clicking.', independent:'Touch 5 blue bugs. Do not click.', success:'The city gate has power again!',
+        show:'Watch Byte follow the blue bug. No clicking.', independent:'Touch 8 blue bugs. Do not click.', success:'The city gate has power again!',
         hints:['Move the pointer onto the blue bug.','Do not press a mouse button.','Follow the bright blue glow.'] },
       { id:'single-click', title:'Reactor Rush', action:'single_click', target:'green-circle',
-        show:'Watch Byte click the green bug one time.', independent:'Click 6 green bugs. One click each.', success:'The reactor is running!',
+        show:'Watch Byte click the green bug one time.', independent:'Click 8 green bugs. One click each.', success:'The reactor is running!',
         hints:['Move onto the green bug.','Click the left button one time.','Wait for the bright green glow.'] },
       { id:'double-click', title:'Vault Breaker', action:'double_click', target:'blue-folder',
-        show:'Watch Byte click twice quickly: click-click!', independent:'Double-click 4 glowing locks.', success:'The city map is back!',
+        show:'Watch Byte click twice quickly: click-click!', independent:'Double-click 6 glowing locks.', success:'The city map is back!',
         hints:['Move onto the glowing lock.','Click twice quickly.','Keep the pointer still: click-click.'] },
       { id:'context-command', title:'Command Deck', action:'context_command', target:'archive-open',
-        show:'Watch Byte right-click, then choose Open.', independent:'Open 3 folders with right-click.', success:'The command deck is working!',
+        show:'Watch Byte right-click, then choose Open.', independent:'Open 5 folders with right-click.', success:'The command deck is working!',
         hints:['Right-click the glowing folder.','Find Open in the small menu.','Use one normal click on Open.'] },
       { id:'drag-drop', title:'Cargo Rescue', action:'drag_drop', target:'homework-folder',
-        show:'Watch Byte hold, move and drop the box.', independent:'Drag 3 boxes into the charging dock.', success:'The cargo is safe!',
+        show:'Watch Byte hold, move and drop the box.', independent:'Drag 5 boxes into the charging dock.', success:'The cargo is safe!',
         hints:['Press and keep holding the box.','Move it into the glowing dock.','Let go only inside the dock.'] },
       { id:'scroll-find', title:'Signal Tower', action:'scroll_find', target:'gold-star',
-        show:'Watch Byte scroll down the tower.', independent:'Scroll down. Turn on 3 antennas.', success:'The tower is sending a signal!',
+        show:'Watch Byte scroll down the tower.', independent:'Scroll down. Turn on 4 antennas.', success:'The tower is sending a signal!',
         hints:['Keep the pointer inside the tower.','Roll the mouse wheel down.','Find the large gold antenna button.'] },
       { id:'keyboard-defense', title:'Sky Shield', action:'type_word', target:'byte-signal',
-        show:'Watch Byte type the glowing word.', independent:'Type 3 words to stop the ships.', success:'The sky shield is on. City saved!',
+        show:'Watch Byte type the glowing word.', independent:'Type 5 words to stop the ships.', success:'The sky shield is on. City saved!',
         hints:['Read the glowing word.','Type one letter at a time.','Green letters are already correct.'] },
     ];
     const grade3Steps = [
       { id:'key-patrol', title:'Key Patrol', action:'home_keys', target:'home-row',
-        show:'Keyboard Kingdom is dark. Wake the home-row keys in the order Byte shows you.', independent:'Hit the four glowing home-row keys to open the kingdom gate.', success:'The home-row gate is open.',
-        hints:['Find A, S, D and F on the middle keyboard row.','Press only the glowing key.','Keep both hands close to the middle row.'] },
+        show:'Keyboard Kingdom is dark. Wake the home-row keys in the order Byte shows you.', independent:'Hit eight glowing home-row keys to open the kingdom gate.', success:'The home-row gate is open.',
+        hints:['Look along the middle keyboard row.','Press only the glowing key.','Keep both hands close to the middle row.'] },
       { id:'word-blaster', title:'Word Blaster', action:'type_word', target:'shield-word',
-        show:'Code clouds are falling over the kingdom. Type each whole word to blast it away.', independent:'Type three falling words before they reach the castle shield.', success:'The code clouds are gone.',
+        show:'Code clouds are falling over the kingdom. Type each whole word to blast it away.', independent:'Type five falling words before they reach the castle shield.', success:'The code clouds are gone.',
         hints:['Read the whole glowing word first.','Type the letters from left to right.','Green letters are already correct.'] },
       { id:'capital-charge', title:'Capital Charge', action:'shift_letter', target:'capital-signal',
-        show:'The capital towers need a stronger signal. Hold Shift while pressing the glowing letter.', independent:'Charge three capital letters using Shift.', success:'The capital towers are charged.',
+        show:'The capital towers need a stronger signal. Hold Shift while pressing the glowing letter.', independent:'Charge five capital letters using Shift.', success:'The capital towers are charged.',
         hints:['Hold either Shift key down.','Keep holding Shift while pressing the letter.','A capital letter is bigger than a lowercase letter.'] },
       { id:'sentence-engine', title:'Sentence Engine', action:'type_sentence', target:'sentence-signal',
-        show:'The sentence engine needs spaces and a full stop, not only letters.', independent:'Type the complete sentence exactly as it appears.', success:'The sentence engine is running.',
+        show:'The sentence engine needs spaces and a full stop, not only letters.', independent:'Type two complete sentences exactly as they appear.', success:'The sentence engine is running.',
         hints:['Use the spacebar between words.','The green part is already correct.','Finish with the full-stop key.'] },
       { id:'repair-bay', title:'Repair Bay', action:'repair_word', target:'repaired-code',
-        show:'Broken words have the wrong middle letter. Use Backspace, then type the correct letters.', independent:'Repair three broken words to restore the kingdom code.', success:'Keyboard Kingdom is restored.',
+        show:'Broken words have the wrong middle letter. Use Backspace, then type the correct letters.', independent:'Repair five broken words to restore the kingdom code.', success:'Keyboard Kingdom is restored.',
         hints:['Use Backspace to remove the wrong letters.','Stop deleting when the beginning matches.','Then type the missing correct letters.'] },
     ];
     const campaigns = {
-      foundation:{ id:'g2-pointer-control', version:2, steps:foundationSteps, kicker:'Foundation World · Chapter 1', title:'Byte and the Blackout', lead:'A digital storm has shut down Byte City. Beat seven arcade missions, restore the power and unlock Advanced Keyboard Kingdom.', speech:'This is a real rescue mission. Chase, whack, unlock, command, drag, climb and type your way through the city.', world:'Foundation for Grade 2 and Grade 3', time:'About 15 minutes', device:'A keyboard and mouse or trackpad', completion:'Byte City is online', completionLead:'You restored every district and opened the road to Grade 3.', start:'Begin the rescue', resume:'Continue the rescue', nextTitle:'Advanced Keyboard Kingdom', nextCopy:'Continue into five playable Grade 3 keyboard missions.', nextLabel:'Continue to Grade 3' },
-      g3:{ id:'g3-keyboard-kingdom', version:1, steps:grade3Steps, kicker:'Grade 3 World · Chapter 2', title:'Byte and the Broken Code', lead:'A scrambled code has locked Keyboard Kingdom. Master keys, words, capitals, sentences and editing to restore it.', speech:'Your Grade 2 skills opened the gate. Now the keyboard is your arcade controller.', world:'Grade 3 keyboard adventure', time:'About 12 minutes', device:'A computer keyboard', completion:'Keyboard Kingdom restored', completionLead:'You mastered the Grade 3 keyboard campaign and earned access to the future Expert World.', start:'Enter Keyboard Kingdom', resume:'Continue Keyboard Kingdom', nextTitle:'Expert World', nextCopy:'Your Foundation and Grade 3 worlds are complete. Expert missions will continue the adventure.', nextLabel:'' },
+      foundation:{ id:'g2-pointer-control', version:2, steps:foundationSteps, kicker:'Foundation World · Chapter 1', title:'Byte and the Blackout', lead:'A digital storm has shut down Byte City. Beat seven arcade missions, restore the power and unlock Advanced Keyboard Kingdom.', speech:'This is a real rescue mission. Chase, whack, unlock, command, drag, climb and type your way through the city.', world:'Foundation for Grade 2 and Grade 3', time:'About 20–25 minutes', device:'A keyboard and mouse or trackpad', completion:'Byte City is online', completionLead:'You restored every district and opened the road to Grade 3.', start:'Begin the rescue', resume:'Continue the rescue', nextTitle:'Advanced Keyboard Kingdom', nextCopy:'Continue into five playable Grade 3 keyboard missions.', nextLabel:'Continue to Grade 3' },
+      g3:{ id:'g3-keyboard-kingdom', version:1, steps:grade3Steps, kicker:'Grade 3 World · Chapter 2', title:'Byte and the Broken Code', lead:'A scrambled code has locked Keyboard Kingdom. Master keys, words, capitals, sentences and editing to restore it.', speech:'Your Grade 2 skills opened the gate. Now the keyboard is your arcade controller.', world:'Grade 3 keyboard adventure', time:'About 18–20 minutes', device:'A computer keyboard', completion:'Keyboard Kingdom restored', completionLead:'You mastered the Grade 3 keyboard campaign and earned access to the future Expert World.', start:'Enter Keyboard Kingdom', resume:'Continue Keyboard Kingdom', nextTitle:'Expert World', nextCopy:'Your Foundation and Grade 3 worlds are complete. Expert missions will continue the adventure.', nextLabel:'' },
     };
     const campaign = campaigns[requestedWorld];
     const ACTIVITY_ID = campaign.id;
@@ -606,7 +606,7 @@
       'sentence-engine': { title:'Build a complete sentence', action:'Type letters, spaces and the final full stop.', detail:'Copy the sentence exactly as it appears.', visual:'type' },
       'repair-bay': { title:'Delete, then repair', action:'Use Backspace to remove the mistake, then type the fix.', detail:'Keep the correct beginning of each word.', visual:'type' },
     };
-    const missionGoals = { 'move-pointer':5, 'single-click':6, 'double-click':4, 'context-command':3, 'drag-drop':3, 'scroll-find':3, 'keyboard-defense':3, 'key-patrol':4, 'word-blaster':3, 'capital-charge':3, 'sentence-engine':1, 'repair-bay':3 };
+    const missionGoals = { 'move-pointer':8, 'single-click':8, 'double-click':6, 'context-command':5, 'drag-drop':5, 'scroll-find':4, 'keyboard-defense':5, 'key-patrol':8, 'word-blaster':5, 'capital-charge':5, 'sentence-engine':2, 'repair-bay':5 };
     const keyboardStepIds = new Set(['keyboard-defense','key-patrol','word-blaster','capital-charge','sentence-engine','repair-bay']);
     const $ = (id) => document.getElementById(id);
 
@@ -810,7 +810,7 @@
         area.innerHTML = `<div class="room-label">Signal Tower · Floor ${roundProgress+1} of ${roundGoal()}</div><div class="scroll-window tower-window" id="scrollWindow"><div class="tower-arrow">SCROLL DOWN ↓</div>${Array.from({length:floors},(_,index)=>`<div class="tower-floor"><span>FLOOR ${index+1}</span></div>`).join('')}<button class="antenna-switch" id="skillTarget" type="button">★ TURN ON</button></div>`;
         $('skillTarget').addEventListener('click', (event) => { event.stopPropagation(); const pane=$('scrollWindow'), bottom=pane.scrollHeight-pane.clientHeight-30; if (pane.scrollTop < bottom) registerWrong('Keep scrolling. The antenna switch is farther down.'); else completeInteraction('scroll_find','gold-star'); });
       } else if (step.id === 'keyboard-defense') {
-        const words=['BYTE','STAR','CODE'], word=words[roundProgress%words.length];
+        const words=['BYTE','STAR','CODE','POWER','SHIELD'], word=words[roundProgress%words.length];
         let typedCount=0;
         area.innerHTML = `<div class="room-label">Sky Shield · Signal ${roundProgress+1} of ${roundGoal()}</div><div class="space-arena" id="spaceArena" tabindex="0" aria-label="Type ${word} to stop the falling signal"><div class="falling-signal" id="skillTarget"><div class="signal-ship"></div><div class="signal-word" id="signalWord">${keyboardWord(word,typedCount)}</div></div><div class="defense-line"></div><div class="defense-cannon"></div></div>`;
         activeKeyHandler=(event)=>{
@@ -823,7 +823,7 @@
         window.addEventListener('keydown',activeKeyHandler);
         $('spaceArena').focus({preventScroll:true});
       } else if (step.id === 'key-patrol') {
-        const sequence=['A','S','D','F'], targetKey=sequence[roundProgress%sequence.length];
+        const sequence=['A','S','D','F','J','K','L',';'], targetKey=sequence[roundProgress%sequence.length];
         area.innerHTML=`<div class="room-label">Key Patrol · Key ${roundProgress+1} of ${roundGoal()}</div><div class="key-arena" id="keyArena" tabindex="0"><div class="key-prompt">Press the glowing home-row key</div><div class="key-row">${sequence.map((key)=>`<span class="arcade-key${key===targetKey?' active':''}" ${key===targetKey?'id="skillTarget"':''}>${key}</span>`).join('')}</div></div>`;
         activeKeyHandler=(event)=>{
           if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
@@ -832,7 +832,7 @@
         };
         window.addEventListener('keydown',activeKeyHandler); $('keyArena').focus({preventScroll:true});
       } else if (step.id === 'word-blaster') {
-        const words=['PLAY','CODE','STAR'], word=words[roundProgress%words.length]; let typedCount=0;
+        const words=['PLAY','CODE','STAR','BYTE','GAME'], word=words[roundProgress%words.length]; let typedCount=0;
         area.innerHTML=`<div class="room-label">Word Blaster · Cloud ${roundProgress+1} of ${roundGoal()}</div><div class="space-arena" id="spaceArena" tabindex="0" aria-label="Type ${word}"><div class="falling-signal" id="skillTarget"><div class="signal-ship"></div><div class="signal-word" id="signalWord">${keyboardWord(word,0)}</div></div><div class="defense-line"></div><div class="defense-cannon"></div></div>`;
         activeKeyHandler=(event)=>{
           if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
@@ -842,7 +842,7 @@
         };
         window.addEventListener('keydown',activeKeyHandler); $('spaceArena').focus({preventScroll:true});
       } else if (step.id === 'capital-charge') {
-        const letters=['B','K','M'], letter=letters[roundProgress%letters.length];
+        const letters=['B','K','M','R','T'], letter=letters[roundProgress%letters.length];
         area.innerHTML=`<div class="room-label">Capital Charge · Tower ${roundProgress+1} of ${roundGoal()}</div><div class="key-arena" id="keyArena" tabindex="0"><div class="key-prompt">Hold Shift and press ${letter}</div><div class="key-row"><span class="arcade-key active" style="min-width:130px">Shift</span><span class="arcade-key active" id="skillTarget">${letter}</span></div></div>`;
         activeKeyHandler=(event)=>{
           if (event.key==='Shift') return;
@@ -851,8 +851,8 @@
         };
         window.addEventListener('keydown',activeKeyHandler); $('keyArena').focus({preventScroll:true});
       } else if (step.id === 'sentence-engine') {
-        const sentence='I CAN CODE.'; let typedCount=0;
-        area.innerHTML=`<div class="room-label">Sentence Engine · Final line</div><div class="typing-card" id="typingCard" tabindex="0"><div class="key-prompt">Type this complete sentence</div><div class="typing-target" id="skillTarget">${keyboardWord(sentence,0)}</div><div class="typing-status">Spaces and the full stop count.</div></div>`;
+        const sentences=['I CAN CODE.','BYTE IS READY.'], sentence=sentences[roundProgress%sentences.length]; let typedCount=0;
+        area.innerHTML=`<div class="room-label">Sentence Engine · Line ${roundProgress+1} of ${roundGoal()}</div><div class="typing-card" id="typingCard" tabindex="0"><div class="key-prompt">Type this complete sentence</div><div class="typing-target" id="skillTarget">${keyboardWord(sentence,0)}</div><div class="typing-status">Spaces and the full stop count.</div></div>`;
         activeKeyHandler=(event)=>{
           if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
           if (event.key.toUpperCase() !== sentence[typedCount]) return registerWrong(`Next: ${sentence[typedCount]===' '?'space':sentence[typedCount]}`);
@@ -861,7 +861,7 @@
         };
         window.addEventListener('keydown',activeKeyHandler); $('typingCard').focus({preventScroll:true});
       } else if (step.id === 'repair-bay') {
-        const repairs=[['COT','CAT'],['HAT','HIT'],['BUG','BAG']], [wrong,correct]=repairs[roundProgress%repairs.length]; let value=wrong;
+        const repairs=[['COT','CAT'],['HAT','HIT'],['BUG','BAG'],['PEN','PIN'],['DOG','DIG']], [wrong,correct]=repairs[roundProgress%repairs.length]; let value=wrong;
         const shared=(()=>{let index=0;while(index<wrong.length&&wrong[index]===correct[index])index+=1;return index;})();
         area.innerHTML=`<div class="room-label">Repair Bay · Word ${roundProgress+1} of ${roundGoal()}</div><div class="typing-card" id="typingCard" tabindex="0"><div class="key-prompt">Repair the broken word to make <strong>${correct}</strong></div><div class="typing-target" id="skillTarget"></div><div class="typing-status">Use Backspace first, then type the missing letters.</div></div>`;
         const renderRepair=()=>{ const matching=Array.from(value).findIndex((char,index)=>char!==correct[index]), split=matching===-1?value.length:matching; $('skillTarget').innerHTML=`<span class="typed">${esc(value.slice(0,split))}</span><span class="wrong">${esc(value.slice(split))}</span>`; };

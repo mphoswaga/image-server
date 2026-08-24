@@ -179,3 +179,15 @@ test('Grade 2 play uses animated demonstrations and save-before-auto-advance', (
   assert.match(player, /localStorage\.removeItem\(checkpointKey\(\)\);\s*setSave\('Progress saved'\);\s*scheduleAutoAdvance\(\)/);
   assert.match(player, /if \(ephemeralMode\) return saveEphemeralCheckpoint\(payload\)/);
 });
+
+test('both arcade worlds provide sustained, varied practice', () => {
+  const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
+  assert.match(player, /'move-pointer':8, 'single-click':8, 'double-click':6/);
+  assert.match(player, /'context-command':5, 'drag-drop':5, 'scroll-find':4, 'keyboard-defense':5/);
+  assert.match(player, /'key-patrol':8, 'word-blaster':5, 'capital-charge':5, 'sentence-engine':2, 'repair-bay':5/);
+  assert.match(player, /\['BYTE','STAR','CODE','POWER','SHIELD'\]/);
+  assert.match(player, /\['I CAN CODE\.','BYTE IS READY\.'\]/);
+  assert.match(player, /\['PEN','PIN'\],\['DOG','DIG'\]/);
+  assert.match(player, /About 20–25 minutes/);
+  assert.match(player, /About 18–20 minutes/);
+});
