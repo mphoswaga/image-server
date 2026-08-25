@@ -44,11 +44,15 @@ function normalizeMode(value) {
   return String(value || '').toLowerCase() === 'classwork' ? 'classwork' : 'homework';
 }
 
-function normalizeAudioPolicy(value) {
+function normalizeAudioPolicy(value, defaultMusicPlayback = 'students') {
   const policy = value && typeof value === 'object' ? value : {};
+  const musicPlayback = policy.musicPlayback === 'teacher' || policy.musicPlayback === 'students'
+    ? policy.musicPlayback
+    : defaultMusicPlayback;
   return {
     soundEffects: policy.soundEffects !== false,
     music: policy.music !== false,
+    musicPlayback,
     voice: policy.voice !== false,
   };
 }
@@ -265,7 +269,7 @@ function createRoom({ teacherId, activityId = 'g2-pointer-control', mode = 'home
     activityVersion: activity.version,
     mode: safeMode,
     phase: safeMode === 'classwork' ? 'lobby' : 'playing',
-    audioPolicy: normalizeAudioPolicy(audioPolicy),
+    audioPolicy: normalizeAudioPolicy(audioPolicy, safeMode === 'classwork' ? 'teacher' : 'students'),
     roster: safeRoster,
     status: 'open',
     createdAt: new Date(now).toISOString(),
@@ -376,7 +380,8 @@ function updateRoomAudio(code, teacherId, audioPolicy) {
   if (room.teacherId !== String(teacherId || '')) {
     throw Object.assign(new Error('This room belongs to another teacher.'), { code: 'forbidden' });
   }
-  room.audioPolicy = normalizeAudioPolicy(audioPolicy);
+  const defaultPlayback = normalizeMode(room.mode) === 'classwork' ? 'teacher' : 'students';
+  room.audioPolicy = normalizeAudioPolicy(audioPolicy, defaultPlayback);
   saveRoom(room);
   return publicRoom(room, { teacherView: true });
 }

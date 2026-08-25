@@ -57,6 +57,8 @@
     .audio-policy > strong { color:var(--navy); font-size:13px; }
     .audio-policy label { display:inline-flex; align-items:center; gap:7px; color:var(--navy); cursor:pointer; }
     .audio-policy input { width:18px; height:18px; accent-color:var(--green); }
+    .audio-policy select { min-height:38px; padding:7px 34px 7px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; color:var(--navy); font:700 12px/1.2 inherit; }
+    .audio-policy .btn { min-height:38px; padding:7px 12px; font-size:12px; }
     .audio-policy small { flex:1 1 260px; color:var(--muted); font-size:11px; }
     .room-stage { display:grid; grid-template-columns:220px 1fr; gap:18px; margin-top:18px; padding-top:18px; border-top:1px solid var(--line); }
     .room-code { display:grid; place-items:center; min-height:140px; border:2px solid var(--cyan); background:var(--soft-cyan); color:var(--navy); }
@@ -98,7 +100,7 @@
         <div><h2 id="liveRoomTitle">Class arcade</h2><p>Run a teacher-controlled class game or share a self-paced homework room.</p></div>
         <div class="live-actions"><select id="liveMode" aria-label="Session type"><option value="classwork">Live classwork</option><option value="homework">Homework · self-paced</option></select><select id="liveRoster" aria-label="Class roster"><option value="">No saved class</option></select><select id="liveActivity" aria-label="Practice world"><option value="g2-pointer-control">Foundation World</option><option value="g3-keyboard-kingdom">Grade 3 World</option></select><button class="btn primary" id="createRoomBtn" type="button">Start live room</button></div>
       </div>
-      <div class="audio-policy" aria-label="Student audio permissions"><strong>Student audio</strong><label><input id="teacherSfx" type="checkbox" checked /> Sound effects</label><label><input id="teacherMusic" type="checkbox" checked /> Calm music</label><label><input id="teacherVoice" type="checkbox" checked /> Read aloud</label><small id="audioPolicyNote">Students can mute allowed audio. Anything you switch off is locked off for everyone in this room.</small></div>
+      <div class="audio-policy" aria-label="Room audio controls"><strong>Room audio</strong><label><input id="teacherSfx" type="checkbox" checked /> Sound effects</label><label><input id="teacherMusic" type="checkbox" checked /> Calm music</label><label for="teacherMusicSource">Music plays on</label><select id="teacherMusicSource"><option value="teacher">Teacher computer</option><option value="students">Student devices</option></select><button class="btn" id="teacherMusicPlay" type="button" hidden>Play music here</button><label><input id="teacherVoice" type="checkbox" checked /> Read aloud</label><small id="audioPolicyNote">Live classwork uses one teacher soundtrack by default. Homework uses each learner's device.</small></div>
       <div class="live-empty" id="liveRoomEmpty">No live room is running. Start one when the class is ready.</div>
       <div class="room-stage" id="liveRoomStage" hidden>
         <div>
@@ -133,11 +135,76 @@
     let data = { students:[], results:[] };
     let liveRoom = null;
     let liveJoinUrl = '';
+    let teacherAudioContext = null;
+    let teacherMusicTimer = null;
+    let teacherMusicNodes = new Set();
+    let teacherAudioUnlocked = false;
     const esc = (value) => String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const fmtTime = (seconds) => { const n=Number(seconds)||0; const m=Math.floor(n/60),s=n%60; return m ? `${m}m ${s}s` : `${s}s`; };
     const fmtDate = (value) => value ? new Date(value).toLocaleString(undefined,{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '-';
     const label = (value) => String(value || 'not_started').replaceAll('_',' ');
-    const audioPolicyFromControls = () => ({ soundEffects:$('teacherSfx').checked, music:$('teacherMusic').checked, voice:$('teacherVoice').checked });
+    const audioPolicyFromControls = () => ({ soundEffects:$('teacherSfx').checked, music:$('teacherMusic').checked, musicPlayback:$('teacherMusicSource').value, voice:$('teacherVoice').checked });
+
+    function stopTeacherMusic() {
+      clearTimeout(teacherMusicTimer);
+      teacherMusicTimer=null;
+      for(const node of teacherMusicNodes){ try { node.stop(); } catch {} }
+      teacherMusicNodes.clear();
+    }
+
+    function teacherMusicWanted() {
+      const policy=liveRoom&&liveRoom.audioPolicy;
+      return Boolean(policy&&policy.music!==false&&policy.musicPlayback==='teacher');
+    }
+
+    function teacherMusicTone(frequency,start,duration,volume,type) {
+      if(!teacherAudioContext) return;
+      const oscillator=teacherAudioContext.createOscillator(), gain=teacherAudioContext.createGain(), begins=teacherAudioContext.currentTime+start;
+      oscillator.frequency.value=frequency;
+      oscillator.type=type;
+      gain.gain.setValueAtTime(.001,begins);
+      gain.gain.exponentialRampToValueAtTime(volume,begins+.08);
+      gain.gain.exponentialRampToValueAtTime(.001,begins+duration);
+      oscillator.connect(gain).connect(teacherAudioContext.destination);
+      teacherMusicNodes.add(oscillator);
+      oscillator.addEventListener('ended',()=>teacherMusicNodes.delete(oscillator),{once:true});
+      oscillator.start(begins);
+      oscillator.stop(begins+duration+.03);
+    }
+
+    function scheduleTeacherMusic() {
+      if(!teacherAudioUnlocked||!teacherMusicWanted()||document.hidden) return stopTeacherMusic();
+      const grade3=liveRoom&&liveRoom.activity&&liveRoom.activity.id==='g3-keyboard-kingdom';
+      const notes=grade3?[220,277.18,329.63,277.18]:[261.63,329.63,392,329.63];
+      notes.forEach((frequency,index)=>{
+        teacherMusicTone(frequency,index*1.65,2.1,.012,'sine');
+        teacherMusicTone(frequency/2,index*1.65,2.35,.006,'triangle');
+      });
+      teacherMusicTimer=setTimeout(scheduleTeacherMusic,6600);
+    }
+
+    function syncTeacherMusic() {
+      $('teacherMusicSource').disabled=!$('teacherMusic').checked;
+      $('teacherMusicPlay').hidden=!teacherMusicWanted();
+      if(teacherMusicWanted()&&teacherAudioUnlocked&&!document.hidden){
+        if(!teacherMusicTimer) scheduleTeacherMusic();
+        $('teacherMusicPlay').textContent='Music playing here';
+      }else{
+        stopTeacherMusic();
+        $('teacherMusicPlay').textContent='Play music here';
+      }
+    }
+
+    function unlockTeacherMusic() {
+      try {
+        const Context=window.AudioContext||window.webkitAudioContext;
+        if(!Context) return;
+        if(!teacherAudioContext) teacherAudioContext=new Context();
+        const ready=()=>{ teacherAudioUnlocked=true; syncTeacherMusic(); };
+        if(teacherAudioContext.state==='running') ready();
+        else teacherAudioContext.resume().then(ready).catch(()=>{});
+      }catch{}
+    }
     $('previewStageBtn').addEventListener('click',()=>{
       const [world,stage]=String($('previewStageSelect').value||'').split(':');
       if(!stage) return;
@@ -155,8 +222,10 @@
       const audioPolicy=room&&room.audioPolicy||audioPolicyFromControls();
       $('teacherSfx').checked=audioPolicy.soundEffects!==false;
       $('teacherMusic').checked=audioPolicy.music!==false;
+      $('teacherMusicSource').value=audioPolicy.musicPlayback==='teacher'?'teacher':'students';
       $('teacherVoice').checked=audioPolicy.voice!==false;
-      $('audioPolicyNote').textContent=room?'Changes apply to joined learners within a few seconds. Anything switched off is locked off.':'Students can mute allowed audio. Anything you switch off is locked off for everyone in this room.';
+      $('audioPolicyNote').textContent=room?(audioPolicy.music&&audioPolicy.musicPlayback==='teacher'?'Music is shared from this computer. Student music controls are locked.':'Changes apply to joined learners within a few seconds. Anything switched off is locked off.'):'Live classwork uses one teacher soundtrack by default. Homework uses each learner\'s device.';
+      syncTeacherMusic();
       if(!room) return;
       liveJoinUrl=`${location.origin}/student/practice/guest?session=${encodeURIComponent(room.code)}${room.activity.id==='g3-keyboard-kingdom'?'&world=g3':''}`;
       $('liveRoomCode').textContent=room.code;
@@ -191,12 +260,13 @@
 
     async function createLiveRoom() {
       $('createRoomBtn').disabled=true;
+      if($('teacherMusic').checked&&$('teacherMusicSource').value==='teacher') unlockTeacherMusic();
       try {
         const response=await fetch('/api/practice/live-sessions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({activityId:$('liveActivity').value,mode:$('liveMode').value,rosterId:$('liveRoster').value||null,audioPolicy:audioPolicyFromControls()})});
         const payload=await response.json();
         if(!response.ok) throw new Error(payload.error||'The live room could not be started.');
         renderLiveRoom(payload.room);
-      }catch(error){ alert(error.message); $('createRoomBtn').disabled=false; }
+      }catch(error){ stopTeacherMusic(); alert(error.message); $('createRoomBtn').disabled=false; }
     }
 
     async function startLiveRoom() {
@@ -213,11 +283,15 @@
     function syncLiveSetup() {
       const classwork=$('liveMode').value==='classwork';
       $('createRoomBtn').textContent=classwork?'Create class lobby':'Create homework room';
+      if(!liveRoom) $('teacherMusicSource').value=classwork?'teacher':'students';
+      syncTeacherMusic();
     }
 
     async function updateLiveAudioPolicy() {
       if(!liveRoom) return;
       const previous=liveRoom.audioPolicy;
+      if($('teacherMusic').checked&&$('teacherMusicSource').value==='teacher') unlockTeacherMusic();
+      else stopTeacherMusic();
       try {
         const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(liveRoom.code)}/audio`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(audioPolicyFromControls())});
         const payload=await response.json();
@@ -233,6 +307,7 @@
       if(!liveRoom||!confirm('End this live room and remove its temporary leaderboard?')) return;
       const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(liveRoom.code)}`,{method:'DELETE'});
       if(!response.ok){ const payload=await response.json(); return alert(payload.error||'The room could not be ended.'); }
+      stopTeacherMusic();
       renderLiveRoom(null);
     }
 
@@ -286,7 +361,8 @@
     $('createRoomBtn').addEventListener('click',createLiveRoom);
     $('startRoomBtn').addEventListener('click',startLiveRoom);
     $('liveMode').addEventListener('change',syncLiveSetup);
-    ['teacherSfx','teacherMusic','teacherVoice'].forEach((id)=>$(id).addEventListener('change',updateLiveAudioPolicy));
+    ['teacherSfx','teacherMusic','teacherVoice','teacherMusicSource'].forEach((id)=>$(id).addEventListener('change',updateLiveAudioPolicy));
+    $('teacherMusicPlay').addEventListener('click',unlockTeacherMusic);
     $('endRoomBtn').addEventListener('click',endLiveRoom);
     $('copyRoomBtn').addEventListener('click',async()=>{
       if(!liveJoinUrl) return;
@@ -294,6 +370,7 @@
       catch { prompt('Copy this student link:',liveJoinUrl); }
     });
     syncLiveSetup();
+    document.addEventListener('visibilitychange',syncTeacherMusic);
     load();
     loadLiveRoom();
     setInterval(()=>{ if(liveRoom&&!document.hidden) loadLiveRoom(); },3000);

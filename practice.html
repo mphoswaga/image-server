@@ -794,7 +794,7 @@
     let soundEffectsEnabled = audioPreferences.soundEffects !== false;
     let musicEnabled = audioPreferences.music !== false;
     let voiceEnabled = audioPreferences.voice === true;
-    let audioPermissions = { soundEffects:true, music:true, voice:true };
+    let audioPermissions = { soundEffects:true, music:true, musicPlayback:'students', voice:true };
     let audioContext = null;
     let musicTimer = null;
     let musicNodes = new Set();
@@ -989,6 +989,7 @@
     }
 
     function audioAllowed(channel) {
+      if(channel === 'music' && audioPermissions.musicPlayback === 'teacher') return false;
       return audioPermissions[channel] !== false;
     }
 
@@ -999,11 +1000,11 @@
         ['voiceBtn','voice',voiceEnabled,'Read aloud'],
       ];
       for(const [id,channel,enabled,label] of controls){
-        const button=$(id), allowed=audioAllowed(channel), active=allowed&&enabled;
+        const button=$(id), teacherMusic=channel==='music'&&audioPermissions.musicPlayback==='teacher', allowed=audioAllowed(channel), active=allowed&&enabled;
         button.disabled=!allowed;
         button.setAttribute('aria-pressed',String(active));
-        button.innerHTML=allowed?`${label} <span>${active?'on':'off'}</span>`:`${label} <span>locked</span>`;
-        button.title=allowed?`Turn ${label.toLowerCase()} ${active?'off':'on'}`:`Your teacher switched ${label.toLowerCase()} off for this room`;
+        button.innerHTML=teacherMusic?`${label} <span>teacher</span>`:allowed?`${label} <span>${active?'on':'off'}</span>`:`${label} <span>locked</span>`;
+        button.title=teacherMusic?'Music is playing from your teacher\'s computer':allowed?`Turn ${label.toLowerCase()} ${active?'off':'on'}`:`Your teacher switched ${label.toLowerCase()} off for this room`;
       }
     }
 
@@ -1085,7 +1086,7 @@
     }
 
     function syncAudioPolicy(room) {
-      audioPermissions={ soundEffects:true, music:true, voice:true, ...(room&&room.audioPolicy||{}) };
+      audioPermissions={ soundEffects:true, music:true, musicPlayback:'students', voice:true, ...(room&&room.audioPolicy||{}) };
       if(!audioAllowed('voice') && 'speechSynthesis' in window) speechSynthesis.cancel();
       updateAudioButtons();
       syncMusic();

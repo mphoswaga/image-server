@@ -92,11 +92,18 @@ test('teacher audio permissions are public, locked to the owner, and update live
     teacherId:'teacher-audio',
     audioPolicy:{ soundEffects:true, music:false, voice:false },
   });
-  assert.deepEqual(room.audioPolicy, { soundEffects:true, music:false, voice:false });
+  assert.deepEqual(room.audioPolicy, { soundEffects:true, music:false, musicPlayback:'students', voice:false });
   assert.throws(() => live.updateRoomAudio(room.code, 'another-teacher', { music:true }), /another teacher/i);
-  const updated = live.updateRoomAudio(room.code, 'teacher-audio', { soundEffects:false, music:true, voice:true });
-  assert.deepEqual(updated.audioPolicy, { soundEffects:false, music:true, voice:true });
+  const updated = live.updateRoomAudio(room.code, 'teacher-audio', { soundEffects:false, music:true, musicPlayback:'teacher', voice:true });
+  assert.deepEqual(updated.audioPolicy, { soundEffects:false, music:true, musicPlayback:'teacher', voice:true });
   assert.deepEqual(live.getRoom(room.code).audioPolicy, updated.audioPolicy);
+});
+
+test('classwork defaults music to one teacher computer while homework defaults to student devices', () => {
+  const classwork = live.createRoom({ teacherId:'teacher-class-music', mode:'classwork' });
+  const homework = live.createRoom({ teacherId:'teacher-home-music', mode:'homework' });
+  assert.equal(classwork.audioPolicy.musicPlayback, 'teacher');
+  assert.equal(homework.audioPolicy.musicPlayback, 'students');
 });
 
 test('live checkpoints are ordered, idempotent and cap client scores', () => {
@@ -201,6 +208,8 @@ test('the server and both screens expose the live-room contract', () => {
   assert.match(player, /id="voiceBtn"/);
   assert.match(player, /let voiceEnabled = audioPreferences\.voice === true/);
   assert.match(player, /function scheduleMusicPhrase\(\)/);
+  assert.match(player, /audioPermissions\.musicPlayback === 'teacher'/);
+  assert.match(player, /Music is playing from your teacher/);
   assert.match(player, /Your teacher switched/);
   assert.match(player, /soloChoice'\)\.hidden=Boolean\(requestedSessionCode\)/);
   assert.match(player, /function liveRoomWaiting\(room=liveRoom\)/);
@@ -209,6 +218,9 @@ test('the server and both screens expose the live-room contract', () => {
   assert.match(teacher, /Start class game/);
   assert.match(teacher, /id="teacherSfx"/);
   assert.match(teacher, /id="teacherMusic"/);
+  assert.match(teacher, /id="teacherMusicSource"/);
+  assert.match(teacher, /id="teacherMusicPlay"/);
+  assert.match(teacher, /function scheduleTeacherMusic\(\)/);
   assert.match(teacher, /id="teacherVoice"/);
   assert.match(teacher, /\/api\/practice\/live-sessions/);
 });
