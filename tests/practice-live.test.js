@@ -87,6 +87,18 @@ test('homework rooms remain self-paced and available beyond one school day', () 
   assert.ok(Date.parse(room.expiresAt) - Date.parse(room.createdAt) > 24 * 60 * 60 * 1000);
 });
 
+test('teacher audio permissions are public, locked to the owner, and update live', () => {
+  const room = live.createRoom({
+    teacherId:'teacher-audio',
+    audioPolicy:{ soundEffects:true, music:false, voice:false },
+  });
+  assert.deepEqual(room.audioPolicy, { soundEffects:true, music:false, voice:false });
+  assert.throws(() => live.updateRoomAudio(room.code, 'another-teacher', { music:true }), /another teacher/i);
+  const updated = live.updateRoomAudio(room.code, 'teacher-audio', { soundEffects:false, music:true, voice:true });
+  assert.deepEqual(updated.audioPolicy, { soundEffects:false, music:true, voice:true });
+  assert.deepEqual(live.getRoom(room.code).audioPolicy, updated.audioPolicy);
+});
+
 test('live checkpoints are ordered, idempotent and cap client scores', () => {
   const room = live.createRoom({ teacherId: 'teacher-3' });
   const joined = live.joinRoom(room.code, 'Mia');
@@ -179,14 +191,24 @@ test('the server and both screens expose the live-room contract', () => {
   assert.match(server, /app\.post\('\/api\/practice\/live-sessions', requirePracticeEnabled, requireAuth/);
   assert.match(server, /app\.post\('\/api\/practice\/live-sessions\/:code\/join', requirePracticeEnabled/);
   assert.match(server, /app\.post\('\/api\/practice\/live-sessions\/:code\/start', requirePracticeEnabled, requireAuth/);
+  assert.match(server, /app\.patch\('\/api\/practice\/live-sessions\/:code\/audio', requirePracticeEnabled, requireAuth/);
   assert.match(server, /app\.post\('\/api\/practice\/live-sessions\/:code\/checkpoints', requirePracticeEnabled/);
   assert.match(player, /id="roomCodeInput"/);
   assert.match(player, /id="liveLobby"/);
   assert.match(player, /id="soloChoice"/);
+  assert.match(player, /id="sfxBtn"/);
+  assert.match(player, /id="musicBtn"/);
+  assert.match(player, /id="voiceBtn"/);
+  assert.match(player, /let voiceEnabled = audioPreferences\.voice === true/);
+  assert.match(player, /function scheduleMusicPhrase\(\)/);
+  assert.match(player, /Your teacher switched/);
   assert.match(player, /soloChoice'\)\.hidden=Boolean\(requestedSessionCode\)/);
   assert.match(player, /function liveRoomWaiting\(room=liveRoom\)/);
   assert.match(player, /async function saveLiveCheckpoint\(payload\)/);
   assert.match(teacher, /Start live room/);
   assert.match(teacher, /Start class game/);
+  assert.match(teacher, /id="teacherSfx"/);
+  assert.match(teacher, /id="teacherMusic"/);
+  assert.match(teacher, /id="teacherVoice"/);
   assert.match(teacher, /\/api\/practice\/live-sessions/);
 });

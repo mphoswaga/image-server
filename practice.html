@@ -23,9 +23,11 @@
     .brand { display:flex; align-items:center; gap:11px; font-size:18px; font-weight:800; white-space:nowrap; }
     .brand-mark { width:36px; height:36px; display:grid; place-items:center; border-radius:8px; background:var(--green); font-size:15px; }
     .brand small { display:block; color:#a9ddeb; font-size:10px; text-transform:uppercase; letter-spacing:.8px; }
-    .top-actions { display:flex; gap:8px; }
+    .top-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
     .icon-btn { min-height:40px; padding:8px 12px; border:1px solid rgba(255,255,255,.22); border-radius:8px; background:rgba(255,255,255,.08); color:#fff; font-weight:700; cursor:pointer; }
     .icon-btn:hover { background:rgba(255,255,255,.14); }
+    .icon-btn[aria-pressed="true"] { border-color:#69e3a7; background:rgba(24,165,104,.3); }
+    .icon-btn:disabled { cursor:not-allowed; opacity:.52; background:rgba(255,255,255,.04); }
     .shell { width:min(1180px,calc(100% - 32px)); margin:22px auto 44px; }
     .status-row { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:14px; }
     .student-name { color:var(--muted); font-size:14px; }
@@ -494,7 +496,9 @@
     }
     @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; scroll-behavior:auto !important; } }
     @media (max-width:760px) {
-      .topbar { align-items:flex-start; padding:10px 14px; }
+      .topbar { align-items:stretch; flex-direction:column; padding:10px 14px; }
+      .top-actions { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); width:100%; }
+      .icon-btn { min-width:0; padding:8px 5px; font-size:12px; }
       .brand small { display:none; }
       .icon-btn span { display:none; }
       .shell { width:min(100% - 20px,1180px); margin-top:12px; }
@@ -556,7 +560,9 @@
   <header class="topbar">
     <div class="brand"><span class="brand-mark">LS</span><span>Byte's Skill Lab<small>LessonScope Practice</small></span></div>
     <div class="top-actions">
-      <button class="icon-btn" id="soundBtn" type="button" title="Turn Byte's voice on or off">Voice <span>on</span></button>
+      <button class="icon-btn" id="sfxBtn" type="button" title="Turn game sound effects on or off">Effects <span>on</span></button>
+      <button class="icon-btn" id="musicBtn" type="button" title="Turn calm background music on or off">Music <span>on</span></button>
+      <button class="icon-btn" id="voiceBtn" type="button" title="Turn Byte's read-aloud voice on or off">Read aloud <span>off</span></button>
       <button class="icon-btn" id="pauseBtn" type="button" title="Pause practice">Pause</button>
     </div>
   </header>
@@ -782,7 +788,17 @@
     let paused = false;
     let pendingSingleClick = null;
     let roundLocked = false;
-    let voiceEnabled = true;
+    const AUDIO_PREF_KEY = 'ls-practice-audio-v1';
+    let audioPreferences = { soundEffects:true, music:true, voice:false };
+    try { audioPreferences={...audioPreferences,...JSON.parse(localStorage.getItem(AUDIO_PREF_KEY)||'{}')}; } catch {}
+    let soundEffectsEnabled = audioPreferences.soundEffects !== false;
+    let musicEnabled = audioPreferences.music !== false;
+    let voiceEnabled = audioPreferences.voice === true;
+    let audioPermissions = { soundEffects:true, music:true, voice:true };
+    let audioContext = null;
+    let musicTimer = null;
+    let musicNodes = new Set();
+    let audioUnlocked = false;
     let activeKeyHandler = null;
     let activeGameTimers = [];
     let autoAdvanceTimer = null;
@@ -836,6 +852,7 @@
       }else if(justStarted){
         $('startBtn').textContent=campaign.start;
         setSave('Your teacher started the game');
+        playCue('start');
         narrate('The teacher started the game. You can begin!');
         $('startBtn').focus({preventScroll:true});
       }
@@ -851,6 +868,7 @@
       $('previewNote').textContent=liveRoom.mode==='classwork'?'Live classwork · Wait for your teacher to start':'Homework practice · Start when you are ready';
       $('completionLead').textContent='You completed the live class adventure. Your temporary score is on the room leaderboard.';
       $('continueWorldBtn').href=continueWorldUrl();
+      syncAudioPolicy(liveRoom);
       syncLiveLobby(liveRoom);
       renderLiveBoard(liveRoom);
       clearInterval(livePollTimer);
@@ -865,6 +883,7 @@
         const payload=await response.json();
         const wasWaiting=liveRoomWaiting(liveRoom);
         liveRoom=payload.room;
+        syncAudioPolicy(liveRoom);
         syncLiveLobby(liveRoom,wasWaiting&&!liveRoomWaiting(liveRoom));
         renderLiveBoard(liveRoom);
       }catch{
@@ -874,11 +893,13 @@
         liveParticipantToken='';
         $('liveStrip').hidden=true;
         $('previewNote').textContent='Solo guest play · Progress is not saved';
+        syncAudioPolicy(null);
         setSave('The live room has ended. You can finish this game on your own.',true);
       }
     }
 
     async function joinLiveRoom() {
+      unlockAudio(false);
       const code=String($('roomCodeInput').value||'').replace(/[^a-z0-9]/gi,'').toUpperCase().slice(0,6);
       const name=String($('nicknameInput').value||'').trim();
       $('joinRoomError').textContent='';
@@ -897,12 +918,14 @@
     }
 
     function chooseSoloGuest() {
+      unlockAudio();
       liveRoom=null; liveParticipant=null; liveParticipantToken='';
       $('guestEntry').hidden=true;
       $('startBtn').hidden=false;
       $('studentName').textContent='Playing on my own';
       $('previewNote').textContent='Solo guest play · Progress is not saved';
       $('continueWorldBtn').href=continueWorldUrl();
+      syncAudioPolicy(null);
     }
     function checkpointKey() { return `ls-practice-pending-${attempt && attempt.id || 'none'}`; }
     function checkpointId(step) { return `${attempt.id}:${attempt.activityVersion}:${step.id}`; }
@@ -960,16 +983,112 @@
       $('missionMeter').style.width = `${Math.min(100,(roundProgress/goal)*100)}%`;
     }
 
-    function playTone(frequency=620) {
-      if (!voiceEnabled) return;
+    function saveAudioPreferences() {
+      audioPreferences={ soundEffects:soundEffectsEnabled, music:musicEnabled, voice:voiceEnabled };
+      try { localStorage.setItem(AUDIO_PREF_KEY,JSON.stringify(audioPreferences)); } catch {}
+    }
+
+    function audioAllowed(channel) {
+      return audioPermissions[channel] !== false;
+    }
+
+    function updateAudioButtons() {
+      const controls=[
+        ['sfxBtn','soundEffects',soundEffectsEnabled,'Effects'],
+        ['musicBtn','music',musicEnabled,'Music'],
+        ['voiceBtn','voice',voiceEnabled,'Read aloud'],
+      ];
+      for(const [id,channel,enabled,label] of controls){
+        const button=$(id), allowed=audioAllowed(channel), active=allowed&&enabled;
+        button.disabled=!allowed;
+        button.setAttribute('aria-pressed',String(active));
+        button.innerHTML=allowed?`${label} <span>${active?'on':'off'}</span>`:`${label} <span>locked</span>`;
+        button.title=allowed?`Turn ${label.toLowerCase()} ${active?'off':'on'}`:`Your teacher switched ${label.toLowerCase()} off for this room`;
+      }
+    }
+
+    function ensureAudioContext() {
       try {
         const Context=window.AudioContext||window.webkitAudioContext;
-        if(!Context) return;
-        const context=new Context(), oscillator=context.createOscillator(), gain=context.createGain();
-        oscillator.frequency.value=frequency; oscillator.type='sine';
-        gain.gain.setValueAtTime(.06,context.currentTime); gain.gain.exponentialRampToValueAtTime(.001,context.currentTime+.18);
-        oscillator.connect(gain).connect(context.destination); oscillator.start(); oscillator.stop(context.currentTime+.18);
-      } catch {}
+        if(!Context) return null;
+        if(!audioContext) audioContext=new Context();
+        if(audioContext.state==='suspended') audioContext.resume().then(()=>{ audioUnlocked=true; }).catch(()=>{});
+        else audioUnlocked=true;
+        return audioContext;
+      } catch { return null; }
+    }
+
+    function unlockAudio(startMusic=true) {
+      const context=ensureAudioContext();
+      if(!context) return;
+      if(context.state==='running'){
+        audioUnlocked=true;
+        if(startMusic) syncMusic();
+        return;
+      }
+      context.resume().then(()=>{ audioUnlocked=true; if(startMusic) syncMusic(); }).catch(()=>{});
+    }
+
+    function tone(frequency, { start=0, duration=.16, volume=.05, type='sine', music=false }={}) {
+      const context=ensureAudioContext();
+      if(!context) return;
+      const oscillator=context.createOscillator(), gain=context.createGain(), starts=context.currentTime+start;
+      oscillator.frequency.value=frequency;
+      oscillator.type=type;
+      gain.gain.setValueAtTime(.001,starts);
+      gain.gain.exponentialRampToValueAtTime(volume,starts+Math.min(.08,duration/3));
+      gain.gain.exponentialRampToValueAtTime(.001,starts+duration);
+      oscillator.connect(gain).connect(context.destination);
+      if(music){ musicNodes.add(oscillator); oscillator.addEventListener('ended',()=>musicNodes.delete(oscillator),{once:true}); }
+      oscillator.start(starts);
+      oscillator.stop(starts+duration+.03);
+    }
+
+    function playTone(frequency=620) {
+      if (!soundEffectsEnabled || !audioAllowed('soundEffects')) return;
+      tone(frequency);
+    }
+
+    function playCue(kind) {
+      if (!soundEffectsEnabled || !audioAllowed('soundEffects')) return;
+      const cues={
+        wrong:[[155,0,.2,.045,'square'],[120,.13,.24,.035,'square']],
+        hit:[[520,0,.11,.045,'sine'],[690,.08,.14,.04,'sine']],
+        complete:[[520,0,.18,.045,'triangle'],[660,.12,.2,.045,'triangle'],[820,.25,.32,.05,'triangle']],
+        start:[[330,0,.2,.035,'sine'],[440,.14,.22,.04,'sine'],[660,.3,.32,.045,'sine']],
+        world:[[392,0,.32,.04,'triangle'],[523,.22,.38,.045,'triangle'],[659,.48,.55,.05,'triangle']],
+      };
+      for(const [frequency,start,duration,volume,type] of cues[kind]||cues.hit) tone(frequency,{start,duration,volume,type});
+    }
+
+    function stopMusic() {
+      clearTimeout(musicTimer);
+      musicTimer=null;
+      for(const node of musicNodes){ try { node.stop(); } catch {} }
+      musicNodes.clear();
+    }
+
+    function scheduleMusicPhrase() {
+      if(!musicEnabled || !audioAllowed('music') || paused || document.hidden) return stopMusic();
+      const notes=requestedWorld==='g3'?[220,277.18,329.63,277.18]:[261.63,329.63,392,329.63];
+      notes.forEach((frequency,index)=>{
+        tone(frequency,{start:index*1.65,duration:2.1,volume:.012,type:'sine',music:true});
+        tone(frequency/2,{start:index*1.65,duration:2.35,volume:.006,type:'triangle',music:true});
+      });
+      musicTimer=setTimeout(scheduleMusicPhrase,6600);
+    }
+
+    function syncMusic() {
+      if(audioUnlocked && musicEnabled && audioAllowed('music') && !paused && !document.hidden){
+        if(!musicTimer) scheduleMusicPhrase();
+      }else stopMusic();
+    }
+
+    function syncAudioPolicy(room) {
+      audioPermissions={ soundEffects:true, music:true, voice:true, ...(room&&room.audioPolicy||{}) };
+      if(!audioAllowed('voice') && 'speechSynthesis' in window) speechSynthesis.cancel();
+      updateAudioButtons();
+      syncMusic();
     }
 
     function narrate(text) {
@@ -1392,6 +1511,7 @@
       $('transitionKicker').textContent=kicker;
       $('transitionTitle').textContent=`Mission ${stepIndex+1}: ${step.title}`;
       $('missionTransition').classList.add('show');
+      playCue('start');
       narrate(`${kicker}. ${step.title}.`);
       setTimeout(()=>$('missionTransition').classList.remove('show'),900);
     }
@@ -1405,7 +1525,7 @@
       $('taskArea').classList.remove('wrong-shake');
       void $('taskArea').offsetWidth;
       $('taskArea').classList.add('wrong-shake');
-      playTone(145);
+      playCue('wrong');
       $('feedback').textContent = message;
       $('feedback').className = 'feedback show';
       narrate(message);
@@ -1454,7 +1574,7 @@
       $('feedback').textContent = finalHit ? step.success : `${combo >= 3 ? `${combo}× combo! ` : ''}${roundGoal()-roundProgress} more to clear this room.`;
       $('feedback').className = 'feedback show';
       updateHud();
-      playTone(finalHit?760:620);
+      playCue(finalHit?'complete':'hit');
       burstParticles(hitTarget,finalHit?'#f8c342':'#25cddc');
       celebrateHit(finalHit,points);
       if (!finalHit) { setTimeout(renderTask,420); return; }
@@ -1558,6 +1678,8 @@
       document.body.classList.remove('intro-screen');
       $('activity').style.display = 'none';
       $('completion').classList.remove('hidden');
+      stopMusic();
+      playCue('world');
       $('progress').innerHTML = steps.map((step,index) => `<div class="progress-step done">${index + 1}. ${esc(step.title)}</div>`).join('');
       const label = String(attempt.mastery || '').replaceAll('_',' ');
       $('masterySummary').innerHTML = `Overall result: <span class="mastery">${esc(label)}</span>`;
@@ -1596,15 +1718,33 @@
       phase = 'show';
       renderStep();
     });
-    $('soundBtn').addEventListener('click', () => {
+    $('sfxBtn').addEventListener('click', () => {
+      if(!audioAllowed('soundEffects')) return;
+      soundEffectsEnabled=!soundEffectsEnabled;
+      saveAudioPreferences();
+      updateAudioButtons();
+      if(soundEffectsEnabled){ unlockAudio(); playCue('hit'); }
+    });
+    $('musicBtn').addEventListener('click', () => {
+      if(!audioAllowed('music')) return;
+      musicEnabled=!musicEnabled;
+      saveAudioPreferences();
+      updateAudioButtons();
+      if(musicEnabled) unlockAudio();
+      else stopMusic();
+    });
+    $('voiceBtn').addEventListener('click', () => {
+      if(!audioAllowed('voice')) return;
       voiceEnabled=!voiceEnabled;
-      $('soundBtn').innerHTML=voiceEnabled?'Voice <span>on</span>':'Voice <span>off</span>';
+      saveAudioPreferences();
+      updateAudioButtons();
       if (!voiceEnabled && 'speechSynthesis' in window) speechSynthesis.cancel();
       if (voiceEnabled) narrate($('coachText').textContent || 'Byte is ready.');
     });
-    function setPaused(value) { paused=value; $('pauseLayer').classList.toggle('show',paused); $('pauseBtn').textContent=paused?'Continue':'Pause'; }
+    function setPaused(value) { paused=value; $('pauseLayer').classList.toggle('show',paused); $('pauseBtn').textContent=paused?'Continue':'Pause'; syncMusic(); }
     $('pauseBtn').addEventListener('click', () => setPaused(!paused));
     $('resumeBtn').addEventListener('click', () => setPaused(false));
+    document.addEventListener('visibilitychange',syncMusic);
     $('practiseAgainBtn').addEventListener('click', async () => { $('completion').classList.add('hidden'); await beginAttempt(true); });
     $('stageJumpBtn').addEventListener('click',()=>{
       const [world,stage]=String($('stageJumpSelect').value||'').split(':');
@@ -1618,6 +1758,7 @@
         syncLiveLobby(liveRoom);
         return;
       }
+      unlockAudio();
       if (forceNew && attempt && attempt.status !== 'completed') return;
       score = 0;
       runMetrics = { correctInputs:0, mistakes:0, activeSeconds:0 };
@@ -1666,6 +1807,7 @@
     $('roomCodeInput').addEventListener('input',()=>{ $('roomCodeInput').value=String($('roomCodeInput').value||'').replace(/[^a-z0-9]/gi,'').toUpperCase().slice(0,6); });
     $('nicknameInput').addEventListener('keydown',(event)=>{ if(event.key==='Enter') joinLiveRoom(); });
 
+    syncAudioPolicy(null);
     (async () => {
       if (matchMedia('(pointer:coarse)').matches) $('deviceNote').style.display='block';
       try {

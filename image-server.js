@@ -2199,6 +2199,7 @@ app.post('/api/practice/live-sessions', requirePracticeEnabled, requireAuth, (re
       activityId: req.body && req.body.activityId,
       mode: req.body && req.body.mode || 'classwork',
       roster: classRoster,
+      audioPolicy: req.body && req.body.audioPolicy,
     });
     const world = room.activity && room.activity.id === 'g3-keyboard-kingdom' ? '&world=g3' : '';
     res.status(201).json({ room, joinPath: `/student/practice/guest?session=${room.code}${world}` });
@@ -2217,6 +2218,19 @@ app.post('/api/practice/live-sessions/:code/start', requirePracticeEnabled, requ
         : err.code === 'room_closed' ? 410
           : 400;
     res.status(status).json({ error: err.message, code: err.code || 'room_start_failed' });
+  }
+});
+
+app.patch('/api/practice/live-sessions/:code/audio', requirePracticeEnabled, requireAuth, (req, res) => {
+  if (req.user && req.user.role === 'student') return res.status(403).json({ error: 'Teacher account required.' });
+  try {
+    res.json({ room: practiceLive.updateRoomAudio(req.params.code, req.userId, req.body || {}) });
+  } catch (err) {
+    const status = err.code === 'forbidden' ? 403
+      : err.code === 'room_not_found' ? 404
+        : err.code === 'room_closed' ? 410
+          : 400;
+    res.status(status).json({ error: err.message, code: err.code || 'room_audio_failed' });
   }
 });
 

@@ -44,6 +44,15 @@ function normalizeMode(value) {
   return String(value || '').toLowerCase() === 'classwork' ? 'classwork' : 'homework';
 }
 
+function normalizeAudioPolicy(value) {
+  const policy = value && typeof value === 'object' ? value : {};
+  return {
+    soundEffects: policy.soundEffects !== false,
+    music: policy.music !== false,
+    voice: policy.voice !== false,
+  };
+}
+
 function identityKey(value) {
   return String(value || '')
     .normalize('NFKD')
@@ -226,6 +235,7 @@ function publicRoom(room, { teacherView = false } = {}) {
     startedAt: room.startedAt || null,
     expiresAt: room.expiresAt,
     participantCount: (room.participants || []).length,
+    audioPolicy: normalizeAudioPolicy(room.audioPolicy),
     roster: room.roster ? { name: room.roster.name, count: room.roster.students.length } : null,
     leaderboard: publicLeaderboard(room),
   };
@@ -237,7 +247,7 @@ function publicRoom(room, { teacherView = false } = {}) {
   return result;
 }
 
-function createRoom({ teacherId, activityId = 'g2-pointer-control', mode = 'homework', roster = null, ttlMs }) {
+function createRoom({ teacherId, activityId = 'g2-pointer-control', mode = 'homework', roster = null, audioPolicy = null, ttlMs }) {
   if (teacherRooms(teacherId).length) {
     throw Object.assign(new Error('End the current live room before starting another one.'), { code: 'room_exists' });
   }
@@ -255,6 +265,7 @@ function createRoom({ teacherId, activityId = 'g2-pointer-control', mode = 'home
     activityVersion: activity.version,
     mode: safeMode,
     phase: safeMode === 'classwork' ? 'lobby' : 'playing',
+    audioPolicy: normalizeAudioPolicy(audioPolicy),
     roster: safeRoster,
     status: 'open',
     createdAt: new Date(now).toISOString(),
@@ -357,6 +368,16 @@ function startRoom(code, teacherId) {
     room.startedAt = new Date().toISOString();
     saveRoom(room);
   }
+  return publicRoom(room, { teacherView: true });
+}
+
+function updateRoomAudio(code, teacherId, audioPolicy) {
+  const room = requireOpenRoom(code);
+  if (room.teacherId !== String(teacherId || '')) {
+    throw Object.assign(new Error('This room belongs to another teacher.'), { code: 'forbidden' });
+  }
+  room.audioPolicy = normalizeAudioPolicy(audioPolicy);
+  saveRoom(room);
   return publicRoom(room, { teacherView: true });
 }
 
@@ -480,6 +501,7 @@ module.exports = {
   createRoom,
   joinRoom,
   startRoom,
+  updateRoomAudio,
   checkpointRoom,
   getRoom,
   teacherRooms,
