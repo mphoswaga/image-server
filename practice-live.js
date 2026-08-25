@@ -1,6 +1,6 @@
-// Temporary, teacher-owned practice rooms. These are intentionally separate
-// from permanent student evidence: a room stores only a short nickname and
-// mission progress, then expires after one school day.
+// Teacher-owned practice rooms are intentionally separate from permanent
+// student evidence. Classwork uses an eight-hour lobby/game window; homework
+// stays open for seven days. Both expire automatically.
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -10,8 +10,9 @@ const scoring = require('./public/practice-scoring');
 
 const LIVE_DIR = path.join(DATA_DIR, 'practice', 'live-sessions');
 const ROOM_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
-const DEFAULT_TTL_MS = 8 * 60 * 60 * 1000;
-const MAX_TTL_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_CLASSWORK_TTL_MS = 8 * 60 * 60 * 1000;
+const DEFAULT_HOMEWORK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 
 function roomPath(code) {
   return path.join(LIVE_DIR, `${normalizeCode(code)}.json`);
@@ -28,6 +29,50 @@ function cleanName(value) {
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 24);
+}
+
+function cleanRosterName(value) {
+  return String(value || '')
+    .normalize('NFKC')
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 60);
+}
+
+function normalizeMode(value) {
+  return String(value || '').toLowerCase() === 'classwork' ? 'classwork' : 'homework';
+}
+
+function identityKey(value) {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .toLocaleLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function studentIdKey(value) {
+  return String(value || '').trim().replace(/\s+/g, '').toUpperCase();
+}
+
+function roomPhase(room) {
+  if (room.phase === 'lobby' || room.phase === 'playing') return room.phase;
+  return 'playing';
+}
+
+function rosterSnapshot(value) {
+  if (!value || !value.id || !Array.isArray(value.students)) return null;
+  return {
+    id: String(value.id),
+    name: String(value.name || 'Class roster').trim().slice(0, 80),
+    students: value.students.map((student) => ({
+      id: String(student && student.id || '').trim().slice(0, 120),
+      name: cleanRosterName(student && student.name) || String(student && student.id || '').trim().slice(0, 120),
+    })).filter((student) => student.id),
+  };
 }
 
 function tokenHash(token) {
@@ -146,11 +191,30 @@ function publicLeaderboard(room) {
     .map((participant, index) => ({ ...participant, rank: index + 1 }));
 }
 
-function publicRoom(room) {
+function roomAttendance(room) {
+  if (!room.roster || !Array.isArray(room.roster.students)) return [];
+  const joined = new Map((room.participants || [])
+    .filter((participant) => participant.rosterStudentId)
+    .map((participant) => [studentIdKey(participant.rosterStudentId), participant]));
+  return room.roster.students.map((student) => {
+    const participant = joined.get(studentIdKey(student.id));
+    return {
+      studentId: student.id,
+      name: student.name,
+      joined: Boolean(participant),
+      joinedAt: participant ? participant.joinedAt : null,
+    };
+  });
+}
+
+function publicRoom(room, { teacherView = false } = {}) {
   const activity = practice.getActivity(room.activityId, room.activityVersion);
-  return {
+  const attendance = teacherView ? roomAttendance(room) : [];
+  const result = {
     code: room.code,
     status: roomIsOpen(room) ? 'open' : 'closed',
+    mode: normalizeMode(room.mode),
+    phase: roomPhase(room),
     activity: activity ? {
       id: activity.id,
       version: activity.version,
@@ -159,39 +223,82 @@ function publicRoom(room) {
       missionCount: activity.steps.length,
     } : null,
     createdAt: room.createdAt,
+    startedAt: room.startedAt || null,
     expiresAt: room.expiresAt,
     participantCount: (room.participants || []).length,
+    roster: room.roster ? { name: room.roster.name, count: room.roster.students.length } : null,
     leaderboard: publicLeaderboard(room),
   };
+  if (teacherView) {
+    result.attendance = attendance;
+    result.joinedRosterCount = attendance.filter((student) => student.joined).length;
+    result.absentRosterCount = attendance.filter((student) => !student.joined).length;
+  }
+  return result;
 }
 
-function createRoom({ teacherId, activityId = 'g2-pointer-control', ttlMs = DEFAULT_TTL_MS }) {
+function createRoom({ teacherId, activityId = 'g2-pointer-control', mode = 'homework', roster = null, ttlMs }) {
   if (teacherRooms(teacherId).length) {
     throw Object.assign(new Error('End the current live room before starting another one.'), { code: 'room_exists' });
   }
   const activity = practice.getActivity(activityId);
   if (!activity) throw Object.assign(new Error('Practice activity not found.'), { code: 'activity_not_found' });
+  const safeMode = normalizeMode(mode);
+  const safeRoster = rosterSnapshot(roster);
   const now = Date.now();
-  const safeTtl = Math.max(30 * 60 * 1000, Math.min(MAX_TTL_MS, Number(ttlMs) || DEFAULT_TTL_MS));
+  const defaultTtl = safeMode === 'classwork' ? DEFAULT_CLASSWORK_TTL_MS : DEFAULT_HOMEWORK_TTL_MS;
+  const safeTtl = Math.max(30 * 60 * 1000, Math.min(MAX_TTL_MS, Number(ttlMs) || defaultTtl));
   const room = {
     code: generateCode(),
     teacherId: String(teacherId || ''),
     activityId: activity.id,
     activityVersion: activity.version,
+    mode: safeMode,
+    phase: safeMode === 'classwork' ? 'lobby' : 'playing',
+    roster: safeRoster,
     status: 'open',
     createdAt: new Date(now).toISOString(),
+    startedAt: safeMode === 'homework' ? new Date(now).toISOString() : null,
     updatedAt: new Date(now).toISOString(),
     expiresAt: new Date(now + safeTtl).toISOString(),
     participants: [],
   };
   saveRoom(room);
-  return publicRoom(room);
+  return publicRoom(room, { teacherView: true });
 }
 
-function joinRoom(code, nickname) {
+function joinRoom(code, input) {
   const room = requireOpenRoom(code);
-  const requestedName = cleanName(nickname);
-  if (!/\p{L}/u.test(requestedName)) {
+  const requestedValue = typeof input === 'object' && input
+    ? String(input.studentId || input.name || '')
+    : String(input || '');
+  let requestedName = cleanName(requestedValue);
+  let rosterStudentId = null;
+
+  if (room.roster && Array.isArray(room.roster.students)) {
+    const wanted = identityKey(requestedValue);
+    const wantedStudentId = studentIdKey(requestedValue);
+    const idMatch = room.roster.students.find((student) => studentIdKey(student.id) === wantedStudentId);
+    const nameMatches = room.roster.students.filter((student) => identityKey(student.name) === wanted);
+    const matched = idMatch || (nameMatches.length === 1 ? nameMatches[0] : null);
+    if (!matched && nameMatches.length > 1) {
+      throw Object.assign(new Error('More than one learner has that name. Enter your Student ID.'), { code: 'ambiguous_student' });
+    }
+    if (!matched) {
+      throw Object.assign(new Error(`That learner is not in ${room.roster.name}. Check the Student ID or full roster name.`), { code: 'student_not_in_roster' });
+    }
+    rosterStudentId = matched.id;
+    requestedName = matched.name;
+    const existing = (room.participants || []).find((participant) => studentIdKey(participant.rosterStudentId) === studentIdKey(rosterStudentId));
+    if (existing) {
+      const token = crypto.randomBytes(24).toString('base64url');
+      existing.tokenHash = tokenHash(token);
+      existing.updatedAt = new Date().toISOString();
+      saveRoom(room);
+      return { room: publicRoom(room), participant: { id: existing.id, name: existing.name }, token, rejoined: true };
+    }
+  }
+  if (!rosterStudentId && !/\p{L}/u.test(requestedName)) {
     throw Object.assign(new Error('Enter a first name or nickname.'), { code: 'invalid_name' });
   }
   if (room.participants.length >= 100) throw Object.assign(new Error('This practice room is full.'), { code: 'room_full' });
@@ -206,6 +313,7 @@ function joinRoom(code, nickname) {
   const participant = {
     id: crypto.randomUUID().replace(/-/g, '').slice(0, 12),
     name,
+    rosterStudentId,
     tokenHash: tokenHash(token),
     score: 0,
     baseScore: 0,
@@ -238,6 +346,20 @@ function joinRoom(code, nickname) {
   return { room: publicRoom(room), participant: { id: participant.id, name: participant.name }, token };
 }
 
+function startRoom(code, teacherId) {
+  const room = requireOpenRoom(code);
+  if (room.teacherId !== String(teacherId || '')) {
+    throw Object.assign(new Error('This room belongs to another teacher.'), { code: 'forbidden' });
+  }
+  if (normalizeMode(room.mode) !== 'classwork') return publicRoom(room, { teacherView: true });
+  if (roomPhase(room) !== 'playing') {
+    room.phase = 'playing';
+    room.startedAt = new Date().toISOString();
+    saveRoom(room);
+  }
+  return publicRoom(room, { teacherView: true });
+}
+
 function findParticipant(room, token) {
   const hash = tokenHash(token);
   return (room.participants || []).find((participant) => (
@@ -247,6 +369,9 @@ function findParticipant(room, token) {
 
 function checkpointRoom(code, token, input = {}) {
   const room = requireOpenRoom(code);
+  if (normalizeMode(room.mode) === 'classwork' && roomPhase(room) !== 'playing') {
+    throw Object.assign(new Error('Wait for your teacher to start the class game.'), { code: 'room_not_started' });
+  }
   const participant = findParticipant(room, token);
   if (!participant) throw Object.assign(new Error('Rejoin the room to continue.'), { code: 'participant_not_found' });
   const activityId = String(input.activityId || room.activityId);
@@ -334,7 +459,7 @@ function teacherRooms(teacherId) {
         return room.teacherId === String(teacherId || '');
       })
       .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-      .map(publicRoom);
+      .map((room) => publicRoom(room, { teacherView: true }));
   } catch { return []; }
 }
 
@@ -344,7 +469,7 @@ function closeRoom(code, teacherId) {
   if (room.teacherId !== String(teacherId || '')) throw Object.assign(new Error('This room belongs to another teacher.'), { code: 'forbidden' });
   room.status = 'closed';
   room.expiresAt = new Date().toISOString();
-  const result = publicRoom(room);
+  const result = publicRoom(room, { teacherView: true });
   try { fs.unlinkSync(roomPath(room.code)); } catch {}
   return result;
 }
@@ -354,6 +479,7 @@ module.exports = {
   cleanName,
   createRoom,
   joinRoom,
+  startRoom,
   checkpointRoom,
   getRoom,
   teacherRooms,

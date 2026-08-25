@@ -2191,14 +2191,32 @@ app.get('/api/practice/live-sessions', requirePracticeEnabled, requireAuth, (req
 app.post('/api/practice/live-sessions', requirePracticeEnabled, requireAuth, (req, res) => {
   if (req.user && req.user.role === 'student') return res.status(403).json({ error: 'Teacher account required.' });
   try {
+    const rosterId = String(req.body && req.body.rosterId || '').trim();
+    const classRoster = rosterId ? roster.getRoster(req.userId, rosterId) : null;
+    if (rosterId && !classRoster) return res.status(404).json({ error: 'That saved class could not be found.', code: 'roster_not_found' });
     const room = practiceLive.createRoom({
       teacherId: req.userId,
       activityId: req.body && req.body.activityId,
+      mode: req.body && req.body.mode || 'classwork',
+      roster: classRoster,
     });
     const world = room.activity && room.activity.id === 'g3-keyboard-kingdom' ? '&world=g3' : '';
     res.status(201).json({ room, joinPath: `/student/practice/guest?session=${room.code}${world}` });
   } catch (err) {
     res.status(err.code === 'activity_not_found' ? 404 : 400).json({ error: err.message, code: err.code || 'room_create_failed' });
+  }
+});
+
+app.post('/api/practice/live-sessions/:code/start', requirePracticeEnabled, requireAuth, (req, res) => {
+  if (req.user && req.user.role === 'student') return res.status(403).json({ error: 'Teacher account required.' });
+  try {
+    res.json({ room: practiceLive.startRoom(req.params.code, req.userId) });
+  } catch (err) {
+    const status = err.code === 'forbidden' ? 403
+      : err.code === 'room_not_found' ? 404
+        : err.code === 'room_closed' ? 410
+          : 400;
+    res.status(status).json({ error: err.message, code: err.code || 'room_start_failed' });
   }
 });
 
@@ -2223,7 +2241,7 @@ app.get('/api/practice/live-sessions/:code', requirePracticeEnabled, (req, res) 
 
 app.post('/api/practice/live-sessions/:code/join', requirePracticeEnabled, (req, res) => {
   try {
-    res.status(201).json(practiceLive.joinRoom(req.params.code, req.body && req.body.name));
+    res.status(201).json(practiceLive.joinRoom(req.params.code, req.body || {}));
   } catch (err) {
     const status = err.code === 'room_not_found' ? 404 : err.code === 'room_closed' ? 410 : 400;
     res.status(status).json({ error: err.message, code: err.code || 'room_join_failed' });
@@ -2238,7 +2256,7 @@ app.post('/api/practice/live-sessions/:code/checkpoints', requirePracticeEnabled
     const status = err.code === 'participant_not_found' ? 401
       : err.code === 'room_not_found' ? 404
         : err.code === 'room_closed' ? 410
-          : err.code === 'step_out_of_order' || err.code === 'attempt_complete' ? 409
+          : err.code === 'step_out_of_order' || err.code === 'attempt_complete' || err.code === 'room_not_started' ? 409
             : 400;
     res.status(status).json({ error: err.message, code: err.code || 'invalid_checkpoint' });
   }

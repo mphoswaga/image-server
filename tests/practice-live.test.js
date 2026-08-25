@@ -30,6 +30,63 @@ test('nicknames are temporary, cleaned and made distinct inside one room', () =>
   assert.throws(() => live.joinRoom(room.code, '---'), /first name or nickname/i);
 });
 
+test('classwork uses a teacher-controlled lobby and private roster attendance', () => {
+  const roster = {
+    id: 'grade-2b',
+    name: 'Grade 2B',
+    students: [
+      { id: 'S001', name: 'Amina Ali' },
+      { id: 'VS 002', name: 'Bảo Trần' },
+    ],
+  };
+  const room = live.createRoom({ teacherId:'teacher-lobby', mode:'classwork', roster });
+  assert.equal(room.mode, 'classwork');
+  assert.equal(room.phase, 'lobby');
+  assert.equal(room.roster.name, 'Grade 2B');
+  assert.equal(room.absentRosterCount, 2);
+  assert.throws(() => live.joinRoom(room.code, { name:'Someone Else' }), /not in Grade 2B/i);
+
+  const joined = live.joinRoom(room.code, { name:'s001' });
+  assert.equal(joined.participant.name, 'Amina Ali');
+  assert.equal('attendance' in joined.room, false);
+  const teacherRoom = live.teacherRooms('teacher-lobby')[0];
+  assert.equal(teacherRoom.joinedRosterCount, 1);
+  assert.deepEqual(teacherRoom.attendance.map((student) => [student.name, student.joined]), [
+    ['Amina Ali', true],
+    ['Bảo Trần', false],
+  ]);
+
+  const accentless = live.joinRoom(room.code, { name:'Bao Tran' });
+  assert.equal(accentless.participant.name, 'Bảo Trần');
+  const rejoined = live.joinRoom(room.code, { studentId:'vs002' });
+  assert.equal(rejoined.rejoined, true);
+  assert.equal(rejoined.participant.id, accentless.participant.id);
+  assert.equal(live.teacherRooms('teacher-lobby')[0].joinedRosterCount, 2);
+  assert.throws(() => live.checkpointRoom(room.code, joined.token, {
+    checkpointId:'before-start',
+    stepId:'move-pointer',
+    evidence:{ action:'pointer_enter', target:'blue-star' },
+  }), /wait for your teacher/i);
+  assert.throws(() => live.startRoom(room.code, 'another-teacher'), /another teacher/i);
+  const started = live.startRoom(room.code, 'teacher-lobby');
+  assert.equal(started.phase, 'playing');
+  assert.ok(started.startedAt);
+  const checkpoint = live.checkpointRoom(room.code, joined.token, {
+    checkpointId:'after-start',
+    stepId:'move-pointer',
+    evidence:{ action:'pointer_enter', target:'blue-star' },
+    baseScore:1300,
+  });
+  assert.equal(checkpoint.participant.missionsCompleted, 1);
+});
+
+test('homework rooms remain self-paced and available beyond one school day', () => {
+  const room = live.createRoom({ teacherId:'teacher-homework', mode:'homework' });
+  assert.equal(room.mode, 'homework');
+  assert.equal(room.phase, 'playing');
+  assert.ok(Date.parse(room.expiresAt) - Date.parse(room.createdAt) > 24 * 60 * 60 * 1000);
+});
+
 test('live checkpoints are ordered, idempotent and cap client scores', () => {
   const room = live.createRoom({ teacherId: 'teacher-3' });
   const joined = live.joinRoom(room.code, 'Mia');
@@ -121,9 +178,15 @@ test('the server and both screens expose the live-room contract', () => {
   const teacher = fs.readFileSync(path.join(__dirname, '..', 'practice-teacher.html'), 'utf8');
   assert.match(server, /app\.post\('\/api\/practice\/live-sessions', requirePracticeEnabled, requireAuth/);
   assert.match(server, /app\.post\('\/api\/practice\/live-sessions\/:code\/join', requirePracticeEnabled/);
+  assert.match(server, /app\.post\('\/api\/practice\/live-sessions\/:code\/start', requirePracticeEnabled, requireAuth/);
   assert.match(server, /app\.post\('\/api\/practice\/live-sessions\/:code\/checkpoints', requirePracticeEnabled/);
   assert.match(player, /id="roomCodeInput"/);
+  assert.match(player, /id="liveLobby"/);
+  assert.match(player, /id="soloChoice"/);
+  assert.match(player, /soloChoice'\)\.hidden=Boolean\(requestedSessionCode\)/);
+  assert.match(player, /function liveRoomWaiting\(room=liveRoom\)/);
   assert.match(player, /async function saveLiveCheckpoint\(payload\)/);
   assert.match(teacher, /Start live room/);
+  assert.match(teacher, /Start class game/);
   assert.match(teacher, /\/api\/practice\/live-sessions/);
 });

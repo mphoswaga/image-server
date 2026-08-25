@@ -62,6 +62,11 @@
     .join-error { min-height:20px; margin-top:8px; color:#ffd28a; font-size:13px; font-weight:700; }
     .solo-choice { display:flex; align-items:center; justify-content:center; gap:10px; margin-top:12px; color:#9fb2c5; font-size:12px; }
     .solo-choice button { border:0; background:transparent; color:#8cecf4; font-weight:800; text-decoration:underline; cursor:pointer; }
+    .live-lobby { width:min(620px,100%); margin:18px auto 0; padding:22px; border:2px solid #25cddc; border-radius:12px; background:#0c1d3b; color:#fff; text-align:center; box-shadow:0 16px 36px rgba(7,20,44,.24); }
+    .live-lobby .lobby-pulse { width:58px; height:58px; display:grid; place-items:center; margin:0 auto 12px; border-radius:50%; border:2px solid #25cddc; background:#102f55; color:#8cecf4; font-size:24px; font-weight:900; animation:pulse 1.5s ease-in-out infinite; }
+    .live-lobby h2 { color:#fff; }
+    .live-lobby p { margin:6px 0 0; color:#b8c9db; }
+    .live-lobby strong { color:#8cecf4; }
     .live-strip { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 10px; padding:9px 12px; border:1px solid #2a4d76; border-radius:10px; background:#0c1d3b; color:#dce8f3; }
     .live-strip strong { color:#8cecf4; white-space:nowrap; }
     .live-mini-board { display:flex; justify-content:flex-end; gap:6px; min-width:0; overflow:hidden; }
@@ -594,15 +599,16 @@
         </div>
         <div class="guest-entry" id="guestEntry" hidden>
           <h2>Join your class arcade</h2>
-          <p>Enter the room code from your teacher and a first name or nickname. It will disappear when the room ends.</p>
+          <p>Enter the room code. For a saved class, use your Student ID or full roster name.</p>
           <div class="join-fields">
             <div class="join-field code"><label for="roomCodeInput">Room code</label><input id="roomCodeInput" maxlength="6" autocomplete="off" inputmode="text" /></div>
-            <div class="join-field"><label for="nicknameInput">Your name</label><input id="nicknameInput" maxlength="24" autocomplete="name" /></div>
-            <button class="btn primary" id="joinRoomBtn" type="button">Join game</button>
+            <div class="join-field"><label for="nicknameInput">Name or Student ID</label><input id="nicknameInput" maxlength="60" autocomplete="name" /></div>
+            <button class="btn primary" id="joinRoomBtn" type="button">Join session</button>
           </div>
           <div class="join-error" id="joinRoomError" role="alert"></div>
-          <div class="solo-choice">No class code? <button id="soloGuestBtn" type="button">Play on my own</button></div>
+          <div class="solo-choice" id="soloChoice">No class code? <button id="soloGuestBtn" type="button">Play on my own</button></div>
         </div>
+        <div class="live-lobby" id="liveLobby" hidden><div class="lobby-pulse">B</div><h2>You are in the class lobby</h2><p id="liveLobbyText">Wait here. Your teacher will start the game when everyone is ready.</p></div>
         <button class="btn primary" id="startBtn" type="button">Begin the rescue</button>
       </div>
     </section>
@@ -812,8 +818,27 @@
       const me=(room.leaderboard||[]).find((player)=>player.id===liveParticipant.id);
       if(me&&!players.some((player)=>player.id===me.id)) players=[...players.slice(0,4),me];
       $('liveMiniBoard').innerHTML=players.length
-        ? players.map((player)=>`<div class="live-mini-player ${player.id===liveParticipant.id?'me':''}"><b>${player.rank}</b><span>${esc(player.name)}</span><small>${player.score}</small></div>`).join('')
+        ? players.map((player)=>`<div class="live-mini-player ${player.id===liveParticipant.id?'me':''}"><b>${liveRoomWaiting(room)?'✓':player.rank}</b><span>${esc(player.name)}</span><small>${liveRoomWaiting(room)?'ready':player.score}</small></div>`).join('')
         : '<span>Waiting for players...</span>';
+    }
+
+    function liveRoomWaiting(room=liveRoom) {
+      return Boolean(room&&room.mode==='classwork'&&room.phase!=='playing');
+    }
+
+    function syncLiveLobby(room, justStarted=false) {
+      const waiting=liveRoomWaiting(room);
+      $('liveLobby').hidden=!waiting;
+      $('startBtn').hidden=waiting;
+      if(waiting){
+        $('liveLobbyText').innerHTML=`<strong>${room.participantCount} ${room.participantCount===1?'learner':'learners'} joined.</strong><br>Wait here. Your teacher will start the game when everyone is ready.`;
+        setSave('Waiting for your teacher to start the class');
+      }else if(justStarted){
+        $('startBtn').textContent=campaign.start;
+        setSave('Your teacher started the game');
+        narrate('The teacher started the game. You can begin!');
+        $('startBtn').focus({preventScroll:true});
+      }
     }
 
     function activateLiveRoom(saved) {
@@ -822,11 +847,11 @@
       liveParticipantToken=saved.token;
       try { sessionStorage.setItem(liveStorageKey(liveRoom.code),JSON.stringify(saved)); } catch {}
       $('guestEntry').hidden=true;
-      $('startBtn').hidden=false;
       $('studentName').textContent=`Playing as ${liveParticipant.name} · Room ${liveRoom.code}`;
-      $('previewNote').textContent='Live class game · Nickname and score disappear when the room ends';
+      $('previewNote').textContent=liveRoom.mode==='classwork'?'Live classwork · Wait for your teacher to start':'Homework practice · Start when you are ready';
       $('completionLead').textContent='You completed the live class adventure. Your temporary score is on the room leaderboard.';
       $('continueWorldBtn').href=continueWorldUrl();
+      syncLiveLobby(liveRoom);
       renderLiveBoard(liveRoom);
       clearInterval(livePollTimer);
       livePollTimer=setInterval(()=>{ if(!document.hidden) refreshLiveRoom(); },3000);
@@ -838,7 +863,9 @@
         const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(liveRoom.code)}`);
         if(!response.ok) throw new Error('Room ended');
         const payload=await response.json();
+        const wasWaiting=liveRoomWaiting(liveRoom);
         liveRoom=payload.room;
+        syncLiveLobby(liveRoom,wasWaiting&&!liveRoomWaiting(liveRoom));
         renderLiveBoard(liveRoom);
       }catch{
         clearInterval(livePollTimer);
@@ -1587,6 +1614,10 @@
     setInterval(() => { if (!paused && !document.hidden && $('activity').style.display === 'block') { stats.activeSeconds += 1; updateHud(); } }, 1000);
 
     async function beginAttempt(forceNew) {
+      if(liveRoomWaiting()){
+        syncLiveLobby(liveRoom);
+        return;
+      }
       if (forceNew && attempt && attempt.status !== 'completed') return;
       score = 0;
       runMetrics = { correctInputs:0, mistakes:0, activeSeconds:0 };
@@ -1650,6 +1681,7 @@
           $('guestEntry').hidden=false;
           $('startBtn').hidden=true;
           $('roomCodeInput').value=requestedSessionCode;
+          $('soloChoice').hidden=Boolean(requestedSessionCode);
           renderProgress();
           if(requestedSessionCode){
             try {

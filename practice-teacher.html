@@ -52,12 +52,28 @@
     .live-head h2 { margin:0 0 4px; color:var(--navy); font-size:22px; }
     .live-head p { margin:0; color:var(--muted); }
     .live-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .live-actions select { min-width:170px; }
     .room-stage { display:grid; grid-template-columns:220px 1fr; gap:18px; margin-top:18px; padding-top:18px; border-top:1px solid var(--line); }
     .room-code { display:grid; place-items:center; min-height:140px; border:2px solid var(--cyan); background:var(--soft-cyan); color:var(--navy); }
     .room-code span { display:block; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.8px; }
     .room-code strong { display:block; font-size:38px; letter-spacing:5px; }
     .room-meta { color:var(--muted); font-size:13px; }
     .room-buttons { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+    .room-state { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; padding:12px 14px; border-left:4px solid var(--cyan); background:var(--soft-cyan); color:var(--navy); }
+    .room-state.playing { border-color:var(--green); background:var(--soft-green); }
+    .room-state strong { display:block; }
+    .room-state span { display:block; color:var(--muted); font-size:12px; }
+    .attendance { margin-bottom:14px; }
+    .attendance-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+    .attendance-head h3,.board-title { margin:0; color:var(--navy); font-size:15px; }
+    .attendance-head span { color:var(--muted); font-size:12px; font-weight:700; }
+    .attendance-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; max-height:240px; overflow:auto; }
+    .attendance-student { display:grid; grid-template-columns:24px minmax(0,1fr); gap:8px; align-items:center; padding:8px 10px; border:1px solid var(--line); background:#fff; }
+    .attendance-student .mark { width:22px; height:22px; display:grid; place-items:center; border-radius:50%; background:#fde9e6; color:#b13d2e; font-weight:900; }
+    .attendance-student.joined { border-color:#9edbbf; background:var(--soft-green); }
+    .attendance-student.joined .mark { background:var(--green); color:#fff; }
+    .attendance-student b { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--navy); font-size:12px; }
+    .board-title { margin:12px 0 8px; }
     .live-board { display:grid; align-content:start; gap:7px; }
     .live-player { display:grid; grid-template-columns:34px minmax(0,1fr) auto auto; gap:10px; align-items:center; padding:9px 11px; border:1px solid var(--line); background:#f8fbfd; }
     .live-rank { width:28px; height:28px; display:grid; place-items:center; border-radius:50%; background:var(--navy); color:#fff; font-size:12px; font-weight:900; }
@@ -65,7 +81,7 @@
     .live-player span { color:var(--muted); font-size:12px; }
     .live-empty { display:grid; place-items:center; min-height:120px; color:var(--muted); text-align:center; }
     @media(max-width:820px){ .cards{grid-template-columns:repeat(2,1fr)} .heading{align-items:flex-start;flex-direction:column} .filters{align-items:flex-start;flex-direction:column} .shell{width:min(100% - 20px,1180px)} }
-    @media(max-width:700px){ .live-head,.room-stage{grid-template-columns:1fr;flex-direction:column}.live-actions{width:100%}.live-actions .btn,.live-actions select{flex:1}.live-player{grid-template-columns:34px minmax(0,1fr) auto}.live-player .live-score{display:none} }
+    @media(max-width:700px){ .live-head,.room-stage{grid-template-columns:1fr;flex-direction:column}.live-actions{width:100%}.live-actions .btn,.live-actions select{width:100%;flex:none}.attendance-list{grid-template-columns:1fr}.live-player{grid-template-columns:34px minmax(0,1fr) auto}.live-player .live-score{display:none} }
   </style>
 </head>
 <body>
@@ -74,17 +90,22 @@
     <div class="heading"><div><h1>Practice evidence</h1><p class="sub">See who practised Pointer Control and where support is still useful.</p></div><div class="heading-actions"><a class="btn primary" href="/practice/preview">Preview full game</a><select id="previewStageSelect" aria-label="Choose a practice stage to test"><optgroup label="Foundation World"><option value="foundation:move-pointer">1. Signal Trail</option><option value="foundation:single-click">2. Reactor Rush</option><option value="foundation:double-click">3. Vault Breaker</option><option value="foundation:context-command">4. Command Deck</option><option value="foundation:drag-drop">5. Cargo Rescue</option><option value="foundation:scroll-find">6. Signal Tower</option><option value="foundation:copy-paste-menu">7. Message Relay</option><option value="foundation:keyboard-defense">8. Sky Shield</option></optgroup><optgroup label="Grade 3 World"><option value="g3:copy-paste-shortcut">1. Rapid Relay</option><option value="g3:key-patrol">2. Key Patrol</option><option value="g3:word-blaster">3. Word Blaster</option><option value="g3:capital-charge">4. Capital Charge</option><option value="g3:sentence-engine">5. Sentence Engine</option><option value="g3:repair-bay">6. Repair Bay</option></optgroup></select><button class="btn" id="previewStageBtn" type="button">Test stage</button><button class="btn" id="refreshBtn" type="button">Refresh</button></div></div>
     <section class="live-room" aria-labelledby="liveRoomTitle">
       <div class="live-head">
-        <div><h2 id="liveRoomTitle">Live class arcade</h2><p>Create a temporary room. Learners join with a nickname and the board disappears after eight hours.</p></div>
-        <div class="live-actions"><select id="liveActivity" aria-label="Practice world"><option value="g2-pointer-control">Foundation World</option><option value="g3-keyboard-kingdom">Grade 3 World</option></select><button class="btn primary" id="createRoomBtn" type="button">Start live room</button></div>
+        <div><h2 id="liveRoomTitle">Class arcade</h2><p>Run a teacher-controlled class game or share a self-paced homework room.</p></div>
+        <div class="live-actions"><select id="liveMode" aria-label="Session type"><option value="classwork">Live classwork</option><option value="homework">Homework · self-paced</option></select><select id="liveRoster" aria-label="Class roster"><option value="">No saved class</option></select><select id="liveActivity" aria-label="Practice world"><option value="g2-pointer-control">Foundation World</option><option value="g3-keyboard-kingdom">Grade 3 World</option></select><button class="btn primary" id="createRoomBtn" type="button">Start live room</button></div>
       </div>
       <div class="live-empty" id="liveRoomEmpty">No live room is running. Start one when the class is ready.</div>
       <div class="room-stage" id="liveRoomStage" hidden>
         <div>
           <div class="room-code"><div><span>Room code</span><strong id="liveRoomCode"></strong></div></div>
           <div class="room-meta" id="liveRoomMeta"></div>
-          <div class="room-buttons"><button class="btn" id="copyRoomBtn" type="button">Copy student link</button><button class="btn" id="endRoomBtn" type="button">End room</button></div>
+          <div class="room-buttons"><button class="btn primary" id="startRoomBtn" type="button" hidden>Start class game</button><button class="btn" id="copyRoomBtn" type="button">Copy student link</button><button class="btn" id="endRoomBtn" type="button">End room</button></div>
         </div>
-        <div class="live-board" id="liveLeaderboard" aria-live="polite"></div>
+        <div>
+          <div class="room-state" id="liveRoomState"><div><strong>Class lobby open</strong><span>Learners can join, but only you can start the game.</span></div></div>
+          <section class="attendance" id="liveAttendance" hidden><div class="attendance-head"><h3 id="attendanceTitle">Class attendance</h3><span id="attendanceCount"></span></div><div class="attendance-list" id="attendanceList"></div></section>
+          <h3 class="board-title" id="liveBoardTitle">Learners in the lobby</h3>
+          <div class="live-board" id="liveLeaderboard" aria-live="polite"></div>
+        </div>
       </div>
     </section>
     <section class="cards" aria-label="Practice summary">
@@ -122,12 +143,28 @@
       $('liveRoomStage').hidden=!room;
       $('createRoomBtn').disabled=Boolean(room);
       $('liveActivity').disabled=Boolean(room);
+      $('liveMode').disabled=Boolean(room);
+      $('liveRoster').disabled=Boolean(room);
       if(!room) return;
       liveJoinUrl=`${location.origin}/student/practice/guest?session=${encodeURIComponent(room.code)}${room.activity.id==='g3-keyboard-kingdom'?'&world=g3':''}`;
       $('liveRoomCode').textContent=room.code;
-      $('liveRoomMeta').textContent=`${room.activity.title} · ${room.participantCount} joined · Ends ${new Date(room.expiresAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
+      const classwork=room.mode==='classwork', waiting=classwork&&room.phase==='lobby';
+      $('startRoomBtn').hidden=!waiting;
+      $('liveRoomState').classList.toggle('playing',!waiting);
+      $('liveRoomState').innerHTML=waiting
+        ? `<div><strong>Class lobby open</strong><span>${room.participantCount} joined. Start when everyone is ready.</span></div>`
+        : `<div><strong>${classwork?'Class game in progress':'Homework room open'}</strong><span>${classwork?'All joined learners can now begin.':'Learners may join and play in their own time.'}</span></div>`;
+      $('liveRoomMeta').textContent=`${room.activity.title} · ${room.roster?room.roster.name+' · ':''}${room.participantCount} joined · ${classwork?'Ends':'Available until'} ${new Date(room.expiresAt).toLocaleString([], {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}`;
+      const attendance=room.attendance||[];
+      $('liveAttendance').hidden=!attendance.length;
+      if(attendance.length){
+        $('attendanceTitle').textContent=`${room.roster.name} attendance`;
+        $('attendanceCount').textContent=`${room.joinedRosterCount||0} of ${attendance.length} joined · ${room.absentRosterCount||0} not signed in`;
+        $('attendanceList').innerHTML=attendance.map((student)=>`<div class="attendance-student ${student.joined?'joined':''}"><span class="mark" aria-label="${student.joined?'Joined':'Not signed in'}">${student.joined?'✓':'×'}</span><b>${esc(student.name)}</b></div>`).join('');
+      }
+      $('liveBoardTitle').textContent=waiting?'Learners in the lobby':'Live leaderboard';
       $('liveLeaderboard').innerHTML=room.leaderboard.length
-        ? room.leaderboard.slice(0,12).map((player)=>`<div class="live-player"><span class="live-rank">${player.rank}</span><b>${esc(player.name)}</b><span>${player.activityId==='g3-keyboard-kingdom'?'Grade 3 · ':''}${player.missionsCompleted}/${player.missionCount||room.activity.missionCount} missions · ${player.accuracyPercent??100}%</span><span class="live-score">${player.score} pts</span></div>`).join('')
+        ? room.leaderboard.slice(0,12).map((player)=>`<div class="live-player"><span class="live-rank">${waiting?'✓':player.rank}</span><b>${esc(player.name)}</b><span>${waiting?'Ready to start':`${player.activityId==='g3-keyboard-kingdom'?'Grade 3 · ':''}${player.missionsCompleted}/${player.missionCount||room.activity.missionCount} missions · ${player.accuracyPercent??100}%`}</span><span class="live-score">${waiting?'Joined':player.score+' pts'}</span></div>`).join('')
         : '<div class="live-empty">Waiting for learners to join...</div>';
     }
 
@@ -143,11 +180,27 @@
     async function createLiveRoom() {
       $('createRoomBtn').disabled=true;
       try {
-        const response=await fetch('/api/practice/live-sessions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({activityId:$('liveActivity').value})});
+        const response=await fetch('/api/practice/live-sessions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({activityId:$('liveActivity').value,mode:$('liveMode').value,rosterId:$('liveRoster').value||null})});
         const payload=await response.json();
         if(!response.ok) throw new Error(payload.error||'The live room could not be started.');
         renderLiveRoom(payload.room);
       }catch(error){ alert(error.message); $('createRoomBtn').disabled=false; }
+    }
+
+    async function startLiveRoom() {
+      if(!liveRoom||liveRoom.phase!=='lobby') return;
+      $('startRoomBtn').disabled=true;
+      try {
+        const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(liveRoom.code)}/start`,{method:'POST'});
+        const payload=await response.json();
+        if(!response.ok) throw new Error(payload.error||'The class game could not be started.');
+        renderLiveRoom(payload.room);
+      }catch(error){ alert(error.message); $('startRoomBtn').disabled=false; }
+    }
+
+    function syncLiveSetup() {
+      const classwork=$('liveMode').value==='classwork';
+      $('createRoomBtn').textContent=classwork?'Create class lobby':'Create homework room';
     }
 
     async function endLiveRoom() {
@@ -197,6 +250,7 @@
         const rosters=new Map();
         for(const student of data.students||[]) for(const roster of student.rosters||[]) rosters.set(roster.id,roster.name);
         $('rosterFilter').innerHTML='<option value="">All classes</option>'+[...rosters].sort((a,b)=>a[1].localeCompare(b[1])).map(([id,name])=>`<option value="${esc(id)}">${esc(name)}</option>`).join('');
+        $('liveRoster').innerHTML='<option value="">No saved class</option>'+[...rosters].sort((a,b)=>a[1].localeCompare(b[1])).map(([id,name])=>`<option value="${esc(id)}">${esc(name)}</option>`).join('');
         refreshCards(); render(); $('loading').hidden=true; $('content').hidden=false;
       }catch(error){ $('loading').className='error'; $('loading').textContent=error.message; }
     }
@@ -204,12 +258,15 @@
     $('masteryFilter').addEventListener('change',render);
     $('refreshBtn').addEventListener('click',load);
     $('createRoomBtn').addEventListener('click',createLiveRoom);
+    $('startRoomBtn').addEventListener('click',startLiveRoom);
+    $('liveMode').addEventListener('change',syncLiveSetup);
     $('endRoomBtn').addEventListener('click',endLiveRoom);
     $('copyRoomBtn').addEventListener('click',async()=>{
       if(!liveJoinUrl) return;
       try { await navigator.clipboard.writeText(liveJoinUrl); $('copyRoomBtn').textContent='Link copied'; setTimeout(()=>$('copyRoomBtn').textContent='Copy student link',1600); }
       catch { prompt('Copy this student link:',liveJoinUrl); }
     });
+    syncLiveSetup();
     load();
     loadLiveRoom();
     setInterval(()=>{ if(liveRoom&&!document.hidden) loadLiveRoom(); },3000);
