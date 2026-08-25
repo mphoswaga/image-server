@@ -53,6 +53,24 @@ test('live checkpoints are ordered, idempotent and cap client scores', () => {
   }), /Reactor Rush/i);
 });
 
+test('live leaderboard score is reduced by mistakes and slow active time', () => {
+  const room = live.createRoom({ teacherId: 'teacher-performance' });
+  const joined = live.joinRoom(room.code, 'Nia');
+  const result = live.checkpointRoom(room.code, joined.token, {
+    checkpointId: 'nia-pointer',
+    stepId: 'move-pointer',
+    evidence: { action:'pointer_enter', target:'blue-star' },
+    baseScore: 1300,
+    correctInputs: 8,
+    mistakes: 4,
+    activeSeconds: 70,
+  });
+  assert.ok(result.participant.score < 1300);
+  assert.equal(result.participant.accuracyPercent, 67);
+  assert.equal(result.participant.mistakes, 4);
+  assert.equal(result.participant.activeSeconds, 70);
+});
+
 test('a Foundation live participant continues into Grade 3 without rejoining', () => {
   const room = live.createRoom({ teacherId: 'teacher-worlds', activityId: 'g2-pointer-control' });
   const joined = live.joinRoom(room.code, 'Tara');

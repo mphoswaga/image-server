@@ -174,7 +174,7 @@ test('guest practice is public but never writes recorded student evidence', () =
   assert.match(player, /function continueWorldUrl\(\)/);
   assert.match(player, /\/student\/practice\/guest\?session=\$\{encodeURIComponent\(code\)\}&world=g3&continue=1/);
   assert.match(player, /continuingFoundationRoom=requestedContinue&&requestedWorld==='g3'/);
-  assert.match(player, /body:JSON\.stringify\(\{\.\.\.payload,arcadeScore:score,activityId:ACTIVITY_ID,activityVersion:campaign\.version\}\)/);
+  assert.match(player, /body:JSON\.stringify\(\{\.\.\.payload,arcadeScore:performanceSummary\(\)\.score,activityId:ACTIVITY_ID,activityVersion:campaign\.version\}\)/);
   assert.match(start, /href="\/student\/practice\/guest">Practise without signing in/);
   assert.match(teacherLogin, /href="\/student\/practice\/guest">Student guest practice/);
   assert.match(teacherLogin, /if\(\$\('authGuestPractice'\)\) \$\('authGuestPractice'\)\.style\.display=d\.enabled\?'block':'none'/);
@@ -192,7 +192,9 @@ test('the learner quest keeps Byte and its connected game states', () => {
   assert.match(player, /Signal Trail/);
   assert.match(player, /Message Relay/);
   assert.match(player, /Keyboard Kingdom/);
-  assert.match(player, /Arcade score/);
+  assert.match(player, /id="scoreValue"/);
+  assert.match(player, /id="accuracyValue"/);
+  assert.match(player, /id="timeValue"/);
   assert.match(player, /arcade-grid/);
   assert.match(player, /burstParticles/);
   assert.match(player, /Combo/);
@@ -236,17 +238,33 @@ test('Grade 2 play uses animated demonstrations and save-before-auto-advance', (
 
 test('both arcade worlds provide sustained, varied practice', () => {
   const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
-  assert.match(player, /'move-pointer':8, 'single-click':8, 'double-click':6/);
-  assert.match(player, /'context-command':5, 'drag-drop':5, 'scroll-find':4, 'copy-paste-menu':3, 'keyboard-defense':5/);
-  assert.match(player, /'copy-paste-shortcut':3, 'key-patrol':8, 'word-blaster':7, 'capital-charge':5, 'sentence-engine':2, 'repair-bay':5/);
+  assert.match(player, /const missionGoals = PracticeScoring\.missionGoals/);
   assert.match(player, /'BUG'.*'BYTE'.*'CODE'.*'POWER'.*'CASTLE'.*'SIGNAL'.*'KEYBOARD'/s);
   assert.match(player, /class="blaster-shield"/);
   assert.match(player, /Boss wave/);
+  assert.match(player, /Type the first letter to <b>lock a ship<\/b>/);
+  assert.match(player, /target\.dataset\.word\.startsWith\(key\)/);
+  assert.match(player, /classList\.add\('locked'\)/);
   assert.match(player, /\['BYTE','STAR','CODE','POWER','SHIELD'\]/);
   assert.match(player, /\['I CAN CODE\.','BYTE IS READY\.'\]/);
   assert.match(player, /\['PEN','PIN'\],\['DOG','DIG'\]/);
   assert.match(player, /About 25–30 minutes/);
   assert.match(player, /About 22–25 minutes/);
+});
+
+test('the arcade result factors accuracy, mistakes and active time into its score', () => {
+  const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
+  const teacher = fs.readFileSync(path.join(__dirname, '..', 'practice-teacher.html'), 'utf8');
+  assert.match(player, /src="\/practice-scoring\.js"/);
+  assert.match(player, /id="accuracyValue"/);
+  assert.match(player, /id="timeValue"/);
+  assert.match(player, /correctInputs:stats\.correctInputs/);
+  assert.match(player, /mistakes:stats\.mistakes/);
+  assert.match(player, /Final score/);
+  assert.match(player, /Accuracy<strong>/);
+  assert.match(player, /Mistakes<strong>/);
+  assert.match(player, /Active time<strong>/);
+  assert.match(teacher, /accurate · \$\{mistakes\} mistakes/);
 });
 
 test('Grade 2 Message Relay uses a consistent right-click Copy and Paste menu', () => {

@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { DATA_DIR, writeJsonAtomic } = require('./storage');
+const scoring = require('./public/practice-scoring');
 
 const PRACTICE_DIR = path.join(DATA_DIR, 'practice');
 const ATTEMPTS_DIR = path.join(PRACTICE_DIR, 'attempts');
@@ -209,6 +210,11 @@ function createAttempt({ studentId, studentName, activityId }) {
     currentStepIndex: 0,
     checkpoints: [],
     mastery: 'not_started',
+    score: 0,
+    baseScore: 0,
+    accuracyPercent: 100,
+    mistakes: 0,
+    activeSeconds: 0,
     startedAt: now,
     updatedAt: now,
     completedAt: null,
@@ -266,19 +272,40 @@ function checkpointAttempt(attemptId, studentId, input) {
   const attempts = asBoundedInt(input.attempts, 1, 50, 1);
   const hintsUsed = asBoundedInt(input.hintsUsed, 0, 5, 0);
   const activeSeconds = asBoundedInt(input.activeSeconds, 1, 600, 1);
+  const correctInputs = asBoundedInt(input.correctInputs, 0, 10000, 0);
+  const mistakes = asBoundedInt(input.mistakes, 0, 1000, Math.max(0, attempts - 1));
+  const maximumBaseScore = scoring.maximumBaseScore(activity.steps, attempt.currentStepIndex + 1);
+  const baseScore = asBoundedInt(input.baseScore, 0, maximumBaseScore, attempt.baseScore || 0);
   const checkpoint = {
     checkpointId,
     stepId: expected.id,
     attempts,
     hintsUsed,
     activeSeconds,
+    correctInputs,
+    mistakes,
     mastery: checkpointMastery(attempts, hintsUsed),
     completedAt: new Date().toISOString(),
   };
 
   attempt.checkpoints.push(checkpoint);
+  attempt.baseScore = Math.max(attempt.baseScore || 0, baseScore);
   attempt.currentStepIndex += 1;
   attempt.mastery = overallMastery(attempt.checkpoints);
+  const totals = attempt.checkpoints.reduce((summary, item) => ({
+    correctInputs: summary.correctInputs + (item.correctInputs || 0),
+    mistakes: summary.mistakes + (item.mistakes ?? Math.max(0, (item.attempts || 1) - 1)),
+    activeSeconds: summary.activeSeconds + (item.activeSeconds || 0),
+  }), { correctInputs:0, mistakes:0, activeSeconds:0 });
+  const performance = scoring.summarize({
+    baseScore: attempt.baseScore,
+    ...totals,
+    targetSeconds: scoring.targetSecondsForSteps(activity.steps, attempt.currentStepIndex),
+  });
+  attempt.score = performance.score;
+  attempt.accuracyPercent = performance.accuracyPercent;
+  attempt.mistakes = performance.mistakes;
+  attempt.activeSeconds = performance.activeSeconds;
   if (attempt.currentStepIndex >= activity.steps.length) {
     attempt.status = 'completed';
     attempt.completedAt = checkpoint.completedAt;

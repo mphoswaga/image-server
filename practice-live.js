@@ -6,28 +6,12 @@ const path = require('path');
 const crypto = require('crypto');
 const { DATA_DIR, writeJsonAtomic } = require('./storage');
 const practice = require('./practice');
+const scoring = require('./public/practice-scoring');
 
 const LIVE_DIR = path.join(DATA_DIR, 'practice', 'live-sessions');
 const ROOM_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 const DEFAULT_TTL_MS = 8 * 60 * 60 * 1000;
 const MAX_TTL_MS = 24 * 60 * 60 * 1000;
-
-const MISSION_GOALS = Object.freeze({
-  'move-pointer': 8,
-  'single-click': 8,
-  'double-click': 6,
-  'context-command': 5,
-  'drag-drop': 5,
-  'scroll-find': 4,
-  'copy-paste-menu': 3,
-  'keyboard-defense': 5,
-  'copy-paste-shortcut': 3,
-  'key-patrol': 8,
-  'word-blaster': 7,
-  'capital-charge': 5,
-  'sentence-engine': 2,
-  'repair-bay': 5,
-});
 
 function roomPath(code) {
   return path.join(LIVE_DIR, `${normalizeCode(code)}.json`);
@@ -86,16 +70,8 @@ function generateCode() {
   throw new Error('A room code could not be created. Please try again.');
 }
 
-function scoreForGoal(goal) {
-  let score = 0;
-  for (let combo = 1; combo <= goal; combo += 1) score += 100 + Math.min(5, combo - 1) * 20;
-  return score;
-}
-
 function maximumScore(activity, completedSteps) {
-  return activity.steps.slice(0, completedSteps).reduce((sum, step) => (
-    sum + scoreForGoal(MISSION_GOALS[step.id] || 1)
-  ), 0);
+  return scoring.maximumBaseScore(activity.steps, completedSteps);
 }
 
 function progressFor(participant, activityId, room) {
@@ -106,6 +82,10 @@ function progressFor(participant, activityId, room) {
       status: participant.status || 'in_progress',
       checkpoints: participant.checkpoints || [],
       score: participant.score || 0,
+      baseScore: participant.baseScore || participant.score || 0,
+      correctInputs: participant.correctInputs || 0,
+      mistakes: participant.mistakes || 0,
+      activeSeconds: participant.activeSeconds || 0,
       completedAt: participant.completedAt || null,
     };
   }
@@ -115,6 +95,10 @@ function progressFor(participant, activityId, room) {
       status: 'in_progress',
       checkpoints: [],
       score: 0,
+      baseScore: 0,
+      correctInputs: 0,
+      mistakes: 0,
+      activeSeconds: 0,
       completedAt: null,
     };
   }
@@ -146,6 +130,15 @@ function publicLeaderboard(room) {
         missionCount: activeActivity ? activeActivity.steps.length : 0,
         activityId: activeActivityId,
         activityTitle: activeActivity ? activeActivity.title : '',
+        accuracyPercent: scoring.summarize({
+          baseScore: active.baseScore || active.score || 0,
+          correctInputs: active.correctInputs || 0,
+          mistakes: active.mistakes || 0,
+          activeSeconds: active.activeSeconds || 0,
+          targetSeconds: activeActivity ? scoring.targetSecondsForSteps(activeActivity.steps, active.currentStepIndex) : 1,
+        }).accuracyPercent,
+        mistakes: active.mistakes || 0,
+        activeSeconds: active.activeSeconds || 0,
         status: active.status || 'in_progress',
       };
     })
@@ -215,6 +208,10 @@ function joinRoom(code, nickname) {
     name,
     tokenHash: tokenHash(token),
     score: 0,
+    baseScore: 0,
+    correctInputs: 0,
+    mistakes: 0,
+    activeSeconds: 0,
     currentStepIndex: 0,
     status: 'in_progress',
     checkpoints: [],
@@ -228,6 +225,10 @@ function joinRoom(code, nickname) {
         status: 'in_progress',
         checkpoints: [],
         score: 0,
+        baseScore: 0,
+        correctInputs: 0,
+        mistakes: 0,
+        activeSeconds: 0,
         completedAt: null,
       },
     },
@@ -275,14 +276,35 @@ function checkpointRoom(code, token, input = {}) {
   }
 
   const nextStepIndex = progress.currentStepIndex + 1;
-  const submittedScore = Math.max(0, Number.parseInt(input.arcadeScore, 10) || 0);
-  progress.score = Math.max(progress.score || 0, Math.min(submittedScore, maximumScore(activity, nextStepIndex)));
+  const submittedBaseScore = Math.max(0, Number.parseInt(input.baseScore ?? input.arcadeScore, 10) || 0);
+  progress.baseScore = Math.max(progress.baseScore || 0, Math.min(submittedBaseScore, maximumScore(activity, nextStepIndex)));
+  progress.correctInputs = Math.min(10000, (progress.correctInputs || 0) + Math.max(0, Number.parseInt(input.correctInputs, 10) || 0));
+  progress.mistakes = Math.min(1000, (progress.mistakes || 0) + Math.max(0, Number.parseInt(input.mistakes, 10) || 0));
+  progress.activeSeconds = Math.min(7200, (progress.activeSeconds || 0) + Math.max(1, Number.parseInt(input.activeSeconds, 10) || 1));
+  progress.score = scoring.summarize({
+    baseScore: progress.baseScore,
+    correctInputs: progress.correctInputs,
+    mistakes: progress.mistakes,
+    activeSeconds: progress.activeSeconds,
+    targetSeconds: scoring.targetSecondsForSteps(activity.steps, nextStepIndex),
+  }).score;
   progress.currentStepIndex = nextStepIndex;
   progress.status = nextStepIndex >= activity.steps.length ? 'completed' : 'in_progress';
   participant.updatedAt = new Date().toISOString();
-  progress.checkpoints.push({ checkpointId, stepId: expected.id, completedAt: participant.updatedAt });
+  progress.checkpoints.push({
+    checkpointId,
+    stepId: expected.id,
+    correctInputs: Math.max(0, Number.parseInt(input.correctInputs, 10) || 0),
+    mistakes: Math.max(0, Number.parseInt(input.mistakes, 10) || 0),
+    activeSeconds: Math.max(1, Number.parseInt(input.activeSeconds, 10) || 1),
+    completedAt: participant.updatedAt,
+  });
   if (progress.status === 'completed') progress.completedAt = participant.updatedAt;
   participant.score = Object.values(participant.activityProgress).reduce((sum, item) => sum + (item.score || 0), 0);
+  participant.baseScore = Object.values(participant.activityProgress).reduce((sum, item) => sum + (item.baseScore || 0), 0);
+  participant.correctInputs = Object.values(participant.activityProgress).reduce((sum, item) => sum + (item.correctInputs || 0), 0);
+  participant.mistakes = Object.values(participant.activityProgress).reduce((sum, item) => sum + (item.mistakes || 0), 0);
+  participant.activeSeconds = Object.values(participant.activityProgress).reduce((sum, item) => sum + (item.activeSeconds || 0), 0);
   participant.currentStepIndex = progress.currentStepIndex;
   participant.status = progress.status;
   participant.checkpoints = progress.checkpoints;

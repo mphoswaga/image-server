@@ -82,7 +82,7 @@
     .workspace-head { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:12px; }
     .workspace-head p { margin:5px 0 0; color:var(--muted); }
     .skill-number { flex:none; padding:5px 9px; border-radius:6px; background:var(--soft-green); color:var(--green-dark); font-size:12px; font-weight:800; }
-    .game-hud { display:grid; grid-template-columns:minmax(150px,1fr) repeat(4,auto); gap:12px; align-items:center; margin-bottom:12px; padding:10px 12px; border:1px solid var(--line); background:#f8fbfd; }
+    .game-hud { display:grid; grid-template-columns:minmax(150px,1fr) repeat(6,auto); gap:12px; align-items:center; margin-bottom:12px; padding:10px 12px; border:1px solid var(--line); background:#f8fbfd; }
     .mission-meter { height:10px; overflow:hidden; border-radius:10px; background:#dce7ef; }
     .mission-meter span { display:block; width:0; height:100%; background:var(--green); transition:width .28s ease; }
     .hud-stat { min-width:92px; color:var(--muted); font-size:11px; font-weight:700; text-align:right; }
@@ -151,14 +151,16 @@
     .signal-word .typed { color:#69e3a7; text-shadow:0 0 9px rgba(105,227,167,.8); }
     .defense-cannon { position:absolute; z-index:3; left:50%; bottom:13px; width:72px; height:35px; transform:translateX(-50%); border:3px solid #69e3a7; border-radius:35px 35px 6px 6px; background:#12623e; box-shadow:0 0 24px rgba(105,227,167,.55); }
     .defense-line { position:absolute; left:0; right:0; bottom:54px; height:3px; background:linear-gradient(90deg,transparent,#f05b6b,transparent); box-shadow:0 0 10px #f05b6b; }
-    .word-blaster-arena { width:min(760px,calc(100% - 30px)); height:290px; position:relative; overflow:hidden; border:2px solid #8f75d9; background:radial-gradient(circle at 50% 115%,rgba(37,205,220,.28),transparent 36%),linear-gradient(180deg,#160d38 0%,#0a1532 64%,#10284b 100%); box-shadow:0 18px 40px rgba(0,0,0,.42),inset 0 0 60px rgba(168,85,247,.12); outline:none; }
+    .word-blaster-arena { width:min(800px,calc(100% - 24px)); height:340px; position:relative; overflow:hidden; border:2px solid #8f75d9; background:radial-gradient(circle at 50% 115%,rgba(37,205,220,.28),transparent 36%),linear-gradient(180deg,#160d38 0%,#0a1532 64%,#10284b 100%); box-shadow:0 18px 40px rgba(0,0,0,.42),inset 0 0 60px rgba(168,85,247,.12); outline:none; }
     .word-blaster-arena:before { content:""; position:absolute; inset:0; opacity:.55; background-image:radial-gradient(circle,#d7ccff 1px,transparent 1.5px),linear-gradient(rgba(100,91,180,.10) 1px,transparent 1px),linear-gradient(90deg,rgba(100,91,180,.10) 1px,transparent 1px); background-size:53px 53px,38px 38px,38px 38px; animation:blasterStars 8s linear infinite; }
     .blaster-wave { position:absolute; z-index:8; left:14px; top:13px; display:flex; align-items:center; gap:8px; padding:7px 10px; border:1px solid #6657ad; background:rgba(8,14,40,.82); color:#d8d0ff; font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:.7px; }
     .blaster-wave strong { color:#f8c342; }
-    .blaster-target { position:absolute; z-index:6; left:var(--target-left,50%); top:24px; transform:translateX(-50%); display:grid; justify-items:center; gap:4px; animation:blasterDive var(--wave-speed,7s) ease-in-out infinite alternate; }
+    .blaster-target { position:absolute; z-index:6; left:var(--target-left,50%); top:52px; transform:translateX(-50%); display:grid; justify-items:center; gap:4px; animation:blasterApproach var(--wave-speed,12s) linear var(--wave-delay,0s) forwards; }
     .blaster-target:before { content:""; width:86px; height:38px; border:3px solid #f05ba9; border-radius:50% 50% 12px 12px; background:radial-gradient(circle at 50% 25%,#ff9bd0 0 8%,transparent 9%),linear-gradient(180deg,#8b367f,#431b5e); box-shadow:0 0 24px rgba(240,91,169,.74); }
     .blaster-target:after { content:""; position:absolute; top:34px; width:3px; height:22px; background:#f05ba9; box-shadow:0 0 12px #f05ba9; }
     .blaster-target.hit { filter:brightness(1.45); transform:translateX(-50%) scale(1.07); }
+    .blaster-target.locked:before { border-color:#f8c342; box-shadow:0 0 30px rgba(248,195,66,.92); }
+    .blaster-target.locked .blaster-word { border-color:#f8c342; box-shadow:0 0 24px rgba(248,195,66,.62); }
     .blaster-target.explode { animation:none; opacity:0; transform:translateX(-50%) scale(1.8) rotate(12deg); transition:opacity .28s ease,transform .28s ease; }
     .blaster-word { min-width:112px; padding:8px 16px; border:2px solid #25cddc; border-radius:18px; background:#07142c; color:#fff; text-align:center; font-size:21px; font-weight:900; letter-spacing:3px; box-shadow:0 0 20px rgba(37,205,220,.42); }
     .blaster-word .typed { color:#69e3a7; text-shadow:0 0 10px rgba(105,227,167,.85); }
@@ -174,6 +176,7 @@
     .shield-cell.empty { background:transparent; border-color:#5b527e; box-shadow:none; }
     .blaster-command { position:absolute; z-index:9; left:14px; right:14px; bottom:8px; display:flex; justify-content:space-between; gap:12px; color:#c9d8e8; font-size:11px; font-weight:800; pointer-events:none; }
     .blaster-command b { color:#8cecf4; }
+    .blaster-lock { color:#f8c342; }
     .key-arena { width:min(720px,calc(100% - 30px)); min-height:285px; display:grid; place-items:center; gap:22px; padding:34px; border:2px solid #6657ad; background:radial-gradient(circle at center,rgba(168,85,247,.20),transparent 54%),#090b24; }
     .key-prompt { color:#c9bfff; font-size:15px; font-weight:800; text-align:center; }
     .key-row { display:flex; justify-content:center; flex-wrap:wrap; gap:12px; }
@@ -225,6 +228,9 @@
     .device-note { display:none; margin:0 0 14px; padding:12px; background:var(--soft-orange); border-left:4px solid var(--orange); color:#7b421f; }
     .preview-note { display:none; margin:0 0 14px; padding:12px 16px; background:#fff8e5; border:1px solid #e3c76f; color:#654c10; font-size:14px; font-weight:700; }
     .mastery { display:inline-block; padding:6px 10px; border-radius:6px; background:var(--soft-green); color:var(--green-dark); font-weight:900; text-transform:capitalize; }
+    .result-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:20px 0; }
+    .result-stat { padding:14px 10px; border:1px solid #2e5884; background:#102747; color:#9fb4ca; font-size:12px; }
+    .result-stat strong { display:block; margin-top:3px; color:#fff; font-size:23px; }
     .quest-hero { display:grid; grid-template-columns:minmax(260px,.8fr) minmax(360px,1.2fr); align-items:center; gap:34px; text-align:left; }
     .bot-stage { min-height:360px; position:relative; display:grid; place-items:center; border:1px solid #2d5380; background:#0b1a35; overflow:hidden; }
     body.intro-screen:not(.campaign-g3) .bot-stage { background-image:linear-gradient(rgba(5,14,32,.24),rgba(5,14,32,.58)),url('/assets/practice/bg_byte_city_blackout.jpeg'); background-position:center; background-size:cover; }
@@ -265,7 +271,7 @@
     @keyframes sparkBurst { from{opacity:1;transform:translate(0,0) scale(1)} to{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.2)} }
     @keyframes wrongShake { 25%{transform:translateX(-7px)} 50%{transform:translateX(7px)} 75%{transform:translateX(-4px)} }
     @keyframes signalDescend { from{top:18px} to{top:150px} }
-    @keyframes blasterDive { from{top:28px;transform:translateX(-50%) scale(.92)} to{top:142px;transform:translateX(-50%) scale(1.08)} }
+    @keyframes blasterApproach { from{top:52px;transform:translateX(-50%) scale(.82)} to{top:226px;transform:translateX(-50%) scale(1.08)} }
     @keyframes blasterStars { to{background-position:0 53px,0 38px,38px 0} }
     @keyframes decoyDrift { from{transform:translate(-8px,-5px)} to{transform:translate(18px,12px)} }
     @keyframes keyGlow { 50%{transform:translateY(3px);box-shadow:0 5px 0 #251b3d,0 0 40px rgba(198,156,255,.8)} }
@@ -330,7 +336,7 @@
     body.playing .workspace { padding:18px; }
     body.playing .workspace-head { align-items:center; margin-bottom:10px; }
     body.playing .workspace-head p { display:none; }
-    body.playing .game-hud { grid-template-columns:minmax(160px,1fr) repeat(3,minmax(74px,auto)); border-radius:10px; }
+    body.playing .game-hud { grid-template-columns:minmax(150px,1fr) repeat(6,minmax(62px,auto)); border-radius:10px; }
     body.playing .combo-stat { display:none; }
     body.playing .hud-stat { text-align:center; }
     body.playing .task-area { min-height:390px; border-radius:12px; }
@@ -507,9 +513,10 @@
       .live-mini-board { width:100%; justify-content:flex-start; overflow-x:auto; padding-bottom:2px; }
       .quest-map { grid-template-columns:repeat(var(--mission-count,8),128px); overflow-x:auto; padding-bottom:5px; }
       .fact+.fact { border-left:0; border-top:1px solid var(--line); }
-      .game-hud { grid-template-columns:repeat(4,1fr); }
+      .game-hud { grid-template-columns:repeat(3,1fr); }
       .game-hud .mission-meter { grid-column:1/-1; }
       .hud-stat { min-width:0; text-align:center; }
+      .result-stats { grid-template-columns:repeat(2,1fr); }
       .arcade-grid { height:320px; gap:8px; padding:8px; }
       .arcade-target { width:58px; height:58px; }
       .vault-grid { grid-template-columns:repeat(2,1fr); gap:9px; }
@@ -529,7 +536,8 @@
       body.playing .progress { grid-template-columns:repeat(var(--mission-count,8),42px); justify-content:flex-start; overflow-x:auto; }
       body.playing .progress:before { display:none; }
       body.playing .coach { grid-template-columns:48px 1fr; }
-      body.playing .game-hud { grid-template-columns:1fr repeat(3,62px); gap:6px; }
+      body.playing .game-hud { grid-template-columns:repeat(3,1fr); gap:6px; }
+      body.playing .game-hud .mission-meter { grid-column:1/-1; }
       body.playing .hud-stat { font-size:9px; }
       body.playing .hud-stat strong { font-size:15px; }
       body.playing .task-area { min-height:420px; }
@@ -607,7 +615,7 @@
       </div>
       <div class="workspace" id="workspace">
         <div class="workspace-head"><div><h2 id="skillTitle"></h2><p id="skillInstruction"></p></div><div class="skill-number" id="skillNumber"></div></div>
-        <div class="game-hud"><div class="mission-meter" aria-label="Mission progress"><span id="missionMeter"></span></div><div class="hud-stat">Mission<strong id="roundValue">0 / 1</strong></div><div class="hud-stat combo-stat">Combo<strong id="comboValue">0×</strong></div><div class="hud-stat">City power<strong id="cityPowerValue">0%</strong></div><div class="hud-stat">Score<strong id="scoreValue">0</strong></div></div>
+        <div class="game-hud"><div class="mission-meter" aria-label="Mission progress"><span id="missionMeter"></span></div><div class="hud-stat">Mission<strong id="roundValue">0 / 1</strong></div><div class="hud-stat combo-stat">Combo<strong id="comboValue">0×</strong></div><div class="hud-stat">Accuracy<strong id="accuracyValue">100%</strong></div><div class="hud-stat">Time<strong id="timeValue">0:00</strong></div><div class="hud-stat">City power<strong id="cityPowerValue">0%</strong></div><div class="hud-stat">Score<strong id="scoreValue">0</strong></div></div>
         <div class="task-area" id="taskArea"></div>
         <div class="feedback" id="feedback" role="status" aria-live="polite"></div>
         <div class="hint" id="hint" role="status" aria-live="polite"></div>
@@ -627,6 +635,7 @@
         <p class="lead" id="completionLead">You moved, clicked, double-clicked, dragged and scrolled. Your teacher can now see the skills you practised.</p>
         <p id="masterySummary"></p>
         <p id="scoreSummary"></p>
+        <div class="result-stats" id="resultStats"></div>
         <div class="badge-shelf" id="badgeShelf" aria-label="Earned skill badges"></div>
         <div class="next-world" id="nextWorld"><b>New world unlocked</b><strong id="nextWorldTitle">Advanced Keyboard Kingdom</strong><span id="nextWorldCopy">Continue into the Grade 3 keyboard campaign.</span><a class="btn primary" id="continueWorldBtn" href="#" style="margin-top:14px">Continue to Grade 3</a></div>
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:24px">
@@ -637,6 +646,7 @@
     </section>
   </main>
 
+  <script src="/practice-scoring.js"></script>
   <script>
     const previewMode = location.pathname === '/practice/preview';
     const guestMode = location.pathname === '/student/practice/guest';
@@ -716,8 +726,9 @@
       'sentence-engine': { title:'Build a complete sentence', action:'Type letters, spaces and the final full stop.', detail:'Copy the sentence exactly as it appears.', visual:'type' },
       'repair-bay': { title:'Delete, then repair', action:'Use Backspace to remove the mistake, then type the fix.', detail:'Keep the correct beginning of each word.', visual:'type' },
     };
-    const missionGoals = { 'move-pointer':8, 'single-click':8, 'double-click':6, 'context-command':5, 'drag-drop':5, 'scroll-find':4, 'copy-paste-menu':3, 'keyboard-defense':5, 'copy-paste-shortcut':3, 'key-patrol':8, 'word-blaster':7, 'capital-charge':5, 'sentence-engine':2, 'repair-bay':5 };
+    const missionGoals = PracticeScoring.missionGoals;
     const keyboardStepIds = new Set(['copy-paste-menu','copy-paste-shortcut','keyboard-defense','key-patrol','word-blaster','capital-charge','sentence-engine','repair-bay']);
+    const inputTrackedStepIds = new Set(['keyboard-defense','key-patrol','word-blaster','capital-charge','sentence-engine','repair-bay']);
     const $ = (id) => document.getElementById(id);
 
     function applyCampaignCopy() {
@@ -755,7 +766,9 @@
     let stepIndex = 0;
     let phase = 'show';
     let independentSaved = false;
-    let stats = { attempts:0, hintsUsed:0, activeSeconds:0 };
+    let stats = { attempts:0, hintsUsed:0, activeSeconds:0, correctInputs:0, mistakes:0 };
+    let runMetrics = { correctInputs:0, mistakes:0, activeSeconds:0 };
+    let metricsCommittedForStep = false;
     let roundProgress = 0;
     let score = 0;
     let combo = 0;
@@ -765,6 +778,7 @@
     let roundLocked = false;
     let voiceEnabled = true;
     let activeKeyHandler = null;
+    let activeGameTimers = [];
     let autoAdvanceTimer = null;
     let taskAreaClickHandler = null;
     let taskAreaPointerDownHandler = null;
@@ -870,10 +884,48 @@
     function currentStep() { return steps[stepIndex]; }
     function roundGoal() { return phase === 'independent' ? missionGoals[currentStep().id] : 1; }
 
+    function formatGameTime(seconds) {
+      const value=Math.max(0,Math.round(Number(seconds)||0));
+      return `${Math.floor(value/60)}:${String(value%60).padStart(2,'0')}`;
+    }
+
+    function performanceMetrics() {
+      const pending=metricsCommittedForStep ? {correctInputs:0,mistakes:0,activeSeconds:0} : stats;
+      return {
+        correctInputs:runMetrics.correctInputs+(pending.correctInputs||0),
+        mistakes:runMetrics.mistakes+(pending.mistakes||0),
+        activeSeconds:runMetrics.activeSeconds+(pending.activeSeconds||0),
+      };
+    }
+
+    function performanceSummary() {
+      const metrics=performanceMetrics();
+      return PracticeScoring.summarize({
+        baseScore:score,
+        ...metrics,
+        targetSeconds:PracticeScoring.targetSecondsForSteps(steps,Math.min(steps.length,stepIndex+1)),
+      });
+    }
+
+    function recordCorrectInput(count=1) {
+      stats.correctInputs=(stats.correctInputs||0)+Math.max(0,count);
+    }
+
+    function commitStepMetrics(payload) {
+      if(metricsCommittedForStep) return;
+      runMetrics.correctInputs+=payload.correctInputs||0;
+      runMetrics.mistakes+=payload.mistakes||0;
+      runMetrics.activeSeconds+=payload.activeSeconds||0;
+      metricsCommittedForStep=true;
+    }
+
     function updateHud() {
       const goal = roundGoal();
       $('roundValue').textContent = `${Math.min(roundProgress,goal)} / ${goal}`;
-      $('scoreValue').textContent = score;
+      const performance=performanceSummary();
+      $('scoreValue').textContent = performance.score;
+      $('accuracyValue').textContent = `${performance.accuracyPercent}%`;
+      $('timeValue').textContent = formatGameTime(performance.activeSeconds);
       $('comboValue').textContent = `${combo}×`;
       $('comboValue').classList.toggle('combo-hot',combo >= 3);
       const roomPower=100/steps.length;
@@ -962,6 +1014,8 @@
     function clearActiveInput() {
       if (activeKeyHandler) window.removeEventListener('keydown',activeKeyHandler);
       activeKeyHandler = null;
+      for(const timer of activeGameTimers) clearTimeout(timer);
+      activeGameTimers=[];
     }
 
     function keyboardWord(word, typedCount) {
@@ -1129,7 +1183,7 @@
           if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
           const key=event.key.toUpperCase();
           if (key !== word[typedCount]) return registerWrong(`Find the next letter: ${word[typedCount]}`);
-          typedCount += 1; $('signalWord').innerHTML=keyboardWord(word,typedCount); playTone(520+(typedCount*45)); burstParticles($('signalWord'),'#69e3a7');
+          typedCount += 1; recordCorrectInput(); $('signalWord').innerHTML=keyboardWord(word,typedCount); playTone(520+(typedCount*45)); burstParticles($('signalWord'),'#69e3a7');
           if (typedCount === word.length) { clearActiveInput(); completeInteraction('type_word','byte-signal'); }
         };
         window.addEventListener('keydown',activeKeyHandler);
@@ -1140,48 +1194,94 @@
         activeKeyHandler=(event)=>{
           if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
           if (event.key.toUpperCase() !== targetKey) return registerWrong(`Find the glowing ${targetKey} key.`);
-          clearActiveInput(); completeInteraction('home_keys','home-row');
+          recordCorrectInput(); clearActiveInput(); completeInteraction('home_keys','home-row');
         };
         window.addEventListener('keydown',activeKeyHandler); $('keyArena').focus({preventScroll:true});
       } else if (step.id === 'word-blaster') {
         const waves=[
-          { word:'BUG', label:'Warm-up drone', speed:8.2, left:28 },
-          { word:'BYTE', label:'Scout cloud', speed:7.6, left:66 },
-          { word:'CODE', label:'Code cloud', speed:7, left:43 },
-          { word:'POWER', label:'Power raider', speed:6.5, left:72 },
-          { word:'CASTLE', label:'Castle jammer', speed:6, left:31 },
-          { word:'SIGNAL', label:'Signal ship', speed:5.5, left:60 },
-          { word:'KEYBOARD', label:'Boss ship', speed:5, left:50 },
+          ['BUG','CODE','STAR'],
+          ['BYTE','DATA','KEY'],
+          ['CODE','FILE','MOUSE'],
+          ['POWER','SHIFT','ENTER'],
+          ['CASTLE','SIGNAL','WINDOW'],
+          ['SCREEN','FOLDER','DELETE'],
+          ['KEYBOARD'],
         ];
-        const wave=waves[roundProgress%waves.length], word=wave.word;
-        let typedCount=0, shield=3;
+        const words=waves[roundProgress%waves.length], boss=roundProgress===roundGoal()-1;
+        const positions=words.length===1?[50]:[22,50,78];
+        let activeTarget=null, typedCount=0, shield=3, blasterResolving=false;
         const shieldCells=()=>Array.from({length:3},(_,index)=>`<span class="shield-cell${index>=shield?' empty':''}"></span>`).join('');
-        area.innerHTML=`<div class="word-blaster-arena" id="wordBlasterArena" tabindex="0" aria-label="Type ${word} to blast the ${wave.label}"><div class="blaster-wave">${roundProgress===roundGoal()-1?'<strong>Boss wave</strong>':'Incoming'} · ${esc(wave.label)} · ${roundProgress+1}/${roundGoal()}</div><div class="blaster-shield"><span>Shield</span><span id="shieldCells">${shieldCells()}</span></div><span class="blaster-decoy one"></span><span class="blaster-decoy two"></span><span class="blaster-decoy three"></span><div class="blaster-target" id="skillTarget" style="--target-left:${wave.left}%;--wave-speed:${wave.speed}s"><div class="blaster-word" id="signalWord">${keyboardWord(word,0)}</div></div><div class="blaster-laser" id="blasterLaser"></div><div class="blaster-castle"></div><div class="blaster-command"><span>Type: <b>${esc(word)}</b></span><span id="letterCount">0 / ${word.length} letters</span></div></div>`;
+        const enemies=words.map((word,index)=>`<div class="blaster-target" data-word="${esc(word)}" style="--target-left:${positions[index]}%;--wave-speed:${boss?15:14-(roundProgress*.6)}s;--wave-delay:${index*.7}s"><div class="blaster-word">${keyboardWord(word,0)}</div></div>`).join('');
+        area.innerHTML=`<div class="word-blaster-arena" id="wordBlasterArena" tabindex="0" aria-label="Type a word to lock and blast an incoming ship"><div class="blaster-wave">${boss?'<strong>Boss wave</strong>':'Incoming fleet'} · ${roundProgress+1}/${roundGoal()}</div><div class="blaster-shield"><span>Shield</span><span id="shieldCells">${shieldCells()}</span></div>${enemies}<div class="blaster-laser" id="blasterLaser"></div><div class="blaster-castle"></div><div class="blaster-command"><span id="blasterPrompt">Type the first letter to <b>lock a ship</b></span><span id="letterCount">Choose a word</span></div></div>`;
+        const targets=[...$('wordBlasterArena').querySelectorAll('.blaster-target')];
+        const remainingTargets=()=>targets.filter((target)=>target.isConnected&&!target.classList.contains('explode'));
+        const resetTargetLock=(message='Type the first letter to <b>lock a ship</b>')=>{
+          activeTarget=null;
+          typedCount=0;
+          $('blasterPrompt').innerHTML=message;
+          $('letterCount').textContent=`${remainingTargets().length} ${remainingTargets().length===1?'ship':'ships'} left`;
+        };
+        const updateTarget=()=>{
+          if(!activeTarget) return;
+          const word=activeTarget.dataset.word;
+          activeTarget.querySelector('.blaster-word').innerHTML=keyboardWord(word,typedCount);
+          $('letterCount').textContent=`${typedCount} / ${word.length} letters`;
+        };
+        const loseShield=(message)=>{
+          shield=Math.max(0,shield-1);
+          $('shieldCells').innerHTML=shieldCells();
+          registerWrong(message);
+          if(shield===0){ shield=3; activeGameTimers.push(setTimeout(()=>{ if($('shieldCells')) $('shieldCells').innerHTML=shieldCells(); },420)); }
+        };
+        targets.forEach((target)=>target.addEventListener('animationend',()=>{
+          if(roundLocked||blasterResolving||target.classList.contains('explode')) return;
+          const missedLocked=target===activeTarget;
+          target.remove();
+          if(missedLocked) resetTargetLock('Target lost. Type a first letter to <b>lock another ship</b>');
+          loseShield(missedLocked?'Locked ship reached the shield. Choose a new word.':'A word ship reached the shield.');
+          if(!$('wordBlasterArena')?.querySelector('.blaster-target')) activeGameTimers.push(setTimeout(renderTask,450));
+        }));
         activeKeyHandler=(event)=>{
           if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
+          if (blasterResolving) return;
           event.preventDefault();
-          if (event.key.toUpperCase() !== word[typedCount]) {
-            shield -= 1;
-            if ($('shieldCells')) $('shieldCells').innerHTML=shieldCells();
-            if (shield === 0) {
-              shield=3;
-              setTimeout(()=>{ if($('shieldCells')) $('shieldCells').innerHTML=shieldCells(); },420);
-              return registerWrong(`Shield recharged. Find ${word[typedCount]} and keep blasting.`);
-            }
-            return registerWrong(`Shield hit. Find the next letter: ${word[typedCount]}`);
+          const key=event.key.toUpperCase();
+          if(!activeTarget){
+            activeTarget=targets.find((target)=>target.isConnected&&target.dataset.word.startsWith(key))||null;
+            if(!activeTarget) return loseShield('No incoming word starts with that letter.');
+            activeTarget.classList.add('locked');
+            activeTarget.id='skillTarget';
+            typedCount=1;
+            recordCorrectInput();
+            $('blasterPrompt').innerHTML=`<span class="blaster-lock">Target locked:</span> <b>${esc(activeTarget.dataset.word)}</b>`;
+            updateTarget();
+          } else {
+            const word=activeTarget.dataset.word;
+            if(key!==word[typedCount]) return loseShield(`Shield hit. Find the next letter: ${word[typedCount]}`);
+            typedCount+=1;
+            recordCorrectInput();
+            updateTarget();
           }
-          typedCount += 1;
-          $('signalWord').innerHTML=keyboardWord(word,typedCount);
-          $('letterCount').textContent=`${typedCount} / ${word.length} letters`;
           const laser=$('blasterLaser'), target=$('skillTarget');
           laser.classList.remove('fire'); void laser.offsetWidth; laser.classList.add('fire');
           target.classList.add('hit');
           setTimeout(()=>{ laser?.classList.remove('fire'); target?.classList.remove('hit'); },130);
-          playTone(540+(typedCount*40)); burstParticles($('signalWord'),'#69e3a7');
-          if (typedCount === word.length) {
-            clearActiveInput();
+          playTone(540+(typedCount*40)); burstParticles(target.querySelector('.blaster-word'),'#69e3a7');
+          if (typedCount === activeTarget.dataset.word.length) {
+            blasterResolving=true;
             target.classList.add('explode');
-            setTimeout(()=>completeInteraction('type_word','shield-word'),280);
+            activeGameTimers.push(setTimeout(()=>{
+              target.remove();
+              const remaining=remainingTargets();
+              if(!remaining.length){
+                clearActiveInput();
+                completeInteraction('type_word','shield-word');
+                return;
+              }
+              blasterResolving=false;
+              resetTargetLock(`<b>Ship destroyed!</b> Lock the next word.`);
+              $('wordBlasterArena')?.focus({preventScroll:true});
+            },280));
           }
         };
         window.addEventListener('keydown',activeKeyHandler); $('wordBlasterArena').focus({preventScroll:true});
@@ -1191,7 +1291,7 @@
         activeKeyHandler=(event)=>{
           if (event.key==='Shift') return;
           if (event.key.toUpperCase() !== letter || !event.shiftKey) return registerWrong(`Hold Shift while you press ${letter}.`);
-          clearActiveInput(); completeInteraction('shift_letter','capital-signal');
+          recordCorrectInput(); clearActiveInput(); completeInteraction('shift_letter','capital-signal');
         };
         window.addEventListener('keydown',activeKeyHandler); $('keyArena').focus({preventScroll:true});
       } else if (step.id === 'sentence-engine') {
@@ -1200,7 +1300,7 @@
         activeKeyHandler=(event)=>{
           if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
           if (event.key.toUpperCase() !== sentence[typedCount]) return registerWrong(`Next: ${sentence[typedCount]===' '?'space':sentence[typedCount]}`);
-          typedCount += 1; $('skillTarget').innerHTML=keyboardWord(sentence,typedCount); playTone(500+(typedCount*18));
+          typedCount += 1; recordCorrectInput(); $('skillTarget').innerHTML=keyboardWord(sentence,typedCount); playTone(500+(typedCount*18));
           if (typedCount === sentence.length) { clearActiveInput(); completeInteraction('type_sentence','sentence-signal'); }
         };
         window.addEventListener('keydown',activeKeyHandler); $('typingCard').focus({preventScroll:true});
@@ -1211,11 +1311,11 @@
         const renderRepair=()=>{ const matching=Array.from(value).findIndex((char,index)=>char!==correct[index]), split=matching===-1?value.length:matching; $('skillTarget').innerHTML=`<span class="typed">${esc(value.slice(0,split))}</span><span class="wrong">${esc(value.slice(split))}</span>`; };
         renderRepair();
         activeKeyHandler=(event)=>{
-          if (event.key==='Backspace') { event.preventDefault(); if(value.length>shared){value=value.slice(0,-1);renderRepair();playTone(260);return;} return registerWrong('The correct beginning must stay. Now type the missing letter.'); }
+          if (event.key==='Backspace') { event.preventDefault(); if(value.length>shared){value=value.slice(0,-1);recordCorrectInput();renderRepair();playTone(260);return;} return registerWrong('The correct beginning must stay. Now type the missing letter.'); }
           if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
           const expected=correct[value.length];
           if (event.key.toUpperCase()!==expected) return registerWrong(`Type ${expected} next.`);
-          value += expected; renderRepair(); playTone(560);
+          value += expected; recordCorrectInput(); renderRepair(); playTone(560);
           if (value===correct) { clearActiveInput(); completeInteraction('repair_word','repaired-code'); }
         };
         window.addEventListener('keydown',activeKeyHandler); $('typingCard').focus({preventScroll:true});
@@ -1232,7 +1332,8 @@
       clearActiveInput();
       const step = currentStep();
       independentSaved = false;
-      stats = { attempts:0, hintsUsed:0, activeSeconds:0 };
+      stats = { attempts:0, hintsUsed:0, activeSeconds:0, correctInputs:0, mistakes:0 };
+      metricsCommittedForStep=false;
       roundProgress = 0;
       combo = 0;
       lastSlot = -1;
@@ -1271,6 +1372,7 @@
     function registerWrong(message) {
       if (phase === 'show' || independentSaved) return;
       stats.attempts += 1;
+      stats.mistakes += 1;
       combo = 0;
       updateHud();
       $('taskArea').classList.remove('wrong-shake');
@@ -1315,6 +1417,7 @@
       const step = currentStep();
       if (action !== step.action || target !== step.target) return registerWrong('Try the skill again.');
       roundLocked = true;
+      if(!inputTrackedStepIds.has(step.id)) recordCorrectInput();
       const hitTarget=$('skillTarget') || $('dropTarget');
       roundProgress += 1;
       combo += 1;
@@ -1335,7 +1438,7 @@
 
     async function saveCheckpoint() {
       const step = currentStep();
-      const payload = { checkpointId:checkpointId(step), stepId:step.id, attempts:Math.max(1,stats.attempts), hintsUsed:stats.hintsUsed, activeSeconds:Math.max(1,stats.activeSeconds), evidence:{ action:step.action, target:step.target } };
+      const payload = { checkpointId:checkpointId(step), stepId:step.id, attempts:Math.max(1,stats.attempts), hintsUsed:stats.hintsUsed, activeSeconds:Math.max(1,stats.activeSeconds), correctInputs:stats.correctInputs||0, mistakes:stats.mistakes||0, baseScore:score, evidence:{ action:step.action, target:step.target } };
       if (ephemeralMode) return liveRoom ? saveLiveCheckpoint(payload) : saveEphemeralCheckpoint(payload);
       localStorage.setItem(checkpointKey(), JSON.stringify(payload));
       setSave('Saving progress...');
@@ -1345,6 +1448,7 @@
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Progress could not be saved.');
         attempt = data.attempt;
+        commitStepMetrics(payload);
         localStorage.removeItem(checkpointKey());
         setSave('Progress saved');
         scheduleAutoAdvance();
@@ -1366,7 +1470,7 @@
         const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(liveRoom.code)}/checkpoints`,{
           method:'POST',
           headers:{'Content-Type':'application/json','X-Practice-Participant':liveParticipantToken},
-          body:JSON.stringify({...payload,arcadeScore:score,activityId:ACTIVITY_ID,activityVersion:campaign.version}),
+          body:JSON.stringify({...payload,arcadeScore:performanceSummary().score,activityId:ACTIVITY_ID,activityVersion:campaign.version}),
         });
         const data=await response.json();
         if(!response.ok) throw new Error(data.error||'The leaderboard could not be updated.');
@@ -1394,6 +1498,7 @@
     function saveEphemeralCheckpoint(payload) {
       const checkpoint = { ...payload, mastery:checkpointMastery(payload), completedAt:new Date().toISOString() };
       attempt.checkpoints.push(checkpoint);
+      commitStepMetrics(payload);
       attempt.currentStepIndex += 1;
       const rank = { independent:3, developing_independence:2, completed_with_support:1 };
       attempt.mastery = attempt.checkpoints.reduce((lowest,item) => rank[item.mastery] < rank[lowest] ? item.mastery : lowest, 'independent');
@@ -1411,6 +1516,8 @@
         const data = await response.json();
         if (!response.ok) return false;
         attempt = data.attempt;
+        try { commitStepMetrics(JSON.parse(raw)); } catch {}
+        score=attempt.baseScore||score;
         localStorage.removeItem(checkpointKey());
         setSave('Progress restored');
         return true;
@@ -1427,7 +1534,9 @@
       $('progress').innerHTML = steps.map((step,index) => `<div class="progress-step done">${index + 1}. ${esc(step.title)}</div>`).join('');
       const label = String(attempt.mastery || '').replaceAll('_',' ');
       $('masterySummary').innerHTML = `Overall result: <span class="mastery">${esc(label)}</span>`;
-      $('scoreSummary').innerHTML = `Arcade score: <strong style="color:#25cddc;font-size:24px">${score}</strong>`;
+      const performance=performanceSummary();
+      $('scoreSummary').innerHTML = `${esc(performance.rating)} · Final score: <strong style="color:#25cddc;font-size:24px">${performance.score}</strong>`;
+      $('resultStats').innerHTML=`<div class="result-stat">Accuracy<strong>${performance.accuracyPercent}%</strong></div><div class="result-stat">Mistakes<strong>${performance.mistakes}</strong></div><div class="result-stat">Active time<strong>${formatGameTime(performance.activeSeconds)}</strong></div><div class="result-stat">Base points<strong>${performance.baseScore}</strong></div>`;
       $('practiseAgainBtn').hidden=Boolean(liveRoom);
       $('continueWorldBtn').href=continueWorldUrl();
       const me=liveRoom&&liveParticipant?(liveRoom.leaderboard||[]).find((player)=>player.id===liveParticipant.id):null;
@@ -1475,11 +1584,13 @@
       if(!stage) return;
       location.href=`/practice/preview?${world==='g3'?'world=g3&':''}stage=${encodeURIComponent(stage)}`;
     });
-    setInterval(() => { if (!paused && !document.hidden && $('activity').style.display === 'block') stats.activeSeconds += 1; }, 1000);
+    setInterval(() => { if (!paused && !document.hidden && $('activity').style.display === 'block') { stats.activeSeconds += 1; updateHud(); } }, 1000);
 
     async function beginAttempt(forceNew) {
       if (forceNew && attempt && attempt.status !== 'completed') return;
       score = 0;
+      runMetrics = { correctInputs:0, mistakes:0, activeSeconds:0 };
+      metricsCommittedForStep=false;
       updateHud();
       if (ephemeralMode) {
         const startIndex=previewMode&&requestedStageIndex>=0?requestedStageIndex:0;
@@ -1497,6 +1608,12 @@
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Practice could not start.');
       attempt = data.attempt;
+      score=attempt.baseScore||PracticeScoring.maximumBaseScore(steps,attempt.currentStepIndex);
+      runMetrics=(attempt.checkpoints||[]).reduce((summary,item)=>({
+        correctInputs:summary.correctInputs+(item.correctInputs||missionGoals[item.stepId]||1),
+        mistakes:summary.mistakes+(item.mistakes??Math.max(0,(item.attempts||1)-1)),
+        activeSeconds:summary.activeSeconds+(item.activeSeconds||0),
+      }),{correctInputs:0,mistakes:0,activeSeconds:0});
       stepIndex = attempt.currentStepIndex;
       if (attempt.status === 'completed') {
         // createAttempt only resumes unfinished attempts, so a completed result
