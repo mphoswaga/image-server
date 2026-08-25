@@ -170,7 +170,11 @@ test('guest practice is public but never writes recorded student evidence', () =
   assert.match(player, /id="guestEntry"/);
   assert.match(player, /function joinLiveRoom\(\)/);
   assert.match(player, /function chooseSoloGuest\(\)/);
-  assert.match(player, /guestMode\?'\/student\/practice\/guest\?world=g3'/);
+  assert.match(player, /const requestedContinue = query\.get\('continue'\) === '1'/);
+  assert.match(player, /function continueWorldUrl\(\)/);
+  assert.match(player, /\/student\/practice\/guest\?session=\$\{encodeURIComponent\(code\)\}&world=g3&continue=1/);
+  assert.match(player, /continuingFoundationRoom=requestedContinue&&requestedWorld==='g3'/);
+  assert.match(player, /body:JSON\.stringify\(\{\.\.\.payload,arcadeScore:score,activityId:ACTIVITY_ID,activityVersion:campaign\.version\}\)/);
   assert.match(start, /href="\/student\/practice\/guest">Practise without signing in/);
   assert.match(teacherLogin, /href="\/student\/practice\/guest">Student guest practice/);
   assert.match(teacherLogin, /if\(\$\('authGuestPractice'\)\) \$\('authGuestPractice'\)\.style\.display=d\.enabled\?'block':'none'/);

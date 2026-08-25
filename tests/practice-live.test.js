@@ -53,6 +53,42 @@ test('live checkpoints are ordered, idempotent and cap client scores', () => {
   }), /Reactor Rush/i);
 });
 
+test('a Foundation live participant continues into Grade 3 without rejoining', () => {
+  const room = live.createRoom({ teacherId: 'teacher-worlds', activityId: 'g2-pointer-control' });
+  const joined = live.joinRoom(room.code, 'Tara');
+  const foundation = [
+    ['move-pointer', 'pointer_enter', 'blue-star'],
+    ['single-click', 'single_click', 'green-circle'],
+    ['double-click', 'double_click', 'blue-folder'],
+    ['context-command', 'context_command', 'archive-open'],
+    ['drag-drop', 'drag_drop', 'homework-folder'],
+    ['scroll-find', 'scroll_find', 'gold-star'],
+    ['copy-paste-menu', 'context_copy_paste', 'relay-console'],
+    ['keyboard-defense', 'type_word', 'byte-signal'],
+  ];
+  for (const [stepId, action, target] of foundation) {
+    live.checkpointRoom(room.code, joined.token, {
+      checkpointId: `tara-${stepId}`,
+      activityId: 'g2-pointer-control',
+      stepId,
+      evidence: { action, target },
+      arcadeScore: 999999,
+    });
+  }
+  const grade3 = live.checkpointRoom(room.code, joined.token, {
+    checkpointId: 'tara-rapid-relay',
+    activityId: 'g3-keyboard-kingdom',
+    stepId: 'copy-paste-shortcut',
+    evidence: { action: 'shortcut_copy_paste', target: 'shortcut-console' },
+    arcadeScore: 360,
+  });
+  assert.equal(grade3.participant.activityId, 'g3-keyboard-kingdom');
+  assert.equal(grade3.participant.missionsCompleted, 1);
+  assert.equal(grade3.participant.totalMissionsCompleted, 9);
+  assert.equal(grade3.participant.missionCount, 6);
+  assert.ok(grade3.participant.score > 360);
+});
+
 test('only the owning teacher can close a live room', () => {
   const room = live.createRoom({ teacherId: 'teacher-4' });
   assert.throws(() => live.closeRoom(room.code, 'teacher-other'), /another teacher/i);

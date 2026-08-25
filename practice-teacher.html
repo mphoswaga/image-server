@@ -127,7 +127,7 @@
       $('liveRoomCode').textContent=room.code;
       $('liveRoomMeta').textContent=`${room.activity.title} · ${room.participantCount} joined · Ends ${new Date(room.expiresAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
       $('liveLeaderboard').innerHTML=room.leaderboard.length
-        ? room.leaderboard.slice(0,12).map((player)=>`<div class="live-player"><span class="live-rank">${player.rank}</span><b>${esc(player.name)}</b><span>${player.missionsCompleted}/${room.activity.missionCount} missions</span><span class="live-score">${player.score} pts</span></div>`).join('')
+        ? room.leaderboard.slice(0,12).map((player)=>`<div class="live-player"><span class="live-rank">${player.rank}</span><b>${esc(player.name)}</b><span>${player.activityId==='g3-keyboard-kingdom'?'Grade 3 · ':''}${player.missionsCompleted}/${player.missionCount||room.activity.missionCount} missions</span><span class="live-score">${player.score} pts</span></div>`).join('')
         : '<div class="live-empty">Waiting for learners to join...</div>';
     }
 

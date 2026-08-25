@@ -23,7 +23,7 @@ const MISSION_GOALS = Object.freeze({
   'keyboard-defense': 5,
   'copy-paste-shortcut': 3,
   'key-patrol': 8,
-  'word-blaster': 5,
+  'word-blaster': 7,
   'capital-charge': 5,
   'sentence-engine': 2,
   'repair-bay': 5,
@@ -98,16 +98,58 @@ function maximumScore(activity, completedSteps) {
   ), 0);
 }
 
+function progressFor(participant, activityId, room) {
+  participant.activityProgress = participant.activityProgress || {};
+  if (!participant.activityProgress[room.activityId]) {
+    participant.activityProgress[room.activityId] = {
+      currentStepIndex: participant.currentStepIndex || 0,
+      status: participant.status || 'in_progress',
+      checkpoints: participant.checkpoints || [],
+      score: participant.score || 0,
+      completedAt: participant.completedAt || null,
+    };
+  }
+  if (!participant.activityProgress[activityId]) {
+    participant.activityProgress[activityId] = {
+      currentStepIndex: 0,
+      status: 'in_progress',
+      checkpoints: [],
+      score: 0,
+      completedAt: null,
+    };
+  }
+  return participant.activityProgress[activityId];
+}
+
+function allowedActivity(room, participant, activityId) {
+  const wanted = String(activityId || room.activityId);
+  if (wanted === room.activityId) return practice.getActivity(room.activityId, room.activityVersion);
+  if (room.activityId !== 'g2-pointer-control' || wanted !== 'g3-keyboard-kingdom') return null;
+  const foundation = progressFor(participant, room.activityId, room);
+  if (foundation.status !== 'completed') return null;
+  return practice.getActivity('g3-keyboard-kingdom');
+}
+
 function publicLeaderboard(room) {
   return (room.participants || [])
-    .map((participant) => ({
-      id: participant.id,
-      name: participant.name,
-      score: participant.score || 0,
-      missionsCompleted: participant.currentStepIndex || 0,
-      status: participant.status || 'in_progress',
-    }))
-    .sort((a, b) => b.missionsCompleted - a.missionsCompleted || b.score - a.score || a.name.localeCompare(b.name))
+    .map((participant) => {
+      const activeActivityId = participant.activeActivityId || room.activityId;
+      const activeActivity = practice.getActivity(activeActivityId);
+      const active = progressFor(participant, activeActivityId, room);
+      const allProgress = Object.values(participant.activityProgress || {});
+      return {
+        id: participant.id,
+        name: participant.name,
+        score: allProgress.reduce((sum, item) => sum + (item.score || 0), 0),
+        missionsCompleted: active.currentStepIndex || 0,
+        totalMissionsCompleted: allProgress.reduce((sum, item) => sum + (item.currentStepIndex || 0), 0),
+        missionCount: activeActivity ? activeActivity.steps.length : 0,
+        activityId: activeActivityId,
+        activityTitle: activeActivity ? activeActivity.title : '',
+        status: active.status || 'in_progress',
+      };
+    })
+    .sort((a, b) => b.totalMissionsCompleted - a.totalMissionsCompleted || b.score - a.score || a.name.localeCompare(b.name))
     .map((participant, index) => ({ ...participant, rank: index + 1 }));
 }
 
@@ -179,6 +221,16 @@ function joinRoom(code, nickname) {
     joinedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     completedAt: null,
+    activeActivityId: room.activityId,
+    activityProgress: {
+      [room.activityId]: {
+        currentStepIndex: 0,
+        status: 'in_progress',
+        checkpoints: [],
+        score: 0,
+        completedAt: null,
+      },
+    },
   };
   room.participants.push(participant);
   saveRoom(room);
@@ -196,18 +248,24 @@ function checkpointRoom(code, token, input = {}) {
   const room = requireOpenRoom(code);
   const participant = findParticipant(room, token);
   if (!participant) throw Object.assign(new Error('Rejoin the room to continue.'), { code: 'participant_not_found' });
-  if (participant.status === 'completed') {
+  const activityId = String(input.activityId || room.activityId);
+  const activity = allowedActivity(room, participant, activityId);
+  if (!activity) {
+    throw Object.assign(new Error('Complete Foundation World before continuing to Grade 3.'), { code: 'activity_locked' });
+  }
+  const progress = progressFor(participant, activity.id, room);
+  participant.activeActivityId = activity.id;
+  if (progress.status === 'completed') {
     throw Object.assign(new Error('This practice run is already complete.'), { code: 'attempt_complete' });
   }
 
   const checkpointId = String(input.checkpointId || '').trim().slice(0, 100);
   if (!checkpointId) throw Object.assign(new Error('Checkpoint ID is required.'), { code: 'invalid_checkpoint' });
-  if (participant.checkpoints.some((checkpoint) => checkpoint.checkpointId === checkpointId)) {
+  if (progress.checkpoints.some((checkpoint) => checkpoint.checkpointId === checkpointId)) {
     return { room: publicRoom(room), participant: publicLeaderboard(room).find((item) => item.id === participant.id), idempotent: true };
   }
 
-  const activity = practice.getActivity(room.activityId, room.activityVersion);
-  const expected = activity && activity.steps[participant.currentStepIndex];
+  const expected = activity.steps[progress.currentStepIndex];
   if (!expected || String(input.stepId || '') !== expected.id) {
     throw Object.assign(new Error(`Complete ${expected ? expected.title : 'the current mission'} before continuing.`), { code: 'step_out_of_order' });
   }
@@ -216,14 +274,19 @@ function checkpointRoom(code, token, input = {}) {
     throw Object.assign(new Error('The required skill action could not be confirmed.'), { code: 'invalid_evidence' });
   }
 
-  const nextStepIndex = participant.currentStepIndex + 1;
+  const nextStepIndex = progress.currentStepIndex + 1;
   const submittedScore = Math.max(0, Number.parseInt(input.arcadeScore, 10) || 0);
-  participant.score = Math.max(participant.score || 0, Math.min(submittedScore, maximumScore(activity, nextStepIndex)));
-  participant.currentStepIndex = nextStepIndex;
-  participant.status = nextStepIndex >= activity.steps.length ? 'completed' : 'in_progress';
+  progress.score = Math.max(progress.score || 0, Math.min(submittedScore, maximumScore(activity, nextStepIndex)));
+  progress.currentStepIndex = nextStepIndex;
+  progress.status = nextStepIndex >= activity.steps.length ? 'completed' : 'in_progress';
   participant.updatedAt = new Date().toISOString();
-  participant.checkpoints.push({ checkpointId, stepId: expected.id, completedAt: participant.updatedAt });
-  if (participant.status === 'completed') participant.completedAt = participant.updatedAt;
+  progress.checkpoints.push({ checkpointId, stepId: expected.id, completedAt: participant.updatedAt });
+  if (progress.status === 'completed') progress.completedAt = participant.updatedAt;
+  participant.score = Object.values(participant.activityProgress).reduce((sum, item) => sum + (item.score || 0), 0);
+  participant.currentStepIndex = progress.currentStepIndex;
+  participant.status = progress.status;
+  participant.checkpoints = progress.checkpoints;
+  participant.completedAt = progress.completedAt;
   saveRoom(room);
   return { room: publicRoom(room), participant: publicLeaderboard(room).find((item) => item.id === participant.id), idempotent: false };
 }

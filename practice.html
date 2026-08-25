@@ -645,6 +645,7 @@
     const requestedWorld = query.get('world') === 'g3' ? 'g3' : 'foundation';
     const requestedStage = String(query.get('stage') || '').trim();
     const requestedSessionCode = String(query.get('session') || '').replace(/[^a-z0-9]/gi,'').toUpperCase().slice(0,6);
+    const requestedContinue = query.get('continue') === '1';
     const foundationSteps = [
       { id:'move-pointer', title:'Signal Trail', action:'pointer_enter', target:'blue-star',
         show:'Watch Byte follow the blue bug. No clicking.', independent:'Touch 8 blue bugs. Do not click.', success:'The city gate has power again!',
@@ -740,7 +741,7 @@
       $('nextWorldCopy').textContent=campaign.nextCopy;
       $('continueWorldBtn').hidden=!campaign.nextLabel;
       $('continueWorldBtn').textContent=campaign.nextLabel || '';
-      $('continueWorldBtn').href=previewMode?'/practice/preview?world=g3':guestMode?'/student/practice/guest?world=g3':'/student/practice?world=g3';
+      $('continueWorldBtn').href=continueWorldUrl();
       $('startBtn').textContent=campaign.start;
       if (previewMode) {
         const groups=[['foundation','Foundation World',foundationSteps],['g3','Grade 3 World',grade3Steps]];
@@ -778,6 +779,16 @@
     function liveStorageKey(code) { return `ls-live-practice-${String(code || '').toUpperCase()}`; }
     function roomWorld(room) { return room && room.activity && room.activity.id === 'g3-keyboard-kingdom' ? 'g3' : 'foundation'; }
     function liveSessionUrl(code, world=requestedWorld) { return `/student/practice/guest?session=${encodeURIComponent(code)}${world === 'g3' ? '&world=g3' : ''}`; }
+    function continueWorldUrl() {
+      if (previewMode) return '/practice/preview?world=g3&continue=1';
+      if (guestMode) {
+        const code=(liveRoom&&liveRoom.code)||requestedSessionCode;
+        return code
+          ? `/student/practice/guest?session=${encodeURIComponent(code)}&world=g3&continue=1`
+          : '/student/practice/guest?world=g3&continue=1';
+      }
+      return '/student/practice?world=g3&continue=1';
+    }
 
     function renderLiveBoard(room) {
       if (!room || !liveParticipant) { $('liveStrip').hidden=true; return; }
@@ -801,6 +812,7 @@
       $('studentName').textContent=`Playing as ${liveParticipant.name} · Room ${liveRoom.code}`;
       $('previewNote').textContent='Live class game · Nickname and score disappear when the room ends';
       $('completionLead').textContent='You completed the live class adventure. Your temporary score is on the room leaderboard.';
+      $('continueWorldBtn').href=continueWorldUrl();
       renderLiveBoard(liveRoom);
       clearInterval(livePollTimer);
       livePollTimer=setInterval(()=>{ if(!document.hidden) refreshLiveRoom(); },3000);
@@ -849,6 +861,7 @@
       $('startBtn').hidden=false;
       $('studentName').textContent='Playing on my own';
       $('previewNote').textContent='Solo guest play · Progress is not saved';
+      $('continueWorldBtn').href=continueWorldUrl();
     }
     function checkpointKey() { return `ls-practice-pending-${attempt && attempt.id || 'none'}`; }
     function checkpointId(step) { return `${attempt.id}:${attempt.activityVersion}:${step.id}`; }
@@ -1353,7 +1366,7 @@
         const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(liveRoom.code)}/checkpoints`,{
           method:'POST',
           headers:{'Content-Type':'application/json','X-Practice-Participant':liveParticipantToken},
-          body:JSON.stringify({...payload,arcadeScore:score}),
+          body:JSON.stringify({...payload,arcadeScore:score,activityId:ACTIVITY_ID,activityVersion:campaign.version}),
         });
         const data=await response.json();
         if(!response.ok) throw new Error(data.error||'The leaderboard could not be updated.');
@@ -1416,6 +1429,7 @@
       $('masterySummary').innerHTML = `Overall result: <span class="mastery">${esc(label)}</span>`;
       $('scoreSummary').innerHTML = `Arcade score: <strong style="color:#25cddc;font-size:24px">${score}</strong>`;
       $('practiseAgainBtn').hidden=Boolean(liveRoom);
+      $('continueWorldBtn').href=continueWorldUrl();
       const me=liveRoom&&liveParticipant?(liveRoom.leaderboard||[]).find((player)=>player.id===liveParticipant.id):null;
       setSave(liveRoom ? `Live room complete${me?` - position ${me.rank}`:''}` : ephemeralMode ? `${guestMode ? 'Guest practice' : 'Preview'} complete - no results were saved` : 'All progress saved');
     }
@@ -1526,11 +1540,18 @@
               if(saved&&saved.token&&saved.participant){
                 const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(requestedSessionCode)}`);
                 const payload=await response.json();
-                if(response.ok&&roomWorld(payload.room)===requestedWorld){ activateLiveRoom({...saved,room:payload.room}); return; }
+                const sameWorld=roomWorld(payload.room)===requestedWorld;
+                const continuingFoundationRoom=requestedContinue&&requestedWorld==='g3'&&roomWorld(payload.room)==='foundation';
+                if(response.ok&&(sameWorld||continuingFoundationRoom)){
+                  activateLiveRoom({...saved,room:payload.room});
+                  if(requestedContinue) await beginAttempt(false);
+                  return;
+                }
               }
             }catch{}
             $('nicknameInput').focus();
-          }else $('roomCodeInput').focus();
+          }else if(requestedContinue){ chooseSoloGuest(); await beginAttempt(false); return; }
+          else $('roomCodeInput').focus();
           return;
         }
         const response = await fetch(previewMode ? '/api/practice/preview' : '/api/practice/student/home');
@@ -1550,6 +1571,7 @@
         }
         const unfinished = previewMode ? null : data.attempts.find((item) => item.activityId === ACTIVITY_ID && item.status === 'in_progress');
         $('startBtn').textContent = unfinished ? campaign.resume : campaign.start;
+        if(requestedContinue){ await beginAttempt(false); return; }
         document.body.classList.add('intro-screen');
         $('intro').classList.remove('hidden');
         renderProgress();
