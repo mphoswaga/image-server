@@ -150,18 +150,22 @@
     .reactor-core { background:radial-gradient(circle at 35% 30%,#72f2ad,#0d8154); border-color:#b8ffd8; box-shadow:0 0 28px rgba(30,184,120,.78); }
     .vault-grid { width:min(720px,calc(100% - 34px)); min-height:310px; display:grid; grid-template-columns:repeat(3,1fr); gap:18px; padding:18px; border:2px solid #8f69ba; background-image:linear-gradient(rgba(14,8,35,.22),rgba(14,8,35,.58)),url('/assets/practice/bg_vault_room.jpeg'); background-position:center; background-size:cover; box-shadow:0 18px 40px rgba(0,0,0,.4),0 0 24px rgba(198,156,255,.16); }
     .vault-slot { min-height:128px; display:grid; place-items:center; border:1px solid rgba(198,156,255,.58); background:rgba(10,13,34,.62); backdrop-filter:blur(2px); }
-    .vault-door { width:130px; min-height:92px; border:3px solid #6b4c91; border-radius:8px; background:#1e183c; color:#755d96; font-weight:900; cursor:default; box-shadow:inset 0 0 20px rgba(0,0,0,.44); }
-    .vault-door.active { border-color:#c69cff; background:#4f2a75; color:#fff; cursor:pointer; box-shadow:0 0 28px rgba(198,156,255,.56),inset 0 0 18px rgba(255,255,255,.08); animation:targetPop .18s cubic-bezier(.18,.9,.3,1.35) both; }
-    .vault-door.active:after { content:"×2"; display:grid; place-items:center; width:34px; height:34px; margin:7px auto 0; border-radius:50%; background:#f8c342; color:#251541; font-size:13px; }
-    .cargo-crate { border-color:#f4b862; background:#fff3db; color:#694318; box-shadow:0 10px 24px rgba(0,0,0,.24); }
+    .vault-door { width:130px; min-height:104px; padding:3px; border:0; background:transparent; color:#8c79a7; font-weight:900; cursor:default; opacity:.36; filter:saturate(.35); }
+    .vault-door.active { color:#fff; cursor:pointer; opacity:1; filter:none; animation:targetPop .18s cubic-bezier(.18,.9,.3,1.35) both; }
+    .vault-door .game-sprite { height:82px; }
+    .vault-door.active .game-sprite { filter:drop-shadow(0 0 15px rgba(198,156,255,.92)); }
+    .vault-door-label { display:block; margin-top:-6px; font-size:11px; text-transform:uppercase; }
+    .cargo-crate { width:142px; min-height:142px; padding:0; border:0; background:transparent; color:#fff; box-shadow:none; }
+    .cargo-crate .game-sprite { height:112px; filter:drop-shadow(0 10px 12px rgba(0,0,0,.48)); }
+    .sprite-caption { display:block; margin-top:-8px; padding:4px 8px; border-radius:999px; background:rgba(7,20,44,.82); color:#fff; font-size:11px; font-weight:900; }
     .charging-dock { border-color:#25cddc; background:rgba(37,205,220,.10); color:#fff; }
     .charging-dock .folder { border-color:#25cddc; background:#123e52; color:#fff; }
     .charging-dock .folder:before { border-color:#25cddc; background:#123e52; }
     .tower-window { border:2px solid #4b78a8; background:#0b1c38; color:#fff; box-shadow:0 15px 36px rgba(0,0,0,.28); }
     .tower-window .scroll-spacer { color:#8ca4bc; background:linear-gradient(#0b1c38,#173b61); }
     .command-desktop { width:min(720px,calc(100% - 30px)); height:290px; position:relative; border:2px solid #5ec9dd; background-color:#08162f; background-image:linear-gradient(rgba(5,14,32,.10),rgba(5,14,32,.48)),url('/assets/practice/bg_command_deck.jpeg'); background-position:center; background-size:cover; box-shadow:0 18px 40px rgba(0,0,0,.38); }
-    .command-folder { position:absolute; left:17%; top:28%; width:132px; min-height:105px; display:grid; place-items:center; gap:4px; padding:14px; border:2px solid #25cddc; border-radius:10px; background:#12345b; color:#fff; font-weight:900; cursor:context-menu; box-shadow:0 0 26px rgba(37,205,220,.35); }
-    .command-folder:before { content:"DATA"; display:grid; place-items:center; width:62px; height:45px; border:3px solid #8cecf4; border-radius:5px; color:#8cecf4; font-size:12px; }
+    .command-folder { position:absolute; left:17%; top:28%; width:142px; min-height:128px; display:grid; place-items:center; gap:0; padding:3px; border:0; background:transparent; color:#fff; font-weight:900; cursor:context-menu; }
+    .command-folder .game-sprite { height:104px; filter:drop-shadow(0 0 15px rgba(37,205,220,.72)); }
     .context-menu { position:absolute; z-index:8; display:none; width:170px; padding:6px 0; border:1px solid #25cddc; background:#0c1d3b; box-shadow:0 14px 34px rgba(0,0,0,.6),0 0 18px rgba(37,205,220,.25); }
     .context-menu.show { display:block; animation:targetPop .14s ease both; }
     .context-item { width:100%; padding:11px 14px; border:0; background:transparent; color:#dce8f3; text-align:left; font-weight:800; cursor:pointer; }
@@ -169,7 +173,7 @@
     .space-arena { width:min(720px,calc(100% - 30px)); height:290px; position:relative; overflow:hidden; border:2px solid #79e8ef; background-image:linear-gradient(rgba(2,6,23,.08),rgba(2,6,23,.46)),url('/assets/practice/bg_sky_shield.jpeg'); background-position:center; background-size:cover; box-shadow:0 18px 40px rgba(0,0,0,.38); }
     .space-arena:before { content:""; position:absolute; inset:0; background-image:radial-gradient(circle,#fff 1px,transparent 1px); background-size:47px 47px; opacity:.35; }
     .falling-signal { position:absolute; z-index:2; left:50%; top:18px; transform:translateX(-50%); display:grid; place-items:center; gap:5px; animation:signalDescend 7s linear infinite alternate; }
-    .signal-ship { width:74px; height:38px; border:3px solid #f05ba9; border-radius:50% 50% 14px 14px; background:#6b235b; box-shadow:0 0 24px rgba(240,91,169,.65); }
+    .signal-ship { width:86px; height:68px; background:url('/assets/practice/sprites/malware-meteor.webp') center/contain no-repeat; filter:drop-shadow(0 0 12px rgba(240,91,107,.78)); }
     .signal-word { padding:7px 15px; border:2px solid #25cddc; border-radius:18px; background:#08162f; color:#fff; font-size:20px; font-weight:900; letter-spacing:3px; box-shadow:0 0 18px rgba(37,205,220,.32); }
     .signal-word .typed { color:#69e3a7; text-shadow:0 0 9px rgba(105,227,167,.8); }
     .defense-cannon { position:absolute; z-index:3; left:50%; bottom:13px; width:72px; height:35px; transform:translateX(-50%); border:3px solid #69e3a7; border-radius:35px 35px 6px 6px; background:#12623e; box-shadow:0 0 24px rgba(105,227,167,.55); }
@@ -419,20 +423,24 @@
     .signal-trail:before { display:none; }
     .city-block { display:none; }
     .city-block.one { left:8%; }.city-block.two { right:8%; height:135px; }
-    .signal-bug { position:absolute; z-index:5; width:78px; height:78px; display:grid; place-items:center; border:4px solid #8cecf4; border-radius:50%; background:radial-gradient(circle at 35% 30%,#50e9ff,#166eaa); color:#fff; font-size:12px; font-weight:900; box-shadow:0 0 30px rgba(37,205,220,.9); transition:left .22s ease,top .22s ease; animation:bugFloat .85s ease-in-out infinite alternate; }
-    .signal-bug:before { content:""; position:absolute; width:14px; height:14px; left:16px; top:21px; border-radius:50%; background:#fff; box-shadow:32px 0 #fff; }
+    .game-sprite { display:block; width:100%; height:100%; object-fit:contain; pointer-events:none; user-select:none; filter:drop-shadow(0 8px 10px rgba(0,0,0,.34)); }
+    .signal-bug { position:absolute; z-index:5; width:92px; height:92px; display:grid; place-items:center; border:0; background:transparent; color:transparent; transition:left .22s ease,top .22s ease; animation:bugFloat .85s ease-in-out infinite alternate; cursor:pointer; }
+    .signal-bug .game-sprite { filter:drop-shadow(0 0 14px rgba(37,205,220,.9)); }
     .signal-bug.guided,.reactor-bug.guided,.vault-door.guided,.command-folder.guided,.antenna-switch.guided { box-shadow:0 0 0 8px rgba(248,195,66,.28),0 0 34px rgba(248,195,66,.72); }
     .reactor-board { width:min(700px,calc(100% - 28px)); height:310px; position:relative; display:grid; place-items:center; border:2px solid #69e3a7; border-radius:50% 50% 18px 18px; background-image:linear-gradient(rgba(5,14,32,.16),rgba(5,14,32,.48)),url('/assets/practice/bg_reactor_room.jpeg'); background-position:center; background-size:cover; overflow:hidden; box-shadow:0 18px 40px rgba(0,0,0,.38),0 0 24px rgba(30,184,120,.18); }
     .reactor-core-ring { position:absolute; width:170px; height:170px; border:10px solid #1e725e; border-radius:50%; box-shadow:0 0 36px rgba(30,184,120,.34),inset 0 0 30px rgba(30,184,120,.25); animation:reactorPulse 1.3s ease-in-out infinite; }
     .reactor-port { position:absolute; width:90px; height:90px; display:grid; place-items:center; border:3px solid #4d8c87; border-radius:50%; background:rgba(7,18,37,.82); backdrop-filter:blur(2px); }
     .reactor-port.active { border-color:#69e3a7; box-shadow:0 0 28px rgba(30,184,120,.65); }
     .reactor-port:nth-child(2){left:12%;top:15%}.reactor-port:nth-child(3){right:12%;top:15%}.reactor-port:nth-child(4){left:12%;bottom:12%}.reactor-port:nth-child(5){right:12%;bottom:12%}.reactor-port:nth-child(6){left:calc(50% - 45px);top:10px}.reactor-port:nth-child(7){left:calc(50% - 45px);bottom:10px}
-    .reactor-bug { width:62px; height:62px; display:grid; place-items:center; border:3px solid #b8ffd8; border-radius:14px 14px 28px 28px; background:#18a568; color:#fff; font-size:11px; font-weight:900; box-shadow:0 0 24px rgba(30,184,120,.8); animation:targetPop .18s cubic-bezier(.18,.9,.3,1.35) both,bugFloat .7s ease-in-out infinite alternate; }
+    .reactor-bug { width:78px; height:78px; display:grid; place-items:center; padding:0; border:0; background:transparent; color:transparent; animation:targetPop .18s cubic-bezier(.18,.9,.3,1.35) both,bugFloat .7s ease-in-out infinite alternate; cursor:pointer; }
+    .reactor-bug .game-sprite { filter:drop-shadow(0 0 14px rgba(30,184,120,.9)); }
     .tower-window { width:min(680px,calc(100% - 30px)); height:310px; padding:0; position:relative; border:6px solid #4b78a8; border-radius:18px 18px 4px 4px; background-image:linear-gradient(rgba(5,14,32,.06),rgba(5,14,32,.42)),url('/assets/practice/bg_signal_tower.jpeg'); background-position:center; background-size:cover; color:#fff; box-shadow:0 18px 40px rgba(0,0,0,.38); }
     .tower-floor { min-height:190px; display:grid; place-items:center; border-bottom:5px solid #355d83; background:linear-gradient(90deg,rgba(11,28,56,.82) 0 12%,rgba(23,59,97,.66) 12% 88%,rgba(11,28,56,.82) 88%); color:#8cecf4; font-size:20px; font-weight:900; }
     .tower-floor span { display:grid; place-items:center; width:100px; height:72px; border:4px solid #4b78a8; background:#08162f; }
     .tower-arrow { position:sticky; z-index:4; left:18px; top:14px; display:inline-flex; padding:7px 10px; border-radius:999px; background:#f8c342; color:#251541; font-size:12px; font-weight:900; animation:arrowBounce 1s ease-in-out infinite; }
-    .antenna-switch { width:180px; min-height:92px; margin:40px auto 24px; border:4px solid #f8c342; border-radius:50%; background:#fff4bd; color:#5f4300; font-size:18px; box-shadow:0 0 28px rgba(248,195,66,.65); }
+    .antenna-switch { width:180px; min-height:150px; margin:24px auto; padding:4px; border:0; background:transparent; color:#fff; font-size:14px; font-weight:900; }
+    .antenna-switch .game-sprite { height:124px; filter:drop-shadow(0 0 16px rgba(248,195,66,.78)); }
+    .relay-packet { width:74px; height:74px; object-fit:contain; filter:drop-shadow(0 0 14px rgba(168,85,247,.72)); animation:packetFly 1.8s ease-in-out infinite; pointer-events:none; }
     .copy-station { width:min(760px,calc(100% - 28px)); display:grid; grid-template-columns:1fr auto 1fr; align-items:stretch; gap:18px; padding:24px; border:2px solid #7351a0; border-radius:18px; background:rgba(9,12,35,.82); box-shadow:0 18px 36px rgba(0,0,0,.28); }
     .room-copy-paste-menu .copy-station { border-color:#b790ef; background-image:linear-gradient(rgba(17,9,43,.26),rgba(17,9,43,.62)),url('/assets/practice/bg_message_relay.jpeg'); background-position:center; background-size:cover; }
     .relay-panel { min-height:190px; display:flex; flex-direction:column; justify-content:center; gap:14px; padding:20px; border:2px solid #4b3e78; border-radius:12px; background:#151735; }
@@ -468,6 +476,7 @@
     @keyframes demoDrag { 0%,30%,100%{transform:translate(0,0)} 62%,82%{transform:translate(110px,-68px)} }
     @keyframes demoTower { 0%,25%{transform:translateY(48px)} 75%,100%{transform:translateY(-54px)} }
     @keyframes demoWheel { 50%{transform:translateY(18px)} }
+    @keyframes packetFly { 0%,100%{transform:translateX(-7px) rotate(-5deg)} 50%{transform:translateX(7px) rotate(5deg)} }
     @keyframes demoType { 0%{width:0} 75%,100%{width:78px} }
     @keyframes demoSelect { 0%,20%,100%{transform:translate(0,0)} 48%,75%{transform:translate(118px,-42px)} }
     @keyframes bugFloat { to{transform:translateY(-8px) scale(1.04)} }
@@ -1236,11 +1245,11 @@
     function signalTrail(slot) {
       const positions=[['12%','18%'],['39%','13%'],['70%','17%'],['18%','47%'],['45%','43%'],['74%','48%'],['12%','69%'],['43%','70%'],['72%','69%']];
       const [left,top]=positions[slot%positions.length];
-      return `<div class="signal-trail"><div class="city-block one"></div><div class="city-block two"></div><div class="signal-bug" id="skillTarget" tabindex="0" style="left:${left};top:${top}" aria-label="Blue signal bug">TOUCH</div></div>`;
+      return `<div class="signal-trail"><div class="city-block one"></div><div class="city-block two"></div><div class="signal-bug" id="skillTarget" tabindex="0" style="left:${left};top:${top}" aria-label="Blue signal bug"><img class="game-sprite" src="/assets/practice/sprites/signal-bug.webp" alt="" /></div></div>`;
     }
 
     function reactorBoard(slot) {
-      return `<div class="reactor-board"><div class="reactor-core-ring"></div>${Array.from({length:6},(_,index)=>`<div class="reactor-port${index===slot?' active':''}">${index===slot?'<button class="reactor-bug" id="skillTarget" type="button" aria-label="Green power bug">CLICK</button>':''}</div>`).join('')}</div>`;
+      return `<div class="reactor-board"><div class="reactor-core-ring"></div>${Array.from({length:6},(_,index)=>`<div class="reactor-port${index===slot?' active':''}">${index===slot?'<button class="reactor-bug" id="skillTarget" type="button" aria-label="Green power bug"><img class="game-sprite" src="/assets/practice/sprites/reactor-bug.webp" alt="" /></button>':''}</div>`).join('')}</div>`;
     }
 
     function clearActiveInput() {
@@ -1277,7 +1286,7 @@
         $('skillTarget').addEventListener('click', (event) => { event.stopPropagation(); completeInteraction('single_click','green-circle'); });
       } else if (step.id === 'double-click') {
         const active=nextSlot(6);
-        area.innerHTML = `<div class="room-label">Vault Breaker · Lock ${roundProgress+1} of ${roundGoal()}</div><div class="vault-grid">${Array.from({length:6},(_,index)=>`<div class="vault-slot"><button class="vault-door${index===active?' active':''}" ${index===active?'id="skillTarget"':''} type="button">${index===active?'Break lock':'Offline'}</button></div>`).join('')}</div>`;
+        area.innerHTML = `<div class="room-label">Vault Breaker · Lock ${roundProgress+1} of ${roundGoal()}</div><div class="vault-grid">${Array.from({length:6},(_,index)=>`<div class="vault-slot"><button class="vault-door${index===active?' active':''}" ${index===active?'id="skillTarget"':''} type="button"><img class="game-sprite" src="/assets/practice/sprites/vault-lock.webp" alt="" /><span class="vault-door-label">${index===active?'Double-click':'Offline'}</span></button></div>`).join('')}</div>`;
         $('skillTarget').addEventListener('click', (event) => {
           event.stopPropagation();
           clearTimeout(pendingSingleClick);
@@ -1286,7 +1295,7 @@
         $('skillTarget').addEventListener('dblclick', (event) => { event.preventDefault(); event.stopPropagation(); clearTimeout(pendingSingleClick); completeInteraction('double_click','blue-folder'); });
       } else if (step.id === 'context-command') {
         const positions=[['17%','25%'],['58%','18%'],['36%','52%']], position=positions[roundProgress%positions.length];
-        area.innerHTML = `<div class="room-label">Command Deck · File ${roundProgress+1} of ${roundGoal()}</div><div class="command-desktop" id="commandDesktop"><div class="command-folder" id="commandFolder" style="left:${position[0]};top:${position[1]}">City archive</div><div class="context-menu" id="commandMenu"><button class="context-item" id="skillTarget" type="button">Open archive</button><button class="context-item" type="button">Rename</button><button class="context-item" type="button">Delete</button></div></div>`;
+        area.innerHTML = `<div class="room-label">Command Deck · File ${roundProgress+1} of ${roundGoal()}</div><div class="command-desktop" id="commandDesktop"><div class="command-folder" id="commandFolder" style="left:${position[0]};top:${position[1]}"><img class="game-sprite" src="/assets/practice/sprites/archive-folder.webp" alt="" /><span class="sprite-caption">City archive</span></div><div class="context-menu" id="commandMenu"><button class="context-item" id="skillTarget" type="button">Open archive</button><button class="context-item" type="button">Rename</button><button class="context-item" type="button">Delete</button></div></div>`;
         const desktop=$('commandDesktop'), folder=$('commandFolder'), menu=$('commandMenu');
         desktop.addEventListener('contextmenu',(event)=>event.preventDefault());
         folder.addEventListener('contextmenu',(event)=>{
@@ -1300,14 +1309,14 @@
         $('skillTarget').addEventListener('click',(event)=>{ event.stopPropagation(); completeInteraction('context_command','archive-open'); });
         menu.querySelectorAll('.context-item:not(#skillTarget)').forEach((button)=>button.addEventListener('click',(event)=>{ event.stopPropagation(); registerWrong('Choose Open archive for this mission.'); }));
       } else if (step.id === 'drag-drop') {
-        area.innerHTML = `<div class="room-label">Cargo Rescue · Crate ${roundProgress+1} of ${roundGoal()}</div><div class="conveyor"><div class="file cargo-crate" id="dragFile" draggable="true">Power crate ${roundProgress+1}<div style="font-size:12px;color:#8b6539">Grab me</div></div><div class="dropzone charging-dock${taskTargetClass()}" id="dropTarget"><div class="folder">Charging dock</div></div></div>`;
+        area.innerHTML = `<div class="room-label">Cargo Rescue · Crate ${roundProgress+1} of ${roundGoal()}</div><div class="conveyor"><div class="file cargo-crate" id="dragFile" draggable="true"><img class="game-sprite" src="/assets/practice/sprites/power-crate.webp" alt="" /><span class="sprite-caption">Drag power crate ${roundProgress+1}</span></div><div class="dropzone charging-dock${taskTargetClass()}" id="dropTarget"><div class="folder">Charging dock</div></div></div>`;
         $('dragFile').addEventListener('dragstart', (event) => event.dataTransfer.setData('text/plain','my-work'));
         $('dropTarget').addEventListener('dragover', (event) => { event.preventDefault(); $('dropTarget').classList.add('over'); });
         $('dropTarget').addEventListener('dragleave', () => $('dropTarget').classList.remove('over'));
         $('dropTarget').addEventListener('drop', (event) => { event.preventDefault(); $('dropTarget').classList.remove('over'); if (event.dataTransfer.getData('text/plain') === 'my-work') completeInteraction('drag_drop','homework-folder'); else registerWrong('Keep holding the file until it is inside Homework.'); });
       } else if (step.id === 'scroll-find') {
         const floors=3+roundProgress;
-        area.innerHTML = `<div class="room-label">Signal Tower · Floor ${roundProgress+1} of ${roundGoal()}</div><div class="scroll-window tower-window" id="scrollWindow"><div class="tower-arrow">SCROLL DOWN ↓</div>${Array.from({length:floors},(_,index)=>`<div class="tower-floor"><span>FLOOR ${index+1}</span></div>`).join('')}<button class="antenna-switch" id="skillTarget" type="button">★ TURN ON</button></div>`;
+        area.innerHTML = `<div class="room-label">Signal Tower · Floor ${roundProgress+1} of ${roundGoal()}</div><div class="scroll-window tower-window" id="scrollWindow"><div class="tower-arrow">SCROLL DOWN ↓</div>${Array.from({length:floors},(_,index)=>`<div class="tower-floor"><span>FLOOR ${index+1}</span></div>`).join('')}<button class="antenna-switch" id="skillTarget" type="button"><img class="game-sprite" src="/assets/practice/sprites/signal-antenna.webp" alt="" /><span class="sprite-caption">Turn signal on</span></button></div>`;
         $('skillTarget').addEventListener('click', (event) => { event.stopPropagation(); const pane=$('scrollWindow'), bottom=pane.scrollHeight-pane.clientHeight-30; if (pane.scrollTop < bottom) registerWrong('Keep scrolling. The antenna switch is farther down.'); else completeInteraction('scroll_find','gold-star'); });
       } else if (step.id === 'copy-paste-menu' || step.id === 'copy-paste-shortcut') {
         const messages=['POWER THE CITY','BYTE IS READY','SAVE THE SIGNAL'];
@@ -1318,7 +1327,7 @@
         const sourceControl=menuMode?'<div class="relay-choice">Right-click the blue message → Copy</div>':`<div class="relay-keys"><span class="relay-key">${modifier}</span><span class="relay-key">C</span></div>`;
         const destinationControl=menuMode?'<div class="relay-choice">Right-click this empty box → Paste</div>':`<div class="relay-keys"><span class="relay-key">${modifier}</span><span class="relay-key">V</span></div>`;
         const contextMenus=menuMode?'<div class="relay-context-menu" id="relayCopyMenu" role="menu"><button class="relay-context-command" id="relayCopyCommand" type="button" role="menuitem">Copy</button></div><div class="relay-context-menu" id="relayPasteMenu" role="menu"><button class="relay-context-command" id="relayPasteCommand" type="button" role="menuitem">Paste</button></div>':'';
-        area.innerHTML = `<div class="room-label">${menuMode?'Message Relay':'Rapid Relay'} · Message ${roundProgress+1} of ${roundGoal()}</div><div class="copy-station"><div class="relay-panel"><b>1. Highlight every word</b><div class="relay-message" id="relaySource">${esc(message)}</div>${sourceControl}<div class="relay-status" id="relayStatus">Drag across the whole message.</div></div><div class="relay-arrow" aria-hidden="true">→</div><div class="relay-panel"><b>2. Paste the message here</b><textarea class="relay-destination" id="relayDestination" placeholder="PASTE HERE" aria-label="Paste the copied message here" autocomplete="off" spellcheck="false"></textarea>${destinationControl}</div></div>${contextMenus}`;
+        area.innerHTML = `<div class="room-label">${menuMode?'Message Relay':'Rapid Relay'} · Message ${roundProgress+1} of ${roundGoal()}</div><div class="copy-station"><div class="relay-panel"><b>1. Highlight every word</b><div class="relay-message" id="relaySource">${esc(message)}</div>${sourceControl}<div class="relay-status" id="relayStatus">Drag across the whole message.</div></div><div class="relay-arrow" aria-hidden="true"><img class="relay-packet" src="/assets/practice/sprites/message-packet.webp" alt="" /></div><div class="relay-panel"><b>2. Paste the message here</b><textarea class="relay-destination" id="relayDestination" placeholder="PASTE HERE" aria-label="Paste the copied message here" autocomplete="off" spellcheck="false"></textarea>${destinationControl}</div></div>${contextMenus}`;
         const source=$('relaySource'), destination=$('relayDestination'), status=$('relayStatus');
         const normalized=(value)=>String(value||'').replace(/\s+/g,' ').trim();
         const selectedMessage=()=>normalized(window.getSelection()?.toString())===message;

@@ -223,6 +223,23 @@ test('every Grade 2 district and finale uses its illustrated background', () => 
   }
 });
 
+test('every Grade 2 mission keeps its arcade sprite asset', () => {
+  const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
+  for (const asset of [
+    'signal-bug.webp',
+    'reactor-bug.webp',
+    'vault-lock.webp',
+    'archive-folder.webp',
+    'power-crate.webp',
+    'signal-antenna.webp',
+    'message-packet.webp',
+    'malware-meteor.webp'
+  ]) {
+    assert.match(player, new RegExp(`/assets/practice/sprites/${asset}`));
+    assert.equal(fs.existsSync(path.join(__dirname, '..', 'public', 'assets', 'practice', 'sprites', asset)), true);
+  }
+});
+
 test('Grade 2 play uses animated demonstrations and save-before-auto-advance', () => {
   const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
   assert.match(player, /function tutorialVisual\(stepId\)/);
