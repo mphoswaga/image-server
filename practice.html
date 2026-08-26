@@ -196,6 +196,7 @@
     .blaster-wave strong { color:#f8c342; }
     .blaster-target { position:absolute; z-index:6; left:var(--target-left,50%); top:52px; transform:translateX(-50%); display:grid; justify-items:center; gap:4px; animation:blasterApproach var(--wave-speed,12s) linear var(--wave-delay,0s) forwards; }
     .blaster-target:before { content:""; width:86px; height:38px; border:3px solid #f05ba9; border-radius:50% 50% 12px 12px; background:radial-gradient(circle at 50% 25%,#ff9bd0 0 8%,transparent 9%),linear-gradient(180deg,#8b367f,#431b5e); box-shadow:0 0 24px rgba(240,91,169,.74); }
+    .campaign-g3 .blaster-target:before { width:104px; height:72px; border:0; border-radius:0; background:url('/assets/practice/sprites-g3/code-ship.webp') center/contain no-repeat; box-shadow:none; filter:drop-shadow(0 0 14px rgba(240,91,169,.78)); }
     .blaster-target:after { content:""; position:absolute; top:34px; width:3px; height:22px; background:#f05ba9; box-shadow:0 0 12px #f05ba9; }
     .blaster-target.hit { filter:brightness(1.45); transform:translateX(-50%) scale(1.07); }
     .blaster-target.locked:before { border-color:#f8c342; box-shadow:0 0 30px rgba(248,195,66,.92); }
@@ -217,6 +218,12 @@
     .blaster-command b { color:#8cecf4; }
     .blaster-lock { color:#f8c342; }
     .key-arena { width:min(720px,calc(100% - 30px)); min-height:285px; display:grid; place-items:center; gap:22px; padding:34px; border:2px solid #6657ad; background:radial-gradient(circle at center,rgba(168,85,247,.20),transparent 54%),#090b24; }
+    .g3-mission-sprite { width:112px; height:96px; object-fit:contain; pointer-events:none; user-select:none; filter:drop-shadow(0 0 15px rgba(37,205,220,.55)); animation:g3SpriteFloat 1.8s ease-in-out infinite alternate; }
+    .g3-mission-sprite.console { width:142px; height:106px; margin-bottom:-14px; }
+    .g3-mission-sprite.capital { width:120px; height:110px; margin-bottom:-18px; filter:drop-shadow(0 0 16px rgba(248,195,66,.68)); }
+    .typing-card-with-sprite { display:grid; grid-template-columns:120px minmax(0,1fr); align-items:center; gap:18px; text-align:left; }
+    .typing-card-with-sprite .typing-copy { min-width:0; text-align:center; }
+    .typing-card-with-sprite .g3-mission-sprite { width:120px; height:130px; }
     .key-prompt { color:#c9bfff; font-size:15px; font-weight:800; text-align:center; }
     .key-row { display:flex; justify-content:center; flex-wrap:wrap; gap:12px; }
     .arcade-key { min-width:72px; min-height:70px; display:grid; place-items:center; border:2px solid #4d4478; border-radius:8px; background:#151735; color:#766f9a; font-size:27px; font-weight:900; box-shadow:0 8px 0 #08091b; }
@@ -453,6 +460,7 @@
     .antenna-switch { width:180px; min-height:150px; margin:24px auto; padding:4px; border:0; background:transparent; color:#fff; font-size:14px; font-weight:900; }
     .antenna-switch .game-sprite { height:124px; filter:drop-shadow(0 0 16px rgba(248,195,66,.78)); }
     .relay-packet { width:74px; height:74px; object-fit:contain; filter:drop-shadow(0 0 14px rgba(168,85,247,.72)); animation:packetFly 1.8s ease-in-out infinite; pointer-events:none; }
+    .relay-packet.advanced { width:92px; height:92px; filter:drop-shadow(0 0 17px rgba(37,205,220,.78)); animation-duration:1.25s; }
     .copy-station { width:min(760px,calc(100% - 28px)); display:grid; grid-template-columns:1fr auto 1fr; align-items:stretch; gap:18px; padding:24px; border:2px solid #7351a0; border-radius:18px; background:rgba(9,12,35,.82); box-shadow:0 18px 36px rgba(0,0,0,.28); }
     .room-copy-paste-menu .copy-station { border-color:#b790ef; background-image:linear-gradient(rgba(17,9,43,.26),rgba(17,9,43,.62)),url('/assets/practice/bg_message_relay.jpeg'); background-position:center; background-size:cover; }
     .relay-panel { min-height:190px; display:flex; flex-direction:column; justify-content:center; gap:14px; padding:20px; border:2px solid #4b3e78; border-radius:12px; background:#151735; }
@@ -489,6 +497,7 @@
     @keyframes demoTower { 0%,25%{transform:translateY(48px)} 75%,100%{transform:translateY(-54px)} }
     @keyframes demoWheel { 50%{transform:translateY(18px)} }
     @keyframes packetFly { 0%,100%{transform:translateX(-7px) rotate(-5deg)} 50%{transform:translateX(7px) rotate(5deg)} }
+    @keyframes g3SpriteFloat { from{transform:translateY(4px)} to{transform:translateY(-5px)} }
     @keyframes spin { to{transform:rotate(360deg)} }
     @keyframes demoType { 0%{width:0} 75%,100%{width:78px} }
     @keyframes demoSelect { 0%,20%,100%{transform:translate(0,0)} 48%,75%{transform:translate(118px,-42px)} }
@@ -579,6 +588,9 @@
       .conveyor { grid-template-columns:1fr; }
       .copy-station { grid-template-columns:1fr; gap:10px; padding:14px; }
       .relay-arrow { transform:rotate(90deg); font-size:24px; }
+      .relay-packet { transform:rotate(-90deg); }
+      .typing-card-with-sprite { grid-template-columns:1fr; }
+      .typing-card-with-sprite .g3-mission-sprite { width:96px; height:96px; margin:auto; }
       .relay-panel { min-height:145px; }
       .tutorial { grid-template-columns:1fr; padding:18px; }
       .tutorial-visual { min-height:170px; }
@@ -1356,7 +1368,8 @@
         const sourceControl=menuMode?'<div class="relay-choice">Right-click the blue message → Copy</div>':`<div class="relay-keys"><span class="relay-key">${modifier}</span><span class="relay-key">C</span></div>`;
         const destinationControl=menuMode?'<div class="relay-choice">Right-click this empty box → Paste</div>':`<div class="relay-keys"><span class="relay-key">${modifier}</span><span class="relay-key">V</span></div>`;
         const contextMenus=menuMode?'<div class="relay-context-menu" id="relayCopyMenu" role="menu"><button class="relay-context-command" id="relayCopyCommand" type="button" role="menuitem">Copy</button></div><div class="relay-context-menu" id="relayPasteMenu" role="menu"><button class="relay-context-command" id="relayPasteCommand" type="button" role="menuitem">Paste</button></div>':'';
-        area.innerHTML = `<div class="room-label">${menuMode?'Message Relay':'Rapid Relay'} · Message ${roundProgress+1} of ${roundGoal()}</div><div class="copy-station"><div class="relay-panel"><b>1. Highlight every word</b><div class="relay-message" id="relaySource">${esc(message)}</div>${sourceControl}<div class="relay-status" id="relayStatus">Drag across the whole message.</div></div><div class="relay-arrow" aria-hidden="true"><img class="relay-packet" src="/assets/practice/sprites/message-packet.webp" alt="" /></div><div class="relay-panel"><b>2. Paste the message here</b><textarea class="relay-destination" id="relayDestination" placeholder="PASTE HERE" aria-label="Paste the copied message here" autocomplete="off" spellcheck="false"></textarea>${destinationControl}</div></div>${contextMenus}`;
+        const relaySprite=menuMode?'/assets/practice/sprites/message-packet.webp':'/assets/practice/sprites-g3/rapid-relay.webp';
+        area.innerHTML = `<div class="room-label">${menuMode?'Message Relay':'Rapid Relay'} · Message ${roundProgress+1} of ${roundGoal()}</div><div class="copy-station"><div class="relay-panel"><b>1. Highlight every word</b><div class="relay-message" id="relaySource">${esc(message)}</div>${sourceControl}<div class="relay-status" id="relayStatus">Drag across the whole message.</div></div><div class="relay-arrow" aria-hidden="true"><img class="relay-packet${menuMode?'':' advanced'}" src="${relaySprite}" alt="" /></div><div class="relay-panel"><b>2. Paste the message here</b><textarea class="relay-destination" id="relayDestination" placeholder="PASTE HERE" aria-label="Paste the copied message here" autocomplete="off" spellcheck="false"></textarea>${destinationControl}</div></div>${contextMenus}`;
         const source=$('relaySource'), destination=$('relayDestination'), status=$('relayStatus');
         const normalized=(value)=>String(value||'').replace(/\s+/g,' ').trim();
         const selectedMessage=()=>normalized(window.getSelection()?.toString())===message;
@@ -1460,7 +1473,7 @@
         $('spaceArena').focus({preventScroll:true});
       } else if (step.id === 'key-patrol') {
         const sequence=['A','S','D','F','J','K','L',';'], targetKey=sequence[roundProgress%sequence.length];
-        area.innerHTML=`<div class="room-label">Key Patrol · Key ${roundProgress+1} of ${roundGoal()}</div><div class="key-arena" id="keyArena" tabindex="0"><div class="key-prompt">Press the glowing home-row key</div><div class="key-row">${sequence.map((key)=>`<span class="arcade-key${key===targetKey?' active':''}" ${key===targetKey?'id="skillTarget"':''}>${key}</span>`).join('')}</div></div>`;
+        area.innerHTML=`<div class="room-label">Key Patrol · Key ${roundProgress+1} of ${roundGoal()}</div><div class="key-arena" id="keyArena" tabindex="0"><img class="g3-mission-sprite console" src="/assets/practice/sprites-g3/home-row-console.webp" alt="" /><div class="key-prompt">Press the glowing home-row key</div><div class="key-row">${sequence.map((key)=>`<span class="arcade-key${key===targetKey?' active':''}" ${key===targetKey?'id="skillTarget"':''}>${key}</span>`).join('')}</div></div>`;
         activeKeyHandler=(event)=>{
           if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
           if (event.key.toUpperCase() !== targetKey) return registerWrong(`Find the glowing ${targetKey} key.`);
@@ -1557,7 +1570,7 @@
         window.addEventListener('keydown',activeKeyHandler); $('wordBlasterArena').focus({preventScroll:true});
       } else if (step.id === 'capital-charge') {
         const letters=['B','K','M','R','T'], letter=letters[roundProgress%letters.length];
-        area.innerHTML=`<div class="room-label">Capital Charge · Tower ${roundProgress+1} of ${roundGoal()}</div><div class="key-arena" id="keyArena" tabindex="0"><div class="key-prompt">Hold Shift and press ${letter}</div><div class="key-row"><span class="arcade-key active" style="min-width:130px">Shift</span><span class="arcade-key active" id="skillTarget">${letter}</span></div></div>`;
+        area.innerHTML=`<div class="room-label">Capital Charge · Tower ${roundProgress+1} of ${roundGoal()}</div><div class="key-arena" id="keyArena" tabindex="0"><img class="g3-mission-sprite capital" src="/assets/practice/sprites-g3/capital-tower.webp" alt="" /><div class="key-prompt">Hold Shift and press ${letter}</div><div class="key-row"><span class="arcade-key active" style="min-width:130px">Shift</span><span class="arcade-key active" id="skillTarget">${letter}</span></div></div>`;
         activeKeyHandler=(event)=>{
           if (event.key==='Shift') return;
           if (event.key.toUpperCase() !== letter || !event.shiftKey) return registerWrong(`Hold Shift while you press ${letter}.`);
@@ -1566,7 +1579,7 @@
         window.addEventListener('keydown',activeKeyHandler); $('keyArena').focus({preventScroll:true});
       } else if (step.id === 'sentence-engine') {
         const sentences=['I CAN CODE.','BYTE IS READY.'], sentence=sentences[roundProgress%sentences.length]; let typedCount=0;
-        area.innerHTML=`<div class="room-label">Sentence Engine · Line ${roundProgress+1} of ${roundGoal()}</div><div class="typing-card" id="typingCard" tabindex="0"><div class="key-prompt">Type this complete sentence</div><div class="typing-target" id="skillTarget">${keyboardWord(sentence,0)}</div><div class="typing-status">Spaces and the full stop count.</div></div>`;
+        area.innerHTML=`<div class="room-label">Sentence Engine · Line ${roundProgress+1} of ${roundGoal()}</div><div class="typing-card typing-card-with-sprite" id="typingCard" tabindex="0"><img class="g3-mission-sprite" src="/assets/practice/sprites-g3/sentence-engine.webp" alt="" /><div class="typing-copy"><div class="key-prompt">Type this complete sentence</div><div class="typing-target" id="skillTarget">${keyboardWord(sentence,0)}</div><div class="typing-status">Spaces and the full stop count.</div></div></div>`;
         activeKeyHandler=(event)=>{
           if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
           if (event.key.toUpperCase() !== sentence[typedCount]) return registerWrong(`Next: ${sentence[typedCount]===' '?'space':sentence[typedCount]}`);
@@ -1577,7 +1590,7 @@
       } else if (step.id === 'repair-bay') {
         const repairs=[['COT','CAT'],['HAT','HIT'],['BUG','BAG'],['PEN','PIN'],['DOG','DIG']], [wrong,correct]=repairs[roundProgress%repairs.length]; let value=wrong;
         const shared=(()=>{let index=0;while(index<wrong.length&&wrong[index]===correct[index])index+=1;return index;})();
-        area.innerHTML=`<div class="room-label">Repair Bay · Word ${roundProgress+1} of ${roundGoal()}</div><div class="typing-card" id="typingCard" tabindex="0"><div class="key-prompt">Repair the broken word to make <strong>${correct}</strong></div><div class="typing-target" id="skillTarget"></div><div class="typing-status">Use Backspace first, then type the missing letters.</div></div>`;
+        area.innerHTML=`<div class="room-label">Repair Bay · Word ${roundProgress+1} of ${roundGoal()}</div><div class="typing-card typing-card-with-sprite" id="typingCard" tabindex="0"><img class="g3-mission-sprite" src="/assets/practice/sprites-g3/repair-drone.webp" alt="" /><div class="typing-copy"><div class="key-prompt">Repair the broken word to make <strong>${correct}</strong></div><div class="typing-target" id="skillTarget"></div><div class="typing-status">Use Backspace first, then type the missing letters.</div></div></div>`;
         const renderRepair=()=>{ const matching=Array.from(value).findIndex((char,index)=>char!==correct[index]), split=matching===-1?value.length:matching; $('skillTarget').innerHTML=`<span class="typed">${esc(value.slice(0,split))}</span><span class="wrong">${esc(value.slice(split))}</span>`; };
         renderRepair();
         activeKeyHandler=(event)=>{

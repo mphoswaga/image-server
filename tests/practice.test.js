@@ -240,6 +240,21 @@ test('every Grade 2 mission keeps its arcade sprite asset', () => {
   }
 });
 
+test('every Grade 3 mission keeps its Keyboard Kingdom sprite asset', () => {
+  const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
+  for (const asset of [
+    'rapid-relay.webp',
+    'home-row-console.webp',
+    'code-ship.webp',
+    'capital-tower.webp',
+    'sentence-engine.webp',
+    'repair-drone.webp'
+  ]) {
+    assert.match(player, new RegExp(`/assets/practice/sprites-g3/${asset}`));
+    assert.equal(fs.existsSync(path.join(__dirname, '..', 'public', 'assets', 'practice', 'sprites-g3', asset)), true);
+  }
+});
+
 test('Grade 2 play uses animated demonstrations and save-before-auto-advance', () => {
   const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
   assert.match(player, /function tutorialVisual\(stepId\)/);
