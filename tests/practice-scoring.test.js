@@ -4,17 +4,20 @@ const scoring = require('../public/practice-scoring');
 
 test('practice scoring rewards accuracy and efficient active time', () => {
   const precise = scoring.summarize({ baseScore: 1000, correctInputs: 40, mistakes: 0, activeSeconds: 40, targetSeconds: 60 });
+  const onTime = scoring.summarize({ baseScore: 1000, correctInputs: 40, mistakes: 0, activeSeconds: 60, targetSeconds: 60 });
   const inaccurate = scoring.summarize({ baseScore: 1000, correctInputs: 30, mistakes: 10, activeSeconds: 40, targetSeconds: 60 });
   const slow = scoring.summarize({ baseScore: 1000, correctInputs: 40, mistakes: 0, activeSeconds: 120, targetSeconds: 60 });
-  assert.equal(precise.score, 1000);
+  const verySlow = scoring.summarize({ baseScore: 1000, correctInputs: 40, mistakes: 0, activeSeconds: 600, targetSeconds: 60 });
+  assert.equal(precise.score, onTime.score);
+  assert.ok(onTime.score > slow.score);
+  assert.ok(slow.score > verySlow.score);
   assert.equal(precise.accuracyPercent, 100);
   assert.ok(inaccurate.score < precise.score);
-  assert.ok(slow.score < precise.score);
 });
 
 test('young learners keep a forgiving score floor while mistakes still matter', () => {
   const result = scoring.summarize({ baseScore: 1000, correctInputs: 10, mistakes: 30, activeSeconds: 1000, targetSeconds: 60 });
-  assert.ok(result.score >= 500);
+  assert.ok(result.score >= 300);
   assert.equal(result.accuracyPercent, 25);
   assert.equal(result.mistakes, 30);
 });

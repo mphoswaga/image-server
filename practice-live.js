@@ -200,7 +200,14 @@ function publicLeaderboard(room) {
         status: active.status || 'in_progress',
       };
     })
-    .sort((a, b) => b.totalMissionsCompleted - a.totalMissionsCompleted || b.score - a.score || a.name.localeCompare(b.name))
+    .sort((a, b) => (
+      b.totalMissionsCompleted - a.totalMissionsCompleted
+      || b.score - a.score
+      || b.accuracyPercent - a.accuracyPercent
+      || a.mistakes - b.mistakes
+      || a.activeSeconds - b.activeSeconds
+      || a.name.localeCompare(b.name)
+    ))
     .map((participant, index) => ({ ...participant, rank: index + 1 }));
 }
 

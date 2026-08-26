@@ -71,10 +71,10 @@
     const targetSeconds = Math.max(1, Math.round(Number(input.targetSeconds) || 1));
     const totalInputs = correctInputs + mistakes;
     const accuracy = totalInputs ? correctInputs / totalInputs : 1;
-    const accuracyFactor = 0.65 + (0.35 * accuracy);
+    const accuracyFactor = 0.6 + (0.4 * accuracy);
     const paceFactor = activeSeconds <= targetSeconds
       ? 1
-      : boundedNumber(targetSeconds / activeSeconds, 0.75, 1, 0.75);
+      : boundedNumber(Math.pow(targetSeconds / activeSeconds, 0.65), 0.45, 1, 0.45);
     const score = Math.max(0, Math.round(baseScore * accuracyFactor * paceFactor));
     const accuracyPercent = Math.round(accuracy * 100);
     const rating = accuracyPercent >= 95 && paceFactor >= 0.95

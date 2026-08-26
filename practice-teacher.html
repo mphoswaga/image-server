@@ -245,7 +245,7 @@
       }
       $('liveBoardTitle').textContent=waiting?'Learners in the lobby':'Live leaderboard';
       $('liveLeaderboard').innerHTML=room.leaderboard.length
-        ? room.leaderboard.slice(0,12).map((player)=>`<div class="live-player"><span class="live-rank">${waiting?'✓':player.rank}</span><b>${esc(player.name)}</b><span>${waiting?'Ready to start':`${player.activityId==='g3-keyboard-kingdom'?'Grade 3 · ':''}${player.missionsCompleted}/${player.missionCount||room.activity.missionCount} missions · ${player.accuracyPercent??100}%`}</span><span class="live-score">${waiting?'Joined':player.score+' pts'}</span></div>`).join('')
+        ? room.leaderboard.slice(0,12).map((player)=>`<div class="live-player"><span class="live-rank">${waiting?'✓':player.rank}</span><b>${esc(player.name)}</b><span>${waiting?'Ready to start':`${player.activityId==='g3-keyboard-kingdom'?'Grade 3 · ':''}${player.missionsCompleted}/${player.missionCount||room.activity.missionCount} missions · ${player.accuracyPercent??100}% accurate · ${fmtTime(player.activeSeconds)}`}</span><span class="live-score">${waiting?'Joined':player.score+' pts'}</span></div>`).join('')
         : '<div class="live-empty">Waiting for learners to join...</div>';
     }
 

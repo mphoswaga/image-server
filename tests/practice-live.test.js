@@ -147,6 +147,32 @@ test('live leaderboard score is reduced by mistakes and slow active time', () =>
   assert.equal(result.participant.activeSeconds, 70);
 });
 
+test('leaderboard uses active time to separate equally accurate learners', () => {
+  const room = live.createRoom({ teacherId:'teacher-time-ranking' });
+  const fast = live.joinRoom(room.code, 'Fast learner');
+  const steady = live.joinRoom(room.code, 'Steady learner');
+  const slow = live.joinRoom(room.code, 'Slow learner');
+  const checkpoint = (joined, checkpointId, activeSeconds) => live.checkpointRoom(room.code, joined.token, {
+    checkpointId,
+    stepId:'move-pointer',
+    evidence:{ action:'pointer_enter', target:'blue-star' },
+    baseScore:1300,
+    correctInputs:8,
+    mistakes:0,
+    activeSeconds,
+  });
+  checkpoint(steady, 'steady-pointer', 30);
+  checkpoint(slow, 'slow-pointer', 70);
+  const result = checkpoint(fast, 'fast-pointer', 20);
+  assert.deepEqual(result.room.leaderboard.map((player) => player.name), [
+    'Fast learner',
+    'Steady learner',
+    'Slow learner',
+  ]);
+  assert.equal(result.room.leaderboard[0].score, result.room.leaderboard[1].score);
+  assert.ok(result.room.leaderboard[1].score > result.room.leaderboard[2].score);
+});
+
 test('a Foundation live participant continues into Grade 3 without rejoining', () => {
   const room = live.createRoom({ teacherId: 'teacher-worlds', activityId: 'g2-pointer-control' });
   const joined = live.joinRoom(room.code, 'Tara');
