@@ -13,6 +13,8 @@ const ROOM_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 const DEFAULT_CLASSWORK_TTL_MS = 8 * 60 * 60 * 1000;
 const DEFAULT_HOMEWORK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+const CLOSED_RESULT_TTL_MS = 30 * 60 * 1000;
+const DEFAULT_CLASS_DURATION_MINUTES = 25;
 
 function roomPath(code) {
   return path.join(LIVE_DIR, `${normalizeCode(code)}.json`);
@@ -42,6 +44,11 @@ function cleanRosterName(value) {
 
 function normalizeMode(value) {
   return String(value || '').toLowerCase() === 'classwork' ? 'classwork' : 'homework';
+}
+
+function normalizeDurationMinutes(value) {
+  const minutes = Number.parseInt(value, 10);
+  return Number.isFinite(minutes) ? Math.max(5, Math.min(120, minutes)) : DEFAULT_CLASS_DURATION_MINUTES;
 }
 
 function normalizeAudioPolicy(value, defaultMusicPlayback = 'students') {
@@ -104,15 +111,34 @@ function saveRoom(room) {
   return room;
 }
 
+function effectiveEndTime(room) {
+  if (!room) return 0;
+  const ordinaryExpiry = Date.parse(room.expiresAt) || 0;
+  const gameExpiry = roomPhase(room) === 'playing' && room.gameEndsAt ? Date.parse(room.gameEndsAt) || 0 : 0;
+  return gameExpiry ? Math.min(ordinaryExpiry, gameExpiry) : ordinaryExpiry;
+}
+
 function roomIsOpen(room, now = Date.now()) {
-  return Boolean(room && room.status === 'open' && Date.parse(room.expiresAt) > now);
+  return Boolean(room && room.status === 'open' && effectiveEndTime(room) > now);
+}
+
+function roomClosedAt(room) {
+  if (!room) return 0;
+  if (room.closedAt) return Date.parse(room.closedAt) || 0;
+  return !roomIsOpen(room) ? effectiveEndTime(room) : 0;
+}
+
+function roomIsReadable(room, now = Date.now()) {
+  if (!room) return false;
+  if (roomIsOpen(room, now)) return true;
+  const closedAt = roomClosedAt(room);
+  return Boolean(closedAt && now - closedAt <= CLOSED_RESULT_TTL_MS);
 }
 
 function requireOpenRoom(code) {
   const room = loadRoom(code);
   if (!room) throw Object.assign(new Error('That room code was not found.'), { code: 'room_not_found' });
   if (!roomIsOpen(room)) {
-    try { fs.unlinkSync(roomPath(room.code)); } catch {}
     throw Object.assign(new Error('That practice room has ended.'), { code: 'room_closed' });
   }
   return room;
@@ -230,9 +256,11 @@ function roomAttendance(room) {
 function publicRoom(room, { teacherView = false } = {}) {
   const activity = practice.getActivity(room.activityId, room.activityVersion);
   const attendance = teacherView ? roomAttendance(room) : [];
+  const open = roomIsOpen(room);
+  const effectiveEnd = effectiveEndTime(room);
   const result = {
     code: room.code,
-    status: roomIsOpen(room) ? 'open' : 'closed',
+    status: open ? 'open' : 'closed',
     mode: normalizeMode(room.mode),
     phase: roomPhase(room),
     activity: activity ? {
@@ -244,7 +272,13 @@ function publicRoom(room, { teacherView = false } = {}) {
     } : null,
     createdAt: room.createdAt,
     startedAt: room.startedAt || null,
+    playStartsAt: room.playStartsAt || null,
     expiresAt: room.expiresAt,
+    durationMinutes: room.durationMinutes || null,
+    gameEndsAt: room.gameEndsAt || null,
+    remainingSeconds: open && roomPhase(room) === 'playing' && room.gameEndsAt ? Math.max(0, Math.ceil((effectiveEnd - Date.now()) / 1000)) : 0,
+    closedAt: room.closedAt || (!open ? new Date(effectiveEnd).toISOString() : null),
+    endedReason: !open ? (room.endedReason || (room.gameEndsAt && Date.now() >= Date.parse(room.gameEndsAt) ? 'time_up' : 'expired')) : null,
     participantCount: (room.participants || []).length,
     audioPolicy: normalizeAudioPolicy(room.audioPolicy),
     roster: room.roster ? { name: room.roster.name, count: room.roster.students.length } : null,
@@ -258,8 +292,8 @@ function publicRoom(room, { teacherView = false } = {}) {
   return result;
 }
 
-function createRoom({ teacherId, activityId = 'g2-pointer-control', mode = 'homework', roster = null, audioPolicy = null, ttlMs }) {
-  if (teacherRooms(teacherId).length) {
+function createRoom({ teacherId, activityId = 'g2-pointer-control', mode = 'homework', roster = null, audioPolicy = null, durationMinutes, ttlMs }) {
+  if (teacherRooms(teacherId).some((room) => room.status === 'open')) {
     throw Object.assign(new Error('End the current live room before starting another one.'), { code: 'room_exists' });
   }
   const activity = practice.getActivity(activityId);
@@ -276,11 +310,14 @@ function createRoom({ teacherId, activityId = 'g2-pointer-control', mode = 'home
     activityVersion: activity.version,
     mode: safeMode,
     phase: safeMode === 'classwork' ? 'lobby' : 'playing',
+    durationMinutes: safeMode === 'classwork' ? normalizeDurationMinutes(durationMinutes) : null,
     audioPolicy: normalizeAudioPolicy(audioPolicy, safeMode === 'classwork' ? 'teacher' : 'students'),
     roster: safeRoster,
     status: 'open',
     createdAt: new Date(now).toISOString(),
     startedAt: safeMode === 'homework' ? new Date(now).toISOString() : null,
+    playStartsAt: safeMode === 'homework' ? new Date(now).toISOString() : null,
+    gameEndsAt: null,
     updatedAt: new Date(now).toISOString(),
     expiresAt: new Date(now + safeTtl).toISOString(),
     participants: [],
@@ -375,8 +412,11 @@ function startRoom(code, teacherId) {
   }
   if (normalizeMode(room.mode) !== 'classwork') return publicRoom(room, { teacherView: true });
   if (roomPhase(room) !== 'playing') {
+    const playStartsAt = Date.now() + 5000;
     room.phase = 'playing';
     room.startedAt = new Date().toISOString();
+    room.playStartsAt = new Date(playStartsAt).toISOString();
+    room.gameEndsAt = new Date(playStartsAt + normalizeDurationMinutes(room.durationMinutes) * 60 * 1000).toISOString();
     saveRoom(room);
   }
   return publicRoom(room, { teacherView: true });
@@ -404,6 +444,9 @@ function checkpointRoom(code, token, input = {}) {
   const room = requireOpenRoom(code);
   if (normalizeMode(room.mode) === 'classwork' && roomPhase(room) !== 'playing') {
     throw Object.assign(new Error('Wait for your teacher to start the class game.'), { code: 'room_not_started' });
+  }
+  if (normalizeMode(room.mode) === 'classwork' && room.playStartsAt && Date.now() < Date.parse(room.playStartsAt)) {
+    throw Object.assign(new Error('Get ready. The class countdown is still running.'), { code: 'room_not_started' });
   }
   const participant = findParticipant(room, token);
   if (!participant) throw Object.assign(new Error('Rejoin the room to continue.'), { code: 'participant_not_found' });
@@ -472,7 +515,12 @@ function checkpointRoom(code, token, input = {}) {
 }
 
 function getRoom(code) {
-  return publicRoom(requireOpenRoom(code));
+  const room = loadRoom(code);
+  if (!room || !roomIsReadable(room)) {
+    if (room) try { fs.unlinkSync(roomPath(room.code)); } catch {}
+    throw Object.assign(new Error('That room code was not found.'), { code: 'room_not_found' });
+  }
+  return publicRoom(room);
 }
 
 function teacherRooms(teacherId) {
@@ -485,7 +533,7 @@ function teacherRooms(teacherId) {
       })
       .filter((room) => {
         if (!room) return false;
-        if (!roomIsOpen(room)) {
+        if (!roomIsReadable(room)) {
           try { fs.unlinkSync(roomPath(room.code)); } catch {}
           return false;
         }
@@ -501,9 +549,10 @@ function closeRoom(code, teacherId) {
   if (!room) throw Object.assign(new Error('Practice room not found.'), { code: 'room_not_found' });
   if (room.teacherId !== String(teacherId || '')) throw Object.assign(new Error('This room belongs to another teacher.'), { code: 'forbidden' });
   room.status = 'closed';
-  room.expiresAt = new Date().toISOString();
+  room.closedAt = new Date().toISOString();
+  room.endedReason = 'teacher_ended';
+  saveRoom(room);
   const result = publicRoom(room, { teacherView: true });
-  try { fs.unlinkSync(roomPath(room.code)); } catch {}
   return result;
 }
 

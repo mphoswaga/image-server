@@ -2200,6 +2200,7 @@ app.post('/api/practice/live-sessions', requirePracticeEnabled, requireAuth, (re
       mode: req.body && req.body.mode || 'classwork',
       roster: classRoster,
       audioPolicy: req.body && req.body.audioPolicy,
+      durationMinutes: req.body && req.body.durationMinutes,
     });
     const world = room.activity && room.activity.id === 'g3-keyboard-kingdom' ? '&world=g3' : '';
     res.status(201).json({ room, joinPath: `/student/practice/guest?session=${room.code}${world}` });

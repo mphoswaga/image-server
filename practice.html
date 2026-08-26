@@ -41,6 +41,8 @@
     .progress-step.current { border-color:var(--cyan); color:var(--navy); background:var(--soft-cyan); }
     .progress-step.done { border-color:var(--green); color:var(--green-dark); background:var(--soft-green); }
     .gate,.intro,.completion { min-height:520px; display:grid; place-items:center; background:#fff; border:1px solid var(--line); box-shadow:var(--shadow); padding:34px; }
+    .completion { position:relative; overflow:hidden; }
+    .completion-inner { position:relative; z-index:1; }
     .intro-inner,.gate-inner,.completion-inner { width:min(760px,100%); text-align:center; }
     .byte-large { width:84px; height:84px; margin:0 auto 18px; border-radius:50%; display:grid; place-items:center; background:var(--soft-cyan); border:2px solid var(--cyan); color:var(--navy); font-size:29px; font-weight:900; }
     h1 { margin:0 0 10px; color:var(--navy); font-size:clamp(28px,4vw,42px); line-height:1.1; }
@@ -69,12 +71,26 @@
     .live-lobby h2 { color:#fff; }
     .live-lobby p { margin:6px 0 0; color:#b8c9db; }
     .live-lobby strong { color:#8cecf4; }
+    .lobby-players { display:flex; justify-content:center; flex-wrap:wrap; gap:8px; margin-top:16px; }
+    .lobby-player { display:flex; align-items:center; gap:7px; padding:7px 10px; border:1px solid #2d5b83; border-radius:999px; background:#102f55; color:#fff; font-size:12px; font-weight:800; animation:lobbyArrival .5s cubic-bezier(.2,.8,.2,1) both; }
+    .lobby-player:before { content:""; width:9px; height:9px; border-radius:50%; background:#52e69a; box-shadow:0 0 0 4px rgba(82,230,154,.12); }
+    .live-countdown { position:fixed; inset:0; z-index:100; display:grid; place-items:center; background:rgba(4,13,31,.92); color:#fff; text-align:center; }
+    .live-countdown strong { display:block; color:#25cddc; font-size:clamp(100px,22vw,220px); line-height:1; text-shadow:0 0 55px rgba(37,205,220,.55); animation:countdownPop .85s ease both; }
+    .live-countdown span { display:block; margin-top:12px; color:#b8c9db; font-size:22px; font-weight:900; }
     .live-strip { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 10px; padding:9px 12px; border:1px solid #2a4d76; border-radius:10px; background:#0c1d3b; color:#dce8f3; }
     .live-strip strong { color:#8cecf4; white-space:nowrap; }
     .live-mini-board { display:flex; justify-content:flex-end; gap:6px; min-width:0; overflow:hidden; }
     .live-mini-player { display:flex; align-items:center; gap:5px; min-width:0; padding:5px 8px; border-radius:6px; background:#16375a; font-size:11px; font-weight:800; }
     .live-mini-player.me { background:#12623e; color:#fff; }
     .live-mini-player span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:90px; }
+    .live-final-board { display:grid; gap:8px; width:min(620px,100%); margin:20px auto; }
+    .live-final-player { display:grid; grid-template-columns:42px minmax(0,1fr) auto; align-items:center; gap:10px; padding:12px 14px; border:1px solid #315d88; background:#102747; color:#fff; text-align:left; }
+    .live-final-player:first-child { border-color:#f4c84b; background:linear-gradient(100deg,#493b12,#102747 65%); }
+    .live-final-player b { display:grid; place-items:center; width:36px; height:36px; border-radius:50%; background:#25cddc; color:#07142c; font-size:17px; }
+    .live-final-player.me { box-shadow:0 0 0 3px rgba(82,230,154,.35); }
+    .live-final-player small { color:#8cecf4; font-weight:900; }
+    .live-celebration { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
+    .live-confetti { position:absolute; left:var(--x); top:-24px; width:10px; height:18px; border-radius:2px; background:var(--color); animation:confettiFall var(--duration) linear var(--delay) infinite; }
     .btn { display:inline-flex; align-items:center; justify-content:center; min-height:46px; padding:11px 18px; border-radius:8px; border:1px solid transparent; font-weight:800; cursor:pointer; text-decoration:none; }
     .btn.primary { background:var(--green); color:#fff; box-shadow:0 8px 20px rgba(24,165,104,.22); }
     .btn.primary:hover { background:var(--green-dark); }
@@ -283,6 +299,9 @@
     @keyframes decoyDrift { from{transform:translate(-8px,-5px)} to{transform:translate(18px,12px)} }
     @keyframes keyGlow { 50%{transform:translateY(3px);box-shadow:0 5px 0 #251b3d,0 0 40px rgba(198,156,255,.8)} }
     @keyframes transitionIn { from{opacity:0;transform:translateY(18px) scale(.92)} to{opacity:1;transform:none} }
+    @keyframes lobbyArrival { from{opacity:0;transform:translateY(10px) scale(.9)} to{opacity:1;transform:none} }
+    @keyframes countdownPop { from{opacity:0;transform:scale(.45)} 60%{opacity:1;transform:scale(1.12)} to{transform:scale(1)} }
+    @keyframes confettiFall { from{transform:translateY(-30px) rotate(0);opacity:1} to{transform:translateY(720px) rotate(620deg);opacity:.15} }
 
     /* Immersive game shell. The evidence system remains the same; only the
        learner-facing world is intentionally separate from the planner UI. */
@@ -577,6 +596,7 @@
     <div class="device-note" id="deviceNote">This practice teaches mouse and keyboard skills. Use a laptop or desktop computer for the full activity.</div>
     <div class="progress" id="progress" aria-label="Activity progress"></div>
     <section class="live-strip" id="liveStrip" aria-label="Live class leaderboard" hidden><strong id="liveStripTitle">Live room</strong><div class="live-mini-board" id="liveMiniBoard"></div></section>
+    <section class="live-countdown hidden" id="liveCountdown" aria-live="assertive"><div><strong id="liveCountdownNumber">3</strong><span>Get ready, Byte City needs you!</span></div></section>
 
     <section class="gate hidden" id="authGate">
       <div class="gate-inner">
@@ -614,7 +634,7 @@
           <div class="join-error" id="joinRoomError" role="alert"></div>
           <div class="solo-choice" id="soloChoice">No class code? <button id="soloGuestBtn" type="button">Play on my own</button></div>
         </div>
-        <div class="live-lobby" id="liveLobby" hidden><div class="lobby-pulse">B</div><h2>You are in the class lobby</h2><p id="liveLobbyText">Wait here. Your teacher will start the game when everyone is ready.</p></div>
+        <div class="live-lobby" id="liveLobby" hidden><div class="lobby-pulse">B</div><h2>You are in the class lobby</h2><p id="liveLobbyText">Wait here. Your teacher will start the game when everyone is ready.</p><div class="lobby-players" id="liveLobbyPlayers"></div></div>
         <button class="btn primary" id="startBtn" type="button">Begin the rescue</button>
       </div>
     </section>
@@ -641,6 +661,7 @@
     </section>
 
     <section class="completion hidden" id="completion">
+      <div class="live-celebration" id="liveCelebration" hidden></div>
       <div class="completion-inner">
         <img class="bot-image complete" src="/assets/byte-talking.gif" alt="Byte celebrating" />
         <h1 id="completionTitle">Byte City is online</h1>
@@ -648,6 +669,7 @@
         <p id="masterySummary"></p>
         <p id="scoreSummary"></p>
         <div class="result-stats" id="resultStats"></div>
+        <div class="live-final-board" id="liveFinalBoard" hidden></div>
         <div class="badge-shelf" id="badgeShelf" aria-label="Earned skill badges"></div>
         <div class="next-world" id="nextWorld"><b>New world unlocked</b><strong id="nextWorldTitle">Advanced Keyboard Kingdom</strong><span id="nextWorldCopy">Continue into the Grade 3 keyboard campaign.</span><a class="btn primary" id="continueWorldBtn" href="#" style="margin-top:14px">Continue to Grade 3</a></div>
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:24px">
@@ -808,6 +830,7 @@
     let liveParticipant = null;
     let liveParticipantToken = '';
     let livePollTimer = null;
+    let liveCountdownRunning = false;
 
     applyCampaignCopy();
 
@@ -829,7 +852,8 @@
     function renderLiveBoard(room) {
       if (!room || !liveParticipant) { $('liveStrip').hidden=true; return; }
       $('liveStrip').hidden=false;
-      $('liveStripTitle').textContent=`Room ${room.code} · ${liveParticipant.name}`;
+      const remaining=room.status==='open'&&room.gameEndsAt?Math.max(0,Math.ceil((Date.parse(room.gameEndsAt)-Date.now())/1000)):0;
+      $('liveStripTitle').textContent=`Room ${room.code} · ${liveParticipant.name}${remaining?` · ${formatGameTime(remaining)} left`:''}`;
       let players=(room.leaderboard||[]).slice(0,5);
       const me=(room.leaderboard||[]).find((player)=>player.id===liveParticipant.id);
       if(me&&!players.some((player)=>player.id===me.id)) players=[...players.slice(0,4),me];
@@ -848,14 +872,73 @@
       $('startBtn').hidden=waiting;
       if(waiting){
         $('liveLobbyText').innerHTML=`<strong>${room.participantCount} ${room.participantCount===1?'learner':'learners'} joined.</strong><br>Wait here. Your teacher will start the game when everyone is ready.`;
+        $('liveLobbyPlayers').innerHTML=(room.leaderboard||[]).map((player)=>`<span class="lobby-player">${esc(player.name)}</span>`).join('');
         setSave('Waiting for your teacher to start the class');
       }else if(justStarted){
-        $('startBtn').textContent=campaign.start;
         setSave('Your teacher started the game');
         playCue('start');
         narrate('The teacher started the game. You can begin!');
-        $('startBtn').focus({preventScroll:true});
+        runLiveStartCountdown(room);
       }
+    }
+
+    async function runLiveStartCountdown(room=liveRoom) {
+      if(liveCountdownRunning) return;
+      const startsAt=Date.parse(room&&room.playStartsAt)||Date.now();
+      if(startsAt<=Date.now()) { if($('intro').classList.contains('hidden')===false) $('startBtn').click(); return; }
+      liveCountdownRunning=true;
+      const layer=$('liveCountdown'), number=$('liveCountdownNumber');
+      layer.classList.remove('hidden');
+      let previous='';
+      while(Date.now()<startsAt){
+        const value=String(Math.max(1,Math.ceil((startsAt-Date.now())/1000)));
+        if(value!==previous){
+          previous=value;
+          number.textContent=value;
+          number.style.animation='none';
+          void number.offsetWidth;
+          number.style.animation='countdownPop .85s ease both';
+          playCue('hit');
+        }
+        await new Promise((resolve)=>setTimeout(resolve,100));
+      }
+      number.textContent='GO!';
+      playCue('start');
+      await new Promise((resolve)=>setTimeout(resolve,500));
+      layer.classList.add('hidden');
+      liveCountdownRunning=false;
+      if($('intro').classList.contains('hidden')===false) $('startBtn').click();
+    }
+
+    function showLiveRoomEnded(room) {
+      clearInterval(livePollTimer);
+      clearTimeout(autoAdvanceTimer);
+      clearActiveInput();
+      paused=true;
+      stopMusic();
+      document.body.classList.remove('playing','intro-screen');
+      $('authGate').classList.add('hidden');
+      $('intro').classList.add('hidden');
+      $('activity').style.display='none';
+      $('completion').classList.remove('hidden');
+      $('completionTitle').textContent=room.endedReason==='time_up'?'Time is up!':'Teacher ended the game';
+      $('completionLead').textContent='The class arcade has finished. Here are the final standings.';
+      $('nextWorld').hidden=true;
+      $('practiseAgainBtn').hidden=true;
+      $('completionBack').href='/start';
+      $('completionBack').textContent='Back to student start';
+      const me=(room.leaderboard||[]).find((player)=>liveParticipant&&player.id===liveParticipant.id);
+      $('masterySummary').innerHTML=me?`You finished in <span class="mastery">position ${me.rank}</span>`:'Final class results';
+      $('scoreSummary').innerHTML=me?`Your score: <strong style="color:#25cddc;font-size:24px">${me.score}</strong>`:'';
+      $('resultStats').innerHTML=me?`<div class="result-stat">Missions<strong>${me.totalMissionsCompleted}</strong></div><div class="result-stat">Accuracy<strong>${me.accuracyPercent}%</strong></div><div class="result-stat">Mistakes<strong>${me.mistakes}</strong></div><div class="result-stat">Active time<strong>${formatGameTime(me.activeSeconds)}</strong></div>`:'';
+      $('badgeShelf').innerHTML='';
+      $('liveFinalBoard').hidden=false;
+      $('liveFinalBoard').innerHTML=(room.leaderboard||[]).slice(0,10).map((player)=>`<div class="live-final-player ${liveParticipant&&player.id===liveParticipant.id?'me':''}"><b>${player.rank}</b><span>${esc(player.name)}</span><small>${player.score} pts</small></div>`).join('')||'<p>No scores were recorded.</p>';
+      $('liveCelebration').hidden=false;
+      $('liveCelebration').innerHTML=Array.from({length:28},(_,index)=>`<i class="live-confetti" style="--x:${(index*37)%100}%;--delay:${(index%7)*-.32}s;--duration:${2.8+(index%5)*.35}s;--color:${['#25cddc','#52e69a','#f4c84b','#f07b3d'][index%4]}"></i>`).join('');
+      renderLiveBoard(room);
+      playCue('world');
+      setSave('Class game complete');
     }
 
     function activateLiveRoom(saved) {
@@ -868,8 +951,9 @@
       $('previewNote').textContent=liveRoom.mode==='classwork'?'Live classwork · Wait for your teacher to start':'Homework practice · Start when you are ready';
       $('completionLead').textContent='You completed the live class adventure. Your temporary score is on the room leaderboard.';
       $('continueWorldBtn').href=continueWorldUrl();
+      if(liveRoom.status==='closed'){ showLiveRoomEnded(liveRoom); return; }
       syncAudioPolicy(liveRoom);
-      syncLiveLobby(liveRoom);
+      syncLiveLobby(liveRoom,liveRoom.mode==='classwork'&&liveRoom.phase==='playing');
       renderLiveBoard(liveRoom);
       clearInterval(livePollTimer);
       livePollTimer=setInterval(()=>{ if(!document.hidden) refreshLiveRoom(); },3000);
@@ -883,6 +967,7 @@
         const payload=await response.json();
         const wasWaiting=liveRoomWaiting(liveRoom);
         liveRoom=payload.room;
+        if(liveRoom.status==='closed'){ showLiveRoomEnded(liveRoom); return; }
         syncAudioPolicy(liveRoom);
         syncLiveLobby(liveRoom,wasWaiting&&!liveRoomWaiting(liveRoom));
         renderLiveBoard(liveRoom);
@@ -1679,6 +1764,8 @@
       document.body.classList.remove('intro-screen');
       $('activity').style.display = 'none';
       $('completion').classList.remove('hidden');
+      $('liveFinalBoard').hidden=true;
+      $('liveCelebration').hidden=true;
       stopMusic();
       playCue('world');
       $('progress').innerHTML = steps.map((step,index) => `<div class="progress-step done">${index + 1}. ${esc(step.title)}</div>`).join('');

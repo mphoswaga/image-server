@@ -71,12 +71,24 @@ test('classwork uses a teacher-controlled lobby and private roster attendance', 
   const started = live.startRoom(room.code, 'teacher-lobby');
   assert.equal(started.phase, 'playing');
   assert.ok(started.startedAt);
-  const checkpoint = live.checkpointRoom(room.code, joined.token, {
-    checkpointId:'after-start',
+  assert.throws(() => live.checkpointRoom(room.code, joined.token, {
+    checkpointId:'during-countdown',
     stepId:'move-pointer',
     evidence:{ action:'pointer_enter', target:'blue-star' },
-    baseScore:1300,
-  });
+  }), /countdown/i);
+  const originalNow = Date.now;
+  Date.now = () => Date.parse(started.playStartsAt) + 1;
+  let checkpoint;
+  try {
+    checkpoint = live.checkpointRoom(room.code, joined.token, {
+      checkpointId:'after-start',
+      stepId:'move-pointer',
+      evidence:{ action:'pointer_enter', target:'blue-star' },
+      baseScore:1300,
+    });
+  } finally {
+    Date.now = originalNow;
+  }
   assert.equal(checkpoint.participant.missionsCompleted, 1);
 });
 
@@ -214,7 +226,20 @@ test('only the owning teacher can close a live room', () => {
   assert.throws(() => live.closeRoom(room.code, 'teacher-other'), /another teacher/i);
   const closed = live.closeRoom(room.code, 'teacher-4');
   assert.equal(closed.status, 'closed');
-  assert.throws(() => live.getRoom(room.code), /not found/i);
+  assert.equal(closed.endedReason, 'teacher_ended');
+  assert.equal(live.getRoom(room.code).status, 'closed');
+  assert.throws(() => live.joinRoom(room.code, 'Late learner'), /ended/i);
+  assert.equal(live.createRoom({ teacherId:'teacher-4' }).status, 'open');
+});
+
+test('classwork duration begins when the teacher starts, not while learners wait', () => {
+  const room = live.createRoom({ teacherId:'teacher-timer', mode:'classwork', durationMinutes:15 });
+  assert.equal(room.durationMinutes, 15);
+  assert.equal(room.gameEndsAt, null);
+  const started = live.startRoom(room.code, 'teacher-timer');
+  assert.ok(Date.parse(started.playStartsAt) - Date.parse(started.startedAt) >= 4000);
+  assert.ok(Date.parse(started.gameEndsAt) - Date.parse(started.playStartsAt) >= 14 * 60 * 1000);
+  assert.ok(started.remainingSeconds > 14 * 60);
 });
 
 test('the server and both screens expose the live-room contract', () => {
@@ -239,6 +264,8 @@ test('the server and both screens expose the live-room contract', () => {
   assert.match(player, /Your teacher switched/);
   assert.match(player, /soloChoice'\)\.hidden=Boolean\(requestedSessionCode\)/);
   assert.match(player, /function liveRoomWaiting\(room=liveRoom\)/);
+  assert.match(player, /function runLiveStartCountdown\(room=liveRoom\)/);
+  assert.match(player, /function showLiveRoomEnded\(room\)/);
   assert.match(player, /async function saveLiveCheckpoint\(payload\)/);
   assert.match(teacher, /Start live room/);
   assert.match(teacher, /Start class game/);
@@ -246,6 +273,8 @@ test('the server and both screens expose the live-room contract', () => {
   assert.match(teacher, /id="teacherMusic"/);
   assert.match(teacher, /id="teacherMusicSource"/);
   assert.match(teacher, /id="teacherMusicPlay"/);
+  assert.match(teacher, /id="liveDuration"/);
+  assert.match(teacher, /Final podium/);
   assert.match(teacher, /function scheduleTeacherMusic\(\)/);
   assert.match(teacher, /id="teacherVoice"/);
   assert.match(teacher, /\/api\/practice\/live-sessions/);
