@@ -282,7 +282,9 @@ function publicRoom(room, { teacherView = false } = {}) {
     participantCount: (room.participants || []).length,
     audioPolicy: normalizeAudioPolicy(room.audioPolicy),
     roster: room.roster ? { name: room.roster.name, count: room.roster.students.length } : null,
-    leaderboard: publicLeaderboard(room),
+    leaderboard: teacherView
+      ? publicLeaderboard(room)
+      : publicLeaderboard(room).map((participant) => ({ id: participant.id, name: participant.name })),
   };
   if (teacherView) {
     result.attendance = attendance;
@@ -523,6 +525,19 @@ function getRoom(code) {
   return publicRoom(room);
 }
 
+function getRoomForParticipant(code, token = '') {
+  const room = loadRoom(code);
+  if (!room || !roomIsReadable(room)) {
+    if (room) try { fs.unlinkSync(roomPath(room.code)); } catch {}
+    throw Object.assign(new Error('That room code was not found.'), { code: 'room_not_found' });
+  }
+  const participant = token ? findParticipant(room, token) : null;
+  return {
+    room: publicRoom(room),
+    participant: participant ? publicLeaderboard(room).find((item) => item.id === participant.id) : null,
+  };
+}
+
 function teacherRooms(teacherId) {
   try {
     return fs.readdirSync(LIVE_DIR)
@@ -565,6 +580,7 @@ module.exports = {
   updateRoomAudio,
   checkpointRoom,
   getRoom,
+  getRoomForParticipant,
   teacherRooms,
   closeRoom,
 };

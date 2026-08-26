@@ -66,14 +66,26 @@
     .join-error { min-height:20px; margin-top:8px; color:#ffd28a; font-size:13px; font-weight:700; }
     .solo-choice { display:flex; align-items:center; justify-content:center; gap:10px; margin-top:12px; color:#9fb2c5; font-size:12px; }
     .solo-choice button { border:0; background:transparent; color:#8cecf4; font-weight:800; text-decoration:underline; cursor:pointer; }
-    .live-lobby { width:min(620px,100%); margin:18px auto 0; padding:22px; border:2px solid #25cddc; border-radius:12px; background:#0c1d3b; color:#fff; text-align:center; box-shadow:0 16px 36px rgba(7,20,44,.24); }
-    .live-lobby .lobby-pulse { width:58px; height:58px; display:grid; place-items:center; margin:0 auto 12px; border-radius:50%; border:2px solid #25cddc; background:#102f55; color:#8cecf4; font-size:24px; font-weight:900; animation:pulse 1.5s ease-in-out infinite; }
-    .live-lobby h2 { color:#fff; }
-    .live-lobby p { margin:6px 0 0; color:#b8c9db; }
+    .live-lobby { width:min(760px,100%); margin:18px auto 0; overflow:hidden; border:2px solid #25cddc; border-radius:16px; background:#07142c; color:#fff; text-align:left; box-shadow:0 24px 52px rgba(3,12,29,.46),0 0 30px rgba(37,205,220,.18); }
+    .lobby-header { display:grid; grid-template-columns:86px minmax(0,1fr) auto; align-items:center; gap:16px; padding:18px 20px; border-bottom:1px solid #2a4d76; background:linear-gradient(110deg,#102f55,#0b1c38); }
+    .lobby-byte { width:82px; height:82px; object-fit:contain; border:3px solid #25cddc; border-radius:50%; background:#fff; box-shadow:0 0 24px rgba(37,205,220,.35); }
+    .live-lobby h2 { margin:0; color:#fff; font-size:25px; }
+    .live-lobby p { margin:5px 0 0; color:#b8c9db; }
     .live-lobby strong { color:#8cecf4; }
-    .lobby-players { display:flex; justify-content:center; flex-wrap:wrap; gap:8px; margin-top:16px; }
-    .lobby-player { display:flex; align-items:center; gap:7px; padding:7px 10px; border:1px solid #2d5b83; border-radius:999px; background:#102f55; color:#fff; font-size:12px; font-weight:800; animation:lobbyArrival .5s cubic-bezier(.2,.8,.2,1) both; }
+    .lobby-code { min-width:112px; padding:10px 13px; border:1px solid #4b78a8; border-radius:10px; background:#07142c; text-align:center; }
+    .lobby-code small { display:block; color:#8ca4bc; font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:1px; }
+    .lobby-code b { display:block; color:#f4c84b; font-size:24px; letter-spacing:3px; }
+    .lobby-stage { padding:18px 20px 20px; background-image:radial-gradient(circle at 50% 0,rgba(37,205,220,.13),transparent 42%),linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px); background-size:auto,30px 30px,30px 30px; }
+    .lobby-stage-title { display:flex; justify-content:space-between; gap:12px; color:#dce8f3; font-size:12px; font-weight:900; text-transform:uppercase; letter-spacing:.7px; }
+    .lobby-waiting { color:#52e69a; animation:pulse 1.4s ease-in-out infinite; }
+    .lobby-players { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:13px; }
+    .lobby-player { display:flex; align-items:center; gap:9px; min-width:0; padding:10px 11px; border:1px solid #2d5b83; border-radius:9px; background:#102f55; color:#fff; font-size:12px; font-weight:800; animation:lobbyArrival .5s cubic-bezier(.2,.8,.2,1) both; }
     .lobby-player:before { content:""; width:9px; height:9px; border-radius:50%; background:#52e69a; box-shadow:0 0 0 4px rgba(82,230,154,.12); }
+    .lobby-player.me { border-color:#52e69a; background:#123e37; }
+    .lobby-player span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .lobby-player small { margin-left:auto; color:#8ef0ba; font-size:9px; text-transform:uppercase; }
+    .lobby-footer { display:flex; align-items:center; justify-content:center; gap:9px; padding:12px 18px; border-top:1px solid #2a4d76; background:#0b1c38; color:#a9b9ce; font-size:12px; font-weight:800; text-align:center; }
+    .lobby-footer:before { content:""; width:10px; height:10px; border:2px solid #25cddc; border-top-color:transparent; border-radius:50%; animation:spin .8s linear infinite; }
     .live-countdown { position:fixed; inset:0; z-index:100; display:grid; place-items:center; background:rgba(4,13,31,.92); color:#fff; text-align:center; }
     .live-countdown strong { display:block; color:#25cddc; font-size:clamp(100px,22vw,220px); line-height:1; text-shadow:0 0 55px rgba(37,205,220,.55); animation:countdownPop .85s ease both; }
     .live-countdown span { display:block; margin-top:12px; color:#b8c9db; font-size:22px; font-weight:900; }
@@ -477,6 +489,7 @@
     @keyframes demoTower { 0%,25%{transform:translateY(48px)} 75%,100%{transform:translateY(-54px)} }
     @keyframes demoWheel { 50%{transform:translateY(18px)} }
     @keyframes packetFly { 0%,100%{transform:translateX(-7px) rotate(-5deg)} 50%{transform:translateX(7px) rotate(5deg)} }
+    @keyframes spin { to{transform:rotate(360deg)} }
     @keyframes demoType { 0%{width:0} 75%,100%{width:78px} }
     @keyframes demoSelect { 0%,20%,100%{transform:translate(0,0)} 48%,75%{transform:translate(118px,-42px)} }
     @keyframes bugFloat { to{transform:translateY(-8px) scale(1.04)} }
@@ -548,6 +561,10 @@
       .teacher-stage-jump { align-items:stretch; flex-direction:column; }
       .teacher-stage-jump select,.teacher-stage-jump .btn { width:100%; }
       .live-mini-board { width:100%; justify-content:flex-start; overflow-x:auto; padding-bottom:2px; }
+      .lobby-header { grid-template-columns:64px minmax(0,1fr); padding:14px; }
+      .lobby-byte { width:62px; height:62px; }
+      .lobby-code { grid-column:1/-1; width:100%; }
+      .lobby-players { grid-template-columns:repeat(2,minmax(0,1fr)); }
       .quest-map { grid-template-columns:repeat(var(--mission-count,8),128px); overflow-x:auto; padding-bottom:5px; }
       .fact+.fact { border-left:0; border-top:1px solid var(--line); }
       .game-hud { grid-template-columns:repeat(3,1fr); }
@@ -643,7 +660,18 @@
           <div class="join-error" id="joinRoomError" role="alert"></div>
           <div class="solo-choice" id="soloChoice">No class code? <button id="soloGuestBtn" type="button">Play on my own</button></div>
         </div>
-        <div class="live-lobby" id="liveLobby" hidden><div class="lobby-pulse">B</div><h2>You are in the class lobby</h2><p id="liveLobbyText">Wait here. Your teacher will start the game when everyone is ready.</p><div class="lobby-players" id="liveLobbyPlayers"></div></div>
+        <div class="live-lobby" id="liveLobby" hidden>
+          <div class="lobby-header">
+            <img class="lobby-byte" src="/assets/byte-talking.gif" alt="Byte waiting in the game lobby" />
+            <div><h2>Byte City game lobby</h2><p id="liveLobbyText">You are connected. Wait for your teacher to launch the mission.</p></div>
+            <div class="lobby-code"><small>Room code</small><b id="liveLobbyCode">------</b></div>
+          </div>
+          <div class="lobby-stage">
+            <div class="lobby-stage-title"><span id="liveLobbyCount">Players ready</span><span class="lobby-waiting">Waiting for teacher</span></div>
+            <div class="lobby-players" id="liveLobbyPlayers"></div>
+          </div>
+          <div class="lobby-footer">Keep this screen open. Everyone will start together.</div>
+        </div>
         <button class="btn primary" id="startBtn" type="button">Begin the rescue</button>
       </div>
     </section>
@@ -863,12 +891,10 @@
       $('liveStrip').hidden=false;
       const remaining=room.status==='open'&&room.gameEndsAt?Math.max(0,Math.ceil((Date.parse(room.gameEndsAt)-Date.now())/1000)):0;
       $('liveStripTitle').textContent=`Room ${room.code} · ${liveParticipant.name}${remaining?` · ${formatGameTime(remaining)} left`:''}`;
-      let players=(room.leaderboard||[]).slice(0,5);
-      const me=(room.leaderboard||[]).find((player)=>player.id===liveParticipant.id);
-      if(me&&!players.some((player)=>player.id===me.id)) players=[...players.slice(0,4),me];
-      $('liveMiniBoard').innerHTML=players.length
-        ? players.map((player)=>`<div class="live-mini-player ${player.id===liveParticipant.id?'me':''}"><b>${liveRoomWaiting(room)?'✓':player.rank}</b><span>${esc(player.name)}</span><small>${liveRoomWaiting(room)?'ready':player.score}</small></div>`).join('')
-        : '<span>Waiting for players...</span>';
+      const me=liveParticipant;
+      $('liveMiniBoard').innerHTML=me
+        ? `<div class="live-mini-player me"><b>${liveRoomWaiting(room)?'✓':'You'}</b><span>${esc(me.name)}</span><small>${liveRoomWaiting(room)?'ready':`${me.score} pts`}</small></div>`
+        : '<span>Your score will appear here.</span>';
     }
 
     function liveRoomWaiting(room=liveRoom) {
@@ -880,8 +906,10 @@
       $('liveLobby').hidden=!waiting;
       $('startBtn').hidden=waiting;
       if(waiting){
-        $('liveLobbyText').innerHTML=`<strong>${room.participantCount} ${room.participantCount===1?'learner':'learners'} joined.</strong><br>Wait here. Your teacher will start the game when everyone is ready.`;
-        $('liveLobbyPlayers').innerHTML=(room.leaderboard||[]).map((player)=>`<span class="lobby-player">${esc(player.name)}</span>`).join('');
+        $('liveLobbyCode').textContent=room.code;
+        $('liveLobbyCount').textContent=`${room.participantCount} ${room.participantCount===1?'player':'players'} ready`;
+        $('liveLobbyText').innerHTML=`<strong>You are connected as ${esc(liveParticipant&&liveParticipant.name||'a player')}.</strong><br>Byte will launch the mission on every screen together.`;
+        $('liveLobbyPlayers').innerHTML=(room.leaderboard||[]).map((player)=>`<span class="lobby-player ${liveParticipant&&player.id===liveParticipant.id?'me':''}"><span>${esc(player.name)}</span><small>${liveParticipant&&player.id===liveParticipant.id?'You':'Ready'}</small></span>`).join('');
         setSave('Waiting for your teacher to start the class');
       }else if(justStarted){
         setSave('Your teacher started the game');
@@ -931,18 +959,18 @@
       $('activity').style.display='none';
       $('completion').classList.remove('hidden');
       $('completionTitle').textContent=room.endedReason==='time_up'?'Time is up!':'Teacher ended the game';
-      $('completionLead').textContent='The class arcade has finished. Here are the final standings.';
+      $('completionLead').textContent='The class arcade has finished. Here is your personal result.';
       $('nextWorld').hidden=true;
       $('practiseAgainBtn').hidden=true;
       $('completionBack').href='/start';
       $('completionBack').textContent='Back to student start';
-      const me=(room.leaderboard||[]).find((player)=>liveParticipant&&player.id===liveParticipant.id);
-      $('masterySummary').innerHTML=me?`You finished in <span class="mastery">position ${me.rank}</span>`:'Final class results';
+      const me=liveParticipant;
+      $('masterySummary').innerHTML=me?`Mission result: <span class="mastery">${esc(me.mastery||'Completed')}</span>`:'Your result was not recorded';
       $('scoreSummary').innerHTML=me?`Your score: <strong style="color:#25cddc;font-size:24px">${me.score}</strong>`:'';
       $('resultStats').innerHTML=me?`<div class="result-stat">Missions<strong>${me.totalMissionsCompleted}</strong></div><div class="result-stat">Accuracy<strong>${me.accuracyPercent}%</strong></div><div class="result-stat">Mistakes<strong>${me.mistakes}</strong></div><div class="result-stat">Active time<strong>${formatGameTime(me.activeSeconds)}</strong></div>`:'';
       $('badgeShelf').innerHTML='';
-      $('liveFinalBoard').hidden=false;
-      $('liveFinalBoard').innerHTML=(room.leaderboard||[]).slice(0,10).map((player)=>`<div class="live-final-player ${liveParticipant&&player.id===liveParticipant.id?'me':''}"><b>${player.rank}</b><span>${esc(player.name)}</span><small>${player.score} pts</small></div>`).join('')||'<p>No scores were recorded.</p>';
+      $('liveFinalBoard').hidden=true;
+      $('liveFinalBoard').innerHTML='';
       $('liveCelebration').hidden=false;
       $('liveCelebration').innerHTML=Array.from({length:28},(_,index)=>`<i class="live-confetti" style="--x:${(index*37)%100}%;--delay:${(index%7)*-.32}s;--duration:${2.8+(index%5)*.35}s;--color:${['#25cddc','#52e69a','#f4c84b','#f07b3d'][index%4]}"></i>`).join('');
       renderLiveBoard(room);
@@ -971,11 +999,12 @@
     async function refreshLiveRoom() {
       if(!liveRoom) return;
       try {
-        const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(liveRoom.code)}`);
+        const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(liveRoom.code)}`,{headers:{'X-Practice-Participant':liveParticipantToken}});
         if(!response.ok) throw new Error('Room ended');
         const payload=await response.json();
         const wasWaiting=liveRoomWaiting(liveRoom);
         liveRoom=payload.room;
+        if(payload.participant) liveParticipant=payload.participant;
         if(liveRoom.status==='closed'){ showLiveRoomEnded(liveRoom); return; }
         syncAudioPolicy(liveRoom);
         syncLiveLobby(liveRoom,wasWaiting&&!liveRoomWaiting(liveRoom));
@@ -1717,6 +1746,7 @@
         const data=await response.json();
         if(!response.ok) throw new Error(data.error||'The leaderboard could not be updated.');
         liveRoom=data.room;
+        if(data.participant) liveParticipant=data.participant;
         renderLiveBoard(liveRoom);
         saveEphemeralCheckpoint(payload);
         setSave(`Room ${liveRoom.code} updated`);

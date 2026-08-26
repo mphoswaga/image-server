@@ -2247,7 +2247,8 @@ app.delete('/api/practice/live-sessions/:code', requirePracticeEnabled, requireA
 
 app.get('/api/practice/live-sessions/:code', requirePracticeEnabled, (req, res) => {
   try {
-    res.json({ room: practiceLive.getRoom(req.params.code) });
+    const token = req.get('X-Practice-Participant') || '';
+    res.json(practiceLive.getRoomForParticipant(req.params.code, token));
   } catch (err) {
     const status = err.code === 'room_not_found' ? 404 : err.code === 'room_closed' ? 410 : 400;
     res.status(status).json({ error: err.message, code: err.code || 'room_unavailable' });

@@ -175,14 +175,37 @@ test('leaderboard uses active time to separate equally accurate learners', () =>
   });
   checkpoint(steady, 'steady-pointer', 30);
   checkpoint(slow, 'slow-pointer', 70);
-  const result = checkpoint(fast, 'fast-pointer', 20);
-  assert.deepEqual(result.room.leaderboard.map((player) => player.name), [
+  checkpoint(fast, 'fast-pointer', 20);
+  const teacherRoom = live.teacherRooms('teacher-time-ranking')[0];
+  assert.deepEqual(teacherRoom.leaderboard.map((player) => player.name), [
     'Fast learner',
     'Steady learner',
     'Slow learner',
   ]);
-  assert.equal(result.room.leaderboard[0].score, result.room.leaderboard[1].score);
-  assert.ok(result.room.leaderboard[1].score > result.room.leaderboard[2].score);
+  assert.equal(teacherRoom.leaderboard[0].score, teacherRoom.leaderboard[1].score);
+  assert.ok(teacherRoom.leaderboard[1].score > teacherRoom.leaderboard[2].score);
+});
+
+test('learner room responses never expose classmates performance', () => {
+  const room = live.createRoom({ teacherId:'teacher-private-results' });
+  const first = live.joinRoom(room.code, 'First learner');
+  live.joinRoom(room.code, 'Second learner');
+  live.checkpointRoom(room.code, first.token, {
+    checkpointId:'private-pointer',
+    stepId:'move-pointer',
+    evidence:{ action:'pointer_enter', target:'blue-star' },
+    baseScore:1300,
+    correctInputs:5,
+    mistakes:2,
+    activeSeconds:25,
+  });
+  const learnerRoom = live.getRoomForParticipant(room.code, first.token);
+  assert.equal(learnerRoom.participant.name, 'First learner');
+  assert.equal(typeof learnerRoom.participant.score, 'number');
+  assert.deepEqual(learnerRoom.room.leaderboard.map((player) => Object.keys(player).sort()), [
+    ['id', 'name'],
+    ['id', 'name'],
+  ]);
 });
 
 test('a Foundation live participant continues into Grade 3 without rejoining', () => {
