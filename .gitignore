@@ -5,3 +5,5 @@ output/
 **/.DS_Store
 data/
 .claude/
+playwright-report/
+test-results/

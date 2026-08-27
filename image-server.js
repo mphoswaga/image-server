@@ -37,6 +37,9 @@ const oauth = require('./oauth');
 const audit = require('./audit');
 const webhooks = require('./webhooks');
 const { DATA_DIR, writeJsonAtomic } = require('./storage');
+const { cookieOptions, createRateLimiter, securityHeaders } = require('./security');
+const { requireUploads } = require('./upload-security');
+const observability = require('./observability');
 
 // Add transitions/animations; never let it break the download.
 function safeAnimate(buffer, band) {
@@ -181,11 +184,12 @@ function assignmentStudentSession(req, res, a) {
   }
 
   const recovered = { studentId: student.studentId, assignmentId: a.id, name: displayName };
-  res.cookie(GAME_COOKIE, issueGameToken(recovered, 'assignment'), { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
+  res.cookie(GAME_COOKIE, issueGameToken(recovered, 'assignment'), cookieOptions(30 * 24 * 60 * 60 * 1000));
   return recovered;
 }
 
 const app = express();
+app.disable('x-powered-by');
 // Behind Railway's TLS-terminating proxy: honour X-Forwarded-Proto/For so
 // req.protocol is 'https' (needed to build correct OAuth/passkey redirect
 // URIs) and req.ip is the real client address for audit logs.
@@ -198,6 +202,19 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
 app.use('/api/billing/webhook', express.raw({ type: '*/*' }));
 app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser());
+app.use(securityHeaders);
+
+const authLimiter = createRateLimiter({ name: 'auth', windowMs: 15 * 60_000, max: Number(process.env.AUTH_RATE_LIMIT || 40) });
+const joinLimiter = createRateLimiter({ name: 'student-join', windowMs: 5 * 60_000, max: Number(process.env.JOIN_RATE_LIMIT || 80) });
+const checkpointLimiter = createRateLimiter({ name: 'practice-checkpoint', windowMs: 60_000, max: Number(process.env.CHECKPOINT_RATE_LIMIT || 300) });
+const generationLimiter = createRateLimiter({ name: 'generation', windowMs: 5 * 60_000, max: Number(process.env.GENERATION_RATE_LIMIT || 40) });
+const uploadLimiter = createRateLimiter({ name: 'upload', windowMs: 5 * 60_000, max: Number(process.env.UPLOAD_RATE_LIMIT || 30) });
+
+app.use(['/api/signup', '/api/student/signup', '/api/login', '/api/password-reset/request', '/api/password-reset/confirm', '/api/webauthn/login/options', '/api/webauthn/login/verify'], authLimiter);
+app.use(['/api/student/login', '/api/student/join-room', '/api/student/pin/reset-request', '/api/practice/live-sessions/:code/join', '/api/assignment/:id/enter', '/api/assignment/:id/pin/reset-request', '/api/game/:id/enter', '/api/game/:id/pin/reset-request'], joinLimiter);
+app.use('/api/practice/live-sessions/:code/checkpoints', checkpointLimiter);
+app.use(['/api/assistant', '/api/lesson-plan', '/api/generate', '/api/pack', '/api/slide'], generationLimiter);
+app.use(['/api/templates', '/api/planning-frameworks', '/api/units', '/api/planning-sources', '/api/source-materials', '/api/import', '/api/game/from-pptx', '/api/roster/preview'], uploadLimiter);
 
 // Attribute every AI call in this request to the signed-in user (for cost
 // tracking). Reads the auth cookie once; AsyncLocalStorage carries it through
@@ -213,6 +230,7 @@ app.use((req, res, next) => {
 // same root-relative relpaths, so an image URL resolves from whichever has it.
 app.use(express.static(MEDIA_DIR));
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(observability.requestMiddleware);
 
 // Guided curriculum advice only. This endpoint cannot mutate plans, generate
 // paid artefacts, or access student records. Any future action-taking tool must
@@ -280,10 +298,17 @@ app.get('/healthz', (req, res) => res.json({
   },
 }));
 
-// ── Auth ──────────────────────────────────────────────────────────────────
-const setSession = (res, userId) => res.cookie(COOKIE_NAME, issueToken(userId), {
-  httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000,
+app.get('/readyz', (req, res) => {
+  const ready = observability.readiness();
+  res.status(ready.ok ? 200 : 503).json({
+    ...ready,
+    commit: RUNNING_COMMIT,
+    commitShort: RUNNING_COMMIT.slice(0, 7),
+  });
 });
+
+// ── Auth ──────────────────────────────────────────────────────────────────
+const setSession = (res, userId) => res.cookie(COOKIE_NAME, issueToken(userId), cookieOptions(30 * 24 * 60 * 60 * 1000));
 
 function educscopeOnlyAuthEnabled() {
   return educscope.configured() && process.env.LESSONSCOPE_LOCAL_AUTH_ENABLED !== 'true';
@@ -549,11 +574,11 @@ app.get('/api/google-drive/status', requireAuth, (req, res) => {
 app.get('/integrations/google-drive/connect', requireAuth, (req, res) => {
   if (!googleDrive.configured()) return res.redirect('/?driveError=' + encodeURIComponent('Google Drive export is not configured yet.'));
   const state = googleDrive.randomState();
-  res.cookie(DRIVE_STATE_COOKIE, state, { httpOnly: true, sameSite: 'lax', maxAge: 10 * 60 * 1000 });
+  res.cookie(DRIVE_STATE_COOKIE, state, cookieOptions(10 * 60 * 1000));
   const deckId = String(req.query.deckId || '').trim().slice(0, 96);
   const exportTarget = req.query.export === 'slides' ? 'slides' : req.query.export === 'drive' ? 'drive' : '';
   if (deckId && exportTarget) {
-    res.cookie(DRIVE_RETURN_COOKIE, JSON.stringify({ deckId, exportTarget }), { httpOnly: true, sameSite: 'lax', maxAge: 10 * 60 * 1000 });
+    res.cookie(DRIVE_RETURN_COOKIE, JSON.stringify({ deckId, exportTarget }), cookieOptions(10 * 60 * 1000));
   }
   res.redirect(googleDrive.buildAuthUrl({ redirectUri: driveRedirectUri(req), state }));
 });
@@ -601,7 +626,7 @@ app.get('/auth/:provider', (req, res) => {
   const provider = req.params.provider;
   if (!socialAuth.isEnabled(provider)) return res.redirect('/?authError=' + encodeURIComponent('That sign-in method is not available.'));
   const state = socialAuth.randomState();
-  res.cookie(OAUTH_STATE_COOKIE, `${provider}:${state}`, { httpOnly: true, sameSite: 'lax', maxAge: 10 * 60 * 1000 });
+  res.cookie(OAUTH_STATE_COOKIE, `${provider}:${state}`, cookieOptions(10 * 60 * 1000));
   res.redirect(socialAuth.buildAuthUrl(provider, { redirectUri: socialRedirectUri(req, provider), state }));
 });
 
@@ -722,7 +747,7 @@ async function reserve(req, action, opts = {}) {
     organizationId = ident.local ? orgIdFallback(req) : ident.organizationId;
     educscopeUserId = ident.userId || null;
   } catch (e) {
-    console.error('EducScope identity failed:', e.message);
+    observability.recordFailure('wallet', { requestId: req.requestId, operation: 'identity', error: e.message });
     // Can't resolve the org: fail closed in remote mode, open in local/beta.
     if (wallet.failClosed()) return { reservation: null, block: { error: 'Credits are temporarily unavailable — please try again in a moment.', walletUnavailable: true } };
     organizationId = orgIdFallback(req);
@@ -738,7 +763,7 @@ async function reserve(req, action, opts = {}) {
     return { reservation, block: null };
   } catch (e) {
     if (e.needCredits) return { reservation: null, block: { error: 'You are out of credits. Top up to keep generating.', needCredits: true, balance: e.balance, action, cost: prices.priceFor(action) } };
-    console.error('Credit reserve failed:', e.message);
+    observability.recordFailure('wallet', { requestId: req.requestId, operation: 'reserve', error: e.message });
     // A wallet OUTAGE: fail open in local/beta, fail closed once the remote
     // EducScope wallet is live (never give paid AI away when the ledger is down).
     if (wallet.failClosed()) return { reservation: null, block: { error: 'Credits are temporarily unavailable — please try again in a moment.', walletUnavailable: true } };
@@ -760,7 +785,7 @@ async function capture(req, reservation, action, resultRef) {
     resultRef: resultRef || null,
   };
   try { await wallet.captureReservation({ reservationId: reservation.reservationId, ...meta }); }
-  catch (e) { console.error('Credit capture failed:', e.message); }
+  catch (e) { observability.recordFailure('wallet', { requestId: req.requestId, operation: 'capture', error: e.message }); }
   educscope.bust(req.userId);   // balance changed → next read re-fetches from EducScope
   audit.log('credits.capture', {
     userId: req.userId, organizationId: orgId(req), product: 'lessonscope', action,
@@ -772,7 +797,7 @@ async function capture(req, reservation, action, resultRef) {
 async function release(req, reservation, action, reason) {
   if (!reservation) return;
   try { await wallet.releaseReservation({ reservationId: reservation.reservationId, reason: reason || 'failed' }); }
-  catch (e) { console.error('Credit release failed:', e.message); }
+  catch (e) { observability.recordFailure('wallet', { requestId: req.requestId, operation: 'release', error: e.message }); }
   educscope.bust(req.userId);   // hold released → next read re-fetches from EducScope
   audit.log('credits.release', {
     userId: req.userId, organizationId: orgId(req), product: 'lessonscope', action,
@@ -804,7 +829,7 @@ app.get('/api/credits', requireCreditsPanelAccess, async (req, res) => {
         history: [],
       });
     } catch (e) {
-      console.error('EducScope balance failed:', e.message);
+      observability.recordFailure('wallet', { requestId: req.requestId, operation: 'balance', error: e.message });
       return res.json({ walletUnavailable: true, billingEnabled: billingOn(), source: 'educscope' });
     }
   }
@@ -1034,6 +1059,10 @@ app.get('/api/youtube/suggestions', requireAuth, async (req, res) => {
 // ── Admin: grow the image library ─────────────────────────────────────────
 app.get('/api/admin/stats', requireAdmin, (req, res) => res.json(libraryStats()));
 
+app.get('/api/admin/operations', requireAdmin, (req, res) => {
+  res.json({ operations: observability.snapshot(), readiness: observability.readiness(), commit: RUNNING_COMMIT });
+});
+
 // Browse images for a specific topic (admin only).
 app.get('/api/admin/images', requireAdmin, (req, res) => {
   const { subject, topic } = req.query;
@@ -1146,7 +1175,7 @@ app.get('/api/templates', requireAuth, (req, res) => {
   res.json({ templates: listTemplates(req.userId).map(publicTemplate), types: TYPES });
 });
 
-app.post('/api/templates', requireAuth, upload.single('file'), async (req, res) => {
+app.post('/api/templates', requireAuth, upload.single('file'), requireUploads('template'), async (req, res) => {
   try {
     let text, filename, buffer = null;
     if (req.file) {
@@ -1238,7 +1267,7 @@ app.get('/api/planning-frameworks', requireAuth, (req, res) => {
   });
 });
 
-app.post('/api/planning-frameworks', requireAuth, upload.single('file'), async (req, res) => {
+app.post('/api/planning-frameworks', requireAuth, upload.single('file'), requireUploads('template'), async (req, res) => {
   if (req.user.role === 'student') return res.status(403).json({ error: 'Teacher account required.' });
   try {
     if (!req.file) return res.status(400).json({ error: 'Choose a framework file.' });
@@ -1497,7 +1526,7 @@ app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
 // Upload a scheme of work → LLM parses it into a structured unit.
 // The unit is then available as context for lesson plans and decks.
 
-app.post('/api/units', requireAuth, upload.single('file'), async (req, res) => {
+app.post('/api/units', requireAuth, upload.single('file'), requireUploads('template'), async (req, res) => {
   declareFree('lessonscope.parse_unit');
   try {
     let text, filename;
@@ -1536,7 +1565,7 @@ app.delete('/api/units/:id', requireAuth, (req, res) => {
 });
 
 // ── Planning sources (pacing guides / year plans / weekly plans) ─────────────
-app.post('/api/planning-sources', requireAuth, upload.single('file'), async (req, res) => {
+app.post('/api/planning-sources', requireAuth, upload.single('file'), requireUploads('planning'), async (req, res) => {
   declareFree('lessonscope.parse_pacing_guide');
   if (!req.file) return res.status(400).json({ error: 'Upload an Excel file (.xlsx).' });
   const { originalname, buffer } = req.file;
@@ -1627,7 +1656,7 @@ function resolvePlanText(body) {
   return clip(body && body.lessonPlanText, LIMITS.source);
 }
 
-app.post('/api/source-materials/preview', requireAuth, upload.array('files', 8), async (req, res) => {
+app.post('/api/source-materials/preview', requireAuth, upload.array('files', 8), requireUploads('source', { maxTotalBytes: 30 * 1024 * 1024 }), async (req, res) => {
   if (req.user.role === 'student') return res.status(403).json({ error: 'Teacher account required.' });
   const files = req.files || [];
   if (!files.length) return res.status(400).json({ error: 'Choose at least one file.' });
@@ -1768,7 +1797,7 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
 // Path A — "I have a lesson plan": upload it (Word/PDF/text), skip objectives,
 // and go straight to slides. The extracted plan text grounds the slides (and
 // the lesson pack afterwards) exactly like an accepted in-app plan would.
-app.post('/api/import/lesson-plan', requireAuth, upload.single('file'), async (req, res) => {
+app.post('/api/import/lesson-plan', requireAuth, upload.single('file'), requireUploads('template'), async (req, res) => {
   if (req.user.role === 'student') return res.status(403).json({ error: 'Teacher account required.' });
   if (!req.file) return res.status(400).json({ error: 'Please choose your lesson-plan file.' });
   const subject = clip(req.body.subject, LIMITS.subject);
@@ -1816,7 +1845,7 @@ app.post('/api/import/lesson-plan', requireAuth, upload.single('file'), async (r
 // what they uploaded. They can then optionally generate a lesson plan from it,
 // or go straight to the pack. No AI visuals are fetched (fast + no library
 // pollution); the teacher swaps in images per-slide if they want.
-app.post('/api/import/slides', requireAuth, upload.single('file'), async (req, res) => {
+app.post('/api/import/slides', requireAuth, upload.single('file'), requireUploads('slides'), async (req, res) => {
   if (req.user.role === 'student') return res.status(403).json({ error: 'Teacher account required.' });
   if (!req.file) return res.status(400).json({ error: 'Please choose your slides (.pptx) file.' });
   const ext = (req.file.originalname || '').toLowerCase();
@@ -2105,7 +2134,7 @@ app.post('/api/student/login', (req, res) => {
     if (!studentAccount.verifyPin(studentId, pin)) return res.status(403).json({ error: 'Incorrect PIN.' });
   }
 
-  res.cookie(STUDENT_COOKIE, issueStudentToken(studentId, displayName), { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
+  res.cookie(STUDENT_COOKIE, issueStudentToken(studentId, displayName), cookieOptions(30 * 24 * 60 * 60 * 1000));
   res.json({ name: displayName });
 });
 
@@ -2152,7 +2181,7 @@ app.post('/api/student/join-room', requireStudentAccess, (req, res) => {
       displayName = s.name;
     }
     const token = issueGameToken({ gameId, studentId, name: displayName });
-    res.cookie(GAME_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
+    res.cookie(GAME_COOKIE, token, cookieOptions(30 * 24 * 60 * 60 * 1000));
     return res.json({ type: 'game', id: gameId, path: '/play/' + gameId });
   }
   const a = assignments.getAssignment(assignmentId);
@@ -2163,7 +2192,7 @@ app.post('/api/student/join-room', requireStudentAccess, (req, res) => {
     displayName = s.name;
   }
   const token = issueGameToken({ assignmentId, studentId, name: displayName }, 'assignment');
-  res.cookie(GAME_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
+  res.cookie(GAME_COOKIE, token, cookieOptions(30 * 24 * 60 * 60 * 1000));
   res.json({ type: 'assignment', id: assignmentId, path: '/assignment/' + assignmentId });
 });
 
@@ -2477,8 +2506,8 @@ app.post('/api/assignment/:id/enter', async (req, res) => {
     }
   }
   const token = issueGameToken({ assignmentId: a.id, studentId, name: displayName }, 'assignment');
-  res.cookie(GAME_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
-  res.cookie(STUDENT_COOKIE, issueStudentToken(studentId, displayName), { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
+  res.cookie(GAME_COOKIE, token, cookieOptions(30 * 24 * 60 * 60 * 1000));
+  res.cookie(STUDENT_COOKIE, issueStudentToken(studentId, displayName), cookieOptions(30 * 24 * 60 * 60 * 1000));
   res.json({ name: displayName });
 });
 
@@ -3296,7 +3325,7 @@ async function exportDeckToGoogle(req, res, { convertToSlides = false } = {}) {
       },
     });
   } catch (err) {
-    console.error(`${convertToSlides ? 'Google Slides' : 'Google Drive'} export failed:`, err.message);
+    observability.recordFailure('export', { requestId: req.requestId, operation: convertToSlides ? 'google_slides' : 'google_drive', error: err.message });
     res.status(400).json({ error: err.message });
   }
 }
@@ -3314,7 +3343,7 @@ app.post('/api/google-slides/export/:id', requireAuth, async (req, res) => {
 
 // ── Student game: create from a deck, play, store results ──────────────────
 // Teacher: turn the current deck into a shareable, persistent student game.
-app.post('/api/game', requireAuth, async (req, res) => {
+app.post('/api/game', requireAuth, generationLimiter, async (req, res) => {
   if (req.user.role === 'student') return res.status(403).json({ error: 'Teachers only.' });
   const deck = decks.get(req.body && req.body.deckId);
   if (!deck) return res.status(404).json({ error: 'Deck expired — regenerate the deck, then create the game.' });
@@ -3337,7 +3366,7 @@ app.post('/api/game', requireAuth, async (req, res) => {
 });
 
 // Create a game from the teacher's own uploaded PowerPoint (no deck generation needed).
-app.post('/api/game/from-pptx', requireAuth, upload.single('file'), async (req, res) => {
+app.post('/api/game/from-pptx', requireAuth, generationLimiter, upload.single('file'), requireUploads('slides'), async (req, res) => {
   if (req.user.role === 'student') return res.status(403).json({ error: 'Teachers only.' });
   if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
   const subject = String(req.body && req.body.subject || '').trim().toLowerCase();
@@ -3419,8 +3448,8 @@ app.post('/api/game/:id/enter', async (req, res) => {
     }
   }
   const token = issueGameToken({ gameId: g.id, studentId, name: displayName });
-  res.cookie(GAME_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
-  res.cookie(STUDENT_COOKIE, issueStudentToken(studentId, displayName), { httpOnly: true, sameSite: 'lax', maxAge: 30 * 24 * 60 * 60 * 1000 });
+  res.cookie(GAME_COOKIE, token, cookieOptions(30 * 24 * 60 * 60 * 1000));
+  res.cookie(STUDENT_COOKIE, issueStudentToken(studentId, displayName), cookieOptions(30 * 24 * 60 * 60 * 1000));
   res.json({ name: displayName });
 });
 
@@ -3553,7 +3582,7 @@ app.get('/api/games', requireAuth, (req, res) => res.json({ games: games.listTea
 
 // Parse a file (CSV, Excel) and return headers + preview rows for UI verification.
 // Does NOT save anything — the teacher must confirm the column mapping first.
-app.post('/api/roster/preview', requireAuth, upload.single('file'), (req, res) => {
+app.post('/api/roster/preview', requireAuth, upload.single('file'), requireUploads('roster'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
   try {
     const result = roster.parseRosterFile(req.file.buffer, req.file.originalname);
@@ -4249,6 +4278,19 @@ app.get('/api/v1/students', requireApiAccess, requireScope('rosters:read'), (req
   }
 
   res.json({ students: out });
+});
+
+app.use((err, req, res, next) => {
+  if (!(err instanceof multer.MulterError)) {
+    observability.recordFailure('other', { requestId: req.requestId, operation: 'unhandled_request', error: err.message || err.name || 'Unknown error' });
+    return res.status(500).json({ error: 'Something went wrong. Try again.', requestId: req.requestId });
+  }
+  const tooLarge = err.code === 'LIMIT_FILE_SIZE' || err.code === 'LIMIT_FILE_COUNT';
+  observability.recordFailure('upload', { requestId: req.requestId, operation: 'multer', error: err.code });
+  res.status(tooLarge ? 413 : 400).json({
+    error: tooLarge ? 'The upload is too large. Use fewer or smaller files.' : 'The upload could not be accepted.',
+    uploadError: err.code,
+  });
 });
 
 app.listen(PORT, () => console.log(`LessonCope running at http://localhost:${PORT}`));
