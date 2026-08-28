@@ -99,6 +99,13 @@ function tokenHash(token) {
   return crypto.createHash('sha256').update(String(token || '')).digest('hex');
 }
 
+function participantTokenHashes(participant) {
+  return [...new Set([
+    ...(Array.isArray(participant && participant.tokenHashes) ? participant.tokenHashes : []),
+    participant && participant.tokenHash,
+  ].filter((value) => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)))];
+}
+
 function loadRoom(code) {
   try { return JSON.parse(fs.readFileSync(roomPath(code), 'utf8')); }
   catch { return null; }
@@ -356,7 +363,9 @@ function joinRoom(code, input) {
     const existing = (room.participants || []).find((participant) => studentIdKey(participant.rosterStudentId) === studentIdKey(rosterStudentId));
     if (existing) {
       const token = crypto.randomBytes(24).toString('base64url');
-      existing.tokenHash = tokenHash(token);
+      const nextHash = tokenHash(token);
+      existing.tokenHashes = [...participantTokenHashes(existing), nextHash].slice(-5);
+      existing.tokenHash = nextHash;
       existing.updatedAt = new Date().toISOString();
       saveRoom(room);
       return { room: publicRoom(room), participant: { id: existing.id, name: existing.name }, token, rejoined: true };
@@ -379,6 +388,7 @@ function joinRoom(code, input) {
     name,
     rosterStudentId,
     tokenHash: tokenHash(token),
+    tokenHashes: [tokenHash(token)],
     score: 0,
     baseScore: 0,
     correctInputs: 0,
@@ -465,9 +475,9 @@ function setRoomPaused(code, teacherId, shouldPause) {
 
 function findParticipant(room, token) {
   const hash = tokenHash(token);
-  return (room.participants || []).find((participant) => (
-    participant.tokenHash && crypto.timingSafeEqual(Buffer.from(participant.tokenHash), Buffer.from(hash))
-  ));
+  return (room.participants || []).find((participant) => participantTokenHashes(participant).some((candidate) => (
+    crypto.timingSafeEqual(Buffer.from(candidate), Buffer.from(hash))
+  )));
 }
 
 function checkpointRoom(code, token, input = {}) {

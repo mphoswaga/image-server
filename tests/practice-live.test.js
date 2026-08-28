@@ -61,6 +61,8 @@ test('classwork uses a teacher-controlled lobby and private roster attendance', 
   const rejoined = live.joinRoom(room.code, { studentId:'vs002' });
   assert.equal(rejoined.rejoined, true);
   assert.equal(rejoined.participant.id, accentless.participant.id);
+  assert.equal(live.getRoomForParticipant(room.code, accentless.token).participant.id, accentless.participant.id);
+  assert.equal(live.getRoomForParticipant(room.code, rejoined.token).participant.id, accentless.participant.id);
   assert.equal(live.teacherRooms('teacher-lobby')[0].joinedRosterCount, 2);
   assert.throws(() => live.checkpointRoom(room.code, joined.token, {
     checkpointId:'before-start',

@@ -915,6 +915,7 @@
     let liveRoom = null;
     let liveParticipant = null;
     let liveParticipantToken = '';
+    let joiningLiveRoom = false;
     let livePollTimer = null;
     let liveCountdownRunning = false;
     let liveDeadlineTimer = null;
@@ -1137,6 +1138,8 @@
     }
 
     async function joinLiveRoom() {
+      if(joiningLiveRoom) return;
+      joiningLiveRoom=true;
       unlockAudio(false);
       const code=String($('roomCodeInput').value||'').replace(/[^a-z0-9]/gi,'').toUpperCase().slice(0,6);
       const name=String($('nicknameInput').value||'').trim();
@@ -1153,6 +1156,7 @@
         history.replaceState(null,'',liveSessionUrl(payload.room.code,world));
         activateLiveRoom(saved);
       }catch(error){ $('joinRoomError').textContent=error.message; $('joinRoomBtn').disabled=false; }
+      finally { joiningLiveRoom=false; }
     }
 
     function chooseSoloGuest() {

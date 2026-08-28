@@ -60,6 +60,16 @@ test('teacher-controlled classwork keeps learners waiting, starts together, and 
     const learnerClock = await learner.locator('#liveStripTitle').textContent();
     const asSeconds = value => { const match=String(value).match(/(\d+):(\d{2})/); return match ? Number(match[1])*60+Number(match[2]) : NaN; };
     expect(Math.abs(asSeconds(teacherClock)-asSeconds(learnerClock))).toBeLessThanOrEqual(2);
+    await learner.locator('#nextBtn').click();
+    await expect(learner.locator('#phaseLabel')).toHaveText('Your mission');
+    for(let target=0;target<8;target+=1){
+      const bug=learner.locator('#skillTarget');
+      await expect(bug).toBeVisible();
+      await bug.dispatchEvent('pointerenter');
+      if(target<7) await learner.waitForTimeout(500);
+    }
+    await expect(learner.locator('#saveState')).toContainText(`Room ${roomCode} updated`);
+    await expect(learner.locator('#nextBtn')).not.toHaveText('Retry save');
     await page.locator('#pauseRoomBtn').click();
     await expect(page.locator('#liveRoomState')).toContainText('Class game paused');
     await expect(page.locator('#pauseRoomBtn')).toHaveText('Resume game');

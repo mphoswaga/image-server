@@ -319,6 +319,13 @@ test('teacher evidence stays hidden until the teacher chooses View progress', ()
   assert.match(teacher, /opening\?'Hide progress':'View progress'/);
 });
 
+test('a learner cannot send overlapping live-room join requests that strand gameplay', () => {
+  const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
+  assert.match(player, /let joiningLiveRoom = false/);
+  assert.match(player, /if\(joiningLiveRoom\) return;\s*joiningLiveRoom=true/);
+  assert.match(player, /finally \{ joiningLiveRoom=false; \}/);
+});
+
 test('Grade 2 Message Relay uses a consistent right-click Copy and Paste menu', () => {
   const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
   assert.match(player, /window\.getSelection\(\)/);
