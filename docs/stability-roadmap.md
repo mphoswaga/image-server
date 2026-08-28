@@ -194,6 +194,12 @@ automated tests use controlled local service doubles and spend no credits.
 **Priority:** Medium-high
 **Target:** 2-4 weeks, delivered incrementally
 
+**Progress:** Preparation slice implemented locally. The PostgreSQL target
+schema, repository/object-store contracts, checksummed file inventory, and
+migration runbook are present. Production remains entirely file-backed: no
+database connection, schema application, dual-write, backfill, or read switch
+has been enabled.
+
 ### Architecture
 
 - PostgreSQL becomes the system of record for:

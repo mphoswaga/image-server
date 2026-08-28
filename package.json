@@ -18,7 +18,8 @@
     "deployed": "node scripts/deployed.js",
     "backup": "node scripts/backup-data.js",
     "backup:verify": "node scripts/verify-backup.js",
-    "restore": "node scripts/restore-data.js"
+    "restore": "node scripts/restore-data.js",
+    "data:inventory": "node scripts/inventory-data.js"
   },
   "engines": {
     "node": ">=20"
