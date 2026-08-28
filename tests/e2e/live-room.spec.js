@@ -42,8 +42,17 @@ test('teacher-controlled classwork keeps learners waiting, starts together, and 
     await page.locator('#startRoomBtn').click();
     await expect(page.locator('#liveRoomState')).toContainText('Class game in progress');
     await expect(page.locator('#roomClock')).toBeVisible();
+    await expect(page.locator('#sessionBeacon')).toBeVisible();
+    await expect(page.locator('#sessionBeacon')).toContainText('Live class connected');
+    await expect(page.locator('#liveTelemetry')).toBeVisible();
     await learner.evaluate(() => refreshLiveRoom());
     await expect(learner.locator('#activity')).toBeVisible({ timeout: 8_000 });
+    await expect(learner.locator('#liveStripTitle')).toContainText('left');
+    await expect(page.locator('#roomClock')).toHaveText(/\d+:\d{2}/);
+    const teacherClock = await page.locator('#roomClock').textContent();
+    const learnerClock = await learner.locator('#liveStripTitle').textContent();
+    const asSeconds = value => { const match=String(value).match(/(\d+):(\d{2})/); return match ? Number(match[1])*60+Number(match[2]) : NaN; };
+    expect(Math.abs(asSeconds(teacherClock)-asSeconds(learnerClock))).toBeLessThanOrEqual(2);
     await expect(learner.locator('#liveMiniBoard')).toContainText('Amina');
     await expect(learner.locator('#liveMiniBoard')).not.toContainText('Bongani');
     await expect(learner.locator('#timeValue')).toBeVisible();

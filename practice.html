@@ -91,6 +91,8 @@
     .live-countdown span { display:block; margin-top:12px; color:#b8c9db; font-size:22px; font-weight:900; }
     .live-strip { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 10px; padding:9px 12px; border:1px solid #2a4d76; border-radius:10px; background:#0c1d3b; color:#dce8f3; }
     .live-strip strong { color:#8cecf4; white-space:nowrap; }
+    .live-strip.time-warning { border-color:#f4c84b; box-shadow:0 0 0 3px rgba(244,200,75,.12); }
+    .live-strip.time-warning strong { color:#ffe17a; }
     .live-mini-board { display:flex; justify-content:flex-end; gap:6px; min-width:0; overflow:hidden; }
     .live-mini-player { display:flex; align-items:center; gap:5px; min-width:0; padding:5px 8px; border-radius:6px; background:#16375a; font-size:11px; font-weight:800; }
     .live-mini-player.me { background:#12623e; color:#fff; }
@@ -880,6 +882,8 @@
     let liveParticipantToken = '';
     let livePollTimer = null;
     let liveCountdownRunning = false;
+    let liveDeadlineTimer = null;
+    let liveDeadlineHandled = false;
 
     applyCampaignCopy();
 
@@ -902,11 +906,35 @@
       if (!room || !liveParticipant) { $('liveStrip').hidden=true; return; }
       $('liveStrip').hidden=false;
       const remaining=room.status==='open'&&room.gameEndsAt?Math.max(0,Math.ceil((Date.parse(room.gameEndsAt)-Date.now())/1000)):0;
-      $('liveStripTitle').textContent=`Room ${room.code} · ${liveParticipant.name}${remaining?` · ${formatGameTime(remaining)} left`:''}`;
+      $('liveStrip').classList.toggle('time-warning',Boolean(room.gameEndsAt&&remaining<=60));
+      $('liveStripTitle').textContent=`Room ${room.code} · ${liveParticipant.name}${room.gameEndsAt?` · ${formatGameTime(remaining)} left`:''}`;
       const me=liveParticipant;
       $('liveMiniBoard').innerHTML=me
         ? `<div class="live-mini-player me"><b>${liveRoomWaiting(room)?'✓':'You'}</b><span>${esc(me.name)}</span><small>${liveRoomWaiting(room)?'ready':`${me.score} pts`}</small></div>`
         : '<span>Your score will appear here.</span>';
+    }
+
+    function syncLiveDeadline(room=liveRoom) {
+      clearInterval(liveDeadlineTimer);
+      if(!room||room.status!=='open'||room.mode!=='classwork'||room.phase!=='playing'||!room.gameEndsAt) return;
+      liveDeadlineHandled=false;
+      const update=()=>{
+        if(!liveRoom||liveRoom.status!=='open') return clearInterval(liveDeadlineTimer);
+        const remaining=Math.max(0,Math.ceil((Date.parse(liveRoom.gameEndsAt)-Date.now())/1000));
+        $('liveStrip').classList.toggle('time-warning',remaining<=60);
+        $('liveStripTitle').textContent=`Room ${liveRoom.code} · ${liveParticipant.name} · ${formatGameTime(remaining)} left`;
+        if(remaining<=0&&!liveDeadlineHandled){
+          liveDeadlineHandled=true;
+          clearInterval(liveDeadlineTimer);
+          paused=true;
+          clearTimeout(autoAdvanceTimer);
+          clearActiveInput();
+          setSave('Time is up - finishing the class game');
+          refreshLiveRoom();
+        }
+      };
+      update();
+      liveDeadlineTimer=setInterval(update,1000);
     }
 
     function liveRoomWaiting(room=liveRoom) {
@@ -961,6 +989,7 @@
 
     function showLiveRoomEnded(room) {
       clearInterval(livePollTimer);
+      clearInterval(liveDeadlineTimer);
       clearTimeout(autoAdvanceTimer);
       clearActiveInput();
       paused=true;
@@ -1004,6 +1033,7 @@
       syncAudioPolicy(liveRoom);
       syncLiveLobby(liveRoom,liveRoom.mode==='classwork'&&liveRoom.phase==='playing');
       renderLiveBoard(liveRoom);
+      syncLiveDeadline(liveRoom);
       clearInterval(livePollTimer);
       livePollTimer=setInterval(()=>{ if(!document.hidden) refreshLiveRoom(); },3000);
     }
@@ -1021,8 +1051,10 @@
         syncAudioPolicy(liveRoom);
         syncLiveLobby(liveRoom,wasWaiting&&!liveRoomWaiting(liveRoom));
         renderLiveBoard(liveRoom);
+        syncLiveDeadline(liveRoom);
       }catch{
         clearInterval(livePollTimer);
+        clearInterval(liveDeadlineTimer);
         liveRoom=null;
         liveParticipant=null;
         liveParticipantToken='';

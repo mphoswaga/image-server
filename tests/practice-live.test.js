@@ -265,6 +265,30 @@ test('classwork duration begins when the teacher starts, not while learners wait
   assert.ok(started.remainingSeconds > 14 * 60);
 });
 
+test('one server deadline closes teacher and learner views and rejects late play', () => {
+  const room = live.createRoom({ teacherId:'teacher-shared-clock', mode:'classwork', durationMinutes:10 });
+  const joined = live.joinRoom(room.code, { name:'Amina' });
+  const started = live.startRoom(room.code, 'teacher-shared-clock');
+  const originalNow = Date.now;
+  Date.now = () => Date.parse(started.gameEndsAt) + 1;
+  try {
+    const teacherView = live.teacherRooms('teacher-shared-clock')[0];
+    const learnerView = live.getRoomForParticipant(room.code, joined.token);
+    assert.equal(teacherView.status, 'closed');
+    assert.equal(learnerView.room.status, 'closed');
+    assert.equal(teacherView.endedReason, 'time_up');
+    assert.equal(learnerView.room.endedReason, 'time_up');
+    assert.equal(learnerView.room.remainingSeconds, 0);
+    assert.throws(() => live.checkpointRoom(room.code, joined.token, {
+      checkpointId:'too-late',
+      stepId:'move-pointer',
+      evidence:{ action:'pointer_enter', target:'blue-star' },
+    }), /ended/i);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
 test('the server and both screens expose the live-room contract', () => {
   const server = fs.readFileSync(path.join(__dirname, '..', 'image-server.js'), 'utf8');
   const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
@@ -289,6 +313,8 @@ test('the server and both screens expose the live-room contract', () => {
   assert.match(player, /function liveRoomWaiting\(room=liveRoom\)/);
   assert.match(player, /function runLiveStartCountdown\(room=liveRoom\)/);
   assert.match(player, /function showLiveRoomEnded\(room\)/);
+  assert.match(player, /function syncLiveDeadline\(room=liveRoom\)/);
+  assert.match(player, /Time is up - finishing the class game/);
   assert.match(player, /async function saveLiveCheckpoint\(payload\)/);
   assert.match(teacher, /Start live room/);
   assert.match(teacher, /Start class game/);
@@ -298,6 +324,8 @@ test('the server and both screens expose the live-room contract', () => {
   assert.match(teacher, /id="teacherMusicPlay"/);
   assert.match(teacher, /id="liveDuration"/);
   assert.match(teacher, /Final podium/);
+  assert.match(teacher, /id="sessionBeacon"/);
+  assert.match(teacher, /id="liveTelemetry"/);
   assert.match(teacher, /function scheduleTeacherMusic\(\)/);
   assert.match(teacher, /id="teacherVoice"/);
   assert.match(teacher, /\/api\/practice\/live-sessions/);
