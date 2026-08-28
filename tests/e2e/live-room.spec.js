@@ -41,6 +41,8 @@ test('teacher-controlled classwork keeps learners waiting, starts together, and 
 
     await page.locator('#startRoomBtn').click();
     await expect(page.locator('#liveRoomState')).toContainText('Class game in progress');
+    await expect(page.locator('#liveRoomEmpty')).toBeHidden();
+    await expect(page.locator('#startRoomBtn')).toBeHidden();
     await expect(page.locator('#roomClock')).toBeVisible();
     await expect(page.locator('#sessionBeacon')).toBeVisible();
     await expect(page.locator('#sessionBeacon')).toContainText('Live class connected');
