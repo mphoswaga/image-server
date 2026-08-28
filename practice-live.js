@@ -79,7 +79,7 @@ function studentIdKey(value) {
 }
 
 function roomPhase(room) {
-  if (room.phase === 'lobby' || room.phase === 'playing') return room.phase;
+  if (room.phase === 'lobby' || room.phase === 'playing' || room.phase === 'paused') return room.phase;
   return 'playing';
 }
 
@@ -276,7 +276,10 @@ function publicRoom(room, { teacherView = false } = {}) {
     expiresAt: room.expiresAt,
     durationMinutes: room.durationMinutes || null,
     gameEndsAt: room.gameEndsAt || null,
-    remainingSeconds: open && roomPhase(room) === 'playing' && room.gameEndsAt ? Math.max(0, Math.ceil((effectiveEnd - Date.now()) / 1000)) : 0,
+    remainingSeconds: open && roomPhase(room) === 'paused'
+      ? Math.max(0, Number(room.pausedRemainingSeconds) || 0)
+      : open && roomPhase(room) === 'playing' && room.gameEndsAt ? Math.max(0, Math.ceil((effectiveEnd - Date.now()) / 1000)) : 0,
+    pausedAt: room.pausedAt || null,
     closedAt: room.closedAt || (!open ? new Date(effectiveEnd).toISOString() : null),
     endedReason: !open ? (room.endedReason || (room.gameEndsAt && Date.now() >= Date.parse(room.gameEndsAt) ? 'time_up' : 'expired')) : null,
     participantCount: (room.participants || []).length,
@@ -435,6 +438,31 @@ function updateRoomAudio(code, teacherId, audioPolicy) {
   return publicRoom(room, { teacherView: true });
 }
 
+function setRoomPaused(code, teacherId, shouldPause) {
+  const room = requireOpenRoom(code);
+  if (room.teacherId !== String(teacherId || '')) {
+    throw Object.assign(new Error('This room belongs to another teacher.'), { code: 'forbidden' });
+  }
+  if (normalizeMode(room.mode) !== 'classwork' || !['playing', 'paused'].includes(roomPhase(room))) {
+    throw Object.assign(new Error('Only a running live class game can be paused.'), { code: 'room_not_playing' });
+  }
+  if (shouldPause && roomPhase(room) === 'playing') {
+    room.pausedRemainingSeconds = Math.max(1, Math.ceil((Date.parse(room.gameEndsAt) - Date.now()) / 1000));
+    room.phase = 'paused';
+    room.pausedAt = new Date().toISOString();
+    room.gameEndsAt = null;
+    saveRoom(room);
+  } else if (!shouldPause && roomPhase(room) === 'paused') {
+    const remaining = Math.max(1, Number(room.pausedRemainingSeconds) || 1);
+    room.phase = 'playing';
+    room.gameEndsAt = new Date(Date.now() + remaining * 1000).toISOString();
+    room.pausedAt = null;
+    room.pausedRemainingSeconds = null;
+    saveRoom(room);
+  }
+  return publicRoom(room, { teacherView: true });
+}
+
 function findParticipant(room, token) {
   const hash = tokenHash(token);
   return (room.participants || []).find((participant) => (
@@ -445,7 +473,8 @@ function findParticipant(room, token) {
 function checkpointRoom(code, token, input = {}) {
   const room = requireOpenRoom(code);
   if (normalizeMode(room.mode) === 'classwork' && roomPhase(room) !== 'playing') {
-    throw Object.assign(new Error('Wait for your teacher to start the class game.'), { code: 'room_not_started' });
+    const paused = roomPhase(room) === 'paused';
+    throw Object.assign(new Error(paused ? 'The class game is paused by your teacher.' : 'Wait for your teacher to start the class game.'), { code: paused ? 'room_paused' : 'room_not_started' });
   }
   if (normalizeMode(room.mode) === 'classwork' && room.playStartsAt && Date.now() < Date.parse(room.playStartsAt)) {
     throw Object.assign(new Error('Get ready. The class countdown is still running.'), { code: 'room_not_started' });
@@ -577,6 +606,7 @@ module.exports = {
   createRoom,
   joinRoom,
   startRoom,
+  setRoomPaused,
   updateRoomAudio,
   checkpointRoom,
   getRoom,

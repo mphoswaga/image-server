@@ -26,6 +26,11 @@
     .btn { display:inline-flex; align-items:center; justify-content:center; min-height:42px; border-radius:8px; border:1px solid var(--line); background:#fff; color:var(--navy); padding:9px 14px; font-weight:800; cursor:pointer; text-decoration:none; }
     .btn.primary { border-color:var(--green); background:var(--green); color:#fff; }
     .cards { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:20px; }
+    .progress-access { display:flex; justify-content:flex-end; margin:0 0 12px; }
+    .progress-panel { padding-top:16px; border-top:1px solid var(--line); }
+    .progress-panel-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
+    .progress-panel-head h2 { margin:0; color:var(--navy); font-size:20px; }
+    .progress-panel-head p { margin:2px 0 0; color:var(--muted); font-size:13px; }
     .card { background:#fff; border:1px solid var(--line); box-shadow:var(--shadow); padding:18px; border-top:3px solid var(--cyan); }
     .card:nth-child(2){border-color:var(--green)}.card:nth-child(3){border-color:var(--orange)}.card:nth-child(4){border-color:var(--navy)}
     .card span { display:block; color:var(--muted); font-size:12px; font-weight:700; }
@@ -117,7 +122,7 @@
 <body>
   <header class="topbar"><div class="brand"><span class="brand-mark">LS</span><span>LessonScope Practice</span></div><a class="back" href="/">Back to planner</a></header>
   <main class="shell">
-    <div class="heading"><div><h1>Practice evidence</h1><p class="sub">See who practised Pointer Control and where support is still useful.</p></div><div class="heading-actions"><a class="btn primary" href="/practice/preview">Preview full game</a><select id="previewStageSelect" aria-label="Choose a practice stage to test"><optgroup label="Foundation World"><option value="foundation:move-pointer">1. Signal Trail</option><option value="foundation:single-click">2. Reactor Rush</option><option value="foundation:double-click">3. Vault Breaker</option><option value="foundation:context-command">4. Command Deck</option><option value="foundation:drag-drop">5. Cargo Rescue</option><option value="foundation:scroll-find">6. Signal Tower</option><option value="foundation:copy-paste-menu">7. Message Relay</option><option value="foundation:keyboard-defense">8. Sky Shield</option></optgroup><optgroup label="Grade 3 World"><option value="g3:copy-paste-shortcut">1. Rapid Relay</option><option value="g3:key-patrol">2. Key Patrol</option><option value="g3:word-blaster">3. Word Blaster</option><option value="g3:capital-charge">4. Capital Charge</option><option value="g3:sentence-engine">5. Sentence Engine</option><option value="g3:repair-bay">6. Repair Bay</option></optgroup></select><button class="btn" id="previewStageBtn" type="button">Test stage</button><button class="btn" id="refreshBtn" type="button">Refresh</button></div></div>
+    <div class="heading"><div><h1>Practice evidence</h1><p class="sub">See who practised Pointer Control and where support is still useful.</p></div><div class="heading-actions"><a class="btn primary" href="/practice/preview">Preview full game</a><select id="previewStageSelect" aria-label="Choose a practice stage to test"><optgroup label="Foundation World"><option value="foundation:move-pointer">1. Signal Trail</option><option value="foundation:single-click">2. Reactor Rush</option><option value="foundation:double-click">3. Vault Breaker</option><option value="foundation:context-command">4. Command Deck</option><option value="foundation:drag-drop">5. Cargo Rescue</option><option value="foundation:scroll-find">6. Signal Tower</option><option value="foundation:copy-paste-menu">7. Message Relay</option><option value="foundation:keyboard-defense">8. Sky Shield</option></optgroup><optgroup label="Grade 3 World"><option value="g3:copy-paste-shortcut">1. Rapid Relay</option><option value="g3:key-patrol">2. Key Patrol</option><option value="g3:word-blaster">3. Word Blaster</option><option value="g3:capital-charge">4. Capital Charge</option><option value="g3:sentence-engine">5. Sentence Engine</option><option value="g3:repair-bay">6. Repair Bay</option></optgroup></select><button class="btn" id="previewStageBtn" type="button">Test stage</button></div></div>
     <section class="live-room" aria-labelledby="liveRoomTitle">
       <div class="live-head">
         <div><h2 id="liveRoomTitle">Class arcade</h2><p>Run a teacher-controlled class game or share a self-paced homework room.</p><div class="session-beacon" id="sessionBeacon" hidden><i></i><span id="sessionBeaconText">Live class connected</span><span class="sync-freshness" id="sessionFreshness">syncing</span></div></div>
@@ -129,7 +134,7 @@
         <div>
           <div class="room-code"><div><span>Room code</span><strong id="liveRoomCode"></strong></div></div>
           <div class="room-meta" id="liveRoomMeta"></div>
-          <div class="room-buttons"><button class="btn primary" id="startRoomBtn" type="button" hidden>Start class game</button><button class="btn" id="copyRoomBtn" type="button">Copy student link</button><button class="btn" id="endRoomBtn" type="button">End room</button></div>
+          <div class="room-buttons"><button class="btn primary" id="startRoomBtn" type="button" hidden>Start class game</button><button class="btn primary" id="pauseRoomBtn" type="button" hidden>Pause game</button><button class="btn" id="copyRoomBtn" type="button">Copy student link</button><button class="btn" id="endRoomBtn" type="button">End room</button></div>
         </div>
         <div>
           <div class="room-state" id="liveRoomState"><div><strong>Class lobby open</strong><span>Learners can join, but only you can start the game.</span></div></div>
@@ -140,17 +145,21 @@
         </div>
       </div>
     </section>
-    <section class="cards" aria-label="Practice summary">
-      <div class="card"><span>Rostered students</span><strong id="studentCount">-</strong></div>
-      <div class="card"><span>Started</span><strong id="startedCount">-</strong></div>
-      <div class="card"><span>Completed</span><strong id="completedCount">-</strong></div>
-      <div class="card"><span>Independent</span><strong id="independentCount">-</strong></div>
-    </section>
-    <section id="loading" class="loading">Loading practice evidence...</section>
-    <section id="content" hidden>
-      <div class="filters"><label for="rosterFilter">Class</label><select id="rosterFilter"><option value="">All classes</option></select><label for="masteryFilter">Result</label><select id="masteryFilter"><option value="">All results</option><option value="independent">Independent</option><option value="developing_independence">Developing independence</option><option value="completed_with_support">Completed with support</option><option value="not_started">In progress</option></select></div>
-      <div class="table-wrap"><table><thead><tr><th>Student</th><th>Class</th><th>Status</th><th>Skill evidence</th><th>Performance</th><th>Hints</th><th>Active time</th><th>Last update</th></tr></thead><tbody id="resultsBody"></tbody></table></div>
-      <div class="empty" id="empty" hidden>No practice evidence matches these filters.</div>
+    <div class="progress-access"><button class="btn" id="toggleProgressBtn" type="button" aria-expanded="false" aria-controls="progressPanel">View progress</button></div>
+    <section class="progress-panel" id="progressPanel" hidden>
+      <div class="progress-panel-head"><div><h2>Learner progress</h2><p>Private teacher evidence. Hide this panel before projecting the screen.</p></div><button class="btn" id="refreshBtn" type="button">Refresh</button></div>
+      <section class="cards" aria-label="Practice summary">
+        <div class="card"><span>Rostered students</span><strong id="studentCount">-</strong></div>
+        <div class="card"><span>Started</span><strong id="startedCount">-</strong></div>
+        <div class="card"><span>Completed</span><strong id="completedCount">-</strong></div>
+        <div class="card"><span>Independent</span><strong id="independentCount">-</strong></div>
+      </section>
+      <section id="loading" class="loading">Loading practice evidence...</section>
+      <section id="content" hidden>
+        <div class="filters"><label for="rosterFilter">Class</label><select id="rosterFilter"><option value="">All classes</option></select><label for="masteryFilter">Result</label><select id="masteryFilter"><option value="">All results</option><option value="independent">Independent</option><option value="developing_independence">Developing independence</option><option value="completed_with_support">Completed with support</option><option value="not_started">In progress</option></select></div>
+        <div class="table-wrap"><table><thead><tr><th>Student</th><th>Class</th><th>Status</th><th>Skill evidence</th><th>Performance</th><th>Hints</th><th>Active time</th><th>Last update</th></tr></thead><tbody id="resultsBody"></tbody></table></div>
+        <div class="empty" id="empty" hidden>No practice evidence matches these filters.</div>
+      </section>
     </section>
   </main>
   <script>
@@ -259,9 +268,10 @@
       const active=Boolean(room&&!ended);
       const classwork=Boolean(room&&room.mode==='classwork'), waiting=classwork&&room.phase==='lobby'&&!ended;
       const playing=classwork&&room&&room.phase==='playing'&&!ended;
-      document.querySelector('.live-room').classList.toggle('session-playing',playing);
+      const paused=classwork&&room&&room.phase==='paused'&&!ended;
+      document.querySelector('.live-room').classList.toggle('session-playing',playing||paused);
       $('sessionBeacon').hidden=!active;
-      $('sessionBeaconText').textContent=waiting?'Lobby connected':playing?'Live class connected':'Homework room connected';
+      $('sessionBeaconText').textContent=waiting?'Lobby connected':paused?'Class paused':playing?'Live class connected':'Homework room connected';
       if(active){ lastRoomSyncAt=Date.now(); $('sessionFreshness').textContent='synced now'; }
       $('liveRoomEmpty').hidden=Boolean(room);
       $('liveRoomStage').hidden=!room;
@@ -281,18 +291,22 @@
       liveJoinUrl=`${location.origin}/student/practice/guest?session=${encodeURIComponent(room.code)}${room.activity.id==='g3-keyboard-kingdom'?'&world=g3':''}`;
       $('liveRoomCode').textContent=room.code;
       $('startRoomBtn').hidden=!waiting;
+      $('pauseRoomBtn').hidden=!(playing||paused);
+      $('pauseRoomBtn').textContent=paused?'Resume game':'Pause game';
       $('copyRoomBtn').hidden=ended;
       $('endRoomBtn').hidden=ended;
-      $('liveRoomState').classList.toggle('playing',!waiting&&!ended);
+      $('liveRoomState').classList.toggle('playing',(playing||paused)&&!ended);
       $('liveRoomState').classList.toggle('ended',ended);
       $('liveRoomState').innerHTML=ended
         ? `<div><strong>${room.endedReason==='time_up'?'Time is up':'Class game ended'}</strong><span>Every learner has been stopped. Here are the final standings.</span></div>`
         : waiting
           ? `<div><strong>Class lobby open</strong><span>${room.participantCount} joined. Start when everyone is ready.</span></div>`
-          : `<div><strong>${classwork?'Class game in progress':'Homework room open'}</strong><span>${classwork?'Everyone is playing in the same timed session.':'Learners may join and play in their own time.'}</span></div>${classwork&&room.gameEndsAt?'<strong class="room-clock" id="roomClock">'+fmtClock(room.remainingSeconds)+'</strong>':''}`;
+          : paused
+            ? `<div><strong>Class game paused</strong><span>Every learner is paused. Resume when the class is ready.</span></div><strong class="room-clock" id="roomClock">${fmtClock(room.remainingSeconds)}</strong>`
+            : `<div><strong>${classwork?'Class game in progress':'Homework room open'}</strong><span>${classwork?'Everyone is playing in the same timed session.':'Learners may join and play in their own time.'}</span></div>${classwork&&room.gameEndsAt?'<strong class="room-clock" id="roomClock">'+fmtClock(room.remainingSeconds)+'</strong>':''}`;
       $('liveRoomMeta').textContent=ended
         ? `${room.activity.title} · ${room.participantCount} played · Final results available briefly`
-        : `${room.activity.title} · ${room.roster?room.roster.name+' · ':''}${room.participantCount} joined · ${classwork?(waiting?`${room.durationMinutes} minute game`:`Ends ${new Date(room.gameEndsAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`):`Available until ${new Date(room.expiresAt).toLocaleString([], {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}`}`;
+        : `${room.activity.title} · ${room.roster?room.roster.name+' · ':''}${room.participantCount} joined · ${classwork?(waiting?`${room.durationMinutes} minute game`:paused?`${fmtClock(room.remainingSeconds)} remaining`:`Ends ${new Date(room.gameEndsAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`):`Available until ${new Date(room.expiresAt).toLocaleString([], {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}`}`;
       const players=room.leaderboard||[];
       const finished=players.filter((player)=>player.status==='completed').length;
       const playingCount=playing?players.length-finished:0;
@@ -356,6 +370,19 @@
         if(!response.ok) throw new Error(payload.error||'The class game could not be started.');
         renderLiveRoom(payload.room);
       }catch(error){ alert(error.message); $('startRoomBtn').disabled=false; }
+    }
+
+    async function toggleLivePause() {
+      if(!liveRoom||!['playing','paused'].includes(liveRoom.phase)) return;
+      const shouldPause=liveRoom.phase==='playing';
+      $('pauseRoomBtn').disabled=true;
+      try {
+        const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(liveRoom.code)}/pause`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({paused:shouldPause})});
+        const payload=await response.json();
+        if(!response.ok) throw new Error(payload.error||'The class game could not be updated.');
+        renderLiveRoom(payload.room);
+      }catch(error){ alert(error.message); }
+      finally { $('pauseRoomBtn').disabled=false; }
     }
 
     function syncLiveSetup() {
@@ -437,9 +464,16 @@
     }
     $('rosterFilter').addEventListener('change',render);
     $('masteryFilter').addEventListener('change',render);
+    $('toggleProgressBtn').addEventListener('click',()=>{
+      const opening=$('progressPanel').hidden;
+      $('progressPanel').hidden=!opening;
+      $('toggleProgressBtn').textContent=opening?'Hide progress':'View progress';
+      $('toggleProgressBtn').setAttribute('aria-expanded',String(opening));
+    });
     $('refreshBtn').addEventListener('click',load);
     $('createRoomBtn').addEventListener('click',createLiveRoom);
     $('startRoomBtn').addEventListener('click',startLiveRoom);
+    $('pauseRoomBtn').addEventListener('click',toggleLivePause);
     $('liveMode').addEventListener('change',syncLiveSetup);
     ['teacherSfx','teacherMusic','teacherVoice','teacherMusicSource'].forEach((id)=>$(id).addEventListener('change',updateLiveAudioPolicy));
     $('teacherMusicPlay').addEventListener('click',unlockTeacherMusic);

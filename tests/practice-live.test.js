@@ -265,6 +265,34 @@ test('classwork duration begins when the teacher starts, not while learners wait
   assert.ok(started.remainingSeconds > 14 * 60);
 });
 
+test('teacher pause freezes the shared deadline and blocks learner checkpoints until resume', () => {
+  const room = live.createRoom({ teacherId:'teacher-pause', mode:'classwork', durationMinutes:10 });
+  const joined = live.joinRoom(room.code, { name:'Amina' });
+  const started = live.startRoom(room.code, 'teacher-pause');
+  const originalNow = Date.now;
+  const playTime = Date.parse(started.playStartsAt) + 10_000;
+  Date.now = () => playTime;
+  try {
+    assert.throws(() => live.setRoomPaused(room.code, 'another-teacher', true), /another teacher/i);
+    const paused = live.setRoomPaused(room.code, 'teacher-pause', true);
+    assert.equal(paused.phase, 'paused');
+    assert.ok(paused.remainingSeconds >= 580 && paused.remainingSeconds <= 591);
+    const frozen = paused.remainingSeconds;
+    Date.now = () => playTime + 120_000;
+    assert.equal(live.getRoomForParticipant(room.code, joined.token).room.remainingSeconds, frozen);
+    assert.throws(() => live.checkpointRoom(room.code, joined.token, {
+      checkpointId:'while-paused',
+      stepId:'move-pointer',
+      evidence:{ action:'pointer_enter', target:'blue-star' },
+    }), /paused by your teacher/i);
+    const resumed = live.setRoomPaused(room.code, 'teacher-pause', false);
+    assert.equal(resumed.phase, 'playing');
+    assert.ok(Math.abs(Date.parse(resumed.gameEndsAt) - Date.now() - frozen * 1000) < 1000);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
 test('one server deadline closes teacher and learner views and rejects late play', () => {
   const room = live.createRoom({ teacherId:'teacher-shared-clock', mode:'classwork', durationMinutes:10 });
   const joined = live.joinRoom(room.code, { name:'Amina' });
@@ -296,6 +324,7 @@ test('the server and both screens expose the live-room contract', () => {
   assert.match(server, /app\.post\('\/api\/practice\/live-sessions', requirePracticeEnabled, requireAuth/);
   assert.match(server, /app\.post\('\/api\/practice\/live-sessions\/:code\/join', requirePracticeEnabled/);
   assert.match(server, /app\.post\('\/api\/practice\/live-sessions\/:code\/start', requirePracticeEnabled, requireAuth/);
+  assert.match(server, /app\.patch\('\/api\/practice\/live-sessions\/:code\/pause', requirePracticeEnabled, requireAuth/);
   assert.match(server, /app\.patch\('\/api\/practice\/live-sessions\/:code\/audio', requirePracticeEnabled, requireAuth/);
   assert.match(server, /app\.post\('\/api\/practice\/live-sessions\/:code\/checkpoints', requirePracticeEnabled/);
   assert.match(player, /id="roomCodeInput"/);

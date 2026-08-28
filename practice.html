@@ -279,6 +279,21 @@
     .result-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:20px 0; }
     .result-stat { padding:14px 10px; border:1px solid #2e5884; background:#102747; color:#9fb4ca; font-size:12px; }
     .result-stat strong { display:block; margin-top:3px; color:#fff; font-size:23px; }
+    .learner-coaching { margin:22px 0; text-align:left; }
+    .coaching-summary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+    .coaching-card { padding:15px 16px; border:1px solid #2e5884; background:#102747; color:#d9e7f3; }
+    .coaching-card.good { border-left:4px solid #52e69a; }
+    .coaching-card.next { border-left:4px solid #f4c84b; }
+    .coaching-card b { display:block; margin-bottom:5px; color:#fff; font-size:15px; }
+    .coaching-card p { margin:0; color:#c2d2e2; font-size:14px; }
+    .mission-report { margin-top:14px; border:1px solid #2e5884; background:#091a34; }
+    .mission-report h2 { margin:0; padding:13px 15px; color:#fff; font-size:17px; border-bottom:1px solid #2e5884; }
+    .mission-feedback { display:grid; grid-template-columns:minmax(145px,.7fr) minmax(0,1.8fr) auto; gap:12px; align-items:center; padding:12px 15px; border-bottom:1px solid #203f63; }
+    .mission-feedback:last-child { border-bottom:0; }
+    .mission-feedback b { color:#fff; }
+    .mission-feedback p { margin:2px 0 0; color:#b8c9db; font-size:13px; }
+    .mission-feedback span { color:#8ef0ba; font-size:12px; font-weight:800; white-space:nowrap; }
+    .mission-feedback.practise span { color:#f7d66d; }
     .quest-hero { display:grid; grid-template-columns:minmax(260px,.8fr) minmax(360px,1.2fr); align-items:center; gap:34px; text-align:left; }
     .bot-stage { min-height:360px; position:relative; display:grid; place-items:center; border:1px solid #2d5380; background:#0b1a35; overflow:hidden; }
     body.intro-screen:not(.campaign-g3) .bot-stage { background-image:linear-gradient(rgba(5,14,32,.24),rgba(5,14,32,.58)),url('/assets/practice/bg_byte_city_blackout.jpeg'); background-position:center; background-size:cover; }
@@ -582,6 +597,9 @@
       .game-hud .mission-meter { grid-column:1/-1; }
       .hud-stat { min-width:0; text-align:center; }
       .result-stats { grid-template-columns:repeat(2,1fr); }
+      .coaching-summary { grid-template-columns:1fr; }
+      .mission-feedback { grid-template-columns:1fr; gap:3px; }
+      .mission-feedback span { white-space:normal; }
       .arcade-grid { height:320px; gap:8px; padding:8px; }
       .arcade-target { width:58px; height:58px; }
       .vault-grid { grid-template-columns:repeat(2,1fr); gap:9px; }
@@ -720,6 +738,7 @@
         <p id="masterySummary"></p>
         <p id="scoreSummary"></p>
         <div class="result-stats" id="resultStats"></div>
+        <div class="learner-coaching" id="learnerCoaching" aria-label="Your practice feedback"></div>
         <div class="live-final-board" id="liveFinalBoard" hidden></div>
         <div class="badge-shelf" id="badgeShelf" aria-label="Earned skill badges"></div>
         <div class="next-world" id="nextWorld"><b>New world unlocked</b><strong id="nextWorldTitle">Advanced Keyboard Kingdom</strong><span id="nextWorldCopy">Continue into the Grade 3 keyboard campaign.</span><a class="btn primary" id="continueWorldBtn" href="#" style="margin-top:14px">Continue to Grade 3</a></div>
@@ -810,6 +829,22 @@
       'capital-charge': { title:'Hold Shift for capitals', action:'Hold Shift and press the glowing letter.', detail:'Do both actions together to make one capital.', visual:'type' },
       'sentence-engine': { title:'Build a complete sentence', action:'Type letters, spaces and the final full stop.', detail:'Copy the sentence exactly as it appears.', visual:'type' },
       'repair-bay': { title:'Delete, then repair', action:'Use Backspace to remove the mistake, then type the fix.', detail:'Keep the correct beginning of each word.', visual:'type' },
+    };
+    const improvementTips = {
+      'move-pointer':'Move smoothly and stop the pointer in the middle of the target.',
+      'single-click':'Press and release the left button once without moving the pointer.',
+      'double-click':'Keep the pointer still and make two quick clicks.',
+      'context-command':'Use the right mouse button, then read and choose the correct menu command.',
+      'drag-drop':'Hold the button while moving, enter the whole target, then release.',
+      'scroll-find':'Keep the pointer inside the panel and scroll steadily until the target appears.',
+      'copy-paste-menu':'Highlight the whole message before choosing Copy, then right-click the empty box for Paste.',
+      'keyboard-defense':'Read the whole word first, then type one careful letter at a time.',
+      'copy-paste-shortcut':'Highlight first, use Ctrl or Command+C, focus the empty box, then use Ctrl or Command+V.',
+      'key-patrol':'Keep your fingers near A, S, D and F and look for the glowing key before pressing.',
+      'word-blaster':'Read the complete word before typing and keep your eyes on the next letter.',
+      'capital-charge':'Hold Shift down first, press the letter once, then release both keys.',
+      'sentence-engine':'Check every space, capital letter and the final full stop before finishing.',
+      'repair-bay':'Delete only the incorrect part, stop at the correct beginning, then type the repair.',
     };
     const missionGoals = PracticeScoring.missionGoals;
     const keyboardStepIds = new Set(['copy-paste-menu','copy-paste-shortcut','keyboard-defense','key-patrol','word-blaster','capital-charge','sentence-engine','repair-bay']);
@@ -907,7 +942,9 @@
       $('liveStrip').hidden=false;
       const remaining=room.status==='open'&&room.gameEndsAt?Math.max(0,Math.ceil((Date.parse(room.gameEndsAt)-Date.now())/1000)):0;
       $('liveStrip').classList.toggle('time-warning',Boolean(room.gameEndsAt&&remaining<=60));
-      $('liveStripTitle').textContent=`Room ${room.code} · ${liveParticipant.name}${room.gameEndsAt?` · ${formatGameTime(remaining)} left`:''}`;
+      $('liveStripTitle').textContent=room.phase==='paused'
+        ? `Room ${room.code} · Game paused · ${formatGameTime(room.remainingSeconds)} left`
+        : `Room ${room.code} · ${liveParticipant.name}${room.gameEndsAt?` · ${formatGameTime(remaining)} left`:''}`;
       const me=liveParticipant;
       $('liveMiniBoard').innerHTML=me
         ? `<div class="live-mini-player me"><b>${liveRoomWaiting(room)?'✓':'You'}</b><span>${esc(me.name)}</span><small>${liveRoomWaiting(room)?'ready':`${me.score} pts`}</small></div>`
@@ -938,7 +975,38 @@
     }
 
     function liveRoomWaiting(room=liveRoom) {
-      return Boolean(room&&room.mode==='classwork'&&room.phase!=='playing');
+      return Boolean(room&&room.mode==='classwork'&&room.phase==='lobby');
+    }
+
+    function syncTeacherPause(room=liveRoom) {
+      const layer=$('pauseLayer'), teacherPaused=Boolean(room&&room.mode==='classwork'&&room.phase==='paused');
+      const wasTeacherPaused=layer.dataset.teacherPaused==='1';
+      if(teacherPaused){
+        layer.dataset.teacherPaused='1';
+        paused=true;
+        clearTimeout(autoAdvanceTimer);
+        clearActiveInput();
+        stopMusic();
+        layer.classList.add('show');
+        layer.querySelector('h2').textContent='Your teacher paused the game';
+        layer.querySelector('p').textContent=`Stay ready. ${formatGameTime(room.remainingSeconds)} remains.`;
+        $('resumeBtn').hidden=true;
+        $('pauseBtn').disabled=true;
+        $('pauseBtn').textContent='Teacher paused';
+        setSave('Game paused by your teacher');
+      }else if(wasTeacherPaused){
+        delete layer.dataset.teacherPaused;
+        paused=false;
+        layer.classList.remove('show');
+        layer.querySelector('h2').textContent='Practice paused';
+        layer.querySelector('p').textContent='Your progress is safe.';
+        $('resumeBtn').hidden=false;
+        $('pauseBtn').disabled=false;
+        $('pauseBtn').textContent='Pause';
+        if($('activity').style.display==='block'&&attempt) renderStep();
+        syncMusic();
+        setSave('Your teacher resumed the game');
+      }
     }
 
     function syncLiveLobby(room, justStarted=false) {
@@ -1009,6 +1077,7 @@
       $('masterySummary').innerHTML=me?`Mission result: <span class="mastery">${esc(me.mastery||'Completed')}</span>`:'Your result was not recorded';
       $('scoreSummary').innerHTML=me?`Your score: <strong style="color:#25cddc;font-size:24px">${me.score}</strong>`:'';
       $('resultStats').innerHTML=me?`<div class="result-stat">Missions<strong>${me.totalMissionsCompleted}</strong></div><div class="result-stat">Accuracy<strong>${me.accuracyPercent}%</strong></div><div class="result-stat">Mistakes<strong>${me.mistakes}</strong></div><div class="result-stat">Active time<strong>${formatGameTime(me.activeSeconds)}</strong></div>`:'';
+      renderLearnerCoaching(me?{accuracyPercent:me.accuracyPercent,mistakes:me.mistakes}:null,[],me&&me.totalMissionsCompleted);
       $('badgeShelf').innerHTML='';
       $('liveFinalBoard').hidden=true;
       $('liveFinalBoard').innerHTML='';
@@ -1032,6 +1101,7 @@
       if(liveRoom.status==='closed'){ showLiveRoomEnded(liveRoom); return; }
       syncAudioPolicy(liveRoom);
       syncLiveLobby(liveRoom,liveRoom.mode==='classwork'&&liveRoom.phase==='playing');
+      syncTeacherPause(liveRoom);
       renderLiveBoard(liveRoom);
       syncLiveDeadline(liveRoom);
       clearInterval(livePollTimer);
@@ -1050,6 +1120,7 @@
         if(liveRoom.status==='closed'){ showLiveRoomEnded(liveRoom); return; }
         syncAudioPolicy(liveRoom);
         syncLiveLobby(liveRoom,wasWaiting&&!liveRoomWaiting(liveRoom));
+        syncTeacherPause(liveRoom);
         renderLiveBoard(liveRoom);
         syncLiveDeadline(liveRoom);
       }catch{
@@ -1122,6 +1193,37 @@
         ...metrics,
         targetSeconds:PracticeScoring.targetSecondsForSteps(steps,Math.min(steps.length,stepIndex+1)),
       });
+    }
+
+    function renderLearnerCoaching(summary, checkpoints=[], completedCount=steps.length) {
+      if(!summary){ $('learnerCoaching').innerHTML=''; return; }
+      const accuracy=Math.max(0,Number(summary.accuracyPercent)||0);
+      const mistakes=Math.max(0,Number(summary.mistakes)||0);
+      const completed=Math.max(0,Number(completedCount)||0);
+      const strong=accuracy>=90
+        ? `You worked accurately: ${accuracy}% of your tracked actions were correct.`
+        : completed
+          ? `You completed ${completed} ${completed===1?'mission':'missions'} and kept going when a task was difficult.`
+          : 'You joined the mission and began building your computer-control skills.';
+      let next='Play again and try to finish each action with fewer mistakes.';
+      if(completed<steps.length) next=`Continue from ${steps[completed] ? steps[completed].title : 'the next mission'} and aim to complete all ${steps.length} missions.`;
+      else if(accuracy<80) next=`Slow down slightly and check the target before acting. Try to raise your accuracy from ${accuracy}% to at least 80%.`;
+      else if(mistakes>0) next=`Replay the missions marked “Practise next” and try to reduce your ${mistakes} ${mistakes===1?'mistake':'mistakes'}.`;
+      else next='Excellent control. Replay and see whether you can keep 100% accuracy while finishing a little faster.';
+
+      const details=(checkpoints||[]).map((checkpoint)=>{
+        const step=steps.find((item)=>item.id===checkpoint.stepId);
+        if(!step) return '';
+        const stepMistakes=Math.max(0,Number(checkpoint.mistakes)||0);
+        const hints=Math.max(0,Number(checkpoint.hintsUsed)||0);
+        const needsPractice=stepMistakes>0||hints>0;
+        const evidence=needsPractice
+          ? `${stepMistakes ? `${stepMistakes} ${stepMistakes===1?'mistake':'mistakes'}` : 'No mistakes'}${hints ? ` · ${hints} ${hints===1?'hint':'hints'} used` : ''}. ${improvementTips[step.id]}`
+          : `Completed without a recorded mistake or hint. ${improvementTips[step.id]}`;
+        return `<div class="mission-feedback ${needsPractice?'practise':''}"><div><b>${esc(step.title)}</b><p>${esc(evidence)}</p></div><span>${needsPractice?'Practise next':'Skill secure'}</span></div>`;
+      }).join('');
+
+      $('learnerCoaching').innerHTML=`<div class="coaching-summary"><div class="coaching-card good"><b>What went well</b><p>${esc(strong)}</p></div><div class="coaching-card next"><b>What to practise next</b><p>${esc(next)}</p></div></div>${details?`<div class="mission-report"><h2>Your mission report</h2>${details}</div>`:''}`;
     }
 
     function recordCorrectInput(count=1) {
@@ -1858,6 +1960,7 @@
       const performance=performanceSummary();
       $('scoreSummary').innerHTML = `${esc(performance.rating)} · Final score: <strong style="color:#25cddc;font-size:24px">${performance.score}</strong>`;
       $('resultStats').innerHTML=`<div class="result-stat">Accuracy<strong>${performance.accuracyPercent}%</strong></div><div class="result-stat">Mistakes<strong>${performance.mistakes}</strong></div><div class="result-stat">Active time<strong>${formatGameTime(performance.activeSeconds)}</strong></div><div class="result-stat">Base points<strong>${performance.baseScore}</strong></div>`;
+      renderLearnerCoaching(performance,attempt.checkpoints||[],attempt.currentStepIndex||steps.length);
       $('practiseAgainBtn').hidden=Boolean(liveRoom);
       $('continueWorldBtn').href=continueWorldUrl();
       const me=liveRoom&&liveParticipant?(liveRoom.leaderboard||[]).find((player)=>player.id===liveParticipant.id):null;

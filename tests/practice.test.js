@@ -299,6 +299,26 @@ test('the arcade result factors accuracy, mistakes and active time into its scor
   assert.match(teacher, /accurate · \$\{mistakes\} mistakes/);
 });
 
+test('learner results explain strengths and give mission-specific next steps', () => {
+  const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
+  assert.match(player, /id="learnerCoaching"/);
+  assert.match(player, /What went well/);
+  assert.match(player, /What to practise next/);
+  assert.match(player, /Your mission report/);
+  assert.match(player, /const improvementTips = \{/);
+  assert.match(player, /checkpoint\.mistakes/);
+  assert.match(player, /checkpoint\.hintsUsed/);
+  assert.match(player, /renderLearnerCoaching\(performance,attempt\.checkpoints/);
+  assert.match(player, /renderLearnerCoaching\(me\?/);
+});
+
+test('teacher evidence stays hidden until the teacher chooses View progress', () => {
+  const teacher = fs.readFileSync(path.join(__dirname, '..', 'practice-teacher.html'), 'utf8');
+  assert.match(teacher, /id="toggleProgressBtn"[^>]*aria-expanded="false"/);
+  assert.match(teacher, /id="progressPanel" hidden/);
+  assert.match(teacher, /opening\?'Hide progress':'View progress'/);
+});
+
 test('Grade 2 Message Relay uses a consistent right-click Copy and Paste menu', () => {
   const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
   assert.match(player, /window\.getSelection\(\)/);
