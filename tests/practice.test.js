@@ -276,6 +276,8 @@ test('File Base teaches the complete create, save and reopen workflow', () => {
   assert.match(player, /Right-click an empty part of the desktop/);
   assert.match(player, /Choose New, then Folder/);
   assert.match(player, /Open File, then choose Save As/);
+  assert.match(player, /Save inside your folder:/);
+  assert.match(player, /Choose My Projects\. 2\. Type Mission Report\. 3\. Choose Save/);
   assert.match(player, /Select My Projects before saving/);
   assert.match(player, /Double-click Mission Report/);
   assert.match(teacher, /g3:file-base/);
