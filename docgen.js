@@ -73,6 +73,37 @@ function worksheetDocx(data, meta = {}) {
   return Packer.toBuffer(doc(c));
 }
 
+function studyNotesDocx(data, meta = {}) {
+  const c = [];
+  c.push(title(data.title || 'Study Notes'), subtitle(metaSubtitle(meta)));
+  if (data.summary) c.push(body(data.summary, { after: 180 }));
+  if (Array.isArray(data.keyIdeas) && data.keyIdeas.length) {
+    c.push(heading('Key ideas'));
+    data.keyIdeas.forEach((idea, i) => c.push(numbered(i + 1, idea)));
+  }
+  if (Array.isArray(data.vocabulary) && data.vocabulary.length) {
+    c.push(heading('Key vocabulary'));
+    data.vocabulary.forEach(v => c.push(new Paragraph({ spacing: { after: 80 }, children: [
+      new TextRun({ text: `${v.term || 'Term'}: `, bold: true, color: NAVY, size: 22 }),
+      new TextRun({ text: v.definition || '', color: INK, size: 22 }),
+    ] })));
+  }
+  if (data.workedExample && ((data.workedExample.title || '') || (data.workedExample.steps || []).length)) {
+    c.push(heading('Worked example'));
+    if (data.workedExample.title) c.push(body(data.workedExample.title, { bold: true }));
+    (data.workedExample.steps || []).forEach((step, i) => c.push(numbered(i + 1, step)));
+  }
+  if (Array.isArray(data.commonMistakes) && data.commonMistakes.length) {
+    c.push(heading('Watch out for'));
+    data.commonMistakes.forEach(mistake => c.push(body(`•  ${mistake}`, { after: 60 })));
+  }
+  if (Array.isArray(data.selfCheck) && data.selfCheck.length) {
+    c.push(heading('Check your learning'));
+    data.selfCheck.forEach(item => c.push(body(`☐  ${item}`, { after: 70 })));
+  }
+  return Packer.toBuffer(doc(c));
+}
+
 function exitTicketDocx(data, meta = {}) {
   const c = [];
   c.push(title(data.title || 'Exit Ticket'), subtitle(metaSubtitle(meta)), nameDate());
@@ -208,16 +239,17 @@ function activitiesDocx(data, meta = {}) {
   return Packer.toBuffer(doc(c));
 }
 
-// The five handouts as one download.
+// The six student resources as one download.
 //
 // Its own function rather than inline in the route so the assembled file can
-// be opened in a test: a zip missing one of its five members still downloads,
+// be opened in a test: a zip missing one of its six members still downloads,
 // still opens, and looks entirely normal until a teacher goes to hand out the
 // homework and finds it was never in there.
 //
 // Every member is named for what it is, because the teacher unzips this into a
 // folder beside four other lessons' worth of files.
 const PACK_MEMBERS = [
+  ['studyNotes', 'study-notes'],
   ['worksheet', 'worksheet'],
   ['exitTicket', 'exit-ticket'],
   ['quiz', 'quiz'],
@@ -235,9 +267,9 @@ function lessonPackZip(base, parts) {
     zip.file(`${name}-${label}.docx`, buffer);
   }
   // A pack that lost a member is a broken promise, not a smaller pack: the
-  // teacher paid for five and would have no way of knowing one was dropped.
+  // teacher requested the full pack and would have no way of knowing one was dropped.
   if (missing.length) throw new Error(`The lesson pack could not be assembled — missing: ${missing.join(', ')}.`);
   return zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
 }
 
-module.exports = { worksheetDocx, exitTicketDocx, quizDocx, homeworkDocx, activitiesDocx, lessonPackZip, PACK_MEMBERS };
+module.exports = { studyNotesDocx, worksheetDocx, exitTicketDocx, quizDocx, homeworkDocx, activitiesDocx, lessonPackZip, PACK_MEMBERS };

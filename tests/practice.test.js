@@ -261,6 +261,25 @@ test('every Grade 3 mission keeps its Keyboard Kingdom sprite asset', () => {
   }
 });
 
+test('Byte feedback states are present and genuinely transparent', async () => {
+  const sharp = require('sharp');
+  const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
+  for (const asset of [
+    'byte-giving-instructions.png',
+    'byte-success.png',
+    'byte-try-again.png',
+    'byte-mission-complete.png',
+  ]) {
+    const assetPath = path.join(__dirname, '..', 'public', 'assets', 'practice', 'byte', asset);
+    assert.match(player, new RegExp(`/assets/practice/byte/${asset}`));
+    assert.equal(fs.existsSync(assetPath), true);
+    const { data, info } = await sharp(assetPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    let transparentPixels = 0;
+    for (let i = 3; i < data.length; i += info.channels) if (data[i] === 0) transparentPixels += 1;
+    assert.ok(transparentPixels > info.width * info.height * 0.4, `${asset} has no usable transparent background`);
+  }
+});
+
 test('Grade 2 play uses animated demonstrations and save-before-auto-advance', () => {
   const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
   assert.match(player, /function tutorialVisual\(stepId\)/);

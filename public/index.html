@@ -3004,6 +3004,7 @@
         <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg> Lesson pack <span class="hint-i" tabindex="0" role="img" aria-label="Student-facing materials from this same lesson. Generate a worksheet (practice questions + answer key) or an exit ticket (a quick end-of-lesson check), edit them, and download each as a Word document." data-tip="Student-facing materials from this same lesson. Generate a worksheet (practice questions + answer key) or an exit ticket (a quick end-of-lesson check), edit them, and download each as a Word document.">i</span></h2>
         <p class="hint">Turn this lesson into student-facing materials — generate, tweak, and download each as a Word document.</p>
         <div class="pack-actions">
+          <button type="button" class="btn ghost" data-pack="notes"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Study notes</button>
           <button type="button" class="btn ghost" data-pack="worksheet"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Worksheet</button>
           <button type="button" class="btn ghost" data-pack="exit-ticket"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg> Exit ticket</button>
           <button type="button" class="btn ghost" data-pack="quiz"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> Quiz</button>
@@ -3013,7 +3014,7 @@
         <div id="packPreview"></div>
         <div class="wp-slot-mount" data-wp-mount="stage:slides" style="margin-top:14px"></div>
         <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px;display:flex;gap:10px;flex-wrap:wrap">
-          <button type="button" id="fullPackBtn" class="btn accent"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Generate full pack <span style="font-size:12px;font-weight:400;opacity:.8">(.zip — worksheet + exit ticket + quiz + homework + differentiated)</span></button>
+          <button type="button" id="fullPackBtn" class="btn accent"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Generate full pack <span style="font-size:12px;font-weight:400;opacity:.8">(.zip — notes + worksheet + exit ticket + quiz + homework + differentiated)</span></button>
           <!-- The teacher's own lesson plan, in their school's format — reachable
                here as well as on the review screen, since this is where they end
                up once the deck is made. -->
@@ -5360,7 +5361,14 @@
     function renderPack(type,data){
       packType=type; packData=data;
       let h=`<p class="pd-title" contenteditable data-f="title">${esc(data.title||'')}</p>`;
-      if(type==='worksheet'){
+      if(type==='notes'){
+        if(data.summary!=null) h+=`<p class="pd-focus" contenteditable data-f="summary">${esc(data.summary)}</p>`;
+        if(data.keyIdeas) h+=`<h4>Key ideas</h4>${packList(data.keyIdeas,'keyIdea')}`;
+        if(data.vocabulary&&data.vocabulary.length) h+=`<h4>Key vocabulary</h4><dl>${data.vocabulary.map((v,i)=>`<dt contenteditable data-f="vocab${i}term">${esc(v.term)}</dt><dd contenteditable data-f="vocab${i}definition">${esc(v.definition)}</dd>`).join('')}</dl>`;
+        if(data.workedExample){ h+=`<h4>Worked example</h4><div class="ex"><b contenteditable data-f="notesExampleTitle">${esc(data.workedExample.title||'')}</b>${packList(data.workedExample.steps,'notesExampleStep')}</div>`; }
+        if(data.commonMistakes) h+=`<h4>Watch out for</h4>${packList(data.commonMistakes,'commonMistake')}`;
+        if(data.selfCheck) h+=`<h4>Check your learning</h4>${packList(data.selfCheck,'selfCheck')}`;
+      }else if(type==='worksheet'){
         if(data.focus!=null) h+=`<p class="pd-focus" contenteditable data-f="focus">${esc(data.focus)}</p>`;
         if(data.warmup) h+=`<h4>Warm-up</h4>${packList(data.warmup,'warmup')}`;
         if(data.example) h+=`<h4>Worked example</h4><div class="ex"><b contenteditable data-f="exP">${esc(data.example.problem||'')}</b><br><span contenteditable data-f="exS">${esc(data.example.solution||'')}</span></div>`;
@@ -5430,6 +5438,12 @@
       const one=f=>{ const el=box.querySelector(`[data-f="${f}"]`); return el?el.innerText.trim():undefined; };
       const many=f=>[...box.querySelectorAll(`[data-f="${f}"]`)].map(x=>x.innerText.trim()).filter(Boolean);
       if(d.title!=null) d.title=one('title')||d.title;
+      if(d.summary!=null) d.summary=one('summary');
+      if(d.keyIdeas) d.keyIdeas=many('keyIdea');
+      if(Array.isArray(d.vocabulary)) d.vocabulary=d.vocabulary.map((v,i)=>({ term:one('vocab'+i+'term')||v.term, definition:one('vocab'+i+'definition')||v.definition }));
+      if(d.workedExample){ d.workedExample.title=one('notesExampleTitle')||d.workedExample.title; d.workedExample.steps=many('notesExampleStep'); }
+      if(d.commonMistakes) d.commonMistakes=many('commonMistake');
+      if(d.selfCheck) d.selfCheck=many('selfCheck');
       if(d.focus!=null) d.focus=one('focus');
       if(d.warmup) d.warmup=many('warmup');
       if(d.example){ d.example.problem=one('exP'); d.example.solution=one('exS'); }

@@ -19,9 +19,9 @@ const { searchGifs, saveGif, giphyConfigured } = require('./giphy');
 const { generateImage } = require('./ai-image');
 const { parseFraction, detectLabelledDiagram } = require('./concept-diagram');
 const { generateDiagram } = require('./svg-diagram');
-const { generateWorksheet, generateExitTicket, generateQuiz, generateHomework, generateActivities, generateGame } = require('./lesson-pack');
+const { generateStudyNotes, generateWorksheet, generateExitTicket, generateQuiz, generateHomework, generateActivities, generateGame } = require('./lesson-pack');
 const { normalizeVideo, suggestVideos, thumbnailDataUrl } = require('./youtube');
-const { worksheetDocx, exitTicketDocx, quizDocx, homeworkDocx, activitiesDocx , lessonPackZip } = require('./docgen');
+const { studyNotesDocx, worksheetDocx, exitTicketDocx, quizDocx, homeworkDocx, activitiesDocx, lessonPackZip } = require('./docgen');
 const unit = require('./unit');
 const weekPlanner = require('./week-planner');
 const { objectivesFromDeck, criteriaFromDeck } = require('./deck-fields');
@@ -1887,11 +1887,11 @@ app.post('/api/import/slides', requireAuth, upload.single('file'), requireUpload
 });
 
 // ── Lesson pack (worksheet, exit ticket, quiz) from the approved plan ───────
-const PACK_GEN    = { worksheet: generateWorksheet, 'exit-ticket': generateExitTicket, quiz: generateQuiz, homework: generateHomework, activities: generateActivities };
+const PACK_GEN    = { notes: generateStudyNotes, worksheet: generateWorksheet, 'exit-ticket': generateExitTicket, quiz: generateQuiz, homework: generateHomework, activities: generateActivities };
 // Only question-based items become student-submittable online assignments;
 // homework and differentiated sheets are print-only (no question shape).
 const PACK_SUBMITTABLE = new Set(['worksheet', 'exit-ticket', 'quiz']);
-const PACK_RENDER = { worksheet: worksheetDocx, 'exit-ticket': exitTicketDocx, quiz: quizDocx, homework: homeworkDocx, activities: activitiesDocx };
+const PACK_RENDER = { notes: studyNotesDocx, worksheet: worksheetDocx, 'exit-ticket': exitTicketDocx, quiz: quizDocx, homework: homeworkDocx, activities: activitiesDocx };
 
 // Full lesson pack: all three artifacts in parallel → zip download.
 // Registered BEFORE '/api/pack/:type' — Express matches routes in
@@ -1914,16 +1914,16 @@ app.post('/api/pack/full', requireAuth, async (req, res) => {
     const ctx = { subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, unitBlock, teachingModelId };
     const meta = { subject, topic, grade };
 
-    const [wData, etData, qData, hwData, acData] = await Promise.all([
-      generateWorksheet(ctx), generateExitTicket(ctx), generateQuiz(ctx), generateHomework(ctx), generateActivities(ctx),
+    const [nData, wData, etData, qData, hwData, acData] = await Promise.all([
+      generateStudyNotes(ctx), generateWorksheet(ctx), generateExitTicket(ctx), generateQuiz(ctx), generateHomework(ctx), generateActivities(ctx),
     ]);
-    const [wBuf, etBuf, qBuf, hwBuf, acBuf] = await Promise.all([
-      worksheetDocx(wData, meta), exitTicketDocx(etData, meta), quizDocx(qData, meta), homeworkDocx(hwData, meta), activitiesDocx(acData, meta),
+    const [nBuf, wBuf, etBuf, qBuf, hwBuf, acBuf] = await Promise.all([
+      studyNotesDocx(nData, meta), worksheetDocx(wData, meta), exitTicketDocx(etData, meta), quizDocx(qData, meta), homeworkDocx(hwData, meta), activitiesDocx(acData, meta),
     ]);
 
     const base = String(topic).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'lesson';
     const zipBuf = lessonPackZip(base, {
-      worksheet: wBuf, exitTicket: etBuf, quiz: qBuf, homework: hwBuf, activities: acBuf,
+      studyNotes: nBuf, worksheet: wBuf, exitTicket: etBuf, quiz: qBuf, homework: hwBuf, activities: acBuf,
     });
 
     await capture(req, reservation, 'lessonscope.generate_lesson_pack', base);

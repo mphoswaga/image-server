@@ -1,9 +1,9 @@
-// The full lesson pack: five handouts as one download.
+// The full lesson pack: six student resources as one download.
 //
 // A zip is the easiest artifact to get quietly wrong, because a zip missing one
 // of its members still downloads, still opens, and looks completely normal. The
-// teacher discovers it when they go to hand out the homework and it was never
-// in there — in front of a class, having paid for five.
+// teacher discovers it when they go to use that resource and it was never
+// in there — in front of a class.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -12,6 +12,7 @@ const { lessonPackZip, worksheetDocx, PACK_MEMBERS } = require('../docgen.js');
 
 const part = (name) => Buffer.from(`pretend ${name} docx`);
 const ALL = {
+  studyNotes: part('study notes'),
   worksheet: part('worksheet'),
   exitTicket: part('exit ticket'),
   quiz: part('quiz'),
@@ -21,7 +22,7 @@ const ALL = {
 
 const namesIn = (buffer) => Object.keys(new PizZip(buffer).files).sort();
 
-test('all five handouts are in the pack, named for what they are', () => {
+test('all six student resources are in the pack, named for what they are', () => {
   // The teacher unzips this beside four other lessons' worth of files, so
   // "document1.docx" would be useless.
   assert.deepEqual(namesIn(lessonPackZip('Spreadsheets', ALL)), [
@@ -29,12 +30,13 @@ test('all five handouts are in the pack, named for what they are', () => {
     'Spreadsheets-exit-ticket.docx',
     'Spreadsheets-homework.docx',
     'Spreadsheets-quiz.docx',
+    'Spreadsheets-study-notes.docx',
     'Spreadsheets-worksheet.docx',
   ]);
 });
 
 test('a pack missing a handout fails loudly instead of shipping short', () => {
-  // Every one of the five, because it is the one that goes missing that matters
+  // Every resource, because it is the one that goes missing that matters
   // and there is no reason to think it will always be the same one.
   for (const [key, label] of PACK_MEMBERS) {
     const short = { ...ALL };

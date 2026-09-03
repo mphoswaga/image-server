@@ -38,6 +38,32 @@ const EXIT_TICKET_SCHEMA = {
   additionalProperties: false,
 };
 
+const STUDY_NOTES_SCHEMA = {
+  type: 'object',
+  properties: {
+    title: { type: 'string' },
+    summary: { type: 'string' },
+    keyIdeas: { type: 'array', items: { type: 'string' } },
+    vocabulary: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { term: { type: 'string' }, definition: { type: 'string' } },
+        required: ['term', 'definition'], additionalProperties: false,
+      },
+    },
+    workedExample: {
+      type: 'object',
+      properties: { title: { type: 'string' }, steps: { type: 'array', items: { type: 'string' } } },
+      required: ['title', 'steps'], additionalProperties: false,
+    },
+    commonMistakes: { type: 'array', items: { type: 'string' } },
+    selfCheck: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['title', 'summary', 'keyIdeas', 'vocabulary', 'workedExample', 'commonMistakes', 'selfCheck'],
+  additionalProperties: false,
+};
+
 function calibration(grade) {
   const age = ageFor(grade);
   return `Pitch everything precisely at ${grade} (students about ${age} years old): vocabulary, reading level, and difficulty must suit ${grade} — assume they mastered the previous grade, and do NOT drift easier or harder.`;
@@ -114,6 +140,28 @@ Plain text only — no markdown symbols.`;
   });
 }
 
+async function generateStudyNotes(ctx) {
+  if (!process.env.OPENAI_API_KEY) return placeholderStudyNotes(ctx);
+  const { wrap } = require('./cache');
+  return wrap('study-notes', ctxKey('study-notes', ctx), async () => {
+    const prompt = `You are an expert teacher creating clear STUDY NOTES that a student can use independently before or after this lesson.
+${ctxBlock(ctx)}
+${artifactPromptBlock(ctx.teachingModelId, 'study notes')}
+Produce:
+- title: a clear, student-friendly title.
+- summary: one short paragraph explaining what the lesson is about and why it matters.
+- keyIdeas: 4-6 complete-sentence notes covering every lesson objective. Teach the content; do not merely list headings.
+- vocabulary: 3-6 important terms, each with a concise, age-appropriate definition.
+- workedExample: one useful example with a title and 3-6 ordered steps that model the thinking or process.
+- commonMistakes: 2-4 specific misunderstandings and how to avoid them.
+- selfCheck: 3-5 "I can..." statements students can use to check their understanding.
+The notes must contain the knowledge needed for the worksheet and quiz, without revealing their answer keys.
+${calibration(ctx.grade)}
+Plain text only — no markdown symbols.`;
+    return callModel(STUDY_NOTES_SCHEMA, 'study_notes', prompt, 3500);
+  });
+}
+
 function placeholderWorksheet({ topic }) {
   const t = String(topic || 'the topic').replace(/-/g, ' ');
   return {
@@ -128,6 +176,19 @@ function placeholderWorksheet({ topic }) {
 function placeholderExitTicket({ topic }) {
   const t = String(topic || 'the topic').replace(/-/g, ' ');
   return { title: `${t} — Exit Ticket`, questions: [`What is one thing you learned about ${t}?`, `Give an example of ${t}.`], answerKey: ['Student answers vary.', 'Student answers vary.'] };
+}
+
+function placeholderStudyNotes({ topic }) {
+  const t = String(topic || 'the topic').replace(/-/g, ' ');
+  return {
+    title: `${t} — Study Notes`,
+    summary: `These notes explain the main ideas about ${t}.`,
+    keyIdeas: [`Understand the main idea of ${t}.`, `Explain how ${t} is used.`],
+    vocabulary: [{ term: t, definition: `An important idea from this lesson (set OPENAI_API_KEY for complete notes).` }],
+    workedExample: { title: `How to think about ${t}`, steps: ['Read the question carefully.', 'Use the lesson ideas.', 'Check that the answer makes sense.'] },
+    commonMistakes: ['Rushing without checking the lesson steps.'],
+    selfCheck: [`I can explain ${t} in my own words.`, `I can give an example of ${t}.`],
+  };
 }
 
 // ── Quiz: printable assessment (MCQ + short-answer, with marks) ────────────
@@ -393,4 +454,4 @@ function placeholderGame({ topic, questionCount }) {
   });
 }
 
-module.exports = { generateWorksheet, generateExitTicket, generateQuiz, generateHomework, generateActivities, generateGame };
+module.exports = { generateStudyNotes, generateWorksheet, generateExitTicket, generateQuiz, generateHomework, generateActivities, generateGame };

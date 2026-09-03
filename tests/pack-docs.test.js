@@ -11,7 +11,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const PizZip = require('pizzip');
-const { worksheetDocx, exitTicketDocx, quizDocx, homeworkDocx, activitiesDocx } = require('../docgen.js');
+const { studyNotesDocx, worksheetDocx, exitTicketDocx, quizDocx, homeworkDocx, activitiesDocx } = require('../docgen.js');
 
 const META = { subject: 'ICT', topic: 'Spreadsheets', grade: 'Grade 5' };
 
@@ -21,6 +21,21 @@ async function textOf(buffer) {
   const xml = new PizZip(await buffer).file('word/document.xml').asText();
   return xml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
+
+test('study notes teach the content and preserve every support section', async () => {
+  const text = await textOf(studyNotesDocx({
+    title: 'Spreadsheet study notes',
+    summary: 'Spreadsheets organise information into rows and columns.',
+    keyIdeas: ['Rows go across and columns go down.', 'A cell has an address such as B3.'],
+    vocabulary: [{ term: 'Cell', definition: 'A box where a row and column meet.' }],
+    workedExample: { title: 'Find cell B3', steps: ['Find column B.', 'Move down to row 3.'] },
+    commonMistakes: ['Do not write the row number before the column letter.'],
+    selfCheck: ['I can identify a cell address.'],
+  }, META));
+  for (const wanted of ['Spreadsheet study notes', 'Rows go across', 'Cell', 'Find cell B3', 'row number', 'I can identify']) {
+    assert.ok(text.includes(wanted), `missing from the study notes: "${wanted}"`);
+  }
+});
 
 test('a worksheet keeps its questions AND its answer key', async () => {
   const text = await textOf(worksheetDocx({
