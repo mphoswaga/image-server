@@ -57,11 +57,10 @@ test('catalog exposes the latest arcade activity without evidence secrets', () =
 
 test('Grade 3 continues into its own recorded keyboard campaign', () => {
   const activity = practice.listActivities().find((item) => item.id === 'g3-keyboard-kingdom');
-  assert.equal(activity.version, 3);
+  assert.equal(activity.version, 2);
   assert.equal(activity.gradeBand, 'Grade 3');
   assert.deepEqual(activity.steps.map((step) => step.id), [
-    'keyboard-map', 'home-row-left', 'home-row-right', 'space-station', 'top-row-reach', 'bottom-row-reach',
-    'word-blaster', 'capital-charge', 'sentence-engine', 'repair-bay',
+    'copy-paste-shortcut', 'key-patrol', 'word-blaster', 'capital-charge', 'sentence-engine', 'repair-bay',
   ]);
   const { attempt } = practice.createAttempt({ studentId: 'G3-1', studentName: 'Gina', activityId: activity.id });
   for (const step of activity.steps) checkpoint(attempt, step.id);
@@ -162,7 +161,7 @@ test('teacher preview is protected and explicitly avoids recorded attempts', () 
   assert.match(player, /id="teacherStageJump"/);
   assert.match(player, /const requestedStageIndex = previewMode/);
   assert.match(player, /previewMode&&requestedStageIndex>=0\?requestedStageIndex:0/);
-  assert.match(player, /\/practice\/preview\?\$\{world==='g3'/);
+  assert.match(player, /world===\'foundation\'\?\'\':`world=\$\{encodeURIComponent\(world\)\}&`/);
 });
 
 test('guest practice is public but never writes recorded student evidence', () => {
@@ -293,8 +292,9 @@ test('both arcade worlds provide sustained, varied practice', () => {
 
 test('the typing academy starts at the keyboard and builds one row at a time', () => {
   const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
-  const activity = practice.getActivity('g3-keyboard-kingdom');
-  assert.equal(activity.version, 3);
+  const activity = practice.getActivity('typing-academy');
+  assert.equal(activity.version, 1);
+  assert.equal(activity.title, 'Keyboard Kingdom Typing Academy');
   assert.deepEqual(activity.steps.slice(0, 6).map((step) => step.id), [
     'keyboard-map', 'home-row-left', 'home-row-right', 'space-station', 'top-row-reach', 'bottom-row-reach',
   ]);
@@ -302,6 +302,16 @@ test('the typing academy starts at the keyboard and builds one row at a time', (
   assert.match(player, /Use a thumb for Space/);
   assert.match(player, /Reach up and come home/);
   assert.match(player, /Reach down and come home/);
+});
+
+test('Typing Academy is a separate teacher-selectable activity', () => {
+  const report = fs.readFileSync(path.join(__dirname, '..', 'practice-teacher.html'), 'utf8');
+  const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
+  assert.match(report, /<option value="typing-academy">Typing Academy<\/option>/);
+  assert.match(report, /<optgroup label="Typing Academy">/);
+  assert.match(report, /world=\$\{encodeURIComponent\(world\)\}/);
+  assert.match(player, /typing:\{ id:'typing-academy', version:1/);
+  assert.match(player, /id==='typing-academy'\?'typing'/);
 });
 
 test('the arcade result factors accuracy, mistakes and active time into its score', () => {

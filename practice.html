@@ -757,7 +757,7 @@
     const guestMode = location.pathname === '/student/practice/guest';
     const ephemeralMode = previewMode || guestMode;
     const query = new URLSearchParams(location.search);
-    const requestedWorld = query.get('world') === 'g3' ? 'g3' : 'foundation';
+    const requestedWorld = ['g3','typing'].includes(query.get('world')) ? query.get('world') : 'foundation';
     const requestedStage = String(query.get('stage') || '').trim();
     const requestedSessionCode = String(query.get('session') || '').replace(/[^a-z0-9]/gi,'').toUpperCase().slice(0,6);
     const requestedContinue = query.get('continue') === '1';
@@ -787,7 +787,7 @@
         show:'Watch Byte type the glowing word.', independent:'Type 5 words to stop the ships.', success:'The sky shield is on. City saved!',
         hints:['Read the glowing word.','Type one letter at a time.','Green letters are already correct.'] },
     ];
-    const grade3Steps = [
+    const typingSteps = [
       { id:'keyboard-map', title:'Keyboard Map', action:'find_keys', target:'anchor-keys',
         show:'Find the two home keys with tiny bumps: F and J. They help both hands find their place.', independent:'Find six anchor keys as Byte calls them out.', success:'Your hands know where to begin.',
         hints:['Find F and J on the middle row.','Feel for the small bumps on F and J.','Return your pointer fingers to F and J after each key.'] },
@@ -819,9 +819,30 @@
         show:'Broken words have the wrong middle letter. Use Backspace, then type the correct letters.', independent:'Repair five broken words to restore the kingdom code.', success:'Keyboard Kingdom is restored.',
         hints:['Use Backspace to remove the wrong letters.','Stop deleting when the beginning matches.','Then type the missing correct letters.'] },
     ];
+    const grade3Steps = [
+      { id:'copy-paste-shortcut', title:'Rapid Relay', action:'shortcut_copy_paste', target:'shortcut-console',
+        show:'Message Relay is moving faster. Highlight the message, then use the copy and paste keyboard shortcuts.', independent:'Send 3 messages using keyboard shortcuts.', success:'The rapid relay is online.',
+        hints:['Drag across the whole blue message.','Press Ctrl+C on Windows or Command+C on Mac.','Click the empty box, then press Ctrl+V or Command+V.'] },
+      { id:'key-patrol', title:'Key Patrol', action:'home_keys', target:'home-row',
+        show:'Keyboard Kingdom is dark. Wake the home-row keys in the order Byte shows you.', independent:'Hit eight glowing home-row keys to open the kingdom gate.', success:'The home-row gate is open.',
+        hints:['Look along the middle keyboard row.','Press only the glowing key.','Keep both hands close to the middle row.'] },
+      { id:'word-blaster', title:'Word Blaster', action:'type_word', target:'shield-word',
+        show:'Enemy code ships are diving toward the castle. Type each glowing word to fire the blaster.', independent:'Clear seven faster waves and defeat the KEYBOARD boss ship.', success:'The code fleet is gone. The castle shield is safe!',
+        hints:['Read the whole glowing word first.','Type the letters from left to right.','Green letters are already correct.'] },
+      { id:'capital-charge', title:'Capital Charge', action:'shift_letter', target:'capital-signal',
+        show:'The capital towers need a stronger signal. Hold Shift while pressing the glowing letter.', independent:'Charge five capital letters using Shift.', success:'The capital towers are charged.',
+        hints:['Hold either Shift key down.','Keep holding Shift while pressing the letter.','A capital letter is bigger than a lowercase letter.'] },
+      { id:'sentence-engine', title:'Sentence Engine', action:'type_sentence', target:'sentence-signal',
+        show:'The sentence engine needs spaces and a full stop, not only letters.', independent:'Type two complete sentences exactly as they appear.', success:'The sentence engine is running.',
+        hints:['Use the spacebar between words.','The green part is already correct.','Finish with the full-stop key.'] },
+      { id:'repair-bay', title:'Repair Bay', action:'repair_word', target:'repaired-code',
+        show:'Broken words have the wrong middle letter. Use Backspace, then type the correct letters.', independent:'Repair five broken words to restore the kingdom code.', success:'Keyboard Kingdom is restored.',
+        hints:['Use Backspace to remove the wrong letters.','Stop deleting when the beginning matches.','Then type the missing correct letters.'] },
+    ];
     const campaigns = {
       foundation:{ id:'g2-pointer-control', version:4, steps:foundationSteps, kicker:'Foundation World · Chapter 1', title:'Byte and the Blackout', lead:'A digital storm has shut down Byte City. Beat eight arcade missions, restore the power and unlock Advanced Keyboard Kingdom.', speech:'Chase, click, drag, scroll, use menus and type your way through the city.', world:'Foundation for Grade 2 and Grade 3', time:'About 25–30 minutes', device:'A keyboard and mouse or trackpad', completion:'Byte City is online', completionLead:'You restored every district and opened the road to Grade 3.', start:'Begin the rescue', resume:'Continue the rescue', nextTitle:'Advanced Keyboard Kingdom', nextCopy:'Continue into six playable Grade 3 keyboard missions.', nextLabel:'Continue to Grade 3' },
-      g3:{ id:'g3-keyboard-kingdom', version:3, steps:grade3Steps, kicker:'Grade 3 World · Typing Academy', title:'Byte and the Keyboard Kingdom', lead:'Begin with the first keys, train both hands, then use accuracy and speed to defend the kingdom.', speech:'Every room teaches one keyboard skill. Watch me, practise it, then win the mission on your own.', world:'Grade 3 typing adventure', time:'About 30–35 minutes', device:'A computer keyboard', completion:'Keyboard Kingdom restored', completionLead:'You learned the keyboard from the beginning and defended the kingdom with accurate typing.', start:'Start typing training', resume:'Continue typing training', nextTitle:'Expert World', nextCopy:'Your Foundation and Grade 3 worlds are complete. Expert missions will continue the adventure.', nextLabel:'' },
+      g3:{ id:'g3-keyboard-kingdom', version:2, steps:grade3Steps, kicker:'Grade 3 World · Chapter 2', title:'Byte and the Broken Code', lead:'A scrambled code has locked Keyboard Kingdom. Master shortcuts, keys, words, capitals, sentences and editing to restore it.', speech:'Your Grade 2 skills opened the gate. Now the keyboard is your arcade controller.', world:'Grade 3 keyboard adventure', time:'About 22–25 minutes', device:'A computer keyboard', completion:'Keyboard Kingdom restored', completionLead:'You mastered the Grade 3 keyboard campaign and earned access to the future Expert World.', start:'Enter Keyboard Kingdom', resume:'Continue Keyboard Kingdom', nextTitle:'Expert World', nextCopy:'Your Foundation and Grade 3 worlds are complete. Expert missions will continue the adventure.', nextLabel:'' },
+      typing:{ id:'typing-academy', version:1, steps:typingSteps, kicker:'Typing Academy · Course 1', title:'Byte and the Typing Academy', lead:'Begin with the first keys, train both hands, then use accuracy and speed to defend the academy.', speech:'Every room teaches one typing skill. Watch me, practise it, then win the mission on your own.', world:'Typing Academy for Grades 2 and 3', time:'About 30–35 minutes', device:'A computer keyboard', completion:'Typing Academy complete', completionLead:'You learned the keyboard from the beginning and completed your first typing course.', start:'Start typing course', resume:'Continue typing course', nextTitle:'Next typing course', nextCopy:'More typing courses can build speed, punctuation and longer writing.', nextLabel:'' },
     };
     const campaign = campaigns[requestedWorld];
     const ACTIVITY_ID = campaign.id;
@@ -877,7 +898,7 @@
     const $ = (id) => document.getElementById(id);
 
     function applyCampaignCopy() {
-      document.body.classList.toggle('campaign-g3',requestedWorld==='g3');
+      document.body.classList.toggle('campaign-g3',requestedWorld!=='foundation');
       document.body.classList.toggle('guest-session',guestMode);
       document.body.style.setProperty('--mission-count',steps.length);
       document.title=`LessonScope Practice - ${campaign.title}`;
@@ -900,7 +921,7 @@
       $('continueWorldBtn').href=continueWorldUrl();
       $('startBtn').textContent=campaign.start;
       if (previewMode) {
-        const groups=[['foundation','Foundation World',foundationSteps],['g3','Grade 3 World',grade3Steps]];
+        const groups=[['foundation','Foundation World',foundationSteps],['g3','Grade 3 World',grade3Steps],['typing','Typing Academy',typingSteps]];
         $('teacherStageJump').hidden=false;
         $('stageJumpSelect').innerHTML=groups.map(([world,label,worldSteps])=>`<optgroup label="${esc(label)}">${worldSteps.map((step,index)=>`<option value="${world}:${esc(step.id)}">${index+1}. ${esc(step.title)}</option>`).join('')}</optgroup>`).join('');
         $('stageJumpSelect').value=`${requestedWorld}:${requestedStageIndex>=0?requestedStage:steps[0].id}`;
@@ -950,8 +971,12 @@
 
     function esc(value) { return String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
     function liveStorageKey(code) { return `ls-live-practice-${String(code || '').toUpperCase()}`; }
-    function roomWorld(room) { return room && room.activity && room.activity.id === 'g3-keyboard-kingdom' ? 'g3' : 'foundation'; }
-    function liveSessionUrl(code, world=requestedWorld) { return `/student/practice/guest?session=${encodeURIComponent(code)}${world === 'g3' ? '&world=g3' : ''}`; }
+    function roomWorld(room) {
+      const id=room&&room.activity&&room.activity.id;
+      return id==='typing-academy'?'typing':id==='g3-keyboard-kingdom'?'g3':'foundation';
+    }
+    function worldQuery(world) { return world==='foundation'?'':`&world=${encodeURIComponent(world)}`; }
+    function liveSessionUrl(code, world=requestedWorld) { return `/student/practice/guest?session=${encodeURIComponent(code)}${worldQuery(world)}`; }
     function continueWorldUrl() {
       if (previewMode) return '/practice/preview?world=g3&continue=1';
       if (guestMode) {
@@ -2074,7 +2099,7 @@
     $('stageJumpBtn').addEventListener('click',()=>{
       const [world,stage]=String($('stageJumpSelect').value||'').split(':');
       if(!stage) return;
-      location.href=`/practice/preview?${world==='g3'?'world=g3&':''}stage=${encodeURIComponent(stage)}`;
+      location.href=`/practice/preview?${world==='foundation'?'':`world=${encodeURIComponent(world)}&`}stage=${encodeURIComponent(stage)}`;
     });
     setInterval(() => { if (!paused && !document.hidden && $('activity').style.display === 'block') { stats.activeSeconds += 1; updateHud(); } }, 1000);
 

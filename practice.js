@@ -12,9 +12,9 @@ const ATTEMPTS_DIR = path.join(PRACTICE_DIR, 'attempts');
 
 const ACTIVITIES = Object.freeze([
   Object.freeze({
-    id: 'g3-keyboard-kingdom',
-    version: 3,
-    gradeBand: 'Grade 3',
+    id: 'typing-academy',
+    version: 1,
+    gradeBand: 'Grades 2-3',
     title: 'Keyboard Kingdom Typing Academy',
     description: 'Learn the keyboard from the beginning, then use accuracy and speed to defend Keyboard Kingdom.',
     estimatedMinutes: 35,
@@ -32,7 +32,6 @@ const ACTIVITIES = Object.freeze([
       Object.freeze({ id: 'repair-bay', title: 'Repair Bay', action: 'repair_word', target: 'repaired-code' }),
     ]),
   }),
-  // Version 2 remains available for attempts using the shorter keyboard campaign.
   Object.freeze({
     id: 'g3-keyboard-kingdom',
     version: 2,

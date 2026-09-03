@@ -2231,7 +2231,8 @@ app.post('/api/practice/live-sessions', requirePracticeEnabled, requireAuth, (re
       audioPolicy: req.body && req.body.audioPolicy,
       durationMinutes: req.body && req.body.durationMinutes,
     });
-    const world = room.activity && room.activity.id === 'g3-keyboard-kingdom' ? '&world=g3' : '';
+    const activityId = room.activity && room.activity.id;
+    const world = activityId === 'typing-academy' ? '&world=typing' : activityId === 'g3-keyboard-kingdom' ? '&world=g3' : '';
     res.status(201).json({ room, joinPath: `/student/practice/guest?session=${room.code}${world}` });
   } catch (err) {
     res.status(err.code === 'activity_not_found' ? 404 : 400).json({ error: err.message, code: err.code || 'room_create_failed' });
