@@ -13,6 +13,28 @@ const ATTEMPTS_DIR = path.join(PRACTICE_DIR, 'attempts');
 const ACTIVITIES = Object.freeze([
   Object.freeze({
     id: 'g3-keyboard-kingdom',
+    version: 3,
+    gradeBand: 'Grade 3',
+    title: 'Keyboard Kingdom Typing Academy',
+    description: 'Learn the keyboard from the beginning, then use accuracy and speed to defend Keyboard Kingdom.',
+    estimatedMinutes: 35,
+    device: 'computer',
+    steps: Object.freeze([
+      Object.freeze({ id: 'keyboard-map', title: 'Keyboard Map', action: 'find_keys', target: 'anchor-keys' }),
+      Object.freeze({ id: 'home-row-left', title: 'Left-Hand Launch', action: 'home_keys', target: 'left-home-row' }),
+      Object.freeze({ id: 'home-row-right', title: 'Right-Hand Rescue', action: 'home_keys', target: 'right-home-row' }),
+      Object.freeze({ id: 'space-station', title: 'Space Station', action: 'type_pattern', target: 'space-pattern' }),
+      Object.freeze({ id: 'top-row-reach', title: 'Sky Key Climb', action: 'row_keys', target: 'top-row' }),
+      Object.freeze({ id: 'bottom-row-reach', title: 'Tunnel Key Run', action: 'row_keys', target: 'bottom-row' }),
+      Object.freeze({ id: 'word-blaster', title: 'Word Blaster', action: 'type_word', target: 'shield-word' }),
+      Object.freeze({ id: 'capital-charge', title: 'Capital Charge', action: 'shift_letter', target: 'capital-signal' }),
+      Object.freeze({ id: 'sentence-engine', title: 'Sentence Engine', action: 'type_sentence', target: 'sentence-signal' }),
+      Object.freeze({ id: 'repair-bay', title: 'Repair Bay', action: 'repair_word', target: 'repaired-code' }),
+    ]),
+  }),
+  // Version 2 remains available for attempts using the shorter keyboard campaign.
+  Object.freeze({
+    id: 'g3-keyboard-kingdom',
     version: 2,
     gradeBand: 'Grade 3',
     title: 'Advanced Keyboard Kingdom',

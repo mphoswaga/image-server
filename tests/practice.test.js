@@ -23,6 +23,12 @@ const evidenceByStep = {
   'capital-charge': { action: 'shift_letter', target: 'capital-signal' },
   'sentence-engine': { action: 'type_sentence', target: 'sentence-signal' },
   'repair-bay': { action: 'repair_word', target: 'repaired-code' },
+  'keyboard-map': { action: 'find_keys', target: 'anchor-keys' },
+  'home-row-left': { action: 'home_keys', target: 'left-home-row' },
+  'home-row-right': { action: 'home_keys', target: 'right-home-row' },
+  'space-station': { action: 'type_pattern', target: 'space-pattern' },
+  'top-row-reach': { action: 'row_keys', target: 'top-row' },
+  'bottom-row-reach': { action: 'row_keys', target: 'bottom-row' },
 };
 
 function checkpoint(attempt, stepId, overrides = {}) {
@@ -51,10 +57,11 @@ test('catalog exposes the latest arcade activity without evidence secrets', () =
 
 test('Grade 3 continues into its own recorded keyboard campaign', () => {
   const activity = practice.listActivities().find((item) => item.id === 'g3-keyboard-kingdom');
-  assert.equal(activity.version, 2);
+  assert.equal(activity.version, 3);
   assert.equal(activity.gradeBand, 'Grade 3');
   assert.deepEqual(activity.steps.map((step) => step.id), [
-    'copy-paste-shortcut', 'key-patrol', 'word-blaster', 'capital-charge', 'sentence-engine', 'repair-bay',
+    'keyboard-map', 'home-row-left', 'home-row-right', 'space-station', 'top-row-reach', 'bottom-row-reach',
+    'word-blaster', 'capital-charge', 'sentence-engine', 'repair-bay',
   ]);
   const { attempt } = practice.createAttempt({ studentId: 'G3-1', studentName: 'Gina', activityId: activity.id });
   for (const step of activity.steps) checkpoint(attempt, step.id);
@@ -281,7 +288,20 @@ test('both arcade worlds provide sustained, varied practice', () => {
   assert.match(player, /\['I CAN CODE\.','BYTE IS READY\.'\]/);
   assert.match(player, /\['PEN','PIN'\],\['DOG','DIG'\]/);
   assert.match(player, /About 25–30 minutes/);
-  assert.match(player, /About 22–25 minutes/);
+  assert.match(player, /About 30–35 minutes/);
+});
+
+test('the typing academy starts at the keyboard and builds one row at a time', () => {
+  const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
+  const activity = practice.getActivity('g3-keyboard-kingdom');
+  assert.equal(activity.version, 3);
+  assert.deepEqual(activity.steps.slice(0, 6).map((step) => step.id), [
+    'keyboard-map', 'home-row-left', 'home-row-right', 'space-station', 'top-row-reach', 'bottom-row-reach',
+  ]);
+  assert.match(player, /Feel the small bump on each key/);
+  assert.match(player, /Use a thumb for Space/);
+  assert.match(player, /Reach up and come home/);
+  assert.match(player, /Reach down and come home/);
 });
 
 test('the arcade result factors accuracy, mistakes and active time into its score', () => {

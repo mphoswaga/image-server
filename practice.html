@@ -49,6 +49,7 @@
     h2 { margin:0; color:var(--navy); font-size:24px; line-height:1.2; }
     .lead { margin:0 auto 22px; max-width:620px; color:var(--muted); font-size:17px; }
     .quest-map { display:grid; grid-template-columns:repeat(var(--mission-count,8),1fr); gap:8px; margin:22px auto; }
+    body.campaign-g3 .quest-map,body.campaign-g3 .progress { grid-template-columns:repeat(5,minmax(0,1fr)); }
     .quest-stop { min-width:0; padding:12px 7px; border:1px solid var(--line); background:#f8fbfd; color:var(--navy); font-size:12px; font-weight:800; }
     .quest-stop strong { display:grid; place-items:center; width:28px; height:28px; margin:0 auto 6px; border-radius:50%; background:var(--navy); color:#fff; }
     .activity-facts { display:grid; grid-template-columns:repeat(3,1fr); border:1px solid var(--line); margin:18px auto 22px; text-align:left; }
@@ -151,8 +152,8 @@
     .room-copy-paste-menu { background-image:linear-gradient(rgba(17,9,43,.18),rgba(17,9,43,.55)),url('/assets/practice/bg_message_relay.jpeg'); background-position:center; background-size:cover; }
     .room-copy-paste-shortcut { background:radial-gradient(circle at 50% 45%,rgba(240,91,169,.18),transparent 35%),linear-gradient(145deg,#111738,#342057); }
     .room-keyboard-defense { background-image:linear-gradient(rgba(2,6,23,.08),rgba(2,6,23,.52)),url('/assets/practice/bg_sky_shield.jpeg'); background-position:center; background-size:cover; }
-    .room-key-patrol,.room-word-blaster,.room-capital-charge,.room-sentence-engine,.room-repair-bay { background:linear-gradient(145deg,#090b24,#29205b); }
-    .room-move-pointer:after,.room-single-click:after,.room-double-click:after,.room-context-command:after,.room-drag-drop:after,.room-scroll-find:after,.room-copy-paste-menu:after,.room-copy-paste-shortcut:after,.room-keyboard-defense:after,.room-key-patrol:after,.room-word-blaster:after,.room-capital-charge:after,.room-sentence-engine:after,.room-repair-bay:after { content:""; position:absolute; z-index:-1; inset:0; opacity:.45; background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px); background-size:34px 34px; }
+    .room-key-patrol,.room-keyboard-map,.room-home-row-left,.room-home-row-right,.room-space-station,.room-top-row-reach,.room-bottom-row-reach,.room-word-blaster,.room-capital-charge,.room-sentence-engine,.room-repair-bay { background:linear-gradient(145deg,#090b24,#29205b); }
+    .room-move-pointer:after,.room-single-click:after,.room-double-click:after,.room-context-command:after,.room-drag-drop:after,.room-scroll-find:after,.room-copy-paste-menu:after,.room-copy-paste-shortcut:after,.room-keyboard-defense:after,.room-key-patrol:after,.room-keyboard-map:after,.room-home-row-left:after,.room-home-row-right:after,.room-space-station:after,.room-top-row-reach:after,.room-bottom-row-reach:after,.room-word-blaster:after,.room-capital-charge:after,.room-sentence-engine:after,.room-repair-bay:after { content:""; position:absolute; z-index:-1; inset:0; opacity:.45; background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px); background-size:34px 34px; }
     .arcade-grid { width:min(680px,calc(100% - 30px)); height:290px; display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr); gap:14px; padding:12px; }
     .arcade-pad { position:relative; display:grid; place-items:center; min-width:0; border:2px solid #29486d; border-radius:50%; background:#071225; box-shadow:inset 0 8px 15px rgba(0,0,0,.65); }
     button.arcade-pad { cursor:pointer; }
@@ -787,12 +788,24 @@
         hints:['Read the glowing word.','Type one letter at a time.','Green letters are already correct.'] },
     ];
     const grade3Steps = [
-      { id:'copy-paste-shortcut', title:'Rapid Relay', action:'shortcut_copy_paste', target:'shortcut-console',
-        show:'Message Relay is moving faster. Highlight the message, then use the copy and paste keyboard shortcuts.', independent:'Send 3 messages using keyboard shortcuts.', success:'The rapid relay is online.',
-        hints:['Drag across the whole blue message.','Press Ctrl+C on Windows or Command+C on Mac.','Click the empty box, then press Ctrl+V or Command+V.'] },
-      { id:'key-patrol', title:'Key Patrol', action:'home_keys', target:'home-row',
-        show:'Keyboard Kingdom is dark. Wake the home-row keys in the order Byte shows you.', independent:'Hit eight glowing home-row keys to open the kingdom gate.', success:'The home-row gate is open.',
-        hints:['Look along the middle keyboard row.','Press only the glowing key.','Keep both hands close to the middle row.'] },
+      { id:'keyboard-map', title:'Keyboard Map', action:'find_keys', target:'anchor-keys',
+        show:'Find the two home keys with tiny bumps: F and J. They help both hands find their place.', independent:'Find six anchor keys as Byte calls them out.', success:'Your hands know where to begin.',
+        hints:['Find F and J on the middle row.','Feel for the small bumps on F and J.','Return your pointer fingers to F and J after each key.'] },
+      { id:'home-row-left', title:'Left-Hand Launch', action:'home_keys', target:'left-home-row',
+        show:'Rest your left fingers on A, S, D and F. Press only the glowing key.', independent:'Power ten left-hand signals with A, S, D and F.', success:'The left launch pad is online.',
+        hints:['Little finger goes on A.','Keep your pointer finger on F.','Move one finger, then bring it home.'] },
+      { id:'home-row-right', title:'Right-Hand Rescue', action:'home_keys', target:'right-home-row',
+        show:'Rest your right fingers on J, K, L and semicolon. Press only the glowing key.', independent:'Rescue ten signals with J, K, L and semicolon.', success:'The right rescue station is online.',
+        hints:['Pointer finger goes on J.','Little finger rests on semicolon.','Use the finger already resting on the glowing key.'] },
+      { id:'space-station', title:'Space Station', action:'type_pattern', target:'space-pattern',
+        show:'Type short home-row groups and tap Space with a thumb between them.', independent:'Send four spaced messages without adding or missing a space.', success:'The message rhythm is steady.',
+        hints:['Read one group at a time.','Use a thumb for Space.','Do not press Space after the last group.'] },
+      { id:'top-row-reach', title:'Sky Key Climb', action:'row_keys', target:'top-row',
+        show:'Reach one finger upward from the home row, press the glowing key, then come home.', independent:'Climb twelve top-row signals and return to the home row.', success:'The sky-key bridge is open.',
+        hints:['Start with your fingers on the home row.','Reach up with the nearest finger.','Return that finger home after every key.'] },
+      { id:'bottom-row-reach', title:'Tunnel Key Run', action:'row_keys', target:'bottom-row',
+        show:'Reach one finger downward, press the glowing key, then return it to the home row.', independent:'Clear twelve tunnel keys without losing your home position.', success:'The keyboard tunnels are clear.',
+        hints:['Keep the other fingers near the home row.','Reach down with the nearest finger.','Return home before finding the next glow.'] },
       { id:'word-blaster', title:'Word Blaster', action:'type_word', target:'shield-word',
         show:'Enemy code ships are diving toward the castle. Type each glowing word to fire the blaster.', independent:'Clear seven faster waves and defeat the KEYBOARD boss ship.', success:'The code fleet is gone. The castle shield is safe!',
         hints:['Read the whole glowing word first.','Type the letters from left to right.','Green letters are already correct.'] },
@@ -808,7 +821,7 @@
     ];
     const campaigns = {
       foundation:{ id:'g2-pointer-control', version:4, steps:foundationSteps, kicker:'Foundation World · Chapter 1', title:'Byte and the Blackout', lead:'A digital storm has shut down Byte City. Beat eight arcade missions, restore the power and unlock Advanced Keyboard Kingdom.', speech:'Chase, click, drag, scroll, use menus and type your way through the city.', world:'Foundation for Grade 2 and Grade 3', time:'About 25–30 minutes', device:'A keyboard and mouse or trackpad', completion:'Byte City is online', completionLead:'You restored every district and opened the road to Grade 3.', start:'Begin the rescue', resume:'Continue the rescue', nextTitle:'Advanced Keyboard Kingdom', nextCopy:'Continue into six playable Grade 3 keyboard missions.', nextLabel:'Continue to Grade 3' },
-      g3:{ id:'g3-keyboard-kingdom', version:2, steps:grade3Steps, kicker:'Grade 3 World · Chapter 2', title:'Byte and the Broken Code', lead:'A scrambled code has locked Keyboard Kingdom. Master shortcuts, keys, words, capitals, sentences and editing to restore it.', speech:'Your Grade 2 skills opened the gate. Now the keyboard is your arcade controller.', world:'Grade 3 keyboard adventure', time:'About 22–25 minutes', device:'A computer keyboard', completion:'Keyboard Kingdom restored', completionLead:'You mastered the Grade 3 keyboard campaign and earned access to the future Expert World.', start:'Enter Keyboard Kingdom', resume:'Continue Keyboard Kingdom', nextTitle:'Expert World', nextCopy:'Your Foundation and Grade 3 worlds are complete. Expert missions will continue the adventure.', nextLabel:'' },
+      g3:{ id:'g3-keyboard-kingdom', version:3, steps:grade3Steps, kicker:'Grade 3 World · Typing Academy', title:'Byte and the Keyboard Kingdom', lead:'Begin with the first keys, train both hands, then use accuracy and speed to defend the kingdom.', speech:'Every room teaches one keyboard skill. Watch me, practise it, then win the mission on your own.', world:'Grade 3 typing adventure', time:'About 30–35 minutes', device:'A computer keyboard', completion:'Keyboard Kingdom restored', completionLead:'You learned the keyboard from the beginning and defended the kingdom with accurate typing.', start:'Start typing training', resume:'Continue typing training', nextTitle:'Expert World', nextCopy:'Your Foundation and Grade 3 worlds are complete. Expert missions will continue the adventure.', nextLabel:'' },
     };
     const campaign = campaigns[requestedWorld];
     const ACTIVITY_ID = campaign.id;
@@ -825,6 +838,12 @@
       'copy-paste-shortcut': { title:'Send the message faster', action:'Highlight. Copy. Paste.', detail:'Use Ctrl on Windows or Command on Mac.', visual:'copy-shortcut' },
       'keyboard-defense': { title:'Fire the sky shield', action:'Type the glowing word.', detail:'Green letters are correct.', visual:'type' },
       'key-patrol': { title:'Wake the home row', action:'Press the glowing A, S, D or F key.', detail:'One key lights at a time. Follow the sequence.', visual:'type' },
+      'keyboard-map': { title:'Find your starting keys', action:'Put your pointer fingers on F and J.', detail:'Feel the small bump on each key.', visual:'type' },
+      'home-row-left': { title:'Place your left hand', action:'Rest one finger on A, S, D and F.', detail:'Press the glow without lifting your whole hand.', visual:'type' },
+      'home-row-right': { title:'Place your right hand', action:'Rest one finger on J, K, L and semicolon.', detail:'Press the glow with the finger already there.', visual:'type' },
+      'space-station': { title:'Make a space with your thumb', action:'Type each group, then tap Space.', detail:'A space separates words and groups.', visual:'type' },
+      'top-row-reach': { title:'Reach up and come home', action:'Press one glowing top-row key.', detail:'Return the finger to its home key afterward.', visual:'type' },
+      'bottom-row-reach': { title:'Reach down and come home', action:'Press one glowing bottom-row key.', detail:'Keep the rest of your hand near the home row.', visual:'type' },
       'word-blaster': { title:'Blast a whole word', action:'Type every letter from left to right.', detail:'Correct letters turn green as the cloud falls.', visual:'type' },
       'capital-charge': { title:'Hold Shift for capitals', action:'Hold Shift and press the glowing letter.', detail:'Do both actions together to make one capital.', visual:'type' },
       'sentence-engine': { title:'Build a complete sentence', action:'Type letters, spaces and the final full stop.', detail:'Copy the sentence exactly as it appears.', visual:'type' },
@@ -845,10 +864,16 @@
       'capital-charge':'Hold Shift down first, press the letter once, then release both keys.',
       'sentence-engine':'Check every space, capital letter and the final full stop before finishing.',
       'repair-bay':'Delete only the incorrect part, stop at the correct beginning, then type the repair.',
+      'keyboard-map':'Use the bumps on F and J to reset both hands without searching from the edge.',
+      'home-row-left':'Keep the left fingers resting on A, S, D and F and move only the needed finger.',
+      'home-row-right':'Keep the right fingers resting on J, K, L and semicolon and move only the needed finger.',
+      'space-station':'Use one thumb for Space and type exactly one space between each group.',
+      'top-row-reach':'Reach upward from the home row with the nearest finger, then return it home.',
+      'bottom-row-reach':'Reach downward from the home row with the nearest finger, then return it home.',
     };
     const missionGoals = PracticeScoring.missionGoals;
-    const keyboardStepIds = new Set(['copy-paste-menu','copy-paste-shortcut','keyboard-defense','key-patrol','word-blaster','capital-charge','sentence-engine','repair-bay']);
-    const inputTrackedStepIds = new Set(['keyboard-defense','key-patrol','word-blaster','capital-charge','sentence-engine','repair-bay']);
+    const keyboardStepIds = new Set(['copy-paste-menu','copy-paste-shortcut','keyboard-defense','key-patrol','keyboard-map','home-row-left','home-row-right','space-station','top-row-reach','bottom-row-reach','word-blaster','capital-charge','sentence-engine','repair-bay']);
+    const inputTrackedStepIds = new Set(['keyboard-defense','key-patrol','keyboard-map','home-row-left','home-row-right','space-station','top-row-reach','bottom-row-reach','word-blaster','capital-charge','sentence-engine','repair-bay']);
     const $ = (id) => document.getElementById(id);
 
     function applyCampaignCopy() {
@@ -1609,15 +1634,36 @@
         };
         window.addEventListener('keydown',activeKeyHandler);
         $('spaceArena').focus({preventScroll:true});
-      } else if (step.id === 'key-patrol') {
-        const sequence=['A','S','D','F','J','K','L',';'], targetKey=sequence[roundProgress%sequence.length];
-        area.innerHTML=`<div class="room-label">Key Patrol · Key ${roundProgress+1} of ${roundGoal()}</div><div class="key-arena" id="keyArena" tabindex="0"><img class="g3-mission-sprite console" src="/assets/practice/sprites-g3/home-row-console.webp" alt="" /><div class="key-prompt">Press the glowing home-row key</div><div class="key-row">${sequence.map((key)=>`<span class="arcade-key${key===targetKey?' active':''}" ${key===targetKey?'id="skillTarget"':''}>${key}</span>`).join('')}</div></div>`;
+      } else if (['key-patrol','keyboard-map','home-row-left','home-row-right','top-row-reach','bottom-row-reach'].includes(step.id)) {
+        const keyLessons={
+          'key-patrol':{keys:['A','S','D','F','J','K','L',';'],label:'Press the glowing home-row key',room:'Key Patrol',action:'home_keys',target:'home-row'},
+          'keyboard-map':{keys:['F','J','F','J','SPACE','ENTER'],label:'Find and press the glowing anchor key',room:'Keyboard Map',action:'find_keys',target:'anchor-keys'},
+          'home-row-left':{keys:['A','S','D','F','D','S','A','F','S','D'],label:'Use your left hand: A S D F',room:'Left-Hand Launch',action:'home_keys',target:'left-home-row'},
+          'home-row-right':{keys:['J','K','L',';','L','K','J',';','K','L'],label:'Use your right hand: J K L ;',room:'Right-Hand Rescue',action:'home_keys',target:'right-home-row'},
+          'top-row-reach':{keys:['Q','W','E','R','T','Y','U','I','O','P','E','I'],label:'Reach up, press the glow, then come home',room:'Sky Key Climb',action:'row_keys',target:'top-row'},
+          'bottom-row-reach':{keys:['Z','X','C','V','B','N','M','C','V','N','X','M'],label:'Reach down, press the glow, then come home',room:'Tunnel Key Run',action:'row_keys',target:'bottom-row'},
+        };
+        const lesson=keyLessons[step.id], targetKey=lesson.keys[roundProgress%lesson.keys.length];
+        const displayKeys=targetKey==='SPACE'?['SPACE']:targetKey==='ENTER'?['ENTER']:lesson.keys.filter((key,index,array)=>array.indexOf(key)===index);
+        area.innerHTML=`<div class="room-label">${lesson.room} · Key ${roundProgress+1} of ${roundGoal()}</div><div class="key-arena" id="keyArena" tabindex="0"><img class="g3-mission-sprite console" src="/assets/practice/sprites-g3/home-row-console.webp" alt="" /><div class="key-prompt">${lesson.label}</div><div class="key-row">${displayKeys.map((key)=>`<span class="arcade-key${key===targetKey?' active':''}" ${key===targetKey?'id="skillTarget"':''}>${key}</span>`).join('')}</div></div>`;
         activeKeyHandler=(event)=>{
-          if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
-          if (event.key.toUpperCase() !== targetKey) return registerWrong(`Find the glowing ${targetKey} key.`);
-          recordCorrectInput(); clearActiveInput(); completeInteraction('home_keys','home-row');
+          if (event.metaKey || event.ctrlKey || event.altKey || (event.key.length !== 1 && !['Enter'].includes(event.key))) return;
+          const pressed=event.key===' '?'SPACE':event.key==='Enter'?'ENTER':event.key.toUpperCase();
+          if (pressed !== targetKey) return registerWrong(`Find the glowing ${targetKey} key.`);
+          event.preventDefault(); recordCorrectInput(); clearActiveInput(); completeInteraction(lesson.action,lesson.target);
         };
         window.addEventListener('keydown',activeKeyHandler); $('keyArena').focus({preventScroll:true});
+      } else if (step.id === 'space-station') {
+        const patterns=['AS DF','JK LL','FJ FJ','ASK DAD'], pattern=patterns[roundProgress%patterns.length]; let typedCount=0;
+        area.innerHTML=`<div class="room-label">Space Station · Message ${roundProgress+1} of ${roundGoal()}</div><div class="typing-card typing-card-with-sprite" id="typingCard" tabindex="0"><img class="g3-mission-sprite console" src="/assets/practice/sprites-g3/home-row-console.webp" alt="" /><div class="typing-copy"><div class="key-prompt">Type the groups. Use your thumb for the space.</div><div class="typing-target" id="skillTarget">${keyboardWord(pattern,0)}</div><div class="typing-status">${pattern.replace(' ',' · SPACE · ')}</div></div></div>`;
+        activeKeyHandler=(event)=>{
+          if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
+          const expected=pattern[typedCount], pressed=event.key.toUpperCase();
+          if(pressed!==expected) return registerWrong(expected===' '?'Tap Space once with your thumb.':`Find ${expected} next.`);
+          event.preventDefault(); typedCount+=1; recordCorrectInput(); $('skillTarget').innerHTML=keyboardWord(pattern,typedCount); playTone(expected===' '?360:500+(typedCount*18));
+          if(typedCount===pattern.length){ clearActiveInput(); completeInteraction('type_pattern','space-pattern'); }
+        };
+        window.addEventListener('keydown',activeKeyHandler); $('typingCard').focus({preventScroll:true});
       } else if (step.id === 'word-blaster') {
         const waves=[
           ['BUG','CODE','STAR'],

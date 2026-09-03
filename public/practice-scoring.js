@@ -18,6 +18,12 @@
     'capital-charge': 5,
     'sentence-engine': 2,
     'repair-bay': 5,
+    'keyboard-map': 6,
+    'home-row-left': 10,
+    'home-row-right': 10,
+    'space-station': 4,
+    'top-row-reach': 12,
+    'bottom-row-reach': 12,
   });
 
   const missionTargetSeconds = Object.freeze({
@@ -35,6 +41,12 @@
     'capital-charge': 50,
     'sentence-engine': 75,
     'repair-bay': 75,
+    'keyboard-map': 45,
+    'home-row-left': 55,
+    'home-row-right': 55,
+    'space-station': 70,
+    'top-row-reach': 70,
+    'bottom-row-reach': 70,
   });
 
   function boundedNumber(value, min, max, fallback = min) {

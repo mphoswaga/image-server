@@ -233,16 +233,16 @@ test('a Foundation live participant continues into Grade 3 without rejoining', (
     });
   }
   const grade3 = live.checkpointRoom(room.code, joined.token, {
-    checkpointId: 'tara-rapid-relay',
+    checkpointId: 'tara-keyboard-map',
     activityId: 'g3-keyboard-kingdom',
-    stepId: 'copy-paste-shortcut',
-    evidence: { action: 'shortcut_copy_paste', target: 'shortcut-console' },
+    stepId: 'keyboard-map',
+    evidence: { action: 'find_keys', target: 'anchor-keys' },
     arcadeScore: 360,
   });
   assert.equal(grade3.participant.activityId, 'g3-keyboard-kingdom');
   assert.equal(grade3.participant.missionsCompleted, 1);
   assert.equal(grade3.participant.totalMissionsCompleted, 9);
-  assert.equal(grade3.participant.missionCount, 6);
+  assert.equal(grade3.participant.missionCount, 10);
   assert.ok(grade3.participant.score > 360);
 });
 
