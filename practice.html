@@ -220,7 +220,12 @@
     .blaster-command { position:absolute; z-index:9; left:14px; right:14px; bottom:8px; display:flex; justify-content:space-between; gap:12px; color:#c9d8e8; font-size:11px; font-weight:800; pointer-events:none; }
     .blaster-command b { color:#8cecf4; }
     .blaster-lock { color:#f8c342; }
-    .key-arena { width:min(720px,calc(100% - 30px)); min-height:285px; display:grid; place-items:center; gap:22px; padding:34px; border:2px solid #6657ad; background:radial-gradient(circle at center,rgba(168,85,247,.20),transparent 54%),#090b24; }
+    .key-arena { width:min(720px,calc(100% - 30px)); min-height:285px; position:relative; overflow:hidden; display:grid; place-items:center; gap:22px; padding:44px 34px 34px; border:2px solid #6657ad; background:radial-gradient(circle at center,rgba(168,85,247,.20),transparent 54%),#090b24; }
+    .key-arena:before,.typing-card:before { content:""; position:absolute; inset:0; pointer-events:none; background:linear-gradient(105deg,transparent 0 43%,rgba(140,236,244,.10) 48%,transparent 53%); transform:translateX(-110%); animation:academySweep 4s ease-in-out infinite; }
+    .key-arena>* ,.typing-card>* { position:relative; z-index:1; }
+    .academy-meter { position:absolute; z-index:3; top:13px; right:14px; display:flex; align-items:center; gap:5px; padding:6px 8px; border:1px solid #4d6b91; background:rgba(5,14,32,.82); color:#b9cae0; font-size:10px; font-weight:900; text-transform:uppercase; }
+    .academy-pip { width:12px; height:7px; border:1px solid #52709a; background:#14294c; transform:skewX(-16deg); }
+    .academy-pip.on { border-color:#69e3a7; background:#35ca84; box-shadow:0 0 8px rgba(105,227,167,.65); }
     .g3-mission-sprite { width:112px; height:96px; object-fit:contain; pointer-events:none; user-select:none; filter:drop-shadow(0 0 15px rgba(37,205,220,.55)); animation:g3SpriteFloat 1.8s ease-in-out infinite alternate; }
     .g3-mission-sprite.console { width:142px; height:106px; margin-bottom:-14px; }
     .g3-mission-sprite.capital { width:120px; height:110px; margin-bottom:-18px; filter:drop-shadow(0 0 16px rgba(248,195,66,.68)); }
@@ -231,7 +236,7 @@
     .key-row { display:flex; justify-content:center; flex-wrap:wrap; gap:12px; }
     .arcade-key { min-width:72px; min-height:70px; display:grid; place-items:center; border:2px solid #4d4478; border-radius:8px; background:#151735; color:#766f9a; font-size:27px; font-weight:900; box-shadow:0 8px 0 #08091b; }
     .arcade-key.active { border-color:#c69cff; background:#603b8b; color:#fff; box-shadow:0 8px 0 #251b3d,0 0 30px rgba(198,156,255,.55); animation:keyGlow 1s ease-in-out infinite; }
-    .typing-card { width:min(670px,calc(100% - 34px)); padding:28px; border:2px solid #6657ad; background:#0b102b; text-align:center; box-shadow:0 16px 36px rgba(0,0,0,.32); }
+    .typing-card { width:min(670px,calc(100% - 34px)); position:relative; overflow:hidden; padding:38px 28px 28px; border:2px solid #6657ad; background:#0b102b; text-align:center; box-shadow:0 16px 36px rgba(0,0,0,.32); }
     .typing-target { margin:14px 0; color:#fff; font-size:clamp(24px,4vw,40px); font-weight:900; letter-spacing:3px; overflow-wrap:anywhere; }
     .typing-target .typed { color:#69e3a7; text-shadow:0 0 10px rgba(105,227,167,.7); }
     .typing-target .wrong { color:#f05b6b; text-decoration:line-through; }
@@ -516,6 +521,7 @@
     @keyframes demoWheel { 50%{transform:translateY(18px)} }
     @keyframes packetFly { 0%,100%{transform:translateX(-7px) rotate(-5deg)} 50%{transform:translateX(7px) rotate(5deg)} }
     @keyframes g3SpriteFloat { from{transform:translateY(4px)} to{transform:translateY(-5px)} }
+    @keyframes academySweep { 0%,24%{transform:translateX(-110%)} 62%,100%{transform:translateX(110%)} }
     @keyframes spin { to{transform:rotate(360deg)} }
     @keyframes demoType { 0%{width:0} 75%,100%{width:78px} }
     @keyframes demoSelect { 0%,20%,100%{transform:translate(0,0)} 48%,75%{transform:translate(118px,-42px)} }
@@ -1492,6 +1498,12 @@
       return `<span class="typed">${esc(word.slice(0,typedCount))}</span>${esc(word.slice(typedCount))}`;
     }
 
+    function academyMeter() {
+      if(requestedWorld!=='typing') return '';
+      const goal=roundGoal();
+      return `<div class="academy-meter"><span>Power</span>${Array.from({length:goal},(_,index)=>`<i class="academy-pip${index<roundProgress?' on':''}"></i>`).join('')}</div>`;
+    }
+
     function renderTask() {
       const step = currentStep();
       const area = $('taskArea');
@@ -1662,28 +1674,28 @@
       } else if (['key-patrol','keyboard-map','home-row-left','home-row-right','top-row-reach','bottom-row-reach'].includes(step.id)) {
         const keyLessons={
           'key-patrol':{keys:['A','S','D','F','J','K','L',';'],label:'Press the glowing home-row key',room:'Key Patrol',action:'home_keys',target:'home-row'},
-          'keyboard-map':{keys:['F','J','F','J','SPACE','ENTER'],label:'Find and press the glowing anchor key',room:'Keyboard Map',action:'find_keys',target:'anchor-keys'},
-          'home-row-left':{keys:['A','S','D','F','D','S','A','F','S','D'],label:'Use your left hand: A S D F',room:'Left-Hand Launch',action:'home_keys',target:'left-home-row'},
-          'home-row-right':{keys:['J','K','L',';','L','K','J',';','K','L'],label:'Use your right hand: J K L ;',room:'Right-Hand Rescue',action:'home_keys',target:'right-home-row'},
-          'top-row-reach':{keys:['Q','W','E','R','T','Y','U','I','O','P','E','I'],label:'Reach up, press the glow, then come home',room:'Sky Key Climb',action:'row_keys',target:'top-row'},
-          'bottom-row-reach':{keys:['Z','X','C','V','B','N','M','C','V','N','X','M'],label:'Reach down, press the glow, then come home',room:'Tunnel Key Run',action:'row_keys',target:'bottom-row'},
+          'keyboard-map':{keys:['f','j','f','j','SPACE','ENTER'],label:'Find the two home keys: f and j',room:'Keyboard Map',action:'find_keys',target:'anchor-keys'},
+          'home-row-left':{keys:['a','s','d','f','d','s','a','f','s','d'],label:'Use your left hand: a s d f',room:'Left-Hand Launch',action:'home_keys',target:'left-home-row'},
+          'home-row-right':{keys:['j','k','l',';','l','k','j',';','k','l'],label:'Use your right hand: j k l ;',room:'Right-Hand Rescue',action:'home_keys',target:'right-home-row'},
+          'top-row-reach':{keys:['q','w','e','r','t','y','u','i','o','p','e','i'],label:'Reach up, press the lowercase glow, then come home',room:'Sky Key Climb',action:'row_keys',target:'top-row'},
+          'bottom-row-reach':{keys:['z','x','c','v','b','n','m','c','v','n','x','m'],label:'Reach down, press the lowercase glow, then come home',room:'Tunnel Key Run',action:'row_keys',target:'bottom-row'},
         };
         const lesson=keyLessons[step.id], targetKey=lesson.keys[roundProgress%lesson.keys.length];
         const displayKeys=targetKey==='SPACE'?['SPACE']:targetKey==='ENTER'?['ENTER']:lesson.keys.filter((key,index,array)=>array.indexOf(key)===index);
-        area.innerHTML=`<div class="room-label">${lesson.room} · Key ${roundProgress+1} of ${roundGoal()}</div><div class="key-arena" id="keyArena" tabindex="0"><img class="g3-mission-sprite console" src="/assets/practice/sprites-g3/home-row-console.webp" alt="" /><div class="key-prompt">${lesson.label}</div><div class="key-row">${displayKeys.map((key)=>`<span class="arcade-key${key===targetKey?' active':''}" ${key===targetKey?'id="skillTarget"':''}>${key}</span>`).join('')}</div></div>`;
+        area.innerHTML=`<div class="room-label">${lesson.room} · Key ${roundProgress+1} of ${roundGoal()}</div><div class="key-arena" id="keyArena" tabindex="0">${academyMeter()}<img class="g3-mission-sprite console" src="/assets/practice/sprites-g3/home-row-console.webp" alt="" /><div class="key-prompt">${lesson.label}</div><div class="key-row">${displayKeys.map((key)=>`<span class="arcade-key${key===targetKey?' active':''}" ${key===targetKey?'id="skillTarget"':''}>${key}</span>`).join('')}</div></div>`;
         activeKeyHandler=(event)=>{
           if (event.metaKey || event.ctrlKey || event.altKey || (event.key.length !== 1 && !['Enter'].includes(event.key))) return;
-          const pressed=event.key===' '?'SPACE':event.key==='Enter'?'ENTER':event.key.toUpperCase();
+          const pressed=event.key===' '?'SPACE':event.key==='Enter'?'ENTER':step.id==='key-patrol'?event.key.toUpperCase():event.key;
           if (pressed !== targetKey) return registerWrong(`Find the glowing ${targetKey} key.`);
           event.preventDefault(); recordCorrectInput(); clearActiveInput(); completeInteraction(lesson.action,lesson.target);
         };
         window.addEventListener('keydown',activeKeyHandler); $('keyArena').focus({preventScroll:true});
       } else if (step.id === 'space-station') {
-        const patterns=['AS DF','JK LL','FJ FJ','ASK DAD'], pattern=patterns[roundProgress%patterns.length]; let typedCount=0;
-        area.innerHTML=`<div class="room-label">Space Station · Message ${roundProgress+1} of ${roundGoal()}</div><div class="typing-card typing-card-with-sprite" id="typingCard" tabindex="0"><img class="g3-mission-sprite console" src="/assets/practice/sprites-g3/home-row-console.webp" alt="" /><div class="typing-copy"><div class="key-prompt">Type the groups. Use your thumb for the space.</div><div class="typing-target" id="skillTarget">${keyboardWord(pattern,0)}</div><div class="typing-status">${pattern.replace(' ',' · SPACE · ')}</div></div></div>`;
+        const patterns=['as df','jk ll','fj fj','ask dad'], pattern=patterns[roundProgress%patterns.length]; let typedCount=0;
+        area.innerHTML=`<div class="room-label">Space Station · Message ${roundProgress+1} of ${roundGoal()}</div><div class="typing-card typing-card-with-sprite" id="typingCard" tabindex="0">${academyMeter()}<img class="g3-mission-sprite console" src="/assets/practice/sprites-g3/home-row-console.webp" alt="" /><div class="typing-copy"><div class="key-prompt">Type the groups. Use your thumb for the space.</div><div class="typing-target" id="skillTarget">${keyboardWord(pattern,0)}</div><div class="typing-status">${pattern.replace(' ',' - SPACE - ')}</div></div></div>`;
         activeKeyHandler=(event)=>{
           if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
-          const expected=pattern[typedCount], pressed=event.key.toUpperCase();
+          const expected=pattern[typedCount], pressed=event.key;
           if(pressed!==expected) return registerWrong(expected===' '?'Tap Space once with your thumb.':`Find ${expected} next.`);
           event.preventDefault(); typedCount+=1; recordCorrectInput(); $('skillTarget').innerHTML=keyboardWord(pattern,typedCount); playTone(expected===' '?360:500+(typedCount*18));
           if(typedCount===pattern.length){ clearActiveInput(); completeInteraction('type_pattern','space-pattern'); }
@@ -1699,7 +1711,7 @@
           ['SCREEN','FOLDER','DELETE'],
           ['KEYBOARD'],
         ];
-        const words=waves[roundProgress%waves.length], boss=roundProgress===roundGoal()-1;
+        const words=(requestedWorld==='typing'?waves.map(group=>group.map(word=>word.toLowerCase())):waves)[roundProgress%waves.length], boss=roundProgress===roundGoal()-1;
         const positions=words.length===1?[50]:[22,50,78];
         let activeTarget=null, typedCount=0, shield=3, blasterResolving=false;
         const shieldCells=()=>Array.from({length:3},(_,index)=>`<span class="shield-cell${index>=shield?' empty':''}"></span>`).join('');
@@ -1737,7 +1749,7 @@
           if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
           if (blasterResolving) return;
           event.preventDefault();
-          const key=event.key.toUpperCase();
+          const key=requestedWorld==='typing'?event.key:event.key.toUpperCase();
           if(!activeTarget){
             activeTarget=targets.find((target)=>target.isConnected&&target.dataset.word.startsWith(key))||null;
             if(!activeTarget) return loseShield('No incoming word starts with that letter.');
@@ -1787,17 +1799,17 @@
         };
         window.addEventListener('keydown',activeKeyHandler); $('keyArena').focus({preventScroll:true});
       } else if (step.id === 'sentence-engine') {
-        const sentences=['I CAN CODE.','BYTE IS READY.'], sentence=sentences[roundProgress%sentences.length]; let typedCount=0;
+        const sentences=requestedWorld==='typing'?['I can type.','Byte is ready.']:['I CAN CODE.','BYTE IS READY.'], sentence=sentences[roundProgress%sentences.length]; let typedCount=0;
         area.innerHTML=`<div class="room-label">Sentence Engine · Line ${roundProgress+1} of ${roundGoal()}</div><div class="typing-card typing-card-with-sprite" id="typingCard" tabindex="0"><img class="g3-mission-sprite" src="/assets/practice/sprites-g3/sentence-engine.webp" alt="" /><div class="typing-copy"><div class="key-prompt">Type this complete sentence</div><div class="typing-target" id="skillTarget">${keyboardWord(sentence,0)}</div><div class="typing-status">Spaces and the full stop count.</div></div></div>`;
         activeKeyHandler=(event)=>{
           if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
-          if (event.key.toUpperCase() !== sentence[typedCount]) return registerWrong(`Next: ${sentence[typedCount]===' '?'space':sentence[typedCount]}`);
+          if (event.key !== sentence[typedCount]) return registerWrong(`Next: ${sentence[typedCount]===' '?'space':sentence[typedCount]}. Match the capital or small letter shown.`);
           typedCount += 1; recordCorrectInput(); $('skillTarget').innerHTML=keyboardWord(sentence,typedCount); playTone(500+(typedCount*18));
           if (typedCount === sentence.length) { clearActiveInput(); completeInteraction('type_sentence','sentence-signal'); }
         };
         window.addEventListener('keydown',activeKeyHandler); $('typingCard').focus({preventScroll:true});
       } else if (step.id === 'repair-bay') {
-        const repairs=[['COT','CAT'],['HAT','HIT'],['BUG','BAG'],['PEN','PIN'],['DOG','DIG']], [wrong,correct]=repairs[roundProgress%repairs.length]; let value=wrong;
+        const repairWords=requestedWorld==='typing'?[['cot','cat'],['hat','hit'],['bug','bag'],['pen','pin'],['dog','dig']]:[['COT','CAT'],['HAT','HIT'],['BUG','BAG'],['PEN','PIN'],['DOG','DIG']], [wrong,correct]=repairWords[roundProgress%repairWords.length]; let value=wrong;
         const shared=(()=>{let index=0;while(index<wrong.length&&wrong[index]===correct[index])index+=1;return index;})();
         area.innerHTML=`<div class="room-label">Repair Bay · Word ${roundProgress+1} of ${roundGoal()}</div><div class="typing-card typing-card-with-sprite" id="typingCard" tabindex="0"><img class="g3-mission-sprite" src="/assets/practice/sprites-g3/repair-drone.webp" alt="" /><div class="typing-copy"><div class="key-prompt">Repair the broken word to make <strong>${correct}</strong></div><div class="typing-target" id="skillTarget"></div><div class="typing-status">Use Backspace first, then type the missing letters.</div></div></div>`;
         const renderRepair=()=>{ const matching=Array.from(value).findIndex((char,index)=>char!==correct[index]), split=matching===-1?value.length:matching; $('skillTarget').innerHTML=`<span class="typed">${esc(value.slice(0,split))}</span><span class="wrong">${esc(value.slice(split))}</span>`; };
@@ -1806,7 +1818,7 @@
           if (event.key==='Backspace') { event.preventDefault(); if(value.length>shared){value=value.slice(0,-1);recordCorrectInput();renderRepair();playTone(260);return;} return registerWrong('The correct beginning must stay. Now type the missing letter.'); }
           if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
           const expected=correct[value.length];
-          if (event.key.toUpperCase()!==expected) return registerWrong(`Type ${expected} next.`);
+          if (event.key!==expected) return registerWrong(`Type ${expected} next.`);
           value += expected; recordCorrectInput(); renderRepair(); playTone(560);
           if (value===correct) { clearActiveInput(); completeInteraction('repair_word','repaired-code'); }
         };

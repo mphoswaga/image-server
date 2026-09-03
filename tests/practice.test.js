@@ -302,6 +302,11 @@ test('the typing academy starts at the keyboard and builds one row at a time', (
   assert.match(player, /Use a thumb for Space/);
   assert.match(player, /Reach up and come home/);
   assert.match(player, /Reach down and come home/);
+  assert.match(player, /patterns=\['as df','jk ll','fj fj','ask dad'\]/);
+  assert.match(player, /word\.toLowerCase\(\)/);
+  assert.match(player, /\['I can type\.','Byte is ready\.'\]/);
+  assert.match(player, /event\.key !== sentence\[typedCount\]/);
+  assert.match(player, /event\.key\.toUpperCase\(\) !== letter \|\| !event\.shiftKey/);
 });
 
 test('Typing Academy is a separate teacher-selectable activity', () => {
