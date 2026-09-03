@@ -18,6 +18,7 @@ const evidenceByStep = {
   'copy-paste': { action: 'copy_paste', target: 'relay-console' },
   'keyboard-defense': { action: 'type_word', target: 'byte-signal' },
   'copy-paste-shortcut': { action: 'shortcut_copy_paste', target: 'shortcut-console' },
+  'file-base': { action: 'folder_save', target: 'mission-report' },
   'key-patrol': { action: 'home_keys', target: 'home-row' },
   'word-blaster': { action: 'type_word', target: 'shield-word' },
   'capital-charge': { action: 'shift_letter', target: 'capital-signal' },
@@ -57,10 +58,10 @@ test('catalog exposes the latest arcade activity without evidence secrets', () =
 
 test('Grade 3 continues into its own recorded keyboard campaign', () => {
   const activity = practice.listActivities().find((item) => item.id === 'g3-keyboard-kingdom');
-  assert.equal(activity.version, 2);
+  assert.equal(activity.version, 3);
   assert.equal(activity.gradeBand, 'Grade 3');
   assert.deepEqual(activity.steps.map((step) => step.id), [
-    'copy-paste-shortcut', 'key-patrol', 'word-blaster', 'capital-charge', 'sentence-engine', 'repair-bay',
+    'file-base', 'copy-paste-shortcut', 'key-patrol', 'word-blaster', 'capital-charge', 'sentence-engine', 'repair-bay',
   ]);
   const { attempt } = practice.createAttempt({ studentId: 'G3-1', studentName: 'Gina', activityId: activity.id });
   for (const step of activity.steps) checkpoint(attempt, step.id);
@@ -125,6 +126,9 @@ test('all legacy Foundation versions remain available for unfinished attempts', 
 });
 
 test('the original Grade 3 campaign remains available for unfinished attempts', () => {
+  const previous = practice.getActivity('g3-keyboard-kingdom', 2);
+  assert.equal(previous.steps.length, 6);
+  assert.equal(previous.steps.some((step) => step.id === 'file-base'), false);
   const legacy = practice.getActivity('g3-keyboard-kingdom', 1);
   assert.equal(legacy.version, 1);
   assert.equal(legacy.steps.length, 5);
@@ -249,6 +253,9 @@ test('every Grade 2 mission keeps its arcade sprite asset', () => {
 test('every Grade 3 mission keeps its Keyboard Kingdom sprite asset', () => {
   const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
   for (const asset of [
+    'file-folder-closed.webp',
+    'file-folder-open.webp',
+    'school-document.webp',
     'rapid-relay.webp',
     'home-row-console.webp',
     'code-ship.webp',
@@ -259,6 +266,19 @@ test('every Grade 3 mission keeps its Keyboard Kingdom sprite asset', () => {
     assert.match(player, new RegExp(`/assets/practice/sprites-g3/${asset}`));
     assert.equal(fs.existsSync(path.join(__dirname, '..', 'public', 'assets', 'practice', 'sprites-g3', asset)), true);
   }
+  assert.match(player, /bg_file_base\.jpeg/);
+  assert.equal(fs.existsSync(path.join(__dirname, '..', 'public', 'assets', 'practice', 'bg_file_base.jpeg')), true);
+});
+
+test('File Base teaches the complete create, save and reopen workflow', () => {
+  const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
+  const teacher = fs.readFileSync(path.join(__dirname, '..', 'practice-teacher.html'), 'utf8');
+  assert.match(player, /Right-click an empty part of the desktop/);
+  assert.match(player, /Choose New, then Folder/);
+  assert.match(player, /Open File, then choose Save As/);
+  assert.match(player, /Select My Projects before saving/);
+  assert.match(player, /Double-click Mission Report/);
+  assert.match(teacher, /g3:file-base/);
 });
 
 test('Byte feedback states are present and genuinely transparent', async () => {

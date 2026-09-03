@@ -34,6 +34,25 @@ const ACTIVITIES = Object.freeze([
   }),
   Object.freeze({
     id: 'g3-keyboard-kingdom',
+    version: 3,
+    gradeBand: 'Grade 3',
+    title: 'Advanced Keyboard Kingdom',
+    description: 'Create folders, save files and use keyboard skills to restore the kingdom.',
+    estimatedMinutes: 25,
+    device: 'computer',
+    steps: Object.freeze([
+      Object.freeze({ id: 'file-base', title: 'File Base', action: 'folder_save', target: 'mission-report' }),
+      Object.freeze({ id: 'copy-paste-shortcut', title: 'Rapid Relay', action: 'shortcut_copy_paste', target: 'shortcut-console' }),
+      Object.freeze({ id: 'key-patrol', title: 'Key Patrol', action: 'home_keys', target: 'home-row' }),
+      Object.freeze({ id: 'word-blaster', title: 'Word Blaster', action: 'type_word', target: 'shield-word' }),
+      Object.freeze({ id: 'capital-charge', title: 'Capital Charge', action: 'shift_letter', target: 'capital-signal' }),
+      Object.freeze({ id: 'sentence-engine', title: 'Sentence Engine', action: 'type_sentence', target: 'sentence-signal' }),
+      Object.freeze({ id: 'repair-bay', title: 'Repair Bay', action: 'repair_word', target: 'repaired-code' }),
+    ]),
+  }),
+  // Version 2 remains available for attempts started before File Base.
+  Object.freeze({
+    id: 'g3-keyboard-kingdom',
     version: 2,
     gradeBand: 'Grade 3',
     title: 'Advanced Keyboard Kingdom',

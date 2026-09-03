@@ -181,6 +181,40 @@
     .command-desktop { width:min(720px,calc(100% - 30px)); height:290px; position:relative; border:2px solid #5ec9dd; background-color:#08162f; background-image:linear-gradient(rgba(5,14,32,.10),rgba(5,14,32,.48)),url('/assets/practice/bg_command_deck.jpeg'); background-position:center; background-size:cover; box-shadow:0 18px 40px rgba(0,0,0,.38); }
     .command-folder { position:absolute; left:17%; top:28%; width:142px; min-height:128px; display:grid; place-items:center; gap:0; padding:3px; border:0; background:transparent; color:#fff; font-weight:900; cursor:context-menu; }
     .command-folder .game-sprite { height:104px; filter:drop-shadow(0 0 15px rgba(37,205,220,.72)); }
+    .room-file-base { background:#07162e; }
+    .file-base-stage { width:min(820px,calc(100% - 24px)); min-height:310px; position:relative; overflow:hidden; border:2px solid #25cddc; border-radius:14px; background-image:linear-gradient(rgba(3,13,33,.18),rgba(3,13,33,.58)),url('/assets/practice/bg_file_base.jpeg'); background-position:center; background-size:cover; box-shadow:0 18px 42px rgba(0,0,0,.45),0 0 28px rgba(37,205,220,.2); color:#fff; }
+    .file-object { position:absolute; display:grid; justify-items:center; gap:2px; width:150px; padding:8px; border:2px solid transparent; border-radius:10px; background:transparent; color:#fff; font-family:inherit; font-size:15px; font-weight:800; cursor:pointer; text-shadow:0 2px 4px #07162e; }
+    .file-object:hover,.file-object.selected { border-color:#8cecf4; background:rgba(7,22,46,.72); }
+    .file-object img { width:112px; height:96px; object-fit:contain; filter:drop-shadow(0 8px 12px rgba(0,0,0,.48)); pointer-events:none; }
+    .file-object.folder { left:11%; top:29%; }
+    .file-object.document { right:11%; top:29%; }
+    .file-menu { position:absolute; z-index:8; display:none; width:190px; padding:7px; border:2px solid #25cddc; border-radius:8px; background:#fff; box-shadow:0 15px 35px rgba(0,0,0,.42); color:#12345b; }
+    .file-menu.show { display:grid; }
+    .file-menu button { min-height:42px; padding:8px 12px; border:0; border-radius:5px; background:#fff; color:#12345b; text-align:left; font-family:inherit; font-size:15px; font-weight:800; cursor:pointer; }
+    .file-menu button:hover,.file-menu button:focus { background:#dff7fa; outline:2px solid #25cddc; }
+    .file-rename { position:absolute; left:9%; top:66%; width:190px; padding:9px 10px; border:3px solid #f8c342; border-radius:7px; font-family:inherit; font-size:16px; font-weight:800; }
+    .file-coach { position:absolute; left:50%; bottom:14px; transform:translateX(-50%); width:max-content; max-width:90%; padding:9px 14px; border-radius:8px; background:rgba(7,22,46,.92); color:#fff; font-weight:800; text-align:center; }
+    .file-editor { position:absolute; inset:24px 7%; border:2px solid #8cecf4; border-radius:10px; overflow:hidden; background:#f7fbff; color:#12345b; box-shadow:0 16px 30px rgba(0,0,0,.36); }
+    .file-editor-bar { height:52px; display:flex; align-items:center; gap:8px; padding:7px 10px; background:#12345b; }
+    .file-editor-bar button { min-height:36px; padding:7px 15px; border:1px solid #8cecf4; border-radius:6px; background:#fff; color:#12345b; font-weight:900; }
+    .file-paper { min-height:190px; padding:28px; background:linear-gradient(#fff,#edf7ff); font-size:19px; line-height:1.55; }
+    .file-paper h3 { margin:0 0 12px; font-size:25px; }
+    .save-dialog { position:absolute; z-index:12; inset:35px 12%; display:none; grid-template-columns:170px 1fr; border:3px solid #25cddc; border-radius:12px; overflow:hidden; background:#fff; color:#12345b; box-shadow:0 20px 50px rgba(0,0,0,.5); }
+    .save-dialog.show { display:grid; }
+    .save-locations { padding:18px 12px; background:#e8f7fa; }
+    .save-locations button { width:100%; margin-bottom:8px; padding:10px; border:2px solid transparent; border-radius:6px; background:transparent; color:#12345b; text-align:left; font-weight:900; }
+    .save-locations button.selected { border-color:#25cddc; background:#fff; }
+    .save-fields { display:grid; align-content:center; gap:10px; padding:22px; }
+    .save-fields label { font-weight:900; }
+    .save-fields input { min-height:44px; padding:9px 11px; border:2px solid #8aa5bd; border-radius:6px; font:700 16px inherit; }
+    .save-fields .btn { justify-self:end; }
+    .folder-window { position:absolute; inset:28px 8%; border:2px solid #8cecf4; border-radius:10px; background:rgba(238,250,255,.96); color:#12345b; box-shadow:0 18px 38px rgba(0,0,0,.4); }
+    .folder-window-head { padding:12px 16px; background:#12345b; color:#fff; font-weight:900; }
+    .folder-window .file-object { left:calc(50% - 75px); top:70px; color:#12345b; text-shadow:none; }
+    .file-tutorial-sequence { width:94%; display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    .file-tutorial-step { min-height:150px; display:grid; place-items:center; align-content:center; gap:4px; padding:10px; border:2px solid rgba(140,236,244,.7); border-radius:10px; background:rgba(7,22,46,.82); color:#fff; font-weight:900; }
+    .file-tutorial-step img { width:80px; height:72px; object-fit:contain; }
+    .file-tutorial-step b { width:28px; height:28px; display:grid; place-items:center; border-radius:50%; background:#25cddc; color:#07162e; }
     .context-menu { position:absolute; z-index:8; display:none; width:170px; padding:6px 0; border:1px solid #25cddc; background:#0c1d3b; box-shadow:0 14px 34px rgba(0,0,0,.6),0 0 18px rgba(37,205,220,.25); }
     .context-menu.show { display:block; animation:targetPop .14s ease both; }
     .context-item { width:100%; padding:11px 14px; border:0; background:transparent; color:#dce8f3; text-align:left; font-weight:800; cursor:pointer; }
@@ -430,6 +464,7 @@
     .briefing-scroll-find .tutorial-visual { background-image:linear-gradient(rgba(5,14,32,.16),rgba(5,14,32,.52)),url('/assets/practice/bg_signal_tower.jpeg'); }
     .briefing-copy-paste-menu .tutorial-visual { background-image:linear-gradient(rgba(17,9,43,.16),rgba(17,9,43,.56)),url('/assets/practice/bg_message_relay.jpeg'); }
     .briefing-keyboard-defense .tutorial-visual { background-image:linear-gradient(rgba(2,6,23,.08),rgba(2,6,23,.48)),url('/assets/practice/bg_sky_shield.jpeg'); }
+    .briefing-file-base .tutorial-visual { background-image:linear-gradient(rgba(3,13,33,.12),rgba(3,13,33,.48)),url('/assets/practice/bg_file_base.jpeg'); }
     .tutorial-copy b { color:#0a92ad; }
     .tutorial-copy h3 { font-size:clamp(23px,3vw,34px); }
     .tutorial-copy p { font-size:clamp(18px,2.3vw,24px); line-height:1.25; }
@@ -624,6 +659,12 @@
       .relay-panel { min-height:145px; }
       .tutorial { grid-template-columns:1fr; padding:18px; }
       .tutorial-visual { min-height:170px; }
+      .file-tutorial-sequence { grid-template-columns:1fr; padding:10px 0; }
+      .file-tutorial-step { min-height:100px; grid-template-columns:auto auto 1fr; justify-content:start; }
+      .file-tutorial-step img { width:62px; height:58px; }
+      .save-dialog { inset:16px 5%; grid-template-columns:1fr; }
+      .save-locations { display:flex; gap:8px; padding:10px; }
+      .save-locations button { margin:0; }
       .quest-hero { grid-template-columns:1fr; }
       .bot-stage { min-height:280px; }
       .bot-image { width:230px; }
@@ -829,6 +870,9 @@
         hints:['Use Backspace to remove the wrong letters.','Stop deleting when the beginning matches.','Then type the missing correct letters.'] },
     ];
     const grade3Steps = [
+      { id:'file-base', title:'File Base', action:'folder_save', target:'mission-report',
+        show:'Build a safe home for your work: create a folder, save a file inside it, then reopen it.', independent:'Create My Projects, save Mission Report inside it, and reopen the saved file.', success:'File Base is organised and online.',
+        hints:['Right-click an empty part of the desktop, then choose New and Folder.','Open File, choose Save As, and select My Projects before saving.','Double-click the folder, then double-click Mission Report.'] },
       { id:'copy-paste-shortcut', title:'Rapid Relay', action:'shortcut_copy_paste', target:'shortcut-console',
         show:'Message Relay is moving faster. Highlight the message, then use the copy and paste keyboard shortcuts.', independent:'Send 3 messages using keyboard shortcuts.', success:'The rapid relay is online.',
         hints:['Drag across the whole blue message.','Press Ctrl+C on Windows or Command+C on Mac.','Click the empty box, then press Ctrl+V or Command+V.'] },
@@ -849,8 +893,8 @@
         hints:['Use Backspace to remove the wrong letters.','Stop deleting when the beginning matches.','Then type the missing correct letters.'] },
     ];
     const campaigns = {
-      foundation:{ id:'g2-pointer-control', version:4, steps:foundationSteps, kicker:'Foundation World · Chapter 1', title:'Byte and the Blackout', lead:'A digital storm has shut down Byte City. Beat eight arcade missions, restore the power and unlock Advanced Keyboard Kingdom.', speech:'Chase, click, drag, scroll, use menus and type your way through the city.', world:'Foundation for Grade 2 and Grade 3', time:'About 25–30 minutes', device:'A keyboard and mouse or trackpad', completion:'Byte City is online', completionLead:'You restored every district and opened the road to Grade 3.', start:'Begin the rescue', resume:'Continue the rescue', nextTitle:'Advanced Keyboard Kingdom', nextCopy:'Continue into six playable Grade 3 keyboard missions.', nextLabel:'Continue to Grade 3' },
-      g3:{ id:'g3-keyboard-kingdom', version:2, steps:grade3Steps, kicker:'Grade 3 World · Chapter 2', title:'Byte and the Broken Code', lead:'A scrambled code has locked Keyboard Kingdom. Master shortcuts, keys, words, capitals, sentences and editing to restore it.', speech:'Your Grade 2 skills opened the gate. Now the keyboard is your arcade controller.', world:'Grade 3 keyboard adventure', time:'About 22–25 minutes', device:'A computer keyboard', completion:'Keyboard Kingdom restored', completionLead:'You mastered the Grade 3 keyboard campaign and earned access to the future Expert World.', start:'Enter Keyboard Kingdom', resume:'Continue Keyboard Kingdom', nextTitle:'Expert World', nextCopy:'Your Foundation and Grade 3 worlds are complete. Expert missions will continue the adventure.', nextLabel:'' },
+      foundation:{ id:'g2-pointer-control', version:4, steps:foundationSteps, kicker:'Foundation World · Chapter 1', title:'Byte and the Blackout', lead:'A digital storm has shut down Byte City. Beat eight arcade missions, restore the power and unlock Advanced Keyboard Kingdom.', speech:'Chase, click, drag, scroll, use menus and type your way through the city.', world:'Foundation for Grade 2 and Grade 3', time:'About 25–30 minutes', device:'A keyboard and mouse or trackpad', completion:'Byte City is online', completionLead:'You restored every district and opened the road to Grade 3.', start:'Begin the rescue', resume:'Continue the rescue', nextTitle:'Advanced Keyboard Kingdom', nextCopy:'Continue into seven playable Grade 3 missions.', nextLabel:'Continue to Grade 3' },
+      g3:{ id:'g3-keyboard-kingdom', version:3, steps:grade3Steps, kicker:'Grade 3 World · Chapter 2', title:'Byte and the Broken Code', lead:'A scrambled code has locked Keyboard Kingdom. Organise files, master shortcuts, keys, words, capitals, sentences and editing to restore it.', speech:'Your Grade 2 skills opened the gate. Build File Base, then use the keyboard as your arcade controller.', world:'Grade 3 computer skills adventure', time:'About 25–30 minutes', device:'A computer keyboard and mouse', completion:'Keyboard Kingdom restored', completionLead:'You mastered the Grade 3 computer skills campaign and earned access to the future Expert World.', start:'Enter Keyboard Kingdom', resume:'Continue Keyboard Kingdom', nextTitle:'Expert World', nextCopy:'Your Foundation and Grade 3 worlds are complete. Expert missions will continue the adventure.', nextLabel:'' },
       typing:{ id:'typing-academy', version:1, steps:typingSteps, kicker:'Typing Academy · Course 1', title:'Byte and the Typing Academy', lead:'Begin with the first keys, train both hands, then use accuracy and speed to defend the academy.', speech:'Every room teaches one typing skill. Watch me, practise it, then win the mission on your own.', world:'Typing Academy for Grades 2 and 3', time:'About 30–35 minutes', device:'A computer keyboard', completion:'Typing Academy complete', completionLead:'You learned the keyboard from the beginning and completed your first typing course.', start:'Start typing course', resume:'Continue typing course', nextTitle:'Next typing course', nextCopy:'More typing courses can build speed, punctuation and longer writing.', nextLabel:'' },
     };
     const campaign = campaigns[requestedWorld];
@@ -858,6 +902,7 @@
     const steps = campaign.steps;
     const requestedStageIndex = previewMode ? steps.findIndex((step)=>step.id===requestedStage) : -1;
     const tutorials = {
+      'file-base': { title:'Build File Base', action:'Create. Save. Reopen.', detail:'Make My Projects, save Mission Report inside it, then find the file again.', visual:'file' },
       'move-pointer': { title:'Follow the blue bug', action:'Move onto it. Do not click.', detail:'Watch the pointer follow the glow.', visual:'move' },
       'single-click': { title:'Click the green bug', action:'Click one time.', detail:'Press and let go once.', visual:'click' },
       'double-click': { title:'Break the glowing lock', action:'Click-click quickly.', detail:'Two fast clicks open the lock.', visual:'double' },
@@ -880,6 +925,7 @@
       'repair-bay': { title:'Delete, then repair', action:'Use Backspace to remove the mistake, then type the fix.', detail:'Keep the correct beginning of each word.', visual:'type' },
     };
     const improvementTips = {
+      'file-base':'Create the folder first, use Save As to choose it, and reopen the file to check where it was saved.',
       'move-pointer':'Move smoothly and stop the pointer in the middle of the target.',
       'single-click':'Press and release the left button once without moving the pointer.',
       'double-click':'Keep the pointer still and make two quick clicks.',
@@ -902,7 +948,7 @@
       'bottom-row-reach':'Reach downward from the home row with the nearest finger, then return it home.',
     };
     const missionGoals = PracticeScoring.missionGoals;
-    const keyboardStepIds = new Set(['copy-paste-menu','copy-paste-shortcut','keyboard-defense','key-patrol','keyboard-map','home-row-left','home-row-right','space-station','top-row-reach','bottom-row-reach','word-blaster','capital-charge','sentence-engine','repair-bay']);
+    const keyboardStepIds = new Set(['file-base','copy-paste-menu','copy-paste-shortcut','keyboard-defense','key-patrol','keyboard-map','home-row-left','home-row-right','space-station','top-row-reach','bottom-row-reach','word-blaster','capital-charge','sentence-engine','repair-bay']);
     const inputTrackedStepIds = new Set(['keyboard-defense','key-patrol','keyboard-map','home-row-left','home-row-right','space-station','top-row-reach','bottom-row-reach','word-blaster','capital-charge','sentence-engine','repair-bay']);
     const $ = (id) => document.getElementById(id);
 
@@ -1475,6 +1521,7 @@
 
     function tutorialVisual(stepId) {
       const kind = tutorials[stepId].visual;
+      if (kind === 'file') return `<div class="file-tutorial-sequence" aria-hidden="true"><div class="file-tutorial-step"><b>1</b><img src="/assets/practice/sprites-g3/file-folder-closed.webp" alt="" /><span>Create My Projects</span></div><div class="file-tutorial-step"><b>2</b><img src="/assets/practice/sprites-g3/school-document.webp" alt="" /><span>Save Mission Report inside</span></div><div class="file-tutorial-step"><b>3</b><img src="/assets/practice/sprites-g3/file-folder-open.webp" alt="" /><span>Reopen the file</span></div></div>`;
       const menu = kind === 'right' ? '<div class="demo-menu">OPEN</div>' : kind === 'copy-menu' ? '<div class="demo-menu">COPY</div>' : '';
       const dock = kind === 'drag' ? '<div class="demo-dock" aria-hidden="true"></div>' : '';
       return `<div class="demo-scene demo-${kind}" aria-hidden="true"><div class="demo-object"></div>${dock}${menu}<div class="demo-cursor"></div></div>`;
@@ -1522,7 +1569,61 @@
         area.innerHTML=`<div class="tutorial"><div class="tutorial-visual">${tutorialVisual(step.id)}</div><div class="tutorial-copy"><b>Watch Byte</b><h3>${esc(tutorial.title)}</h3><p>${esc(tutorial.action)}</p><small>${esc(tutorial.detail)}</small></div></div>`;
         return;
       }
-      if (step.id === 'move-pointer') {
+      if (step.id === 'file-base') {
+        const coach=(text)=>{ const node=$('fileCoach'); if(node) node.textContent=text; };
+        if (roundProgress === 0) {
+          area.innerHTML=`<div class="room-label">File Base · 1 of 3 · Create a folder</div><div class="file-base-stage" id="fileDesktop"><div class="file-menu" id="fileCreateMenu"><button type="button" data-wrong>View</button><button type="button" id="fileNew">New ›</button><button type="button" data-wrong>Display settings</button></div><div class="file-menu" id="fileNewMenu"><button type="button" id="fileFolderChoice">Folder</button><button type="button" data-wrong>Document</button></div><div class="file-coach" id="fileCoach">Right-click an empty part of the desktop.</div></div>`;
+          const desktop=$('fileDesktop'), menu=$('fileCreateMenu'), submenu=$('fileNewMenu');
+          desktop.addEventListener('contextmenu',(event)=>{
+            event.preventDefault();
+            const rect=desktop.getBoundingClientRect();
+            menu.style.left=`${Math.min(desktop.clientWidth-205,Math.max(8,event.clientX-rect.left))}px`;
+            menu.style.top=`${Math.min(desktop.clientHeight-160,Math.max(8,event.clientY-rect.top))}px`;
+            menu.classList.add('show'); submenu.classList.remove('show'); coach('Choose New, then choose Folder.'); playTone(430);
+          });
+          $('fileNew').addEventListener('click',(event)=>{
+            event.stopPropagation(); recordCorrectInput();
+            submenu.style.left=`${Math.min(desktop.clientWidth-205,(parseFloat(menu.style.left)||8)+180)}px`;
+            submenu.style.top=menu.style.top; submenu.classList.add('show'); coach('Choose Folder.');
+          });
+          $('fileFolderChoice').addEventListener('click',(event)=>{
+            event.stopPropagation(); recordCorrectInput(); menu.classList.remove('show'); submenu.classList.remove('show');
+            desktop.insertAdjacentHTML('beforeend',`<div class="file-object folder"><img src="/assets/practice/sprites-g3/file-folder-closed.webp" alt="" /></div><input class="file-rename" id="fileRename" aria-label="Folder name" placeholder="Type folder name" autocomplete="off" />`);
+            coach('Type My Projects, then press Enter.'); $('fileRename').focus();
+            $('fileRename').addEventListener('keydown',(keyEvent)=>{
+              if(keyEvent.key!=='Enter') return;
+              keyEvent.preventDefault();
+              if(keyEvent.currentTarget.value.trim().toLowerCase()!=='my projects') return registerWrong('Name the folder My Projects, then press Enter.');
+              completeInteraction('folder_save','mission-report');
+            });
+          });
+          area.querySelectorAll('[data-wrong]').forEach((button)=>button.addEventListener('click',(event)=>{ event.stopPropagation(); registerWrong('Choose New, then Folder.'); }));
+        } else if (roundProgress === 1) {
+          area.innerHTML=`<div class="room-label">File Base · 2 of 3 · Save inside the folder</div><div class="file-base-stage"><div class="file-editor"><div class="file-editor-bar"><button type="button" id="fileButton">File</button><span>Mission Report - Not saved</span><div class="file-menu" id="fileSaveMenu"><button type="button" id="saveAsButton">Save As...</button><button type="button" data-wrong>Print</button></div></div><div class="file-paper"><h3>Mission Report</h3><p>Byte City files are organised and ready for the next mission.</p></div></div><div class="save-dialog" id="saveDialog"><div class="save-locations"><button type="button" data-location="desktop">Desktop</button><button type="button" id="projectLocation" data-location="projects">📁 My Projects</button></div><div class="save-fields"><label for="fileName">File name</label><input id="fileName" placeholder="Mission Report" autocomplete="off" /><button class="btn primary" type="button" id="confirmSave">Save</button></div></div><div class="file-coach" id="fileCoach">Open File, then choose Save As.</div></div>`;
+          let selectedFolder=false;
+          $('fileButton').addEventListener('click',()=>{ $('fileSaveMenu').classList.add('show'); $('fileSaveMenu').style.left='8px'; $('fileSaveMenu').style.top='46px'; recordCorrectInput(); coach('Choose Save As.'); });
+          $('saveAsButton').addEventListener('click',()=>{ $('fileSaveMenu').classList.remove('show'); $('saveDialog').classList.add('show'); recordCorrectInput(); coach('Choose My Projects, then name the file.'); });
+          $('projectLocation').addEventListener('click',(event)=>{ selectedFolder=true; event.currentTarget.classList.add('selected'); area.querySelector('[data-location="desktop"]').classList.remove('selected'); $('fileName').focus(); coach('Type Mission Report, then choose Save.'); playTone(520); });
+          area.querySelector('[data-location="desktop"]').addEventListener('click',(event)=>{ selectedFolder=false; event.currentTarget.classList.add('selected'); $('projectLocation').classList.remove('selected'); registerWrong('Choose My Projects so the file goes inside the folder.'); });
+          area.querySelector('[data-wrong]').addEventListener('click',()=>registerWrong('Choose Save As for this mission.'));
+          $('confirmSave').addEventListener('click',()=>{
+            if(!selectedFolder) return registerWrong('Select My Projects before saving.');
+            if($('fileName').value.trim().toLowerCase()!=='mission report') return registerWrong('Name the file Mission Report.');
+            completeInteraction('folder_save','mission-report');
+          });
+        } else {
+          area.innerHTML=`<div class="room-label">File Base · 3 of 3 · Find and reopen the file</div><div class="file-base-stage" id="fileDesktop"><button class="file-object folder" id="skillTarget" type="button"><img src="/assets/practice/sprites-g3/file-folder-closed.webp" alt="" /><span>My Projects</span></button><div class="file-coach" id="fileCoach">Double-click My Projects.</div></div>`;
+          const folder=$('skillTarget');
+          folder.addEventListener('click',()=>{ folder.classList.add('selected'); coach('Folder selected. Double-click it to open.'); });
+          folder.addEventListener('dblclick',(event)=>{
+            event.preventDefault(); recordCorrectInput();
+            $('fileDesktop').innerHTML=`<div class="folder-window"><div class="folder-window-head">📁 My Projects</div><button class="file-object document" id="savedDocument" type="button"><img src="/assets/practice/sprites-g3/school-document.webp" alt="" /><span>Mission Report</span></button></div><div class="file-coach" id="fileCoach">Double-click Mission Report.</div>`;
+            const documentButton=$('savedDocument');
+            documentButton.addEventListener('click',()=>{ documentButton.classList.add('selected'); coach('File selected. Double-click it to reopen.'); });
+            documentButton.addEventListener('dblclick',(documentEvent)=>{ documentEvent.preventDefault(); completeInteraction('folder_save','mission-report'); });
+          });
+        }
+      } else if (step.id === 'move-pointer') {
         area.innerHTML = `<div class="room-label">Signal Trail · Bug ${roundProgress+1} of ${roundGoal()}</div>${signalTrail(nextSlot(9))}`;
         $('skillTarget').addEventListener('pointerenter', () => completeInteraction('pointer_enter','blue-star'));
       } else if (step.id === 'single-click') {

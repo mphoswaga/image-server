@@ -164,7 +164,9 @@
   </main>
   <script>
     const $ = (id) => document.getElementById(id);
-    const stepNames = { 'move-pointer':'Pointer chase', 'single-click':'Single-click', 'double-click':'Double-click', 'context-command':'Right-click', 'drag-drop':'Drag', 'scroll-find':'Scroll', 'keyboard-defense':'Typing', 'key-patrol':'Home-row keys', 'word-blaster':'Words', 'capital-charge':'Shift capitals', 'sentence-engine':'Sentences', 'repair-bay':'Backspace editing' };
+    const stepNames = { 'move-pointer':'Pointer chase', 'single-click':'Single-click', 'double-click':'Double-click', 'context-command':'Right-click', 'drag-drop':'Drag', 'scroll-find':'Scroll', 'file-base':'Folders and saving', 'keyboard-defense':'Typing', 'key-patrol':'Home-row keys', 'word-blaster':'Words', 'capital-charge':'Shift capitals', 'sentence-engine':'Sentences', 'repair-bay':'Backspace editing' };
+    const grade3StageGroup=[...$('previewStageSelect').querySelectorAll('optgroup')].find((group)=>group.label==='Grade 3 World');
+    if(grade3StageGroup) grade3StageGroup.innerHTML='<option value="g3:file-base">1. File Base</option><option value="g3:copy-paste-shortcut">2. Rapid Relay</option><option value="g3:key-patrol">3. Key Patrol</option><option value="g3:word-blaster">4. Word Blaster</option><option value="g3:capital-charge">5. Capital Charge</option><option value="g3:sentence-engine">6. Sentence Engine</option><option value="g3:repair-bay">7. Repair Bay</option>';
     let data = { students:[], results:[] };
     let liveRoom = null;
     let liveJoinUrl = '';
