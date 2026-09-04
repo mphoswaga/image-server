@@ -310,7 +310,7 @@ test('Grade 2 play uses animated demonstrations and save-before-auto-advance', (
   assert.match(player, /class=\"tower-floor\"/);
   assert.match(player, /function scheduleAutoAdvance\(\)/);
   assert.match(player, /setTimeout\(advanceAfterCheckpoint,2600\)/);
-  assert.match(player, /localStorage\.removeItem\(checkpointKey\(\)\);\s*setSave\('Progress saved'\);\s*scheduleAutoAdvance\(\)/);
+  assert.match(player, /localStorage\.removeItem\(checkpointKey\(\)\);[^]*?setSave\('Progress saved'\);\s*scheduleAutoAdvance\(\)/);
   assert.match(player, /if \(ephemeralMode\) return liveRoom \? saveLiveCheckpoint\(payload\) : saveEphemeralCheckpoint\(payload\)/);
 });
 

@@ -1121,7 +1121,7 @@
         $('pauseBtn').disabled=false;
         $('pauseBtn').textContent='Pause';
         if($('activity').style.display==='block'&&attempt) {
-          if(currentStep().id==='file-base'&&phase==='independent') {
+          if(phase==='independent') {
             if(independentSaved) {
               if(attempt.currentStepIndex>stepIndex) scheduleAutoAdvance();
             } else renderTask();
@@ -2003,6 +2003,7 @@
     }
 
     function scheduleAutoAdvance() {
+      delete $('nextBtn').dataset.retry;
       showRoomClearCard();
       $('nextBtn').disabled=false;
       $('nextBtn').textContent=attempt.status === 'completed' ? 'See my result' : 'Next mission';
@@ -2011,7 +2012,7 @@
     }
 
     async function completeInteraction(action, target) {
-      if (phase === 'show' || independentSaved || roundLocked) return;
+      if (paused || phase === 'show' || independentSaved || roundLocked) return;
       const step = currentStep();
       if (action !== step.action || target !== step.target) return registerWrong('Try the skill again.');
       roundLocked = true;
@@ -2029,36 +2030,72 @@
       playCue(finalHit?'complete':'hit');
       burstParticles(hitTarget,finalHit?'#f8c342':'#25cddc');
       celebrateHit(finalHit,points);
-      if (!finalHit) { setTimeout(renderTask,420); return; }
+      if (!finalHit) { activeGameTimers.push(setTimeout(()=>{ if(!paused) renderTask(); },420)); return; }
       stats.attempts += 1;
       independentSaved = true;
       await saveCheckpoint();
     }
 
+    async function checkpointRequest(url, options) {
+      const controller = new AbortController();
+      const timeout = setTimeout(()=>controller.abort(),15000);
+      try {
+        const response = await fetch(url,{...options,signal:controller.signal});
+        const data = await response.json();
+        return {response,data};
+      } finally { clearTimeout(timeout); }
+    }
+
+    let checkpointSaving=false, checkpointRetryTimer=null, checkpointRetryCount=0, frozenCheckpoint=null;
+    function retryCheckpointSoon() {
+      clearTimeout(checkpointRetryTimer);
+      if(checkpointRetryCount>=5) return;
+      checkpointRetryTimer=setTimeout(()=>{
+        if(paused || !navigator.onLine) { retryCheckpointSoon(); return; }
+        if($('nextBtn').dataset.retry==='1' && (!liveRoom || liveRoom.status!=='closed')) {
+          checkpointRetryCount++;
+          saveCheckpoint();
+        }
+      },Math.min(30000,2000*2**checkpointRetryCount));
+    }
+    window.addEventListener('online',()=>{
+      if($('nextBtn').dataset.retry==='1') { checkpointRetryCount=0; retryCheckpointSoon(); }
+    });
     async function saveCheckpoint() {
+      if(checkpointSaving || paused || (liveRoom && liveRoom.status==='closed')) return;
+      checkpointSaving=true;
+      clearTimeout(checkpointRetryTimer);
+      try { await performCheckpointSave(); }
+      finally { checkpointSaving=false; }
+    }
+    async function performCheckpointSave() {
       const step = currentStep();
-      const payload = { checkpointId:checkpointId(step), stepId:step.id, attempts:Math.max(1,stats.attempts), hintsUsed:stats.hintsUsed, activeSeconds:Math.max(1,stats.activeSeconds), correctInputs:stats.correctInputs||0, mistakes:stats.mistakes||0, baseScore:score, evidence:{ action:step.action, target:step.target } };
+      if(!frozenCheckpoint || frozenCheckpoint.checkpointId!==checkpointId(step)) {
+        checkpointRetryCount=0;
+        frozenCheckpoint={ checkpointId:checkpointId(step), stepId:step.id, attempts:Math.max(1,stats.attempts), hintsUsed:stats.hintsUsed, activeSeconds:Math.max(1,stats.activeSeconds), correctInputs:stats.correctInputs||0, mistakes:stats.mistakes||0, baseScore:score, evidence:{ action:step.action, target:step.target } };
+      }
+      const payload = frozenCheckpoint;
       if (ephemeralMode) return liveRoom ? saveLiveCheckpoint(payload) : saveEphemeralCheckpoint(payload);
-      localStorage.setItem(checkpointKey(), JSON.stringify(payload));
+      try { localStorage.setItem(checkpointKey(), JSON.stringify(payload)); } catch (_) { /* Saving to the server still works when browser storage is unavailable. */ }
       setSave('Saving progress...');
       $('nextBtn').disabled = true;
       try {
-        const response = await fetch(`/api/practice/attempts/${encodeURIComponent(attempt.id)}/checkpoints`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
-        const data = await response.json();
+        const {response,data} = await checkpointRequest(`/api/practice/attempts/${encodeURIComponent(attempt.id)}/checkpoints`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
         if (!response.ok) throw new Error(data.error || 'Progress could not be saved.');
         attempt = data.attempt;
         commitStepMetrics(payload);
-        localStorage.removeItem(checkpointKey());
+        try { localStorage.removeItem(checkpointKey()); } catch (_) { /* The server has already confirmed this checkpoint. */ }
         setSave('Progress saved');
         scheduleAutoAdvance();
       } catch (error) {
-        independentSaved = false;
+        independentSaved = true;
         setSave('Progress is waiting to save', true);
         $('feedback').textContent = `${error.message} Choose Retry save.`;
         $('feedback').className = 'feedback show';
         $('nextBtn').disabled = false;
         $('nextBtn').textContent = 'Retry save';
         $('nextBtn').dataset.retry = '1';
+        retryCheckpointSoon();
       }
     }
 
@@ -2066,12 +2103,11 @@
       setSave(`Updating room ${liveRoom.code}...`);
       $('nextBtn').disabled=true;
       try {
-        const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(liveRoom.code)}/checkpoints`,{
+        const {response,data}=await checkpointRequest(`/api/practice/live-sessions/${encodeURIComponent(liveRoom.code)}/checkpoints`,{
           method:'POST',
           headers:{'Content-Type':'application/json','X-Practice-Participant':liveParticipantToken},
           body:JSON.stringify({...payload,arcadeScore:performanceSummary().score,activityId:ACTIVITY_ID,activityVersion:campaign.version}),
         });
-        const data=await response.json();
         if(!response.ok) throw new Error(data.error||'The leaderboard could not be updated.');
         liveRoom=data.room;
         if(data.participant) liveParticipant=data.participant;
@@ -2079,13 +2115,14 @@
         saveEphemeralCheckpoint(payload);
         setSave(`Room ${liveRoom.code} updated`);
       }catch(error){
-        independentSaved=false;
+        independentSaved=true;
         setSave('Leaderboard update is waiting',true);
         $('feedback').textContent=`${error.message} Choose Retry save.`;
         $('feedback').className='feedback show';
         $('nextBtn').disabled=false;
         $('nextBtn').textContent='Retry save';
         $('nextBtn').dataset.retry='1';
+        retryCheckpointSoon();
       }
     }
 
@@ -2109,11 +2146,11 @@
 
     async function retryPending() {
       if (ephemeralMode) return true;
-      const raw = localStorage.getItem(checkpointKey());
+      let raw;
+      try { raw = localStorage.getItem(checkpointKey()); } catch { return false; }
       if (!raw) return false;
       try {
-        const response = await fetch(`/api/practice/attempts/${encodeURIComponent(attempt.id)}/checkpoints`, { method:'POST', headers:{'Content-Type':'application/json'}, body:raw });
-        const data = await response.json();
+        const {response,data} = await checkpointRequest(`/api/practice/attempts/${encodeURIComponent(attempt.id)}/checkpoints`, { method:'POST', headers:{'Content-Type':'application/json'}, body:raw });
         if (!response.ok) return false;
         attempt = data.attempt;
         try { commitStepMetrics(JSON.parse(raw)); } catch {}
@@ -2154,6 +2191,7 @@
     }
 
     $('nextBtn').addEventListener('click', async () => {
+      if(paused || $('nextBtn').disabled) return;
       clearTimeout(autoAdvanceTimer);
       if ($('nextBtn').dataset.retry === '1') { delete $('nextBtn').dataset.retry; independentSaved = true; await saveCheckpoint(); return; }
       if (phase === 'show') { phase = 'independent'; renderStep(); return; }
