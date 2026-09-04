@@ -20,7 +20,7 @@
       if(['desktop','new','folder','name'].includes(s)) {
         body=explorer(s==='desktop'?'<p class="fb-empty">This folder is empty.</p>':s==='new'?`<div class="fb-context">${button('folder','New')}</div>`:s==='folder'?`<div class="fb-context">${button('name','Folder')}</div>`:`<form id="folderForm"><div class="fb-art">${img('file-folder-closed')}</div><label for="fileRename">Your name</label><input id="fileRename" maxlength="60" value="${escape(state.folderName)}" autocomplete="off" /><button type="submit">Create folder</button></form>`);
       } else if(s==='document') {
-        body=`<div class="fb-word"><div class="fb-toolbar"><b class="fb-word-icon">W</b>${button('file','File')}<span>My work - Word practice</span></div><article><h3>My computer skills</h3><p>I can create a folder with my name.</p><p>I can save my work in my folder.</p><p>I can find my work again.</p></article></div>`;
+        body=`<div class="fb-word-scroll"><div class="fb-word fb-word-illustrated"><img class="fb-word-background" src="/assets/practice/word-document.png" alt="Word-style document window" /><button type="button" class="fb-word-file" data-file-action="file">File</button><article><h3>My computer skills</h3><p>I can create a folder with my name.</p><p>I can save my work in my folder.</p><p>I can find my work again.</p></article><div class="fb-word-status">Page 1 of 1</div></div></div>`;
       } else if(['file','saveAs','browse'].includes(s)) {
         const next={file:['saveAs','Save As'],saveAs:['browse','Save As'],browse:['folders','Browse']}[s];
         body=`<div class="fb-backstage"><h3>My work</h3>${button(next[0],next[1])}${button('document','Back to document')}</div>`;

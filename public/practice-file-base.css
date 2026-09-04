@@ -14,6 +14,14 @@ body.playing #taskArea.room-file-base { height:auto; min-height:390px; padding:1
 .fb-word article { padding:18px 26px; background:#fff; }
 .fb-word h3,.fb-browser h3,.fb-backstage h3 { margin:0 0 12px; font-size:20px; overflow-wrap:anywhere; }
 .fb-word p { margin:8px 0; }
+.fb-word-scroll { max-width:100%; overflow-x:auto; }
+.fb-word-illustrated { position:relative; min-width:560px; aspect-ratio:1235/864; }
+.fb-word-background { display:block; width:100%; height:100%; position:absolute; inset:0; pointer-events:none; }
+.fb-word-illustrated .fb-word-file { position:absolute; left:0.5%; top:6.2%; width:7%; min-width:48px; min-height:32px; height:5.6%; padding:0; background:#315d91; border:2px solid #f6d679; color:#fff; border-radius:3px; font-size:16px; }
+.fb-word-illustrated article { position:absolute; left:8%; right:8%; top:35%; bottom:10%; padding:20px; background:#fffefa; overflow:auto; color:#17354d; }
+.fb-word-illustrated article h3 { font-size:20px; }
+.fb-word-illustrated article p { font-size:16px; line-height:1.5; }
+.fb-word-status { position:absolute; bottom:0.4%; left:0.5%; width:40%; height:3.5%; display:flex; align-items:center; padding-left:6px; box-sizing:border-box; background:#eef0f2; color:#263747; font-size:12px; white-space:nowrap; }
 .fb-backstage,.fb-browser { padding:22px; display:grid; gap:14px; align-content:start; }
 .fb-backstage button { justify-self:start; min-width:150px; }
 .fb-folder { display:grid; justify-items:center; gap:8px; justify-self:start; max-width:100%; overflow-wrap:anywhere; }

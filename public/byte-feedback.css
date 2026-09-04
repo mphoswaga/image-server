@@ -1,0 +1,28 @@
+/* Decorative companions follow existing UI states; messages remain the source of meaning. */
+[data-byte-ui] {
+  --byte-image: url('/assets/practice/byte/byte-giving-instructions.png');
+}
+[data-byte-ui] :is(.byte-guide,.byte-result,.byte-message:not(:empty))::before {
+  content:"";
+  display:block;
+  width:72px;
+  height:80px;
+  margin:0 auto 10px;
+  background:var(--byte-image) center/contain no-repeat;
+  pointer-events:none;
+}
+[data-byte-ui] .byte-result { --byte-image:url('/assets/practice/byte/byte-mission-complete.png'); }
+[data-byte-ui] .byte-message { overflow-wrap:anywhere; }
+[data-byte-ui] .byte-message.err,
+[data-byte-ui] .byte-message.error { --byte-image:url('/assets/practice/byte/byte-try-again.png'); }
+[data-byte-ui] .byte-message.ok,
+[data-byte-ui] .byte-message.ok-msg { --byte-image:url('/assets/practice/byte/byte-success.png'); }
+[data-byte-ui] .byte-message:not(:empty)::before { width:42px; height:46px; }
+[data-byte-ui="teacher"] .byte-guide::before { width:48px; height:54px; }
+[data-byte-ui] .toast.byte-message::before { margin:0; flex:0 0 42px; }
+[data-byte-ui] .room-state.byte-guide::before { margin:0 12px 0 0; flex:0 0 48px; }
+[data-byte-ui] .room-state.ended { --byte-image:url('/assets/practice/byte/byte-mission-complete.png'); }
+[data-byte-ui] .room-state.playing { --byte-image:url('/assets/practice/byte/byte-success.png'); }
+@media(max-width:600px) {
+  [data-byte-ui] :is(.byte-guide,.byte-result)::before { width:56px; height:62px; }
+}

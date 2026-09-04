@@ -52,8 +52,9 @@
     .empty { text-align:center; color:var(--muted); font-size:14px; padding:30px 0; }
     .logout-link { display:block; text-align:center; margin-top:20px; font-size:13px; color:var(--muted); text-decoration:none; }
   </style>
+  <link rel="stylesheet" href="/byte-feedback.css" />
 </head>
-<body>
+<body data-byte-ui="student">
   <div class="logo">
     <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="40" height="40" rx="10" fill="#1a56a0"/>
@@ -254,5 +255,6 @@
       $('studentId').focus();
     })();
   </script>
+  <script src="/byte-feedback.js"></script>
 </body>
 </html>

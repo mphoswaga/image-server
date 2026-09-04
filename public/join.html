@@ -27,8 +27,9 @@
     #step2 { display:none; }
     .game-pill { background:#e8f0fb; color:var(--primary); font-size:13px; font-weight:600; border-radius:20px; padding:4px 12px; display:inline-block; margin-bottom:14px; }
   </style>
+  <link rel="stylesheet" href="/byte-feedback.css" />
 </head>
-<body>
+<body data-byte-ui="student">
   <div class="logo">
     <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="40" height="40" rx="10" fill="#1a56a0"/>
@@ -177,5 +178,6 @@
     $('roomCode').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
     $('studentId').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase(); });
   </script>
+  <script src="/byte-feedback.js"></script>
 </body>
 </html>

@@ -2321,8 +2321,9 @@
       .assistant-compose { padding-bottom:82px; }
     }
   </style>
+  <link rel="stylesheet" href="/byte-feedback.css" />
 </head>
-<body>
+<body data-byte-ui="teacher">
   <!-- SPLASH (plays once per visit, then fades to reveal the app) -->
   <div id="splash">
     <video id="splashVideo" autoplay muted playsinline preload="auto">
@@ -7710,5 +7711,6 @@
       showAuth(); window._splashAuthReady?.();
     })();
   </script>
+  <script src="/byte-feedback.js"></script>
 </body>
 </html>
