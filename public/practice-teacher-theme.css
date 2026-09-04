@@ -1,0 +1,102 @@
+/* Scoped to the teacher console; learner games and planning forms are unchanged. */
+body.mission-control {
+  --navy:#e9fbff;
+  --ink:#e9fbff;
+  --muted:#b7d3dc;
+  --line:#426975;
+  --green:#73e4b6;
+  --green-dark:#a6f5cf;
+  --cyan:#63dbe8;
+  --soft-green:#173f39;
+  --soft-cyan:#173d4b;
+  --soft-orange:#443d29;
+  --shadow:none;
+  background:#102531 url('/assets/practice/bg_mission_control.webp') center top / max(100%, 1100px) auto no-repeat;
+  color:var(--ink);
+  letter-spacing:0;
+}
+.mission-control .topbar { background:rgba(12,34,45,.94); border-bottom:1px solid #477582; }
+.mission-control .brand-mark { background:#73e4b6; color:#12392f; box-shadow:0 0 18px #73e4b62b; }
+.mission-control .back { background:#153d49; border-color:#5b8d96; }
+.mission-control .shell { width:min(1280px,calc(100% - 40px)); margin:180px auto 40px; }
+.mission-control .heading { align-items:center; padding:18px 22px; margin:0; background:rgba(12,34,45,.96); border-top:3px solid #78e5d2; border-bottom:1px solid #426975; }
+.mission-control h1 { font-size:28px; }
+.mission-control .heading>div,.mission-control .room-stage>div { min-width:0; }
+.mission-control .heading-actions { justify-content:flex-end; }
+.mission-control .btn,.mission-control select,.mission-control .audio-policy select { background:#204954; color:#f1fdff; border-color:#64939e; }
+.mission-control select { max-width:100%; color-scheme:dark; }
+.mission-control select option,.mission-control select optgroup { background:#153740; color:#f1fdff; }
+.mission-control .btn { transition:background .16s,border-color .16s; }
+.mission-control .btn:hover,.mission-control .back:hover { background:#2e6269; border-color:#8ae4df; }
+.mission-control .btn.primary { background:#73e4b6; border-color:#a7f6d3; color:#103b30; }
+.mission-control .btn.primary:hover { background:#a2f1cf; }
+.mission-control .btn:disabled { opacity:.55; cursor:not-allowed; }
+.mission-control button:focus-visible,.mission-control a:focus-visible,.mission-control select:focus-visible { outline:3px solid #ffe39a; outline-offset:3px; }
+.mission-control .live-room { background:rgba(12,34,45,.96); border:0; border-bottom:1px solid #426975; margin:0 0 16px; padding:22px; overflow:visible; }
+.mission-control .live-head { display:grid; grid-template-columns:minmax(240px,.8fr) minmax(0,1.2fr); gap:24px; }
+.mission-control .live-actions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.mission-control .live-actions select { min-width:0; width:100%; }
+.mission-control #createRoomBtn { grid-column:span 2; }
+.mission-control .live-head h2 { font-size:21px; }
+.mission-control .audio-policy { border:0; border-top:1px solid #426975; border-bottom:1px solid #426975; background:transparent; padding:14px 0; gap:12px; }
+.mission-control .audio-policy input { accent-color:#73e4b6; }
+.mission-control .audio-policy small { color:#b7d3dc; }
+.mission-control .session-beacon { border-color:#578b76; background:#173f39; color:#adf6d1; letter-spacing:0; }
+.mission-control .session-beacon i { background:#73e4b6; }
+.mission-control .room-stage { grid-template-columns:230px minmax(0,1fr); gap:24px; }
+.mission-control .room-code { background:#173d4b; border:2px solid #83dfd6; border-radius:8px; min-height:150px; box-shadow:inset 0 0 30px #63dbe817; }
+.mission-control .room-code span { color:#b8eee8; letter-spacing:0; }
+.mission-control .room-code strong { font-size:36px; color:#ffe39a; letter-spacing:0; }
+.mission-control .room-meta { margin-top:10px; }
+.mission-control .room-buttons { display:grid; grid-template-columns:1fr; }
+.mission-control #endRoomBtn { border-color:#d19082; color:#ffd0c4; background:#442f30; }
+.mission-control .room-state { background:#173d4b; border-color:#63dbe8; border-radius:0; }
+.mission-control .room-state.playing { background:#173f39; border-color:#73e4b6; }
+.mission-control .room-state.ended { background:#443d29; border-color:#f3cc70; }
+.mission-control .room-clock { font-size:30px; color:#ffe39a; white-space:nowrap; }
+.mission-control .live-room.session-playing { box-shadow:none; }
+.mission-control .live-room.session-playing::before { background:#73e4b6; width:3px; }
+.mission-control .live-meter { background:#193945; border:0; border-bottom:2px solid #64b7c1; }
+.mission-control .live-meter:nth-child(2) { border-color:#73e4b6; }
+.mission-control .live-meter:nth-child(3) { border-color:#f3cc70; }
+.mission-control .live-meter strong { font-size:24px; font-variant-numeric:tabular-nums; }
+.mission-control .class-progress { background:#2c4d59; }
+.mission-control .class-progress>i { background:#73e4b6; }
+.mission-control .live-player { background:#193945; border:1px solid #426975; border-radius:8px; min-height:56px; }
+.mission-control .live-rank { background:#73e4b6; color:#12392f; }
+.mission-control .live-player.podium { background:#193945; }
+.mission-control .live-player.podium:first-child { background:#443d29; border-color:#f3cc70; }
+.mission-control .live-player.podium:first-child .live-rank { background:#f3cc70; color:#443617; }
+.mission-control .attendance-student { background:#193945; }
+.mission-control .attendance-student.joined { background:#173f39; border-color:#578b76; }
+.mission-control .attendance-student.joined .mark { color:#12392f; }
+.mission-control .live-empty { min-height:150px; color:#c6e4e9; }
+.mission-control .progress-panel { background:#102c37; padding:22px; border:1px solid #426975; }
+.mission-control .card,.mission-control .filters,.mission-control .table-wrap,.mission-control .empty,.mission-control .loading { background:#193945; }
+.mission-control th { background:#24515c; }
+.mission-control tbody tr:hover { background:#204954; }
+.mission-control .error { background:#442f30; color:#ffd0c4; }
+.mission-control .pill.completed_with_support { color:#ffe39a; }
+@media(max-width:1000px) {
+  .mission-control .heading { align-items:flex-start; flex-direction:column; }
+  .mission-control .heading-actions { justify-content:flex-start; }
+  .mission-control .live-head { grid-template-columns:1fr; }
+}
+@media(max-width:700px) {
+  .mission-control .shell { width:calc(100% - 20px); margin-top:110px; }
+  .mission-control .topbar { gap:10px; padding:10px 14px; flex-wrap:wrap; }
+  .mission-control .heading,.mission-control .live-room,.mission-control .progress-panel { padding:16px; }
+  .mission-control .heading-actions { display:grid; grid-template-columns:1fr; width:100%; }
+  .mission-control .heading-actions select { min-width:0; width:100%; }
+  .mission-control .live-actions { grid-template-columns:1fr; }
+  .mission-control #liveRoster,.mission-control #liveActivity,.mission-control #createRoomBtn { grid-column:1/-1; }
+  .mission-control .room-stage { grid-template-columns:1fr; }
+  .mission-control .room-buttons { grid-template-columns:1fr 1fr; }
+  .mission-control .room-state { flex-wrap:wrap; }
+  .mission-control .live-player.podium { grid-template-columns:40px minmax(0,1fr) auto; }
+  .mission-control .live-player span { overflow-wrap:anywhere; }
+  .mission-control .audio-policy { flex-direction:row; align-items:center; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .mission-control *, .mission-control *::before { animation:none!important; transition:none!important; }
+}
