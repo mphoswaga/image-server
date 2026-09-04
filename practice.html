@@ -803,6 +803,8 @@
     </section>
   </main>
 
+  <link rel="stylesheet" href="/practice-city.css" />
+  <script src="/practice-city.js"></script>
   <script src="/practice-scoring.js"></script>
   <script>
     const previewMode = location.pathname === '/practice/preview';
@@ -970,6 +972,10 @@
       $('completionLead').textContent=campaign.completionLead;
       $('questMap').innerHTML=steps.map((step,index)=>`<div class="quest-stop"><strong>${index+1}</strong>${esc(step.title)}</div>`).join('');
       $('questMap').setAttribute('aria-label',`${steps.length} arcade missions`);
+      if(requestedWorld==='foundation') {
+        $('questMap').classList.add('city-quest');
+        $('questMap').innerHTML=PracticeCity.render(steps,0);
+      }
       $('badgeShelf').innerHTML=steps.map((step,index)=>`<div class="earned-badge"><span>${index+1}</span>${esc(step.title)}</div>`).join('');
       $('nextWorldTitle').textContent=campaign.nextTitle;
       $('nextWorldCopy').textContent=campaign.nextCopy;
@@ -2016,6 +2022,10 @@
       const overlay=document.createElement('div');
       overlay.className='room-clear-card';
       overlay.innerHTML=`<div class="room-clear-inner"><img src="/assets/practice/byte/byte-mission-complete.png" alt="" /><strong>${stepIndex+1===steps.length?'World saved!':'Mission complete!'}</strong><span>${next?`Next: ${esc(next.title)}`:'Byte City is ready.'}</span></div>`;
+      if(requestedWorld==='foundation') {
+        overlay.classList.add('city-clear');
+        overlay.innerHTML=`<div class="city-clear-title">${esc(step.title)} restored! ${next?`Next: ${esc(next.title)}`:'Byte City is online!'}</div>${PracticeCity.render(steps,stepIndex+1)}`;
+      }
       $('taskArea').appendChild(overlay);
       clearActiveInput();
     }
@@ -2159,6 +2169,11 @@
       document.body.classList.remove('intro-screen');
       $('activity').style.display = 'none';
       $('completion').classList.remove('hidden');
+      if(requestedWorld==='foundation') {
+        let city=$('completionCity');
+        if(!city) { city=document.createElement('div'); city.id='completionCity'; $('completion').appendChild(city); }
+        city.innerHTML=PracticeCity.render(steps,steps.length);
+      }
       $('liveFinalBoard').hidden=true;
       $('liveCelebration').hidden=true;
       stopMusic();

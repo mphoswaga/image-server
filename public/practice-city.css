@@ -1,0 +1,32 @@
+.city-map { position:relative; width:100%; aspect-ratio:1376/768; overflow:hidden; background:#65b9a9; isolation:isolate; }
+.city-art,.city-light { position:absolute; inset:0; width:100%; height:100%; object-fit:fill; pointer-events:none; }
+.city-light { filter:brightness(1.28) saturate(1.45); animation:district-power .8s ease-out; }
+.city-marker { position:absolute; z-index:2; transform:translate(-50%,-20%); display:grid; justify-items:center; width:22%; padding:4px 3px; border:1px solid #6c8f96; border-radius:6px; background:#15333ef2; color:#fff; line-height:1.15; text-align:center; }
+.city-number { display:grid; place-items:center; width:24px; height:24px; margin-top:-18px; margin-bottom:3px; border-radius:50%; background:#314d57; color:#fff; font-weight:900; }
+.city-name { font-size:13px; font-weight:800; }
+.city-marker small { margin-top:3px; font-size:11px; color:#c4d7dd; }
+.city-marker.next { border:2px solid #ffe294; background:#284440; }
+.city-marker.next .city-number { background:#ffe294; color:#25352d; }
+.city-marker.next small { color:#ffe294; }
+.city-marker.restored { background:#12483b; border-color:#9ff3c5; }
+.city-marker.restored .city-number { background:#9ff3c5; color:#12483b; }
+.city-marker.restored small { color:#9ff3c5; }
+#questMap.city-quest { display:block; width:min(960px,100%); padding:0; margin:20px auto; overflow:visible; }
+.room-clear-card.city-clear { padding:8px; background:#09222b; align-content:center; gap:6px; }
+.city-clear .city-map { width:min(460px,100%); min-width:0; margin:auto; }
+.city-clear-title { color:#fff; font-size:18px; font-weight:900; text-align:center; }
+.city-clear .city-name { font-size:10px; }
+.city-clear .city-marker small { font-size:9px; }
+.city-clear .city-number { width:18px; height:18px; margin-top:-13px; font-size:11px; }
+#completionCity { margin:20px auto; width:min(960px,100%); }
+@keyframes district-power { from { opacity:0; } to { opacity:1; } }
+@media(max-width:600px) {
+  .city-map { min-width:560px; }
+  #questMap.city-quest,#completionCity { overflow-x:auto; }
+  .room-clear-card.city-clear { overflow:auto; }
+  .city-clear .city-map { min-width:0; }
+  .city-clear .city-name,.city-clear .city-marker small { display:none; }
+  .city-clear .city-marker { width:24px; border-radius:50%; padding:0; }
+  .city-clear .city-number { margin:0; width:22px; height:22px; }
+}
+@media(prefers-reduced-motion:reduce) { .city-light { animation:none; } }
