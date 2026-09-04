@@ -270,16 +270,15 @@ test('every Grade 3 mission keeps its Keyboard Kingdom sprite asset', () => {
   assert.equal(fs.existsSync(path.join(__dirname, '..', 'public', 'assets', 'practice', 'bg_file_base.jpeg')), true);
 });
 
-test('File Base teaches the complete create, save and reopen workflow', () => {
-  const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
+test('File Base teaches personal folder creation and Word Save As', () => {
+  const player = fs.readFileSync(path.join(__dirname, '..', 'public', 'practice-file-base.js'), 'utf8');
   const teacher = fs.readFileSync(path.join(__dirname, '..', 'practice-teacher.html'), 'utf8');
-  assert.match(player, /Right-click an empty part of the desktop/);
-  assert.match(player, /Choose New, then Folder/);
-  assert.match(player, /Open File, then choose Save As/);
-  assert.match(player, /Save inside your folder:/);
-  assert.match(player, /Choose My Projects\. 2\. Type Mission Report\. 3\. Choose Save/);
-  assert.match(player, /Select My Projects before saving/);
-  assert.match(player, /Double-click Mission Report/);
+  assert.match(player, /Type your name for the folder/);
+  assert.match(player, /Choose Browse to find your folder/);
+  assert.match(player, /Double-click it, or choose Open/);
+  assert.match(player, /id="folderForm"/);
+  assert.match(player, /id="saveForm"/);
+  assert.match(player, /fileName:'My work'/);
   assert.match(teacher, /g3:file-base/);
 });
 

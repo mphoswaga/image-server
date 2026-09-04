@@ -1,0 +1,40 @@
+body.playing #taskArea.room-file-base { height:auto; min-height:390px; padding:14px; overflow:visible; }
+.fb-stage { width:min(850px,100%); color:#16354d; background:#f4fafc; border:2px solid #59cdd6; border-radius:8px; overflow:hidden; }
+.fb-stage>header { padding:14px 18px; background:#153e4b; color:#fff; font-size:19px; font-weight:800; line-height:1.4; }
+.fb-body { min-height:270px; }
+.fb-stage button { padding:12px 20px; min-height:46px; border:1px solid #168373; border-radius:6px; background:#14755f; color:#fff; font:inherit; font-weight:700; cursor:pointer; }
+.fb-stage button:focus-visible,.fb-stage input:focus-visible { outline:3px solid #f4be45; outline-offset:2px; }
+.fb-stage input { box-sizing:border-box; min-width:0; width:100%; padding:12px; font:inherit; border:2px solid #6a8b9c; border-radius:6px; color:#16354d; background:#fff; }
+.fb-stage label { font-weight:800; color:#16354d; }
+.fb-desktop { min-height:270px; display:grid; place-items:center; padding:22px; background:url('/assets/practice/bg_file_base.jpeg') center/cover; }
+.fb-desktop form { width:min(350px,100%); display:grid; gap:10px; padding:18px; background:#f4fafc; border-radius:8px; }
+.fb-art img { display:block; width:80px; height:65px; object-fit:contain; margin:auto; }
+.fb-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:12px; padding:10px; background:#d8e9f5; }
+.fb-word-icon { display:grid; place-items:center; width:36px; height:36px; color:#fff; background:#2167af; }
+.fb-word article { padding:18px 26px; background:#fff; }
+.fb-word h3,.fb-browser h3,.fb-backstage h3 { margin:0 0 12px; font-size:20px; overflow-wrap:anywhere; }
+.fb-word p { margin:8px 0; }
+.fb-backstage,.fb-browser { padding:22px; display:grid; gap:14px; align-content:start; }
+.fb-backstage button { justify-self:start; min-width:150px; }
+.fb-folder { display:grid; justify-items:center; gap:8px; justify-self:start; max-width:100%; overflow-wrap:anywhere; }
+.fb-folder img,.fb-saved img { width:90px; height:80px; object-fit:contain; }
+.fb-saved { display:grid; justify-items:center; gap:16px; padding:26px; overflow-wrap:anywhere; }
+.fb-error { margin:0; padding:10px 18px; color:#8e3027; font-weight:700; }
+.fb-error:empty { padding:0; }
+.fb-explorer { background:#eaf6f8; border:3px solid #47c5d2; }
+.fb-title { padding:12px 18px; background:#174953; color:#bafaff; font-weight:800; }
+.fb-ribbon { display:flex; align-items:center; flex-wrap:wrap; gap:10px; padding:12px; border-bottom:1px solid #93bac4; }
+.fb-path { flex:1; min-width:120px; padding:10px; background:white; border:1px solid #93bac4; overflow-wrap:anywhere; }
+.fb-explorer-layout { display:grid; grid-template-columns:140px minmax(0,1fr); min-height:250px; }
+.fb-explorer nav { display:flex; flex-direction:column; gap:8px; padding:12px; border-right:1px solid #93bac4; background:#d8edef; }
+.fb-explorer nav button { padding:10px 6px; color:#173f49; background:transparent; border-color:transparent; }
+.fb-explorer nav button[aria-current="location"] { background:#fff; border-color:#168373; }
+.fb-files { padding:20px; background:linear-gradient(#ffffffeb,#fffffff2),url('/assets/practice/bg_file_base.jpeg') center/cover; min-width:0; }
+.fb-files form { display:grid; gap:12px; max-width:420px; }
+.fb-files .fb-folder { background:#fff; color:#173f49; border:2px solid #b8d5dc; min-width:130px; margin-bottom:12px; }
+.fb-files .fb-folder.is-selected { border-color:#087e9b; background:#dcf6ff; box-shadow:0 0 0 2px #087e9b; }
+.fb-status { padding:8px 14px; border-top:1px solid #93bac4; font-size:13px; }
+.fb-empty { color:#456875; }
+.fb-context { display:grid; width:160px; padding:8px; background:#fff; border:1px solid #93bac4; }
+@media(max-width:600px) { .fb-explorer-layout { grid-template-columns:100px minmax(0,1fr); }.fb-files { padding:12px; }.fb-explorer nav { padding:6px; }.fb-path { flex-basis:100%; }.fb-files .fb-folder { min-width:0; width:100%; }.fb-browser { padding:8px; } }
+@media(max-width:600px) { body.playing #taskArea.room-file-base { padding:6px; }.fb-stage>header { font-size:17px; }.fb-desktop { padding:12px; } }
