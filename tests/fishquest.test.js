@@ -87,3 +87,10 @@ test('teacher previews are not blocked by stale learner sessions', () => {
   assert.match(live, /Open the FishQuest live room from My games first/);
   assert.match(client, /err\.status === 401 \|\| err\.status === 403/);
 });
+
+test('FishQuest launch never reuses a stale browser client', () => {
+  const server = fs.readFileSync(path.join(__dirname, '..', 'image-server.js'), 'utf8');
+  const page = fs.readFileSync(path.join(__dirname, '..', 'public', 'fishquest.html'), 'utf8');
+  assert.match(server, /app\.get\('\/fishquest-client\.js'[\s\S]*Cache-Control', 'no-store, max-age=0'/);
+  assert.match(page, /fishquest-client\.js\?v=\d+/);
+});

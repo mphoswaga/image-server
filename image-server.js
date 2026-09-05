@@ -232,6 +232,10 @@ app.use((req, res, next) => {
 // served first; committed starter images fall through to public/. Both map the
 // same root-relative relpaths, so an image URL resolves from whichever has it.
 app.use(express.static(MEDIA_DIR));
+app.get('/fishquest-client.js', (req, res) => {
+  res.set('Cache-Control', 'no-store, max-age=0');
+  res.sendFile(path.join(__dirname, 'public', 'fishquest-client.js'));
+});
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(observability.requestMiddleware);
 
