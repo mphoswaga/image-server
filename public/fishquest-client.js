@@ -61,7 +61,7 @@
     for (const p of state.players) {
       seen.add(p.id); let e = entities.get(p.id);
       if (!e) { const sprite = scene.add.image(p.x, p.y, fishTexture(p.variant)); const label = scene.add.text(p.x, p.y - 34, p.name, { font: 'bold 15px Arial', color: '#ffffff', stroke: '#052c48', strokeThickness: 4 }).setOrigin(.5); e = { sprite, label, tx: p.x, ty: p.y }; entities.set(p.id, e); if (p.id === state.me) scene.cameras.main.startFollow(sprite, true, .08, .08); }
-      e.tx = p.x; e.ty = p.y; const scale = Math.sqrt(p.mass / 100); e.sprite.setScale(scale); e.sprite.setAlpha(p.respawning ? .2 : p.protected ? .72 : 1); e.label.setText(p.name).setAlpha(p.respawning ? .3 : 1);
+      e.tx = p.x; e.ty = p.y; const scale = Math.pow(p.mass / 100, .65); e.sprite.setScale(scale); e.sprite.setAlpha(p.respawning ? .2 : p.protected ? .72 : 1); e.label.setText(p.name).setAlpha(p.respawning ? .3 : 1);
     }
     for (const [id, e] of entities) if (!seen.has(id)) { e.sprite.destroy(); e.label.destroy(); entities.delete(id); }
     const foodSeen = new Set();

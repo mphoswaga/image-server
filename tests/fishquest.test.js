@@ -52,6 +52,21 @@ test('wrong answer releases both fish without rewarding attacker', () => {
   assert.deepEqual(f.match.education(f.a),{correct:0,answered:1,coverage:1,total:2});
 });
 
+test('plankton grows a fish gradually before fish meals give a larger jump', () => {
+  const f=fixture();
+  f.a.mass=100;f.b.mass=100;f.a.protectedUntil=0;f.b.protectedUntil=0;
+  for(const food of f.match.state.food)food.readyAt=Infinity;
+  f.match.state.food[0]={id:0,x:f.a.x,y:f.a.y,readyAt:0};
+  f.advance(100);f.match.tick();
+  const planktonGrowth=f.a.mass-100;
+  assert.ok(planktonGrowth>0&&planktonGrowth<=CONFIG.foodGrowth);
+  assert.equal(f.match.claim(f.a,f.b),null);
+  f.a.mass=120;f.a.x=f.b.x=900;f.a.y=f.b.y=700;
+  const before=f.a.mass,interaction=f.match.claim(f.a,f.b);
+  f.match.answer(f.a.id,{interactionId:interaction.id,choice:1});
+  assert.ok(f.a.mass-before>planktonGrowth);
+});
+
 test('timeout, disconnect and teacher end cannot leave a learner locked', () => {
   const f=fixture();f.a.mass=200;f.b.mass=100;f.a.x=f.b.x=900;f.a.y=f.b.y=700;
   let interaction=f.match.claim(f.a,f.b);f.advance(CONFIG.questionMs+1);f.match.tick();
