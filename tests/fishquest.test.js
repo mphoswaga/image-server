@@ -76,3 +76,14 @@ test('FishQuest is offered beside the existing student game choices', () => {
   assert.match(play, /location\.href='\/fishquest-play\/'\+GAME_ID/);
   assert.match(dashboard, /Open FishQuest live room/);
 });
+
+test('teacher previews are not blocked by stale learner sessions', () => {
+  const server = fs.readFileSync(path.join(__dirname, '..', 'image-server.js'), 'utf8');
+  const live = fs.readFileSync(path.join(__dirname, '..', 'fishquest-live.js'), 'utf8');
+  const client = fs.readFileSync(path.join(__dirname, '..', 'public', 'fishquest-client.js'), 'utf8');
+
+  assert.ok(server.indexOf('const teacherTok') < server.indexOf('const gameTok'));
+  assert.match(live, /__TEACHER_TEST__:/);
+  assert.match(live, /Open the FishQuest live room from My games first/);
+  assert.match(client, /err\.status === 401 \|\| err\.status === 403/);
+});

@@ -90,20 +90,22 @@ function issueGameToken(payload, kind = 'game') {
 // are unaffected by assignment tokens (assignmentId is simply undefined there).
 // Teacher path: sets req.userId (existing behaviour).
 function requireGameAccess(req, res, next) {
+  // A teacher may also have an old learner cookie from previewing another
+  // game. Their signed-in teacher session must win, otherwise that stale
+  // learner cookie makes a perfectly valid preview look like the wrong game.
+  const teacherTok = req.cookies && req.cookies[COOKIE_NAME];
+  if (teacherTok) {
+    try {
+      const p = verifyToken(teacherTok);
+      if (p) { req.userId = p; req.user = getUserById(p) || {}; return next(); }
+    } catch {}
+  }
   const gameTok = req.cookies && req.cookies[GAME_COOKIE];
   if (gameTok) {
     try {
       const p = jwt.verify(gameTok, JWT_SECRET);
       if (p.type === 'game') { req.gameSession = { studentId: p.studentId, gameId: p.gameId, name: p.name }; return next(); }
       if (p.type === 'assignment') { req.gameSession = { studentId: p.studentId, assignmentId: p.assignmentId, name: p.name }; return next(); }
-    } catch {}
-  }
-  // Fall back to teacher token.
-  const tok = req.cookies && req.cookies[COOKIE_NAME];
-  if (tok) {
-    try {
-      const p = verifyToken(tok);
-      if (p) { req.userId = p; req.user = getUserById(p) || {}; return next(); }
     } catch {}
   }
   res.status(401).json({ error: 'Not authenticated.' });

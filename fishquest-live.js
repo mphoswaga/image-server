@@ -66,7 +66,7 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
     for (const p of match.state.players) {
       const first = new Map();
       for (const a of p.attempts) if (['correct', 'incorrect', 'timeout'].includes(a.outcome) && !first.has(a.questionIndex)) first.set(a.questionIndex, a);
-      if (!first.size) continue;
+      if (!first.size || String(p.studentId).startsWith('__TEACHER_TEST__:')) continue;
       const answers = game.questions.map((_, i) => first.has(i) ? first.get(i).choice : -1);
       const score = [...first.values()].filter(a => a.correct).length;
       games.recordResult(game.id, {
@@ -119,10 +119,16 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
   app.post('/api/game/:id/fishquest/ticket', requireGameAccess, (req, res) => {
     const game = readyGame(games.getGame(req.params.id));
     if (!isFish(game)) return res.status(404).json({ error: 'FishQuest game not found.' });
-    if (!req.gameSession || req.gameSession.gameId !== game.id) return res.status(403).json({ error: 'Join this game again.' });
+    const teacherPreview = req.userId && req.userId === game.teacherId;
+    const identity = req.gameSession && req.gameSession.gameId === game.id
+      ? { studentId: req.gameSession.studentId, name: req.gameSession.name }
+      : teacherPreview
+        ? { studentId: `__TEACHER_TEST__:${req.userId}`, name: `${(req.user && (req.user.name || req.user.email)) || 'Teacher'} (test)` }
+        : null;
+    if (!identity) return res.status(403).json({ error: 'Join this lesson game again before opening FishQuest.' });
     const match = getMatch(game.id);
-    if (!match) return res.status(409).json({ error: 'The teacher has not opened this room yet.' });
-    const token = jwt.sign({ type: 'fishquest', gameId: game.id, studentId: req.gameSession.studentId, name: req.gameSession.name }, jwtSecret, { expiresIn: '2h' });
+    if (!match) return res.status(409).json({ error: teacherPreview ? 'Open the FishQuest live room from My games first.' : 'The teacher has not opened the FishQuest room yet.' });
+    const token = jwt.sign({ type: 'fishquest', gameId: game.id, ...identity }, jwtSecret, { expiresIn: '2h' });
     res.json({ token });
   });
 

@@ -23,7 +23,7 @@
   };
   async function getTicket() {
     try { ticket = (await json(`/api/game/${GAME_ID}/fishquest/ticket`, { method: 'POST' })).token; connect(); }
-    catch (err) { wait(err.message); }
+    catch (err) { if (err.status === 401 || err.status === 403) { show('join'); $('joinError').textContent = err.message; } else wait(err.message); }
   }
   function connect() {
     clearTimeout(reconnectTimer); show('arena'); $('connection').textContent = 'Connecting to the ocean...';
