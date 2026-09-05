@@ -84,7 +84,7 @@ test('teacher previews are not blocked by stale learner sessions', () => {
 
   assert.ok(server.indexOf('const teacherTok') < server.indexOf('const gameTok'));
   assert.match(live, /__TEACHER_TEST__:/);
-  assert.match(live, /Open the FishQuest live room from My games first/);
+  assert.match(live, /teacherPreview && \(!match \|\| match\.state\.phase === 'ended'\)/);
   assert.match(client, /err\.status === 401 \|\| err\.status === 403/);
 });
 
@@ -93,4 +93,13 @@ test('FishQuest launch never reuses a stale browser client', () => {
   const page = fs.readFileSync(path.join(__dirname, '..', 'public', 'fishquest.html'), 'utf8');
   assert.match(server, /app\.get\('\/fishquest-client\.js'[\s\S]*Cache-Control', 'no-store, max-age=0'/);
   assert.match(page, /fishquest-client\.js\?v=\d+/);
+});
+
+test('a teacher can launch a private FishQuest practice match directly', () => {
+  const live = fs.readFileSync(path.join(__dirname, '..', 'fishquest-live.js'), 'utf8');
+  assert.match(live, /openMatch\(game, \{ preview: true \}\)/);
+  assert.match(live, /__TEACHER_PREVIEW_BOT__/);
+  assert.match(live, /match\.start\(\)/);
+  assert.match(live, /!teacherPreview && match\.state\.preview/);
+  assert.match(live, /openMatch\(game, \{ replacePreview: true \}\)/);
 });

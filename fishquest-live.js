@@ -34,10 +34,12 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
     matches.set(gameId, match);
     return match;
   }
-  function openMatch(game) {
+  function openMatch(game, { preview = false, replacePreview = false } = {}) {
     const current = getMatch(game.id);
-    if (current && current.state.phase !== 'ended') return current;
+    if (current && current.state.phase !== 'ended' && !(replacePreview && current.state.preview)) return current;
+    if (current && current.state.preview && current.state.phase !== 'ended') current.end('preview_replaced');
     const match = new FishMatch(game, { persist: state => saveState(game.id, state) });
+    match.state.preview = preview;
     match.save();
     matches.set(game.id, match);
     return match;
@@ -66,7 +68,7 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
     for (const p of match.state.players) {
       const first = new Map();
       for (const a of p.attempts) if (['correct', 'incorrect', 'timeout'].includes(a.outcome) && !first.has(a.questionIndex)) first.set(a.questionIndex, a);
-      if (!first.size || String(p.studentId).startsWith('__TEACHER_TEST__:')) continue;
+      if (!first.size || String(p.studentId).startsWith('__TEACHER_')) continue;
       const answers = game.questions.map((_, i) => first.has(i) ? first.get(i).choice : -1);
       const score = [...first.values()].filter(a => a.correct).length;
       games.recordResult(game.id, {
@@ -100,7 +102,7 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
   });
   app.post('/api/game/:id/fishquest/open', requireAuth, (req, res) => {
     const game = owner(req, res); if (!game) return;
-    res.json(teacherPayload(game, openMatch(game)));
+    res.json(teacherPayload(game, openMatch(game, { replacePreview: true })));
   });
   app.post('/api/game/:id/fishquest/start', requireAuth, (req, res) => {
     const game = owner(req, res); if (!game) return;
@@ -126,9 +128,11 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
         ? { studentId: `__TEACHER_TEST__:${req.userId}`, name: `${(req.user && (req.user.name || req.user.email)) || 'Teacher'} (test)` }
         : null;
     if (!identity) return res.status(403).json({ error: 'Join this lesson game again before opening FishQuest.' });
-    const match = getMatch(game.id);
-    if (!match) return res.status(409).json({ error: teacherPreview ? 'Open the FishQuest live room from My games first.' : 'The teacher has not opened the FishQuest room yet.' });
-    const token = jwt.sign({ type: 'fishquest', gameId: game.id, ...identity }, jwtSecret, { expiresIn: '2h' });
+    let match = getMatch(game.id);
+    if (teacherPreview && (!match || match.state.phase === 'ended')) match = openMatch(game, { preview: true });
+    if (!match || (!teacherPreview && match.state.preview)) return res.status(409).json({ error: 'The teacher has not opened the FishQuest room yet.' });
+    const preview = teacherPreview && !!match.state.preview;
+    const token = jwt.sign({ type: 'fishquest', gameId: game.id, ...identity, preview }, jwtSecret, { expiresIn: '2h' });
     res.json({ token });
   });
 
@@ -155,6 +159,13 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
             const game = games.getGame(claim.gameId), match = getMatch(claim.gameId);
             if (!isFish(game) || !match) throw Error('Room closed');
             const p = match.join({ studentId: claim.studentId, name: claim.name });
+            if (claim.preview && match.state.preview && match.state.phase === 'lobby') {
+              const bot = match.join({ studentId: '__TEACHER_PREVIEW_BOT__', name: 'Practice fish' });
+              p.mass = 130; p.protectedUntil = 0;
+              bot.mass = 70; bot.protectedUntil = 0;
+              bot.x = Math.min(2320, p.x + 130); bot.y = p.y;
+              match.start();
+            }
             clearTimeout(authTimer); ws.gameId = game.id; ws.playerId = p.id;
             if (!clients.has(game.id)) clients.set(game.id, new Set());
             for (const old of clients.get(game.id)) if (old !== ws && old.playerId === p.id) old.close(4002, 'Opened on another device');

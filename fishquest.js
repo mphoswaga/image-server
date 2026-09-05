@@ -30,8 +30,8 @@ class FishMatch {
     }
     p.connected=true;p.dx=0;p.dy=0;p.seq=-1;this.save();this.log('join',{playerId:p.id});return p;
   }
-  start(){if(this.state.phase!=='lobby')throw Error('The match has already started.');
-    if(this.state.players.filter(p=>p.connected).length<2)throw Error('Wait for at least two learners.');
+  start(minimumPlayers=2){if(this.state.phase!=='lobby')throw Error('The match has already started.');
+    if(this.state.players.filter(p=>p.connected).length<minimumPlayers)throw Error('Wait for at least two learners.');
     this.state.phase='running';this.state.endsAt=this.now()+this.game.fishquest.durationMinutes*60000;
     for(const p of this.state.players)p.protectedUntil=this.now()+CONFIG.protectionMs;
     this.lastTick=this.now();this.save();this.log('start',{});
