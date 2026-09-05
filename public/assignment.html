@@ -195,7 +195,8 @@
     async function init() {
       try {
         const metaRes = await fetch('/api/assignment/' + assignmentId);
-        if (metaRes.status === 401) {
+        const meta = await metaRes.json();
+        if (metaRes.status === 401 || (metaRes.status === 403 && meta.error === 'Session is for a different assignment.')) {
           // No session yet (or it expired) — this happens whenever the raw
           // link is opened directly instead of via /join. Prompt inline
           // rather than rendering a broken/partial form.
@@ -204,7 +205,6 @@
           if (prefillSid) { $('auSid').value = prefillSid; $('authForm').requestSubmit(); }
           return;
         }
-        const meta = await metaRes.json();
         if (!metaRes.ok) throw new Error(meta.error || 'Could not load this assignment.');
         $('title').textContent = meta.title || 'Assignment';
         $('instructions').textContent = meta.instructions || '';

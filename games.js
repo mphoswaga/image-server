@@ -39,7 +39,7 @@ function getRoomCode(code) {
   return rooms[String(code).toUpperCase()] || null;
 }
 
-function createGame({ teacherId, teacherName, lessonTitle, subject, topic, grade, game, rosterId, cutoffAt }) {
+function createGame({ teacherId, teacherName, lessonTitle, subject, topic, grade, game, rosterId, cutoffAt, mode }) {
   fs.mkdirSync(GAMES_DIR, { recursive: true });
   const id = crypto.randomUUID().slice(0, 8); // short + shareable
   const roomCode = genRoomCode();
@@ -49,6 +49,8 @@ function createGame({ teacherId, teacherName, lessonTitle, subject, topic, grade
     roomCode,
     rosterId: rosterId || null,
     cutoffAt: cutoffAt || null,
+    mode: mode === 'fishquest' ? 'fishquest' : 'arcade',
+    fishquest: mode === 'fishquest' ? { durationMinutes: 10, lateJoin: true } : null,
     summary: game.summary || { overview: game.overview || '', concepts: game.concepts || [] },
     questions: game.questions || [],
     createdAt: new Date().toISOString(),
@@ -70,19 +72,21 @@ function loadResults(id) {
 }
 
 // Upsert a student's attempt — keep latest quiz score, keep BEST arcade score per game type.
-function recordResult(id, { studentId, name, score, total, answers, arcadeScore, gameType }) {
+function recordResult(id, { studentId, name, score, total, answers, arcadeScore, gameType, resultId, fishquest }) {
   studentId = normalizeStudentId(studentId);
   const results = loadResults(id);
   const at = new Date().toISOString();
+  if (resultId && results.some(r => r.resultId === resultId)) return results;
   const existing = results.find(r => normalizeStudentId(r.studentId) === studentId);
   if (existing) {
     const as = existing.arcadeScores || {};
     if (gameType) as[gameType] = Math.max(as[gameType] || 0, arcadeScore || 0);
-    Object.assign(existing, { name, score, total, answers, at, attempts: (existing.attempts || 1) + 1, arcadeScores: as, gameType });
+    const fishquestHistory = fishquest ? [...(existing.fishquestHistory || []), { ...fishquest, resultId, at }].slice(-20) : (existing.fishquestHistory || []);
+    Object.assign(existing, { name, score, total, answers, at, attempts: (existing.attempts || 1) + 1, arcadeScores: as, gameType, resultId: resultId || null, fishquest: fishquest || null, fishquestHistory });
   } else {
     const arcadeScores = {};
     if (gameType) arcadeScores[gameType] = arcadeScore || 0;
-    results.push({ studentId, name, score, total, answers, at, attempts: 1, arcadeScores, gameType: gameType || null });
+    results.push({ studentId, name, score, total, answers, at, attempts: 1, arcadeScores, gameType: gameType || null, resultId: resultId || null, fishquest: fishquest || null, fishquestHistory: fishquest ? [{ ...fishquest, resultId, at }] : [] });
   }
   writeJsonAtomic(resultsPath(id), results);
   return results;
@@ -111,6 +115,7 @@ function listTeacherGames(teacherId) {
       id: g.id, lessonTitle: g.lessonTitle, subject: g.subject, topic: g.topic, grade: g.grade,
       questionCount: (g.questions || []).length, createdAt: g.createdAt, plays: loadResults(g.id).length,
       roomCode: g.roomCode || null, rosterId: g.rosterId || null, cutoffAt: g.cutoffAt || null,
+      mode: g.mode || 'arcade',
     }))
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
@@ -124,4 +129,24 @@ function updateGameCutoff(id, cutoffAt) {
   return g;
 }
 
-module.exports = { createGame, getGame, recordResult, getResults, getHighScores, listTeacherGames, getRoomCode, updateGameCutoff, normalizeStudentId };
+function updateFishQuest(id, config) {
+  const p = gamePath(String(id));
+  if (!fs.existsSync(p)) return null;
+  const g = JSON.parse(fs.readFileSync(p, 'utf8'));
+  if ((g.mode || 'arcade') !== 'fishquest') return null;
+  const durationMinutes = Math.min(30, Math.max(3, Number(config.durationMinutes) || 10));
+  g.fishquest = { durationMinutes, lateJoin: config.lateJoin !== false };
+  if (Array.isArray(config.questions)) {
+    g.questions = config.questions.map((q, i) => ({
+      question: String(q.question || '').trim(),
+      options: Array.isArray(q.options) ? q.options.map(v => String(v || '').trim()).slice(0, 4) : [],
+      correctIndex: Number(q.correctIndex),
+      explanation: String(q.explanation || '').trim(),
+    })).filter(q => q.question && q.options.length >= 2 && Number.isInteger(q.correctIndex) && q.correctIndex >= 0 && q.correctIndex < q.options.length);
+  }
+  if (!g.questions.length) throw new Error('Add at least one complete question.');
+  writeJsonAtomic(p, g);
+  return g;
+}
+
+module.exports = { createGame, getGame, recordResult, getResults, getHighScores, listTeacherGames, getRoomCode, updateGameCutoff, updateFishQuest, normalizeStudentId };

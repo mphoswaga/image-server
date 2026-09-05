@@ -12,7 +12,7 @@
     "test:e2e": "playwright test",
     "test:e2e:update": "playwright test --update-snapshots",
     "check:release": "npm run check && npm test && npm run test:e2e",
-    "check:html": "node scripts/check-html-scripts.mjs public/index.html public/assignment.html public/join.html public/my-work.html public/oauth-consent.html public/play.html public/start.html practice.html practice-teacher.html",
+    "check:html": "node scripts/check-html-scripts.mjs public/index.html public/assignment.html public/fishquest.html public/fishquest-teacher.html public/join.html public/my-work.html public/oauth-consent.html public/play.html public/start.html practice.html practice-teacher.html",
     "check:server": "for f in *.js; do node --check \"$f\" || exit 1; done",
     "check": "npm run check:server && npm run check:html",
     "deployed": "node scripts/deployed.js",
@@ -43,10 +43,12 @@
     "multer": "^2.2.0",
     "openai": "^6.49.0",
     "pdf-parse": "^2.4.5",
+    "phaser": "^3.90.0",
     "pizzip": "^3.2.0",
     "pptxgenjs": "^4.0.1",
     "qrcode": "^1.5.4",
     "sharp": "^0.35.3",
+    "ws": "^8.21.3",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

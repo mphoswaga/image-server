@@ -1231,12 +1231,13 @@
       livePollTimer=setInterval(()=>{ if(!document.hidden) refreshLiveRoom(); },3000);
     }
 
+    let refreshingLiveRoom=false;
     async function refreshLiveRoom() {
-      if(!liveRoom) return;
+      if(!liveRoom || refreshingLiveRoom) return;
+      refreshingLiveRoom=true;
       try {
-        const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(liveRoom.code)}`,{headers:{'X-Practice-Participant':liveParticipantToken}});
-        if(!response.ok) throw new Error('Room ended');
-        const payload=await response.json();
+        const {response,data:payload}=await checkpointRequest(`/api/practice/live-sessions/${encodeURIComponent(liveRoom.code)}`,{headers:{'X-Practice-Participant':liveParticipantToken}});
+        if(!response.ok) throw new Error('Room connection unavailable');
         const wasWaiting=liveRoomWaiting(liveRoom);
         liveRoom=payload.room;
         if(payload.participant) liveParticipant=payload.participant;
@@ -1247,16 +1248,9 @@
         renderLiveBoard(liveRoom);
         syncLiveDeadline(liveRoom);
       }catch{
-        clearInterval(livePollTimer);
-        clearInterval(liveDeadlineTimer);
-        liveRoom=null;
-        liveParticipant=null;
-        liveParticipantToken='';
-        $('liveStrip').hidden=true;
-        $('previewNote').textContent='Solo guest play · Progress is not saved';
-        syncAudioPolicy(null);
-        setSave('The live room has ended. You can finish this game on your own.',true);
-      }
+        // A transport failure is not evidence that the teacher ended the room.
+        setSave('Connection interrupted. Reconnecting to your class...',true);
+      } finally { refreshingLiveRoom=false; }
     }
 
     async function joinLiveRoom() {
@@ -1962,20 +1956,22 @@
       setTimeout(()=>$('missionTransition').classList.remove('show'),900);
     }
 
+    let lastMistakeEffect=0;
     function registerWrong(message) {
-      if (phase === 'show' || independentSaved) return;
+      if (paused || phase === 'show' || independentSaved || roundLocked) return;
       stats.attempts += 1;
       stats.mistakes += 1;
       combo = 0;
       updateHud();
-      $('taskArea').classList.remove('wrong-shake');
-      void $('taskArea').offsetWidth;
-      $('taskArea').classList.add('wrong-shake');
-      playCue('wrong');
-      setByteState('retry');
       $('feedback').textContent = message;
       $('feedback').className = 'feedback show';
-      narrate(message);
+      const now=performance.now();
+      if(now-lastMistakeEffect<500) return;
+      lastMistakeEffect=now;
+      // Optional effects must not interrupt the caller's input/recovery logic.
+      try { setByteState('retry'); } catch (error) { console.warn('Byte feedback unavailable',error); }
+      try { playCue('wrong'); } catch (error) { console.warn('Mistake audio unavailable',error); }
+      try { narrate(message); } catch (error) { console.warn('Read aloud unavailable',error); }
     }
 
     function showRoomClearCard() {
@@ -2328,12 +2324,11 @@
             try {
               const saved=JSON.parse(sessionStorage.getItem(liveStorageKey(requestedSessionCode))||'null');
               if(saved&&saved.token&&saved.participant){
-                const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(requestedSessionCode)}`);
-                const payload=await response.json();
+                const {response,data:payload}=await checkpointRequest(`/api/practice/live-sessions/${encodeURIComponent(requestedSessionCode)}`,{headers:{'X-Practice-Participant':saved.token}});
                 const sameWorld=roomWorld(payload.room)===requestedWorld;
                 const continuingFoundationRoom=requestedContinue&&requestedWorld==='g3'&&roomWorld(payload.room)==='foundation';
                 if(response.ok&&(sameWorld||continuingFoundationRoom)){
-                  activateLiveRoom({...saved,room:payload.room});
+                  activateLiveRoom({...saved,room:payload.room,participant:payload.participant||saved.participant});
                   if(requestedContinue) await beginAttempt(false);
                   return;
                 }

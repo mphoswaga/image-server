@@ -4,6 +4,32 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname,'..','practice.html'),'utf8');
+test('failed room polling retains the learner identity and allows another poll',async()=>{
+  let calls=0;
+  const context=vm.createContext({liveRoom:{code:'ABCDEF'},liveParticipant:{id:'learner'},liveParticipantToken:'token',
+    checkpointRequest:async()=>{calls++;throw Error('offline');},setSave:()=>{}});
+  vm.runInContext(source.slice(source.indexOf('    let refreshingLiveRoom='),source.indexOf('    async function joinLiveRoom()')),context);
+  await vm.runInContext('refreshLiveRoom()',context);
+  await vm.runInContext('refreshLiveRoom()',context);
+  assert.equal(calls,2);
+  assert.equal(context.liveRoom.code,'ABCDEF');
+  assert.equal(context.liveParticipantToken,'token');
+  assert.equal(context.liveParticipant.id,'learner');
+});
+test('mistakes remain recoverable when audio and narration throw',()=>{
+  const feedback={}; let effects=0;
+  const context=vm.createContext({paused:false,phase:'independent',independentSaved:false,roundLocked:false,
+    stats:{attempts:0,mistakes:0},combo:4,updateHud:()=>{},$:()=>feedback,
+    performance:{now:()=>1000},console:{warn:()=>{}},setByteState:()=>{},
+    playCue:()=>{effects++;throw Error('audio unavailable');},narrate:()=>{throw Error('speech unavailable');}});
+  vm.runInContext(source.slice(source.indexOf('    let lastMistakeEffect='),source.indexOf('    function showRoomClearCard()')),context);
+  for(let i=0;i<100;i++) assert.doesNotThrow(()=>vm.runInContext("registerWrong('Try the next key')",context));
+  assert.equal(context.stats.mistakes,100);
+  assert.equal(effects,1);
+  assert.equal(feedback.textContent,'Try the next key');
+  context.paused=true;vm.runInContext("registerWrong('ignored')",context);
+  assert.equal(context.stats.mistakes,100);
+});
 function harness() {
   const timers = new Map();
   const events = {};

@@ -3034,6 +3034,8 @@
           </select>
           <label for="gameQCount" style="font-size:13px;font-weight:600;white-space:nowrap">Questions</label>
           <input id="gameQCount" type="number" min="4" max="20" value="6" style="width:64px;font-size:13px;padding:8px 10px" />
+          <label for="gameMode" style="font-size:13px;font-weight:600;white-space:nowrap">Game style</label>
+          <select id="gameMode" style="width:auto;font-size:13px;padding:8px 10px"><option value="arcade">Solo arcade</option><option value="fishquest">FishQuest live multiplayer</option></select>
         </div>
         <div class="cutoff-field">
           <label for="gameCutoff">Close game at <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
@@ -3141,6 +3143,7 @@
             </select>
           </div>
           <div><label for="pptxQCount" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Questions (4–20)</label><input id="pptxQCount" type="number" min="4" max="20" value="6" style="width:100%;box-sizing:border-box;font-size:13px;padding:8px 10px" /></div>
+          <div><label for="pptxMode" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Game style</label><select id="pptxMode" style="width:100%;font-size:13px;padding:8px 10px"><option value="arcade">Solo arcade</option><option value="fishquest">FishQuest live multiplayer</option></select></div>
           <div style="grid-column:1/-1"><label for="pptxRosterPick" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Class roster <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
             <select id="pptxRosterPick" style="width:100%;font-size:13px;padding:8px 10px;box-sizing:border-box">
               <option value="">— No roster (free-form names) —</option>
@@ -6407,7 +6410,8 @@
       const rosterId=$('gameRosterPick').value||null;
       const questionCount=Math.min(20,Math.max(4,parseInt($('gameQCount').value,10)||6));
       const cutoffAt=$('gameCutoff').value||null;
-      try{ const r=await fetch('/api/game',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deckId:currentDeckId,rosterId,questionCount,cutoffAt})});
+      const mode=$('gameMode').value;
+      try{ const r=await fetch('/api/game',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deckId:currentDeckId,rosterId,questionCount,cutoffAt,mode})});
         const d=await r.json(); if(creditBlocked(r,d)){ b.disabled=false; b.innerHTML=o; return; } if(!r.ok) throw new Error(d.error);
         refreshCredits();
         const url=location.origin+d.path;
@@ -6417,6 +6421,7 @@
           ${d.roomCode?`<div style="margin-bottom:14px"><p style="font-size:13px;font-weight:600;margin-bottom:6px">Room Code — show this on the board:</p><div style="font-size:36px;font-weight:900;letter-spacing:6px;color:var(--primary);background:#e8f0fb;display:inline-block;padding:10px 20px;border-radius:10px">${esc(d.roomCode)}</div><p class="hint" style="margin-top:6px">Students go to <b>${esc(joinUrl)}</b> and type this code.</p></div>`:''}
           <div class="game-link"><input id="gameUrl" readonly value="${esc(url)}"><button type="button" class="btn ghost" id="copyGameBtn" style="width:auto;padding:10px 14px">${ICON('i-doc')} Copy link</button></div>
           <p class="hint" style="margin:10px 0 2px">${d.questionCount} questions · ${rosterId?'roster attached':'no roster — free-form names'}.</p>
+          ${d.mode==='fishquest'?`<a class="btn accent" href="/fishquest/${esc(d.gameId)}" style="display:inline-flex;width:auto;margin:8px 0">${ICON('i-gamepad')} Open FishQuest control room</a>`:''}
           ${d.roomCode&&rosterId?`<a href="/api/game/${esc(d.gameId)}/qr-sheet" style="font-size:13px;font-weight:600;color:var(--primary);display:inline-flex;align-items:center;gap:4px;margin-bottom:8px">${ICON('i-image')} Print QR cards</a>`:''}
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px"><b style="font-size:14px;color:var(--primary)">Results</b><button type="button" id="refreshResBtn" style="font-size:12.5px;font-weight:600;padding:6px 11px;border:1px solid var(--border);border-radius:9px;background:#fff;color:var(--primary);cursor:pointer;display:inline-flex;align-items:center;gap:6px">${ICON('i-refresh')} Refresh</button></div>
           <div id="gameResults"></div>`;
@@ -6781,7 +6786,7 @@
             <div class="gc-top">
               <div>
                 <div class="gc-title">${esc(g.lessonTitle)}</div>
-                <div class="gc-meta">${subjectChip}${gradeChip}<span class="gc-chip">${g.questionCount} Qs</span><span class="gc-chip">${g.plays} played</span></div>
+                <div class="gc-meta">${subjectChip}${gradeChip}<span class="gc-chip">${g.questionCount} Qs</span><span class="gc-chip">${g.plays} played</span>${g.mode==='fishquest'?'<span class="gc-chip" style="background:#d9fbf5;color:#087653">FishQuest multiplayer</span>':''}</div>
                 <div class="gc-dates"><span>Created ${fmtDate(g.createdAt)}</span>${cutoffLine}${badge}</div>
               </div>
               ${g.roomCode?`<div style="text-align:right"><span class="room-label">Room code</span><div class="room-code">${esc(g.roomCode)}</div></div>`:''}
@@ -6792,6 +6797,7 @@
             <div class="game-link"><input readonly value="${esc(url)}"><button type="button" class="btn ghost gcopy" data-url="${esc(url)}" style="width:auto;padding:9px 13px">${ICON('i-doc')} Copy</button></div>
             ${g.rosterId?`<a href="/api/game/${esc(g.id)}/qr-sheet" style="font-size:12.5px;font-weight:600;color:var(--primary);display:inline-flex;align-items:center;gap:4px;margin-top:8px">${ICON('i-image')} Print QR cards</a>`:''}
             <div class="gc-actions" style="margin-top:10px">
+              ${g.mode==='fishquest'?`<a class="btn accent" href="/fishquest/${esc(g.id)}" style="font-size:12px;padding:7px 12px;width:auto;text-decoration:none">Open control room</a>`:''}
               <button type="button" class="btn ghost gc-extend-btn" data-id="${esc(g.id)}" data-row="${extRowId}" style="font-size:12px;padding:6px 12px;width:auto">Extend deadline</button>
             </div>
             <div class="gc-extend-row" id="${extRowId}">
@@ -6867,7 +6873,8 @@
       container.innerHTML=`
         ${d.roomCode?`<div style="margin-bottom:12px"><p style="font-size:13px;font-weight:600;margin-bottom:6px">Room Code — show this on the board:</p><div style="font-size:32px;font-weight:900;letter-spacing:6px;color:var(--primary);background:#e8f0fb;display:inline-block;padding:8px 18px;border-radius:10px">${esc(d.roomCode)}</div><p class="hint" style="margin-top:6px">Students go to <b>${esc(joinUrl)}</b> and type this code.</p></div>`:''}
         <div class="game-link"><input id="pptxGameUrl" readonly value="${esc(url)}"><button type="button" class="btn ghost" id="pptxCopyBtn" style="width:auto;padding:10px 14px">${ICON('i-doc')} Copy link</button></div>
-        <p class="hint" style="margin:8px 0 0">${d.questionCount} questions · ${rosterId?'roster attached':'free-form names'}.</p>`;
+        <p class="hint" style="margin:8px 0 0">${d.questionCount} questions · ${rosterId?'roster attached':'free-form names'}.</p>
+        ${d.mode==='fishquest'?`<a class="btn accent" href="/fishquest/${esc(d.gameId)}" style="display:inline-flex;width:auto;margin-top:10px">${ICON('i-gamepad')} Open FishQuest control room</a>`:''}`;
       document.getElementById('pptxCopyBtn').addEventListener('click',()=>copyLink(url));
     }
     const pptxDrop=$('pptxDrop');
@@ -6890,6 +6897,7 @@
       fd.append('questionCount',Math.min(20,Math.max(4,parseInt($('pptxQCount').value,10)||6)));
       fd.append('rosterId',$('pptxRosterPick').value||'');
       fd.append('cutoffAt',$('pptxCutoff').value||'');
+      fd.append('mode',$('pptxMode').value);
       try{
         const r=await fetch('/api/game/from-pptx',{method:'POST',body:fd});
         const d=await r.json(); if(creditBlocked(r,d)){ btn.disabled=false; btn.innerHTML=orig; return; } if(!r.ok) throw new Error(d.error);

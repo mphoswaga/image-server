@@ -62,6 +62,7 @@ const releaseManager = require('./release-manager');
 const planningFramework = require('./planning-framework');
 const practice = require('./practice');
 const practiceLive = require('./practice-live');
+const { createFishQuestLive } = require('./fishquest-live');
 const { runWithUser, usageSnapshot, usageSince, declareAction } = require('./ai-client');
 const usage = require('./usage');
 const jwt = require('jsonwebtoken');
@@ -2542,7 +2543,7 @@ app.get('/api/assignment/:id', requireAssignmentAccess, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
   const session = assignmentStudentSession(req, res, a);
-  if (req.gameSession && req.gameSession.assignmentId && !session) return res.status(403).json({ error: 'Session is for a different assignment.' });
+  if (req.gameSession && req.gameSession.assignmentId && !session) return res.status(401).json({ code:'ASSIGNMENT_REJOIN_REQUIRED', error: 'Join this assignment to continue. Your other assignment is still saved.' });
   res.json({ id: a.id, type: a.type, title: a.title, subject: a.subject, topic: a.topic, grade: a.grade, teacherName: a.teacherName, hasRoster: !!a.rosterId, students: a.rosterId ? classListFor(a.teacherId, a.rosterId, a.id) : [], instructions: a.content.instructions, questionCount: a.content.questions.length });
 });
 
@@ -2551,7 +2552,7 @@ app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
   const session = assignmentStudentSession(req, res, a);
-  if (req.gameSession && req.gameSession.assignmentId && !session) return res.status(403).json({ error: 'Session is for a different assignment.' });
+  if (req.gameSession && req.gameSession.assignmentId && !session) return res.status(401).json({ code:'ASSIGNMENT_REJOIN_REQUIRED', error: 'Join this assignment to continue. Your other assignment is still saved.' });
   const already = session && assignments.getSubmission(a.id, session.studentId);
   res.json({
     title: a.title, instructions: a.content.instructions,
@@ -3356,6 +3357,8 @@ app.post('/api/google-slides/export/:id', requireAuth, async (req, res) => {
 });
 
 // ── Student game: create from a deck, play, store results ──────────────────
+const fishQuestLive = createFishQuestLive({ app, games, roster, requireAuth, requireGameAccess, jwtSecret: JWT_SECRET });
+
 // Teacher: turn the current deck into a shareable, persistent student game.
 app.post('/api/game', requireAuth, generationLimiter, async (req, res) => {
   if (req.user.role === 'student') return res.status(403).json({ error: 'Teachers only.' });
@@ -3369,9 +3372,10 @@ app.post('/api/game', requireAuth, generationLimiter, async (req, res) => {
     const lessonTitle = (deck.slides.find(s => s.type === 'title') || {}).title || deck.topic;
     const rosterId = (req.body && req.body.rosterId) || null;
     const cutoffAt = (req.body && req.body.cutoffAt) || null;
-    const rec = games.createGame({ teacherId: req.userId, teacherName: req.user.name, lessonTitle, subject: deck.subject, topic: deck.topic, grade: deck.grade, game, rosterId, cutoffAt });
+    const mode = req.body && req.body.mode === 'fishquest' ? 'fishquest' : 'arcade';
+    const rec = games.createGame({ teacherId: req.userId, teacherName: req.user.name, lessonTitle, subject: deck.subject, topic: deck.topic, grade: deck.grade, game, rosterId, cutoffAt, mode });
     await capture(req, reservation, 'lessonscope.generate_game', rec.id);
-    res.json({ gameId: rec.id, path: `/play/${rec.id}`, questionCount: rec.questions.length, roomCode: rec.roomCode });
+    res.json({ gameId: rec.id, path: `/play/${rec.id}`, questionCount: rec.questions.length, roomCode: rec.roomCode, mode: rec.mode });
   } catch (err) {
     await release(req, reservation, 'lessonscope.generate_game', err.message);
     console.error('Game creation failed:', err.message);
@@ -3395,9 +3399,10 @@ app.post('/api/game/from-pptx', requireAuth, generationLimiter, upload.single('f
   try {
     const lessonPlanText = await extractText(req.file.buffer, req.file.originalname);
     const game = await generateGame({ subject, topic, grade, objectives: '', lessonPlanText, questionCount });
-    const rec = games.createGame({ teacherId: req.userId, teacherName: req.user.name, lessonTitle: topic, subject, topic, grade, game, rosterId, cutoffAt });
+    const mode = req.body && req.body.mode === 'fishquest' ? 'fishquest' : 'arcade';
+    const rec = games.createGame({ teacherId: req.userId, teacherName: req.user.name, lessonTitle: topic, subject, topic, grade, game, rosterId, cutoffAt, mode });
     await capture(req, reservation, 'lessonscope.generate_game', rec.id);
-    res.json({ gameId: rec.id, path: `/play/${rec.id}`, questionCount: rec.questions.length, roomCode: rec.roomCode });
+    res.json({ gameId: rec.id, path: `/play/${rec.id}`, questionCount: rec.questions.length, roomCode: rec.roomCode, mode: rec.mode });
   } catch (err) {
     await release(req, reservation, 'lessonscope.generate_game', err.message);
     console.error('Game from pptx failed:', err.message);
@@ -3486,13 +3491,14 @@ app.get('/api/game/:id', requireGameAccess, (req, res) => {
   // Students must hold a session for THIS game.
   if (req.gameSession && req.gameSession.gameId !== g.id) return res.status(403).json({ error: 'Session is for a different game.' });
   const hasRoster = !!g.rosterId;
-  res.json({ id: g.id, lessonTitle: g.lessonTitle, subject: g.subject, topic: g.topic, grade: g.grade, summary: g.summary, questionCount: (g.questions || []).length, teacherName: g.teacherName, hasRoster, students: hasRoster ? classListFor(g.teacherId, g.rosterId, g.id) : [], highScores: games.getHighScores(g.id) });
+  res.json({ id: g.id, lessonTitle: g.lessonTitle, subject: g.subject, topic: g.topic, grade: g.grade, mode: g.mode || 'arcade', summary: g.summary, questionCount: (g.questions || []).length, teacherName: g.teacherName, hasRoster, students: hasRoster ? classListFor(g.teacherId, g.rosterId, g.id) : [], highScores: games.getHighScores(g.id) });
 });
 
 // Student: the questions, WITHOUT the correct answers.
 app.get('/api/game/:id/play', requireGameAccess, (req, res) => {
   const g = games.getGame(req.params.id);
   if (!g) return res.status(404).json({ error: 'Game not found.' });
+  if ((g.mode || 'arcade') === 'fishquest') return res.status(409).json({ error: 'FishQuest questions are delivered privately during encounters.' });
   if (req.gameSession && req.gameSession.gameId !== g.id) return res.status(403).json({ error: 'Session is for a different game.' });
   res.json({ questions: g.questions.map((q, i) => ({ i, question: q.question, options: q.options })) });
 });
@@ -3501,6 +3507,7 @@ app.get('/api/game/:id/play', requireGameAccess, (req, res) => {
 app.post('/api/game/:id/answer', requireGameAccess, (req, res) => {
   const g = games.getGame(req.params.id);
   if (!g) return res.status(404).json({ error: 'Game not found.' });
+  if ((g.mode || 'arcade') === 'fishquest') return res.status(409).json({ error: 'Answers are checked by the live FishQuest server.' });
   if (req.gameSession && req.gameSession.gameId !== g.id) return res.status(403).json({ error: 'Session is for a different game.' });
   const q = g.questions[Number(req.body.questionIndex)];
   if (!q) return res.status(400).json({ error: 'bad question' });
@@ -3511,6 +3518,7 @@ app.post('/api/game/:id/answer', requireGameAccess, (req, res) => {
 app.post('/api/game/:id/finish', requireGameAccess, (req, res) => {
   const g = games.getGame(req.params.id);
   if (!g) return res.status(404).json({ error: 'Game not found.' });
+  if ((g.mode || 'arcade') === 'fishquest') return res.status(409).json({ error: 'FishQuest results are saved by the live match server.' });
   if (req.gameSession && req.gameSession.gameId !== g.id) return res.status(403).json({ error: 'Session is for a different game.' });
   const answers = Array.isArray(req.body.answers) ? req.body.answers : [];
   let score = 0;
@@ -3543,7 +3551,7 @@ app.get('/api/game/:id/results', requireAuth, (req, res) => {
     .map(r => ({
       studentId: r.studentId,
       name: rosterMap[roster.normalizeStudentId(r.studentId)] || r.name,
-      score: r.score, total: r.total, at: r.at, attempts: r.attempts,
+      score: r.score, total: r.total, at: r.at, attempts: r.attempts, arcadeScore: r.arcadeScores && r.arcadeScores.fishquest, fishquest: r.fishquest || null,
     }))
     .sort((a, b) => b.score - a.score || (a.at < b.at ? -1 : 1));
   // Per-question breakdown: how many players got each question right (games
@@ -3844,7 +3852,11 @@ app.get('/practice/preview', requirePracticeEnabled, requireAuth, (req, res) => 
 app.get('/practice', requirePracticeEnabled, (req, res) => res.sendFile(path.join(__dirname, 'practice-teacher.html')));
 
 // Student play page (the shareable link target).
-app.get('/play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'play.html')));
+app.get('/play/:id', (req, res) => {
+  const game = games.getGame(req.params.id);
+  res.sendFile(path.join(__dirname, 'public', game && (game.mode || 'arcade') === 'fishquest' ? 'fishquest.html' : 'play.html'));
+});
+app.get('/fishquest/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'fishquest-teacher.html')));
 
 // Student assignment page (worksheet/exit-ticket/quiz online submission).
 app.get('/assignment/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'assignment.html')));
@@ -4307,4 +4319,5 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => console.log(`LessonCope running at http://localhost:${PORT}`));
+const httpServer = app.listen(PORT, () => console.log(`LessonCope running at http://localhost:${PORT}`));
+fishQuestLive.attach(httpServer);
