@@ -103,3 +103,10 @@ test('a teacher can launch a private FishQuest practice match directly', () => {
   assert.match(live, /!teacherPreview && match\.state\.preview/);
   assert.match(live, /openMatch\(game, \{ replacePreview: true \}\)/);
 });
+
+test('FishQuest answer buttons remain mounted while live state updates arrive', () => {
+  const client = fs.readFileSync(path.join(__dirname, '..', 'public', 'fishquest-client.js'), 'utf8');
+  assert.match(client, /renderedQuestionId === q\.id/);
+  assert.match(client, /renderedQuestionId = q\.id/);
+  assert.match(client, /socket\.readyState !== WebSocket\.OPEN/);
+});

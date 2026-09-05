@@ -1,7 +1,7 @@
 (() => {
   const $ = id => document.getElementById(id);
   const GAME_ID = location.pathname.split('/').filter(Boolean).pop();
-  let meta, socket, state, scene, rendererStarting = false, me, reconnects = 0, seq = 0, ticket = '', reconnectTimer;
+  let meta, socket, state, scene, rendererStarting = false, me, reconnects = 0, seq = 0, ticket = '', reconnectTimer, renderedQuestionId = null;
   const keys = new Set(); let touch = { x: 0, y: 0 }, entities = new Map(), foods = new Map(), lastEvent = null, qTimer;
   function show(id) { document.querySelectorAll('.screen').forEach(el => el.classList.toggle('show', el.id === id)); }
   async function json(url, options) { const r = await fetch(url, options); const d = await r.json().catch(() => ({})); if (!r.ok) { const e = Error(d.error || 'Please try again.'); e.status = r.status; throw e; } return d; }
@@ -74,9 +74,17 @@
     if (me) scene.cameras.main.setZoom(Math.max(.58, Math.min(1.05, 1.02 - (me.mass-100)/1600)));
   }
   function renderQuestion() {
-    const q = state.question; $('question').hidden = !q; clearInterval(qTimer); if (!q) return;
+    const q = state.question;
+    if (!q) {
+      $('question').hidden = true;
+      if (renderedQuestionId) { renderedQuestionId = null; clearInterval(qTimer); $('options').innerHTML = ''; }
+      return;
+    }
+    $('question').hidden = false;
+    if (renderedQuestionId === q.id) return;
+    renderedQuestionId = q.id; clearInterval(qTimer);
     $('prompt').textContent = q.prompt; $('options').innerHTML = '';
-    q.options.forEach((option, choice) => { const b = document.createElement('button'); b.className='option'; b.textContent=option; b.onclick=()=>{ document.querySelectorAll('.option').forEach(x=>x.disabled=true); socket.send(JSON.stringify({ type:'answer', interactionId:q.id, choice })); }; $('options').appendChild(b); });
+    q.options.forEach((option, choice) => { const b = document.createElement('button'); b.className='option'; b.textContent=option; b.onclick=()=>{ if (!socket || socket.readyState !== WebSocket.OPEN) { toast('Reconnecting. Try that answer again.', false); return; } document.querySelectorAll('.option').forEach(x=>x.disabled=true); socket.send(JSON.stringify({ type:'answer', interactionId:q.id, choice })); }; $('options').appendChild(b); });
     const update=()=>{ $('qtime').textContent=`${Math.max(0,Math.ceil((q.expiresAt-Date.now())/1000))} seconds left`; }; update();qTimer=setInterval(update,250);
   }
   function finish() {

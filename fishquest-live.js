@@ -161,10 +161,12 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
             const p = match.join({ studentId: claim.studentId, name: claim.name });
             if (claim.preview && match.state.preview && match.state.phase === 'lobby') {
               const bot = match.join({ studentId: '__TEACHER_PREVIEW_BOT__', name: 'Practice fish' });
-              p.mass = 130; p.protectedUntil = 0;
-              bot.mass = 70; bot.protectedUntil = 0;
-              bot.x = Math.min(2320, p.x + 130); bot.y = p.y;
+              p.mass = 130;
+              bot.mass = 70;
+              bot.x = Math.max(80, Math.min(2320, p.x + (p.x > 1200 ? -130 : 130))); bot.y = p.y;
               match.start();
+              p.protectedUntil = 0; bot.protectedUntil = 0;
+              match.save();
             }
             clearTimeout(authTimer); ws.gameId = game.id; ws.playerId = p.id;
             if (!clients.has(game.id)) clients.set(game.id, new Set());
