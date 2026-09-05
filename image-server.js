@@ -3498,7 +3498,6 @@ app.get('/api/game/:id', requireGameAccess, (req, res) => {
 app.get('/api/game/:id/play', requireGameAccess, (req, res) => {
   const g = games.getGame(req.params.id);
   if (!g) return res.status(404).json({ error: 'Game not found.' });
-  if ((g.mode || 'arcade') === 'fishquest') return res.status(409).json({ error: 'FishQuest questions are delivered privately during encounters.' });
   if (req.gameSession && req.gameSession.gameId !== g.id) return res.status(403).json({ error: 'Session is for a different game.' });
   res.json({ questions: g.questions.map((q, i) => ({ i, question: q.question, options: q.options })) });
 });
@@ -3507,7 +3506,6 @@ app.get('/api/game/:id/play', requireGameAccess, (req, res) => {
 app.post('/api/game/:id/answer', requireGameAccess, (req, res) => {
   const g = games.getGame(req.params.id);
   if (!g) return res.status(404).json({ error: 'Game not found.' });
-  if ((g.mode || 'arcade') === 'fishquest') return res.status(409).json({ error: 'Answers are checked by the live FishQuest server.' });
   if (req.gameSession && req.gameSession.gameId !== g.id) return res.status(403).json({ error: 'Session is for a different game.' });
   const q = g.questions[Number(req.body.questionIndex)];
   if (!q) return res.status(400).json({ error: 'bad question' });
@@ -3518,7 +3516,6 @@ app.post('/api/game/:id/answer', requireGameAccess, (req, res) => {
 app.post('/api/game/:id/finish', requireGameAccess, (req, res) => {
   const g = games.getGame(req.params.id);
   if (!g) return res.status(404).json({ error: 'Game not found.' });
-  if ((g.mode || 'arcade') === 'fishquest') return res.status(409).json({ error: 'FishQuest results are saved by the live match server.' });
   if (req.gameSession && req.gameSession.gameId !== g.id) return res.status(403).json({ error: 'Session is for a different game.' });
   const answers = Array.isArray(req.body.answers) ? req.body.answers : [];
   let score = 0;
@@ -3852,10 +3849,8 @@ app.get('/practice/preview', requirePracticeEnabled, requireAuth, (req, res) => 
 app.get('/practice', requirePracticeEnabled, (req, res) => res.sendFile(path.join(__dirname, 'practice-teacher.html')));
 
 // Student play page (the shareable link target).
-app.get('/play/:id', (req, res) => {
-  const game = games.getGame(req.params.id);
-  res.sendFile(path.join(__dirname, 'public', game && (game.mode || 'arcade') === 'fishquest' ? 'fishquest.html' : 'play.html'));
-});
+app.get('/play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'play.html')));
+app.get('/fishquest-play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'fishquest.html')));
 app.get('/fishquest/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'fishquest-teacher.html')));
 
 // Student assignment page (worksheet/exit-ticket/quiz online submission).

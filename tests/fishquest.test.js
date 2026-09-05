@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const { FishMatch, CONFIG } = require('../fishquest');
 
 function fixture() {
@@ -65,4 +67,12 @@ test('reconnect resets stale input sequence and snapshot does not expose answers
   const same=f.match.join({studentId:'A',name:'Amina'});assert.equal(same.id,f.a.id);assert.equal(same.seq,-1);
   f.match.input(same.id,{seq:0,x:-1,y:0});assert.equal(same.dx,-1);
   const json=JSON.stringify(f.match.snapshot(same.id));assert.equal(json.includes('correctIndex'),false);
+});
+
+test('FishQuest is offered beside the existing student game choices', () => {
+  const play = fs.readFileSync(path.join(__dirname, '..', 'public', 'play.html'), 'utf8');
+  const dashboard = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.match(play, /class="game-pick" data-game="fishquest"/);
+  assert.match(play, /location\.href='\/fishquest-play\/'\+GAME_ID/);
+  assert.match(dashboard, /Open FishQuest live room/);
 });

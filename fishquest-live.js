@@ -17,12 +17,13 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
   const clients = new Map();
   let wss = null;
 
-  function isFish(game) { return game && (game.mode || 'arcade') === 'fishquest'; }
+  function isFish(game) { return !!(game && Array.isArray(game.questions) && game.questions.length); }
+  function readyGame(game) { return game ? { ...game, fishquest: game.fishquest || { durationMinutes: 10, lateJoin: true } } : null; }
   function saveState(gameId, state) { writeJsonAtomic(fileFor(gameId), state); }
   function loadState(gameId) { try { return JSON.parse(fs.readFileSync(fileFor(gameId), 'utf8')); } catch { return null; } }
   function getMatch(gameId) {
     if (matches.has(gameId)) return matches.get(gameId);
-    const game = games.getGame(gameId);
+    const game = readyGame(games.getGame(gameId));
     if (!isFish(game)) return null;
     const stored = loadState(gameId);
     if (!stored) return null;
@@ -42,7 +43,7 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
     return match;
   }
   function owner(req, res) {
-    const game = games.getGame(req.params.id);
+    const game = readyGame(games.getGame(req.params.id));
     if (!game) { res.status(404).json({ error: 'Game not found.' }); return null; }
     if (game.teacherId !== req.userId) { res.status(403).json({ error: 'Not your game.' }); return null; }
     if (!isFish(game)) { res.status(409).json({ error: 'This is not a FishQuest game.' }); return null; }
@@ -116,7 +117,7 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
     res.json(teacherPayload(game, match));
   });
   app.post('/api/game/:id/fishquest/ticket', requireGameAccess, (req, res) => {
-    const game = games.getGame(req.params.id);
+    const game = readyGame(games.getGame(req.params.id));
     if (!isFish(game)) return res.status(404).json({ error: 'FishQuest game not found.' });
     if (!req.gameSession || req.gameSession.gameId !== game.id) return res.status(403).json({ error: 'Join this game again.' });
     const match = getMatch(game.id);
@@ -178,7 +179,7 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
         try { match.tick(); }
         catch (err) { match.state.phase = 'ended'; match.state.reason = 'storage_error'; match.state.endedAt = Date.now(); console.error('FishQuest match stopped safely:', err.message); }
         if (before !== 'ended' && match.state.phase === 'ended') {
-          try { finalize(games.getGame(gameId), match); } catch (err) { console.error('FishQuest results will retry on next read:', err.message); }
+          try { finalize(readyGame(games.getGame(gameId)), match); } catch (err) { console.error('FishQuest results will retry on next read:', err.message); }
         }
         if (frame % 2 === 0 || before !== match.state.phase) broadcast(gameId);
       }

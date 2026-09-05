@@ -133,7 +133,6 @@ function updateFishQuest(id, config) {
   const p = gamePath(String(id));
   if (!fs.existsSync(p)) return null;
   const g = JSON.parse(fs.readFileSync(p, 'utf8'));
-  if ((g.mode || 'arcade') !== 'fishquest') return null;
   const durationMinutes = Math.min(30, Math.max(3, Number(config.durationMinutes) || 10));
   g.fishquest = { durationMinutes, lateJoin: config.lateJoin !== false };
   if (Array.isArray(config.questions)) {
