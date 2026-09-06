@@ -857,12 +857,31 @@
     const shadow = scene.add.ellipse(0, width * .19, width * .62, width * .13, 0x180f0a, .3);
     const sprite = scene.add.image(0, 0, texture);
     sprite.setDisplaySize(width, width * .67);
+    const legs = scene.add.graphics();
+    const gait = { phase: 0 };
+    const paintLegs = () => {
+      legs.clear().lineStyle(Math.max(1.4, width * .025), 0x59301b, 1);
+      for (let side = -1; side <= 1; side += 2) {
+        for (let leg = 0; leg < 3; leg += 1) {
+          const x = (leg - 1) * width * .12;
+          const step = Math.sin(gait.phase + leg * 2.1 + side) * width * .055;
+          legs.beginPath().moveTo(x, width * .06);
+          legs.lineTo(x + side * width * .09, width * .19);
+          legs.lineTo(x + side * width * .15 + step, width * .3);
+          legs.strokePath();
+        }
+      }
+    };
     const badge = scene.add.circle(-width * .17, -width * .11, Math.max(2, width * .045), teamColor, .95);
     const cargo = scene.add.ellipse(-width * .04, -width * .24, width * .24, width * .11, 0x7cbd4d, 1).setAngle(-16).setVisible(false);
-    container.add([shadow, sprite, badge, cargo]);
+    container.add([shadow, legs, sprite, badge, cargo]);
     container.sprite = sprite;
     container.cargo = cargo;
     container.carriesFood = carriesFood;
+    paintLegs();
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      scene.tweens.add({ targets: gait, phase: Math.PI * 2, duration: 430, repeat: -1, onUpdate: paintLegs });
+    }
     const baseY = sprite.y;
     scene.tweens.add({ targets: sprite, y: baseY - Math.max(1, width * .025), duration: 170 + Math.random() * 80, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     return container;
@@ -881,16 +900,27 @@
       const dy = next.y - agent.y;
       agent.sprite.setFlipX(dx < 0);
       agent.sprite.setAngle(Phaser.Math.Clamp(Math.atan2(dy, Math.max(8, Math.abs(dx))) * 18, -10, 10));
-      agent.cargo.setVisible(agent.carriesFood && cursor >= Math.ceil(points.length / 2));
       const distance = Math.hypot(dx, dy);
+      const curve = tunnelCurve({ x: agent.x, y: agent.y }, next);
+      const progress = { value: 0 };
       scene.tweens.add({
-        targets: agent,
-        x: next.x,
-        y: next.y,
+        targets: progress,
+        value: 1,
+        onUpdate: () => {
+          if (!agent.active) return;
+          const point = curve.getPoint(progress.value);
+          agent.setPosition(point.x, point.y);
+        },
         duration: Math.max(650, distance * (13 + index % 4)),
         ease: 'Sine.easeInOut',
         onComplete: () => {
           if (!agent.active) return;
+          if (agent.carriesFood && cursor === Math.floor(points.length / 2)) agent.cargo.setVisible(true);
+          if (agent.carriesFood && cursor === 0) {
+            agent.cargo.setVisible(false);
+            const delivery = scene.add.ellipse(agent.x, agent.y - 6, 8, 5, 0x9bd568, 1).setDepth(6);
+            scene.tweens.add({ targets: delivery, y: agent.y + 7, alpha: 0, duration: 650, onComplete: () => delivery.destroy() });
+          }
           scene.time.delayedCall(100 + (index % 3) * 90, travel);
         },
       });
@@ -898,33 +928,56 @@
     scene.time.delayedCall(160 + index * 120, travel);
   }
 
+  function tunnelCurve(a, b) {
+    const bend = Math.sign(b.y - a.y) * Math.min(28, Math.abs(b.y - a.y) * .18);
+    return new Phaser.Curves.CubicBezier(
+      new Phaser.Math.Vector2(a.x, a.y),
+      new Phaser.Math.Vector2(a.x + bend, a.y + (b.y - a.y) * .4),
+      new Phaser.Math.Vector2(b.x - bend, b.y - (b.y - a.y) * .35),
+      new Phaser.Math.Vector2(b.x, b.y));
+  }
+
   function drawTunnel(graphics, points, width) {
+    const curved = [];
+    for (let index = 1; index < points.length; index += 1) {
+      const a = points[index - 1], b = points[index];
+      const curve = tunnelCurve(a, b);
+      curved.push(...curve.getPoints(18));
+    }
     const stroke = (lineWidth, color, alpha) => {
       graphics.lineStyle(lineWidth, color, alpha);
       graphics.beginPath();
-      graphics.moveTo(points[0].x, points[0].y);
-      for (const point of points.slice(1)) graphics.lineTo(point.x, point.y);
+      graphics.moveTo(curved[0].x, curved[0].y);
+      for (const point of curved.slice(1)) graphics.lineTo(point.x, point.y);
       graphics.strokePath();
     };
-    stroke(width + 8, 0x24130d, .76);
-    stroke(width, 0x885638, .62);
+    stroke(width + 18, 0x432817, .9);
+    stroke(width + 10, 0xb38352, .9);
+    stroke(width + 3, 0x291d19, 1);
+    stroke(width, 0x493629, 1);
   }
 
   function drawChamber(graphics, x, y, width, height, palette, active = false) {
-    ellipse(graphics, x, y, width + 10, height + 10, 0x24130d, .84);
-    ellipse(graphics, x, y, width, height, 0x8b593a, .48);
-    graphics.lineStyle(active ? 3 : 2, palette.light, active ? .9 : .5);
+    ellipse(graphics, x, y + 5, width + 20, height + 18, 0x201a17, .72);
+    ellipse(graphics, x, y, width + 12, height + 12, 0xb68a57, 1);
+    ellipse(graphics, x, y, width, height, 0x332a24, 1);
+    ellipse(graphics, x, y + height * .12, width * .88, height * .64, 0x65513a, 1);
+    for (let index = 0; index < 14; index += 1) {
+      const angle = index * Math.PI * 2 / 14;
+      ellipse(graphics, x + Math.cos(angle) * (width * .5 + 2), y + Math.sin(angle) * (height * .5 + 2), 7, 4, index % 2 ? 0xd5b47e : 0x96734c, .85);
+    }
+    graphics.lineStyle(active ? 2 : 1, active ? palette.light : 0xe2c38c, active ? .8 : .3);
     graphics.strokeEllipse(x, y, width, height);
   }
 
   function chamberTag(x, y, label, zoneWidth) {
     return scene.add.text(x, y, label, {
       fontFamily: 'Arial',
-      fontSize: zoneWidth < 250 ? '7px' : '9px',
+      fontSize: zoneWidth < 250 ? '9px' : '11px',
       fontStyle: 'bold',
       color: '#fff1c9',
-      backgroundColor: '#342016',
-      padding: { x: zoneWidth < 250 ? 3 : 5, y: 2 },
+      backgroundColor: '#213f35',
+      padding: { x: 7, y: 4 },
     }).setOrigin(.5, 1).setDepth(7);
   }
 
@@ -944,17 +997,13 @@
     const graphics = scene.add.graphics().setDepth(0);
     const cx = zone.x + zone.w * .5;
     const entrance = { x: cx, y: zone.y + zone.h * .2 };
-    const junction = { x: cx, y: zone.y + zone.h * .46 };
-    const food = { x: zone.x + zone.w * .27, y: zone.y + zone.h * .66 };
-    const guard = { x: zone.x + zone.w * .73, y: zone.y + zone.h * .64 };
-    const nursery = { x: cx, y: zone.y + zone.h * .82 };
+    const junction = { x: cx, y: zone.y + zone.h * .43 };
+    const food = { x: zone.x + zone.w * .25, y: zone.y + zone.h * .55 };
+    const guard = { x: zone.x + zone.w * .75, y: zone.y + zone.h * .54 };
+    const nursery = { x: cx, y: zone.y + zone.h * .77 };
     const active = teamIndex === session.currentTeamIndex && session.phase !== 'ended';
-    const chamberW = Phaser.Math.Clamp(zone.w * .26 + team.nestLevel * 3, 54, 142);
-    const chamberH = Phaser.Math.Clamp(zone.h * .2 + team.nestLevel * 2, 32, 70);
-
-    ellipse(graphics, cx, zone.y + zone.h * .58, zone.w * .9, zone.h * .82, palette.primary, active ? .13 : .065);
-    graphics.lineStyle(active ? 4 : 2, palette.light, active ? .72 : .24);
-    graphics.strokeEllipse(cx, zone.y + zone.h * .58, zone.w * .9, zone.h * .82);
+    const chamberW = Phaser.Math.Clamp(zone.w * .32 + team.nestLevel * 3, 64, 180);
+    const chamberH = Phaser.Math.Clamp(zone.h * .19 + team.nestLevel * 2, 40, 96);
 
     drawTunnel(graphics, [entrance, junction, nursery], 9 + Math.min(6, team.nestLevel));
     drawTunnel(graphics, [junction, food], 8 + Math.min(5, team.nestLevel));
@@ -966,9 +1015,42 @@
     drawChamber(graphics, guard.x, guard.y, chamberW + team.defense * 3, chamberH + team.defense * 2, palette, team.defense > 2);
     drawChamber(graphics, nursery.x, nursery.y, chamberW + 24 + team.queenLevel * 4, chamberH + 14 + team.queenLevel * 2, palette, active);
 
+    // Furnishings make each chamber's job visible before its numbers change.
+    for (let index = 0; index < 7; index += 1) {
+      const leafX = nursery.x + (index - 3) * chamberW * .095;
+      const leafY = nursery.y + chamberH * .24 + Math.sin(index * 1.8) * 4;
+      ellipse(graphics, leafX, leafY, chamberW * .19, 12, index % 2 ? 0x789850 : 0x4b783e, 1);
+      graphics.lineStyle(1, 0xb1c77d, .6);
+      graphics.lineBetween(leafX - chamberW * .06, leafY, leafX + chamberW * .06, leafY - 2);
+    }
+    const barrierY = guard.y + chamberH * .22;
+    const barrierW = chamberW * .58;
+    for (let index = 0; index < 5; index += 1) {
+      const x = guard.x - barrierW / 2 + index * barrierW / 4;
+      graphics.lineStyle(6, 0x36221a, 1);
+      graphics.lineBetween(x, barrierY + 9, x + 3, barrierY - 13);
+      graphics.lineStyle(3, 0xc5935e, 1);
+      graphics.lineBetween(x - 1, barrierY + 8, x + 2, barrierY - 13);
+    }
+    graphics.lineStyle(4, 0x97734d, 1);
+    graphics.lineBetween(guard.x - barrierW / 2 - 4, barrierY, guard.x + barrierW / 2 + 5, barrierY);
+    for (let shelf = 0; shelf < 2; shelf += 1) {
+      const shelfY = food.y + 3 + shelf * 17;
+      graphics.lineStyle(5, 0x352419, 1);
+      graphics.lineBetween(food.x - chamberW * .33, shelfY, food.x + chamberW * .33, shelfY);
+      graphics.lineStyle(2, 0xc6a471, 1);
+      graphics.lineBetween(food.x - chamberW * .33, shelfY - 2, food.x + chamberW * .33, shelfY - 2);
+    }
+    for (const site of [food, nursery]) {
+      const lampX = site.x + chamberW * .35, lampY = site.y - chamberH * .16;
+      ellipse(graphics, lampX, lampY, 23, 23, 0xeab854, .08);
+      ellipse(graphics, lampX, lampY, 14, 14, 0xf2c366, .16);
+      ellipse(graphics, lampX, lampY, 5, 7, 0xffe0a0, .95);
+    }
+
     let expansion = null;
     if (team.territory > 1) {
-      expansion = { x: zone.x + zone.w * (teamIndex % 2 ? .86 : .14), y: zone.y + zone.h * .86 };
+      expansion = { x: zone.x + zone.w * (teamIndex % 2 ? .84 : .16), y: zone.y + zone.h * .87 };
       drawTunnel(graphics, [teamIndex % 2 ? guard : food, expansion], 7 + Math.min(4, team.nestLevel));
       drawChamber(graphics, expansion.x, expansion.y, Phaser.Math.Clamp(38 + team.territory * 8, 46, 92), Phaser.Math.Clamp(25 + team.territory * 4, 30, 55), palette);
     }
@@ -978,17 +1060,21 @@
     chamberTag(nursery.x, nursery.y - (chamberH + 14) * .48, `NURSERY  QUEEN ${team.queenLevel}`, zone.w);
     if (expansion) chamberTag(expansion.x, expansion.y - 19, `NEW CHAMBER  ${team.territory}`, zone.w);
 
-    const foodDots = Math.min(18, Math.max(3, Math.round(team.food / 7)));
+    const foodDots = Math.min(24, Math.max(3, Math.round(team.food / 3)));
     for (let index = 0; index < foodDots; index += 1) {
       const column = index % 6;
       const row = Math.floor(index / 6);
       const color = index % 3 === 0 ? 0xd85f42 : index % 2 ? 0xe9b84a : 0x78ad45;
-      ellipse(graphics, food.x - chamberW * .28 + column * 8, food.y + chamberH * .05 + row * 7, 7, 5, color, .98);
+      const seedX = food.x - chamberW * .28 + column * chamberW * .09;
+      const seedY = food.y - 3 + (row % 2) * 17 - Math.floor(row / 2) * 5;
+      ellipse(graphics, seedX, seedY + 2, 10, 6, 0x211b14, .5);
+      ellipse(graphics, seedX, seedY, 9, 6, color, .98);
+      ellipse(graphics, seedX - 1, seedY - 1, 3, 2, 0xffedb5, .65);
     }
 
     const eggCount = Math.min(12, 3 + team.queenLevel * 2);
     for (let index = 0; index < eggCount; index += 1) {
-      ellipse(graphics, nursery.x - 28 + (index % 6) * 9, nursery.y + 12 + Math.floor(index / 6) * 7, 7, 4, index % 3 ? 0xfff1cb : 0xd8f3df, .98);
+      ellipse(graphics, nursery.x - 24 + (index % 6) * 9, nursery.y + chamberH * .25 + Math.floor(index / 6) * 6, 8, 5, index % 3 ? 0xfff1cb : 0xd8f3df, .98);
     }
 
     for (let index = 0; index < Math.min(14, team.defense * 3); index += 1) {
@@ -1014,21 +1100,21 @@
       graphics.fillTriangle(fx, fy - 25, fx, fy - 13, fx - 11, fy - 20);
     }
 
-    const queenWidth = Phaser.Math.Clamp(68 + team.queenLevel * 6, 72, Math.min(124, zone.w * .28));
-    const queen = makeAntAgent('cq-queen', { x: nursery.x, y: nursery.y - 7 }, queenWidth, palette.primary);
+    const queenWidth = Math.min(62 + team.queenLevel * 4, zone.w * .25, chamberW * .63);
+    const queen = makeAntAgent('cq-queen', { x: nursery.x - 6, y: nursery.y - 9 }, queenWidth, palette.primary);
     queen.setDepth(4);
     queen.sprite.setFlipX(teamIndex % 2 === 1);
     const queenScaleX = queen.sprite.scaleX;
     const queenScaleY = queen.sprite.scaleY;
     scene.tweens.add({ targets: queen.sprite, scaleX: queenScaleX * 1.025, scaleY: queenScaleY * 1.025, duration: 1050, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
-    const antWidth = Phaser.Math.Clamp(Math.min(zone.w / 5.2, zone.h / 3.3), 38, 76);
-    const workerCount = Math.min(7, Math.max(3, Math.ceil(team.workers / 3)));
+    const antWidth = Phaser.Math.Clamp(Math.min(zone.w / 9, zone.h / 7), 23, 44);
+    const workerCount = Math.min(10, Math.max(4, Math.ceil(team.workers / 2)));
     const workerPaths = [
       [food, junction, entrance, { x: zone.x + zone.w * .18, y: zone.y + zone.h * .13 }, entrance, junction],
       [nursery, junction, food, { x: food.x + chamberW * .22, y: food.y - 4 }, junction],
-      [guard, junction, entrance, { x: zone.x + zone.w * .82, y: zone.y + zone.h * .14 }, entrance],
-      [nursery, { x: nursery.x - chamberW * .3, y: nursery.y - 4 }, food, junction],
+      [food, junction, entrance, { x: zone.x + zone.w * .82, y: zone.y + zone.h * .14 }, entrance, junction],
+      [nursery, junction, food, junction],
     ];
     const ants = [];
     for (let index = 0; index < workerCount; index += 1) {
