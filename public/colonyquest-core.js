@@ -5,7 +5,7 @@
 }(typeof globalThis !== 'undefined' ? globalThis : this, function colonyQuestCoreFactory() {
   'use strict';
 
-  const VERSION = 2;
+  const VERSION = 3;
   const TEAM_COLORS = Object.freeze([
     { name: 'Azure', primary: 0x2f80ed, light: 0x8ec5ff, dark: 0x123f7a },
     { name: 'Coral', primary: 0xef6351, light: 0xffb0a4, dark: 0x7b2b23 },
@@ -243,7 +243,13 @@
         teacherJudged: !!(answer && answer.teacherJudged),
         at: text(answer && answer.at, 40),
       })) : [],
-      events: Array.isArray(source.events) ? source.events.slice(-40).map(event => ({ key: text(event && event.key, 40), at: text(event && event.at, 40) })) : [],
+      events: Array.isArray(source.events) ? source.events.slice(-40).map(event => ({
+        key: text(event && event.key, 40),
+        at: text(event && event.at, 40),
+        teamId: text(event && event.teamId, 40) || null,
+        amount: Math.floor(clamp(event && event.amount, 0, 9999)),
+        secondary: Math.floor(clamp(event && event.secondary, 0, 9999)),
+      })) : [],
     };
   }
 

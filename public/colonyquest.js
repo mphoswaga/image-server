@@ -23,6 +23,7 @@
   let soundOn = true;
   let audioContext = null;
   let ambientTimer = null;
+  let worldStoryAction = null;
   const ASSETS = {
     world: '/assets/colonyquest/moonroot-meadow.webp',
     worker: '/assets/colonyquest/pip-worker.webp',
@@ -38,6 +39,14 @@
       { at: .7, title: 'Moonroot Rally', line: 'Friendly knowledge challenges decide who carries the Ancient Acorn.' },
     ],
   };
+  const REWARD_STORIES = {
+    workers: { title: 'The foraging trail comes alive', text: 'New workers hurry from the meadow entrance to the food store, carrying fresh seeds for the colony.', site: 'entrance' },
+    food: { title: 'The food store fills', text: 'The workers stack a new harvest inside the pantry so the colony can grow through the next chapter.', site: 'food' },
+    defense: { title: 'The nest walls grow stronger', text: 'Guardians carry pebbles to the guard post and reinforce the tunnels before the rain returns.', site: 'guard' },
+    queen: { title: 'The nursery begins to glow', text: 'The queen tends new eggs in the nursery, welcoming more ants into the colony family.', site: 'nursery' },
+    expansion: { title: 'A hidden tunnel opens', text: 'Workers clear the deep roots, raise a new colony flag, and discover another chamber to explore.', site: 'expansion' },
+    soldiers: { title: 'A guardian patrol forms', text: 'New guardians march between the entrance and guard post, ready to protect every worker and seed.', site: 'guard' },
+  };
 
   function esc(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
@@ -45,10 +54,6 @@
 
   function colorHex(value) {
     return `#${Number(value || 0).toString(16).padStart(6, '0')}`;
-  }
-
-  function wait(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   async function request(path = '', options = {}) {
@@ -291,9 +296,34 @@
     $('studentPick').innerHTML = '<option value="">Choose learner</option>' + (team && team.members || []).map(item => `<option value="${esc(item.id)}"${member && member.id === item.id ? ' selected' : ''}>${esc(item.name)}</option>`).join('');
   }
 
+  function hideWorldStory() {
+    worldStoryAction = null;
+    $('worldStory').classList.add('hidden');
+    $('worldStoryContinue').disabled = false;
+  }
+
   function setOverlay(id) {
+    hideWorldStory();
     for (const overlay of ['storyOverlay', 'questionOverlay', 'rewardOverlay', 'targetOverlay', 'eventOverlay', 'finalOverlay']) $(overlay).classList.add('hidden');
     if (id) $(id).classList.remove('hidden');
+    $('gameScreen').classList.toggle('dock-open', ['questionOverlay', 'rewardOverlay', 'targetOverlay'].includes(id));
+  }
+
+  function showWorldStory(details, onContinue) {
+    setOverlay(null);
+    transitionLocked = false;
+    const tone = details.tone === 'storm' || details.tone === 'danger' ? details.tone : '';
+    $('worldStory').className = `world-story${tone ? ` ${tone}` : ''}`;
+    $('worldStoryArt').src = details.art || ASSETS.worker;
+    $('worldStoryArt').alt = details.art === ASSETS.guardian ? 'A guardian ant' : details.art === ASSETS.queen ? 'The queen ant' : 'Pip the scout ant';
+    $('worldStoryKicker').textContent = details.kicker || 'The story continues';
+    $('worldStoryTitle').textContent = details.title;
+    $('worldStoryText').textContent = details.text || details.description || '';
+    $('worldStoryEffect').textContent = details.effect || '';
+    $('worldStoryContinue').textContent = details.continueLabel || 'Continue journey';
+    worldStoryAction = onContinue || null;
+    $('worldStoryContinue').disabled = false;
+    $('worldStory').classList.remove('hidden');
   }
 
   function storyChapter() {
@@ -385,6 +415,7 @@
     $('feedbackNext').textContent = 'Continue';
     setOverlay('questionOverlay');
     updateHUD();
+    updateWorld();
   }
 
   function handleOutcome(choice, correct, teacherJudged = false) {
@@ -449,6 +480,52 @@
     return choices;
   }
 
+  function rewardChange(key, before, after) {
+    if (key === 'workers') return { amount: after.workers - before.workers, secondary: after.food - before.food };
+    if (key === 'food') return { amount: after.food - before.food, secondary: 0 };
+    if (key === 'defense') return { amount: after.defense - before.defense, secondary: after.nestLevel - before.nestLevel };
+    if (key === 'queen') return { amount: after.population - before.population, secondary: after.workers - before.workers };
+    if (key === 'expansion') return { amount: after.food - before.food, secondary: after.nestLevel - before.nestLevel };
+    if (key === 'soldiers') return { amount: after.soldiers - before.soldiers, secondary: Math.max(0, before.food - after.food) };
+    return { amount: 0, secondary: 0 };
+  }
+
+  function rewardEffectText(key, change, team) {
+    const amount = Math.max(0, Number(change && change.amount) || 0);
+    const secondary = Math.max(0, Number(change && change.secondary) || 0);
+    if (key === 'workers') return `+${amount} workers, +${amount} ants, and +${secondary} food - ${team.workers} workers now`;
+    if (key === 'food') return `+${amount} food - ${team.food} stored in the pantry`;
+    if (key === 'defense') return `+${amount} defense${secondary ? ` and +${secondary} nest level` : ''} - defense is now ${team.defense}`;
+    if (key === 'queen') return `Queen level ${team.queenLevel} - +${amount} ants and +${secondary} ${secondary === 1 ? 'worker' : 'workers'}`;
+    if (key === 'expansion') return `+1 territory and +${amount} food${secondary ? ` - nest level ${team.nestLevel}` : ''}`;
+    if (key === 'soldiers') return `+${amount} guardians and -${secondary} food - ${team.soldiers} guardians now`;
+    return '';
+  }
+
+  function previewReward(key) {
+    const team = currentTeam();
+    const clones = session.teams.map(item => ({ ...item, members: (item.members || []).map(member => ({ ...member })) }));
+    const preview = clones.find(item => item.id === team.id);
+    const before = { ...preview };
+    core.applyReward(preview, key, clones);
+    return rewardEffectText(key, rewardChange(key, before, preview), preview);
+  }
+
+  function showRewardStory(event, onContinue = nextTurn) {
+    const key = String(event && event.key || '').replace(/^upgrade-/, '');
+    const team = session.teams.find(item => item.id === (event && event.teamId)) || currentTeam();
+    const story = REWARD_STORIES[key] || { title: 'The colony grows', text: 'The ants put their new reward to work inside the nest.', site: 'center' };
+    const art = key === 'queen' ? ASSETS.queen : ['defense', 'soldiers'].includes(key) ? ASSETS.guardian : ASSETS.worker;
+    showWorldStory({
+      kicker: `A correct answer changes ${team.name}`,
+      title: story.title,
+      text: story.text,
+      effect: rewardEffectText(key, event, team),
+      art,
+    }, onContinue);
+    celebrate(team.id, key, rewardEffectText(key, event, team));
+  }
+
   function showRewards() {
     transitionLocked = false;
     const team = currentTeam();
@@ -456,9 +533,10 @@
     $('rewardGrid').innerHTML = rewardChoices().map(key => {
       const reward = core.REWARDS[key];
       const art = key === 'queen' ? ASSETS.queen : ['defense', 'soldiers', 'raid'].includes(key) ? ASSETS.guardian : ASSETS.worker;
-      return `<button type="button" class="reward" data-reward="${key}"><span class="reward-symbol"><img src="${art}" alt=""></span><strong>${esc(reward.label)}</strong><span>${esc(reward.description)}</span></button>`;
+      return `<button type="button" class="reward" data-reward="${key}"><span class="reward-symbol"><img src="${art}" alt=""></span><strong>${esc(reward.label)}</strong><span>${esc(reward.description)}</span><span class="reward-effect">${esc(previewReward(key))}</span></button>`;
     }).join('');
     setOverlay('rewardOverlay');
+    updateWorld();
   }
 
   async function chooseReward(key) {
@@ -468,25 +546,26 @@
       const team = currentTeam();
       $('targetGrid').innerHTML = session.teams.filter(item => item.id !== team.id).map(item => `<button type="button" data-target="${esc(item.id)}">Challenge ${esc(item.name)}</button>`).join('');
       setOverlay('targetOverlay');
+      updateWorld();
       transitionLocked = false;
       return;
     }
     const team = currentTeam();
+    const before = { ...team };
     core.applyReward(team, key, session.teams);
+    const change = rewardChange(key, before, team);
     const upgradeEvent = `upgrade-${key}`;
     session.phase = 'event';
     session.eventAction = 'next-turn';
-    session.events.push({ key: upgradeEvent, at: new Date().toISOString() });
+    const event = { key: upgradeEvent, teamId: team.id, amount: change.amount, secondary: change.secondary, at: new Date().toISOString() };
+    session.events.push(event);
     setOverlay(null);
     updateWorld();
-    celebrate(team.id, key);
     playTone('upgrade');
     updateHUD();
-    toast(`${core.REWARDS[key].label} upgraded for ${team.name}`);
     await saveState();
-    await wait(850);
-    const latestEvent = session.events[session.events.length - 1];
-    if (session.phase === 'event' && latestEvent && latestEvent.key === upgradeEvent) await nextTurn();
+    transitionLocked = false;
+    showRewardStory(event);
   }
 
   async function chooseRaid(targetId) {
@@ -499,6 +578,8 @@
     session.phase = 'event';
     session.eventAction = 'next-turn';
     session.events.push({ key: 'raid-result', at: new Date().toISOString() });
+    setOverlay(null);
+    updateWorld();
     celebrate(result.success ? attacker.id : defender.id, result.success ? 'raid' : 'defense');
     playTone(result.success ? 'upgrade' : 'wrong');
     showEvent({
@@ -583,24 +664,27 @@
     presentQuestion();
   }
 
+  function worldEventEffect(event) {
+    if (event.key === 'fallen-fruit') return 'Watch workers carry the orchard gift into every pantry.';
+    if (event.key === 'heavy-rain') return 'Stronger walls protect more food while the rain crosses the meadow.';
+    if (event.key === 'food-trail') return 'More workers mean a larger harvest from Pip\'s golden trail.';
+    if (event.key === 'predator') return 'Guardians and strong walls keep more of the colony stores safe.';
+    if (event.key === 'new-territory') return 'A new chamber and flag appear for the colonies that need room most.';
+    if (event.kicker === 'Chapter 4') return 'The final knowledge challenges are now unlocked.';
+    if (String(event.kicker || '').startsWith('Chapter')) return 'Look at how far every colony has grown.';
+    return '';
+  }
+
   function showEvent(event, onContinue) {
-    $('eventKicker').textContent = event.kicker || 'World event';
-    $('eventTitle').textContent = event.title;
-    $('eventText').textContent = event.description;
-    $('eventGuide').src = event.tone === 'danger' || event.tone === 'storm' || event.kicker === 'Colony Wars' ? ASSETS.guardian : ASSETS.worker;
-    $('eventGuide').alt = event.tone === 'danger' || event.tone === 'storm' ? 'A guardian ant' : 'Pip the scout ant';
-    $('eventMark').textContent = event.kicker === 'Chapter 4' ? 'The final chapter' : 'A Moonroot Meadow event';
-    $('eventContinue').classList.remove('hidden');
-    $('eventContinue').disabled = false;
-    $('eventContinue').onclick = () => {
-      $('eventContinue').disabled = true;
-      Promise.resolve(onContinue && onContinue()).catch(error => {
-        transitionLocked = false;
-        $('eventContinue').disabled = false;
-        toast(error.message);
-      });
-    };
-    setOverlay('eventOverlay');
+    const guardianMoment = event.tone === 'danger' || event.tone === 'storm' || event.kicker === 'Colony Wars';
+    showWorldStory({
+      kicker: event.kicker || 'A Moonroot Meadow event',
+      title: event.title,
+      text: event.description,
+      effect: worldEventEffect(event),
+      tone: event.tone,
+      art: guardianMoment ? ASSETS.guardian : ASSETS.worker,
+    }, onContinue);
   }
 
   async function finishMatch() {
@@ -644,6 +728,7 @@
     if (session.phase === 'reward') return showRewards();
     if (session.phase === 'event') {
       const last = session.events[session.events.length - 1];
+      if (last && String(last.key).startsWith('upgrade-')) return showRewardStory(last, nextTurn);
       const event = last && last.key === 'colony-wars'
         ? { title: 'The Moonroot Rally begins', description: 'The moon is rising. Colonies may now enter friendly knowledge challenges to win food and earn the Ancient Acorn. Every colony stays in the adventure.', kicker: 'Chapter 4' }
         : chapterEvent(last && last.key) || core.EVENTS.find(item => item.key === (last && last.key));
@@ -832,6 +917,17 @@
     graphics.strokeEllipse(x, y, width, height);
   }
 
+  function chamberTag(x, y, label, zoneWidth) {
+    return scene.add.text(x, y, label, {
+      fontFamily: 'Arial',
+      fontSize: zoneWidth < 250 ? '7px' : '9px',
+      fontStyle: 'bold',
+      color: '#fff1c9',
+      backgroundColor: '#342016',
+      padding: { x: zoneWidth < 250 ? 3 : 5, y: 2 },
+    }).setOrigin(.5, 1).setDepth(7);
+  }
+
   function addAmbientLife(width, height) {
     for (let index = 0; index < 18; index += 1) {
       const mote = scene.add.circle((index * 97 + 31) % width, 20 + (index * 37) % Math.max(35, height * .22), 1.5 + index % 3, index % 3 ? 0xffe797 : 0xc4f2b0, .34).setDepth(-5);
@@ -870,11 +966,17 @@
     drawChamber(graphics, guard.x, guard.y, chamberW + team.defense * 3, chamberH + team.defense * 2, palette, team.defense > 2);
     drawChamber(graphics, nursery.x, nursery.y, chamberW + 24 + team.queenLevel * 4, chamberH + 14 + team.queenLevel * 2, palette, active);
 
+    let expansion = null;
     if (team.territory > 1) {
-      const expansion = { x: zone.x + zone.w * (teamIndex % 2 ? .86 : .14), y: zone.y + zone.h * .86 };
+      expansion = { x: zone.x + zone.w * (teamIndex % 2 ? .86 : .14), y: zone.y + zone.h * .86 };
       drawTunnel(graphics, [teamIndex % 2 ? guard : food, expansion], 7 + Math.min(4, team.nestLevel));
       drawChamber(graphics, expansion.x, expansion.y, Phaser.Math.Clamp(38 + team.territory * 8, 46, 92), Phaser.Math.Clamp(25 + team.territory * 4, 30, 55), palette);
     }
+
+    chamberTag(food.x, food.y - chamberH * .48, `PANTRY  ${team.food}`, zone.w);
+    chamberTag(guard.x, guard.y - chamberH * .48, `GUARD POST  ${team.defense}`, zone.w);
+    chamberTag(nursery.x, nursery.y - (chamberH + 14) * .48, `NURSERY  QUEEN ${team.queenLevel}`, zone.w);
+    if (expansion) chamberTag(expansion.x, expansion.y - 19, `NEW CHAMBER  ${team.territory}`, zone.w);
 
     const foodDots = Math.min(18, Math.max(3, Math.round(team.food / 7)));
     for (let index = 0; index < foodDots; index += 1) {
@@ -952,7 +1054,14 @@
       const glow = scene.add.ellipse(entrance.x, entrance.y, 54, 24, palette.light, .18).setDepth(2).setStrokeStyle(2, palette.light, .8);
       scene.tweens.add({ targets: glow, scaleX: 1.3, scaleY: 1.3, alpha: .04, duration: 850, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     }
-    colonyViews.set(team.id, { zone, graphics, ants, queen, center: { x: cx, y: zone.y + zone.h * .62 } });
+    colonyViews.set(team.id, {
+      zone,
+      graphics,
+      ants,
+      queen,
+      center: { x: cx, y: zone.y + zone.h * .62 },
+      sites: { entrance, food, guard, nursery, expansion: expansion || junction, center: junction },
+    });
   }
 
   function updateWorld() {
@@ -966,13 +1075,15 @@
     if (session.warsActive) scene.add.rectangle(width / 2, height / 2, width, height, 0x1d2944, .18).setDepth(-20);
     addAmbientLife(width, height);
 
+    const docked = width > 850 && $('gameScreen').classList.contains('dock-open');
+    const layoutWidth = docked ? width - Math.min(620, width * .44) : width;
     const count = session.teams.length;
-    const columns = width < 700 ? (count <= 2 ? 1 : 2) : count <= 3 ? count : count === 4 ? 2 : 3;
+    const columns = layoutWidth < 700 ? (count <= 2 ? 1 : 2) : count <= 3 ? count : count === 4 ? 2 : 3;
     const rows = Math.ceil(count / columns);
-    const marginX = width < 700 ? 7 : 14;
+    const marginX = layoutWidth < 700 ? 7 : 14;
     const marginY = 8;
     const top = Math.min(124, Math.max(98, height * .18));
-    const zoneWidth = (width - marginX * (columns + 1)) / columns;
+    const zoneWidth = (layoutWidth - marginX * (columns + 1)) / columns;
     const zoneHeight = (height - top - marginY * (rows + 1)) / rows;
     session.teams.forEach((team, index) => {
       const col = index % columns;
@@ -986,15 +1097,25 @@
     });
   }
 
-  function celebrate(teamId, kind) {
+  function celebrate(teamId, kind, effectText = '') {
     if (!scene) return;
     const view = colonyViews.get(teamId);
     if (!view) return;
     const palette = core.TEAM_COLORS[session.teams.find(team => team.id === teamId).colorIndex];
+    const siteName = REWARD_STORIES[kind] && REWARD_STORIES[kind].site || (kind === 'defense' ? 'guard' : 'center');
+    const origin = view.sites && view.sites[siteName] || view.center;
     for (let index = 0; index < 18; index += 1) {
-      const dot = scene.add.circle(view.zone.x + view.zone.w / 2, view.zone.y + view.zone.h / 2, 3 + index % 3, index % 3 === 0 ? 0xffd166 : palette.light).setDepth(10);
+      const dot = scene.add.circle(origin.x, origin.y, 3 + index % 3, index % 3 === 0 ? 0xffd166 : palette.light).setDepth(10);
       const angle = Math.PI * 2 * index / 18;
       scene.tweens.add({ targets: dot, x: dot.x + Math.cos(angle) * (45 + index * 2), y: dot.y + Math.sin(angle) * (32 + index), alpha: 0, scale: .3, duration: 850, ease: 'Cubic.easeOut', onComplete: () => dot.destroy() });
+    }
+    const ring = scene.add.ellipse(origin.x, origin.y, 52, 30, palette.light, .12).setDepth(9).setStrokeStyle(4, palette.light, .95);
+    scene.tweens.add({ targets: ring, scaleX: 2.1, scaleY: 2.1, alpha: .08, duration: 850, yoyo: true, repeat: 4, ease: 'Sine.easeInOut', onComplete: () => ring.destroy() });
+    if (effectText) {
+      const label = scene.add.text(origin.x, origin.y - 32, effectText.split(' - ')[0].toUpperCase(), {
+        fontFamily: 'Arial', fontSize: view.zone.w < 260 ? '9px' : '13px', fontStyle: 'bold', color: '#fff5cf', backgroundColor: '#254d39', padding: { x: 7, y: 4 },
+      }).setOrigin(.5).setDepth(14);
+      scene.tweens.add({ targets: label, y: label.y - 18, duration: 900, yoyo: true, hold: 2100, ease: 'Sine.easeOut', onComplete: () => label.destroy() });
     }
   }
 
@@ -1082,6 +1203,22 @@
 
   $('matchType').addEventListener('click', event => { const button = event.target.closest('[data-type]'); if (button) setMatchType(button.dataset.type); });
   $('teamCount').addEventListener('change', renderTeamEditor);
+  $('worldStoryContinue').addEventListener('click', async () => {
+    if (!worldStoryAction || transitionLocked) return;
+    const action = worldStoryAction;
+    const button = $('worldStoryContinue');
+    transitionLocked = true;
+    button.disabled = true;
+    try {
+      await action();
+    } catch (error) {
+      transitionLocked = false;
+      button.disabled = false;
+      worldStoryAction = action;
+      $('worldStory').classList.remove('hidden');
+      toast(error.message);
+    }
+  });
   $('storyContinue').addEventListener('click', async () => {
     if (!session || session.introSeen) return;
     const button = $('storyContinue');

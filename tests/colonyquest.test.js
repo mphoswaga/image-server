@@ -124,13 +124,14 @@ test('session normalization preserves recovery phases and honest named participa
       { questionIndex: 0, teamId: all[0].id, studentId: 'S1', studentName: 'Learner 1', correct: true },
       { questionIndex: 1, teamId: all[1].id, correct: false },
     ],
-    events: [{ key: 'raid-result', at: '2026-01-01T00:00:00.000Z' }],
+    events: [{ key: 'upgrade-workers', teamId: all[0].id, amount: 3, secondary: 4, at: '2026-01-01T00:00:00.000Z' }],
   });
   assert.equal(session.phase, 'event');
   assert.equal(session.previousPhase, 'reward');
   assert.equal(session.eventAction, 'next-turn');
   assert.equal(session.currentTeamIndex, 1);
   assert.equal(session.introSeen, true);
+  assert.deepEqual(session.events[0], { key: 'upgrade-workers', teamId: all[0].id, amount: 3, secondary: 4, at: '2026-01-01T00:00:00.000Z' });
   assert.equal(session.teams.length, 2);
   const summary = core.sessionSummary(session);
   assert.equal(summary.answers, 2);
@@ -244,6 +245,8 @@ test('the dashboard exposes ColonyQuest as a whole-class lesson game', () => {
   assert.match(page, /Mark correct/);
   assert.match(page, /Random learner/);
   assert.match(page, /Moonroot Meadow needs you/);
+  assert.match(page, /id="worldStory"/);
+  assert.match(page, /class="overlay question-overlay hidden"/);
   assert.match(page, /colonyquest-core\.js\?v=\d+/);
   assert.match(page, /colonyquest\.js\?v=\d+/);
   assert.match(client, /moonroot-meadow\.webp/);

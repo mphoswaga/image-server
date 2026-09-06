@@ -107,6 +107,11 @@ test('a teacher can run, recover, pause, and finish a one-screen ColonyQuest mat
   await expect(page.locator('#questionText')).toHaveText(questions[0].question);
   await expect(page.locator('#scoreStrip .score-card')).toHaveCount(2);
   await expect(page.locator('#gameMount canvas')).toBeVisible();
+  if (testInfo.project.name === 'windows-100') {
+    const questionBox = await page.locator('.question-dialog').boundingBox();
+    expect(questionBox.width).toBeLessThan(1366 * .5);
+    expect(questionBox.x).toBeGreaterThan(1366 * .5);
+  }
 
   const canvasShot = await page.locator('#gameMount canvas').screenshot();
   await testInfo.attach('colony-world', { body: canvasShot, contentType: 'image/png' });
@@ -125,8 +130,21 @@ test('a teacher can run, recover, pause, and finish a one-screen ColonyQuest mat
   await page.locator('#resumeBtn').click();
   await expect(page.locator('#rewardOverlay')).toBeVisible();
   await page.getByRole('button', { name: /Workers/ }).click();
+  await expect(page.locator('#worldStory')).toBeVisible();
+  await expect(page.locator('#worldStoryTitle')).toContainText('foraging trail');
+  await expect(page.locator('#worldStoryEffect')).toContainText('+3 workers');
+  expect(session.phase).toBe('event');
+  await page.locator('#worldStoryContinue').click();
   await expect(page.locator('#questionOverlay')).toBeVisible();
   await expect(page.locator('#turnTeam')).toContainText('River Colony');
+
+  await page.locator('.answer').nth(1).click();
+  await expect(page.locator('#feedback')).toContainText('Try again');
+  await page.locator('#feedbackNext').click();
+  await expect(page.locator('#worldStoryTitle')).toHaveText('Deep Roots');
+  await expect(page.locator('#worldStoryEffect')).toContainText('how far every colony has grown');
+  await page.locator('#worldStoryContinue').click();
+  await expect(page.locator('#questionOverlay')).toBeVisible();
 
   await page.locator('#pauseBtn').click();
   await expect(page.locator('#eventTitle')).toHaveText('The colonies are resting');
@@ -141,6 +159,7 @@ test('a teacher can run, recover, pause, and finish a one-screen ColonyQuest mat
   await expect(page.locator('#finalOverlay')).toBeVisible();
   await expect(page.locator('#podium')).toContainText('Colony');
   expect(session.phase).toBe('ended');
-  expect(session.answers).toHaveLength(1);
+  expect(session.answers).toHaveLength(2);
   expect(session.answers[0].studentId).toBe('S1');
+  expect(session.answers[1].studentId).toBe('S2');
 });
