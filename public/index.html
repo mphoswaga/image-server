@@ -955,9 +955,15 @@
     .lesson-workspace-actions .archive-lesson { width:38px; min-width:38px; padding:9px; justify-content:center; color:var(--muted); }
     .gc-extend-row { margin-top:10px; display:none; align-items:center; gap:8px; flex-wrap:wrap; background:var(--primary-soft); border-radius:10px; padding:10px 12px; }
     .gc-extend-row input[type=datetime-local] { font-size:12.5px; padding:7px 10px; border:1.5px solid var(--border); border-radius:9px; flex:1; min-width:180px; background:#fff; }
-    .gc-extend-save { font-size:12.5px; font-weight:700; padding:7px 14px; border-radius:9px; background:var(--primary); color:#fff; border:none; cursor:pointer; font-family:inherit; white-space:nowrap; }
-    .gc-extend-save:hover { background:var(--primary-2); }
-    .gc-extend-cancel { font-size:12.5px; font-weight:600; padding:7px 12px; border-radius:9px; background:#fff; color:var(--muted); border:1px solid var(--border); cursor:pointer; font-family:inherit; }
+    .class-picker { display:flex; flex-wrap:wrap; gap:7px; padding:9px; border:1.5px solid var(--border); border-radius:8px; background:#fff; min-width:260px; }
+    .class-picker label { display:flex; align-items:center; gap:6px; padding:6px 9px; border:1px solid var(--border); border-radius:6px; background:var(--surface,#fff); color:var(--primary); font-size:12.5px; font-weight:700; cursor:pointer; }
+    .class-picker input { width:17px; height:17px; margin:0; accent-color:var(--accent); }
+    .class-picker .class-picker-empty { color:var(--muted); font-size:12.5px; padding:3px; }
+    .gc-class-row { margin-top:10px; display:none; padding:11px 12px; background:var(--primary-soft); border-radius:8px; }
+    .gc-class-row .class-picker { margin-bottom:9px; }
+    .gc-extend-save,.gc-class-save { font-size:12.5px; font-weight:700; padding:7px 14px; border-radius:7px; background:var(--primary); color:#fff; border:none; cursor:pointer; font-family:inherit; white-space:nowrap; }
+    .gc-extend-save:hover,.gc-class-save:hover { background:var(--primary-2); }
+    .gc-extend-cancel,.gc-class-cancel { font-size:12.5px; font-weight:600; padding:7px 12px; border-radius:7px; background:#fff; color:var(--muted); border:1px solid var(--border); cursor:pointer; font-family:inherit; }
     .cutoff-field { margin-top:10px; }
     .cutoff-field label { font-size:13px; font-weight:600; display:block; margin-bottom:4px; }
     .cutoff-field input { font-size:13px; padding:8px 10px; border:1.5px solid var(--border); border-radius:9px; background:#fff; width:100%; box-sizing:border-box; }
@@ -3066,10 +3072,8 @@
         </div>
         <p id="gameModeHint" class="hint">Share the Room Code on the board. Learners join on their own devices.</p>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
-          <label for="gameRosterPick" style="font-size:13px;font-weight:600;white-space:nowrap">Class roster <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
-          <select id="gameRosterPick" style="width:auto;min-width:180px;font-size:13px;padding:8px 10px">
-            <option value="">— No roster (free-form names) —</option>
-          </select>
+          <span id="gameRosterPickLabel" style="font-size:13px;font-weight:600;white-space:nowrap">Classes <span style="font-weight:400;color:var(--muted)">(choose any number)</span></span>
+          <div id="gameRosterPick" class="class-picker" role="group" aria-labelledby="gameRosterPickLabel"><span class="class-picker-empty">No classes selected: learners use free-form names.</span></div>
           <label for="gameQCount" style="font-size:13px;font-weight:600;white-space:nowrap">Questions</label>
           <input id="gameQCount" type="number" min="4" max="20" value="6" style="width:64px;font-size:13px;padding:8px 10px" />
         </div>
@@ -3202,10 +3206,8 @@
               <option value="arcade">Individual arcade</option><option value="fishquest">Live multiplayer - FishQuest</option><option value="colonyquest">Whole class - ColonyQuest</option>
             </select>
           </div>
-          <div style="grid-column:1/-1"><label for="pptxRosterPick" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Class roster <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
-            <select id="pptxRosterPick" style="width:100%;font-size:13px;padding:8px 10px;box-sizing:border-box">
-              <option value="">— No roster (free-form names) —</option>
-            </select>
+          <div style="grid-column:1/-1"><span id="pptxRosterPickLabel" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Classes <span style="font-weight:400;color:var(--muted)">(choose any number)</span></span>
+            <div id="pptxRosterPick" class="class-picker" role="group" aria-labelledby="pptxRosterPickLabel"><span class="class-picker-empty">No classes selected: learners use free-form names.</span></div>
           </div>
           <div id="pptxCutoffWrap" style="grid-column:1/-1"><label for="pptxCutoff" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Close game at <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
             <input id="pptxCutoff" type="datetime-local" style="width:100%;font-size:13px;padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;background:#fff;box-sizing:border-box" />
@@ -6463,7 +6465,7 @@
     $('gameModePick').addEventListener('click',event=>{ const button=event.target.closest('[data-game-mode]'); if(button)setGameMode(button.dataset.gameMode); });
     setGameMode('arcade');
     const resultsTable=rs=> rs && rs.length
-      ? '<div class="res-table"><div class="res-row"><span>Student</span><span class="sc">Score</span><span class="pc">%</span></div>'+rs.map(r=>`<div class="res-row"><span>${esc(r.name)}</span><span class="sc">${r.score}/${r.total}</span><span class="pc">${Math.round(r.score/r.total*100)}%</span></div>`).join('')+'</div>'
+      ? '<div class="res-table"><div class="res-row"><span>Student</span><span class="sc">Score</span><span class="pc">%</span></div>'+rs.map(r=>`<div class="res-row"><span>${esc(r.name)}${r.className?`<small style="display:block;color:var(--muted);font-weight:500">${esc(r.className)}</small>`:''}</span><span class="sc">${r.score}/${r.total}</span><span class="pc">${Math.round(r.score/r.total*100)}%</span></div>`).join('')+'</div>'
       : '<p class="hint" style="margin-top:8px">No students have played yet.</p>';
     // Per-question breakdown for a game: which questions students missed, as a
     // correct/answered bar. Mirrors what assignments show, so games aren't just
@@ -6487,7 +6489,7 @@
         const missingLabel=d.mode==='colonyquest'?'No identified turn yet':'Not played yet';
         html+=`<div style="margin-top:12px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:#fdf6ea">
           <b style="font-size:12.5px;color:#b26a00">${missingLabel} (${d.notPlayed.length})</b>
-          <div style="font-size:12.5px;color:var(--muted);margin-top:3px">${d.notPlayed.map(s=>esc(s.name)).join(', ')}</div>
+          <div style="font-size:12.5px;color:var(--muted);margin-top:3px">${d.notPlayed.map(s=>`${esc(s.name)}${s.className?` (${esc(s.className)})`:''}`).join(', ')}</div>
         </div>`;
       }
       return html;
@@ -6507,10 +6509,10 @@
     function copyLink(url){ if(navigator.clipboard){ navigator.clipboard.writeText(url).then(()=>toast('Link copied','ok')).catch(()=>toast('Copy failed — select and copy manually')); } else toast('Copy not supported — select the link'); }
     $('makeGameBtn').addEventListener('click', async ()=>{
       const b=$('makeGameBtn'); b.disabled=true; const o=b.innerHTML; b.innerHTML='<span class="spinner"></span>Building game…';
-      const rosterId=$('gameRosterPick').value||null;
+      const rosterIds=selectedClassIds($('gameRosterPick'));
       const questionCount=Math.min(20,Math.max(4,parseInt($('gameQCount').value,10)||6));
       const cutoffAt=$('gameCutoff').value||null;
-      try{ const r=await fetch('/api/game',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deckId:currentDeckId,rosterId,questionCount,cutoffAt,mode:selectedGameMode})});
+      try{ const r=await fetch('/api/game',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deckId:currentDeckId,rosterIds,questionCount,cutoffAt,mode:selectedGameMode})});
         const d=await r.json(); if(creditBlocked(r,d)){ b.disabled=false; b.innerHTML=o; return; } if(!r.ok) throw new Error(d.error);
         if(d.gameId&&!workspaceGameIds.includes(d.gameId)) workspaceGameIds.push(d.gameId);
         scheduleWorkspaceSave();
@@ -6523,9 +6525,9 @@
         }else $('gamePanel').innerHTML=`
           ${d.roomCode?`<div style="margin-bottom:14px"><p style="font-size:13px;font-weight:600;margin-bottom:6px">Room Code — show this on the board:</p><div style="font-size:36px;font-weight:900;letter-spacing:6px;color:var(--primary);background:#e8f0fb;display:inline-block;padding:10px 20px;border-radius:10px">${esc(d.roomCode)}</div><p class="hint" style="margin-top:6px">Students go to <b>${esc(joinUrl)}</b> and type this code.</p></div>`:''}
           <div class="game-link"><input id="gameUrl" readonly value="${esc(url)}"><button type="button" class="btn ghost" id="copyGameBtn" style="width:auto;padding:10px 14px">${ICON('i-doc')} Copy link</button></div>
-          <p class="hint" style="margin:10px 0 2px">${d.questionCount} questions · ${rosterId?'roster attached':'no roster — free-form names'}.</p>
+          <p class="hint" style="margin:10px 0 2px">${d.questionCount} questions · ${rosterIds.length?`${rosterIds.length} ${rosterIds.length===1?'class':'classes'} attached`:'no class — free-form names'}.</p>
           ${d.mode==='fishquest'?`<a class="btn accent" href="/fishquest/${esc(d.gameId)}" style="display:inline-flex;width:auto;margin:8px 0">${ICON('i-gamepad')} Open FishQuest live room</a>`:''}
-          ${d.roomCode&&rosterId?`<a href="/api/game/${esc(d.gameId)}/qr-sheet" style="font-size:13px;font-weight:600;color:var(--primary);display:inline-flex;align-items:center;gap:4px;margin-bottom:8px">${ICON('i-image')} Print QR cards</a>`:''}
+          ${d.roomCode&&rosterIds.length?`<a href="/api/game/${esc(d.gameId)}/qr-sheet" style="font-size:13px;font-weight:600;color:var(--primary);display:inline-flex;align-items:center;gap:4px;margin-bottom:8px">${ICON('i-image')} Print QR cards</a>`:''}
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px"><b style="font-size:14px;color:var(--primary)">Results</b><button type="button" id="refreshResBtn" style="font-size:12.5px;font-weight:600;padding:6px 11px;border:1px solid var(--border);border-radius:9px;background:#fff;color:var(--primary);cursor:pointer;display:inline-flex;align-items:center;gap:6px">${ICON('i-refresh')} Refresh</button></div>
           <div id="gameResults"></div>`;
         $('copyGameBtn')?.addEventListener('click',()=>copyLink(url));
@@ -7152,14 +7154,18 @@
     function fmtDateTime(iso){if(!iso)return'';const d=new Date(iso);return d.toLocaleString(undefined,{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}
     function gameLive(cutoffAt){return!cutoffAt||new Date(cutoffAt)>new Date();}
 
-    let allGames=[];
+    let allGames=[], gameClassRosters=[];
+
+    function gameRosterIds(game){return Array.isArray(game.rosterIds)?game.rosterIds:(game.rosterId?[game.rosterId]:[])}
+    function gameClassNames(game){const ids=new Set(gameRosterIds(game));return gameClassRosters.filter(r=>ids.has(r.id)).map(r=>r.name)}
 
     function filterGames(games,search,status,classId){
       return games.filter(g=>{
         const matchText=!search||(g.topic||'').toLowerCase().includes(search)||(g.lessonTitle||'').toLowerCase().includes(search)||(g.subject||'').toLowerCase().includes(search);
         const live=gameLive(g.cutoffAt);
         const matchStatus=status==='all'||(status==='live'&&live)||(status==='closed'&&!live);
-        const matchClass=classId==='all'||(classId==='none'&&!g.rosterId)||(g.rosterId===classId);
+        const rosterIds=gameRosterIds(g);
+        const matchClass=classId==='all'||(classId==='none'&&!rosterIds.length)||rosterIds.includes(classId);
         return matchText&&matchStatus&&matchClass;
       });
     }
@@ -7184,12 +7190,16 @@
         const cutoffLine=colony?'<span>Teacher-controlled screen</span>':g.cutoffAt?`<span>Closes ${fmtDateTime(g.cutoffAt)}</span>`:'<span>No close date</span>';
         const modeLabel=colony?'ColonyQuest':fish?'FishQuest':'Individual arcade';
         const extRowId='ext-'+g.id;
+        const classRowId='classes-'+g.id;
+        const classNames=gameClassNames(g);
+        const classLine=classNames.length?classNames.map(name=>`<span class="gc-chip">${esc(name)}</span>`).join(''):'<span class="gc-chip">Free-form names</span>';
+        const classChoices=gameClassRosters.length?gameClassRosters.map(r=>`<label><input type="checkbox" value="${esc(r.id)}" ${gameRosterIds(g).includes(r.id)?'checked':''}> <span>${esc(r.name)} <small>(${r.count})</small></span></label>`).join(''):'<span class="class-picker-empty">Create a class roster first.</span>';
         return `<div class="game-card">
           <div class="gc-head">
             <div class="gc-top">
               <div>
                 <div class="gc-title">${esc(g.lessonTitle)}</div>
-                <div class="gc-meta">${subjectChip}${gradeChip}<span class="gc-chip">${g.questionCount} Qs</span>${colony?'':`<span class="gc-chip">${g.plays} played</span>`}<span class="gc-chip" style="background:#d9fbf5;color:#087653">${modeLabel}</span></div>
+                <div class="gc-meta">${subjectChip}${gradeChip}<span class="gc-chip">${g.questionCount} Qs</span>${colony?'':`<span class="gc-chip">${g.plays} played</span>`}<span class="gc-chip" style="background:#d9fbf5;color:#087653">${modeLabel}</span>${classLine}</div>
                 <div class="gc-dates"><span>Created ${fmtDate(g.createdAt)}</span>${cutoffLine}${badge}</div>
               </div>
               ${g.roomCode?`<div style="text-align:right"><span class="room-label">Room code</span><div class="room-code">${esc(g.roomCode)}</div></div>`:''}
@@ -7198,10 +7208,15 @@
           </div>
           <div class="gc-body">
             ${colony?'':`<div class="game-link"><input readonly value="${esc(studentUrl)}"><button type="button" class="btn ghost gcopy" data-url="${esc(studentUrl)}" style="width:auto;padding:9px 13px">${ICON('i-doc')} Copy</button></div>`}
-            ${!colony&&g.rosterId?`<a href="/api/game/${esc(g.id)}/qr-sheet" style="font-size:12.5px;font-weight:600;color:var(--primary);display:inline-flex;align-items:center;gap:4px;margin-top:8px">${ICON('i-image')} Print QR cards</a>`:''}
+            ${!colony&&gameRosterIds(g).length?`<a href="/api/game/${esc(g.id)}/qr-sheet" style="font-size:12.5px;font-weight:600;color:var(--primary);display:inline-flex;align-items:center;gap:4px;margin-top:8px">${ICON('i-image')} Print QR cards</a>`:''}
             <div class="gc-actions" style="margin-top:10px">
               <a class="btn accent" href="${esc(launchUrl)}" style="font-size:12px;padding:7px 12px;width:auto;text-decoration:none">${colony?'Open ColonyQuest':fish?'Open FishQuest control room':'Open game'}</a>
+              <button type="button" class="btn ghost gc-class-btn" data-id="${esc(g.id)}" data-row="${classRowId}" style="font-size:12px;padding:6px 12px;width:auto">Manage classes</button>
               ${colony?'':`<button type="button" class="btn ghost gc-extend-btn" data-id="${esc(g.id)}" data-row="${extRowId}" style="font-size:12px;padding:6px 12px;width:auto">Extend deadline</button>`}
+            </div>
+            <div class="gc-class-row" id="${classRowId}">
+              <div class="class-picker" role="group" aria-label="Classes assigned to ${esc(g.lessonTitle)}">${classChoices}</div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="gc-class-save" data-id="${esc(g.id)}" data-row="${classRowId}">Save classes</button><button type="button" class="gc-class-cancel" data-row="${classRowId}">Cancel</button><small style="color:var(--muted)">Leave all unchecked to allow free-form names.</small></div>
             </div>
             ${colony?'':`<div class="gc-extend-row" id="${extRowId}">
               <input type="datetime-local" class="gc-extend-input" />
@@ -7215,6 +7230,12 @@
       wrap.innerHTML=html;
       games.forEach(g=>loadGameResults(g.id,'res-'+g.id));
       wrap.querySelectorAll('.gcopy').forEach(b=>b.addEventListener('click',()=>copyLink(b.dataset.url)));
+      wrap.querySelectorAll('.gc-class-btn').forEach(b=>b.addEventListener('click',()=>{
+        const row=document.getElementById(b.dataset.row);
+        row.style.display=row.style.display==='block'?'none':'block';
+      }));
+      wrap.querySelectorAll('.gc-class-save').forEach(b=>b.addEventListener('click',()=>saveGameClasses(b.dataset.id,b.dataset.row)));
+      wrap.querySelectorAll('.gc-class-cancel').forEach(b=>b.addEventListener('click',()=>{document.getElementById(b.dataset.row).style.display='none';}));
       wrap.querySelectorAll('.gc-extend-btn').forEach(b=>b.addEventListener('click',()=>{
         const row=document.getElementById(b.dataset.row);
         const visible=row.style.display==='flex';
@@ -7243,18 +7264,35 @@
       }catch(e){toast(e.message||'Failed to update.');}
     }
 
+    async function saveGameClasses(gameId,rowId){
+      const row=document.getElementById(rowId);
+      if(!row)return;
+      const rosterIds=selectedClassIds(row.querySelector('.class-picker'));
+      const save=row.querySelector('.gc-class-save');
+      save.disabled=true;const original=save.textContent;save.textContent='Saving...';
+      try{
+        const r=await fetch('/api/game/'+gameId+'/classes',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({rosterIds})});
+        const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not update classes.');
+        const game=allGames.find(item=>item.id===gameId);
+        if(game){game.rosterIds=d.rosterIds||[];game.rosterId=d.rosterId||null;}
+        toast(rosterIds.length?`Game assigned to ${rosterIds.length} ${rosterIds.length===1?'class':'classes'}.`:'Game now allows free-form names.','ok');
+        applyFilters();
+      }catch(err){save.disabled=false;save.textContent=original;toast(err.message||'Could not update classes.');}
+    }
+
     async function loadMyGames(){
       const wrap=$('gamesList'); wrap.innerHTML='<span class="status">Loading…</span>';
       try{
         const [gd, rd] = await Promise.all([fetch('/api/games').then(r=>r.json()), fetch('/api/rosters').then(r=>r.json())]);
         const rosters = rd.rosters || [];
+        gameClassRosters=rosters;
         if(!gd.games||!gd.games.length){ allGames=[]; wrap.innerHTML='<div class="empty-state"><svg class="ic" aria-hidden="true" style="width:36px;height:36px;opacity:.3"><use href="#i-target"/></svg><p>No games yet</p><p style="font-size:13px;color:var(--muted)">Create one from a finished lesson — look for the "Lesson game" section under your slides.</p></div>'; return; }
         allGames=gd.games;
         // Build class dropdown — only rosters referenced by at least one game + "No class" if any game has no roster
-        const usedRosterIds=new Set(allGames.map(g=>g.rosterId).filter(Boolean));
+        const usedRosterIds=new Set(allGames.flatMap(gameRosterIds));
         const classEl=$('gamesClassFilter');
         const curClass=classEl.value;
-        const hasNoRoster=allGames.some(g=>!g.rosterId);
+        const hasNoRoster=allGames.some(g=>!gameRosterIds(g).length);
         classEl.innerHTML='<option value="all">All classes</option>'
           +(hasNoRoster?'<option value="none">No class</option>':'')
           +rosters.filter(r=>usedRosterIds.has(r.id)).map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');
@@ -7270,7 +7308,7 @@
 
     // ---- Game from own PowerPoint ----
     let pptxFile=null;
-    function showGamePanel(container, d, rosterId){
+    function showGamePanel(container, d, rosterIds){
       const url=location.origin+d.path;
       const joinUrl=location.origin+'/join';
       if(d.mode==='colonyquest'){
@@ -7280,7 +7318,7 @@
       container.innerHTML=`
         ${d.roomCode?`<div style="margin-bottom:12px"><p style="font-size:13px;font-weight:600;margin-bottom:6px">Room Code — show this on the board:</p><div style="font-size:32px;font-weight:900;letter-spacing:6px;color:var(--primary);background:#e8f0fb;display:inline-block;padding:8px 18px;border-radius:10px">${esc(d.roomCode)}</div><p class="hint" style="margin-top:6px">Students go to <b>${esc(joinUrl)}</b> and type this code.</p></div>`:''}
         <div class="game-link"><input id="pptxGameUrl" readonly value="${esc(url)}"><button type="button" class="btn ghost" id="pptxCopyBtn" style="width:auto;padding:10px 14px">${ICON('i-doc')} Copy link</button></div>
-        <p class="hint" style="margin:8px 0 0">${d.questionCount} questions · ${rosterId?'roster attached':'free-form names'}.</p>
+        <p class="hint" style="margin:8px 0 0">${d.questionCount} questions · ${rosterIds.length?`${rosterIds.length} ${rosterIds.length===1?'class':'classes'} attached`:'free-form names'}.</p>
         ${d.mode==='fishquest'?`<a class="btn accent" href="/fishquest/${esc(d.gameId)}" style="display:inline-flex;width:auto;margin-top:10px">${ICON('i-gamepad')} Open FishQuest live room</a>`:''}`;
       document.getElementById('pptxCopyBtn').addEventListener('click',()=>copyLink(url));
     }
@@ -7303,14 +7341,15 @@
       fd.append('subject',subject); fd.append('topic',topic);
       fd.append('grade',$('pptxGrade').value);
       fd.append('questionCount',Math.min(20,Math.max(4,parseInt($('pptxQCount').value,10)||6)));
-      fd.append('rosterId',$('pptxRosterPick').value||'');
+      const rosterIds=selectedClassIds($('pptxRosterPick'));
+      fd.append('rosterIds',JSON.stringify(rosterIds));
       fd.append('cutoffAt',$('pptxCutoff').value||'');
       fd.append('mode',$('pptxGameMode').value);
       try{
         const r=await fetch('/api/game/from-pptx',{method:'POST',body:fd});
         const d=await r.json(); if(creditBlocked(r,d)){ btn.disabled=false; btn.innerHTML=orig; return; } if(!r.ok) throw new Error(d.error);
         refreshCredits();
-        showGamePanel($('pptxResult'),d,$('pptxRosterPick').value);
+        showGamePanel($('pptxResult'),d,rosterIds);
         btn.innerHTML=`${ICON('i-check')} Game created`;
         loadMyGames();
       }catch(err){ toast(err.message); btn.disabled=false; btn.innerHTML=orig; }
@@ -7322,13 +7361,25 @@
     function closeRosters(){ rostersPanel.style.display='none'; stepsEl.style.display='flex'; show('composer'); setStep(1); setActiveNav('homeBtn'); }
     $('rostersBtn').onclick=openRosters; $('rostersBack').onclick=closeRosters; $('rostersBackTop').onclick=closeRosters;
 
+    function selectedClassIds(picker){
+      return picker?[...picker.querySelectorAll('input[type="checkbox"]:checked')].map(input=>input.value):[];
+    }
+    function populateClassPicker(picker,rosters,selected){
+      if(!picker)return;
+      const chosen=new Set(selected||selectedClassIds(picker));
+      picker.innerHTML=rosters.length?rosters.map(r=>`<label><input type="checkbox" value="${esc(r.id)}" ${chosen.has(r.id)?'checked':''}> <span>${esc(r.name)} <small>(${r.count})</small></span></label>`).join(''):'<span class="class-picker-empty">Create a class roster first, or leave this game open to free-form names.</span>';
+    }
+
     async function loadRosters(populatePicker=true){
       const wrap=$('rosterList'); if(wrap) wrap.innerHTML='<span class="status">Loading…</span>';
       try{
         const d=await (await fetch('/api/rosters')).json();
         if(populatePicker){
           const rosterOpts='<option value="">— No roster (free-form names) —</option>'+(d.rosters||[]).map(r=>`<option value="${esc(r.id)}">${esc(r.name)} (${r.count} students)</option>`).join('');
-          [$('gameRosterPick'),$('pptxRosterPick'),$('assignRosterPick')].forEach(pick=>{ if(!pick) return; const cur=pick.value; pick.innerHTML=rosterOpts; if(cur) pick.value=cur; });
+          populateClassPicker($('gameRosterPick'),d.rosters||[]);
+          populateClassPicker($('pptxRosterPick'),d.rosters||[]);
+          const assignmentPick=$('assignRosterPick');
+          if(assignmentPick){const cur=assignmentPick.value;assignmentPick.innerHTML=rosterOpts;if(cur)assignmentPick.value=cur;}
         }
         if(!wrap) return;
         if(!d.rosters||!d.rosters.length){ wrap.innerHTML='<div class="empty-state"><svg class="ic" aria-hidden="true" style="width:36px;height:36px;opacity:.3"><use href="#i-doc"/></svg><p>No rosters yet</p><p style="font-size:13px;color:var(--muted)">Add your first class list below.</p></div>'; return; }

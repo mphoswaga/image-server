@@ -16,6 +16,25 @@ const colonySessionPath = id => path.join(GAMES_DIR, `${id}.colonyquest.json`);
 const isGameFile = f => f.endsWith('.json') && !f.endsWith('.results.json') && !f.endsWith('.colonyquest.json') && f !== '_rooms.json';
 const normalizeStudentId = value => String(value || '').trim().replace(/\s+/g, '').toUpperCase();
 
+function normalizeRosterIds(rosterIds, rosterId) {
+  const source = Array.isArray(rosterIds) ? rosterIds : rosterIds ? [rosterIds] : rosterId ? [rosterId] : [];
+  return [...new Set(source.map(value => String(value || '').trim()).filter(Boolean))].slice(0, 30);
+}
+
+function getRosterIds(game) {
+  return normalizeRosterIds(game && game.rosterIds, game && game.rosterId);
+}
+
+function hasRoster(game, rosterId) {
+  return getRosterIds(game).includes(String(rosterId || '').trim());
+}
+
+function normalizeGameRecord(game) {
+  if (!game) return null;
+  const rosterIds = getRosterIds(game);
+  return { ...game, rosterIds, rosterId: rosterIds[0] || null };
+}
+
 // 6-char room code using unambiguous chars (no 0/O/1/I/L).
 const ROOM_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 function genRoomCode() {
@@ -51,16 +70,18 @@ function defaultColonyQuestConfig() {
   };
 }
 
-function createGame({ teacherId, teacherName, lessonTitle, subject, topic, grade, game, rosterId, cutoffAt, mode }) {
+function createGame({ teacherId, teacherName, lessonTitle, subject, topic, grade, game, rosterIds, rosterId, cutoffAt, mode }) {
   fs.mkdirSync(GAMES_DIR, { recursive: true });
   const id = crypto.randomUUID().slice(0, 8); // short + shareable
   const normalizedMode = mode === 'fishquest' ? 'fishquest' : mode === 'colonyquest' ? 'colonyquest' : 'arcade';
   const roomCode = normalizedMode === 'colonyquest' ? null : genRoomCode();
+  const assignedRosterIds = normalizeRosterIds(rosterIds, rosterId);
   const rec = {
     id, teacherId, teacherName: teacherName || '',
     lessonTitle: lessonTitle || topic, subject, topic, grade,
     roomCode,
-    rosterId: rosterId || null,
+    rosterIds: assignedRosterIds,
+    rosterId: assignedRosterIds[0] || null,
     cutoffAt: cutoffAt || null,
     mode: normalizedMode,
     fishquest: normalizedMode === 'fishquest' ? { durationMinutes: 10, lateJoin: true, playMode: 'live' } : null,
@@ -80,7 +101,7 @@ function createGame({ teacherId, teacherName, lessonTitle, subject, topic, grade
 }
 
 function getGame(id) {
-  try { return JSON.parse(fs.readFileSync(gamePath(String(id)), 'utf8')); } catch { return null; }
+  try { return normalizeGameRecord(JSON.parse(fs.readFileSync(gamePath(String(id)), 'utf8'))); } catch { return null; }
 }
 
 function loadResults(id) {
@@ -88,7 +109,7 @@ function loadResults(id) {
 }
 
 // Upsert a student's attempt — keep latest quiz score, keep BEST arcade score per game type.
-function recordResult(id, { studentId, name, score, total, answers, arcadeScore, gameType, resultId, fishquest }) {
+function recordResult(id, { studentId, name, score, total, answers, arcadeScore, gameType, resultId, rosterId, fishquest }) {
   studentId = normalizeStudentId(studentId);
   const results = loadResults(id);
   const at = new Date().toISOString();
@@ -98,11 +119,11 @@ function recordResult(id, { studentId, name, score, total, answers, arcadeScore,
     const as = existing.arcadeScores || {};
     if (gameType) as[gameType] = Math.max(as[gameType] || 0, arcadeScore || 0);
     const fishquestHistory = fishquest ? [...(existing.fishquestHistory || []), { ...fishquest, resultId, at }].slice(-20) : (existing.fishquestHistory || []);
-    Object.assign(existing, { name, score, total, answers, at, attempts: (existing.attempts || 1) + 1, arcadeScores: as, gameType, resultId: resultId || null, fishquest: fishquest || null, fishquestHistory });
+    Object.assign(existing, { name, score, total, answers, at, attempts: (existing.attempts || 1) + 1, arcadeScores: as, gameType, resultId: resultId || null, rosterId: rosterId || existing.rosterId || null, fishquest: fishquest || null, fishquestHistory });
   } else {
     const arcadeScores = {};
     if (gameType) arcadeScores[gameType] = arcadeScore || 0;
-    results.push({ studentId, name, score, total, answers, at, attempts: 1, arcadeScores, gameType: gameType || null, resultId: resultId || null, fishquest: fishquest || null, fishquestHistory: fishquest ? [{ ...fishquest, resultId, at }] : [] });
+    results.push({ studentId, name, score, total, answers, at, attempts: 1, arcadeScores, gameType: gameType || null, resultId: resultId || null, rosterId: rosterId || null, fishquest: fishquest || null, fishquestHistory: fishquest ? [{ ...fishquest, resultId, at }] : [] });
   }
   writeJsonAtomic(resultsPath(id), results);
   return results;
@@ -125,12 +146,12 @@ function listTeacherGames(teacherId) {
   fs.mkdirSync(GAMES_DIR, { recursive: true });
   return fs.readdirSync(GAMES_DIR)
     .filter(isGameFile)
-    .map(f => { try { return JSON.parse(fs.readFileSync(path.join(GAMES_DIR, f), 'utf8')); } catch { return null; } })
+    .map(f => { try { return normalizeGameRecord(JSON.parse(fs.readFileSync(path.join(GAMES_DIR, f), 'utf8'))); } catch { return null; } })
     .filter(g => g && g.teacherId === teacherId)
     .map(g => ({
       id: g.id, lessonTitle: g.lessonTitle, subject: g.subject, topic: g.topic, grade: g.grade,
       questionCount: (g.questions || []).length, createdAt: g.createdAt, plays: loadResults(g.id).length,
-      roomCode: g.roomCode || null, rosterId: g.rosterId || null, cutoffAt: g.cutoffAt || null,
+      roomCode: g.roomCode || null, rosterId: g.rosterId || null, rosterIds: getRosterIds(g), cutoffAt: g.cutoffAt || null,
       mode: g.mode || 'arcade',
     }))
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
@@ -143,6 +164,16 @@ function updateGameCutoff(id, cutoffAt) {
   g.cutoffAt = cutoffAt || null;
   writeJsonAtomic(p, g);
   return g;
+}
+
+function updateGameRosters(id, rosterIds) {
+  const p = gamePath(String(id));
+  if (!fs.existsSync(p)) return null;
+  const g = JSON.parse(fs.readFileSync(p, 'utf8'));
+  g.rosterIds = normalizeRosterIds(rosterIds);
+  g.rosterId = g.rosterIds[0] || null;
+  writeJsonAtomic(p, g);
+  return normalizeGameRecord(g);
 }
 
 function updateFishQuest(id, config) {
@@ -216,6 +247,7 @@ function clearColonyQuestSession(id) {
 
 module.exports = {
   createGame, getGame, recordResult, getResults, getHighScores, listTeacherGames, getRoomCode,
-  updateGameCutoff, updateFishQuest, updateColonyQuest, getColonyQuestSession,
-  saveColonyQuestSession, clearColonyQuestSession, normalizeStudentId,
+  updateGameCutoff, updateGameRosters, updateFishQuest, updateColonyQuest, getColonyQuestSession,
+  saveColonyQuestSession, clearColonyQuestSession, normalizeStudentId, normalizeRosterIds,
+  getRosterIds, hasRoster,
 };

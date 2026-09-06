@@ -14,7 +14,7 @@ const DIR = path.join(DATA_DIR, 'fishquest');
 const fileFor = matchKey => path.join(DIR, `${String(matchKey).replace(/[^a-zA-Z0-9._-]/g, '_')}.json`);
 const soloKey = (gameId, studentId) => `${gameId}.solo.${crypto.createHash('sha256').update(String(studentId)).digest('hex').slice(0, 16)}`;
 
-function createFishQuestLive({ app, games, roster, requireAuth, requireGameAccess, jwtSecret }) {
+function createFishQuestLive({ app, games, roster, requireAuth, requireGameAccess, gameSessionCanAccess = () => true, jwtSecret }) {
   fs.mkdirSync(DIR, { recursive: true });
   const matches = new Map();
   const clients = new Map();
@@ -56,9 +56,27 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
     return game;
   }
   function rosterAttendance(game, match) {
-    const joined = new Set((match ? match.state.players : []).map(p => games.normalizeStudentId(p.studentId)));
-    const r = game.rosterId ? roster.getRoster(game.teacherId, game.rosterId) : null;
-    return r ? r.students.map(s => ({ studentId: s.id, name: s.name, joined: joined.has(games.normalizeStudentId(s.id)) })) : [];
+    const joined = new Set((match ? match.state.players : []).map(p => `${p.rosterId || '*'}:${games.normalizeStudentId(p.studentId)}`));
+    const attendance = [];
+    const seen = new Set();
+    for (const rosterId of games.getRosterIds(game)) {
+      const classRoster = roster.getRoster(game.teacherId, rosterId);
+      if (!classRoster) continue;
+      for (const student of classRoster.students || []) {
+        const studentId = games.normalizeStudentId(student.id);
+        const key = `${rosterId}:${studentId}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        attendance.push({
+          studentId: student.id,
+          name: student.name,
+          rosterId,
+          className: classRoster.name,
+          joined: joined.has(key) || joined.has(`*:${studentId}`),
+        });
+      }
+    }
+    return attendance;
   }
   function teacherPayload(game, match) {
     return {
@@ -77,7 +95,7 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
       const score = [...first.values()].filter(a => a.correct).length;
       games.recordResult(game.id, {
         studentId: p.studentId, name: p.name, score, total: game.questions.length, answers,
-        arcadeScore: p.score, gameType: 'fishquest', resultId: `${match.state.id}:${p.studentId}`,
+        arcadeScore: p.score, gameType: 'fishquest', resultId: `${match.state.id}:${p.studentId}`, rosterId: p.rosterId || null,
         fishquest: { matchId: match.state.id, mass: Math.round(p.mass), collections: p.collections, swallows: p.swallows, attempts: p.attempts },
       });
     }
@@ -144,9 +162,10 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
   app.post('/api/game/:id/fishquest/ticket', requireGameAccess, (req, res) => {
     const game = readyGame(games.getGame(req.params.id));
     if (!isFish(game)) return res.status(404).json({ error: 'FishQuest game not found.' });
+    if (req.gameSession && !gameSessionCanAccess(game, req.gameSession)) return res.status(403).json({ error: 'This game is no longer assigned to your class.' });
     const teacherPreview = req.userId && req.userId === game.teacherId;
     const identity = req.gameSession && req.gameSession.gameId === game.id
-      ? { studentId: req.gameSession.studentId, name: req.gameSession.name }
+      ? { studentId: req.gameSession.studentId, name: req.gameSession.name, rosterId: req.gameSession.rosterId || null }
       : teacherPreview
         ? { studentId: `__TEACHER_TEST__:${req.userId}`, name: `${(req.user && (req.user.name || req.user.email)) || 'Teacher'} (test)` }
         : null;
@@ -192,7 +211,7 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
             if (claim.type !== 'fishquest') throw Error('Bad ticket');
             const game = games.getGame(claim.gameId), matchKey = claim.matchKey || claim.gameId, match = getMatch(matchKey, claim.gameId);
             if (!isFish(game) || !match) throw Error('Room closed');
-            const p = match.join({ studentId: claim.studentId, name: claim.name });
+            const p = match.join({ studentId: claim.studentId, name: claim.name, rosterId: claim.rosterId || null });
             if ((claim.preview || claim.solo) && match.state.phase === 'lobby') {
               match.addNpcs();match.start(1);
               p.protectedUntil = 0;

@@ -116,6 +116,52 @@ test('activity results match rosters when student IDs use different casing', () 
   assert.equal(gb.rows[0].average, 1);
 });
 
+test('one published game can be assigned to several classes and edited later', () => {
+  const teacherId = `teacher-multi-game-${Date.now()}`;
+  const classA = roster.saveRoster(teacherId, { name: '3A', students: [{ id: 'A-1', name: 'Ama One' }] });
+  const classB = roster.saveRoster(teacherId, { name: '3B', students: [{ id: 'B-1', name: 'Bao Two' }] });
+  const classC = roster.saveRoster(teacherId, { name: '3C', students: [{ id: 'C-1', name: 'Chi Three' }] });
+  const game = games.createGame({
+    teacherId,
+    lessonTitle: 'Multiple classes',
+    subject: 'ICT',
+    topic: 'Files',
+    grade: '3',
+    rosterIds: [classA.id, classB.id, classA.id],
+    game: { questions: [{ question: 'Save?', options: ['Yes', 'No'], correctIndex: 0 }] },
+  });
+
+  assert.deepEqual(game.rosterIds, [classA.id, classB.id]);
+  assert.equal(game.rosterId, classA.id, 'legacy callers still see the first class');
+  assert.equal(games.hasRoster(game, classA.id), true);
+  assert.equal(games.hasRoster(game, classC.id), false);
+  assert.deepEqual(games.listTeacherGames(teacherId)[0].rosterIds, [classA.id, classB.id]);
+
+  const updated = games.updateGameRosters(game.id, [classB.id, classC.id]);
+  assert.deepEqual(updated.rosterIds, [classB.id, classC.id]);
+  assert.equal(games.hasRoster(games.getGame(game.id), classA.id), false);
+  assert.equal(gradebook.listClasses(teacherId).find(item => item.rosterId === classA.id).games, 0);
+  assert.equal(gradebook.listClasses(teacherId).find(item => item.rosterId === classB.id).games, 1);
+  assert.equal(gradebook.listClasses(teacherId).find(item => item.rosterId === classC.id).games, 1);
+});
+
+test('legacy single-class games are exposed through the multi-class model', () => {
+  const game = { rosterId: 'legacy-class' };
+  assert.deepEqual(games.getRosterIds(game), ['legacy-class']);
+  assert.equal(games.hasRoster(game, 'legacy-class'), true);
+  assert.deepEqual(games.normalizeRosterIds(undefined, 'legacy-class'), ['legacy-class']);
+});
+
+test('published games expose editable multi-class controls', () => {
+  const server = fs.readFileSync(path.join(__dirname, '..', 'image-server.js'), 'utf8');
+  const dashboard = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.match(server, /app\.patch\('\/api\/game\/:id\/classes'/);
+  assert.match(server, /ownedGameRosterIds\(req\.userId/);
+  assert.match(dashboard, /Manage classes/);
+  assert.match(dashboard, /selectedClassIds\(\$\('gameRosterPick'\)\)/);
+  assert.match(dashboard, /rosterIds',JSON\.stringify\(rosterIds\)/);
+});
+
 test('a student who is not on a roster keeps the name they typed', () => {
   // studentId is an identity KEY — upper-cased with spaces removed, so that one
   // person is one person across attempts. Used as a NAME it produced results a

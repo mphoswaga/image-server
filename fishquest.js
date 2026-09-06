@@ -24,12 +24,12 @@ class FishMatch {
       if(this.state.phase==='ended')throw Error('This match has ended.');
       if(this.state.phase==='running'&&this.game.fishquest.lateJoin===false)throw Error('Late joining is closed.');
       if(this.state.players.length>=CONFIG.maxPlayers)throw Error('This room is full.');
-      p={id:crypto.randomUUID(),studentId:identity.studentId,name:identity.name,variant:this.state.players.length%CONFIG.variantCount,
+      p={id:crypto.randomUUID(),studentId:identity.studentId,name:identity.name,rosterId:identity.rosterId||null,variant:this.state.players.length%CONFIG.variantCount,
         mass:100,score:0,...this.point(),dx:0,dy:0,inputAt:0,seq:-1,connected:true,protectedUntil:this.now()+CONFIG.protectionMs,
         cooldownUntil:0,respawnAt:0,lock:null,attempts:[],presented:[],collections:0,swallows:0};
       this.state.players.push(p); this.spawn(p);
     }
-    p.connected=true;p.dx=0;p.dy=0;p.seq=-1;this.save();this.log('join',{playerId:p.id});return p;
+    p.connected=true;p.rosterId=identity.rosterId||p.rosterId||null;p.dx=0;p.dy=0;p.seq=-1;this.save();this.log('join',{playerId:p.id});return p;
   }
   addNpcs(){
     if(this.state.players.some(p=>p.npc))return;

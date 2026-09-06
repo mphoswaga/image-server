@@ -21,7 +21,7 @@ function listClasses(userId) {
     name: r.name,
     students: r.count,
     assignments: asgs.filter(a => a.rosterId === r.id).length,
-    games: gms.filter(g => g.rosterId === r.id).length,
+    games: gms.filter(g => games.hasRoster(g, r.id)).length,
   })).filter(c => c.assignments + c.games > 0 || c.students > 0);
 }
 
@@ -39,7 +39,7 @@ function buildGradebook(userId, rosterId) {
   const asgs = assignments.listTeacherAssignments(userId).filter(a => a.rosterId === rosterId);
   // ColonyQuest records team/class evidence. It must not create blank or
   // manufactured individual marks in a learner gradebook.
-  const gms = games.listTeacherGames(userId).filter(g => g.rosterId === rosterId && isIndividuallyGradedGame(g));
+  const gms = games.listTeacherGames(userId).filter(g => games.hasRoster(g, rosterId) && isIndividuallyGradedGame(g));
 
   const assessments = [];
   const cells = {}; // studentId -> { assessmentId -> { mark, max, pct } }
@@ -60,7 +60,9 @@ function buildGradebook(userId, rosterId) {
   }
 
   for (const g of gms) {
-    const byStu = Object.fromEntries(games.getResults(g.id).map(x => [sid(x.studentId), x]));
+    const byStu = Object.fromEntries(games.getResults(g.id)
+      .filter(result => !result.rosterId || result.rosterId === rosterId)
+      .map(x => [sid(x.studentId), x]));
     const pcts = [];
     students.forEach(s => {
       const studentId = sid(s.id);

@@ -106,7 +106,7 @@ function requireGameAccess(req, res, next) {
   if (gameTok) {
     try {
       const p = jwt.verify(gameTok, JWT_SECRET);
-      if (p.type === 'game') { req.gameSession = { studentId: p.studentId, gameId: p.gameId, name: p.name }; return next(); }
+      if (p.type === 'game') { req.gameSession = { studentId: p.studentId, gameId: p.gameId, name: p.name, rosterId: p.rosterId || null }; return next(); }
       if (p.type === 'assignment') { req.gameSession = { studentId: p.studentId, assignmentId: p.assignmentId, name: p.name }; return next(); }
     } catch {}
   }
@@ -123,7 +123,7 @@ function requireAssignmentAccess(req, res, next) {
     try {
       const p = jwt.verify(gameTok, JWT_SECRET);
       if (p.type === 'assignment') { req.gameSession = { studentId: p.studentId, assignmentId: p.assignmentId, name: p.name }; return next(); }
-      if (p.type === 'game') { req.gameSession = { studentId: p.studentId, gameId: p.gameId, name: p.name }; return next(); }
+      if (p.type === 'game') { req.gameSession = { studentId: p.studentId, gameId: p.gameId, name: p.name, rosterId: p.rosterId || null }; return next(); }
     } catch {}
   }
   const student = optionalStudentSession(req);
@@ -2059,15 +2059,21 @@ function gatherWork(studentId, includeFreeform) {
   studentId = roster.normalizeStudentId(studentId);
   const matches = roster.findStudentAcrossAllTeachers(studentId);
   const work = [];
+  const verifiedGames = new Set();
   let name = null;
 
   for (const m of matches) {
     const teacher = getUserById(m.teacherId) || {};
     name = name || m.name;
     for (const g of games.listTeacherGames(m.teacherId)) {
-      if (g.rosterId !== m.rosterId) continue;
-      const mine = games.getResults(g.id).find(r => roster.normalizeStudentId(r.studentId) === studentId);
-      if (mine) work.push({ kind: 'game', id: g.id, title: g.lessonTitle, subject: g.subject, topic: g.topic, teacherName: teacher.name || '', score: mine.score, total: mine.total, at: mine.at, path: '/play/' + g.id, verified: true });
+      const gameKey = `${m.teacherId}:${g.id}`;
+      if (verifiedGames.has(gameKey)) continue;
+      if (!games.hasRoster(g, m.rosterId)) continue;
+      const mine = games.getResults(g.id).find(r => roster.normalizeStudentId(r.studentId) === studentId && (!r.rosterId || r.rosterId === m.rosterId));
+      if (mine) {
+        work.push({ kind: 'game', id: g.id, title: g.lessonTitle, subject: g.subject, topic: g.topic, teacherName: teacher.name || '', score: mine.score, total: mine.total, at: mine.at, path: '/play/' + g.id, verified: true });
+        verifiedGames.add(gameKey);
+      }
     }
     for (const a of assignments.listTeacherAssignments(m.teacherId)) {
       if (a.rosterId !== m.rosterId) continue;
@@ -2093,7 +2099,7 @@ function gatherWork(studentId, includeFreeform) {
     for (const teacherId of listAllUserIds()) {
       const teacher = getUserById(teacherId) || {};
       for (const g of games.listTeacherGames(teacherId)) {
-        if (g.rosterId || seen.has('game:' + g.id)) continue;
+        if (games.getRosterIds(g).length || seen.has('game:' + g.id)) continue;
         const mine = games.getResults(g.id).find(r => norm(r.studentId) === target || norm(r.name) === target);
         if (mine) { work.push({ kind: 'game', id: g.id, title: g.lessonTitle, subject: g.subject, topic: g.topic, teacherName: teacher.name || '', score: mine.score, total: mine.total, at: mine.at, path: '/play/' + g.id, verified: false }); seen.add('game:' + g.id); }
       }
@@ -2200,12 +2206,14 @@ app.post('/api/student/join-room', requireStudentAccess, (req, res) => {
   if (gameId) {
     const g = games.getGame(gameId);
     let displayName = name;
-    if (g.rosterId) {
-      const s = roster.findStudentInRoster(g.teacherId, g.rosterId, studentId);
-      if (!s) return res.status(403).json({ error: "You're not on the roster for this game." });
-      displayName = s.name;
+    let matchedRosterId = null;
+    if (games.getRosterIds(g).length) {
+      const match = studentInGameRosters(g, studentId);
+      if (!match) return res.status(403).json({ error: "You're not on a class list for this game." });
+      displayName = match.student.name;
+      matchedRosterId = match.rosterId;
     }
-    const token = issueGameToken({ gameId, studentId, name: displayName });
+    const token = issueGameToken({ gameId, studentId, name: displayName, rosterId: matchedRosterId });
     res.cookie(GAME_COOKIE, token, cookieOptions(30 * 24 * 60 * 60 * 1000));
     return res.json({ type: 'game', id: gameId, path: '/play/' + gameId });
   }
@@ -2473,6 +2481,68 @@ function classListFor(teacherId, rosterId, activityId) {
   });
 }
 
+function gameRosterRecords(game) {
+  return games.getRosterIds(game)
+    .map(rosterId => roster.getRoster(game.teacherId, rosterId))
+    .filter(Boolean);
+}
+
+function studentInGameRosters(game, studentId) {
+  for (const classRoster of gameRosterRecords(game)) {
+    const student = (classRoster.students || []).find(item =>
+      roster.normalizeStudentId(item.id) === roster.normalizeStudentId(studentId));
+    if (student) return { student, rosterId: classRoster.id, rosterName: classRoster.name };
+  }
+  return null;
+}
+
+function studentFromGameHandle(game, handle) {
+  for (const classRoster of gameRosterRecords(game)) {
+    const student = studentFromHandle(game.teacherId, classRoster.id, game.id, handle);
+    if (student) return { student, rosterId: classRoster.id, rosterName: classRoster.name };
+  }
+  return null;
+}
+
+function classListForGame(game) {
+  const seen = new Set();
+  const students = [];
+  for (const classRoster of gameRosterRecords(game)) {
+    for (const item of classListFor(game.teacherId, classRoster.id, game.id)) {
+      if (seen.has(item.handle)) continue;
+      seen.add(item.handle);
+      students.push(item);
+    }
+  }
+  return students;
+}
+
+function combinedGameRoster(game) {
+  const records = gameRosterRecords(game);
+  if (!records.length) return null;
+  const seen = new Set();
+  const students = [];
+  for (const classRoster of records) {
+    for (const student of classRoster.students || []) {
+      const id = roster.normalizeStudentId(student.id);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      students.push({ id: student.id, name: student.name, rosterId: classRoster.id, rosterName: classRoster.name });
+    }
+  }
+  return { id: records.map(item => item.id).join(','), name: records.map(item => item.name).join(' + '), students };
+}
+
+function gameSessionCanAccess(game, session) {
+  if (!session) return true;
+  const rosterIds = games.getRosterIds(game);
+  if (!rosterIds.length) return !session.rosterId;
+  if (session.rosterId) return rosterIds.includes(session.rosterId);
+  // Tokens issued before multi-class support did not record rosterId. Keep
+  // those valid only while the learner still appears in an assigned class.
+  return !!studentInGameRosters(game, session.studentId);
+}
+
 // What the join screen needs, and nothing else.
 //
 // The full meta routes sit behind a session, which a student does not have
@@ -2496,10 +2566,11 @@ app.get('/api/assignment/:id/join', (req, res) => {
 app.get('/api/game/:id/join', (req, res) => {
   const g = games.getGame(req.params.id);
   if (!g) return res.status(404).json({ error: 'Game not found.' });
+  const hasRoster = games.getRosterIds(g).length > 0;
   res.json({
     lessonTitle: g.lessonTitle, teacherName: g.teacherName || null,
-    hasRoster: !!g.rosterId,
-    students: g.rosterId ? classListFor(g.teacherId, g.rosterId, g.id) : [],
+    hasRoster,
+    students: hasRoster ? classListForGame(g) : [],
   });
 });
 
@@ -3495,12 +3566,33 @@ app.post('/api/google-slides/export/:id', requireAuth, async (req, res) => {
 });
 
 // ── Student game: create from a deck, play, store results ──────────────────
-const fishQuestLive = createFishQuestLive({ app, games, roster, requireAuth, requireGameAccess, jwtSecret: JWT_SECRET });
+const fishQuestLive = createFishQuestLive({ app, games, roster, requireAuth, requireGameAccess, gameSessionCanAccess, jwtSecret: JWT_SECRET });
 
 function requestedGameMode(body) {
   if (body && body.mode === 'fishquest') return 'fishquest';
   if (body && body.mode === 'colonyquest') return 'colonyquest';
   return 'arcade';
+}
+
+function requestedGameRosterIds(body = {}) {
+  let value = body.rosterIds;
+  if (typeof value === 'string') {
+    try { value = JSON.parse(value); }
+    catch { value = value.split(','); }
+  }
+  return games.normalizeRosterIds(value, body.rosterId);
+}
+
+function ownedGameRosterIds(teacherId, body) {
+  const rosterIds = requestedGameRosterIds(body);
+  for (const rosterId of rosterIds) {
+    if (!roster.getRoster(teacherId, rosterId)) {
+      const err = new Error('One of the selected classes could not be found. Refresh and try again.');
+      err.code = 'roster_not_found';
+      throw err;
+    }
+  }
+  return rosterIds;
 }
 
 function gameLaunchPath(game) {
@@ -3513,17 +3605,19 @@ app.post('/api/game', requireAuth, generationLimiter, async (req, res) => {
   const deck = decks.get(req.body && req.body.deckId);
   if (!deck) return res.status(404).json({ error: 'Deck expired — regenerate the deck, then create the game.' });
   const questionCount = Math.min(20, Math.max(4, parseInt(req.body && req.body.questionCount, 10) || 6));
+  let rosterIds;
+  try { rosterIds = ownedGameRosterIds(req.userId, req.body || {}); }
+  catch (err) { return res.status(404).json({ error: err.message, code: err.code }); }
   const { reservation, block } = await reserve(req, 'lessonscope.generate_game');
   if (block) return res.status(402).json(block);
   try {
     const game = await generateGame({ subject: deck.subject, topic: deck.topic, grade: deck.grade, tone: deck.tone, objectives: deck.objectives || '', lessonPlanText: deck.lessonPlanText || '', questionCount });
     const lessonTitle = (deck.slides.find(s => s.type === 'title') || {}).title || deck.topic;
-    const rosterId = (req.body && req.body.rosterId) || null;
     const cutoffAt = (req.body && req.body.cutoffAt) || null;
     const mode = requestedGameMode(req.body);
-    const rec = games.createGame({ teacherId: req.userId, teacherName: req.user.name, lessonTitle, subject: deck.subject, topic: deck.topic, grade: deck.grade, game, rosterId, cutoffAt, mode });
+    const rec = games.createGame({ teacherId: req.userId, teacherName: req.user.name, lessonTitle, subject: deck.subject, topic: deck.topic, grade: deck.grade, game, rosterIds, cutoffAt, mode });
     await capture(req, reservation, 'lessonscope.generate_game', rec.id);
-    res.json({ gameId: rec.id, path: gameLaunchPath(rec), questionCount: rec.questions.length, roomCode: rec.roomCode, mode: rec.mode });
+    res.json({ gameId: rec.id, path: gameLaunchPath(rec), questionCount: rec.questions.length, roomCode: rec.roomCode, mode: rec.mode, rosterIds: rec.rosterIds });
   } catch (err) {
     await release(req, reservation, 'lessonscope.generate_game', err.message);
     console.error('Game creation failed:', err.message);
@@ -3540,7 +3634,9 @@ app.post('/api/game/from-pptx', requireAuth, generationLimiter, upload.single('f
   const grade   = String(req.body && req.body.grade   || 'Grade 5').trim();
   if (!subject || !topic) return res.status(400).json({ error: 'Subject and topic are required.' });
   const questionCount = Math.min(20, Math.max(4, parseInt(req.body && req.body.questionCount, 10) || 6));
-  const rosterId = (req.body && req.body.rosterId) || null;
+  let rosterIds;
+  try { rosterIds = ownedGameRosterIds(req.userId, req.body || {}); }
+  catch (err) { return res.status(404).json({ error: err.message, code: err.code }); }
   const cutoffAt = (req.body && req.body.cutoffAt) || null;
   const { reservation, block } = await reserve(req, 'lessonscope.generate_game');
   if (block) return res.status(402).json(block);
@@ -3548,9 +3644,9 @@ app.post('/api/game/from-pptx', requireAuth, generationLimiter, upload.single('f
     const lessonPlanText = await extractText(req.file.buffer, req.file.originalname);
     const game = await generateGame({ subject, topic, grade, objectives: '', lessonPlanText, questionCount });
     const mode = requestedGameMode(req.body);
-    const rec = games.createGame({ teacherId: req.userId, teacherName: req.user.name, lessonTitle: topic, subject, topic, grade, game, rosterId, cutoffAt, mode });
+    const rec = games.createGame({ teacherId: req.userId, teacherName: req.user.name, lessonTitle: topic, subject, topic, grade, game, rosterIds, cutoffAt, mode });
     await capture(req, reservation, 'lessonscope.generate_game', rec.id);
-    res.json({ gameId: rec.id, path: gameLaunchPath(rec), questionCount: rec.questions.length, roomCode: rec.roomCode, mode: rec.mode });
+    res.json({ gameId: rec.id, path: gameLaunchPath(rec), questionCount: rec.questions.length, roomCode: rec.roomCode, mode: rec.mode, rosterIds: rec.rosterIds });
   } catch (err) {
     await release(req, reservation, 'lessonscope.generate_game', err.message);
     console.error('Game from pptx failed:', err.message);
@@ -3566,6 +3662,19 @@ app.patch('/api/game/:id/cutoff', requireAuth, (req, res) => {
   const cutoffAt = (req.body && req.body.cutoffAt) || null;
   const updated = games.updateGameCutoff(req.params.id, cutoffAt);
   res.json({ ok: true, cutoffAt: updated.cutoffAt });
+});
+
+// Teachers can change the classes attached to a published game without
+// regenerating its questions or losing results already collected.
+app.patch('/api/game/:id/classes', requireAuth, (req, res) => {
+  const game = games.getGame(req.params.id);
+  if (!game) return res.status(404).json({ error: 'Game not found.' });
+  if (game.teacherId !== req.userId) return res.status(403).json({ error: 'Not your game.' });
+  let rosterIds;
+  try { rosterIds = ownedGameRosterIds(req.userId, req.body || {}); }
+  catch (err) { return res.status(404).json({ error: err.message, code: err.code }); }
+  const updated = games.updateGameRosters(game.id, rosterIds);
+  res.json({ ok: true, rosterId: updated.rosterId, rosterIds: updated.rosterIds });
 });
 
 function ownedColonyQuest(req, res) {
@@ -3593,7 +3702,7 @@ function ownedColonyQuest(req, res) {
 app.get('/api/game/:id/colonyquest', requireAuth, (req, res) => {
   const game = ownedColonyQuest(req, res);
   if (!game) return;
-  const classRoster = game.rosterId ? roster.getRoster(req.userId, game.rosterId) : null;
+  const classRoster = combinedGameRoster(game);
   res.json({
     game: {
       id: game.id,
@@ -3654,20 +3763,21 @@ app.post('/api/game/:id/enter', async (req, res) => {
   if (!g) return res.status(404).json({ error: 'Game not found.' });
   // The join screen sends a handle, not the school's own ID — see studentHandle.
   // A typed entry (no roster, or a child not on the list) still arrives as text.
-  const fromList = g.rosterId
-    ? studentFromHandle(g.teacherId, g.rosterId, g.id, req.body && req.body.handle)
-    : null;
+  const assignedRosterIds = games.getRosterIds(g);
+  const fromList = assignedRosterIds.length ? studentFromGameHandle(g, req.body && req.body.handle) : null;
   const studentId = fromList
-    ? roster.normalizeStudentId(fromList.id)
+    ? roster.normalizeStudentId(fromList.student.id)
     : roster.normalizeStudentId(req.body && req.body.studentId);
   if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
   const pin = req.body && req.body.pin ? String(req.body.pin).trim() : '';
   let displayName = roster.displayNameFrom(req.body && req.body.name, studentId);
-  if (g.rosterId) {
+  let matchedRosterId = null;
+  if (assignedRosterIds.length) {
     const teacher = getUserById(g.teacherId);
-    const s = teacher ? roster.findStudentInRoster(g.teacherId, g.rosterId, studentId) : null;
-    if (!s) return res.status(403).json({ error: 'Student ID not found. Check with your teacher.' });
-    displayName = s.name;
+    const match = teacher ? (fromList || studentInGameRosters(g, studentId)) : null;
+    if (!match) return res.status(403).json({ error: 'Student ID not found in a class assigned to this game. Check with your teacher.' });
+    displayName = match.student.name;
+    matchedRosterId = match.rosterId;
     const pinState = studentAccount.getAccountState(studentId);
     if (pinState === 'unset') {
       if (!pin) return res.status(428).json({ needsPinSetup: true, name: displayName, error: 'Set up a 4-digit PIN to continue.' });
@@ -3692,7 +3802,7 @@ app.post('/api/game/:id/enter', async (req, res) => {
       if (!studentAccount.verifyPin(key, pin)) return res.status(403).json({ error: 'Incorrect PIN. Ask your teacher if you have forgotten it.' });
     }
   }
-  const token = issueGameToken({ gameId: g.id, studentId, name: displayName });
+  const token = issueGameToken({ gameId: g.id, studentId, name: displayName, rosterId: matchedRosterId });
   res.cookie(GAME_COOKIE, token, cookieOptions(30 * 24 * 60 * 60 * 1000));
   res.cookie(STUDENT_COOKIE, issueStudentToken(studentId, displayName), cookieOptions(30 * 24 * 60 * 60 * 1000));
   res.json({ name: displayName });
@@ -3702,7 +3812,7 @@ app.post('/api/game/:id/enter', async (req, res) => {
 // anything by itself.
 app.post('/api/game/:id/pin/reset-request', (req, res) => {
   const g = games.getGame(req.params.id);
-  if (!g || !g.rosterId) return res.status(404).json({ error: 'Game not found.' });
+  if (!g || !games.getRosterIds(g).length) return res.status(404).json({ error: 'Game not found.' });
   const studentId = roster.normalizeStudentId(req.body && req.body.studentId);
   if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
   const ok = studentAccount.requestPinReset(studentId);
@@ -3716,8 +3826,9 @@ app.get('/api/game/:id', requireGameAccess, (req, res) => {
   if (!g) return res.status(404).json({ error: 'Game not found.' });
   // Students must hold a session for THIS game.
   if (req.gameSession && req.gameSession.gameId !== g.id) return res.status(403).json({ error: 'Session is for a different game.' });
-  const hasRoster = !!g.rosterId;
-  res.json({ id: g.id, lessonTitle: g.lessonTitle, subject: g.subject, topic: g.topic, grade: g.grade, mode: g.mode || 'arcade', summary: g.summary, questionCount: (g.questions || []).length, teacherName: g.teacherName, hasRoster, students: hasRoster ? classListFor(g.teacherId, g.rosterId, g.id) : [], highScores: games.getHighScores(g.id), canManageColonyQuest: !!req.userId && g.teacherId === req.userId });
+  if (!gameSessionCanAccess(g, req.gameSession)) return res.status(403).json({ error: 'This game is no longer assigned to your class.' });
+  const hasRoster = games.getRosterIds(g).length > 0;
+  res.json({ id: g.id, lessonTitle: g.lessonTitle, subject: g.subject, topic: g.topic, grade: g.grade, mode: g.mode || 'arcade', summary: g.summary, questionCount: (g.questions || []).length, teacherName: g.teacherName, hasRoster, students: hasRoster ? classListForGame(g) : [], highScores: games.getHighScores(g.id), canManageColonyQuest: !!req.userId && g.teacherId === req.userId });
 });
 
 // Student: the questions, WITHOUT the correct answers.
@@ -3725,6 +3836,7 @@ app.get('/api/game/:id/play', requireGameAccess, (req, res) => {
   const g = games.getGame(req.params.id);
   if (!g) return res.status(404).json({ error: 'Game not found.' });
   if (req.gameSession && req.gameSession.gameId !== g.id) return res.status(403).json({ error: 'Session is for a different game.' });
+  if (!gameSessionCanAccess(g, req.gameSession)) return res.status(403).json({ error: 'This game is no longer assigned to your class.' });
   res.json({ questions: g.questions.map((q, i) => ({ i, question: q.question, options: q.options })) });
 });
 
@@ -3733,6 +3845,7 @@ app.post('/api/game/:id/answer', requireGameAccess, (req, res) => {
   const g = games.getGame(req.params.id);
   if (!g) return res.status(404).json({ error: 'Game not found.' });
   if (req.gameSession && req.gameSession.gameId !== g.id) return res.status(403).json({ error: 'Session is for a different game.' });
+  if (!gameSessionCanAccess(g, req.gameSession)) return res.status(403).json({ error: 'This game is no longer assigned to your class.' });
   const q = g.questions[Number(req.body.questionIndex)];
   if (!q) return res.status(400).json({ error: 'bad question' });
   res.json({ correct: Number(req.body.choice) === q.correctIndex, correctIndex: q.correctIndex, explanation: q.explanation });
@@ -3743,6 +3856,7 @@ app.post('/api/game/:id/finish', requireGameAccess, (req, res) => {
   const g = games.getGame(req.params.id);
   if (!g) return res.status(404).json({ error: 'Game not found.' });
   if (req.gameSession && req.gameSession.gameId !== g.id) return res.status(403).json({ error: 'Session is for a different game.' });
+  if (!gameSessionCanAccess(g, req.gameSession)) return res.status(403).json({ error: 'This game is no longer assigned to your class.' });
   const answers = Array.isArray(req.body.answers) ? req.body.answers : [];
   let score = 0;
   g.questions.forEach((q, i) => { if (Number(answers[i]) === q.correctIndex) score++; });
@@ -3752,9 +3866,10 @@ app.post('/api/game/:id/finish', requireGameAccess, (req, res) => {
   const arcadeScore = Math.max(0, parseInt(req.body.arcadeScore, 10) || 0);
   const gameType = ['car', 'space', 'runner', 'balloon', 'target'].includes(req.body.gameType) ? req.body.gameType : null;
   const prevHigh = gameType ? games.getHighScores(g.id)[gameType] : 0;
-  games.recordResult(g.id, { studentId, name, score, total: g.questions.length, answers, arcadeScore, gameType });
-  if (g.rosterId) {
-    setImmediate(() => webhooks.dispatch('result.created', { gameId: g.id, rosterId: g.rosterId, studentId, score, total: g.questions.length, at: new Date().toISOString() }).catch(() => {}));
+  const matchedRoster = (req.gameSession && req.gameSession.rosterId) || (studentInGameRosters(g, studentId) || {}).rosterId || null;
+  games.recordResult(g.id, { studentId, name, score, total: g.questions.length, answers, arcadeScore, gameType, rosterId: matchedRoster });
+  if (matchedRoster) {
+    setImmediate(() => webhooks.dispatch('result.created', { gameId: g.id, rosterId: matchedRoster, studentId, score, total: g.questions.length, at: new Date().toISOString() }).catch(() => {}));
   }
   const newHighScores = games.getHighScores(g.id);
   const isNewHigh = gameType && arcadeScore > 0 && arcadeScore > prevHigh;
@@ -3767,7 +3882,9 @@ app.get('/api/game/:id/results', requireAuth, (req, res) => {
   const g = games.getGame(req.params.id);
   if (!g) return res.status(404).json({ error: 'Game not found.' });
   if (g.teacherId !== req.userId) return res.status(403).json({ error: 'Not your game.' });
-  const rosterData = g.rosterId ? roster.getRoster(req.userId, g.rosterId) : null;
+  const rosterRecords = gameRosterRecords(g);
+  const rosterData = combinedGameRoster(g);
+  const rosterNames = Object.fromEntries(rosterRecords.map(classRoster => [classRoster.id, classRoster.name]));
   if (g.mode === 'colonyquest') {
     const session = games.getColonyQuestSession(g.id);
     const answers = session && Array.isArray(session.answers) ? session.answers : [];
@@ -3785,7 +3902,7 @@ app.get('/api/game/:id/results', requireAuth, (req, res) => {
     });
     const participated = new Set(answers.map(answer => roster.normalizeStudentId(answer.studentId)).filter(Boolean));
     const notPlayed = rosterData
-      ? rosterData.students.filter(student => !participated.has(roster.normalizeStudentId(student.id))).map(student => ({ studentId: student.id, name: student.name }))
+      ? rosterData.students.filter(student => !participated.has(roster.normalizeStudentId(student.id))).map(student => ({ studentId: student.id, name: student.name, rosterId: student.rosterId, className: student.rosterName }))
       : [];
     return res.json({
       mode: 'colonyquest',
@@ -3799,11 +3916,20 @@ app.get('/api/game/:id/results', requireAuth, (req, res) => {
     });
   }
   const rosterMap = rosterData ? Object.fromEntries(rosterData.students.map(s => [roster.normalizeStudentId(s.id), s.name])) : {};
+  const classNamesByStudent = {};
+  for (const classRoster of rosterRecords) {
+    for (const student of classRoster.students || []) {
+      const id = roster.normalizeStudentId(student.id);
+      (classNamesByStudent[id] ||= []).push(classRoster.name);
+    }
+  }
   const raw = games.getResults(g.id);
   const results = raw
     .map(r => ({
       studentId: r.studentId,
       name: rosterMap[roster.normalizeStudentId(r.studentId)] || r.name,
+      rosterId: r.rosterId || null,
+      className: r.rosterId ? rosterNames[r.rosterId] || '' : (classNamesByStudent[roster.normalizeStudentId(r.studentId)] || []).join(', '),
       score: r.score, total: r.total, at: r.at, attempts: r.attempts, arcadeScore: r.arcadeScores && r.arcadeScores.fishquest, fishquest: r.fishquest || null,
     }))
     .sort((a, b) => b.score - a.score || (a.at < b.at ? -1 : 1));
@@ -3821,8 +3947,11 @@ app.get('/api/game/:id/results', requireAuth, (req, res) => {
     return { index: i, question: q.question, correct, answered, correctIndex: q.correctIndex, options: q.options || null };
   });
   // Who's on the roster but hasn't played yet, so the teacher can chase them.
-  const played = new Set(raw.map(r => roster.normalizeStudentId(r.studentId)));
-  const notPlayed = rosterData ? rosterData.students.filter(s => !played.has(roster.normalizeStudentId(s.id))).map(s => ({ studentId: s.id, name: s.name })) : [];
+  const played = new Set(raw.map(r => `${r.rosterId || '*'}:${roster.normalizeStudentId(r.studentId)}`));
+  const notPlayed = rosterData ? rosterData.students.filter(s => {
+    const studentId = roster.normalizeStudentId(s.id);
+    return !played.has(`${s.rosterId}:${studentId}`) && !played.has(`*:${studentId}`);
+  }).map(s => ({ studentId: s.id, name: s.name, rosterId: s.rosterId, className: s.rosterName })) : [];
   res.json({ lessonTitle: g.lessonTitle, questionCount: g.questions.length, roomCode: g.roomCode, results, questionStats, notPlayed, rosterCount: rosterData ? rosterData.students.length : null });
 });
 
@@ -4011,7 +4140,9 @@ app.get('/api/roster/:id/progress', requireAuth, (req, res) => {
   // Collect results keyed by studentId.
   const byStudent = new Map();
   for (const g of allGames) {
+    if (!games.hasRoster(g, r.id)) continue;
     for (const result of games.getResults(g.id)) {
+      if (result.rosterId && result.rosterId !== r.id) continue;
       const studentId = roster.normalizeStudentId(result.studentId);
       if (!rosterMap.has(studentId)) continue;
       if (!byStudent.has(studentId)) byStudent.set(studentId, []);
@@ -4049,21 +4180,23 @@ app.get('/api/roster/:id/progress', requireAuth, (req, res) => {
   res.json({ roster: { id: r.id, name: r.name }, students });
 });
 
-// Teacher: printable QR card sheet for a game's attached roster.
+// Teacher: printable QR card sheet for every class attached to a game.
 app.get('/api/game/:id/qr-sheet', requireAuth, async (req, res) => {
   const g = games.getGame(req.params.id);
   if (!g) return res.status(404).json({ error: 'Game not found.' });
   if (g.teacherId !== req.userId) return res.status(403).json({ error: 'Not your game.' });
-  if (!g.rosterId) return res.status(400).json({ error: 'This game has no roster attached.' });
-  const r = roster.getRoster(req.userId, g.rosterId);
-  if (!r) return res.status(404).json({ error: 'Roster not found.' });
+  const classRosters = gameRosterRecords(g);
+  if (!classRosters.length) return res.status(400).json({ error: 'This game has no classes attached.' });
   const qrcode = require('qrcode');
   const baseUrl = `${req.protocol}://${req.get('host')}/join`;
-  const cards = await Promise.all(r.students.map(async s => {
-    const url = `${baseUrl}?sid=${encodeURIComponent(s.id)}`;
-    const svg = await qrcode.toString(url, { type: 'svg', margin: 1, width: 150 });
-    return `<div class="card"><div class="qr">${svg}</div><div class="sid">${esc(s.id)}</div><div class="sname">${esc(s.name)}</div></div>`;
-  }));
+  const cards = [];
+  for (const classRoster of classRosters) {
+    for (const s of classRoster.students || []) {
+      const url = `${baseUrl}?sid=${encodeURIComponent(s.id)}`;
+      const svg = await qrcode.toString(url, { type: 'svg', margin: 1, width: 150 });
+      cards.push(`<div class="card"><div class="qr">${svg}</div><div class="sid">${esc(s.id)}</div><div class="sname">${esc(s.name)}</div><div class="class-name">${esc(classRoster.name)}</div></div>`);
+    }
+  }
   function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>QR Cards — ${esc(g.lessonTitle)}</title>
 <style>body{font-family:sans-serif;margin:0;padding:20px;background:#fff}
@@ -4072,7 +4205,7 @@ app.get('/api/game/:id/qr-sheet', requireAuth, async (req, res) => {
 .grid{display:flex;flex-wrap:wrap;gap:12px;justify-content:flex-start}
 .card{border:1px dashed #999;border-radius:8px;padding:10px;text-align:center;width:170px;break-inside:avoid}
 .card .qr svg{width:140px;height:140px}.card .sid{font-size:11px;color:#666;margin:4px 0 2px;font-family:monospace}
-.card .sname{font-size:13px;font-weight:600}
+.card .sname{font-size:13px;font-weight:600}.card .class-name{font-size:11px;color:#1a56a0;margin-top:3px;font-weight:700}
 @media print{.no-print{display:none}body{padding:0}.header{margin-bottom:12px}}</style></head>
 <body><div class="header no-print"><h1>${esc(g.lessonTitle)} — Student QR Cards</h1>
 <p style="margin:4px 0">Lesson Room Code: <span class="code">${esc(g.roomCode || '')}</span></p>
@@ -4409,7 +4542,9 @@ app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:r
     byStudent.get(sid).push(row);
   };
   for (const g of games.listTeacherGames(foundTeacherId)) {
+    if (!games.hasRoster(g, foundRoster.id)) continue;
     for (const result of games.getResults(g.id)) {
+      if (result.rosterId && result.rosterId !== foundRoster.id) continue;
       if (!inRoster(result.studentId)) continue;
       push(result.studentId, { kind: 'game', gameId: g.id, topic: g.topic, subject: g.subject,
         score: result.score, total: result.total,
@@ -4451,7 +4586,7 @@ app.get('/api/v1/roster/:id/activities', requireApiAccess, requireScope('results
   if (!foundRoster) return res.status(404).json({ error: 'Roster not found.' });
 
   const gameActivities = games.listTeacherGames(foundTeacherId)
-    .filter(g => g.rosterId === foundRoster.id)
+    .filter(g => games.hasRoster(g, foundRoster.id))
     .map(g => ({ kind: 'game', id: g.id, title: g.lessonTitle, subject: g.subject, topic: g.topic, grade: g.grade, questionCount: (g.questions || []).length, createdAt: g.createdAt, roomCode: g.roomCode }));
   const assignmentActivities = assignments.listTeacherAssignments(foundTeacherId)
     .filter(a => a.rosterId === foundRoster.id)
@@ -4493,7 +4628,7 @@ app.get('/api/v1/results', requireApiAccess, requireScope('results:read'), (req,
         if (updatedSince && r.at < updatedSince) continue;
         all.push({
           id: `${g.id}_${r.studentId}_${r.at}`,
-          kind: 'game', gameId: g.id, rosterId: g.rosterId || null,
+          kind: 'game', gameId: g.id, rosterId: r.rosterId || g.rosterId || null, rosterIds: g.rosterIds || [],
           studentId: r.studentId,
           subject: g.subject, topic: g.topic,
           score: r.score, total: r.total,
