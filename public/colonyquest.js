@@ -23,6 +23,21 @@
   let soundOn = true;
   let audioContext = null;
   let ambientTimer = null;
+  const ASSETS = {
+    world: '/assets/colonyquest/moonroot-meadow.webp',
+    worker: '/assets/colonyquest/pip-worker.webp',
+    queen: '/assets/colonyquest/queen.webp',
+    guardian: '/assets/colonyquest/guardian.webp',
+  };
+  const STORY = {
+    intro: 'Last night, the Great Rain swept through Moonroot Meadow and left the old colony tunnels empty. Queen Aurelia has asked Pip and your class to guide the new colonies before moonrise. Every answer awakens a Heartseed, and every choice changes the world below.',
+    chapters: [
+      { at: 0, title: 'First Light', line: 'Wake the workers and gather the first seeds.' },
+      { at: .3, title: 'Deep Roots', line: 'Open warm chambers beneath the ancient oak.' },
+      { at: .6, title: 'Storm Watch', line: 'Prepare the nests as clouds return to the meadow.' },
+      { at: .7, title: 'Moonroot Rally', line: 'Friendly knowledge challenges decide who carries the Ancient Acorn.' },
+    ],
+  };
 
   function esc(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
@@ -228,6 +243,7 @@
       turnIndex: 0,
       questionCursor: 0,
       currentTeamIndex: 0,
+      introSeen: false,
       warsActive: false,
       teams,
       answers: [],
@@ -276,8 +292,31 @@
   }
 
   function setOverlay(id) {
-    for (const overlay of ['questionOverlay', 'rewardOverlay', 'targetOverlay', 'eventOverlay', 'finalOverlay']) $(overlay).classList.add('hidden');
+    for (const overlay of ['storyOverlay', 'questionOverlay', 'rewardOverlay', 'targetOverlay', 'eventOverlay', 'finalOverlay']) $(overlay).classList.add('hidden');
     if (id) $(id).classList.remove('hidden');
+  }
+
+  function storyChapter() {
+    const progress = session ? turnProgress() : 0;
+    return [...STORY.chapters].reverse().find(chapter => progress >= chapter.at) || STORY.chapters[0];
+  }
+
+  function chapterKey(chapter) {
+    return `chapter-${chapter.title.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '')}`;
+  }
+
+  function chapterEvent(key) {
+    const index = STORY.chapters.findIndex(chapter => chapterKey(chapter) === key);
+    if (index < 0) return null;
+    const chapter = STORY.chapters[index];
+    return { title: chapter.title, description: chapter.line, kicker: `Chapter ${index + 1}`, tone: 'good' };
+  }
+
+  function showStoryIntro() {
+    $('storyKicker').textContent = 'Chapter 1 - The Great Rain';
+    $('storyTitle').textContent = 'Moonroot Meadow needs you';
+    $('storyText').textContent = STORY.intro;
+    setOverlay('storyOverlay');
   }
 
   function totalTurns() {
@@ -309,7 +348,8 @@
     }
     const round = Math.floor(session.turnIndex / Math.max(1, session.teams.length)) + 1;
     $('roundLabel').textContent = config.matchType === 'rounds' ? `Round ${Math.min(round, config.rounds)} of ${config.rounds}` : timeLabel();
-    $('phaseLabel').textContent = session.warsActive ? 'Colony Wars' : 'Growth phase';
+    const chapter = storyChapter();
+    $('phaseLabel').textContent = session.warsActive ? 'Moonroot Rally' : chapter.title;
     $('pauseBtn').textContent = session.phase === 'paused' ? 'Resume' : 'Pause';
     $('pauseBtn').classList.toggle('active', session.phase === 'paused');
     $('muteBtn').textContent = soundOn ? 'Sound on' : 'Sound off';
@@ -337,6 +377,7 @@
     setCurrentParticipant(chooseParticipant(team));
     const question = questionAtCursor();
     $('questionKicker').textContent = `${team.name} - ${currentParticipant ? currentParticipant.name : 'team answer'}`;
+    $('guideLine').textContent = `${storyChapter().line} Pip found a Heartseed for this turn.`;
     $('questionText').textContent = question.question;
     $('questionProgress').textContent = `Question ${(session.questionCursor % data.game.questions.length) + 1} of ${data.game.questions.length}`;
     $('answers').innerHTML = question.options.map((option, index) => `<button type="button" class="answer" data-choice="${index}"><span>${String.fromCharCode(65 + index)}.</span> ${esc(option)}</button>`).join('');
@@ -364,8 +405,8 @@
       if (choice === index && !correct) button.classList.add('wrong');
     });
     $('feedback').className = `feedback visible${correct ? '' : ' wrong'}`;
-    $('feedbackText').textContent = correct ? 'Correct - this colony earned an upgrade.' : `Good try. The answer is ${question.options[question.correctIndex]}.`;
-    $('feedbackNext').textContent = correct ? 'Choose reward' : 'Next team';
+    $('feedbackText').textContent = correct ? 'Correct! The Heartseed is awake. Your colony earned a new upgrade.' : `Try again next time. The Heartseed is still dim, but Pip found the answer: ${question.options[question.correctIndex]}.`;
+    $('feedbackNext').textContent = correct ? 'Shape the colony' : 'Continue the journey';
     playTone(correct ? 'correct' : 'wrong');
   }
 
@@ -414,7 +455,8 @@
     $('rewardTitle').textContent = `${team.name}: choose your colony reward`;
     $('rewardGrid').innerHTML = rewardChoices().map(key => {
       const reward = core.REWARDS[key];
-      return `<button type="button" class="reward" data-reward="${key}"><span class="reward-symbol">${reward.label.charAt(0)}</span><strong>${esc(reward.label)}</strong><span>${esc(reward.description)}</span></button>`;
+      const art = key === 'queen' ? ASSETS.queen : ['defense', 'soldiers', 'raid'].includes(key) ? ASSETS.guardian : ASSETS.worker;
+      return `<button type="button" class="reward" data-reward="${key}"><span class="reward-symbol"><img src="${art}" alt=""></span><strong>${esc(reward.label)}</strong><span>${esc(reward.description)}</span></button>`;
     }).join('');
     setOverlay('rewardOverlay');
   }
@@ -481,6 +523,7 @@
   }
 
   async function nextTurn() {
+    const previousChapter = storyChapter();
     setOverlay(null);
     session.eventAction = null;
     session.turnIndex += 1;
@@ -498,8 +541,20 @@
       session.events.push({ key: 'colony-wars', at: new Date().toISOString() });
       updateWorld();
       await saveState();
-      showEvent({ title: 'Colony Wars have begun', description: 'Knowledge raids are now available. Colonies can win food, but every team stays in the game.', kicker: 'Final phase' }, continueAfterEvent);
+      showEvent({ title: 'The Moonroot Rally begins', description: 'The moon is rising. Colonies may now enter friendly knowledge challenges to win food and earn the Ancient Acorn. Every colony stays in the adventure.', kicker: 'Chapter 4' }, continueAfterEvent);
       playTone('wars');
+      return;
+    }
+    const nextChapter = storyChapter();
+    if (nextChapter.title !== previousChapter.title) {
+      const chapter = chapterEvent(chapterKey(nextChapter));
+      session.phase = 'event';
+      session.eventAction = 'question';
+      session.events.push({ key: chapterKey(nextChapter), at: new Date().toISOString() });
+      updateWorld();
+      await saveState();
+      showEvent(chapter, continueAfterEvent);
+      playTone('upgrade');
       return;
     }
     if (shouldShowEvent()) {
@@ -508,8 +563,8 @@
       session.events.push({ key: event.key, at: new Date().toISOString() });
       session.phase = 'event';
       session.eventAction = 'question';
-      playWorldEvent(event.key);
       updateWorld();
+      playWorldEvent(event.key);
       await saveState();
       showEvent(event, continueAfterEvent);
       return;
@@ -532,7 +587,9 @@
     $('eventKicker').textContent = event.kicker || 'World event';
     $('eventTitle').textContent = event.title;
     $('eventText').textContent = event.description;
-    $('eventMark').textContent = event.kicker === 'Final phase' ? 'W' : '!';
+    $('eventGuide').src = event.tone === 'danger' || event.tone === 'storm' || event.kicker === 'Colony Wars' ? ASSETS.guardian : ASSETS.worker;
+    $('eventGuide').alt = event.tone === 'danger' || event.tone === 'storm' ? 'A guardian ant' : 'Pip the scout ant';
+    $('eventMark').textContent = event.kicker === 'Chapter 4' ? 'The final chapter' : 'A Moonroot Meadow event';
     $('eventContinue').classList.remove('hidden');
     $('eventContinue').disabled = false;
     $('eventContinue').onclick = () => {
@@ -588,13 +645,14 @@
     if (session.phase === 'event') {
       const last = session.events[session.events.length - 1];
       const event = last && last.key === 'colony-wars'
-        ? { title: 'Colony Wars have begun', description: 'Knowledge raids are now available. Colonies can win food, but every team stays in the game.', kicker: 'Final phase' }
-        : core.EVENTS.find(item => item.key === (last && last.key));
+        ? { title: 'The Moonroot Rally begins', description: 'The moon is rising. Colonies may now enter friendly knowledge challenges to win food and earn the Ancient Acorn. Every colony stays in the adventure.', kicker: 'Chapter 4' }
+        : chapterEvent(last && last.key) || core.EVENTS.find(item => item.key === (last && last.key));
       const next = session.eventAction === 'next-turn' ? nextTurn : continueAfterEvent;
       return showEvent(event || { title: 'Colony event', description: 'The colonies have adapted. Continue when the class is ready.' }, next);
     }
     if (session.phase === 'paused') return showPaused();
     session.phase = 'question';
+    if (!session.introSeen && session.turnIndex === 0 && !session.answers.length) return showStoryIntro();
     presentQuestion();
   }
 
@@ -602,7 +660,9 @@
     $('eventKicker').textContent = 'Teacher pause';
     $('eventTitle').textContent = 'The colonies are resting';
     $('eventText').textContent = 'The timer and all turns are paused for the whole class.';
-    $('eventMark').textContent = 'II';
+    $('eventGuide').src = ASSETS.queen;
+    $('eventGuide').alt = 'The queen ant';
+    $('eventMark').textContent = 'The meadow waits';
     $('eventContinue').classList.add('hidden');
     setOverlay('eventOverlay');
   }
@@ -680,6 +740,12 @@
       render: { antialias: true, roundPixels: false },
       scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
       scene: {
+        preload() {
+          this.load.image('cq-world', ASSETS.world);
+          this.load.image('cq-worker', ASSETS.worker);
+          this.load.image('cq-queen', ASSETS.queen);
+          this.load.image('cq-guardian', ASSETS.guardian);
+        },
         create() {
           scene = this;
           this.scale.on('resize', updateWorld);
@@ -694,130 +760,199 @@
     graphics.fillEllipse(x, y, width, height);
   }
 
-  function drawAnt(targetScene, x, y, color, soldier, scale = 1) {
-    const container = targetScene.add.container(x, y);
-    const legs = targetScene.add.graphics();
-    legs.lineStyle(soldier ? 2.2 : 1.7, 0x161d1d, .95);
-    for (const offset of [-5, 0, 5]) {
-      legs.lineBetween(offset, -2, offset - 6, -7);
-      legs.lineBetween(offset, 2, offset - 6, 7);
-    }
-    const abdomen = targetScene.add.ellipse(7, 0, soldier ? 13 : 11, soldier ? 10 : 8, color);
-    const body = targetScene.add.ellipse(0, 0, 9, 7, color);
-    const head = targetScene.add.circle(-7, 0, soldier ? 5 : 4, soldier ? 0x2a2020 : color);
-    const leaf = targetScene.add.ellipse(0, -8, 8, 4, 0x75c043).setVisible(false);
-    container.add([legs, abdomen, body, head, leaf]);
-    container.setScale(scale);
-    container.leaf = leaf;
-    container.legs = legs;
+  function fitWorldImage(key, width, height) {
+    const image = scene.add.image(width / 2, height / 2, key).setDepth(-30);
+    const scale = Math.max(width / Math.max(1, image.width), height / Math.max(1, image.height));
+    image.setScale(scale);
+    return image;
+  }
+
+  function makeAntAgent(texture, point, width, teamColor, carriesFood = false) {
+    const container = scene.add.container(point.x, point.y).setDepth(5);
+    const shadow = scene.add.ellipse(0, width * .19, width * .62, width * .13, 0x180f0a, .3);
+    const sprite = scene.add.image(0, 0, texture);
+    sprite.setDisplaySize(width, width * .67);
+    const badge = scene.add.circle(-width * .17, -width * .11, Math.max(2, width * .045), teamColor, .95);
+    const cargo = scene.add.ellipse(-width * .04, -width * .24, width * .24, width * .11, 0x7cbd4d, 1).setAngle(-16).setVisible(false);
+    container.add([shadow, sprite, badge, cargo]);
+    container.sprite = sprite;
+    container.cargo = cargo;
+    container.carriesFood = carriesFood;
+    const baseY = sprite.y;
+    scene.tweens.add({ targets: sprite, y: baseY - Math.max(1, width * .025), duration: 170 + Math.random() * 80, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     return container;
   }
 
-  function roamAnt(ant, zone, index) {
-    if (!scene || !ant.active) return;
-    const surfaceY = zone.y + zone.h * .19;
-    const homeX = zone.x + zone.w * (.42 + (index % 4) * .05);
-    const homeY = zone.y + zone.h * (.64 + (index % 3) * .07);
-    const forageX = zone.x + zone.w * (.12 + ((index * 17) % 72) / 100);
-    const forageY = surfaceY - 8 - (index % 3) * 6;
-    ant.x = homeX;
-    ant.y = homeY;
-    const duration = 2300 + (index % 5) * 260;
-    scene.tweens.add({ targets: ant.legs, angle: index % 2 ? 8 : -8, duration: 120 + index % 3 * 20, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    scene.tweens.add({
-      targets: ant,
-      x: forageX,
-      y: forageY,
-      angle: index % 2 ? -8 : 8,
-      duration,
-      delay: index * 90,
-      ease: 'Sine.easeInOut',
-      yoyo: true,
-      repeat: -1,
-      hold: 180,
-      repeatDelay: 160,
-      onYoyo: () => { if (ant.active) ant.leaf.setVisible(true); },
-      onRepeat: () => { if (ant.active) ant.leaf.setVisible(false); },
-    });
+  function animateAnt(agent, points, index = 0) {
+    if (!points.length) return;
+    let cursor = index % points.length;
+    agent.x = points[cursor].x;
+    agent.y = points[cursor].y;
+    const travel = () => {
+      if (!scene || !agent.active) return;
+      cursor = (cursor + 1) % points.length;
+      const next = points[cursor];
+      const dx = next.x - agent.x;
+      const dy = next.y - agent.y;
+      agent.sprite.setFlipX(dx < 0);
+      agent.sprite.setAngle(Phaser.Math.Clamp(Math.atan2(dy, Math.max(8, Math.abs(dx))) * 18, -10, 10));
+      agent.cargo.setVisible(agent.carriesFood && cursor >= Math.ceil(points.length / 2));
+      const distance = Math.hypot(dx, dy);
+      scene.tweens.add({
+        targets: agent,
+        x: next.x,
+        y: next.y,
+        duration: Math.max(650, distance * (13 + index % 4)),
+        ease: 'Sine.easeInOut',
+        onComplete: () => {
+          if (!agent.active) return;
+          scene.time.delayedCall(100 + (index % 3) * 90, travel);
+        },
+      });
+    };
+    scene.time.delayedCall(160 + index * 120, travel);
   }
 
-  function drawColony(team, zone) {
+  function drawTunnel(graphics, points, width) {
+    const stroke = (lineWidth, color, alpha) => {
+      graphics.lineStyle(lineWidth, color, alpha);
+      graphics.beginPath();
+      graphics.moveTo(points[0].x, points[0].y);
+      for (const point of points.slice(1)) graphics.lineTo(point.x, point.y);
+      graphics.strokePath();
+    };
+    stroke(width + 8, 0x24130d, .76);
+    stroke(width, 0x885638, .62);
+  }
+
+  function drawChamber(graphics, x, y, width, height, palette, active = false) {
+    ellipse(graphics, x, y, width + 10, height + 10, 0x24130d, .84);
+    ellipse(graphics, x, y, width, height, 0x8b593a, .48);
+    graphics.lineStyle(active ? 3 : 2, palette.light, active ? .9 : .5);
+    graphics.strokeEllipse(x, y, width, height);
+  }
+
+  function addAmbientLife(width, height) {
+    for (let index = 0; index < 18; index += 1) {
+      const mote = scene.add.circle((index * 97 + 31) % width, 20 + (index * 37) % Math.max(35, height * .22), 1.5 + index % 3, index % 3 ? 0xffe797 : 0xc4f2b0, .34).setDepth(-5);
+      scene.tweens.add({ targets: mote, y: mote.y - 12 - index % 10, x: mote.x + (index % 2 ? 7 : -7), alpha: .85, duration: 1700 + index * 80, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    }
+    for (let index = 0; index < 24; index += 1) {
+      const dust = scene.add.circle((index * 131 + 47) % width, height * .34 + (index * 61) % Math.max(30, height * .62), 1 + index % 2, 0xffce78, .16).setDepth(-4);
+      scene.tweens.add({ targets: dust, y: dust.y - 8, alpha: .42, duration: 2400 + index * 65, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    }
+  }
+
+  function drawColony(team, zone, teamIndex) {
     const palette = core.TEAM_COLORS[team.colorIndex];
-    const graphics = scene.add.graphics();
-    graphics.fillStyle(palette.primary, .08);
-    graphics.fillRoundedRect(zone.x + 3, zone.y + 3, zone.w - 6, zone.h - 6, 12);
-    graphics.lineStyle(2, palette.light, .5);
-    graphics.strokeRoundedRect(zone.x + 3, zone.y + 3, zone.w - 6, zone.h - 6, 12);
-    const surfaceY = zone.y + zone.h * .19;
-    graphics.fillStyle(0x74ad5f, .95);
-    graphics.fillRect(zone.x + 4, surfaceY - 7, zone.w - 8, 13);
-    graphics.lineStyle(2, 0xb8df77, .82);
-    for (let blade = 0; blade < Math.max(6, Math.floor(zone.w / 42)); blade += 1) {
-      const grassX = zone.x + 14 + (blade * 41) % Math.max(20, zone.w - 25);
-      graphics.lineBetween(grassX, surfaceY - 6, grassX + (blade % 2 ? 5 : -4), surfaceY - 20 - blade % 3 * 3);
+    const graphics = scene.add.graphics().setDepth(0);
+    const cx = zone.x + zone.w * .5;
+    const entrance = { x: cx, y: zone.y + zone.h * .2 };
+    const junction = { x: cx, y: zone.y + zone.h * .46 };
+    const food = { x: zone.x + zone.w * .27, y: zone.y + zone.h * .66 };
+    const guard = { x: zone.x + zone.w * .73, y: zone.y + zone.h * .64 };
+    const nursery = { x: cx, y: zone.y + zone.h * .82 };
+    const active = teamIndex === session.currentTeamIndex && session.phase !== 'ended';
+    const chamberW = Phaser.Math.Clamp(zone.w * .26 + team.nestLevel * 3, 54, 142);
+    const chamberH = Phaser.Math.Clamp(zone.h * .2 + team.nestLevel * 2, 32, 70);
+
+    ellipse(graphics, cx, zone.y + zone.h * .58, zone.w * .9, zone.h * .82, palette.primary, active ? .13 : .065);
+    graphics.lineStyle(active ? 4 : 2, palette.light, active ? .72 : .24);
+    graphics.strokeEllipse(cx, zone.y + zone.h * .58, zone.w * .9, zone.h * .82);
+
+    drawTunnel(graphics, [entrance, junction, nursery], 9 + Math.min(6, team.nestLevel));
+    drawTunnel(graphics, [junction, food], 8 + Math.min(5, team.nestLevel));
+    drawTunnel(graphics, [junction, guard], 8 + Math.min(5, team.nestLevel));
+    graphics.fillStyle(0x2a160e, .95);
+    graphics.fillEllipse(entrance.x, entrance.y, 40 + team.nestLevel * 4, 17);
+
+    drawChamber(graphics, food.x, food.y, chamberW, chamberH, palette);
+    drawChamber(graphics, guard.x, guard.y, chamberW + team.defense * 3, chamberH + team.defense * 2, palette, team.defense > 2);
+    drawChamber(graphics, nursery.x, nursery.y, chamberW + 24 + team.queenLevel * 4, chamberH + 14 + team.queenLevel * 2, palette, active);
+
+    if (team.territory > 1) {
+      const expansion = { x: zone.x + zone.w * (teamIndex % 2 ? .86 : .14), y: zone.y + zone.h * .86 };
+      drawTunnel(graphics, [teamIndex % 2 ? guard : food, expansion], 7 + Math.min(4, team.nestLevel));
+      drawChamber(graphics, expansion.x, expansion.y, Phaser.Math.Clamp(38 + team.territory * 8, 46, 92), Phaser.Math.Clamp(25 + team.territory * 4, 30, 55), palette);
     }
-    for (let stone = 0; stone < Math.min(8, 3 + team.territory); stone += 1) {
-      ellipse(graphics, zone.x + 28 + (stone * 67) % Math.max(30, zone.w - 52), surfaceY + 20 + stone % 2 * 10, 10 + stone % 4, 6 + stone % 3, 0x9b765f, .46);
-    }
-    graphics.fillStyle(0x3b2a22, .92);
-    graphics.fillEllipse(zone.x + zone.w * .5, surfaceY + 4, 34 + team.nestLevel * 3, 15);
 
-    graphics.lineStyle(8 + Math.min(5, team.nestLevel), 0x2e211c, .62);
-    graphics.beginPath();
-    graphics.moveTo(zone.x + zone.w * .5, surfaceY + 8);
-    graphics.lineTo(zone.x + zone.w * .49, zone.y + zone.h * .43);
-    graphics.lineTo(zone.x + zone.w * .3, zone.y + zone.h * .61);
-    graphics.moveTo(zone.x + zone.w * .49, zone.y + zone.h * .43);
-    graphics.lineTo(zone.x + zone.w * .7, zone.y + zone.h * .59);
-    graphics.moveTo(zone.x + zone.w * .49, zone.y + zone.h * .5);
-    graphics.lineTo(zone.x + zone.w * .5, zone.y + zone.h * .82);
-    graphics.strokePath();
-
-    const chamberColor = 0x2f211c;
-    ellipse(graphics, zone.x + zone.w * .3, zone.y + zone.h * .64, 70 + team.food * .3, 42 + team.nestLevel * 2, chamberColor, .72);
-    ellipse(graphics, zone.x + zone.w * .7, zone.y + zone.h * .62, 72 + team.defense * 4, 45 + team.nestLevel * 2, chamberColor, .72);
-    ellipse(graphics, zone.x + zone.w * .5, zone.y + zone.h * .83, 88 + team.queenLevel * 5, 48 + team.queenLevel * 2, chamberColor, .78);
-    graphics.lineStyle(Math.min(7, 1 + team.defense), palette.light, .85);
-    graphics.strokeEllipse(zone.x + zone.w * .7, zone.y + zone.h * .62, 72 + team.defense * 4, 45 + team.nestLevel * 2);
-
-    const foodDots = Math.min(16, Math.max(2, Math.round(team.food / 7)));
+    const foodDots = Math.min(18, Math.max(3, Math.round(team.food / 7)));
     for (let index = 0; index < foodDots; index += 1) {
-      ellipse(graphics, zone.x + zone.w * .25 + (index % 5) * 9, zone.y + zone.h * .62 + Math.floor(index / 5) * 7, 7, 4, index % 2 ? 0xe9c46a : 0x7ac943, .95);
+      const column = index % 6;
+      const row = Math.floor(index / 6);
+      const color = index % 3 === 0 ? 0xd85f42 : index % 2 ? 0xe9b84a : 0x78ad45;
+      ellipse(graphics, food.x - chamberW * .28 + column * 8, food.y + chamberH * .05 + row * 7, 7, 5, color, .98);
     }
 
-    const eggCount = Math.min(8, 2 + team.queenLevel);
+    const eggCount = Math.min(12, 3 + team.queenLevel * 2);
     for (let index = 0; index < eggCount; index += 1) {
-      ellipse(graphics, zone.x + zone.w * .47 + (index % 4) * 8, zone.y + zone.h * .84 + Math.floor(index / 4) * 7, 7, 4, 0xf7edcf, .95);
+      ellipse(graphics, nursery.x - 28 + (index % 6) * 9, nursery.y + 12 + Math.floor(index / 6) * 7, 7, 4, index % 3 ? 0xfff1cb : 0xd8f3df, .98);
     }
 
-    if (team.defense > 1) {
-      graphics.lineStyle(Math.min(8, 2 + team.defense), palette.light, .9);
-      graphics.strokeCircle(zone.x + zone.w * .5, surfaceY + 3, 20 + team.defense * 2);
+    for (let index = 0; index < Math.min(14, team.defense * 3); index += 1) {
+      const angle = Math.PI * 2 * index / Math.max(3, Math.min(14, team.defense * 3));
+      ellipse(graphics, guard.x + Math.cos(angle) * (chamberW * .47), guard.y + Math.sin(angle) * (chamberH * .45), 7, 5, index % 2 ? 0xa98a67 : 0x6f745e, .9);
     }
 
-    const queen = drawAnt(scene, zone.x + zone.w * .5, zone.y + zone.h * .82, palette.light, false, 1.7 + team.queenLevel * .06);
+    const plaqueWidth = Phaser.Math.Clamp(zone.w * .48, 120, 210);
+    graphics.fillStyle(0x35251a, .92);
+    graphics.fillRoundedRect(zone.x + 8, zone.y + 7, plaqueWidth, 39, 5);
+    graphics.lineStyle(2, palette.primary, .95);
+    graphics.strokeRoundedRect(zone.x + 8, zone.y + 7, plaqueWidth, 39, 5);
+    const labelSize = zone.w < 250 ? 11 : 14;
+    scene.add.text(zone.x + 18, zone.y + 12, team.name, { fontFamily: 'Georgia', fontSize: `${labelSize}px`, fontStyle: 'bold', color: '#fff0c9' }).setDepth(8);
+    scene.add.text(zone.x + 18, zone.y + 28, `Nest ${team.nestLevel}  |  ${team.population} ants`, { fontFamily: 'Arial', fontSize: zone.w < 250 ? '8px' : '10px', color: '#d9dfc9' }).setDepth(8);
+
+    for (let flag = 0; flag < Math.min(4, team.territory); flag += 1) {
+      const fx = zone.x + zone.w - 17 - flag * 14;
+      const fy = zone.y + 43;
+      graphics.lineStyle(2, 0xf8e5b5, .9);
+      graphics.lineBetween(fx, fy, fx, fy - 25);
+      graphics.fillStyle(palette.primary, 1);
+      graphics.fillTriangle(fx, fy - 25, fx, fy - 13, fx - 11, fy - 20);
+    }
+
+    const queenWidth = Phaser.Math.Clamp(68 + team.queenLevel * 6, 72, Math.min(124, zone.w * .28));
+    const queen = makeAntAgent('cq-queen', { x: nursery.x, y: nursery.y - 7 }, queenWidth, palette.primary);
     queen.setDepth(4);
-    const labelSize = zone.w < 260 ? 12 : 15;
-    const title = scene.add.text(zone.x + 13, zone.y + 13, team.name, { fontFamily: 'Arial', fontSize: `${labelSize}px`, fontStyle: 'bold', color: '#ffffff', stroke: '#102f34', strokeThickness: 4 });
-    const level = scene.add.text(zone.x + 13, zone.y + 32, `Nest ${team.nestLevel}  |  Territory ${team.territory}`, { fontFamily: 'Arial', fontSize: zone.w < 260 ? '9px' : '11px', color: '#e5fff4', stroke: '#102f34', strokeThickness: 3 });
-    title.setDepth(5); level.setDepth(5);
+    queen.sprite.setFlipX(teamIndex % 2 === 1);
+    const queenScaleX = queen.sprite.scaleX;
+    const queenScaleY = queen.sprite.scaleY;
+    scene.tweens.add({ targets: queen.sprite, scaleX: queenScaleX * 1.025, scaleY: queenScaleY * 1.025, duration: 1050, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
-    for (let flag = 0; flag < Math.min(5, team.territory); flag += 1) {
-      const fx = zone.x + zone.w - 22 - flag * 16;
-      graphics.lineStyle(2, 0xf7ecd3, .9); graphics.lineBetween(fx, surfaceY - 5, fx, surfaceY - 28);
-      graphics.fillStyle(palette.primary, 1); graphics.fillTriangle(fx, surfaceY - 28, fx, surfaceY - 17, fx - 11, surfaceY - 23);
-    }
-
-    const visibleAnts = Math.min(14, Math.max(4, Math.round(team.population / 2)));
+    const antWidth = Phaser.Math.Clamp(Math.min(zone.w / 5.2, zone.h / 3.3), 38, 76);
+    const workerCount = Math.min(7, Math.max(3, Math.ceil(team.workers / 3)));
+    const workerPaths = [
+      [food, junction, entrance, { x: zone.x + zone.w * .18, y: zone.y + zone.h * .13 }, entrance, junction],
+      [nursery, junction, food, { x: food.x + chamberW * .22, y: food.y - 4 }, junction],
+      [guard, junction, entrance, { x: zone.x + zone.w * .82, y: zone.y + zone.h * .14 }, entrance],
+      [nursery, { x: nursery.x - chamberW * .3, y: nursery.y - 4 }, food, junction],
+    ];
     const ants = [];
-    for (let index = 0; index < visibleAnts; index += 1) {
-      const soldier = index < Math.min(team.soldiers, 5);
-      const ant = drawAnt(scene, 0, 0, soldier ? palette.dark : palette.primary, soldier, soldier ? 1.22 : 1);
-      ant.setDepth(3);
+    for (let index = 0; index < workerCount; index += 1) {
+      const path = workerPaths[index % workerPaths.length].map(point => ({ x: point.x + (index % 3 - 1) * 5, y: point.y + (index % 2 ? 3 : -3) }));
+      const ant = makeAntAgent('cq-worker', path[0], antWidth * (index % 4 === 0 ? 1.08 : .9), palette.primary, index % 2 === 0);
       ants.push(ant);
-      roamAnt(ant, zone, index);
+      animateAnt(ant, path, index);
     }
-    colonyViews.set(team.id, { zone, graphics, ants, queen, title, level });
+
+    const guardianCount = Math.min(3, Math.max(1, Math.ceil(team.soldiers / 4)));
+    for (let index = 0; index < guardianCount; index += 1) {
+      const path = [
+        { x: guard.x - chamberW * .18, y: guard.y },
+        { x: guard.x + chamberW * .2, y: guard.y - 4 },
+        { x: junction.x + 8, y: junction.y + index * 4 },
+      ];
+      const guardian = makeAntAgent('cq-guardian', path[0], antWidth * 1.04, palette.primary);
+      ants.push(guardian);
+      animateAnt(guardian, path, index + 8);
+    }
+
+    if (active) {
+      const glow = scene.add.ellipse(entrance.x, entrance.y, 54, 24, palette.light, .18).setDepth(2).setStrokeStyle(2, palette.light, .8);
+      scene.tweens.add({ targets: glow, scaleX: 1.3, scaleY: 1.3, alpha: .04, duration: 850, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    }
+    colonyViews.set(team.id, { zone, graphics, ants, queen, center: { x: cx, y: zone.y + zone.h * .62 } });
   }
 
   function updateWorld() {
@@ -827,36 +962,27 @@
     colonyViews = new Map();
     const width = scene.scale.width;
     const height = scene.scale.height;
-    const background = scene.add.graphics();
-    background.fillStyle(session.warsActive ? 0x6fa69a : 0x8bc9b1, 1);
-    background.fillRect(0, 0, width, height);
-    background.fillStyle(session.warsActive ? 0x4a302b : 0x5d4032, 1);
-    background.fillRect(0, 98, width, height - 98);
-    background.fillStyle(0x3c2a24, .24);
-    for (let y = 140; y < height; y += 42) background.fillRect(0, y, width, 2);
-    background.lineStyle(2, 0xdaf5b4, .65);
-    for (let index = 0; index < 14; index += 1) {
-      const x = (index * 137) % Math.max(1, width);
-      background.beginPath(); background.moveTo(x, 0); background.lineTo(x + ((index % 3) - 1) * 18, 65 + (index % 4) * 8); background.strokePath();
-    }
-    for (let index = 0; index < 80; index += 1) {
-      const x = (index * 83 + 29) % Math.max(1, width);
-      const y = 118 + ((index * 59) % Math.max(1, height - 125));
-      ellipse(background, x, y, 2 + index % 4, 2 + index % 3, index % 3 ? 0x8f6c54 : 0xc39b72, .24);
-    }
-    background.setDepth(-10);
+    fitWorldImage('cq-world', width, height);
+    if (session.warsActive) scene.add.rectangle(width / 2, height / 2, width, height, 0x1d2944, .18).setDepth(-20);
+    addAmbientLife(width, height);
 
     const count = session.teams.length;
     const columns = width < 700 ? (count <= 2 ? 1 : 2) : count <= 3 ? count : count === 4 ? 2 : 3;
     const rows = Math.ceil(count / columns);
-    const margin = 10;
-    const top = 108;
-    const zoneWidth = (width - margin * (columns + 1)) / columns;
-    const zoneHeight = (height - top - margin * (rows + 1)) / rows;
+    const marginX = width < 700 ? 7 : 14;
+    const marginY = 8;
+    const top = Math.min(124, Math.max(98, height * .18));
+    const zoneWidth = (width - marginX * (columns + 1)) / columns;
+    const zoneHeight = (height - top - marginY * (rows + 1)) / rows;
     session.teams.forEach((team, index) => {
       const col = index % columns;
       const row = Math.floor(index / columns);
-      drawColony(team, { x: margin + col * (zoneWidth + margin), y: top + margin + row * (zoneHeight + margin), w: zoneWidth, h: zoneHeight });
+      drawColony(team, {
+        x: marginX + col * (zoneWidth + marginX),
+        y: top + marginY + row * (zoneHeight + marginY),
+        w: zoneWidth,
+        h: zoneHeight,
+      }, index);
     });
   }
 
@@ -878,6 +1004,28 @@
       for (let index = 0; index < 70; index += 1) {
         const drop = scene.add.rectangle((index * 71) % scene.scale.width, -20 - (index % 8) * 18, 2, 16, 0xbde8ff, .8).setDepth(12).setAngle(12);
         scene.tweens.add({ targets: drop, y: scene.scale.height + 30, x: drop.x + 90, duration: 900 + (index % 5) * 120, delay: (index % 10) * 50, onComplete: () => drop.destroy() });
+      }
+    }
+    if (key === 'fallen-fruit') {
+      const fruit = scene.add.circle(scene.scale.width * .52, -35, 24, 0xc74f3f, 1).setDepth(14).setStrokeStyle(5, 0xf4b64e, 1);
+      const leaf = scene.add.ellipse(fruit.x + 13, fruit.y - 16, 18, 8, 0x6eaa4a, 1).setDepth(15).setAngle(-25);
+      scene.tweens.add({ targets: [fruit, leaf], y: scene.scale.height * .32, duration: 850, ease: 'Bounce.easeOut', onComplete: () => scene.time.delayedCall(800, () => { fruit.destroy(); leaf.destroy(); }) });
+    }
+    if (key === 'food-trail') {
+      for (let index = 0; index < 24; index += 1) {
+        const seed = scene.add.ellipse(scene.scale.width * .12 + index * scene.scale.width * .032, scene.scale.height * .25 + Math.sin(index * .8) * 18, 8, 4, 0xf5c856, .25).setDepth(12).setAngle(index * 17);
+        scene.tweens.add({ targets: seed, alpha: 1, scaleX: 1.35, scaleY: 1.35, duration: 420, delay: index * 35, yoyo: true, hold: 250, onComplete: () => seed.destroy() });
+      }
+    }
+    if (key === 'predator') {
+      const shadow = scene.add.ellipse(-180, scene.scale.height * .14, 210, 64, 0x111821, .35).setDepth(13).setAngle(-8);
+      scene.tweens.add({ targets: shadow, x: scene.scale.width + 180, duration: 1500, ease: 'Sine.easeInOut', onComplete: () => shadow.destroy() });
+    }
+    if (key === 'new-territory') {
+      for (let index = 0; index < 34; index += 1) {
+        const spark = scene.add.circle(scene.scale.width * .5, scene.scale.height * .62, 2 + index % 3, index % 2 ? 0xffd56e : 0x8de4c0, .9).setDepth(13);
+        const angle = Math.PI * 2 * index / 34;
+        scene.tweens.add({ targets: spark, x: spark.x + Math.cos(angle) * (80 + index * 4), y: spark.y + Math.sin(angle) * (45 + index * 2), alpha: 0, duration: 900, ease: 'Cubic.easeOut', onComplete: () => spark.destroy() });
       }
     }
   }
@@ -934,6 +1082,15 @@
 
   $('matchType').addEventListener('click', event => { const button = event.target.closest('[data-type]'); if (button) setMatchType(button.dataset.type); });
   $('teamCount').addEventListener('change', renderTeamEditor);
+  $('storyContinue').addEventListener('click', async () => {
+    if (!session || session.introSeen) return;
+    const button = $('storyContinue');
+    button.disabled = true;
+    session.introSeen = true;
+    await saveState();
+    button.disabled = false;
+    presentQuestion();
+  });
   $('saveSetupBtn').addEventListener('click', async () => {
     showNotice('Saving setup...');
     try { await saveSetup(); showNotice('Setup saved.'); }

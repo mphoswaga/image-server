@@ -100,6 +100,9 @@ test('a teacher can run, recover, pause, and finish a one-screen ColonyQuest mat
 
   await page.locator('#startBtn').click();
   await expect(page.locator('#gameScreen')).toBeVisible();
+  await expect(page.locator('#storyOverlay')).toBeVisible();
+  await expect(page.locator('#storyTitle')).toHaveText('Moonroot Meadow needs you');
+  await page.locator('#storyContinue').click();
   await expect(page.locator('#questionOverlay')).toBeVisible();
   await expect(page.locator('#questionText')).toHaveText(questions[0].question);
   await expect(page.locator('#scoreStrip .score-card')).toHaveCount(2);

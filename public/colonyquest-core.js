@@ -5,7 +5,7 @@
 }(typeof globalThis !== 'undefined' ? globalThis : this, function colonyQuestCoreFactory() {
   'use strict';
 
-  const VERSION = 1;
+  const VERSION = 2;
   const TEAM_COLORS = Object.freeze([
     { name: 'Azure', primary: 0x2f80ed, light: 0x8ec5ff, dark: 0x123f7a },
     { name: 'Coral', primary: 0xef6351, light: 0xffb0a4, dark: 0x7b2b23 },
@@ -26,11 +26,11 @@
   });
 
   const EVENTS = Object.freeze([
-    { key: 'fallen-fruit', title: 'Fallen Fruit', description: 'Every colony discovers food. Smaller stores receive a little more.', tone: 'good' },
-    { key: 'heavy-rain', title: 'Heavy Rain', description: 'Strong defenses keep tunnels dry.', tone: 'storm' },
-    { key: 'food-trail', title: 'New Food Trail', description: 'Workers bring home an unexpected harvest.', tone: 'good' },
-    { key: 'predator', title: 'Predator Nearby', description: 'Defenses protect food while the predator passes.', tone: 'danger' },
-    { key: 'new-territory', title: 'New Territory', description: 'The smallest colonies find room to expand.', tone: 'good' },
+    { key: 'fallen-fruit', title: 'The Orchard Gift', description: 'A ripe berry tumbles into Moonroot Meadow. Every colony gathers a share, and the smallest food stores receive the most.', tone: 'good' },
+    { key: 'heavy-rain', title: 'The Rain Returns', description: 'Clouds gather above the old oak. Strong nest walls keep precious tunnels warm and dry.', tone: 'storm' },
+    { key: 'food-trail', title: 'Pip Finds a Trail', description: 'Pip discovers a trail of golden seeds. Busy workers hurry the surprise harvest home.', tone: 'good' },
+    { key: 'predator', title: 'A Shadow Crosses the Meadow', description: 'The colonies become perfectly still. Guardians protect the stores until the shadow safely passes.', tone: 'danger' },
+    { key: 'new-territory', title: 'The Deep Root Opens', description: 'An ancient root shifts and reveals new earth. The smallest colonies discover room to grow.', tone: 'good' },
   ]);
 
   function clamp(value, min, max) {
@@ -229,6 +229,7 @@
       turnIndex: Math.floor(clamp(source.turnIndex, 0, 9999)),
       questionCursor: Math.floor(clamp(source.questionCursor, 0, 9999)),
       currentTeamIndex: Math.floor(clamp(source.currentTeamIndex, 0, Math.max(0, teams.length - 1))),
+      introSeen: !!source.introSeen,
       warsActive: !!source.warsActive,
       eventAction: source.eventAction === 'next-turn' ? 'next-turn' : source.eventAction === 'question' ? 'question' : null,
       teams,

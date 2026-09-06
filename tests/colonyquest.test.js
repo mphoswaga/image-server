@@ -117,6 +117,7 @@ test('session normalization preserves recovery phases and honest named participa
     turnIndex: 7,
     questionCursor: 7,
     currentTeamIndex: 99,
+    introSeen: true,
     warsActive: true,
     teams: all,
     answers: [
@@ -129,6 +130,7 @@ test('session normalization preserves recovery phases and honest named participa
   assert.equal(session.previousPhase, 'reward');
   assert.equal(session.eventAction, 'next-turn');
   assert.equal(session.currentTeamIndex, 1);
+  assert.equal(session.introSeen, true);
   assert.equal(session.teams.length, 2);
   const summary = core.sessionSummary(session);
   assert.equal(summary.answers, 2);
@@ -231,6 +233,7 @@ test('the dashboard exposes ColonyQuest as a whole-class lesson game', () => {
   const dashboard = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
   const picker = fs.readFileSync(path.join(__dirname, '..', 'public', 'play.html'), 'utf8');
   const page = fs.readFileSync(path.join(__dirname, '..', 'public', 'colonyquest.html'), 'utf8');
+  const client = fs.readFileSync(path.join(__dirname, '..', 'public', 'colonyquest.js'), 'utf8');
   const server = fs.readFileSync(path.join(__dirname, '..', 'image-server.js'), 'utf8');
   assert.match(dashboard, /data-game-mode="colonyquest"/);
   assert.match(dashboard, /Whole class - ColonyQuest/);
@@ -240,5 +243,14 @@ test('the dashboard exposes ColonyQuest as a whole-class lesson game', () => {
   assert.match(page, /vendor\/phaser\.min\.js/);
   assert.match(page, /Mark correct/);
   assert.match(page, /Random learner/);
+  assert.match(page, /Moonroot Meadow needs you/);
+  assert.match(client, /moonroot-meadow\.webp/);
   assert.match(server, /app\.get\('\/colonyquest\/:id'/);
+
+  for (const name of ['moonroot-meadow.webp', 'pip-worker.webp', 'queen.webp', 'guardian.webp']) {
+    const asset = fs.readFileSync(path.join(__dirname, '..', 'public', 'assets', 'colonyquest', name));
+    assert.ok(asset.length > 10_000, `${name} should contain production artwork`);
+    assert.equal(asset.subarray(0, 4).toString('ascii'), 'RIFF');
+    assert.equal(asset.subarray(8, 12).toString('ascii'), 'WEBP');
+  }
 });
