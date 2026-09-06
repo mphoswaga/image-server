@@ -7,6 +7,7 @@
 .world-navigation select,.world-navigation button{min-width:0;max-width:180px;background:#285c50;color:white;border:1px solid #87bdae;border-radius:4px;padding:7px;font:700 12px Arial;cursor:pointer}
 #worldDepth{font-size:11px;color:#d7f0e2;padding:0 5px;white-space:nowrap}
 .world-story{bottom:64px!important}
+.raid-playing .turn-banner{display:none}
 @media(max-width:850px){.world-viewport{top:82px}#gameMount.game-mount{height:calc(100dvh - 82px)}.world-navigation{bottom:8px;left:8px;max-width:calc(100% - 150px)}.world-navigation select{max-width:110px}.world-navigation button{font-size:11px}#worldDepth{display:none}}
 .game-top{background:#173e38;border-bottom:1px solid #87bdae;box-shadow:0 3px 12px #102a2840}
 .game-title strong{font:800 21px Arial,sans-serif;color:#effff8}
@@ -33,6 +34,20 @@
 .world-story{background:#f1fbf4;border:1px solid #98b8a2;border-left:7px solid var(--story-color,#2f7b55);box-shadow:0 12px 30px #102e3640}
 .world-story h2{font-family:Arial,sans-serif}
 .reward{border-color:#b6ccbd;background:#fff;box-shadow:0 3px 0 #d7e6dc}
+.choice-dialog .reward-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;overflow:visible}
+.choice-dialog .reward{display:block;min-width:0;min-height:82px;padding:9px;position:relative}
+.choice-dialog .reward-guide{display:none}
+.choice-dialog h2{font-size:19px;margin:7px 0 12px}
+.choice-dialog .reward-symbol{float:right;width:34px;height:30px;margin:0 0 3px 5px;background:transparent}
+.choice-dialog .reward-symbol img{width:34px;height:30px}
+.choice-dialog .reward strong{font-size:14px;line-height:1.2}
+.choice-dialog .reward span:not(.reward-symbol){font-size:11px;line-height:1.3}
+.choice-dialog .reward:disabled{opacity:.58;cursor:not-allowed;box-shadow:none}
+.choice-dialog .reward:focus-visible{outline:3px solid #d59a21;outline-offset:2px}
+.choice-dialog .reward[data-reward="raid"]{grid-column:1/-1;min-height:66px;background:#f8eee4;border-color:#af8061}
+.choice-dialog .target-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.target-grid small{display:block;margin-top:7px;font-size:12px;line-height:1.4;font-weight:400}
+@media(max-width:850px){.choice-dialog .reward{min-height:66px;padding:7px}.choice-dialog .reward strong{font-size:13px}.choice-dialog .reward span:not(.reward-symbol){font-size:10px}.choice-dialog .reward-symbol,.choice-dialog .reward>span:not(.reward-symbol):not(.reward-effect){display:none}.choice-dialog .reward[data-reward="raid"]{min-height:54px}#rewardOverlay .dialog-kicker{display:none}.choice-dialog h2{font-size:17px;margin:5px 0 8px}}
 .top-controls button,.teacher-handle{background:#285c50;border-color:#79a798;box-shadow:none}
 @media(min-width:851px){.game-screen.dock-open .score-strip{right:calc(min(620px,44vw) + 18px)}.game-screen.dock-open .score-card{min-width:0}.game-screen.dock-open .score-name{font-size:12px}.game-screen.dock-open .score-stats{font-size:10px}}
 @media(max-width:850px){.score-strip{left:10px;right:10px}.question-overlay,.choice-overlay{padding-top:0}.question-dialog,.choice-dialog{padding:13px}.question-dialog h2,.choice-dialog h2{font-size:20px;margin:8px 0}.question-dialog .guide-line{padding:0 0 6px;font-size:12px}.question-dialog .answer{min-height:52px;font-size:14px}.turn-banner{top:168px}.question-foot{padding-top:7px}}

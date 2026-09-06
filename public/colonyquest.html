@@ -21,7 +21,7 @@
     @media(max-width:440px){.question-dialog .dialog-kicker{font-size:11px}.question-dialog .guide-line{font-size:11px}.question-dialog h2{font-size:18px}.question-dialog .answer{font-size:13px}.question-dialog .question-foot{font-size:11px}.question-dialog .feedback{font-size:12px}}
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
   </style>
-  <link rel="stylesheet" href="/colonyquest-polish.css?v=5">
+  <link rel="stylesheet" href="/colonyquest-polish.css?v=7">
 </head>
 <body>
   <div id="loading" class="loading"><div><div class="spinner"></div>Preparing ColonyQuest...</div></div>
@@ -78,7 +78,7 @@
     </section>
 
     <section id="rewardOverlay" class="overlay choice-overlay hidden" aria-label="Choose a colony reward"><div class="dialog choice-dialog"><div class="dialog-kicker">The Heartseed is glowing</div><h2 id="rewardTitle">Choose a colony reward</h2><div class="reward-guide"><img src="/assets/colonyquest/pip-worker.webp" alt=""><span>Choose what the ants build next. The change will happen in the colony.</span></div><div id="rewardGrid" class="reward-grid"></div></div></section>
-    <section id="targetOverlay" class="overlay choice-overlay hidden" aria-label="Choose a colony to challenge"><div class="dialog choice-dialog event-dialog"><div class="dialog-kicker">Moonroot Rally</div><h2>Choose a colony to challenge</h2><div id="targetGrid" class="target-grid"></div></div></section>
+    <section id="targetOverlay" class="overlay choice-overlay hidden" aria-label="Choose a colony to challenge"><div class="dialog choice-dialog event-dialog"><div class="dialog-kicker">Moonroot Rally</div><h2>Choose a colony to challenge</h2><div id="targetGrid" class="target-grid"></div><button id="targetBack" class="btn" type="button">Back to upgrades</button></div></section>
     <section id="eventOverlay" class="overlay hidden" aria-label="Colony event"><div class="dialog event-dialog"><img id="eventGuide" class="event-guide" src="/assets/colonyquest/pip-worker.webp" alt="Pip the scout ant"><div id="eventMark" class="event-mark">A Moonroot Meadow event</div><div class="dialog-kicker" id="eventKicker">World event</div><h2 id="eventTitle"></h2><p id="eventText"></p><button id="eventContinue" class="btn gold" type="button">Continue</button></div></section>
 
     <section id="worldStory" class="world-story hidden" aria-live="polite">
@@ -95,7 +95,7 @@
   </div>
 
   <script src="/vendor/phaser.min.js"></script>
-  <script src="/colonyquest-core.js?v=6"></script>
-  <script src="/colonyquest.js?v=6"></script>
+  <script src="/colonyquest-core.js?v=7"></script>
+  <script src="/colonyquest.js?v=7"></script>
 </body>
 </html>

@@ -24,6 +24,7 @@
   let audioContext = null;
   let ambientTimer = null;
   let worldStoryAction = null;
+  let raidPresentation = null;
   const ASSETS = {
     world: '/assets/colonyquest/moonroot-meadow.webp',
     worker: '/assets/colonyquest/pip-worker.webp',
@@ -303,6 +304,7 @@
   }
 
   function setOverlay(id) {
+    stopRaidPresentation();
     hideWorldStory();
     for (const overlay of ['storyOverlay', 'questionOverlay', 'rewardOverlay', 'targetOverlay', 'eventOverlay', 'finalOverlay']) $(overlay).classList.add('hidden');
     if (id) $(id).classList.remove('hidden');
@@ -476,11 +478,7 @@
   }
 
   function rewardChoices() {
-    const base = ['workers', 'food', 'defense', 'queen', 'expansion', 'soldiers'].filter(key => key !== 'defense' || currentTeam().defense < core.FORTIFICATIONS.length - 1);
-    const start = session.turnIndex % base.length;
-    const choices = [base[start], base[(start + 2) % base.length], base[(start + 4) % base.length]];
-    if (session.warsActive) choices[2] = 'raid';
-    return choices;
+    return Object.keys(core.REWARDS);
   }
 
   function rewardChange(key, before, after) {
@@ -501,12 +499,14 @@
     if (key === 'defense') return `${core.fortification(team).name} walls throughout the colony - defense ${team.defense}`;
     if (key === 'queen') return `+${Math.max(0, amount - secondary)} ${amount - secondary === 1 ? 'egg' : 'eggs'} - queen level ${team.queenLevel}`;
     if (key === 'expansion') return `+1 permanent room: ${core.colonyRooms(team).at(-1).label} - ${core.colonyRooms(team).length} rooms`;
-    if (key === 'soldiers') return `+${amount} ${amount === 1 ? 'soldier' : 'soldiers'} - ${team.soldiers} soldiers now`;
+    if (key === 'soldiers') return `+${amount} ${amount === 1 ? 'soldier' : 'soldiers'} - ${team.soldiers} ${team.soldiers === 1 ? 'soldier' : 'soldiers'} now`;
     return '';
   }
 
   function previewReward(key) {
     const team = currentTeam();
+    if (key === 'raid') return 'Visit another colony and bring food home';
+    if (key === 'defense' && team.defense >= core.FORTIFICATIONS.length - 1) return 'Maximum fortification reached';
     const clones = session.teams.map(item => ({ ...item, members: (item.members || []).map(member => ({ ...member })) }));
     const preview = clones.find(item => item.id === team.id);
     const before = { ...preview };
@@ -537,7 +537,8 @@
     $('rewardGrid').innerHTML = rewardChoices().map(key => {
       const reward = core.REWARDS[key];
       const art = key === 'queen' ? ASSETS.queen : ['defense', 'soldiers', 'raid'].includes(key) ? ASSETS.guardian : ASSETS.worker;
-      return `<button type="button" class="reward" data-reward="${key}"><span class="reward-symbol"><img src="${art}" alt=""></span><strong>${esc(reward.label)}</strong><span>${esc(reward.description)}</span><span class="reward-effect">${esc(previewReward(key))}</span></button>`;
+      const unavailable = key === 'defense' && team.defense >= core.FORTIFICATIONS.length - 1;
+      return `<button type="button" class="reward" data-reward="${key}"${unavailable ? ' disabled' : ''}><span class="reward-symbol"><img src="${art}" alt=""></span><strong>${esc(reward.label)}</strong><span>${esc(reward.description)}</span><span class="reward-effect">${esc(previewReward(key))}</span></button>`;
     }).join('');
     setOverlay('rewardOverlay');
     updateWorld();
@@ -545,10 +546,11 @@
 
   async function chooseReward(key) {
     if (session.phase !== 'reward' || transitionLocked) return;
+    if (!core.REWARDS[key] || key === 'defense' && currentTeam().defense >= core.FORTIFICATIONS.length - 1) return;
     transitionLocked = true;
     if (key === 'raid') {
       const team = currentTeam();
-      $('targetGrid').innerHTML = session.teams.filter(item => item.id !== team.id).map(item => `<button type="button" data-target="${esc(item.id)}">Challenge ${esc(item.name)}</button>`).join('');
+      $('targetGrid').innerHTML = session.teams.filter(item => item.id !== team.id).map(item => `<button type="button" data-target="${esc(item.id)}">${esc(item.name)}<small>${esc(core.TEAM_COLORS[item.colorIndex].name)} ants · ${item.soldiers} soldiers · ${esc(core.fortification(item).name)} walls</small></button>`).join('');
       setOverlay('targetOverlay');
       updateWorld();
       transitionLocked = false;
@@ -577,26 +579,113 @@
     transitionLocked = true;
     const attacker = currentTeam();
     const defender = session.teams.find(team => team.id === targetId);
-    if (!defender) return;
+    if (!defender || defender.id === attacker.id) { transitionLocked = false; return; }
     const result = core.resolveRaid(attacker, defender, session.teams);
     session.phase = 'event';
     session.eventAction = 'next-turn';
-    session.events.push({ key: 'raid-result', at: new Date().toISOString() });
+    const event = { key: 'raid-result', attackerId: attacker.id, defenderId: defender.id, ...result, at: new Date().toISOString() };
+    session.events.push(event);
     setOverlay(null);
     updateWorld();
-    celebrate(result.success ? attacker.id : defender.id, result.success ? 'raid' : 'defense');
-    playTone(result.success ? 'upgrade' : 'wrong');
-    showEvent({
-      title: result.success ? `${attacker.name} completes the raid` : `${defender.name} holds the line`,
-      description: result.success ? `${attacker.name} carries ${result.stolen} food home. No colony is eliminated.` : `${defender.name}'s defenses protect the colony and earn extra food.`,
-      kicker: 'Colony Wars',
-    }, nextTurn);
+    showRaidStory(event, true);
     updateHUD();
     await saveState();
   }
 
   function eventForTurn() {
     return core.EVENTS[Math.floor(session.turnIndex / Math.max(1, session.teams.length * 2)) % core.EVENTS.length];
+  }
+
+  function stopRaidPresentation() {
+    const raid = raidPresentation;
+    if (!raid) return;
+    raidPresentation = null;
+    raid.tween?.stop();
+    for (const ant of raid.hidden) if (ant.active) ant.setVisible(true);
+    for (const label of raid.labels) if (label.active) label.setVisible(true);
+    for (const actor of raid.actors) {
+      if (!actor.active) continue;
+      scene.tweens.killTweensOf(actor.sprite);
+      scene.tweens.killTweensOf(actor.gait);
+      actor.destroy();
+    }
+    raid.trail?.destroy();
+    scene.cameras.main.setZoom(1).setScroll(0, $('worldViewport').scrollTop);
+    $('worldViewport').removeAttribute('data-raid-phase');
+    $('gameScreen').classList.remove('raid-playing');
+  }
+
+  function showRaidStory(event, animate = false) {
+    const attacker = session.teams.find(team => team.id === event.attackerId);
+    const defender = session.teams.find(team => team.id === event.defenderId);
+    if (!attacker || !defender) return showEvent({ title: 'The raid is over', description: 'The colonies are ready for their next turn.' }, nextTurn);
+    const finish = () => {
+      stopRaidPresentation();
+      showWorldStory({
+        kicker: 'Back in the meadow',
+        title: event.success ? `${attacker.name} returns home` : `${defender.name} holds the line`,
+        text: event.success ? `The raiders brought ${event.stolen} seeds back from ${defender.name}. The workers put them in their food store.` : `${defender.name}'s guardians turned the raiders away. The raiders return home safely, and the defending colony earns five seeds.`,
+        effect: event.success ? `+${event.stolen} food for ${attacker.name}` : `+5 food for ${defender.name}`,
+        art: ASSETS.guardian,
+      }, nextTurn);
+      focusColony(event.success ? attacker.id : defender.id, 'food');
+    };
+    if (!animate || !scene || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return finish();
+    const home = colonyViews.get(attacker.id), away = colonyViews.get(defender.id);
+    if (!home || !away) return finish();
+    showWorldStory({ kicker: `${core.TEAM_COLORS[attacker.colorIndex].name} ants on the move`, title: `${attacker.name} sets out`, text: `Follow the raiding party to ${defender.name}'s nest.`, effect: 'Leaving the queen chamber', art: ASSETS.guardian, continueLabel: 'Skip animation' }, finish);
+    const party = home.ants.filter(ant => ant.getData('role') === (attacker.soldiers ? 'soldier' : 'worker')).slice(0, 6);
+    if (!party.length) return finish();
+    // These are visual stand-ins for existing ants, not extra recruits or a second raid result.
+    const hidden = [...party];
+    const actors = party.map(() => makeAntAgent(attacker.soldiers ? 'cq-guardian' : 'cq-worker', home.sites.nursery, 34, core.TEAM_COLORS[attacker.colorIndex].primary));
+    for (const ant of hidden) ant.setVisible(false);
+    const destination = event.success ? { x: away.sites.food.x + 37, y: away.sites.food.y + 22 } : { x: away.sites.entrance.x - 28, y: away.sites.entrance.y - 15 };
+    const points = [{ x: home.sites.nursery.x + 37, y: home.sites.nursery.y + 22 }, home.sites.entrance, { x: home.sites.entrance.x, y: home.sites.entrance.y - 28 }, { x: away.sites.entrance.x, y: away.sites.entrance.y - 28 }, away.sites.entrance, destination];
+    const route = new Phaser.Curves.Path(points[0].x, points[0].y);
+    for (const point of points.slice(1)) route.lineTo(point.x, point.y);
+    const trail = scene.add.graphics().setDepth(4);
+    for (const point of route.getSpacedPoints(45)) ellipse(trail, point.x, point.y + 8, 3, 3, core.TEAM_COLORS[attacker.colorIndex].light, .65);
+    const defenders = away.ants.filter(ant => ant.getData('role') === 'soldier').slice(0, 4);
+    for (const [index, ant] of defenders.entries()) {
+      ant.setVisible(false); hidden.push(ant);
+      const guard = makeAntAgent('cq-guardian', { x: away.sites.entrance.x + (index - 1.5) * 19, y: away.sites.entrance.y + 10 }, 34, core.TEAM_COLORS[defender.colorIndex].primary);
+      guard.sprite.setFlipX(away.sites.entrance.x > home.sites.entrance.x);
+      actors.push(guard);
+    }
+    const labels = [...colonyViews.values()].flatMap(view => view.labels);
+    for (const label of labels) label.setVisible(false);
+    const raid = { event, actors, hidden, labels, trail, tween: null };
+    raidPresentation = raid;
+    $('gameScreen').classList.add('raid-playing');
+    const progress = { value: 0 };
+    const camera = scene.cameras.main;
+    camera.setZoom(1.6);
+    let lastPhase = '';
+    raid.tween = scene.tweens.add({ targets: progress, value: 1, duration: 10500, ease: 'Linear',
+      onUpdate: () => {
+        if (raidPresentation !== raid) return;
+        const p = progress.value;
+        const phase = p < .42 ? 'outbound' : p < .56 ? 'at-nest' : 'returning';
+        const distance = p < .42 ? p / .42 : p < .56 ? 1 : (1 - p) / .44;
+        for (let index = 0; index < party.length; index += 1) {
+          const ant = actors[index];
+          const t = Phaser.Math.Clamp(distance - index * .018, 0, 1);
+          const point = route.getPoint(t), ahead = route.getPoint(Math.min(1, t + .01));
+          ant.setPosition(point.x, point.y + index % 2 * 8);
+          ant.sprite.setFlipX(phase === 'returning' ? ahead.x >= point.x : ahead.x < point.x);
+          ant.cargo.setVisible(phase === 'returning' && event.success && event.stolen > 0);
+        }
+        camera.centerOn(actors[0].x, actors[0].y + 25);
+        if (phase !== lastPhase) {
+          lastPhase = phase;
+          $('worldViewport').dataset.raidPhase = phase;
+          $('worldStoryTitle').textContent = phase === 'outbound' ? `${attacker.name} crosses the meadow` : phase === 'at-nest' ? event.success ? 'The raiders reach the food store' : 'The guardians block the entrance' : `${attacker.name} heads home`;
+          $('worldStoryEffect').textContent = phase === 'outbound' ? `Destination: ${defender.name}` : phase === 'at-nest' ? event.success ? `${event.stolen} seeds collected` : 'The nest is protected' : event.success ? 'Carrying the seeds home' : 'Returning safely without food';
+          if (phase === 'at-nest') playTone(event.success ? 'upgrade' : 'wrong');
+        }
+      }, onComplete: finish,
+    });
   }
 
   function shouldStartWars() {
@@ -626,7 +715,7 @@
       session.events.push({ key: 'colony-wars', at: new Date().toISOString() });
       updateWorld();
       await saveState();
-      showEvent({ title: 'The Moonroot Rally begins', description: 'The moon is rising. Colonies may now enter friendly knowledge challenges to win food and earn the Ancient Acorn. Every colony stays in the adventure.', kicker: 'Chapter 4' }, continueAfterEvent);
+      showEvent({ title: 'The Moonroot Rally begins', description: 'The moon is rising. Keep building, gathering, or raiding as the colonies compete for the Ancient Acorn. Every colony stays in the adventure.', kicker: 'Chapter 4' }, continueAfterEvent);
       playTone('wars');
       return;
     }
@@ -732,9 +821,10 @@
     if (session.phase === 'reward') return showRewards();
     if (session.phase === 'event') {
       const last = session.events[session.events.length - 1];
+      if (last?.key === 'raid-result' && last.attackerId) return showRaidStory(last);
       if (last && String(last.key).startsWith('upgrade-')) return showRewardStory(last, nextTurn);
       const event = last && last.key === 'colony-wars'
-        ? { title: 'The Moonroot Rally begins', description: 'The moon is rising. Colonies may now enter friendly knowledge challenges to win food and earn the Ancient Acorn. Every colony stays in the adventure.', kicker: 'Chapter 4' }
+        ? { title: 'The Moonroot Rally begins', description: 'The moon is rising. Keep building, gathering, or raiding as the colonies compete for the Ancient Acorn. Every colony stays in the adventure.', kicker: 'Chapter 4' }
         : chapterEvent(last && last.key) || core.EVENTS.find(item => item.key === (last && last.key));
       const next = session.eventAction === 'next-turn' ? nextTurn : continueAfterEvent;
       return showEvent(event || { title: 'Colony event', description: 'The colonies have adapted. Continue when the class is ready.' }, next);
@@ -861,12 +951,12 @@
   function makeAntAgent(texture, point, width, teamColor, carriesFood = false, animateLegs = true) {
     const container = scene.add.container(point.x, point.y).setDepth(5);
     const shadow = scene.add.ellipse(0, width * .19, width * .62, width * .13, 0x180f0a, .3);
-    const sprite = scene.add.image(0, 0, texture);
+    const sprite = scene.add.image(0, 0, naturalAntTexture(texture, teamColor));
     sprite.setDisplaySize(width, width * .67);
     const legs = scene.add.graphics();
     const gait = { phase: 0 };
     const paintLegs = () => {
-      legs.clear().lineStyle(Math.max(1.4, width * .025), 0x59301b, 1);
+      legs.clear().lineStyle(Math.max(1.4, width * .025), teamColor, 1);
       for (let side = -1; side <= 1; side += 2) {
         for (let leg = 0; leg < 3; leg += 1) {
           const x = (leg - 1) * width * .12;
@@ -882,6 +972,7 @@
     const cargo = scene.add.ellipse(-width * .04, -width * .24, width * .24, width * .11, 0x7cbd4d, 1).setAngle(-16).setVisible(false);
     container.add([shadow, legs, sprite, badge, cargo]);
     container.sprite = sprite;
+    container.gait = gait;
     container.cargo = cargo;
     container.carriesFood = carriesFood;
     paintLegs();
@@ -891,6 +982,27 @@
     const baseY = sprite.y;
     scene.tweens.add({ targets: sprite, y: baseY - Math.max(1, width * .025), duration: 170 + Math.random() * 80, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     return container;
+  }
+
+  function naturalAntTexture(sourceKey, color) {
+    const key = `${sourceKey}-natural-${color}`;
+    if (scene.textures.exists(key)) return key;
+    const source = scene.textures.get(sourceKey).getSourceImage();
+    const canvas = scene.textures.createCanvas(key, 256, 256);
+    const ctx = canvas.getContext();
+    ctx.drawImage(source, 0, 0, 256, 256);
+    const pixels = ctx.getImageData(0, 0, 256, 256);
+    const base = [color >> 16 & 255, color >> 8 & 255, color & 255];
+    // Reuse the sprite's shading and alpha, with a cached natural-colour shell for each team.
+    for (let i = 0; i < pixels.data.length; i += 4) {
+      if (!pixels.data[i + 3]) continue;
+      const light = (pixels.data[i] * .3 + pixels.data[i + 1] * .59 + pixels.data[i + 2] * .11) / 255;
+      const shine = Math.max(0, light - .65) * 120;
+      for (let channel = 0; channel < 3; channel += 1) pixels.data[i + channel] = Math.min(255, base[channel] * (.3 + light * 1.5) + shine);
+    }
+    ctx.putImageData(pixels, 0, 0);
+    canvas.refresh();
+    return key;
   }
 
   function animateAnt(agent, points, index = 0, previous = null, startDelay = 0) {
@@ -1098,7 +1210,7 @@
       backgroundColor: '#1c4036', padding: { x: 9, y: 6 }, wordWrap: { width: zone.w - 44 },
     }).setDepth(8);
     title.setInteractive({ useHandCursor: true }).on('pointerdown', () => focusColony(team.id));
-    scene.add.text(zone.x + 13, zone.y + 33, `${rooms.length} ${rooms.length === 1 ? 'room' : 'rooms'} · ${material.name} walls`, {
+    const subtitle = scene.add.text(zone.x + 13, zone.y + 33, `${palette.name} ants · ${rooms.length} ${rooms.length === 1 ? 'room' : 'rooms'} · ${material.name}`, {
       fontFamily: 'Arial', fontSize: '11px', color: '#ffffff', backgroundColor: '#263d33', padding: { x: 5, y: 3 },
     }).setDepth(8);
 
@@ -1140,7 +1252,7 @@
       const lastEvent = session.events.at(-1);
       if (index === team.soldiers - 1 && session.phase === 'event' && lastEvent?.key === 'upgrade-soldiers' && lastEvent.teamId === team.id) revealRecruit(soldier);
     }
-    colonyViews.set(team.id, { zone, graphics, ants, queen, rooms, center: nursery, sites });
+    colonyViews.set(team.id, { zone, graphics, ants, queen, rooms, center: nursery, sites, labels: [title, subtitle] });
   }
 
   function revealRecruit(ant) {
@@ -1174,6 +1286,11 @@
 
   function updateWorld() {
     if (!scene || !session) return;
+    if (raidPresentation) {
+      const event = raidPresentation.event;
+      stopRaidPresentation();
+      if (session.phase === 'event') showRaidStory(event);
+    }
     const previous = new Map([...colonyViews].map(([id, view]) => [id, {
       zone: view.zone, roomCount: view.rooms.length,
       workers: view.ants.filter(ant => ant.getData('role') === 'worker').map(ant => ({ x: ant.x, y: ant.y })),
@@ -1223,7 +1340,7 @@
       const view = colonyViews.get(team.id);
       const workers = view.ants.filter(ant => ant.getData('role') === 'worker').length;
       const soldiers = view.ants.filter(ant => ant.getData('role') === 'soldier').length;
-      return `${team.name}: 1 queen, ${workers} workers, ${soldiers} soldiers. ${view.rooms.length} rooms: ${view.rooms.map(room => room.label).join(', ')}. ${core.fortification(team).name} walls.`;
+      return `${team.name}: 1 queen, ${workers} workers, ${soldiers} soldiers. ${view.rooms.length} rooms: ${view.rooms.map(room => room.label).join(', ')}. ${core.fortification(team).name} walls. ${core.TEAM_COLORS[team.colorIndex].name} ants.`;
     }).join(' '));
   }
 
@@ -1335,7 +1452,7 @@
 
   $('matchType').addEventListener('click', event => { const button = event.target.closest('[data-type]'); if (button) setMatchType(button.dataset.type); });
   $('worldViewport').addEventListener('scroll', () => {
-    if (scene) scene.cameras.main.scrollY = $('worldViewport').scrollTop;
+    if (scene && !raidPresentation) scene.cameras.main.scrollY = $('worldViewport').scrollTop;
     $('worldDepth').textContent = `Depth ${Math.round($('worldViewport').scrollTop / 16)}`;
   }, { passive: true });
   $('worldSurface').addEventListener('click', () => $('worldViewport').scrollTo({ top: 0, behavior: 'smooth' }));
@@ -1386,6 +1503,7 @@
   });
   $('feedbackNext').addEventListener('click', () => commitOutcome().catch(error => toast(error.message)));
   $('rewardGrid').addEventListener('click', event => { const button = event.target.closest('[data-reward]'); if (button) chooseReward(button.dataset.reward).catch(error => toast(error.message)); });
+  $('targetBack').addEventListener('click', () => { if (session.phase === 'reward' && !transitionLocked) showRewards(); });
   $('targetGrid').addEventListener('click', event => { const button = event.target.closest('[data-target]'); if (button) chooseRaid(button.dataset.target).catch(error => toast(error.message)); });
   $('revealBtn').addEventListener('click', () => {
     const question = questionAtCursor();

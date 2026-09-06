@@ -5,7 +5,7 @@
 }(typeof globalThis !== 'undefined' ? globalThis : this, function colonyQuestCoreFactory() {
   'use strict';
 
-  const VERSION = 5;
+  const VERSION = 6;
   const FORTIFICATIONS = Object.freeze([
     { name: 'Earth', wall: 0xb68a57, edge: 0x785437, floor: 0x65513a },
     { name: 'Timber', wall: 0xa7743e, edge: 0xe3b571, floor: 0x65513a },
@@ -31,12 +31,12 @@
     return rooms;
   }
   const TEAM_COLORS = Object.freeze([
-    { name: 'Azure', primary: 0x2f80ed, light: 0x8ec5ff, dark: 0x123f7a },
-    { name: 'Coral', primary: 0xef6351, light: 0xffb0a4, dark: 0x7b2b23 },
-    { name: 'Emerald', primary: 0x20a66a, light: 0x8ce0b7, dark: 0x145c3f },
-    { name: 'Gold', primary: 0xf2b134, light: 0xffdc83, dark: 0x795511 },
-    { name: 'Violet', primary: 0x8c63d6, light: 0xcdb6f5, dark: 0x493074 },
-    { name: 'Rose', primary: 0xd94f8a, light: 0xf4a8c8, dark: 0x762648 },
+    { name: 'Charcoal', primary: 0x45464a, light: 0xc5c9cd, dark: 0x202126 },
+    { name: 'Rust', primary: 0xb34d29, light: 0xf3b18c, dark: 0x612817 },
+    { name: 'Amber', primary: 0xc69236, light: 0xf6d78d, dark: 0x70501c },
+    { name: 'Chestnut', primary: 0x86513a, light: 0xd9af93, dark: 0x462719 },
+    { name: 'Umber', primary: 0x93815b, light: 0xd9cba7, dark: 0x51452e },
+    { name: 'Dark brown', primary: 0x59433a, light: 0xbea496, dark: 0x2e211c },
   ]);
 
   const REWARDS = Object.freeze({
@@ -274,6 +274,12 @@
         teamId: text(event && event.teamId, 40) || null,
         amount: Math.floor(clamp(event && event.amount, 0, 9999)),
         secondary: Math.floor(clamp(event && event.secondary, 0, 9999)),
+        ...(event?.key === 'raid-result' ? {
+          attackerId: text(event.attackerId, 40) || null,
+          defenderId: text(event.defenderId, 40) || null,
+          success: !!event.success,
+          stolen: Math.floor(clamp(event.stolen, 0, 9999)),
+        } : {}),
       })) : [],
     };
   }

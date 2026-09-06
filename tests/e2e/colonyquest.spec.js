@@ -55,6 +55,88 @@ test('growing colonies draw every soldier, retain every room, and scroll to a ne
   expect(errors).toEqual([]);
 });
 
+test('all upgrade cards are available and raids visibly travel, return and recover once', async ({ page }, testInfo) => {
+  test.setTimeout(60_000);
+  const colonies = [colonyCore.createTeam({ name: 'Oak Colony', colorIndex: 0 }, 0), colonyCore.createTeam({ name: 'Seed Colony', colorIndex: 1 }, 1)];
+  const setup = { teamCount: 2, rounds: 12, matchType: 'rounds', durationMinutes: 15, sound: false, teams: colonies };
+  let saved = colonyCore.normalizeSession({ phase: 'reward', introSeen: true, teams: colonies, currentTeamIndex: 0, turnIndex: 0 });
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.route(/\/api\/game\/cq-raid\/colonyquest(?:\/session)?$/, async route => {
+    if (route.request().method() === 'PUT') {
+      saved = colonyCore.normalizeSession(route.request().postDataJSON().session);
+      return route.fulfill({ json: { ok: true } });
+    }
+    return route.fulfill({ json: { game: { id: 'cq-raid', lessonTitle: 'Habitats', questions, colonyquest: setup }, session: saved } });
+  });
+  await page.goto('/colonyquest/cq-raid');
+  await page.locator('#resumeBtn').click();
+  await expect(page.locator('[data-reward]')).toHaveCount(7);
+  for (const key of Object.keys(colonyCore.REWARDS)) await expect(page.locator(`[data-reward="${key}"]`)).toBeEnabled();
+  await expect(page.locator('#worldViewport')).toHaveAttribute('aria-description', /Charcoal ants.*Rust ants/);
+  await page.screenshot({ path: `/tmp/colony-cards-${testInfo.project.name}.png` });
+  for (const card of await page.locator('[data-reward]').all()) {
+    const inside = await card.evaluate(el => {
+      const bounds = el.getBoundingClientRect(), panel = el.closest('.dialog').getBoundingClientRect();
+      return bounds.top >= panel.top && bounds.bottom <= panel.bottom;
+    });
+    expect(inside, 'All upgrade cards fit in the choice panel').toBe(true);
+  }
+  await page.locator('[data-reward="raid"]').click();
+  await page.locator('#targetBack').click();
+  await expect(page.locator('[data-reward]')).toHaveCount(7);
+  await page.locator('[data-reward="raid"]').click();
+  await page.locator('[data-target="team-2"]').click();
+  const world = page.locator('#worldViewport');
+  await expect(world).toHaveAttribute('data-raid-phase', 'outbound');
+  const departure = await page.locator('#gameMount canvas').screenshot();
+  await expect(world).toHaveAttribute('data-raid-phase', 'at-nest');
+  await page.screenshot({ path: `/tmp/colony-raid-${testInfo.project.name}.png` });
+  const arrival = await page.locator('#gameMount canvas').screenshot();
+  expect(Buffer.compare(departure, arrival)).not.toBe(0);
+  await expect(world).toHaveAttribute('data-raid-phase', 'returning');
+  await expect(page.locator('#worldStoryTitle')).toContainText('returns home', { timeout: 15000 });
+  expect(saved.teams[0].food).toBe(16);
+  expect(saved.teams[1].food).toBe(0);
+  expect(saved.events.filter(event => event.key === 'raid-result')).toHaveLength(1);
+  await page.reload();
+  await page.locator('#resumeBtn').click();
+  await expect(page.locator('#worldStoryEffect')).toHaveText('+8 food for Oak Colony');
+  expect(saved.teams[0].food).toBe(16);
+  await page.locator('#worldStoryContinue').click();
+  await expect(page.locator('#questionOverlay')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('a defended raid can be paused without duplicate rewards', async ({ page }) => {
+  const colonies = [colonyCore.createTeam({ name: 'Oak Colony', colorIndex: 0 }, 0), colonyCore.createTeam({ name: 'Seed Colony', colorIndex: 1 }, 1)];
+  Object.assign(colonies[1], { defense: 4, soldiers: 10, population: 12 });
+  let saved = colonyCore.normalizeSession({ phase: 'reward', introSeen: true, teams: colonies });
+  const setup = { teamCount: 2, rounds: 12, matchType: 'rounds', durationMinutes: 15, sound: false, teams: colonies };
+  await page.route(/\/api\/game\/cq-defense\/colonyquest(?:\/session)?$/, async route => {
+    if (route.request().method() === 'PUT') {
+      saved = colonyCore.normalizeSession(route.request().postDataJSON().session);
+      return route.fulfill({ json: { ok: true } });
+    }
+    return route.fulfill({ json: { game: { id: 'cq-defense', lessonTitle: 'Habitats', questions, colonyquest: setup }, session: saved } });
+  });
+  await page.goto('/colonyquest/cq-defense');
+  await page.locator('#resumeBtn').click();
+  await page.locator('[data-reward="raid"]').click();
+  await page.locator('[data-target="team-2"]').click();
+  await expect(page.locator('#worldViewport')).toHaveAttribute('data-raid-phase', 'outbound');
+  await page.locator('#pauseBtn').click();
+  await expect(page.locator('#eventOverlay')).toBeVisible();
+  await expect(page.locator('#worldViewport')).not.toHaveAttribute('data-raid-phase');
+  await page.locator('#pauseBtn').click();
+  await expect(page.locator('#worldStoryTitle')).toHaveText('Seed Colony holds the line');
+  expect(saved.teams[1].food).toBe(13);
+  expect(saved.teams[0].food).toBe(8);
+  expect(saved.events.filter(event => event.key === 'raid-result')).toHaveLength(1);
+  await page.locator('#worldStoryContinue').click();
+  await expect(page.locator('#questionOverlay')).toBeVisible();
+});
+
 test('LessonScope creates ColonyQuest as a teacher-owned whole-class game', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'windows-100', 'The server creation contract only needs one browser.');
   await signInDisposableTeacher(page, '-colonyquest-create');

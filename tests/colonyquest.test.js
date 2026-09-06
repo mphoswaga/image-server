@@ -175,6 +175,18 @@ test('knowledge raids reward success or defense but never eliminate a colony', (
   assert.ok(attacker.population >= 1);
 });
 
+test('raid results survive recovery without resolving the raid again', () => {
+  const all = teams(2);
+  const result = core.resolveRaid(all[0], all[1], all);
+  const saved = core.normalizeSession({ phase: 'event', eventAction: 'next-turn', teams: all, events: [{ key: 'raid-result', attackerId: all[0].id, defenderId: all[1].id, ...result }] });
+  const restored = core.normalizeSession(saved);
+  assert.deepEqual(restored.teams, saved.teams);
+  assert.equal(restored.events[0].attackerId, all[0].id);
+  assert.equal(restored.events[0].defenderId, all[1].id);
+  assert.equal(restored.events[0].success, result.success);
+  assert.equal(restored.events[0].stolen, result.stolen);
+});
+
 test('world events stay bounded and favor defenses or trailing colonies appropriately', () => {
   const all = teams(3);
   all[0].food = 300;
