@@ -3,6 +3,15 @@
   const GAME_ID = location.pathname.split('/').filter(Boolean).pop();
   let meta, socket, state, scene, rendererStarting = false, me, reconnects = 0, seq = 0, ticket = '', reconnectTimer, renderedQuestionId = null, answerTimer = null;
   const keys = new Set(); let touch = { x: 0, y: 0 }, entities = new Map(), foods = new Map(), lastEvent = null, qTimer;
+  let lastStateAt = 0, serverOffset = 0, connecting = false, displaced = false;
+  const serverNow = () => Date.now() + serverOffset;
+  const reportedEffects = new Set();
+  function optionalEffect(name, action) {
+    try { return action(); }
+    catch (error) {
+      if (!reportedEffects.has(name)) { reportedEffects.add(name); console.warn(`FishQuest ${name} unavailable`, error); }
+    }
+  }
   const AUDIO_PREF_KEY = 'ls-fishquest-audio-v1';
   let audioSettings = { sound: true, music: true };
   try { audioSettings = { ...audioSettings, ...JSON.parse(localStorage.getItem(AUDIO_PREF_KEY) || '{}') }; } catch {}
@@ -48,7 +57,15 @@
     if (id !== 'arena') leaveImmersive();
     document.querySelectorAll('.screen').forEach(el => el.classList.toggle('show', el.id === id));
   }
-  async function json(url, options) { const r = await fetch(url, options); const d = await r.json().catch(() => ({})); if (!r.ok) { const e = Error(d.error || 'Please try again.'); e.status = r.status; throw e; } return d; }
+  async function json(url, options) {
+    const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 10000);
+    try {
+      const r = await fetch(url, { ...options, signal: controller.signal });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { const e = Error(d.error || 'Please try again.'); e.status = r.status; throw e; }
+      return d;
+    } finally { clearTimeout(timeout); }
+  }
   function saveAudioSettings() { try { localStorage.setItem(AUDIO_PREF_KEY, JSON.stringify(audioSettings)); } catch {} }
   function ensureAudio() {
     try {
@@ -77,7 +94,8 @@
     if (music) { musicNodes.add(oscillator); oscillator.addEventListener('ended', () => musicNodes.delete(oscillator), { once: true }); }
     oscillator.start(begins); oscillator.stop(begins + duration + .03);
   }
-  function playCue(kind) {
+  function playCue(kind) { optionalEffect('sound', () => playCueAudio(kind)); }
+  function playCueAudio(kind) {
     if (!audioSettings.sound || !audioUnlocked) return;
     const cues = {
       plankton: [[560, 0, .08, .024, 'sine'], [720, .05, .09, .02, 'sine']],
@@ -120,7 +138,8 @@
     element.classList.remove('stat-pop'); void element.offsetWidth; element.classList.add('stat-pop');
     setTimeout(() => element.classList.remove('stat-pop'), 420);
   }
-  function growthRipple(big = false) {
+  function growthRipple(big = false) { optionalEffect('growth effect', () => drawGrowthRipple(big)); }
+  function drawGrowthRipple(big) {
     if (reducedMotion || !scene || !me) return;
     const fish = entities.get(me.id); if (!fish) return;
     const ring = scene.add.circle(fish.sprite.x, fish.sprite.y, big ? 44 : 30, big ? 0xffd166 : 0x52e5db, 0).setStrokeStyle(big ? 5 : 3, big ? 0xffd166 : 0x52e5db, .95).setDepth(20);
@@ -143,21 +162,51 @@
     } catch (err) { $('joinError').textContent = err.message; } finally { button.disabled = false; }
   };
   async function getTicket() {
+    if (connecting || displaced) return;
+    connecting = true;
     try { ticket = (await json(`/api/game/${GAME_ID}/fishquest/ticket`, { method: 'POST' })).token; connect(); }
-    catch (err) { if (err.status === 401 || err.status === 403) { show('join'); $('joinError').textContent = err.message; } else wait(err.message); }
+    catch (err) {
+      if (err.status === 401 || err.status === 403) { show('join'); $('joinError').textContent = err.message; }
+      else if (err.status === 409 || err.status === 404) wait(err.message);
+      else scheduleReconnect();
+    } finally { connecting = false; }
+  }
+  function scheduleReconnect() {
+    clearTimeout(reconnectTimer);
+    if (displaced || (state && state.phase === 'ended' && state.resultsSaved)) return;
+    $('connection').textContent = navigator.onLine ? 'Reconnecting... your progress is safe' : 'Offline. Reconnecting when the network returns.';
+    if (!navigator.onLine) return;
+    reconnectTimer = setTimeout(() => state && state.phase === 'ended' ? connect() : getTicket(), Math.min(15000, 500 * 2 ** Math.min(reconnects++, 5)) + Math.random() * 500);
   }
   function connect() {
-    clearTimeout(reconnectTimer); show('arena'); $('connection').textContent = 'Connecting to the ocean...';
-    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'; socket = new WebSocket(`${protocol}//${location.host}/ws/fishquest`);
-    socket.onopen = () => { reconnects = 0; socket.send(JSON.stringify({ type: 'auth', token: ticket })); $('connection').textContent = 'Live with your class'; };
-    socket.onmessage = event => { const m = JSON.parse(event.data); if (m.type === 'state') apply(m.state); if (m.type === 'answer_ack') answerAck(m); if (m.type === 'error') toast(m.error, false); };
-    socket.onclose = event => {
-      if (state && state.phase === 'ended') return;
+    clearTimeout(reconnectTimer); show(state && state.phase === 'ended' ? 'ended' : 'arena'); $('connection').textContent = 'Connecting to the ocean...';
+    if (socket) { socket.onclose = null; socket.close(); }
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const current = socket = new WebSocket(`${protocol}//${location.host}/ws/fishquest`);
+    lastStateAt = Date.now();
+    current.onopen = () => { if (socket === current) current.send(JSON.stringify({ type: 'auth', token: ticket })); };
+    current.onerror = () => { if (socket === current) current.close(); };
+    current.onmessage = event => {
+      if (socket !== current) return;
+      let m; try { m = JSON.parse(event.data); } catch { return; }
+      if (!m || typeof m !== 'object') return;
+      if (m.type === 'state' && m.state && Array.isArray(m.state.players)) {
+        lastStateAt = Date.now(); reconnects = 0;
+        serverOffset = Number.isFinite(m.state.now) ? m.state.now - Date.now() : 0;
+        apply(m.state);
+      }
+      if (m.type === 'answer_ack') answerAck(m);
+      if (m.type === 'error') toast(m.error, false);
+    };
+    current.onclose = event => {
+      if (socket !== current) return;
+      if (state && state.phase === 'ended' && state.resultsSaved) return;
       stopMusic();
       $('connection').textContent = 'Reconnecting... your progress is safe';
       unlockAnswers();
+      if (event.code === 4002) { displaced = true; wait('This game is open on another device. Close this tab and continue there.'); return; }
       if (event.code === 4003) { wait('Your room changed. Join again to continue.'); return; }
-      reconnectTimer = setTimeout(() => getTicket(), Math.min(8000, 500 * 2 ** reconnects++));
+      scheduleReconnect();
     };
   }
   function apply(next) {
@@ -172,7 +221,7 @@
       if (!finishSoundPlayed && previousPhase && previousPhase !== 'ended') { finishSoundPlayed = true; playCue('finish'); }
       return finish();
     }
-    renderState(); renderQuestion();
+    renderQuestion(); optionalEffect('scene update', renderState);
     const freshEvent = state.event && state.event.id !== lastEvent ? state.event : null;
     const swallowed = freshEvent && freshEvent.outcome === 'correct' && freshEvent.attacker === state.me;
     if (previousMe && previousMe.id === me.id && me.score > previousMe.score && !swallowed) {
@@ -407,10 +456,11 @@
     renderedQuestionId = q.id; clearInterval(qTimer);
     $('prompt').textContent = q.prompt; $('options').innerHTML = '';
     q.options.forEach((option, choice) => { const b = document.createElement('button'); b.className='option'; b.textContent=option; b.onclick=()=>sendAnswer(q.id,choice); $('options').appendChild(b); });
-    const update=()=>{ $('qtime').textContent=`${Math.max(0,Math.ceil((q.expiresAt-Date.now())/1000))} seconds left`; }; update();qTimer=setInterval(update,250);
+    const update=()=>{ $('qtime').textContent=state.phase==='paused'?'Paused':`${Math.max(0,Math.ceil(((state.question || q).expiresAt-serverNow())/1000))} seconds left`; }; update();qTimer=setInterval(update,250);
   }
   function sendAnswer(interactionId,choice) {
     if (!socket || socket.readyState !== WebSocket.OPEN) { toast('Reconnecting. Try that answer again.', false); return; }
+    if (socket.bufferedAmount > 16384) { toast('Connection is slow. Please try that answer again.', false); return; }
     document.querySelectorAll('.option').forEach(x=>x.disabled=true);
     socket.send(JSON.stringify({ type:'answer', interactionId, choice }));
     clearTimeout(answerTimer); answerTimer=setTimeout(()=>{ if(state&&state.question&&state.question.id===interactionId){unlockAnswers();toast('The answer did not reach the ocean. Please tap it again.',false);}},2500);
@@ -424,6 +474,9 @@
   function unlockAnswers(){clearTimeout(answerTimer);answerTimer=null;document.querySelectorAll('.option').forEach(x=>x.disabled=false)}
   function finish() {
     stopMusic();
+    clearInterval(qTimer); unlockAnswers();
+    $('resultSaveStatus').textContent = state.resultsSaved ? 'Your learning results have been saved.' : 'Saving your learning results. Please keep this page open.';
+    if (state.resultsSaved && socket && socket.readyState === WebSocket.OPEN) socket.close();
     show('ended'); const order=[...state.players].sort((a,b)=>b.score-a.score), place=order.findIndex(p=>p.id===state.me)+1;
     $('rank').textContent = place ? `You finished number ${place} of ${order.length}` : 'Adventure complete'; $('finalScore').textContent = `${me.score} points`;
     const p=state.personal||{}; $('learning').textContent = p.answered ? `You answered ${p.correct} of ${p.answered} questions correctly and explored ${p.coverage} different questions.` : 'You collected plankton and practised navigating the ocean.';
@@ -446,11 +499,19 @@
   addEventListener('pointerdown', () => unlockAudio(), { once: true });
   addEventListener('keydown', () => unlockAudio(), { once: true });
   document.addEventListener('visibilitychange', syncMusic);
+  const resetInput = () => { keys.clear(); touch = { x: 0, y: 0 }; $('touchDot').style.transform = ''; };
+  addEventListener('blur', resetInput);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) resetInput(); });
+  addEventListener('online', () => { if (!socket || socket.readyState !== WebSocket.OPEN) scheduleReconnect(); });
+  setInterval(() => {
+    if (!socket || displaced || document.hidden || (state && state.phase === 'ended' && state.resultsSaved)) return;
+    if (Date.now() - lastStateAt > 12000 && socket.readyState < WebSocket.CLOSING) { socket.close(); scheduleReconnect(); }
+  }, 2000);
   addEventListener('keydown', e => { if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','a','s','d'].includes(e.key)) { keys.add(e.key.toLowerCase()); e.preventDefault(); } });
   addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
   const pad=$('touch'), dot=$('touchDot'); function moveTouch(e){const r=pad.getBoundingClientRect(),x=e.clientX-(r.left+r.width/2),y=e.clientY-(r.top+r.height/2),l=Math.max(1,Math.hypot(x,y)),m=Math.min(r.width*.32,l);touch={x:x/l,y:y/l};dot.style.transform=`translate(${touch.x*m}px,${touch.y*m}px)`;}
   pad.onpointerdown=e=>{pad.setPointerCapture(e.pointerId);moveTouch(e)};pad.onpointermove=e=>{if(pad.hasPointerCapture(e.pointerId))moveTouch(e)};pad.onpointerup=pad.onpointercancel=()=>{touch={x:0,y:0};dot.style.transform=''};
-  setInterval(()=>{if(!socket||socket.readyState!==1||!state||state.phase!=='running'||state.question)return;let x=(keys.has('arrowright')||keys.has('d')?1:0)-(keys.has('arrowleft')||keys.has('a')?1:0),y=(keys.has('arrowdown')||keys.has('s')?1:0)-(keys.has('arrowup')||keys.has('w')?1:0);if(!x&&!y){x=touch.x;y=touch.y}socket.send(JSON.stringify({type:'input',seq:seq++,x,y}));},50);
-  setInterval(()=>{if(!state)return;const left=state.endsAt?Math.max(0,state.endsAt-(state.phase==='paused'?state.pausedAt:Date.now())):0;$('time').textContent=state.phase==='lobby'?'Lobby':state.phase==='paused'?'Paused':`${Math.floor(left/60000)}:${String(Math.floor(left/1000)%60).padStart(2,'0')}`;},250);
+  setInterval(()=>{if(!socket||socket.readyState!==1||socket.bufferedAmount>16384||document.hidden||!state||state.phase!=='running'||state.question)return;let x=(keys.has('arrowright')||keys.has('d')?1:0)-(keys.has('arrowleft')||keys.has('a')?1:0),y=(keys.has('arrowdown')||keys.has('s')?1:0)-(keys.has('arrowup')||keys.has('w')?1:0);if(!x&&!y){x=touch.x;y=touch.y}socket.send(JSON.stringify({type:'input',seq:seq++,x,y}));},100);
+  setInterval(()=>{if(!state)return;const left=state.endsAt?Math.max(0,state.endsAt-(state.phase==='paused'?state.pausedAt:serverNow())):0;$('time').textContent=state.phase==='lobby'?'Lobby':state.phase==='paused'?'Paused':`${Math.floor(left/60000)}:${String(Math.floor(left/1000)%60).padStart(2,'0')}`;},250);
   updateAudioControls(); load();
 })();

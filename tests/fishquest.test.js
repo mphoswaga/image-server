@@ -16,6 +16,17 @@ function fixture() {
   return { match,a,b,c,game,advance:n=>now+=n,saves:()=>saves };
 }
 
+test('shared broadcast work preserves private questions and personal results', () => {
+  const f=fixture();f.a.mass=200;f.b.mass=100;f.a.x=f.b.x=900;f.a.y=f.b.y=700;
+  f.match.claim(f.a,f.b);
+  const shared=f.match.snapshot(null);
+  const a=f.match.snapshot(f.a.id,false,shared),b=f.match.snapshot(f.b.id,false,shared);
+  assert.deepEqual(a,f.match.snapshot(f.a.id));
+  assert.deepEqual(b,f.match.snapshot(f.b.id));
+  assert.equal(a.players,b.players);assert.equal(a.food,b.food);
+  assert.ok(a.question);assert.equal(b.question,undefined);assert.equal(shared.question,undefined);
+});
+
 test('server owns movement and clamps impossible input', () => {
   const f=fixture(),x=f.a.x;
   f.match.input(f.a.id,{seq:1,x:999,y:0}); f.advance(100);f.match.tick();

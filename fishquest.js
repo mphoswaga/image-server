@@ -159,12 +159,13 @@ class FishMatch {
     for(const a of this.state.players)for(const b of this.state.players)if(this.eligible(a,b))this.claim(a,b);
     if(t-this.lastPersist>=3000)this.save();
   }
-  snapshot(id,teacher=false){
+  snapshot(id,teacher=false,shared=null){
     const t=this.now(),me=this.player(id);
-    const players=this.state.players.map(p=>({id:p.id,name:p.name,variant:p.variant,npc:!!p.npc,x:Math.round(p.x),y:Math.round(p.y),mass:Math.round(p.mass),score:p.score,connected:p.connected,
+    const players=shared ? shared.players : this.state.players.map(p=>({id:p.id,name:p.name,variant:p.variant,npc:!!p.npc,x:Math.round(p.x),y:Math.round(p.y),mass:Math.round(p.mass),score:p.score,connected:p.connected,
       protected:p.protectedUntil>t,respawning:!!p.respawnAt,locked:!!p.lock}));
     const result={matchId:this.state.id,phase:this.state.phase,solo:!!this.state.solo,endsAt:this.state.endsAt,pausedAt:this.state.pausedAt,now:t,players,world:{width:CONFIG.width,height:CONFIG.height},eatRatio:CONFIG.eatRatio,
-      food:this.state.food.filter(f=>f.readyAt<=t).map(f=>[f.id,Math.round(f.x),Math.round(f.y)])};
+      food:shared ? shared.food : this.state.food.filter(f=>f.readyAt<=t).map(f=>[f.id,Math.round(f.x),Math.round(f.y)])};
+    if(this.state.phase==='ended')result.resultsSaved=!!this.state.resultsSavedAt;
     if(me){
       const interaction=this.state.interactions.find(i=>i.id===me.lock&&i.attacker===id&&i.status==='pending');
       result.me=id;

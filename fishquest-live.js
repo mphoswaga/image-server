@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const { WebSocketServer } = require('ws');
 const { DATA_DIR, writeJsonAtomic } = require('./storage');
 const { FishMatch } = require('./fishquest');
+const { send, decode } = require('./fishquest-transport');
 
 // Match simulation is intentionally process-local for the first release. Run
 // one LessonScope web process; horizontal scaling requires a shared realtime
@@ -81,15 +82,17 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
       });
     }
     match.state.resultsSavedAt = new Date().toISOString();
-    match.save();
+    try { match.save(); }
+    catch (err) { delete match.state.resultsSavedAt; throw err; }
   }
   function broadcast(matchKey) {
     const match = matches.get(matchKey) || getMatch(matchKey);
     if (!match) return;
     const group = clients.get(matchKey);
-    if (!group) return;
-    for (const ws of group) if (ws.readyState === ws.OPEN && ws.playerId) {
-      try { ws.send(JSON.stringify({ type: 'state', state: match.snapshot(ws.playerId) })); }
+    if (!group || !group.size) return;
+    const shared = match.snapshot(null);
+    for (const ws of group) if (ws.readyState === ws.OPEN && ws.playerId && !ws.replaced) {
+      try { send(ws, { type: 'state', state: match.snapshot(ws.playerId, false, shared) }); }
       catch { ws.terminate(); }
     }
   }
@@ -164,7 +167,7 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
   });
 
   function attach(server) {
-    wss = new WebSocketServer({ noServer: true });
+    wss = new WebSocketServer({ noServer: true, maxPayload: 4096, perMessageDeflate: false });
     server.on('upgrade', (req, socket, head) => {
       const url = new URL(req.url, 'http://localhost');
       if (url.pathname !== '/ws/fishquest') { socket.destroy(); return; }
@@ -176,10 +179,12 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
     });
     wss.on('connection', ws => {
       ws.isAlive = true;
+      ws.on('error', () => ws.terminate());
       ws.on('pong', () => { ws.isAlive = true; });
       const authTimer = setTimeout(() => ws.close(4001, 'Authentication required'), 5000);
       ws.on('message', raw => {
-        let message; try { message = JSON.parse(String(raw)); } catch { return; }
+        const message = decode(ws, raw);
+        if (!message || ws.replaced) return;
         if (!ws.playerId) {
           if (message.type !== 'auth') return;
           try {
@@ -196,37 +201,40 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
             clearTimeout(authTimer); ws.gameId = game.id; ws.matchKey = matchKey; ws.playerId = p.id;
             if (!clients.has(matchKey)) clients.set(matchKey, new Set());
             clients.get(matchKey).add(ws);
-            for (const old of clients.get(matchKey)) if (old !== ws && old.playerId === p.id) old.close(4002, 'Opened on another device');
-            ws.send(JSON.stringify({ type: 'state', state: match.snapshot(p.id) }));
+            for (const old of clients.get(matchKey)) if (old !== ws && old.playerId === p.id) { old.replaced = true; old.close(4002, 'Opened on another device'); }
+            send(ws, { type: 'state', state: match.snapshot(p.id) });
           } catch { ws.close(4003, 'Join the room again'); }
           return;
         }
-        const match = getMatch(ws.matchKey, ws.gameId); if (!match) return;
         try {
+          const match = getMatch(ws.matchKey, ws.gameId); if (!match) return;
           if (message.type === 'input') match.input(ws.playerId, message);
           if (message.type === 'answer') {
             match.answer(ws.playerId, message);
-            ws.send(JSON.stringify({ type: 'answer_ack', interactionId: message.interactionId, accepted: true }));
+            send(ws, { type: 'answer_ack', interactionId: message.interactionId, accepted: true });
           }
         } catch (err) {
-          if (message.type === 'answer') ws.send(JSON.stringify({ type: 'answer_ack', interactionId: message.interactionId, accepted: false, error: err.message }));
-          else ws.send(JSON.stringify({ type: 'error', error: err.message }));
+          if (message.type === 'answer') send(ws, { type: 'answer_ack', interactionId: message.interactionId, accepted: false, error: 'Please try your answer again.' });
+          else send(ws, { type: 'error', error: 'Please reconnect to the ocean.' });
         } finally {
-          if (message.type === 'answer') broadcast(ws.matchKey);
+          if (message.type === 'answer') { try { broadcast(ws.matchKey); } catch (err) { console.error('FishQuest broadcast failed:', err.message); } }
         }
       });
       ws.on('close', () => {
         clearTimeout(authTimer);
         if (!ws.gameId) return;
         const group = clients.get(ws.matchKey); if (group) group.delete(ws);
-        const match = getMatch(ws.matchKey, ws.gameId);
-        if (match && ![...(group || [])].some(other => other.playerId === ws.playerId)) match.disconnect(ws.playerId);
+        try {
+          const match = getMatch(ws.matchKey, ws.gameId);
+          if (match && ![...(group || [])].some(other => other.playerId === ws.playerId && !other.replaced)) match.disconnect(ws.playerId);
+        } catch (err) { console.error('FishQuest disconnect save failed:', err.message); }
+        if (group && !group.size) clients.delete(ws.matchKey);
       });
     });
     const heartbeat = setInterval(() => {
       for (const ws of wss.clients) {
         if (ws.isAlive === false) { ws.terminate(); continue; }
-        ws.isAlive = false; ws.ping();
+        ws.isAlive = false; try { ws.ping(); } catch { ws.terminate(); }
       }
     }, 15000);
     heartbeat.unref();
@@ -238,13 +246,18 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
         const before = match.state.phase;
         try { match.tick(); }
         catch (err) { match.state.phase = 'ended'; match.state.reason = 'storage_error'; match.state.endedAt = Date.now(); console.error('FishQuest match stopped safely:', err.message); }
-        if (before !== 'ended' && match.state.phase === 'ended') {
+        if (match.state.phase === 'ended' && !match.state.resultsSavedAt && Date.now() >= (match.retryResultsAt || 0)) {
+          match.retryResultsAt = Date.now() + 5000;
           try { finalize(readyGame(games.getGame(match.state.gameId)), match); } catch (err) { console.error('FishQuest results will retry on next read:', err.message); }
         }
-        if (frame % 2 === 0 || before !== match.state.phase) broadcast(matchKey);
+        try {
+          if ((match.state.phase === 'running' ? frame % 2 === 0 : frame % 20 === 0) || before !== match.state.phase) broadcast(matchKey);
+        } catch (err) { console.error('FishQuest broadcast failed:', err.message); }
+        if (match.state.phase === 'ended' && match.state.resultsSavedAt && !clients.has(matchKey)) matches.delete(matchKey);
       }
     }, 50);
     timer.unref();
+    wss.on('close', () => clearInterval(timer));
     return wss;
   }
   return { attach, getMatch, openMatch, finalize };
