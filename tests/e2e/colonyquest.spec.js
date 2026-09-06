@@ -55,9 +55,39 @@ test('growing colonies draw every soldier, retain every room, and scroll to a ne
   expect(errors).toEqual([]);
 });
 
+test('blocked colony choices explain their requirements and allow worker recovery', async ({ page }, testInfo) => {
+  const colonies = [colonyCore.createTeam({ name: 'Oak Colony' }, 0), colonyCore.createTeam({ name: 'Seed Colony', colorIndex: 1 }, 1)];
+  Object.assign(colonies[0], { workers: 0, population: 1, food: 0 });
+  let saved = colonyCore.normalizeSession({ phase: 'reward', introSeen: true, teams: colonies });
+  const setup = { teamCount: 2, rounds: 12, matchType: 'rounds', durationMinutes: 15, sound: false, teams: colonies };
+  await page.route(/\/api\/game\/cq-rules\/colonyquest(?:\/session)?$/, async route => {
+    if (route.request().method() === 'PUT') {
+      saved = colonyCore.normalizeSession(route.request().postDataJSON().session);
+      return route.fulfill({ json: { ok: true } });
+    }
+    return route.fulfill({ json: { game: { id: 'cq-rules', lessonTitle: 'Habitats', questions, colonyquest: setup }, session: saved } });
+  });
+  await page.goto('/colonyquest/cq-rules');
+  await page.locator('#resumeBtn').click();
+  await expect(page.locator('[data-reward]')).toHaveCount(7);
+  for (const key of ['raid', 'expansion', 'defense', 'food', 'queen', 'soldiers']) await expect(page.locator(`[data-reward="${key}"]`)).toBeDisabled();
+  await expect(page.locator('[data-reward="raid"]')).toContainText('Recruit a soldier');
+  await expect(page.locator('[data-reward="expansion"]')).toContainText('Add a worker');
+  await page.screenshot({ path: `/tmp/colony-rules-${testInfo.project.name}.png` });
+  await page.locator('[data-reward="expansion"]').evaluate(button => { button.disabled = false; button.click(); });
+  expect(saved.events).toHaveLength(0);
+  expect(saved.phase).toBe('reward');
+  await page.locator('[data-reward="workers"]').click();
+  await expect(page.locator('#worldStoryEffect')).toContainText('+1 worker');
+  expect(saved.teams[0].workers).toBe(1);
+  expect(saved.teams[0].food).toBe(0);
+  expect(colonyCore.colonyRooms(saved.teams[0])).toHaveLength(1);
+});
+
 test('all upgrade cards are available and raids visibly travel, return and recover once', async ({ page }, testInfo) => {
   test.setTimeout(60_000);
   const colonies = [colonyCore.createTeam({ name: 'Oak Colony', colorIndex: 0 }, 0), colonyCore.createTeam({ name: 'Seed Colony', colorIndex: 1 }, 1)];
+  Object.assign(colonies[0], { soldiers: 1, population: 3, barracksBuilt: true });
   const setup = { teamCount: 2, rounds: 12, matchType: 'rounds', durationMinutes: 15, sound: false, teams: colonies };
   let saved = colonyCore.normalizeSession({ phase: 'reward', introSeen: true, teams: colonies, currentTeamIndex: 0, turnIndex: 0 });
   const errors = [];
@@ -110,6 +140,7 @@ test('all upgrade cards are available and raids visibly travel, return and recov
 
 test('a defended raid can be paused without duplicate rewards', async ({ page }) => {
   const colonies = [colonyCore.createTeam({ name: 'Oak Colony', colorIndex: 0 }, 0), colonyCore.createTeam({ name: 'Seed Colony', colorIndex: 1 }, 1)];
+  Object.assign(colonies[0], { soldiers: 1, population: 3, barracksBuilt: true });
   Object.assign(colonies[1], { defense: 4, soldiers: 10, population: 12 });
   let saved = colonyCore.normalizeSession({ phase: 'reward', introSeen: true, teams: colonies });
   const setup = { teamCount: 2, rounds: 12, matchType: 'rounds', durationMinutes: 15, sound: false, teams: colonies };
@@ -139,6 +170,7 @@ test('a defended raid can be paused without duplicate rewards', async ({ page })
 
 test('harvest, hatching, raid recovery and the Great Rain ending survive refresh', async ({ page }, testInfo) => {
   const colonies = [colonyCore.createTeam({ name: 'Oak Colony', colorIndex: 0 }, 0), colonyCore.createTeam({ name: 'Seed Colony', colorIndex: 1 }, 1)];
+  Object.assign(colonies[0], { soldiers: 1, population: 3, barracksBuilt: true });
   Object.assign(colonies[1], { eggs: [{ roundsLeft: 1 }], population: 3, queenLevel: 2 });
   let saved = colonyCore.normalizeSession({ phase: 'event', eventAction: 'next-turn', introSeen: true, teams: colonies, currentTeamIndex: 1, turnIndex: 1, events: [{ key: 'raid-result', attackerId: 'team-1', defenderId: 'team-2', turnIndex: 0 }, { key: 'upgrade-queen', teamId: 'team-2', amount: 1 }] });
   const setup = { teamCount: 2, rounds: 12, matchType: 'rounds', durationMinutes: 15, sound: false, teams: colonies };

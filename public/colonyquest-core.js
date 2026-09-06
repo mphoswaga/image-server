@@ -5,7 +5,7 @@
 }(typeof globalThis !== 'undefined' ? globalThis : this, function colonyQuestCoreFactory() {
   'use strict';
 
-  const VERSION = 7;
+  const VERSION = 8;
   const FORTIFICATIONS = Object.freeze([
     { name: 'Earth', wall: 0xb68a57, edge: 0x785437, floor: 0x65513a },
     { name: 'Timber', wall: 0xa7743e, edge: 0xe3b571, floor: 0x65513a },
@@ -155,9 +155,30 @@
     return 1;
   }
 
+  function rewardAvailability(team, reward) {
+    let reason = '';
+    if (!team || !REWARDS[reward]) reason = 'Choose a colony upgrade.';
+    else if (['expansion', 'defense', 'food'].includes(reward) && team.workers < 1) reason = 'Add a worker first.';
+    else if (reward === 'raid' && team.soldiers < 1) reason = 'Recruit a soldier before raiding.';
+    else if (reward === 'soldiers' && !team.barracksBuilt) reason = 'Build a barracks first (your second room upgrade).';
+    else if (['soldiers', 'queen'].includes(reward) && team.food < 1) reason = 'Gather food for the growing colony first.';
+    else if (reward === 'queen' && (team.eggs || []).length >= 3) reason = 'The nursery has three eggs. Wait for one to hatch.';
+    else if (reward === 'defense' && team.defense >= FORTIFICATIONS.length - 1) reason = 'Maximum fortification reached.';
+    return { allowed: !reason, reason };
+  }
+
+  function raidAvailability(attacker, defender, session) {
+    const recruitment = rewardAvailability(attacker, 'raid');
+    if (!recruitment.allowed) return recruitment;
+    if (!defender || attacker.id === defender.id) return { allowed: false, reason: 'Choose another colony.' };
+    if (defender.food < 1) return { allowed: false, reason: 'This colony has no food to raid.' };
+    const cooldown = session ? raidCooldown(session, attacker.id, defender.id) : 0;
+    if (cooldown) return { allowed: false, reason: `Recovering: ${cooldown} rounds left` };
+    return { allowed: true, reason: '' };
+  }
+
   function applyReward(team, reward, teams) {
-    if (!team || !REWARDS[reward] || reward === 'raid') return team;
-    if (reward === 'defense' && team.defense >= FORTIFICATIONS.length - 1) return team;
+    if (!rewardAvailability(team, reward).allowed || reward === 'raid') return team;
     if (reward === 'workers') {
       team.workers += 1;
       team.population += 1;
@@ -180,6 +201,7 @@
   }
 
   function expandColony(team) {
+    if (team.workers < 1) return;
     if (!team.pantryBuilt) team.pantryBuilt = true;
     else if (!team.barracksBuilt) team.barracksBuilt = true;
     else team.expansionRooms = (team.expansionRooms ?? Math.max(0, team.territory - 1)) + 1;
@@ -187,6 +209,8 @@
   }
 
   function raidForecast(attacker, defender) {
+    const eligibility = raidAvailability(attacker, defender);
+    if (!eligibility.allowed) return { success: false, attack: 0, guard: 0, reason: eligibility.reason };
     const attack = attacker.soldiers * 4 + attacker.territory * 2 + attacker.correct * 3;
     const guard = defender.defense * 5 + defender.soldiers * 3 + defender.nestLevel * 2 + colonyRooms(defender).filter(room => room.kind === 'guard').length * 4;
     const knowledgeEdge = 12;
@@ -200,7 +224,9 @@
     return Math.max(0, 3 - Math.floor((session.turnIndex - last.turnIndex) / Math.max(1, session.teams.length)));
   }
 
-  function resolveRaid(attacker, defender, teams) {
+  function resolveRaid(attacker, defender, teams, session) {
+    const eligibility = raidAvailability(attacker, defender, session);
+    if (!eligibility.allowed) return { success: false, stolen: 0, blocked: true, reason: eligibility.reason };
     const { success } = raidForecast(attacker, defender);
     if (success) {
       const stolen = Math.min(defender.food, Math.max(6, Math.round(12 * comebackMultiplier(attacker, teams))));
@@ -238,7 +264,7 @@
 
   function roundEconomy(team) {
     const gardens = colonyRooms(team).filter(room => room.kind === 'expansion' && room.expansion % 4 === 1).length;
-    const gathered = team.workers * 2 + gardens * 2;
+    const gathered = team.workers > 0 ? team.workers * 2 + gardens * 2 : 0;
     const eaten = Math.min(team.food + gathered, Math.max(1, Math.ceil((1 + team.workers + team.soldiers) / 3)));
     return { gathered, eaten, gardens };
   }
@@ -277,7 +303,7 @@
       const team = teams[index];
       if (event.key === 'fallen-fruit') team.food += strengths[index] === weakest ? 20 : 12;
       if (event.key === 'heavy-rain') team.food = Math.max(0, team.food - Math.min(rainOutcome(team).exposedFood, Math.max(0, 9 - team.defense * 2)));
-      if (event.key === 'food-trail') team.food += 7 + Math.min(12, team.workers);
+      if (event.key === 'food-trail' && team.workers > 0) team.food += 7 + Math.min(12, team.workers);
       if (event.key === 'predator') team.food = Math.max(0, team.food - Math.max(0, 12 - team.defense * 3 - team.soldiers));
       if (event.key === 'new-territory' && strengths[index] <= weakest * 1.08) expandColony(team);
     }
@@ -400,6 +426,8 @@
     normalizeConfig,
     normalizeSession,
     applyReward,
+    rewardAvailability,
+    raidAvailability,
     roomBenefit,
     roundEconomy,
     rainPreparation,

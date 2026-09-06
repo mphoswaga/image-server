@@ -41,6 +41,7 @@ test('every strategic reward visibly changes the relevant colony state', () => {
   const gains = [];
   for (const reward of ['workers', 'food', 'defense', 'queen', 'expansion', 'soldiers']) {
     const all = teams(2);
+    if (reward === 'soldiers') all[0].barracksBuilt = true;
     const before = JSON.stringify(all[0]);
     const beforeStrength = core.colonyStrength(all[0]);
     core.applyReward(all[0], reward, all);
@@ -98,6 +99,7 @@ test('fortifications reach stone and steel and do not sell an invisible higher t
 test('recruiting one ant never adds other rewards, including after save and at old room thresholds', () => {
   for (const role of ['workers', 'soldiers']) {
     const all = teams(2);
+    if (role === 'soldiers') all[0].barracksBuilt = true;
     all[1].food = 999;
     let colony = all[0];
     for (let index = 0; index < 20; index++) {
@@ -106,9 +108,9 @@ test('recruiting one ant never adds other rewards, including after save and at o
       assert.equal(colony[role], before[role] + 1);
       assert.equal(colony.population, before.population + 1);
       assert.equal(colony.food, before.food);
-      assert.equal(core.colonyRooms(colony).length, 1);
+      assert.equal(core.colonyRooms(colony).length, role === 'soldiers' ? 2 : 1);
       colony = core.normalizeTeam(colony, 0);
-      assert.equal(core.colonyRooms(colony).length, 1);
+      assert.equal(core.colonyRooms(colony).length, role === 'soldiers' ? 2 : 1);
     }
   }
 });
@@ -176,16 +178,17 @@ test('workers and gardens gather predictable food, with visible meal costs', () 
 test('rain preparations and room protections contribute to the ending without destroying progress', () => {
   const colony = core.createTeam({}, 0);
   const earth = core.rainOutcome(colony);
-  for (const reward of ['food', 'expansion', 'soldiers', 'defense']) core.applyReward(colony, reward, [colony]);
+  for (const reward of ['food', 'expansion', 'expansion', 'soldiers', 'defense']) core.applyReward(colony, reward, [colony]);
   assert.equal(core.rainPreparation(colony).filter(goal => goal.done).length, 4);
   const snapshot = JSON.stringify(colony);
   const outcome = core.rainOutcome(colony);
   assert.ok(outcome.protectedFood > earth.protectedFood);
   assert.equal(outcome.ready, 4);
   assert.equal(JSON.stringify(colony), snapshot);
-  const beforeGuard = core.raidForecast(core.createTeam({}, 1), colony).guard;
-  core.applyReward(colony, 'expansion', [colony]);
-  assert.equal(core.raidForecast(core.createTeam({}, 1), colony).guard, beforeGuard + 4);
+  const raider = { ...core.createTeam({}, 1), soldiers: 1 };
+  const beforeGuard = core.raidForecast(raider, colony).guard;
+  colony.barracksAnnexes = 1;
+  assert.equal(core.raidForecast(raider, colony).guard, beforeGuard + 4);
 });
 
 test('repeat raids give the same target two intervening turns to recover', () => {
@@ -207,6 +210,67 @@ test('harvest recovery and team improvement preserve actual evidence', () => {
   assert.equal(saved.stormSeen, true);
   assert.equal(core.learningImprovement(saved, colony.id), 100);
   assert.equal(core.learningImprovement(saved, 'unknown'), null);
+});
+
+test('natural upgrade requirements are enforced without consuming a blocked choice', () => {
+  const colony = core.createTeam({}, 0);
+  colony.workers = 0;
+  colony.population = 1;
+  colony.food = 0;
+  for (const reward of ['food', 'expansion', 'defense', 'soldiers', 'queen', 'raid']) {
+    assert.equal(core.rewardAvailability(colony, reward).allowed, false, reward);
+    const before = JSON.stringify(colony);
+    core.applyReward(colony, reward, [colony]);
+    assert.equal(JSON.stringify(colony), before, reward);
+  }
+  core.applyReward(colony, 'workers', [colony]);
+  assert.equal(colony.workers, 1);
+  core.applyReward(colony, 'food', [colony]);
+  core.applyReward(colony, 'expansion', [colony]);
+  assert.equal(core.rewardAvailability(colony, 'soldiers').allowed, false);
+  core.applyReward(colony, 'expansion', [colony]);
+  assert.equal(core.rewardAvailability(colony, 'soldiers').allowed, true);
+  core.applyReward(colony, 'soldiers', [colony]);
+  assert.equal(colony.soldiers, 1);
+  for (let i = 0; i < 3; i++) core.applyReward(colony, 'queen', [colony]);
+  const beforeFull = JSON.stringify(colony);
+  core.applyReward(colony, 'queen', [colony]);
+  assert.equal(JSON.stringify(colony), beforeFull);
+  core.applyUpkeep([colony]);
+  core.applyUpkeep([colony]);
+  assert.equal(core.rewardAvailability(colony, 'queen').allowed, true);
+});
+
+test('a raid needs soldiers, a different supplied target, and an expired cooldown', () => {
+  const colonies = teams(2), [attacker, defender] = colonies;
+  const unchanged = () => JSON.stringify(colonies);
+  let before = unchanged();
+  assert.equal(core.resolveRaid(attacker, defender, colonies).blocked, true);
+  assert.equal(unchanged(), before);
+  attacker.soldiers = 1;
+  before = unchanged();
+  assert.equal(core.resolveRaid(attacker, attacker, colonies).blocked, true);
+  assert.equal(unchanged(), before);
+  defender.food = 0;
+  before = unchanged();
+  assert.equal(core.resolveRaid(attacker, defender, colonies).blocked, true);
+  assert.equal(unchanged(), before);
+  defender.food = 5;
+  const session = { teams: colonies, turnIndex: 2, events: [{ key: 'raid-result', attackerId: attacker.id, defenderId: defender.id, turnIndex: 0 }] };
+  before = unchanged();
+  assert.equal(core.resolveRaid(attacker, defender, colonies, session).blocked, true);
+  assert.equal(unchanged(), before);
+  session.turnIndex = 6;
+  assert.equal(core.resolveRaid(attacker, defender, colonies, session).success, true);
+});
+
+test('unattended gardens and discoveries cannot bypass the worker requirement', () => {
+  const colony = { ...core.createTeam({}, 0), workers: 0, population: 1, expansionRooms: 1 };
+  const before = JSON.stringify(colony);
+  assert.equal(core.roundEconomy(colony).gathered, 0);
+  core.applyEvent([colony], 'food-trail');
+  core.applyEvent([colony], 'new-territory');
+  assert.equal(JSON.stringify(colony), before);
 });
 
 test('comeback help is meaningful without erasing the leading colony', () => {
@@ -234,8 +298,9 @@ test('knowledge raids reward success or defense but never eliminate a colony', (
   assert.ok(defender.population >= 1);
   assert.ok(defender.food >= 0);
 
-  attacker.soldiers = 0;
+  attacker.soldiers = 1;
   attacker.correct = 0;
+  defender.food = 8;
   defender.defense = 20;
   const defended = core.resolveRaid(attacker, defender, all);
   assert.equal(defended.success, false);
@@ -245,6 +310,7 @@ test('knowledge raids reward success or defense but never eliminate a colony', (
 
 test('raid results survive recovery without resolving the raid again', () => {
   const all = teams(2);
+  all[0].soldiers = 1;
   const result = core.resolveRaid(all[0], all[1], all);
   const saved = core.normalizeSession({ phase: 'event', eventAction: 'next-turn', teams: all, events: [{ key: 'raid-result', attackerId: all[0].id, defenderId: all[1].id, ...result }] });
   const restored = core.normalizeSession(saved);

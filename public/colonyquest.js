@@ -516,6 +516,8 @@
 
   function previewReward(key) {
     const team = currentTeam();
+    const eligibility = core.rewardAvailability(team, key);
+    if (!eligibility.allowed) return eligibility.reason;
     if (key === 'raid') return 'Visit another colony and bring food home';
     if (key === 'defense' && team.defense >= core.FORTIFICATIONS.length - 1) return 'Maximum fortification reached';
     const clones = session.teams.map(item => ({ ...item, eggs: (item.eggs || []).map(egg => ({ ...egg })), members: (item.members || []).map(member => ({ ...member })) }));
@@ -551,7 +553,7 @@
     $('rewardGrid').innerHTML = rewardChoices().map(key => {
       const reward = core.REWARDS[key];
       const art = key === 'queen' ? ASSETS.queen : ['defense', 'soldiers', 'raid'].includes(key) ? ASSETS.guardian : ASSETS.worker;
-      const unavailable = key === 'defense' && team.defense >= core.FORTIFICATIONS.length - 1;
+      const unavailable = !core.rewardAvailability(team, key).allowed;
       return `<button type="button" class="reward" data-reward="${key}"${unavailable ? ' disabled' : ''}><span class="reward-symbol"><img src="${art}" alt=""></span><strong>${esc(reward.label)}</strong><span>${esc(reward.description)}</span><span class="reward-effect">${esc(previewReward(key))}</span></button>`;
     }).join('');
     setOverlay('rewardOverlay');
@@ -560,14 +562,14 @@
 
   async function chooseReward(key) {
     if (session.phase !== 'reward' || transitionLocked) return;
-    if (!core.REWARDS[key] || key === 'defense' && currentTeam().defense >= core.FORTIFICATIONS.length - 1) return;
+    if (!core.rewardAvailability(currentTeam(), key).allowed) return;
     transitionLocked = true;
     if (key === 'raid') {
       const team = currentTeam();
       $('targetGrid').innerHTML = session.teams.filter(item => item.id !== team.id).map(item => {
-        const cooldown = core.raidCooldown(session, team.id, item.id);
+        const eligibility = core.raidAvailability(team, item, session);
         const forecast = core.raidForecast(team, item);
-        return `<button type="button" data-target="${esc(item.id)}"${cooldown ? ' disabled' : ''}>${esc(item.name)}<small>${esc(core.TEAM_COLORS[item.colorIndex].name)} ants · ${item.food} food · ${item.soldiers} soldiers · ${esc(core.fortification(item).name)} walls</small><small>${cooldown ? `Recovering: ${cooldown} rounds left` : forecast.success ? 'Your party can pass these defenses' : 'Strong defenses: build up your colony first'}</small></button>`;
+        return `<button type="button" data-target="${esc(item.id)}"${!eligibility.allowed ? ' disabled' : ''}>${esc(item.name)}<small>${esc(core.TEAM_COLORS[item.colorIndex].name)} ants · ${item.food} food · ${item.soldiers} soldiers · ${esc(core.fortification(item).name)} walls</small><small>${!eligibility.allowed ? esc(eligibility.reason) : forecast.success ? 'Your party can pass these defenses' : 'Strong defenses: build up your colony first'}</small></button>`;
       }).join('');
       setOverlay('targetOverlay');
       updateWorld();
@@ -597,8 +599,9 @@
     transitionLocked = true;
     const attacker = currentTeam();
     const defender = session.teams.find(team => team.id === targetId);
-    if (!defender || defender.id === attacker.id || core.raidCooldown(session, attacker.id, targetId)) { transitionLocked = false; return; }
-    const result = core.resolveRaid(attacker, defender, session.teams);
+    if (!core.raidAvailability(attacker, defender, session).allowed) { transitionLocked = false; return; }
+    const result = core.resolveRaid(attacker, defender, session.teams, session);
+    if (result.blocked) { transitionLocked = false; return; }
     session.phase = 'event';
     session.eventAction = 'next-turn';
     const event = { key: 'raid-result', attackerId: attacker.id, defenderId: defender.id, ...result, turnIndex: session.turnIndex, at: new Date().toISOString() };
@@ -652,7 +655,7 @@
     const home = colonyViews.get(attacker.id), away = colonyViews.get(defender.id);
     if (!home || !away) return finish();
     showWorldStory({ kicker: `${core.TEAM_COLORS[attacker.colorIndex].name} ants on the move`, title: `${attacker.name} sets out`, text: `Follow the raiding party to ${defender.name}'s nest.`, effect: 'Leaving the queen chamber', art: ASSETS.guardian, continueLabel: 'Skip animation' }, finish);
-    const party = home.ants.filter(ant => ant.getData('role') === (attacker.soldiers ? 'soldier' : 'worker')).slice(0, 6);
+    const party = home.ants.filter(ant => ant.getData('role') === 'soldier').slice(0, 6);
     if (!party.length) return finish();
     // These are visual stand-ins for existing ants, not extra recruits or a second raid result.
     const hidden = [...party];
@@ -1301,7 +1304,9 @@
       const egg = team.eggs?.[0];
       const detail = room.kind === 'food' ? ` · ${team.food} food` : room.kind === 'guard' ? ` · ${Math.min(8, Math.max(0, team.soldiers - guards.indexOf(room) * 8))} soldiers` : room.kind === 'nursery' ? egg ? ` · egg: ${Math.max(1, egg.roundsLeft)} rounds` : ` · level ${team.queenLevel}` : '';
       const tag = chamberTag(room.x, room.y - roomHeight / 2 - 3, room.label + detail, zone.w);
-      tag.setInteractive({ useHandCursor: true }).on('pointerdown', () => toast(core.roomBenefit(room)));
+      tag.setInteractive({ useHandCursor: true }).on('pointerdown', pointer => {
+        if (pointer.event?.target === game.canvas) toast(core.roomBenefit(room));
+      });
       if (room.kind === 'expansion') {
         const flagX = room.x + roomWidth * .42, flagY = room.y - 16;
         graphics.lineStyle(2, 0xe5dcbf, 1); graphics.lineBetween(flagX, flagY, flagX, flagY - 25);
@@ -1314,7 +1319,9 @@
       fontFamily: 'Arial', fontSize: '14px', fontStyle: 'bold', color: '#f1fff5',
       backgroundColor: '#1c4036', padding: { x: 9, y: 6 }, wordWrap: { width: zone.w - 44 },
     }).setDepth(8);
-    title.setInteractive({ useHandCursor: true }).on('pointerdown', () => focusColony(team.id));
+    title.setInteractive({ useHandCursor: true }).on('pointerdown', pointer => {
+      if (pointer.event?.target === game.canvas) focusColony(team.id);
+    });
     const subtitle = scene.add.text(zone.x + 13, zone.y + 33, `${palette.name} ants · ${rooms.length} ${rooms.length === 1 ? 'room' : 'rooms'} · ${material.name}`, {
       fontFamily: 'Arial', fontSize: '11px', color: '#ffffff', backgroundColor: '#263d33', padding: { x: 5, y: 3 },
     }).setDepth(8);
