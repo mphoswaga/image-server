@@ -44,6 +44,7 @@ test('file inventory produces deterministic ownership migration evidence', () =>
 test('known file paths map to their migration domain', () => {
   assert.equal(classify('users/t1/rosters/r1.json'), 'rosters');
   assert.equal(classify('users/t1/planning-sources/p1.json'), 'planning_sources');
+  assert.equal(classify('users/t1/lesson-workspaces/w1.json'), 'lesson_workspaces');
   assert.equal(classify('practice/live-sessions/ABC123.json'), 'live_rooms');
   assert.equal(classify('media/deck/image.png'), 'media');
 });

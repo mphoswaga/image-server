@@ -60,6 +60,7 @@ const prices = require('./credit-prices');
 const lessonAssistant = require('./lesson-assistant');
 const releaseManager = require('./release-manager');
 const planningFramework = require('./planning-framework');
+const lessonWorkspaces = require('./lesson-workspaces');
 const practice = require('./practice');
 const practiceLive = require('./practice-live');
 const { createFishQuestLive } = require('./fishquest-live');
@@ -958,7 +959,8 @@ function loadDecks() {
     const now = Date.now();
     let restored = 0;
     for (const [id, d] of Object.entries(raw)) {
-      if (d && typeof d.createdAt === 'number' && now - d.createdAt <= DECK_TTL) { decks.set(id, d); restored++; }
+      const lastTouched = d && (Number(d.touchedAt) || Number(d.createdAt));
+      if (d && lastTouched && now - lastTouched <= DECK_TTL) { decks.set(id, d); restored++; }
     }
     if (restored) console.log(`Restored ${restored} in-progress deck(s) from disk.`);
   } catch { /* no snapshot yet, or unreadable — start empty, same as before this change */ }
@@ -973,7 +975,7 @@ function persistDecks() {
 function purgeOldDecks() {
   const now = Date.now();
   let purged = false;
-  for (const [id, d] of decks) if (now - d.createdAt > DECK_TTL) { decks.delete(id); purged = true; }
+  for (const [id, d] of decks) if (now - (Number(d.touchedAt) || Number(d.createdAt)) > DECK_TTL) { decks.delete(id); purged = true; }
   for (const [k, v] of planRegens) if (now - v.at > DECK_TTL) planRegens.delete(k);
   if (purged) persistDecks();
 }
@@ -1823,14 +1825,11 @@ app.post('/api/import/lesson-plan', requireAuth, upload.single('file'), requireU
     const groundedPlanText = mergeSourceIntoPlanText(planText, materialText);
     const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives: '', lessonPlanText: groundedPlanText, sourceMaterialText: materialText, sourceImages: materialImages, teachingModelId, skipAssemble: true, presetId: presetId || null });
     const id = crypto.randomUUID();
-    // The deck's own objectives slide, word for word. Storing it here means
-    // every route downstream sees the school's wording instead of nothing.
-    const liftedObjectives = objectivesFromDeck({ slides });
-    const liftedCriteria = criteriaFromDeck({ slides }).split('\n').filter(Boolean);
     decks.set(id, {
+      ownerId: req.userId,
       subject: String(subject).toLowerCase(), topic: String(topic).toLowerCase(),
       grade: grade || 'middle school', tone, focus, band: built.band,
-      slides: built.slides, images: built.images, createdAt: Date.now(),
+      slides: built.slides, images: built.images, createdAt: Date.now(), touchedAt: Date.now(),
       objectives: '', lessonPlanText: groundedPlanText, sourceMaterialText: materialText, sourceMaterialImages: materialImages, teachingModelId, presetId: presetId || null,
     });
     await capture(req, reservation, 'lessonscope.import_plan_to_slides', id);
@@ -1874,11 +1873,17 @@ app.post('/api/import/slides', requireAuth, upload.single('file'), requireUpload
     }));
     const images = slides.map(() => null); // no image fetched on import
     const sourceText = parsed.map(p => [p.title, ...p.bullets].join('\n')).join('\n\n').slice(0, LIMITS.source);
+    // Keep the wording found in the teacher's own slides for every resource
+    // generated later from this restored lesson.
+    const liftedObjectives = objectivesFromDeck({ slides });
+    const liftedCriteria = criteriaFromDeck({ slides }).split('\n').filter(Boolean);
     const id = crypto.randomUUID();
     decks.set(id, {
+      ownerId: req.userId,
       subject: String(subject).toLowerCase(), topic: String(topic).toLowerCase(),
       grade: req.body.grade || 'middle school', tone: req.body.tone || 'clear and engaging',
       focus: '', band: null, slides, images, createdAt: Date.now(),
+      touchedAt: Date.now(),
       objectives: liftedObjectives, lessonPlanText: sourceText, imported: true, presetId: null,
     });
     const filename = `${subject}-${topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
@@ -2926,9 +2931,10 @@ app.post('/api/generate', requireAuth, async (req, res) => {
     const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives, lessonPlanText, sourceMaterialText: materialText, sourceImages: materialImages, teachingModelId, extras: { regenerate: !!regenerate, lessonSequence }, skipAssemble: true, presetId: presetId || null });
     const id = crypto.randomUUID();
     decks.set(id, {
+      ownerId: req.userId,
       subject: String(subject).toLowerCase(), topic: String(topic).toLowerCase(),
       grade: grade || 'middle school', tone, focus, band: built.band,
-      slides: built.slides, images: built.images, createdAt: Date.now(),
+      slides: built.slides, images: built.images, createdAt: Date.now(), touchedAt: Date.now(),
       objectives: objectives || '', lessonPlanText, sourceMaterialText: materialText, sourceMaterialImages: materialImages, // kept so follow-up resources are grounded in this lesson
       lessonSequence,
       teachingModelId,
@@ -3312,6 +3318,118 @@ app.get('/api/deck/:id', requireAuth, (req, res) => {
     sourceText: deck.lessonPlanText || deck.sourceText || '',
     slides: deck.slides.map((s, i) => previewEntry(s, deck.images[i])),
   });
+});
+
+// ── Persistent lesson workspaces ─────────────────────────────────────────
+// A deck is still kept in the fast in-memory editing map while the teacher is
+// working. A workspace also snapshots it on disk, alongside the approved plan
+// and generated resources, so returning tomorrow does not require regeneration.
+function cloneWorkspaceValue(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function applyWorkspaceDeckEdits(deck, edits) {
+  const byIndex = new Map((Array.isArray(edits) ? edits : []).slice(0, 100).map(edit => [Number(edit.index), edit]));
+  deck.slides = (deck.slides || []).map((slide, index) => {
+    const edit = byIndex.get(index);
+    if (!edit) return slide;
+    const updated = { ...slide };
+    if (edit.title !== undefined) updated.title = clip(edit.title, 500);
+    if (edit.subtitle !== undefined) updated.subtitle = clip(edit.subtitle, 1000);
+    if (edit.example !== undefined) updated.example = clip(edit.example, 2000);
+    if (Array.isArray(edit.bullets)) updated.bullets = edit.bullets.slice(0, 20).map(item => clip(item, 1000));
+    return updated;
+  });
+  return deck;
+}
+
+function workspaceDeckSnapshots(req, existing) {
+  const refs = req.body && req.body.deckRefs;
+  if (!Array.isArray(refs)) return undefined;
+  const previous = new Map(((existing && existing.deckSnapshots) || []).map(item => [item.deckId, item]));
+  return refs.slice(0, 12).map(ref => {
+    const deckId = clip(ref && ref.deckId, 120);
+    if (!deckId) return null;
+    const liveDeck = decks.get(deckId);
+    if (!liveDeck) return previous.get(deckId) || null;
+    if (liveDeck.ownerId && liveDeck.ownerId !== req.userId) return null;
+    liveDeck.ownerId = req.userId;
+    liveDeck.touchedAt = Date.now();
+    const snapshot = applyWorkspaceDeckEdits(cloneWorkspaceValue(liveDeck), ref.edits);
+    return { deckId, deck: snapshot };
+  }).filter(Boolean);
+}
+
+function workspaceUpdateFrom(req, existing) {
+  const body = req.body || {};
+  const update = {
+    title: body.title,
+    subject: body.subject,
+    topic: body.topic,
+    grade: body.grade,
+    stage: body.stage,
+    context: body.context,
+    plan: body.plan,
+    sequencePlans: body.sequencePlans,
+    activeSequencePlanIndex: body.activeSequencePlanIndex,
+    activeDeckId: body.activeDeckId,
+    packs: body.packs,
+    activePackType: body.activePackType,
+    assignmentIds: body.assignmentIds,
+    gameIds: body.gameIds,
+    archived: body.archived,
+  };
+  const snapshots = workspaceDeckSnapshots(req, existing);
+  if (snapshots !== undefined) update.deckSnapshots = snapshots;
+  return update;
+}
+
+app.get('/api/lesson-workspaces', requireAuth, (req, res) => {
+  res.json({ lessons: lessonWorkspaces.list(req.userId) });
+});
+
+app.post('/api/lesson-workspaces', requireAuth, (req, res) => {
+  if (req.user.role === 'student') return res.status(403).json({ error: 'Teacher account required.' });
+  try {
+    const record = lessonWorkspaces.create(req.userId, workspaceUpdateFrom(req, null));
+    persistDecks();
+    audit.log('lesson_workspace.created', { userId: req.userId, workspaceId: record.id, stage: record.stage });
+    res.status(201).json({ workspace: lessonWorkspaces.withoutDeckSnapshots(record) });
+  } catch (err) {
+    console.error('Lesson workspace create failed:', err.message);
+    res.status(400).json({ error: 'Could not save this lesson. Try again.' });
+  }
+});
+
+app.patch('/api/lesson-workspaces/:id', requireAuth, (req, res) => {
+  if (req.user.role === 'student') return res.status(403).json({ error: 'Teacher account required.' });
+  const existing = lessonWorkspaces.get(req.userId, req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Lesson workspace not found.' });
+  try {
+    const record = lessonWorkspaces.update(req.userId, req.params.id, workspaceUpdateFrom(req, existing));
+    persistDecks();
+    audit.log('lesson_workspace.updated', { userId: req.userId, workspaceId: record.id, stage: record.stage, archived: record.archived });
+    res.json({ workspace: lessonWorkspaces.withoutDeckSnapshots(record) });
+  } catch (err) {
+    console.error('Lesson workspace update failed:', err.message);
+    res.status(400).json({ error: 'Could not save this lesson. Try again.' });
+  }
+});
+
+app.get('/api/lesson-workspaces/:id/resume', requireAuth, (req, res) => {
+  const record = lessonWorkspaces.get(req.userId, req.params.id);
+  if (!record) return res.status(404).json({ error: 'Lesson workspace not found.' });
+  const restoredDecks = [];
+  for (const item of record.deckSnapshots || []) {
+    if (!item || !item.deckId || !item.deck || !Array.isArray(item.deck.slides)) continue;
+    const deck = cloneWorkspaceValue(item.deck);
+    deck.ownerId = req.userId;
+    deck.touchedAt = Date.now();
+    decks.set(item.deckId, deck);
+    restoredDecks.push(deckPreviewPayload(item.deckId, deck));
+  }
+  if (restoredDecks.length) persistDecks();
+  res.json({ workspace: lessonWorkspaces.withoutDeckSnapshots(record), decks: restoredDecks });
 });
 
 async function exportDeckToGoogle(req, res, { convertToSlides = false } = {}) {

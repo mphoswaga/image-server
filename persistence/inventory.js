@@ -7,6 +7,7 @@ const DOMAIN_RULES = Object.freeze([
   ['rosters', /^users\/[^/]+\/rosters\/[^/]+\.json$/],
   ['templates', /^users\/[^/]+\/templates\//],
   ['planning_sources', /^users\/[^/]+\/planning-sources\/[^/]+\.json$/],
+  ['lesson_workspaces', /^users\/[^/]+\/lesson-workspaces\/[^/]+\.json$/],
   ['assignments', /^assignments\/[^/]+\.json$/],
   ['games', /^games\/[^/]+\.json$/],
   ['practice_attempts', /^practice\/attempts\/[^/]+\.json$/],

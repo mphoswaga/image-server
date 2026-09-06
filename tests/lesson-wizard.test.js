@@ -29,6 +29,20 @@ test('the wizard preserves every field needed by the existing generation request
     'generated success criteria must survive from plan review to workbook download');
 });
 
+test('saved lessons have a permanent navigation entry and autosave wiring', () => {
+  for (const id of [
+    'lessonsBtn', 'lessonsPanel', 'lessonsList', 'lessonsSearch', 'newLessonBtn',
+    'workspaceSaveStatus', 'workspaceSaveText',
+  ]) {
+    assert.equal([...markup.matchAll(new RegExp(`id="${id}"`, 'g'))].length, 1, `${id} should exist exactly once`);
+  }
+  assert.match(html, /fetch\('\/api\/lesson-workspaces'/);
+  assert.match(html, /\/api\/lesson-workspaces\/\$\{encodeURIComponent\(id\)\}\/resume/);
+  assert.match(html, /function scheduleWorkspaceSave\(\)/);
+  assert.match(html, /deckEl\.addEventListener\('input'/);
+  assert.match(html, /\$\('packSection'\)\.addEventListener\('input'/);
+});
+
 test('saved templates can be named, assigned to a grade, selected, and edited', () => {
   for (const id of ['tplList', 'tplName', 'tplGrade', 'tplType', 'tplAddBtn']) {
     assert.equal([...markup.matchAll(new RegExp(`id="${id}"`, 'g'))].length, 1, `${id} should exist exactly once`);

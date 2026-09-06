@@ -534,7 +534,8 @@
     .sequence-next { margin-top:12px; width:100%; }
 
     /* Slides preview */
-    .edit-tip { text-align:center; color:var(--muted); font-size:13.5px; margin-bottom:18px; display:flex; align-items:center; justify-content:center; gap:7px; }
+    .edit-tip { text-align:center; color:var(--muted); font-size:13.5px; line-height:1.55; margin-bottom:18px; overflow-wrap:anywhere; }
+    .edit-tip .ic { margin-right:4px; vertical-align:-2px; }
     .edit-tip b { color:var(--accent); }
     .deck { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
     .slide { background:var(--card); border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:var(--sh); display:flex; flex-direction:column; transition:transform .12s, box-shadow .15s; }
@@ -928,6 +929,24 @@
     .games-filter input  { flex:1; min-width:160px; font-size:13px; padding:9px 12px; border:1.5px solid var(--border); border-radius:10px; background:#fff; }
     .games-filter select { font-size:13px; padding:9px 12px; border:1.5px solid var(--border); border-radius:10px; background:#fff; width:auto; }
     .gc-dates { font-size:12px; color:var(--muted); display:flex; gap:14px; flex-wrap:wrap; margin-top:4px; }
+    .workspace-save-status { display:none; width:max-content; max-width:100%; margin:-7px auto 14px; padding:6px 11px; border:1px solid #b9dfd0; border-radius:8px; background:#f2fbf7; color:#147d57; font-size:12px; font-weight:700; align-items:center; gap:7px; }
+    .workspace-save-status.visible { display:flex; }
+    .workspace-save-status.saving { color:var(--muted); border-color:var(--border); background:#f8fafc; }
+    .workspace-save-status.error { color:var(--err); border-color:#f5c2bb; background:#fff8f7; }
+    .workspace-save-dot { width:7px; height:7px; border-radius:50%; background:currentColor; flex:none; }
+    .lessons-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+    .lessons-toolbar input { flex:1; min-width:200px; margin:0; }
+    .lesson-workspace-list { display:grid; gap:12px; }
+    .lesson-workspace-card { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:16px; align-items:center; padding:16px 18px; border:1.5px solid var(--border); border-radius:12px; background:#fff; box-shadow:var(--sh-sm); }
+    .lesson-workspace-card:hover { border-color:#b9dfd0; box-shadow:var(--sh); }
+    .lesson-workspace-title { margin:0 0 5px; color:var(--ink); font-size:16px; font-weight:800; overflow-wrap:anywhere; }
+    .lesson-workspace-meta, .lesson-workspace-progress { display:flex; gap:7px; align-items:center; flex-wrap:wrap; color:var(--muted); font-size:12px; }
+    .lesson-workspace-progress { margin-top:9px; }
+    .lesson-workspace-progress span { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; border-radius:7px; background:#f3f7fa; color:#526173; font-weight:650; }
+    .lesson-workspace-progress span.ready { background:#e9f8f1; color:#147d57; }
+    .lesson-workspace-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+    .lesson-workspace-actions .btn { width:auto; margin:0; padding:9px 13px; }
+    .lesson-workspace-actions .archive-lesson { width:38px; min-width:38px; padding:9px; justify-content:center; color:var(--muted); }
     .gc-extend-row { margin-top:10px; display:none; align-items:center; gap:8px; flex-wrap:wrap; background:var(--primary-soft); border-radius:10px; padding:10px 12px; }
     .gc-extend-row input[type=datetime-local] { font-size:12.5px; padding:7px 10px; border:1.5px solid var(--border); border-radius:9px; flex:1; min-width:180px; background:#fff; }
     .gc-extend-save { font-size:12.5px; font-weight:700; padding:7px 14px; border-radius:9px; background:var(--primary); color:#fff; border:none; cursor:pointer; font-family:inherit; white-space:nowrap; }
@@ -1167,6 +1186,8 @@
       .roster-actions .btn-progress { flex:1 1 170px; justify-content:center; }
       .btn-icon-del { margin-left:auto; }
       .games-filter input, .games-filter select, .gc-extend-row input[type=datetime-local] { width:100%; flex-basis:100%; min-width:0; }
+      .lesson-workspace-card { grid-template-columns:1fr; }
+      .lesson-workspace-actions { justify-content:flex-start; }
     }
 
     /* ── Splash screen ── */
@@ -2509,6 +2530,7 @@
       <span>Menu</span>
     </div>
     <button id="homeBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg><span class="app-menu-label">Plan</span></button>
+    <button id="lessonsBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg><span class="app-menu-label">My lessons</span></button>
     <button id="rostersBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg><span class="app-menu-label">Rosters</span></button>
     <button id="gamesBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-gamepad"/></svg><span class="app-menu-label">My games</span></button>
     <a id="practiceBtn" class="nav-link" href="/practice" style="display:none;text-decoration:none"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg><span class="app-menu-label">Practice</span></a>
@@ -2595,6 +2617,9 @@
       <span class="st active" data-step="1"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> Set up lesson</span>
       <span class="st" data-step="2"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Review plan</span>
       <span class="st" data-step="3"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Create slides</span>
+    </div>
+    <div id="workspaceSaveStatus" class="workspace-save-status" role="status" aria-live="polite">
+      <span class="workspace-save-dot" aria-hidden="true"></span><span id="workspaceSaveText">Lesson saved</span>
     </div>
 
     <!-- Entry mode: start fresh, or bring your own plan / slides -->
@@ -3116,6 +3141,24 @@
       <div style="margin-top:28px;padding-top:18px;border-top:1px solid var(--border)"><button id="adminBack" class="back-btn"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back to lesson planner</button></div>
     </section>
 
+    <!-- MY LESSONS -->
+    <section id="lessonsPanel" class="card wide" style="display:none">
+      <div class="page-hd">
+        <button class="back-btn" id="lessonsBackTop"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back</button>
+        <div class="phd-icon" style="background:var(--primary-soft);color:var(--primary)"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg></div>
+        <div>
+          <h2>My lessons</h2>
+          <p class="page-sub">Reopen a lesson with its approved plan, editable slides, resources, assignments, and games together.</p>
+        </div>
+      </div>
+      <div class="lessons-toolbar">
+        <input id="lessonsSearch" type="search" placeholder="Search lessons by topic, subject, or grade" autocomplete="off" />
+        <button id="newLessonBtn" class="btn accent" type="button" style="width:auto"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> New lesson</button>
+      </div>
+      <div id="lessonsList" class="lesson-workspace-list"></div>
+      <div style="margin-top:28px;padding-top:18px;border-top:1px solid var(--border)"><button id="lessonsBack" class="back-btn"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back to lesson planner</button></div>
+    </section>
+
     <!-- MY GAMES -->
     <section id="gamesPanel" class="card wide" style="display:none">
       <div class="page-hd">
@@ -3433,6 +3476,8 @@
     function badgeMeta(src){ if(src==='ai-generated') return {cls:'ai',label:'AI'}; if(src==='svg-diagram') return {cls:'ai',label:'diagram'}; if(src==='teacher-upload') return {cls:'fetched',label:'your material'}; if(src&&src!=='library') return {cls:'fetched',label:'fetched'}; return {cls:'',label:'library'}; }
     const composer=$('composer'), planStage=$('planStage'), results=$('results'), statusEl=$('status');
     let library={subjects:[],topicsBySubject:{}}, ctx=null, currentDeckId=null;
+    let currentWorkspaceId=null, workspaceSaveTimer=null, workspaceSaveChain=Promise.resolve(), restoringWorkspace=false;
+    let workspacePacks={}, workspaceAssignmentIds=[], workspaceGameIds=[], lastDeckPreview=null;
     let sequencePlans=[], activeSequencePlanIndex=0, sequencePlanDownloaded=false;
     let sequenceDecks=[], activeSequenceDeckIndex=0, sequenceStartLessonNumber=null;
     let teachingModelsById={standard:{id:'standard',label:'Standard lesson',description:'A flexible lesson flow that works well for most topics and school templates.'}}, selectedTeachingModelId='standard';
@@ -3872,11 +3917,13 @@
       $('importSlidesCard').style.display=(choseStart && startMode==='haveSlides')?'block':'none';
       planStage.style.display=stage==='plan'?'block':'none';
       results.style.display=stage==='slides'?'block':'none';
+      if($('workspaceSaveStatus')) $('workspaceSaveStatus').style.display=currentWorkspaceId?'':'none';
       if(choseStart && startMode==='plan') renderComposerPage();
       if(weekPlannerState && weekPlannerState.present) renderSlotPickers();
       if($('assistantPanel').classList.contains('open')) refreshAssistantContext();
     }
     function setStartMode(m,begin=false){ startMode=m;
+      if(begin) clearWorkspaceState();
       composerPage=begin?1:0;
       composerMaxPage=1;
       placeTemplateRow();
@@ -4678,7 +4725,8 @@
           <button type="button" class="assistant-inline" data-assistant-plan="${i}">${ICON('i-spark')}Improve with Assistant</button>
           ${s.note?`<p class="plan-note">${esc(s.note)}</p>`:''}
         </div>`).join('');
-      planStage.querySelectorAll('textarea.content').forEach(t=>{ t.style.height='auto'; t.style.height=t.scrollHeight+'px'; t.addEventListener('input',()=>{t.style.height='auto';t.style.height=t.scrollHeight+'px';}); });
+      planStage.querySelectorAll('textarea.content').forEach(t=>{ t.style.height='auto'; t.style.height=t.scrollHeight+'px'; t.addEventListener('input',()=>{t.style.height='auto';t.style.height=t.scrollHeight+'px'; scheduleWorkspaceSave();}); });
+      planStage.querySelectorAll('input.heading').forEach(input=>input.addEventListener('input',scheduleWorkspaceSave));
     }
     function renderSequencePlanFlow(){
       const flow=$('sequencePlanFlow');
@@ -4716,6 +4764,7 @@
       }
       paintPlan(d);
       renderSequencePlanFlow();
+      scheduleWorkspaceSave();
     }
     $('sequencePlanTabs').addEventListener('click',e=>{
       const tab=e.target.closest('[data-plan-index]'); if(!tab||tab.disabled) return;
@@ -5055,6 +5104,7 @@
     }
     const BAND={ early:'Early grades · big colourful text', middle:'Middle grades · balanced', senior:'Senior grades · detailed' };
     function renderDeck(d){
+      lastDeckPreview=d;
       if(sequenceMode()&&sequenceDecks.length){
         const index=sequenceDecks.findIndex(deck=>deck&&(deck.deckId===d.deckId||deck.deckId===currentDeckId));
         if(index>=0) sequenceDecks[index]={...sequenceDecks[index],...d,deckId:d.deckId||sequenceDecks[index].deckId};
@@ -5068,6 +5118,7 @@
       loadQuota(); // show remaining AI-visual budget + gate the AI buttons
       applyCostBadges(); // credit pills + cost note (only when billing is live)
       renderSequenceSlidesFlow();
+      scheduleWorkspaceSave();
     }
     // Strip any existing pill, then append the current cost pill for `action`.
     function setBtnCost(el,action){ if(!el) return; el.querySelectorAll('.cost-pill').forEach(x=>x.remove()); const p=costPill(action); if(p) el.insertAdjacentHTML('beforeend',p); }
@@ -5361,6 +5412,7 @@
     const OPT=['A','B','C','D'];
     function renderPack(type,data){
       packType=type; packData=data;
+      workspacePacks[type]=JSON.parse(JSON.stringify(data));
       let h=`<p class="pd-title" contenteditable data-f="title">${esc(data.title||'')}</p>`;
       if(type==='notes'){
         if(data.summary!=null) h+=`<p class="pd-focus" contenteditable data-f="summary">${esc(data.summary)}</p>`;
@@ -5433,6 +5485,7 @@
       </div>`;
       $('packPreview').innerHTML=`<div class="pack-doc">${h}</div>`;
       loadRosters(true);
+      scheduleWorkspaceSave();
     }
     function collectPack(){
       const box=$('packPreview'), d=JSON.parse(JSON.stringify(packData));
@@ -5491,6 +5544,8 @@
         const cutoffAt=$('assignCutoff').value||null;
         try{ const r=await fetch('/api/pack/'+packType+'/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:collectPack(),subject:ctx.subject,topic:ctx.topic,grade:ctx.grade,rosterId,cutoffAt})});
           const d=await r.json(); if(!r.ok) throw new Error(d.error);
+          if(d.assignmentId&&!workspaceAssignmentIds.includes(d.assignmentId)) workspaceAssignmentIds.push(d.assignmentId);
+          scheduleWorkspaceSave();
           const url=location.origin+d.path, joinUrl=location.origin+'/join';
           $('assignResultPanel').innerHTML=`
             ${d.roomCode?`<div style="margin-bottom:14px"><p style="font-size:13px;font-weight:600;margin-bottom:6px">Room Code — show this on the board:</p><div style="font-size:36px;font-weight:900;letter-spacing:6px;color:var(--primary);background:#e8f0fb;display:inline-block;padding:10px 20px;border-radius:10px">${esc(d.roomCode)}</div><p class="hint" style="margin-top:6px">Students go to <b>${esc(joinUrl)}</b> and type this code.</p></div>`:''}
@@ -5646,14 +5701,15 @@
 
     // "Start over" discards the generated deck (and any edits) — two-step confirm.
     let restartArm=false, restartTmr=null;
-    function doRestart(){ const b=$('restartBtn'); b.textContent='Start over'; b.classList.remove('warn'); restartArm=false; clearTimeout(restartTmr);
+    async function doRestart(){ const b=$('restartBtn'); b.textContent='Start over'; b.classList.remove('warn'); restartArm=false; clearTimeout(restartTmr);
+      await saveWorkspaceNow(); clearWorkspaceState();
       sequencePlans=[]; sequenceDecks=[]; activeSequencePlanIndex=0; activeSequenceDeckIndex=0; sequencePlanDownloaded=false; sequenceStartLessonNumber=null;
       setStartMode('plan'); statusEl.innerHTML=''; window.scrollTo({top:0,behavior:'smooth'}); }
-    $('restartBtn').addEventListener('click',()=>{
+    $('restartBtn').addEventListener('click',async()=>{
       const b=$('restartBtn');
       if(!restartArm){ restartArm=true; b.textContent='Discard deck?'; b.classList.add('warn');
         restartTmr=setTimeout(()=>{ restartArm=false; b.textContent='Start over'; b.classList.remove('warn'); },3000); return; }
-      doRestart();
+      await doRestart();
     });
 
     // ---- auth ----
@@ -6266,7 +6322,7 @@
       finally{ button.innerHTML=original; button.disabled=!(releaseManagerState&&releaseManagerState.configured&&target.options.length); }
     });
     function setActiveNav(id){ document.querySelectorAll('.nav-link').forEach(el=>el.classList.toggle('nav-active',el.id===id)); }
-    function goHome(){ hideAllPanels(); stepsEl.style.display='flex'; setStartMode('plan'); setActiveNav('homeBtn'); window.scrollTo({top:0,behavior:'smooth'}); }
+    async function goHome(){ await saveWorkspaceNow(); clearWorkspaceState(); hideAllPanels(); stepsEl.style.display='flex'; setStartMode('plan'); setActiveNav('homeBtn'); history.pushState({lessonFlowPage:0},'','#plan'); window.scrollTo({top:0,behavior:'smooth'}); }
     function closeMainNavMenu(){ $('nav')?.classList.remove('menu-open'); $('navMenuBtn')?.setAttribute('aria-expanded','false'); }
     function toggleMainNavMenu(e){
       e.preventDefault();
@@ -6278,6 +6334,9 @@
     $('mainNavMenu')?.addEventListener('click', e=>{ if(e.target.closest('.nav-link')) closeMainNavMenu(); });
     document.addEventListener('click', e=>{ if(!$('nav')?.contains(e.target)) closeMainNavMenu(); });
     $('homeBtn').onclick=goHome;
+    $('lessonsBack').onclick=goHome;
+    $('lessonsBackTop').onclick=goHome;
+    $('newLessonBtn').onclick=goHome;
     $('adminBtn').onclick=openAdmin;
     $('adminBack').onclick=closeAdmin;
     $('adminBackTop').onclick=closeAdmin;
@@ -6409,6 +6468,8 @@
       const cutoffAt=$('gameCutoff').value||null;
       try{ const r=await fetch('/api/game',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deckId:currentDeckId,rosterId,questionCount,cutoffAt})});
         const d=await r.json(); if(creditBlocked(r,d)){ b.disabled=false; b.innerHTML=o; return; } if(!r.ok) throw new Error(d.error);
+        if(d.gameId&&!workspaceGameIds.includes(d.gameId)) workspaceGameIds.push(d.gameId);
+        scheduleWorkspaceSave();
         refreshCredits();
         const url=location.origin+d.path;
         const joinUrl=location.origin+'/join';
@@ -6428,9 +6489,306 @@
       }catch(err){ toast(err.message); b.disabled=false; b.innerHTML=o; }
     });
 
+    // ---- Persistent "My lessons" workspaces ----
+    const WORKSPACE_STAGE_LABELS={draft:'Getting started',plan:'Plan ready',slides:'Slides ready',resources:'Resources ready',assigned:'Shared with learners'};
+    let lessonWorkspaceList=[];
+
+    function setWorkspaceSaveStatus(state,text){
+      const box=$('workspaceSaveStatus');
+      if(!box) return;
+      box.style.display='';
+      box.className='workspace-save-status visible'+(state==='saving'?' saving':state==='error'?' error':'');
+      $('workspaceSaveText').textContent=text;
+    }
+
+    function clearWorkspaceState(){
+      clearTimeout(workspaceSaveTimer);
+      currentWorkspaceId=null;
+      ctx=null;
+      currentDeckId=null;
+      workspacePacks={};
+      workspaceAssignmentIds=[];
+      workspaceGameIds=[];
+      lastDeckPreview=null;
+      packType=null;
+      packData=null;
+      importedPlanText='';
+      deckImported=false;
+      sourceMaterialText='';
+      sourceMaterialImages=[];
+      planMode='manual';
+      selectedPsrcId=null;
+      pulledItemData=null;
+      selGrade=null;
+      selWeekNum=null;
+      sequencePlans=[];
+      sequenceDecks=[];
+      activeSequencePlanIndex=0;
+      activeSequenceDeckIndex=0;
+      sequencePlanDownloaded=false;
+      sequenceStartLessonNumber=null;
+      if($('planSections')) $('planSections').innerHTML='';
+      if($('deck')) $('deck').innerHTML='';
+      if($('packPreview')) $('packPreview').innerHTML='';
+      ['subject','topic','objectives','focus','ipSubject','ipTopic','isSubject','isTopic'].forEach(id=>{ if($(id)) $(id).value=''; });
+      const box=$('workspaceSaveStatus');
+      if(box){ box.className='workspace-save-status'; box.style.display='none'; }
+    }
+
+    function workspaceDeckEdits(deck){
+      return (deck&&Array.isArray(deck.slides)?deck.slides:[]).map((slide,index)=>({
+        index,
+        title:slide.title||'',
+        subtitle:slide.subtitle||'',
+        example:slide.example||'',
+        bullets:Array.isArray(slide.bullets)?slide.bullets:[],
+      }));
+    }
+
+    function workspaceDeckRefs(){
+      if(sequenceMode()&&sequenceDecks.length){
+        if(currentStage==='slides') saveActiveSequenceDeck();
+        return sequenceDecks.filter(deck=>deck&&deck.deckId).map(deck=>({
+          deckId:deck.deckId,
+          edits:deck.deckId===currentDeckId&&currentStage==='slides' ? collectEdits() : workspaceDeckEdits(deck),
+        }));
+      }
+      return currentDeckId ? [{deckId:currentDeckId,edits:currentStage==='slides'?collectEdits():workspaceDeckEdits(lastDeckPreview)}] : [];
+    }
+
+    function workspacePlan(){
+      if(currentStage==='plan'&&sequenceMode()) saveActiveSequencePlan();
+      if(!$('planSections').children.length) return null;
+      return {
+        ...collectPlan(),
+        successCriteria:Array.isArray(ctx&&ctx.successCriteria)?ctx.successCriteria:[],
+        templateId:planTemplateId||(ctx&&ctx.templateId)||null,
+        teachingModelId:(ctx&&ctx.teachingModelId)||'standard',
+      };
+    }
+
+    function workspaceStageFor(deckRefs){
+      if(workspaceAssignmentIds.length||workspaceGameIds.length) return 'assigned';
+      if(Object.keys(workspacePacks).length) return 'resources';
+      if(deckRefs.length) return 'slides';
+      if($('planSections').children.length) return 'plan';
+      return 'draft';
+    }
+
+    function workspacePayload(){
+      if(packType&&packData&&$('packPreview').children.length){
+        try{ workspacePacks[packType]=collectPack(); }catch{}
+      }
+      const deckRefs=workspaceDeckRefs();
+      return {
+        title:[ctx.subject,ctx.topic].filter(Boolean).join(' - '),
+        subject:ctx.subject,
+        topic:ctx.topic,
+        grade:ctx.grade,
+        stage:workspaceStageFor(deckRefs),
+        context:{...ctx,startMode,deckImported,planTemplateId,presetId:selectedPresetId,workspaceView:currentStage,composerPage},
+        plan:workspacePlan(),
+        sequencePlans:sequencePlans.filter(Boolean).length?sequencePlans:[],
+        activeSequencePlanIndex,
+        deckRefs,
+        activeDeckId:currentDeckId,
+        packs:workspacePacks,
+        activePackType:packType||Object.keys(workspacePacks)[0]||null,
+        assignmentIds:workspaceAssignmentIds,
+        gameIds:workspaceGameIds,
+      };
+    }
+
+    function saveWorkspaceNow(){
+      clearTimeout(workspaceSaveTimer);
+      if(restoringWorkspace||!ctx||!String(ctx.subject||'').trim()||!String(ctx.topic||'').trim()) return Promise.resolve(false);
+      let payload;
+      try{ payload=workspacePayload(); }catch{ return Promise.resolve(false); }
+      setWorkspaceSaveStatus('saving','Saving lesson...');
+      workspaceSaveChain=workspaceSaveChain.catch(()=>{}).then(async()=>{
+        const id=currentWorkspaceId;
+        const controller=new AbortController();
+        const timeout=setTimeout(()=>controller.abort(),3500);
+        try{
+          const r=await fetch(id?`/api/lesson-workspaces/${encodeURIComponent(id)}`:'/api/lesson-workspaces',{
+            method:id?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:controller.signal,
+          });
+          const d=await r.json().catch(()=>({}));
+          if(!r.ok) throw new Error(d.error||'Could not save this lesson.');
+          currentWorkspaceId=d.workspace.id;
+          setWorkspaceSaveStatus('saved',`Saved ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`);
+          return true;
+        }finally{ clearTimeout(timeout); }
+      }).catch(()=>{
+        setWorkspaceSaveStatus('error','Not saved - check your connection');
+        return false;
+      });
+      return workspaceSaveChain;
+    }
+
+    function scheduleWorkspaceSave(){
+      if(restoringWorkspace||!ctx) return;
+      clearTimeout(workspaceSaveTimer);
+      workspaceSaveTimer=setTimeout(saveWorkspaceNow,700);
+    }
+
+    function restoreContextFields(saved){
+      const fields={subject:'subject',topic:'topic',objectives:'objectives',grade:'grade',slideCount:'slideCount',tone:'tone',focus:'focus',teachingModelId:'teachingModel'};
+      Object.entries(fields).forEach(([key,id])=>{ const el=$(id); if(el&&saved[key]!==undefined&&saved[key]!==null) el.value=String(saved[key]); });
+      if($('sequenceEnabled')) $('sequenceEnabled').checked=!!saved.sequenceEnabled;
+      if($('sequenceLessonCount')&&saved.sequenceLessonCount) $('sequenceLessonCount').value=String(saved.sequenceLessonCount);
+      if($('periodMinutes')&&saved.periodMinutes) $('periodMinutes').value=String(saved.periodMinutes);
+    }
+
+    async function resumeLessonWorkspace(id){
+      const list=$('lessonsList');
+      list?.querySelectorAll('button').forEach(button=>button.disabled=true);
+      try{
+        const r=await fetch(`/api/lesson-workspaces/${encodeURIComponent(id)}/resume`);
+        const d=await r.json();
+        if(!r.ok) throw new Error(d.error||'Could not reopen that lesson.');
+        const saved=d.workspace;
+        restoringWorkspace=true;
+        currentWorkspaceId=saved.id;
+        ctx=saved.context||{subject:saved.subject,topic:saved.topic,grade:saved.grade};
+        startMode=ctx.startMode||'plan';
+        deckImported=!!ctx.deckImported;
+        selectedTemplateId=ctx.templateId||null;
+        planTemplateId=ctx.planTemplateId||null;
+        selectedPresetId=ctx.presetId||selectedPresetId;
+        sourceMaterialText=ctx.sourceMaterialText||'';
+        sourceMaterialImages=Array.isArray(ctx.sourceMaterialImages)?ctx.sourceMaterialImages:[];
+        workspacePacks=saved.packs&&typeof saved.packs==='object'?JSON.parse(JSON.stringify(saved.packs)):{};
+        workspaceAssignmentIds=Array.isArray(saved.assignmentIds)?saved.assignmentIds.slice():[];
+        workspaceGameIds=Array.isArray(saved.gameIds)?saved.gameIds.slice():[];
+        sequencePlans=Array.isArray(saved.sequencePlans)?saved.sequencePlans.map(plan=>plan?JSON.parse(JSON.stringify(plan)):plan):[];
+        activeSequencePlanIndex=Math.min(Math.max(0,Number(saved.activeSequencePlanIndex)||0),Math.max(0,sequencePlans.length-1));
+        sequenceDecks=Array.isArray(d.decks)?d.decks:[];
+        activeSequenceDeckIndex=Math.max(0,sequenceDecks.findIndex(deck=>deck.deckId===saved.activeDeckId));
+        currentDeckId=saved.activeDeckId||(sequenceDecks[activeSequenceDeckIndex]&&sequenceDecks[activeSequenceDeckIndex].deckId)||null;
+        restoreContextFields(ctx);
+        hideAllPanels();
+        stepsEl.style.display='flex';
+        if(sequencePlans.length){
+          const selectedPlan=sequencePlans[activeSequencePlanIndex]||sequencePlans.find(Boolean);
+          if(selectedPlan) renderPlan(selectedPlan);
+        }else if(saved.plan&&Array.isArray(saved.plan.sections)){
+          renderPlan(saved.plan);
+        }else{
+          $('planSections').innerHTML='';
+        }
+        const activeDeck=sequenceDecks.find(deck=>deck.deckId===currentDeckId)||sequenceDecks[0];
+        const activePack=saved.activePackType&&workspacePacks[saved.activePackType]
+          ? saved.activePackType:Object.keys(workspacePacks)[0];
+        if(activeDeck){
+          currentDeckId=activeDeck.deckId;
+          lastDeckPreview=activeDeck;
+          renderDeck(activeDeck);
+          if(activePack) renderPack(activePack,workspacePacks[activePack]);
+        }
+        const preferredView=['composer','plan','slides'].includes(ctx.workspaceView)?ctx.workspaceView:null;
+        if(preferredView==='composer'){
+          composerPage=Math.min(3,Math.max(1,Number(ctx.composerPage)||3));
+          composerMaxPage=Math.max(composerMaxPage,composerPage);
+          show('composer'); setStep(1);
+        }else if(preferredView==='plan'&&$('planSections').children.length){
+          show('plan'); setStep(2); planStage.scrollIntoView({behavior:'smooth',block:'start'});
+        }else if(activeDeck){
+          show('slides'); setStep(3); results.scrollIntoView({behavior:'smooth',block:'start'});
+        }else if($('planSections').children.length){
+          show('plan'); setStep(2); planStage.scrollIntoView({behavior:'smooth',block:'start'});
+        }else{
+          composerPage=3; composerMaxPage=3; show('composer'); setStep(1);
+        }
+        setActiveNav('lessonsBtn');
+        history.pushState({workspaceId:saved.id},'',`#lesson/${saved.id}`);
+        setWorkspaceSaveStatus('saved','Lesson restored and saved');
+      }catch(err){
+        toast(err.message);
+        list?.querySelectorAll('button').forEach(button=>button.disabled=false);
+      }finally{
+        restoringWorkspace=false;
+      }
+    }
+
+    function renderLessonWorkspaces(){
+      const wrap=$('lessonsList');
+      const query=$('lessonsSearch').value.trim().toLowerCase();
+      const lessons=lessonWorkspaceList.filter(lesson=>[lesson.title,lesson.subject,lesson.topic,lesson.grade].join(' ').toLowerCase().includes(query));
+      if(!lessons.length){
+        wrap.innerHTML=`<div class="empty-state"><svg class="ic" aria-hidden="true" style="width:36px;height:36px;opacity:.3"><use href="#i-doc"/></svg><p>${query?'No lessons match that search.':'No saved lessons yet.'}</p><p class="hint-action">${query?'Try another subject, topic, or grade.':'Generate your first lesson plan and it will save here automatically.'}</p></div>`;
+        return;
+      }
+      wrap.innerHTML=lessons.map(lesson=>{
+        const progress=[
+          lesson.hasPlan?'<span class="ready">Plan</span>':'',
+          lesson.deckCount?`<span class="ready">${lesson.deckCount} slide deck${lesson.deckCount===1?'':'s'}</span>`:'',
+          lesson.resourceCount?`<span class="ready">${lesson.resourceCount} resource${lesson.resourceCount===1?'':'s'}</span>`:'',
+          lesson.assignmentCount?`<span class="ready">${lesson.assignmentCount} assignment${lesson.assignmentCount===1?'':'s'}</span>`:'',
+          lesson.gameCount?`<span class="ready">${lesson.gameCount} game${lesson.gameCount===1?'':'s'}</span>`:'',
+        ].filter(Boolean).join('');
+        return `<article class="lesson-workspace-card" data-workspace-id="${esc(lesson.id)}">
+          <div>
+            <h3 class="lesson-workspace-title">${esc(lesson.topic||lesson.title)}</h3>
+            <div class="lesson-workspace-meta"><span class="gc-chip">${esc(lesson.subject||'Lesson')}</span>${lesson.grade?`<span class="gc-chip">${esc(lesson.grade)}</span>`:''}<span>${esc(WORKSPACE_STAGE_LABELS[lesson.stage]||'In progress')}</span><span>Edited ${esc(fmtDateTime(lesson.updatedAt))}</span></div>
+            <div class="lesson-workspace-progress">${progress||'<span>Set-up saved</span>'}</div>
+          </div>
+          <div class="lesson-workspace-actions">
+            ${lesson.assignmentCount?`<button type="button" class="btn ghost" data-workspace-assignments="${esc(lesson.id)}">Assignments</button>`:''}
+            ${lesson.gameCount?`<button type="button" class="btn ghost" data-workspace-games="${esc(lesson.id)}">Games</button>`:''}
+            <button type="button" class="btn primary" data-workspace-resume="${esc(lesson.id)}">Resume lesson</button>
+            <button type="button" class="btn ghost archive-lesson" data-workspace-archive="${esc(lesson.id)}" title="Archive lesson" aria-label="Archive ${esc(lesson.topic||lesson.title)}">${ICON('i-trash')}</button>
+          </div>
+        </article>`;
+      }).join('');
+    }
+
+    async function loadLessonWorkspaces(){
+      $('lessonsList').innerHTML='<span class="status">Loading saved lessons...</span>';
+      try{
+        const r=await fetch('/api/lesson-workspaces');
+        const d=await r.json();
+        if(!r.ok) throw new Error(d.error||'Could not load saved lessons.');
+        lessonWorkspaceList=d.lessons||[];
+        renderLessonWorkspaces();
+      }catch(err){ $('lessonsList').innerHTML=`<p class="hint err">${esc(err.message)}</p>`; }
+    }
+
+    async function openLessons(){
+      await saveWorkspaceNow();
+      hideAllPanels();
+      $('lessonsPanel').style.display='block';
+      setActiveNav('lessonsBtn');
+      window.scrollTo({top:0,behavior:'smooth'});
+      loadLessonWorkspaces();
+    }
+
+    $('lessonsBtn').onclick=openLessons;
+    $('lessonsSearch').addEventListener('input',renderLessonWorkspaces);
+    $('lessonsList').addEventListener('click',async e=>{
+      const resume=e.target.closest('[data-workspace-resume]');
+      if(resume){ await resumeLessonWorkspace(resume.dataset.workspaceResume); return; }
+      if(e.target.closest('[data-workspace-assignments]')){ openAssignments(); return; }
+      if(e.target.closest('[data-workspace-games]')){ openGames(); return; }
+      const archive=e.target.closest('[data-workspace-archive]');
+      if(!archive) return;
+      const lesson=lessonWorkspaceList.find(item=>item.id===archive.dataset.workspaceArchive);
+      if(!confirm(`Archive "${lesson&&lesson.topic||'this lesson'}"? You can keep its assignments and games.`)) return;
+      const r=await fetch(`/api/lesson-workspaces/${encodeURIComponent(archive.dataset.workspaceArchive)}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({archived:true})});
+      if(!r.ok){ const d=await r.json().catch(()=>({})); toast(d.error||'Could not archive that lesson.'); return; }
+      lessonWorkspaceList=lessonWorkspaceList.filter(item=>item.id!==archive.dataset.workspaceArchive);
+      renderLessonWorkspaces();
+      toast('Lesson archived.','ok');
+    });
+
+    // Save contenteditable changes as teachers type, not only when they export.
+    deckEl.addEventListener('input',e=>{ if(e.target.closest('[contenteditable]')) scheduleWorkspaceSave(); });
+    $('packSection').addEventListener('input',e=>{ if(e.target.closest('[contenteditable]')) scheduleWorkspaceSave(); });
+    document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden') saveWorkspaceNow(); });
+
     // ---- "My games" view ----
     const gamesPanel=$('gamesPanel');
-    function hideAllPanels(){ composer.style.display='none'; planStage.style.display='none'; results.style.display='none'; adminPanel.style.display='none'; gamesPanel.style.display='none'; if($('modeSelect')) $('modeSelect').style.display='none'; if($('importPlanCard')) $('importPlanCard').style.display='none'; if($('importSlidesCard')) $('importSlidesCard').style.display='none'; if($('rostersPanel')) $('rostersPanel').style.display='none'; if($('assignmentsPanel')) $('assignmentsPanel').style.display='none'; if($('marksPanel')) $('marksPanel').style.display='none'; if($('creditsPanel')) $('creditsPanel').style.display='none'; if($('progressWrap')) $('progressWrap').style.display='none'; stepsEl.style.display='none'; statusEl.innerHTML=''; }
+    function hideAllPanels(){ composer.style.display='none'; planStage.style.display='none'; results.style.display='none'; adminPanel.style.display='none'; gamesPanel.style.display='none'; if($('lessonsPanel')) $('lessonsPanel').style.display='none'; if($('workspaceSaveStatus')) $('workspaceSaveStatus').style.display='none'; if($('modeSelect')) $('modeSelect').style.display='none'; if($('importPlanCard')) $('importPlanCard').style.display='none'; if($('importSlidesCard')) $('importSlidesCard').style.display='none'; if($('rostersPanel')) $('rostersPanel').style.display='none'; if($('assignmentsPanel')) $('assignmentsPanel').style.display='none'; if($('marksPanel')) $('marksPanel').style.display='none'; if($('creditsPanel')) $('creditsPanel').style.display='none'; if($('progressWrap')) $('progressWrap').style.display='none'; stepsEl.style.display='none'; statusEl.innerHTML=''; }
     function openGames(){ hideAllPanels(); gamesPanel.style.display='block'; loadMyGames(); loadRosters(true); setActiveNav('gamesBtn'); window.scrollTo({top:0,behavior:'smooth'}); }
     function closeGames(){ gamesPanel.style.display='none'; stepsEl.style.display='flex'; show('composer'); setStep(1); setActiveNav('homeBtn'); }
     $('gamesBtn').onclick=openGames; $('gamesBack').onclick=closeGames; $('gamesBackTop').onclick=closeGames;
@@ -7439,7 +7797,7 @@
         steps:[
           {label:'Sign in',text:'Choose Log in or Sign up. Your password is entered only on EducScope.'},
           {label:'Switch apps',text:'Use the app-grid button in the top bar to move between EducScope, LessonScope, and TeacherScope.'},
-          {label:'Use the menu',text:'Plan starts new work. Rosters, My assignments, My games, Marks, and Usage keep completed work organised.'},
+          {label:'Use the menu',text:'Plan starts new work. My lessons reopens saved planning, while Rosters, My assignments, My games, Marks, and Usage keep class work organised.'},
         ],
         tip:'If a session ends, sign in through EducScope again. Do not create a second LessonScope account.',
       },
@@ -7522,6 +7880,16 @@
           {label:'Download the update',text:'For a sequence, generate each lesson in order, then download the updated plan containing all completed lessons.'},
         ],
         tip:'What you edit on the review screen is what LessonScope uses for slides and writes into the downloaded template.',
+      },
+      { icon:'i-doc', iconBg:'#edf9f3', iconColor:'#08745f',
+        section:'Keep lessons organised', title:'Reopen work from My lessons',
+        subtitle:'LessonScope saves the lesson as you work so its plan, slides, resources, assignments, and games stay connected.',
+        steps:[
+          {label:'Save automatically',text:'Edits to lesson-plan sections, slide text, and generated resources are saved to your account.'},
+          {label:'Resume later',text:'Open My lessons, search by subject, topic, or grade, then choose Resume lesson.'},
+          {label:'Continue without regenerating',text:'The editable plan and slide workspace reopen from the saved version, so existing AI work is not charged again.'},
+        ],
+        tip:'Archive a finished lesson to remove it from the main list without deleting its published assignments or games.',
       },
       { icon:'i-layers', iconBg:'#f4efff', iconColor:'#7048e8',
         section:'Create slides', title:'Create and review the slide deck',
