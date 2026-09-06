@@ -6,12 +6,14 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { DATA_DIR, writeJsonAtomic } = require('./storage');
+const colonyQuest = require('./public/colonyquest-core');
 
 const GAMES_DIR = path.join(DATA_DIR, 'games');
 const ROOMS_PATH = path.join(GAMES_DIR, '_rooms.json');
 const gamePath = id => path.join(GAMES_DIR, `${id}.json`);
 const resultsPath = id => path.join(GAMES_DIR, `${id}.results.json`);
-const isGameFile = f => f.endsWith('.json') && !f.endsWith('.results.json') && f !== '_rooms.json';
+const colonySessionPath = id => path.join(GAMES_DIR, `${id}.colonyquest.json`);
+const isGameFile = f => f.endsWith('.json') && !f.endsWith('.results.json') && !f.endsWith('.colonyquest.json') && f !== '_rooms.json';
 const normalizeStudentId = value => String(value || '').trim().replace(/\s+/g, '').toUpperCase();
 
 // 6-char room code using unambiguous chars (no 0/O/1/I/L).
@@ -42,15 +44,23 @@ function getRoomCode(code) {
 function createGame({ teacherId, teacherName, lessonTitle, subject, topic, grade, game, rosterId, cutoffAt, mode }) {
   fs.mkdirSync(GAMES_DIR, { recursive: true });
   const id = crypto.randomUUID().slice(0, 8); // short + shareable
-  const roomCode = genRoomCode();
+  const normalizedMode = mode === 'fishquest' ? 'fishquest' : mode === 'colonyquest' ? 'colonyquest' : 'arcade';
+  const roomCode = normalizedMode === 'colonyquest' ? null : genRoomCode();
   const rec = {
     id, teacherId, teacherName: teacherName || '',
     lessonTitle: lessonTitle || topic, subject, topic, grade,
     roomCode,
     rosterId: rosterId || null,
     cutoffAt: cutoffAt || null,
-    mode: mode === 'fishquest' ? 'fishquest' : 'arcade',
-    fishquest: mode === 'fishquest' ? { durationMinutes: 10, lateJoin: true, playMode: 'live' } : null,
+    mode: normalizedMode,
+    fishquest: normalizedMode === 'fishquest' ? { durationMinutes: 10, lateJoin: true, playMode: 'live' } : null,
+    colonyquest: normalizedMode === 'colonyquest' ? {
+      ...colonyQuest.normalizeConfig({ teamCount: 4, matchType: 'rounds', rounds: 5, durationMinutes: 15, sound: true }),
+      teams: Array.from({ length: 4 }, (_, index) => {
+        const team = colonyQuest.createTeam({}, index);
+        return { id: team.id, name: team.name, colorIndex: team.colorIndex, members: [] };
+      }),
+    } : null,
     summary: game.summary || { overview: game.overview || '', concepts: game.concepts || [] },
     questions: game.questions || [],
     createdAt: new Date().toISOString(),
@@ -58,8 +68,10 @@ function createGame({ teacherId, teacherName, lessonTitle, subject, topic, grade
   writeJsonAtomic(gamePath(id), rec);
   // Register room code in the index.
   const rooms = loadRooms();
-  rooms[roomCode] = id;
-  saveRooms(rooms);
+  if (roomCode) {
+    rooms[roomCode] = id;
+    saveRooms(rooms);
+  }
   return rec;
 }
 
@@ -148,4 +160,58 @@ function updateFishQuest(id, config) {
   return g;
 }
 
-module.exports = { createGame, getGame, recordResult, getResults, getHighScores, listTeacherGames, getRoomCode, updateGameCutoff, updateFishQuest, normalizeStudentId };
+function updateColonyQuest(id, config = {}) {
+  const p = gamePath(String(id));
+  if (!fs.existsSync(p)) return null;
+  const g = JSON.parse(fs.readFileSync(p, 'utf8'));
+  if (g.mode !== 'colonyquest') return null;
+  const normalized = colonyQuest.normalizeConfig({ ...(g.colonyquest || {}), ...config });
+  const requestedTeams = Array.isArray(config.teams) ? config.teams : (g.colonyquest && g.colonyquest.teams) || [];
+  const teams = Array.from({ length: normalized.teamCount }, (_, index) => {
+    const source = requestedTeams[index] || {};
+    const team = colonyQuest.createTeam(source, index);
+    return { id: team.id, name: team.name, colorIndex: team.colorIndex, members: team.members };
+  });
+  g.colonyquest = { ...normalized, teams };
+  if (Array.isArray(config.questions)) {
+    g.questions = config.questions.map(q => ({
+      question: String(q && q.question || '').trim().slice(0, 500),
+      options: Array.isArray(q && q.options) ? q.options.map(value => String(value || '').trim().slice(0, 250)).slice(0, 4) : [],
+      correctIndex: Number(q && q.correctIndex),
+      explanation: String(q && q.explanation || '').trim().slice(0, 1000),
+    })).filter(q => q.question && q.options.filter(Boolean).length >= 2 && Number.isInteger(q.correctIndex) && q.correctIndex >= 0 && q.correctIndex < q.options.length && q.options[q.correctIndex]).slice(0, 40);
+  }
+  if (!g.questions.length) throw new Error('Add at least one complete question.');
+  writeJsonAtomic(p, g);
+  return g;
+}
+
+function getColonyQuestSession(id) {
+  try { return JSON.parse(fs.readFileSync(colonySessionPath(String(id)), 'utf8')); }
+  catch { return null; }
+}
+
+function saveColonyQuestSession(id, session) {
+  fs.mkdirSync(GAMES_DIR, { recursive: true });
+  const normalized = colonyQuest.normalizeSession(session);
+  if (normalized.teams.length < 2) throw new Error('ColonyQuest needs at least two teams.');
+  const record = {
+    ...normalized,
+    updatedAt: new Date().toISOString(),
+    summary: normalized.phase === 'ended' ? colonyQuest.sessionSummary(normalized) : null,
+  };
+  writeJsonAtomic(colonySessionPath(String(id)), record);
+  return record;
+}
+
+function clearColonyQuestSession(id) {
+  const p = colonySessionPath(String(id));
+  if (fs.existsSync(p)) fs.unlinkSync(p);
+  return true;
+}
+
+module.exports = {
+  createGame, getGame, recordResult, getResults, getHighScores, listTeacherGames, getRoomCode,
+  updateGameCutoff, updateFishQuest, updateColonyQuest, getColonyQuestSession,
+  saveColonyQuestSession, clearColonyQuestSession, normalizeStudentId,
+};

@@ -102,7 +102,7 @@ test('the complete guide covers the full teacher workflow and can resume', () =>
     'Build the lesson resource pack',
     'Create and verify class rosters',
     'Publish an online assignment',
-    'Create and run a student game',
+    'Create and run a lesson game',
     'Review marks and class progress',
     'Download or export your finished work',
     'Understand your subscription and usage',
@@ -112,6 +112,7 @@ test('the complete guide covers the full teacher workflow and can resume', () =>
   assert.match(html, /sessionStorage\.getItem\('lc_wizard_step'\)/);
   assert.match(html, /sessionStorage\.setItem\('lc_wizard_step'/);
   assert.match(html, /wz-progress-label/);
+  assert.match(html, /Individual Arcade[\s\S]+FishQuest[\s\S]+ColonyQuest/);
 });
 
 test('the admin panel exposes protected code rollback without implying data rollback', () => {

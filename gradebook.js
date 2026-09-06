@@ -9,12 +9,13 @@ const XLSX = require('xlsx');
 const games = require('./games');
 const assignments = require('./assignments');
 const roster = require('./roster');
+const isIndividuallyGradedGame = game => game.mode !== 'colonyquest';
 
 // The classes a teacher can open a gradebook for, with how much is in each.
 function listClasses(userId) {
   const rosters = roster.listRosters(userId);
   const asgs = assignments.listTeacherAssignments(userId);
-  const gms = games.listTeacherGames(userId);
+  const gms = games.listTeacherGames(userId).filter(isIndividuallyGradedGame);
   return rosters.map(r => ({
     rosterId: r.id,
     name: r.name,
@@ -36,7 +37,9 @@ function buildGradebook(userId, rosterId) {
   const students = rs.students || [];
 
   const asgs = assignments.listTeacherAssignments(userId).filter(a => a.rosterId === rosterId);
-  const gms = games.listTeacherGames(userId).filter(g => g.rosterId === rosterId);
+  // ColonyQuest records team/class evidence. It must not create blank or
+  // manufactured individual marks in a learner gradebook.
+  const gms = games.listTeacherGames(userId).filter(g => g.rosterId === rosterId && isIndividuallyGradedGame(g));
 
   const assessments = [];
   const cells = {}; // studentId -> { assessmentId -> { mark, max, pct } }
@@ -108,7 +111,7 @@ function gatherStudentResults(teacherIds, studentId) {
   const rows = [];
   let name = null;
   for (const tid of teacherIds) {
-    for (const g of games.listTeacherGames(tid)) {
+    for (const g of games.listTeacherGames(tid).filter(isIndividuallyGradedGame)) {
       for (const r of games.getResults(g.id)) {
         if (sid(r.studentId) !== studentId) continue;
         if (r.name && !name) name = r.name;

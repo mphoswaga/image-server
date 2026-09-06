@@ -12,7 +12,7 @@
     "test:e2e": "playwright test",
     "test:e2e:update": "playwright test --update-snapshots",
     "check:release": "npm run check && npm test && npm run test:e2e",
-    "check:html": "node scripts/check-html-scripts.mjs public/index.html public/assignment.html public/fishquest.html public/fishquest-teacher.html public/join.html public/my-work.html public/oauth-consent.html public/play.html public/start.html practice.html practice-teacher.html",
+    "check:html": "node scripts/check-html-scripts.mjs public/index.html public/assignment.html public/colonyquest.html public/fishquest.html public/fishquest-teacher.html public/join.html public/my-work.html public/oauth-consent.html public/play.html public/start.html practice.html practice-teacher.html",
     "check:server": "for f in *.js; do node --check \"$f\" || exit 1; done",
     "check": "npm run check:server && npm run check:html",
     "deployed": "node scripts/deployed.js",

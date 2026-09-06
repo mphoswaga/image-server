@@ -64,6 +64,7 @@ const lessonWorkspaces = require('./lesson-workspaces');
 const practice = require('./practice');
 const practiceLive = require('./practice-live');
 const { createFishQuestLive } = require('./fishquest-live');
+const colonyQuestCore = require('./public/colonyquest-core');
 const { runWithUser, usageSnapshot, usageSince, declareAction } = require('./ai-client');
 const usage = require('./usage');
 const jwt = require('jsonwebtoken');
@@ -3484,6 +3485,16 @@ app.post('/api/google-slides/export/:id', requireAuth, async (req, res) => {
 // ── Student game: create from a deck, play, store results ──────────────────
 const fishQuestLive = createFishQuestLive({ app, games, roster, requireAuth, requireGameAccess, jwtSecret: JWT_SECRET });
 
+function requestedGameMode(body) {
+  if (body && body.mode === 'fishquest') return 'fishquest';
+  if (body && body.mode === 'colonyquest') return 'colonyquest';
+  return 'arcade';
+}
+
+function gameLaunchPath(game) {
+  return game.mode === 'colonyquest' ? `/colonyquest/${game.id}` : `/play/${game.id}`;
+}
+
 // Teacher: turn the current deck into a shareable, persistent student game.
 app.post('/api/game', requireAuth, generationLimiter, async (req, res) => {
   if (req.user.role === 'student') return res.status(403).json({ error: 'Teachers only.' });
@@ -3497,10 +3508,10 @@ app.post('/api/game', requireAuth, generationLimiter, async (req, res) => {
     const lessonTitle = (deck.slides.find(s => s.type === 'title') || {}).title || deck.topic;
     const rosterId = (req.body && req.body.rosterId) || null;
     const cutoffAt = (req.body && req.body.cutoffAt) || null;
-    const mode = req.body && req.body.mode === 'fishquest' ? 'fishquest' : 'arcade';
+    const mode = requestedGameMode(req.body);
     const rec = games.createGame({ teacherId: req.userId, teacherName: req.user.name, lessonTitle, subject: deck.subject, topic: deck.topic, grade: deck.grade, game, rosterId, cutoffAt, mode });
     await capture(req, reservation, 'lessonscope.generate_game', rec.id);
-    res.json({ gameId: rec.id, path: `/play/${rec.id}`, questionCount: rec.questions.length, roomCode: rec.roomCode, mode: rec.mode });
+    res.json({ gameId: rec.id, path: gameLaunchPath(rec), questionCount: rec.questions.length, roomCode: rec.roomCode, mode: rec.mode });
   } catch (err) {
     await release(req, reservation, 'lessonscope.generate_game', err.message);
     console.error('Game creation failed:', err.message);
@@ -3524,10 +3535,10 @@ app.post('/api/game/from-pptx', requireAuth, generationLimiter, upload.single('f
   try {
     const lessonPlanText = await extractText(req.file.buffer, req.file.originalname);
     const game = await generateGame({ subject, topic, grade, objectives: '', lessonPlanText, questionCount });
-    const mode = req.body && req.body.mode === 'fishquest' ? 'fishquest' : 'arcade';
+    const mode = requestedGameMode(req.body);
     const rec = games.createGame({ teacherId: req.userId, teacherName: req.user.name, lessonTitle: topic, subject, topic, grade, game, rosterId, cutoffAt, mode });
     await capture(req, reservation, 'lessonscope.generate_game', rec.id);
-    res.json({ gameId: rec.id, path: `/play/${rec.id}`, questionCount: rec.questions.length, roomCode: rec.roomCode, mode: rec.mode });
+    res.json({ gameId: rec.id, path: gameLaunchPath(rec), questionCount: rec.questions.length, roomCode: rec.roomCode, mode: rec.mode });
   } catch (err) {
     await release(req, reservation, 'lessonscope.generate_game', err.message);
     console.error('Game from pptx failed:', err.message);
@@ -3543,6 +3554,78 @@ app.patch('/api/game/:id/cutoff', requireAuth, (req, res) => {
   const cutoffAt = (req.body && req.body.cutoffAt) || null;
   const updated = games.updateGameCutoff(req.params.id, cutoffAt);
   res.json({ ok: true, cutoffAt: updated.cutoffAt });
+});
+
+function ownedColonyQuest(req, res) {
+  const game = games.getGame(req.params.id);
+  if (!game || game.mode !== 'colonyquest') {
+    res.status(404).json({ error: 'ColonyQuest game not found.' });
+    return null;
+  }
+  if (game.teacherId !== req.userId) {
+    res.status(403).json({ error: 'Not your game.' });
+    return null;
+  }
+  return game;
+}
+
+// ColonyQuest is operated entirely from the teacher's authenticated screen.
+// These endpoints persist configuration and turn snapshots; animation and the
+// continuous ant simulation stay on the classroom computer.
+app.get('/api/game/:id/colonyquest', requireAuth, (req, res) => {
+  const game = ownedColonyQuest(req, res);
+  if (!game) return;
+  const classRoster = game.rosterId ? roster.getRoster(req.userId, game.rosterId) : null;
+  res.json({
+    game: {
+      id: game.id,
+      lessonTitle: game.lessonTitle,
+      subject: game.subject,
+      topic: game.topic,
+      grade: game.grade,
+      questions: game.questions,
+      colonyquest: game.colonyquest,
+    },
+    roster: classRoster ? {
+      id: classRoster.id,
+      name: classRoster.name,
+      students: classRoster.students.map(student => ({ id: student.id, name: student.name })),
+    } : null,
+    session: games.getColonyQuestSession(game.id),
+  });
+});
+
+app.patch('/api/game/:id/colonyquest', requireAuth, (req, res) => {
+  const game = ownedColonyQuest(req, res);
+  if (!game) return;
+  const session = games.getColonyQuestSession(game.id);
+  if (session && !['setup', 'ended'].includes(session.phase)) {
+    return res.status(409).json({ error: 'End or reset the current match before changing its setup.' });
+  }
+  try {
+    const updated = games.updateColonyQuest(game.id, req.body || {});
+    res.json({ ok: true, colonyquest: updated.colonyquest, questions: updated.questions });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Could not save ColonyQuest settings.' });
+  }
+});
+
+app.put('/api/game/:id/colonyquest/session', requireAuth, (req, res) => {
+  const game = ownedColonyQuest(req, res);
+  if (!game) return;
+  try {
+    const session = games.saveColonyQuestSession(game.id, req.body && req.body.session);
+    res.json({ ok: true, updatedAt: session.updatedAt, summary: session.summary });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Could not save this ColonyQuest match.' });
+  }
+});
+
+app.delete('/api/game/:id/colonyquest/session', requireAuth, (req, res) => {
+  const game = ownedColonyQuest(req, res);
+  if (!game) return;
+  games.clearColonyQuestSession(game.id);
+  res.json({ ok: true });
 });
 
 // Student: enter a game with their Student ID — issues a short-lived game session.
@@ -3667,6 +3750,36 @@ app.get('/api/game/:id/results', requireAuth, (req, res) => {
   if (!g) return res.status(404).json({ error: 'Game not found.' });
   if (g.teacherId !== req.userId) return res.status(403).json({ error: 'Not your game.' });
   const rosterData = g.rosterId ? roster.getRoster(req.userId, g.rosterId) : null;
+  if (g.mode === 'colonyquest') {
+    const session = games.getColonyQuestSession(g.id);
+    const answers = session && Array.isArray(session.answers) ? session.answers : [];
+    const summary = session ? (session.summary || colonyQuestCore.sessionSummary(session)) : null;
+    const questionStats = g.questions.map((q, index) => {
+      const attempts = answers.filter(answer => answer.questionIndex === index);
+      return {
+        index,
+        question: q.question,
+        correct: attempts.filter(answer => answer.correct).length,
+        answered: attempts.length,
+        correctIndex: q.correctIndex,
+        options: q.options || null,
+      };
+    });
+    const participated = new Set(answers.map(answer => roster.normalizeStudentId(answer.studentId)).filter(Boolean));
+    const notPlayed = rosterData
+      ? rosterData.students.filter(student => !participated.has(roster.normalizeStudentId(student.id))).map(student => ({ studentId: student.id, name: student.name }))
+      : [];
+    return res.json({
+      mode: 'colonyquest',
+      lessonTitle: g.lessonTitle,
+      questionCount: g.questions.length,
+      results: [],
+      questionStats,
+      notPlayed,
+      rosterCount: rosterData ? rosterData.students.length : null,
+      colonyquest: summary,
+    });
+  }
   const rosterMap = rosterData ? Object.fromEntries(rosterData.students.map(s => [roster.normalizeStudentId(s.id), s.name])) : {};
   const raw = games.getResults(g.id);
   const results = raw
@@ -3977,6 +4090,7 @@ app.get('/practice', requirePracticeEnabled, (req, res) => res.sendFile(path.joi
 app.get('/play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'play.html')));
 app.get('/fishquest-play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'fishquest.html')));
 app.get('/fishquest/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'fishquest-teacher.html')));
+app.get('/colonyquest/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'colonyquest.html')));
 
 // Student assignment page (worksheet/exit-ticket/quiz online submission).
 app.get('/assignment/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'assignment.html')));
