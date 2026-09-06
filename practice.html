@@ -28,7 +28,11 @@
     .icon-btn:hover { background:rgba(255,255,255,.14); }
     .icon-btn[aria-pressed="true"] { border-color:#69e3a7; background:rgba(24,165,104,.3); }
     .icon-btn:disabled { cursor:not-allowed; opacity:.52; background:rgba(255,255,255,.04); }
+    .immersive-btn { width:42px; min-width:42px; padding:7px; font-size:20px; line-height:1; }
     .shell { width:min(1180px,calc(100% - 32px)); margin:22px auto 44px; }
+    body.immersive-active .topbar { position:sticky; z-index:100; top:0; }
+    body.immersive-active .shell { width:min(1500px,calc(100% - 24px)); margin:12px auto 24px; }
+    body.immersive-fallback { min-height:100dvh; overflow-x:hidden; }
     .status-row { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:14px; }
     .student-name { color:var(--muted); font-size:14px; }
     .save-state { font-size:13px; color:var(--green-dark); font-weight:700; min-height:20px; }
@@ -369,6 +373,7 @@
     .bot-image.small { width:54px; height:54px; border-width:2px; box-shadow:none; }
     .bot-image.complete { width:170px; height:170px; margin-bottom:18px; }
     .byte-state { width:76px; height:76px; object-fit:contain; filter:drop-shadow(0 8px 12px rgba(5,14,32,.22)); transition:transform .18s ease; }
+    .byte .byte-state { width:100%; height:100%; }
     .byte-state.success { transform:scale(1.08); }
     .byte-state.complete { width:210px; height:210px; margin-bottom:14px; animation:transitionIn .5s cubic-bezier(.2,.8,.2,1) both; }
     .live-chip { position:absolute; left:18px; top:18px; display:flex; align-items:center; gap:7px; color:#8cecf4; font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:.8px; }
@@ -639,8 +644,9 @@
     @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; scroll-behavior:auto !important; } }
     @media (max-width:760px) {
       .topbar { align-items:stretch; flex-direction:column; padding:10px 14px; }
-      .top-actions { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); width:100%; }
+      .top-actions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); width:100%; }
       .icon-btn { min-width:0; padding:8px 5px; font-size:12px; }
+      .immersive-btn { width:auto; font-size:18px; }
       .brand small { display:none; }
       .icon-btn span { display:none; }
       .shell { width:min(100% - 20px,1180px); margin-top:12px; }
@@ -727,6 +733,7 @@
       <button class="icon-btn" id="musicBtn" type="button" title="Turn calm background music on or off">Music <span>on</span></button>
       <button class="icon-btn" id="voiceBtn" type="button" title="Turn Byte's read-aloud voice on or off">Read aloud <span>off</span></button>
       <button class="icon-btn" id="pauseBtn" type="button" title="Pause practice">Pause</button>
+      <button class="icon-btn immersive-btn" id="immersiveBtn" type="button" title="Enter immersive view" aria-label="Enter immersive view" aria-pressed="false">⛶</button>
     </div>
   </header>
 
@@ -1002,6 +1009,49 @@
     const keyboardStepIds = new Set(['file-base','copy-paste-menu','copy-paste-shortcut','keyboard-defense','key-patrol','keyboard-map','home-row-left','home-row-right','space-station','top-row-reach','bottom-row-reach','word-blaster','capital-charge','number-launch','punctuation-port','sentence-engine','repair-bay']);
     const inputTrackedStepIds = new Set(['keyboard-defense','key-patrol','keyboard-map','home-row-left','home-row-right','space-station','top-row-reach','bottom-row-reach','word-blaster','capital-charge','number-launch','punctuation-port','sentence-engine','repair-bay']);
     const $ = (id) => document.getElementById(id);
+    const fullscreenElement = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+    function syncPracticeImmersive() {
+      const fallback = document.body.classList.contains('immersive-fallback');
+      const active = fullscreenElement() === document.documentElement || fallback;
+      document.body.classList.toggle('immersive-active', active);
+      $('immersiveBtn').textContent = active ? '×' : '⛶';
+      $('immersiveBtn').title = active ? 'Exit immersive view' : 'Enter immersive view';
+      $('immersiveBtn').setAttribute('aria-label', $('immersiveBtn').title);
+      $('immersiveBtn').setAttribute('aria-pressed', String(active));
+    }
+
+    function clearImmersiveFallback() {
+      if (!document.body.classList.contains('immersive-fallback')) return;
+      document.body.classList.remove('immersive-fallback');
+    }
+
+    async function leavePracticeImmersive() {
+      clearImmersiveFallback();
+      if (fullscreenElement()) {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit) await Promise.resolve(exit.call(document)).catch(() => {});
+      }
+      syncPracticeImmersive();
+    }
+
+    async function togglePracticeImmersive() {
+      if (fullscreenElement() || document.body.classList.contains('immersive-fallback')) {
+        await leavePracticeImmersive(); return;
+      }
+      const request = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+      if (request) {
+        try {
+          await Promise.resolve(request.call(document.documentElement));
+          if (fullscreenElement() !== document.documentElement) document.body.classList.add('immersive-fallback');
+        }
+        catch {
+          document.body.classList.add('immersive-fallback');
+        }
+      } else {
+        document.body.classList.add('immersive-fallback');
+      }
+      syncPracticeImmersive();
+    }
 
     function renderCampaignStepSet() {
       document.body.style.setProperty('--mission-count',steps.length);
@@ -2590,6 +2640,12 @@
     function setPaused(value) { paused=value; $('pauseLayer').classList.toggle('show',paused); $('pauseBtn').textContent=paused?'Continue':'Pause'; syncMusic(); }
     $('pauseBtn').addEventListener('click', () => setPaused(!paused));
     $('resumeBtn').addEventListener('click', () => setPaused(false));
+    $('immersiveBtn').addEventListener('click', togglePracticeImmersive);
+    document.addEventListener('fullscreenchange', syncPracticeImmersive);
+    document.addEventListener('webkitfullscreenchange', syncPracticeImmersive);
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && document.body.classList.contains('immersive-fallback')) leavePracticeImmersive();
+    });
     document.addEventListener('visibilitychange',syncMusic);
     $('practiseAgainBtn').addEventListener('click', async () => { $('completion').classList.add('hidden'); await beginAttempt(true); });
     $('stageJumpBtn').addEventListener('click',()=>{

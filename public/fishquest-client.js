@@ -8,7 +8,46 @@
   try { audioSettings = { ...audioSettings, ...JSON.parse(localStorage.getItem(AUDIO_PREF_KEY) || '{}') }; } catch {}
   let audioContext = null, audioUnlocked = false, musicTimer = null, musicNodes = new Set(), lastPlanktonCue = 0, finishSoundPlayed = false;
   const reducedMotion = Boolean(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  function show(id) { document.querySelectorAll('.screen').forEach(el => el.classList.toggle('show', el.id === id)); }
+  const fullscreenElement = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+  function syncImmersive() {
+    const arena = $('arena'), button = $('immersiveToggle');
+    if (!arena || !button) return;
+    const active = fullscreenElement() === arena || arena.classList.contains('immersive-fallback');
+    button.textContent = active ? '×' : '⛶';
+    button.title = active ? 'Exit immersive view' : 'Enter immersive view';
+    button.setAttribute('aria-label', button.title);
+    button.setAttribute('aria-pressed', String(active));
+    if (scene && scene.scale && typeof scene.scale.refresh === 'function') setTimeout(() => scene.scale.refresh(), 80);
+  }
+  async function leaveImmersive() {
+    const arena = $('arena');
+    if (!arena) return;
+    arena.classList.remove('immersive-fallback');
+    if (fullscreenElement() === arena) {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      if (exit) await Promise.resolve(exit.call(document)).catch(() => {});
+    }
+    syncImmersive();
+  }
+  async function toggleImmersive() {
+    const arena = $('arena'), current = fullscreenElement();
+    if (current === arena || arena.classList.contains('immersive-fallback')) {
+      await leaveImmersive(); return;
+    }
+    const request = arena.requestFullscreen || arena.webkitRequestFullscreen;
+    if (request) {
+      try {
+        await Promise.resolve(request.call(arena));
+        if (fullscreenElement() !== arena) arena.classList.add('immersive-fallback');
+      }
+      catch { arena.classList.add('immersive-fallback'); }
+    } else arena.classList.add('immersive-fallback');
+    syncImmersive();
+  }
+  function show(id) {
+    if (id !== 'arena') leaveImmersive();
+    document.querySelectorAll('.screen').forEach(el => el.classList.toggle('show', el.id === id));
+  }
   async function json(url, options) { const r = await fetch(url, options); const d = await r.json().catch(() => ({})); if (!r.ok) { const e = Error(d.error || 'Please try again.'); e.status = r.status; throw e; } return d; }
   function saveAudioSettings() { try { localStorage.setItem(AUDIO_PREF_KEY, JSON.stringify(audioSettings)); } catch {} }
   function ensureAudio() {
@@ -398,6 +437,12 @@
     audioSettings.music = !audioSettings.music; saveAudioSettings(); updateAudioControls();
     await unlockAudio(); syncMusic();
   };
+  $('immersiveToggle').onclick = toggleImmersive;
+  document.addEventListener('fullscreenchange', syncImmersive);
+  document.addEventListener('webkitfullscreenchange', syncImmersive);
+  addEventListener('keydown', event => {
+    if (event.key === 'Escape' && $('arena').classList.contains('immersive-fallback')) leaveImmersive();
+  });
   addEventListener('pointerdown', () => unlockAudio(), { once: true });
   addEventListener('keydown', () => unlockAudio(), { once: true });
   document.addEventListener('visibilitychange', syncMusic);

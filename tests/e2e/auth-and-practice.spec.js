@@ -32,6 +32,38 @@ test('FishQuest keeps each learner audio choice on their device', async ({ page 
   await expect(page.locator('#soundToggle')).toHaveAttribute('aria-pressed', 'false');
 });
 
+test('every learner game can enter and leave immersive fallback without resetting', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100', 'One Chromium run covers the shared immersive behavior.');
+  await page.addInitScript(() => {
+    Object.defineProperty(Element.prototype, 'requestFullscreen', { configurable: true, value: undefined });
+    Object.defineProperty(Element.prototype, 'webkitRequestFullscreen', { configurable: true, value: undefined });
+  });
+
+  await page.goto('/student/practice/guest?world=g3&continue=1');
+  await expect(page.getByRole('heading', { name: 'File Base' })).toBeVisible();
+  await page.getByRole('button', { name: 'Enter immersive view' }).click();
+  await expect(page.locator('body')).toHaveClass(/immersive-fallback/);
+  await expect(page.locator('#immersiveBtn')).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Exit immersive view' }).click();
+  await expect(page.locator('body')).not.toHaveClass(/immersive-fallback/);
+
+  await page.goto('/play/immersive-test');
+  await page.locator('#gameScreen').evaluate(screen => { screen.style.display = 'block'; });
+  await page.locator('#fsBtn').evaluate(button => button.click());
+  await expect(page.locator('#gameScreen')).toHaveClass(/immersive-fallback/);
+  await expect(page.locator('#fsBtn')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#fsBtn').evaluate(button => button.click());
+  await expect(page.locator('#gameScreen')).not.toHaveClass(/immersive-fallback/);
+
+  await page.goto('/fishquest-play/immersive-test');
+  await page.evaluate(() => document.querySelectorAll('.screen').forEach(screen => screen.classList.toggle('show', screen.id === 'arena')));
+  await page.locator('#immersiveToggle').evaluate(button => button.click());
+  await expect(page.locator('#arena')).toHaveClass(/immersive-fallback/);
+  await expect(page.locator('#immersiveToggle')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#immersiveToggle').evaluate(button => button.click());
+  await expect(page.locator('#arena')).not.toHaveClass(/immersive-fallback/);
+});
+
 test('Typing Academy repairs a missed number key before unlocking the next lesson', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'windows-100', 'One desktop Chromium run covers physical-key interaction.');
   await signInDisposableTeacher(page, '-typing-repair');

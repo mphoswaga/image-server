@@ -188,3 +188,20 @@ test('FishQuest game feel stays local, optional, and motion-safe', () => {
   assert.match(client, /function syncMusic/);
   assert.match(client, /me\.score > previousMe\.score/);
 });
+
+test('every learner game surface offers optional state-preserving immersive view', () => {
+  const arcade = fs.readFileSync(path.join(__dirname, '..', 'public', 'play.html'), 'utf8');
+  const fishPage = fs.readFileSync(path.join(__dirname, '..', 'public', 'fishquest.html'), 'utf8');
+  const fishClient = fs.readFileSync(path.join(__dirname, '..', 'public', 'fishquest-client.js'), 'utf8');
+  const practicePage = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
+
+  assert.match(arcade, /id="fsBtn"[^>]+aria-label="Enter immersive view"/);
+  assert.match(arcade, /gameScreen\.requestFullscreen\|\|gameScreen\.webkitRequestFullscreen/);
+  assert.match(arcade, /gameScreen\.classList\.add\('immersive-fallback'\)/);
+  assert.match(fishPage, /id="immersiveToggle"[^>]+aria-label="Enter immersive view"/);
+  assert.match(fishClient, /arena\.requestFullscreen \|\| arena\.webkitRequestFullscreen/);
+  assert.match(fishClient, /arena\.classList\.add\('immersive-fallback'\)/);
+  assert.match(practicePage, /id="immersiveBtn"[^>]+aria-label="Enter immersive view"/);
+  assert.match(practicePage, /document\.documentElement\.requestFullscreen \|\| document\.documentElement\.webkitRequestFullscreen/);
+  assert.match(practicePage, /document\.body\.classList\.add\('immersive-fallback'\)/);
+});
