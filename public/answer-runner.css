@@ -1,0 +1,44 @@
+body.runner-view { background: #edf5f2; }
+body.runner-view .wrap { max-width: 1180px; padding-top: 12px; }
+body.runner-view .brand { margin-bottom: 12px; }
+#gameScreen.runner-game { width: min(100%, calc((100dvh - 290px) * 1.7778)); max-width: none; margin: 0 auto; background: #f8fcfa; border: 1px solid #b7d5c9; border-radius: 8px; box-shadow: 0 12px 36px #15433418; }
+#gameScreen.runner-game .marquee { display: block; padding: 13px 16px 0; text-align: left; color: #164c48; font: 800 20px 'Plus Jakarta Sans',sans-serif; letter-spacing: 0; text-shadow: none; }
+#gameScreen.runner-game .hud { color: #264d47; padding: 8px 16px; gap: 8px; }
+#gameScreen.runner-game .hud .prog { color: #316455; }
+#gameScreen.runner-game .hud .score { color: #8b5e06; }
+#gameScreen.runner-game .stage { max-width: none; margin: 0; }
+#gameScreen.runner-game #gameCanvas { aspect-ratio: var(--runner-ratio); border-radius: 0; image-rendering: auto; }
+.runner-journey { display: grid; grid-template-columns: minmax(0,1fr) auto 38px; align-items: center; gap: 8px; padding: 11px 16px 0; background: #184d48; color: #fff; }
+.runner-journey[hidden] { display: none; }
+.runner-journey b { display: block; font-size: 17px; }
+.runner-eyebrow { display: block; font-size: 9px; font-weight: 800; color: #b8e4d7; letter-spacing: 0; }
+.runner-travel { display: flex; gap: 15px; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.runner-journey .hud-btn { color: #fff; opacity: 1; border: 1px solid #80b6a8; border-radius: 5px; }
+.runner-journey progress { grid-column: 1/-1; width: 100%; height: 5px; border: 0; appearance: none; background: #47766c; }
+.runner-journey progress::-webkit-progress-bar { background: #47766c; }
+.runner-journey progress::-webkit-progress-value { background: #f5d469; }
+.runner-journey progress::-moz-progress-bar { background: #f5d469; }
+#gameScreen.runner-game .controls { padding: 10px; gap: 12px; background: #f0f7f3; }
+#gameScreen.runner-game .ctrl { width: 100px; height: 44px; background: #176c68; border: 1px solid #0a5754; border-radius: 6px; box-shadow: 0 3px 0 #0c4845; }
+#gameScreen.runner-game .tip { display: none; }
+#gameScreen.runner-game .q-overlay { background: #102f4380; }
+#gameScreen.runner-game .q-box { max-width: 440px; border-radius: 8px; max-height: 94%; overflow: auto; border: 2px solid #67ad9c; }
+#gameScreen.runner-game.immersive-view { width: 100%; background: #123b3d; justify-content: flex-start; overflow: auto; padding: 0; }
+#gameScreen.runner-game.immersive-view .stage { width: min(100%, calc((100dvh - 200px) * 1.7778)); flex: none; }
+#gameScreen.runner-game.immersive-view .marquee { color: #f8efc6; }
+#gameScreen.runner-game.immersive-view .hud,
+#gameScreen.runner-game.immersive-view .runner-journey { width: 100%; max-width: 1180px; }
+#gameScreen.runner-game.immersive-view .hud { color: #effcf5; }
+#gameScreen.runner-game.immersive-view .hud .prog { color: #b5e5d2; }
+#gameScreen.runner-game.immersive-view .controls { background: transparent; }
+@media(max-width:699px) {
+  #gameScreen.runner-game { width: min(100%, calc((100dvh - 215px) * .75)); }
+  body.runner-view .wrap { padding: 8px 8px 18px; }
+  body.runner-view .brand { display: none; }
+  #gameScreen.runner-game .hud { padding: 7px 10px; font-size: 11px; }
+  #gameScreen.runner-game .hud .lives { font-size: 13px; letter-spacing: 0; }
+  #gameScreen.runner-game .hud-right { gap: 5px; }
+  .runner-journey { padding: 9px 10px 0; }
+  .runner-travel { flex-direction: column; gap: 0; font-size: 11px; }
+  #gameScreen.runner-game.immersive-view .stage { width: min(100%, calc((100dvh - 215px) * .75)); }
+}
