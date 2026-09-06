@@ -30,6 +30,8 @@ const evidenceByStep = {
   'space-station': { action: 'type_pattern', target: 'space-pattern' },
   'top-row-reach': { action: 'row_keys', target: 'top-row' },
   'bottom-row-reach': { action: 'row_keys', target: 'bottom-row' },
+  'number-launch': { action: 'type_pattern', target: 'number-pattern' },
+  'punctuation-port': { action: 'type_pattern', target: 'punctuation-pattern' },
 };
 
 function checkpoint(attempt, stepId, overrides = {}) {
@@ -74,6 +76,23 @@ test('an unfinished activity resumes instead of creating duplicate attempts', ()
   assert.equal(first.resumed, false);
   assert.equal(second.resumed, true);
   assert.equal(second.attempt.id, first.attempt.id);
+});
+
+test('an unfinished supported Typing Academy version resumes after a course upgrade', () => {
+  const first = practice.createAttempt({ studentId: 'TYPE-LEGACY-1', studentName: 'Lebo', activityId: 'typing-academy' });
+  const attemptFile = path.join(process.env.DATA_DIR, 'practice', 'attempts', `${first.attempt.id}.json`);
+  fs.writeFileSync(attemptFile, JSON.stringify({
+    ...first.attempt,
+    activityVersion: 1,
+    currentStepIndex: 4,
+    updatedAt: new Date(Date.now() + 1000).toISOString(),
+  }));
+
+  const resumed = practice.createAttempt({ studentId: 'TYPE-LEGACY-1', studentName: 'Lebo', activityId: 'typing-academy' });
+  assert.equal(resumed.resumed, true);
+  assert.equal(resumed.attempt.id, first.attempt.id);
+  assert.equal(resumed.attempt.activityVersion, 1);
+  assert.equal(resumed.attempt.currentStepIndex, 4);
 });
 
 test('a learner cannot skip a skill or submit mismatched evidence', () => {
@@ -184,7 +203,7 @@ test('guest practice is public but never writes recorded student evidence', () =
   assert.match(player, /function continueWorldUrl\(\)/);
   assert.match(player, /\/student\/practice\/guest\?session=\$\{encodeURIComponent\(code\)\}&world=g3&continue=1/);
   assert.match(player, /continuingFoundationRoom=requestedContinue&&requestedWorld==='g3'/);
-  assert.match(player, /body:JSON\.stringify\(\{\.\.\.payload,arcadeScore:performanceSummary\(\)\.score,activityId:ACTIVITY_ID,activityVersion:campaign\.version\}\)/);
+  assert.match(player, /body:JSON\.stringify\(\{\.\.\.payload,arcadeScore:performanceSummary\(\)\.score,activityId:ACTIVITY_ID,activityVersion:attempt\.activityVersion\|\|campaign\.version\}\)/);
   assert.match(start, /href="\/student\/practice\/guest">Practise without signing in/);
   assert.match(teacherLogin, /href="\/student\/practice\/guest">Student guest practice/);
   assert.match(teacherLogin, /if\(\$\('authGuestPractice'\)\) \$\('authGuestPractice'\)\.style\.display=d\.enabled\?'block':'none'/);
@@ -210,7 +229,7 @@ test('the learner quest keeps Byte and its connected game states', () => {
   assert.match(player, /Combo/);
   assert.match(player, /feedback show mistake/);
   assert.match(player, /showComboMilestone/);
-  assert.match(player, /celebrateHit\(finalHit,points,hitTarget\)/);
+  assert.match(player, /celebrateHit\(finalHit&&!needsRepair,points,hitTarget\)/);
   assert.doesNotMatch(player, /body\.playing \.combo-stat\s*\{\s*display:none/);
   assert.doesNotMatch(player, /phase === 'guided'/);
 });
@@ -339,17 +358,21 @@ test('both arcade worlds provide sustained, varied practice', () => {
   assert.match(player, /\['I CAN CODE\.','BYTE IS READY\.'\]/);
   assert.match(player, /\['PEN','PIN'\],\['DOG','DIG'\]/);
   assert.match(player, /About 25–30 minutes/);
-  assert.match(player, /About 30–35 minutes/);
+  assert.match(player, /About 40–45 minutes/);
 });
 
 test('the typing academy starts at the keyboard and builds one row at a time', () => {
   const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');
   const activity = practice.getActivity('typing-academy');
-  assert.equal(activity.version, 1);
+  assert.equal(activity.version, 2);
   assert.equal(activity.title, 'Keyboard Kingdom Typing Academy');
-  assert.deepEqual(activity.steps.slice(0, 6).map((step) => step.id), [
+  assert.deepEqual(activity.steps.map((step) => step.id), [
     'keyboard-map', 'home-row-left', 'home-row-right', 'space-station', 'top-row-reach', 'bottom-row-reach',
+    'word-blaster', 'capital-charge', 'number-launch', 'punctuation-port', 'sentence-engine', 'repair-bay',
   ]);
+  const legacy = practice.getActivity('typing-academy', 1);
+  assert.equal(legacy.version, 1);
+  assert.equal(legacy.steps.length, 10);
   assert.match(player, /Feel the small bump on each key/);
   assert.match(player, /Use a thumb for Space/);
   assert.match(player, /Reach up and come home/);
@@ -357,8 +380,17 @@ test('the typing academy starts at the keyboard and builds one row at a time', (
   assert.match(player, /patterns=\['as df','jk ll','fj fj','ask dad'\]/);
   assert.match(player, /word\.toLowerCase\(\)/);
   assert.match(player, /\['I can type\.','Byte is ready\.'\]/);
-  assert.match(player, /event\.key !== sentence\[typedCount\]/);
+  assert.match(player, /const expected=sentence\[typedCount\]/);
   assert.match(player, /event\.key\.toUpperCase\(\) !== letter \|\| !event\.shiftKey/);
+  assert.match(player, /\['123 321','456 654','789 987','2026','10 20 30'\]/);
+  assert.match(player, /\['cat, dog\.',\s*'yes!',\s*'ready\?',\s*"I'm here\."\]/);
+  assert.match(player, /function adaptiveRepairKeys\(\)/);
+  assert.match(player, /adaptiveRepair\.misses>=3/);
+  assert.match(player, /id="typingWpmStat"/);
+  assert.match(player, /index===0\?'current':'locked'/);
+  assert.match(player, /const typingStepsV1 = typingSteps\.filter/);
+  assert.match(player, /function selectStepVersion\(version\)/);
+  assert.match(player, /selectStepVersion\(attempt\.activityVersion\)/);
 });
 
 test('Typing Academy is a separate teacher-selectable activity', () => {
@@ -367,8 +399,41 @@ test('Typing Academy is a separate teacher-selectable activity', () => {
   assert.match(report, /<option value="typing-academy">Typing Academy<\/option>/);
   assert.match(report, /<optgroup label="Typing Academy">/);
   assert.match(report, /world=\$\{encodeURIComponent\(world\)\}/);
-  assert.match(player, /typing:\{ id:'typing-academy', version:1/);
+  assert.match(player, /typing:\{ id:'typing-academy', version:2/);
   assert.match(player, /id==='typing-academy'\?'typing'/);
+  assert.match(report, /id="activityFilter"/);
+  assert.match(report, /Lesson-by-lesson details/);
+  assert.match(report, /problemKeys/);
+});
+
+test('typing checkpoints retain real WPM and problem-key evidence', () => {
+  const { attempt } = practice.createAttempt({
+    studentId: 'TYPE-METRIC-1',
+    studentName: 'Mina',
+    activityId: 'typing-academy',
+  });
+  const saved = checkpoint(attempt, 'keyboard-map', {
+    activeSeconds: 15,
+    correctInputs: 8,
+    mistakes: 2,
+    typedCharacters: 10,
+    typingSeconds: 12,
+    keyStats: {
+      f: { correct: 4, mistakes: 2, confusions: { j: 2 } },
+      j: { correct: 4, mistakes: 0 },
+      constructor: { correct: 9999, mistakes: 9999 },
+    },
+  });
+  assert.equal(saved.checkpoint.typedCharacters, 10);
+  assert.equal(saved.attempt.wpm, 10);
+  assert.equal(saved.attempt.problemKeys[0].key, 'f');
+  assert.deepEqual(saved.attempt.problemKeys[0].confusedWith, [{ key: 'j', count: 2 }]);
+  assert.equal(Object.hasOwn(saved.checkpoint.keyStats, 'constructor'), false);
+
+  const teacherResult = practice.teacherResults(['type-metric-1'])[0];
+  assert.equal(teacherResult.wpm, 10);
+  assert.equal(teacherResult.typedCharacters, 10);
+  assert.equal(teacherResult.problemKeys[0].accuracyPercent, 67);
 });
 
 test('the arcade result factors accuracy, mistakes and active time into its score', () => {
@@ -400,7 +465,9 @@ test('learner results explain strengths and give mission-specific next steps', (
   assert.match(player, /checkpoint\.mistakes/);
   assert.match(player, /checkpoint\.hintsUsed/);
   assert.match(player, /renderLearnerCoaching\(performance,attempt\.checkpoints/);
-  assert.match(player, /renderLearnerCoaching\(me\?/);
+  assert.match(player, /renderLearnerCoaching\(me,/);
+  assert.match(player, /Your typing focus/);
+  assert.match(player, /confusion=item\.confusedWith/);
 });
 
 test('teacher evidence stays hidden until the teacher chooses View progress', () => {

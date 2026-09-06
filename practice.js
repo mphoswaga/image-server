@@ -13,6 +13,31 @@ const ATTEMPTS_DIR = path.join(PRACTICE_DIR, 'attempts');
 const ACTIVITIES = Object.freeze([
   Object.freeze({
     id: 'typing-academy',
+    version: 2,
+    gradeBand: 'Grades 2-3',
+    title: 'Keyboard Kingdom Typing Academy',
+    description: 'Learn every keyboard row, numbers and punctuation, then strengthen keys that need more practice.',
+    estimatedMinutes: 42,
+    device: 'computer',
+    steps: Object.freeze([
+      Object.freeze({ id: 'keyboard-map', title: 'Keyboard Map', action: 'find_keys', target: 'anchor-keys' }),
+      Object.freeze({ id: 'home-row-left', title: 'Left-Hand Launch', action: 'home_keys', target: 'left-home-row' }),
+      Object.freeze({ id: 'home-row-right', title: 'Right-Hand Rescue', action: 'home_keys', target: 'right-home-row' }),
+      Object.freeze({ id: 'space-station', title: 'Space Station', action: 'type_pattern', target: 'space-pattern' }),
+      Object.freeze({ id: 'top-row-reach', title: 'Sky Key Climb', action: 'row_keys', target: 'top-row' }),
+      Object.freeze({ id: 'bottom-row-reach', title: 'Tunnel Key Run', action: 'row_keys', target: 'bottom-row' }),
+      Object.freeze({ id: 'word-blaster', title: 'Word Blaster', action: 'type_word', target: 'shield-word' }),
+      Object.freeze({ id: 'capital-charge', title: 'Capital Charge', action: 'shift_letter', target: 'capital-signal' }),
+      Object.freeze({ id: 'number-launch', title: 'Number Launch', action: 'type_pattern', target: 'number-pattern' }),
+      Object.freeze({ id: 'punctuation-port', title: 'Punctuation Port', action: 'type_pattern', target: 'punctuation-pattern' }),
+      Object.freeze({ id: 'sentence-engine', title: 'Sentence Engine', action: 'type_sentence', target: 'sentence-signal' }),
+      Object.freeze({ id: 'repair-bay', title: 'Repair Bay', action: 'repair_word', target: 'repaired-code' }),
+    ]),
+  }),
+  // Version 1 remains available for attempts started before number and
+  // punctuation training was added.
+  Object.freeze({
+    id: 'typing-academy',
     version: 1,
     gradeBand: 'Grades 2-3',
     title: 'Keyboard Kingdom Typing Academy',
@@ -234,8 +259,8 @@ function createAttempt({ studentId, studentName, activityId }) {
   const resumable = allAttempts()
     .filter((attempt) => attempt.studentId === sid
       && attempt.activityId === activity.id
-      && attempt.activityVersion === activity.version
-      && attempt.status === 'in_progress')
+      && attempt.status === 'in_progress'
+      && getActivity(attempt.activityId, attempt.activityVersion))
     .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))[0];
   if (resumable) return { attempt: resumable, resumed: true };
 
@@ -258,6 +283,10 @@ function createAttempt({ studentId, studentName, activityId }) {
     paceMultiplierPercent: 100,
     mistakes: 0,
     activeSeconds: 0,
+    typedCharacters: 0,
+    typingSeconds: 0,
+    wpm: 0,
+    problemKeys: [],
     targetSeconds: 0,
     rating: 'Precision pilot',
     startedAt: now,
@@ -319,6 +348,9 @@ function checkpointAttempt(attemptId, studentId, input) {
   const activeSeconds = asBoundedInt(input.activeSeconds, 1, 600, 1);
   const correctInputs = asBoundedInt(input.correctInputs, 0, 10000, 0);
   const mistakes = asBoundedInt(input.mistakes, 0, 1000, Math.max(0, attempts - 1));
+  const typedCharacters = asBoundedInt(input.typedCharacters, 0, 100000, 0);
+  const typingSeconds = Math.min(activeSeconds, asBoundedInt(input.typingSeconds, 0, 600, 0));
+  const keyStats = scoring.normalizeKeyStats(input.keyStats);
   const maximumBaseScore = scoring.maximumBaseScore(activity.steps, attempt.currentStepIndex + 1);
   const baseScore = asBoundedInt(input.baseScore, 0, maximumBaseScore, attempt.baseScore || 0);
   const checkpoint = {
@@ -329,6 +361,9 @@ function checkpointAttempt(attemptId, studentId, input) {
     activeSeconds,
     correctInputs,
     mistakes,
+    typedCharacters,
+    typingSeconds,
+    keyStats,
     mastery: checkpointMastery(attempts, hintsUsed),
     completedAt: new Date().toISOString(),
   };
@@ -357,6 +392,11 @@ function checkpointAttempt(attemptId, studentId, input) {
   attempt.activeSeconds = performance.activeSeconds;
   attempt.targetSeconds = performance.targetSeconds;
   attempt.rating = performance.rating;
+  const typing = scoring.typingSummaryFromCheckpoints(attempt.checkpoints);
+  attempt.typedCharacters = typing.typedCharacters;
+  attempt.typingSeconds = typing.typingSeconds;
+  attempt.wpm = typing.wpm;
+  attempt.problemKeys = typing.problemKeys;
   if (attempt.currentStepIndex >= activity.steps.length) {
     attempt.status = 'completed';
     attempt.completedAt = checkpoint.completedAt;
@@ -386,7 +426,8 @@ function withCurrentPerformance(attempt) {
     ...totals,
     targetSeconds: scoring.targetSecondsForSteps(activity.steps, attempt.currentStepIndex || 0),
   });
-  return { ...attempt, ...performance };
+  const typing = scoring.typingSummaryFromCheckpoints(attempt.checkpoints);
+  return { ...attempt, ...performance, ...typing };
 }
 
 function teacherResults(studentIds) {

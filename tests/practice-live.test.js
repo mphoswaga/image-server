@@ -292,6 +292,41 @@ test('learner room responses never expose classmates performance', () => {
   ]);
 });
 
+test('live typing rooms save WPM and problem keys only in authorized views', () => {
+  const room = live.createRoom({
+    teacherId: 'teacher-typing-metrics',
+    mode: 'homework',
+    activityId: 'typing-academy',
+  });
+  const learner = live.joinRoom(room.code, 'Mina');
+  const saved = live.checkpointRoom(room.code, learner.token, {
+    checkpointId: 'mina-keyboard-map',
+    activityId: 'typing-academy',
+    stepId: 'keyboard-map',
+    evidence: { action: 'find_keys', target: 'anchor-keys' },
+    correctInputs: 8,
+    mistakes: 2,
+    activeSeconds: 15,
+    typedCharacters: 10,
+    typingSeconds: 12,
+    keyStats: {
+      f: { correct: 4, mistakes: 2, confusions: { j: 2 } },
+      j: { correct: 4, mistakes: 0 },
+    },
+  });
+  assert.equal(saved.participant.wpm, 10);
+  assert.equal(saved.participant.typedCharacters, 10);
+  assert.equal(saved.participant.problemKeys[0].key, 'f');
+
+  const teacherRoom = live.teacherRooms('teacher-typing-metrics')[0];
+  assert.equal(teacherRoom.leaderboard[0].wpm, 10);
+  assert.equal(teacherRoom.leaderboard[0].problemKeys[0].key, 'f');
+
+  const learnerRoom = live.getRoomForParticipant(room.code, learner.token);
+  assert.equal(learnerRoom.participant.wpm, 10);
+  assert.deepEqual(Object.keys(learnerRoom.room.leaderboard[0]).sort(), ['id', 'name']);
+});
+
 test('a Foundation live participant continues into Grade 3 without rejoining', () => {
   const room = live.createRoom({ teacherId: 'teacher-worlds', activityId: 'g2-pointer-control' });
   const joined = live.joinRoom(room.code, 'Tara');

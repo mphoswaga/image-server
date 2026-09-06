@@ -193,7 +193,43 @@
     const fin = scene.add.image(-2,9,fishTexture(p.variant,'fin')).setOrigin(.68,.28).setScale(.29);
     const sprite = scene.add.container(p.x,p.y,[tail,body,fin]);
     const label = scene.add.text(p.x,p.y-34,p.name,{font:'bold 15px Arial',color:'#ffffff',stroke:'#052c48',strokeThickness:4}).setOrigin(.5);
-    return {sprite,label,tail,fin,tx:p.x,ty:p.y,scale:Math.pow(p.mass/100,.65),facing:1,phase:p.variant*1.7};
+    return {sprite,label,tail,fin,tx:p.x,ty:p.y,scale:Math.pow(p.mass/100,.65),facing:1,phase:p.variant*1.7,swimSpeed:0};
+  }
+  const bubbles = [];
+  let oceanTime=0;
+  function planktonTexture(variant) {
+    const key=`plankton-${variant}`;
+    if(scene.textures.exists(key)) return key;
+    const texture=scene.textures.createCanvas(key,48,64), c=texture.context;
+    c.strokeStyle='#245b48'; c.lineWidth=2; c.lineCap='round';
+    c.beginPath(); c.moveTo(19,25); c.quadraticCurveTo(8,14,12,5); c.moveTo(29,25); c.quadraticCurveTo(40,13,36,4); c.stroke();
+    const gradient=c.createLinearGradient(12,20,36,52);
+    gradient.addColorStop(0,['#d9fa90','#9df4dd','#ffe599'][variant]); gradient.addColorStop(1,['#58b96a','#39ab91','#e7af48'][variant]);
+    c.fillStyle=gradient; c.beginPath(); c.ellipse(24,37,13,20,0,0,Math.PI*2); c.fill(); c.stroke();
+    c.fillStyle='#fffde7'; c.beginPath(); c.ellipse(24,30,8,9,0,0,Math.PI*2); c.fill();
+    c.fillStyle='#244958'; c.beginPath(); c.arc(26,30,4,0,Math.PI*2); c.fill();
+    c.fillStyle='#ffffff'; c.beginPath(); c.arc(27,28,1.5,0,Math.PI*2); c.fill();
+    c.beginPath(); c.moveTo(20,44); c.quadraticCurveTo(25,49,29,43); c.stroke();
+    texture.refresh(); return key;
+  }
+  function animateOcean(dt,t) {
+    if(!bubbles.length) {
+      for(let i=0;i<56;i++) {
+        const bubble=scene.add.circle((i*443)%2400,(i*277)%1600,2+i%6,0xc7faff,.035).setStrokeStyle(1,0xd5fcff,.24).setDepth(i%3===0?2:-2);
+        bubbles.push({sprite:bubble,x:bubble.x,y:bubble.y,speed:12+i%23,phase:i*2.4});
+      }
+    }
+    for(const b of bubbles) {
+      b.y-=b.speed*dt;
+      if(b.y < -12) b.y=1612;
+      b.sprite.setPosition(b.x+Math.sin(t*.55+b.phase)*15,b.y);
+    }
+    for(const [id,f] of foods) if(f.visible) {
+      const phase=t*1.8+Number(id)*2.3;
+      f.rotation=Math.sin(phase)*.16;
+      f.setPosition(f.foodX+Math.sin(phase*.7)*2,f.foodY+Math.sin(phase)*3);
+      f.setScale(.34*(1+Math.sin(phase)*.035),.34*(1-Math.sin(phase)*.04));
+    }
   }
   function renderState() {
     if (!scene) return;
@@ -207,20 +243,27 @@
     }
     for (const [id, e] of entities) if (!seen.has(id)) { e.sprite.destroy(); e.label.destroy(); entities.delete(id); }
     const foodSeen = new Set();
-    for (const [id, x, y] of state.food) { foodSeen.add(id); let f = foods.get(id); if (!f) { f = scene.add.circle(x, y, 6, [0xffeb65,0x70f0dc,0xff8d79][id%3]).setStrokeStyle(2,0xffffff,.65); foods.set(id,f); } f.setPosition(x,y).setVisible(true); }
+    for (const [id, x, y] of state.food) { foodSeen.add(id); let f = foods.get(id); if (!f) { f = scene.add.image(x,y,planktonTexture(id%3)).setScale(.34); foods.set(id,f); } f.foodX=x; f.foodY=y; f.setVisible(true); }
     for (const [id,f] of foods) if (!foodSeen.has(id)) f.setVisible(false);
   }
   function animate() {
     if (!state || !scene) return;
-    const dt=Math.min(50,scene.game.loop.delta)/1000, follow=1-Math.exp(-14*dt), t=performance.now()/1000;
+    const dt=state.phase==='paused'||state.phase==='ended'?0:Math.min(50,scene.game.loop.delta)/1000, follow=1-Math.exp(-14*dt);
+    oceanTime+=dt*(reducedMotion?.2:1);
+    const t=oceanTime;
+    animateOcean(dt,t);
     for (const e of entities.values()) {
       const dx=e.tx-e.sprite.x,dy=e.ty-e.sprite.y,speed=Math.min(1,Math.hypot(dx,dy)/16);
       e.sprite.x+=dx*follow; e.sprite.y+=dy*follow;
       e.sprite.scaleY+=(e.scale-e.sprite.scaleY)*(1-Math.exp(-7*dt));
       e.sprite.scaleX+=(e.facing*e.scale-e.sprite.scaleX)*(1-Math.exp(-12*dt));
-      const beat=t*(e.locked?3:5+speed*9)+e.phase;
-      e.tail.rotation=Math.sin(beat)*(.12+speed*.22); e.tail.scaleX=.32*(.8+Math.cos(beat)*.2);
-      e.fin.rotation=Math.sin(beat+1)*.28;
+      e.swimSpeed+=(speed-e.swimSpeed)*(1-Math.exp(-4*dt));
+      e.phase=(e.phase+dt*(reducedMotion?.8:e.locked?2.5:4+e.swimSpeed*6))%(Math.PI*2);
+      const beat=e.phase;
+      e.tail.rotation=Math.sin(beat)*(.10+e.swimSpeed*.19); e.tail.scaleX=.32*(.94+Math.cos(beat)*.06);
+      e.tail.scaleY=.32*(1+Math.sin(beat+.7)*.04);
+      e.fin.rotation=Math.sin(beat-.8)*.19+Math.sin(beat*2-1)*.035;
+      e.fin.scaleY=.29*(.94+Math.cos(beat-.8)*.08);
       const tilt=Math.max(-.25,Math.min(.25,dy*.018*e.facing));
       e.sprite.rotation+=(tilt+Math.sin(beat)*.025-e.sprite.rotation)*follow;
       e.label.setPosition(e.sprite.x,e.sprite.y-36*e.sprite.scaleY);

@@ -52,6 +52,16 @@
     .skill-list { display:flex; flex-wrap:wrap; gap:4px; }
     .skill { padding:3px 6px; border:1px solid var(--line); border-radius:5px; color:var(--muted); font-size:10px; }
     .skill.done { border-color:#9edbbf; color:var(--green-dark); background:var(--soft-green); }
+    .skill.practise { border-color:#f0c28e; color:#8c4b25; background:var(--soft-orange); }
+    .activity-tag { display:inline-block; margin-top:5px; color:var(--cyan); font-size:10px; font-weight:800; }
+    .typing-performance { margin-top:7px; padding:7px 8px; border-left:3px solid var(--cyan); background:var(--soft-cyan); color:var(--navy); }
+    .typing-performance b { font-size:15px; }
+    .key-focus { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
+    .key-chip { padding:3px 5px; border:1px solid #d8b17e; border-radius:4px; background:#fff8e9; color:#7a431e; font-size:9px; font-weight:800; }
+    .typing-detail { margin-top:8px; color:var(--navy); font-size:10px; }
+    .typing-detail summary { cursor:pointer; color:var(--cyan); font-weight:800; }
+    .lesson-line { display:grid; grid-template-columns:minmax(90px,1fr) auto; gap:7px; padding:5px 0; border-bottom:1px solid var(--line); }
+    .lesson-line:last-child { border-bottom:0; }
     .empty,.loading,.error { padding:46px 24px; text-align:center; color:var(--muted); background:#fff; border:1px solid var(--line); }
     .error { color:#a13c2e; }
     .live-room { position:relative; overflow:hidden; margin-bottom:20px; padding:20px; border:1px solid #9edbbf; border-top:4px solid var(--green); background:#fff; box-shadow:var(--shadow); transition:border-color .25s,box-shadow .25s; }
@@ -152,7 +162,7 @@
 <body class="mission-control" data-byte-ui="teacher">
   <header class="topbar"><div class="brand"><span class="brand-mark">LS</span><span>LessonScope Practice</span></div><a class="back" href="/">Back to planner</a></header>
   <main class="shell">
-    <div class="heading"><div><h1>Mission Control</h1><p class="sub">Class arcade and live sessions</p></div><div class="heading-actions"><a class="btn primary" id="previewFullBtn" href="/practice/preview">Preview full game</a><select id="previewStageSelect" aria-label="Choose a practice stage to test"><optgroup label="Foundation World"><option value="foundation:move-pointer">1. Signal Trail</option><option value="foundation:single-click">2. Reactor Rush</option><option value="foundation:double-click">3. Vault Breaker</option><option value="foundation:context-command">4. Command Deck</option><option value="foundation:drag-drop">5. Cargo Rescue</option><option value="foundation:scroll-find">6. Signal Tower</option><option value="foundation:copy-paste-menu">7. Message Relay</option><option value="foundation:keyboard-defense">8. Sky Shield</option></optgroup><optgroup label="Grade 3 World"><option value="g3:copy-paste-shortcut">1. Rapid Relay</option><option value="g3:key-patrol">2. Key Patrol</option><option value="g3:word-blaster">3. Word Blaster</option><option value="g3:capital-charge">4. Capital Charge</option><option value="g3:sentence-engine">5. Sentence Engine</option><option value="g3:repair-bay">6. Repair Bay</option></optgroup><optgroup label="Typing Academy"><option value="typing:keyboard-map">1. Keyboard Map</option><option value="typing:home-row-left">2. Left-Hand Launch</option><option value="typing:home-row-right">3. Right-Hand Rescue</option><option value="typing:space-station">4. Space Station</option><option value="typing:top-row-reach">5. Sky Key Climb</option><option value="typing:bottom-row-reach">6. Tunnel Key Run</option><option value="typing:word-blaster">7. Word Blaster</option><option value="typing:capital-charge">8. Capital Charge</option><option value="typing:sentence-engine">9. Sentence Engine</option><option value="typing:repair-bay">10. Repair Bay</option></optgroup></select><button class="btn" id="previewStageBtn" type="button">Test stage</button></div></div>
+    <div class="heading"><div><h1>Mission Control</h1><p class="sub">Class arcade and live sessions</p></div><div class="heading-actions"><a class="btn primary" id="previewFullBtn" href="/practice/preview">Preview full game</a><select id="previewStageSelect" aria-label="Choose a practice stage to test"><optgroup label="Foundation World"><option value="foundation:move-pointer">1. Signal Trail</option><option value="foundation:single-click">2. Reactor Rush</option><option value="foundation:double-click">3. Vault Breaker</option><option value="foundation:context-command">4. Command Deck</option><option value="foundation:drag-drop">5. Cargo Rescue</option><option value="foundation:scroll-find">6. Signal Tower</option><option value="foundation:copy-paste-menu">7. Message Relay</option><option value="foundation:keyboard-defense">8. Sky Shield</option></optgroup><optgroup label="Grade 3 World"><option value="g3:copy-paste-shortcut">1. Rapid Relay</option><option value="g3:key-patrol">2. Key Patrol</option><option value="g3:word-blaster">3. Word Blaster</option><option value="g3:capital-charge">4. Capital Charge</option><option value="g3:sentence-engine">5. Sentence Engine</option><option value="g3:repair-bay">6. Repair Bay</option></optgroup><optgroup label="Typing Academy"><option value="typing:keyboard-map">1. Keyboard Map</option><option value="typing:home-row-left">2. Left-Hand Launch</option><option value="typing:home-row-right">3. Right-Hand Rescue</option><option value="typing:space-station">4. Space Station</option><option value="typing:top-row-reach">5. Sky Key Climb</option><option value="typing:bottom-row-reach">6. Tunnel Key Run</option><option value="typing:word-blaster">7. Word Blaster</option><option value="typing:capital-charge">8. Capital Charge</option><option value="typing:number-launch">9. Number Launch</option><option value="typing:punctuation-port">10. Punctuation Port</option><option value="typing:sentence-engine">11. Sentence Engine</option><option value="typing:repair-bay">12. Repair Bay</option></optgroup></select><button class="btn" id="previewStageBtn" type="button">Test stage</button></div></div>
     <section class="live-room" aria-labelledby="liveRoomTitle">
       <div class="live-head">
         <div><h2 id="liveRoomTitle">Class arcade</h2><p>Run a teacher-controlled class game or share a self-paced homework room.</p><div class="session-beacon" id="sessionBeacon" hidden><i></i><span id="sessionBeaconText">Live class connected</span><span class="sync-freshness" id="sessionFreshness">syncing</span></div></div>
@@ -189,7 +199,7 @@
       </section>
       <section id="loading" class="loading">Loading practice evidence...</section>
       <section id="content" hidden>
-        <div class="filters"><label for="rosterFilter">Class</label><select id="rosterFilter"><option value="">All classes</option></select><label for="masteryFilter">Result</label><select id="masteryFilter"><option value="">All results</option><option value="independent">Independent</option><option value="developing_independence">Developing independence</option><option value="completed_with_support">Completed with support</option><option value="not_started">In progress</option></select></div>
+        <div class="filters"><label for="activityFilter">Activity</label><select id="activityFilter"><option value="">All activities</option><option value="g2-pointer-control">Foundation World</option><option value="g3-keyboard-kingdom">Grade 3 World</option><option value="typing-academy">Typing Academy</option></select><label for="rosterFilter">Class</label><select id="rosterFilter"><option value="">All classes</option></select><label for="masteryFilter">Result</label><select id="masteryFilter"><option value="">All results</option><option value="independent">Independent</option><option value="developing_independence">Developing independence</option><option value="completed_with_support">Completed with support</option><option value="not_started">In progress</option></select></div>
         <div class="table-wrap"><table><thead><tr><th>Student</th><th>Class</th><th>Status</th><th>Skill evidence</th><th>Performance</th><th>Hints</th><th>Active time</th><th>Last update</th></tr></thead><tbody id="resultsBody"></tbody></table></div>
         <div class="empty" id="empty" hidden>No practice evidence matches these filters.</div>
       </section>
@@ -197,7 +207,12 @@
   </main>
   <script>
     const $ = (id) => document.getElementById(id);
-    const stepNames = { 'move-pointer':'Pointer chase', 'single-click':'Single-click', 'double-click':'Double-click', 'context-command':'Right-click', 'drag-drop':'Drag', 'scroll-find':'Scroll', 'file-base':'Folders and saving', 'keyboard-defense':'Typing', 'key-patrol':'Home-row keys', 'word-blaster':'Words', 'capital-charge':'Shift capitals', 'sentence-engine':'Sentences', 'repair-bay':'Backspace editing' };
+    const activityNames={ 'g2-pointer-control':'Foundation World', 'g3-keyboard-kingdom':'Grade 3 World', 'typing-academy':'Typing Academy' };
+    const stepNames = {
+      'g2-pointer-control':{ 'move-pointer':'Pointer chase', 'single-click':'Single-click', 'double-click':'Double-click', 'context-command':'Right-click', 'drag-drop':'Drag', 'scroll-find':'Scroll', 'copy-paste-menu':'Copy and paste menus', 'keyboard-defense':'Typing' },
+      'g3-keyboard-kingdom':{ 'file-base':'Folders and saving', 'copy-paste-shortcut':'Copy and paste shortcuts', 'key-patrol':'Home-row keys', 'word-blaster':'Words', 'capital-charge':'Shift capitals', 'sentence-engine':'Sentences', 'repair-bay':'Backspace editing' },
+      'typing-academy':{ 'keyboard-map':'Keyboard map', 'home-row-left':'Left home row', 'home-row-right':'Right home row', 'space-station':'Spacebar', 'top-row-reach':'Top row', 'bottom-row-reach':'Bottom row', 'word-blaster':'Words', 'capital-charge':'Shift capitals', 'number-launch':'Numbers', 'punctuation-port':'Punctuation', 'sentence-engine':'Sentences', 'repair-bay':'Backspace editing' },
+    };
     const grade3StageGroup=[...$('previewStageSelect').querySelectorAll('optgroup')].find((group)=>group.label==='Grade 3 World');
     if(grade3StageGroup) grade3StageGroup.innerHTML='<option value="g3:file-base">1. File Base</option><option value="g3:copy-paste-shortcut">2. Rapid Relay</option><option value="g3:key-patrol">3. Key Patrol</option><option value="g3:word-blaster">4. Word Blaster</option><option value="g3:capital-charge">5. Capital Charge</option><option value="g3:sentence-engine">6. Sentence Engine</option><option value="g3:repair-bay">7. Repair Bay</option>';
     let data = { students:[], results:[] };
@@ -479,7 +494,7 @@
       $('liveBoardTitle').textContent=ended?(classwork?'Final podium':'Homework results'):waiting?'Learners in the lobby':classwork?'Live leaderboard':'Learner progress';
       $('rankingNote').hidden=waiting||!players.length;
       $('liveLeaderboard').innerHTML=players.length
-        ? players.map((player)=>{ const isNew=!knownLivePlayers.has(player.id); const connection=playerConnectionState(player,{waiting,paused,ended}); const activityLabel=player.activityId==='typing-academy'?'Typing · ':player.activityId==='g3-keyboard-kingdom'?'Grade 3 · ':''; const formula=`${player.baseScore||0} mission pts × ${player.accuracyMultiplierPercent??100}% accuracy × ${player.paceMultiplierPercent??100}% pace`; const podium=ended&&player.rank<=3?`podium rank-${player.rank}`:''; return `<div class="live-player ${isNew?'new-arrival':''} ${podium}"><span class="live-rank">${waiting?'✓':player.rank}</span><div class="live-player-name"><b>${esc(player.name)}</b><span class="player-state ${connection.className}"><i></i>${connection.label}</span></div><span>${waiting?'Ready to start':`${activityLabel}${player.missionsCompleted}/${player.missionCount||room.activity.missionCount} missions · ${player.accuracyPercent??100}% accurate · ${player.mistakes||0} mistakes · ${fmtTime(player.activeSeconds)} active`}</span><span class="live-score" title="${esc(formula)}">${waiting?'Joined':`<b>${player.score} pts</b><small>${esc(formula)}</small>`}</span></div>`; }).join('')
+        ? players.map((player)=>{ const isNew=!knownLivePlayers.has(player.id); const connection=playerConnectionState(player,{waiting,paused,ended}); const typing=player.activityId==='typing-academy'; const activityLabel=typing?'Typing · ':player.activityId==='g3-keyboard-kingdom'?'Grade 3 · ':''; const formula=`${player.baseScore||0} mission pts × ${player.accuracyMultiplierPercent??100}% accuracy × ${player.paceMultiplierPercent??100}% pace`; const podium=ended&&player.rank<=3?`podium rank-${player.rank}`:''; return `<div class="live-player ${isNew?'new-arrival':''} ${podium}"><span class="live-rank">${waiting?'✓':player.rank}</span><div class="live-player-name"><b>${esc(player.name)}</b><span class="player-state ${connection.className}"><i></i>${connection.label}</span></div><span>${waiting?'Ready to start':`${activityLabel}${player.missionsCompleted}/${player.missionCount||room.activity.missionCount} missions · ${player.accuracyPercent??100}% accurate · ${player.mistakes||0} mistakes · ${fmtTime(player.activeSeconds)} active${typing?` · ${player.wpm||0} WPM`:''}`}</span><span class="live-score" title="${esc(formula)}">${waiting?'Joined':`<b>${player.score} pts</b><small>${esc(formula)}</small>`}</span></div>`; }).join('')
         : '<div class="live-empty">Waiting for learners to join...</div>';
       knownLivePlayers=new Set(players.map((player)=>player.id));
       syncRoomClock();
@@ -591,16 +606,19 @@
       return [...latest.values()];
     }
     function refreshCards() {
-      const latest=latestPerStudent(data.results);
+      const activityId=$('activityFilter').value;
+      const source=activityId?data.results.filter((result)=>result.activityId===activityId):data.results;
+      const latest=latestPerStudent(source);
       $('studentCount').textContent=data.students.length;
       $('startedCount').textContent=latest.length;
       $('completedCount').textContent=latest.filter((r)=>r.status==='completed').length;
       $('independentCount').textContent=latest.filter((r)=>r.mastery==='independent').length;
     }
     function render() {
-      const rosterId=$('rosterFilter').value, mastery=$('masteryFilter').value;
-      let results=latestPerStudent(data.results);
-      if(rosterId) results=results.filter((r)=>(r.rosters||[]).some((item)=>item.id===rosterId));
+      const activityId=$('activityFilter').value, rosterId=$('rosterFilter').value, mastery=$('masteryFilter').value;
+      let source=activityId?data.results.filter((result)=>result.activityId===activityId):data.results;
+      if(rosterId) source=source.filter((r)=>(r.rosters||[]).some((item)=>item.id===rosterId));
+      let results=latestPerStudent(source);
       if(mastery) results=results.filter((r)=>(mastery==='not_started' ? r.status!=='completed' : r.mastery===mastery));
       $('resultsBody').innerHTML=results.map((result)=>{
         const mistakes=(result.checkpoints||[]).reduce((sum,item)=>sum+(item.mistakes??Math.max(0,(item.attempts||1)-1)),0);
@@ -609,9 +627,16 @@
         const hints=(result.checkpoints||[]).reduce((sum,item)=>sum+(item.hintsUsed||0),0);
         const seconds=(result.checkpoints||[]).reduce((sum,item)=>sum+(item.activeSeconds||0),0);
         const scoreFormula=`${result.baseScore||0} mission pts × ${result.accuracyMultiplierPercent??100}% accuracy × ${result.paceMultiplierPercent??100}% pace`;
-        const completed=new Set((result.checkpoints||[]).map((item)=>item.stepId));
-        const skills=Object.entries(stepNames).map(([id,name])=>`<span class="skill ${completed.has(id)?'done':''}">${esc(name)}</span>`).join('');
-        return `<tr><td><div class="student">${esc(result.studentName||result.studentId)}</div><div class="meta">${esc(result.studentId)}</div></td><td>${esc((result.rosters||[]).map((r)=>r.name).join(', ')||'-')}</td><td><span class="pill ${esc(result.mastery)}">${esc(result.status==='completed'?label(result.mastery):'In progress')}</span></td><td><div class="skill-list">${skills}</div></td><td><b>${result.score||0} pts</b><div class="meta">${accuracy}% accurate · ${mistakes} mistakes</div><div class="meta">${esc(scoreFormula)}</div></td><td>${hints}</td><td>${fmtTime(seconds)}</td><td>${fmtDate(result.updatedAt)}</td></tr>`;
+        const checkpoints=new Map((result.checkpoints||[]).map((item)=>[item.stepId,item]));
+        let definitions=stepNames[result.activityId]||{};
+        if(result.activityId==='typing-academy'&&Number(result.activityVersion)===1) definitions=Object.fromEntries(Object.entries(definitions).filter(([id])=>!['number-launch','punctuation-port'].includes(id)));
+        const skills=Object.entries(definitions).map(([id,name])=>{const checkpoint=checkpoints.get(id),needsPractice=checkpoint&&((checkpoint.mistakes||0)>0||(checkpoint.hintsUsed||0)>0);return `<span class="skill ${checkpoint?(needsPractice?'practise':'done'):''}" title="${checkpoint?`${checkpoint.mistakes||0} mistakes · ${checkpoint.hintsUsed||0} hints`:'Not completed'}">${esc(name)}</span>`;}).join('');
+        const typing=result.activityId==='typing-academy';
+        const problemKeys=(result.problemKeys||[]).slice(0,5);
+        const keyFocus=problemKeys.length?`<div class="key-focus">${problemKeys.map((item)=>`<span class="key-chip">${esc(item.key)} · ${item.accuracyPercent}%</span>`).join('')}</div>`:'<div class="meta">No problem keys recorded</div>';
+        const lessonDetails=typing?`<details class="typing-detail"><summary>Lesson-by-lesson details</summary>${(result.checkpoints||[]).map((checkpoint)=>{const chars=Number(checkpoint.typedCharacters)||0,typingTime=Number(checkpoint.typingSeconds)||0,wpm=typingTime?Math.round((((chars/5)/(typingTime/60))*10))/10:0;return `<div class="lesson-line"><b>${esc((definitions[checkpoint.stepId]||checkpoint.stepId))}</b><span>${wpm} WPM · ${checkpoint.mistakes||0} mistakes · ${fmtTime(checkpoint.activeSeconds)}</span></div>`;}).join('')||'<div class="meta">No completed typing lessons yet.</div>'}</details>`:'';
+        const typingPerformance=typing?`<div class="typing-performance"><b>${result.wpm||0} WPM</b><div class="meta">${result.typedCharacters||0} characters typed</div>${keyFocus}</div>`:'';
+        return `<tr><td><div class="student">${esc(result.studentName||result.studentId)}</div><div class="meta">${esc(result.studentId)}</div><span class="activity-tag">${esc(activityNames[result.activityId]||result.activityId)}</span></td><td>${esc((result.rosters||[]).map((r)=>r.name).join(', ')||'-')}</td><td><span class="pill ${esc(result.mastery)}">${esc(result.status==='completed'?label(result.mastery):'In progress')}</span></td><td><div class="skill-list">${skills}</div>${lessonDetails}</td><td><b>${result.score||0} pts</b><div class="meta">${accuracy}% accurate · ${mistakes} mistakes</div><div class="meta">${esc(scoreFormula)}</div>${typingPerformance}</td><td>${hints}</td><td>${fmtTime(seconds)}</td><td>${fmtDate(result.updatedAt)}</td></tr>`;
       }).join('');
       $('empty').hidden=results.length>0;
     }
@@ -632,6 +657,7 @@
     }
     $('rosterFilter').addEventListener('change',render);
     $('masteryFilter').addEventListener('change',render);
+    $('activityFilter').addEventListener('change',()=>{refreshCards();render();});
     $('toggleProgressBtn').addEventListener('click',()=>{
       const opening=$('progressPanel').hidden;
       $('progressPanel').hidden=!opening;

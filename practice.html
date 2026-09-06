@@ -40,6 +40,7 @@
     .progress-step { min-width:0; padding:9px 8px; border-top:3px solid var(--line); color:var(--muted); font-size:12px; font-weight:700; text-align:center; }
     .progress-step.current { border-color:var(--cyan); color:var(--navy); background:var(--soft-cyan); }
     .progress-step.done { border-color:var(--green); color:var(--green-dark); background:var(--soft-green); }
+    .progress-step.locked { opacity:.62; }
     .gate,.intro,.completion { min-height:520px; display:grid; place-items:center; background:#fff; border:1px solid var(--line); box-shadow:var(--shadow); padding:34px; }
     .completion { position:relative; overflow:hidden; }
     .completion-inner { position:relative; z-index:1; }
@@ -52,6 +53,9 @@
     body.campaign-g3 .quest-map,body.campaign-g3 .progress { grid-template-columns:repeat(5,minmax(0,1fr)); }
     .quest-stop { min-width:0; padding:12px 7px; border:1px solid var(--line); background:#f8fbfd; color:var(--navy); font-size:12px; font-weight:800; }
     .quest-stop strong { display:grid; place-items:center; width:28px; height:28px; margin:0 auto 6px; border-radius:50%; background:var(--navy); color:#fff; }
+    .quest-stop.current { border-color:var(--cyan); background:var(--soft-cyan); }
+    .quest-stop.locked { opacity:.58; }
+    .quest-stop.locked:after { content:"Locked"; display:block; margin-top:5px; color:var(--muted); font-size:9px; text-transform:uppercase; }
     .activity-facts { display:grid; grid-template-columns:repeat(3,1fr); border:1px solid var(--line); margin:18px auto 22px; text-align:left; }
     .fact { padding:14px; min-width:0; }
     .fact+.fact { border-left:1px solid var(--line); }
@@ -152,8 +156,8 @@
     .room-copy-paste-menu { background-image:linear-gradient(rgba(17,9,43,.18),rgba(17,9,43,.55)),url('/assets/practice/bg_message_relay.jpeg'); background-position:center; background-size:cover; }
     .room-copy-paste-shortcut { background:radial-gradient(circle at 50% 45%,rgba(240,91,169,.18),transparent 35%),linear-gradient(145deg,#111738,#342057); }
     .room-keyboard-defense { background-image:linear-gradient(rgba(2,6,23,.08),rgba(2,6,23,.52)),url('/assets/practice/bg_sky_shield.jpeg'); background-position:center; background-size:cover; }
-    .room-key-patrol,.room-keyboard-map,.room-home-row-left,.room-home-row-right,.room-space-station,.room-top-row-reach,.room-bottom-row-reach,.room-word-blaster,.room-capital-charge,.room-sentence-engine,.room-repair-bay { background:linear-gradient(145deg,#090b24,#29205b); }
-    .room-move-pointer:after,.room-single-click:after,.room-double-click:after,.room-context-command:after,.room-drag-drop:after,.room-scroll-find:after,.room-copy-paste-menu:after,.room-copy-paste-shortcut:after,.room-keyboard-defense:after,.room-key-patrol:after,.room-keyboard-map:after,.room-home-row-left:after,.room-home-row-right:after,.room-space-station:after,.room-top-row-reach:after,.room-bottom-row-reach:after,.room-word-blaster:after,.room-capital-charge:after,.room-sentence-engine:after,.room-repair-bay:after { content:""; position:absolute; z-index:-1; inset:0; opacity:.45; background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px); background-size:34px 34px; }
+    .room-key-patrol,.room-keyboard-map,.room-home-row-left,.room-home-row-right,.room-space-station,.room-top-row-reach,.room-bottom-row-reach,.room-word-blaster,.room-capital-charge,.room-number-launch,.room-punctuation-port,.room-sentence-engine,.room-repair-bay { background:linear-gradient(145deg,#090b24,#29205b); }
+    .room-move-pointer:after,.room-single-click:after,.room-double-click:after,.room-context-command:after,.room-drag-drop:after,.room-scroll-find:after,.room-copy-paste-menu:after,.room-copy-paste-shortcut:after,.room-keyboard-defense:after,.room-key-patrol:after,.room-keyboard-map:after,.room-home-row-left:after,.room-home-row-right:after,.room-space-station:after,.room-top-row-reach:after,.room-bottom-row-reach:after,.room-word-blaster:after,.room-capital-charge:after,.room-number-launch:after,.room-punctuation-port:after,.room-sentence-engine:after,.room-repair-bay:after { content:""; position:absolute; z-index:-1; inset:0; opacity:.45; background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px); background-size:34px 34px; }
     .arcade-grid { width:min(680px,calc(100% - 30px)); height:290px; display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr); gap:14px; padding:12px; }
     .arcade-pad { position:relative; display:grid; place-items:center; min-width:0; border:2px solid #29486d; border-radius:50%; background:#071225; box-shadow:inset 0 8px 15px rgba(0,0,0,.65); }
     button.arcade-pad { cursor:pointer; }
@@ -277,6 +281,13 @@
     .typing-target .typed { color:#69e3a7; text-shadow:0 0 10px rgba(105,227,167,.7); }
     .typing-target .wrong { color:#f05b6b; text-decoration:line-through; }
     .typing-status { color:#a9b9ce; font-size:14px; }
+    .adaptive-repair { width:min(680px,calc(100% - 30px)); min-height:285px; position:relative; display:grid; grid-template-columns:150px minmax(0,1fr); align-items:center; gap:24px; padding:34px; border:2px solid #f8c342; background:#0b102b; box-shadow:0 0 34px rgba(248,195,66,.18); }
+    .adaptive-repair img { width:145px; height:145px; object-fit:contain; }
+    .adaptive-copy { min-width:0; text-align:center; }
+    .adaptive-copy b { display:block; color:#f8c342; font-size:12px; text-transform:uppercase; }
+    .adaptive-copy h3 { margin:7px 0 6px; color:#fff; font-size:24px; }
+    .adaptive-copy p { margin:0 0 18px; color:#b9cae0; }
+    .adaptive-progress { margin-top:17px; color:#a9b9ce; font-size:12px; font-weight:800; }
     .conveyor { width:min(700px,calc(100% - 34px)); min-height:230px; display:grid; grid-template-columns:1fr 1fr; align-items:center; justify-items:center; gap:30px; padding:30px; position:relative; border:2px solid #79e8ef; background-image:linear-gradient(rgba(5,14,32,.10),rgba(5,14,32,.42)),url('/assets/practice/bg_cargo_station.jpeg'); background-position:center; background-size:cover; overflow:hidden; box-shadow:0 18px 40px rgba(0,0,0,.36); }
     .conveyor:after { content:""; position:absolute; z-index:-1; left:-20%; right:-20%; bottom:16%; height:44px; border-top:4px dashed #8da3ba; border-bottom:4px dashed #8da3ba; animation:conveyorMove 1.2s linear infinite; }
     .combo-hot { color:#f8c342 !important; text-shadow:0 0 12px rgba(248,195,66,.55); }
@@ -322,7 +333,7 @@
     .device-note { display:none; margin:0 0 14px; padding:12px; background:var(--soft-orange); border-left:4px solid var(--orange); color:#7b421f; }
     .preview-note { display:none; margin:0 0 14px; padding:12px 16px; background:#fff8e5; border:1px solid #e3c76f; color:#654c10; font-size:14px; font-weight:700; }
     .mastery { display:inline-block; padding:6px 10px; border-radius:6px; background:var(--soft-green); color:var(--green-dark); font-weight:900; text-transform:capitalize; }
-    .result-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:20px 0; }
+    .result-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin:20px 0; }
     .result-stat { padding:14px 10px; border:1px solid #2e5884; background:#102747; color:#9fb4ca; font-size:12px; }
     .result-stat strong { display:block; margin-top:3px; color:#fff; font-size:23px; }
     .score-explanation { margin:14px 0 0; padding:12px 14px; border-left:4px solid #25cddc; background:#102747; color:#c2d2e2; font-size:13px; line-height:1.45; text-align:left; }
@@ -342,6 +353,12 @@
     .mission-feedback p { margin:2px 0 0; color:#b8c9db; font-size:13px; }
     .mission-feedback span { color:#8ef0ba; font-size:12px; font-weight:800; white-space:nowrap; }
     .mission-feedback.practise span { color:#f7d66d; }
+    .typing-focus { margin-top:14px; padding:15px; border:1px solid #2e5884; background:#102747; }
+    .typing-focus h2 { margin:0 0 5px; color:#fff; font-size:17px; }
+    .typing-focus > p { margin:0 0 11px; color:#c2d2e2; font-size:13px; }
+    .problem-key-list { display:flex; flex-wrap:wrap; gap:7px; }
+    .problem-key { padding:7px 9px; border:1px solid #7a6398; border-radius:6px; background:#201b45; color:#fff; font-size:12px; font-weight:800; }
+    .problem-key small { display:block; margin-top:2px; color:#c8badb; font-size:10px; font-weight:600; }
     .quest-hero { display:grid; grid-template-columns:minmax(260px,.8fr) minmax(360px,1.2fr); align-items:center; gap:34px; text-align:left; }
     .bot-stage { min-height:360px; position:relative; display:grid; place-items:center; border:1px solid #2d5380; background:#0b1a35; overflow:hidden; }
     body.intro-screen:not(.campaign-g3) .bot-stage { background-image:linear-gradient(rgba(5,14,32,.24),rgba(5,14,32,.58)),url('/assets/practice/bg_byte_city_blackout.jpeg'); background-position:center; background-size:cover; }
@@ -450,6 +467,8 @@
     body.playing .progress-step:before { top:10px; width:22px; height:22px; border:4px solid #07142c; }
     body.playing .progress-step.current,
     body.playing .progress-step.done { border:0; background:transparent; color:transparent; box-shadow:none; }
+    body.playing .progress-step.locked:after { content:""; position:absolute; left:50%; top:16px; width:10px; height:8px; transform:translateX(-50%); border:2px solid #7890aa; border-radius:2px; background:#0c1d3b; }
+    body.playing .progress-step.locked { opacity:.48; }
     body.playing .activity { max-width:1100px; margin:0 auto; }
     body.playing .coach { grid-template-columns:68px 1fr auto; padding:12px 18px; border-radius:16px 16px 0 0; }
     body.playing .coach-text { max-width:760px; font-size:clamp(17px,2vw,22px); line-height:1.25; }
@@ -457,6 +476,7 @@
     body.playing .workspace-head { align-items:center; margin-bottom:10px; }
     body.playing .workspace-head p { display:none; }
     body.playing .game-hud { grid-template-columns:minmax(150px,1fr) repeat(6,minmax(62px,auto)); border-radius:10px; }
+    body.typing-campaign.playing .game-hud { grid-template-columns:minmax(140px,1fr) repeat(7,minmax(58px,auto)); }
     body.playing .hud-stat { text-align:center; }
     body.playing .task-area { min-height:390px; border-radius:12px; }
     body.playing .controls { border-radius:0 0 16px 16px; }
@@ -668,6 +688,8 @@
       .relay-packet { transform:rotate(-90deg); }
       .typing-card-with-sprite { grid-template-columns:1fr; }
       .typing-card-with-sprite .g3-mission-sprite { width:96px; height:96px; margin:auto; }
+      .adaptive-repair { grid-template-columns:1fr; gap:8px; padding:24px 18px; }
+      .adaptive-repair img { width:100px; height:100px; margin:auto; }
       .relay-panel { min-height:145px; }
       .tutorial { grid-template-columns:1fr; padding:18px; }
       .tutorial-visual { min-height:170px; }
@@ -686,6 +708,7 @@
       body.playing .progress:before { display:none; }
       body.playing .coach { grid-template-columns:48px 1fr; }
       body.playing .game-hud { grid-template-columns:repeat(3,1fr); gap:6px; }
+      body.typing-campaign.playing .game-hud { grid-template-columns:repeat(3,minmax(0,1fr)); }
       body.playing .game-hud .mission-meter { grid-column:1/-1; }
       body.playing .hud-stat { font-size:9px; }
       body.playing .hud-stat strong { font-size:15px; }
@@ -779,7 +802,7 @@
       </div>
       <div class="workspace" id="workspace">
         <div class="workspace-head"><div><h2 id="skillTitle"></h2><p id="skillInstruction"></p></div><div class="skill-number" id="skillNumber"></div></div>
-        <div class="game-hud"><div class="mission-meter" aria-label="Mission progress"><span id="missionMeter"></span></div><div class="hud-stat">Mission<strong id="roundValue">0 / 1</strong></div><div class="hud-stat combo-stat">Combo<strong id="comboValue">0×</strong></div><div class="hud-stat">Accuracy<strong id="accuracyValue">100%</strong></div><div class="hud-stat">Time<strong id="timeValue">0:00</strong></div><div class="hud-stat">City power<strong id="cityPowerValue">0%</strong></div><div class="hud-stat">Score<strong id="scoreValue">0</strong></div></div>
+        <div class="game-hud"><div class="mission-meter" aria-label="Mission progress"><span id="missionMeter"></span></div><div class="hud-stat">Mission<strong id="roundValue">0 / 1</strong></div><div class="hud-stat combo-stat">Combo<strong id="comboValue">0×</strong></div><div class="hud-stat">Accuracy<strong id="accuracyValue">100%</strong></div><div class="hud-stat">Time<strong id="timeValue">0:00</strong></div><div class="hud-stat" id="typingWpmStat" hidden>WPM<strong id="typingWpmValue">0</strong></div><div class="hud-stat">City power<strong id="cityPowerValue">0%</strong></div><div class="hud-stat">Score<strong id="scoreValue">0</strong></div></div>
         <div class="task-area" id="taskArea"></div>
         <div class="feedback" id="feedback" role="status" aria-live="polite"></div>
         <div class="hint" id="hint" role="status" aria-live="polite"></div>
@@ -879,6 +902,12 @@
       { id:'capital-charge', title:'Capital Charge', action:'shift_letter', target:'capital-signal',
         show:'The capital towers need a stronger signal. Hold Shift while pressing the glowing letter.', independent:'Charge five capital letters using Shift.', success:'The capital towers are charged.',
         hints:['Hold either Shift key down.','Keep holding Shift while pressing the letter.','A capital letter is bigger than a lowercase letter.'] },
+      { id:'number-launch', title:'Number Launch', action:'type_pattern', target:'number-pattern',
+        show:'Find the number row above the letters. Type each launch code from left to right.', independent:'Send five number codes without looking away from the screen.', success:'Every number rocket launched.',
+        hints:['The number row is above Q, W, E and R.','Read one number at a time.','Use Space between groups when the code shows a gap.'] },
+      { id:'punctuation-port', title:'Punctuation Port', action:'type_pattern', target:'punctuation-pattern',
+        show:'Messages need punctuation. Type commas, full stops, apostrophes, question marks and exclamation marks exactly.', independent:'Deliver four messages with the correct punctuation.', success:'The punctuation port is connected.',
+        hints:['Copy every mark exactly where it appears.','Hold Shift to type a question mark or exclamation mark.','Check the end of the message before you finish.'] },
       { id:'sentence-engine', title:'Sentence Engine', action:'type_sentence', target:'sentence-signal',
         show:'The sentence engine needs spaces and a full stop, not only letters.', independent:'Type two complete sentences exactly as they appear.', success:'The sentence engine is running.',
         hints:['Use the spacebar between words.','The green part is already correct.','Finish with the full-stop key.'] },
@@ -886,6 +915,7 @@
         show:'Broken words have the wrong middle letter. Use Backspace, then type the correct letters.', independent:'Repair five broken words to restore the kingdom code.', success:'Keyboard Kingdom is restored.',
         hints:['Use Backspace to remove the wrong letters.','Stop deleting when the beginning matches.','Then type the missing correct letters.'] },
     ];
+    const typingStepsV1 = typingSteps.filter((step)=>!['number-launch','punctuation-port'].includes(step.id));
     const grade3Steps = [
       { id:'file-base', title:'File Base', action:'folder_save', target:'mission-report',
         show:'Create a folder with your name. Then save a Word document inside it.', independent:'Name your folder, then save your document inside it.', success:'Your document is saved in your folder!',
@@ -912,11 +942,11 @@
     const campaigns = {
       foundation:{ id:'g2-pointer-control', version:4, steps:foundationSteps, kicker:'Foundation World · Chapter 1', title:'Byte and the Blackout', lead:'A digital storm has shut down Byte City. Beat eight arcade missions, restore the power and unlock Advanced Keyboard Kingdom.', speech:'Chase, click, drag, scroll, use menus and type your way through the city.', world:'Foundation for Grade 2 and Grade 3', time:'About 25–30 minutes', device:'A keyboard and mouse or trackpad', completion:'Byte City is online', completionLead:'You restored every district and opened the road to Grade 3.', start:'Begin the rescue', resume:'Continue the rescue', nextTitle:'Advanced Keyboard Kingdom', nextCopy:'Continue into seven playable Grade 3 missions.', nextLabel:'Continue to Grade 3' },
       g3:{ id:'g3-keyboard-kingdom', version:3, steps:grade3Steps, kicker:'Grade 3 World · Chapter 2', title:'Byte and the Broken Code', lead:'A scrambled code has locked Keyboard Kingdom. Organise files, master shortcuts, keys, words, capitals, sentences and editing to restore it.', speech:'Your Grade 2 skills opened the gate. Build File Base, then use the keyboard as your arcade controller.', world:'Grade 3 computer skills adventure', time:'About 25–30 minutes', device:'A computer keyboard and mouse', completion:'Keyboard Kingdom restored', completionLead:'You mastered the Grade 3 computer skills campaign and earned access to the future Expert World.', start:'Enter Keyboard Kingdom', resume:'Continue Keyboard Kingdom', nextTitle:'Expert World', nextCopy:'Your Foundation and Grade 3 worlds are complete. Expert missions will continue the adventure.', nextLabel:'' },
-      typing:{ id:'typing-academy', version:1, steps:typingSteps, kicker:'Typing Academy · Course 1', title:'Byte and the Typing Academy', lead:'Begin with the first keys, train both hands, then use accuracy and speed to defend the academy.', speech:'Every room teaches one typing skill. Watch me, practise it, then win the mission on your own.', world:'Typing Academy for Grades 2 and 3', time:'About 30–35 minutes', device:'A computer keyboard', completion:'Typing Academy complete', completionLead:'You learned the keyboard from the beginning and completed your first typing course.', start:'Start typing course', resume:'Continue typing course', nextTitle:'Next typing course', nextCopy:'More typing courses can build speed, punctuation and longer writing.', nextLabel:'' },
+      typing:{ id:'typing-academy', version:2, steps:typingSteps, kicker:'Typing Academy · Course 1', title:'Byte and the Typing Academy', lead:'Begin with the first keys, train both hands, then master words, capitals, numbers and punctuation.', speech:'Every room teaches one typing skill. Byte also builds a short repair round from the keys you miss.', world:'Typing Academy for Grades 2 and 3', time:'About 40–45 minutes', device:'A computer keyboard', completion:'Typing Academy complete', completionLead:'You learned every keyboard row and completed your first typing course.', start:'Start typing course', resume:'Continue typing course', nextTitle:'Keep building speed', nextCopy:'Replay the course to raise your WPM and strengthen the keys in your personal focus report.', nextLabel:'' },
     };
     const campaign = campaigns[requestedWorld];
     const ACTIVITY_ID = campaign.id;
-    const steps = campaign.steps;
+    let steps = campaign.steps;
     const requestedStageIndex = previewMode ? steps.findIndex((step)=>step.id===requestedStage) : -1;
     const tutorials = {
       'file-base': { title:'A folder of your own', action:'Name your folder. Save your work.', detail:'File, Save As, Save As, Browse, your folder, Save.', visual:'file' },
@@ -938,6 +968,8 @@
       'bottom-row-reach': { title:'Reach down and come home', action:'Press one glowing bottom-row key.', detail:'Keep the rest of your hand near the home row.', visual:'type' },
       'word-blaster': { title:'Blast a whole word', action:'Type every letter from left to right.', detail:'Correct letters turn green as the cloud falls.', visual:'type' },
       'capital-charge': { title:'Hold Shift for capitals', action:'Hold Shift and press the glowing letter.', detail:'Do both actions together to make one capital.', visual:'type' },
+      'number-launch': { title:'Find the number row', action:'Type each launch code exactly as it appears.', detail:'Use the keys above the letter rows.', visual:'type' },
+      'punctuation-port': { title:'Give messages meaning', action:'Type every punctuation mark in the right place.', detail:'Question marks and exclamation marks need Shift.', visual:'type' },
       'sentence-engine': { title:'Build a complete sentence', action:'Type letters, spaces and the final full stop.', detail:'Copy the sentence exactly as it appears.', visual:'type' },
       'repair-bay': { title:'Delete, then repair', action:'Use Backspace to remove the mistake, then type the fix.', detail:'Keep the correct beginning of each word.', visual:'type' },
     };
@@ -955,6 +987,8 @@
       'key-patrol':'Keep your fingers near A, S, D and F and look for the glowing key before pressing.',
       'word-blaster':'Read the complete word before typing and keep your eyes on the next letter.',
       'capital-charge':'Hold Shift down first, press the letter once, then release both keys.',
+      'number-launch':'Keep your eyes on the launch code and reach to the number row with the nearest finger.',
+      'punctuation-port':'Pause at each punctuation mark and use Shift when the symbol appears above another key.',
       'sentence-engine':'Check every space, capital letter and the final full stop before finishing.',
       'repair-bay':'Delete only the incorrect part, stop at the correct beginning, then type the repair.',
       'keyboard-map':'Use the bumps on F and J to reset both hands without searching from the edge.',
@@ -965,14 +999,33 @@
       'bottom-row-reach':'Reach downward from the home row with the nearest finger, then return it home.',
     };
     const missionGoals = PracticeScoring.missionGoals;
-    const keyboardStepIds = new Set(['file-base','copy-paste-menu','copy-paste-shortcut','keyboard-defense','key-patrol','keyboard-map','home-row-left','home-row-right','space-station','top-row-reach','bottom-row-reach','word-blaster','capital-charge','sentence-engine','repair-bay']);
-    const inputTrackedStepIds = new Set(['keyboard-defense','key-patrol','keyboard-map','home-row-left','home-row-right','space-station','top-row-reach','bottom-row-reach','word-blaster','capital-charge','sentence-engine','repair-bay']);
+    const keyboardStepIds = new Set(['file-base','copy-paste-menu','copy-paste-shortcut','keyboard-defense','key-patrol','keyboard-map','home-row-left','home-row-right','space-station','top-row-reach','bottom-row-reach','word-blaster','capital-charge','number-launch','punctuation-port','sentence-engine','repair-bay']);
+    const inputTrackedStepIds = new Set(['keyboard-defense','key-patrol','keyboard-map','home-row-left','home-row-right','space-station','top-row-reach','bottom-row-reach','word-blaster','capital-charge','number-launch','punctuation-port','sentence-engine','repair-bay']);
     const $ = (id) => document.getElementById(id);
+
+    function renderCampaignStepSet() {
+      document.body.style.setProperty('--mission-count',steps.length);
+      $('questMap').innerHTML=steps.map((step,index)=>`<div class="quest-stop ${index===0?'current':'locked'}"><strong>${index+1}</strong>${esc(step.title)}</div>`).join('');
+      $('questMap').setAttribute('aria-label',`${steps.length} arcade missions`);
+      if(requestedWorld==='foundation') {
+        $('questMap').classList.add('city-quest');
+        $('questMap').innerHTML=PracticeCity.render(steps,0);
+      }
+      $('badgeShelf').innerHTML=steps.map((step,index)=>`<div class="earned-badge"><span>${index+1}</span>${esc(step.title)}</div>`).join('');
+    }
+
+    function selectStepVersion(version) {
+      const selected=requestedWorld==='typing'&&Number(version)===1?typingStepsV1:campaign.steps;
+      if(steps===selected) return;
+      steps=selected;
+      renderCampaignStepSet();
+      if(requestedWorld==='typing') $('factTime').textContent=Number(version)===1?'About 30–35 minutes':campaign.time;
+    }
 
     function applyCampaignCopy() {
       document.body.classList.toggle('campaign-g3',requestedWorld!=='foundation');
+      document.body.classList.toggle('typing-campaign',requestedWorld==='typing');
       document.body.classList.toggle('guest-session',guestMode);
-      document.body.style.setProperty('--mission-count',steps.length);
       document.title=`LessonScope Practice - ${campaign.title}`;
       $('questKicker').textContent=campaign.kicker;
       $('questTitle').textContent=campaign.title;
@@ -983,19 +1036,14 @@
       $('factDevice').textContent=campaign.device;
       $('completionTitle').textContent=campaign.completion;
       $('completionLead').textContent=campaign.completionLead;
-      $('questMap').innerHTML=steps.map((step,index)=>`<div class="quest-stop"><strong>${index+1}</strong>${esc(step.title)}</div>`).join('');
-      $('questMap').setAttribute('aria-label',`${steps.length} arcade missions`);
-      if(requestedWorld==='foundation') {
-        $('questMap').classList.add('city-quest');
-        $('questMap').innerHTML=PracticeCity.render(steps,0);
-      }
-      $('badgeShelf').innerHTML=steps.map((step,index)=>`<div class="earned-badge"><span>${index+1}</span>${esc(step.title)}</div>`).join('');
+      renderCampaignStepSet();
       $('nextWorldTitle').textContent=campaign.nextTitle;
       $('nextWorldCopy').textContent=campaign.nextCopy;
       $('continueWorldBtn').hidden=!campaign.nextLabel;
       $('continueWorldBtn').textContent=campaign.nextLabel || '';
       $('continueWorldBtn').href=continueWorldUrl();
       $('startBtn').textContent=campaign.start;
+      $('typingWpmStat').hidden=requestedWorld!=='typing';
       if (previewMode) {
         const groups=[['foundation','Foundation World',foundationSteps],['g3','Grade 3 World',grade3Steps],['typing','Typing Academy',typingSteps]];
         $('teacherStageJump').hidden=false;
@@ -1008,7 +1056,10 @@
     let stepIndex = 0;
     let phase = 'show';
     let independentSaved = false;
-    let stats = { attempts:0, hintsUsed:0, activeSeconds:0, correctInputs:0, mistakes:0 };
+    function freshStats() {
+      return { attempts:0, hintsUsed:0, activeSeconds:0, correctInputs:0, mistakes:0, typedCharacters:0, typingSeconds:0, typingActive:false, keyStats:{} };
+    }
+    let stats = freshStats();
     let runMetrics = { correctInputs:0, mistakes:0, activeSeconds:0 };
     let metricsCommittedForStep = false;
     let roundProgress = 0;
@@ -1019,6 +1070,8 @@
     let paused = false;
     let pendingSingleClick = null;
     let roundLocked = false;
+    let adaptiveRepair = null;
+    let adaptiveCompleted = false;
     const AUDIO_PREF_KEY = 'ls-practice-audio-v1';
     let audioPreferences = { soundEffects:true, music:true, voice:false };
     try { audioPreferences={...audioPreferences,...JSON.parse(localStorage.getItem(AUDIO_PREF_KEY)||'{}')}; } catch {}
@@ -1217,9 +1270,9 @@
       const me=liveParticipant;
       $('masterySummary').innerHTML=me?`Mission result: <span class="mastery">${esc(me.mastery||'Completed')}</span>`:'Your result was not recorded';
       $('scoreSummary').innerHTML=me?`Your score: <strong style="color:#25cddc;font-size:24px">${me.score}</strong>`:'';
-      $('resultStats').innerHTML=me?`<div class="result-stat">Missions<strong>${me.totalMissionsCompleted}</strong></div><div class="result-stat">Accuracy<strong>${me.accuracyPercent}%</strong></div><div class="result-stat">Mistakes<strong>${me.mistakes}</strong></div><div class="result-stat">Active time<strong>${formatGameTime(me.activeSeconds)}</strong></div>`:'';
+      $('resultStats').innerHTML=me?`<div class="result-stat">Missions<strong>${me.totalMissionsCompleted}</strong></div><div class="result-stat">Accuracy<strong>${me.accuracyPercent}%</strong></div><div class="result-stat">Mistakes<strong>${me.mistakes}</strong></div><div class="result-stat">Active time<strong>${formatGameTime(me.activeSeconds)}</strong></div>${requestedWorld==='typing'?`<div class="result-stat">Typing speed<strong>${me.wpm||0} WPM</strong></div>`:''}`:'';
       renderScoreExplanation(me);
-      renderLearnerCoaching(me?{accuracyPercent:me.accuracyPercent,mistakes:me.mistakes}:null,[],me&&me.totalMissionsCompleted);
+      renderLearnerCoaching(me,[],me&&me.totalMissionsCompleted);
       $('badgeShelf').innerHTML='';
       $('liveFinalBoard').hidden=true;
       $('liveFinalBoard').innerHTML='';
@@ -1349,6 +1402,56 @@
       });
     }
 
+    function expectedKeyLabel(key, requireShift=false) {
+      if(key===' ') return 'Space';
+      if(key==='Enter') return 'Enter';
+      if(key==='Backspace') return 'Backspace';
+      if(requireShift || /^[A-Z]$/.test(key)) return `Shift+${String(key).toUpperCase()}`;
+      return String(key);
+    }
+
+    function actualKeyLabel(event) {
+      if(!event) return 'Unknown';
+      if(event.key===' ') return 'Space';
+      if(event.key==='Enter') return 'Enter';
+      if(event.key==='Backspace') return 'Backspace';
+      if(event.shiftKey && /^[a-z]$/i.test(event.key)) return `Shift+${event.key.toUpperCase()}`;
+      return String(event.key || 'Unknown').slice(0,24);
+    }
+
+    function recordKeyAttempt(expected, actual, correct) {
+      if(requestedWorld!=='typing') return;
+      stats.typingActive=true;
+      const key=String(expected||'Unknown').slice(0,24);
+      const entry=stats.keyStats[key]||{correct:0,mistakes:0,confusions:{}};
+      if(correct) entry.correct+=1;
+      else {
+        entry.mistakes+=1;
+        const wrong=String(actual||'Unknown').slice(0,24);
+        entry.confusions[wrong]=(entry.confusions[wrong]||0)+1;
+      }
+      stats.keyStats[key]=entry;
+    }
+
+    function recordTypingCorrect(expected, event, {requireShift=false,countCharacter=true}={}) {
+      recordCorrectInput();
+      if(requestedWorld!=='typing') return;
+      const label=expectedKeyLabel(expected,requireShift);
+      recordKeyAttempt(label,actualKeyLabel(event),true);
+      if(countCharacter && String(expected).length===1) stats.typedCharacters+=1;
+    }
+
+    function registerTypingWrong(message, expected, event, {requireShift=false}={}) {
+      if(requestedWorld==='typing') recordKeyAttempt(expectedKeyLabel(expected,requireShift),actualKeyLabel(event),false);
+      registerWrong(message);
+    }
+
+    function currentTypingSummary() {
+      if(requestedWorld!=='typing') return PracticeScoring.summarizeTyping();
+      const checkpoints=attempt&&Array.isArray(attempt.checkpoints)?attempt.checkpoints:[];
+      return PracticeScoring.typingSummaryFromCheckpoints(metricsCommittedForStep?checkpoints:[...checkpoints,stats]);
+    }
+
     function renderLearnerCoaching(summary, checkpoints=[], completedCount=steps.length) {
       if(!summary){ $('learnerCoaching').innerHTML=''; return; }
       const accuracy=Math.max(0,Number(summary.accuracyPercent)||0);
@@ -1377,7 +1480,14 @@
         return `<div class="mission-feedback ${needsPractice?'practise':''}"><div><b>${esc(step.title)}</b><p>${esc(evidence)}</p></div><span>${needsPractice?'Practise next':'Skill secure'}</span></div>`;
       }).join('');
 
-      $('learnerCoaching').innerHTML=`<div class="coaching-summary"><div class="coaching-card good"><b>What went well</b><p>${esc(strong)}</p></div><div class="coaching-card next"><b>What to practise next</b><p>${esc(next)}</p></div></div>${details?`<div class="mission-report"><h2>Your mission report</h2>${details}</div>`:''}`;
+      const typing=requestedWorld==='typing'
+        ? checkpoints.length?PracticeScoring.typingSummaryFromCheckpoints(checkpoints):{typedCharacters:summary.typedCharacters||0,typingSeconds:summary.typingSeconds||0,wpm:summary.wpm||0,problemKeys:summary.problemKeys||[]}
+        : null;
+      const focus=typing
+        ? `<section class="typing-focus"><h2>Your typing focus</h2><p>${typing.wpm||0} WPM across ${typing.typedCharacters||0} typed characters. ${typing.problemKeys.length?'These keys need the most practice:':'No problem keys were recorded in this run.'}</p>${typing.problemKeys.length?`<div class="problem-key-list">${typing.problemKeys.slice(0,5).map((item)=>{const confusion=item.confusedWith&&item.confusedWith[0];return `<span class="problem-key">${esc(item.key)} · ${item.accuracyPercent}%<small>${item.mistakes} ${item.mistakes===1?'mistake':'mistakes'}${confusion?` · often ${esc(confusion.key)}`:''}</small></span>`;}).join('')}</div>`:''}</section>`
+        : '';
+
+      $('learnerCoaching').innerHTML=`<div class="coaching-summary"><div class="coaching-card good"><b>What went well</b><p>${esc(strong)}</p></div><div class="coaching-card next"><b>What to practise next</b><p>${esc(next)}</p></div></div>${focus}${details?`<div class="mission-report"><h2>Your mission report</h2>${details}</div>`:''}`;
     }
 
     function recordCorrectInput(count=1) {
@@ -1400,6 +1510,7 @@
       $('scoreValue').title = scoreFormula(performance);
       $('accuracyValue').textContent = `${performance.accuracyPercent}%`;
       $('timeValue').textContent = formatGameTime(performance.activeSeconds);
+      if(requestedWorld==='typing') $('typingWpmValue').textContent=currentTypingSummary().wpm;
       $('comboValue').textContent = `${combo}×`;
       $('comboValue').classList.toggle('combo-hot',combo >= 3);
       const roomPower=100/steps.length;
@@ -1582,7 +1693,13 @@
     }
 
     function renderProgress() {
-      $('progress').innerHTML = steps.map((step, index) => `<div class="progress-step ${index < stepIndex ? 'done' : index === stepIndex ? 'current' : ''}">${index + 1}. ${esc(step.title)}</div>`).join('');
+      const progress=$('progress');
+      progress.innerHTML = steps.map((step, index) => `<div class="progress-step ${index < stepIndex ? 'done' : index === stepIndex ? 'current' : 'locked'}" aria-label="${esc(step.title)}: ${index < stepIndex ? 'complete' : index === stepIndex ? 'current lesson' : 'locked'}">${index + 1}. ${esc(step.title)}</div>`).join('');
+      requestAnimationFrame(()=>{
+        const current=progress.querySelector('.current');
+        if(!current||progress.scrollWidth<=progress.clientWidth) return;
+        progress.scrollLeft=Math.max(0,current.offsetLeft-(progress.clientWidth-current.offsetWidth)/2);
+      });
     }
 
     function taskTargetClass() { return ''; }
@@ -1647,6 +1764,90 @@
       if(requestedWorld!=='typing') return '';
       const goal=roundGoal();
       return `<div class="academy-meter"><span>Power</span>${Array.from({length:goal},(_,index)=>`<i class="academy-pip${index<roundProgress?' on':''}"></i>`).join('')}</div>`;
+    }
+
+    function adaptiveKeyMatches(event, key) {
+      if(key==='Space') return event.key===' ';
+      if(key==='Enter') return event.key==='Enter';
+      if(key==='Backspace') return event.key==='Backspace';
+      if(key.startsWith('Shift+')) return event.shiftKey && event.key.toUpperCase()===key.slice(6).toUpperCase();
+      return event.key===key;
+    }
+
+    function adaptiveKeyDisplay(key) {
+      return String(key).replace('Shift+','Shift + ');
+    }
+
+    function adaptiveRepairKeys() {
+      if(requestedWorld!=='typing' || adaptiveCompleted) return [];
+      return PracticeScoring.summarizeTyping(stats).problemKeys.slice(0,3).flatMap((item)=>[item.key,item.key]);
+    }
+
+    async function finishAdaptiveRepair() {
+      clearActiveInput();
+      adaptiveRepair=null;
+      adaptiveCompleted=true;
+      roundLocked=true;
+      stats.typingActive=false;
+      stats.attempts+=1;
+      independentSaved=true;
+      $('feedback').textContent='Repair round complete. Byte saved your personal key practice.';
+      $('feedback').className='feedback show';
+      setByteState('complete');
+      playCue('complete');
+      await saveCheckpoint();
+    }
+
+    function renderAdaptiveRepair() {
+      if(!adaptiveRepair || paused) return;
+      clearActiveInput();
+      const key=adaptiveRepair.keys[adaptiveRepair.index];
+      if(!key) { finishAdaptiveRepair(); return; }
+      roundLocked=false;
+      const area=$('taskArea');
+      area.className='task-area room-repair-bay';
+      area.innerHTML=`<div class="room-label">Byte's repair round</div><div class="adaptive-repair" id="adaptiveRepairCard" tabindex="0"><img src="/assets/practice/byte/byte-giving-instructions.png" alt="Byte helping with a difficult key" /><div class="adaptive-copy"><b>Personal key practice</b><h3>Press ${esc(adaptiveKeyDisplay(key))}</h3><p>Byte chose this because it needs a little more practice.</p><div class="key-row"><span class="arcade-key active" id="skillTarget">${esc(adaptiveKeyDisplay(key))}</span></div><div class="adaptive-progress">Key ${adaptiveRepair.index+1} of ${adaptiveRepair.keys.length}</div></div></div>`;
+      activeKeyHandler=(event)=>{
+        if(event.metaKey||event.ctrlKey||event.altKey||(event.key.length!==1&&!['Enter','Backspace'].includes(event.key))) return;
+        event.preventDefault();
+        if(!adaptiveKeyMatches(event,key)) {
+          recordKeyAttempt(key,actualKeyLabel(event),false);
+          adaptiveRepair.misses+=1;
+          registerWrong(`Find ${adaptiveKeyDisplay(key)}. Byte will move on after three tries.`);
+          if(adaptiveRepair.misses>=3) {
+            adaptiveRepair.index+=1;
+            adaptiveRepair.misses=0;
+            roundLocked=true;
+            clearActiveInput();
+            activeGameTimers.push(setTimeout(renderAdaptiveRepair,420));
+          }
+          return;
+        }
+        recordCorrectInput();
+        recordKeyAttempt(key,actualKeyLabel(event),true);
+        if(!['Enter','Backspace'].includes(key)) stats.typedCharacters+=1;
+        adaptiveRepair.index+=1;
+        adaptiveRepair.misses=0;
+        roundLocked=true;
+        clearActiveInput();
+        playCue('hit');
+        burstParticles($('skillTarget'),'#f8c342');
+        if(adaptiveRepair.index>=adaptiveRepair.keys.length) activeGameTimers.push(setTimeout(finishAdaptiveRepair,360));
+        else activeGameTimers.push(setTimeout(renderAdaptiveRepair,300));
+        updateHud();
+      };
+      window.addEventListener('keydown',activeKeyHandler);
+      $('adaptiveRepairCard').focus({preventScroll:true});
+      setByteState('instructions');
+    }
+
+    function startAdaptiveRepair(keys) {
+      adaptiveRepair={keys,index:0,misses:0};
+      $('feedback').textContent=`Byte found ${Math.ceil(keys.length/2)} ${keys.length===2?'key':'keys'} to strengthen before the next lesson.`;
+      $('feedback').className='feedback show';
+      setByteState('instructions');
+      narrate('Personal repair round. Practise the keys that were difficult.');
+      activeGameTimers.push(setTimeout(renderAdaptiveRepair,520));
     }
 
     function renderTask() {
@@ -1837,8 +2038,9 @@
         activeKeyHandler=(event)=>{
           if (event.metaKey || event.ctrlKey || event.altKey || (event.key.length !== 1 && !['Enter'].includes(event.key))) return;
           const pressed=event.key===' '?'SPACE':event.key==='Enter'?'ENTER':step.id==='key-patrol'?event.key.toUpperCase():event.key;
-          if (pressed !== targetKey) return registerWrong(`Find the glowing ${targetKey} key.`);
-          event.preventDefault(); recordCorrectInput(); clearActiveInput(); completeInteraction(lesson.action,lesson.target);
+          const expectedInput=targetKey==='SPACE'?' ':targetKey==='ENTER'?'Enter':targetKey;
+          if (pressed !== targetKey) return registerTypingWrong(`Find the glowing ${targetKey} key.`,expectedInput,event);
+          event.preventDefault(); recordTypingCorrect(expectedInput,event,{countCharacter:targetKey!=='ENTER'}); clearActiveInput(); completeInteraction(lesson.action,lesson.target);
         };
         window.addEventListener('keydown',activeKeyHandler); $('keyArena').focus({preventScroll:true});
       } else if (step.id === 'space-station') {
@@ -1847,8 +2049,8 @@
         activeKeyHandler=(event)=>{
           if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
           const expected=pattern[typedCount], pressed=event.key;
-          if(pressed!==expected) return registerWrong(expected===' '?'Tap Space once with your thumb.':`Find ${expected} next.`);
-          event.preventDefault(); typedCount+=1; recordCorrectInput(); $('skillTarget').innerHTML=keyboardWord(pattern,typedCount); playTone(expected===' '?360:500+(typedCount*18));
+          if(pressed!==expected) return registerTypingWrong(expected===' '?'Tap Space once with your thumb.':`Find ${expected} next.`,expected,event);
+          event.preventDefault(); typedCount+=1; recordTypingCorrect(expected,event); $('skillTarget').innerHTML=keyboardWord(pattern,typedCount); playTone(expected===' '?360:500+(typedCount*18));
           if(typedCount===pattern.length){ clearActiveInput(); completeInteraction('type_pattern','space-pattern'); }
         };
         window.addEventListener('keydown',activeKeyHandler); $('typingCard').focus({preventScroll:true});
@@ -1882,10 +2084,11 @@
           activeTarget.querySelector('.blaster-word').innerHTML=keyboardWord(word,typedCount);
           $('letterCount').textContent=`${typedCount} / ${word.length} letters`;
         };
-        const loseShield=(message)=>{
+        const loseShield=(message,expected=null,event=null)=>{
           shield=Math.max(0,shield-1);
           $('shieldCells').innerHTML=shieldCells();
-          registerWrong(message);
+          if(expected&&event) registerTypingWrong(message,expected,event);
+          else registerWrong(message);
           if(shield===0){ shield=3; activeGameTimers.push(setTimeout(()=>{ if($('shieldCells')) $('shieldCells').innerHTML=shieldCells(); },420)); }
         };
         targets.forEach((target)=>target.addEventListener('animationend',()=>{
@@ -1907,14 +2110,14 @@
             activeTarget.classList.add('locked');
             activeTarget.id='skillTarget';
             typedCount=1;
-            recordCorrectInput();
+            recordTypingCorrect(activeTarget.dataset.word[0],event);
             $('blasterPrompt').innerHTML=`<span class="blaster-lock">Target locked:</span> <b>${esc(activeTarget.dataset.word)}</b>`;
             updateTarget();
           } else {
             const word=activeTarget.dataset.word;
-            if(key!==word[typedCount]) return loseShield(`Shield hit. Find the next letter: ${word[typedCount]}`);
+            if(key!==word[typedCount]) return loseShield(`Shield hit. Find the next letter: ${word[typedCount]}`,word[typedCount],event);
             typedCount+=1;
-            recordCorrectInput();
+            recordTypingCorrect(word[typedCount-1],event);
             updateTarget();
           }
           const laser=$('blasterLaser'), target=$('skillTarget');
@@ -1945,17 +2148,41 @@
         area.innerHTML=`<div class="room-label">Capital Charge · Tower ${roundProgress+1} of ${roundGoal()}</div><div class="key-arena" id="keyArena" tabindex="0"><img class="g3-mission-sprite capital" src="/assets/practice/sprites-g3/capital-tower.webp" alt="" /><div class="key-prompt">Hold Shift and press ${letter}</div><div class="key-row"><span class="arcade-key active" style="min-width:130px">Shift</span><span class="arcade-key active" id="skillTarget">${letter}</span></div></div>`;
         activeKeyHandler=(event)=>{
           if (event.key==='Shift') return;
-          if (event.key.toUpperCase() !== letter || !event.shiftKey) return registerWrong(`Hold Shift while you press ${letter}.`);
-          recordCorrectInput(); clearActiveInput(); completeInteraction('shift_letter','capital-signal');
+          if (event.key.toUpperCase() !== letter || !event.shiftKey) return registerTypingWrong(`Hold Shift while you press ${letter}.`,letter,event,{requireShift:true});
+          recordTypingCorrect(letter,event,{requireShift:true}); clearActiveInput(); completeInteraction('shift_letter','capital-signal');
         };
         window.addEventListener('keydown',activeKeyHandler); $('keyArena').focus({preventScroll:true});
+      } else if (step.id === 'number-launch' || step.id === 'punctuation-port') {
+        const numberPatterns=['123 321','456 654','789 987','2026','10 20 30'];
+        const punctuationPatterns=['cat, dog.','yes!','ready?',"I'm here."];
+        const punctuation=step.id==='punctuation-port';
+        const patterns=punctuation?punctuationPatterns:numberPatterns;
+        const pattern=patterns[roundProgress%patterns.length];
+        let typedCount=0;
+        const room=punctuation?'Punctuation Port':'Number Launch';
+        const status=punctuation?'Copy every mark. Hold Shift for ? and !.':'Use the number row and copy each space.';
+        area.innerHTML=`<div class="room-label">${room} · Code ${roundProgress+1} of ${roundGoal()}</div><div class="typing-card" id="typingCard" tabindex="0">${academyMeter()}<div class="key-prompt">${punctuation?'Type the message exactly':'Type the launch code'}</div><div class="typing-target" id="skillTarget">${keyboardWord(pattern,0)}</div><div class="typing-status">${status}</div></div>`;
+        activeKeyHandler=(event)=>{
+          if(event.metaKey||event.ctrlKey||event.altKey||event.key.length!==1) return;
+          const expected=pattern[typedCount];
+          const requireShift=/[A-Z]/.test(expected);
+          if(event.key!==expected||(requireShift&&!event.shiftKey)) return registerTypingWrong(`Next: ${expected===' '?'Space':expected}. Copy the code exactly.`,expected,event,{requireShift});
+          event.preventDefault();
+          typedCount+=1;
+          recordTypingCorrect(expected,event,{requireShift});
+          $('skillTarget').innerHTML=keyboardWord(pattern,typedCount);
+          playTone(expected===' '?360:500+(typedCount*12));
+          if(typedCount===pattern.length){ clearActiveInput(); completeInteraction('type_pattern',punctuation?'punctuation-pattern':'number-pattern'); }
+        };
+        window.addEventListener('keydown',activeKeyHandler); $('typingCard').focus({preventScroll:true});
       } else if (step.id === 'sentence-engine') {
         const sentences=requestedWorld==='typing'?['I can type.','Byte is ready.']:['I CAN CODE.','BYTE IS READY.'], sentence=sentences[roundProgress%sentences.length]; let typedCount=0;
         area.innerHTML=`<div class="room-label">Sentence Engine · Line ${roundProgress+1} of ${roundGoal()}</div><div class="typing-card typing-card-with-sprite" id="typingCard" tabindex="0"><img class="g3-mission-sprite" src="/assets/practice/sprites-g3/sentence-engine.webp" alt="" /><div class="typing-copy"><div class="key-prompt">Type this complete sentence</div><div class="typing-target" id="skillTarget">${keyboardWord(sentence,0)}</div><div class="typing-status">Spaces and the full stop count.</div></div></div>`;
         activeKeyHandler=(event)=>{
           if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
-          if (event.key !== sentence[typedCount]) return registerWrong(`Next: ${sentence[typedCount]===' '?'space':sentence[typedCount]}. Match the capital or small letter shown.`);
-          typedCount += 1; recordCorrectInput(); $('skillTarget').innerHTML=keyboardWord(sentence,typedCount); playTone(500+(typedCount*18));
+          const expected=sentence[typedCount], requireShift=/[A-Z]/.test(expected);
+          if (event.key !== expected || (requireShift&&!event.shiftKey)) return registerTypingWrong(`Next: ${expected===' '?'space':expected}. Match the capital or small letter shown.`,expected,event,{requireShift});
+          event.preventDefault(); typedCount += 1; recordTypingCorrect(expected,event,{requireShift}); $('skillTarget').innerHTML=keyboardWord(sentence,typedCount); playTone(500+(typedCount*18));
           if (typedCount === sentence.length) { clearActiveInput(); completeInteraction('type_sentence','sentence-signal'); }
         };
         window.addEventListener('keydown',activeKeyHandler); $('typingCard').focus({preventScroll:true});
@@ -1966,11 +2193,11 @@
         const renderRepair=()=>{ const matching=Array.from(value).findIndex((char,index)=>char!==correct[index]), split=matching===-1?value.length:matching; $('skillTarget').innerHTML=`<span class="typed">${esc(value.slice(0,split))}</span><span class="wrong">${esc(value.slice(split))}</span>`; };
         renderRepair();
         activeKeyHandler=(event)=>{
-          if (event.key==='Backspace') { event.preventDefault(); if(value.length>shared){value=value.slice(0,-1);recordCorrectInput();renderRepair();playTone(260);return;} return registerWrong('The correct beginning must stay. Now type the missing letter.'); }
+          if (event.key==='Backspace') { event.preventDefault(); if(value.length>shared){value=value.slice(0,-1);recordTypingCorrect('Backspace',event,{countCharacter:false});renderRepair();playTone(260);return;} return registerTypingWrong('The correct beginning must stay. Now type the missing letter.',correct[value.length]||correct.at(-1),event); }
           if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
           const expected=correct[value.length];
-          if (event.key!==expected) return registerWrong(`Type ${expected} next.`);
-          value += expected; recordCorrectInput(); renderRepair(); playTone(560);
+          if (event.key!==expected) return registerTypingWrong(`Type ${expected} next.`,expected,event);
+          value += expected; recordTypingCorrect(expected,event); renderRepair(); playTone(560);
           if (value===correct) { clearActiveInput(); completeInteraction('repair_word','repaired-code'); }
         };
         window.addEventListener('keydown',activeKeyHandler); $('typingCard').focus({preventScroll:true});
@@ -2000,11 +2227,13 @@
       clearActiveInput();
       const step = currentStep();
       independentSaved = false;
-      stats = { attempts:0, hintsUsed:0, activeSeconds:0, correctInputs:0, mistakes:0 };
+      stats = freshStats();
       metricsCommittedForStep=false;
       roundProgress = 0;
       fileBaseState = PracticeFileBase.createState();
       combo = 0;
+      adaptiveRepair = null;
+      adaptiveCompleted = false;
       lastSlot = -1;
       document.body.classList.remove('intro-screen');
       document.body.classList.add('playing');
@@ -2112,17 +2341,21 @@
       const points=100+Math.min(5,combo-1)*20;
       score += points;
       const finalHit=roundProgress >= roundGoal();
-      optionalEffect('Byte feedback',()=>setByteState(finalHit?'complete':'success'));
-      $('feedback').textContent = finalHit ? step.success : `${combo >= 3 ? `${combo}× combo! ` : ''}${roundGoal()-roundProgress} more to clear this room.`;
+      const repairKeys=finalHit?adaptiveRepairKeys():[];
+      const needsRepair=repairKeys.length>0;
+      optionalEffect('Byte feedback',()=>setByteState(finalHit&&!needsRepair?'complete':'success'));
+      $('feedback').textContent = needsRepair ? 'Core lesson clear. Byte is preparing your personal repair round.' : finalHit ? step.success : `${combo >= 3 ? `${combo}× combo! ` : ''}${roundGoal()-roundProgress} more to clear this room.`;
       $('feedback').className = 'feedback show';
       updateHud();
-      optionalEffect('Game sound',()=>playCue(finalHit?'complete':'hit'));
-      optionalEffect('Mission particles',()=>burstParticles(hitTarget,finalHit?'#f8c342':'#25cddc'));
-      optionalEffect('Score animation',()=>celebrateHit(finalHit,points,hitTarget));
+      optionalEffect('Game sound',()=>playCue(finalHit&&!needsRepair?'complete':'hit'));
+      optionalEffect('Mission particles',()=>burstParticles(hitTarget,finalHit&&!needsRepair?'#f8c342':'#25cddc'));
+      optionalEffect('Score animation',()=>celebrateHit(finalHit&&!needsRepair,points,hitTarget));
       optionalEffect('HUD animation',pulseScoreHud);
       optionalEffect('Combo milestone',()=>showComboMilestone(combo,hitTarget));
       if (!finalHit) { activeGameTimers.push(setTimeout(()=>{ if(!paused) renderTask(); },420)); return; }
+      if(needsRepair) { startAdaptiveRepair(repairKeys); return; }
       stats.attempts += 1;
+      stats.typingActive=false;
       independentSaved = true;
       await saveCheckpoint();
     }
@@ -2163,7 +2396,7 @@
       const step = currentStep();
       if(!frozenCheckpoint || frozenCheckpoint.checkpointId!==checkpointId(step)) {
         checkpointRetryCount=0;
-        frozenCheckpoint={ checkpointId:checkpointId(step), stepId:step.id, attempts:Math.max(1,stats.attempts), hintsUsed:stats.hintsUsed, activeSeconds:Math.max(1,stats.activeSeconds), correctInputs:stats.correctInputs||0, mistakes:stats.mistakes||0, baseScore:score, evidence:{ action:step.action, target:step.target } };
+        frozenCheckpoint={ checkpointId:checkpointId(step), stepId:step.id, attempts:Math.max(1,stats.attempts), hintsUsed:stats.hintsUsed, activeSeconds:Math.max(1,stats.activeSeconds), correctInputs:stats.correctInputs||0, mistakes:stats.mistakes||0, typedCharacters:stats.typedCharacters||0, typingSeconds:stats.typedCharacters?Math.max(1,stats.typingSeconds||0):0, keyStats:PracticeScoring.normalizeKeyStats(stats.keyStats), baseScore:score, evidence:{ action:step.action, target:step.target } };
       }
       const payload = frozenCheckpoint;
       if (ephemeralMode) return liveRoom ? saveLiveCheckpoint(payload) : saveEphemeralCheckpoint(payload);
@@ -2197,7 +2430,7 @@
         const {response,data}=await checkpointRequest(`/api/practice/live-sessions/${encodeURIComponent(liveRoom.code)}/checkpoints`,{
           method:'POST',
           headers:{'Content-Type':'application/json','X-Practice-Participant':liveParticipantToken},
-          body:JSON.stringify({...payload,arcadeScore:performanceSummary().score,activityId:ACTIVITY_ID,activityVersion:campaign.version}),
+          body:JSON.stringify({...payload,arcadeScore:performanceSummary().score,activityId:ACTIVITY_ID,activityVersion:attempt.activityVersion||campaign.version}),
         });
         if(!response.ok) {
           if(['step_out_of_order','attempt_complete'].includes(data.code) && await restoreLiveProgress()) return;
@@ -2246,6 +2479,7 @@
     function saveEphemeralCheckpoint(payload) {
       const checkpoint = { ...payload, mastery:checkpointMastery(payload), completedAt:new Date().toISOString() };
       attempt.checkpoints.push(checkpoint);
+      Object.assign(attempt,PracticeScoring.typingSummaryFromCheckpoints(attempt.checkpoints));
       commitStepMetrics(payload);
       attempt.currentStepIndex += 1;
       const rank = { independent:3, developing_independence:2, completed_with_support:1 };
@@ -2292,8 +2526,9 @@
       const label = String(attempt.mastery || '').replaceAll('_',' ');
       $('masterySummary').innerHTML = `Overall result: <span class="mastery">${esc(label)}</span>`;
       const performance=performanceSummary();
+      const typing=currentTypingSummary();
       $('scoreSummary').innerHTML = `${esc(performance.rating)} · Final score: <strong style="color:#25cddc;font-size:24px">${performance.score}</strong>`;
-      $('resultStats').innerHTML=`<div class="result-stat">Accuracy<strong>${performance.accuracyPercent}%</strong></div><div class="result-stat">Mistakes<strong>${performance.mistakes}</strong></div><div class="result-stat">Active time<strong>${formatGameTime(performance.activeSeconds)}</strong></div><div class="result-stat">Base points<strong>${performance.baseScore}</strong></div>`;
+      $('resultStats').innerHTML=`<div class="result-stat">Accuracy<strong>${performance.accuracyPercent}%</strong></div><div class="result-stat">Mistakes<strong>${performance.mistakes}</strong></div><div class="result-stat">Active time<strong>${formatGameTime(performance.activeSeconds)}</strong></div>${requestedWorld==='typing'?`<div class="result-stat">Typing speed<strong>${typing.wpm} WPM</strong></div><div class="result-stat">Characters<strong>${typing.typedCharacters}</strong></div>`:`<div class="result-stat">Base points<strong>${performance.baseScore}</strong></div>`}`;
       renderScoreExplanation(performance);
       renderLearnerCoaching(performance,attempt.checkpoints||[],attempt.currentStepIndex||steps.length);
       $('practiseAgainBtn').hidden=Boolean(liveRoom);
@@ -2362,7 +2597,7 @@
       if(!stage) return;
       location.href=`/practice/preview?${world==='foundation'?'':`world=${encodeURIComponent(world)}&`}stage=${encodeURIComponent(stage)}`;
     });
-    setInterval(() => { if (!paused && !document.hidden && $('activity').style.display === 'block') { stats.activeSeconds += 1; updateHud(); } }, 1000);
+    setInterval(() => { if (!paused && !document.hidden && $('activity').style.display === 'block') { stats.activeSeconds += 1; if(stats.typingActive) stats.typingSeconds += 1; updateHud(); } }, 1000);
 
     async function beginAttempt(forceNew) {
       if(liveRoomWaiting()){
@@ -2376,10 +2611,12 @@
       metricsCommittedForStep=false;
       updateHud();
       if (ephemeralMode) {
+        const activityVersion=liveRoom&&liveRoom.activity&&liveRoom.activity.id===ACTIVITY_ID?Number(liveRoom.activity.version)||campaign.version:campaign.version;
+        selectStepVersion(activityVersion);
         const liveIndex=liveRoom&&liveParticipant&&liveParticipant.activityId===ACTIVITY_ID?Number(liveParticipant.missionsCompleted)||0:0;
         const startIndex=liveRoom?Math.max(0,Math.min(steps.length,liveIndex)):previewMode&&requestedStageIndex>=0?requestedStageIndex:0;
         const restoredStatus=liveRoom&&liveParticipant&&liveParticipant.activityId===ACTIVITY_ID&&liveParticipant.status==='completed'?'completed':'in_progress';
-        attempt = { id:`${guestMode?'guest':'preview'}-${Date.now()}`, activityId:ACTIVITY_ID, activityVersion:campaign.version, status:restoredStatus, currentStepIndex:startIndex, checkpoints:[], mastery:'not_started' };
+        attempt = { id:`${guestMode?'guest':'preview'}-${Date.now()}`, activityId:ACTIVITY_ID, activityVersion, status:restoredStatus, currentStepIndex:startIndex, checkpoints:[], mastery:'not_started' };
         stepIndex = startIndex;
         if(attempt.status==='completed'||stepIndex>=steps.length)return showCompletion();
         phase = 'show';
@@ -2394,6 +2631,7 @@
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Practice could not start.');
       attempt = data.attempt;
+      selectStepVersion(attempt.activityVersion);
       score=attempt.baseScore||PracticeScoring.maximumBaseScore(steps,attempt.currentStepIndex);
       runMetrics=(attempt.checkpoints||[]).reduce((summary,item)=>({
         correctInputs:summary.correctInputs+(item.correctInputs||missionGoals[item.stepId]||1),
@@ -2474,6 +2712,7 @@
           $('studentName').textContent = `Practising as ${data.student.name}`;
         }
         const unfinished = previewMode ? null : data.attempts.find((item) => item.activityId === ACTIVITY_ID && item.status === 'in_progress');
+        if(unfinished) selectStepVersion(unfinished.activityVersion);
         $('startBtn').textContent = unfinished ? campaign.resume : campaign.start;
         if(requestedContinue){ await beginAttempt(false); return; }
         document.body.classList.add('intro-screen');

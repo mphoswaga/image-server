@@ -41,3 +41,39 @@ test('leaderboard ranking is deterministic and gives exact ties the same place',
   assert.deepEqual(ranked.map((entry) => entry.name), ['Ama', 'Zola', 'Kai']);
   assert.deepEqual(ranked.map((entry) => entry.rank), [1, 1, 3]);
 });
+
+test('typing summaries calculate real WPM and rank weak keys by mistakes', () => {
+  const summary = scoring.summarizeTyping({
+    typedCharacters: 50,
+    typingSeconds: 60,
+    keyStats: {
+      a: { correct: 8, mistakes: 2, confusions: { s: 2 } },
+      f: { correct: 2, mistakes: 4, confusions: { d: 3, g: 1 } },
+      j: { correct: 12, mistakes: 0 },
+    },
+  });
+  assert.equal(summary.wpm, 10);
+  assert.equal(summary.typedCharacters, 50);
+  assert.deepEqual(summary.problemKeys.map((item) => item.key), ['f', 'a']);
+  assert.equal(summary.problemKeys[0].accuracyPercent, 33);
+  assert.deepEqual(summary.problemKeys[0].confusedWith, [
+    { key: 'd', count: 3 },
+    { key: 'g', count: 1 },
+  ]);
+});
+
+test('typing checkpoint summaries aggregate safely and bound untrusted key data', () => {
+  const unsafe = JSON.parse('{"__proto__":{"correct":99,"mistakes":99},"a":{"correct":4,"mistakes":1,"confusions":{"s":1}},"toString":{"correct":1,"mistakes":1,"confusions":{"valueOf":1}},"constructor":{"correct":99,"mistakes":99}}');
+  const normalized = scoring.normalizeKeyStats(unsafe);
+  assert.deepEqual(Object.keys(normalized), ['a', 'toString']);
+
+  const summary = scoring.typingSummaryFromCheckpoints([
+    { typedCharacters: 10, typingSeconds: 12, keyStats: normalized },
+    { typedCharacters: 15, typingSeconds: 18, keyStats: { a:{ correct:5, mistakes:1, confusions:{ s:1 } } } },
+  ]);
+  assert.equal(summary.typedCharacters, 25);
+  assert.equal(summary.typingSeconds, 30);
+  assert.equal(summary.wpm, 10);
+  assert.deepEqual(summary.keyStats.a, { correct: 9, mistakes: 2, confusions: { s: 2 } });
+  assert.deepEqual(summary.keyStats.toString, { correct: 1, mistakes: 1, confusions: { valueOf: 1 } });
+});

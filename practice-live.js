@@ -217,6 +217,9 @@ function progressFor(participant, activityId, room) {
       correctInputs: participant.correctInputs || 0,
       mistakes: participant.mistakes || 0,
       activeSeconds: participant.activeSeconds || 0,
+      typedCharacters: participant.typedCharacters || 0,
+      typingSeconds: participant.typingSeconds || 0,
+      keyStats: participant.keyStats || {},
       completedAt: participant.completedAt || null,
     };
   }
@@ -232,6 +235,9 @@ function progressFor(participant, activityId, room) {
       correctInputs: 0,
       mistakes: 0,
       activeSeconds: 0,
+      typedCharacters: 0,
+      typingSeconds: 0,
+      keyStats: {},
       completedAt: null,
     };
   }
@@ -271,11 +277,13 @@ function publicLeaderboard(room) {
   const entries = (room.participants || [])
     .map((participant) => {
       const activeActivityId = participant.activeActivityId || room.activityId;
-      const activeActivity = practice.getActivity(activeActivityId);
       const active = progressFor(participant, activeActivityId, room);
+      const activeActivity = practice.getActivity(activeActivityId, active.activityVersion)
+        || practice.getActivity(activeActivityId);
       const allProgress = Object.values(participant.activityProgress || {});
       const presence = participantPresenceState(room, participant);
       const performance = participantPerformance(participant, room);
+      const typing = scoring.typingSummaryFromCheckpoints(active.checkpoints || []);
       return {
         id: participant.id,
         name: participant.name,
@@ -285,6 +293,7 @@ function publicLeaderboard(room) {
         totalMissionsCompleted: allProgress.reduce((sum, item) => sum + (item.currentStepIndex || 0), 0),
         missionCount: activeActivity ? activeActivity.steps.length : 0,
         activityId: activeActivityId,
+        activityVersion: activeActivity ? activeActivity.version : active.activityVersion,
         activityTitle: activeActivity ? activeActivity.title : '',
         accuracyPercent: performance.accuracyPercent,
         accuracyMultiplierPercent: performance.accuracyMultiplierPercent,
@@ -294,6 +303,10 @@ function publicLeaderboard(room) {
         activeSeconds: performance.activeSeconds,
         targetSeconds: performance.targetSeconds,
         rating: performance.rating,
+        typedCharacters: typing.typedCharacters,
+        typingSeconds: typing.typingSeconds,
+        wpm: typing.wpm,
+        problemKeys: typing.problemKeys,
         status: active.status || 'in_progress',
         online: presence.online,
         lastSeenAt: presence.lastSeenAt,
@@ -464,6 +477,11 @@ function joinRoom(code, input) {
     correctInputs: 0,
     mistakes: 0,
     activeSeconds: 0,
+    typedCharacters: 0,
+    typingSeconds: 0,
+    keyStats: {},
+    wpm: 0,
+    problemKeys: [],
     currentStepIndex: 0,
     status: 'in_progress',
     checkpoints: [],
@@ -481,6 +499,9 @@ function joinRoom(code, input) {
         correctInputs: 0,
         mistakes: 0,
         activeSeconds: 0,
+        typedCharacters: 0,
+        typingSeconds: 0,
+        keyStats: {},
         completedAt: null,
       },
     },
@@ -591,10 +612,17 @@ function checkpointRoom(code, token, input = {}) {
 
   const nextStepIndex = progress.currentStepIndex + 1;
   const submittedBaseScore = Math.max(0, Number.parseInt(input.baseScore ?? input.arcadeScore, 10) || 0);
+  const checkpointActiveSeconds = Math.max(1, Math.min(600, Number.parseInt(input.activeSeconds, 10) || 1));
+  const checkpointTypedCharacters = Math.max(0, Math.min(100000, Number.parseInt(input.typedCharacters, 10) || 0));
+  const checkpointTypingSeconds = Math.max(0, Math.min(checkpointActiveSeconds, Number.parseInt(input.typingSeconds, 10) || 0));
+  const checkpointKeyStats = scoring.normalizeKeyStats(input.keyStats);
   progress.baseScore = Math.max(progress.baseScore || 0, Math.min(submittedBaseScore, maximumScore(activity, nextStepIndex)));
   progress.correctInputs = Math.min(10000, (progress.correctInputs || 0) + Math.max(0, Number.parseInt(input.correctInputs, 10) || 0));
   progress.mistakes = Math.min(1000, (progress.mistakes || 0) + Math.max(0, Number.parseInt(input.mistakes, 10) || 0));
-  progress.activeSeconds = Math.min(7200, (progress.activeSeconds || 0) + Math.max(1, Number.parseInt(input.activeSeconds, 10) || 1));
+  progress.activeSeconds = Math.min(7200, (progress.activeSeconds || 0) + checkpointActiveSeconds);
+  progress.typedCharacters = Math.min(100000, (progress.typedCharacters || 0) + checkpointTypedCharacters);
+  progress.typingSeconds = Math.min(7200, (progress.typingSeconds || 0) + checkpointTypingSeconds);
+  progress.keyStats = scoring.mergeKeyStats(progress.keyStats, checkpointKeyStats);
   const progressPerformance = scoring.summarize({
     baseScore: progress.baseScore,
     correctInputs: progress.correctInputs,
@@ -607,6 +635,9 @@ function checkpointRoom(code, token, input = {}) {
   progress.accuracyMultiplierPercent = progressPerformance.accuracyMultiplierPercent;
   progress.paceMultiplierPercent = progressPerformance.paceMultiplierPercent;
   progress.targetSeconds = progressPerformance.targetSeconds;
+  const typingPerformance = scoring.summarizeTyping(progress);
+  progress.wpm = typingPerformance.wpm;
+  progress.problemKeys = typingPerformance.problemKeys;
   progress.currentStepIndex = nextStepIndex;
   progress.status = nextStepIndex >= activity.steps.length ? 'completed' : 'in_progress';
   participant.updatedAt = new Date().toISOString();
@@ -615,7 +646,10 @@ function checkpointRoom(code, token, input = {}) {
     stepId: expected.id,
     correctInputs: Math.max(0, Number.parseInt(input.correctInputs, 10) || 0),
     mistakes: Math.max(0, Number.parseInt(input.mistakes, 10) || 0),
-    activeSeconds: Math.max(1, Number.parseInt(input.activeSeconds, 10) || 1),
+    activeSeconds: checkpointActiveSeconds,
+    typedCharacters: checkpointTypedCharacters,
+    typingSeconds: checkpointTypingSeconds,
+    keyStats: checkpointKeyStats,
     completedAt: participant.updatedAt,
   });
   if (progress.status === 'completed') progress.completedAt = participant.updatedAt;
@@ -629,6 +663,11 @@ function checkpointRoom(code, token, input = {}) {
   participant.accuracyMultiplierPercent = totalPerformance.accuracyMultiplierPercent;
   participant.paceMultiplierPercent = totalPerformance.paceMultiplierPercent;
   participant.targetSeconds = totalPerformance.targetSeconds;
+  participant.typedCharacters = typingPerformance.typedCharacters;
+  participant.typingSeconds = typingPerformance.typingSeconds;
+  participant.keyStats = typingPerformance.keyStats;
+  participant.wpm = typingPerformance.wpm;
+  participant.problemKeys = typingPerformance.problemKeys;
   participant.currentStepIndex = progress.currentStepIndex;
   participant.status = progress.status;
   participant.checkpoints = progress.checkpoints;

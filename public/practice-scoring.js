@@ -17,6 +17,8 @@
     'key-patrol': 8,
     'word-blaster': 7,
     'capital-charge': 5,
+    'number-launch': 5,
+    'punctuation-port': 4,
     'sentence-engine': 2,
     'repair-bay': 5,
     'keyboard-map': 6,
@@ -41,6 +43,8 @@
     'key-patrol': 45,
     'word-blaster': 90,
     'capital-charge': 50,
+    'number-launch': 75,
+    'punctuation-port': 95,
     'sentence-engine': 75,
     'repair-bay': 75,
     'keyboard-map': 45,
@@ -116,6 +120,91 @@
     };
   }
 
+  function keyLabel(value) {
+    const label = String(value == null ? '' : value).replace(/[\x00-\x1f\x7f]/g, '').trim().slice(0, 24);
+    if (!label || ['__proto__', 'constructor', 'prototype'].includes(label)) return '';
+    return label;
+  }
+
+  function boundedCount(value, maximum = 10000) {
+    return Math.max(0, Math.min(maximum, Math.round(Number(value) || 0)));
+  }
+
+  function normalizeKeyStats(value) {
+    const result = {};
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return result;
+    for (const [rawKey, rawEntry] of Object.entries(value).slice(0, 64)) {
+      const key = keyLabel(rawKey);
+      if (!key || !rawEntry || typeof rawEntry !== 'object' || Array.isArray(rawEntry)) continue;
+      const correct = boundedCount(rawEntry.correct);
+      const mistakes = boundedCount(rawEntry.mistakes, 1000);
+      const confusions = {};
+      if (rawEntry.confusions && typeof rawEntry.confusions === 'object' && !Array.isArray(rawEntry.confusions)) {
+        for (const [rawWrongKey, rawCount] of Object.entries(rawEntry.confusions).slice(0, 12)) {
+          const wrongKey = keyLabel(rawWrongKey);
+          const count = boundedCount(rawCount, 1000);
+          if (wrongKey && count) confusions[wrongKey] = count;
+        }
+      }
+      if (correct || mistakes) result[key] = { correct, mistakes, confusions };
+    }
+    return result;
+  }
+
+  function mergeKeyStats(...sources) {
+    const result = {};
+    for (const source of sources) {
+      for (const [key, entry] of Object.entries(normalizeKeyStats(source))) {
+        const target = Object.hasOwn(result, key) ? result[key] : { correct:0, mistakes:0, confusions:{} };
+        target.correct = boundedCount(target.correct + entry.correct);
+        target.mistakes = boundedCount(target.mistakes + entry.mistakes, 1000);
+        for (const [wrongKey, count] of Object.entries(entry.confusions)) {
+          const previous = Object.hasOwn(target.confusions, wrongKey) ? target.confusions[wrongKey] : 0;
+          target.confusions[wrongKey] = boundedCount(previous + count, 1000);
+        }
+        result[key] = target;
+      }
+    }
+    return result;
+  }
+
+  function summarizeTyping(input = {}) {
+    const typedCharacters = boundedCount(input.typedCharacters, 100000);
+    const typingSeconds = boundedCount(input.typingSeconds, 7200);
+    const keyStats = normalizeKeyStats(input.keyStats);
+    const wpm = typingSeconds > 0
+      ? Math.round((((typedCharacters / 5) / (typingSeconds / 60))) * 10) / 10
+      : 0;
+    const problemKeys = Object.entries(keyStats)
+      .filter(([, entry]) => entry.mistakes > 0)
+      .map(([key, entry]) => {
+        const total = entry.correct + entry.mistakes;
+        const confusedWith = Object.entries(entry.confusions)
+          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+          .slice(0, 3)
+          .map(([wrongKey, count]) => ({ key:wrongKey, count }));
+        return {
+          key,
+          correct: entry.correct,
+          mistakes: entry.mistakes,
+          accuracyPercent: total ? Math.round((entry.correct / total) * 100) : 0,
+          confusedWith,
+        };
+      })
+      .sort((a, b) => b.mistakes - a.mistakes || a.accuracyPercent - b.accuracyPercent || a.key.localeCompare(b.key))
+      .slice(0, 8);
+    return { typedCharacters, typingSeconds, wpm, keyStats, problemKeys };
+  }
+
+  function typingSummaryFromCheckpoints(checkpoints = []) {
+    const totals = (Array.isArray(checkpoints) ? checkpoints : []).reduce((summary, checkpoint) => ({
+      typedCharacters: summary.typedCharacters + boundedCount(checkpoint && checkpoint.typedCharacters, 100000),
+      typingSeconds: summary.typingSeconds + boundedCount(checkpoint && checkpoint.typingSeconds, 7200),
+      keyStats: mergeKeyStats(summary.keyStats, checkpoint && checkpoint.keyStats),
+    }), { typedCharacters:0, typingSeconds:0, keyStats:{} });
+    return summarizeTyping(totals);
+  }
+
   function compareLeaderboardPerformance(a, b) {
     return (Number(b.totalMissionsCompleted) || 0) - (Number(a.totalMissionsCompleted) || 0)
       || (Number(b.score) || 0) - (Number(a.score) || 0)
@@ -143,6 +232,10 @@
     maximumBaseScore,
     targetSecondsForSteps,
     summarize,
+    normalizeKeyStats,
+    mergeKeyStats,
+    summarizeTyping,
+    typingSummaryFromCheckpoints,
     compareLeaderboardPerformance,
     rankLeaderboard,
   });
