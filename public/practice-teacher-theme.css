@@ -76,8 +76,11 @@ body.mission-control {
 .mission-control .activity-event.success { background:#173f39; border-color:#578b76; color:#adf6d1; }
 .mission-control .activity-event.warning { background:#443d29; border-color:#b79354; color:#ffe39a; }
 .mission-control .live-player.podium { background:#193945; }
-.mission-control .live-player.podium:first-child { background:#443d29; border-color:#f3cc70; }
-.mission-control .live-player.podium:first-child .live-rank { background:#f3cc70; color:#443617; }
+.mission-control .live-player.podium.rank-1 { background:#443d29; border-color:#f3cc70; }
+.mission-control .live-player.podium.rank-1 .live-rank { background:#f3cc70; color:#443617; }
+.mission-control .live-score b { color:#f1fdff; }
+.mission-control .live-score small { color:#b7d3dc; }
+.mission-control .ranking-note { background:#173d4b; color:#c6e4e9; }
 .mission-control .attendance-student { background:#193945; }
 .mission-control .attendance-student.joined { background:#173f39; border-color:#578b76; }
 .mission-control .attendance-student.joined .mark { color:#12392f; }

@@ -321,6 +321,8 @@
     .result-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:20px 0; }
     .result-stat { padding:14px 10px; border:1px solid #2e5884; background:#102747; color:#9fb4ca; font-size:12px; }
     .result-stat strong { display:block; margin-top:3px; color:#fff; font-size:23px; }
+    .score-explanation { margin:14px 0 0; padding:12px 14px; border-left:4px solid #25cddc; background:#102747; color:#c2d2e2; font-size:13px; line-height:1.45; text-align:left; }
+    .score-explanation:empty { display:none; }
     .learner-coaching { margin:22px 0; text-align:left; }
     .coaching-summary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
     .coaching-card { padding:15px 16px; border:1px solid #2e5884; background:#102747; color:#d9e7f3; }
@@ -790,6 +792,7 @@
         <p class="lead" id="completionLead">You moved, clicked, double-clicked, dragged and scrolled. Your teacher can now see the skills you practised.</p>
         <p id="masterySummary"></p>
         <p id="scoreSummary"></p>
+        <p class="score-explanation" id="scoreExplanation"></p>
         <div class="result-stats" id="resultStats"></div>
         <div class="learner-coaching" id="learnerCoaching" aria-label="Your practice feedback"></div>
         <div class="live-final-board" id="liveFinalBoard" hidden></div>
@@ -1207,6 +1210,7 @@
       $('masterySummary').innerHTML=me?`Mission result: <span class="mastery">${esc(me.mastery||'Completed')}</span>`:'Your result was not recorded';
       $('scoreSummary').innerHTML=me?`Your score: <strong style="color:#25cddc;font-size:24px">${me.score}</strong>`:'';
       $('resultStats').innerHTML=me?`<div class="result-stat">Missions<strong>${me.totalMissionsCompleted}</strong></div><div class="result-stat">Accuracy<strong>${me.accuracyPercent}%</strong></div><div class="result-stat">Mistakes<strong>${me.mistakes}</strong></div><div class="result-stat">Active time<strong>${formatGameTime(me.activeSeconds)}</strong></div>`:'';
+      renderScoreExplanation(me);
       renderLearnerCoaching(me?{accuracyPercent:me.accuracyPercent,mistakes:me.mistakes}:null,[],me&&me.totalMissionsCompleted);
       $('badgeShelf').innerHTML='';
       $('liveFinalBoard').hidden=true;
@@ -1308,6 +1312,17 @@
       return `${Math.floor(value/60)}:${String(value%60).padStart(2,'0')}`;
     }
 
+    function scoreFormula(summary) {
+      if(!summary) return '';
+      return `${Math.max(0,Number(summary.baseScore)||0)} mission points × ${Math.max(0,Number(summary.accuracyMultiplierPercent)||0)}% accuracy adjustment × ${Math.max(0,Number(summary.paceMultiplierPercent)||0)}% pace adjustment = ${Math.max(0,Number(summary.score)||0)} points.`;
+    }
+
+    function renderScoreExplanation(summary) {
+      $('scoreExplanation').textContent=summary
+        ? `How your score was calculated: ${scoreFormula(summary)} Accuracy reflects correct actions and mistakes. Your active time was ${formatGameTime(summary.activeSeconds)} and the goal for those missions was ${formatGameTime(summary.targetSeconds)}. Finishing within the goal keeps the full pace adjustment; rushing does not add extra points.`
+        : '';
+    }
+
     function performanceMetrics() {
       const pending=metricsCommittedForStep ? {correctInputs:0,mistakes:0,activeSeconds:0} : stats;
       return {
@@ -1374,6 +1389,7 @@
       $('roundValue').textContent = `${Math.min(roundProgress,goal)} / ${goal}`;
       const performance=performanceSummary();
       $('scoreValue').textContent = performance.score;
+      $('scoreValue').title = scoreFormula(performance);
       $('accuracyValue').textContent = `${performance.accuracyPercent}%`;
       $('timeValue').textContent = formatGameTime(performance.activeSeconds);
       $('comboValue').textContent = `${combo}×`;
@@ -2214,6 +2230,7 @@
       const performance=performanceSummary();
       $('scoreSummary').innerHTML = `${esc(performance.rating)} · Final score: <strong style="color:#25cddc;font-size:24px">${performance.score}</strong>`;
       $('resultStats').innerHTML=`<div class="result-stat">Accuracy<strong>${performance.accuracyPercent}%</strong></div><div class="result-stat">Mistakes<strong>${performance.mistakes}</strong></div><div class="result-stat">Active time<strong>${formatGameTime(performance.activeSeconds)}</strong></div><div class="result-stat">Base points<strong>${performance.baseScore}</strong></div>`;
+      renderScoreExplanation(performance);
       renderLearnerCoaching(performance,attempt.checkpoints||[],attempt.currentStepIndex||steps.length);
       $('practiseAgainBtn').hidden=Boolean(liveRoom);
       $('continueWorldBtn').href=continueWorldUrl();

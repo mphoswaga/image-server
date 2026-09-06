@@ -247,6 +247,27 @@ test('leaderboard uses active time to separate equally accurate learners', () =>
   ]);
   assert.equal(teacherRoom.leaderboard[0].score, teacherRoom.leaderboard[1].score);
   assert.ok(teacherRoom.leaderboard[1].score > teacherRoom.leaderboard[2].score);
+  assert.deepEqual(teacherRoom.leaderboard.map((player) => player.rank), [1, 2, 3]);
+});
+
+test('live leaderboard gives identical performances a shared rank', () => {
+  const room = live.createRoom({ teacherId:'teacher-shared-rank' });
+  const zola = live.joinRoom(room.code, 'Zola');
+  const ama = live.joinRoom(room.code, 'Ama');
+  for (const [joined, checkpointId] of [[zola, 'zola-pointer'], [ama, 'ama-pointer']]) {
+    live.checkpointRoom(room.code, joined.token, {
+      checkpointId,
+      stepId:'move-pointer',
+      evidence:{ action:'pointer_enter', target:'blue-star' },
+      baseScore:1300,
+      correctInputs:8,
+      mistakes:1,
+      activeSeconds:30,
+    });
+  }
+  const teacherRoom = live.teacherRooms('teacher-shared-rank')[0];
+  assert.deepEqual(teacherRoom.leaderboard.map((player) => player.name), ['Ama', 'Zola']);
+  assert.deepEqual(teacherRoom.leaderboard.map((player) => player.rank), [1, 1]);
 });
 
 test('learner room responses never expose classmates performance', () => {
@@ -305,6 +326,11 @@ test('a Foundation live participant continues into Grade 3 without rejoining', (
   assert.equal(grade3.participant.totalMissionsCompleted, 9);
   assert.equal(grade3.participant.missionCount, 7);
   assert.ok(grade3.participant.score > 360);
+  assert.ok(grade3.participant.baseScore > 360);
+  assert.equal(grade3.participant.accuracyMultiplierPercent, 100);
+  assert.equal(grade3.participant.paceMultiplierPercent, 100);
+  assert.equal(grade3.participant.activeSeconds, 9);
+  assert.equal(grade3.participant.targetSeconds, 540);
 });
 
 test('only the owning teacher can close a live room', () => {

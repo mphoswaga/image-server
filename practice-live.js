@@ -208,6 +208,7 @@ function progressFor(participant, activityId, room) {
   participant.activityProgress = participant.activityProgress || {};
   if (!participant.activityProgress[room.activityId]) {
     participant.activityProgress[room.activityId] = {
+      activityVersion: room.activityVersion,
       currentStepIndex: participant.currentStepIndex || 0,
       status: participant.status || 'in_progress',
       checkpoints: participant.checkpoints || [],
@@ -220,7 +221,9 @@ function progressFor(participant, activityId, room) {
     };
   }
   if (!participant.activityProgress[activityId]) {
+    const activity = practice.getActivity(activityId);
     participant.activityProgress[activityId] = {
+      activityVersion: activity ? activity.version : null,
       currentStepIndex: 0,
       status: 'in_progress',
       checkpoints: [],
@@ -244,46 +247,59 @@ function allowedActivity(room, participant, activityId) {
   return practice.getActivity('g3-keyboard-kingdom');
 }
 
+function participantPerformance(participant, room) {
+  const totals = Object.entries(participant.activityProgress || {}).reduce((summary, [activityId, progress]) => {
+    const activity = practice.getActivity(
+      activityId,
+      activityId === room.activityId ? room.activityVersion : progress.activityVersion
+    ) || practice.getActivity(activityId);
+    const completedSteps = activity
+      ? Math.max(0, Math.min(activity.steps.length, Number(progress.currentStepIndex) || 0))
+      : 0;
+    return {
+      baseScore: summary.baseScore + (Number(progress.baseScore) || Number(progress.score) || 0),
+      correctInputs: summary.correctInputs + (Number(progress.correctInputs) || 0),
+      mistakes: summary.mistakes + (Number(progress.mistakes) || 0),
+      activeSeconds: summary.activeSeconds + (Number(progress.activeSeconds) || 0),
+      targetSeconds: summary.targetSeconds + (activity ? scoring.targetSecondsForSteps(activity.steps, completedSteps) : 0),
+    };
+  }, { baseScore:0, correctInputs:0, mistakes:0, activeSeconds:0, targetSeconds:0 });
+  return scoring.summarize({ ...totals, targetSeconds: Math.max(1, totals.targetSeconds) });
+}
+
 function publicLeaderboard(room) {
-  return (room.participants || [])
+  const entries = (room.participants || [])
     .map((participant) => {
       const activeActivityId = participant.activeActivityId || room.activityId;
       const activeActivity = practice.getActivity(activeActivityId);
       const active = progressFor(participant, activeActivityId, room);
       const allProgress = Object.values(participant.activityProgress || {});
       const presence = participantPresenceState(room, participant);
+      const performance = participantPerformance(participant, room);
       return {
         id: participant.id,
         name: participant.name,
-        score: allProgress.reduce((sum, item) => sum + (item.score || 0), 0),
+        score: performance.score,
+        baseScore: performance.baseScore,
         missionsCompleted: active.currentStepIndex || 0,
         totalMissionsCompleted: allProgress.reduce((sum, item) => sum + (item.currentStepIndex || 0), 0),
         missionCount: activeActivity ? activeActivity.steps.length : 0,
         activityId: activeActivityId,
         activityTitle: activeActivity ? activeActivity.title : '',
-        accuracyPercent: scoring.summarize({
-          baseScore: active.baseScore || active.score || 0,
-          correctInputs: active.correctInputs || 0,
-          mistakes: active.mistakes || 0,
-          activeSeconds: active.activeSeconds || 0,
-          targetSeconds: activeActivity ? scoring.targetSecondsForSteps(activeActivity.steps, active.currentStepIndex) : 1,
-        }).accuracyPercent,
-        mistakes: active.mistakes || 0,
-        activeSeconds: active.activeSeconds || 0,
+        accuracyPercent: performance.accuracyPercent,
+        accuracyMultiplierPercent: performance.accuracyMultiplierPercent,
+        paceMultiplierPercent: performance.paceMultiplierPercent,
+        correctInputs: performance.correctInputs,
+        mistakes: performance.mistakes,
+        activeSeconds: performance.activeSeconds,
+        targetSeconds: performance.targetSeconds,
+        rating: performance.rating,
         status: active.status || 'in_progress',
         online: presence.online,
         lastSeenAt: presence.lastSeenAt,
       };
-    })
-    .sort((a, b) => (
-      b.totalMissionsCompleted - a.totalMissionsCompleted
-      || b.score - a.score
-      || b.accuracyPercent - a.accuracyPercent
-      || a.mistakes - b.mistakes
-      || a.activeSeconds - b.activeSeconds
-      || a.name.localeCompare(b.name)
-    ))
-    .map((participant, index) => ({ ...participant, rank: index + 1 }));
+    });
+  return scoring.rankLeaderboard(entries);
 }
 
 function roomAttendance(room) {
@@ -579,13 +595,18 @@ function checkpointRoom(code, token, input = {}) {
   progress.correctInputs = Math.min(10000, (progress.correctInputs || 0) + Math.max(0, Number.parseInt(input.correctInputs, 10) || 0));
   progress.mistakes = Math.min(1000, (progress.mistakes || 0) + Math.max(0, Number.parseInt(input.mistakes, 10) || 0));
   progress.activeSeconds = Math.min(7200, (progress.activeSeconds || 0) + Math.max(1, Number.parseInt(input.activeSeconds, 10) || 1));
-  progress.score = scoring.summarize({
+  const progressPerformance = scoring.summarize({
     baseScore: progress.baseScore,
     correctInputs: progress.correctInputs,
     mistakes: progress.mistakes,
     activeSeconds: progress.activeSeconds,
     targetSeconds: scoring.targetSecondsForSteps(activity.steps, nextStepIndex),
-  }).score;
+  });
+  progress.score = progressPerformance.score;
+  progress.accuracyPercent = progressPerformance.accuracyPercent;
+  progress.accuracyMultiplierPercent = progressPerformance.accuracyMultiplierPercent;
+  progress.paceMultiplierPercent = progressPerformance.paceMultiplierPercent;
+  progress.targetSeconds = progressPerformance.targetSeconds;
   progress.currentStepIndex = nextStepIndex;
   progress.status = nextStepIndex >= activity.steps.length ? 'completed' : 'in_progress';
   participant.updatedAt = new Date().toISOString();
@@ -598,11 +619,16 @@ function checkpointRoom(code, token, input = {}) {
     completedAt: participant.updatedAt,
   });
   if (progress.status === 'completed') progress.completedAt = participant.updatedAt;
-  participant.score = Object.values(participant.activityProgress).reduce((sum, item) => sum + (item.score || 0), 0);
-  participant.baseScore = Object.values(participant.activityProgress).reduce((sum, item) => sum + (item.baseScore || 0), 0);
-  participant.correctInputs = Object.values(participant.activityProgress).reduce((sum, item) => sum + (item.correctInputs || 0), 0);
-  participant.mistakes = Object.values(participant.activityProgress).reduce((sum, item) => sum + (item.mistakes || 0), 0);
-  participant.activeSeconds = Object.values(participant.activityProgress).reduce((sum, item) => sum + (item.activeSeconds || 0), 0);
+  const totalPerformance = participantPerformance(participant, room);
+  participant.score = totalPerformance.score;
+  participant.baseScore = totalPerformance.baseScore;
+  participant.correctInputs = totalPerformance.correctInputs;
+  participant.mistakes = totalPerformance.mistakes;
+  participant.activeSeconds = totalPerformance.activeSeconds;
+  participant.accuracyPercent = totalPerformance.accuracyPercent;
+  participant.accuracyMultiplierPercent = totalPerformance.accuracyMultiplierPercent;
+  participant.paceMultiplierPercent = totalPerformance.paceMultiplierPercent;
+  participant.targetSeconds = totalPerformance.targetSeconds;
   participant.currentStepIndex = progress.currentStepIndex;
   participant.status = progress.status;
   participant.checkpoints = progress.checkpoints;

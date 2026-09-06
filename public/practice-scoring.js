@@ -91,13 +91,59 @@
       : boundedNumber(Math.pow(targetSeconds / activeSeconds, 0.65), 0.45, 1, 0.45);
     const score = Math.max(0, Math.round(baseScore * accuracyFactor * paceFactor));
     const accuracyPercent = Math.round(accuracy * 100);
+    const accuracyMultiplierPercent = Math.round(accuracyFactor * 100);
+    const paceMultiplierPercent = Math.round(paceFactor * 100);
+    const afterAccuracyScore = Math.max(0, Math.round(baseScore * accuracyFactor));
     const rating = accuracyPercent >= 95 && paceFactor >= 0.95
       ? 'Precision pilot'
       : accuracyPercent >= 85
         ? 'Steady navigator'
         : 'Skill builder';
-    return { score, baseScore, correctInputs, mistakes, activeSeconds, targetSeconds, accuracyPercent, paceFactor, rating };
+    return {
+      score,
+      baseScore,
+      correctInputs,
+      mistakes,
+      activeSeconds,
+      targetSeconds,
+      accuracyPercent,
+      accuracyMultiplierPercent,
+      paceMultiplierPercent,
+      accuracyPointsLost: Math.max(0, baseScore - afterAccuracyScore),
+      pacePointsLost: Math.max(0, afterAccuracyScore - score),
+      paceFactor,
+      rating,
+    };
   }
 
-  return Object.freeze({ missionGoals, missionTargetSeconds, scoreForGoal, maximumBaseScore, targetSecondsForSteps, summarize });
+  function compareLeaderboardPerformance(a, b) {
+    return (Number(b.totalMissionsCompleted) || 0) - (Number(a.totalMissionsCompleted) || 0)
+      || (Number(b.score) || 0) - (Number(a.score) || 0)
+      || (Number(b.accuracyPercent) || 0) - (Number(a.accuracyPercent) || 0)
+      || (Number(a.mistakes) || 0) - (Number(b.mistakes) || 0)
+      || (Number(a.activeSeconds) || 0) - (Number(b.activeSeconds) || 0);
+  }
+
+  function rankLeaderboard(entries = []) {
+    const ordered = [...entries].sort((a, b) => (
+      compareLeaderboardPerformance(a, b)
+      || String(a.name || '').localeCompare(String(b.name || ''))
+    ));
+    let rank = 0;
+    return ordered.map((entry, index) => {
+      if (index === 0 || compareLeaderboardPerformance(ordered[index - 1], entry) !== 0) rank = index + 1;
+      return { ...entry, rank };
+    });
+  }
+
+  return Object.freeze({
+    missionGoals,
+    missionTargetSeconds,
+    scoreForGoal,
+    maximumBaseScore,
+    targetSecondsForSteps,
+    summarize,
+    compareLeaderboardPerformance,
+    rankLeaderboard,
+  });
 }));

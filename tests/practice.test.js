@@ -379,7 +379,11 @@ test('the arcade result factors accuracy, mistakes and active time into its scor
   assert.match(player, /Accuracy<strong>/);
   assert.match(player, /Mistakes<strong>/);
   assert.match(player, /Active time<strong>/);
+  assert.match(player, /id="scoreExplanation"/);
+  assert.match(player, /How your score was calculated/);
   assert.match(teacher, /accurate · \$\{mistakes\} mistakes/);
+  assert.match(teacher, /Exact ties share a place/);
+  assert.match(teacher, /accuracyMultiplierPercent/);
 });
 
 test('learner results explain strengths and give mission-specific next steps', () => {

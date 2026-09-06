@@ -74,6 +74,9 @@ test('teacher-controlled classwork keeps learners waiting, starts together, and 
     await expect(learner.locator('#nextBtn')).not.toHaveText('Retry save');
     await page.evaluate(() => loadLiveRoom());
     await expect(page.locator('#sessionActivityFeed')).toContainText('Amina cleared a mission');
+    await expect(page.locator('#rankingNote')).toBeVisible();
+    await expect(page.locator('#rankingNote')).toContainText('Exact ties share a place');
+    await expect(page.locator('#liveLeaderboard')).toContainText('mission pts');
     await page.locator('#pauseRoomBtn').click();
     await expect(page.locator('#liveRoomState')).toContainText('Class game paused');
     await expect(page.locator('#pauseRoomBtn')).toHaveText('Resume game');
@@ -98,6 +101,7 @@ test('teacher-controlled classwork keeps learners waiting, starts together, and 
     await learner.evaluate(() => refreshLiveRoom());
     await expect(learner.locator('#completionTitle')).toHaveText('Teacher ended the game');
     await expect(learner.locator('#scoreSummary')).toContainText('Your score');
+    await expect(learner.locator('#scoreExplanation')).toContainText('How your score was calculated');
     await expect(learner.locator('#liveFinalBoard')).toBeHidden();
   } finally {
     await learnerContext.close();

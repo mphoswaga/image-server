@@ -252,9 +252,14 @@ function createAttempt({ studentId, studentName, activityId }) {
     mastery: 'not_started',
     score: 0,
     baseScore: 0,
+    correctInputs: 0,
     accuracyPercent: 100,
+    accuracyMultiplierPercent: 100,
+    paceMultiplierPercent: 100,
     mistakes: 0,
     activeSeconds: 0,
+    targetSeconds: 0,
+    rating: 'Precision pilot',
     startedAt: now,
     updatedAt: now,
     completedAt: null,
@@ -343,9 +348,15 @@ function checkpointAttempt(attemptId, studentId, input) {
     targetSeconds: scoring.targetSecondsForSteps(activity.steps, attempt.currentStepIndex),
   });
   attempt.score = performance.score;
+  attempt.baseScore = performance.baseScore;
+  attempt.correctInputs = performance.correctInputs;
   attempt.accuracyPercent = performance.accuracyPercent;
+  attempt.accuracyMultiplierPercent = performance.accuracyMultiplierPercent;
+  attempt.paceMultiplierPercent = performance.paceMultiplierPercent;
   attempt.mistakes = performance.mistakes;
   attempt.activeSeconds = performance.activeSeconds;
+  attempt.targetSeconds = performance.targetSeconds;
+  attempt.rating = performance.rating;
   if (attempt.currentStepIndex >= activity.steps.length) {
     attempt.status = 'completed';
     attempt.completedAt = checkpoint.completedAt;
@@ -358,7 +369,24 @@ function studentSummary(studentId) {
   const sid = String(studentId || '').trim().toUpperCase();
   return allAttempts()
     .filter((attempt) => attempt.studentId === sid)
-    .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+    .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
+    .map(withCurrentPerformance);
+}
+
+function withCurrentPerformance(attempt) {
+  const activity = getActivity(attempt.activityId, attempt.activityVersion) || getActivity(attempt.activityId);
+  if (!activity || !(attempt.checkpoints || []).length) return { ...attempt };
+  const totals = attempt.checkpoints.reduce((summary, item) => ({
+    correctInputs: summary.correctInputs + (item.correctInputs || 0),
+    mistakes: summary.mistakes + (item.mistakes ?? Math.max(0, (item.attempts || 1) - 1)),
+    activeSeconds: summary.activeSeconds + (item.activeSeconds || 0),
+  }), { correctInputs:0, mistakes:0, activeSeconds:0 });
+  const performance = scoring.summarize({
+    baseScore: attempt.baseScore || 0,
+    ...totals,
+    targetSeconds: scoring.targetSecondsForSteps(activity.steps, attempt.currentStepIndex || 0),
+  });
+  return { ...attempt, ...performance };
 }
 
 function teacherResults(studentIds) {
@@ -367,7 +395,7 @@ function teacherResults(studentIds) {
     .filter((attempt) => allowed.has(attempt.studentId))
     .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
     .map((attempt) => ({
-      ...attempt,
+      ...withCurrentPerformance(attempt),
       checkpoints: attempt.checkpoints.map((checkpoint) => ({ ...checkpoint })),
     }));
 }

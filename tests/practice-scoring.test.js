@@ -12,7 +12,11 @@ test('practice scoring rewards accuracy and efficient active time', () => {
   assert.ok(onTime.score > slow.score);
   assert.ok(slow.score > verySlow.score);
   assert.equal(precise.accuracyPercent, 100);
+  assert.equal(precise.accuracyMultiplierPercent, 100);
+  assert.equal(precise.paceMultiplierPercent, 100);
+  assert.equal(slow.paceMultiplierPercent, 64);
   assert.ok(inaccurate.score < precise.score);
+  assert.equal(inaccurate.accuracyPointsLost + inaccurate.pacePointsLost + inaccurate.score, inaccurate.baseScore);
 });
 
 test('young learners keep a forgiving score floor while mistakes still matter', () => {
@@ -26,4 +30,14 @@ test('campaign maximums and target times come from the shared mission catalogue'
   const steps = [{ id:'move-pointer' }, { id:'word-blaster' }];
   assert.equal(scoring.maximumBaseScore(steps), scoring.scoreForGoal(8) + scoring.scoreForGoal(7));
   assert.equal(scoring.targetSecondsForSteps(steps), 125);
+});
+
+test('leaderboard ranking is deterministic and gives exact ties the same place', () => {
+  const ranked = scoring.rankLeaderboard([
+    { name:'Zola', totalMissionsCompleted:4, score:500, accuracyPercent:90, mistakes:1, activeSeconds:50 },
+    { name:'Ama', totalMissionsCompleted:4, score:500, accuracyPercent:90, mistakes:1, activeSeconds:50 },
+    { name:'Kai', totalMissionsCompleted:4, score:490, accuracyPercent:100, mistakes:0, activeSeconds:30 },
+  ]);
+  assert.deepEqual(ranked.map((entry) => entry.name), ['Ama', 'Zola', 'Kai']);
+  assert.deepEqual(ranked.map((entry) => entry.rank), [1, 1, 3]);
 });

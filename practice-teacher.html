@@ -99,12 +99,12 @@
     .attendance-student b { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--navy); font-size:12px; }
     .board-title { margin:12px 0 8px; }
     .live-board { display:grid; align-content:start; gap:7px; max-height:540px; overflow:auto; padding-right:3px; scrollbar-width:thin; }
-    .live-player { display:grid; grid-template-columns:34px minmax(0,1fr) auto auto; gap:10px; align-items:center; padding:9px 11px; border:1px solid var(--line); background:#f8fbfd; }
+    .live-player { display:grid; grid-template-columns:34px minmax(0,.75fr) minmax(0,1.4fr) minmax(120px,.65fr); gap:10px; align-items:center; padding:9px 11px; border:1px solid var(--line); background:#f8fbfd; }
     .live-player.new-arrival { animation:player-arrives .55s cubic-bezier(.2,.8,.2,1) both; }
-    .live-player.podium { grid-template-columns:48px minmax(0,1fr) auto auto; padding:14px; border-width:2px; background:linear-gradient(100deg,#fff,var(--soft-cyan)); }
-    .live-player.podium:first-child { border-color:#e5b634; background:linear-gradient(100deg,#fff8d9,#fff); }
-    .live-player.podium:nth-child(2) { border-color:#9eb0c2; }
-    .live-player.podium:nth-child(3) { border-color:#c98b57; }
+    .live-player.podium { grid-template-columns:48px minmax(0,.75fr) minmax(0,1.4fr) minmax(120px,.65fr); padding:14px; border-width:2px; background:linear-gradient(100deg,#fff,var(--soft-cyan)); }
+    .live-player.podium.rank-1 { border-color:#e5b634; background:linear-gradient(100deg,#fff8d9,#fff); }
+    .live-player.podium.rank-2 { border-color:#9eb0c2; }
+    .live-player.podium.rank-3 { border-color:#c98b57; }
     .live-player.podium .live-rank { width:40px; height:40px; font-size:18px; }
     .room-state.ended { border-color:var(--orange); background:var(--soft-orange); }
     .room-clock { margin-left:auto; color:var(--navy); font-size:22px; font-variant-numeric:tabular-nums; }
@@ -123,6 +123,10 @@
     .live-player span { color:var(--muted); font-size:12px; }
     .live-player-name { min-width:0; }
     .live-player-name b { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .live-score { min-width:0; text-align:right; }
+    .live-score b { display:block; color:var(--navy); font-size:15px; font-variant-numeric:tabular-nums; }
+    .live-score small { display:block; margin-top:2px; color:var(--muted); font-size:10px; line-height:1.25; }
+    .ranking-note { margin:-2px 0 9px; padding:8px 10px; border-left:3px solid var(--cyan); background:var(--soft-cyan); color:var(--muted); font-size:11px; line-height:1.4; }
     .player-state { display:inline-flex!important; align-items:center; gap:5px; margin-top:3px; color:var(--muted); font-size:10px!important; font-weight:800; text-transform:uppercase; }
     .player-state i { width:7px; height:7px; border-radius:50%; background:#9eb0c2; }
     .player-state.online { color:var(--green-dark); }
@@ -169,6 +173,7 @@
           <section class="session-activity" id="sessionActivity" hidden><div class="session-activity-head"><h3>Session activity</h3><span>Live updates</span></div><div class="activity-feed" id="sessionActivityFeed" aria-live="polite"></div></section>
           <section class="attendance" id="liveAttendance" hidden><div class="attendance-head"><h3 id="attendanceTitle">Class attendance</h3><span id="attendanceCount"></span></div><div class="attendance-list" id="attendanceList"></div></section>
           <h3 class="board-title" id="liveBoardTitle">Learners in the lobby</h3>
+          <p class="ranking-note" id="rankingNote" hidden>Ranks compare missions completed first, then score. Score is mission points adjusted for accuracy and active time. Exact ties share a place.</p>
           <div class="live-board" id="liveLeaderboard" aria-live="polite"></div>
         </div>
       </div>
@@ -472,8 +477,9 @@
         $('attendanceList').innerHTML=attendance.map((student)=>`<div class="attendance-student ${student.joined?'joined':''}"><span class="mark" aria-label="${student.joined?'Joined':'Not signed in'}">${student.joined?'✓':'×'}</span><b>${esc(student.name)}</b></div>`).join('');
       }
       $('liveBoardTitle').textContent=ended?(classwork?'Final podium':'Homework results'):waiting?'Learners in the lobby':classwork?'Live leaderboard':'Learner progress';
+      $('rankingNote').hidden=waiting||!players.length;
       $('liveLeaderboard').innerHTML=players.length
-        ? players.map((player,index)=>{ const isNew=!knownLivePlayers.has(player.id); const connection=playerConnectionState(player,{waiting,paused,ended}); const activityLabel=player.activityId==='typing-academy'?'Typing · ':player.activityId==='g3-keyboard-kingdom'?'Grade 3 · ':''; return `<div class="live-player ${isNew?'new-arrival':''} ${ended&&index<3?'podium':''}"><span class="live-rank">${waiting?'✓':player.rank}</span><div class="live-player-name"><b>${esc(player.name)}</b><span class="player-state ${connection.className}"><i></i>${connection.label}</span></div><span>${waiting?'Ready to start':`${activityLabel}${player.missionsCompleted}/${player.missionCount||room.activity.missionCount} missions · ${player.accuracyPercent??100}% accurate · ${fmtTime(player.activeSeconds)}`}</span><span class="live-score">${waiting?'Joined':player.score+' pts'}</span></div>`; }).join('')
+        ? players.map((player)=>{ const isNew=!knownLivePlayers.has(player.id); const connection=playerConnectionState(player,{waiting,paused,ended}); const activityLabel=player.activityId==='typing-academy'?'Typing · ':player.activityId==='g3-keyboard-kingdom'?'Grade 3 · ':''; const formula=`${player.baseScore||0} mission pts × ${player.accuracyMultiplierPercent??100}% accuracy × ${player.paceMultiplierPercent??100}% pace`; const podium=ended&&player.rank<=3?`podium rank-${player.rank}`:''; return `<div class="live-player ${isNew?'new-arrival':''} ${podium}"><span class="live-rank">${waiting?'✓':player.rank}</span><div class="live-player-name"><b>${esc(player.name)}</b><span class="player-state ${connection.className}"><i></i>${connection.label}</span></div><span>${waiting?'Ready to start':`${activityLabel}${player.missionsCompleted}/${player.missionCount||room.activity.missionCount} missions · ${player.accuracyPercent??100}% accurate · ${player.mistakes||0} mistakes · ${fmtTime(player.activeSeconds)} active`}</span><span class="live-score" title="${esc(formula)}">${waiting?'Joined':`<b>${player.score} pts</b><small>${esc(formula)}</small>`}</span></div>`; }).join('')
         : '<div class="live-empty">Waiting for learners to join...</div>';
       knownLivePlayers=new Set(players.map((player)=>player.id));
       syncRoomClock();
@@ -602,9 +608,10 @@
         const accuracy=result.accuracyPercent??(correct+mistakes?Math.round((correct/(correct+mistakes))*100):100);
         const hints=(result.checkpoints||[]).reduce((sum,item)=>sum+(item.hintsUsed||0),0);
         const seconds=(result.checkpoints||[]).reduce((sum,item)=>sum+(item.activeSeconds||0),0);
+        const scoreFormula=`${result.baseScore||0} mission pts × ${result.accuracyMultiplierPercent??100}% accuracy × ${result.paceMultiplierPercent??100}% pace`;
         const completed=new Set((result.checkpoints||[]).map((item)=>item.stepId));
         const skills=Object.entries(stepNames).map(([id,name])=>`<span class="skill ${completed.has(id)?'done':''}">${esc(name)}</span>`).join('');
-        return `<tr><td><div class="student">${esc(result.studentName||result.studentId)}</div><div class="meta">${esc(result.studentId)}</div></td><td>${esc((result.rosters||[]).map((r)=>r.name).join(', ')||'-')}</td><td><span class="pill ${esc(result.mastery)}">${esc(result.status==='completed'?label(result.mastery):'In progress')}</span></td><td><div class="skill-list">${skills}</div></td><td><b>${result.score||0} pts</b><div class="meta">${accuracy}% accurate · ${mistakes} mistakes</div></td><td>${hints}</td><td>${fmtTime(seconds)}</td><td>${fmtDate(result.updatedAt)}</td></tr>`;
+        return `<tr><td><div class="student">${esc(result.studentName||result.studentId)}</div><div class="meta">${esc(result.studentId)}</div></td><td>${esc((result.rosters||[]).map((r)=>r.name).join(', ')||'-')}</td><td><span class="pill ${esc(result.mastery)}">${esc(result.status==='completed'?label(result.mastery):'In progress')}</span></td><td><div class="skill-list">${skills}</div></td><td><b>${result.score||0} pts</b><div class="meta">${accuracy}% accurate · ${mistakes} mistakes</div><div class="meta">${esc(scoreFormula)}</div></td><td>${hints}</td><td>${fmtTime(seconds)}</td><td>${fmtDate(result.updatedAt)}</td></tr>`;
       }).join('');
       $('empty').hidden=results.length>0;
     }
