@@ -5,7 +5,7 @@
 }(typeof globalThis !== 'undefined' ? globalThis : this, function colonyQuestCoreFactory() {
   'use strict';
 
-  const VERSION = 4;
+  const VERSION = 5;
   const FORTIFICATIONS = Object.freeze([
     { name: 'Earth', wall: 0xb68a57, edge: 0x785437, floor: 0x65513a },
     { name: 'Timber', wall: 0xa7743e, edge: 0xe3b571, floor: 0x65513a },
@@ -22,10 +22,10 @@
     const rooms = [{ id: 'nursery', kind: 'nursery', label: 'Queen chamber' }];
     if (team.pantryBuilt) rooms.push({ id: 'food', kind: 'food', label: 'Pantry' });
     if (team.barracksBuilt) rooms.push({ id: 'guard', kind: 'guard', label: 'Barracks' });
-    for (let index = 1; index < Math.ceil(team.soldiers / 8); index += 1) rooms.push({ id: `guard-${index}`, kind: 'guard', label: `Barracks ${index + 1}` });
-    for (let index = 1; index < Math.ceil(team.workers / 12); index += 1) rooms.push({ id: `workers-${index}`, kind: 'workers', label: `Worker lodge ${index}` });
+    for (let index = 1; index <= (team.barracksAnnexes || 0); index += 1) rooms.push({ id: `guard-${index}`, kind: 'guard', label: `Barracks ${index + 1}` });
+    for (let index = 1; index <= (team.workerLodges || 0); index += 1) rooms.push({ id: `workers-${index}`, kind: 'workers', label: `Worker lodge ${index}` });
     const expansions = ['Mushroom garden', 'Seed vault', 'Workshop', 'Water store'];
-    for (let index = 1; index < team.territory; index += 1) {
+    for (let index = 1; index <= (team.expansionRooms ?? Math.max(0, team.territory - 1)); index += 1) {
       rooms.push({ id: `expansion-${index}`, kind: 'expansion', label: `${expansions[(index - 1) % expansions.length]} ${index}`, expansion: index });
     }
     return rooms;
@@ -40,12 +40,12 @@
   ]);
 
   const REWARDS = Object.freeze({
-    workers: { label: 'Workers', description: 'More ants collect food.', icon: 'worker' },
-    food: { label: 'Food', description: 'Fill the colony stores.', icon: 'leaf' },
+    workers: { label: 'Add one worker', description: 'One new ant joins the foraging trail.', icon: 'worker' },
+    food: { label: 'Gather food', description: 'Bring home five seeds.', icon: 'leaf' },
     defense: { label: 'Defense', description: 'Strengthen the nest walls.', icon: 'shield' },
-    queen: { label: 'Queen', description: 'Grow the colony faster.', icon: 'crown' },
-    expansion: { label: 'Expansion', description: 'Open new territory.', icon: 'compass' },
-    soldiers: { label: 'Soldiers', description: 'Prepare for Colony Wars.', icon: 'sword' },
+    queen: { label: 'Care for the queen', description: 'The queen lays one new egg.', icon: 'crown' },
+    expansion: { label: 'Build one room', description: 'Dig and furnish one new chamber.', icon: 'compass' },
+    soldiers: { label: 'Add one soldier', description: 'One new guardian joins the colony.', icon: 'sword' },
     raid: { label: 'Knowledge raid', description: 'Challenge another colony.', icon: 'flag' },
   });
 
@@ -88,6 +88,9 @@
       defense: 0,
       pantryBuilt: false,
       barracksBuilt: false,
+      workerLodges: 0,
+      barracksAnnexes: 0,
+      expansionRooms: 0,
       territory: 1,
       queenLevel: 1,
       nestLevel: 1,
@@ -110,6 +113,10 @@
     base.territory = Math.max(1, base.territory);
     base.pantryBuilt = typeof input?.pantryBuilt === 'boolean' ? input.pantryBuilt : base.workers > 1 || base.food > 8;
     base.barracksBuilt = typeof input?.barracksBuilt === 'boolean' ? input.barracksBuilt : base.soldiers > 0;
+    // Preserve rooms from older matches without creating new rooms as ant counts rise.
+    base.workerLodges = Math.floor(clamp(input?.workerLodges ?? Math.max(0, Math.ceil(base.workers / 12) - 1), 0, 999));
+    base.barracksAnnexes = Math.floor(clamp(input?.barracksAnnexes ?? Math.max(0, Math.ceil(base.soldiers / 8) - 1), 0, 999));
+    base.expansionRooms = Math.floor(clamp(input?.expansionRooms ?? Math.max(0, base.territory - 1), 0, 999));
     base.population = Math.max(base.population, 1 + base.workers + base.soldiers);
     return base;
   }
@@ -148,38 +155,31 @@
   function applyReward(team, reward, teams) {
     if (!team || !REWARDS[reward] || reward === 'raid') return team;
     if (reward === 'defense' && team.defense >= FORTIFICATIONS.length - 1) return team;
-    const boost = comebackMultiplier(team, teams);
-    const add = value => Math.max(1, Math.round(value * boost));
     if (reward === 'workers') {
-      team.pantryBuilt = true;
-      const amount = add(3);
-      team.workers += amount;
-      team.population += amount;
-      team.food += add(3);
+      team.workers += 1;
+      team.population += 1;
     } else if (reward === 'food') {
-      team.pantryBuilt = true;
-      team.food += add(23 + team.workers);
+      team.food += 5;
     } else if (reward === 'defense') {
       team.defense += 1;
-      team.nestLevel += team.defense % 2 === 0 ? 1 : 0;
     } else if (reward === 'queen') {
-      team.pantryBuilt = true;
       team.queenLevel += 1;
-      team.population += add(2 + team.queenLevel);
-      team.workers += add(1);
+      team.population += 1;
     } else if (reward === 'expansion') {
-      team.territory += 1;
-      team.food += add(9);
-      team.nestLevel += team.territory % 2 === 0 ? 1 : 0;
+      expandColony(team);
     } else if (reward === 'soldiers') {
-      team.barracksBuilt = true;
-      const amount = add(3);
-      team.soldiers += amount;
-      team.population += amount;
-      team.food = Math.max(0, team.food - 3);
+      team.soldiers += 1;
+      team.population += 1;
     }
     team.upgrades += 1;
     return team;
+  }
+
+  function expandColony(team) {
+    if (!team.pantryBuilt) team.pantryBuilt = true;
+    else if (!team.barracksBuilt) team.barracksBuilt = true;
+    else team.expansionRooms = (team.expansionRooms ?? Math.max(0, team.territory - 1)) + 1;
+    team.territory += 1;
   }
 
   function resolveRaid(attacker, defender, teams) {
@@ -204,17 +204,6 @@
       const production = Math.max(2, Math.round(team.workers * 0.65 + team.territory * 2 + team.queenLevel));
       const upkeep = Math.max(1, Math.round(team.population * 0.22 + team.soldiers * 0.35));
       team.food = Math.max(0, team.food + production - upkeep);
-      const births = Math.max(1, team.queenLevel);
-      if (team.food >= births * 2) {
-        team.food -= births * 2;
-        team.population += births;
-        team.workers += Math.max(1, Math.ceil(births * 0.6));
-        if (team.workers > 1) team.pantryBuilt = true;
-      }
-      if (team.food === 0 && team.population > 5) {
-        if (team.population > 1 + team.workers + team.soldiers) team.population -= 1;
-        else if (team.workers > 3) { team.workers -= 1; team.population -= 1; }
-      }
     }
     return teams;
   }
@@ -229,7 +218,7 @@
       if (event.key === 'heavy-rain') team.food = Math.max(0, team.food - Math.max(1, 9 - team.defense * 2));
       if (event.key === 'food-trail') team.food += 7 + Math.min(12, team.workers);
       if (event.key === 'predator') team.food = Math.max(0, team.food - Math.max(0, 12 - team.defense * 3 - team.soldiers));
-      if (event.key === 'new-territory' && strengths[index] <= weakest * 1.08) team.territory += 1;
+      if (event.key === 'new-territory' && strengths[index] <= weakest * 1.08) expandColony(team);
     }
     return event;
   }

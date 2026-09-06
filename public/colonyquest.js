@@ -40,12 +40,12 @@
     ],
   };
   const REWARD_STORIES = {
-    workers: { title: 'The foraging trail comes alive', text: 'New workers hurry from the meadow entrance to the food store, carrying fresh seeds for the colony.', site: 'entrance' },
-    food: { title: 'The food store fills', text: 'The workers stack a new harvest inside the pantry so the colony can grow through the next chapter.', site: 'food' },
+    workers: { title: 'The foraging trail comes alive', text: 'One new worker emerges beside the queen, then joins the foraging trail. Watch the new ant take its first steps.', site: 'nursery' },
+    food: { title: 'Five more seeds for the colony', text: 'The worker brings a small bundle of five seeds into the existing food store.', site: 'food' },
     defense: { title: 'The nest walls grow stronger', text: 'The workers rebuild the room walls and tunnel supports with stronger materials. Their new home is ready for the rain.', site: 'nursery' },
-    queen: { title: 'The nursery begins to glow', text: 'The queen tends new eggs in the nursery, welcoming more ants into the colony family.', site: 'nursery' },
+    queen: { title: 'One new egg in the nursery', text: 'The queen settles one new egg onto the leaf bedding. Her small family is growing, one step at a time.', site: 'nursery' },
     expansion: { title: 'A hidden tunnel opens', text: 'Workers clear the deep roots, raise a new colony flag, and discover another chamber to explore.', site: 'expansion' },
-    soldiers: { title: 'A guardian patrol forms', text: 'New guardians march between the entrance and guard post, ready to protect every worker and seed.', site: 'guard' },
+    soldiers: { title: 'One new guardian reports for duty', text: 'One soldier joins the colony and begins its patrol in the existing nest.', site: 'guard' },
   };
 
   function esc(value) {
@@ -496,12 +496,12 @@
   function rewardEffectText(key, change, team) {
     const amount = Math.max(0, Number(change && change.amount) || 0);
     const secondary = Math.max(0, Number(change && change.secondary) || 0);
-    if (key === 'workers') return `+${amount} workers, +${amount} ants, and +${secondary} food - ${team.workers} workers now`;
-    if (key === 'food') return `+${amount} food - ${team.food} stored in the pantry`;
+    if (key === 'workers') return `+${amount} ${amount === 1 ? 'worker' : 'workers'} - ${team.workers} workers now`;
+    if (key === 'food') return `+${amount} food - ${team.food} seeds stored`;
     if (key === 'defense') return `${core.fortification(team).name} walls throughout the colony - defense ${team.defense}`;
-    if (key === 'queen') return `Queen level ${team.queenLevel} - +${amount} ants and +${secondary} ${secondary === 1 ? 'worker' : 'workers'}`;
-    if (key === 'expansion') return `+1 permanent room: ${core.colonyRooms(team).at(-1).label} - ${core.colonyRooms(team).length} rooms, +${amount} food`;
-    if (key === 'soldiers') return `+${amount} guardians and -${secondary} food - ${team.soldiers} guardians now`;
+    if (key === 'queen') return `+${Math.max(0, amount - secondary)} ${amount - secondary === 1 ? 'egg' : 'eggs'} - queen level ${team.queenLevel}`;
+    if (key === 'expansion') return `+1 permanent room: ${core.colonyRooms(team).at(-1).label} - ${core.colonyRooms(team).length} rooms`;
+    if (key === 'soldiers') return `+${amount} ${amount === 1 ? 'soldier' : 'soldiers'} - ${team.soldiers} soldiers now`;
     return '';
   }
 
@@ -893,11 +893,11 @@
     return container;
   }
 
-  function animateAnt(agent, points, index = 0) {
+  function animateAnt(agent, points, index = 0, previous = null, startDelay = 0) {
     if (!points.length) return;
     let cursor = index % points.length;
-    agent.x = points[cursor].x;
-    agent.y = points[cursor].y;
+    agent.x = previous ? previous.x : points[cursor].x;
+    agent.y = previous ? previous.y : points[cursor].y;
     const travel = () => {
       if (!scene || !agent.active) return;
       cursor = (cursor + 1) % points.length;
@@ -931,7 +931,7 @@
         },
       });
     };
-    scene.time.delayedCall(160 + index * 120, travel);
+    scene.time.delayedCall(Math.max(startDelay, 160 + index * 120), travel);
   }
 
   function tunnelCurve(a, b) {
@@ -1028,6 +1028,7 @@
     } else if (kind === 'nursery' || kind === 'workers') {
       for (let i = 0; i < 7; i += 1) ellipse(graphics, x + (i - 3) * roomWidth * .09, y + roomHeight * .23 + Math.sin(i) * 3, roomWidth * .18, 12, i % 2 ? 0x789850 : 0x4b783e);
       if (kind === 'nursery') {
+        if (!team.pantryBuilt) for (let i = 0; i < Math.min(20, team.food); i += 1) ellipse(graphics, x - roomWidth * .34 + i % 5 * 6, y - 15 + Math.floor(i / 5) * 5, 5, 4, 0xf1cc66);
         const young = Math.max(0, team.population - 1 - team.workers - team.soldiers);
         for (let i = 0; i < young; i += 1) ellipse(graphics, x - roomWidth * .27 + i % 10 * roomWidth * .06, y + roomHeight * .17 + Math.floor(i / 10) * 6, 6, 4, 0xfff1cb);
       }
@@ -1048,7 +1049,7 @@
     }
   }
 
-  function drawColony(team, zone, teamIndex) {
+  function drawColony(team, zone, teamIndex, previous = null) {
     const palette = core.TEAM_COLORS[team.colorIndex];
     const material = core.fortification(team);
     const graphics = scene.add.graphics().setDepth(0);
@@ -1063,10 +1064,11 @@
       y: zone.y + 156 + Math.ceil(index / 2) * 166,
     }));
     const nursery = rooms[0];
+    const preservePositions = previous && previous.zone.x === zone.x && previous.zone.y === zone.y && previous.zone.w === zone.w && previous.roomCount === rooms.length;
     const food = rooms.find(room => room.kind === 'food') || nursery;
     const guards = rooms.filter(room => room.kind === 'guard');
     const guard = guards.at(-1) || nursery;
-    const sites = { entrance, nursery, food, guard, center: nursery, expansion: rooms.filter(room => room.kind === 'expansion').at(-1) || nursery };
+    const sites = { entrance, nursery, food, guard, center: nursery, expansion: rooms.at(-1) };
 
     drawTunnel(graphics, [entrance, nursery], 14, material);
     for (let index = 1; index < rooms.length; index += 1) {
@@ -1117,23 +1119,34 @@
       const route = pathTo(room);
       const surface = { x: cx + (index % 2 ? -1 : 1) * zone.w * .3, y: entrance.y - 19 };
       const path = building ? [{ x: room.x - 12, y: room.y }, { x: room.x + 14, y: room.y + 5 }, { x: room.x, y: room.y - 8 }] : [...route.slice().reverse(), entrance, surface, entrance, ...route];
+      const recruit = index === team.workers - 1 && session.phase === 'event' && lastEvent?.key === 'upgrade-workers' && lastEvent.teamId === team.id;
+      if (recruit) path.unshift({ x: nursery.x + roomWidth * .28, y: nursery.y + 4 });
       const ant = makeAntAgent('cq-worker', path[0], 29, palette.primary, !building, index < 48);
       ant.setData('role', 'worker');
       ants.push(ant);
-      animateAnt(ant, path, index);
+      animateAnt(ant, path, recruit ? 0 : index, preservePositions && !recruit ? previous.workers[index] : null, recruit ? 1400 : 0);
+      if (recruit) revealRecruit(ant);
     }
     for (let index = 0; index < team.soldiers; index += 1) {
       const room = guards[Math.floor(index / 8)] || nursery;
-      const slot = index % 8;
+      const slot = guards[Math.floor(index / 8)] ? index % 8 : index - guards.length * 8;
       const x = room.x + ((slot % 4) - 1.5) * roomWidth * .19;
       const y = room.y - 13 + Math.floor(slot / 4) * 24;
       const path = [{ x, y }, { x: x + 10, y: y - 5 }, { x: x - 8, y: y + 3 }];
       const soldier = makeAntAgent('cq-guardian', path[0], 30, palette.primary, false, index < 48);
       soldier.setData('role', 'soldier');
       ants.push(soldier);
-      animateAnt(soldier, path, index);
+      animateAnt(soldier, path, index, preservePositions ? previous.soldiers[index] : null);
+      const lastEvent = session.events.at(-1);
+      if (index === team.soldiers - 1 && session.phase === 'event' && lastEvent?.key === 'upgrade-soldiers' && lastEvent.teamId === team.id) revealRecruit(soldier);
     }
     colonyViews.set(team.id, { zone, graphics, ants, queen, rooms, center: nursery, sites });
+  }
+
+  function revealRecruit(ant) {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    ant.setScale(.2).setAlpha(.35);
+    scene.tweens.add({ targets: ant, scaleX: 1, scaleY: 1, alpha: 1, duration: 850, ease: 'Sine.easeOut' });
   }
 
   function focusColony(teamId, siteName = 'nursery') {
@@ -1161,13 +1174,17 @@
 
   function updateWorld() {
     if (!scene || !session) return;
+    const previous = new Map([...colonyViews].map(([id, view]) => [id, {
+      zone: view.zone, roomCount: view.rooms.length,
+      workers: view.ants.filter(ant => ant.getData('role') === 'worker').map(ant => ({ x: ant.x, y: ant.y })),
+      soldiers: view.ants.filter(ant => ant.getData('role') === 'soldier').map(ant => ({ x: ant.x, y: ant.y })),
+    }]));
     scene.tweens.killAll();
     scene.children.removeAll(true);
     colonyViews = new Map();
     const width = scene.scale.width;
     const height = scene.scale.height;
-    const docked = width > 850 && $('gameScreen').classList.contains('dock-open');
-    const layoutWidth = docked ? width - Math.min(620, width * .44) : width;
+    const layoutWidth = width > 850 ? width - Math.min(620, width * .44) : width;
     const count = session.teams.length;
     const columns = layoutWidth < 600 ? 1 : layoutWidth < 1050 ? 2 : Math.min(3, count);
     const zoneWidth = (layoutWidth - 18 * (columns + 1)) / columns;
@@ -1197,7 +1214,7 @@
       for (let col = 0; col < columns; col += 1) {
         const index = row * columns + col;
         if (index >= count) break;
-        drawColony(session.teams[index], { x: 18 + col * (zoneWidth + 18), y: rowTop, w: zoneWidth, h: rowHeights[row] }, index);
+        drawColony(session.teams[index], { x: 18 + col * (zoneWidth + 18), y: rowTop, w: zoneWidth, h: rowHeights[row] }, index, previous.get(session.teams[index].id));
       }
       rowTop += rowHeights[row] + 28;
     }

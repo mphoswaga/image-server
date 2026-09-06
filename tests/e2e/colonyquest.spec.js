@@ -14,7 +14,7 @@ test('growing colonies draw every soldier, retain every room, and scroll to a ne
   test.setTimeout(60_000);
   test.skip(!['windows-100', 'mobile'].includes(testInfo.project.name), 'Verify the growing world with a mouse and on a narrow touch screen.');
   const colonies = [colonyCore.createTeam({ name: 'Leaf Colony' }, 0), colonyCore.createTeam({ name: 'River Colony' }, 1)];
-  Object.assign(colonies[0], { soldiers: 11, workers: 16, population: 28, pantryBuilt: true, barracksBuilt: true, territory: 8, defense: 4 });
+  Object.assign(colonies[0], { soldiers: 11, workers: 16, population: 28, pantryBuilt: true, barracksBuilt: true, barracksAnnexes: 1, workerLodges: 1, expansionRooms: 7, territory: 8, defense: 4 });
   const setup = { teamCount: 2, rounds: 12, matchType: 'rounds', durationMinutes: 15, sound: false, teams: colonies };
   let saved = colonyCore.normalizeSession({ phase: 'reward', introSeen: true, teams: colonies, currentTeamIndex: 0, turnIndex: 1 });
   await page.route(/\/api\/game\/cq-growth\/colonyquest(?:\/session)?$/, async route => {
@@ -176,10 +176,14 @@ test('a teacher can run, recover, pause, and finish a one-screen ColonyQuest mat
   await expect(page.locator('#resumeBar')).toBeVisible();
   await page.locator('#resumeBtn').click();
   await expect(page.locator('#rewardOverlay')).toBeVisible();
-  await page.getByRole('button', { name: /Workers/ }).click();
+  await page.getByRole('button', { name: /Add one worker/ }).click();
   await expect(page.locator('#worldStory')).toBeVisible();
   await expect(page.locator('#worldStoryTitle')).toContainText('foraging trail');
-  await expect(page.locator('#worldStoryEffect')).toContainText('+3 workers');
+  await expect(page.locator('#worldStoryEffect')).toContainText('+1 worker');
+  await expect(page.locator('#worldViewport')).toHaveAttribute('aria-description', /Leaf Colony: 1 queen, 2 workers, 0 soldiers. 1 rooms/);
+  expect(session.teams[0].workers).toBe(2);
+  expect(session.teams[0].food).toBe(8);
+  expect(colonyCore.colonyRooms(session.teams[0])).toHaveLength(1);
   expect(session.phase).toBe('event');
   await page.locator('#worldStoryContinue').click();
   await expect(page.locator('#questionOverlay')).toBeVisible();
