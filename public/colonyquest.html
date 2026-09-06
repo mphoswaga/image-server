@@ -21,7 +21,7 @@
     @media(max-width:440px){.question-dialog .dialog-kicker{font-size:11px}.question-dialog .guide-line{font-size:11px}.question-dialog h2{font-size:18px}.question-dialog .answer{font-size:13px}.question-dialog .question-foot{font-size:11px}.question-dialog .feedback{font-size:12px}}
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
   </style>
-  <link rel="stylesheet" href="/colonyquest-polish.css?v=7">
+  <link rel="stylesheet" href="/colonyquest-polish.css?v=8">
 </head>
 <body>
   <div id="loading" class="loading"><div><div class="spinner"></div>Preparing ColonyQuest...</div></div>
@@ -32,7 +32,7 @@
       <div class="setup-heading"><div><h1>Set up the class colonies</h1><p id="lessonTitle">Questions and teams will load here.</p></div><span id="lessonMeta" class="lesson-chip"></span></div>
       <div id="resumeBar" class="resume-bar"><div><b>A saved match is waiting</b><span id="resumeText">Continue from the last completed turn.</span></div><div><button id="resumeBtn" class="btn gold" type="button">Resume match</button><button id="discardBtn" class="btn" type="button">Start new</button></div></div>
 
-      <div class="setup-story"><img src="/assets/colonyquest/pip-worker.webp" alt="Pip the scout ant"><div><span class="eyebrow">The Moonroot Meadow adventure</span><strong>Rebuild the colonies before moonrise</strong><p>The Great Rain has opened new tunnels beneath the old oak. Teams answer, choose upgrades, and watch their living colony grow through four story chapters.</p></div></div>
+      <div class="setup-story"><img src="/assets/colonyquest/pip-worker.webp" alt="Pip the scout ant"><div><span class="eyebrow">The Moonroot Meadow adventure</span><strong>Build a safe home before the Great Rain</strong><p>Queen Aurelia and her tiny colony need food, shelter, and guardians. Your class decides how their story grows.</p></div></div>
 
       <h2 class="section-title">Match</h2>
       <div class="setup-grid">
@@ -67,17 +67,18 @@
     </header>
     <div id="scoreStrip" class="score-strip"></div>
     <div id="turnBanner" class="turn-banner"><b id="turnTeam">Team 1</b><span id="turnStudent">Choose an answer together</span></div>
+    <details id="rainPlan" class="rain-plan"><summary id="rainSummary">Great Rain: 0/4 ready</summary><b id="rainTeam"></b><ul id="rainGoals"></ul><label for="rainApproach">Rain approaching</label><progress id="rainApproach" value="0" max="1"></progress></details>
     <div class="world-navigation"><select id="colonyViewPick" aria-label="View colony"></select><button id="worldSurface" type="button" title="Return to the meadow surface">Surface</button><span id="worldDepth" aria-live="off">Depth 0</span></div>
 
     <section id="storyOverlay" class="overlay hidden" aria-label="ColonyQuest story">
-      <div class="dialog story-dialog"><div class="story-art"><img src="/assets/colonyquest/pip-worker.webp" alt="Pip the scout ant"></div><div class="story-copy"><div class="dialog-kicker" id="storyKicker">Chapter 1 - The Great Rain</div><h2 id="storyTitle">Moonroot Meadow needs you</h2><p id="storyText"></p><div class="story-goals"><div class="story-goal"><b>1</b><span>Answer together to awaken the Heartseed.</span></div><div class="story-goal"><b>2</b><span>Choose how your colony grows after every success.</span></div><div class="story-goal"><b>3</b><span>Reach the Moonroot Rally before nightfall.</span></div></div><button id="storyContinue" class="btn gold" type="button">Begin the adventure</button></div></div>
+      <div class="dialog story-dialog"><div class="story-art"><img src="/assets/colonyquest/pip-worker.webp" alt="Pip the scout ant"></div><div class="story-copy"><div class="dialog-kicker" id="storyKicker">Chapter 1 - The Great Rain</div><h2 id="storyTitle">Moonroot Meadow needs you</h2><p id="storyText"></p><div class="story-goals"><div class="story-goal"><b>1</b><span>Awaken the Heartseed with a correct answer.</span></div><div class="story-goal"><b>2</b><span>Gather food, build rooms, and protect the queen.</span></div><div class="story-goal"><b>3</b><span>Welcome the Great Rain with a home ready for everyone.</span></div></div><button id="storyContinue" class="btn gold" type="button">Begin the adventure</button></div></div>
     </section>
 
     <section id="questionOverlay" class="overlay question-overlay hidden" aria-label="Question">
       <div class="dialog question-dialog"><div class="dialog-kicker" id="questionKicker">Team turn</div><div class="guide-line"><img src="/assets/colonyquest/pip-worker.webp" alt=""><span id="guideLine">Pip has found a Heartseed. Power it with the right answer.</span></div><h2 id="questionText"></h2><div id="answers" class="answers"></div><div id="feedback" class="feedback"><span id="feedbackText"></span><button id="feedbackNext" class="btn primary" type="button">Continue</button></div><div class="question-foot"><span id="questionProgress"></span><button id="revealBtn" type="button">Reveal answer</button></div></div>
     </section>
 
-    <section id="rewardOverlay" class="overlay choice-overlay hidden" aria-label="Choose a colony reward"><div class="dialog choice-dialog"><div class="dialog-kicker">The Heartseed is glowing</div><h2 id="rewardTitle">Choose a colony reward</h2><div class="reward-guide"><img src="/assets/colonyquest/pip-worker.webp" alt=""><span>Choose what the ants build next. The change will happen in the colony.</span></div><div id="rewardGrid" class="reward-grid"></div></div></section>
+    <section id="rewardOverlay" class="overlay choice-overlay hidden" aria-label="Choose a colony reward"><div class="dialog choice-dialog"><div class="dialog-kicker">One correct answer = one upgrade. No food cost.</div><h2 id="rewardTitle">Choose a colony reward</h2><div class="reward-guide"><img src="/assets/colonyquest/pip-worker.webp" alt=""><span>Choose what the ants build next. The change will happen in the colony.</span></div><div id="rewardGrid" class="reward-grid"></div></div></section>
     <section id="targetOverlay" class="overlay choice-overlay hidden" aria-label="Choose a colony to challenge"><div class="dialog choice-dialog event-dialog"><div class="dialog-kicker">Moonroot Rally</div><h2>Choose a colony to challenge</h2><div id="targetGrid" class="target-grid"></div><button id="targetBack" class="btn" type="button">Back to upgrades</button></div></section>
     <section id="eventOverlay" class="overlay hidden" aria-label="Colony event"><div class="dialog event-dialog"><img id="eventGuide" class="event-guide" src="/assets/colonyquest/pip-worker.webp" alt="Pip the scout ant"><div id="eventMark" class="event-mark">A Moonroot Meadow event</div><div class="dialog-kicker" id="eventKicker">World event</div><h2 id="eventTitle"></h2><p id="eventText"></p><button id="eventContinue" class="btn gold" type="button">Continue</button></div></section>
 
@@ -85,7 +86,7 @@
       <img id="worldStoryArt" src="/assets/colonyquest/pip-worker.webp" alt="Pip the scout ant"><div><div id="worldStoryKicker" class="world-story-kicker">The colony changes</div><h2 id="worldStoryTitle">Watch the colony</h2><p id="worldStoryText"></p><strong id="worldStoryEffect" class="world-story-effect"></strong></div><button id="worldStoryContinue" class="btn gold" type="button">Continue journey</button>
     </section>
 
-    <section id="finalOverlay" class="overlay hidden" aria-label="Final ColonyQuest results"><div class="dialog final-dialog"><div class="dialog-kicker">Chapter 4 complete - Moonrise</div><h2>Moonroot Meadow is alive again</h2><p class="final-story">Every colony helped rebuild the meadow. One colony earned the Ancient Acorn, and every team leaves a mark on the world below.</p><div id="podium" class="podium"></div><div id="awards" class="awards"></div><div class="final-actions"><button id="backToSetupBtn" class="btn" type="button">Back to setup</button><button id="playAgainBtn" class="btn primary" type="button">Play again</button></div></div></section>
+    <section id="finalOverlay" class="overlay hidden" aria-label="Final ColonyQuest results"><div class="dialog final-dialog"><div class="dialog-kicker">After the Great Rain</div><h2>Every colony has a story</h2><p class="final-story">The rain passes. Your choices built homes, fed families, and protected the meadow.</p><div id="colonyStories" class="colony-stories"></div><div id="awards" class="awards"></div><h3>The Ancient Acorn standings</h3><div id="podium" class="podium"></div><div class="final-actions"><button id="backToSetupBtn" class="btn" type="button">Back to setup</button><button id="playAgainBtn" class="btn primary" type="button">Play again</button></div></div></section>
 
     <button id="teacherHandle" class="teacher-handle" type="button">Teacher controls</button>
     <div id="teacherTray" class="teacher-tray">
@@ -95,7 +96,7 @@
   </div>
 
   <script src="/vendor/phaser.min.js"></script>
-  <script src="/colonyquest-core.js?v=7"></script>
-  <script src="/colonyquest.js?v=7"></script>
+  <script src="/colonyquest-core.js?v=8"></script>
+  <script src="/colonyquest.js?v=8"></script>
 </body>
 </html>

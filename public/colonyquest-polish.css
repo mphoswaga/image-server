@@ -7,7 +7,12 @@
 .world-navigation select,.world-navigation button{min-width:0;max-width:180px;background:#285c50;color:white;border:1px solid #87bdae;border-radius:4px;padding:7px;font:700 12px Arial;cursor:pointer}
 #worldDepth{font-size:11px;color:#d7f0e2;padding:0 5px;white-space:nowrap}
 .world-story{bottom:64px!important}
-.raid-playing .turn-banner{display:none}
+.raid-playing .turn-banner,.story-open .turn-banner{display:none}
+.rain-plan{position:absolute;left:18px;bottom:64px;z-index:25;width:min(310px,calc(100% - 36px));padding:10px 12px;background:#f1fbf4f5;border:1px solid #7fada2;border-radius:6px;color:#193c35;font-size:12px;box-shadow:0 6px 16px #132f3320}
+.rain-plan summary{cursor:pointer;font-weight:800;font-size:13px}.rain-plan>b{display:block;margin-top:10px}.rain-plan ul{list-style:none;padding:0;margin:8px 0}.rain-plan li{display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:7px;align-items:center;padding:4px 0}.rain-plan li b{font-size:11px}.rain-plan input{margin:0;accent-color:#287c5f}.rain-plan li.ready{color:#237045}.rain-plan progress{display:block;width:100%;height:8px;margin-top:4px;accent-color:#387eaa}.rain-plan label{font-size:10px;color:#56777a}.story-open .rain-plan,.raid-playing .rain-plan{display:none}
+.target-grid button:disabled{opacity:.55;cursor:not-allowed}
+.colony-stories{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:14px 0 22px}.colony-ending{border-top:3px solid #3d917a;padding:10px 0}.colony-ending h3{margin:0 0 9px;font-size:18px;color:#21473d}.colony-ending p{font-size:14px;line-height:1.45;margin:8px 0}.colony-ending strong{font-size:13px;color:#29735c}
+@media(max-width:850px){.rain-plan{left:8px;bottom:62px;width:min(310px,calc(100% - 16px));padding:7px 10px}.dock-open .rain-plan{display:none}.colony-stories{grid-template-columns:1fr}.colony-ending h3{font-size:16px}.colony-ending p{font-size:13px}}
 @media(max-width:850px){.world-viewport{top:82px}#gameMount.game-mount{height:calc(100dvh - 82px)}.world-navigation{bottom:8px;left:8px;max-width:calc(100% - 150px)}.world-navigation select{max-width:110px}.world-navigation button{font-size:11px}#worldDepth{display:none}}
 .game-top{background:#173e38;border-bottom:1px solid #87bdae;box-shadow:0 3px 12px #102a2840}
 .game-title strong{font:800 21px Arial,sans-serif;color:#effff8}

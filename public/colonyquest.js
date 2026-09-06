@@ -25,6 +25,7 @@
   let ambientTimer = null;
   let worldStoryAction = null;
   let raidPresentation = null;
+  let weatherEffects = [];
   const ASSETS = {
     world: '/assets/colonyquest/moonroot-meadow.webp',
     worker: '/assets/colonyquest/pip-worker.webp',
@@ -32,7 +33,7 @@
     guardian: '/assets/colonyquest/guardian.webp',
   };
   const STORY = {
-    intro: 'The Great Rain has left Queen Aurelia and one worker in a tiny earth chamber. Help them rebuild Moonroot Meadow: hatch new ants, open rooms, and strengthen the walls. Every correct answer gives your colony a choice, and every choice changes its home.',
+    intro: 'The Great Rain is coming to Moonroot Meadow. Queen Aurelia and one worker need your help to build a safe home. Store ten seeds, build a food store, recruit a guardian, and strengthen the walls before the rain arrives. Each correct answer earns one upgrade. Every colony has a part in this story.',
     chapters: [
       { at: 0, title: 'First Light', line: 'Wake the workers and gather the first seeds.' },
       { at: .3, title: 'Deep Roots', line: 'Open warm chambers beneath the ancient oak.' },
@@ -44,7 +45,7 @@
     workers: { title: 'The foraging trail comes alive', text: 'One new worker emerges beside the queen, then joins the foraging trail. Watch the new ant take its first steps.', site: 'nursery' },
     food: { title: 'Five more seeds for the colony', text: 'The worker brings a small bundle of five seeds into the existing food store.', site: 'food' },
     defense: { title: 'The nest walls grow stronger', text: 'The workers rebuild the room walls and tunnel supports with stronger materials. Their new home is ready for the rain.', site: 'nursery' },
-    queen: { title: 'One new egg in the nursery', text: 'The queen settles one new egg onto the leaf bedding. Her small family is growing, one step at a time.', site: 'nursery' },
+    queen: { title: 'One new egg in the nursery', text: 'The queen settles one egg onto the leaf bedding. After two round-ends it hatches into a worker. Watch its progress in the queen chamber.', site: 'nursery' },
     expansion: { title: 'A hidden tunnel opens', text: 'Workers clear the deep roots, raise a new colony flag, and discover another chamber to explore.', site: 'expansion' },
     soldiers: { title: 'One new guardian reports for duty', text: 'One soldier joins the colony and begins its patrol in the existing nest.', site: 'guard' },
   };
@@ -298,6 +299,7 @@
   }
 
   function hideWorldStory() {
+    $('gameScreen').classList.remove('story-open');
     worldStoryAction = null;
     $('worldStory').classList.add('hidden');
     $('worldStoryContinue').disabled = false;
@@ -305,6 +307,7 @@
 
   function setOverlay(id) {
     stopRaidPresentation();
+    stopWeather();
     hideWorldStory();
     for (const overlay of ['storyOverlay', 'questionOverlay', 'rewardOverlay', 'targetOverlay', 'eventOverlay', 'finalOverlay']) $(overlay).classList.add('hidden');
     if (id) $(id).classList.remove('hidden');
@@ -313,6 +316,7 @@
 
   function showWorldStory(details, onContinue) {
     setOverlay(null);
+    $('gameScreen').classList.add('story-open');
     transitionLocked = false;
     const tone = details.tone === 'storm' || details.tone === 'danger' ? details.tone : '';
     $('worldStory').className = `world-story${tone ? ` ${tone}` : ''}`;
@@ -358,7 +362,8 @@
   function turnProgress() {
     if (config.matchType === 'rounds') return Math.min(1, session.turnIndex / Math.max(1, totalTurns()));
     const duration = config.durationMinutes * 60_000;
-    return Math.min(1, Math.max(0, 1 - ((session.endsAt || Date.now()) - Date.now()) / duration));
+    const now = session.phase === 'paused' && session.pausedAt ? session.pausedAt : Date.now();
+    return Math.min(1, Math.max(0, 1 - ((session.endsAt || now) - now) / duration));
   }
 
   function matchFinished() {
@@ -369,6 +374,11 @@
   function updateHUD() {
     if (!session) return;
     const team = currentTeam();
+    const goals = core.rainPreparation(team);
+    $('rainSummary').textContent = `Great Rain: ${goals.filter(goal => goal.done).length}/4 ready`;
+    $('rainTeam').textContent = team.name;
+    $('rainGoals').innerHTML = goals.map(goal => `<li class="${goal.done ? 'ready' : ''}"><input type="checkbox" disabled${goal.done ? ' checked' : ''} aria-label="${esc(goal.label)}"><span>${esc(goal.label)}</span><b>${esc(goal.value)}</b></li>`).join('');
+    $('rainApproach').value = turnProgress();
     $('scoreStrip').innerHTML = session.teams.map((item, index) => {
       const palette = core.TEAM_COLORS[item.colorIndex];
       return `<div class="score-card${index === session.currentTeamIndex && session.phase !== 'ended' ? ' current' : ''}" style="--team-color:${colorHex(palette.primary)}"><div class="score-name"><span>${esc(item.name)}</span><span>${core.colonyStrength(item)}</span></div><div class="score-stats"><span>1 queen</span><span>${item.workers} workers</span><span>${item.soldiers} soldiers</span><span>${item.food} food</span><span>${core.fortification(item).name}</span></div></div>`;
@@ -383,8 +393,9 @@
     const round = Math.floor(session.turnIndex / Math.max(1, session.teams.length)) + 1;
     $('roundLabel').textContent = config.matchType === 'rounds' ? `Round ${Math.min(round, config.rounds)} of ${config.rounds}` : timeLabel();
     const chapter = storyChapter();
-    $('phaseLabel').textContent = session.warsActive ? 'Moonroot Rally' : chapter.title;
+    $('phaseLabel').textContent = session.phase === 'ended' ? session.stormSeen ? 'After the rain' : 'The Great Rain' : session.warsActive ? 'Moonroot Rally' : chapter.title;
     $('pauseBtn').textContent = session.phase === 'paused' ? 'Resume' : 'Pause';
+    $('pauseBtn').disabled = session.phase === 'ended';
     $('pauseBtn').classList.toggle('active', session.phase === 'paused');
     $('muteBtn').textContent = soundOn ? 'Sound on' : 'Sound off';
     $('muteBtn').classList.toggle('active', !soundOn);
@@ -507,14 +518,16 @@
     const team = currentTeam();
     if (key === 'raid') return 'Visit another colony and bring food home';
     if (key === 'defense' && team.defense >= core.FORTIFICATIONS.length - 1) return 'Maximum fortification reached';
-    const clones = session.teams.map(item => ({ ...item, members: (item.members || []).map(member => ({ ...member })) }));
+    const clones = session.teams.map(item => ({ ...item, eggs: (item.eggs || []).map(egg => ({ ...egg })), members: (item.members || []).map(member => ({ ...member })) }));
     const preview = clones.find(item => item.id === team.id);
     const before = { ...preview };
     core.applyReward(preview, key, clones);
-    return rewardEffectText(key, rewardChange(key, before, preview), preview);
+    const effect = rewardEffectText(key, rewardChange(key, before, preview), preview);
+    return key === 'expansion' ? `+1 ${core.colonyRooms(preview).at(-1).label}. ${core.roomBenefit(core.colonyRooms(preview).at(-1))}` : effect;
   }
 
   function showRewardStory(event, onContinue = nextTurn) {
+    if (session.phase !== 'event') return;
     const key = String(event && event.key || '').replace(/^upgrade-/, '');
     const team = session.teams.find(item => item.id === (event && event.teamId)) || currentTeam();
     const story = REWARD_STORIES[key] || { title: 'The colony grows', text: 'The ants put their new reward to work inside the nest.', site: 'center' };
@@ -531,6 +544,7 @@
   }
 
   function showRewards() {
+    if (session.phase !== 'reward') return;
     transitionLocked = false;
     const team = currentTeam();
     $('rewardTitle').textContent = `${team.name}: choose your colony reward`;
@@ -550,7 +564,11 @@
     transitionLocked = true;
     if (key === 'raid') {
       const team = currentTeam();
-      $('targetGrid').innerHTML = session.teams.filter(item => item.id !== team.id).map(item => `<button type="button" data-target="${esc(item.id)}">${esc(item.name)}<small>${esc(core.TEAM_COLORS[item.colorIndex].name)} ants · ${item.soldiers} soldiers · ${esc(core.fortification(item).name)} walls</small></button>`).join('');
+      $('targetGrid').innerHTML = session.teams.filter(item => item.id !== team.id).map(item => {
+        const cooldown = core.raidCooldown(session, team.id, item.id);
+        const forecast = core.raidForecast(team, item);
+        return `<button type="button" data-target="${esc(item.id)}"${cooldown ? ' disabled' : ''}>${esc(item.name)}<small>${esc(core.TEAM_COLORS[item.colorIndex].name)} ants · ${item.food} food · ${item.soldiers} soldiers · ${esc(core.fortification(item).name)} walls</small><small>${cooldown ? `Recovering: ${cooldown} rounds left` : forecast.success ? 'Your party can pass these defenses' : 'Strong defenses: build up your colony first'}</small></button>`;
+      }).join('');
       setOverlay('targetOverlay');
       updateWorld();
       transitionLocked = false;
@@ -579,11 +597,11 @@
     transitionLocked = true;
     const attacker = currentTeam();
     const defender = session.teams.find(team => team.id === targetId);
-    if (!defender || defender.id === attacker.id) { transitionLocked = false; return; }
+    if (!defender || defender.id === attacker.id || core.raidCooldown(session, attacker.id, targetId)) { transitionLocked = false; return; }
     const result = core.resolveRaid(attacker, defender, session.teams);
     session.phase = 'event';
     session.eventAction = 'next-turn';
-    const event = { key: 'raid-result', attackerId: attacker.id, defenderId: defender.id, ...result, at: new Date().toISOString() };
+    const event = { key: 'raid-result', attackerId: attacker.id, defenderId: defender.id, ...result, turnIndex: session.turnIndex, at: new Date().toISOString() };
     session.events.push(event);
     setOverlay(null);
     updateWorld();
@@ -624,7 +642,7 @@
       showWorldStory({
         kicker: 'Back in the meadow',
         title: event.success ? `${attacker.name} returns home` : `${defender.name} holds the line`,
-        text: event.success ? `The raiders brought ${event.stolen} seeds back from ${defender.name}. The workers put them in their food store.` : `${defender.name}'s guardians turned the raiders away. The raiders return home safely, and the defending colony earns five seeds.`,
+        text: event.success ? `The raiders brought ${event.stolen} seeds back from ${defender.name}. The workers put them in their food store. Let this colony recover for two of your turns before visiting again.` : `${core.raidForecast(attacker, defender).reason} The raiders return home safely. The defending colony earns five seeds.`,
         effect: event.success ? `+${event.stolen} food for ${attacker.name}` : `+5 food for ${defender.name}`,
         art: ASSETS.guardian,
       }, nextTurn);
@@ -697,17 +715,62 @@
   }
 
   async function nextTurn() {
-    const previousChapter = storyChapter();
+    const previousChapter = storyChapter().title;
     setOverlay(null);
     session.eventAction = null;
     session.turnIndex += 1;
     session.questionCursor += 1;
-    if (session.turnIndex % session.teams.length === 0) core.applyUpkeep(session.teams);
+    let reports = null;
+    if (session.turnIndex % session.teams.length === 0) {
+      reports = session.teams.map(team => ({ teamId: team.id, ...core.roundEconomy(team), workersBefore: team.workers }));
+      core.applyUpkeep(session.teams);
+      reports = reports.map(report => ({ teamId: report.teamId, gathered: report.gathered, eaten: report.eaten, hatched: session.teams.find(team => team.id === report.teamId).workers - report.workersBefore }));
+    }
     if (matchFinished()) {
       await finishMatch();
       return;
     }
     session.currentTeamIndex = session.turnIndex % session.teams.length;
+    if (reports) {
+      const event = { key: 'round-supplies', chapterBefore: previousChapter, reports, reportIndex: 0, at: new Date().toISOString() };
+      session.events.push(event);
+      session.phase = 'event';
+      session.eventAction = 'question';
+      updateWorld();
+      await saveState();
+      showRoundStory(event);
+      return;
+    }
+    await beginTurn(previousChapter);
+  }
+
+  function showRoundStory(event) {
+    if (session.phase !== 'event') return;
+    const report = event.reports[event.reportIndex || 0];
+    if (!report) { showWorldStory({ title: 'The foraging round is complete', text: 'The colonies are ready for their next question.' }, () => beginTurn(event.chapterBefore)); return; }
+    const team = session.teams.find(item => item.id === report.teamId);
+    const egg = team.eggs?.[0];
+    showWorldStory({
+      kicker: 'The workers come home',
+      title: `${team.name}: round harvest`,
+      text: `${report.gathered} seeds gathered. The colony ate ${report.eaten}. ${report.hatched ? 'One egg hatched! A new worker takes its first steps.' : egg ? `The next egg hatches in ${Math.max(1, egg.roundsLeft)} round${egg.roundsLeft === 1 ? '' : 's'}.` : 'Every worker brings two seeds each round.'}`,
+      effect: `${team.food} seeds stored${report.hatched ? ' · +1 worker' : ''}`,
+      continueLabel: event.reportIndex < event.reports.length - 1 ? 'Next colony' : 'Continue journey',
+      art: report.hatched ? ASSETS.queen : ASSETS.worker,
+    }, async () => {
+      if ((event.reportIndex || 0) < event.reports.length - 1) {
+        event.reportIndex = (event.reportIndex || 0) + 1;
+        updateWorld();
+        await saveState();
+        showRoundStory(event);
+      } else await beginTurn(event.chapterBefore);
+    });
+    focusColony(team.id, report.hatched ? 'nursery' : 'food');
+    celebrate(team.id, report.hatched ? 'workers' : 'food', report.hatched ? '+1 worker' : `+${report.gathered} seeds gathered`);
+  }
+
+  async function beginTurn(previousChapter) {
+    if (session.phase === 'ended' || session.phase === 'paused') return;
     if (shouldStartWars()) {
       session.warsActive = true;
       session.phase = 'event';
@@ -720,7 +783,7 @@
       return;
     }
     const nextChapter = storyChapter();
-    if (nextChapter.title !== previousChapter.title) {
+    if (nextChapter.title !== previousChapter) {
       const chapter = chapterEvent(chapterKey(nextChapter));
       session.phase = 'event';
       session.eventAction = 'question';
@@ -738,7 +801,6 @@
       session.phase = 'event';
       session.eventAction = 'question';
       updateWorld();
-      playWorldEvent(event.key);
       await saveState();
       showEvent(event, continueAfterEvent);
       return;
@@ -763,12 +825,13 @@
     if (event.key === 'food-trail') return 'More workers mean a larger harvest from Pip\'s golden trail.';
     if (event.key === 'predator') return 'Guardians and strong walls keep more of the colony stores safe.';
     if (event.key === 'new-territory') return 'A new chamber and flag appear for the colonies that need room most.';
-    if (event.kicker === 'Chapter 4') return 'The final knowledge challenges are now unlocked.';
+    if (event.kicker === 'Chapter 4') return 'The Great Rain is close. Choose what your colony still needs.';
     if (String(event.kicker || '').startsWith('Chapter')) return 'Look at how far every colony has grown.';
     return '';
   }
 
   function showEvent(event, onContinue) {
+    if (session.phase === 'paused' || session.phase === 'ended') return;
     const guardianMoment = event.tone === 'danger' || event.tone === 'storm' || event.kicker === 'Colony Wars';
     showWorldStory({
       kicker: event.kicker || 'A Moonroot Meadow event',
@@ -778,20 +841,41 @@
       tone: event.tone,
       art: guardianMoment ? ASSETS.guardian : ASSETS.worker,
     }, onContinue);
+    if (event.key) playWorldEvent(event.key);
   }
 
   async function finishMatch() {
+    $('teacherTray').classList.remove('open');
     if (!session || session.phase === 'ended') {
-      showFinal();
+      if (session) session.stormSeen ? showFinal() : showRainFinale();
       return;
     }
     session.phase = 'ended';
     session.endedAt = new Date().toISOString();
+    session.stormSeen = false;
     setOverlay(null);
     updateHUD();
     await saveState();
     playTone('victory');
-    showFinal();
+    updateWorld();
+    showRainFinale();
+  }
+
+  function showRainFinale() {
+    $('worldViewport').scrollTo({ top: 0, behavior: 'auto' });
+    showWorldStory({
+      kicker: 'The Great Rain arrives',
+      title: 'The colonies shelter together',
+      text: session.teams.map(team => `${team.name}: ${core.rainOutcome(team).protectedFood} seeds kept dry, ${core.rainOutcome(team).ready}/4 preparations ready.`).join(' '),
+      effect: 'Every colony survives. See what your choices built.',
+      art: ASSETS.queen,
+      continueLabel: 'See colony stories',
+    }, async () => {
+      session.stormSeen = true;
+      await saveState();
+      showFinal();
+    });
+    playWorldEvent('heavy-rain');
   }
 
   function bestTeamBy(key) {
@@ -806,21 +890,30 @@
       return `<div class="podium-place${index === 0 ? ' first' : ''}" style="--team-color:${colorHex(core.TEAM_COLORS[entry.team.colorIndex].primary)}"><b>${index + 1}. ${esc(entry.team.name)}</b><span>${entry.score} strength - ${entry.team.attempts ? Math.round(entry.team.correct / entry.team.attempts * 100) : 0}% accuracy</span><small>Knowledge ${entry.breakdown.knowledge} · Growth ${growth} · Resources ${entry.breakdown.resources + entry.breakdown.territory} · Protection ${protection}</small></div>`;
     }).join('');
     const knowledge = [...session.teams].sort((a, b) => (b.attempts ? b.correct / b.attempts : 0) - (a.attempts ? a.correct / a.attempts : 0) || b.correct - a.correct)[0];
+    const improved = session.teams.filter(team => core.learningImprovement(session, team.id) > 0).sort((a, b) => core.learningImprovement(session, b.id) - core.learningImprovement(session, a.id))[0];
     const awards = [
       ['Knowledge champions', knowledge],
       ['Best defense', bestTeamBy('defense')],
-      ['Fastest growth', bestTeamBy('population')],
+      ['Largest family', bestTeamBy('population')],
       ['Most resources', bestTeamBy('food')],
     ];
+    if (improved) awards.push(['Most improved answers', improved]);
     $('awards').innerHTML = awards.map(([label, team]) => `<div class="award"><b>${label}</b><span>${esc(team.name)}</span></div>`).join('');
+    $('colonyStories').innerHTML = session.teams.map(team => {
+      const outcome = core.rainOutcome(team);
+      const improvement = core.learningImprovement(session, team.id);
+      const missing = core.rainPreparation(team).filter(goal => !goal.done).map(goal => goal.label.toLowerCase());
+      return `<article class="colony-ending"><h3>${esc(team.name)}: ${outcome.ready}/4 ready</h3><p>${esc(outcome.text)}</p><p>${team.workers} workers · ${team.soldiers} guardians · ${core.colonyRooms(team).length} rooms · ${team.correct}/${team.attempts} correct answers.</p><p>${improvement === null ? 'More answers will help show your learning progress.' : improvement > 0 ? `Your accuracy improved by ${improvement} percentage points from the first half to the second half.` : 'Keep practising the questions you found challenging.'}</p><strong>${missing.length ? `Next adventure: ${esc(missing[0])}.` : 'All four preparations complete.'}</strong></article>`;
+    }).join('');
     setOverlay('finalOverlay');
   }
 
   function resumePhase() {
-    if (session.phase === 'ended') return showFinal();
+    if (session.phase === 'ended') return session.stormSeen ? showFinal() : showRainFinale();
     if (session.phase === 'reward') return showRewards();
     if (session.phase === 'event') {
       const last = session.events[session.events.length - 1];
+      if (last?.key === 'round-supplies') return showRoundStory(last);
       if (last?.key === 'raid-result' && last.attackerId) return showRaidStory(last);
       if (last && String(last.key).startsWith('upgrade-')) return showRewardStory(last, nextTurn);
       const event = last && last.key === 'colony-wars'
@@ -880,6 +973,7 @@
   function enterGame() {
     $('setup').classList.add('hidden');
     $('gameScreen').classList.remove('hidden');
+    $('rainPlan').open = window.innerWidth > 850;
     $('gameLessonTitle').textContent = data.game.lessonTitle;
     soundOn = config.sound !== false;
     initAudio();
@@ -1104,6 +1198,7 @@
       color: '#fff1c9',
       backgroundColor: '#213f35',
       padding: { x: 7, y: 4 },
+      wordWrap: { width: Math.max(100, zoneWidth * .75) }, align: 'center',
     }).setOrigin(.5, 1).setDepth(7);
   }
 
@@ -1181,6 +1276,8 @@
     const guards = rooms.filter(room => room.kind === 'guard');
     const guard = guards.at(-1) || nursery;
     const sites = { entrance, nursery, food, guard, center: nursery, expansion: rooms.at(-1) };
+    const lastEvent = session.events.at(-1);
+    const harvest = session.phase === 'event' && lastEvent?.key === 'round-supplies' ? lastEvent.reports[lastEvent.reportIndex || 0] : null;
 
     drawTunnel(graphics, [entrance, nursery], 14, material);
     for (let index = 1; index < rooms.length; index += 1) {
@@ -1193,10 +1290,18 @@
       drawTunnel(graphics, [junction, room], 12, material);
     }
     for (const room of rooms) {
-      drawChamber(graphics, room.x, room.y, roomWidth, roomHeight, palette, active && room.kind === 'nursery', material, team.defense);
-      furnishRoom(graphics, room, team, roomWidth, roomHeight);
-      const detail = room.kind === 'food' ? ` · ${team.food} food` : room.kind === 'guard' ? ` · ${Math.min(8, Math.max(0, team.soldiers - guards.indexOf(room) * 8))} soldiers` : room.kind === 'nursery' ? ` · level ${team.queenLevel}` : '';
-      chamberTag(room.x, room.y - roomHeight / 2 - 3, room.label + detail, zone.w);
+      const newRoom = room === rooms.at(-1) && session.phase === 'event' && lastEvent?.key === 'upgrade-expansion' && lastEvent.teamId === team.id;
+      const roomGraphics = newRoom ? scene.add.graphics().setDepth(1) : graphics;
+      drawChamber(roomGraphics, room.x, room.y, roomWidth, roomHeight, palette, active && room.kind === 'nursery', material, team.defense);
+      furnishRoom(roomGraphics, room, team, roomWidth, roomHeight);
+      if (newRoom && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        roomGraphics.setAlpha(0);
+        scene.tweens.add({ targets: roomGraphics, alpha: 1, duration: 1600 });
+      }
+      const egg = team.eggs?.[0];
+      const detail = room.kind === 'food' ? ` · ${team.food} food` : room.kind === 'guard' ? ` · ${Math.min(8, Math.max(0, team.soldiers - guards.indexOf(room) * 8))} soldiers` : room.kind === 'nursery' ? egg ? ` · egg: ${Math.max(1, egg.roundsLeft)} rounds` : ` · level ${team.queenLevel}` : '';
+      const tag = chamberTag(room.x, room.y - roomHeight / 2 - 3, room.label + detail, zone.w);
+      tag.setInteractive({ useHandCursor: true }).on('pointerdown', () => toast(core.roomBenefit(room)));
       if (room.kind === 'expansion') {
         const flagX = room.x + roomWidth * .42, flagY = room.y - 16;
         graphics.lineStyle(2, 0xe5dcbf, 1); graphics.lineBetween(flagX, flagY, flagX, flagY - 25);
@@ -1231,12 +1336,13 @@
       const route = pathTo(room);
       const surface = { x: cx + (index % 2 ? -1 : 1) * zone.w * .3, y: entrance.y - 19 };
       const path = building ? [{ x: room.x - 12, y: room.y }, { x: room.x + 14, y: room.y + 5 }, { x: room.x, y: room.y - 8 }] : [...route.slice().reverse(), entrance, surface, entrance, ...route];
-      const recruit = index === team.workers - 1 && session.phase === 'event' && lastEvent?.key === 'upgrade-workers' && lastEvent.teamId === team.id;
+      const recruit = index === team.workers - 1 && session.phase === 'event' && (lastEvent?.key === 'upgrade-workers' && lastEvent.teamId === team.id || harvest?.teamId === team.id && harvest.hatched);
       if (recruit) path.unshift({ x: nursery.x + roomWidth * .28, y: nursery.y + 4 });
       const ant = makeAntAgent('cq-worker', path[0], 29, palette.primary, !building, index < 48);
       ant.setData('role', 'worker');
       ants.push(ant);
-      animateAnt(ant, path, recruit ? 0 : index, preservePositions && !recruit ? previous.workers[index] : null, recruit ? 1400 : 0);
+      if (index === 0 && (harvest?.teamId === team.id && harvest.gathered > 0 || session.phase === 'event' && lastEvent?.key === 'upgrade-food' && lastEvent.teamId === team.id)) deliverHarvest(ant, [surface, entrance, ...pathTo(food)]);
+      else animateAnt(ant, path, recruit ? 0 : index, preservePositions && !recruit ? previous.workers[index] : null, recruit ? 1400 : 0);
       if (recruit) revealRecruit(ant);
     }
     for (let index = 0; index < team.soldiers; index += 1) {
@@ -1261,6 +1367,25 @@
     scene.tweens.add({ targets: ant, scaleX: 1, scaleY: 1, alpha: 1, duration: 850, ease: 'Sine.easeOut' });
   }
 
+  function deliverHarvest(ant, points) {
+    ant.setPosition(points[0].x, points[0].y);
+    ant.cargo.setVisible(true);
+    const route = new Phaser.Curves.Path(points[0].x, points[0].y);
+    for (const point of points.slice(1)) route.lineTo(point.x, point.y);
+    const progress = { value: 0 };
+    scene.tweens.add({ targets: progress, value: 1, duration: 2400, ease: 'Sine.easeInOut', onUpdate: () => {
+      if (!ant.active) return;
+      const point = route.getPoint(progress.value);
+      ant.sprite.setFlipX(point.x < ant.x);
+      ant.setPosition(point.x, point.y);
+    }, onComplete: () => {
+      if (!ant.active) return;
+      ant.cargo.setVisible(false);
+      const seed = scene.add.ellipse(ant.x + 9, ant.y, 9, 6, 0xf1cc66).setDepth(8);
+      scene.tweens.add({ targets: seed, y: seed.y + 10, duration: 450, onComplete: () => seed.destroy() });
+    } });
+  }
+
   function focusColony(teamId, siteName = 'nursery') {
     const view = colonyViews.get(teamId);
     if (!view) return;
@@ -1276,6 +1401,12 @@
   function restoreWorldFocus() {
     if (!session) return;
     const event = session.events.at(-1);
+    if (session.phase === 'ended' && !session.stormSeen) { playWorldEvent('heavy-rain'); return; }
+    if (session.phase === 'event' && event?.key === 'round-supplies') {
+      const report = event.reports[event.reportIndex || 0];
+      if (report) focusColony(report.teamId, report.hatched ? 'nursery' : 'food');
+      return;
+    }
     const key = String(event && event.key || '').replace(/^upgrade-/, '');
     if (session.phase === 'event' && REWARD_STORIES[key]) {
       const team = session.teams.find(item => item.id === event.teamId) || currentTeam();
@@ -1286,6 +1417,7 @@
 
   function updateWorld() {
     if (!scene || !session) return;
+    stopWeather();
     if (raidPresentation) {
       const event = raidPresentation.event;
       stopRaidPresentation();
@@ -1368,12 +1500,36 @@
     }
   }
 
+  function stopWeather() {
+    if (!scene) return;
+    for (const effect of weatherEffects) {
+      if (!effect.active) continue;
+      scene.tweens.killTweensOf(effect);
+      effect.destroy();
+    }
+    weatherEffects = [];
+  }
+
   function playWorldEvent(key) {
     if (!scene) return;
     if (key === 'heavy-rain') {
+      stopWeather();
+      const cloud = scene.add.graphics().setDepth(-3);
+      cloud.fillStyle(0x344f63, .4);
+      cloud.fillRect(0, 0, scene.scale.width, Math.min(185, scene.scale.height * .27));
+      weatherEffects.push(cloud);
+      const floor = Math.min(215, scene.scale.height * .32);
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       for (let index = 0; index < 70; index += 1) {
         const drop = scene.add.rectangle((index * 71) % scene.scale.width, -20 - (index % 8) * 18, 2, 16, 0xbde8ff, .8).setDepth(12).setAngle(12);
-        scene.tweens.add({ targets: drop, y: scene.scale.height + 30, x: drop.x + 90, duration: 900 + (index % 5) * 120, delay: (index % 10) * 50, onComplete: () => drop.destroy() });
+        weatherEffects.push(drop);
+        if (reducedMotion) drop.y = index * 17 % floor;
+        else scene.tweens.add({ targets: drop, y: floor, x: drop.x + 55, duration: 750 + (index % 5) * 80, delay: (index % 10) * 50, repeat: -1 });
+      }
+      for (const view of colonyViews.values()) {
+        const water = scene.add.ellipse(view.sites.entrance.x, view.sites.entrance.y + 11, 67, 8, 0x7dc3d9, .55).setDepth(2);
+        weatherEffects.push(water);
+        if (!reducedMotion) scene.tweens.add({ targets: water, scaleX: 1.12, alpha: .25, duration: 900, yoyo: true, repeat: -1 });
       }
     }
     if (key === 'fallen-fruit') {

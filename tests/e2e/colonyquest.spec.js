@@ -137,6 +137,67 @@ test('a defended raid can be paused without duplicate rewards', async ({ page })
   await expect(page.locator('#questionOverlay')).toBeVisible();
 });
 
+test('harvest, hatching, raid recovery and the Great Rain ending survive refresh', async ({ page }, testInfo) => {
+  const colonies = [colonyCore.createTeam({ name: 'Oak Colony', colorIndex: 0 }, 0), colonyCore.createTeam({ name: 'Seed Colony', colorIndex: 1 }, 1)];
+  Object.assign(colonies[1], { eggs: [{ roundsLeft: 1 }], population: 3, queenLevel: 2 });
+  let saved = colonyCore.normalizeSession({ phase: 'event', eventAction: 'next-turn', introSeen: true, teams: colonies, currentTeamIndex: 1, turnIndex: 1, events: [{ key: 'raid-result', attackerId: 'team-1', defenderId: 'team-2', turnIndex: 0 }, { key: 'upgrade-queen', teamId: 'team-2', amount: 1 }] });
+  const setup = { teamCount: 2, rounds: 12, matchType: 'rounds', durationMinutes: 15, sound: false, teams: colonies };
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.route(/\/api\/game\/cq-story\/colonyquest(?:\/session)?$/, async route => {
+    if (route.request().method() === 'PUT') {
+      saved = colonyCore.normalizeSession(route.request().postDataJSON().session);
+      return route.fulfill({ json: { ok: true } });
+    }
+    return route.fulfill({ json: { game: { id: 'cq-story', lessonTitle: 'Habitats', questions, colonyquest: setup }, session: saved } });
+  });
+  await page.goto('/colonyquest/cq-story');
+  await page.locator('#resumeBtn').click();
+  await page.locator('#worldStoryContinue').click();
+  await expect(page.locator('#worldStoryTitle')).toHaveText('Oak Colony: round harvest');
+  expect(saved.teams[1].workers).toBe(2);
+  expect(saved.teams[1].eggs).toHaveLength(0);
+  const foodAfter = saved.teams.map(team => team.food);
+  await page.reload();
+  await page.locator('#resumeBtn').click();
+  await expect(page.locator('#worldStoryTitle')).toHaveText('Oak Colony: round harvest');
+  expect(saved.teams.map(team => team.food)).toEqual(foodAfter);
+  await page.locator('#worldStoryContinue').click();
+  await expect(page.locator('#worldStoryEffect')).toContainText('+1 worker');
+  await expect(page.locator('#worldViewport')).toHaveAttribute('aria-description', /Seed Colony: 1 queen, 2 workers/);
+  await page.screenshot({ path: `/tmp/colony-hatch-${testInfo.project.name}.png` });
+  await page.locator('#pauseBtn').click();
+  await page.locator('#pauseBtn').click();
+  await expect(page.locator('#worldStoryTitle')).toHaveText('Seed Colony: round harvest');
+  await page.locator('#worldStoryContinue').click();
+  await expect(page.locator('#questionOverlay')).toBeVisible();
+  await page.locator('.answer').first().click();
+  await page.locator('#feedbackNext').click();
+  await page.locator('[data-reward="raid"]').click();
+  await expect(page.locator('[data-target="team-2"]')).toBeDisabled();
+  await expect(page.locator('[data-target="team-2"]')).toContainText('Recovering: 2 rounds');
+  await page.locator('#targetBack').click();
+  page.once('dialog', dialog => dialog.accept());
+  await page.locator('#teacherHandle').click();
+  await page.locator('#endGameBtn').click();
+  await expect(page.locator('#worldStoryTitle')).toHaveText('The colonies shelter together');
+  await page.screenshot({ path: `/tmp/colony-rain-${testInfo.project.name}.png` });
+  expect(saved.phase).toBe('ended');
+  await page.reload();
+  await page.locator('#resumeBtn').click();
+  await expect(page.locator('#worldStoryTitle')).toHaveText('The colonies shelter together');
+  await page.locator('#worldStoryContinue').click();
+  await expect(page.locator('#colonyStories .colony-ending')).toHaveCount(2);
+  await expect(page.locator('#colonyStories')).toContainText('seeds dry');
+  await page.screenshot({ path: `/tmp/colony-ending-${testInfo.project.name}.png` });
+  expect(saved.stormSeen).toBe(true);
+  await page.reload();
+  await page.locator('#resumeBtn').click();
+  await expect(page.locator('#finalOverlay')).toBeVisible();
+  expect(saved.teams[1].workers).toBe(2);
+  expect(errors).toEqual([]);
+});
+
 test('LessonScope creates ColonyQuest as a teacher-owned whole-class game', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'windows-100', 'The server creation contract only needs one browser.');
   await signInDisposableTeacher(page, '-colonyquest-create');
@@ -274,6 +335,10 @@ test('a teacher can run, recover, pause, and finish a one-screen ColonyQuest mat
   await page.locator('.answer').nth(1).click();
   await expect(page.locator('#feedback')).toContainText('Try again');
   await page.locator('#feedbackNext').click();
+  await expect(page.locator('#worldStoryTitle')).toHaveText('Leaf Colony: round harvest');
+  await page.locator('#worldStoryContinue').click();
+  await expect(page.locator('#worldStoryTitle')).toHaveText('River Colony: round harvest');
+  await page.locator('#worldStoryContinue').click();
   await expect(page.locator('#worldStoryTitle')).toHaveText('Deep Roots');
   await expect(page.locator('#worldStoryEffect')).toContainText('how far every colony has grown');
   await page.locator('#worldStoryContinue').click();
@@ -289,6 +354,8 @@ test('a teacher can run, recover, pause, and finish a one-screen ColonyQuest mat
   page.once('dialog', dialog => dialog.accept());
   await page.locator('#teacherHandle').click();
   await page.locator('#endGameBtn').click();
+  await expect(page.locator('#worldStoryTitle')).toHaveText('The colonies shelter together');
+  await page.locator('#worldStoryContinue').click();
   await expect(page.locator('#finalOverlay')).toBeVisible();
   await expect(page.locator('#podium')).toContainText('Colony');
   expect(session.phase).toBe('ended');

@@ -141,6 +141,74 @@ test('old matches retain their ants and rooms while newborn colonies stay small'
   assert.deepEqual(core.colonyRooms(core.normalizeTeam(large, 0)), existingRooms);
 });
 
+test('eggs take two rounds, hatch one at a time, and survive a save', () => {
+  let colony = core.createTeam({}, 0);
+  core.applyReward(colony, 'queen', [colony]);
+  core.applyReward(colony, 'queen', [colony]);
+  assert.deepEqual(colony.eggs, [{ roundsLeft: 2 }, { roundsLeft: 2 }]);
+  const population = colony.population;
+  core.applyUpkeep([colony]);
+  assert.equal(colony.workers, 1);
+  colony = core.normalizeTeam(colony, 0);
+  assert.equal(colony.eggs[0].roundsLeft, 1);
+  core.applyUpkeep([colony]);
+  assert.equal(colony.workers, 2);
+  assert.equal(colony.eggs.length, 1);
+  assert.equal(colony.population, population);
+  core.applyUpkeep([colony]);
+  assert.equal(colony.workers, 3);
+  assert.equal(colony.eggs.length, 0);
+  assert.equal(core.colonyRooms(colony).length, 1);
+});
+
+test('workers and gardens gather predictable food, with visible meal costs', () => {
+  const colony = core.createTeam({}, 0);
+  assert.deepEqual(core.roundEconomy(colony), { gathered: 2, eaten: 1, gardens: 0 });
+  core.applyReward(colony, 'workers', [colony]);
+  const before = colony.food;
+  const budget = core.roundEconomy(colony);
+  core.applyUpkeep([colony]);
+  assert.equal(colony.food, before + budget.gathered - budget.eaten);
+  for (let index = 0; index < 3; index++) core.applyReward(colony, 'expansion', [colony]);
+  assert.equal(core.roundEconomy(colony).gathered, 6);
+});
+
+test('rain preparations and room protections contribute to the ending without destroying progress', () => {
+  const colony = core.createTeam({}, 0);
+  const earth = core.rainOutcome(colony);
+  for (const reward of ['food', 'expansion', 'soldiers', 'defense']) core.applyReward(colony, reward, [colony]);
+  assert.equal(core.rainPreparation(colony).filter(goal => goal.done).length, 4);
+  const snapshot = JSON.stringify(colony);
+  const outcome = core.rainOutcome(colony);
+  assert.ok(outcome.protectedFood > earth.protectedFood);
+  assert.equal(outcome.ready, 4);
+  assert.equal(JSON.stringify(colony), snapshot);
+  const beforeGuard = core.raidForecast(core.createTeam({}, 1), colony).guard;
+  core.applyReward(colony, 'expansion', [colony]);
+  assert.equal(core.raidForecast(core.createTeam({}, 1), colony).guard, beforeGuard + 4);
+});
+
+test('repeat raids give the same target two intervening turns to recover', () => {
+  const colonies = teams(3);
+  let session = core.normalizeSession({ teams: colonies, turnIndex: 0, events: [{ key: 'raid-result', attackerId: colonies[0].id, defenderId: colonies[1].id, turnIndex: 0 }] });
+  for (let round = 0; round <= 3; round++) {
+    session.turnIndex = round * 3;
+    session = core.normalizeSession(session);
+    assert.equal(core.raidCooldown(session, colonies[0].id, colonies[1].id), Math.max(0, 3 - round));
+    assert.equal(core.raidCooldown(session, colonies[0].id, colonies[2].id), 0);
+  }
+});
+
+test('harvest recovery and team improvement preserve actual evidence', () => {
+  const colony = core.createTeam({}, 0);
+  const saved = core.normalizeSession({ teams: [colony], phase: 'event', stormSeen: true, events: [{ key: 'round-supplies', chapterBefore: 'First Light', reportIndex: 0, reports: [{ teamId: colony.id, gathered: 4, eaten: 1, hatched: 1 }] }], answers: [false, false, true, true].map(correct => ({ teamId: colony.id, correct })) });
+  assert.deepEqual(core.normalizeSession(saved), saved);
+  assert.equal(saved.events[0].reports[0].hatched, 1);
+  assert.equal(saved.stormSeen, true);
+  assert.equal(core.learningImprovement(saved, colony.id), 100);
+  assert.equal(core.learningImprovement(saved, 'unknown'), null);
+});
+
 test('comeback help is meaningful without erasing the leading colony', () => {
   const all = teams(2);
   all[0].food = 400;

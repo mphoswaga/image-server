@@ -5,7 +5,7 @@
 }(typeof globalThis !== 'undefined' ? globalThis : this, function colonyQuestCoreFactory() {
   'use strict';
 
-  const VERSION = 6;
+  const VERSION = 7;
   const FORTIFICATIONS = Object.freeze([
     { name: 'Earth', wall: 0xb68a57, edge: 0x785437, floor: 0x65513a },
     { name: 'Timber', wall: 0xa7743e, edge: 0xe3b571, floor: 0x65513a },
@@ -40,10 +40,10 @@
   ]);
 
   const REWARDS = Object.freeze({
-    workers: { label: 'Add one worker', description: 'One new ant joins the foraging trail.', icon: 'worker' },
+    workers: { label: 'Add one worker', description: 'Brings home two seeds each round.', icon: 'worker' },
     food: { label: 'Gather food', description: 'Bring home five seeds.', icon: 'leaf' },
     defense: { label: 'Defense', description: 'Strengthen the nest walls.', icon: 'shield' },
-    queen: { label: 'Care for the queen', description: 'The queen lays one new egg.', icon: 'crown' },
+    queen: { label: 'Care for the queen', description: 'One egg hatches into a worker in two rounds.', icon: 'crown' },
     expansion: { label: 'Build one room', description: 'Dig and furnish one new chamber.', icon: 'compass' },
     soldiers: { label: 'Add one soldier', description: 'One new guardian joins the colony.', icon: 'sword' },
     raid: { label: 'Knowledge raid', description: 'Challenge another colony.', icon: 'flag' },
@@ -99,6 +99,7 @@
       successfulAttacks: 0,
       successfulDefenses: 0,
       upgrades: 0,
+      eggs: [],
     };
   }
 
@@ -118,6 +119,8 @@
     base.barracksAnnexes = Math.floor(clamp(input?.barracksAnnexes ?? Math.max(0, Math.ceil(base.soldiers / 8) - 1), 0, 999));
     base.expansionRooms = Math.floor(clamp(input?.expansionRooms ?? Math.max(0, base.territory - 1), 0, 999));
     base.population = Math.max(base.population, 1 + base.workers + base.soldiers);
+    base.eggs = Array.isArray(input?.eggs) ? input.eggs.slice(0, 999).map(egg => ({ roundsLeft: Math.floor(clamp(egg?.roundsLeft, 0, 2)) })) : Array.from({ length: Math.max(0, base.population - 1 - base.workers - base.soldiers) }, () => ({ roundsLeft: 2 }));
+    base.population = 1 + base.workers + base.soldiers + base.eggs.length;
     return base;
   }
 
@@ -165,6 +168,7 @@
     } else if (reward === 'queen') {
       team.queenLevel += 1;
       team.population += 1;
+      team.eggs = [...(team.eggs || []), { roundsLeft: 2 }];
     } else if (reward === 'expansion') {
       expandColony(team);
     } else if (reward === 'soldiers') {
@@ -182,11 +186,22 @@
     team.territory += 1;
   }
 
-  function resolveRaid(attacker, defender, teams) {
+  function raidForecast(attacker, defender) {
     const attack = attacker.soldiers * 4 + attacker.territory * 2 + attacker.correct * 3;
-    const guard = defender.defense * 5 + defender.soldiers * 3 + defender.nestLevel * 2;
+    const guard = defender.defense * 5 + defender.soldiers * 3 + defender.nestLevel * 2 + colonyRooms(defender).filter(room => room.kind === 'guard').length * 4;
     const knowledgeEdge = 12;
     const success = attack + knowledgeEdge >= guard * 0.78;
+    return { success, attack: attack + knowledgeEdge, guard, reason: success ? 'Your knowledge and raiding party can pass these defenses.' : `${fortification(defender).name} walls, ${defender.soldiers} guardians${defender.barracksBuilt ? ' and a barracks' : ''} protect this nest. Recruit a soldier or build another room before trying again.` };
+  }
+
+  function raidCooldown(session, attackerId, defenderId) {
+    const last = [...(session.events || [])].reverse().find(event => event.key === 'raid-result' && event.attackerId === attackerId && event.defenderId === defenderId);
+    if (!Number.isFinite(last?.turnIndex)) return 0;
+    return Math.max(0, 3 - Math.floor((session.turnIndex - last.turnIndex) / Math.max(1, session.teams.length)));
+  }
+
+  function resolveRaid(attacker, defender, teams) {
+    const { success } = raidForecast(attacker, defender);
     if (success) {
       const stolen = Math.min(defender.food, Math.max(6, Math.round(12 * comebackMultiplier(attacker, teams))));
       defender.food -= stolen;
@@ -201,11 +216,57 @@
 
   function applyUpkeep(teams) {
     for (const team of teams || []) {
-      const production = Math.max(2, Math.round(team.workers * 0.65 + team.territory * 2 + team.queenLevel));
-      const upkeep = Math.max(1, Math.round(team.population * 0.22 + team.soldiers * 0.35));
-      team.food = Math.max(0, team.food + production - upkeep);
+      const economy = roundEconomy(team);
+      team.food = Math.max(0, team.food + economy.gathered - economy.eaten);
+      for (const egg of team.eggs || []) egg.roundsLeft = Math.max(0, egg.roundsLeft - 1);
+      const ready = (team.eggs || []).findIndex(egg => egg.roundsLeft === 0);
+      if (ready !== -1) {
+        team.eggs.splice(ready, 1);
+        team.workers += 1;
+      }
     }
     return teams;
+  }
+
+  function roomBenefit(room) {
+    if (room.kind === 'nursery') return 'Shelters the queen and growing eggs';
+    if (room.kind === 'food') return 'Keeps ten extra seeds dry in the rain';
+    if (room.kind === 'guard') return 'Adds four points to raid defense';
+    if (room.kind === 'workers') return 'Shelters the growing foraging team';
+    return ['Keeps five extra seeds dry', 'Grows two extra seeds each round', 'Keeps five extra seeds dry', 'Adds two points to rain protection'][room.expansion % 4];
+  }
+
+  function roundEconomy(team) {
+    const gardens = colonyRooms(team).filter(room => room.kind === 'expansion' && room.expansion % 4 === 1).length;
+    const gathered = team.workers * 2 + gardens * 2;
+    const eaten = Math.min(team.food + gathered, Math.max(1, Math.ceil((1 + team.workers + team.soldiers) / 3)));
+    return { gathered, eaten, gardens };
+  }
+
+  function rainPreparation(team) {
+    return [
+      { label: '10 seeds stored', done: team.food >= 10, value: `${team.food}/10` },
+      { label: 'Food store built', done: !!team.pantryBuilt, value: team.pantryBuilt ? 'Ready' : 'Build one room' },
+      { label: 'One guardian', done: team.soldiers >= 1, value: `${team.soldiers}/1` },
+      { label: 'Stronger walls', done: team.defense >= 1, value: fortification(team).name },
+    ];
+  }
+
+  function rainOutcome(team) {
+    const rooms = colonyRooms(team);
+    const storage = rooms.filter(room => room.kind === 'expansion' && [0, 2].includes(room.expansion % 4)).length * 5;
+    const workshops = rooms.filter(room => room.kind === 'expansion' && room.expansion % 4 === 3).length * 2;
+    const protectedFood = Math.min(team.food, 3 + team.defense * 5 + (team.pantryBuilt ? 10 : 0) + storage + workshops);
+    const ready = rainPreparation(team).filter(goal => goal.done).length;
+    return { protectedFood, exposedFood: team.food - protectedFood, ready, text: `${fortification(team).name} walls${team.pantryBuilt ? ' and the food store' : ''} keep ${protectedFood} seeds dry. ${team.soldiers ? `${team.soldiers} guardians watch the entrance.` : 'A guardian could help protect the entrance next time.'} ${ready === 4 ? 'Your colony is ready for the Great Rain!' : 'Everyone finds shelter. Keep building to protect more of the colony next time.'}` };
+  }
+
+  function learningImprovement(session, teamId) {
+    const answers = session.answers.filter(answer => answer.teamId === teamId);
+    if (answers.length < 2) return null;
+    const midpoint = Math.floor(answers.length / 2);
+    const accuracy = list => list.filter(answer => answer.correct).length / list.length;
+    return Math.round((accuracy(answers.slice(midpoint)) - accuracy(answers.slice(0, midpoint))) * 100);
   }
 
   function applyEvent(teams, key) {
@@ -215,7 +276,7 @@
     for (let index = 0; index < (teams || []).length; index += 1) {
       const team = teams[index];
       if (event.key === 'fallen-fruit') team.food += strengths[index] === weakest ? 20 : 12;
-      if (event.key === 'heavy-rain') team.food = Math.max(0, team.food - Math.max(1, 9 - team.defense * 2));
+      if (event.key === 'heavy-rain') team.food = Math.max(0, team.food - Math.min(rainOutcome(team).exposedFood, Math.max(0, 9 - team.defense * 2)));
       if (event.key === 'food-trail') team.food += 7 + Math.min(12, team.workers);
       if (event.key === 'predator') team.food = Math.max(0, team.food - Math.max(0, 12 - team.defense * 3 - team.soldiers));
       if (event.key === 'new-territory' && strengths[index] <= weakest * 1.08) expandColony(team);
@@ -249,12 +310,13 @@
       previousPhase: phases.has(source.previousPhase) ? source.previousPhase : null,
       startedAt: text(source.startedAt, 40) || null,
       endedAt: text(source.endedAt, 40) || null,
-      endsAt: Number.isFinite(Number(source.endsAt)) ? Number(source.endsAt) : null,
-      pausedAt: Number.isFinite(Number(source.pausedAt)) ? Number(source.pausedAt) : null,
+      endsAt: source.endsAt != null && Number.isFinite(Number(source.endsAt)) ? Number(source.endsAt) : null,
+      pausedAt: source.pausedAt != null && Number.isFinite(Number(source.pausedAt)) ? Number(source.pausedAt) : null,
       turnIndex: Math.floor(clamp(source.turnIndex, 0, 9999)),
       questionCursor: Math.floor(clamp(source.questionCursor, 0, 9999)),
       currentTeamIndex: Math.floor(clamp(source.currentTeamIndex, 0, Math.max(0, teams.length - 1))),
       introSeen: !!source.introSeen,
+      stormSeen: !!source.stormSeen,
       warsActive: !!source.warsActive,
       eventAction: source.eventAction === 'next-turn' ? 'next-turn' : source.eventAction === 'question' ? 'question' : null,
       teams,
@@ -264,7 +326,7 @@
         studentId: text(answer && answer.studentId, 80) || null,
         studentName: text(answer && answer.studentName, 80) || null,
         correct: !!(answer && answer.correct),
-        choice: Number.isFinite(Number(answer && answer.choice)) ? Number(answer.choice) : null,
+        choice: answer?.choice != null && Number.isFinite(Number(answer.choice)) ? Number(answer.choice) : null,
         teacherJudged: !!(answer && answer.teacherJudged),
         at: text(answer && answer.at, 40),
       })) : [],
@@ -279,6 +341,12 @@
           defenderId: text(event.defenderId, 40) || null,
           success: !!event.success,
           stolen: Math.floor(clamp(event.stolen, 0, 9999)),
+          turnIndex: Number.isFinite(event.turnIndex) ? Math.floor(clamp(event.turnIndex, 0, 9999)) : null,
+        } : {}),
+        ...(event?.key === 'round-supplies' ? {
+          chapterBefore: text(event.chapterBefore, 60),
+          reportIndex: Math.floor(clamp(event.reportIndex, 0, Math.max(0, teams.length - 1))),
+          reports: (Array.isArray(event.reports) ? event.reports : []).slice(0, 6).map(report => ({ teamId: text(report.teamId, 40), gathered: Math.floor(clamp(report.gathered, 0, 9999)), eaten: Math.floor(clamp(report.eaten, 0, 9999)), hatched: Math.floor(clamp(report.hatched, 0, 1)) })),
         } : {}),
       })) : [],
     };
@@ -332,6 +400,13 @@
     normalizeConfig,
     normalizeSession,
     applyReward,
+    roomBenefit,
+    roundEconomy,
+    rainPreparation,
+    rainOutcome,
+    learningImprovement,
+    raidForecast,
+    raidCooldown,
     resolveRaid,
     applyUpkeep,
     applyEvent,
