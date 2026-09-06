@@ -174,3 +174,15 @@ test('FishQuest answer buttons remain mounted while live state updates arrive', 
   assert.match(client, /answer_ack/);
   assert.match(client, /answer did not reach the ocean/);
 });
+
+test('FishQuest game feel stays local, optional, and motion-safe', () => {
+  const page = fs.readFileSync(path.join(__dirname, '..', 'public', 'fishquest.html'), 'utf8');
+  const client = fs.readFileSync(path.join(__dirname, '..', 'public', 'fishquest-client.js'), 'utf8');
+  assert.match(page, /id="soundToggle"/);
+  assert.match(page, /id="musicToggle"/);
+  assert.match(page, /prefers-reduced-motion:reduce/);
+  assert.match(client, /ls-fishquest-audio-v1/);
+  assert.match(client, /function growthRipple/);
+  assert.match(client, /function syncMusic/);
+  assert.match(client, /me\.score > previousMe\.score/);
+});

@@ -208,6 +208,10 @@ test('the learner quest keeps Byte and its connected game states', () => {
   assert.match(player, /arcade-grid/);
   assert.match(player, /burstParticles/);
   assert.match(player, /Combo/);
+  assert.match(player, /feedback show mistake/);
+  assert.match(player, /showComboMilestone/);
+  assert.match(player, /celebrateHit\(finalHit,points,hitTarget\)/);
+  assert.doesNotMatch(player, /body\.playing \.combo-stat\s*\{\s*display:none/);
   assert.doesNotMatch(player, /phase === 'guided'/);
 });
 

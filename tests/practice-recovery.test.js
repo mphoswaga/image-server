@@ -27,6 +27,7 @@ test('mistakes remain recoverable when audio and narration throw',()=>{
   assert.equal(context.stats.mistakes,100);
   assert.equal(effects,1);
   assert.equal(feedback.textContent,'Try the next key');
+  assert.equal(feedback.className,'feedback show mistake');
   context.paused=true;vm.runInContext("registerWrong('ignored')",context);
   assert.equal(context.stats.mistakes,100);
 });

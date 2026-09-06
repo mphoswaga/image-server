@@ -3,18 +3,100 @@
   const GAME_ID = location.pathname.split('/').filter(Boolean).pop();
   let meta, socket, state, scene, rendererStarting = false, me, reconnects = 0, seq = 0, ticket = '', reconnectTimer, renderedQuestionId = null, answerTimer = null;
   const keys = new Set(); let touch = { x: 0, y: 0 }, entities = new Map(), foods = new Map(), lastEvent = null, qTimer;
+  const AUDIO_PREF_KEY = 'ls-fishquest-audio-v1';
+  let audioSettings = { sound: true, music: true };
+  try { audioSettings = { ...audioSettings, ...JSON.parse(localStorage.getItem(AUDIO_PREF_KEY) || '{}') }; } catch {}
+  let audioContext = null, audioUnlocked = false, musicTimer = null, musicNodes = new Set(), lastPlanktonCue = 0, finishSoundPlayed = false;
+  const reducedMotion = Boolean(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   function show(id) { document.querySelectorAll('.screen').forEach(el => el.classList.toggle('show', el.id === id)); }
   async function json(url, options) { const r = await fetch(url, options); const d = await r.json().catch(() => ({})); if (!r.ok) { const e = Error(d.error || 'Please try again.'); e.status = r.status; throw e; } return d; }
+  function saveAudioSettings() { try { localStorage.setItem(AUDIO_PREF_KEY, JSON.stringify(audioSettings)); } catch {} }
+  function ensureAudio() {
+    try {
+      const Context = window.AudioContext || window.webkitAudioContext;
+      if (!Context) return null;
+      if (!audioContext) audioContext = new Context();
+      return audioContext;
+    } catch { return null; }
+  }
+  function unlockAudio() {
+    const context = ensureAudio();
+    if (!context) return Promise.resolve(false);
+    const ready = context.state === 'running' ? Promise.resolve() : context.resume();
+    return ready.then(() => { audioUnlocked = context.state === 'running'; syncMusic(); return audioUnlocked; }).catch(() => false);
+  }
+  function tone(frequency, { start = 0, duration = .14, volume = .035, type = 'sine', music = false } = {}) {
+    if (!audioUnlocked) return;
+    const context = ensureAudio();
+    if (!context) return;
+    const oscillator = context.createOscillator(), gain = context.createGain(), begins = context.currentTime + start;
+    oscillator.frequency.value = frequency; oscillator.type = type;
+    gain.gain.setValueAtTime(.001, begins);
+    gain.gain.exponentialRampToValueAtTime(volume, begins + Math.min(.06, duration / 3));
+    gain.gain.exponentialRampToValueAtTime(.001, begins + duration);
+    oscillator.connect(gain).connect(context.destination);
+    if (music) { musicNodes.add(oscillator); oscillator.addEventListener('ended', () => musicNodes.delete(oscillator), { once: true }); }
+    oscillator.start(begins); oscillator.stop(begins + duration + .03);
+  }
+  function playCue(kind) {
+    if (!audioSettings.sound || !audioUnlocked) return;
+    const cues = {
+      plankton: [[560, 0, .08, .024, 'sine'], [720, .05, .09, .02, 'sine']],
+      correct: [[392, 0, .16, .035, 'triangle'], [523, .12, .2, .04, 'triangle'], [659, .25, .25, .04, 'triangle']],
+      wrong: [[185, 0, .17, .032, 'square'], [145, .13, .22, .025, 'square']],
+      bump: [[125, 0, .2, .04, 'sawtooth']],
+      finish: [[392, 0, .2, .035, 'triangle'], [523, .15, .24, .04, 'triangle'], [659, .32, .28, .04, 'triangle'], [784, .5, .38, .045, 'triangle']],
+    };
+    for (const [frequency, start, duration, volume, type] of cues[kind] || []) tone(frequency, { start, duration, volume, type });
+  }
+  function stopMusic() {
+    clearTimeout(musicTimer); musicTimer = null;
+    for (const node of musicNodes) { try { node.stop(); } catch {} }
+    musicNodes.clear();
+  }
+  function scheduleMusic() {
+    if (!audioUnlocked || !audioSettings.music || !state || state.phase !== 'running' || document.hidden) return stopMusic();
+    [196, 246.94, 293.66, 246.94].forEach((frequency, index) => {
+      tone(frequency, { start: index * 1.6, duration: 2, volume: .011, type: 'sine', music: true });
+      tone(frequency / 2, { start: index * 1.6, duration: 2.2, volume: .005, type: 'triangle', music: true });
+    });
+    musicTimer = setTimeout(scheduleMusic, 6400);
+  }
+  function syncMusic() {
+    if (audioUnlocked && audioSettings.music && state && state.phase === 'running' && !document.hidden) {
+      if (!musicTimer) scheduleMusic();
+    } else stopMusic();
+  }
+  function updateAudioControls() {
+    for (const [id, stateId, setting, label] of [['soundToggle', 'soundState', 'sound', 'sound effects'], ['musicToggle', 'musicState', 'music', 'music']]) {
+      const button = $(id), enabled = audioSettings[setting] !== false;
+      if (!button) continue;
+      button.setAttribute('aria-pressed', String(enabled));
+      button.setAttribute('aria-label', `Turn ${label} ${enabled ? 'off' : 'on'}`);
+      $(stateId).textContent = enabled ? 'On' : 'Off';
+    }
+  }
+  function pulseStat(id) {
+    const element = $(id); if (!element) return;
+    element.classList.remove('stat-pop'); void element.offsetWidth; element.classList.add('stat-pop');
+    setTimeout(() => element.classList.remove('stat-pop'), 420);
+  }
+  function growthRipple(big = false) {
+    if (reducedMotion || !scene || !me) return;
+    const fish = entities.get(me.id); if (!fish) return;
+    const ring = scene.add.circle(fish.sprite.x, fish.sprite.y, big ? 44 : 30, big ? 0xffd166 : 0x52e5db, 0).setStrokeStyle(big ? 5 : 3, big ? 0xffd166 : 0x52e5db, .95).setDepth(20);
+    scene.tweens.add({ targets: ring, scale: big ? 2.8 : 1.8, alpha: 0, duration: big ? 700 : 420, ease: 'Cubic.easeOut', onComplete: () => ring.destroy() });
+  }
   async function load() {
     try {
       meta = await json(`/api/game/${GAME_ID}`); $('nameLabel').textContent = meta.hasRoster ? 'Student ID' : 'Your name';
       $('roomTitle').textContent = meta.lessonTitle || 'FishQuest'; await getTicket();
     } catch (err) { if (err.status === 401 || err.status === 403) show('join'); else wait(err.message); }
   }
-  function wait(message) { show('waiting'); $('waitText').textContent = message || 'Waiting for your teacher to open the ocean...'; }
+  function wait(message) { stopMusic(); show('waiting'); $('waitText').textContent = message || 'Waiting for your teacher to open the ocean...'; }
   $('retryButton').onclick = load;
   $('joinForm').onsubmit = async event => {
-    event.preventDefault(); const button = $('joinButton'); button.disabled = true; $('joinError').textContent = '';
+    event.preventDefault(); unlockAudio(); const button = $('joinButton'); button.disabled = true; $('joinError').textContent = '';
     try {
       const studentId = $('studentId').value.trim();
       await json(`/api/game/${GAME_ID}/enter`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId, name: studentId, pin: $('pin').value }) });
@@ -32,6 +114,7 @@
     socket.onmessage = event => { const m = JSON.parse(event.data); if (m.type === 'state') apply(m.state); if (m.type === 'answer_ack') answerAck(m); if (m.type === 'error') toast(m.error, false); };
     socket.onclose = event => {
       if (state && state.phase === 'ended') return;
+      stopMusic();
       $('connection').textContent = 'Reconnecting... your progress is safe';
       unlockAnswers();
       if (event.code === 4003) { wait('Your room changed. Join again to continue.'); return; }
@@ -39,13 +122,37 @@
     };
   }
   function apply(next) {
+    const previousMe = state && me ? { id: me.id, mass: Number(me.mass) || 0, score: Number(me.score) || 0 } : null;
+    const previousPhase = state && state.phase;
     state = next; me = state.players.find(p => p.id === state.me); if (!me) return;
     if (!scene && !rendererStarting) startRenderer();
     $('mass').textContent = me.mass; $('score').textContent = me.score; $('connection').textContent=state.solo?'Homework ocean · computer fish':'Live with your class';
     $('teacherWait').hidden = state.phase !== 'lobby'; $('teacherPause').hidden = state.phase !== 'paused';
-    if (state.phase === 'ended') return finish();
+    if (state.phase === 'ended') {
+      syncMusic();
+      if (!finishSoundPlayed && previousPhase && previousPhase !== 'ended') { finishSoundPlayed = true; playCue('finish'); }
+      return finish();
+    }
     renderState(); renderQuestion();
-    if (state.event && state.event.id !== lastEvent) { lastEvent = state.event.id; const mine = state.event.attacker === state.me; if (state.event.outcome === 'correct' && mine) toast('Correct! You grew bigger!', true); else if (state.event.outcome === 'incorrect' && mine) toast('Not this time. Keep exploring!', false); else if (state.event.outcome === 'timeout' && mine) toast('Time ran out. Keep going!', false); else if (state.event.outcome === 'bumped' && state.event.victim === state.me) toast('That fish is too big! Eat more plankton first.', false); else if (state.event.outcome === 'correct') toast('Splash! You are safely back.', false); }
+    const freshEvent = state.event && state.event.id !== lastEvent ? state.event : null;
+    const swallowed = freshEvent && freshEvent.outcome === 'correct' && freshEvent.attacker === state.me;
+    if (previousMe && previousMe.id === me.id && me.score > previousMe.score && !swallowed) {
+      const now = performance.now();
+      if (now - lastPlanktonCue > 110) { lastPlanktonCue = now; playCue('plankton'); }
+      pulseStat('mass'); pulseStat('score'); growthRipple(false);
+    }
+    if (freshEvent) {
+      lastEvent = freshEvent.id;
+      if (previousMe) {
+        const mine = freshEvent.attacker === state.me;
+        if (freshEvent.outcome === 'correct' && mine) { toast('Correct! You swallowed the fish and grew bigger!', true); playCue('correct'); pulseStat('mass'); pulseStat('score'); growthRipple(true); }
+        else if (freshEvent.outcome === 'incorrect' && mine) { toast('Not this time. Keep exploring!', false); playCue('wrong'); }
+        else if (freshEvent.outcome === 'timeout' && mine) { toast('Time ran out. Keep going!', false); playCue('wrong'); }
+        else if (freshEvent.outcome === 'bumped' && freshEvent.victim === state.me) { toast('That fish is too big! Eat more plankton first.', false); playCue('bump'); }
+        else if (freshEvent.outcome === 'correct' && freshEvent.victim === state.me) { toast('Splash! You are safely back. Grow and try again!', false); playCue('bump'); }
+      }
+    }
+    syncMusic();
   }
   function startRenderer() {
     rendererStarting = true;
@@ -148,16 +255,28 @@
   }
   function unlockAnswers(){clearTimeout(answerTimer);answerTimer=null;document.querySelectorAll('.option').forEach(x=>x.disabled=false)}
   function finish() {
+    stopMusic();
     show('ended'); const order=[...state.players].sort((a,b)=>b.score-a.score), place=order.findIndex(p=>p.id===state.me)+1;
     $('rank').textContent = place ? `You finished number ${place} of ${order.length}` : 'Adventure complete'; $('finalScore').textContent = `${me.score} points`;
     const p=state.personal||{}; $('learning').textContent = p.answered ? `You answered ${p.correct} of ${p.answered} questions correctly and explored ${p.coverage} different questions.` : 'You collected plankton and practised navigating the ocean.';
   }
   function toast(text, good) { const el=$('toast');el.textContent=text;el.className=`toast show ${good?'good':'bad'}`;setTimeout(()=>el.className='toast',2200); }
+  $('soundToggle').onclick = async () => {
+    audioSettings.sound = !audioSettings.sound; saveAudioSettings(); updateAudioControls();
+    await unlockAudio(); if (audioSettings.sound) playCue('plankton');
+  };
+  $('musicToggle').onclick = async () => {
+    audioSettings.music = !audioSettings.music; saveAudioSettings(); updateAudioControls();
+    await unlockAudio(); syncMusic();
+  };
+  addEventListener('pointerdown', () => unlockAudio(), { once: true });
+  addEventListener('keydown', () => unlockAudio(), { once: true });
+  document.addEventListener('visibilitychange', syncMusic);
   addEventListener('keydown', e => { if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','a','s','d'].includes(e.key)) { keys.add(e.key.toLowerCase()); e.preventDefault(); } });
   addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
   const pad=$('touch'), dot=$('touchDot'); function moveTouch(e){const r=pad.getBoundingClientRect(),x=e.clientX-(r.left+r.width/2),y=e.clientY-(r.top+r.height/2),l=Math.max(1,Math.hypot(x,y)),m=Math.min(r.width*.32,l);touch={x:x/l,y:y/l};dot.style.transform=`translate(${touch.x*m}px,${touch.y*m}px)`;}
   pad.onpointerdown=e=>{pad.setPointerCapture(e.pointerId);moveTouch(e)};pad.onpointermove=e=>{if(pad.hasPointerCapture(e.pointerId))moveTouch(e)};pad.onpointerup=pad.onpointercancel=()=>{touch={x:0,y:0};dot.style.transform=''};
   setInterval(()=>{if(!socket||socket.readyState!==1||!state||state.phase!=='running'||state.question)return;let x=(keys.has('arrowright')||keys.has('d')?1:0)-(keys.has('arrowleft')||keys.has('a')?1:0),y=(keys.has('arrowdown')||keys.has('s')?1:0)-(keys.has('arrowup')||keys.has('w')?1:0);if(!x&&!y){x=touch.x;y=touch.y}socket.send(JSON.stringify({type:'input',seq:seq++,x,y}));},50);
   setInterval(()=>{if(!state)return;const left=state.endsAt?Math.max(0,state.endsAt-(state.phase==='paused'?state.pausedAt:Date.now())):0;$('time').textContent=state.phase==='lobby'?'Lobby':state.phase==='paused'?'Paused':`${Math.floor(left/60000)}:${String(Math.floor(left/1000)%60).padStart(2,'0')}`;},250);
-  load();
+  updateAudioControls(); load();
 })();

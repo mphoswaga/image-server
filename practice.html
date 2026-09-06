@@ -280,6 +280,8 @@
     .conveyor { width:min(700px,calc(100% - 34px)); min-height:230px; display:grid; grid-template-columns:1fr 1fr; align-items:center; justify-items:center; gap:30px; padding:30px; position:relative; border:2px solid #79e8ef; background-image:linear-gradient(rgba(5,14,32,.10),rgba(5,14,32,.42)),url('/assets/practice/bg_cargo_station.jpeg'); background-position:center; background-size:cover; overflow:hidden; box-shadow:0 18px 40px rgba(0,0,0,.36); }
     .conveyor:after { content:""; position:absolute; z-index:-1; left:-20%; right:-20%; bottom:16%; height:44px; border-top:4px dashed #8da3ba; border-bottom:4px dashed #8da3ba; animation:conveyorMove 1.2s linear infinite; }
     .combo-hot { color:#f8c342 !important; text-shadow:0 0 12px rgba(248,195,66,.55); }
+    .hud-stat.score-bump strong { animation:scoreBump .36s ease; }
+    .combo-stat.combo-bump { animation:comboBump .42s ease; }
     .fx-particle { position:absolute; z-index:20; width:8px; height:8px; border-radius:2px; background:var(--spark,#25cddc); pointer-events:none; animation:sparkBurst .62s ease-out forwards; }
     .task-area.wrong-shake { animation:wrongShake .28s ease; }
     .next-world { margin:22px auto 0; padding:16px 18px; max-width:640px; border:1px solid #2e5884; background:#102747; text-align:left; }
@@ -305,10 +307,12 @@
     .tutorial-copy h3 { margin:0 0 8px; color:var(--navy); font-size:23px; }
     .tutorial-copy p { margin:0 0 8px; color:var(--ink); font-size:17px; font-weight:700; }
     .tutorial-copy small { display:block; color:var(--muted); font-size:13px; }
-    .burst { position:absolute; z-index:8; width:110px; height:110px; display:grid; place-items:center; border-radius:50%; background:var(--green); color:#fff; font-size:20px; font-weight:900; animation:burst .62s ease both; pointer-events:none; }
-    .points-pop { position:absolute; z-index:9; color:var(--green-dark); font-size:24px; font-weight:900; animation:pointsUp .75s ease both; pointer-events:none; }
+    .burst { position:absolute; z-index:8; width:110px; height:110px; display:grid; place-items:center; border-radius:50%; background:var(--green); color:#fff; font-size:20px; font-weight:900; animation:burst .62s ease both; pointer-events:none; transform:translate(-50%,-50%); }
+    .points-pop { position:absolute; z-index:9; color:#fff; font-size:24px; font-weight:900; text-shadow:0 2px 5px rgba(5,14,32,.9),0 0 12px rgba(37,205,220,.9); animation:pointsUp .75s ease both; pointer-events:none; transform:translate(-50%,-50%); }
+    .combo-callout { position:absolute; z-index:21; min-width:125px; padding:9px 12px; border:2px solid #f8c342; border-radius:7px; background:rgba(7,20,44,.94); color:#ffe17a; font-size:15px; font-weight:900; text-align:center; text-transform:uppercase; box-shadow:0 8px 24px rgba(5,14,32,.45),0 0 22px rgba(248,195,66,.28); pointer-events:none; animation:comboRise .9s ease both; }
     .feedback { min-height:42px; margin-top:13px; padding:10px 12px; background:var(--soft-green); border-left:4px solid var(--green); color:var(--green-dark); font-size:14px; font-weight:700; display:none; }
     .feedback.show { display:block; }
+    .feedback.mistake { background:#fff0ed; border-left-color:#f05b6b; color:#8a2430; }
     .hint { min-height:42px; margin-top:10px; padding:10px 12px; background:#fff8e5; border-left:4px solid var(--gold); color:#654c10; font-size:14px; display:none; }
     .hint.show { display:block; }
     .controls { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; background:#fff; border:1px solid var(--line); border-top:0; }
@@ -372,8 +376,11 @@
     @keyframes mousePress { 0%,45%,100%{transform:translateY(0);opacity:.65} 55%,70%{transform:translateY(5px);opacity:1} }
     @keyframes keyPress { 0%,20%,100%{transform:none;background:#fff} 30%,48%{transform:translateY(4px);background:#9df6c6} }
     @keyframes wheelMove { 0%,100%{transform:translateY(-5px)} 50%{transform:translateY(9px)} }
-    @keyframes burst { 0%{transform:scale(.35);opacity:0} 55%{transform:scale(1.08);opacity:1} 100%{transform:scale(1);opacity:1} }
-    @keyframes pointsUp { from{transform:translateY(15px);opacity:0} 35%{opacity:1} to{transform:translateY(-38px);opacity:0} }
+    @keyframes burst { 0%{transform:translate(-50%,-50%) scale(.35);opacity:0} 55%{transform:translate(-50%,-50%) scale(1.08);opacity:1} 100%{transform:translate(-50%,-50%) scale(1);opacity:1} }
+    @keyframes pointsUp { from{transform:translate(-50%,calc(-50% + 15px));opacity:0} 35%{opacity:1} to{transform:translate(-50%,calc(-50% - 38px));opacity:0} }
+    @keyframes comboRise { from{transform:translate(-50%,8px) scale(.8);opacity:0} 35%,72%{transform:translate(-50%,-8px) scale(1);opacity:1} to{transform:translate(-50%,-42px) scale(.94);opacity:0} }
+    @keyframes scoreBump { 50%{transform:scale(1.22);color:#f8c342;text-shadow:0 0 14px rgba(248,195,66,.6)} }
+    @keyframes comboBump { 50%{transform:translateY(-3px) scale(1.08)} }
     @keyframes livePulse { 50%{opacity:.45;transform:scale(.78)} }
     @keyframes reactorPulse { 50%{box-shadow:0 0 0 15px rgba(30,184,120,.08),0 0 42px rgba(30,184,120,.8)} }
     @keyframes targetPop { from{opacity:0;transform:scale(.2) translateY(15px)} to{opacity:1;transform:none} }
@@ -450,7 +457,6 @@
     body.playing .workspace-head { align-items:center; margin-bottom:10px; }
     body.playing .workspace-head p { display:none; }
     body.playing .game-hud { grid-template-columns:minmax(150px,1fr) repeat(6,minmax(62px,auto)); border-radius:10px; }
-    body.playing .combo-stat { display:none; }
     body.playing .hud-stat { text-align:center; }
     body.playing .task-area { min-height:390px; border-radius:12px; }
     body.playing .controls { border-radius:0 0 16px 16px; }
@@ -629,7 +635,9 @@
       .control-left,.control-right { width:100%; }
       .control-left .btn,.control-right .btn { flex:1; }
       body.playing .shell { padding-bottom:86px; }
-      body.playing .controls { position:fixed; z-index:55; left:10px; right:10px; bottom:10px; width:auto; padding:8px; border:1px solid #2a4d76; border-radius:12px; box-shadow:0 14px 40px rgba(0,0,0,.55); }
+      body.playing .controls { position:fixed; z-index:55; left:10px; right:10px; bottom:10px; width:auto; padding:8px; border:1px solid #2a4d76; border-radius:12px; box-shadow:0 14px 40px rgba(0,0,0,.55); align-items:center; flex-direction:row; }
+      body.playing .control-left,body.playing .control-right { width:auto; min-width:0; flex:1; }
+      body.playing .controls .btn { width:100%; min-width:0; padding-inline:8px; font-size:15px; }
       .activity-facts { grid-template-columns:1fr; }
       .join-fields { grid-template-columns:1fr; }
       .live-strip { align-items:flex-start; flex-direction:column; }
@@ -1471,6 +1479,7 @@
       const cues={
         wrong:[[155,0,.2,.045,'square'],[120,.13,.24,.035,'square']],
         hit:[[520,0,.11,.045,'sine'],[690,.08,.14,.04,'sine']],
+        streak:[[610,0,.12,.045,'triangle'],[770,.09,.16,.04,'triangle'],[930,.19,.2,.04,'triangle']],
         complete:[[520,0,.18,.045,'triangle'],[660,.12,.2,.045,'triangle'],[820,.25,.32,.05,'triangle']],
         start:[[330,0,.2,.035,'sine'],[440,.14,.22,.04,'sine'],[660,.3,.32,.045,'sine']],
         world:[[392,0,.32,.04,'triangle'],[523,.22,.38,.045,'triangle'],[659,.48,.55,.05,'triangle']],
@@ -1516,12 +1525,56 @@
       speechSynthesis.speak(speech);
     }
 
-    function celebrateHit(finalHit, points=100) {
+    function effectPoint(target) {
+      const area=$('taskArea');
+      if(!area || !area.getBoundingClientRect) return null;
+      const areaRect=area.getBoundingClientRect();
+      if(!target || !target.getBoundingClientRect) return {area,x:areaRect.width/2,y:areaRect.height/2};
+      const rect=target.getBoundingClientRect();
+      return {
+        area,
+        x:Math.max(55,Math.min(areaRect.width-55,rect.left-areaRect.left+rect.width/2)),
+        y:Math.max(55,Math.min(areaRect.height-55,rect.top-areaRect.top+rect.height/2)),
+      };
+    }
+
+    function celebrateHit(finalHit, points=100, target=null) {
+      const point=effectPoint(target);
+      if(!point) return;
       const pop=document.createElement('div');
       pop.className=finalHit?'burst':'points-pop';
       pop.textContent=finalHit?'Room clear':`+${points}`;
-      $('taskArea').appendChild(pop);
+      pop.style.left=`${point.x}px`;
+      pop.style.top=`${point.y}px`;
+      point.area.appendChild(pop);
       setTimeout(()=>pop.remove(),finalHit?720:800);
+    }
+
+    function showComboMilestone(value, target) {
+      const labels={3:'Streak started',5:'Power streak',8:'Master streak',12:'Unstoppable'};
+      if(!labels[value]) return;
+      const point=effectPoint(target);
+      if(!point) return;
+      const callout=document.createElement('div');
+      callout.className='combo-callout';
+      callout.textContent=`${value}× ${labels[value]}`;
+      callout.style.left=`${point.x}px`;
+      callout.style.top=`${Math.max(58,point.y-48)}px`;
+      point.area.appendChild(callout);
+      playCue('streak');
+      setTimeout(()=>callout.remove(),950);
+    }
+
+    function pulseScoreHud() {
+      const scoreStat=$('scoreValue')&&$('scoreValue').parentElement;
+      const comboStat=$('comboValue')&&$('comboValue').parentElement;
+      for(const [element,className] of [[scoreStat,'score-bump'],[comboStat,'combo-bump']]){
+        if(!element || !element.classList) continue;
+        element.classList.remove(className);
+        void element.offsetWidth;
+        element.classList.add(className);
+        setTimeout(()=>element.classList.remove(className),450);
+      }
     }
 
     function optionalEffect(label, effect) {
@@ -1995,11 +2048,20 @@
       combo = 0;
       updateHud();
       $('feedback').textContent = message;
-      $('feedback').className = 'feedback show';
+      $('feedback').className = 'feedback show mistake';
       const now=performance.now();
       if(now-lastMistakeEffect<500) return;
       lastMistakeEffect=now;
       // Optional effects must not interrupt the caller's input/recovery logic.
+      try {
+        const area=$('taskArea');
+        if(area&&area.classList){
+          area.classList.remove('wrong-shake');
+          void area.offsetWidth;
+          area.classList.add('wrong-shake');
+          setTimeout(()=>area.classList.remove('wrong-shake'),320);
+        }
+      } catch (error) { console.warn('Mistake animation unavailable',error); }
       try { setByteState('retry'); } catch (error) { console.warn('Byte feedback unavailable',error); }
       try { playCue('wrong'); } catch (error) { console.warn('Mistake audio unavailable',error); }
       try { narrate(message); } catch (error) { console.warn('Read aloud unavailable',error); }
@@ -2056,7 +2118,9 @@
       updateHud();
       optionalEffect('Game sound',()=>playCue(finalHit?'complete':'hit'));
       optionalEffect('Mission particles',()=>burstParticles(hitTarget,finalHit?'#f8c342':'#25cddc'));
-      optionalEffect('Score animation',()=>celebrateHit(finalHit,points));
+      optionalEffect('Score animation',()=>celebrateHit(finalHit,points,hitTarget));
+      optionalEffect('HUD animation',pulseScoreHud);
+      optionalEffect('Combo milestone',()=>showComboMilestone(combo,hitTarget));
       if (!finalHit) { activeGameTimers.push(setTimeout(()=>{ if(!paused) renderTask(); },420)); return; }
       stats.attempts += 1;
       independentSaved = true;
