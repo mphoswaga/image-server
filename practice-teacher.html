@@ -62,8 +62,13 @@
     .live-head p { margin:0; color:var(--muted); }
     .session-beacon { display:inline-flex; align-items:center; gap:8px; margin-top:9px; padding:6px 10px; border:1px solid #9edbbf; background:var(--soft-green); color:var(--green-dark); font-size:12px; font-weight:900; text-transform:uppercase; letter-spacing:.5px; }
     .session-beacon i { width:9px; height:9px; border-radius:50%; background:var(--green); box-shadow:0 0 0 0 rgba(24,165,104,.45); animation:live-pulse 1.4s infinite; }
+    .session-beacon.stale { border-color:#f0c28e; background:var(--soft-orange); color:#8c4b25; }
+    .session-beacon.stale i { background:var(--orange); animation:none; }
     .live-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
     .live-actions select { min-width:170px; }
+    .room-library { display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
+    .room-library label { color:var(--navy); }
+    .room-library select { min-width:290px; }
     .audio-policy { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:14px; padding:12px 14px; border:1px solid var(--line); background:#f8fbfd; }
     .audio-policy > strong { color:var(--navy); font-size:13px; }
     .audio-policy label { display:inline-flex; align-items:center; gap:7px; color:var(--navy); cursor:pointer; }
@@ -73,6 +78,7 @@
     .audio-policy small { flex:1 1 260px; color:var(--muted); font-size:11px; }
     .room-stage { display:grid; grid-template-columns:220px 1fr; gap:18px; margin-top:18px; padding-top:18px; border-top:1px solid var(--line); }
     .room-code { display:grid; place-items:center; min-height:140px; border:2px solid var(--cyan); background:var(--soft-cyan); color:var(--navy); }
+    .session-playing .room-code { box-shadow:0 0 0 4px rgba(26,168,196,.08),0 12px 28px rgba(18,52,91,.1); }
     .room-code span { display:block; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.8px; }
     .room-code strong { display:block; font-size:38px; letter-spacing:5px; }
     .room-meta { color:var(--muted); font-size:13px; }
@@ -92,7 +98,7 @@
     .attendance-student.joined .mark { background:var(--green); color:#fff; }
     .attendance-student b { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--navy); font-size:12px; }
     .board-title { margin:12px 0 8px; }
-    .live-board { display:grid; align-content:start; gap:7px; }
+    .live-board { display:grid; align-content:start; gap:7px; max-height:540px; overflow:auto; padding-right:3px; scrollbar-width:thin; }
     .live-player { display:grid; grid-template-columns:34px minmax(0,1fr) auto auto; gap:10px; align-items:center; padding:9px 11px; border:1px solid var(--line); background:#f8fbfd; }
     .live-player.new-arrival { animation:player-arrives .55s cubic-bezier(.2,.8,.2,1) both; }
     .live-player.podium { grid-template-columns:48px minmax(0,1fr) auto auto; padding:14px; border-width:2px; background:linear-gradient(100deg,#fff,var(--soft-cyan)); }
@@ -115,9 +121,27 @@
     .live-rank { width:28px; height:28px; display:grid; place-items:center; border-radius:50%; background:var(--navy); color:#fff; font-size:12px; font-weight:900; }
     .live-player b { overflow-wrap:anywhere; color:var(--navy); }
     .live-player span { color:var(--muted); font-size:12px; }
+    .live-player-name { min-width:0; }
+    .live-player-name b { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .player-state { display:inline-flex!important; align-items:center; gap:5px; margin-top:3px; color:var(--muted); font-size:10px!important; font-weight:800; text-transform:uppercase; }
+    .player-state i { width:7px; height:7px; border-radius:50%; background:#9eb0c2; }
+    .player-state.online { color:var(--green-dark); }
+    .player-state.online i { background:var(--green); box-shadow:0 0 0 3px rgba(24,165,104,.12); }
+    .player-state.finished { color:#8c4b25; }
+    .player-state.finished i { background:var(--orange); }
+    .player-state.paused,.player-state.stopped { color:#8c4b25; }
+    .player-state.paused i,.player-state.stopped i { background:#f3cc70; }
+    .session-activity { margin:0 0 14px; padding:11px 14px; border-left:4px solid var(--cyan); background:#f8fbfd; }
+    .session-activity-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:7px; }
+    .session-activity-head h3 { margin:0; color:var(--navy); font-size:13px; }
+    .session-activity-head span { color:var(--green-dark); font-size:10px; font-weight:900; text-transform:uppercase; }
+    .activity-feed { display:flex; gap:7px; overflow:auto; padding:1px 0 3px; scrollbar-width:thin; }
+    .activity-event { flex:0 0 auto; max-width:280px; padding:6px 9px; border:1px solid var(--line); background:#fff; color:var(--navy); font-size:11px; font-weight:700; animation:player-arrives .4s ease both; }
+    .activity-event.success { border-color:#9edbbf; background:var(--soft-green); color:var(--green-dark); }
+    .activity-event.warning { border-color:#f0c28e; background:var(--soft-orange); color:#8c4b25; }
     .live-empty { display:grid; place-items:center; min-height:120px; color:var(--muted); text-align:center; }
     @media(max-width:820px){ .cards{grid-template-columns:repeat(2,1fr)} .heading{align-items:flex-start;flex-direction:column} .filters{align-items:flex-start;flex-direction:column} .shell{width:min(100% - 20px,1180px)} }
-    @media(max-width:700px){ .live-head,.room-stage{grid-template-columns:1fr;flex-direction:column}.live-actions{width:100%}.live-actions .btn,.live-actions select{width:100%;flex:none}.audio-policy{align-items:flex-start;flex-direction:column}.attendance-list{grid-template-columns:1fr}.live-player{grid-template-columns:34px minmax(0,1fr) auto}.live-player .live-score{display:none}.live-telemetry{grid-template-columns:repeat(2,minmax(0,1fr))} }
+    @media(max-width:700px){ .live-head,.room-stage{grid-template-columns:1fr;flex-direction:column}.live-actions{width:100%}.live-actions .btn,.live-actions select{width:100%;flex:none}.room-library{align-items:stretch;flex-direction:column}.room-library select,.room-library .btn{width:100%;min-width:0}.audio-policy{align-items:flex-start;flex-direction:column}.attendance-list{grid-template-columns:1fr}.live-player{grid-template-columns:34px minmax(0,1fr) auto}.live-player .live-score{display:none}.live-telemetry{grid-template-columns:repeat(2,minmax(0,1fr))} }
   </style>
   <link rel="stylesheet" href="/byte-feedback.css" />
 </head>
@@ -128,8 +152,9 @@
     <section class="live-room" aria-labelledby="liveRoomTitle">
       <div class="live-head">
         <div><h2 id="liveRoomTitle">Class arcade</h2><p>Run a teacher-controlled class game or share a self-paced homework room.</p><div class="session-beacon" id="sessionBeacon" hidden><i></i><span id="sessionBeaconText">Live class connected</span><span class="sync-freshness" id="sessionFreshness">syncing</span></div></div>
-        <div class="live-actions"><select id="liveMode" aria-label="Session type"><option value="classwork">Live classwork</option><option value="homework">Homework · self-paced</option></select><select id="liveDuration" aria-label="Class game duration"><option value="10">10 minutes</option><option value="15">15 minutes</option><option value="20">20 minutes</option><option value="25" selected>25 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">60 minutes</option></select><select id="liveRoster" aria-label="Class roster"><option value="">No saved class</option></select><select id="liveActivity" aria-label="Practice activity"><option value="g2-pointer-control">Foundation World</option><option value="g3-keyboard-kingdom">Grade 3 World</option><option value="typing-academy">Typing Academy</option></select><button class="btn primary" id="createRoomBtn" type="button">Start live room</button></div>
+        <div class="live-actions"><select id="liveMode" aria-label="Session type"><option value="classwork">Live classwork</option><option value="homework">Homework · self-paced</option></select><select id="liveDuration" aria-label="Class game duration"><option value="10">10 minutes</option><option value="15">15 minutes</option><option value="20">20 minutes</option><option value="25" selected>25 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">60 minutes</option></select><select id="liveHomeworkDays" aria-label="Homework availability" hidden><option value="1">Open for 1 day</option><option value="3">Open for 3 days</option><option value="7" selected>Open for 7 days</option><option value="14">Open for 14 days</option></select><select id="liveRoster" aria-label="Class roster"><option value="">No saved class</option></select><select id="liveActivity" aria-label="Practice activity"><option value="g2-pointer-control">Foundation World</option><option value="g3-keyboard-kingdom">Grade 3 World</option><option value="typing-academy">Typing Academy</option></select><button class="btn primary" id="createRoomBtn" type="button">Start live room</button></div>
       </div>
+      <div class="room-library" id="roomLibrary" hidden><label for="roomSwitcher">Your rooms</label><select id="roomSwitcher" aria-label="Choose a current or recent room"></select><button class="btn" id="newRoomBtn" type="button">Set up another room</button></div>
       <div class="audio-policy" aria-label="Room audio controls"><strong>Room audio</strong><label><input id="teacherSfx" type="checkbox" checked /> Sound effects</label><label><input id="teacherMusic" type="checkbox" checked /> Calm music</label><label for="teacherMusicSource">Music plays on</label><select id="teacherMusicSource"><option value="teacher">Teacher computer</option><option value="students">Student devices</option></select><button class="btn" id="teacherMusicPlay" type="button" hidden>Play music here</button><label><input id="teacherVoice" type="checkbox" checked /> Read aloud</label><small id="audioPolicyNote">Live classwork uses one teacher soundtrack by default. Homework uses each learner's device.</small></div>
       <div class="live-empty" id="liveRoomEmpty">No live room is running. Start one when the class is ready.</div>
       <div class="room-stage" id="liveRoomStage" hidden>
@@ -140,7 +165,8 @@
         </div>
         <div>
           <div class="room-state" id="liveRoomState"><div><strong>Class lobby open</strong><span>Learners can join, but only you can start the game.</span></div></div>
-          <div class="live-telemetry" id="liveTelemetry" hidden><div class="live-meter"><span>Connected</span><strong id="telemetryJoined">0</strong></div><div class="live-meter"><span>Playing</span><strong id="telemetryPlaying">0</strong></div><div class="live-meter"><span>Finished</span><strong id="telemetryFinished">0</strong></div><div class="live-meter"><span>Class progress</span><strong id="telemetryProgress">0%</strong></div><div class="class-progress" aria-hidden="true"><i id="classProgressFill"></i></div></div>
+          <div class="live-telemetry" id="liveTelemetry" hidden><div class="live-meter"><span id="telemetryJoinedLabel">Joined</span><strong id="telemetryJoined">0</strong></div><div class="live-meter"><span>Online now</span><strong id="telemetryPlaying">0</strong></div><div class="live-meter"><span>Finished</span><strong id="telemetryFinished">0</strong></div><div class="live-meter"><span id="telemetryProgressLabel">Class progress</span><strong id="telemetryProgress">0%</strong></div><div class="class-progress" aria-hidden="true"><i id="classProgressFill"></i></div></div>
+          <section class="session-activity" id="sessionActivity" hidden><div class="session-activity-head"><h3>Session activity</h3><span>Live updates</span></div><div class="activity-feed" id="sessionActivityFeed" aria-live="polite"></div></section>
           <section class="attendance" id="liveAttendance" hidden><div class="attendance-head"><h3 id="attendanceTitle">Class attendance</h3><span id="attendanceCount"></span></div><div class="attendance-list" id="attendanceList"></div></section>
           <h3 class="board-title" id="liveBoardTitle">Learners in the lobby</h3>
           <div class="live-board" id="liveLeaderboard" aria-live="polite"></div>
@@ -179,6 +205,13 @@
     let roomClockTimer = null;
     let lastRoomSyncAt = 0;
     let knownLivePlayers = new Set();
+    let knownLivePlayerState = new Map();
+    let roomActivityEvents = [];
+    let renderedRoomCode = '';
+    let liveRoomLoadPending = false;
+    let liveRooms = [];
+    let selectedRoomCode = '';
+    let settingUpNewRoom = false;
     const esc = (value) => String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const fmtTime = (seconds) => { const n=Number(seconds)||0; const m=Math.floor(n/60),s=n%60; return m ? `${m}m ${s}s` : `${s}s`; };
     const fmtDate = (value) => value ? new Date(value).toLocaleString(undefined,{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '-';
@@ -270,23 +303,119 @@
       $('previewFullBtn').href=world==='foundation'?'/practice/preview':`/practice/preview?world=${encodeURIComponent(world)}`;
     });
 
+    function addRoomActivity(text,tone='') {
+      roomActivityEvents.unshift({text:String(text||''),tone,at:Date.now()});
+      roomActivityEvents=roomActivityEvents.slice(0,8);
+    }
+
+    function updateRoomActivity(room,players,{waiting,ended}) {
+      for(const player of players){
+        const previous=knownLivePlayerState.get(player.id);
+        if(!previous) addRoomActivity(`${player.name} joined the room`,'success');
+        else if(player.status==='completed'&&previous.status!=='completed') addRoomActivity(`${player.name} finished every mission`,'success');
+        else if((player.missionsCompleted||0)>(previous.missionsCompleted||0)) {
+          const gained=(player.missionsCompleted||0)-(previous.missionsCompleted||0);
+          addRoomActivity(`${player.name} cleared ${gained===1?'a mission':`${gained} missions`}`,'success');
+        } else if(player.online&&!previous.online) addRoomActivity(`${player.name} reconnected`,'success');
+        else if(!ended&&!player.online&&previous.online) addRoomActivity(`${player.name} may have lost connection`,'warning');
+      }
+      knownLivePlayerState=new Map(players.map((player)=>[player.id,{online:Boolean(player.online),status:player.status,missionsCompleted:player.missionsCompleted||0}]));
+      $('sessionActivity').hidden=!room;
+      $('sessionActivityFeed').innerHTML=roomActivityEvents.length
+        ? roomActivityEvents.map((event)=>`<span class="activity-event ${event.tone}">${esc(event.text)}</span>`).join('')
+        : `<span class="activity-event">${waiting?'Waiting for the first learner to join':'Waiting for learner progress'}</span>`;
+    }
+
+    function playerConnectionState(player,{waiting,paused,ended}) {
+      if(player.status==='completed') return {label:'Finished',className:'finished'};
+      if(ended) return {label:'Stopped',className:'stopped'};
+      if(!player.online) return {label:'Reconnecting',className:''};
+      if(paused) return {label:'Paused',className:'paused'};
+      return {label:waiting?'Ready':'Playing',className:'online'};
+    }
+
+    function showLiveSyncDelayed() {
+      if(!liveRoom||liveRoom.status==='closed') return;
+      $('sessionBeacon').hidden=false;
+      $('sessionBeacon').classList.add('stale');
+      $('sessionBeaconText').textContent='Connection delayed';
+      $('sessionFreshness').textContent='retrying';
+    }
+
+    function roomPickerLabel(room) {
+      const open=room.status==='open';
+      const kind=room.mode==='homework'?'Homework':'Live class';
+      const state=open?(room.phase==='paused'?'paused':room.phase==='lobby'?'lobby':'open'):'ended';
+      return `${kind} · ${room.code} · ${room.activity.title} · ${state}`;
+    }
+
+    function renderRoomLibrary() {
+      $('roomLibrary').hidden=!liveRooms.length;
+      if(!liveRooms.length) return;
+      $('roomSwitcher').innerHTML=(settingUpNewRoom?'<option value="">Setting up a new room</option>':'')+liveRooms.map((room)=>`<option value="${esc(room.code)}">${esc(roomPickerLabel(room))}</option>`).join('');
+      if(selectedRoomCode&&liveRooms.some((room)=>room.code===selectedRoomCode)) $('roomSwitcher').value=selectedRoomCode;
+      else if(settingUpNewRoom) $('roomSwitcher').value='';
+      $('newRoomBtn').hidden=settingUpNewRoom;
+    }
+
+    function rememberRoom(room) {
+      if(!room) return;
+      const index=liveRooms.findIndex((item)=>item.code===room.code);
+      if(index>=0) liveRooms[index]=room;
+      else liveRooms.unshift(room);
+      selectedRoomCode=room.code;
+      settingUpNewRoom=false;
+      renderRoomLibrary();
+    }
+
+    function beginNewRoomSetup() {
+      settingUpNewRoom=true;
+      selectedRoomCode='';
+      renderLiveRoom(null);
+      renderRoomLibrary();
+      syncLiveSetup();
+    }
+
     function renderLiveRoom(room) {
+      if(room&&renderedRoomCode!==room.code){
+        renderedRoomCode=room.code;
+        knownLivePlayers=new Set();
+        knownLivePlayerState=new Map();
+        roomActivityEvents=[];
+      }else if(!room){
+        renderedRoomCode='';
+        knownLivePlayers=new Set();
+        knownLivePlayerState=new Map();
+        roomActivityEvents=[];
+      }
       liveRoom=room||null;
       const ended=Boolean(room&&room.status==='closed');
       const active=Boolean(room&&!ended);
-      const classwork=Boolean(room&&room.mode==='classwork'), waiting=classwork&&room.phase==='lobby'&&!ended;
-      const playing=classwork&&room&&room.phase==='playing'&&!ended;
-      const paused=classwork&&room&&room.phase==='paused'&&!ended;
+      const classwork=room?room.mode==='classwork':$('liveMode').value==='classwork';
+      const waiting=Boolean(room&&classwork&&room.phase==='lobby'&&!ended);
+      const playing=Boolean(room&&classwork&&room.phase==='playing'&&!ended);
+      const paused=Boolean(room&&classwork&&room.phase==='paused'&&!ended);
+      if(room){
+        $('liveMode').value=room.mode;
+        $('liveActivity').value=room.activity.id;
+        if(room.durationMinutes) $('liveDuration').value=String(room.durationMinutes);
+        if(room.availabilityDays) $('liveHomeworkDays').value=String(room.availabilityDays);
+      }
+      $('liveDuration').hidden=!classwork;
+      $('liveHomeworkDays').hidden=classwork;
       document.querySelector('.live-room').classList.toggle('session-playing',playing||paused);
       $('sessionBeacon').hidden=!active;
-      $('sessionBeaconText').textContent=waiting?'Lobby connected':paused?'Class paused':playing?'Live class connected':'Homework room connected';
+      $('sessionBeacon').classList.remove('stale');
+      $('sessionBeaconText').textContent=waiting?'Lobby connected':paused?'Class paused':playing?'Live class connected':'Homework assigned';
       if(active){ lastRoomSyncAt=Date.now(); $('sessionFreshness').textContent='synced now'; }
       $('liveRoomEmpty').hidden=Boolean(room);
+      $('liveRoomEmpty').textContent=liveRooms.length?'Choose settings for another room. Existing homework assignments will remain open.':'No live room is running. Start one when the class is ready.';
       $('liveRoomStage').hidden=!room;
       $('createRoomBtn').disabled=active;
       $('liveActivity').disabled=active;
       $('liveMode').disabled=active;
       $('liveDuration').disabled=active;
+      $('liveHomeworkDays').disabled=active;
       $('liveRoster').disabled=active;
       const audioPolicy=room&&room.audioPolicy||audioPolicyFromControls();
       $('teacherSfx').checked=audioPolicy.soundEffects!==false;
@@ -300,34 +429,41 @@
       liveJoinUrl=`${location.origin}/student/practice/guest?session=${encodeURIComponent(room.code)}${roomWorld?`&world=${roomWorld}`:''}`;
       $('liveRoomCode').textContent=room.code;
       $('startRoomBtn').hidden=!waiting;
+      $('startRoomBtn').textContent=waiting&&room.connectedCount?`Start class game (${room.connectedCount} ready)`:'Start class game';
       $('pauseRoomBtn').hidden=!(playing||paused);
       $('pauseRoomBtn').textContent=paused?'Resume game':'Pause game';
       $('copyRoomBtn').hidden=ended;
+      $('copyRoomBtn').textContent=classwork?'Copy student link':'Copy homework link';
       $('endRoomBtn').hidden=ended;
+      $('endRoomBtn').textContent=classwork?'End room':'Close homework';
       $('liveRoomState').classList.toggle('playing',(playing||paused)&&!ended);
       $('liveRoomState').classList.toggle('ended',ended);
-      $('liveRoomState').innerHTML=ended
-        ? `<div><strong>${room.endedReason==='time_up'?'Time is up':'Class game ended'}</strong><span>Every learner has been stopped. Here are the final standings.</span></div>`
-        : waiting
-          ? `<div><strong>Class lobby open</strong><span>${room.participantCount} joined. Start when everyone is ready.</span></div>`
-          : paused
-            ? `<div><strong>Class game paused</strong><span>Every learner is paused. Resume when the class is ready.</span></div><strong class="room-clock" id="roomClock">${fmtClock(room.remainingSeconds)}</strong>`
-            : `<div><strong>${classwork?'Class game in progress':'Homework room open'}</strong><span>${classwork?'Everyone is playing in the same timed session.':'Learners may join and play in their own time.'}</span></div>${classwork&&room.gameEndsAt?'<strong class="room-clock" id="roomClock">'+fmtClock(room.remainingSeconds)+'</strong>':''}`;
-      $('liveRoomMeta').textContent=ended
-        ? `${room.activity.title} · ${room.participantCount} played · Final results available briefly`
-        : `${room.activity.title} · ${room.roster?room.roster.name+' · ':''}${room.participantCount} joined · ${classwork?(waiting?`${room.durationMinutes} minute game`:paused?`${fmtClock(room.remainingSeconds)} remaining`:`Ends ${new Date(room.gameEndsAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`):`Available until ${new Date(room.expiresAt).toLocaleString([], {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}`}`;
+      const connected=Number.isFinite(room.connectedCount)?room.connectedCount:room.participantCount;
       const players=room.leaderboard||[];
       const finished=players.filter((player)=>player.status==='completed').length;
-      const playingCount=playing?players.length-finished:0;
+      const homeworkDue=new Date(room.expiresAt).toLocaleString([], {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+      $('liveRoomState').innerHTML=ended
+        ? `<div><strong>${classwork?(room.endedReason==='time_up'?'Time is up':'Class game ended'):'Homework closed'}</strong><span>${classwork?'Every learner has been stopped. Here are the final standings.':`${finished} of ${room.participantCount} learners finished. Results remain available for review.`}</span></div>`
+        : waiting
+          ? `<div><strong>Class lobby open</strong><span>${connected} online now · ${room.participantCount} joined. Start when everyone is ready.</span></div>`
+          : paused
+            ? `<div><strong>Class game paused</strong><span>${connected} learner${connected===1?' is':'s are'} connected. Resume when the class is ready.</span></div><strong class="room-clock" id="roomClock">${fmtClock(room.remainingSeconds)}</strong>`
+            : `<div><strong>${classwork?'Class game in progress':'Homework assignment open'}</strong><span>${classwork?`${connected} online now. Every connected learner shares this timer.`:`${finished} of ${room.participantCount} finished · Open until ${homeworkDue}.`}</span></div>${classwork&&room.gameEndsAt?'<strong class="room-clock" id="roomClock">'+fmtClock(room.remainingSeconds)+'</strong>':''}`;
+      $('liveRoomMeta').textContent=ended
+        ? `${room.activity.title} · ${room.participantCount} played · ${classwork?'Final results available briefly':'Homework results saved for 30 days'}`
+        : `${room.activity.title} · ${room.roster?room.roster.name+' · ':''}${room.participantCount} ${classwork?'joined':'started'} · ${classwork?(waiting?`${room.durationMinutes} minute game`:paused?`${fmtClock(room.remainingSeconds)} remaining`:`Ends ${new Date(room.gameEndsAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`):`Available until ${homeworkDue}`}`;
       const missionTotal=players.reduce((sum,player)=>sum+(player.missionCount||room.activity.missionCount||0),0);
       const missionDone=players.reduce((sum,player)=>sum+(player.missionsCompleted||0),0);
       const progress=missionTotal?Math.round((missionDone/missionTotal)*100):0;
       $('liveTelemetry').hidden=!active;
+      $('telemetryJoinedLabel').textContent=classwork?'Joined':'Started';
+      $('telemetryProgressLabel').textContent=classwork?'Class progress':'Homework progress';
       $('telemetryJoined').textContent=room.participantCount||0;
-      $('telemetryPlaying').textContent=playingCount;
+      $('telemetryPlaying').textContent=connected;
       $('telemetryFinished').textContent=finished;
       $('telemetryProgress').textContent=`${progress}%`;
       $('classProgressFill').style.width=`${progress}%`;
+      updateRoomActivity(room,players,{waiting,ended});
       const attendance=room.attendance||[];
       $('liveAttendance').hidden=!attendance.length;
       if(attendance.length){
@@ -335,21 +471,30 @@
         $('attendanceCount').textContent=`${room.joinedRosterCount||0} of ${attendance.length} joined · ${room.absentRosterCount||0} not signed in`;
         $('attendanceList').innerHTML=attendance.map((student)=>`<div class="attendance-student ${student.joined?'joined':''}"><span class="mark" aria-label="${student.joined?'Joined':'Not signed in'}">${student.joined?'✓':'×'}</span><b>${esc(student.name)}</b></div>`).join('');
       }
-      $('liveBoardTitle').textContent=ended?'Final podium':waiting?'Learners in the lobby':'Live leaderboard';
-      $('liveLeaderboard').innerHTML=room.leaderboard.length
-        ? room.leaderboard.slice(0,12).map((player,index)=>{ const isNew=!knownLivePlayers.has(player.id); const activityLabel=player.activityId==='typing-academy'?'Typing · ':player.activityId==='g3-keyboard-kingdom'?'Grade 3 · ':''; return `<div class="live-player ${isNew?'new-arrival':''} ${ended&&index<3?'podium':''}"><span class="live-rank">${waiting?'✓':player.rank}</span><b>${esc(player.name)}</b><span>${waiting?'Ready to start':`${activityLabel}${player.missionsCompleted}/${player.missionCount||room.activity.missionCount} missions · ${player.accuracyPercent??100}% accurate · ${fmtTime(player.activeSeconds)}`}</span><span class="live-score">${waiting?'Joined':player.score+' pts'}</span></div>`; }).join('')
+      $('liveBoardTitle').textContent=ended?(classwork?'Final podium':'Homework results'):waiting?'Learners in the lobby':classwork?'Live leaderboard':'Learner progress';
+      $('liveLeaderboard').innerHTML=players.length
+        ? players.map((player,index)=>{ const isNew=!knownLivePlayers.has(player.id); const connection=playerConnectionState(player,{waiting,paused,ended}); const activityLabel=player.activityId==='typing-academy'?'Typing · ':player.activityId==='g3-keyboard-kingdom'?'Grade 3 · ':''; return `<div class="live-player ${isNew?'new-arrival':''} ${ended&&index<3?'podium':''}"><span class="live-rank">${waiting?'✓':player.rank}</span><div class="live-player-name"><b>${esc(player.name)}</b><span class="player-state ${connection.className}"><i></i>${connection.label}</span></div><span>${waiting?'Ready to start':`${activityLabel}${player.missionsCompleted}/${player.missionCount||room.activity.missionCount} missions · ${player.accuracyPercent??100}% accurate · ${fmtTime(player.activeSeconds)}`}</span><span class="live-score">${waiting?'Joined':player.score+' pts'}</span></div>`; }).join('')
         : '<div class="live-empty">Waiting for learners to join...</div>';
-      knownLivePlayers=new Set(room.leaderboard.map((player)=>player.id));
+      knownLivePlayers=new Set(players.map((player)=>player.id));
       syncRoomClock();
     }
 
     async function loadLiveRoom() {
+      if(liveRoomLoadPending) return;
+      liveRoomLoadPending=true;
       try {
         const response=await fetch('/api/practice/live-sessions');
-        if(!response.ok) return;
+        if(!response.ok) throw new Error('Live room sync unavailable');
         const payload=await response.json();
-        renderLiveRoom((payload.rooms||[])[0]||null);
-      }catch{}
+        liveRooms=payload.rooms||[];
+        if(settingUpNewRoom){ renderRoomLibrary(); return; }
+        let selected=liveRooms.find((room)=>room.code===selectedRoomCode);
+        if(!selected) selected=liveRooms[0]||null;
+        selectedRoomCode=selected?selected.code:'';
+        renderRoomLibrary();
+        renderLiveRoom(selected);
+      }catch{ showLiveSyncDelayed(); }
+      finally { liveRoomLoadPending=false; }
     }
 
     setInterval(()=>{
@@ -363,9 +508,10 @@
       $('createRoomBtn').disabled=true;
       if($('teacherMusic').checked&&$('teacherMusicSource').value==='teacher') unlockTeacherMusic();
       try {
-        const response=await fetch('/api/practice/live-sessions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({activityId:$('liveActivity').value,mode:$('liveMode').value,durationMinutes:Number($('liveDuration').value)||25,rosterId:$('liveRoster').value||null,audioPolicy:audioPolicyFromControls()})});
+        const response=await fetch('/api/practice/live-sessions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({activityId:$('liveActivity').value,mode:$('liveMode').value,durationMinutes:Number($('liveDuration').value)||25,availabilityDays:Number($('liveHomeworkDays').value)||7,rosterId:$('liveRoster').value||null,audioPolicy:audioPolicyFromControls()})});
         const payload=await response.json();
         if(!response.ok) throw new Error(payload.error||'The live room could not be started.');
+        rememberRoom(payload.room);
         renderLiveRoom(payload.room);
       }catch(error){ stopTeacherMusic(); alert(error.message); $('createRoomBtn').disabled=false; }
     }
@@ -377,6 +523,7 @@
         const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(liveRoom.code)}/start`,{method:'POST'});
         const payload=await response.json();
         if(!response.ok) throw new Error(payload.error||'The class game could not be started.');
+        rememberRoom(payload.room);
         renderLiveRoom(payload.room);
       }catch(error){ alert(error.message); $('startRoomBtn').disabled=false; }
     }
@@ -389,6 +536,7 @@
         const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(liveRoom.code)}/pause`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({paused:shouldPause})});
         const payload=await response.json();
         if(!response.ok) throw new Error(payload.error||'The class game could not be updated.');
+        rememberRoom(payload.room);
         renderLiveRoom(payload.room);
       }catch(error){ alert(error.message); }
       finally { $('pauseRoomBtn').disabled=false; }
@@ -398,6 +546,7 @@
       const classwork=$('liveMode').value==='classwork';
       $('createRoomBtn').textContent=classwork?'Create class lobby':'Create homework room';
       $('liveDuration').hidden=!classwork;
+      $('liveHomeworkDays').hidden=classwork;
       if(!liveRoom) $('teacherMusicSource').value=classwork?'teacher':'students';
       syncTeacherMusic();
     }
@@ -411,6 +560,7 @@
         const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(liveRoom.code)}/audio`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(audioPolicyFromControls())});
         const payload=await response.json();
         if(!response.ok) throw new Error(payload.error||'Audio permissions could not be updated.');
+        rememberRoom(payload.room);
         renderLiveRoom(payload.room);
       }catch(error){
         if(previous) renderLiveRoom({...liveRoom,audioPolicy:previous});
@@ -419,11 +569,13 @@
     }
 
     async function endLiveRoom() {
-      if(!liveRoom||!confirm('End the game for every learner and show the final standings?')) return;
+      const homework=liveRoom&&liveRoom.mode==='homework';
+      if(!liveRoom||!confirm(homework?'Close this homework room? Learners will no longer be able to join or continue.':'End the game for every learner and show the final standings?')) return;
       const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(liveRoom.code)}`,{method:'DELETE'});
       if(!response.ok){ const payload=await response.json(); return alert(payload.error||'The room could not be ended.'); }
       const payload=await response.json();
       stopTeacherMusic();
+      rememberRoom(payload.room);
       renderLiveRoom(payload.room);
     }
 
@@ -487,16 +639,25 @@
     ['teacherSfx','teacherMusic','teacherVoice','teacherMusicSource'].forEach((id)=>$(id).addEventListener('change',updateLiveAudioPolicy));
     $('teacherMusicPlay').addEventListener('click',unlockTeacherMusic);
     $('endRoomBtn').addEventListener('click',endLiveRoom);
+    $('newRoomBtn').addEventListener('click',beginNewRoomSetup);
+    $('roomSwitcher').addEventListener('change',()=>{
+      const selected=liveRooms.find((room)=>room.code===$('roomSwitcher').value);
+      if(!selected) return;
+      settingUpNewRoom=false;
+      selectedRoomCode=selected.code;
+      renderRoomLibrary();
+      renderLiveRoom(selected);
+    });
     $('copyRoomBtn').addEventListener('click',async()=>{
       if(!liveJoinUrl) return;
-      try { await navigator.clipboard.writeText(liveJoinUrl); $('copyRoomBtn').textContent='Link copied'; setTimeout(()=>$('copyRoomBtn').textContent='Copy student link',1600); }
+      try { await navigator.clipboard.writeText(liveJoinUrl); $('copyRoomBtn').textContent='Link copied'; setTimeout(()=>$('copyRoomBtn').textContent=liveRoom&&liveRoom.mode==='homework'?'Copy homework link':'Copy student link',1600); }
       catch { prompt('Copy this student link:',liveJoinUrl); }
     });
     syncLiveSetup();
     document.addEventListener('visibilitychange',syncTeacherMusic);
     load();
     loadLiveRoom();
-    setInterval(()=>{ if(liveRoom&&!document.hidden) loadLiveRoom(); },3000);
+    setInterval(()=>{ if((liveRoom||liveRooms.length)&&!document.hidden) loadLiveRoom(); },2500);
   </script>
   <script src="/byte-feedback.js"></script>
 </body>

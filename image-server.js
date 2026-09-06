@@ -2237,6 +2237,7 @@ app.post('/api/practice/live-sessions', requirePracticeEnabled, requireAuth, (re
       roster: classRoster,
       audioPolicy: req.body && req.body.audioPolicy,
       durationMinutes: req.body && req.body.durationMinutes,
+      availabilityDays: req.body && req.body.availabilityDays,
     });
     const activityId = room.activity && room.activity.id;
     const world = activityId === 'typing-academy' ? '&world=typing' : activityId === 'g3-keyboard-kingdom' ? '&world=g3' : '';

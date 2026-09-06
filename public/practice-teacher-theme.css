@@ -43,6 +43,8 @@ body.mission-control {
 .mission-control .audio-policy small { color:#b7d3dc; }
 .mission-control .session-beacon { border-color:#578b76; background:#173f39; color:#adf6d1; letter-spacing:0; }
 .mission-control .session-beacon i { background:#73e4b6; }
+.mission-control .session-beacon.stale { border-color:#b79354; background:#443d29; color:#ffe39a; }
+.mission-control .session-beacon.stale i { background:#f3cc70; }
 .mission-control .room-stage { grid-template-columns:230px minmax(0,1fr); gap:24px; }
 .mission-control .room-code { background:#173d4b; border:2px solid #83dfd6; border-radius:8px; min-height:150px; box-shadow:inset 0 0 30px #63dbe817; }
 .mission-control .room-code span { color:#b8eee8; letter-spacing:0; }
@@ -64,6 +66,15 @@ body.mission-control {
 .mission-control .class-progress>i { background:#73e4b6; }
 .mission-control .live-player { background:#193945; border:1px solid #426975; border-radius:8px; min-height:56px; }
 .mission-control .live-rank { background:#73e4b6; color:#12392f; }
+.mission-control .player-state.online { color:#adf6d1; }
+.mission-control .player-state.finished { color:#ffe39a; }
+.mission-control .player-state.paused,.mission-control .player-state.stopped { color:#ffe39a; }
+.mission-control .session-activity { background:#193945; border-left-color:#63dbe8; }
+.mission-control .session-activity-head h3 { color:#e9fbff; }
+.mission-control .session-activity-head span { color:#adf6d1; }
+.mission-control .activity-event { background:#204954; border-color:#527b85; color:#e9fbff; }
+.mission-control .activity-event.success { background:#173f39; border-color:#578b76; color:#adf6d1; }
+.mission-control .activity-event.warning { background:#443d29; border-color:#b79354; color:#ffe39a; }
 .mission-control .live-player.podium { background:#193945; }
 .mission-control .live-player.podium:first-child { background:#443d29; border-color:#f3cc70; }
 .mission-control .live-player.podium:first-child .live-rank { background:#f3cc70; color:#443617; }

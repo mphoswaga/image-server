@@ -13,8 +13,14 @@ const ROOM_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 const DEFAULT_CLASSWORK_TTL_MS = 8 * 60 * 60 * 1000;
 const DEFAULT_HOMEWORK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_TTL_MS = 14 * 24 * 60 * 60 * 1000;
-const CLOSED_RESULT_TTL_MS = 30 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const CLOSED_CLASS_RESULT_TTL_MS = 30 * 60 * 1000;
+const CLOSED_HOMEWORK_RESULT_TTL_MS = 30 * DAY_MS;
 const DEFAULT_CLASS_DURATION_MINUTES = 25;
+const DEFAULT_HOMEWORK_AVAILABILITY_DAYS = 7;
+const PARTICIPANT_ONLINE_WINDOW_MS = 12 * 1000;
+const PARTICIPANT_PRESENCE_TTL_MS = 30 * 60 * 1000;
+const participantPresence = new Map();
 
 function roomPath(code) {
   return path.join(LIVE_DIR, `${normalizeCode(code)}.json`);
@@ -49,6 +55,11 @@ function normalizeMode(value) {
 function normalizeDurationMinutes(value) {
   const minutes = Number.parseInt(value, 10);
   return Number.isFinite(minutes) ? Math.max(5, Math.min(120, minutes)) : DEFAULT_CLASS_DURATION_MINUTES;
+}
+
+function normalizeAvailabilityDays(value) {
+  const days = Number.parseInt(value, 10);
+  return Number.isFinite(days) ? Math.max(1, Math.min(14, days)) : DEFAULT_HOMEWORK_AVAILABILITY_DAYS;
 }
 
 function normalizeAudioPolicy(value, defaultMusicPlayback = 'students') {
@@ -99,6 +110,31 @@ function tokenHash(token) {
   return crypto.createHash('sha256').update(String(token || '')).digest('hex');
 }
 
+function presenceKey(roomCode, participantId) {
+  return `${normalizeCode(roomCode)}:${String(participantId || '')}`;
+}
+
+function markParticipantPresent(room, participant, now = Date.now()) {
+  if (!room || !participant) return;
+  participantPresence.set(presenceKey(room.code, participant.id), now);
+}
+
+function participantPresenceState(room, participant, now = Date.now()) {
+  const key = presenceKey(room.code, participant.id);
+  const seenAt = participantPresence.get(key) || 0;
+  if (seenAt && now - seenAt > PARTICIPANT_PRESENCE_TTL_MS) participantPresence.delete(key);
+  return {
+    online: Boolean(seenAt && now - seenAt <= PARTICIPANT_ONLINE_WINDOW_MS),
+    lastSeenAt: seenAt ? new Date(seenAt).toISOString() : null,
+  };
+}
+
+function clearRoomPresence(room) {
+  for (const participant of room && room.participants || []) {
+    participantPresence.delete(presenceKey(room.code, participant.id));
+  }
+}
+
 function participantTokenHashes(participant) {
   return [...new Set([
     ...(Array.isArray(participant && participant.tokenHashes) ? participant.tokenHashes : []),
@@ -139,7 +175,10 @@ function roomIsReadable(room, now = Date.now()) {
   if (!room) return false;
   if (roomIsOpen(room, now)) return true;
   const closedAt = roomClosedAt(room);
-  return Boolean(closedAt && now - closedAt <= CLOSED_RESULT_TTL_MS);
+  const resultTtl = normalizeMode(room.mode) === 'homework'
+    ? CLOSED_HOMEWORK_RESULT_TTL_MS
+    : CLOSED_CLASS_RESULT_TTL_MS;
+  return Boolean(closedAt && now - closedAt <= resultTtl);
 }
 
 function requireOpenRoom(code) {
@@ -212,6 +251,7 @@ function publicLeaderboard(room) {
       const activeActivity = practice.getActivity(activeActivityId);
       const active = progressFor(participant, activeActivityId, room);
       const allProgress = Object.values(participant.activityProgress || {});
+      const presence = participantPresenceState(room, participant);
       return {
         id: participant.id,
         name: participant.name,
@@ -231,6 +271,8 @@ function publicLeaderboard(room) {
         mistakes: active.mistakes || 0,
         activeSeconds: active.activeSeconds || 0,
         status: active.status || 'in_progress',
+        online: presence.online,
+        lastSeenAt: presence.lastSeenAt,
       };
     })
     .sort((a, b) => (
@@ -263,6 +305,7 @@ function roomAttendance(room) {
 function publicRoom(room, { teacherView = false } = {}) {
   const activity = practice.getActivity(room.activityId, room.activityVersion);
   const attendance = teacherView ? roomAttendance(room) : [];
+  const leaderboard = publicLeaderboard(room);
   const open = roomIsOpen(room);
   const effectiveEnd = effectiveEndTime(room);
   const result = {
@@ -278,10 +321,12 @@ function publicRoom(room, { teacherView = false } = {}) {
       missionCount: activity.steps.length,
     } : null,
     createdAt: room.createdAt,
+    updatedAt: room.updatedAt || room.createdAt,
     startedAt: room.startedAt || null,
     playStartsAt: room.playStartsAt || null,
     expiresAt: room.expiresAt,
     durationMinutes: room.durationMinutes || null,
+    availabilityDays: room.availabilityDays || null,
     gameEndsAt: room.gameEndsAt || null,
     remainingSeconds: open && roomPhase(room) === 'paused'
       ? Math.max(0, Number(room.pausedRemainingSeconds) || 0)
@@ -290,11 +335,12 @@ function publicRoom(room, { teacherView = false } = {}) {
     closedAt: room.closedAt || (!open ? new Date(effectiveEnd).toISOString() : null),
     endedReason: !open ? (room.endedReason || (room.gameEndsAt && Date.now() >= Date.parse(room.gameEndsAt) ? 'time_up' : 'expired')) : null,
     participantCount: (room.participants || []).length,
+    connectedCount: open ? leaderboard.filter((participant) => participant.online).length : 0,
     audioPolicy: normalizeAudioPolicy(room.audioPolicy),
     roster: room.roster ? { name: room.roster.name, count: room.roster.students.length } : null,
     leaderboard: teacherView
-      ? publicLeaderboard(room)
-      : publicLeaderboard(room).map((participant) => ({ id: participant.id, name: participant.name })),
+      ? leaderboard
+      : leaderboard.map((participant) => ({ id: participant.id, name: participant.name })),
   };
   if (teacherView) {
     result.attendance = attendance;
@@ -304,17 +350,23 @@ function publicRoom(room, { teacherView = false } = {}) {
   return result;
 }
 
-function createRoom({ teacherId, activityId = 'g2-pointer-control', mode = 'homework', roster = null, audioPolicy = null, durationMinutes, ttlMs }) {
-  if (teacherRooms(teacherId).some((room) => room.status === 'open')) {
-    throw Object.assign(new Error('End the current live room before starting another one.'), { code: 'room_exists' });
+function createRoom({ teacherId, activityId = 'g2-pointer-control', mode = 'homework', roster = null, audioPolicy = null, durationMinutes, availabilityDays, ttlMs }) {
+  const safeMode = normalizeMode(mode);
+  const openRooms = teacherRooms(teacherId).filter((room) => room.status === 'open');
+  if (safeMode === 'classwork' && openRooms.some((room) => room.mode === 'classwork')) {
+    throw Object.assign(new Error('End the current live class before starting another live class.'), { code: 'room_exists' });
+  }
+  if (safeMode === 'homework' && openRooms.filter((room) => room.mode === 'homework').length >= 20) {
+    throw Object.assign(new Error('Close an older homework room before creating another one.'), { code: 'room_limit' });
   }
   const activity = practice.getActivity(activityId);
   if (!activity) throw Object.assign(new Error('Practice activity not found.'), { code: 'activity_not_found' });
-  const safeMode = normalizeMode(mode);
   const safeRoster = rosterSnapshot(roster);
   const now = Date.now();
+  const safeAvailabilityDays = safeMode === 'homework' ? normalizeAvailabilityDays(availabilityDays) : null;
   const defaultTtl = safeMode === 'classwork' ? DEFAULT_CLASSWORK_TTL_MS : DEFAULT_HOMEWORK_TTL_MS;
-  const safeTtl = Math.max(30 * 60 * 1000, Math.min(MAX_TTL_MS, Number(ttlMs) || defaultTtl));
+  const requestedTtl = Number(ttlMs) || (safeAvailabilityDays ? safeAvailabilityDays * DAY_MS : defaultTtl);
+  const safeTtl = Math.max(30 * 60 * 1000, Math.min(MAX_TTL_MS, requestedTtl));
   const room = {
     code: generateCode(),
     teacherId: String(teacherId || ''),
@@ -323,6 +375,7 @@ function createRoom({ teacherId, activityId = 'g2-pointer-control', mode = 'home
     mode: safeMode,
     phase: safeMode === 'classwork' ? 'lobby' : 'playing',
     durationMinutes: safeMode === 'classwork' ? normalizeDurationMinutes(durationMinutes) : null,
+    availabilityDays: safeAvailabilityDays,
     audioPolicy: normalizeAudioPolicy(audioPolicy, safeMode === 'classwork' ? 'teacher' : 'students'),
     roster: safeRoster,
     status: 'open',
@@ -367,6 +420,7 @@ function joinRoom(code, input) {
       existing.tokenHashes = [...participantTokenHashes(existing), nextHash].slice(-5);
       existing.tokenHash = nextHash;
       existing.updatedAt = new Date().toISOString();
+      markParticipantPresent(room, existing);
       saveRoom(room);
       return { room: publicRoom(room), participant: { id: existing.id, name: existing.name }, token, rejoined: true };
     }
@@ -416,6 +470,7 @@ function joinRoom(code, input) {
     },
   };
   room.participants.push(participant);
+  markParticipantPresent(room, participant);
   saveRoom(room);
   return { room: publicRoom(room), participant: { id: participant.id, name: participant.name }, token };
 }
@@ -491,6 +546,7 @@ function checkpointRoom(code, token, input = {}) {
   }
   const participant = findParticipant(room, token);
   if (!participant) throw Object.assign(new Error('Rejoin the room to continue.'), { code: 'participant_not_found' });
+  markParticipantPresent(room, participant);
   const activityId = String(input.activityId || room.activityId);
   const activity = allowedActivity(room, participant, activityId);
   if (!activity) {
@@ -571,6 +627,7 @@ function getRoomForParticipant(code, token = '') {
     throw Object.assign(new Error('That room code was not found.'), { code: 'room_not_found' });
   }
   const participant = token ? findParticipant(room, token) : null;
+  if (participant && roomIsOpen(room)) markParticipantPresent(room, participant);
   return {
     room: publicRoom(room),
     participant: participant ? publicLeaderboard(room).find((item) => item.id === participant.id) : null,
@@ -606,6 +663,7 @@ function closeRoom(code, teacherId) {
   room.closedAt = new Date().toISOString();
   room.endedReason = 'teacher_ended';
   saveRoom(room);
+  clearRoomPresence(room);
   const result = publicRoom(room, { teacherView: true });
   return result;
 }

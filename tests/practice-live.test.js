@@ -30,6 +30,33 @@ test('nicknames are temporary, cleaned and made distinct inside one room', () =>
   assert.throws(() => live.joinRoom(room.code, '---'), /first name or nickname/i);
 });
 
+test('teacher presence shows who is online without treating every past join as connected', () => {
+  const originalNow = Date.now;
+  const startedAt = originalNow();
+  Date.now = () => startedAt;
+  try {
+    const room = live.createRoom({ teacherId:'teacher-presence', mode:'classwork' });
+    const joined = live.joinRoom(room.code, { name:'Amina' });
+    let teacherRoom = live.teacherRooms('teacher-presence')[0];
+    assert.equal(teacherRoom.participantCount, 1);
+    assert.equal(teacherRoom.connectedCount, 1);
+    assert.equal(teacherRoom.leaderboard[0].online, true);
+
+    Date.now = () => startedAt + 13_000;
+    teacherRoom = live.teacherRooms('teacher-presence')[0];
+    assert.equal(teacherRoom.participantCount, 1);
+    assert.equal(teacherRoom.connectedCount, 0);
+    assert.equal(teacherRoom.leaderboard[0].online, false);
+
+    live.getRoomForParticipant(room.code, joined.token);
+    teacherRoom = live.teacherRooms('teacher-presence')[0];
+    assert.equal(teacherRoom.connectedCount, 1);
+    assert.equal(teacherRoom.leaderboard[0].online, true);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
 test('classwork uses a teacher-controlled lobby and private roster attendance', () => {
   const roster = {
     id: 'grade-2b',
@@ -95,10 +122,44 @@ test('classwork uses a teacher-controlled lobby and private roster attendance', 
 });
 
 test('homework rooms remain self-paced and available beyond one school day', () => {
-  const room = live.createRoom({ teacherId:'teacher-homework', mode:'homework' });
+  const room = live.createRoom({ teacherId:'teacher-homework', mode:'homework', availabilityDays:3 });
   assert.equal(room.mode, 'homework');
   assert.equal(room.phase, 'playing');
-  assert.ok(Date.parse(room.expiresAt) - Date.parse(room.createdAt) > 24 * 60 * 60 * 1000);
+  assert.equal(room.availabilityDays, 3);
+  assert.equal(room.gameEndsAt, null);
+  assert.equal(Date.parse(room.expiresAt) - Date.parse(room.createdAt), 3 * 24 * 60 * 60 * 1000);
+});
+
+test('closed homework results remain reviewable for 30 days after the deadline', () => {
+  const originalNow = Date.now;
+  const createdAt = originalNow();
+  Date.now = () => createdAt;
+  try {
+    const room = live.createRoom({ teacherId:'teacher-homework-review', mode:'homework', availabilityDays:1 });
+    live.joinRoom(room.code, { name:'Amina' });
+    const deadline = Date.parse(room.expiresAt);
+    Date.now = () => deadline + 29 * 24 * 60 * 60 * 1000;
+    const reviewable = live.teacherRooms('teacher-homework-review');
+    assert.equal(reviewable.length, 1);
+    assert.equal(reviewable[0].status, 'closed');
+    assert.equal(reviewable[0].participantCount, 1);
+
+    Date.now = () => deadline + 31 * 24 * 60 * 60 * 1000;
+    assert.equal(live.teacherRooms('teacher-homework-review').length, 0);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test('open homework assignments do not block another homework or one live class', () => {
+  const teacherId = 'teacher-parallel-rooms';
+  const firstHomework = live.createRoom({ teacherId, mode:'homework', availabilityDays:7 });
+  const secondHomework = live.createRoom({ teacherId, mode:'homework', availabilityDays:3, activityId:'typing-academy' });
+  const liveClass = live.createRoom({ teacherId, mode:'classwork', durationMinutes:15 });
+  const rooms = live.teacherRooms(teacherId);
+  assert.equal(rooms.filter((room) => room.status==='open').length, 3);
+  assert.deepEqual(new Set(rooms.map((room) => room.code)), new Set([firstHomework.code,secondHomework.code,liveClass.code]));
+  assert.throws(() => live.createRoom({ teacherId, mode:'classwork' }), /current live class/i);
 });
 
 test('teacher audio permissions are public, locked to the owner, and update live', () => {
@@ -354,9 +415,19 @@ test('the server and both screens expose the live-room contract', () => {
   assert.match(teacher, /id="teacherMusicSource"/);
   assert.match(teacher, /id="teacherMusicPlay"/);
   assert.match(teacher, /id="liveDuration"/);
+  assert.match(teacher, /id="liveHomeworkDays"/);
+  assert.match(teacher, /id="roomSwitcher"/);
+  assert.match(teacher, /id="newRoomBtn"/);
+  assert.match(teacher, /availabilityDays:Number\(\$\('liveHomeworkDays'\)/);
+  assert.match(player, /Homework practice · Work at your own pace/);
+  assert.match(player, /Homework deadline reached/);
   assert.match(teacher, /Final podium/);
   assert.match(teacher, /id="sessionBeacon"/);
   assert.match(teacher, /id="liveTelemetry"/);
+  assert.match(teacher, /id="sessionActivity"/);
+  assert.match(teacher, /Online now/);
+  assert.match(teacher, /Connection delayed/);
+  assert.match(teacher, /function updateRoomActivity\(room,players/);
   assert.match(teacher, /function scheduleTeacherMusic\(\)/);
   assert.match(teacher, /id="teacherVoice"/);
   assert.match(teacher, /\/api\/practice\/live-sessions/);

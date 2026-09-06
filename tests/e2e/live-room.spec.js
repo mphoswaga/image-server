@@ -43,6 +43,8 @@ test('teacher-controlled classwork keeps learners waiting, starts together, and 
     await page.evaluate(() => loadLiveRoom());
     await expect(page.locator('#liveLeaderboard')).toContainText('Amina');
     await expect(page.locator('#liveLeaderboard')).toContainText('Bongani');
+    await expect(page.locator('#telemetryPlaying')).toHaveText('2');
+    await expect(page.locator('#sessionActivityFeed')).toContainText('joined the room');
 
     await page.locator('#startRoomBtn').click();
     await expect(page.locator('#liveRoomState')).toContainText('Class game in progress');
@@ -70,6 +72,8 @@ test('teacher-controlled classwork keeps learners waiting, starts together, and 
     }
     await expect(learner.locator('#saveState')).toContainText(`Room ${roomCode} updated`);
     await expect(learner.locator('#nextBtn')).not.toHaveText('Retry save');
+    await page.evaluate(() => loadLiveRoom());
+    await expect(page.locator('#sessionActivityFeed')).toContainText('Amina cleared a mission');
     await page.locator('#pauseRoomBtn').click();
     await expect(page.locator('#liveRoomState')).toContainText('Class game paused');
     await expect(page.locator('#pauseRoomBtn')).toHaveText('Resume game');
@@ -95,6 +99,56 @@ test('teacher-controlled classwork keeps learners waiting, starts together, and 
     await expect(learner.locator('#completionTitle')).toHaveText('Teacher ended the game');
     await expect(learner.locator('#scoreSummary')).toContainText('Your score');
     await expect(learner.locator('#liveFinalBoard')).toBeHidden();
+  } finally {
+    await learnerContext.close();
+  }
+});
+
+test('homework opens immediately for each learner and keeps its own deadline', async ({ page, browser }, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100', 'One Chromium run covers the self-paced homework workflow.');
+
+  await signInDisposableTeacher(page, '-homework-room');
+  await page.goto('/practice');
+  await page.locator('#liveMode').selectOption('homework');
+  await expect(page.locator('#liveDuration')).toBeHidden();
+  await expect(page.locator('#liveHomeworkDays')).toBeVisible();
+  await page.locator('#liveHomeworkDays').selectOption('3');
+  await page.locator('#teacherMusic').uncheck();
+  await page.locator('#createRoomBtn').click();
+  await expect(page.locator('#liveRoomState')).toContainText('Homework assignment open');
+  await expect(page.locator('#startRoomBtn')).toBeHidden();
+  await expect(page.locator('#copyRoomBtn')).toHaveText('Copy homework link');
+  const roomCode = (await page.locator('#liveRoomCode').textContent()).trim();
+
+  const learnerContext = await browser.newContext();
+  const learner = await learnerContext.newPage();
+  const origin = new URL(page.url()).origin;
+  try {
+    await learner.goto(`${origin}/student/practice/guest?session=${roomCode}`);
+    await learner.locator('#nicknameInput').fill('Amina');
+    await learner.locator('#joinRoomBtn').click();
+    await expect(learner.locator('#liveLobby')).toBeHidden();
+    await expect(learner.locator('#startBtn')).toBeVisible();
+    await expect(learner.locator('#previewNote')).toContainText('Work at your own pace');
+    await expect(learner.locator('#liveStripTitle')).toContainText('Homework');
+    await learner.locator('#startBtn').click();
+    await expect(learner.locator('#activity')).toBeVisible();
+
+    await page.locator('#newRoomBtn').click();
+    await expect(page.locator('#liveRoomEmpty')).toContainText('Existing homework assignments will remain open');
+    await page.locator('#liveMode').selectOption('classwork');
+    await expect(page.locator('#liveDuration')).toBeVisible();
+    await page.locator('#createRoomBtn').click();
+    await expect(page.locator('#liveRoomState')).toContainText('Class lobby open');
+    await expect(page.locator('#roomSwitcher option')).toHaveCount(2);
+    await page.locator('#roomSwitcher').selectOption(roomCode);
+    await expect(page.locator('#liveRoomState')).toContainText('Homework assignment open');
+
+    page.once('dialog', dialog => dialog.accept());
+    await page.locator('#endRoomBtn').click();
+    await expect(page.locator('#liveRoomState')).toContainText('Homework closed');
+    await learner.evaluate(() => refreshLiveRoom());
+    await expect(learner.locator('#completionTitle')).toHaveText('Homework closed');
   } finally {
     await learnerContext.close();
   }

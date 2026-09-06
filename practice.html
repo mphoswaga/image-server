@@ -706,7 +706,7 @@
     </div>
     <div class="device-note" id="deviceNote">This practice teaches mouse and keyboard skills. Use a laptop or desktop computer for the full activity.</div>
     <div class="progress" id="progress" aria-label="Activity progress"></div>
-    <section class="live-strip" id="liveStrip" aria-label="Live class leaderboard" hidden><strong id="liveStripTitle">Live room</strong><div class="live-mini-board" id="liveMiniBoard"></div></section>
+    <section class="live-strip" id="liveStrip" aria-label="Session progress" hidden><strong id="liveStripTitle">Live room</strong><div class="live-mini-board" id="liveMiniBoard"></div></section>
     <section class="live-countdown hidden" id="liveCountdown" aria-live="assertive"><div><strong id="liveCountdownNumber">3</strong><span>Get ready, Byte City needs you!</span></div></section>
 
     <section class="gate hidden" id="authGate">
@@ -1059,7 +1059,10 @@
       $('liveStrip').hidden=false;
       const remaining=room.status==='open'&&room.gameEndsAt?Math.max(0,Math.ceil((Date.parse(room.gameEndsAt)-Date.now())/1000)):0;
       $('liveStrip').classList.toggle('time-warning',Boolean(room.gameEndsAt&&remaining<=60));
-      $('liveStripTitle').textContent=room.phase==='paused'
+      const homeworkDue=room.mode==='homework'&&room.expiresAt?new Date(room.expiresAt).toLocaleDateString([], {day:'numeric',month:'short'}):'';
+      $('liveStripTitle').textContent=room.mode==='homework'
+        ? `Homework · ${liveParticipant.name} · Due ${homeworkDue}`
+        : room.phase==='paused'
         ? `Room ${room.code} · Game paused · ${formatGameTime(room.remainingSeconds)} left`
         : `Room ${room.code} · ${liveParticipant.name}${room.gameEndsAt?` · ${formatGameTime(remaining)} left`:''}`;
       const me=liveParticipant;
@@ -1191,8 +1194,11 @@
       $('intro').classList.add('hidden');
       $('activity').style.display='none';
       $('completion').classList.remove('hidden');
-      $('completionTitle').textContent=room.endedReason==='time_up'?'Time is up!':'Teacher ended the game';
-      $('completionLead').textContent='The class arcade has finished. Here is your personal result.';
+      const homework=room.mode==='homework';
+      $('completionTitle').textContent=homework
+        ? room.endedReason==='teacher_ended'?'Homework closed':'Homework deadline reached'
+        : room.endedReason==='time_up'?'Time is up!':'Teacher ended the game';
+      $('completionLead').textContent=homework?'Your homework is closed. Here is the progress saved for your teacher.':'The class arcade has finished. Here is your personal result.';
       $('nextWorld').hidden=true;
       $('practiseAgainBtn').hidden=true;
       $('completionBack').href='/start';
@@ -1219,8 +1225,12 @@
       try { sessionStorage.setItem(liveStorageKey(liveRoom.code),JSON.stringify(saved)); } catch {}
       $('guestEntry').hidden=true;
       $('studentName').textContent=`Playing as ${liveParticipant.name} · Room ${liveRoom.code}`;
-      $('previewNote').textContent=liveRoom.mode==='classwork'?'Live classwork · Wait for your teacher to start':'Homework practice · Start when you are ready';
-      $('completionLead').textContent='You completed the live class adventure. Your temporary score is on the room leaderboard.';
+      $('previewNote').textContent=liveRoom.mode==='classwork'
+        ? 'Live classwork · Wait for your teacher to start'
+        : `Homework practice · Work at your own pace · Due ${new Date(liveRoom.expiresAt).toLocaleString([], {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}`;
+      $('completionLead').textContent=liveRoom.mode==='classwork'
+        ? 'You completed the live class adventure. Your temporary score is on the room leaderboard.'
+        : 'Homework complete. Your teacher can review your saved score, accuracy, mistakes and active time.';
       $('continueWorldBtn').href=continueWorldUrl();
       if(liveRoom.status==='closed'){ showLiveRoomEnded(liveRoom); return; }
       syncAudioPolicy(liveRoom);
