@@ -39,6 +39,13 @@ test('LessonScope creates ColonyQuest as a teacher-owned whole-class game', asyn
   await page.goto(created.path);
   await expect(page.locator('#setup')).toBeVisible();
   await expect(page.locator('#lessonTitle')).toHaveText('habitats');
+
+  await page.goto(`/play/${created.gameId}`);
+  await page.locator('#startBtn').click();
+  await expect(page.locator('#colonyQuestPick')).toBeVisible();
+  await page.locator('#colonyQuestPick').click();
+  await expect(page).toHaveURL(new RegExp(`/colonyquest/${created.gameId}$`));
+  await expect(page.locator('#setup')).toBeVisible();
 });
 
 test('a teacher can run, recover, pause, and finish a one-screen ColonyQuest match', async ({ page }, testInfo) => {

@@ -193,6 +193,19 @@ test('invalid ColonyQuest snapshots and incomplete questions are rejected', () =
   }), /at least one complete question/i);
 });
 
+test('an existing arcade lesson can add ColonyQuest without losing its original mode', () => {
+  const game = games.createGame({
+    teacherId: 'teacher-picker', lessonTitle: 'Habitats', subject: 'Science', topic: 'Habitats', grade: 'Grade 3', mode: 'arcade',
+    game: { questions: [{ question: 'A habitat?', options: ['Forest', 'Desk'], correctIndex: 0 }] },
+  });
+  assert.equal(game.colonyquest, null);
+  const updated = games.updateColonyQuest(game.id, { teamCount: 2 });
+  assert.equal(updated.mode, 'arcade');
+  assert.equal(updated.colonyquest.teamCount, 2);
+  assert.equal(updated.colonyquest.teams.length, 2);
+  assert.equal(updated.questions[0].question, 'A habitat?');
+});
+
 test('whole-class answers never become blank or invented individual gradebook marks', () => {
   const teacherId = 'teacher-honest-results';
   const classRoster = roster.saveRoster(teacherId, {
@@ -216,11 +229,14 @@ test('whole-class answers never become blank or invented individual gradebook ma
 
 test('the dashboard exposes ColonyQuest as a whole-class lesson game', () => {
   const dashboard = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  const picker = fs.readFileSync(path.join(__dirname, '..', 'public', 'play.html'), 'utf8');
   const page = fs.readFileSync(path.join(__dirname, '..', 'public', 'colonyquest.html'), 'utf8');
   const server = fs.readFileSync(path.join(__dirname, '..', 'image-server.js'), 'utf8');
   assert.match(dashboard, /data-game-mode="colonyquest"/);
   assert.match(dashboard, /Whole class - ColonyQuest/);
   assert.match(dashboard, /Open ColonyQuest setup/);
+  assert.match(picker, /id="colonyQuestPick"/);
+  assert.match(picker, /location\.href='\/colonyquest\/'\+GAME_ID/);
   assert.match(page, /vendor\/phaser\.min\.js/);
   assert.match(page, /Mark correct/);
   assert.match(page, /Random learner/);

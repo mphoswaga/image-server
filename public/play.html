@@ -179,6 +179,7 @@
         <button class="game-pick" data-game="runner"><span class="gi">🏃</span><span><b>Answer Runner</b><span>Jump rocks, duck branches, grab coins — crash and answer to keep running.</span></span></button>
         <button class="game-pick" data-game="target"><span class="gi">🎯</span><span><b>Target Shot</b><span>Read at your own pace, then FIRE when the crosshair sweeps over the right answer!</span></span></button>
         <button class="game-pick" data-game="fishquest"><span class="gi">🐠</span><span><b>FishQuest</b><span>Eat plankton, answer questions and grow in a live class or your own homework ocean.</span></span></button>
+        <button class="game-pick" id="colonyQuestPick" data-game="colonyquest" hidden><span class="gi">🐜</span><span><b>ColonyQuest</b><span>Lead the whole class from one screen, answer together, and build competing ant colonies.</span></span></button>
       </div>
     </div>
 
@@ -369,6 +370,7 @@
       }
       if(!r.ok){ const d=await r.json().catch(()=>({})); $('loading').innerHTML='<p class="center">'+esc(d.error||'Game not found.')+'</p>'; show('loading'); return; }
       game=await r.json();
+      $('colonyQuestPick').hidden=!game.canManageColonyQuest;
       setAuthLabels(!!game.hasRoster);
       if (game.hasRoster) renderNameGrid(game.students);
       $('sumMeta').textContent=`${game.subject} · ${game.topic} · ${game.grade||''}`;
@@ -420,6 +422,7 @@
     function loop(t){ if(!active) return; let dt=(t-lastT)/1000; lastT=t; if(dt>0.05) dt=0.05; active.update(dt); active.render(); raf=requestAnimationFrame(loop); }
     async function pickGame(key){
       if(key==='fishquest'){ location.href='/fishquest-play/'+GAME_ID; return; }
+      if(key==='colonyquest'){ location.href='/colonyquest/'+GAME_ID; return; }
       show('loading');
       const r=await fetch('/api/game/'+GAME_ID+'/play'); const d=await r.json();
       questions=d.questions||[]; answers=new Array(questions.length); qi=0; score=0; lives=3; arcadeScore=0; activeGameType=key;

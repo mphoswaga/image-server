@@ -41,6 +41,16 @@ function getRoomCode(code) {
   return rooms[String(code).toUpperCase()] || null;
 }
 
+function defaultColonyQuestConfig() {
+  return {
+    ...colonyQuest.normalizeConfig({ teamCount: 4, matchType: 'rounds', rounds: 5, durationMinutes: 15, sound: true }),
+    teams: Array.from({ length: 4 }, (_, index) => {
+      const team = colonyQuest.createTeam({}, index);
+      return { id: team.id, name: team.name, colorIndex: team.colorIndex, members: [] };
+    }),
+  };
+}
+
 function createGame({ teacherId, teacherName, lessonTitle, subject, topic, grade, game, rosterId, cutoffAt, mode }) {
   fs.mkdirSync(GAMES_DIR, { recursive: true });
   const id = crypto.randomUUID().slice(0, 8); // short + shareable
@@ -54,13 +64,7 @@ function createGame({ teacherId, teacherName, lessonTitle, subject, topic, grade
     cutoffAt: cutoffAt || null,
     mode: normalizedMode,
     fishquest: normalizedMode === 'fishquest' ? { durationMinutes: 10, lateJoin: true, playMode: 'live' } : null,
-    colonyquest: normalizedMode === 'colonyquest' ? {
-      ...colonyQuest.normalizeConfig({ teamCount: 4, matchType: 'rounds', rounds: 5, durationMinutes: 15, sound: true }),
-      teams: Array.from({ length: 4 }, (_, index) => {
-        const team = colonyQuest.createTeam({}, index);
-        return { id: team.id, name: team.name, colorIndex: team.colorIndex, members: [] };
-      }),
-    } : null,
+    colonyquest: normalizedMode === 'colonyquest' ? defaultColonyQuestConfig() : null,
     summary: game.summary || { overview: game.overview || '', concepts: game.concepts || [] },
     questions: game.questions || [],
     createdAt: new Date().toISOString(),
@@ -164,9 +168,9 @@ function updateColonyQuest(id, config = {}) {
   const p = gamePath(String(id));
   if (!fs.existsSync(p)) return null;
   const g = JSON.parse(fs.readFileSync(p, 'utf8'));
-  if (g.mode !== 'colonyquest') return null;
-  const normalized = colonyQuest.normalizeConfig({ ...(g.colonyquest || {}), ...config });
-  const requestedTeams = Array.isArray(config.teams) ? config.teams : (g.colonyquest && g.colonyquest.teams) || [];
+  const existing = g.colonyquest || defaultColonyQuestConfig();
+  const normalized = colonyQuest.normalizeConfig({ ...existing, ...config });
+  const requestedTeams = Array.isArray(config.teams) ? config.teams : existing.teams;
   const teams = Array.from({ length: normalized.teamCount }, (_, index) => {
     const source = requestedTeams[index] || {};
     const team = colonyQuest.createTeam(source, index);

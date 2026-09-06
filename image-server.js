@@ -3558,7 +3558,7 @@ app.patch('/api/game/:id/cutoff', requireAuth, (req, res) => {
 
 function ownedColonyQuest(req, res) {
   const game = games.getGame(req.params.id);
-  if (!game || game.mode !== 'colonyquest') {
+  if (!game) {
     res.status(404).json({ error: 'ColonyQuest game not found.' });
     return null;
   }
@@ -3566,7 +3566,13 @@ function ownedColonyQuest(req, res) {
     res.status(403).json({ error: 'Not your game.' });
     return null;
   }
-  return game;
+  if (game.colonyquest) return game;
+  try {
+    return games.updateColonyQuest(game.id, {});
+  } catch (err) {
+    res.status(409).json({ error: err.message || 'This lesson cannot start ColonyQuest yet.' });
+    return null;
+  }
 }
 
 // ColonyQuest is operated entirely from the teacher's authenticated screen.
@@ -3699,7 +3705,7 @@ app.get('/api/game/:id', requireGameAccess, (req, res) => {
   // Students must hold a session for THIS game.
   if (req.gameSession && req.gameSession.gameId !== g.id) return res.status(403).json({ error: 'Session is for a different game.' });
   const hasRoster = !!g.rosterId;
-  res.json({ id: g.id, lessonTitle: g.lessonTitle, subject: g.subject, topic: g.topic, grade: g.grade, mode: g.mode || 'arcade', summary: g.summary, questionCount: (g.questions || []).length, teacherName: g.teacherName, hasRoster, students: hasRoster ? classListFor(g.teacherId, g.rosterId, g.id) : [], highScores: games.getHighScores(g.id) });
+  res.json({ id: g.id, lessonTitle: g.lessonTitle, subject: g.subject, topic: g.topic, grade: g.grade, mode: g.mode || 'arcade', summary: g.summary, questionCount: (g.questions || []).length, teacherName: g.teacherName, hasRoster, students: hasRoster ? classListFor(g.teacherId, g.rosterId, g.id) : [], highScores: games.getHighScores(g.id), canManageColonyQuest: !!req.userId && g.teacherId === req.userId });
 });
 
 // Student: the questions, WITHOUT the correct answers.
