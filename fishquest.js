@@ -2,7 +2,7 @@ const crypto = require('crypto');
 
 const CONFIG = Object.freeze({ width:2400, height:1600, initialMass:100, maxMass:900, eatRatio:1.18,
   foodCount:320, foodGrowth:4, fishGrowthRatio:.25, minimumFishGrowth:24, foodRespawnMs:4000, questionMs:30000, cooldownMs:4000,
-  protectionMs:5000, escapeMs:3000, respawnMs:2000, inputExpiryMs:400, maxPlayers:30 });
+  protectionMs:5000, escapeMs:3000, respawnMs:2000, inputExpiryMs:400, maxPlayers:30, variantCount:30 });
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const radius=p=>18*Math.sqrt(p.mass/100);
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
@@ -24,7 +24,7 @@ class FishMatch {
       if(this.state.phase==='ended')throw Error('This match has ended.');
       if(this.state.phase==='running'&&this.game.fishquest.lateJoin===false)throw Error('Late joining is closed.');
       if(this.state.players.length>=CONFIG.maxPlayers)throw Error('This room is full.');
-      p={id:crypto.randomUUID(),studentId:identity.studentId,name:identity.name,variant:this.state.players.length%5,
+      p={id:crypto.randomUUID(),studentId:identity.studentId,name:identity.name,variant:this.state.players.length%CONFIG.variantCount,
         mass:100,score:0,...this.point(),dx:0,dy:0,inputAt:0,seq:-1,connected:true,protectedUntil:this.now()+CONFIG.protectionMs,
         cooldownUntil:0,respawnAt:0,lock:null,attempts:[],presented:[],collections:0,swallows:0};
       this.state.players.push(p); this.spawn(p);
@@ -34,7 +34,7 @@ class FishMatch {
   addNpcs(){
     if(this.state.players.some(p=>p.npc))return;
     NPCS.forEach(([name,mass],variant)=>{
-      const p={id:`npc-${variant}`,studentId:`__NPC__${variant}`,name,variant:variant%5,npc:true,baseMass:mass,
+      const p={id:`npc-${variant}`,studentId:`__NPC__${variant}`,name,variant:variant%CONFIG.variantCount,npc:true,baseMass:mass,
         mass,score:0,...this.point(),dx:0,dy:0,inputAt:this.now(),seq:-1,connected:true,protectedUntil:0,
         cooldownUntil:0,respawnAt:0,lock:null,attempts:[],presented:[],collections:0,swallows:0,aiTarget:this.point(),aiUntil:0};
       this.state.players.push(p);this.spawn(p);

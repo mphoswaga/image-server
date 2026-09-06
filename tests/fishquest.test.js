@@ -86,11 +86,13 @@ test('pause freezes the match and resume preserves remaining match and question 
   assert.equal(f.match.state.pausedAt,null);assert.equal(f.match.state.phase,'running');
 });
 
-test('a full 25-learner class survives sustained movement, mistakes and reconnects', () => {
+test('a full 30-learner class has distinct fish variants and survives sustained play', () => {
   let now=2_000_000;
-  const game={id:'class25',fishquest:{durationMinutes:10,lateJoin:true},questions:[{question:'Safe?',options:['Yes','No'],correctIndex:0}]};
+  const game={id:'class30',fishquest:{durationMinutes:10,lateJoin:true},questions:[{question:'Safe?',options:['Yes','No'],correctIndex:0}]};
   const match=new FishMatch(game,{now:()=>now,random:Math.random,persist:()=>{}}),players=[];
-  for(let i=0;i<25;i++)players.push(match.join({studentId:`S${i}`,name:`Learner ${i+1}`}));
+  for(let i=0;i<30;i++)players.push(match.join({studentId:`S${i}`,name:`Learner ${i+1}`}));
+  assert.equal(new Set(players.map(player=>player.variant)).size,30);
+  assert.throws(()=>match.join({studentId:'S30',name:'Learner 31'}),/room is full/i);
   match.start();now+=CONFIG.protectionMs+1;
   for(let frame=0;frame<300;frame++){
     for(const [i,p] of players.entries())match.input(p.id,{seq:frame,x:Math.sin(frame+i),y:Math.cos(frame-i)});
@@ -100,7 +102,7 @@ test('a full 25-learner class survives sustained movement, mistakes and reconnec
   const interaction=match.claim(attacker,victim);match.answer(attacker.id,{interactionId:interaction.id,choice:1});
   match.disconnect(attacker.id);const restored=match.join({studentId:'S0',name:'Learner 1'});
   assert.equal(restored.id,attacker.id);assert.equal(restored.lock,null);assert.equal(restored.connected,true);
-  assert.equal(match.state.players.length,25);assert.equal(match.snapshot(restored.id).players.length,25);
+  assert.equal(match.state.players.length,30);assert.equal(match.snapshot(restored.id).players.length,30);
 });
 
 test('homework NPCs offer small prey and larger fish bump without locking the learner', () => {
