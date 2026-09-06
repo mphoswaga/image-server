@@ -50,18 +50,52 @@
     rendererStarting = true;
     new Phaser.Game({ type: Phaser.AUTO, parent: 'game', width: innerWidth, height: innerHeight, backgroundColor: '#073b58', scale: { mode: Phaser.Scale.RESIZE }, scene: { preload() { this.load.image('lagoon', '/assets/fishquest/lagoon.png'); }, create() { scene = this; rendererStarting = false; const bg = this.add.image(1200, 800, 'lagoon').setDisplaySize(2400, 1600).setDepth(-5); bg.setAlpha(.93); this.cameras.main.setBounds(0, 0, 2400, 1600); renderState(); }, update() { animate(); } } });
   }
-  function fishTexture(variant) {
-    const key = `fish-${variant}`; if (scene.textures.exists(key)) return key;
-    const colors = [0xff7657, 0x53e0cf, 0xffce4a, 0x9e75ea, 0x43a9ff], g = scene.make.graphics({ add: false });
-    g.fillStyle(colors[variant % colors.length]); g.fillTriangle(2, 25, 22, 8, 22, 42); g.fillEllipse(40, 25, 45, 30); g.fillStyle(0xffffff); g.fillCircle(50, 20, 5); g.fillStyle(0x0b2845); g.fillCircle(52, 20, 2); g.generateTexture(key, 65, 50); g.destroy(); return key;
+  function fishTexture(variant, part = 'body') {
+    const key = `fish-${variant}-${part}`;
+    if (scene.textures.exists(key)) return key;
+    const palettes = [['#ffbd70','#f56a38','#b93230'],['#9cf7de','#24bfa9','#167989'],['#fff0a0','#efb632','#ca6225'],['#e6c6ff','#a275dc','#60429b'],['#9ce9ff','#359cde','#285da5']];
+    const [light,base,dark] = palettes[variant % palettes.length];
+    const texture = scene.textures.createCanvas(key, 160, 112), c = texture.context;
+    c.lineJoin = 'round'; c.lineWidth = 3; c.strokeStyle = '#153950';
+    const shade = c.createLinearGradient(0,18,0,95); shade.addColorStop(0,light); shade.addColorStop(.5,base); shade.addColorStop(1,dark); c.fillStyle = shade;
+    if (part === 'tail') {
+      c.beginPath(); c.moveTo(145,56); c.bezierCurveTo(100,48,68,15,30,12); c.quadraticCurveTo(48,56,30,100); c.bezierCurveTo(70,96,109,63,145,56); c.fill(); c.stroke();
+      c.strokeStyle = light; c.lineWidth = 2; for (const y of [28,44,68,84]) { c.beginPath(); c.moveTo(132,56); c.lineTo(48,y); c.stroke(); }
+    } else if (part === 'fin') {
+      c.beginPath(); c.moveTo(110,30); c.bezierCurveTo(74,25,40,47,35,80); c.quadraticCurveTo(85,87,110,30); c.fill(); c.stroke();
+      c.strokeStyle = light; c.beginPath(); c.moveTo(101,36); c.lineTo(49,74); c.stroke();
+    } else {
+      c.beginPath(); c.moveTo(48,34); c.quadraticCurveTo(63,0,101,18); c.lineTo(116,36); c.fill(); c.stroke();
+      c.beginPath(); c.ellipse(83,58,65,38,0,0,Math.PI*2); c.fill(); c.stroke();
+      c.save(); c.clip();
+      c.fillStyle = '#fff9d8'; c.globalAlpha = .8;
+      for (const x of [47,74]) { c.beginPath(); c.moveTo(x,17); c.bezierCurveTo(x-12,44,x+16,70,x+2,103); c.lineTo(x+15,103); c.bezierCurveTo(x+27,70,x+1,42,x+16,17); c.fill(); }
+      c.globalAlpha = .23; c.fillStyle = '#ffffff'; c.beginPath(); c.ellipse(81,80,53,15,0,0,Math.PI*2); c.fill(); c.restore();
+      c.fillStyle = '#ffffff'; c.beginPath(); c.ellipse(118,46,15,18,-.12,0,Math.PI*2); c.fill(); c.stroke();
+      c.fillStyle = '#113047'; c.beginPath(); c.ellipse(123,47,8,11,0,0,Math.PI*2); c.fill();
+      c.fillStyle = '#ffffff'; c.beginPath(); c.arc(125,42,3.5,0,Math.PI*2); c.fill();
+      c.strokeStyle = '#733f44'; c.lineWidth = 2.5; c.beginPath(); c.moveTo(130,69); c.quadraticCurveTo(139,74,146,66); c.stroke();
+      c.strokeStyle = light; c.lineWidth = 4; c.beginPath(); c.ellipse(82,39,28,10,-.15,Math.PI,Math.PI*1.8); c.stroke();
+    }
+    texture.refresh(); return key;
+  }
+  function makeFish(p) {
+    const tail = scene.add.image(-24,0,fishTexture(p.variant,'tail')).setOrigin(.9,.5).setScale(.32);
+    const body = scene.add.image(0,0,fishTexture(p.variant)).setScale(.46);
+    const fin = scene.add.image(-2,9,fishTexture(p.variant,'fin')).setOrigin(.68,.28).setScale(.29);
+    const sprite = scene.add.container(p.x,p.y,[tail,body,fin]);
+    const label = scene.add.text(p.x,p.y-34,p.name,{font:'bold 15px Arial',color:'#ffffff',stroke:'#052c48',strokeThickness:4}).setOrigin(.5);
+    return {sprite,label,tail,fin,tx:p.x,ty:p.y,scale:Math.pow(p.mass/100,.65),facing:1,phase:p.variant*1.7};
   }
   function renderState() {
     if (!scene) return;
     const seen = new Set();
     for (const p of state.players) {
       seen.add(p.id); let e = entities.get(p.id);
-      if (!e) { const sprite = scene.add.image(p.x, p.y, fishTexture(p.variant)); const label = scene.add.text(p.x, p.y - 34, p.name, { font: 'bold 15px Arial', color: '#ffffff', stroke: '#052c48', strokeThickness: 4 }).setOrigin(.5); e = { sprite, label, tx: p.x, ty: p.y }; entities.set(p.id, e); if (p.id === state.me) scene.cameras.main.startFollow(sprite, true, .08, .08); }
-      e.tx = p.x; e.ty = p.y; const scale = Math.pow(p.mass / 100, .65); e.sprite.setScale(scale); e.sprite.setAlpha(p.respawning ? .2 : p.protected ? .72 : 1); e.label.setText(p.name).setAlpha(p.respawning ? .3 : 1);
+      if (!e) { e = makeFish(p); entities.set(p.id,e); if (p.id === state.me) scene.cameras.main.startFollow(e.sprite,true,.08,.08); }
+      if (Math.abs(p.x-e.tx)>1) e.facing=p.x>e.tx?1:-1;
+      e.tx=p.x; e.ty=p.y; e.scale=Math.pow(p.mass/100,.65); e.locked=p.locked;
+      e.sprite.setAlpha(p.respawning ? .2 : p.protected ? .72 : 1); e.label.setText(p.id === state.me ? 'You' : p.name).setAlpha(p.respawning ? .3 : 1);
     }
     for (const [id, e] of entities) if (!seen.has(id)) { e.sprite.destroy(); e.label.destroy(); entities.delete(id); }
     const foodSeen = new Set();
@@ -70,7 +104,19 @@
   }
   function animate() {
     if (!state || !scene) return;
-    for (const e of entities.values()) { e.sprite.x += (e.tx-e.sprite.x)*.22; e.sprite.y += (e.ty-e.sprite.y)*.22; e.label.setPosition(e.sprite.x,e.sprite.y-34*e.sprite.scaleY); e.sprite.rotation=Math.sin(performance.now()/280+e.sprite.x)*.025; }
+    const dt=Math.min(50,scene.game.loop.delta)/1000, follow=1-Math.exp(-14*dt), t=performance.now()/1000;
+    for (const e of entities.values()) {
+      const dx=e.tx-e.sprite.x,dy=e.ty-e.sprite.y,speed=Math.min(1,Math.hypot(dx,dy)/16);
+      e.sprite.x+=dx*follow; e.sprite.y+=dy*follow;
+      e.sprite.scaleY+=(e.scale-e.sprite.scaleY)*(1-Math.exp(-7*dt));
+      e.sprite.scaleX+=(e.facing*e.scale-e.sprite.scaleX)*(1-Math.exp(-12*dt));
+      const beat=t*(e.locked?3:5+speed*9)+e.phase;
+      e.tail.rotation=Math.sin(beat)*(.12+speed*.22); e.tail.scaleX=.32*(.8+Math.cos(beat)*.2);
+      e.fin.rotation=Math.sin(beat+1)*.28;
+      const tilt=Math.max(-.25,Math.min(.25,dy*.018*e.facing));
+      e.sprite.rotation+=(tilt+Math.sin(beat)*.025-e.sprite.rotation)*follow;
+      e.label.setPosition(e.sprite.x,e.sprite.y-36*e.sprite.scaleY);
+    }
     if (me) scene.cameras.main.setZoom(Math.max(.58, Math.min(1.05, 1.02 - (me.mass-100)/1600)));
   }
   function renderQuestion() {
