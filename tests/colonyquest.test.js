@@ -244,7 +244,11 @@ test('the dashboard exposes ColonyQuest as a whole-class lesson game', () => {
   assert.match(page, /Mark correct/);
   assert.match(page, /Random learner/);
   assert.match(page, /Moonroot Meadow needs you/);
+  assert.match(page, /colonyquest-core\.js\?v=\d+/);
+  assert.match(page, /colonyquest\.js\?v=\d+/);
   assert.match(client, /moonroot-meadow\.webp/);
+  assert.match(server, /app\.get\('\/colonyquest-core\.js'[\s\S]*Cache-Control', 'no-store, max-age=0'/);
+  assert.match(server, /app\.get\('\/colonyquest\.js'[\s\S]*Cache-Control', 'no-store, max-age=0'/);
   assert.match(server, /app\.get\('\/colonyquest\/:id'/);
 
   for (const name of ['moonroot-meadow.webp', 'pip-worker.webp', 'queen.webp', 'guardian.webp']) {

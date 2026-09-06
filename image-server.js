@@ -238,6 +238,18 @@ app.get('/fishquest-client.js', (req, res) => {
   res.set('Cache-Control', 'no-store, max-age=0');
   res.sendFile(path.join(__dirname, 'public', 'fishquest-client.js'));
 });
+app.get('/colonyquest-core.js', (req, res) => {
+  res.set('Cache-Control', 'no-store, max-age=0');
+  res.set('CDN-Cache-Control', 'no-store');
+  res.set('Cloudflare-CDN-Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, 'public', 'colonyquest-core.js'));
+});
+app.get('/colonyquest.js', (req, res) => {
+  res.set('Cache-Control', 'no-store, max-age=0');
+  res.set('CDN-Cache-Control', 'no-store');
+  res.set('Cloudflare-CDN-Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, 'public', 'colonyquest.js'));
+});
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(observability.requestMiddleware);
 
