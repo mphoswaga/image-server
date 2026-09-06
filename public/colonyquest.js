@@ -31,7 +31,7 @@
     guardian: '/assets/colonyquest/guardian.webp',
   };
   const STORY = {
-    intro: 'Last night, the Great Rain swept through Moonroot Meadow and left the old colony tunnels empty. Queen Aurelia has asked Pip and your class to guide the new colonies before moonrise. Every answer awakens a Heartseed, and every choice changes the world below.',
+    intro: 'The Great Rain has left Queen Aurelia and one worker in a tiny earth chamber. Help them rebuild Moonroot Meadow: hatch new ants, open rooms, and strengthen the walls. Every correct answer gives your colony a choice, and every choice changes its home.',
     chapters: [
       { at: 0, title: 'First Light', line: 'Wake the workers and gather the first seeds.' },
       { at: .3, title: 'Deep Roots', line: 'Open warm chambers beneath the ancient oak.' },
@@ -42,7 +42,7 @@
   const REWARD_STORIES = {
     workers: { title: 'The foraging trail comes alive', text: 'New workers hurry from the meadow entrance to the food store, carrying fresh seeds for the colony.', site: 'entrance' },
     food: { title: 'The food store fills', text: 'The workers stack a new harvest inside the pantry so the colony can grow through the next chapter.', site: 'food' },
-    defense: { title: 'The nest walls grow stronger', text: 'Guardians carry pebbles to the guard post and reinforce the tunnels before the rain returns.', site: 'guard' },
+    defense: { title: 'The nest walls grow stronger', text: 'The workers rebuild the room walls and tunnel supports with stronger materials. Their new home is ready for the rain.', site: 'nursery' },
     queen: { title: 'The nursery begins to glow', text: 'The queen tends new eggs in the nursery, welcoming more ants into the colony family.', site: 'nursery' },
     expansion: { title: 'A hidden tunnel opens', text: 'Workers clear the deep roots, raise a new colony flag, and discover another chamber to explore.', site: 'expansion' },
     soldiers: { title: 'A guardian patrol forms', text: 'New guardians march between the entrance and guard post, ready to protect every worker and seed.', site: 'guard' },
@@ -369,8 +369,10 @@
     const team = currentTeam();
     $('scoreStrip').innerHTML = session.teams.map((item, index) => {
       const palette = core.TEAM_COLORS[item.colorIndex];
-      return `<div class="score-card${index === session.currentTeamIndex && session.phase !== 'ended' ? ' current' : ''}" style="--team-color:${colorHex(palette.primary)}"><div class="score-name"><span>${esc(item.name)}</span><span>${core.colonyStrength(item)}</span></div><div class="score-stats"><span>${item.population} ants</span><span>${item.food} food</span><span>${item.defense} defense</span></div></div>`;
+      return `<div class="score-card${index === session.currentTeamIndex && session.phase !== 'ended' ? ' current' : ''}" style="--team-color:${colorHex(palette.primary)}"><div class="score-name"><span>${esc(item.name)}</span><span>${core.colonyStrength(item)}</span></div><div class="score-stats"><span>1 queen</span><span>${item.workers} workers</span><span>${item.soldiers} soldiers</span><span>${item.food} food</span><span>${core.fortification(item).name}</span></div></div>`;
     }).join('');
+    const options = session.teams.map(item => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join('');
+    if ($('colonyViewPick').innerHTML !== options) $('colonyViewPick').innerHTML = options;
     if (team) {
       const palette = core.TEAM_COLORS[team.colorIndex];
       $('turnBanner').style.setProperty('--team-color', colorHex(palette.primary));
@@ -416,6 +418,7 @@
     setOverlay('questionOverlay');
     updateHUD();
     updateWorld();
+    focusColony(team.id);
   }
 
   function handleOutcome(choice, correct, teacherJudged = false) {
@@ -473,7 +476,7 @@
   }
 
   function rewardChoices() {
-    const base = ['workers', 'food', 'defense', 'queen', 'expansion', 'soldiers'];
+    const base = ['workers', 'food', 'defense', 'queen', 'expansion', 'soldiers'].filter(key => key !== 'defense' || currentTeam().defense < core.FORTIFICATIONS.length - 1);
     const start = session.turnIndex % base.length;
     const choices = [base[start], base[(start + 2) % base.length], base[(start + 4) % base.length]];
     if (session.warsActive) choices[2] = 'raid';
@@ -495,9 +498,9 @@
     const secondary = Math.max(0, Number(change && change.secondary) || 0);
     if (key === 'workers') return `+${amount} workers, +${amount} ants, and +${secondary} food - ${team.workers} workers now`;
     if (key === 'food') return `+${amount} food - ${team.food} stored in the pantry`;
-    if (key === 'defense') return `+${amount} defense${secondary ? ` and +${secondary} nest level` : ''} - defense is now ${team.defense}`;
+    if (key === 'defense') return `${core.fortification(team).name} walls throughout the colony - defense ${team.defense}`;
     if (key === 'queen') return `Queen level ${team.queenLevel} - +${amount} ants and +${secondary} ${secondary === 1 ? 'worker' : 'workers'}`;
-    if (key === 'expansion') return `+1 territory and +${amount} food${secondary ? ` - nest level ${team.nestLevel}` : ''}`;
+    if (key === 'expansion') return `+1 permanent room: ${core.colonyRooms(team).at(-1).label} - ${core.colonyRooms(team).length} rooms, +${amount} food`;
     if (key === 'soldiers') return `+${amount} guardians and -${secondary} food - ${team.soldiers} guardians now`;
     return '';
   }
@@ -524,6 +527,7 @@
       art,
     }, onContinue);
     celebrate(team.id, key, rewardEffectText(key, event, team));
+    focusColony(team.id, story.site);
   }
 
   function showRewards() {
@@ -823,6 +827,7 @@
       height: Math.max(420, $('gameMount').clientHeight),
       backgroundColor: '#86c8af',
       render: { antialias: true, roundPixels: false },
+      input: { mouse: { preventDefaultWheel: false } },
       scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
       scene: {
         preload() {
@@ -833,8 +838,9 @@
         },
         create() {
           scene = this;
-          this.scale.on('resize', updateWorld);
+          this.scale.on('resize', () => { updateWorld(); restoreWorldFocus(); });
           updateWorld();
+          restoreWorldFocus();
         },
       },
     });
@@ -852,7 +858,7 @@
     return image;
   }
 
-  function makeAntAgent(texture, point, width, teamColor, carriesFood = false) {
+  function makeAntAgent(texture, point, width, teamColor, carriesFood = false, animateLegs = true) {
     const container = scene.add.container(point.x, point.y).setDepth(5);
     const shadow = scene.add.ellipse(0, width * .19, width * .62, width * .13, 0x180f0a, .3);
     const sprite = scene.add.image(0, 0, texture);
@@ -879,7 +885,7 @@
     container.cargo = cargo;
     container.carriesFood = carriesFood;
     paintLegs();
-    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (animateLegs && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       scene.tweens.add({ targets: gait, phase: Math.PI * 2, duration: 430, repeat: -1, onUpdate: paintLegs });
     }
     const baseY = sprite.y;
@@ -937,7 +943,7 @@
       new Phaser.Math.Vector2(b.x, b.y));
   }
 
-  function drawTunnel(graphics, points, width) {
+  function drawTunnel(graphics, points, width, material = core.FORTIFICATIONS[0]) {
     const curved = [];
     for (let index = 1; index < points.length; index += 1) {
       const a = points[index - 1], b = points[index];
@@ -952,19 +958,27 @@
       graphics.strokePath();
     };
     stroke(width + 18, 0x432817, .9);
-    stroke(width + 10, 0xb38352, .9);
+    stroke(width + 10, material.wall, .95);
     stroke(width + 3, 0x291d19, 1);
-    stroke(width, 0x493629, 1);
+    stroke(width, material.floor, 1);
   }
 
-  function drawChamber(graphics, x, y, width, height, palette, active = false) {
+  function drawChamber(graphics, x, y, width, height, palette, active = false, material = core.FORTIFICATIONS[0], defense = 0) {
     ellipse(graphics, x, y + 5, width + 20, height + 18, 0x201a17, .72);
-    ellipse(graphics, x, y, width + 12, height + 12, 0xb68a57, 1);
+    ellipse(graphics, x, y, width + 12 + Math.min(4, defense) * 2, height + 12 + Math.min(4, defense) * 2, material.wall, 1);
     ellipse(graphics, x, y, width, height, 0x332a24, 1);
-    ellipse(graphics, x, y + height * .12, width * .88, height * .64, 0x65513a, 1);
+    ellipse(graphics, x, y + height * .12, width * .88, height * .64, material.floor, 1);
     for (let index = 0; index < 14; index += 1) {
       const angle = index * Math.PI * 2 / 14;
-      ellipse(graphics, x + Math.cos(angle) * (width * .5 + 2), y + Math.sin(angle) * (height * .5 + 2), 7, 4, index % 2 ? 0xd5b47e : 0x96734c, .85);
+      const px = x + Math.cos(angle) * (width * .5 + 3), py = y + Math.sin(angle) * (height * .5 + 3);
+      if (defense === 0) ellipse(graphics, px, py, 7, 4, index % 2 ? material.edge : material.wall, .85);
+      else if (defense >= 4) {
+        ellipse(graphics, px, py, 5, 5, 0x253d49, 1);
+        ellipse(graphics, px - 1, py - 1, 2, 2, 0xe7faff, 1);
+      } else {
+        graphics.lineStyle(defense === 1 ? 4 : 2, material.edge, 1);
+        graphics.lineBetween(x + Math.cos(angle) * width * .49, y + Math.sin(angle) * height * .49, x + Math.cos(angle) * (width * .5 + 8), y + Math.sin(angle) * (height * .5 + 8));
+      }
     }
     graphics.lineStyle(active ? 2 : 1, active ? palette.light : 0xe2c38c, active ? .8 : .3);
     graphics.strokeEllipse(x, y, width, height);
@@ -992,162 +1006,157 @@
     }
   }
 
+  function furnishRoom(graphics, room, team, roomWidth, roomHeight) {
+    const { x, y, kind } = room;
+    if (kind === 'food' || kind === 'expansion' && room.expansion % 4 === 2) {
+      for (let row = 0; row < 2; row += 1) {
+        graphics.lineStyle(4, 0xc6a471, 1);
+        graphics.lineBetween(x - roomWidth * .34, y + row * 18, x + roomWidth * .34, y + row * 18);
+      }
+      const stored = Math.min(30, team.food);
+      for (let i = 0; i < stored; i += 1) {
+        ellipse(graphics, x - roomWidth * .29 + (i % 10) * roomWidth * .064, y - 5 + Math.floor(i / 10) * 8, 7, 5, [0xf1cc66, 0x8bbc5e, 0xdb7857][i % 3]);
+      }
+    } else if (kind === 'guard') {
+      for (let i = 0; i < 6; i += 1) {
+        graphics.lineStyle(5, 0xb79463, 1);
+        const px = x + (i - 2.5) * roomWidth * .1;
+        graphics.lineBetween(px, y + roomHeight * .26, px + 2, y + roomHeight * .06);
+      }
+      graphics.lineStyle(3, 0x5b4130, 1);
+      graphics.lineBetween(x - roomWidth * .3, y + roomHeight * .2, x + roomWidth * .3, y + roomHeight * .2);
+    } else if (kind === 'nursery' || kind === 'workers') {
+      for (let i = 0; i < 7; i += 1) ellipse(graphics, x + (i - 3) * roomWidth * .09, y + roomHeight * .23 + Math.sin(i) * 3, roomWidth * .18, 12, i % 2 ? 0x789850 : 0x4b783e);
+      if (kind === 'nursery') {
+        const young = Math.max(0, team.population - 1 - team.workers - team.soldiers);
+        for (let i = 0; i < young; i += 1) ellipse(graphics, x - roomWidth * .27 + i % 10 * roomWidth * .06, y + roomHeight * .17 + Math.floor(i / 10) * 6, 6, 4, 0xfff1cb);
+      }
+    } else if (room.expansion % 4 === 1) {
+      for (let i = 0; i < 5; i += 1) {
+        const mx = x + (i - 2) * roomWidth * .13, my = y + Math.sin(i) * 5;
+        graphics.lineStyle(4, 0xd9d7b4, 1); graphics.lineBetween(mx, my, mx, my + 14);
+        ellipse(graphics, mx, my, 17, 9, i % 2 ? 0xd99185 : 0x94cbd1);
+      }
+    } else if (room.expansion % 4 === 0) {
+      ellipse(graphics, x, y + 9, roomWidth * .7, roomHeight * .42, 0x245568);
+      ellipse(graphics, x, y + 6, roomWidth * .61, roomHeight * .3, 0x71ced8);
+      graphics.lineStyle(1, 0xd9ffff, .8); graphics.strokeEllipse(x, y + 6, roomWidth * .38, 10);
+    } else {
+      graphics.fillStyle(0xb68a57); graphics.fillRoundedRect(x - roomWidth * .3, y, roomWidth * .6, 9, 2);
+      graphics.lineStyle(4, 0x7e6550); graphics.lineBetween(x - 13, y - 5, x + 9, y - 17);
+      graphics.lineStyle(6, 0xb4c8c9); graphics.lineBetween(x + 3, y - 21, x + 14, y - 11);
+    }
+  }
+
   function drawColony(team, zone, teamIndex) {
     const palette = core.TEAM_COLORS[team.colorIndex];
+    const material = core.fortification(team);
     const graphics = scene.add.graphics().setDepth(0);
-    const cx = zone.x + zone.w * .5;
-    const entrance = { x: cx, y: zone.y + zone.h * .2 };
-    const junction = { x: cx, y: zone.y + zone.h * .43 };
-    const food = { x: zone.x + zone.w * .25, y: zone.y + zone.h * .55 };
-    const guard = { x: zone.x + zone.w * .75, y: zone.y + zone.h * .54 };
-    const nursery = { x: cx, y: zone.y + zone.h * .77 };
+    const cx = zone.x + zone.w / 2;
+    const entrance = { x: cx, y: zone.y + 60 };
     const active = teamIndex === session.currentTeamIndex && session.phase !== 'ended';
-    const chamberW = Phaser.Math.Clamp(zone.w * .32 + team.nestLevel * 3, 64, 180);
-    const chamberH = Phaser.Math.Clamp(zone.h * .19 + team.nestLevel * 2, 40, 96);
+    const roomWidth = Math.min(166, zone.w * .41);
+    const roomHeight = 96;
+    const rooms = core.colonyRooms(team).map((room, index) => ({
+      ...room,
+      x: index === 0 ? cx : zone.x + zone.w * ((index - 1) % 2 ? .75 : .25),
+      y: zone.y + 156 + Math.ceil(index / 2) * 166,
+    }));
+    const nursery = rooms[0];
+    const food = rooms.find(room => room.kind === 'food') || nursery;
+    const guards = rooms.filter(room => room.kind === 'guard');
+    const guard = guards.at(-1) || nursery;
+    const sites = { entrance, nursery, food, guard, center: nursery, expansion: rooms.filter(room => room.kind === 'expansion').at(-1) || nursery };
 
-    drawTunnel(graphics, [entrance, junction, nursery], 9 + Math.min(6, team.nestLevel));
-    drawTunnel(graphics, [junction, food], 8 + Math.min(5, team.nestLevel));
-    drawTunnel(graphics, [junction, guard], 8 + Math.min(5, team.nestLevel));
-    graphics.fillStyle(0x2a160e, .95);
-    graphics.fillEllipse(entrance.x, entrance.y, 40 + team.nestLevel * 4, 17);
-
-    drawChamber(graphics, food.x, food.y, chamberW, chamberH, palette);
-    drawChamber(graphics, guard.x, guard.y, chamberW + team.defense * 3, chamberH + team.defense * 2, palette, team.defense > 2);
-    drawChamber(graphics, nursery.x, nursery.y, chamberW + 24 + team.queenLevel * 4, chamberH + 14 + team.queenLevel * 2, palette, active);
-
-    // Furnishings make each chamber's job visible before its numbers change.
-    for (let index = 0; index < 7; index += 1) {
-      const leafX = nursery.x + (index - 3) * chamberW * .095;
-      const leafY = nursery.y + chamberH * .24 + Math.sin(index * 1.8) * 4;
-      ellipse(graphics, leafX, leafY, chamberW * .19, 12, index % 2 ? 0x789850 : 0x4b783e, 1);
-      graphics.lineStyle(1, 0xb1c77d, .6);
-      graphics.lineBetween(leafX - chamberW * .06, leafY, leafX + chamberW * .06, leafY - 2);
+    drawTunnel(graphics, [entrance, nursery], 14, material);
+    for (let index = 1; index < rooms.length; index += 1) {
+      const room = rooms[index];
+      const junction = { x: cx, y: room.y - 75 };
+      if (index % 2 === 1) {
+        const previousY = index === 1 ? nursery.y : rooms[index - 2].y - 75;
+        drawTunnel(graphics, [{ x: cx, y: previousY }, junction], 14, material);
+      }
+      drawTunnel(graphics, [junction, room], 12, material);
     }
-    const barrierY = guard.y + chamberH * .22;
-    const barrierW = chamberW * .58;
-    for (let index = 0; index < 5; index += 1) {
-      const x = guard.x - barrierW / 2 + index * barrierW / 4;
-      graphics.lineStyle(6, 0x36221a, 1);
-      graphics.lineBetween(x, barrierY + 9, x + 3, barrierY - 13);
-      graphics.lineStyle(3, 0xc5935e, 1);
-      graphics.lineBetween(x - 1, barrierY + 8, x + 2, barrierY - 13);
+    for (const room of rooms) {
+      drawChamber(graphics, room.x, room.y, roomWidth, roomHeight, palette, active && room.kind === 'nursery', material, team.defense);
+      furnishRoom(graphics, room, team, roomWidth, roomHeight);
+      const detail = room.kind === 'food' ? ` · ${team.food} food` : room.kind === 'guard' ? ` · ${Math.min(8, Math.max(0, team.soldiers - guards.indexOf(room) * 8))} soldiers` : room.kind === 'nursery' ? ` · level ${team.queenLevel}` : '';
+      chamberTag(room.x, room.y - roomHeight / 2 - 3, room.label + detail, zone.w);
+      if (room.kind === 'expansion') {
+        const flagX = room.x + roomWidth * .42, flagY = room.y - 16;
+        graphics.lineStyle(2, 0xe5dcbf, 1); graphics.lineBetween(flagX, flagY, flagX, flagY - 25);
+        graphics.fillStyle(palette.primary, 1); graphics.fillTriangle(flagX, flagY - 25, flagX + 14, flagY - 19, flagX, flagY - 12);
+      }
     }
-    graphics.lineStyle(4, 0x97734d, 1);
-    graphics.lineBetween(guard.x - barrierW / 2 - 4, barrierY, guard.x + barrierW / 2 + 5, barrierY);
-    for (let shelf = 0; shelf < 2; shelf += 1) {
-      const shelfY = food.y + 3 + shelf * 17;
-      graphics.lineStyle(5, 0x352419, 1);
-      graphics.lineBetween(food.x - chamberW * .33, shelfY, food.x + chamberW * .33, shelfY);
-      graphics.lineStyle(2, 0xc6a471, 1);
-      graphics.lineBetween(food.x - chamberW * .33, shelfY - 2, food.x + chamberW * .33, shelfY - 2);
-    }
-    for (const site of [food, nursery]) {
-      const lampX = site.x + chamberW * .35, lampY = site.y - chamberH * .16;
-      ellipse(graphics, lampX, lampY, 23, 23, 0xeab854, .08);
-      ellipse(graphics, lampX, lampY, 14, 14, 0xf2c366, .16);
-      ellipse(graphics, lampX, lampY, 5, 7, 0xffe0a0, .95);
-    }
+    ellipse(graphics, entrance.x, entrance.y, 48, 19, 0x261a13);
+    graphics.lineStyle(3, material.wall, 1); graphics.strokeEllipse(entrance.x, entrance.y, 48, 19);
+    const title = scene.add.text(zone.x + 12, zone.y + 2, team.name, {
+      fontFamily: 'Arial', fontSize: '14px', fontStyle: 'bold', color: '#f1fff5',
+      backgroundColor: '#1c4036', padding: { x: 9, y: 6 }, wordWrap: { width: zone.w - 44 },
+    }).setDepth(8);
+    title.setInteractive({ useHandCursor: true }).on('pointerdown', () => focusColony(team.id));
+    scene.add.text(zone.x + 13, zone.y + 33, `${rooms.length} ${rooms.length === 1 ? 'room' : 'rooms'} · ${material.name} walls`, {
+      fontFamily: 'Arial', fontSize: '11px', color: '#ffffff', backgroundColor: '#263d33', padding: { x: 5, y: 3 },
+    }).setDepth(8);
 
-    let expansion = null;
-    if (team.territory > 1) {
-      expansion = { x: zone.x + zone.w * (teamIndex % 2 ? .84 : .16), y: zone.y + zone.h * .87 };
-      drawTunnel(graphics, [teamIndex % 2 ? guard : food, expansion], 7 + Math.min(4, team.nestLevel));
-      drawChamber(graphics, expansion.x, expansion.y, Phaser.Math.Clamp(38 + team.territory * 8, 46, 92), Phaser.Math.Clamp(25 + team.territory * 4, 30, 55), palette);
-    }
-
-    chamberTag(food.x, food.y - chamberH * .48, `PANTRY  ${team.food}`, zone.w);
-    chamberTag(guard.x, guard.y - chamberH * .48, `GUARD POST  ${team.defense}`, zone.w);
-    chamberTag(nursery.x, nursery.y - (chamberH + 14) * .48, `NURSERY  QUEEN ${team.queenLevel}`, zone.w);
-    if (expansion) chamberTag(expansion.x, expansion.y - 19, `NEW CHAMBER  ${team.territory}`, zone.w);
-
-    const foodDots = Math.min(24, Math.max(3, Math.round(team.food / 3)));
-    for (let index = 0; index < foodDots; index += 1) {
-      const column = index % 6;
-      const row = Math.floor(index / 6);
-      const color = index % 3 === 0 ? 0xd85f42 : index % 2 ? 0xe9b84a : 0x78ad45;
-      const seedX = food.x - chamberW * .28 + column * chamberW * .09;
-      const seedY = food.y - 3 + (row % 2) * 17 - Math.floor(row / 2) * 5;
-      ellipse(graphics, seedX, seedY + 2, 10, 6, 0x211b14, .5);
-      ellipse(graphics, seedX, seedY, 9, 6, color, .98);
-      ellipse(graphics, seedX - 1, seedY - 1, 3, 2, 0xffedb5, .65);
-    }
-
-    const eggCount = Math.min(12, 3 + team.queenLevel * 2);
-    for (let index = 0; index < eggCount; index += 1) {
-      ellipse(graphics, nursery.x - 24 + (index % 6) * 9, nursery.y + chamberH * .25 + Math.floor(index / 6) * 6, 8, 5, index % 3 ? 0xfff1cb : 0xd8f3df, .98);
-    }
-
-    for (let index = 0; index < Math.min(14, team.defense * 3); index += 1) {
-      const angle = Math.PI * 2 * index / Math.max(3, Math.min(14, team.defense * 3));
-      ellipse(graphics, guard.x + Math.cos(angle) * (chamberW * .47), guard.y + Math.sin(angle) * (chamberH * .45), 7, 5, index % 2 ? 0xa98a67 : 0x6f745e, .9);
-    }
-
-    const plaqueWidth = Phaser.Math.Clamp(zone.w * .48, 120, 210);
-    graphics.fillStyle(0x35251a, .92);
-    graphics.fillRoundedRect(zone.x + 8, zone.y + 7, plaqueWidth, 39, 5);
-    graphics.lineStyle(2, palette.primary, .95);
-    graphics.strokeRoundedRect(zone.x + 8, zone.y + 7, plaqueWidth, 39, 5);
-    const labelSize = zone.w < 250 ? 11 : 14;
-    scene.add.text(zone.x + 18, zone.y + 12, team.name, { fontFamily: 'Georgia', fontSize: `${labelSize}px`, fontStyle: 'bold', color: '#fff0c9' }).setDepth(8);
-    scene.add.text(zone.x + 18, zone.y + 28, `Nest ${team.nestLevel}  |  ${team.population} ants`, { fontFamily: 'Arial', fontSize: zone.w < 250 ? '8px' : '10px', color: '#d9dfc9' }).setDepth(8);
-
-    for (let flag = 0; flag < Math.min(4, team.territory); flag += 1) {
-      const fx = zone.x + zone.w - 17 - flag * 14;
-      const fy = zone.y + 43;
-      graphics.lineStyle(2, 0xf8e5b5, .9);
-      graphics.lineBetween(fx, fy, fx, fy - 25);
-      graphics.fillStyle(palette.primary, 1);
-      graphics.fillTriangle(fx, fy - 25, fx, fy - 13, fx - 11, fy - 20);
-    }
-
-    const queenWidth = Math.min(62 + team.queenLevel * 4, zone.w * .25, chamberW * .63);
-    const queen = makeAntAgent('cq-queen', { x: nursery.x - 6, y: nursery.y - 9 }, queenWidth, palette.primary);
-    queen.setDepth(4);
-    queen.sprite.setFlipX(teamIndex % 2 === 1);
-    const queenScaleX = queen.sprite.scaleX;
-    const queenScaleY = queen.sprite.scaleY;
-    scene.tweens.add({ targets: queen.sprite, scaleX: queenScaleX * 1.025, scaleY: queenScaleY * 1.025, duration: 1050, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-
-    const antWidth = Phaser.Math.Clamp(Math.min(zone.w / 9, zone.h / 7), 23, 44);
-    const workerCount = Math.min(10, Math.max(4, Math.ceil(team.workers / 2)));
-    const workerPaths = [
-      [food, junction, entrance, { x: zone.x + zone.w * .18, y: zone.y + zone.h * .13 }, entrance, junction],
-      [nursery, junction, food, { x: food.x + chamberW * .22, y: food.y - 4 }, junction],
-      [food, junction, entrance, { x: zone.x + zone.w * .82, y: zone.y + zone.h * .14 }, entrance, junction],
-      [nursery, junction, food, junction],
-    ];
+    const queen = makeAntAgent('cq-queen', { x: nursery.x, y: nursery.y - 4 }, Math.min(55 + team.queenLevel * 4, roomWidth * .65), palette.primary);
+    queen.setData('role', 'queen');
     const ants = [];
-    for (let index = 0; index < workerCount; index += 1) {
-      const path = workerPaths[index % workerPaths.length].map(point => ({ x: point.x + (index % 3 - 1) * 5, y: point.y + (index % 2 ? 3 : -3) }));
-      const ant = makeAntAgent('cq-worker', path[0], antWidth * (index % 4 === 0 ? 1.08 : .9), palette.primary, index % 2 === 0);
+    const pathTo = room => {
+      if (room === nursery) return [nursery, entrance];
+      const points = [nursery];
+      for (let y = nursery.y + 91; y <= room.y - 74; y += 166) points.push({ x: cx, y });
+      points.push(room);
+      return points;
+    };
+    for (let index = 0; index < team.workers; index += 1) {
+      const lastEvent = session.events.at(-1);
+      const building = index === 0 && session.phase === 'event' && lastEvent?.key === 'upgrade-expansion' && lastEvent.teamId === team.id;
+      const room = building ? sites.expansion : index % 3 === 0 ? food : rooms[index % rooms.length];
+      const route = pathTo(room);
+      const surface = { x: cx + (index % 2 ? -1 : 1) * zone.w * .3, y: entrance.y - 19 };
+      const path = building ? [{ x: room.x - 12, y: room.y }, { x: room.x + 14, y: room.y + 5 }, { x: room.x, y: room.y - 8 }] : [...route.slice().reverse(), entrance, surface, entrance, ...route];
+      const ant = makeAntAgent('cq-worker', path[0], 29, palette.primary, !building, index < 48);
+      ant.setData('role', 'worker');
       ants.push(ant);
       animateAnt(ant, path, index);
     }
-
-    const guardianCount = Math.min(3, Math.max(1, Math.ceil(team.soldiers / 4)));
-    for (let index = 0; index < guardianCount; index += 1) {
-      const path = [
-        { x: guard.x - chamberW * .18, y: guard.y },
-        { x: guard.x + chamberW * .2, y: guard.y - 4 },
-        { x: junction.x + 8, y: junction.y + index * 4 },
-      ];
-      const guardian = makeAntAgent('cq-guardian', path[0], antWidth * 1.04, palette.primary);
-      ants.push(guardian);
-      animateAnt(guardian, path, index + 8);
+    for (let index = 0; index < team.soldiers; index += 1) {
+      const room = guards[Math.floor(index / 8)] || nursery;
+      const slot = index % 8;
+      const x = room.x + ((slot % 4) - 1.5) * roomWidth * .19;
+      const y = room.y - 13 + Math.floor(slot / 4) * 24;
+      const path = [{ x, y }, { x: x + 10, y: y - 5 }, { x: x - 8, y: y + 3 }];
+      const soldier = makeAntAgent('cq-guardian', path[0], 30, palette.primary, false, index < 48);
+      soldier.setData('role', 'soldier');
+      ants.push(soldier);
+      animateAnt(soldier, path, index);
     }
+    colonyViews.set(team.id, { zone, graphics, ants, queen, rooms, center: nursery, sites });
+  }
 
-    if (active) {
-      const glow = scene.add.ellipse(entrance.x, entrance.y, 54, 24, palette.light, .18).setDepth(2).setStrokeStyle(2, palette.light, .8);
-      scene.tweens.add({ targets: glow, scaleX: 1.3, scaleY: 1.3, alpha: .04, duration: 850, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    }
-    colonyViews.set(team.id, {
-      zone,
-      graphics,
-      ants,
-      queen,
-      center: { x: cx, y: zone.y + zone.h * .62 },
-      sites: { entrance, food, guard, nursery, expansion: expansion || junction, center: junction },
-    });
+  function focusColony(teamId, siteName = 'nursery') {
+    const view = colonyViews.get(teamId);
+    if (!view) return;
+    $('colonyViewPick').value = teamId;
+    const target = view.sites[siteName] || view.center;
+    const viewport = $('worldViewport');
+    const lowerPanel = !$('worldStory').classList.contains('hidden') ? $('worldStory').offsetHeight + 45 : 80;
+    const visibleHeight = viewport.clientHeight - lowerPanel;
+    viewport.scrollTo({ top: Math.max(0, target.y - visibleHeight * .48), behavior: 'auto' });
+    if (scene) scene.cameras.main.scrollY = viewport.scrollTop;
+  }
+
+  function restoreWorldFocus() {
+    if (!session) return;
+    const event = session.events.at(-1);
+    const key = String(event && event.key || '').replace(/^upgrade-/, '');
+    if (session.phase === 'event' && REWARD_STORIES[key]) {
+      const team = session.teams.find(item => item.id === event.teamId) || currentTeam();
+      focusColony(team.id, REWARD_STORIES[key].site);
+      celebrate(team.id, key, rewardEffectText(key, event, team));
+    } else if (currentTeam()) focusColony(currentTeam().id);
   }
 
   function updateWorld() {
@@ -1157,30 +1166,48 @@
     colonyViews = new Map();
     const width = scene.scale.width;
     const height = scene.scale.height;
-    fitWorldImage('cq-world', width, height);
-    if (session.warsActive) scene.add.rectangle(width / 2, height / 2, width, height, 0x1d2944, .18).setDepth(-20);
-    addAmbientLife(width, height);
-
     const docked = width > 850 && $('gameScreen').classList.contains('dock-open');
     const layoutWidth = docked ? width - Math.min(620, width * .44) : width;
     const count = session.teams.length;
-    const columns = layoutWidth < 700 ? (count <= 2 ? 1 : 2) : count <= 3 ? count : count === 4 ? 2 : 3;
+    const columns = layoutWidth < 600 ? 1 : layoutWidth < 1050 ? 2 : Math.min(3, count);
+    const zoneWidth = (layoutWidth - 18 * (columns + 1)) / columns;
     const rows = Math.ceil(count / columns);
-    const marginX = layoutWidth < 700 ? 7 : 14;
-    const marginY = 8;
-    const top = Math.min(124, Math.max(98, height * .18));
-    const zoneWidth = (layoutWidth - marginX * (columns + 1)) / columns;
-    const zoneHeight = (height - top - marginY * (rows + 1)) / rows;
-    session.teams.forEach((team, index) => {
-      const col = index % columns;
-      const row = Math.floor(index / columns);
-      drawColony(team, {
-        x: marginX + col * (zoneWidth + marginX),
-        y: top + marginY + row * (zoneHeight + marginY),
-        w: zoneWidth,
-        h: zoneHeight,
-      }, index);
+    const rowHeights = Array.from({ length: rows }, (_, row) => {
+      const roomCounts = session.teams.slice(row * columns, (row + 1) * columns).map(team => core.colonyRooms(team).length);
+      return 242 + Math.ceil((Math.max(...roomCounts) - 1) / 2) * 166;
     });
+    const worldHeight = Math.max(height, 145 + rowHeights.reduce((a, b) => a + b + 28, 0) + 190);
+    $('worldScrollSpace').style.height = `${worldHeight}px`;
+    fitWorldImage('cq-world', width, height);
+    // Tile only the soil portion beneath the first screen to keep the surface above ground.
+    const texture = scene.textures.get('cq-world').getSourceImage();
+    const soilScale = width / texture.width;
+    const soilHeight = texture.height * .6 * soilScale;
+    for (let y = height; y < worldHeight; y += soilHeight - 1) {
+      const soil = scene.add.image(width / 2, y, 'cq-world').setOrigin(.5, 0).setDepth(-30);
+      soil.setCrop(0, texture.height * .4, texture.width, texture.height * .6);
+      soil.setScale(soilScale);
+      soil.y -= texture.height * .4 * soilScale;
+    }
+    scene.cameras.main.setBounds(0, 0, width, worldHeight);
+    scene.cameras.main.scrollY = $('worldViewport').scrollTop;
+    addAmbientLife(layoutWidth, height);
+    let rowTop = 133;
+    for (let row = 0; row < rows; row += 1) {
+      for (let col = 0; col < columns; col += 1) {
+        const index = row * columns + col;
+        if (index >= count) break;
+        drawColony(session.teams[index], { x: 18 + col * (zoneWidth + 18), y: rowTop, w: zoneWidth, h: rowHeights[row] }, index);
+      }
+      rowTop += rowHeights[row] + 28;
+    }
+    $('worldViewport').setAttribute('aria-label', `Colony world, largest colony has ${Math.max(...session.teams.map(team => core.colonyRooms(team).length))} rooms`);
+    $('worldViewport').setAttribute('aria-description', session.teams.map(team => {
+      const view = colonyViews.get(team.id);
+      const workers = view.ants.filter(ant => ant.getData('role') === 'worker').length;
+      const soldiers = view.ants.filter(ant => ant.getData('role') === 'soldier').length;
+      return `${team.name}: 1 queen, ${workers} workers, ${soldiers} soldiers. ${view.rooms.length} rooms: ${view.rooms.map(room => room.label).join(', ')}. ${core.fortification(team).name} walls.`;
+    }).join(' '));
   }
 
   function celebrate(teamId, kind, effectText = '') {
@@ -1198,9 +1225,11 @@
     const ring = scene.add.ellipse(origin.x, origin.y, 52, 30, palette.light, .12).setDepth(9).setStrokeStyle(4, palette.light, .95);
     scene.tweens.add({ targets: ring, scaleX: 2.1, scaleY: 2.1, alpha: .08, duration: 850, yoyo: true, repeat: 4, ease: 'Sine.easeInOut', onComplete: () => ring.destroy() });
     if (effectText) {
-      const label = scene.add.text(origin.x, origin.y - 32, effectText.split(' - ')[0].toUpperCase(), {
-        fontFamily: 'Arial', fontSize: view.zone.w < 260 ? '9px' : '13px', fontStyle: 'bold', color: '#fff5cf', backgroundColor: '#254d39', padding: { x: 7, y: 4 },
-      }).setOrigin(.5).setDepth(14);
+      const labelWidth = Math.min(300, view.zone.w - 32);
+      const labelX = Phaser.Math.Clamp(origin.x, view.zone.x + labelWidth / 2 + 14, view.zone.x + view.zone.w - labelWidth / 2 - 14);
+      const label = scene.add.text(labelX, origin.y - 68, effectText.split(' - ')[0].toUpperCase(), {
+        fontFamily: 'Arial', fontSize: view.zone.w < 400 ? '11px' : '13px', fontStyle: 'bold', color: '#fff5cf', backgroundColor: '#254d39', padding: { x: 7, y: 4 }, wordWrap: { width: labelWidth }, align: 'center',
+      }).setOrigin(.5, 1).setDepth(14);
       scene.tweens.add({ targets: label, y: label.y - 18, duration: 900, yoyo: true, hold: 2100, ease: 'Sine.easeOut', onComplete: () => label.destroy() });
     }
   }
@@ -1288,6 +1317,12 @@
   }
 
   $('matchType').addEventListener('click', event => { const button = event.target.closest('[data-type]'); if (button) setMatchType(button.dataset.type); });
+  $('worldViewport').addEventListener('scroll', () => {
+    if (scene) scene.cameras.main.scrollY = $('worldViewport').scrollTop;
+    $('worldDepth').textContent = `Depth ${Math.round($('worldViewport').scrollTop / 16)}`;
+  }, { passive: true });
+  $('worldSurface').addEventListener('click', () => $('worldViewport').scrollTo({ top: 0, behavior: 'smooth' }));
+  $('colonyViewPick').addEventListener('change', event => focusColony(event.target.value));
   $('teamCount').addEventListener('change', renderTeamEditor);
   $('worldStoryContinue').addEventListener('click', async () => {
     if (!worldStoryAction || transitionLocked) return;

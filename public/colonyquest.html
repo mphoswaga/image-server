@@ -21,7 +21,7 @@
     @media(max-width:440px){.question-dialog .dialog-kicker{font-size:11px}.question-dialog .guide-line{font-size:11px}.question-dialog h2{font-size:18px}.question-dialog .answer{font-size:13px}.question-dialog .question-foot{font-size:11px}.question-dialog .feedback{font-size:12px}}
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
   </style>
-  <link rel="stylesheet" href="/colonyquest-polish.css?v=4">
+  <link rel="stylesheet" href="/colonyquest-polish.css?v=5">
 </head>
 <body>
   <div id="loading" class="loading"><div><div class="spinner"></div>Preparing ColonyQuest...</div></div>
@@ -59,7 +59,7 @@
   </div>
 
   <div id="gameScreen" class="game-screen hidden">
-    <div id="gameMount" class="game-mount"></div>
+    <div id="worldViewport" class="world-viewport" tabindex="0" role="region" aria-label="Colony world"><div id="worldScrollSpace"><div id="gameMount" class="game-mount"></div></div></div>
     <header class="game-top">
       <div class="game-title"><strong>ColonyQuest</strong><span id="gameLessonTitle"></span></div>
       <div class="phase-box"><b id="phaseLabel">Growth phase</b><span id="roundLabel">Round 1</span></div>
@@ -67,6 +67,7 @@
     </header>
     <div id="scoreStrip" class="score-strip"></div>
     <div id="turnBanner" class="turn-banner"><b id="turnTeam">Team 1</b><span id="turnStudent">Choose an answer together</span></div>
+    <div class="world-navigation"><select id="colonyViewPick" aria-label="View colony"></select><button id="worldSurface" type="button" title="Return to the meadow surface">Surface</button><span id="worldDepth" aria-live="off">Depth 0</span></div>
 
     <section id="storyOverlay" class="overlay hidden" aria-label="ColonyQuest story">
       <div class="dialog story-dialog"><div class="story-art"><img src="/assets/colonyquest/pip-worker.webp" alt="Pip the scout ant"></div><div class="story-copy"><div class="dialog-kicker" id="storyKicker">Chapter 1 - The Great Rain</div><h2 id="storyTitle">Moonroot Meadow needs you</h2><p id="storyText"></p><div class="story-goals"><div class="story-goal"><b>1</b><span>Answer together to awaken the Heartseed.</span></div><div class="story-goal"><b>2</b><span>Choose how your colony grows after every success.</span></div><div class="story-goal"><b>3</b><span>Reach the Moonroot Rally before nightfall.</span></div></div><button id="storyContinue" class="btn gold" type="button">Begin the adventure</button></div></div>
@@ -94,7 +95,7 @@
   </div>
 
   <script src="/vendor/phaser.min.js"></script>
-  <script src="/colonyquest-core.js?v=3"></script>
-  <script src="/colonyquest.js?v=4"></script>
+  <script src="/colonyquest-core.js?v=5"></script>
+  <script src="/colonyquest.js?v=5"></script>
 </body>
 </html>

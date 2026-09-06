@@ -5,7 +5,31 @@
 }(typeof globalThis !== 'undefined' ? globalThis : this, function colonyQuestCoreFactory() {
   'use strict';
 
-  const VERSION = 3;
+  const VERSION = 4;
+  const FORTIFICATIONS = Object.freeze([
+    { name: 'Earth', wall: 0xb68a57, edge: 0x785437, floor: 0x65513a },
+    { name: 'Timber', wall: 0xa7743e, edge: 0xe3b571, floor: 0x65513a },
+    { name: 'Brick', wall: 0xb7654e, edge: 0xe9b59a, floor: 0x675046 },
+    { name: 'Stone', wall: 0x81918f, edge: 0xc2cecb, floor: 0x4e6260 },
+    { name: 'Stone and steel', wall: 0x8aafbe, edge: 0xe4f5fa, floor: 0x405563 },
+  ]);
+
+  function fortification(team) {
+    return FORTIFICATIONS[Math.floor(clamp(team && team.defense, 0, FORTIFICATIONS.length - 1))];
+  }
+
+  function colonyRooms(team) {
+    const rooms = [{ id: 'nursery', kind: 'nursery', label: 'Queen chamber' }];
+    if (team.pantryBuilt) rooms.push({ id: 'food', kind: 'food', label: 'Pantry' });
+    if (team.barracksBuilt) rooms.push({ id: 'guard', kind: 'guard', label: 'Barracks' });
+    for (let index = 1; index < Math.ceil(team.soldiers / 8); index += 1) rooms.push({ id: `guard-${index}`, kind: 'guard', label: `Barracks ${index + 1}` });
+    for (let index = 1; index < Math.ceil(team.workers / 12); index += 1) rooms.push({ id: `workers-${index}`, kind: 'workers', label: `Worker lodge ${index}` });
+    const expansions = ['Mushroom garden', 'Seed vault', 'Workshop', 'Water store'];
+    for (let index = 1; index < team.territory; index += 1) {
+      rooms.push({ id: `expansion-${index}`, kind: 'expansion', label: `${expansions[(index - 1) % expansions.length]} ${index}`, expansion: index });
+    }
+    return rooms;
+  }
   const TEAM_COLORS = Object.freeze([
     { name: 'Azure', primary: 0x2f80ed, light: 0x8ec5ff, dark: 0x123f7a },
     { name: 'Coral', primary: 0xef6351, light: 0xffb0a4, dark: 0x7b2b23 },
@@ -57,11 +81,13 @@
       name: text(input && input.name, 40) || `Team ${index + 1}`,
       colorIndex,
       members: Array.isArray(input && input.members) ? input.members.slice(0, 80).map(cleanMember) : [],
-      population: 8,
-      workers: 5,
-      soldiers: 1,
-      food: 24,
-      defense: 1,
+      population: 2,
+      workers: 1,
+      soldiers: 0,
+      food: 8,
+      defense: 0,
+      pantryBuilt: false,
+      barracksBuilt: false,
       territory: 1,
       queenLevel: 1,
       nestLevel: 1,
@@ -81,6 +107,10 @@
     base.population = Math.max(1, base.population);
     base.queenLevel = Math.max(1, base.queenLevel);
     base.nestLevel = Math.max(1, base.nestLevel);
+    base.territory = Math.max(1, base.territory);
+    base.pantryBuilt = typeof input?.pantryBuilt === 'boolean' ? input.pantryBuilt : base.workers > 1 || base.food > 8;
+    base.barracksBuilt = typeof input?.barracksBuilt === 'boolean' ? input.barracksBuilt : base.soldiers > 0;
+    base.population = Math.max(base.population, 1 + base.workers + base.soldiers);
     return base;
   }
 
@@ -117,19 +147,23 @@
 
   function applyReward(team, reward, teams) {
     if (!team || !REWARDS[reward] || reward === 'raid') return team;
+    if (reward === 'defense' && team.defense >= FORTIFICATIONS.length - 1) return team;
     const boost = comebackMultiplier(team, teams);
     const add = value => Math.max(1, Math.round(value * boost));
     if (reward === 'workers') {
+      team.pantryBuilt = true;
       const amount = add(3);
       team.workers += amount;
       team.population += amount;
       team.food += add(3);
     } else if (reward === 'food') {
-      team.food += add(22 + team.workers);
+      team.pantryBuilt = true;
+      team.food += add(23 + team.workers);
     } else if (reward === 'defense') {
       team.defense += 1;
       team.nestLevel += team.defense % 2 === 0 ? 1 : 0;
     } else if (reward === 'queen') {
+      team.pantryBuilt = true;
       team.queenLevel += 1;
       team.population += add(2 + team.queenLevel);
       team.workers += add(1);
@@ -138,6 +172,7 @@
       team.food += add(9);
       team.nestLevel += team.territory % 2 === 0 ? 1 : 0;
     } else if (reward === 'soldiers') {
+      team.barracksBuilt = true;
       const amount = add(3);
       team.soldiers += amount;
       team.population += amount;
@@ -174,10 +209,11 @@
         team.food -= births * 2;
         team.population += births;
         team.workers += Math.max(1, Math.ceil(births * 0.6));
+        if (team.workers > 1) team.pantryBuilt = true;
       }
       if (team.food === 0 && team.population > 5) {
-        team.population -= 1;
-        if (team.workers > 3) team.workers -= 1;
+        if (team.population > 1 + team.workers + team.soldiers) team.population -= 1;
+        else if (team.workers > 3) { team.workers -= 1; team.population -= 1; }
       }
     }
     return teams;
@@ -289,6 +325,9 @@
 
   return {
     VERSION,
+    FORTIFICATIONS,
+    fortification,
+    colonyRooms,
     TEAM_COLORS,
     REWARDS,
     EVENTS,

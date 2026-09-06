@@ -1,4 +1,13 @@
 /* Keep the playfield visually dominant while questions remain readable. */
+.world-viewport{position:absolute;inset:76px 0 0;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;scrollbar-color:#85b7a0 #193c35;overscroll-behavior:contain;touch-action:pan-y}
+#worldScrollSpace{position:relative;min-height:100%}
+#gameMount.game-mount{position:sticky;inset:auto;top:0;height:calc(100dvh - 76px);width:100%}
+#gameMount canvas{touch-action:pan-y!important}
+.world-navigation{position:absolute;z-index:24;bottom:12px;left:14px;display:flex;align-items:center;gap:6px;max-width:calc(100% - 180px);padding:5px;background:#183e35ed;border:1px solid #7fb19b;border-radius:6px}
+.world-navigation select,.world-navigation button{min-width:0;max-width:180px;background:#285c50;color:white;border:1px solid #87bdae;border-radius:4px;padding:7px;font:700 12px Arial;cursor:pointer}
+#worldDepth{font-size:11px;color:#d7f0e2;padding:0 5px;white-space:nowrap}
+.world-story{bottom:64px!important}
+@media(max-width:850px){.world-viewport{top:82px}#gameMount.game-mount{height:calc(100dvh - 82px)}.world-navigation{bottom:8px;left:8px;max-width:calc(100% - 150px)}.world-navigation select{max-width:110px}.world-navigation button{font-size:11px}#worldDepth{display:none}}
 .game-top{background:#173e38;border-bottom:1px solid #87bdae;box-shadow:0 3px 12px #102a2840}
 .game-title strong{font:800 21px Arial,sans-serif;color:#effff8}
 .phase-box b{font:800 18px Arial,sans-serif;color:#fbd576}

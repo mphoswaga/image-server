@@ -21,11 +21,12 @@ function teams(count = 4) {
 test('ColonyQuest starts as a balanced, child-readable colony simulation', () => {
   const colony = core.createTeam({ name: 'Blue Colony' }, 0);
   assert.equal(colony.name, 'Blue Colony');
-  assert.equal(colony.population, 8);
-  assert.equal(colony.workers, 5);
-  assert.equal(colony.soldiers, 1);
+  assert.equal(colony.population, 2);
+  assert.equal(colony.workers, 1);
+  assert.equal(colony.soldiers, 0);
   assert.equal(colony.queenLevel, 1);
-  assert.equal(colony.defense, 1);
+  assert.equal(colony.defense, 0);
+  assert.deepEqual(core.colonyRooms(colony).map(room => room.id), ['nursery']);
   assert.ok(core.colonyStrength(colony) > 0);
   assert.deepEqual(core.normalizeConfig(), {
     teamCount: 4,
@@ -60,6 +61,49 @@ test('queen development produces visible colony growth during each round', () =>
   assert.ok(all[0].workers > beforeWorkers);
 });
 
+test('rooms grow permanently, including every expansion and full soldier garrisons', () => {
+  const all = teams(2), colony = all[0];
+  core.applyReward(colony, 'food', all);
+  assert.ok(core.colonyRooms(colony).some(room => room.id === 'food'));
+  colony.food = 0;
+  assert.ok(core.colonyRooms(core.normalizeTeam(colony, 0)).some(room => room.id === 'food'));
+  for (let i = 0; i < 8; i++) {
+    const before = core.colonyRooms(colony).length;
+    core.applyReward(colony, 'expansion', all);
+    assert.equal(core.colonyRooms(colony).length, before + 1);
+  }
+  for (let i = 0; i < 4; i++) core.applyReward(colony, 'soldiers', all);
+  const rooms = core.colonyRooms(colony);
+  assert.equal(rooms.filter(room => room.kind === 'guard').length, Math.ceil(colony.soldiers / 8));
+  assert.equal(new Set(rooms.map(room => room.id)).size, rooms.length);
+  assert.deepEqual(core.colonyRooms(core.normalizeTeam(colony, 0)), rooms);
+});
+
+test('fortifications reach stone and steel and do not sell an invisible higher tier', () => {
+  const all = teams(2), colony = all[0];
+  const materials = [core.fortification(colony).name];
+  for (let i = 0; i < 4; i++) {
+    core.applyReward(colony, 'defense', all);
+    materials.push(core.fortification(colony).name);
+  }
+  assert.deepEqual(materials, ['Earth', 'Timber', 'Brick', 'Stone', 'Stone and steel']);
+  const before = JSON.stringify(colony);
+  core.applyReward(colony, 'defense', all);
+  assert.equal(JSON.stringify(colony), before);
+  assert.equal(core.fortification(core.normalizeTeam(colony, 0)).name, 'Stone and steel');
+});
+
+test('old matches retain their ants and rooms while newborn colonies stay small', () => {
+  const old = core.normalizeTeam({ population: 18, workers: 10, soldiers: 4, food: 60, defense: 3, territory: 4, queenLevel: 2, nestLevel: 3 }, 0);
+  assert.equal(old.population, 18);
+  assert.equal(old.workers, 10);
+  assert.equal(old.soldiers, 4);
+  assert.equal(core.colonyRooms(old).length, 6);
+  const fresh = core.normalizeTeam(core.createTeam({}, 0), 0);
+  assert.equal(core.colonyRooms(fresh).length, 1);
+  assert.equal(fresh.population, 2);
+});
+
 test('comeback help is meaningful without erasing the leading colony', () => {
   const all = teams(2);
   all[0].food = 400;
@@ -68,7 +112,7 @@ test('comeback help is meaningful without erasing the leading colony', () => {
   assert.equal(core.comebackMultiplier(weaker, all), 1.2);
   const before = core.colonyStrength(all[0]);
   core.applyReward(weaker, 'workers', all);
-  assert.equal(weaker.workers, 9);
+  assert.equal(weaker.workers, 5);
   assert.ok(core.colonyStrength(all[0]) === before);
   assert.ok(core.colonyStrength(all[0]) > core.colonyStrength(weaker));
 });

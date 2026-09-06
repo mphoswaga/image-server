@@ -1,6 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const sharp = require('sharp');
 const pptxgen = require('pptxgenjs');
+const colonyCore = require('../../public/colonyquest-core');
 const { expectNoPageOverflow, signInDisposableTeacher } = require('./helpers');
 
 const questions = [
@@ -8,6 +9,51 @@ const questions = [
   { question: 'What do plants need to grow?', options: ['Light', 'Plastic', 'Glass', 'Metal'], correctIndex: 0, explanation: 'Plants need light.' },
   { question: 'Which animal might live in a pond?', options: ['Frog', 'Camel', 'Lion', 'Penguin'], correctIndex: 0, explanation: 'A frog can live in a pond.' },
 ];
+
+test('growing colonies draw every soldier, retain every room, and scroll to a new expansion', async ({ page }, testInfo) => {
+  test.setTimeout(60_000);
+  test.skip(!['windows-100', 'mobile'].includes(testInfo.project.name), 'Verify the growing world with a mouse and on a narrow touch screen.');
+  const colonies = [colonyCore.createTeam({ name: 'Leaf Colony' }, 0), colonyCore.createTeam({ name: 'River Colony' }, 1)];
+  Object.assign(colonies[0], { soldiers: 11, workers: 16, population: 28, pantryBuilt: true, barracksBuilt: true, territory: 8, defense: 4 });
+  const setup = { teamCount: 2, rounds: 12, matchType: 'rounds', durationMinutes: 15, sound: false, teams: colonies };
+  let saved = colonyCore.normalizeSession({ phase: 'reward', introSeen: true, teams: colonies, currentTeamIndex: 0, turnIndex: 1 });
+  await page.route(/\/api\/game\/cq-growth\/colonyquest(?:\/session)?$/, async route => {
+    if (route.request().method() === 'PUT') {
+      saved = colonyCore.normalizeSession(route.request().postDataJSON().session);
+      return route.fulfill({ json: { ok: true } });
+    }
+    return route.fulfill({ json: { game: { id: 'cq-growth', lessonTitle: 'Habitats', questions, colonyquest: setup }, session: saved } });
+  });
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/colonyquest/cq-growth');
+  await page.locator('#resumeBtn').click();
+  const world = page.locator('#worldViewport');
+  await expect(world).toHaveAttribute('aria-description', /Leaf Colony: 1 queen, 16 workers, 11 soldiers/);
+  await expect(world).toHaveAttribute('aria-description', /Stone and steel walls/);
+  const beforeRooms = colonyCore.colonyRooms(saved.teams[0]).length;
+  await page.locator('[data-reward="expansion"]').click();
+  await expect(page.locator('#worldStory')).toBeVisible();
+  await expect(page.locator('#worldStoryEffect')).toContainText('+1 permanent room');
+  expect(colonyCore.colonyRooms(saved.teams[0])).toHaveLength(beforeRooms + 1);
+  await expect.poll(() => world.evaluate(element => element.scrollTop)).toBeGreaterThan(100);
+  const deep = await page.locator('#gameMount canvas').screenshot();
+  await testInfo.attach('expanded-colony', { body: deep, contentType: 'image/png' });
+  await page.locator('#worldSurface').click();
+  await expect.poll(() => world.evaluate(element => element.scrollTop)).toBe(0);
+  const surface = await page.locator('#gameMount canvas').screenshot();
+  expect(Buffer.compare(deep, surface)).not.toBe(0);
+  await world.hover({ position: { x: 40, y: 250 } });
+  await page.mouse.wheel(0, 400);
+  await expect.poll(() => world.evaluate(element => element.scrollTop)).toBeGreaterThan(100);
+  await page.reload();
+  await page.locator('#resumeBtn').click();
+  await expect(page.locator('#worldStoryEffect')).toContainText('+1 permanent room');
+  await expect(world).toHaveAttribute('aria-description', new RegExp(`${beforeRooms + 1} rooms`));
+  await expect(world).toHaveAttribute('aria-description', /16 workers, 11 soldiers/);
+  await expect.poll(() => world.evaluate(element => element.scrollTop)).toBeGreaterThan(100);
+  expect(errors).toEqual([]);
+});
 
 test('LessonScope creates ColonyQuest as a teacher-owned whole-class game', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'windows-100', 'The server creation contract only needs one browser.');
@@ -49,6 +95,7 @@ test('LessonScope creates ColonyQuest as a teacher-owned whole-class game', asyn
 });
 
 test('a teacher can run, recover, pause, and finish a one-screen ColonyQuest match', async ({ page }, testInfo) => {
+  test.setTimeout(60_000);
   test.skip(!['windows-100', 'tablet', 'mobile'].includes(testInfo.project.name), 'The classroom journey runs at representative desktop and touch viewports.');
 
   let session = null;
