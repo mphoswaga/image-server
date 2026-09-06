@@ -77,6 +77,54 @@ test('timeout, disconnect and teacher end cannot leave a learner locked', () => 
   f.match.end('teacher');assert.equal(f.match.state.phase,'ended');assert.equal(interaction.status,'cancelled');assert.equal(f.a.lock,null);
 });
 
+test('pause freezes the match and resume preserves remaining match and question time', () => {
+  const f=fixture();f.a.mass=200;f.b.mass=100;f.a.x=f.b.x=900;f.a.y=f.b.y=700;
+  const interaction=f.match.claim(f.a,f.b),endsAt=f.match.state.endsAt,expiresAt=interaction.expiresAt,x=f.a.x;
+  f.match.input(f.a.id,{seq:1,x:1,y:0});f.match.pause();f.advance(15000);f.match.tick();
+  assert.equal(f.a.x,x);assert.equal(f.match.state.phase,'paused');assert.equal(f.match.snapshot(f.a.id).pausedAt,f.match.state.pausedAt);
+  f.match.resume();assert.equal(f.match.state.endsAt,endsAt+15000);assert.equal(interaction.expiresAt,expiresAt+15000);
+  assert.equal(f.match.state.pausedAt,null);assert.equal(f.match.state.phase,'running');
+});
+
+test('a full 25-learner class survives sustained movement, mistakes and reconnects', () => {
+  let now=2_000_000;
+  const game={id:'class25',fishquest:{durationMinutes:10,lateJoin:true},questions:[{question:'Safe?',options:['Yes','No'],correctIndex:0}]};
+  const match=new FishMatch(game,{now:()=>now,random:Math.random,persist:()=>{}}),players=[];
+  for(let i=0;i<25;i++)players.push(match.join({studentId:`S${i}`,name:`Learner ${i+1}`}));
+  match.start();now+=CONFIG.protectionMs+1;
+  for(let frame=0;frame<300;frame++){
+    for(const [i,p] of players.entries())match.input(p.id,{seq:frame,x:Math.sin(frame+i),y:Math.cos(frame-i)});
+    now+=50;match.tick();
+  }
+  const attacker=players[0],victim=players[1];attacker.mass=200;victim.mass=100;attacker.protectedUntil=victim.protectedUntil=0;attacker.cooldownUntil=0;attacker.x=victim.x=500;attacker.y=victim.y=500;
+  const interaction=match.claim(attacker,victim);match.answer(attacker.id,{interactionId:interaction.id,choice:1});
+  match.disconnect(attacker.id);const restored=match.join({studentId:'S0',name:'Learner 1'});
+  assert.equal(restored.id,attacker.id);assert.equal(restored.lock,null);assert.equal(restored.connected,true);
+  assert.equal(match.state.players.length,25);assert.equal(match.snapshot(restored.id).players.length,25);
+});
+
+test('homework NPCs offer small prey and larger fish bump without locking the learner', () => {
+  let now=3_000_000;
+  const game={id:'solo',fishquest:{durationMinutes:10,lateJoin:true,playMode:'homework'},questions:[{question:'Pick yes',options:['Yes','No'],correctIndex:0}]};
+  const match=new FishMatch(game,{now:()=>now,random:()=>.4,persist:()=>{}}),learner=match.join({studentId:'S1',name:'Sam'});
+  match.addNpcs();match.start(1);now+=CONFIG.protectionMs+1;learner.protectedUntil=0;
+  const small=match.state.players.find(p=>p.npc&&p.mass===80),large=match.state.players.find(p=>p.npc&&p.mass===460);
+  learner.x=small.x=400;learner.y=small.y=400;
+  const encounter=match.claim(learner,small);assert.ok(encounter);assert.equal(match.snapshot(learner.id).question.prompt,'Pick yes');
+  match.answer(learner.id,{interactionId:encounter.id,choice:0});assert.ok(learner.mass>CONFIG.initialMass);assert.equal(learner.lock,null);
+  now+=CONFIG.cooldownMs+1;learner.protectedUntil=0;learner.mass=120;learner.score=20;learner.x=large.x=600;learner.y=large.y=600;
+  match.bump(large,learner);assert.equal(learner.mass,CONFIG.initialMass);assert.equal(learner.score,5);assert.equal(learner.lock,null);
+  const event=match.snapshot(learner.id).event;assert.equal(event.outcome,'bumped');assert.equal(event.victim,learner.id);
+});
+
+test('FishQuest homework settings create a private NPC ocean per learner', () => {
+  const gamesSource=fs.readFileSync(path.join(__dirname,'..','games.js'),'utf8');
+  const live=fs.readFileSync(path.join(__dirname,'..','fishquest-live.js'),'utf8');
+  assert.match(gamesSource,/playMode: config\.playMode === 'homework'/);
+  assert.match(live,/soloKey\(game\.id, identity\.studentId\)/);
+  assert.match(live,/match\.addNpcs\(\);match\.start\(1\)/);
+});
+
 test('reconnect resets stale input sequence and snapshot does not expose answers', () => {
   const f=fixture();f.match.input(f.a.id,{seq:99,x:1,y:0});f.match.disconnect(f.a.id);
   const same=f.match.join({studentId:'A',name:'Amina'});assert.equal(same.id,f.a.id);assert.equal(same.seq,-1);
@@ -113,8 +161,7 @@ test('FishQuest launch never reuses a stale browser client', () => {
 test('a teacher can launch a private FishQuest practice match directly', () => {
   const live = fs.readFileSync(path.join(__dirname, '..', 'fishquest-live.js'), 'utf8');
   assert.match(live, /openMatch\(game, \{ preview: true \}\)/);
-  assert.match(live, /__TEACHER_PREVIEW_BOT__/);
-  assert.match(live, /match\.start\(\)/);
+  assert.match(live, /match\.addNpcs\(\);match\.start\(1\)/);
   assert.match(live, /!teacherPreview && match\.state\.preview/);
   assert.match(live, /openMatch\(game, \{ replacePreview: true \}\)/);
 });
@@ -124,4 +171,6 @@ test('FishQuest answer buttons remain mounted while live state updates arrive', 
   assert.match(client, /renderedQuestionId === q\.id/);
   assert.match(client, /renderedQuestionId = q\.id/);
   assert.match(client, /socket\.readyState !== WebSocket\.OPEN/);
+  assert.match(client, /answer_ack/);
+  assert.match(client, /answer did not reach the ocean/);
 });

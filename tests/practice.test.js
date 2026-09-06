@@ -282,6 +282,14 @@ test('File Base teaches personal folder creation and Word Save As', () => {
   assert.match(teacher, /g3:file-base/);
 });
 
+test('live arcade refresh restores the server mission and pause cannot strand a completed step', () => {
+  const player=fs.readFileSync(path.join(__dirname,'..','practice.html'),'utf8');
+  assert.match(player,/liveParticipant\.activityId===ACTIVITY_ID\?Number\(liveParticipant\.missionsCompleted\)/);
+  assert.match(player,/\['step_out_of_order','attempt_complete'\]\.includes\(data\.code\) && await restoreLiveProgress\(\)/);
+  assert.match(player,/if\(attempt\.currentStepIndex>stepIndex\) scheduleAutoAdvance\(\);\s*else saveCheckpoint\(\);/);
+  assert.match(player,/optionalEffect\('Mission particles'/);
+});
+
 test('Byte feedback states are present and genuinely transparent', async () => {
   const sharp = require('sharp');
   const player = fs.readFileSync(path.join(__dirname, '..', 'practice.html'), 'utf8');

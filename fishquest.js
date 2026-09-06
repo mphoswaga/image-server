@@ -6,11 +6,12 @@ const CONFIG = Object.freeze({ width:2400, height:1600, initialMass:100, maxMass
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const radius=p=>18*Math.sqrt(p.mass/100);
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+const NPCS=[['Pip',80],['Bubbles',85],['Coral',110],['Flash',145],['Marina',190],['Tide',250],['Nova',340],['Titan',460]];
 
 class FishMatch {
   constructor(game,{now=Date.now,random=Math.random,persist=()=>{},log=()=>{}}={}) {
     this.game=game; this.now=now; this.random=random; this.persist=persist; this.log=log;
-    this.state={id:crypto.randomUUID(),gameId:game.id,phase:'lobby',endsAt:null,players:[],food:[],interactions:[],revision:0};
+    this.state={id:crypto.randomUUID(),gameId:game.id,phase:'lobby',endsAt:null,pausedAt:null,players:[],food:[],interactions:[],revision:0};
     for(let i=0;i<CONFIG.foodCount;i++)this.state.food.push({id:i,...this.point(),readyAt:0});
     this.lastTick=now(); this.lastPersist=now();
   }
@@ -30,11 +31,35 @@ class FishMatch {
     }
     p.connected=true;p.dx=0;p.dy=0;p.seq=-1;this.save();this.log('join',{playerId:p.id});return p;
   }
+  addNpcs(){
+    if(this.state.players.some(p=>p.npc))return;
+    NPCS.forEach(([name,mass],variant)=>{
+      const p={id:`npc-${variant}`,studentId:`__NPC__${variant}`,name,variant:variant%5,npc:true,baseMass:mass,
+        mass,score:0,...this.point(),dx:0,dy:0,inputAt:this.now(),seq:-1,connected:true,protectedUntil:0,
+        cooldownUntil:0,respawnAt:0,lock:null,attempts:[],presented:[],collections:0,swallows:0,aiTarget:this.point(),aiUntil:0};
+      this.state.players.push(p);this.spawn(p);
+    });
+    this.save();
+  }
   start(minimumPlayers=2){if(this.state.phase!=='lobby')throw Error('The match has already started.');
     if(this.state.players.filter(p=>p.connected).length<minimumPlayers)throw Error('Wait for at least two learners.');
     this.state.phase='running';this.state.endsAt=this.now()+this.game.fishquest.durationMinutes*60000;
     for(const p of this.state.players)p.protectedUntil=this.now()+CONFIG.protectionMs;
     this.lastTick=this.now();this.save();this.log('start',{});
+  }
+  pause(){
+    if(this.state.phase!=='running')throw Error('Only a running match can be paused.');
+    this.state.phase='paused';this.state.pausedAt=this.now();
+    for(const p of this.state.players){p.dx=0;p.dy=0;}
+    this.save();this.log('pause',{});
+  }
+  resume(){
+    if(this.state.phase!=='paused')throw Error('Only a paused match can be resumed.');
+    const pausedFor=Math.max(0,this.now()-this.state.pausedAt);
+    this.state.endsAt+=pausedFor;
+    for(const i of this.state.interactions.filter(i=>i.status==='pending'))i.expiresAt+=pausedFor;
+    this.state.phase='running';this.state.pausedAt=null;this.lastTick=this.now();
+    this.save();this.log('resume',{pausedFor});
   }
   end(reason='teacher'){
     if(this.state.phase==='ended')return;
@@ -53,7 +78,7 @@ class FishMatch {
     p.seq=message.seq;const length=Math.max(1,Math.hypot(message.x,message.y));
     p.dx=clamp(message.x/length,-1,1);p.dy=clamp(message.y/length,-1,1);p.inputAt=this.now();
   }
-  eligible(a,b){const t=this.now();return this.state.phase==='running'&&a.id!==b.id&&a.connected&&b.connected&&!a.lock&&!b.lock&&!a.respawnAt&&!b.respawnAt&&
+  eligible(a,b){const t=this.now();return this.state.phase==='running'&&!a.npc&&a.id!==b.id&&a.connected&&b.connected&&!a.lock&&!b.lock&&!a.respawnAt&&!b.respawnAt&&
     a.protectedUntil<=t&&b.protectedUntil<=t&&a.cooldownUntil<=t&&a.mass>=b.mass*CONFIG.eatRatio&&distance(a,b)<=radius(a)+radius(b)*.6;}
   question(p){
     if(!this.game.questions.length)throw Error('This match has no questions.');
@@ -72,6 +97,7 @@ class FishMatch {
     const i=this.state.interactions.find(i=>i.id===message.interactionId&&i.attacker===id);
     if(!i)throw Error('That question is no longer active.');
     if(i.status!=='pending'){this.log('duplicate_answer',{interactionId:i.id});return i;}
+    if(this.state.phase==='paused')throw Error('The match is paused.');
     if(this.state.phase!=='running'){this.resolve(i,'cancelled');return i;}
     if(this.now()>=this.state.endsAt){this.end('time');return i;}
     const q=this.game.questions[i.questionIndex];
@@ -89,7 +115,7 @@ class FishMatch {
     if(outcome==='correct'){
       const fishGrowth=Math.max(CONFIG.minimumFishGrowth,Math.min(100,b.mass*CONFIG.fishGrowthRatio));
       a.mass=Math.min(CONFIG.maxMass,a.mass+fishGrowth);a.score+=75;a.swallows++;
-      b.mass=Math.max(CONFIG.initialMass,b.mass*.6);b.respawnAt=t+CONFIG.respawnMs;b.dx=0;b.dy=0;
+      b.mass=b.npc?b.baseMass:Math.max(CONFIG.initialMass,b.mass*.6);b.respawnAt=t+CONFIG.respawnMs;b.dx=0;b.dy=0;
     }
     this.save();this.log('swallow_resolved',{interactionId:i.id,outcome});
   }
@@ -99,6 +125,18 @@ class FishMatch {
       if(gap>clearance){best=point;clearance=gap;}}
     Object.assign(p,best);p.protectedUntil=this.now()+CONFIG.protectionMs;p.respawnAt=0;
   }
+  bump(npc,p){
+    const t=this.now();
+    p.mass=Math.max(CONFIG.initialMass,p.mass*.82);p.score=Math.max(0,p.score-15);p.dx=0;p.dy=0;p.cooldownUntil=t+CONFIG.cooldownMs;
+    this.spawn(p);
+    const i={id:crypto.randomUUID(),attacker:npc.id,victim:p.id,startedAt:t,finishedAt:t,status:'bumped'};
+    this.state.interactions.push(i);this.save();this.log('npc_bump',{npcId:npc.id,playerId:p.id});
+  }
+  moveNpc(p,t,dt){
+    if(!p.aiTarget||t>=p.aiUntil||distance(p,p.aiTarget)<50){p.aiTarget=this.point();p.aiUntil=t+1800+this.random()*3200;}
+    const x=p.aiTarget.x-p.x,y=p.aiTarget.y-p.y,length=Math.max(1,Math.hypot(x,y));p.dx=x/length;p.dy=y/length;
+    const speed=105/Math.pow(p.mass/100,.12),r=radius(p);p.x=clamp(p.x+p.dx*speed*dt,r,CONFIG.width-r);p.y=clamp(p.y+p.dy*speed*dt,r,CONFIG.height-r);
+  }
   tick(){
     const t=this.now(),dt=Math.min(.1,Math.max(0,(t-this.lastTick)/1000));this.lastTick=t;
     if(this.state.phase!=='running')return;
@@ -107,6 +145,7 @@ class FishMatch {
     for(const p of this.state.players){
       if(p.respawnAt){if(t>=p.respawnAt)this.spawn(p);continue;}
       if(!p.connected||p.lock)continue;
+      if(p.npc){this.moveNpc(p,t,dt);continue;}
       if(t-p.inputAt>CONFIG.inputExpiryMs){p.dx=0;p.dy=0;}
       const speed=180/Math.pow(p.mass/100,.18),r=radius(p);
       p.x=clamp(p.x+p.dx*speed*dt,r,CONFIG.width-r);p.y=clamp(p.y+p.dy*speed*dt,r,CONFIG.height-r);
@@ -114,14 +153,17 @@ class FishMatch {
         f.readyAt=t+CONFIG.foodRespawnMs;Object.assign(f,this.point());p.mass=Math.min(CONFIG.maxMass,p.mass+CONFIG.foodGrowth/Math.sqrt(p.mass/100));p.score++;p.collections++;
       }
     }
+    for(const npc of this.state.players.filter(p=>p.npc&&!p.respawnAt))for(const p of this.state.players.filter(p=>!p.npc&&p.connected&&!p.respawnAt&&!p.lock)){
+      if(p.protectedUntil<=t&&p.cooldownUntil<=t&&npc.mass>=p.mass*CONFIG.eatRatio&&distance(npc,p)<=radius(npc)+radius(p)*.7)this.bump(npc,p);
+    }
     for(const a of this.state.players)for(const b of this.state.players)if(this.eligible(a,b))this.claim(a,b);
     if(t-this.lastPersist>=3000)this.save();
   }
   snapshot(id,teacher=false){
     const t=this.now(),me=this.player(id);
-    const players=this.state.players.map(p=>({id:p.id,name:p.name,variant:p.variant,x:Math.round(p.x),y:Math.round(p.y),mass:Math.round(p.mass),score:p.score,connected:p.connected,
+    const players=this.state.players.map(p=>({id:p.id,name:p.name,variant:p.variant,npc:!!p.npc,x:Math.round(p.x),y:Math.round(p.y),mass:Math.round(p.mass),score:p.score,connected:p.connected,
       protected:p.protectedUntil>t,respawning:!!p.respawnAt,locked:!!p.lock}));
-    const result={matchId:this.state.id,phase:this.state.phase,endsAt:this.state.endsAt,now:t,players,world:{width:CONFIG.width,height:CONFIG.height},eatRatio:CONFIG.eatRatio,
+    const result={matchId:this.state.id,phase:this.state.phase,solo:!!this.state.solo,endsAt:this.state.endsAt,pausedAt:this.state.pausedAt,now:t,players,world:{width:CONFIG.width,height:CONFIG.height},eatRatio:CONFIG.eatRatio,
       food:this.state.food.filter(f=>f.readyAt<=t).map(f=>[f.id,Math.round(f.x),Math.round(f.y)])};
     if(me){
       const interaction=this.state.interactions.find(i=>i.id===me.lock&&i.attacker===id&&i.status==='pending');

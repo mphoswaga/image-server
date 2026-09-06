@@ -1124,6 +1124,7 @@
           if(phase==='independent') {
             if(independentSaved) {
               if(attempt.currentStepIndex>stepIndex) scheduleAutoAdvance();
+              else saveCheckpoint();
             } else renderTask();
           } else renderStep();
         }
@@ -1495,6 +1496,10 @@
       pop.textContent=finalHit?'Room clear':`+${points}`;
       $('taskArea').appendChild(pop);
       setTimeout(()=>pop.remove(),finalHit?720:800);
+    }
+
+    function optionalEffect(label, effect) {
+      try { effect(); } catch (error) { console.warn(`${label} unavailable`,error); }
     }
 
     function renderProgress() {
@@ -2019,13 +2024,13 @@
       const points=100+Math.min(5,combo-1)*20;
       score += points;
       const finalHit=roundProgress >= roundGoal();
-      setByteState(finalHit?'complete':'success');
+      optionalEffect('Byte feedback',()=>setByteState(finalHit?'complete':'success'));
       $('feedback').textContent = finalHit ? step.success : `${combo >= 3 ? `${combo}× combo! ` : ''}${roundGoal()-roundProgress} more to clear this room.`;
       $('feedback').className = 'feedback show';
       updateHud();
-      playCue(finalHit?'complete':'hit');
-      burstParticles(hitTarget,finalHit?'#f8c342':'#25cddc');
-      celebrateHit(finalHit,points);
+      optionalEffect('Game sound',()=>playCue(finalHit?'complete':'hit'));
+      optionalEffect('Mission particles',()=>burstParticles(hitTarget,finalHit?'#f8c342':'#25cddc'));
+      optionalEffect('Score animation',()=>celebrateHit(finalHit,points));
       if (!finalHit) { activeGameTimers.push(setTimeout(()=>{ if(!paused) renderTask(); },420)); return; }
       stats.attempts += 1;
       independentSaved = true;
@@ -2104,7 +2109,10 @@
           headers:{'Content-Type':'application/json','X-Practice-Participant':liveParticipantToken},
           body:JSON.stringify({...payload,arcadeScore:performanceSummary().score,activityId:ACTIVITY_ID,activityVersion:campaign.version}),
         });
-        if(!response.ok) throw new Error(data.error||'The leaderboard could not be updated.');
+        if(!response.ok) {
+          if(['step_out_of_order','attempt_complete'].includes(data.code) && await restoreLiveProgress()) return;
+          const error=new Error(data.error||'The leaderboard could not be updated.');error.code=data.code;throw error;
+        }
         liveRoom=data.room;
         if(data.participant) liveParticipant=data.participant;
         renderLiveBoard(liveRoom);
@@ -2120,6 +2128,23 @@
         $('nextBtn').dataset.retry='1';
         retryCheckpointSoon();
       }
+    }
+
+    async function restoreLiveProgress() {
+      try {
+        const {response,data}=await checkpointRequest(`/api/practice/live-sessions/${encodeURIComponent(liveRoom.code)}`,{headers:{'X-Practice-Participant':liveParticipantToken}});
+        if(!response.ok||!data.participant)return false;
+        liveRoom=data.room;liveParticipant=data.participant;renderLiveBoard(liveRoom);
+        const serverIndex=liveParticipant.activityId===ACTIVITY_ID?Math.max(0,Math.min(steps.length,Number(liveParticipant.missionsCompleted)||0)):0;
+        if(serverIndex===stepIndex&&liveParticipant.status!=='completed')return false;
+        clearTimeout(checkpointRetryTimer);checkpointRetryCount=0;frozenCheckpoint=null;delete $('nextBtn').dataset.retry;
+        attempt.currentStepIndex=serverIndex;attempt.status=liveParticipant.status==='completed'?'completed':'in_progress';
+        independentSaved=false;
+        if(attempt.status==='completed'||serverIndex>=steps.length){attempt.status='completed';showCompletion();}
+        else {stepIndex=serverIndex;phase='show';renderStep();showMissionTransition('Mission restored');}
+        setSave('Progress restored from the class room');
+        return true;
+      }catch{return false;}
     }
 
     function checkpointMastery(payload) {
@@ -2260,9 +2285,12 @@
       metricsCommittedForStep=false;
       updateHud();
       if (ephemeralMode) {
-        const startIndex=previewMode&&requestedStageIndex>=0?requestedStageIndex:0;
-        attempt = { id:`${guestMode?'guest':'preview'}-${Date.now()}`, activityId:ACTIVITY_ID, activityVersion:campaign.version, status:'in_progress', currentStepIndex:startIndex, checkpoints:[], mastery:'not_started' };
+        const liveIndex=liveRoom&&liveParticipant&&liveParticipant.activityId===ACTIVITY_ID?Number(liveParticipant.missionsCompleted)||0:0;
+        const startIndex=liveRoom?Math.max(0,Math.min(steps.length,liveIndex)):previewMode&&requestedStageIndex>=0?requestedStageIndex:0;
+        const restoredStatus=liveRoom&&liveParticipant&&liveParticipant.activityId===ACTIVITY_ID&&liveParticipant.status==='completed'?'completed':'in_progress';
+        attempt = { id:`${guestMode?'guest':'preview'}-${Date.now()}`, activityId:ACTIVITY_ID, activityVersion:campaign.version, status:restoredStatus, currentStepIndex:startIndex, checkpoints:[], mastery:'not_started' };
         stepIndex = startIndex;
+        if(attempt.status==='completed'||stepIndex>=steps.length)return showCompletion();
         phase = 'show';
         $('intro').classList.add('hidden');
         setSave(liveRoom ? `Live room ${liveRoom.code}` : guestMode ? 'Guest practice - results not saved' : 'Preview only - results not saved');

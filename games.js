@@ -50,7 +50,7 @@ function createGame({ teacherId, teacherName, lessonTitle, subject, topic, grade
     rosterId: rosterId || null,
     cutoffAt: cutoffAt || null,
     mode: mode === 'fishquest' ? 'fishquest' : 'arcade',
-    fishquest: mode === 'fishquest' ? { durationMinutes: 10, lateJoin: true } : null,
+    fishquest: mode === 'fishquest' ? { durationMinutes: 10, lateJoin: true, playMode: 'live' } : null,
     summary: game.summary || { overview: game.overview || '', concepts: game.concepts || [] },
     questions: game.questions || [],
     createdAt: new Date().toISOString(),
@@ -134,7 +134,7 @@ function updateFishQuest(id, config) {
   if (!fs.existsSync(p)) return null;
   const g = JSON.parse(fs.readFileSync(p, 'utf8'));
   const durationMinutes = Math.min(30, Math.max(3, Number(config.durationMinutes) || 10));
-  g.fishquest = { durationMinutes, lateJoin: config.lateJoin !== false };
+  g.fishquest = { durationMinutes, lateJoin: config.lateJoin !== false, playMode: config.playMode === 'homework' ? 'homework' : 'live' };
   if (Array.isArray(config.questions)) {
     g.questions = config.questions.map((q, i) => ({
       question: String(q.question || '').trim(),

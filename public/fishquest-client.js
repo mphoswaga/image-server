@@ -1,7 +1,7 @@
 (() => {
   const $ = id => document.getElementById(id);
   const GAME_ID = location.pathname.split('/').filter(Boolean).pop();
-  let meta, socket, state, scene, rendererStarting = false, me, reconnects = 0, seq = 0, ticket = '', reconnectTimer, renderedQuestionId = null;
+  let meta, socket, state, scene, rendererStarting = false, me, reconnects = 0, seq = 0, ticket = '', reconnectTimer, renderedQuestionId = null, answerTimer = null;
   const keys = new Set(); let touch = { x: 0, y: 0 }, entities = new Map(), foods = new Map(), lastEvent = null, qTimer;
   function show(id) { document.querySelectorAll('.screen').forEach(el => el.classList.toggle('show', el.id === id)); }
   async function json(url, options) { const r = await fetch(url, options); const d = await r.json().catch(() => ({})); if (!r.ok) { const e = Error(d.error || 'Please try again.'); e.status = r.status; throw e; } return d; }
@@ -29,10 +29,11 @@
     clearTimeout(reconnectTimer); show('arena'); $('connection').textContent = 'Connecting to the ocean...';
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'; socket = new WebSocket(`${protocol}//${location.host}/ws/fishquest`);
     socket.onopen = () => { reconnects = 0; socket.send(JSON.stringify({ type: 'auth', token: ticket })); $('connection').textContent = 'Live with your class'; };
-    socket.onmessage = event => { const m = JSON.parse(event.data); if (m.type === 'state') apply(m.state); if (m.type === 'error') toast(m.error, false); };
+    socket.onmessage = event => { const m = JSON.parse(event.data); if (m.type === 'state') apply(m.state); if (m.type === 'answer_ack') answerAck(m); if (m.type === 'error') toast(m.error, false); };
     socket.onclose = event => {
       if (state && state.phase === 'ended') return;
       $('connection').textContent = 'Reconnecting... your progress is safe';
+      unlockAnswers();
       if (event.code === 4003) { wait('Your room changed. Join again to continue.'); return; }
       reconnectTimer = setTimeout(() => getTicket(), Math.min(8000, 500 * 2 ** reconnects++));
     };
@@ -40,11 +41,11 @@
   function apply(next) {
     state = next; me = state.players.find(p => p.id === state.me); if (!me) return;
     if (!scene && !rendererStarting) startRenderer();
-    $('mass').textContent = me.mass; $('score').textContent = me.score;
-    $('teacherWait').hidden = state.phase !== 'lobby';
+    $('mass').textContent = me.mass; $('score').textContent = me.score; $('connection').textContent=state.solo?'Homework ocean · computer fish':'Live with your class';
+    $('teacherWait').hidden = state.phase !== 'lobby'; $('teacherPause').hidden = state.phase !== 'paused';
     if (state.phase === 'ended') return finish();
     renderState(); renderQuestion();
-    if (state.event && state.event.id !== lastEvent) { lastEvent = state.event.id; const mine = state.event.attacker === state.me; if (state.event.outcome === 'correct' && mine) toast('Correct! You grew bigger!', true); else if (state.event.outcome === 'incorrect' && mine) toast('Not this time. Keep exploring!', false); else if (state.event.outcome === 'timeout' && mine) toast('Time ran out. Keep going!', false); else if (state.event.outcome === 'correct') toast('Splash! You are safely back.', false); }
+    if (state.event && state.event.id !== lastEvent) { lastEvent = state.event.id; const mine = state.event.attacker === state.me; if (state.event.outcome === 'correct' && mine) toast('Correct! You grew bigger!', true); else if (state.event.outcome === 'incorrect' && mine) toast('Not this time. Keep exploring!', false); else if (state.event.outcome === 'timeout' && mine) toast('Time ran out. Keep going!', false); else if (state.event.outcome === 'bumped' && state.event.victim === state.me) toast('That fish is too big! Eat more plankton first.', false); else if (state.event.outcome === 'correct') toast('Splash! You are safely back.', false); }
   }
   function startRenderer() {
     rendererStarting = true;
@@ -95,7 +96,7 @@
       if (!e) { e = makeFish(p); entities.set(p.id,e); if (p.id === state.me) scene.cameras.main.startFollow(e.sprite,true,.08,.08); }
       if (Math.abs(p.x-e.tx)>1) e.facing=p.x>e.tx?1:-1;
       e.tx=p.x; e.ty=p.y; e.scale=Math.pow(p.mass/100,.65); e.locked=p.locked;
-      e.sprite.setAlpha(p.respawning ? .2 : p.protected ? .72 : 1); e.label.setText(p.id === state.me ? 'You' : p.name).setAlpha(p.respawning ? .3 : 1);
+      e.sprite.setAlpha(p.respawning ? .2 : p.protected ? .72 : 1); e.label.setText(p.id === state.me ? 'You' : p.npc ? `${p.name} · ${p.mass}` : p.name).setAlpha(p.respawning ? .3 : 1);
     }
     for (const [id, e] of entities) if (!seen.has(id)) { e.sprite.destroy(); e.label.destroy(); entities.delete(id); }
     const foodSeen = new Set();
@@ -123,16 +124,29 @@
     const q = state.question;
     if (!q) {
       $('question').hidden = true;
-      if (renderedQuestionId) { renderedQuestionId = null; clearInterval(qTimer); $('options').innerHTML = ''; }
+      if (renderedQuestionId) { renderedQuestionId = null; clearInterval(qTimer); unlockAnswers(); $('options').innerHTML = ''; }
       return;
     }
     $('question').hidden = false;
     if (renderedQuestionId === q.id) return;
     renderedQuestionId = q.id; clearInterval(qTimer);
     $('prompt').textContent = q.prompt; $('options').innerHTML = '';
-    q.options.forEach((option, choice) => { const b = document.createElement('button'); b.className='option'; b.textContent=option; b.onclick=()=>{ if (!socket || socket.readyState !== WebSocket.OPEN) { toast('Reconnecting. Try that answer again.', false); return; } document.querySelectorAll('.option').forEach(x=>x.disabled=true); socket.send(JSON.stringify({ type:'answer', interactionId:q.id, choice })); }; $('options').appendChild(b); });
+    q.options.forEach((option, choice) => { const b = document.createElement('button'); b.className='option'; b.textContent=option; b.onclick=()=>sendAnswer(q.id,choice); $('options').appendChild(b); });
     const update=()=>{ $('qtime').textContent=`${Math.max(0,Math.ceil((q.expiresAt-Date.now())/1000))} seconds left`; }; update();qTimer=setInterval(update,250);
   }
+  function sendAnswer(interactionId,choice) {
+    if (!socket || socket.readyState !== WebSocket.OPEN) { toast('Reconnecting. Try that answer again.', false); return; }
+    document.querySelectorAll('.option').forEach(x=>x.disabled=true);
+    socket.send(JSON.stringify({ type:'answer', interactionId, choice }));
+    clearTimeout(answerTimer); answerTimer=setTimeout(()=>{ if(state&&state.question&&state.question.id===interactionId){unlockAnswers();toast('The answer did not reach the ocean. Please tap it again.',false);}},2500);
+  }
+  function answerAck(message) {
+    clearTimeout(answerTimer); answerTimer=null;
+    if (!message.accepted && state && state.question && state.question.id === message.interactionId) {
+      unlockAnswers(); toast(message.error || 'Please choose your answer again.', false);
+    }
+  }
+  function unlockAnswers(){clearTimeout(answerTimer);answerTimer=null;document.querySelectorAll('.option').forEach(x=>x.disabled=false)}
   function finish() {
     show('ended'); const order=[...state.players].sort((a,b)=>b.score-a.score), place=order.findIndex(p=>p.id===state.me)+1;
     $('rank').textContent = place ? `You finished number ${place} of ${order.length}` : 'Adventure complete'; $('finalScore').textContent = `${me.score} points`;
@@ -144,6 +158,6 @@
   const pad=$('touch'), dot=$('touchDot'); function moveTouch(e){const r=pad.getBoundingClientRect(),x=e.clientX-(r.left+r.width/2),y=e.clientY-(r.top+r.height/2),l=Math.max(1,Math.hypot(x,y)),m=Math.min(r.width*.32,l);touch={x:x/l,y:y/l};dot.style.transform=`translate(${touch.x*m}px,${touch.y*m}px)`;}
   pad.onpointerdown=e=>{pad.setPointerCapture(e.pointerId);moveTouch(e)};pad.onpointermove=e=>{if(pad.hasPointerCapture(e.pointerId))moveTouch(e)};pad.onpointerup=pad.onpointercancel=()=>{touch={x:0,y:0};dot.style.transform=''};
   setInterval(()=>{if(!socket||socket.readyState!==1||!state||state.phase!=='running'||state.question)return;let x=(keys.has('arrowright')||keys.has('d')?1:0)-(keys.has('arrowleft')||keys.has('a')?1:0),y=(keys.has('arrowdown')||keys.has('s')?1:0)-(keys.has('arrowup')||keys.has('w')?1:0);if(!x&&!y){x=touch.x;y=touch.y}socket.send(JSON.stringify({type:'input',seq:seq++,x,y}));},50);
-  setInterval(()=>{if(!state)return;const left=state.endsAt?Math.max(0,state.endsAt-Date.now()):0;$('time').textContent=state.phase==='lobby'?'Lobby':`${Math.floor(left/60000)}:${String(Math.floor(left/1000)%60).padStart(2,'0')}`;},250);
+  setInterval(()=>{if(!state)return;const left=state.endsAt?Math.max(0,state.endsAt-(state.phase==='paused'?state.pausedAt:Date.now())):0;$('time').textContent=state.phase==='lobby'?'Lobby':state.phase==='paused'?'Paused':`${Math.floor(left/60000)}:${String(Math.floor(left/1000)%60).padStart(2,'0')}`;},250);
   load();
 })();
