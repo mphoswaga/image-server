@@ -326,6 +326,7 @@
     for (const overlay of ['storyOverlay', 'questionOverlay', 'rewardOverlay', 'targetOverlay', 'eventOverlay', 'finalOverlay']) $(overlay).classList.add('hidden');
     if (id) $(id).classList.remove('hidden');
     $('gameScreen').classList.toggle('dock-open', ['questionOverlay', 'rewardOverlay', 'targetOverlay'].includes(id));
+    $('gameScreen').classList.toggle('question-open', id === 'questionOverlay');
     $('gameScreen').classList.toggle('full-overlay-open', ['storyOverlay', 'finalOverlay'].includes(id));
   }
 

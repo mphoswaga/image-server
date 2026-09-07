@@ -360,10 +360,12 @@ test('a teacher can run, recover, pause, and finish a one-screen ColonyQuest mat
   await expect(page.locator('#questionText')).toHaveText(questions[0].question);
   await expect(page.locator('#scoreStrip .score-card')).toHaveCount(2);
   await expect(page.locator('#gameMount canvas')).toBeVisible();
+  await page.screenshot({ path: `/tmp/colony-question-banner-${testInfo.project.name}.png` });
   if (testInfo.project.name === 'windows-100') {
     const questionBox = await page.locator('.question-dialog').boundingBox();
-    expect(questionBox.width).toBeLessThan(1366 * .5);
-    expect(questionBox.x).toBeGreaterThan(1366 * .5);
+    expect(questionBox.width).toBeGreaterThan(1366 * .85);
+    expect(questionBox.y).toBeGreaterThan(768 * .55);
+    expect(questionBox.x).toBeLessThan(30);
   }
 
   const canvasShot = await page.locator('#gameMount canvas').screenshot();
