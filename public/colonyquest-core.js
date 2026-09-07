@@ -40,21 +40,21 @@
   ]);
 
   const REWARDS = Object.freeze({
-    workers: { label: 'Add one worker', description: 'Brings home two seeds each round.', icon: 'worker' },
-    food: { label: 'Gather food', description: 'Bring home five seeds.', icon: 'leaf' },
-    defense: { label: 'Defense', description: 'Strengthen the nest walls.', icon: 'shield' },
-    queen: { label: 'Care for the queen', description: 'One egg hatches into a worker in two rounds.', icon: 'crown' },
-    expansion: { label: 'Build one room', description: 'Dig and furnish one new chamber.', icon: 'compass' },
-    soldiers: { label: 'Add one soldier', description: 'One new guardian joins the colony.', icon: 'sword' },
-    raid: { label: 'Knowledge raid', description: 'Challenge another colony.', icon: 'flag' },
+    workers: { label: 'Add one worker', description: 'This ant finds two seeds each round.', icon: 'worker' },
+    food: { label: 'Find food', description: 'Bring five seeds home.', icon: 'leaf' },
+    defense: { label: 'Make walls stronger', description: 'Keep the ant home safe.', icon: 'shield' },
+    queen: { label: 'Help the queen', description: 'Add one egg. It hatches in two rounds.', icon: 'crown' },
+    expansion: { label: 'Build one room', description: 'Dig one new room.', icon: 'compass' },
+    soldiers: { label: 'Add one guard', description: 'One guard ant protects the home.', icon: 'sword' },
+    raid: { label: 'Challenge a colony', description: 'Send guard ants to try to win food.', icon: 'flag' },
   });
 
   const EVENTS = Object.freeze([
-    { key: 'fallen-fruit', title: 'The Orchard Gift', description: 'A ripe berry tumbles into Moonroot Meadow. Every colony gathers a share, and the smallest food stores receive the most.', tone: 'good' },
-    { key: 'heavy-rain', title: 'The Rain Returns', description: 'Clouds gather above the old oak. Strong nest walls keep precious tunnels warm and dry.', tone: 'storm' },
-    { key: 'food-trail', title: 'Pip Finds a Trail', description: 'Pip discovers a trail of golden seeds. Busy workers hurry the surprise harvest home.', tone: 'good' },
-    { key: 'predator', title: 'A Shadow Crosses the Meadow', description: 'The colonies become perfectly still. Guardians protect the stores until the shadow safely passes.', tone: 'danger' },
-    { key: 'new-territory', title: 'The Deep Root Opens', description: 'An ancient root shifts and reveals new earth. The smallest colonies discover room to grow.', tone: 'good' },
+    { key: 'fallen-fruit', title: 'A berry falls', description: 'A ripe berry falls into the meadow. Every team gets food. Teams with less food get a little more.', tone: 'good' },
+    { key: 'heavy-rain', title: 'The rain comes back', description: 'Rain falls on the old tree. Strong walls help keep the ant rooms warm and dry.', tone: 'storm' },
+    { key: 'food-trail', title: 'Pip finds food', description: 'Pip finds golden seeds. The workers carry them home.', tone: 'good' },
+    { key: 'predator', title: 'A big shadow!', description: 'The ants stop and hide. Guard ants keep the food safe until the shadow leaves.', tone: 'danger' },
+    { key: 'new-territory', title: 'A new place to dig', description: 'An old root moves. Smaller colonies find space for a new room.', tone: 'good' },
   ]);
 
   function clamp(value, min, max) {
@@ -159,11 +159,11 @@
     let reason = '';
     if (!team || !REWARDS[reward]) reason = 'Choose a colony upgrade.';
     else if (['expansion', 'defense', 'food'].includes(reward) && team.workers < 1) reason = 'Add a worker first.';
-    else if (reward === 'raid' && team.soldiers < 1) reason = 'Recruit a soldier before raiding.';
-    else if (reward === 'soldiers' && !team.barracksBuilt) reason = 'Build a barracks first (your second room upgrade).';
-    else if (['soldiers', 'queen'].includes(reward) && team.food < 1) reason = 'Gather food for the growing colony first.';
-    else if (reward === 'queen' && (team.eggs || []).length >= 3) reason = 'The nursery has three eggs. Wait for one to hatch.';
-    else if (reward === 'defense' && team.defense >= FORTIFICATIONS.length - 1) reason = 'Maximum fortification reached.';
+    else if (reward === 'raid' && team.soldiers < 1) reason = 'Add a guard ant first.';
+    else if (reward === 'soldiers' && !team.barracksBuilt) reason = 'Build two rooms before adding a guard.';
+    else if (['soldiers', 'queen'].includes(reward) && team.food < 1) reason = 'Find food first.';
+    else if (reward === 'queen' && (team.eggs || []).length >= 3) reason = 'There are three eggs. Wait for one to hatch.';
+    else if (reward === 'defense' && team.defense >= FORTIFICATIONS.length - 1) reason = 'The walls are as strong as they can be.';
     return { allowed: !reason, reason };
   }
 
@@ -215,7 +215,7 @@
     const guard = defender.defense * 5 + defender.soldiers * 3 + defender.nestLevel * 2 + colonyRooms(defender).filter(room => room.kind === 'guard').length * 4;
     const knowledgeEdge = 12;
     const success = attack + knowledgeEdge >= guard * 0.78;
-    return { success, attack: attack + knowledgeEdge, guard, reason: success ? 'Your knowledge and raiding party can pass these defenses.' : `${fortification(defender).name} walls, ${defender.soldiers} guardians${defender.barracksBuilt ? ' and a barracks' : ''} protect this nest. Recruit a soldier or build another room before trying again.` };
+    return { success, attack: attack + knowledgeEdge, guard, reason: success ? 'Your guard ants are strong enough for this challenge.' : `${fortification(defender).name} walls and ${defender.soldiers} guard ants protect this home. Add a guard or build another room before trying again.` };
   }
 
   function raidCooldown(session, attackerId, defenderId) {
@@ -257,7 +257,7 @@
   function roomBenefit(room) {
     if (room.kind === 'nursery') return 'Shelters the queen and growing eggs';
     if (room.kind === 'food') return 'Keeps ten extra seeds dry in the rain';
-    if (room.kind === 'guard') return 'Adds four points to raid defense';
+    if (room.kind === 'guard') return 'Helps guard the food during a challenge';
     if (room.kind === 'workers') return 'Shelters the growing foraging team';
     return ['Keeps five extra seeds dry', 'Grows two extra seeds each round', 'Keeps five extra seeds dry', 'Adds two points to rain protection'][room.expansion % 4];
   }
@@ -273,7 +273,7 @@
     return [
       { label: '10 seeds stored', done: team.food >= 10, value: `${team.food}/10` },
       { label: 'Food store built', done: !!team.pantryBuilt, value: team.pantryBuilt ? 'Ready' : 'Build one room' },
-      { label: 'One guardian', done: team.soldiers >= 1, value: `${team.soldiers}/1` },
+      { label: 'One guard ant', done: team.soldiers >= 1, value: `${team.soldiers}/1` },
       { label: 'Stronger walls', done: team.defense >= 1, value: fortification(team).name },
     ];
   }
@@ -284,7 +284,7 @@
     const workshops = rooms.filter(room => room.kind === 'expansion' && room.expansion % 4 === 3).length * 2;
     const protectedFood = Math.min(team.food, 3 + team.defense * 5 + (team.pantryBuilt ? 10 : 0) + storage + workshops);
     const ready = rainPreparation(team).filter(goal => goal.done).length;
-    return { protectedFood, exposedFood: team.food - protectedFood, ready, text: `${fortification(team).name} walls${team.pantryBuilt ? ' and the food store' : ''} keep ${protectedFood} seeds dry. ${team.soldiers ? `${team.soldiers} guardians watch the entrance.` : 'A guardian could help protect the entrance next time.'} ${ready === 4 ? 'Your colony is ready for the Great Rain!' : 'Everyone finds shelter. Keep building to protect more of the colony next time.'}` };
+    return { protectedFood, exposedFood: team.food - protectedFood, ready, text: `${fortification(team).name} walls${team.pantryBuilt ? ' and the food store' : ''} keep ${protectedFood} seeds dry. ${team.soldiers ? `${team.soldiers} guard ants watch the entrance.` : 'A guard ant could help at the entrance next time.'} ${ready === 4 ? 'Your colony is ready for the Great Rain!' : 'Everyone finds shelter. Keep building to protect more of the colony next time.'}` };
   }
 
   function learningImprovement(session, teamId) {
@@ -312,7 +312,18 @@
 
   function rankTeams(teams) {
     return (teams || []).map(team => ({ team, score: colonyStrength(team), breakdown: strengthBreakdown(team) }))
-      .sort((a, b) => b.score - a.score || b.team.correct - a.team.correct || a.team.name.localeCompare(b.team.name));
+      .sort((a, b) => {
+        const aAccuracy = a.team.attempts ? a.team.correct / a.team.attempts : 0;
+        const bAccuracy = b.team.attempts ? b.team.correct / b.team.attempts : 0;
+        return b.score - a.score || b.team.correct - a.team.correct || bAccuracy - aAccuracy || a.team.name.localeCompare(b.team.name);
+      });
+  }
+
+  function sameResult(a, b) {
+    if (!a || !b || a.score !== b.score || a.team.correct !== b.team.correct) return false;
+    const aAccuracy = a.team.attempts ? a.team.correct / a.team.attempts : 0;
+    const bAccuracy = b.team.attempts ? b.team.correct / b.team.attempts : 0;
+    return aAccuracy === bAccuracy;
   }
 
   function normalizeConfig(input) {
@@ -383,6 +394,8 @@
     const ranking = rankTeams(safe.teams);
     const answers = safe.answers.length;
     const correct = safe.answers.filter(answer => answer.correct).length;
+    const winners = ranking[0] ? ranking.filter(entry => sameResult(entry, ranking[0])) : [];
+    let previousRank = 0;
     return {
       phase: safe.phase,
       startedAt: safe.startedAt,
@@ -392,8 +405,11 @@
       correct,
       accuracy: answers ? Math.round(correct / answers * 100) : 0,
       winner: ranking[0] ? { id: ranking[0].team.id, name: ranking[0].team.name, score: ranking[0].score } : null,
+      winners: winners.map(entry => ({ id: entry.team.id, name: entry.team.name, score: entry.score })),
+      isTie: winners.length > 1,
+      winningRule: 'Highest colony strength wins. A tie uses answers right, then answer accuracy.',
       teams: ranking.map((entry, index) => ({
-        rank: index + 1,
+        rank: (previousRank = index > 0 && sameResult(entry, ranking[index - 1]) ? previousRank : index + 1),
         id: entry.team.id,
         name: entry.team.name,
         score: entry.score,

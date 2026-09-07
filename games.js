@@ -133,10 +133,10 @@ function getResults(id) { return loadResults(id); }
 
 // Returns the anonymous high score for each game type across all students.
 function getHighScores(id) {
-  const hs = { car: 0, space: 0, runner: 0 };
+  const hs = { car: 0, space: 0, runner: 0, target: 0 };
   for (const r of loadResults(id)) {
     if (r.arcadeScores) {
-      for (const t of ['car', 'space', 'runner']) hs[t] = Math.max(hs[t], r.arcadeScores[t] || 0);
+      for (const t of ['car', 'space', 'runner', 'target']) hs[t] = Math.max(hs[t], r.arcadeScores[t] || 0);
     }
   }
   return hs;

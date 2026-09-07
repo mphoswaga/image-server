@@ -60,7 +60,7 @@ test('wrong answer releases both fish without rewarding attacker', () => {
   const f=fixture();f.a.mass=200;f.b.mass=100;f.a.x=f.b.x=900;f.a.y=f.b.y=700;
   const interaction=f.match.claim(f.a,f.b);f.match.answer(f.a.id,{interactionId:interaction.id,choice:0});
   assert.equal(f.a.score,0);assert.equal(f.a.lock,null);assert.equal(f.b.lock,null);assert.ok(f.b.protectedUntil>0);
-  assert.deepEqual(f.match.education(f.a),{correct:0,answered:1,coverage:1,total:2});
+  assert.deepEqual(f.match.education(f.a),{correct:0,answered:1,coverage:1,total:2,collections:0,swallows:0});
 });
 
 test('plankton grows a fish gradually before fish meals give a larger jump', () => {
@@ -198,6 +198,19 @@ test('FishQuest game feel stays local, optional, and motion-safe', () => {
   assert.match(client, /function growthRipple/);
   assert.match(client, /function syncMusic/);
   assert.match(client, /me\.score > previousMe\.score/);
+});
+
+test('FishQuest ends with a clear winner and the learner own useful facts', () => {
+  const page = fs.readFileSync(path.join(__dirname, '..', 'public', 'fishquest.html'), 'utf8');
+  const client = fs.readFileSync(path.join(__dirname, '..', 'public', 'fishquest-client.js'), 'utf8');
+  const teacher = fs.readFileSync(path.join(__dirname, '..', 'public', 'fishquest-teacher.html'), 'utf8');
+  assert.match(page, /id="winnerLine"/);
+  assert.match(page, /id="endFacts"/);
+  assert.match(client, /You won FishQuest!/);
+  assert.match(client, /Questions right/);
+  assert.match(client, /Plankton eaten/);
+  assert.match(client, /Fish eaten/);
+  assert.match(teacher, /id="winnerCallout"/);
 });
 
 test('every learner game surface offers optional state-preserving immersive view', () => {

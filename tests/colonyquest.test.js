@@ -368,6 +368,18 @@ test('session normalization preserves recovery phases and honest named participa
   assert.equal(summary.identifiedParticipation[0].studentId, 'S1');
 });
 
+test('ColonyQuest names one winner or reports a fair shared win', () => {
+  const all = teams(3);
+  Object.assign(all[0], { name: 'Oak Colony', food: 20, correct: 2, attempts: 3 });
+  Object.assign(all[1], { name: 'River Colony', food: 20, correct: 2, attempts: 3 });
+  Object.assign(all[2], { name: 'Seed Colony', food: 4, correct: 0, attempts: 1 });
+  const summary = core.sessionSummary({ phase: 'ended', teams: all });
+  assert.equal(summary.isTie, true);
+  assert.deepEqual(summary.winners.map(team => team.name), ['Oak Colony', 'River Colony']);
+  assert.deepEqual(summary.teams.map(team => team.rank), [1, 1, 3]);
+  assert.match(summary.winningRule, /Highest colony strength wins/);
+});
+
 test('persistent ColonyQuest games have no learner room and keep recoverable match state', () => {
   const game = games.createGame({
     teacherId: 'teacher-colony',
@@ -471,7 +483,12 @@ test('the dashboard exposes ColonyQuest as a whole-class lesson game', () => {
   assert.match(page, /vendor\/phaser\.min\.js/);
   assert.match(page, /Mark correct/);
   assert.match(page, /Random learner/);
-  assert.match(page, /Moonroot Meadow needs you/);
+  assert.match(page, /Help the tiny ant colony/);
+  assert.match(page, /id="storyCrawl"/);
+  assert.match(page, /id="storyPause"/);
+  assert.match(page, /id="storyReplay"/);
+  assert.match(page, /id="winnerBanner"/);
+  assert.match(page, /id="winnerTitle"/);
   assert.match(page, /id="worldStory"/);
   assert.match(page, /class="overlay question-overlay hidden"/);
   assert.match(page, /colonyquest-core\.js\?v=\d+/);

@@ -6498,8 +6498,10 @@
       const result=d&&d.colonyquest;
       if(!result) return '<p class="hint" style="margin-top:8px">No whole-class match has been completed yet.</p>';
       const teams=(result.teams||[]).map(team=>`<div class="res-row"><span><b>${team.rank}. ${esc(team.name)}</b></span><span class="sc">${team.accuracy}%</span><span class="pc">${team.score}</span></div>`).join('');
-      const headline=result.phase==='ended'&&result.winner?`${esc(result.winner.name)} won ColonyQuest`:'ColonyQuest match in progress';
-      return `<div style="margin-top:10px;padding:11px 13px;border:1px solid #b9dfd0;background:#f1fbf6;border-radius:8px"><b style="color:var(--primary)">${headline}</b><span class="hint" style="display:block;margin-top:3px">${result.answers} team answers · ${result.accuracy}% class accuracy</span></div>${teams?`<div class="res-table"><div class="res-row"><span>Colony</span><span class="sc">Accuracy</span><span class="pc">Strength</span></div>${teams}</div>`:''}${gameBreakdown(d)}`;
+      const winnerNames=(result.winners||[]).map(winner=>winner.name);
+      const headline=result.phase==='ended'&&result.winner?(result.isTie&&winnerNames.length?`${winnerNames.map(esc).join(' and ')} share the ColonyQuest win`:`${esc(result.winner.name)} wins ColonyQuest`):'ColonyQuest match in progress';
+      const winnerDetail=result.phase==='ended'&&result.winner?`${result.winner.score} colony strength. ${esc(result.winningRule||'The strongest colony wins.')}`:`${result.answers} team answers · ${result.accuracy}% class accuracy`;
+      return `<div style="margin-top:10px;padding:11px 13px;border:2px solid #9dcfb9;background:#f1fbf6;border-radius:8px"><b style="color:var(--primary);font-size:16px">${headline}</b><span class="hint" style="display:block;margin-top:3px">${winnerDetail}</span></div>${teams?`<div class="res-table"><div class="res-row"><span>Colony</span><span class="sc">Accuracy</span><span class="pc">Strength</span></div>${teams}</div>`:''}${gameBreakdown(d)}`;
     }
     async function loadGameResults(gid,elId){ const wrap=$(elId); if(!wrap) return;
       try{ const d=await (await fetch('/api/game/'+gid+'/results')).json(); wrap.innerHTML=d.mode==='colonyquest'?colonyQuestResults(d):resultsTable(d.results)+gameBreakdown(d); }

@@ -66,7 +66,7 @@ test('runner art, movement, touch, pause and recovery work together', async ({ p
   expect(errors).toEqual([]);
 });
 
-test('a question checkpoint awards points without changing hearts and finishes normally', async ({ page }) => {
+test('a question checkpoint awards points without changing hearts and finishes normally', async ({ page }, testInfo) => {
   // Shorten only the checkpoint wait; the shipped 25-second threshold is covered by unit tests.
   await page.route('**/answer-runner.js*', async route => {
     const response = await route.fetch();
@@ -83,6 +83,11 @@ test('a question checkpoint awards points without changing hearts and finishes n
     await page.locator('#nextBtn').click();
   }
   await expect(page.locator('#resultScreen')).toBeVisible();
+  await expect(page.locator('#resTitle')).toHaveText('You won this round!');
+  await expect(page.locator('#resOutcome')).toContainText('You won');
+  await expect(page.locator('#resDetails')).toContainText('Questions right');
+  await expect(page.locator('#resDetails')).toContainText('Questions to practise');
+  await page.screenshot({ path: `/tmp/arcade-result-${testInfo.project.name}.png` });
   expect(submitted).toHaveLength(2);
   await page.locator('#againBtn').click();
   await page.locator('[data-game="car"]').click();

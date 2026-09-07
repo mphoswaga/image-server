@@ -29,7 +29,7 @@ test('growing colonies draw every soldier, retain every room, and scroll to a ne
   await page.goto('/colonyquest/cq-growth');
   await page.locator('#resumeBtn').click();
   const world = page.locator('#worldViewport');
-  await expect(world).toHaveAttribute('aria-description', /Leaf Colony: 1 queen, 16 workers, 11 soldiers/);
+  await expect(world).toHaveAttribute('aria-description', /Leaf Colony: 1 queen, 16 workers, 11 guard ants/);
   await expect(world).toHaveAttribute('aria-description', /Stone and steel walls/);
   const beforeRooms = colonyCore.colonyRooms(saved.teams[0]).length;
   await page.locator('[data-reward="expansion"]').click();
@@ -50,9 +50,31 @@ test('growing colonies draw every soldier, retain every room, and scroll to a ne
   await page.locator('#resumeBtn').click();
   await expect(page.locator('#worldStoryEffect')).toContainText('+1 permanent room');
   await expect(world).toHaveAttribute('aria-description', new RegExp(`${beforeRooms + 1} rooms`));
-  await expect(world).toHaveAttribute('aria-description', /16 workers, 11 soldiers/);
+  await expect(world).toHaveAttribute('aria-description', /16 workers, 11 guard ants/);
   await expect.poll(() => world.evaluate(element => element.scrollTop)).toBeGreaterThan(100);
   expect(errors).toEqual([]);
+});
+
+test('all six colonies begin on the shared meadow surface', async ({ page }, testInfo) => {
+  test.skip(!['windows-100', 'mobile'].includes(testInfo.project.name), 'Check the widest class layout and narrow-screen colony navigation.');
+  const colonies = Array.from({ length: 6 }, (_, index) => colonyCore.createTeam({ name: `Colony ${index + 1}`, colorIndex: index }, index));
+  const setup = { teamCount: 6, rounds: 5, matchType: 'rounds', durationMinutes: 15, sound: false, teams: colonies };
+  const saved = colonyCore.normalizeSession({ phase: 'reward', introSeen: true, teams: colonies });
+  await page.route(/\/api\/game\/cq-six\/colonyquest(?:\/session)?$/, route => route.fulfill({
+    json: { game: { id: 'cq-six', lessonTitle: 'Habitats', questions, colonyquest: setup }, session: saved },
+  }));
+
+  await page.goto('/colonyquest/cq-six');
+  await page.locator('#resumeBtn').click();
+  const world = page.locator('#worldViewport');
+  await expect(world).toHaveAttribute('data-layout', 'shared-surface');
+  await expect(world).toHaveAttribute('data-surface-colonies', '6');
+  await expect(world).toHaveAttribute('aria-label', /All 6 colony entrances begin at the meadow surface/);
+  await expect(page.locator('#colonyViewPick option')).toHaveCount(6);
+  await expect(page.locator('#gameMount canvas')).toBeVisible();
+  await page.screenshot({ path: `/tmp/colony-shared-surface-${testInfo.project.name}.png` });
+  await page.locator('#colonyViewPick').selectOption('team-6');
+  await expect(page.locator('#colonyViewPick')).toHaveValue('team-6');
 });
 
 test('blocked colony choices explain their requirements and allow worker recovery', async ({ page }, testInfo) => {
@@ -71,7 +93,7 @@ test('blocked colony choices explain their requirements and allow worker recover
   await page.locator('#resumeBtn').click();
   await expect(page.locator('[data-reward]')).toHaveCount(7);
   for (const key of ['raid', 'expansion', 'defense', 'food', 'queen', 'soldiers']) await expect(page.locator(`[data-reward="${key}"]`)).toBeDisabled();
-  await expect(page.locator('[data-reward="raid"]')).toContainText('Recruit a soldier');
+  await expect(page.locator('[data-reward="raid"]')).toContainText('Add a guard ant');
   await expect(page.locator('[data-reward="expansion"]')).toContainText('Add a worker');
   await page.screenshot({ path: `/tmp/colony-rules-${testInfo.project.name}.png` });
   await page.locator('[data-reward="expansion"]').evaluate(button => { button.disabled = false; button.click(); });
@@ -186,13 +208,13 @@ test('harvest, hatching, raid recovery and the Great Rain ending survive refresh
   await page.goto('/colonyquest/cq-story');
   await page.locator('#resumeBtn').click();
   await page.locator('#worldStoryContinue').click();
-  await expect(page.locator('#worldStoryTitle')).toHaveText('Oak Colony: round harvest');
+  await expect(page.locator('#worldStoryTitle')).toHaveText('Oak Colony: food report');
   expect(saved.teams[1].workers).toBe(2);
   expect(saved.teams[1].eggs).toHaveLength(0);
   const foodAfter = saved.teams.map(team => team.food);
   await page.reload();
   await page.locator('#resumeBtn').click();
-  await expect(page.locator('#worldStoryTitle')).toHaveText('Oak Colony: round harvest');
+  await expect(page.locator('#worldStoryTitle')).toHaveText('Oak Colony: food report');
   expect(saved.teams.map(team => team.food)).toEqual(foodAfter);
   await page.locator('#worldStoryContinue').click();
   await expect(page.locator('#worldStoryEffect')).toContainText('+1 worker');
@@ -200,7 +222,7 @@ test('harvest, hatching, raid recovery and the Great Rain ending survive refresh
   await page.screenshot({ path: `/tmp/colony-hatch-${testInfo.project.name}.png` });
   await page.locator('#pauseBtn').click();
   await page.locator('#pauseBtn').click();
-  await expect(page.locator('#worldStoryTitle')).toHaveText('Seed Colony: round harvest');
+  await expect(page.locator('#worldStoryTitle')).toHaveText('Seed Colony: food report');
   await page.locator('#worldStoryContinue').click();
   await expect(page.locator('#questionOverlay')).toBeVisible();
   await page.locator('.answer').first().click();
@@ -212,14 +234,16 @@ test('harvest, hatching, raid recovery and the Great Rain ending survive refresh
   page.once('dialog', dialog => dialog.accept());
   await page.locator('#teacherHandle').click();
   await page.locator('#endGameBtn').click();
-  await expect(page.locator('#worldStoryTitle')).toHaveText('The colonies shelter together');
+  await expect(page.locator('#worldStoryTitle')).toHaveText('The ants are safe from the rain!');
   await page.screenshot({ path: `/tmp/colony-rain-${testInfo.project.name}.png` });
   expect(saved.phase).toBe('ended');
   await page.reload();
   await page.locator('#resumeBtn').click();
-  await expect(page.locator('#worldStoryTitle')).toHaveText('The colonies shelter together');
+  await expect(page.locator('#worldStoryTitle')).toHaveText('The ants are safe from the rain!');
   await page.locator('#worldStoryContinue').click();
   await expect(page.locator('#colonyStories .colony-ending')).toHaveCount(2);
+  await expect(page.locator('#winnerBanner')).toBeVisible();
+  await expect(page.locator('#winnerTitle')).toContainText('Ancient Acorn');
   await expect(page.locator('#colonyStories')).toContainText('seeds dry');
   await page.screenshot({ path: `/tmp/colony-ending-${testInfo.project.name}.png` });
   expect(saved.stormSeen).toBe(true);
@@ -323,7 +347,14 @@ test('a teacher can run, recover, pause, and finish a one-screen ColonyQuest mat
   await page.locator('#startBtn').click();
   await expect(page.locator('#gameScreen')).toBeVisible();
   await expect(page.locator('#storyOverlay')).toBeVisible();
-  await expect(page.locator('#storyTitle')).toHaveText('Moonroot Meadow needs you');
+  await expect(page.locator('#storyTitle')).toHaveText('Help the tiny ant colony!');
+  await expect(page.locator('#storyCrawl')).toHaveClass(/is-moving/);
+  await page.locator('#storyPause').click();
+  await expect(page.locator('#storyCrawl')).toHaveClass(/is-paused/);
+  await expect(page.locator('#storyPause')).toHaveText('Play story');
+  await page.locator('#storyReplay').click();
+  await expect(page.locator('#storyCrawl')).not.toHaveClass(/is-paused/);
+  await page.screenshot({ path: `/tmp/colony-intro-${testInfo.project.name}.png` });
   await page.locator('#storyContinue').click();
   await expect(page.locator('#questionOverlay')).toBeVisible();
   await expect(page.locator('#questionText')).toHaveText(questions[0].question);
@@ -353,9 +384,9 @@ test('a teacher can run, recover, pause, and finish a one-screen ColonyQuest mat
   await expect(page.locator('#rewardOverlay')).toBeVisible();
   await page.getByRole('button', { name: /Add one worker/ }).click();
   await expect(page.locator('#worldStory')).toBeVisible();
-  await expect(page.locator('#worldStoryTitle')).toContainText('foraging trail');
+  await expect(page.locator('#worldStoryTitle')).toHaveText('A new worker wakes up');
   await expect(page.locator('#worldStoryEffect')).toContainText('+1 worker');
-  await expect(page.locator('#worldViewport')).toHaveAttribute('aria-description', /Leaf Colony: 1 queen, 2 workers, 0 soldiers. 1 rooms/);
+  await expect(page.locator('#worldViewport')).toHaveAttribute('aria-description', /Leaf Colony: 1 queen, 2 workers, 0 guard ants. 1 rooms/);
   expect(session.teams[0].workers).toBe(2);
   expect(session.teams[0].food).toBe(8);
   expect(colonyCore.colonyRooms(session.teams[0])).toHaveLength(1);
@@ -365,11 +396,11 @@ test('a teacher can run, recover, pause, and finish a one-screen ColonyQuest mat
   await expect(page.locator('#turnTeam')).toContainText('River Colony');
 
   await page.locator('.answer').nth(1).click();
-  await expect(page.locator('#feedback')).toContainText('Try again');
+  await expect(page.locator('#feedback')).toContainText('Good try');
   await page.locator('#feedbackNext').click();
-  await expect(page.locator('#worldStoryTitle')).toHaveText('Leaf Colony: round harvest');
+  await expect(page.locator('#worldStoryTitle')).toHaveText('Leaf Colony: food report');
   await page.locator('#worldStoryContinue').click();
-  await expect(page.locator('#worldStoryTitle')).toHaveText('River Colony: round harvest');
+  await expect(page.locator('#worldStoryTitle')).toHaveText('River Colony: food report');
   await page.locator('#worldStoryContinue').click();
   await expect(page.locator('#worldStoryTitle')).toHaveText('Deep Roots');
   await expect(page.locator('#worldStoryEffect')).toContainText('how far every colony has grown');
@@ -386,12 +417,24 @@ test('a teacher can run, recover, pause, and finish a one-screen ColonyQuest mat
   page.once('dialog', dialog => dialog.accept());
   await page.locator('#teacherHandle').click();
   await page.locator('#endGameBtn').click();
-  await expect(page.locator('#worldStoryTitle')).toHaveText('The colonies shelter together');
+  await expect(page.locator('#worldStoryTitle')).toHaveText('The ants are safe from the rain!');
   await page.locator('#worldStoryContinue').click();
   await expect(page.locator('#finalOverlay')).toBeVisible();
+  await expect(page.locator('#winnerTitle')).toContainText('Ancient Acorn');
+  await expect(page.locator('#winnerFacts')).toContainText('colony strength');
   await expect(page.locator('#podium')).toContainText('Colony');
   expect(session.phase).toBe('ended');
   expect(session.answers).toHaveLength(2);
   expect(session.answers[0].studentId).toBe('S1');
   expect(session.answers[1].studentId).toBe('S2');
+
+  await page.locator('#backToSetupBtn').click();
+  await expect(page.locator('#setup')).toBeVisible();
+  await page.locator('#startBtn').click();
+  await expect(page.locator('#gameScreen')).toBeVisible();
+  await expect(page.locator('#storyOverlay')).toBeVisible();
+  await expect(page.locator('#gameMount canvas')).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => document.readyState)).toBe('complete');
+  expect(session.phase).toBe('question');
+  expect(session.answers).toHaveLength(0);
 });

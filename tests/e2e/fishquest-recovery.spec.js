@@ -47,3 +47,41 @@ test('FishQuest updates paused questions and recovers a silent connection withou
   await page.clock.fastForward(60000);
   expect(await page.evaluate(()=>window.testSockets.length)).toBe(2);
 });
+
+test('FishQuest names the winner while showing only the learner own result', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100', 'One desktop browser covers the private ending screen.');
+  await page.route('**/api/game/ending-test', route => route.fulfill({ json: { lessonTitle: 'Ocean lesson', hasRoster: false } }));
+  await page.route('**/api/game/ending-test/fishquest/ticket', route => route.fulfill({ json: { token: 'ending-ticket' } }));
+  await page.addInitScript(() => {
+    window.testSockets=[];
+    window.WebSocket=class {
+      static OPEN=1;static CLOSING=2;
+      constructor(){this.readyState=0;this.bufferedAmount=0;window.testSockets.push(this);setTimeout(()=>{this.readyState=1;this.onopen?.();},0);}
+      send(){}
+      close(){this.readyState=3;}
+      receive(state){this.onmessage?.({data:JSON.stringify({type:'state',state})});}
+    };
+  });
+  await page.goto('/fishquest-play/ending-test');
+  await expect.poll(()=>page.evaluate(()=>window.testSockets.length)).toBe(1);
+  await page.evaluate(() => {
+    Phaser.Game=function(){};
+    window.testSockets[0].receive({
+      matchId:'finished-match',phase:'ended',resultsSaved:true,me:'me',now:Date.now(),endsAt:Date.now(),
+      players:[
+        {id:'me',name:'Lebo',mass:180,score:125,variant:0},
+        {id:'winner',name:'Amina',mass:260,score:200,variant:1},
+      ],
+      personal:{correct:3,answered:4,coverage:4,collections:17,swallows:1},
+      food:[],world:{width:2400,height:1600},
+    });
+  });
+  await expect(page.locator('#ended')).toBeVisible();
+  await expect(page.locator('#winnerLine')).toHaveText('Amina won this game.');
+  await expect(page.locator('#rank')).toContainText('place 2 of 2');
+  await expect(page.locator('#finalScore')).toHaveText('125 points');
+  await expect(page.locator('#endFacts')).toContainText('3/4');
+  await expect(page.locator('#endFacts')).toContainText('17');
+  await expect(page.locator('#ended')).not.toContainText('200 points');
+  await page.screenshot({ path: `/tmp/fishquest-ending-${testInfo.project.name}.png` });
+});

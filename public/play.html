@@ -112,11 +112,18 @@
     .feedback.show { display:block; } .feedback.right { background:#ebfbee; color:#0f6b3d; } .feedback.no { background:#fff0ef; color:#a32820; } .feedback b { display:block; margin-bottom:3px; }
     .result-score { font-family:'Fraunces',Georgia,serif; font-size:52px; font-weight:700; color:var(--primary); text-align:center; margin:6px 0 0; }
     .result-of { text-align:center; color:var(--muted); margin:0 0 8px; } .result-msg { text-align:center; font-size:16px; margin:0 0 22px; }
+    .result-outcome { margin:14px 0; padding:14px 16px; border:2px solid #9ed6bb; border-radius:8px; background:#eefbf4; color:#0d6b3b; text-align:center; font-size:15px; font-weight:800; }
+    .result-outcome.keep-going { border-color:#ffd18a; background:#fff7e8; color:#8a4a00; }
+    .result-details { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:14px 0 20px; }
+    .result-detail { min-width:0; padding:11px 7px; border:1px solid var(--border); border-radius:8px; background:#f7f9fc; text-align:center; }
+    .result-detail b { display:block; color:var(--primary); font-size:21px; line-height:1.15; }
+    .result-detail span { display:block; margin-top:3px; color:var(--muted); font-size:11px; font-weight:700; }
     .name-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; margin:4px 0 6px; }
   .name-grid button { padding:16px 12px; font-size:17px; font-weight:700; border-radius:12px;
     border:2px solid #d9e1ea; background:#fff; color:#12263f; cursor:pointer; text-align:center; }
   .name-grid button:hover { border-color:#16a34a; }
   .name-grid button.is-picked { border-color:#16a34a; background:#ecfdf5; }
+  @media(max-width:440px){.result-details{grid-template-columns:1fr}.result-detail{display:flex;align-items:center;justify-content:space-between;text-align:left}.result-detail span{margin:0}.result-detail b{font-size:18px}}
 </style>
   <link rel="stylesheet" href="/byte-feedback.css" />
 </head>
@@ -164,23 +171,23 @@
     <div id="summaryScreen" class="card" style="display:none">
       <div class="meta-pill" id="sumMeta"></div>
       <h1 id="sumTitle"></h1>
-      <p class="sub">Read this recap. When you understand it, choose a game to play!</p>
+      <p class="sub">Read these lesson notes. Then pick a game.</p>
       <div class="overview" id="sumOverview"></div>
       <div id="sumConcepts"></div>
       <div id="sumHighScores" style="display:none;background:#fff7e6;border:1.5px solid #ffd43b;border-radius:14px;padding:12px 16px;margin-top:18px;font-size:13.5px"></div>
-      <div style="margin-top:22px"><button id="startBtn" class="btn accent">I understand — choose a game 🎮</button></div>
+      <div style="margin-top:22px"><button id="startBtn" class="btn accent">Choose a game</button></div>
     </div>
 
     <div id="pickerScreen" class="card" style="display:none">
       <h1>Choose your game</h1>
-      <p class="sub">Same questions — your pick of game. Ready?</p>
+      <p class="sub">Pick a game. Each game uses the same lesson questions.</p>
       <div class="game-cards">
-        <button class="game-pick" data-game="car"><span class="gi">🚗</span><span><b>Car Dodge</b><span>Dodge traffic, grab coins, watch for trucks — crash to answer a question.</span></span></button>
-        <button class="game-pick" data-game="space"><span class="gi">🚀</span><span><b>Space Blaster</b><span>Blast the alien fleet and dodge their bombs — get hit to answer a question.</span></span></button>
-        <button class="game-pick" data-game="runner"><span class="gi">🏃</span><span><b>Answer Runner</b><span>Jump rocks, duck branches, grab coins — crash and answer to keep running.</span></span></button>
-        <button class="game-pick" data-game="target"><span class="gi">🎯</span><span><b>Target Shot</b><span>Read at your own pace, then FIRE when the crosshair sweeps over the right answer!</span></span></button>
-        <button class="game-pick" data-game="fishquest"><span class="gi">🐠</span><span><b>FishQuest</b><span>Eat plankton, answer questions and grow in a live class or your own homework ocean.</span></span></button>
-        <button class="game-pick" id="colonyQuestPick" data-game="colonyquest" hidden><span class="gi">🐜</span><span><b>ColonyQuest</b><span>Lead the whole class from one screen, answer together, and build competing ant colonies.</span></span></button>
+        <button class="game-pick" data-game="car"><span class="gi">🚗</span><span><b>Car Dodge</b><span>Move past cars and collect coins. A crash gives you a question.</span></span></button>
+        <button class="game-pick" data-game="space"><span class="gi">🚀</span><span><b>Space Blaster</b><span>Move your ship, fire at aliens, and answer questions when you are hit.</span></span></button>
+        <button class="game-pick" data-game="runner"><span class="gi">🏃</span><span><b>Answer Runner</b><span>Jump, slide, and collect coins. Answer a question when you hit something.</span></span></button>
+        <button class="game-pick" data-game="target"><span class="gi">🎯</span><span><b>Target Shot</b><span>Read the question. Fire when the target reaches your answer.</span></span></button>
+        <button class="game-pick" data-game="fishquest"><span class="gi">🐠</span><span><b>FishQuest</b><span>Eat plankton, answer questions, and grow into a big fish.</span></span></button>
+        <button class="game-pick" id="colonyQuestPick" data-game="colonyquest" hidden><span class="gi">🐜</span><span><b>ColonyQuest</b><span>Answer as a team and grow the strongest ant colony.</span></span></button>
       </div>
     </div>
 
@@ -194,7 +201,7 @@
         <canvas id="gameCanvas" width="320" height="480" tabindex="0" aria-label="Arcade game"></canvas>
         <div class="q-overlay" id="qOverlay">
           <div class="q-box">
-            <p class="crash">💥 Crash! Answer to win your life back:</p>
+            <p class="crash">You hit something. Answer to keep playing.</p>
             <p class="question" id="qText"></p>
             <div class="options" id="qOptions"></div>
             <div class="feedback" id="qFeedback"></div>
@@ -215,7 +222,8 @@
     </div>
 
     <div id="resultScreen" class="card" style="display:none">
-      <h1 class="center">Game over! 🏁</h1>
+      <h1 class="center" id="resTitle">Round finished</h1>
+      <div id="resOutcome" class="result-outcome"></div>
       <div id="resArcade" style="text-align:center;margin:10px 0 4px"></div>
       <div id="resHighScore" style="text-align:center;margin-bottom:18px"></div>
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
@@ -223,8 +231,9 @@
         <p class="result-of" id="resOf"></p>
         <p class="result-msg" id="resMsg"></p>
       </div>
+      <div id="resDetails" class="result-details"></div>
       <button id="againBtn" class="btn primary">Play another game</button>
-      <p class="center sub" style="margin-top:16px">Your teacher can see your result.</p>
+      <p class="center sub" style="margin-top:16px">Your teacher can see what you did well and what to practise.</p>
     </div>
   </div>
 
@@ -405,22 +414,27 @@
       const d=await (await fetch('/api/game/'+GAME_ID+'/finish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answers:answers.map(a=>a==null?-1:a),arcadeScore,gameType:activeGameType})})).json();
 
       // Arcade score block
-      const typeLabel=activeGameType==='space'?'invaders blasted':'points';
+      const typeLabel=activeGameType==='space'?'aliens blasted':'arcade points';
       $('resArcade').innerHTML=`<div style="font-size:56px;font-weight:900;color:var(--accent);line-height:1">${arcadeScore}</div><div style="font-size:14px;color:var(--muted);margin-top:4px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">${typeLabel}</div>`;
 
       // High score comparison (anonymous — no names shown)
       const hs=d.highScores&&activeGameType?d.highScores[activeGameType]||0:0;
       if(d.isNewHigh){
-        $('resHighScore').innerHTML='<div style="background:#fff7e6;border:1.5px solid #ffd43b;border-radius:12px;padding:10px 18px;display:inline-block;font-size:15px;font-weight:700">🎉 New record! You\'re the best so far!</div>';
+        $('resHighScore').innerHTML='<div style="background:#fff7e6;border:1.5px solid #ffd43b;border-radius:8px;padding:10px 18px;display:inline-block;font-size:15px;font-weight:700">You have the top arcade score!</div>';
       } else if(hs>0){
         const gap=hs-arcadeScore;
-        $('resHighScore').innerHTML=`<div style="font-size:13px;color:var(--muted)">🏆 Record: <b style="color:var(--primary);font-size:16px">${hs}</b>&ensp;${gap>0?'You need '+gap+' more to beat it!':'You tied the record!'}</div>`;
+        $('resHighScore').innerHTML=`<div style="font-size:13px;color:var(--muted)">Top arcade score: <b style="color:var(--primary);font-size:16px">${hs}</b>. ${gap>0?'Get '+gap+' more points to take the lead.':'You share the top score!'}</div>`;
       } else {
-        $('resHighScore').innerHTML='<div style="font-size:13px;color:var(--muted)">🏆 You\'re the first to play — set the record!</div>';
+        $('resHighScore').innerHTML='<div style="font-size:13px;color:var(--muted)">You are the first player. This is the score to beat.</div>';
       }
 
-      $('resScore').textContent=`${d.score}/${d.total}`; $('resOf').textContent=`${Math.round((d.score/d.total)*100)}% correct`;
-      const pct=d.score/d.total; $('resMsg').textContent=pct===1?'Perfect — you nailed every question! 🌟':pct>=0.7?'Great work! 👏':pct>=0.5?'Good effort — review the tricky ones.':'Keep practising — you\'ll get there! 💪';
+      const total=Math.max(0,Number(d.total)||0), right=Math.max(0,Number(d.score)||0), missed=Math.max(0,total-right), pct=total?right/total:0, percent=Math.round(pct*100), won=total>0&&pct>=0.7;
+      $('resTitle').textContent=won?'You won this round!':'Round finished. Try again!';
+      $('resOutcome').className='result-outcome'+(won?'':' keep-going');
+      $('resOutcome').textContent=won?'You won by getting most of the questions right.':`Get ${Math.max(0,Math.ceil(total*.7)-right)} more right next time to win the round.`;
+      $('resScore').textContent=`${right}/${total}`; $('resOf').textContent=`${percent}% of the questions were right`;
+      $('resMsg').textContent=pct===1?'Every answer was right. Excellent work!':pct>=0.7?'You knew most of the answers.':pct>=0.5?'You are close. Read the lesson notes, then try again.':'Read the lesson notes once more, then try again.';
+      $('resDetails').innerHTML=`<div class="result-detail"><b>${right}</b><span>Questions right</span></div><div class="result-detail"><b>${missed}</b><span>Questions to practise</span></div><div class="result-detail"><b>${arcadeScore}</b><span>Arcade points</span></div>`;
       show('resultScreen');
     }
     function loop(t){ if(!active) return; let dt=(t-lastT)/1000; lastT=t; if(dt>0.05) dt=0.05; active.update(dt); active.render(); raf=requestAnimationFrame(loop); }
@@ -441,7 +455,7 @@
       $('lrControls').style.display = (key==='runner'||key==='target')?'none':'flex';
       $('qBanner').style.display = key==='target'?'block':'none';
       $('qFb').className='qfb';
-      $('dragTip').textContent = key==='space'?'Move ◀ ▶ (or drag), tap FIRE — blast the invaders, dodge their bombs!' : key==='runner'?'⬆ jump rocks, ⬇ duck branches, grab coins — watch for runaway boulders!' : key==='target'?'Read the question, pick your answer, then FIRE (or tap) when the crosshair is over its target. Bullseye = +2!' : 'Dodge traffic ◀ ▶ (or drag), grab coins — watch for speeding trucks!';
+      $('dragTip').textContent = key==='space'?'Move left or right. Tap FIRE. Dodge the alien bombs.' : key==='runner'?'Jump over rocks. Slide under branches. Collect coins.' : key==='target'?'Read the question. Fire when the target reaches your answer.' : 'Move left or right. Dodge the cars. Collect coins.';
       const NAMES={ car:'🚗 Car Dodge', space:'🚀 Space Blaster', runner:'🏃 Answer Runner', target:'🎯 Target Shot' };
       $('marquee').textContent = NAMES[key] || 'LessonCope Arcade';
       active = key==='car' ? CarGame() : key==='runner' ? RunnerGame() : key==='target' ? TargetGame() : SpaceGame();

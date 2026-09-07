@@ -177,6 +177,6 @@ class FishMatch {
     if(teacher)result.education=this.state.players.map(p=>({id:p.id,studentId:p.studentId,name:p.name,...this.education(p)}));
     return result;
   }
-  education(p){const graded=p.attempts.filter(a=>['correct','incorrect','timeout'].includes(a.outcome));return {correct:graded.filter(a=>a.correct).length,answered:graded.length,coverage:new Set(graded.map(a=>a.questionIndex)).size,total:this.game.questions.length};}
+  education(p){const graded=p.attempts.filter(a=>['correct','incorrect','timeout'].includes(a.outcome));return {correct:graded.filter(a=>a.correct).length,answered:graded.length,coverage:new Set(graded.map(a=>a.questionIndex)).size,total:this.game.questions.length,collections:p.collections||0,swallows:p.swallows||0};}
 }
 module.exports={FishMatch,CONFIG,radius};

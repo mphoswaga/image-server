@@ -477,9 +477,21 @@
     clearInterval(qTimer); unlockAnswers();
     $('resultSaveStatus').textContent = state.resultsSaved ? 'Your learning results have been saved.' : 'Saving your learning results. Please keep this page open.';
     if (state.resultsSaved && socket && socket.readyState === WebSocket.OPEN) socket.close();
-    show('ended'); const order=[...state.players].sort((a,b)=>b.score-a.score), place=order.findIndex(p=>p.id===state.me)+1;
-    $('rank').textContent = place ? `You finished number ${place} of ${order.length}` : 'Adventure complete'; $('finalScore').textContent = `${me.score} points`;
-    const p=state.personal||{}; $('learning').textContent = p.answered ? `You answered ${p.correct} of ${p.answered} questions correctly and explored ${p.coverage} different questions.` : 'You collected plankton and practised navigating the ocean.';
+    show('ended');
+    const order=[...state.players].sort((a,b)=>b.score-a.score||b.mass-a.mass||String(a.name).localeCompare(String(b.name)));
+    const place=order.findIndex(p=>p.id===state.me)+1, winner=order[0], p=state.personal||{};
+    const tiedWinners=winner?order.filter(item=>item.score===winner.score&&item.mass===winner.mass):[];
+    const meWon=tiedWinners.some(item=>item.id===state.me);
+    $('endTitle').textContent=meWon?'You won FishQuest!':'Ocean game finished!';
+    if(tiedWinners.length>1){
+      $('winnerLine').textContent=meWon?'You share first place!':`${tiedWinners.map(item=>item.name).join(' and ')} share first place.`;
+    }else if(winner){
+      $('winnerLine').textContent=winner.id===state.me?'You are the winner!':`${winner.name} won this game.`;
+    }else $('winnerLine').textContent='The game is complete.';
+    $('rank').textContent=place?`You finished in place ${place} of ${order.length}.`:'Your ocean adventure is complete.';
+    $('finalScore').textContent=`${me.score} points`;
+    $('endFacts').innerHTML=`<div class="end-fact"><b>${Math.round(me.mass)}</b><span>Final size</span></div><div class="end-fact"><b>${p.correct||0}/${p.answered||0}</b><span>Questions right</span></div><div class="end-fact"><b>${p.collections||0}</b><span>Plankton eaten</span></div><div class="end-fact"><b>${p.swallows||0}</b><span>Fish eaten</span></div>`;
+    $('learning').textContent=p.answered?`You saw ${p.coverage} different questions. Practise the questions you missed, then play again.`:'You practised moving your fish. Next time, try to eat a smaller fish and answer its question.';
   }
   function toast(text, good) { const el=$('toast');el.textContent=text;el.className=`toast show ${good?'good':'bad'}`;setTimeout(()=>el.className='toast',2200); }
   $('soundToggle').onclick = async () => {
