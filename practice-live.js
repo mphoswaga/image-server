@@ -286,6 +286,7 @@ function publicLeaderboard(room) {
       const typing = scoring.typingSummaryFromCheckpoints(active.checkpoints || []);
       return {
         id: participant.id,
+        studentId: participant.rosterStudentId || null,
         name: participant.name,
         score: performance.score,
         baseScore: performance.baseScore,
@@ -307,6 +308,15 @@ function publicLeaderboard(room) {
         typingSeconds: typing.typingSeconds,
         wpm: typing.wpm,
         problemKeys: typing.problemKeys,
+        checkpoints: (active.checkpoints || []).map((checkpoint) => ({
+          stepId: checkpoint.stepId,
+          mastery: checkpoint.mastery || '',
+          attempts: checkpoint.attempts || 1,
+          hintsUsed: checkpoint.hintsUsed || 0,
+          mistakes: checkpoint.mistakes || 0,
+          activeSeconds: checkpoint.activeSeconds || 0,
+          completedAt: checkpoint.completedAt || null,
+        })),
         status: active.status || 'in_progress',
         online: presence.online,
         lastSeenAt: presence.lastSeenAt,
@@ -366,7 +376,7 @@ function publicRoom(room, { teacherView = false } = {}) {
     participantCount: (room.participants || []).length,
     connectedCount: open ? leaderboard.filter((participant) => participant.online).length : 0,
     audioPolicy: normalizeAudioPolicy(room.audioPolicy),
-    roster: room.roster ? { name: room.roster.name, count: room.roster.students.length } : null,
+    roster: room.roster ? { id: room.roster.id, name: room.roster.name, count: room.roster.students.length } : null,
     leaderboard: teacherView
       ? leaderboard
       : leaderboard.map((participant) => ({ id: participant.id, name: participant.name })),

@@ -187,6 +187,7 @@ function assignmentResultRows(teacherId) {
       out.push({
         kind: 'assignment', type: a.type, assignmentId: a.id, rosterId: a.rosterId || null,
         studentId: sub.studentId, subject: a.subject || null, topic: a.topic || null, title: a.title,
+        mode: a.type === 'homework' ? 'homework' : 'classwork', activityId: `assignment:${a.id}`,
         score: sub.totalMarks, total: sub.maxMarks,
         percentage: sub.maxMarks > 0 ? Math.round((sub.totalMarks / sub.maxMarks) * 100) : 0,
         at: sub.submittedAt || a.createdAt,

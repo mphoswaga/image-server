@@ -4547,6 +4547,7 @@ app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:r
       if (result.rosterId && result.rosterId !== foundRoster.id) continue;
       if (!inRoster(result.studentId)) continue;
       push(result.studentId, { kind: 'game', gameId: g.id, topic: g.topic, subject: g.subject,
+        title: g.lessonTitle, mode: g.mode || 'arcade', activityId: `game:${g.id}`,
         score: result.score, total: result.total,
         percentage: result.total > 0 ? Math.round((result.score / result.total) * 100) : 0,
         at: result.at, updatedAt: result.at });
@@ -4555,7 +4556,68 @@ app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:r
   for (const a of gradebook.assignmentResultRows(foundTeacherId)) {
     if (!inRoster(a.studentId)) continue;
     push(a.studentId, { kind: 'assignment', type: a.type, assignmentId: a.assignmentId, topic: a.topic, subject: a.subject,
+      title: a.title, mode: a.type === 'homework' ? 'homework' : 'classwork', activityId: `assignment:${a.assignmentId}`,
       score: a.score, total: a.total, percentage: a.percentage, at: a.at, updatedAt: a.at });
+  }
+  const practiceCatalog = new Map(practice.listActivities().map(activity => [activity.id, activity]));
+  const masteryPercentage = mastery => mastery === 'independent' ? 95 : mastery === 'developing_independence' ? 68 : 38;
+  const checkpointPercentage = checkpoint => {
+    if (checkpoint.mastery) return masteryPercentage(checkpoint.mastery);
+    const correct = Math.max(0, Number(checkpoint.correctInputs) || 0);
+    const mistakes = Math.max(0, Number(checkpoint.mistakes) || 0);
+    return correct + mistakes > 0 ? Math.round((correct / (correct + mistakes)) * 100) : 0;
+  };
+  for (const result of practice.teacherResults(foundRoster.students.map(student => student.id))) {
+    if (!inRoster(result.studentId) || result.status !== 'completed') continue;
+    const activity = practiceCatalog.get(result.activityId);
+    push(result.studentId, {
+      kind: 'practice', activityId: `practice:${result.activityId}`, title: activity && activity.title || result.activityId,
+      topic: activity && activity.description || result.activityId, subject: 'ICT', mode: 'independent',
+      score: result.score, total: result.baseScore || result.score || 1, percentage: result.accuracyPercent,
+      mistakes: result.mistakes || 0, activeSeconds: result.activeSeconds || 0, mastery: result.mastery || '',
+      checkpoints: (result.checkpoints || []).map(checkpoint => ({ stepId: checkpoint.stepId, mastery: checkpoint.mastery, attempts: checkpoint.attempts, hintsUsed: checkpoint.hintsUsed })),
+      at: result.completedAt || result.updatedAt, updatedAt: result.updatedAt || result.completedAt
+    });
+    const fullActivity = practice.getActivity(result.activityId, result.activityVersion) || practice.getActivity(result.activityId);
+    for (const checkpoint of result.checkpoints || []) {
+      const step = fullActivity && fullActivity.steps.find(item => item.id === checkpoint.stepId);
+      push(result.studentId, {
+        kind: 'practice_checkpoint', activityId: `practice:${result.activityId}:${checkpoint.stepId}`,
+        title: step && step.title || checkpoint.stepId, topic: `${step && step.title || checkpoint.stepId} ${step && step.action || ''}`,
+        subject: 'ICT', mode: 'independent', score: masteryPercentage(checkpoint.mastery), total: 100,
+        percentage: masteryPercentage(checkpoint.mastery), mistakes: Math.max(0, (checkpoint.attempts || 1) - 1),
+        activeSeconds: checkpoint.activeSeconds || 0, mastery: checkpoint.mastery || '',
+        at: checkpoint.completedAt || result.completedAt || result.updatedAt, updatedAt: checkpoint.completedAt || result.updatedAt
+      });
+    }
+  }
+  for (const room of practiceLive.teacherRooms(foundTeacherId)) {
+    if (!room.roster || room.roster.id !== foundRoster.id) continue;
+    for (const participant of room.leaderboard || []) {
+      if (!participant.studentId || !inRoster(participant.studentId) || participant.status !== 'completed') continue;
+      push(participant.studentId, {
+        kind: 'practice', activityId: `practice-room:${room.code}:${participant.activityId}`,
+        title: participant.activityTitle || room.activity && room.activity.title || 'Practice activity',
+        topic: participant.activityTitle || room.activity && room.activity.title || 'Practice activity',
+        subject: 'ICT', mode: room.mode || 'classwork', score: participant.score,
+        total: participant.baseScore || participant.score || 1, percentage: participant.accuracyPercent,
+        mistakes: participant.mistakes || 0, activeSeconds: participant.activeSeconds || 0,
+        missionsCompleted: participant.missionsCompleted || 0, missionCount: participant.missionCount || 0,
+        at: participant.lastSeenAt || room.updatedAt, updatedAt: participant.lastSeenAt || room.updatedAt
+      });
+      const fullActivity = practice.getActivity(participant.activityId, participant.activityVersion) || practice.getActivity(participant.activityId);
+      for (const checkpoint of participant.checkpoints || []) {
+        const step = fullActivity && fullActivity.steps.find(item => item.id === checkpoint.stepId);
+        push(participant.studentId, {
+          kind: 'practice_checkpoint', activityId: `practice-room:${room.code}:${participant.activityId}:${checkpoint.stepId}`,
+          title: step && step.title || checkpoint.stepId, topic: `${step && step.title || checkpoint.stepId} ${step && step.action || ''}`,
+          subject: 'ICT', mode: room.mode || 'classwork', score: checkpointPercentage(checkpoint), total: 100,
+          percentage: checkpointPercentage(checkpoint), mistakes: checkpoint.mistakes || Math.max(0, (checkpoint.attempts || 1) - 1),
+          activeSeconds: checkpoint.activeSeconds || 0, mastery: checkpoint.mastery || '',
+          at: checkpoint.completedAt || participant.lastSeenAt || room.updatedAt, updatedAt: checkpoint.completedAt || room.updatedAt
+        });
+      }
+    }
   }
 
   const students = foundRoster.students.map(s => {
