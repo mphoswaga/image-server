@@ -86,11 +86,7 @@
 @media(max-width:850px){.choice-dialog .reward{min-height:66px;padding:7px}.choice-dialog .reward strong{font-size:13px}.choice-dialog .reward span:not(.reward-symbol){font-size:10px}.choice-dialog .reward-symbol,.choice-dialog .reward>span:not(.reward-symbol):not(.reward-effect){display:none}.choice-dialog .reward[data-reward="raid"]{min-height:54px}#rewardOverlay .dialog-kicker{display:none}.choice-dialog h2{font-size:17px;margin:5px 0 8px}}
 .top-controls button,.teacher-handle{background:#285c50;border-color:#79a798;box-shadow:none}
 @media(min-width:851px){
-  .game-screen.dock-open:not(.question-open) .score-strip{right:calc(min(620px,44vw) + 18px)}
-  .game-screen.dock-open:not(.question-open) .score-card{min-width:0}
-  .game-screen.dock-open:not(.question-open) .score-name{font-size:12px}
-  .game-screen.dock-open:not(.question-open) .score-stats{font-size:10px}
-  .question-overlay{place-items:end center;padding:0 16px 14px}
+  .question-overlay,.choice-overlay{place-items:end center;padding:0 16px 14px}
   .question-dialog{display:grid;grid-template-columns:minmax(300px,.8fr) minmax(520px,1.55fr);grid-template-rows:auto auto 1fr auto;column-gap:18px;width:min(1500px,calc(100vw - 32px));max-height:min(39vh,340px);padding:13px 16px 12px}
   .question-dialog .dialog-kicker{grid-column:1;grid-row:1}
   .question-dialog .guide-line{grid-column:1;grid-row:2;padding:5px 0 7px}
@@ -99,8 +95,13 @@
   .question-dialog .answer{min-height:54px;padding:8px 11px;font-size:16px}
   .question-dialog .feedback{grid-column:1/-1;grid-row:4;margin-top:8px;padding:8px 11px}
   .question-dialog .question-foot{grid-column:1/-1;grid-row:5;margin-top:7px;padding-top:7px;font-size:12px}
-  .game-screen.question-open .turn-banner{left:50%}
-  .game-screen.question-open .rain-plan{display:none}
+  .choice-dialog{width:min(1500px,calc(100vw - 32px));max-height:min(43vh,370px);padding:12px 16px}
+  .choice-dialog .reward-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+  .choice-dialog .reward{min-height:76px;padding:8px 10px}
+  .choice-dialog .reward[data-reward="raid"]{grid-column:span 2;min-height:62px}
+  .choice-dialog .target-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .game-screen.dock-open .turn-banner{left:50%}
+  .game-screen.dock-open .rain-plan{display:none}
 }
 @media(max-width:850px){.score-strip{left:10px;right:10px}.question-overlay,.choice-overlay{padding-top:0}.question-dialog,.choice-dialog{padding:13px}.question-dialog h2,.choice-dialog h2{font-size:20px;margin:8px 0}.question-dialog .guide-line{padding:0 0 6px;font-size:12px}.question-dialog .answer{min-height:52px;font-size:14px}.turn-banner{top:168px}.question-foot{padding-top:7px}}
 @media(max-width:440px){.game-title strong{font-size:17px}.question-dialog h2{font-size:18px}.question-dialog .answer{font-size:13px}.score-card{min-width:145px;padding:7px 9px}.score-stats{font-size:10px}.turn-banner{top:160px}}

@@ -378,6 +378,12 @@ test('a teacher can run, recover, pause, and finish a one-screen ColonyQuest mat
   await expect(page.locator('#feedback')).toContainText('Correct');
   await page.locator('#feedbackNext').click();
   await expect(page.locator('#rewardOverlay')).toBeVisible();
+  if (testInfo.project.name === 'windows-100') {
+    const rewardBox = await page.locator('#rewardOverlay .choice-dialog').boundingBox();
+    expect(rewardBox.width).toBeGreaterThan(1366 * .85);
+    expect(rewardBox.y).toBeGreaterThan(768 * .5);
+    expect(rewardBox.x).toBeLessThan(30);
+  }
   expect(session.phase).toBe('reward');
 
   await page.reload();
