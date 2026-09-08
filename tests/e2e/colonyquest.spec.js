@@ -77,6 +77,122 @@ test('all six colonies begin on the shared meadow surface', async ({ page }, tes
   await expect(page.locator('#colonyViewPick')).toHaveValue('team-6');
 });
 
+test('world events become class-triggered scenes and recover safely', async ({ page }, testInfo) => {
+  test.skip(!['windows-100', 'mobile'].includes(testInfo.project.name), 'The event choreography needs desktop and touch visual passes.');
+  const colonies = [colonyCore.createTeam({ name: 'Oak Colony' }, 0), colonyCore.createTeam({ name: 'Seed Colony', colorIndex: 1 }, 1)];
+  colonies[0].food = 5;
+  const setup = { teamCount: 2, rounds: 5, matchType: 'rounds', durationMinutes: 15, sound: false, teams: colonies };
+  let saved = colonyCore.normalizeSession({
+    phase: 'event',
+    eventAction: 'question',
+    introSeen: true,
+    teams: colonies,
+    focusTeamId: colonies[0].id,
+    events: [{ key: 'tunnel-collapse', focusTeamId: colonies[0].id, effects: [{ teamId: colonies[0].id, foodDelta: -3, workersDelta: 0, roomsDelta: 0 }] }],
+  });
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.route(/\/api\/game\/cq-event\/colonyquest(?:\/session)?$/, async route => {
+    if (route.request().method() === 'PUT') {
+      saved = colonyCore.normalizeSession(route.request().postDataJSON().session);
+      return route.fulfill({ json: { ok: true } });
+    }
+    return route.fulfill({ json: { game: { id: 'cq-event', lessonTitle: 'Habitats', questions, colonyquest: setup }, session: saved } });
+  });
+  await page.goto('/colonyquest/cq-event');
+  await page.locator('#resumeBtn').click();
+  await expect(page.locator('#worldStoryTitle')).toHaveText('A tunnel has fallen in!');
+  await expect(page.locator('#worldStoryContinue')).toHaveText('Help Dot repair it');
+  await page.screenshot({ path: `/tmp/colony-event-needs-help-${testInfo.project.name}.png` });
+  await page.locator('#worldStoryContinue').click();
+  await expect(page.locator('#worldStoryTitle')).toHaveText('The tunnel is open again!', { timeout: 8000 });
+  await expect(page.locator('#worldStoryEffect')).toContainText('3 food could not be saved');
+  await page.screenshot({ path: `/tmp/colony-event-repaired-${testInfo.project.name}.png` });
+  await page.reload();
+  await page.locator('#resumeBtn').click();
+  await expect(page.locator('#worldStoryContinue')).toHaveText('Help Dot repair it');
+  expect(saved.teams[0].food).toBe(5);
+  expect(errors).toEqual([]);
+});
+
+test('every colony reward plays a visible action before continuing', async ({ page }, testInfo) => {
+  test.setTimeout(60_000);
+  test.skip(testInfo.project.name !== 'windows-100', 'Run the complete reward choreography once on desktop.');
+  const titles = {
+    workers: 'Pip wakes a new worker',
+    food: 'Pip finds five bright seeds',
+    defense: 'Dot strengthens the walls',
+    queen: 'Queen Aurelia lays one egg',
+    expansion: 'Dot opens a new room',
+    soldiers: 'Bramble joins the guard',
+  };
+  const setup = { teamCount: 2, rounds: 5, matchType: 'rounds', durationMinutes: 15, sound: false };
+  let saved;
+  const freshSession = () => {
+    const colonies = [colonyCore.createTeam({ name: 'Oak Colony' }, 0), colonyCore.createTeam({ name: 'Seed Colony', colorIndex: 1 }, 1)];
+    Object.assign(colonies[0], { workers: 2, population: 4, food: 20, pantryBuilt: true, barracksBuilt: true, territory: 3 });
+    return colonyCore.normalizeSession({ phase: 'reward', introSeen: true, teams: colonies });
+  };
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.addInitScript(() => localStorage.clear());
+  await page.route(/\/api\/game\/cq-rewards\/colonyquest(?:\/session)?$/, async route => {
+    if (route.request().method() === 'PUT') {
+      saved = colonyCore.normalizeSession(route.request().postDataJSON().session);
+      return route.fulfill({ json: { ok: true } });
+    }
+    return route.fulfill({ json: { game: { id: 'cq-rewards', lessonTitle: 'Habitats', questions, colonyquest: { ...setup, teams: saved.teams } }, session: saved } });
+  });
+
+  for (const [reward, title] of Object.entries(titles)) {
+    saved = freshSession();
+    await page.goto('/colonyquest/cq-rewards');
+    await page.locator('#resumeBtn').click();
+    await page.locator(`[data-reward="${reward}"]`).click();
+    await expect(page.locator('#worldStoryTitle')).toHaveText(title);
+    await expect(page.locator('#worldStoryContinue')).toBeDisabled();
+    await expect(page.locator('#worldStoryContinue')).toBeEnabled({ timeout: 5000 });
+    if (reward === 'food') await page.screenshot({ path: '/tmp/colony-visible-food-delivery.png' });
+  }
+  expect(errors).toEqual([]);
+});
+
+test('the spider encounter and lost-ant rescue complete without locking the game', async ({ page }, testInfo) => {
+  test.setTimeout(30_000);
+  test.skip(testInfo.project.name !== 'windows-100', 'Exercise the two character-led event paths once.');
+  const scenes = [
+    { key: 'predator', action: 'Call Bramble', result: 'The spider retreats!', foodDelta: -5 },
+    { key: 'lost-ant', action: 'Guide the ant home', result: 'The lost scout is home!', foodDelta: 5 },
+  ];
+  let saved;
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.addInitScript(() => localStorage.clear());
+  await page.route(/\/api\/game\/cq-character-event\/colonyquest(?:\/session)?$/, async route => {
+    if (route.request().method() === 'PUT') {
+      saved = colonyCore.normalizeSession(route.request().postDataJSON().session);
+      return route.fulfill({ json: { ok: true } });
+    }
+    return route.fulfill({ json: { game: { id: 'cq-character-event', lessonTitle: 'Habitats', questions, colonyquest: { teamCount: 2, rounds: 5, matchType: 'rounds', sound: false, teams: saved.teams } }, session: saved } });
+  });
+
+  for (const event of scenes) {
+    const colonies = [colonyCore.createTeam({ name: 'Oak Colony' }, 0), colonyCore.createTeam({ name: 'Seed Colony', colorIndex: 1 }, 1)];
+    Object.assign(colonies[0], { soldiers: 1, barracksBuilt: true, population: 3 });
+    saved = colonyCore.normalizeSession({
+      phase: 'event', eventAction: 'question', introSeen: true, teams: colonies,
+      events: [{ key: event.key, focusTeamId: colonies[0].id, effects: [{ teamId: colonies[0].id, foodDelta: event.foodDelta, workersDelta: 0, roomsDelta: 0 }] }],
+    });
+    await page.goto('/colonyquest/cq-character-event');
+    await page.locator('#resumeBtn').click();
+    await expect(page.locator('#worldStoryContinue')).toHaveText(event.action);
+    await page.locator('#worldStoryContinue').click();
+    await expect(page.locator('#worldStoryTitle')).toHaveText(event.result, { timeout: 7000 });
+    await expect(page.locator('#worldStoryContinue')).toBeEnabled();
+  }
+  expect(errors).toEqual([]);
+});
+
 test('blocked colony choices explain their requirements and allow worker recovery', async ({ page }, testInfo) => {
   const colonies = [colonyCore.createTeam({ name: 'Oak Colony' }, 0), colonyCore.createTeam({ name: 'Seed Colony', colorIndex: 1 }, 1)];
   Object.assign(colonies[0], { workers: 0, population: 1, food: 0 });

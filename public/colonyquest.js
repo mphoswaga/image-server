@@ -26,6 +26,8 @@
   let audioContext = null;
   let ambientTimer = null;
   let worldStoryAction = null;
+  let worldStoryTimer = null;
+  let worldEventPresentation = [];
   let raidPresentation = null;
   let weatherEffects = [];
   let weatherTimers = [];
@@ -46,13 +48,22 @@
     ],
   };
   const REWARD_STORIES = {
-    workers: { title: 'Pip wakes a new worker', text: 'The new worker stretches its legs, follows Pip, and begins gathering two seeds each round.', site: 'nursery' },
-    food: { title: 'Pip finds five bright seeds', text: 'A worker carries every seed through the entrance and stores it safely underground.', site: 'food' },
-    defense: { title: 'Dot strengthens the walls', text: 'Dot the builder repairs every room with a stronger material. The nest can protect more food from rain.', site: 'nursery' },
-    queen: { title: 'Queen Aurelia lays one egg', text: 'The nurse ants place the egg in the warm queen room. It will hatch in two rounds.', site: 'nursery' },
-    expansion: { title: 'Dot opens a new room', text: 'Workers dig through the soil, carry away the dirt, and connect one new room to the colony.', site: 'expansion' },
-    soldiers: { title: 'Bramble joins the guard', text: 'Bramble trains one new guard ant. The guard patrols the entrance and can defend or challenge another colony.', site: 'guard' },
+    workers: { title: 'Pip wakes a new worker', text: 'The new worker stretches its legs, follows Pip, and begins gathering two seeds each round.', site: 'nursery', speaker: 'Pip', speech: 'Wake up! We have seeds to find.' },
+    food: { title: 'Pip finds five bright seeds', text: 'A worker carries every seed through the entrance and stores it safely underground.', site: 'food', speaker: 'Pip', speech: 'Carry all five seeds to the pantry!' },
+    defense: { title: 'Dot strengthens the walls', text: 'Dot the builder repairs every room with a stronger material. The nest can protect more food from rain.', site: 'nursery', speaker: 'Dot', speech: 'New walls make every room safer.' },
+    queen: { title: 'Queen Aurelia lays one egg', text: 'The nurse ants place the egg in the warm queen room. It will hatch in two rounds.', site: 'nursery', speaker: 'Queen Aurelia', speech: 'Keep this little egg warm and safe.' },
+    expansion: { title: 'Dot opens a new room', text: 'Workers dig through the soil, carry away the dirt, and connect one new room to the colony.', site: 'expansion', speaker: 'Dot', speech: 'Dig together. The new room is this way!' },
+    soldiers: { title: 'Bramble joins the guard', text: 'Bramble trains one new guard ant. The guard patrols the entrance and can defend or challenge another colony.', site: 'guard', speaker: 'Bramble', speech: 'Stand tall. Guard the colony entrance!' },
   };
+  const WORLD_EVENT_SCENES = Object.freeze({
+    'fallen-fruit': { action: 'Gather the berry', resultTitle: 'The berry is safely stored!', speaker: 'Pip', speech: 'Workers, follow me to the berry!', site: 'food', result: 'The workers carried the berry pieces into the pantry.' },
+    'heavy-rain': { action: 'Close the entrances', resultTitle: 'The colony is ready for the rain!', speaker: 'Dot', speech: 'Seal the tunnels before the water comes!', site: 'entrance', result: 'The ants closed the entrances and moved exposed food to safety.' },
+    'food-trail': { action: 'Follow Pip', resultTitle: 'The seed trail leads home!', speaker: 'Pip', speech: 'I found seeds. Follow my trail!', site: 'entrance', result: 'The workers followed Pip and carried the bright seeds home.' },
+    predator: { action: 'Call Bramble', resultTitle: 'The spider retreats!', speaker: 'Bramble', speech: 'Guards with me. Workers, take cover!', site: 'entrance', result: 'Bramble faced the spider while the workers protected the food.' },
+    'tunnel-collapse': { action: 'Help Dot repair it', resultTitle: 'The tunnel is open again!', speaker: 'Dot', speech: 'Move one stone at a time. We can open this path!', site: 'nursery', result: 'Dot and the workers cleared the fallen soil and reopened the tunnel.' },
+    'lost-ant': { action: 'Guide the ant home', resultTitle: 'The lost scout is home!', speaker: 'Pip', speech: 'Follow our scent trail. You are nearly home!', site: 'entrance', result: 'The lost scout reached the colony and shared a map to five seeds.' },
+    'new-territory': { action: 'Explore the soft soil', resultTitle: 'A safe new path is open!', speaker: 'Dot', speech: 'This soil is safe to dig. Let us explore!', site: 'expansion', result: 'The workers opened a safe path beneath the hidden root.' },
+  });
   const COLONY_LAYOUT = Object.freeze({
     gap: 14,
     minimumWidth: 205,
@@ -316,10 +327,24 @@
   }
 
   function hideWorldStory() {
+    clearTimeout(worldStoryTimer);
+    worldStoryTimer = null;
+    clearWorldEventPresentation();
     $('gameScreen').classList.remove('story-open');
     worldStoryAction = null;
     $('worldStory').classList.add('hidden');
     $('worldStoryContinue').disabled = false;
+  }
+
+  function clearWorldEventPresentation() {
+    if (scene) {
+      for (const object of worldEventPresentation) {
+        if (!object || !object.active) continue;
+        scene.tweens.killTweensOf(object);
+        object.destroy();
+      }
+    }
+    worldEventPresentation = [];
   }
 
   function setOverlay(id) {
@@ -333,10 +358,7 @@
     $('gameScreen').classList.toggle('full-overlay-open', ['storyOverlay', 'finalOverlay'].includes(id));
   }
 
-  function showWorldStory(details, onContinue) {
-    setOverlay(null);
-    $('gameScreen').classList.add('story-open');
-    transitionLocked = false;
+  function setWorldStoryContent(details, onContinue) {
     const tone = details.tone === 'storm' || details.tone === 'danger' ? details.tone : '';
     $('worldStory').className = `world-story${tone ? ` ${tone}` : ''}`;
     $('worldStoryArt').src = details.art || ASSETS.worker;
@@ -349,6 +371,45 @@
     worldStoryAction = onContinue || null;
     $('worldStoryContinue').disabled = false;
     $('worldStory').classList.remove('hidden');
+  }
+
+  function showWorldStory(details, onContinue) {
+    setOverlay(null);
+    $('gameScreen').classList.add('story-open');
+    transitionLocked = false;
+    setWorldStoryContent(details, onContinue);
+  }
+
+  function replaceWorldStory(details, onContinue) {
+    clearTimeout(worldStoryTimer);
+    worldStoryTimer = null;
+    $('gameScreen').classList.add('story-open');
+    transitionLocked = false;
+    setWorldStoryContent(details, onContinue);
+  }
+
+  function holdWorldStory(duration = 1800, label = 'Watch the ants...') {
+    const button = $('worldStoryContinue');
+    const readyLabel = button.textContent;
+    const expectedAction = worldStoryAction;
+    clearTimeout(worldStoryTimer);
+    button.disabled = true;
+    button.textContent = label;
+    const wait = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 180 : duration;
+    worldStoryTimer = setTimeout(() => {
+      worldStoryTimer = null;
+      if (worldStoryAction !== expectedAction || $('worldStory').classList.contains('hidden')) return;
+      button.textContent = readyLabel;
+      button.disabled = false;
+    }, wait);
+  }
+
+  async function waitForWorldReady(timeout = 3000) {
+    const started = Date.now();
+    while ((!scene || !colonyViews.size) && Date.now() - started < timeout) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    return !!scene && colonyViews.size > 0;
   }
 
   function storyChapter() {
@@ -601,9 +662,11 @@
       effect: rewardEffectText(key, event, team),
       art,
     }, onContinue);
-    celebrate(team.id, key, rewardEffectText(key, event, team));
+    celebrate(team.id, key);
     focusColony(team.id, story.site);
-    playUpgradeAction(team.id, key);
+    const actionDuration = playUpgradeAction(team.id, key);
+    showAntSpeech(team.id, story.speaker, story.speech, story.site, actionDuration + 700);
+    holdWorldStory(actionDuration, 'Watch the colony change...');
   }
 
   function showRewards() {
@@ -677,6 +740,39 @@
 
   function eventForTurn() {
     return core.EVENTS[Math.floor(session.turnIndex / Math.max(1, session.teams.length * 2)) % core.EVENTS.length];
+  }
+
+  function worldEventFocusTeam(event) {
+    const teams = session.teams || [];
+    if (!teams.length) return null;
+    if (event && event.focusTeamId) return teams.find(team => team.id === event.focusTeamId) || currentTeam();
+    if (['lost-ant', 'fallen-fruit', 'new-territory'].includes(event && event.key)) {
+      return [...teams].sort((a, b) => core.colonyStrength(a) - core.colonyStrength(b))[0];
+    }
+    if (['predator', 'heavy-rain', 'tunnel-collapse'].includes(event && event.key)) {
+      return [...teams].sort((a, b) => (a.defense * 3 + a.soldiers + a.workers) - (b.defense * 3 + b.soldiers + b.workers))[0];
+    }
+    return currentTeam() || teams[0];
+  }
+
+  function worldEventSnapshot() {
+    return new Map(session.teams.map(team => [team.id, {
+      food: team.food,
+      workers: team.workers,
+      rooms: core.colonyRooms(team).length,
+    }]));
+  }
+
+  function worldEventEffects(before) {
+    return session.teams.map(team => {
+      const old = before.get(team.id) || { food: team.food, workers: team.workers, rooms: core.colonyRooms(team).length };
+      return {
+        teamId: team.id,
+        foodDelta: team.food - old.food,
+        workersDelta: team.workers - old.workers,
+        roomsDelta: core.colonyRooms(team).length - old.rooms,
+      };
+    });
   }
 
   function stopRaidPresentation() {
@@ -911,6 +1007,7 @@
     });
     focusColony(team.id, report.hatched ? 'nursery' : 'food');
     celebrate(team.id, report.hatched ? 'workers' : 'food', report.hatched ? '+1 worker' : `+${report.gathered} seeds gathered`);
+    if (report.hatched) holdWorldStory(playHatchAction(team.id), 'Watch the egg hatch...');
   }
 
   async function beginTurn(previousChapter) {
@@ -940,13 +1037,16 @@
     }
     if (shouldShowEvent()) {
       const event = eventForTurn();
+      const focusTeam = worldEventFocusTeam(event);
+      const before = worldEventSnapshot();
       core.applyEvent(session.teams, event.key);
-      session.events.push({ key: event.key, at: new Date().toISOString() });
+      const eventRecord = { key: event.key, focusTeamId: focusTeam && focusTeam.id, effects: worldEventEffects(before), at: new Date().toISOString() };
+      session.events.push(eventRecord);
       session.phase = 'event';
       session.eventAction = 'question';
       updateWorld();
       await saveState();
-      showEvent(event, continueAfterEvent);
+      showEvent({ ...event, ...eventRecord }, continueAfterEvent);
       return;
     }
     session.phase = 'question';
@@ -968,6 +1068,8 @@
     if (event.key === 'heavy-rain') return 'Stronger walls protect more food while the rain crosses the meadow.';
     if (event.key === 'food-trail') return 'More workers can bring home more food from Pip\'s golden trail.';
     if (event.key === 'predator') return 'Guardians and strong walls keep more of the colony stores safe.';
+    if (event.key === 'tunnel-collapse') return 'Workers and strong walls help clear the tunnel without losing food.';
+    if (event.key === 'lost-ant') return 'Guide the scout home to discover five seeds for the colony that needs help.';
     if (event.key === 'new-territory') return 'A new room and flag appear for the colonies that need more space.';
     if (event.key === 'chapter-final-warning') return 'Lightning is above Moonroot Meadow. Finish every rain job now.';
     if (event.kicker === 'Chapter 4') return 'The Great Rain is close. Choose what your colony still needs.';
@@ -975,9 +1077,57 @@
     return '';
   }
 
+  function worldEventResultEffect(event, team) {
+    const effect = (event.effects || []).find(item => item.teamId === team?.id);
+    if (!effect) return worldEventEffect(event);
+    const changes = [];
+    if (effect.foodDelta > 0) changes.push(`+${effect.foodDelta} food`);
+    if (effect.foodDelta < 0) changes.push(`${Math.abs(effect.foodDelta)} food could not be saved`);
+    if (effect.workersDelta > 0) changes.push(`+${effect.workersDelta} worker`);
+    if (effect.roomsDelta > 0) changes.push(`+${effect.roomsDelta} room`);
+    if (!changes.length) changes.push('The colony protected everything');
+    return `${team.name}: ${changes.join(' · ')}`;
+  }
+
   function showEvent(event, onContinue) {
     if (session.phase === 'paused' || session.phase === 'ended') return;
+    const eventScene = WORLD_EVENT_SCENES[event && event.key];
     const guardianMoment = event.tone === 'danger' || event.tone === 'storm' || event.kicker === 'Colony Wars';
+    if (eventScene) {
+      const team = worldEventFocusTeam(event);
+      showWorldStory({
+        kicker: event.kicker || 'A Moonroot Meadow event',
+        title: event.title,
+        text: event.description,
+        effect: worldEventEffect(event),
+        tone: event.tone,
+        art: guardianMoment ? ASSETS.guardian : ASSETS.worker,
+        continueLabel: eventScene.action,
+      }, async () => {
+        clearWorldEventPresentation();
+        await waitForWorldReady();
+        if (!session || session.phase === 'paused' || session.phase === 'ended') return;
+        updateWorld();
+        focusColony(team.id, eventScene.site);
+        const duration = playWorldEvent(event.key, team.id);
+        await new Promise(resolve => setTimeout(resolve, duration));
+        if (!session || session.phase === 'paused' || session.phase === 'ended') return;
+        replaceWorldStory({
+          kicker: `${eventScene.speaker} reports back`,
+          title: eventScene.resultTitle,
+          text: eventScene.result,
+          effect: worldEventResultEffect(event, team),
+          tone: event.tone,
+          art: guardianMoment ? ASSETS.guardian : ASSETS.worker,
+          continueLabel: 'Continue journey',
+        }, onContinue);
+        showAntSpeech(team.id, eventScene.speaker, eventScene.result, eventScene.site, 3200);
+      });
+      focusColony(team.id, eventScene.site);
+      stageWorldEvent(event.key, team.id);
+      worldEventPresentation.push(...showAntSpeech(team.id, eventScene.speaker, eventScene.speech, eventScene.site, 0));
+      return;
+    }
     showWorldStory({
       kicker: event.kicker || 'A Moonroot Meadow event',
       title: event.title,
@@ -987,7 +1137,6 @@
       art: guardianMoment ? ASSETS.guardian : ASSETS.worker,
     }, onContinue);
     if (event.key === 'chapter-final-warning') playWorldEvent('heavy-rain');
-    else if (event.key) playWorldEvent(event.key);
   }
 
   async function finishMatch() {
@@ -1112,9 +1261,10 @@
       if (last?.key === 'round-supplies') return showRoundStory(last);
       if (last?.key === 'raid-result' && last.attackerId) return showRaidStory(last);
       if (last && String(last.key).startsWith('upgrade-')) return showRewardStory(last, nextTurn);
-      const event = last && last.key === 'colony-wars'
+      const eventTemplate = last && last.key === 'colony-wars'
         ? { title: 'The Moonroot Rally begins', description: 'The moon is rising. Keep building, gathering, or raiding as the colonies compete for the Ancient Acorn. Every colony stays in the adventure.', kicker: 'Chapter 4' }
         : chapterEvent(last && last.key) || core.EVENTS.find(item => item.key === (last && last.key));
+      const event = eventTemplate ? { ...eventTemplate, ...last } : null;
       const next = session.eventAction === 'next-turn' ? nextTurn : continueAfterEvent;
       return showEvent(event || { title: 'Something changed', description: 'The colonies are ready. Continue when the class is ready.' }, next);
     }
@@ -1167,12 +1317,15 @@
   }
 
   function resetMatchRuntime() {
+    clearTimeout(worldStoryTimer);
+    worldStoryTimer = null;
     answerLocked = false;
     pendingOutcome = null;
     transitionLocked = false;
     currentParticipant = null;
     participantOffset = 0;
     worldStoryAction = null;
+    worldEventPresentation = [];
     raidPresentation = null;
     weatherEffects = [];
     weatherTimers = [];
@@ -1659,19 +1812,38 @@
     if (session.phase === 'ended' && !session.stormSeen) { playWorldEvent('heavy-rain'); return; }
     if (session.phase === 'event' && event?.key === 'round-supplies') {
       const report = event.reports[event.reportIndex || 0];
-      if (report) focusColony(report.teamId, report.hatched ? 'nursery' : 'food');
+      if (report) {
+        focusColony(report.teamId, report.hatched ? 'nursery' : 'food');
+        if (report.hatched && !$('worldStory').classList.contains('hidden')) holdWorldStory(playHatchAction(report.teamId), 'Watch the egg hatch...');
+      }
+      return;
+    }
+    if (session.phase === 'event' && WORLD_EVENT_SCENES[event?.key]) {
+      const eventScene = WORLD_EVENT_SCENES[event.key];
+      const team = worldEventFocusTeam(event);
+      if (team) {
+        focusColony(team.id, eventScene.site);
+        stageWorldEvent(event.key, team.id);
+        if (!$('worldStory').classList.contains('hidden')) worldEventPresentation.push(...showAntSpeech(team.id, eventScene.speaker, eventScene.speech, eventScene.site, 0));
+      }
       return;
     }
     const key = String(event && event.key || '').replace(/^upgrade-/, '');
     if (session.phase === 'event' && REWARD_STORIES[key]) {
       const team = session.teams.find(item => item.id === event.teamId) || currentTeam();
       focusColony(team.id, REWARD_STORIES[key].site);
-      celebrate(team.id, key, rewardEffectText(key, event, team));
+      celebrate(team.id, key);
+      if (!$('worldStory').classList.contains('hidden')) {
+        const actionDuration = playUpgradeAction(team.id, key);
+        showAntSpeech(team.id, REWARD_STORIES[key].speaker, REWARD_STORIES[key].speech, REWARD_STORIES[key].site, actionDuration + 700);
+        holdWorldStory(actionDuration, 'Watch the colony change...');
+      }
     } else if (currentTeam()) focusColony(currentTeam().id);
   }
 
   function updateWorld() {
     if (!scene || !session) return;
+    clearWorldEventPresentation();
     stopWeather();
     if (raidPresentation) {
       const event = raidPresentation.event;
@@ -1754,36 +1926,176 @@
     }
   }
 
-  function playUpgradeAction(teamId, kind) {
-    if (!scene || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  function showAntSpeech(teamId, speaker, message, siteName = 'nursery', duration = 2800) {
+    if (!scene || !speaker || !message) return [];
     const view = colonyViews.get(teamId);
-    if (!view) return;
+    if (!view) return [];
+    const site = view.sites[siteName] || view.center;
+    const width = Math.max(118, Math.min(205, view.zone.w - 18));
+    const x = Phaser.Math.Clamp(site.x, view.zone.x + width / 2 + 5, view.zone.x + view.zone.w - width / 2 - 5);
+    const y = Math.max(view.zone.y + 72, site.y - 55);
+    const bubble = scene.add.text(x, y, `${speaker}: ${message}`, {
+      fontFamily: 'Arial', fontSize: view.zone.w < 260 ? '10px' : '12px', fontStyle: 'bold',
+      color: '#18382f', backgroundColor: '#fff9e8', padding: { x: 9, y: 7 },
+      wordWrap: { width: width - 18 }, align: 'center',
+    }).setOrigin(.5, 1).setDepth(30).setStroke('#fff9e8', 2);
+    const pointer = scene.add.triangle(x, y + 6, 0, 0, 14, 0, 7, 9, 0xfff9e8, 1).setOrigin(.5, 0).setDepth(29);
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      bubble.setScale(.75).setAlpha(.2);
+      pointer.setAlpha(.2);
+      scene.tweens.add({ targets: [bubble, pointer], alpha: 1, scaleX: 1, scaleY: 1, duration: 260, ease: 'Back.easeOut' });
+    }
+    if (duration > 0) {
+      scene.time.delayedCall(duration, () => {
+        if (!bubble.active) return;
+        scene.tweens.add({ targets: [bubble, pointer], alpha: 0, y: '-=8', duration: 320, onComplete: () => { bubble.destroy(); pointer.destroy(); } });
+      });
+    }
+    return [bubble, pointer];
+  }
+
+  function moveActionActor(actor, points, duration, onComplete) {
+    if (!scene || !actor || !points.length) return;
+    actor.setPosition(points[0].x, points[0].y);
+    const route = new Phaser.Curves.Path(points[0].x, points[0].y);
+    for (const point of points.slice(1)) route.lineTo(point.x, point.y);
+    const progress = { value: 0 };
+    scene.tweens.add({
+      targets: progress,
+      value: 1,
+      duration,
+      ease: 'Sine.easeInOut',
+      onUpdate: () => {
+        if (!actor.active) return;
+        const point = route.getPoint(progress.value);
+        actor.sprite.setFlipX(point.x < actor.x);
+        actor.setPosition(point.x, point.y);
+      },
+      onComplete: () => {
+        if (actor.active && onComplete) onComplete(actor);
+      },
+    });
+  }
+
+  function actionWorker(view, palette, point, width = 32, guardian = false) {
+    return makeAntAgent(guardian ? 'cq-guardian' : 'cq-worker', point, width, palette.primary, false, false).setDepth(18);
+  }
+
+  function depositVisibleSeeds(point, count = 5) {
+    for (let index = 0; index < count; index += 1) {
+      const seed = scene.add.ellipse(point.x, point.y - 10, 9, 6, [0xf1cc66, 0x8bbc5e, 0xdb7857][index % 3], 1).setDepth(19).setAngle(index * 28);
+      scene.tweens.add({
+        targets: seed,
+        x: point.x + (index - (count - 1) / 2) * 8,
+        y: point.y + 9 + Math.floor(index / 3) * 5,
+        duration: 420,
+        delay: index * 70,
+        ease: 'Bounce.easeOut',
+        onComplete: () => scene.time.delayedCall(700, () => { if (seed.active) seed.destroy(); }),
+      });
+    }
+  }
+
+  function playUpgradeAction(teamId, kind) {
+    if (!scene) return 250;
+    const view = colonyViews.get(teamId);
+    if (!view) return 250;
     const team = session.teams.find(item => item.id === teamId);
     const palette = core.TEAM_COLORS[team.colorIndex];
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reducedMotion) return 250;
+    const nursery = view.sites.nursery;
+    const entrance = view.sites.entrance;
+    const site = view.sites[REWARD_STORIES[kind]?.site || 'center'] || view.center;
+
+    if (kind === 'workers') {
+      const recruit = view.ants.filter(ant => ant.getData('role') === 'worker').at(-1);
+      if (recruit) {
+        recruit.setDepth(19);
+        scene.tweens.add({ targets: recruit, scaleX: 1.35, scaleY: .72, duration: 260, yoyo: true, repeat: 2, ease: 'Sine.easeInOut' });
+        const wakeRing = scene.add.ellipse(nursery.x, nursery.y, 48, 28, palette.light, .12).setStrokeStyle(4, palette.light, 1).setDepth(17);
+        scene.tweens.add({ targets: wakeRing, scaleX: 2, scaleY: 2, alpha: 0, duration: 1150, onComplete: () => wakeRing.destroy() });
+      }
+      return 1500;
+    }
+
+    if (kind === 'food') {
+      const surface = { x: entrance.x + Math.min(60, view.zone.w * .27), y: entrance.y - 24 };
+      const carrier = actionWorker(view, palette, surface);
+      carrier.cargo.setVisible(true);
+      for (let index = 0; index < 5; index += 1) {
+        const seed = scene.add.ellipse(-11 + index * 5, -10 - index % 2 * 5, 7, 5, [0xf1cc66, 0x8bbc5e, 0xdb7857][index % 3], 1);
+        carrier.add(seed);
+      }
+      moveActionActor(carrier, [surface, entrance, { x: entrance.x, y: (entrance.y + site.y) / 2 }, site], 2200, actor => {
+        actor.cargo.setVisible(false);
+        depositVisibleSeeds(site, 5);
+        scene.tweens.add({ targets: actor, alpha: 0, duration: 260, onComplete: () => actor.destroy(true) });
+      });
+      return 2500;
+    }
+
     if (kind === 'defense') {
+      const builder = actionWorker(view, palette, nursery);
+      const route = [nursery, ...view.rooms.slice(1, 8)];
+      moveActionActor(builder, route, 2300, actor => scene.tweens.add({ targets: actor, alpha: 0, duration: 250, onComplete: () => actor.destroy(true) }));
       for (const room of view.rooms.slice(0, 8)) {
         const ring = scene.add.ellipse(room.x, room.y, 72, 44, palette.light, .04).setStrokeStyle(4, core.fortification(team).edge, .95).setDepth(12);
-        scene.tweens.add({ targets: ring, scaleX: 1.75, scaleY: 1.75, alpha: 0, duration: 1200, delay: view.rooms.indexOf(room) * 90, onComplete: () => ring.destroy() });
+        scene.tweens.add({ targets: ring, scaleX: 1.75, scaleY: 1.75, alpha: 0, duration: 1050, delay: 280 + view.rooms.indexOf(room) * 190, onComplete: () => ring.destroy() });
+        for (let block = 0; block < 3; block += 1) {
+          const material = scene.add.rectangle(room.x - 17 + block * 17, room.y - 3, 13, 8, core.fortification(team).wall, 1).setStrokeStyle(1, core.fortification(team).edge, 1).setDepth(13).setAlpha(0);
+          scene.tweens.add({ targets: material, alpha: 1, y: room.y + 6, duration: 320, delay: 450 + view.rooms.indexOf(room) * 190 + block * 70, yoyo: true, hold: 420, onComplete: () => material.destroy() });
+        }
       }
-      return;
+      return 2700;
     }
-    const site = view.sites[REWARD_STORIES[kind]?.site || 'center'] || view.center;
+
     if (kind === 'queen') {
       const egg = scene.add.ellipse(site.x + 24, site.y + 13, 14, 10, 0xfff4d2, 1).setStrokeStyle(2, 0xd9b976, 1).setDepth(12).setScale(.2);
-      scene.tweens.add({ targets: egg, scaleX: 1.25, scaleY: 1.25, duration: 700, yoyo: true, hold: 650, onComplete: () => egg.destroy() });
-      return;
+      scene.tweens.add({ targets: egg, scaleX: 1.25, scaleY: 1.25, duration: 700, yoyo: true, hold: 900, onComplete: () => egg.destroy() });
+      return 1800;
     }
+
     if (kind === 'soldiers') {
       const shield = scene.add.ellipse(site.x, site.y, 44, 44, palette.light, .12).setStrokeStyle(5, palette.light, 1).setDepth(12);
       scene.tweens.add({ targets: shield, scaleX: 1.8, scaleY: 1.8, alpha: 0, duration: 1250, onComplete: () => shield.destroy() });
-      return;
+      const guard = view.ants.filter(ant => ant.getData('role') === 'soldier').at(-1);
+      if (guard) scene.tweens.add({ targets: guard, angle: { from: -7, to: 7 }, duration: 190, yoyo: true, repeat: 5 });
+      return 1600;
     }
+
     if (kind === 'expansion') {
+      const builders = [-10, 10].map(offset => actionWorker(view, palette, { x: nursery.x + offset, y: nursery.y }, 29));
+      builders.forEach((builder, index) => moveActionActor(builder, [nursery, { x: (nursery.x + site.x) / 2, y: (nursery.y + site.y) / 2 }, { x: site.x + (index ? 13 : -13), y: site.y }], 1450 + index * 140, actor => {
+        scene.tweens.add({ targets: actor, x: actor.x + (index ? -9 : 9), angle: index ? -12 : 12, duration: 180, yoyo: true, repeat: 4, onComplete: () => scene.tweens.add({ targets: actor, alpha: 0, duration: 250, onComplete: () => actor.destroy(true) }) });
+      }));
       for (let index = 0; index < 14; index += 1) {
         const dirt = scene.add.circle(site.x + (index % 5 - 2) * 6, site.y, 3 + index % 3, index % 2 ? 0x8b5b35 : 0xc08a52, .95).setDepth(12);
-        scene.tweens.add({ targets: dirt, x: dirt.x + (index % 2 ? 1 : -1) * (22 + index * 2), y: dirt.y - 16 - index % 5 * 6, alpha: 0, duration: 850 + index * 25, ease: 'Cubic.easeOut', onComplete: () => dirt.destroy() });
+        scene.tweens.add({ targets: dirt, x: dirt.x + (index % 2 ? 1 : -1) * (22 + index * 2), y: dirt.y - 16 - index % 5 * 6, alpha: 0, duration: 850 + index * 25, delay: 1050, ease: 'Cubic.easeOut', onComplete: () => dirt.destroy() });
       }
+      return 2500;
     }
+    return 1400;
+  }
+
+  function playHatchAction(teamId) {
+    if (!scene) return 250;
+    const view = colonyViews.get(teamId);
+    const team = session.teams.find(item => item.id === teamId);
+    if (!view || !team || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return 250;
+    const site = view.sites.nursery;
+    const palette = core.TEAM_COLORS[team.colorIndex];
+    const egg = scene.add.ellipse(site.x + 20, site.y + 5, 20, 27, 0xfff4d2, 1).setStrokeStyle(3, 0xd9b976, 1).setDepth(20);
+    const crack = scene.add.graphics().setDepth(21).setAlpha(0);
+    crack.lineStyle(2, 0x765c3c, 1).beginPath().moveTo(site.x + 15, site.y - 4).lineTo(site.x + 21, site.y + 1).lineTo(site.x + 16, site.y + 7).lineTo(site.x + 23, site.y + 12).strokePath();
+    scene.tweens.add({ targets: egg, angle: { from: -8, to: 8 }, duration: 170, yoyo: true, repeat: 4, onComplete: () => {
+      crack.setAlpha(1);
+      scene.tweens.add({ targets: [egg, crack], scaleX: 1.28, scaleY: 1.28, alpha: 0, duration: 480, delay: 420, onComplete: () => { egg.destroy(); crack.destroy(); } });
+      const baby = actionWorker(view, palette, { x: site.x + 20, y: site.y + 8 }, 24).setScale(.25).setAlpha(.2);
+      scene.tweens.add({ targets: baby, scaleX: 1, scaleY: 1, alpha: 1, y: baby.y - 12, duration: 700, delay: 420, ease: 'Back.easeOut', onComplete: () => scene.time.delayedCall(650, () => { if (baby.active) baby.destroy(true); }) });
+    } });
+    showAntSpeech(teamId, 'Queen Aurelia', 'Crack! A new worker is ready.', 'nursery', 3000);
+    return 2300;
   }
 
   function stopWeather() {
@@ -1848,8 +2160,74 @@
     }
   }
 
-  function playWorldEvent(key) {
+  function createMeadowSpider(point, scale = 1) {
+    const spider = scene.add.container(point.x, point.y).setDepth(24).setScale(scale);
+    const legs = scene.add.graphics();
+    legs.lineStyle(5, 0x39271f, 1);
+    for (let side = -1; side <= 1; side += 2) {
+      for (let leg = 0; leg < 4; leg += 1) {
+        const y = -14 + leg * 10;
+        legs.beginPath().moveTo(side * 4, y * .45).lineTo(side * (24 + leg * 3), y - 8).lineTo(side * (38 + leg * 4), y + (leg < 2 ? -2 : 9)).strokePath();
+      }
+    }
+    const body = scene.add.ellipse(0, 5, 43, 39, 0x2c201d, 1).setStrokeStyle(3, 0x6f4a32, 1);
+    const head = scene.add.circle(0, -19, 16, 0x3b2922, 1).setStrokeStyle(2, 0x7f5639, 1);
+    const mark = scene.add.ellipse(0, 7, 12, 18, 0xb96532, .9);
+    const eyeLeft = scene.add.circle(-6, -23, 3, 0xffdf7c, 1);
+    const eyeRight = scene.add.circle(6, -23, 3, 0xffdf7c, 1);
+    spider.add([legs, body, mark, head, eyeLeft, eyeRight]);
+    return spider;
+  }
+
+  function stageWorldEvent(key, teamId) {
     if (!scene) return;
+    clearWorldEventPresentation();
+    const view = colonyViews.get(teamId);
+    const team = session.teams.find(item => item.id === teamId);
+    if (!view || !team) return;
+    const palette = core.TEAM_COLORS[team.colorIndex];
+    const entrance = view.sites.entrance;
+    const nursery = view.sites.nursery;
+    if (key === 'predator') {
+      const spider = createMeadowSpider({ x: entrance.x + Math.min(78, view.zone.w * .3), y: entrance.y - 35 }, .72);
+      worldEventPresentation.push(spider);
+      scene.tweens.add({ targets: spider, x: spider.x - 12, y: spider.y + 4, angle: 3, duration: 720, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    }
+    if (key === 'tunnel-collapse') {
+      const fall = { x: (entrance.x + nursery.x) / 2, y: (entrance.y + nursery.y) / 2 };
+      const warning = scene.add.ellipse(fall.x, fall.y, 72, 42, 0xf2b94b, .2).setStrokeStyle(3, 0xffdb78, .9).setDepth(20);
+      const blocked = scene.add.text(fall.x + Math.min(76, view.zone.w * .22), fall.y + 3, 'TUNNEL BLOCKED', {
+        fontFamily: 'Arial', fontSize: '10px', fontStyle: 'bold', color: '#fff5ce', backgroundColor: '#8b3f27', padding: { x: 6, y: 4 },
+      }).setOrigin(.5).setDepth(24);
+      worldEventPresentation.push(warning, blocked);
+      scene.tweens.add({ targets: warning, alpha: .5, scaleX: 1.12, scaleY: 1.12, duration: 520, yoyo: true, repeat: -1 });
+      for (let index = 0; index < 7; index += 1) {
+        const stone = scene.add.polygon(fall.x + (index % 3 - 1) * 12, fall.y + Math.floor(index / 3) * 9, [-8, 4, -5, -5, 3, -8, 9, 0, 5, 7], index % 2 ? 0xa36f45 : 0xc08a52, 1).setStrokeStyle(2, 0xf2c078, .9).setDepth(22).setAngle(index * 19);
+        worldEventPresentation.push(stone);
+      }
+    }
+    if (key === 'lost-ant') {
+      const lost = actionWorker(view, palette, { x: entrance.x + Math.min(88, view.zone.w * .34), y: entrance.y - 31 }, 25);
+      lost.setAngle(-13);
+      worldEventPresentation.push(lost);
+      scene.tweens.add({ targets: lost, x: lost.x - 8, angle: 13, duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    }
+    if (key === 'fallen-fruit') {
+      const fruit = scene.add.circle(entrance.x + 35, Math.max(16, entrance.y - 92), 21, 0xc74f3f, 1).setDepth(22).setStrokeStyle(4, 0xf4b64e, 1);
+      const leaf = scene.add.ellipse(fruit.x + 12, fruit.y - 15, 17, 8, 0x6eaa4a, 1).setDepth(23).setAngle(-25);
+      worldEventPresentation.push(fruit, leaf);
+      scene.tweens.add({ targets: [fruit, leaf], y: '+=5', duration: 650, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    }
+    if (key === 'heavy-rain') lightningStrike(false);
+  }
+
+  function playWorldEvent(key, teamId) {
+    if (!scene) return 250;
+    const view = colonyViews.get(teamId) || colonyViews.values().next().value;
+    const team = session.teams.find(item => item.id === teamId) || currentTeam();
+    const palette = team ? core.TEAM_COLORS[team.colorIndex] : core.TEAM_COLORS[0];
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reducedMotion) return 300;
     if (key === 'heavy-rain') {
       stopWeather();
       const cloud = scene.add.graphics().setDepth(-3);
@@ -1871,29 +2249,99 @@
       }
       lightningStrike(true);
       if (!reducedMotion) weatherTimers.push(scene.time.addEvent({ delay: 4300, loop: true, callback: () => lightningStrike(true) }));
+      if (view) {
+        for (let index = 0; index < Math.min(2, team.workers); index += 1) {
+          const runner = actionWorker(view, palette, { x: view.sites.entrance.x + (index ? 12 : -12), y: view.sites.entrance.y - 22 }, 28);
+          moveActionActor(runner, [{ x: runner.x, y: runner.y }, view.sites.entrance, view.sites.nursery], 1650 + index * 160, actor => scene.tweens.add({ targets: actor, alpha: 0, duration: 220, onComplete: () => actor.destroy(true) }));
+        }
+      }
+      return 2500;
     }
     if (key === 'fallen-fruit') {
-      const fruit = scene.add.circle(scene.scale.width * .52, -35, 24, 0xc74f3f, 1).setDepth(14).setStrokeStyle(5, 0xf4b64e, 1);
+      const fruitX = view ? view.sites.entrance.x + 30 : scene.scale.width * .52;
+      const fruit = scene.add.circle(fruitX, -35, 24, 0xc74f3f, 1).setDepth(14).setStrokeStyle(5, 0xf4b64e, 1);
       const leaf = scene.add.ellipse(fruit.x + 13, fruit.y - 16, 18, 8, 0x6eaa4a, 1).setDepth(15).setAngle(-25);
       scene.tweens.add({ targets: [fruit, leaf], y: scene.scale.height * .32, duration: 850, ease: 'Bounce.easeOut', onComplete: () => scene.time.delayedCall(800, () => { fruit.destroy(); leaf.destroy(); }) });
+      if (view) {
+        const pickup = { x: fruitX, y: view.sites.entrance.y - 20 };
+        const carrier = actionWorker(view, palette, pickup);
+        carrier.cargo.setVisible(true);
+        moveActionActor(carrier, [pickup, view.sites.entrance, view.sites.food], 2200, actor => { depositVisibleSeeds(view.sites.food, 5); actor.destroy(true); });
+      }
+      return 2600;
     }
     if (key === 'food-trail') {
-      for (let index = 0; index < 24; index += 1) {
-        const seed = scene.add.ellipse(scene.scale.width * .12 + index * scene.scale.width * .032, scene.scale.height * .25 + Math.sin(index * .8) * 18, 8, 4, 0xf5c856, .25).setDepth(12).setAngle(index * 17);
+      const startX = view ? view.zone.x + 14 : scene.scale.width * .12;
+      const trailWidth = view ? Math.max(80, view.zone.w - 28) : scene.scale.width * .76;
+      for (let index = 0; index < 18; index += 1) {
+        const seed = scene.add.ellipse(startX + index / 17 * trailWidth, scene.scale.height * .22 + Math.sin(index * .8) * 15, 8, 4, 0xf5c856, .25).setDepth(12).setAngle(index * 17);
         scene.tweens.add({ targets: seed, alpha: 1, scaleX: 1.35, scaleY: 1.35, duration: 420, delay: index * 35, yoyo: true, hold: 250, onComplete: () => seed.destroy() });
       }
+      if (view) {
+        const surface = { x: startX + trailWidth, y: view.sites.entrance.y - 24 };
+        const follower = actionWorker(view, palette, surface);
+        follower.cargo.setVisible(true);
+        moveActionActor(follower, [surface, view.sites.entrance, view.sites.food], 2100, actor => { depositVisibleSeeds(view.sites.food, 5); actor.destroy(true); });
+      }
+      return 2500;
     }
     if (key === 'predator') {
-      const shadow = scene.add.ellipse(-180, scene.scale.height * .14, 210, 64, 0x111821, .35).setDepth(13).setAngle(-8);
-      scene.tweens.add({ targets: shadow, x: scene.scale.width + 180, duration: 1500, ease: 'Sine.easeInOut', onComplete: () => shadow.destroy() });
+      const entrance = view ? view.sites.entrance : { x: scene.scale.width / 2, y: scene.scale.height * .25 };
+      const spider = createMeadowSpider({ x: entrance.x + Math.min(120, view ? view.zone.w * .45 : 120), y: entrance.y - 38 }, .9);
+      const guardStart = view ? view.sites.guard : { x: entrance.x, y: entrance.y + 90 };
+      const guard = view ? actionWorker(view, palette, guardStart, 33, true) : null;
+      scene.tweens.add({ targets: spider, x: entrance.x + 28, y: entrance.y - 24, duration: 1050, ease: 'Sine.easeInOut' });
+      if (guard) moveActionActor(guard, [guardStart, entrance], 950, actor => {
+        scene.cameras.main.shake(230, .004);
+        playTone('battle');
+        scene.tweens.add({ targets: actor, x: actor.x + 17, angle: -12, duration: 180, yoyo: true, repeat: 2 });
+        scene.tweens.add({ targets: spider, x: entrance.x + Math.min(150, view.zone.w * .6), y: entrance.y - 80, angle: 24, alpha: .1, duration: 900, delay: 260, ease: 'Cubic.easeIn', onComplete: () => spider.destroy(true) });
+        scene.time.delayedCall(1450, () => { if (actor.active) actor.destroy(true); });
+      });
+      else scene.tweens.add({ targets: spider, x: entrance.x + 140, alpha: 0, duration: 950, delay: 1050, onComplete: () => spider.destroy(true) });
+      return 2700;
+    }
+    if (key === 'tunnel-collapse' && view) {
+      const fall = { x: (view.sites.entrance.x + view.sites.nursery.x) / 2, y: (view.sites.entrance.y + view.sites.nursery.y) / 2 };
+      const stones = [];
+      for (let index = 0; index < 8; index += 1) {
+        const stone = scene.add.polygon(fall.x + (index % 4 - 1.5) * 11, fall.y + Math.floor(index / 4) * 11, [-8, 4, -5, -5, 3, -8, 9, 0, 5, 7], index % 2 ? 0x70513c : 0x8c6748, 1).setStrokeStyle(2, 0xc39a6b, .75).setDepth(22).setAngle(index * 21);
+        stones.push(stone);
+      }
+      const helpers = [0, 1].slice(0, Math.max(1, Math.min(2, team.workers))).map(index => actionWorker(view, palette, { x: view.sites.nursery.x + (index ? 12 : -12), y: view.sites.nursery.y }, 28));
+      helpers.forEach((helper, index) => moveActionActor(helper, [{ x: helper.x, y: helper.y }, fall], 900 + index * 130, actor => {
+        scene.tweens.add({ targets: actor, x: actor.x + (index ? -8 : 8), angle: index ? -10 : 10, duration: 150, yoyo: true, repeat: 5 });
+      }));
+      scene.time.delayedCall(1050, () => stones.forEach((stone, index) => scene.tweens.add({ targets: stone, x: stone.x + (index % 2 ? 1 : -1) * (35 + index * 3), y: stone.y + 18 + index % 3 * 6, alpha: 0, duration: 850, delay: index * 45, ease: 'Cubic.easeOut', onComplete: () => stone.destroy() })));
+      scene.time.delayedCall(2350, () => helpers.forEach(helper => { if (helper.active) helper.destroy(true); }));
+      return 2600;
+    }
+    if (key === 'lost-ant' && view) {
+      const start = { x: view.sites.entrance.x + Math.min(105, view.zone.w * .4), y: view.sites.entrance.y - 34 };
+      const lost = actionWorker(view, palette, start, 25);
+      const trail = scene.add.graphics().setDepth(13);
+      trail.lineStyle(3, palette.light, .8).beginPath().moveTo(start.x, start.y).lineTo(view.sites.entrance.x, view.sites.entrance.y).lineTo(view.sites.nursery.x, view.sites.nursery.y).strokePath();
+      scene.tweens.add({ targets: trail, alpha: 0, duration: 2200, delay: 500, onComplete: () => trail.destroy() });
+      moveActionActor(lost, [start, view.sites.entrance, view.sites.nursery], 2200, actor => {
+        depositVisibleSeeds(view.sites.nursery, 5);
+        scene.tweens.add({ targets: actor, scaleX: 1.18, scaleY: 1.18, duration: 220, yoyo: true, repeat: 2, onComplete: () => actor.destroy(true) });
+      });
+      return 2750;
     }
     if (key === 'new-territory') {
+      const origin = view ? view.sites.expansion : { x: scene.scale.width * .5, y: scene.scale.height * .62 };
       for (let index = 0; index < 34; index += 1) {
-        const spark = scene.add.circle(scene.scale.width * .5, scene.scale.height * .62, 2 + index % 3, index % 2 ? 0xffd56e : 0x8de4c0, .9).setDepth(13);
+        const spark = scene.add.circle(origin.x, origin.y, 2 + index % 3, index % 2 ? 0xffd56e : 0x8de4c0, .9).setDepth(13);
         const angle = Math.PI * 2 * index / 34;
         scene.tweens.add({ targets: spark, x: spark.x + Math.cos(angle) * (80 + index * 4), y: spark.y + Math.sin(angle) * (45 + index * 2), alpha: 0, duration: 900, ease: 'Cubic.easeOut', onComplete: () => spark.destroy() });
       }
+      if (view) {
+        const explorer = actionWorker(view, palette, view.sites.nursery);
+        moveActionActor(explorer, [view.sites.nursery, origin], 1750, actor => scene.tweens.add({ targets: actor, alpha: 0, duration: 350, onComplete: () => actor.destroy(true) }));
+      }
+      return 2300;
     }
+    return 1800;
   }
 
   function initAudio() {

@@ -376,6 +376,50 @@ test('world events stay bounded and favor defenses or trailing colonies appropri
   assert.ok(all.every(team => team.food >= 0 && team.population >= 1));
 });
 
+test('repair and rescue events follow visible colony rules', () => {
+  assert.ok(core.EVENTS.some(event => event.key === 'tunnel-collapse'));
+  assert.ok(core.EVENTS.some(event => event.key === 'lost-ant'));
+  assert.match(core.EVENTS.find(event => event.key === 'predator').description, /spider/i);
+
+  const exposed = core.createTeam({ name: 'Exposed Colony' }, 0);
+  const prepared = core.createTeam({ name: 'Prepared Colony' }, 1);
+  Object.assign(prepared, { workers: 4, population: 5, defense: 2, food: 20 });
+  const exposedFood = exposed.food;
+  const preparedFood = prepared.food;
+  core.applyEvent([exposed, prepared], 'tunnel-collapse');
+  assert.equal(exposed.food, exposedFood - 3);
+  assert.equal(prepared.food, preparedFood);
+
+  const strongFood = prepared.food;
+  const weakFood = exposed.food;
+  core.applyEvent([prepared, exposed], 'lost-ant');
+  assert.equal(prepared.food, strongFood);
+  assert.equal(exposed.food, weakFood + 5);
+});
+
+test('interactive world-event focus and effects survive refresh', () => {
+  const all = teams(2);
+  const session = core.normalizeSession({
+    phase: 'event',
+    eventAction: 'question',
+    teams: all,
+    events: [{
+      key: 'tunnel-collapse',
+      focusTeamId: all[1].id,
+      effects: [
+        { teamId: all[0].id, foodDelta: -3, workersDelta: 0, roomsDelta: 0 },
+        { teamId: all[1].id, foodDelta: 0, workersDelta: 0, roomsDelta: 0 },
+      ],
+    }],
+  });
+  assert.equal(session.events[0].focusTeamId, all[1].id);
+  assert.deepEqual(session.events[0].effects, [
+    { teamId: all[0].id, foodDelta: -3, workersDelta: 0, roomsDelta: 0 },
+    { teamId: all[1].id, foodDelta: 0, workersDelta: 0, roomsDelta: 0 },
+  ]);
+  assert.deepEqual(core.normalizeSession(session).events[0].effects, session.events[0].effects);
+});
+
 test('session normalization preserves recovery phases and honest named participation', () => {
   const all = teams(2);
   const session = core.normalizeSession({

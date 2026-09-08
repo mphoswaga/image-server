@@ -5,7 +5,7 @@
 }(typeof globalThis !== 'undefined' ? globalThis : this, function colonyQuestCoreFactory() {
   'use strict';
 
-  const VERSION = 9;
+  const VERSION = 10;
   const FORTIFICATIONS = Object.freeze([
     { name: 'Earth', wall: 0xb68a57, edge: 0x785437, floor: 0x65513a },
     { name: 'Timber', wall: 0xa7743e, edge: 0xe3b571, floor: 0x65513a },
@@ -53,7 +53,9 @@
     { key: 'fallen-fruit', title: 'The golden berry falls!', description: 'A giant berry crashes into Moonroot Meadow. Pip calls every worker to gather food. Colonies with less food receive a little more.', tone: 'good' },
     { key: 'heavy-rain', title: 'Thunder shakes the old tree!', description: 'Lightning flashes and rain rushes toward the entrances. Dot checks every wall while the ants move food into dry rooms.', tone: 'storm' },
     { key: 'food-trail', title: 'Pip finds a golden trail', description: 'Pip waves from the meadow. Every available worker follows the bright seeds and carries food home.', tone: 'good' },
-    { key: 'predator', title: 'Bramble sees a huge shadow!', description: 'The ants freeze, then hurry below ground. Bramble and the guard ants protect the stores until the danger passes.', tone: 'danger' },
+    { key: 'predator', title: 'Bramble sees a meadow spider!', description: 'A giant spider creeps toward an entrance. Bramble calls the guards while the workers carry the food below ground.', tone: 'danger' },
+    { key: 'tunnel-collapse', title: 'A tunnel has fallen in!', description: 'Loose soil blocks a colony path. Dot needs the workers to move every stone and open the tunnel again.', tone: 'danger' },
+    { key: 'lost-ant', title: 'A little ant is lost!', description: 'Pip hears a tiny call in the grass. Help the scout follow the colony trail and carry its seed map safely home.', tone: 'good' },
     { key: 'new-territory', title: 'Dot discovers a hidden root', description: 'The ancient root shifts and soft soil appears. Workers in smaller colonies race to open a new room.', tone: 'good' },
   ]);
 
@@ -334,6 +336,8 @@
       if (event.key === 'heavy-rain') team.food = Math.max(0, team.food - Math.min(rainOutcome(team).exposedFood, Math.max(0, 9 - team.defense * 2)));
       if (event.key === 'food-trail' && team.workers > 0) team.food += 7 + Math.min(12, team.workers);
       if (event.key === 'predator') team.food = Math.max(0, team.food - Math.max(0, 12 - team.defense * 3 - team.soldiers));
+      if (event.key === 'tunnel-collapse') team.food = Math.max(0, team.food - Math.max(0, 4 - team.workers - team.defense));
+      if (event.key === 'lost-ant' && index === strengths.indexOf(weakest)) team.food += 5;
       if (event.key === 'new-territory' && strengths[index] <= weakest * 1.08) expandColony(team);
     }
     return event;
@@ -402,6 +406,15 @@
         teamId: text(event && event.teamId, 40) || null,
         amount: Math.floor(clamp(event && event.amount, 0, 9999)),
         secondary: Math.floor(clamp(event && event.secondary, 0, 9999)),
+        ...(event?.focusTeamId ? { focusTeamId: text(event.focusTeamId, 40) } : {}),
+        ...(Array.isArray(event?.effects) ? {
+          effects: event.effects.slice(0, 6).map(effect => ({
+            teamId: text(effect && effect.teamId, 40),
+            foodDelta: Math.floor(clamp(effect && effect.foodDelta, -9999, 9999)),
+            workersDelta: Math.floor(clamp(effect && effect.workersDelta, -999, 999)),
+            roomsDelta: Math.floor(clamp(effect && effect.roomsDelta, -999, 999)),
+          })),
+        } : {}),
         ...(event?.key === 'raid-result' ? {
           attackerId: text(event.attackerId, 40) || null,
           defenderId: text(event.defenderId, 40) || null,
