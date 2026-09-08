@@ -153,6 +153,9 @@ test('FishQuest is offered beside the existing student game choices', () => {
   assert.match(dashboard, /Open FishQuest live room/);
   assert.match(dashboard, /Start FishQuest live/);
   assert.match(dashboard, /Learner game link/);
+  const teacher = fs.readFileSync(path.join(__dirname, '..', 'public', 'fishquest-teacher.html'), 'utf8');
+  assert.match(teacher, /id="sessionClass"/);
+  assert.match(teacher, /Class playing now/);
 });
 
 test('teacher previews are not blocked by stale learner sessions', () => {
@@ -164,6 +167,11 @@ test('teacher previews are not blocked by stale learner sessions', () => {
   assert.match(live, /__TEACHER_TEST__:/);
   assert.match(live, /teacherPreview && \(!match \|\| match\.state\.phase === 'ended'\)/);
   assert.match(client, /err\.status === 401 \|\| err\.status === 403/);
+});
+
+test('FishQuest rechecks the selected live class when a socket reconnects', () => {
+  const live = fs.readFileSync(path.join(__dirname, '..', 'fishquest-live.js'), 'utf8');
+  assert.match(live, /!claim\.preview && !claim\.solo && !identityCanJoinSession\(game, match, claim\)/);
 });
 
 test('FishQuest launch never reuses a stale browser client', () => {
@@ -178,7 +186,7 @@ test('a teacher can launch a private FishQuest practice match directly', () => {
   assert.match(live, /openMatch\(game, \{ preview: true \}\)/);
   assert.match(live, /match\.addNpcs\(\);match\.start\(1\)/);
   assert.match(live, /!teacherPreview && match\.state\.preview/);
-  assert.match(live, /openMatch\(game, \{ replacePreview: true \}\)/);
+  assert.match(live, /openMatch\(game, \{ replacePreview: true, rosterIds \}\)/);
 });
 
 test('FishQuest answer buttons remain mounted while live state updates arrive', () => {

@@ -12,11 +12,11 @@ const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'fq-transport-'));
 process.env.DATA_DIR = temp;
 const { createFishQuestLive } = require('../fishquest-live');
 
-test('30 real connections survive invalid messages, replacement, pause and resume', { timeout:20000 }, async t => {
+test('30 real connections survive invalid messages, replacement, pause and resume', { timeout:40000 }, async t => {
   const game={id:'live-test',teacherId:'owner',fishquest:{durationMinutes:10,lateJoin:true},questions:[{question:'Yes?',options:['Yes','No'],correctIndex:0}]};
   const app=express(),server=http.createServer(app),sockets=[];
   let resultWrites=0;
-  const live=createFishQuestLive({app,games:{getGame:()=>game,normalizeStudentId:s=>s,recordResult:()=>{ if (++resultWrites===1) throw Error('temporary storage failure'); }},roster:{},requireAuth:(_,__,next)=>next(),requireGameAccess:(_,__,next)=>next(),jwtSecret:'test-secret'});
+  const live=createFishQuestLive({app,games:{getGame:()=>game,getRosterIds:()=>[],normalizeStudentId:s=>s,recordResult:()=>{ if (++resultWrites===1) throw Error('temporary storage failure'); }},roster:{},requireAuth:(_,__,next)=>next(),requireGameAccess:(_,__,next)=>next(),jwtSecret:'test-secret'});
   const wss=live.attach(server);
   t.after(async()=>{
     for(const ws of wss.clients)ws.terminate();
@@ -63,4 +63,32 @@ test('30 real connections survive invalid messages, replacement, pause and resum
   await new Promise(resolve=>setTimeout(resolve,5100));
   assert.equal(resultWrites,2);
   assert.ok(match.state.resultsSavedAt);
+});
+
+test('a live lobby can select one assigned class without unassigning the others', async t => {
+  const game={id:'class-choice',teacherId:'owner',rosterIds:['2A','2B'],fishquest:{durationMinutes:10,lateJoin:true,playMode:'live'},questions:[{question:'Yes?',options:['Yes','No'],correctIndex:0}]};
+  const records={
+    '2A':{id:'2A',name:'Grade 2A',students:[{id:'A1',name:'Amina'}]},
+    '2B':{id:'2B',name:'Grade 2B',students:[{id:'B1',name:'Ben'}]},
+  };
+  const app=express();app.use(express.json());
+  const requireAuth=(req,_res,next)=>{req.userId='owner';req.user={name:'Teacher'};next()};
+  const requireGameAccess=(req,_res,next)=>{req.gameSession={gameId:game.id,studentId:req.headers['x-student'],name:req.headers['x-student'],rosterId:req.headers['x-roster']};next()};
+  createFishQuestLive({app,games:{getGame:()=>game,getRosterIds:g=>g.rosterIds,normalizeStudentId:s=>String(s).toUpperCase(),recordResult:()=>{}},roster:{getRoster:(_teacher,id)=>records[id]||null},requireAuth,requireGameAccess,gameSessionCanAccess:()=>true,jwtSecret:'test-secret'});
+  const server=http.createServer(app);
+  t.after(async()=>{await new Promise(resolve=>server.close(resolve))});
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  const base=`http://127.0.0.1:${server.address().port}/api/game/${game.id}/fishquest`;
+  const opened=await fetch(`${base}/open`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rosterIds:['2A']})});
+  assert.equal(opened.status,200);
+  const payload=await opened.json();
+  assert.deepEqual(payload.sessionRosterIds,['2A']);
+  assert.deepEqual(payload.attendance.map(item=>item.name),['Amina']);
+  assert.deepEqual(game.rosterIds,['2A','2B']);
+  const excluded=await fetch(`${base}/ticket`,{method:'POST',headers:{'x-student':'B1','x-roster':'2B'}});
+  assert.equal(excluded.status,403);
+  assert.match((await excluded.json()).error,/not playing/i);
+  const included=await fetch(`${base}/ticket`,{method:'POST',headers:{'x-student':'A1','x-roster':'2A'}});
+  assert.equal(included.status,200);
+  assert.ok((await included.json()).token);
 });

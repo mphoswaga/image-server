@@ -37,16 +37,44 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
     matches.set(matchKey, match);
     return match;
   }
-  function openMatch(game, { preview = false, replacePreview = false, matchKey = game.id, solo = false } = {}) {
+  function openMatch(game, { preview = false, replacePreview = false, matchKey = game.id, solo = false, rosterIds = [] } = {}) {
     const current = getMatch(matchKey, game.id);
     if (current && current.state.phase !== 'ended' && !(replacePreview && current.state.preview)) return current;
     if (current && current.state.preview && current.state.phase !== 'ended') current.end('preview_replaced');
     const match = new FishMatch(game, { persist: state => saveState(matchKey, state) });
     match.state.preview = preview;
     match.state.solo = solo;
+    match.state.rosterIds = Array.isArray(rosterIds) ? rosterIds : [];
     match.save();
     matches.set(matchKey, match);
     return match;
+  }
+  function assignedClasses(game) {
+    return games.getRosterIds(game).map(rosterId => roster.getRoster(game.teacherId, rosterId)).filter(Boolean)
+      .map(item => ({ id: String(item.id), name: item.name, count: (item.students || []).length }));
+  }
+  function requestedSessionRosters(game, body = {}) {
+    const assigned = games.getRosterIds(game).map(String);
+    if (!assigned.length) return [];
+    const requested = Array.isArray(body.rosterIds) ? [...new Set(body.rosterIds.map(String).filter(Boolean))] : assigned;
+    if (!requested.length) throw Error('Choose at least one class for this live session.');
+    if (requested.some(rosterId => !assigned.includes(rosterId))) throw Error('That class is not assigned to this game.');
+    return requested;
+  }
+  function sessionRosterIds(game, match) {
+    return match && Array.isArray(match.state.rosterIds) && match.state.rosterIds.length
+      ? match.state.rosterIds.map(String)
+      : games.getRosterIds(game).map(String);
+  }
+  function identityCanJoinSession(game, match, identity) {
+    const selected = sessionRosterIds(game, match);
+    if (!selected.length) return true;
+    if (identity.rosterId && selected.includes(String(identity.rosterId))) return true;
+    const wanted = games.normalizeStudentId(identity.studentId);
+    return selected.some(rosterId => {
+      const classRoster = roster.getRoster(game.teacherId, rosterId);
+      return !!classRoster && (classRoster.students || []).some(student => games.normalizeStudentId(student.id) === wanted);
+    });
   }
   function owner(req, res) {
     const game = readyGame(games.getGame(req.params.id));
@@ -59,7 +87,7 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
     const joined = new Set((match ? match.state.players : []).map(p => `${p.rosterId || '*'}:${games.normalizeStudentId(p.studentId)}`));
     const attendance = [];
     const seen = new Set();
-    for (const rosterId of games.getRosterIds(game)) {
+    for (const rosterId of sessionRosterIds(game, match)) {
       const classRoster = roster.getRoster(game.teacherId, rosterId);
       if (!classRoster) continue;
       for (const student of classRoster.students || []) {
@@ -82,6 +110,8 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
     return {
       game: { id: game.id, lessonTitle: game.lessonTitle, roomCode: game.roomCode, questions: game.questions, fishquest: game.fishquest },
       match: match ? match.snapshot(null, true) : null,
+      classes: assignedClasses(game),
+      sessionRosterIds: match ? sessionRosterIds(game, match) : [],
       attendance: rosterAttendance(game, match),
     };
   }
@@ -129,7 +159,10 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
   });
   app.post('/api/game/:id/fishquest/open', requireAuth, (req, res) => {
     const game = owner(req, res); if (!game) return;
-    res.json(teacherPayload(game, openMatch(game, { replacePreview: true })));
+    try {
+      const rosterIds = requestedSessionRosters(game, req.body || {});
+      res.json(teacherPayload(game, openMatch(game, { replacePreview: true, rosterIds })));
+    } catch (err) { res.status(400).json({ error: err.message }); }
   });
   app.post('/api/game/:id/fishquest/start', requireAuth, (req, res) => {
     const game = owner(req, res); if (!game) return;
@@ -179,6 +212,7 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
     } else match = getMatch(game.id);
     if (teacherPreview && (!match || match.state.phase === 'ended')) match = openMatch(game, { preview: true });
     if (!match || (!teacherPreview && match.state.preview)) return res.status(409).json({ error: 'The teacher has not opened the FishQuest room yet.' });
+    if (!teacherPreview && !solo && !identityCanJoinSession(game, match, identity)) return res.status(403).json({ error: 'Your class is not playing in this FishQuest session.' });
     const preview = teacherPreview && !!match.state.preview;
     if (preview) matchKey = game.id;
     const token = jwt.sign({ type: 'fishquest', gameId: game.id, matchKey, ...identity, preview, solo }, jwtSecret, { expiresIn: '2h' });
@@ -211,6 +245,7 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
             if (claim.type !== 'fishquest') throw Error('Bad ticket');
             const game = games.getGame(claim.gameId), matchKey = claim.matchKey || claim.gameId, match = getMatch(matchKey, claim.gameId);
             if (!isFish(game) || !match) throw Error('Room closed');
+            if (!claim.preview && !claim.solo && !identityCanJoinSession(game, match, claim)) throw Error('Class not selected for this room');
             const p = match.join({ studentId: claim.studentId, name: claim.name, rosterId: claim.rosterId || null });
             if ((claim.preview || claim.solo) && match.state.phase === 'lobby') {
               match.addNpcs();match.start(1);
