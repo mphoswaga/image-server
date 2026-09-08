@@ -21,7 +21,7 @@
     @media(max-width:440px){.question-dialog .dialog-kicker{font-size:11px}.question-dialog .guide-line{font-size:11px}.question-dialog h2{font-size:18px}.question-dialog .answer{font-size:13px}.question-dialog .question-foot{font-size:11px}.question-dialog .feedback{font-size:12px}}
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
   </style>
-  <link rel="stylesheet" href="/colonyquest-polish.css?v=11">
+  <link rel="stylesheet" href="/colonyquest-polish.css?v=12">
 </head>
 <body>
   <div id="loading" class="loading"><div><div class="spinner"></div>Preparing ColonyQuest...</div></div>
@@ -67,7 +67,12 @@
     </header>
     <div id="scoreStrip" class="score-strip"></div>
     <div id="turnBanner" class="turn-banner"><b id="turnTeam">Team 1</b><span id="turnStudent">Choose an answer together</span></div>
-    <details id="rainPlan" class="rain-plan"><summary id="rainSummary">Rain jobs: 0/4 done</summary><b id="rainTeam"></b><ul id="rainGoals"></ul><label for="rainApproach">The rain is coming</label><progress id="rainApproach" value="0" max="1"></progress></details>
+    <div id="raidHud" class="raid-hud hidden" aria-live="polite">
+      <div class="raid-side attacking"><small>ATTACKING</small><b id="raidAttacker">Colony</b><span id="raidAttackCount">0 guards</span></div>
+      <div class="raid-clash"><span id="raidPhase">Marching</span><strong>VS</strong><small id="raidPower">0 vs 0</small></div>
+      <div class="raid-side defending"><small>DEFENDING</small><b id="raidDefender">Colony</b><span id="raidDefenseCount">0 guards</span></div>
+    </div>
+    <details id="rainPlan" class="rain-plan"><summary id="rainSummary">Chapter mission: 0/2 ready</summary><b id="rainTeam"></b><ul id="rainGoals"></ul><label id="stormLabel" for="rainApproach">The Great Rain is far away</label><progress id="rainApproach" value="0" max="1"></progress></details>
     <div class="world-navigation"><select id="colonyViewPick" aria-label="View colony"></select><button id="worldSurface" type="button" title="Return to the meadow surface">Surface</button><span id="worldDepth" aria-live="off">Depth 0</span></div>
 
     <section id="storyOverlay" class="overlay story-overlay hidden" aria-label="ColonyQuest opening story">
@@ -121,7 +126,7 @@
   </div>
 
   <script src="/vendor/phaser.min.js"></script>
-  <script src="/colonyquest-core.js?v=10"></script>
-  <script src="/colonyquest.js?v=11"></script>
+  <script src="/colonyquest-core.js?v=11"></script>
+  <script src="/colonyquest.js?v=12"></script>
 </body>
 </html>

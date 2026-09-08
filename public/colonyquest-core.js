@@ -5,7 +5,7 @@
 }(typeof globalThis !== 'undefined' ? globalThis : this, function colonyQuestCoreFactory() {
   'use strict';
 
-  const VERSION = 8;
+  const VERSION = 9;
   const FORTIFICATIONS = Object.freeze([
     { name: 'Earth', wall: 0xb68a57, edge: 0x785437, floor: 0x65513a },
     { name: 'Timber', wall: 0xa7743e, edge: 0xe3b571, floor: 0x65513a },
@@ -50,11 +50,11 @@
   });
 
   const EVENTS = Object.freeze([
-    { key: 'fallen-fruit', title: 'A berry falls', description: 'A ripe berry falls into the meadow. Every team gets food. Teams with less food get a little more.', tone: 'good' },
-    { key: 'heavy-rain', title: 'The rain comes back', description: 'Rain falls on the old tree. Strong walls help keep the ant rooms warm and dry.', tone: 'storm' },
-    { key: 'food-trail', title: 'Pip finds food', description: 'Pip finds golden seeds. The workers carry them home.', tone: 'good' },
-    { key: 'predator', title: 'A big shadow!', description: 'The ants stop and hide. Guard ants keep the food safe until the shadow leaves.', tone: 'danger' },
-    { key: 'new-territory', title: 'A new place to dig', description: 'An old root moves. Smaller colonies find space for a new room.', tone: 'good' },
+    { key: 'fallen-fruit', title: 'The golden berry falls!', description: 'A giant berry crashes into Moonroot Meadow. Pip calls every worker to gather food. Colonies with less food receive a little more.', tone: 'good' },
+    { key: 'heavy-rain', title: 'Thunder shakes the old tree!', description: 'Lightning flashes and rain rushes toward the entrances. Dot checks every wall while the ants move food into dry rooms.', tone: 'storm' },
+    { key: 'food-trail', title: 'Pip finds a golden trail', description: 'Pip waves from the meadow. Every available worker follows the bright seeds and carries food home.', tone: 'good' },
+    { key: 'predator', title: 'Bramble sees a huge shadow!', description: 'The ants freeze, then hurry below ground. Bramble and the guard ants protect the stores until the danger passes.', tone: 'danger' },
+    { key: 'new-territory', title: 'Dot discovers a hidden root', description: 'The ancient root shifts and soft soil appears. Workers in smaller colonies race to open a new room.', tone: 'good' },
   ]);
 
   function clamp(value, min, max) {
@@ -98,6 +98,8 @@
       attempts: 0,
       successfulAttacks: 0,
       successfulDefenses: 0,
+      guardsLost: 0,
+      guardsDefeated: 0,
       upgrades: 0,
       eggs: [],
     };
@@ -105,7 +107,7 @@
 
   function normalizeTeam(input, index) {
     const base = createTeam(input, index);
-    const numeric = ['population', 'workers', 'soldiers', 'food', 'defense', 'territory', 'queenLevel', 'nestLevel', 'correct', 'attempts', 'successfulAttacks', 'successfulDefenses', 'upgrades'];
+    const numeric = ['population', 'workers', 'soldiers', 'food', 'defense', 'territory', 'queenLevel', 'nestLevel', 'correct', 'attempts', 'successfulAttacks', 'successfulDefenses', 'guardsLost', 'guardsDefeated', 'upgrades'];
     for (const key of numeric) base[key] = Math.floor(clamp(input && input[key], 0, key === 'food' ? 9999 : 999));
     base.correct = Math.min(base.correct, base.attempts);
     base.population = Math.max(1, base.population);
@@ -210,12 +212,30 @@
 
   function raidForecast(attacker, defender) {
     const eligibility = raidAvailability(attacker, defender);
-    if (!eligibility.allowed) return { success: false, attack: 0, guard: 0, reason: eligibility.reason };
-    const attack = attacker.soldiers * 4 + attacker.territory * 2 + attacker.correct * 3;
-    const guard = defender.defense * 5 + defender.soldiers * 3 + defender.nestLevel * 2 + colonyRooms(defender).filter(room => room.kind === 'guard').length * 4;
-    const knowledgeEdge = 12;
-    const success = attack + knowledgeEdge >= guard * 0.78;
-    return { success, attack: attack + knowledgeEdge, guard, reason: success ? 'Your guard ants are strong enough for this challenge.' : `${fortification(defender).name} walls and ${defender.soldiers} guard ants protect this home. Add a guard or build another room before trying again.` };
+    if (!eligibility.allowed) return { success: false, attackers: 0, defenders: 0, attack: 0, guard: 0, attackerLosses: 0, defenderLosses: 0, reason: eligibility.reason };
+    const attackers = Math.max(0, Math.floor(attacker.soldiers));
+    const defenders = Math.max(0, Math.floor(defender.soldiers));
+    const wallBonus = Math.min(8, Math.max(0, defender.defense) * 2);
+    const barracksBonus = colonyRooms(defender).filter(room => room.kind === 'guard').length * 4;
+    const supportBonus = wallBonus + barracksBonus;
+    const knowledgeBonus = Math.min(6, Math.floor(Math.max(0, attacker.correct) / 2));
+    const attack = attackers * 5 + knowledgeBonus;
+    const guard = defenders * 5 + supportBonus;
+    // A smaller guard group cannot overpower a larger one. Walls can still stop
+    // an equal or slightly larger attacking group.
+    const success = attackers >= defenders && attack >= guard;
+    const attackerLosses = success
+      ? Math.min(Math.max(0, attackers - 1), defenders ? Math.max(1, Math.floor((defenders + wallBonus / 2) / 3)) : Math.floor(wallBonus / 3))
+      : Math.min(attackers, Math.max(1, Math.ceil((defenders + wallBonus / 2 - attackers) / 2)));
+    const defenderLosses = success
+      ? Math.min(defenders, Math.max(defenders ? 1 : 0, Math.ceil((attackers - Math.floor(wallBonus / 2)) / 3)))
+      : Math.min(defenders, Math.floor(attackers / 3));
+    const reason = success
+      ? `${attackers} attacking guards overcome ${defenders} home guards and ${fortification(defender).name.toLowerCase()} walls.`
+      : attackers < defenders
+        ? `${attackers} attacking guards are outnumbered by ${defenders} home guards.`
+        : `${fortification(defender).name} walls help ${defenders} home guards hold the entrance.`;
+    return { success, attackers, defenders, wallBonus, supportBonus, attack, guard, attackerLosses, defenderLosses, reason };
   }
 
   function raidCooldown(session, attackerId, defenderId) {
@@ -227,17 +247,26 @@
   function resolveRaid(attacker, defender, teams, session) {
     const eligibility = raidAvailability(attacker, defender, session);
     if (!eligibility.allowed) return { success: false, stolen: 0, blocked: true, reason: eligibility.reason };
-    const { success } = raidForecast(attacker, defender);
+    const battle = raidForecast(attacker, defender);
+    const { success, attackerLosses, defenderLosses } = battle;
+    attacker.soldiers = Math.max(0, attacker.soldiers - attackerLosses);
+    defender.soldiers = Math.max(0, defender.soldiers - defenderLosses);
+    attacker.guardsLost = Math.max(0, attacker.guardsLost || 0) + attackerLosses;
+    defender.guardsLost = Math.max(0, defender.guardsLost || 0) + defenderLosses;
+    attacker.guardsDefeated = Math.max(0, attacker.guardsDefeated || 0) + defenderLosses;
+    defender.guardsDefeated = Math.max(0, defender.guardsDefeated || 0) + attackerLosses;
+    attacker.population = 1 + attacker.workers + attacker.soldiers + (attacker.eggs || []).length;
+    defender.population = 1 + defender.workers + defender.soldiers + (defender.eggs || []).length;
     if (success) {
       const stolen = Math.min(defender.food, Math.max(6, Math.round(12 * comebackMultiplier(attacker, teams))));
       defender.food -= stolen;
       attacker.food += stolen;
       attacker.successfulAttacks += 1;
-      return { success: true, stolen };
+      return { ...battle, success: true, stolen };
     }
     defender.successfulDefenses += 1;
     defender.food += 5;
-    return { success: false, stolen: 0 };
+    return { ...battle, success: false, stolen: 0 };
   }
 
   function applyUpkeep(teams) {
@@ -378,6 +407,15 @@
           defenderId: text(event.defenderId, 40) || null,
           success: !!event.success,
           stolen: Math.floor(clamp(event.stolen, 0, 9999)),
+          attackers: Math.floor(clamp(event.attackers, 0, 999)),
+          defenders: Math.floor(clamp(event.defenders, 0, 999)),
+          wallBonus: Math.floor(clamp(event.wallBonus, 0, 999)),
+          supportBonus: Math.floor(clamp(event.supportBonus, 0, 999)),
+          attack: Math.floor(clamp(event.attack, 0, 9999)),
+          guard: Math.floor(clamp(event.guard, 0, 9999)),
+          attackerLosses: Math.floor(clamp(event.attackerLosses, 0, 999)),
+          defenderLosses: Math.floor(clamp(event.defenderLosses, 0, 999)),
+          reason: text(event.reason, 240),
           turnIndex: Number.isFinite(event.turnIndex) ? Math.floor(clamp(event.turnIndex, 0, 9999)) : null,
         } : {}),
         ...(event?.key === 'round-supplies' ? {
@@ -416,6 +454,10 @@
         correct: entry.team.correct,
         attempts: entry.team.attempts,
         accuracy: entry.team.attempts ? Math.round(entry.team.correct / entry.team.attempts * 100) : 0,
+        successfulAttacks: entry.team.successfulAttacks,
+        successfulDefenses: entry.team.successfulDefenses,
+        guardsLost: entry.team.guardsLost,
+        guardsDefeated: entry.team.guardsDefeated,
         breakdown: entry.breakdown,
       })),
       identifiedParticipation: safe.answers.filter(answer => answer.studentId).map(answer => ({

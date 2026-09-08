@@ -308,6 +308,42 @@ test('knowledge raids reward success or defense but never eliminate a colony', (
   assert.ok(attacker.population >= 1);
 });
 
+test('raid battles use guard numbers, walls and visible losses', () => {
+  const outnumbered = teams(2);
+  Object.assign(outnumbered[0], { soldiers: 2, population: 4, barracksBuilt: true });
+  Object.assign(outnumbered[1], { soldiers: 4, population: 6, barracksBuilt: true });
+  const failed = core.resolveRaid(outnumbered[0], outnumbered[1], outnumbered);
+  assert.equal(failed.success, false);
+  assert.equal(failed.attackers, 2);
+  assert.equal(failed.defenders, 4);
+  assert.ok(failed.attackerLosses > 0);
+  assert.equal(outnumbered[0].soldiers, 2 - failed.attackerLosses);
+  assert.equal(outnumbered[0].population, 1 + outnumbered[0].workers + outnumbered[0].soldiers);
+  assert.match(failed.reason, /outnumbered/i);
+
+  const stronger = teams(2);
+  Object.assign(stronger[0], { soldiers: 5, population: 7, barracksBuilt: true });
+  Object.assign(stronger[1], { soldiers: 3, population: 5, barracksBuilt: true });
+  const won = core.resolveRaid(stronger[0], stronger[1], stronger);
+  assert.equal(won.success, true);
+  assert.ok(won.attackerLosses > 0);
+  assert.ok(won.defenderLosses > 0);
+  assert.equal(stronger[0].guardsLost, won.attackerLosses);
+  assert.equal(stronger[0].guardsDefeated, won.defenderLosses);
+  assert.equal(stronger[1].guardsLost, won.defenderLosses);
+});
+
+test('strong walls can stop equal guard groups', () => {
+  const all = teams(2);
+  Object.assign(all[0], { soldiers: 2, population: 4, barracksBuilt: true });
+  Object.assign(all[1], { soldiers: 2, population: 4, barracksBuilt: true, defense: 4 });
+  const forecast = core.raidForecast(all[0], all[1]);
+  assert.equal(forecast.attackers, forecast.defenders);
+  assert.equal(forecast.success, false);
+  assert.ok(forecast.guard > forecast.attack);
+  assert.match(forecast.reason, /walls/i);
+});
+
 test('raid results survive recovery without resolving the raid again', () => {
   const all = teams(2);
   all[0].soldiers = 1;
@@ -319,6 +355,11 @@ test('raid results survive recovery without resolving the raid again', () => {
   assert.equal(restored.events[0].defenderId, all[1].id);
   assert.equal(restored.events[0].success, result.success);
   assert.equal(restored.events[0].stolen, result.stolen);
+  assert.equal(restored.events[0].attackers, result.attackers);
+  assert.equal(restored.events[0].defenders, result.defenders);
+  assert.equal(restored.events[0].attackerLosses, result.attackerLosses);
+  assert.equal(restored.events[0].defenderLosses, result.defenderLosses);
+  assert.equal(restored.teams[0].guardsLost, saved.teams[0].guardsLost);
 });
 
 test('world events stay bounded and favor defenses or trailing colonies appropriately', () => {

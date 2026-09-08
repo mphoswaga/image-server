@@ -28,6 +28,7 @@
   let worldStoryAction = null;
   let raidPresentation = null;
   let weatherEffects = [];
+  let weatherTimers = [];
   const ASSETS = {
     world: '/assets/colonyquest/moonroot-meadow.webp',
     worker: '/assets/colonyquest/pip-worker.webp',
@@ -35,21 +36,22 @@
     guardian: '/assets/colonyquest/guardian.webp',
   };
   const STORY = {
-    intro: 'Dark clouds are coming to Moonroot Meadow. Queen Aurelia has one worker and one small room. Answer questions to help the ants. Each right answer lets your team pick one upgrade. Add ants, find food, build rooms, or make the walls stronger. The team with the strongest colony wins the Ancient Acorn.',
+    intro: 'Dark clouds are moving toward Moonroot Meadow. Queen Aurelia has one worker, one room, and almost no shelter. Pip the scout needs your help. Answer questions to guide the ants. Each right answer lets your team make one important choice. Grow food, wake workers, dig rooms, train guards, and strengthen the walls before the Great Rain arrives. The colony that learns, plans, and survives best will carry the Ancient Acorn.',
     chapters: [
-      { at: 0, title: 'First Light', line: 'Wake the worker and find the first seeds.' },
-      { at: .3, title: 'Deep Roots', line: 'Dig new rooms under the old tree.' },
-      { at: .6, title: 'Storm Watch', line: 'Make the nest safe before the rain.' },
-      { at: .7, title: 'Moonroot Rally', line: 'Teams may challenge each other for food.' },
+      { at: 0, title: 'First Light', line: 'Help Pip wake a worker and gather the first seeds.' },
+      { at: .25, title: 'Deep Roots', line: 'The wind is rising. Dig safe rooms under the old tree.' },
+      { at: .5, title: 'Storm Watch', line: 'Dark clouds are close. Store food and strengthen the nest.' },
+      { at: .7, title: 'Moonroot Rally', line: 'Guard ants may challenge rival colonies for precious food.' },
+      { at: .88, title: 'Final Warning', line: 'Thunder is over the meadow. Finish the rain jobs now.' },
     ],
   };
   const REWARD_STORIES = {
-    workers: { title: 'A new worker wakes up', text: 'One new worker gets up and walks out to find food.', site: 'nursery' },
-    food: { title: 'Five seeds come home', text: 'A worker carries five seeds into the food room.', site: 'food' },
-    defense: { title: 'The walls get stronger', text: 'Workers make the walls stronger. The ant home is safer in the rain.', site: 'nursery' },
-    queen: { title: 'The queen lays one egg', text: 'The egg rests in the queen room. It will hatch in two rounds.', site: 'nursery' },
-    expansion: { title: 'A new room opens', text: 'Workers dig one new room. The colony now has more space.', site: 'expansion' },
-    soldiers: { title: 'A new guard joins', text: 'One guard ant joins the colony and watches the home.', site: 'guard' },
+    workers: { title: 'Pip wakes a new worker', text: 'The new worker stretches its legs, follows Pip, and begins gathering two seeds each round.', site: 'nursery' },
+    food: { title: 'Pip finds five bright seeds', text: 'A worker carries every seed through the entrance and stores it safely underground.', site: 'food' },
+    defense: { title: 'Dot strengthens the walls', text: 'Dot the builder repairs every room with a stronger material. The nest can protect more food from rain.', site: 'nursery' },
+    queen: { title: 'Queen Aurelia lays one egg', text: 'The nurse ants place the egg in the warm queen room. It will hatch in two rounds.', site: 'nursery' },
+    expansion: { title: 'Dot opens a new room', text: 'Workers dig through the soil, carry away the dirt, and connect one new room to the colony.', site: 'expansion' },
+    soldiers: { title: 'Bramble joins the guard', text: 'Bramble trains one new guard ant. The guard patrols the entrance and can defend or challenge another colony.', site: 'guard' },
   };
   const COLONY_LAYOUT = Object.freeze({
     gap: 14,
@@ -57,6 +59,7 @@
     roomStep: 142,
     baseHeight: 218,
   });
+  const MAX_MOVING_ANTS_PER_ROLE = 24;
 
   function esc(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
@@ -308,7 +311,7 @@
   function setCurrentParticipant(member) {
     currentParticipant = member || null;
     const team = currentTeam();
-    $('turnStudent').textContent = member ? `Next learner: ${member.name}` : 'Choose an answer together';
+    $('turnStudent').textContent = member ? `Next learner: ${member.name} · Other teams: choose the upgrade they need` : 'Choose together · Other teams: predict the best upgrade';
     $('studentPick').innerHTML = '<option value="">Choose learner</option>' + (team && team.members || []).map(item => `<option value="${esc(item.id)}"${member && member.id === item.id ? ' selected' : ''}>${esc(item.name)}</option>`).join('');
   }
 
@@ -353,6 +356,32 @@
     return [...STORY.chapters].reverse().find(chapter => progress >= chapter.at) || STORY.chapters[0];
   }
 
+  function chapterMission(team) {
+    const chapter = storyChapter().title;
+    const rooms = core.colonyRooms(team).length;
+    const goal = (label, done, value) => ({ label, done, value });
+    if (chapter === 'First Light') return {
+      title: 'Wake and gather',
+      goals: [goal('Two worker ants', team.workers >= 2, `${team.workers}/2`), goal('10 seeds stored', team.food >= 10, `${team.food}/10`)],
+    };
+    if (chapter === 'Deep Roots') return {
+      title: 'Build below the tree',
+      goals: [goal('Two rooms open', rooms >= 2, `${rooms}/2`), goal('Two worker ants', team.workers >= 2, `${team.workers}/2`), goal('12 seeds stored', team.food >= 12, `${team.food}/12`)],
+    };
+    if (chapter === 'Moonroot Rally') return {
+      title: 'Protect the colony',
+      goals: [goal('One guard ant', team.soldiers >= 1, `${team.soldiers}/1`), goal('Stronger walls', team.defense >= 1, core.fortification(team).name), goal('Food for the storm', team.food >= 10, `${team.food}/10`)],
+    };
+    return { title: chapter === 'Final Warning' ? 'Last chance before the rain' : 'Prepare for the Great Rain', goals: core.rainPreparation(team) };
+  }
+
+  function stormStatus(progress) {
+    if (progress >= .88) return { stage: 'danger', text: 'Thunder overhead - the Great Rain is almost here' };
+    if (progress >= .68) return { stage: 'near', text: 'Dark clouds are crossing the meadow' };
+    if (progress >= .42) return { stage: 'watch', text: 'The wind is rising' };
+    return { stage: 'calm', text: 'The Great Rain is still far away' };
+  }
+
   function chapterKey(chapter) {
     return `chapter-${chapter.title.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '')}`;
   }
@@ -361,7 +390,8 @@
     const index = STORY.chapters.findIndex(chapter => chapterKey(chapter) === key);
     if (index < 0) return null;
     const chapter = STORY.chapters[index];
-    return { title: chapter.title, description: chapter.line, kicker: `Chapter ${index + 1}`, tone: 'good' };
+    const tone = chapter.title === 'Final Warning' ? 'storm' : chapter.title === 'Moonroot Rally' ? 'danger' : 'good';
+    return { key, title: chapter.title, description: chapter.line, kicker: `Chapter ${index + 1}`, tone };
   }
 
   function showStoryIntro() {
@@ -400,11 +430,15 @@
   function updateHUD() {
     if (!session) return;
     const team = currentTeam();
-    const goals = core.rainPreparation(team);
-    $('rainSummary').textContent = `Rain jobs: ${goals.filter(goal => goal.done).length}/4 done`;
-    $('rainTeam').textContent = team.name;
+    const mission = chapterMission(team);
+    const goals = mission.goals;
+    const weather = stormStatus(turnProgress());
+    $('rainSummary').textContent = `${mission.title}: ${goals.filter(goal => goal.done).length}/${goals.length} ready`;
+    $('rainTeam').textContent = `${team.name} - ${storyChapter().line}`;
     $('rainGoals').innerHTML = goals.map(goal => `<li class="${goal.done ? 'ready' : ''}"><input type="checkbox" disabled${goal.done ? ' checked' : ''} aria-label="${esc(goal.label)}"><span>${esc(goal.label)}</span><b>${esc(goal.value)}</b></li>`).join('');
     $('rainApproach').value = turnProgress();
+    $('stormLabel').textContent = weather.text;
+    $('gameScreen').dataset.stormStage = weather.stage;
     $('scoreStrip').innerHTML = session.teams.map((item, index) => {
       const palette = core.TEAM_COLORS[item.colorIndex];
       return `<div class="score-card${index === session.currentTeamIndex && session.phase !== 'ended' ? ' current' : ''}" style="--team-color:${colorHex(palette.primary)}"><div class="score-name"><span>${esc(item.name)}</span><span>${core.colonyStrength(item)} pts</span></div><div class="score-stats"><span>1 queen</span><span>${item.workers} workers</span><span>${item.soldiers} guards</span><span>${item.food} food</span><span>${core.fortification(item).name}</span></div></div>`;
@@ -569,6 +603,7 @@
     }, onContinue);
     celebrate(team.id, key, rewardEffectText(key, event, team));
     focusColony(team.id, story.site);
+    playUpgradeAction(team.id, key);
   }
 
   function showRewards() {
@@ -595,7 +630,8 @@
       $('targetGrid').innerHTML = session.teams.filter(item => item.id !== team.id).map(item => {
         const eligibility = core.raidAvailability(team, item, session);
         const forecast = core.raidForecast(team, item);
-        return `<button type="button" data-target="${esc(item.id)}"${!eligibility.allowed ? ' disabled' : ''}>${esc(item.name)}<small>${esc(core.TEAM_COLORS[item.colorIndex].name)} ants · ${item.food} food · ${item.soldiers} guards · ${esc(core.fortification(item).name)} walls</small><small>${!eligibility.allowed ? esc(eligibility.reason) : forecast.success ? 'Your guards are ready for this challenge' : 'This home is strong. Build your colony first.'}</small></button>`;
+        const comparison = `${forecast.attackers} attacking guards vs ${forecast.defenders} home guards. Rooms and walls add ${forecast.supportBonus || 0} defense power`;
+        return `<button type="button" data-target="${esc(item.id)}"${!eligibility.allowed ? ' disabled' : ''}>${esc(item.name)}<small>${esc(core.TEAM_COLORS[item.colorIndex].name)} ants · ${item.food} food · ${item.soldiers} guards · ${esc(core.fortification(item).name)} walls</small><small>${!eligibility.allowed ? esc(eligibility.reason) : `${esc(comparison)}. ${forecast.success ? 'Your group is favoured.' : 'Your group is likely to lose guards.'}`}</small></button>`;
       }).join('');
       setOverlay('targetOverlay');
       updateWorld();
@@ -645,6 +681,7 @@
 
   function stopRaidPresentation() {
     const raid = raidPresentation;
+    $('raidHud').classList.add('hidden');
     if (!raid) return;
     raidPresentation = null;
     raid.tween?.stop();
@@ -656,80 +693,158 @@
       scene.tweens.killTweensOf(actor.gait);
       actor.destroy();
     }
+    for (const effect of raid.effects || []) if (effect.active) effect.destroy();
     raid.trail?.destroy();
-    scene.cameras.main.setZoom(1).setScroll(0, $('worldViewport').scrollTop);
+    if (scene) scene.cameras.main.setZoom(1).setScroll(0, $('worldViewport').scrollTop);
     $('worldViewport').removeAttribute('data-raid-phase');
     $('gameScreen').classList.remove('raid-playing');
+  }
+
+  function setRaidHud(event, attacker, defender, phase) {
+    const attackColor = colorHex(core.TEAM_COLORS[attacker.colorIndex].primary);
+    const defenseColor = colorHex(core.TEAM_COLORS[defender.colorIndex].primary);
+    const resolved = phase === 'result' || phase === 'returning';
+    $('raidAttacker').textContent = attacker.name;
+    $('raidDefender').textContent = defender.name;
+    $('raidAttackCount').textContent = `${resolved ? attacker.soldiers : event.attackers} guards${resolved && event.attackerLosses ? ` · ${event.attackerLosses} lost` : ''}`;
+    $('raidDefenseCount').textContent = `${resolved ? defender.soldiers : event.defenders} guards${resolved && event.defenderLosses ? ` · ${event.defenderLosses} lost` : ''}`;
+    $('raidPhase').textContent = phase === 'outbound' ? 'Marching' : phase === 'at-nest' ? 'Battle!' : event.success ? 'Raid won' : 'Raid stopped';
+    $('raidPower').textContent = `${event.attack} power vs ${event.guard} defense`;
+    document.querySelector('.raid-side.attacking').style.setProperty('--raid-color', attackColor);
+    document.querySelector('.raid-side.defending').style.setProperty('--raid-color', defenseColor);
+    $('raidHud').classList.remove('hidden');
+  }
+
+  function showBattleBurst(point, colors, effects) {
+    if (!scene) return;
+    scene.cameras.main.shake(280, .006);
+    for (let index = 0; index < 12; index += 1) {
+      const angle = Math.PI * 2 * index / 12;
+      const spark = scene.add.circle(point.x, point.y, 3 + index % 3, colors[index % colors.length], .95).setDepth(18);
+      effects.push(spark);
+      scene.tweens.add({ targets: spark, x: point.x + Math.cos(angle) * (35 + index * 3), y: point.y + Math.sin(angle) * (22 + index * 2), alpha: 0, duration: 620, ease: 'Cubic.easeOut' });
+    }
+  }
+
+  function raidLossLine(event) {
+    const losses = [];
+    if (event.attackerLosses) losses.push(`${event.attackerLosses} attacking ${event.attackerLosses === 1 ? 'guard leaves' : 'guards leave'} the battle`);
+    if (event.defenderLosses) losses.push(`${event.defenderLosses} defending ${event.defenderLosses === 1 ? 'guard leaves' : 'guards leave'} the battle`);
+    return losses.length ? `${losses.join(' and ')}.` : 'Every guard returns safely.';
   }
 
   function showRaidStory(event, animate = false) {
     const attacker = session.teams.find(team => team.id === event.attackerId);
     const defender = session.teams.find(team => team.id === event.defenderId);
     if (!attacker || !defender) return showEvent({ title: 'The raid is over', description: 'The colonies are ready for their next turn.' }, nextTurn);
+    const attackers = Math.max(1, event.attackers || attacker.soldiers + (event.attackerLosses || 0));
+    const defenders = Math.max(0, event.defenders || defender.soldiers + (event.defenderLosses || 0));
+    event.attackers = attackers;
+    event.defenders = defenders;
+    event.attack = event.attack || attackers * 5;
+    event.guard = event.guard || defenders * 5 + (event.wallBonus || 0);
     const finish = () => {
       stopRaidPresentation();
       showWorldStory({
-        kicker: 'Back in the meadow',
-        title: event.success ? `${attacker.name} returns home` : `${defender.name} holds the line`,
-        text: event.success ? `The guard ants bring ${event.stolen} food home from ${defender.name}. Wait two turns before you challenge that team again.` : `${core.raidForecast(attacker, defender).reason} The guard ants go home safely. ${defender.name} gets five food.`,
-        effect: event.success ? `+${event.stolen} food for ${attacker.name}` : `+5 food for ${defender.name}`,
+        kicker: event.success ? 'Bramble returns from the rally' : 'Bramble calls the retreat',
+        title: event.success ? `${attacker.name} wins the raid` : `${defender.name} protects its home`,
+        text: event.success
+          ? `${event.reason || 'The attacking guards break through.'} They carry ${event.stolen} seeds home. ${raidLossLine(event)} Both groups must recover before another challenge.`
+          : `${event.reason || 'The home guards stop the attack.'} ${raidLossLine(event)} ${defender.name} receives five food for a strong defense.`,
+        effect: event.success
+          ? `+${event.stolen} food · ${attacker.soldiers} attacking guards remain · ${defender.soldiers} home guards remain`
+          : `+5 food for ${defender.name} · ${attacker.soldiers} attacking guards remain · ${defender.soldiers} home guards remain`,
         art: ASSETS.guardian,
       }, nextTurn);
-      focusColony(event.success ? attacker.id : defender.id, 'food');
+      focusColony(event.success ? attacker.id : defender.id, event.success ? 'food' : 'guard');
     };
     if (!animate || !scene || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return finish();
     const home = colonyViews.get(attacker.id), away = colonyViews.get(defender.id);
     if (!home || !away) return finish();
-    showWorldStory({ kicker: `${core.TEAM_COLORS[attacker.colorIndex].name} ants on the move`, title: `${attacker.name} sets out`, text: `Watch the guard ants walk to ${defender.name}'s home.`, effect: 'Leaving the queen room', art: ASSETS.guardian, continueLabel: 'Skip' }, finish);
-    const party = home.ants.filter(ant => ant.getData('role') === 'soldier').slice(0, 6);
-    if (!party.length) return finish();
-    // These are visual stand-ins for existing ants, not extra recruits or a second raid result.
-    const hidden = [...party];
-    const actors = party.map(() => makeAntAgent(attacker.soldiers ? 'cq-guardian' : 'cq-worker', home.sites.nursery, 34, core.TEAM_COLORS[attacker.colorIndex].primary));
+    showWorldStory({ kicker: `${core.TEAM_COLORS[attacker.colorIndex].name} guards answer Bramble's call`, title: `${attacker.name} begins a raid`, text: `${attackers} guards march toward ${defender.name}. The home has ${defenders} guards and ${core.fortification(defender).name.toLowerCase()} walls.`, effect: `${event.attack} attack power vs ${event.guard} defense power`, art: ASSETS.guardian, continueLabel: 'Skip battle' }, finish);
+    const attackerActorCount = Math.min(8, attackers);
+    const defenderActorCount = Math.min(8, defenders);
+    const party = home.ants.filter(ant => ant.getData('role') === 'soldier').slice(0, attackerActorCount);
+    const homeGuards = away.ants.filter(ant => ant.getData('role') === 'soldier').slice(0, defenderActorCount);
+    // Stand-ins preserve the pre-battle groups even though the result is already saved.
+    const hidden = [...party, ...homeGuards];
+    const attackActors = Array.from({ length: attackerActorCount }, (_, index) => makeAntAgent('cq-guardian', { x: home.sites.entrance.x + (index % 3 - 1) * 15, y: home.sites.entrance.y + Math.floor(index / 3) * 8 }, 36, core.TEAM_COLORS[attacker.colorIndex].primary));
     for (const ant of hidden) ant.setVisible(false);
-    const destination = event.success ? { x: away.sites.food.x + 37, y: away.sites.food.y + 22 } : { x: away.sites.entrance.x - 28, y: away.sites.entrance.y - 15 };
+    const destination = { x: away.sites.entrance.x - Math.sign(away.sites.entrance.x - home.sites.entrance.x || 1) * 34, y: away.sites.entrance.y - 12 };
     const points = [{ x: home.sites.nursery.x + 37, y: home.sites.nursery.y + 22 }, home.sites.entrance, { x: home.sites.entrance.x, y: home.sites.entrance.y - 28 }, { x: away.sites.entrance.x, y: away.sites.entrance.y - 28 }, away.sites.entrance, destination];
     const route = new Phaser.Curves.Path(points[0].x, points[0].y);
     for (const point of points.slice(1)) route.lineTo(point.x, point.y);
     const trail = scene.add.graphics().setDepth(4);
     for (const point of route.getSpacedPoints(45)) ellipse(trail, point.x, point.y + 8, 3, 3, core.TEAM_COLORS[attacker.colorIndex].light, .65);
-    const defenders = away.ants.filter(ant => ant.getData('role') === 'soldier').slice(0, 4);
-    for (const [index, ant] of defenders.entries()) {
-      ant.setVisible(false); hidden.push(ant);
-      const guard = makeAntAgent('cq-guardian', { x: away.sites.entrance.x + (index - 1.5) * 19, y: away.sites.entrance.y + 10 }, 34, core.TEAM_COLORS[defender.colorIndex].primary);
+    const defenseActors = Array.from({ length: defenderActorCount }, (_, index) => {
+      const guard = makeAntAgent('cq-guardian', { x: away.sites.entrance.x + (index % 3 - 1) * 17, y: away.sites.entrance.y + 8 + Math.floor(index / 3) * 9 }, 36, core.TEAM_COLORS[defender.colorIndex].primary);
       guard.sprite.setFlipX(away.sites.entrance.x > home.sites.entrance.x);
-      actors.push(guard);
-    }
+      return guard;
+    });
+    const actors = [...attackActors, ...defenseActors];
     const labels = [...colonyViews.values()].flatMap(view => view.labels);
     for (const label of labels) label.setVisible(false);
-    const raid = { event, actors, hidden, labels, trail, tween: null };
+    const effects = [];
+    const raid = { event, actors, hidden, labels, trail, effects, tween: null };
     raidPresentation = raid;
     $('gameScreen').classList.add('raid-playing');
+    setRaidHud(event, attacker, defender, 'outbound');
     const progress = { value: 0 };
     const camera = scene.cameras.main;
-    camera.setZoom(1.6);
+    camera.setZoom(1.35);
+    const meeting = route.getPoint(1);
+    const attackLossVisuals = event.attackerLosses ? Math.max(1, Math.round(event.attackerLosses / attackers * attackerActorCount)) : 0;
+    const defenseLossVisuals = event.defenderLosses && defenderActorCount ? Math.max(1, Math.round(event.defenderLosses / defenders * defenderActorCount)) : 0;
     let lastPhase = '';
-    raid.tween = scene.tweens.add({ targets: progress, value: 1, duration: 10500, ease: 'Linear',
+    raid.tween = scene.tweens.add({ targets: progress, value: 1, duration: 11200, ease: 'Linear',
       onUpdate: () => {
         if (raidPresentation !== raid) return;
         const p = progress.value;
-        const phase = p < .42 ? 'outbound' : p < .56 ? 'at-nest' : 'returning';
-        const distance = p < .42 ? p / .42 : p < .56 ? 1 : (1 - p) / .44;
-        for (let index = 0; index < party.length; index += 1) {
-          const ant = actors[index];
-          const t = Phaser.Math.Clamp(distance - index * .018, 0, 1);
-          const point = route.getPoint(t), ahead = route.getPoint(Math.min(1, t + .01));
-          ant.setPosition(point.x, point.y + index % 2 * 8);
-          ant.sprite.setFlipX(phase === 'returning' ? ahead.x >= point.x : ahead.x < point.x);
-          ant.cargo.setVisible(phase === 'returning' && event.success && event.stolen > 0);
+        const phase = p < .34 ? 'outbound' : p < .68 ? 'at-nest' : 'returning';
+        const battleProgress = Phaser.Math.Clamp((p - .34) / .34, 0, 1);
+        const distance = phase === 'outbound' ? p / .34 : phase === 'returning' ? (1 - p) / .32 : 1;
+        for (let index = 0; index < attackActors.length; index += 1) {
+          const ant = attackActors[index];
+          const lost = index >= attackActors.length - attackLossVisuals;
+          if (phase === 'at-nest') {
+            const side = Math.sign(home.sites.entrance.x - away.sites.entrance.x || -1);
+            const lunge = Math.sin(battleProgress * Math.PI * 10 + index) * 8;
+            ant.setPosition(meeting.x + side * (20 + (index % 3) * 11) - side * lunge, meeting.y + (index % 3 - 1) * 12);
+            ant.sprite.setFlipX(side > 0);
+            if (lost && battleProgress > .58) ant.setAlpha(Math.max(.12, 1 - (battleProgress - .58) * 2.5)).setAngle(side * -70);
+          } else if (phase === 'returning' && lost) {
+            ant.setVisible(false);
+          } else {
+            const t = Phaser.Math.Clamp(distance - index * .014, 0, 1);
+            const point = route.getPoint(t), ahead = route.getPoint(Math.min(1, t + .01));
+            ant.setPosition(point.x, point.y + index % 3 * 7).setAlpha(1).setAngle(0);
+            ant.sprite.setFlipX(phase === 'returning' ? ahead.x >= point.x : ahead.x < point.x);
+            ant.cargo.setVisible(phase === 'returning' && event.success && event.stolen > 0);
+          }
         }
-        camera.centerOn(actors[0].x, actors[0].y + 25);
+        for (let index = 0; index < defenseActors.length; index += 1) {
+          const ant = defenseActors[index];
+          const lost = index >= defenseActors.length - defenseLossVisuals;
+          const side = Math.sign(away.sites.entrance.x - home.sites.entrance.x || 1);
+          const lunge = phase === 'at-nest' ? Math.sin(battleProgress * Math.PI * 10 + index + 1) * 7 : 0;
+          ant.setPosition(meeting.x + side * (22 + (index % 3) * 11) - side * lunge, meeting.y + (index % 3 - 1) * 12);
+          ant.sprite.setFlipX(side < 0);
+          if (lost && phase !== 'outbound' && battleProgress > .58) ant.setAlpha(Math.max(.12, 1 - (battleProgress - .58) * 2.5)).setAngle(side * 70);
+          if (phase === 'returning' && lost) ant.setVisible(false);
+        }
+        const lead = attackActors.find(actor => actor.visible) || attackActors[0];
+        camera.setZoom(phase === 'at-nest' ? 2.15 : phase === 'outbound' ? 1.55 + distance * .35 : 1.7);
+        camera.centerOn(phase === 'at-nest' ? meeting.x : lead.x, (phase === 'at-nest' ? meeting.y : lead.y) + 18);
         if (phase !== lastPhase) {
           lastPhase = phase;
           $('worldViewport').dataset.raidPhase = phase;
-          $('worldStoryTitle').textContent = phase === 'outbound' ? `${attacker.name} crosses the meadow` : phase === 'at-nest' ? event.success ? 'The guard ants reach the food store' : 'The home guards block the entrance' : `${attacker.name} heads home`;
-          $('worldStoryEffect').textContent = phase === 'outbound' ? `Destination: ${defender.name}` : phase === 'at-nest' ? event.success ? `${event.stolen} seeds collected` : 'The nest is protected' : event.success ? 'Carrying the seeds home' : 'Returning safely without food';
-          if (phase === 'at-nest') playTone(event.success ? 'upgrade' : 'wrong');
+          setRaidHud(event, attacker, defender, phase);
+          $('worldStoryTitle').textContent = phase === 'outbound' ? `${attacker.name} crosses the meadow` : phase === 'at-nest' ? 'The guard ants clash at the entrance!' : event.success ? `${attacker.name} carries food home` : `${attacker.name} retreats`;
+          $('worldStoryEffect').textContent = phase === 'outbound' ? `${attackers} guards against ${defenders} guards and ${core.fortification(defender).name.toLowerCase()} walls` : phase === 'at-nest' ? `${event.attack} attack power vs ${event.guard} defense power` : raidLossLine(event);
+          if (phase === 'at-nest') {
+            showBattleBurst(meeting, [core.TEAM_COLORS[attacker.colorIndex].light, core.TEAM_COLORS[defender.colorIndex].light, 0xffd66b], effects);
+            playTone('battle');
+          }
         }
       }, onComplete: finish,
     });
@@ -854,6 +969,7 @@
     if (event.key === 'food-trail') return 'More workers can bring home more food from Pip\'s golden trail.';
     if (event.key === 'predator') return 'Guardians and strong walls keep more of the colony stores safe.';
     if (event.key === 'new-territory') return 'A new room and flag appear for the colonies that need more space.';
+    if (event.key === 'chapter-final-warning') return 'Lightning is above Moonroot Meadow. Finish every rain job now.';
     if (event.kicker === 'Chapter 4') return 'The Great Rain is close. Choose what your colony still needs.';
     if (String(event.kicker || '').startsWith('Chapter')) return 'Look at how far every colony has grown.';
     return '';
@@ -870,7 +986,8 @@
       tone: event.tone,
       art: guardianMoment ? ASSETS.guardian : ASSETS.worker,
     }, onContinue);
-    if (event.key) playWorldEvent(event.key);
+    if (event.key === 'chapter-final-warning') playWorldEvent('heavy-rain');
+    else if (event.key) playWorldEvent(event.key);
   }
 
   async function finishMatch() {
@@ -902,9 +1019,27 @@
     }, async () => {
       session.stormSeen = true;
       await saveState();
-      showFinal();
+      showWinnerJourney();
     });
     playWorldEvent('heavy-rain');
+  }
+
+  function showWinnerJourney() {
+    const first = core.rankTeams(session.teams)[0];
+    if (!first) return showFinal();
+    const winner = first.team;
+    const rooms = core.colonyRooms(winner);
+    const outcome = core.rainOutcome(winner);
+    showWorldStory({
+      kicker: 'Final chapter - morning returns',
+      title: `${winner.name} carries the Ancient Acorn`,
+      text: `Follow Pip through ${rooms.length} ${rooms.length === 1 ? 'room' : 'rooms'}. The colony has ${winner.workers} workers, ${winner.soldiers} guards, and ${core.fortification(winner).name.toLowerCase()} walls. It kept ${outcome.protectedFood} seeds dry through the storm.`,
+      effect: `${first.score} colony strength · ${winner.correct}/${winner.attempts} answers right`,
+      art: ASSETS.queen,
+      continueLabel: 'See every team result',
+    }, showFinal);
+    focusColony(winner.id, rooms.length > 1 ? 'expansion' : 'nursery');
+    celebrate(winner.id, 'queen', 'THE ANCIENT ACORN IS SAFE');
   }
 
   function bestTeamBy(key) {
@@ -946,7 +1081,7 @@
       const accuracy = entry.team.attempts ? Math.round(entry.team.correct / entry.team.attempts * 100) : 0;
       const tiedFirst = isTie && tiedWinners.some(item => item.team.id === entry.team.id);
       const place = tiedFirst ? 'Winner' : index === 0 ? 'Winner' : `Place ${index + 1}`;
-      return `<div class="podium-place${index === 0 || tiedFirst ? ' first' : ''}" style="--team-color:${colorHex(core.TEAM_COLORS[entry.team.colorIndex].primary)}"><b>${place}: ${esc(entry.team.name)}</b><span>${entry.score} colony strength</span><span>${entry.team.correct}/${entry.team.attempts} answers right (${accuracy}%)</span><small>Answer points ${entry.breakdown.knowledge} · Colony points ${growth} · Food and land ${entry.breakdown.resources + entry.breakdown.territory} · Safety points ${protection}</small></div>`;
+      return `<div class="podium-place${index === 0 || tiedFirst ? ' first' : ''}" style="--team-color:${colorHex(core.TEAM_COLORS[entry.team.colorIndex].primary)}"><b>${place}: ${esc(entry.team.name)}</b><span>${entry.score} colony strength</span><span>${entry.team.correct}/${entry.team.attempts} answers right (${accuracy}%)</span><small>Answer points ${entry.breakdown.knowledge} · Colony points ${growth} · Food and land ${entry.breakdown.resources + entry.breakdown.territory} · Safety points ${protection}</small><small>Raid record: ${entry.team.successfulAttacks} won · ${entry.team.successfulDefenses} defended · ${entry.team.guardsDefeated || 0} rival guards defeated · ${entry.team.guardsLost || 0} guards lost</small></div>`;
     }).join('');
     const knowledge = [...session.teams].sort((a, b) => (b.attempts ? b.correct / b.attempts : 0) - (a.attempts ? a.correct / a.attempts : 0) || b.correct - a.correct)[0];
     const improved = session.teams.filter(team => core.learningImprovement(session, team.id) > 0).sort((a, b) => core.learningImprovement(session, b.id) - core.learningImprovement(session, a.id))[0];
@@ -957,12 +1092,14 @@
       ['Most food', bestTeamBy('food')],
     ];
     if (improved) awards.push(['Biggest answer improvement', improved]);
+    const battleLeader = [...session.teams].sort((a, b) => (b.guardsDefeated || 0) - (a.guardsDefeated || 0))[0];
+    if (battleLeader && battleLeader.guardsDefeated > 0) awards.push(['Bravest guard team', battleLeader]);
     $('awards').innerHTML = awards.map(([label, team]) => `<div class="award"><b>${label}</b><span>${esc(team.name)}</span></div>`).join('');
     $('colonyStories').innerHTML = session.teams.map(team => {
       const outcome = core.rainOutcome(team);
       const improvement = core.learningImprovement(session, team.id);
       const missing = core.rainPreparation(team).filter(goal => !goal.done).map(goal => goal.label.toLowerCase());
-      return `<article class="colony-ending"><h3>${esc(team.name)}: ${outcome.ready}/4 rain jobs done</h3><p>${esc(outcome.text)}</p><p>${team.workers} workers · ${team.soldiers} guards · ${core.colonyRooms(team).length} rooms · ${team.correct}/${team.attempts} answers right.</p><p>${improvement === null ? 'Answer more questions next time to show what you know.' : improvement > 0 ? 'Your team got more answers right near the end.' : 'Next time, read each answer and talk before you choose.'}</p><strong>${missing.length ? `Build next: ${esc(missing[0])}.` : 'Your four rain jobs are done.'}</strong></article>`;
+      return `<article class="colony-ending"><h3>${esc(team.name)}: ${outcome.ready}/4 rain jobs done</h3><p>${esc(outcome.text)}</p><p>${team.workers} workers · ${team.soldiers} guards · ${core.colonyRooms(team).length} rooms · ${team.correct}/${team.attempts} answers right.</p><p>${team.successfulAttacks || team.successfulDefenses ? `Raid story: ${team.successfulAttacks} won, ${team.successfulDefenses} defended, and ${team.guardsLost || 0} guards lost.` : 'This colony did not enter a raid.'}</p><p>${improvement === null ? 'Answer more questions next time to show what you know.' : improvement > 0 ? 'Your team got more answers right near the end.' : 'Next time, read each answer and talk before you choose.'}</p><strong>${missing.length ? `Build next: ${esc(missing[0])}.` : 'Your four rain jobs are done.'}</strong></article>`;
     }).join('');
     setOverlay('finalOverlay');
   }
@@ -1038,6 +1175,7 @@
     worldStoryAction = null;
     raidPresentation = null;
     weatherEffects = [];
+    weatherTimers = [];
   }
 
   async function enterGame() {
@@ -1179,8 +1317,10 @@
     if (animateLegs && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       scene.tweens.add({ targets: gait, phase: Math.PI * 2, duration: 430, repeat: -1, onUpdate: paintLegs });
     }
-    const baseY = sprite.y;
-    scene.tweens.add({ targets: sprite, y: baseY - Math.max(1, width * .025), duration: 170 + Math.random() * 80, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    if (animateLegs && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const baseY = sprite.y;
+      scene.tweens.add({ targets: sprite, y: baseY - Math.max(1, width * .025), duration: 170 + Math.random() * 80, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    }
     return container;
   }
 
@@ -1210,6 +1350,7 @@
     let cursor = index % points.length;
     agent.x = previous ? previous.x : points[cursor].x;
     agent.y = previous ? previous.y : points[cursor].y;
+    if (index >= MAX_MOVING_ANTS_PER_ROLE && !startDelay) return;
     const travel = () => {
       if (!scene || !agent.active) return;
       cursor = (cursor + 1) % points.length;
@@ -1448,7 +1589,7 @@
       const path = building ? [{ x: room.x - 12, y: room.y }, { x: room.x + 14, y: room.y + 5 }, { x: room.x, y: room.y - 8 }] : [...route.slice().reverse(), entrance, surface, entrance, ...route];
       const recruit = index === team.workers - 1 && session.phase === 'event' && (lastEvent?.key === 'upgrade-workers' && lastEvent.teamId === team.id || harvest?.teamId === team.id && harvest.hatched);
       if (recruit) path.unshift({ x: nursery.x + roomWidth * .28, y: nursery.y + 4 });
-      const ant = makeAntAgent('cq-worker', path[0], 29, palette.primary, !building, index < 48);
+      const ant = makeAntAgent('cq-worker', path[0], 29, palette.primary, !building, index < MAX_MOVING_ANTS_PER_ROLE);
       ant.setData('role', 'worker');
       ants.push(ant);
       if (index === 0 && (harvest?.teamId === team.id && harvest.gathered > 0 || session.phase === 'event' && lastEvent?.key === 'upgrade-food' && lastEvent.teamId === team.id)) deliverHarvest(ant, [surface, entrance, ...pathTo(food)]);
@@ -1461,7 +1602,7 @@
       const x = room.x + ((slot % 4) - 1.5) * roomWidth * .19;
       const y = room.y - 13 + Math.floor(slot / 4) * 24;
       const path = [{ x, y }, { x: x + 10, y: y - 5 }, { x: x - 8, y: y + 3 }];
-      const soldier = makeAntAgent('cq-guardian', path[0], 30, palette.primary, false, index < 48);
+      const soldier = makeAntAgent('cq-guardian', path[0], 30, palette.primary, false, index < MAX_MOVING_ANTS_PER_ROLE);
       soldier.setData('role', 'soldier');
       ants.push(soldier);
       animateAnt(soldier, path, index, preservePositions ? previous.soldiers[index] : null);
@@ -1543,6 +1684,7 @@
       soldiers: view.ants.filter(ant => ant.getData('role') === 'soldier').map(ant => ({ x: ant.x, y: ant.y })),
     }]));
     scene.tweens.killAll();
+    scene.time.removeAllEvents();
     scene.children.removeAll(true);
     colonyViews = new Map();
     const width = scene.scale.width;
@@ -1576,6 +1718,7 @@
         h: colonyHeight,
       }, index, previous.get(session.teams[index].id));
     }
+    addStormAtmosphere();
     $('worldViewport').dataset.layout = 'shared-surface';
     $('worldViewport').dataset.surfaceColonies = String(count);
     $('worldViewport').setAttribute('aria-label', `Colony world. All ${count} colony entrances begin at the meadow surface. The largest colony has ${largestRoomCount} rooms.`);
@@ -1594,9 +1737,9 @@
     const palette = core.TEAM_COLORS[session.teams.find(team => team.id === teamId).colorIndex];
     const siteName = REWARD_STORIES[kind] && REWARD_STORIES[kind].site || (kind === 'defense' ? 'guard' : 'center');
     const origin = view.sites && view.sites[siteName] || view.center;
-    for (let index = 0; index < 18; index += 1) {
+    for (let index = 0; index < 12; index += 1) {
       const dot = scene.add.circle(origin.x, origin.y, 3 + index % 3, index % 3 === 0 ? 0xffd166 : palette.light).setDepth(10);
-      const angle = Math.PI * 2 * index / 18;
+      const angle = Math.PI * 2 * index / 12;
       scene.tweens.add({ targets: dot, x: dot.x + Math.cos(angle) * (45 + index * 2), y: dot.y + Math.sin(angle) * (32 + index), alpha: 0, scale: .3, duration: 850, ease: 'Cubic.easeOut', onComplete: () => dot.destroy() });
     }
     const ring = scene.add.ellipse(origin.x, origin.y, 52, 30, palette.light, .12).setDepth(9).setStrokeStyle(4, palette.light, .95);
@@ -1611,8 +1754,42 @@
     }
   }
 
+  function playUpgradeAction(teamId, kind) {
+    if (!scene || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const view = colonyViews.get(teamId);
+    if (!view) return;
+    const team = session.teams.find(item => item.id === teamId);
+    const palette = core.TEAM_COLORS[team.colorIndex];
+    if (kind === 'defense') {
+      for (const room of view.rooms.slice(0, 8)) {
+        const ring = scene.add.ellipse(room.x, room.y, 72, 44, palette.light, .04).setStrokeStyle(4, core.fortification(team).edge, .95).setDepth(12);
+        scene.tweens.add({ targets: ring, scaleX: 1.75, scaleY: 1.75, alpha: 0, duration: 1200, delay: view.rooms.indexOf(room) * 90, onComplete: () => ring.destroy() });
+      }
+      return;
+    }
+    const site = view.sites[REWARD_STORIES[kind]?.site || 'center'] || view.center;
+    if (kind === 'queen') {
+      const egg = scene.add.ellipse(site.x + 24, site.y + 13, 14, 10, 0xfff4d2, 1).setStrokeStyle(2, 0xd9b976, 1).setDepth(12).setScale(.2);
+      scene.tweens.add({ targets: egg, scaleX: 1.25, scaleY: 1.25, duration: 700, yoyo: true, hold: 650, onComplete: () => egg.destroy() });
+      return;
+    }
+    if (kind === 'soldiers') {
+      const shield = scene.add.ellipse(site.x, site.y, 44, 44, palette.light, .12).setStrokeStyle(5, palette.light, 1).setDepth(12);
+      scene.tweens.add({ targets: shield, scaleX: 1.8, scaleY: 1.8, alpha: 0, duration: 1250, onComplete: () => shield.destroy() });
+      return;
+    }
+    if (kind === 'expansion') {
+      for (let index = 0; index < 14; index += 1) {
+        const dirt = scene.add.circle(site.x + (index % 5 - 2) * 6, site.y, 3 + index % 3, index % 2 ? 0x8b5b35 : 0xc08a52, .95).setDepth(12);
+        scene.tweens.add({ targets: dirt, x: dirt.x + (index % 2 ? 1 : -1) * (22 + index * 2), y: dirt.y - 16 - index % 5 * 6, alpha: 0, duration: 850 + index * 25, ease: 'Cubic.easeOut', onComplete: () => dirt.destroy() });
+      }
+    }
+  }
+
   function stopWeather() {
     if (!scene) return;
+    for (const timer of weatherTimers) timer?.remove?.(false);
+    weatherTimers = [];
     for (const effect of weatherEffects) {
       if (!effect.active) continue;
       scene.tweens.killTweensOf(effect);
@@ -1621,18 +1798,68 @@
     weatherEffects = [];
   }
 
+  function lightningStrike(withThunder = true) {
+    if (!scene) return;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const width = scene.scale.width;
+    const height = scene.scale.height;
+    const strikeX = width * (.2 + Math.random() * .6);
+    const flash = scene.add.rectangle(width / 2, height / 2, width, height, 0xe8f8ff, reducedMotion ? .2 : .66).setScrollFactor(0).setDepth(40);
+    const bolt = scene.add.graphics().setScrollFactor(0).setDepth(41);
+    bolt.lineStyle(5, 0xf6fbff, .95).beginPath().moveTo(strikeX, -10).lineTo(strikeX - 24, 58).lineTo(strikeX + 7, 58).lineTo(strikeX - 38, 152).lineTo(strikeX - 13, 82).lineTo(strikeX - 43, 82).lineTo(strikeX, -10).strokePath();
+    weatherEffects.push(flash, bolt);
+    if (!reducedMotion) {
+      scene.cameras.main.shake(300, .0035);
+      scene.tweens.add({ targets: [flash, bolt], alpha: 0, duration: 360, ease: 'Cubic.easeOut' });
+    }
+    const cleanup = scene.time.delayedCall(450, () => {
+      for (const effect of [flash, bolt]) if (effect.active) effect.destroy();
+    });
+    weatherTimers.push(cleanup);
+    if (withThunder) playThunder();
+  }
+
+  function addStormAtmosphere() {
+    if (!scene || !session || session.phase === 'ended') return;
+    const progress = turnProgress();
+    if (progress < .42) return;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const width = scene.scale.width;
+    const height = scene.scale.height;
+    const veil = scene.add.rectangle(width / 2, height / 2, width, height, 0x162c3c, Math.min(.3, .07 + progress * .2)).setScrollFactor(0).setDepth(10);
+    weatherEffects.push(veil);
+    const cloud = scene.add.graphics().setDepth(-3);
+    cloud.fillStyle(0x263b4e, .22 + progress * .35);
+    cloud.fillRect(0, 0, width, Math.min(190, height * .3));
+    weatherEffects.push(cloud);
+    if (progress >= .68) {
+      const rainCount = reducedMotion ? 14 : 28;
+      const floor = Math.min(225, height * .34);
+      for (let index = 0; index < rainCount; index += 1) {
+        const drop = scene.add.rectangle((index * 83) % width, -15 - (index % 7) * 21, 2, 11, 0xc9edff, .38).setDepth(12).setAngle(14);
+        weatherEffects.push(drop);
+        if (reducedMotion) drop.y = index * 13 % floor;
+        else scene.tweens.add({ targets: drop, y: floor, x: drop.x + 45, duration: 1050 + index % 5 * 90, delay: index % 8 * 70, repeat: -1 });
+      }
+    }
+    if (progress >= .88 && !reducedMotion) {
+      const timer = scene.time.addEvent({ delay: 5200, loop: true, callback: () => lightningStrike(true) });
+      weatherTimers.push(timer);
+    }
+  }
+
   function playWorldEvent(key) {
     if (!scene) return;
     if (key === 'heavy-rain') {
       stopWeather();
       const cloud = scene.add.graphics().setDepth(-3);
-      cloud.fillStyle(0x344f63, .4);
+      cloud.fillStyle(0x20384d, .72);
       cloud.fillRect(0, 0, scene.scale.width, Math.min(185, scene.scale.height * .27));
       weatherEffects.push(cloud);
       const floor = Math.min(215, scene.scale.height * .32);
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      for (let index = 0; index < 70; index += 1) {
-        const drop = scene.add.rectangle((index * 71) % scene.scale.width, -20 - (index % 8) * 18, 2, 16, 0xbde8ff, .8).setDepth(12).setAngle(12);
+      for (let index = 0; index < 54; index += 1) {
+        const drop = scene.add.rectangle((index * 71) % scene.scale.width, -20 - (index % 8) * 18, index % 4 ? 2 : 3, 16 + index % 4 * 2, 0xbde8ff, .86).setDepth(12).setAngle(12);
         weatherEffects.push(drop);
         if (reducedMotion) drop.y = index * 17 % floor;
         else scene.tweens.add({ targets: drop, y: floor, x: drop.x + 55, duration: 750 + (index % 5) * 80, delay: (index % 10) * 50, repeat: -1 });
@@ -1642,6 +1869,8 @@
         weatherEffects.push(water);
         if (!reducedMotion) scene.tweens.add({ targets: water, scaleX: 1.12, alpha: .25, duration: 900, yoyo: true, repeat: -1 });
       }
+      lightningStrike(true);
+      if (!reducedMotion) weatherTimers.push(scene.time.addEvent({ delay: 4300, loop: true, callback: () => lightningStrike(true) }));
     }
     if (key === 'fallen-fruit') {
       const fruit = scene.add.circle(scene.scale.width * .52, -35, 24, 0xc74f3f, 1).setDepth(14).setStrokeStyle(5, 0xf4b64e, 1);
@@ -1676,6 +1905,32 @@
     } catch {}
   }
 
+  function playThunder() {
+    initAudio();
+    if (!soundOn || !audioContext) return;
+    try {
+      const duration = 1.25;
+      const buffer = audioContext.createBuffer(1, Math.floor(audioContext.sampleRate * duration), audioContext.sampleRate);
+      const channel = buffer.getChannelData(0);
+      for (let index = 0; index < channel.length; index += 1) {
+        const decay = Math.pow(1 - index / channel.length, 2.4);
+        channel[index] = (Math.random() * 2 - 1) * decay;
+      }
+      const source = audioContext.createBufferSource();
+      const filter = audioContext.createBiquadFilter();
+      const gain = audioContext.createGain();
+      filter.type = 'lowpass';
+      filter.frequency.value = 170;
+      gain.gain.setValueAtTime(.0001, audioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(.065, audioContext.currentTime + .08);
+      gain.gain.exponentialRampToValueAtTime(.0001, audioContext.currentTime + duration);
+      source.buffer = buffer;
+      source.connect(filter); filter.connect(gain); gain.connect(audioContext.destination);
+      source.start(); source.stop(audioContext.currentTime + duration + .05);
+      tone(55, .85, .035, .05);
+    } catch {}
+  }
+
   function tone(frequency, duration, volume, delay = 0) {
     if (!soundOn || !audioContext) return;
     const oscillator = audioContext.createOscillator();
@@ -1694,6 +1949,7 @@
     if (type === 'wrong') { tone(246, .22, .035); tone(220, .25, .03, .13); }
     if (type === 'upgrade') { tone(392, .2, .05); tone(523, .25, .05, .1); tone(784, .3, .04, .2); }
     if (type === 'wars') { tone(196, .45, .06); tone(293, .45, .055, .2); }
+    if (type === 'battle') { tone(110, .22, .055); tone(165, .18, .05, .18); tone(98, .3, .055, .36); }
     if (type === 'victory') [523, 659, 784, 1046].forEach((note, index) => tone(note, .4, .055, index * .14));
   }
 
@@ -1701,7 +1957,8 @@
     if (!soundOn || ambientTimer || (session && session.phase === 'paused')) return;
     const play = () => {
       if (!soundOn || !audioContext) return;
-      const notes = session && session.warsActive ? [146, 174, 220] : [174, 220, 261];
+      const progress = session ? turnProgress() : 0;
+      const notes = session && session.warsActive ? [146, 174, 220] : progress >= .68 ? [130, 174, 196] : [174, 220, 261];
       notes.forEach((note, index) => tone(note, 2.8, .009, index * .08));
     };
     play(); ambientTimer = setInterval(play, 3600);

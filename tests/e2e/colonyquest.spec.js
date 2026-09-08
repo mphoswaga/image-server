@@ -109,7 +109,8 @@ test('blocked colony choices explain their requirements and allow worker recover
 test('all upgrade cards are available and raids visibly travel, return and recover once', async ({ page }, testInfo) => {
   test.setTimeout(60_000);
   const colonies = [colonyCore.createTeam({ name: 'Oak Colony', colorIndex: 0 }, 0), colonyCore.createTeam({ name: 'Seed Colony', colorIndex: 1 }, 1)];
-  Object.assign(colonies[0], { soldiers: 1, population: 3, barracksBuilt: true });
+  Object.assign(colonies[0], { soldiers: 5, population: 7, barracksBuilt: true });
+  Object.assign(colonies[1], { soldiers: 3, population: 5, barracksBuilt: true });
   const setup = { teamCount: 2, rounds: 12, matchType: 'rounds', durationMinutes: 15, sound: false, teams: colonies };
   let saved = colonyCore.normalizeSession({ phase: 'reward', introSeen: true, teams: colonies, currentTeamIndex: 0, turnIndex: 0 });
   const errors = [];
@@ -143,17 +144,22 @@ test('all upgrade cards are available and raids visibly travel, return and recov
   await expect(world).toHaveAttribute('data-raid-phase', 'outbound');
   const departure = await page.locator('#gameMount canvas').screenshot();
   await expect(world).toHaveAttribute('data-raid-phase', 'at-nest');
+  await expect(page.locator('#raidHud')).toContainText('5 guards');
+  await expect(page.locator('#raidHud')).toContainText('3 guards');
   await page.screenshot({ path: `/tmp/colony-raid-${testInfo.project.name}.png` });
   const arrival = await page.locator('#gameMount canvas').screenshot();
   expect(Buffer.compare(departure, arrival)).not.toBe(0);
   await expect(world).toHaveAttribute('data-raid-phase', 'returning');
-  await expect(page.locator('#worldStoryTitle')).toContainText('returns home', { timeout: 15000 });
+  await expect(page.locator('#worldStoryTitle')).toContainText('wins the raid', { timeout: 15000 });
   expect(saved.teams[0].food).toBe(16);
   expect(saved.teams[1].food).toBe(0);
+  expect(saved.teams[0].soldiers).toBe(4);
+  expect(saved.teams[1].soldiers).toBe(1);
   expect(saved.events.filter(event => event.key === 'raid-result')).toHaveLength(1);
   await page.reload();
   await page.locator('#resumeBtn').click();
-  await expect(page.locator('#worldStoryEffect')).toHaveText('+8 food for Oak Colony');
+  await expect(page.locator('#worldStoryEffect')).toContainText('+8 food');
+  await expect(page.locator('#worldStoryEffect')).toContainText('4 attacking guards remain');
   expect(saved.teams[0].food).toBe(16);
   await page.locator('#worldStoryContinue').click();
   await expect(page.locator('#questionOverlay')).toBeVisible();
@@ -182,9 +188,10 @@ test('a defended raid can be paused without duplicate rewards', async ({ page })
   await expect(page.locator('#eventOverlay')).toBeVisible();
   await expect(page.locator('#worldViewport')).not.toHaveAttribute('data-raid-phase');
   await page.locator('#pauseBtn').click();
-  await expect(page.locator('#worldStoryTitle')).toHaveText('Seed Colony holds the line');
+  await expect(page.locator('#worldStoryTitle')).toHaveText('Seed Colony protects its home');
   expect(saved.teams[1].food).toBe(13);
   expect(saved.teams[0].food).toBe(8);
+  expect(saved.teams[0].soldiers).toBe(0);
   expect(saved.events.filter(event => event.key === 'raid-result')).toHaveLength(1);
   await page.locator('#worldStoryContinue').click();
   await expect(page.locator('#questionOverlay')).toBeVisible();
@@ -240,6 +247,8 @@ test('harvest, hatching, raid recovery and the Great Rain ending survive refresh
   await page.reload();
   await page.locator('#resumeBtn').click();
   await expect(page.locator('#worldStoryTitle')).toHaveText('The ants are safe from the rain!');
+  await page.locator('#worldStoryContinue').click();
+  await expect(page.locator('#worldStoryTitle')).toContainText('Ancient Acorn');
   await page.locator('#worldStoryContinue').click();
   await expect(page.locator('#colonyStories .colony-ending')).toHaveCount(2);
   await expect(page.locator('#winnerBanner')).toBeVisible();
@@ -392,7 +401,7 @@ test('a teacher can run, recover, pause, and finish a one-screen ColonyQuest mat
   await expect(page.locator('#rewardOverlay')).toBeVisible();
   await page.getByRole('button', { name: /Add one worker/ }).click();
   await expect(page.locator('#worldStory')).toBeVisible();
-  await expect(page.locator('#worldStoryTitle')).toHaveText('A new worker wakes up');
+  await expect(page.locator('#worldStoryTitle')).toHaveText('Pip wakes a new worker');
   await expect(page.locator('#worldStoryEffect')).toContainText('+1 worker');
   await expect(page.locator('#worldViewport')).toHaveAttribute('aria-description', /Leaf Colony: 1 queen, 2 workers, 0 guard ants. 1 rooms/);
   expect(session.teams[0].workers).toBe(2);
@@ -426,6 +435,8 @@ test('a teacher can run, recover, pause, and finish a one-screen ColonyQuest mat
   await page.locator('#teacherHandle').click();
   await page.locator('#endGameBtn').click();
   await expect(page.locator('#worldStoryTitle')).toHaveText('The ants are safe from the rain!');
+  await page.locator('#worldStoryContinue').click();
+  await expect(page.locator('#worldStoryTitle')).toContainText('Ancient Acorn');
   await page.locator('#worldStoryContinue').click();
   await expect(page.locator('#finalOverlay')).toBeVisible();
   await expect(page.locator('#winnerTitle')).toContainText('Ancient Acorn');
