@@ -151,6 +151,8 @@ test('FishQuest is offered beside the existing student game choices', () => {
   assert.match(play, /class="game-pick" data-game="fishquest"/);
   assert.match(play, /location\.href='\/fishquest-play\/'\+GAME_ID/);
   assert.match(dashboard, /Open FishQuest live room/);
+  assert.match(dashboard, /Start FishQuest live/);
+  assert.match(dashboard, /Learner game link/);
 });
 
 test('teacher previews are not blocked by stale learner sessions', () => {

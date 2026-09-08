@@ -7209,10 +7209,12 @@
             ${g.roomCode?`<p class="hint" style="margin:4px 0 0;font-size:12px">Students join at <b>${esc(joinUrl)}</b> and enter this code</p>`:''}
           </div>
           <div class="gc-body">
-            ${colony?'':`<div class="game-link"><input readonly value="${esc(studentUrl)}"><button type="button" class="btn ghost gcopy" data-url="${esc(studentUrl)}" style="width:auto;padding:9px 13px">${ICON('i-doc')} Copy</button></div>`}
+            ${colony?'':`<label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:5px">Learner game link</label><div class="game-link"><input readonly value="${esc(studentUrl)}" aria-label="Learner game link"><button type="button" class="btn ghost gcopy" data-url="${esc(studentUrl)}" style="width:auto;padding:9px 13px">${ICON('i-doc')} Copy learner link</button></div>`}
             ${!colony&&gameRosterIds(g).length?`<a href="/api/game/${esc(g.id)}/qr-sheet" style="font-size:12.5px;font-weight:600;color:var(--primary);display:inline-flex;align-items:center;gap:4px;margin-top:8px">${ICON('i-image')} Print QR cards</a>`:''}
             <div class="gc-actions" style="margin-top:10px">
-              <a class="btn accent" href="${esc(launchUrl)}" style="font-size:12px;padding:7px 12px;width:auto;text-decoration:none">${colony?'Open ColonyQuest':fish?'Open FishQuest control room':'Open game'}</a>
+              ${colony
+                ? `<a class="btn accent" href="${esc(launchUrl)}" style="font-size:12px;padding:7px 12px;width:auto;text-decoration:none">Open ColonyQuest</a>`
+                : `<a class="btn accent" href="/fishquest/${esc(g.id)}" style="font-size:12px;padding:7px 12px;width:auto;text-decoration:none">${fish?'Open FishQuest control room':'Start FishQuest live'}</a><a class="btn ghost" href="${esc(studentUrl)}" style="font-size:12px;padding:7px 12px;width:auto;text-decoration:none">Preview learner games</a>`}
               <button type="button" class="btn ghost gc-class-btn" data-id="${esc(g.id)}" data-row="${classRowId}" style="font-size:12px;padding:6px 12px;width:auto">Manage classes</button>
               ${colony?'':`<button type="button" class="btn ghost gc-extend-btn" data-id="${esc(g.id)}" data-row="${extRowId}" style="font-size:12px;padding:6px 12px;width:auto">Extend deadline</button>`}
             </div>
