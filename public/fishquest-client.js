@@ -366,7 +366,7 @@
     const fin=scene.add.image(style.finX,style.finY,fishTexture(p.variant,'fin',stage)).setOrigin(.68,.28).setScale(style.fin);
     const sprite=scene.add.container(p.x,p.y,[tail,body,fin]);
     const label=scene.add.text(p.x,p.y-style.label,p.name,{font:'bold 15px Arial',color:'#ffffff',stroke:'#052c48',strokeThickness:4}).setOrigin(.5);
-    return {sprite,label,tail,body,fin,stage,tailBase:style.tail,finBase:style.fin,labelOffset:style.label,tx:p.x,ty:p.y,scale:Math.pow(p.mass/100,.65),facing:1,phase:p.variant*1.7,swimSpeed:0};
+    return {sprite,label,tail,body,fin,stage,tailBase:style.tail,finBase:style.fin,labelOffset:style.label,tx:p.x,ty:p.y,samples:[],scale:Math.pow(p.mass/100,.65),facing:1,phase:p.variant*1.7,swimSpeed:0};
   }
   const bubbles = [];
   let oceanTime=0;
@@ -409,9 +409,11 @@
     const seen = new Set();
     for (const p of state.players) {
       seen.add(p.id); let e = entities.get(p.id);
-      if (!e) { e = makeFish(p); entities.set(p.id,e); if (p.id === state.me) scene.cameras.main.startFollow(e.sprite,true,.08,.08); }
+      if (!e) { e = makeFish(p); entities.set(p.id,e); }
       setFishEvolution(e,p);
-      if (Math.abs(p.x-e.tx)>1) e.facing=p.x>e.tx?1:-1;
+      const reset = p.respawning || p.locked || state.phase !== 'running' || Math.hypot(p.x-e.tx,p.y-e.ty)>200;
+      FishQuestMotion.push(e.samples,p,performance.now(),reset);
+      if(reset) e.sprite.setPosition(p.x,p.y);
       e.tx=p.x; e.ty=p.y; e.scale=Math.pow(p.mass/100,.65); e.locked=p.locked;
       e.sprite.setAlpha(p.respawning ? .2 : p.protected ? .72 : 1); e.label.setText(p.id === state.me ? 'You' : p.npc ? `${p.name} · ${p.mass}` : p.name).setAlpha(p.respawning ? .3 : 1);
     }
@@ -427,7 +429,9 @@
     const t=oceanTime;
     animateOcean(dt,t);
     for (const e of entities.values()) {
-      const dx=e.tx-e.sprite.x,dy=e.ty-e.sprite.y,speed=Math.min(1,Math.hypot(dx,dy)/16);
+      const target=FishQuestMotion.sample(e.samples,performance.now()-80) || {x:e.tx,y:e.ty};
+      const dx=target.x-e.sprite.x,dy=target.y-e.sprite.y,speed=Math.min(1,Math.hypot(dx,dy)/16);
+      if(Math.abs(dx)>.8) e.facing=dx>0?1:-1;
       e.sprite.x+=dx*follow; e.sprite.y+=dy*follow;
       e.sprite.scaleY+=(e.scale-e.sprite.scaleY)*(1-Math.exp(-7*dt));
       e.sprite.scaleX+=(e.facing*e.scale-e.sprite.scaleX)*(1-Math.exp(-12*dt));
@@ -442,7 +446,12 @@
       e.sprite.rotation+=(tilt+Math.sin(beat)*.025-e.sprite.rotation)*follow;
       e.label.setPosition(e.sprite.x,e.sprite.y-e.labelOffset*e.sprite.scaleY);
     }
-    if (me) scene.cameras.main.setZoom(Math.max(.58, Math.min(1.05, 1.02 - (me.mass-100)/1600)));
+    if (me) {
+      const camera=scene.cameras.main, fish=entities.get(me.id);
+      const zoom=Math.max(.58,Math.min(1.05,1.02-(me.mass-100)/1600));
+      camera.setZoom(camera.zoom+(zoom-camera.zoom)*(1-Math.exp(-3*dt)));
+      if(fish) camera.centerOn(fish.sprite.x,fish.sprite.y);
+    }
   }
   function renderQuestion() {
     const q = state.question;

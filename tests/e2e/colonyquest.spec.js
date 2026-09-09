@@ -116,8 +116,8 @@ test('world events become class-triggered scenes and recover safely', async ({ p
 });
 
 test('every colony reward plays a visible action before continuing', async ({ page }, testInfo) => {
-  test.setTimeout(60_000);
-  test.skip(testInfo.project.name !== 'windows-100', 'Run the complete reward choreography once on desktop.');
+  test.setTimeout(90_000);
+  test.skip(!['windows-100', 'mobile'].includes(testInfo.project.name), 'Check reward close-ups on desktop and mobile.');
   const titles = {
     workers: 'Pip wakes a new worker',
     food: 'Pip finds five bright seeds',
@@ -145,13 +145,21 @@ test('every colony reward plays a visible action before continuing', async ({ pa
   });
 
   for (const [reward, title] of Object.entries(titles)) {
+    if (testInfo.project.name === 'mobile' && !['queen', 'expansion'].includes(reward)) continue;
     saved = freshSession();
     await page.goto('/colonyquest/cq-rewards');
+    await page.evaluate(() => {
+      const Original = Phaser.Game;
+      Phaser.Game = function(config) { window.rewardGame = new Original(config); return window.rewardGame; };
+    });
     await page.locator('#resumeBtn').click();
     await page.locator(`[data-reward="${reward}"]`).click();
     await expect(page.locator('#worldStoryTitle')).toHaveText(title);
     await expect(page.locator('#worldStoryContinue')).toBeDisabled();
-    await expect(page.locator('#worldStoryContinue')).toBeEnabled({ timeout: 5000 });
+    await expect(page.locator('#worldViewport')).toHaveAttribute('data-action-focus', /team-1:/);
+    await expect.poll(() => page.evaluate(() => window.rewardGame?.scene.scenes[0]?.cameras.main.zoom)).toBeGreaterThan(1.2);
+    if (['queen', 'expansion'].includes(reward)) await page.screenshot({ path: `/tmp/colony-closeup-${reward}-${testInfo.project.name}.png` });
+    await expect(page.locator('#worldStoryContinue')).toBeEnabled({ timeout: 10000 });
     if (reward === 'food') await page.screenshot({ path: '/tmp/colony-visible-food-delivery.png' });
   }
   expect(errors).toEqual([]);

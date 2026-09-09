@@ -29,6 +29,9 @@
   let worldStoryTimer = null;
   let worldEventPresentation = [];
   let raidPresentation = null;
+  let actionCamera = false;
+  let trackedActionActor = null;
+  const ACTION_SPEED = .6;
   let weatherEffects = [];
   let weatherTimers = [];
   const ASSETS = {
@@ -327,6 +330,7 @@
   }
 
   function hideWorldStory() {
+    resetActionCamera();
     clearTimeout(worldStoryTimer);
     worldStoryTimer = null;
     clearWorldEventPresentation();
@@ -395,7 +399,7 @@
     clearTimeout(worldStoryTimer);
     button.disabled = true;
     button.textContent = label;
-    const wait = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 180 : duration;
+    const wait = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 180 : Math.max(3500, duration / (actionCamera ? ACTION_SPEED : 1) + 650);
     worldStoryTimer = setTimeout(() => {
       worldStoryTimer = null;
       if (worldStoryAction !== expectedAction || $('worldStory').classList.contains('hidden')) return;
@@ -1005,6 +1009,7 @@
     focusColony(team.id, report.hatched ? 'nursery' : 'food');
     celebrate(team.id, report.hatched ? 'workers' : 'food', report.hatched ? '+1 worker' : `+${report.gathered} seeds gathered`);
     if (report.hatched) holdWorldStory(playHatchAction(team.id), 'Watch the egg hatch...');
+    else holdWorldStory(2600, 'Watch the workers bring food home...');
   }
 
   async function beginTurn(previousChapter) {
@@ -1107,7 +1112,7 @@
         updateWorld();
         focusColony(team.id, eventScene.site);
         const duration = playWorldEvent(event.key, team.id);
-        await new Promise(resolve => setTimeout(resolve, duration));
+        await new Promise(resolve => setTimeout(resolve, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? duration : duration / ACTION_SPEED + 650));
         if (!session || session.phase === 'paused' || session.phase === 'ended') return;
         replaceWorldStory({
           kicker: `${eventScene.speaker} reports back`,
@@ -1694,7 +1699,7 @@
       furnishRoom(roomGraphics, room, team, roomWidth, roomHeight);
       if (newRoom && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         roomGraphics.setAlpha(0);
-        scene.tweens.add({ targets: roomGraphics, alpha: 1, duration: 1600 });
+        scene.tweens.add({ targets: roomGraphics, alpha: 1, delay: 2000, duration: 1500 });
       }
       const egg = team.eggs?.[0];
       const detail = room.kind === 'food' ? ` · ${team.food} food` : room.kind === 'guard' ? ` · ${Math.min(8, Math.max(0, team.soldiers - guards.indexOf(room) * 8))} soldiers` : room.kind === 'nursery' ? egg ? ` · egg: ${Math.max(1, egg.roundsLeft)} rounds` : ` · level ${team.queenLevel}` : '';
@@ -1789,6 +1794,20 @@
     } });
   }
 
+  function resetActionCamera() {
+    actionCamera = false;
+    trackedActionActor = null;
+    if (!scene) return;
+    scene.tweens.timeScale = 1;
+    scene.time.timeScale = 1;
+    const camera = scene.cameras.main;
+    camera.stopFollow();
+    camera.panEffect.reset();
+    camera.zoomEffect.reset();
+    camera.setZoom(1).setScroll(camera.scrollX, $('worldViewport').scrollTop);
+    $('worldViewport').removeAttribute('data-action-focus');
+  }
+
   function focusColony(teamId, siteName = 'nursery') {
     const view = colonyViews.get(teamId);
     if (!view) return;
@@ -1800,6 +1819,23 @@
     viewport.scrollTo({ top: Math.max(0, target.y - visibleHeight * .48), behavior: 'auto' });
     if (scene) {
       const camera = scene.cameras.main;
+      if (!$('worldStory').classList.contains('hidden')) {
+        actionCamera = true;
+        const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        scene.tweens.timeScale = reduced ? 1 : ACTION_SPEED;
+        scene.time.timeScale = reduced ? 1 : ACTION_SPEED;
+        // Frame the room above the story banner, including space for dialogue.
+        const zoom = Math.max(1.25, Math.min(2.2, viewport.clientWidth / 280, Math.max(180, visibleHeight) / 150));
+        const centerY = target.y + lowerPanel / (2 * zoom) - 15;
+        $('worldViewport').dataset.actionFocus = `${teamId}:${siteName}`;
+        if (reduced) camera.setZoom(zoom).centerOn(target.x, centerY);
+        else {
+          camera.zoomTo(zoom, 750, 'Sine.easeInOut', true);
+          camera.pan(target.x, centerY, 750, 'Sine.easeInOut', true);
+        }
+        return;
+      }
+      resetActionCamera();
       camera.scrollX = Phaser.Math.Clamp(target.x - viewport.clientWidth / 2, 0, Math.max(0, camera.getBounds().width - viewport.clientWidth));
       camera.scrollY = viewport.scrollTop;
     }
@@ -1956,6 +1992,12 @@
   function moveActionActor(actor, points, duration, onComplete) {
     if (!scene || !actor || !points.length) return;
     actor.setPosition(points[0].x, points[0].y);
+    if (actionCamera && !trackedActionActor && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      trackedActionActor = actor;
+      const camera = scene.cameras.main;
+      camera.panEffect.reset();
+      camera.startFollow(actor, false, .08, .08, 0, -($('worldStory').offsetHeight + 45) / (2 * Math.max(1.25, camera.zoom)) + 15);
+    }
     const route = new Phaser.Curves.Path(points[0].x, points[0].y);
     for (const point of points.slice(1)) route.lineTo(point.x, point.y);
     const progress = { value: 0 };
@@ -1971,6 +2013,10 @@
         actor.setPosition(point.x, point.y);
       },
       onComplete: () => {
+        if (trackedActionActor === actor) {
+          scene.cameras.main.stopFollow();
+          trackedActionActor = null;
+        }
         if (actor.active && onComplete) onComplete(actor);
       },
     });
@@ -2031,7 +2077,7 @@
         depositVisibleSeeds(site, 5);
         scene.tweens.add({ targets: actor, alpha: 0, duration: 260, onComplete: () => actor.destroy(true) });
       });
-      return 2500;
+      return 3200;
     }
 
     if (kind === 'defense') {
@@ -2052,7 +2098,7 @@
     if (kind === 'queen') {
       const egg = scene.add.ellipse(site.x + 24, site.y + 13, 14, 10, 0xfff4d2, 1).setStrokeStyle(2, 0xd9b976, 1).setDepth(12).setScale(.2);
       scene.tweens.add({ targets: egg, scaleX: 1.25, scaleY: 1.25, duration: 700, yoyo: true, hold: 900, onComplete: () => egg.destroy() });
-      return 1800;
+      return 2800;
     }
 
     if (kind === 'soldiers') {
@@ -2072,7 +2118,7 @@
         const dirt = scene.add.circle(site.x + (index % 5 - 2) * 6, site.y, 3 + index % 3, index % 2 ? 0x8b5b35 : 0xc08a52, .95).setDepth(12);
         scene.tweens.add({ targets: dirt, x: dirt.x + (index % 2 ? 1 : -1) * (22 + index * 2), y: dirt.y - 16 - index % 5 * 6, alpha: 0, duration: 850 + index * 25, delay: 1050, ease: 'Cubic.easeOut', onComplete: () => dirt.destroy() });
       }
-      return 2500;
+      return 4000;
     }
     return 1400;
   }
@@ -2093,8 +2139,8 @@
       const baby = actionWorker(view, palette, { x: site.x + 20, y: site.y + 8 }, 24).setScale(.25).setAlpha(.2);
       scene.tweens.add({ targets: baby, scaleX: 1, scaleY: 1, alpha: 1, y: baby.y - 12, duration: 700, delay: 420, ease: 'Back.easeOut', onComplete: () => scene.time.delayedCall(650, () => { if (baby.active) baby.destroy(true); }) });
     } });
-    showAntSpeech(teamId, 'Queen Aurelia', 'Crack! A new worker is ready.', 'nursery', 3000);
-    return 2300;
+    showAntSpeech(teamId, 'Queen Aurelia', 'Crack! A new worker is ready.', 'nursery', 4300);
+    return 4300;
   }
 
   function stopWeather() {
@@ -2423,10 +2469,10 @@
 
   $('matchType').addEventListener('click', event => { const button = event.target.closest('[data-type]'); if (button) setMatchType(button.dataset.type); });
   $('worldViewport').addEventListener('scroll', () => {
-    if (scene && !raidPresentation) scene.cameras.main.scrollY = $('worldViewport').scrollTop;
+    if (scene && !raidPresentation && !actionCamera) scene.cameras.main.scrollY = $('worldViewport').scrollTop;
     $('worldDepth').textContent = `Depth ${Math.round($('worldViewport').scrollTop / 16)}`;
   }, { passive: true });
-  $('worldSurface').addEventListener('click', () => $('worldViewport').scrollTo({ top: 0, behavior: 'smooth' }));
+  $('worldSurface').addEventListener('click', () => { resetActionCamera(); $('worldViewport').scrollTo({ top: 0, behavior: 'smooth' }); });
   $('colonyViewPick').addEventListener('change', event => focusColony(event.target.value));
   $('teamCount').addEventListener('change', renderTeamEditor);
   $('worldStoryContinue').addEventListener('click', async () => {
