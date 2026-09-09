@@ -1,0 +1,7 @@
+[data-student-google][hidden]{display:none!important}
+.student-social-divider{display:flex;align-items:center;gap:10px;margin:18px 0 12px;color:#6b7280;font-size:12px}
+.student-social-divider::before,.student-social-divider::after{content:"";height:1px;background:#dde3ec;flex:1}
+.student-google-button{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:12px;border:1.5px solid #dde3ec;border-radius:8px;background:#fff;color:#1c2331;font:700 14px Arial,sans-serif;text-decoration:none}
+.student-google-button:hover{background:#f8fafc;border-color:#9aa6b5}
+.student-google-button svg{width:19px;height:19px;flex:none}
+.student-social-note{margin:7px 0 0;color:#6b7280;font-size:12px;line-height:1.4;text-align:center}

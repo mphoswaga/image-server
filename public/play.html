@@ -7,6 +7,7 @@
   <meta name="theme-color" content="#1f4e79" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/answer-runner.css?v=1" />
+  <link rel="stylesheet" href="/student-auth.css?v=1" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -166,6 +167,7 @@
         <div id="authErr" class="err"></div>
         <div id="forgotMsg" class="err" style="color:var(--ok, #1f9d55)"></div>
       </form>
+      <div data-student-google hidden></div>
     </div>
 
     <div id="summaryScreen" class="card" style="display:none">
@@ -939,6 +941,7 @@
 
     loadGame();
   </script>
+  <script src="/student-google.js?v=1"></script>
   <script src="/byte-feedback.js"></script>
 </body>
 </html>

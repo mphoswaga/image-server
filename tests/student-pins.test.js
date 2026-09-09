@@ -67,3 +67,37 @@ test('a rejected PIN format changes nothing', () => {
   assert.equal(sa.issuePin('S6', '12'), null, 'three digits is not a PIN');
   assert.equal(sa.revealPin('S6'), good, 'and the working one is left alone');
 });
+
+test('a verified Google identity links to an existing PIN account', () => {
+  sa.issuePin('S7', '2468');
+  const linked = sa.linkIdentity('S7', { provider: 'google', providerUserId: 'google-7', email: 'student@school.edu', name: 'Student Seven' });
+  assert.equal(linked.ok, true);
+  assert.equal(sa.findByIdentity('google', 'google-7').studentId, 'S7');
+  assert.deepEqual(sa.identitySummary('S7').map(item => [item.provider, item.email]), [['google', 'student@school.edu']]);
+});
+
+test('one Google identity cannot take over a second Student ID', () => {
+  sa.issuePin('S8', '2469');
+  sa.issuePin('S9', '2470');
+  assert.equal(sa.linkIdentity('S8', { provider: 'google', providerUserId: 'shared-google', email: 'one@school.edu' }).ok, true);
+  assert.equal(sa.linkIdentity('S9', { provider: 'google', providerUserId: 'shared-google', email: 'one@school.edu' }).code, 'identity_in_use');
+  assert.equal(sa.findByIdentity('google', 'shared-google').studentId, 'S8');
+});
+
+test('Google linking requires a PIN and can be revoked without deleting it', () => {
+  assert.equal(sa.linkIdentity('S10', { provider: 'google', providerUserId: 'google-10', email: 'ten@school.edu' }).code, 'pin_required');
+  sa.issuePin('S10', '2471');
+  sa.linkIdentity('S10', { provider: 'google', providerUserId: 'google-10', email: 'ten@school.edu' });
+  assert.equal(sa.unlinkProvider('S10', 'google'), 1);
+  assert.equal(sa.findByIdentity('google', 'google-10'), null);
+  assert.equal(sa.verifyPin('S10', '2471'), true);
+});
+
+test('teacher PIN replacement keeps the linked Google identity and learning account', () => {
+  sa.issuePin('S11', '2472');
+  sa.linkIdentity('S11', { provider: 'google', providerUserId: 'google-11', email: 'eleven@school.edu' });
+  sa.issuePin('S11', '2473');
+  assert.equal(sa.verifyPin('S11', '2472'), false);
+  assert.equal(sa.verifyPin('S11', '2473'), true);
+  assert.equal(sa.findByIdentity('google', 'google-11').studentId, 'S11');
+});

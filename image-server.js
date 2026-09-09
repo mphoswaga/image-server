@@ -106,9 +106,34 @@ function requireGameAccess(req, res, next) {
   if (gameTok) {
     try {
       const p = jwt.verify(gameTok, JWT_SECRET);
-      if (p.type === 'game') { req.gameSession = { studentId: p.studentId, gameId: p.gameId, name: p.name, rosterId: p.rosterId || null }; return next(); }
-      if (p.type === 'assignment') { req.gameSession = { studentId: p.studentId, assignmentId: p.assignmentId, name: p.name }; return next(); }
+      // A stale scoped cookie must not override the learner's general account
+      // when they open a different game after signing in with PIN or Google.
+      if (p.type === 'game' && p.gameId === req.params.id) {
+        req.gameSession = { studentId: p.studentId, gameId: p.gameId, name: p.name, rosterId: p.rosterId || null };
+        return next();
+      }
     } catch {}
+  }
+  // A learner who signed in through /start (including Google) has a general
+  // student cookie rather than a game-specific one. Recover the scoped game
+  // session here so direct game links work without asking for the PIN again.
+  const student = optionalStudentSession(req);
+  if (student && req.params && req.params.id) {
+    const game = games.getGame(req.params.id);
+    if (game) {
+      const assignedRosterIds = games.getRosterIds(game);
+      const match = assignedRosterIds.length ? studentInGameRosters(game, student.studentId) : null;
+      if (assignedRosterIds.length && !match) return res.status(403).json({ error: 'This game is not assigned to your class.' });
+      const recovered = {
+        studentId: student.studentId,
+        gameId: game.id,
+        name: match ? match.student.name : student.name,
+        rosterId: match ? match.rosterId : null,
+      };
+      req.gameSession = recovered;
+      res.cookie(GAME_COOKIE, issueGameToken(recovered), cookieOptions(30 * 24 * 60 * 60 * 1000));
+      return next();
+    }
   }
   res.status(401).json({ error: 'Not authenticated.' });
 }
@@ -122,8 +147,12 @@ function requireAssignmentAccess(req, res, next) {
   if (gameTok) {
     try {
       const p = jwt.verify(gameTok, JWT_SECRET);
-      if (p.type === 'assignment') { req.gameSession = { studentId: p.studentId, assignmentId: p.assignmentId, name: p.name }; return next(); }
-      if (p.type === 'game') { req.gameSession = { studentId: p.studentId, gameId: p.gameId, name: p.name, rosterId: p.rosterId || null }; return next(); }
+      // Ignore a cookie from another assignment. The general lc_student
+      // identity below can safely issue a new assignment-scoped session.
+      if (p.type === 'assignment' && p.assignmentId === req.params.id) {
+        req.gameSession = { studentId: p.studentId, assignmentId: p.assignmentId, name: p.name };
+        return next();
+      }
     } catch {}
   }
   const student = optionalStudentSession(req);
@@ -216,7 +245,7 @@ const generationLimiter = createRateLimiter({ name: 'generation', windowMs: 5 * 
 const uploadLimiter = createRateLimiter({ name: 'upload', windowMs: 5 * 60_000, max: Number(process.env.UPLOAD_RATE_LIMIT || 30) });
 
 app.use(['/api/signup', '/api/student/signup', '/api/login', '/api/password-reset/request', '/api/password-reset/confirm', '/api/webauthn/login/options', '/api/webauthn/login/verify'], authLimiter);
-app.use(['/api/student/login', '/api/student/join-room', '/api/student/pin/reset-request', '/api/practice/live-sessions/:code/join', '/api/assignment/:id/enter', '/api/assignment/:id/pin/reset-request', '/api/game/:id/enter', '/api/game/:id/pin/reset-request'], joinLimiter);
+app.use(['/api/student/login', '/api/student/google/link', '/api/student/join-room', '/api/student/pin/reset-request', '/api/practice/live-sessions/:code/join', '/api/assignment/:id/enter', '/api/assignment/:id/pin/reset-request', '/api/game/:id/enter', '/api/game/:id/pin/reset-request'], joinLimiter);
 app.use('/api/practice/live-sessions/:code/checkpoints', checkpointLimiter);
 app.use(['/api/assistant', '/api/lesson-plan', '/api/generate', '/api/pack', '/api/slide'], generationLimiter);
 app.use(['/api/templates', '/api/planning-frameworks', '/api/units', '/api/planning-sources', '/api/source-materials', '/api/import', '/api/game/from-pptx', '/api/roster/preview'], uploadLimiter);
@@ -569,8 +598,46 @@ app.get('/api/auth/providers', (req, res) => {
   res.json({ providers: socialAuth.enabledProviders() });
 });
 
+// Student accounts remain separate from teacher/EducScope accounts. Google is
+// offered as an optional way into an existing Student ID account; the first
+// sign-in is linked only after the learner proves the account's PIN.
+app.get('/api/student/auth/providers', (req, res) => {
+  const providers = socialAuth.enabledProviders().filter(provider => provider.id === 'google');
+  res.json({ providers });
+});
+
 const OAUTH_STATE_COOKIE = 'lc_social_state';
+const STUDENT_SOCIAL_LINK_COOKIE = 'lc_student_social_link';
 const socialRedirectUri = (req, provider) => `${originFor(req)}/auth/${provider}/callback`;
+function safeLocalReturn(value, fallback = '/start') {
+  const candidate = String(value || '');
+  if (!candidate.startsWith('/') || candidate.startsWith('//') || /[\\\r\n]/.test(candidate)) return fallback;
+  try {
+    const parsed = new URL(candidate, 'http://lessonscope.local');
+    if (parsed.origin !== 'http://lessonscope.local') return fallback;
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch { return fallback; }
+}
+function encodeSocialIntent(intent) {
+  return Buffer.from(JSON.stringify(intent)).toString('base64url');
+}
+function decodeSocialIntent(value) {
+  try {
+    const parsed = JSON.parse(Buffer.from(String(value || ''), 'base64url').toString('utf8'));
+    return parsed && parsed.provider && parsed.state ? parsed : null;
+  } catch {
+    const [provider, state] = String(value || '').split(':');
+    return provider && state ? { provider, state, audience: 'teacher', returnTo: '/' } : null;
+  }
+}
+function pendingStudentSocial(req) {
+  const token = req.cookies && req.cookies[STUDENT_SOCIAL_LINK_COOKIE];
+  if (!token) return null;
+  try {
+    const pending = jwt.verify(token, JWT_SECRET);
+    return pending.type === 'student-social-link' ? pending : null;
+  } catch { return null; }
+}
 const DRIVE_STATE_COOKIE = 'lc_drive_state';
 const DRIVE_RETURN_COOKIE = 'lc_drive_return';
 function publicOriginFor(req) {
@@ -643,29 +710,58 @@ app.post('/api/google-drive/disconnect', requireAuth, (req, res) => {
 
 // Start sign-in: set a short-lived CSRF-state cookie and bounce to the provider.
 app.get('/auth/:provider', (req, res) => {
-  if (educscopeOnlyAuthEnabled()) return res.redirect(educscope.loginUrl() || '/');
   const provider = req.params.provider;
-  if (!socialAuth.isEnabled(provider)) return res.redirect('/?authError=' + encodeURIComponent('That sign-in method is not available.'));
+  const audience = req.query.student === '1' ? 'student' : 'teacher';
+  if (audience === 'teacher' && educscopeOnlyAuthEnabled()) return res.redirect(educscope.loginUrl() || '/');
+  const failurePath = audience === 'student' ? '/start?googleError=' : '/?authError=';
+  if (audience === 'student' && provider !== 'google') return res.redirect(failurePath + encodeURIComponent('Students can use Google sign-in.'));
+  if (!socialAuth.isEnabled(provider)) return res.redirect(failurePath + encodeURIComponent('That sign-in method is not available.'));
   const state = socialAuth.randomState();
-  res.cookie(OAUTH_STATE_COOKIE, `${provider}:${state}`, cookieOptions(10 * 60 * 1000));
+  const returnTo = safeLocalReturn(req.query.next, audience === 'student' ? '/start' : '/');
+  if (audience === 'student') res.clearCookie(STUDENT_SOCIAL_LINK_COOKIE);
+  res.cookie(OAUTH_STATE_COOKIE, encodeSocialIntent({ provider, state, audience, returnTo }), cookieOptions(10 * 60 * 1000));
   res.redirect(socialAuth.buildAuthUrl(provider, { redirectUri: socialRedirectUri(req, provider), state }));
 });
 
 // Provider redirects back here with ?code&state. Verify state, exchange the
 // code, find-or-create the teacher, set the session, and land them in the app.
 app.get('/auth/:provider/callback', async (req, res) => {
-  if (educscopeOnlyAuthEnabled()) return res.redirect(educscope.loginUrl() || '/');
   const provider = req.params.provider;
-  const fail = msg => res.redirect('/?authError=' + encodeURIComponent(msg));
+  const intent = decodeSocialIntent(req.cookies && req.cookies[OAUTH_STATE_COOKIE]);
+  const studentIntent = intent && intent.audience === 'student';
+  const fail = msg => {
+    if (studentIntent) res.clearCookie(STUDENT_SOCIAL_LINK_COOKIE);
+    return res.redirect((studentIntent ? '/start?googleError=' : '/?authError=') + encodeURIComponent(msg));
+  };
+  res.clearCookie(OAUTH_STATE_COOKIE);
   try {
     if (req.query.error) return fail(`${provider} sign-in was cancelled.`);
-    const cookie = req.cookies && req.cookies[OAUTH_STATE_COOKIE];
-    res.clearCookie(OAUTH_STATE_COOKIE);
-    if (!cookie || cookie !== `${provider}:${req.query.state}`) return fail('Sign-in session expired — please try again.');
+    if (!intent || intent.provider !== provider || intent.state !== req.query.state) return fail('Sign-in session expired — please try again.');
+    if (!studentIntent && educscopeOnlyAuthEnabled()) return res.redirect(educscope.loginUrl() || '/');
     if (!socialAuth.isEnabled(provider)) return fail('That sign-in method is not available.');
     if (!req.query.code) return fail('No authorization code returned.');
 
     const profile = await socialAuth.fetchProfile(provider, { code: req.query.code, redirectUri: socialRedirectUri(req, provider) });
+    if (studentIntent) {
+      if (provider !== 'google' || !profile.emailVerified) return fail('Use a verified school Google account.');
+      const linked = studentAccount.findByIdentity(provider, profile.providerUserId);
+      if (linked) {
+        const matches = roster.findStudentAcrossAllTeachers(linked.studentId);
+        if (!matches.length) return fail('This Student ID is not in a current class. Ask your teacher for help.');
+        const displayName = matches[0].name || linked.studentId;
+        res.cookie(STUDENT_COOKIE, issueStudentToken(linked.studentId, displayName), cookieOptions(30 * 24 * 60 * 60 * 1000));
+        res.clearCookie(STUDENT_SOCIAL_LINK_COOKIE);
+        audit.log('student.social_login', { provider, studentId: linked.studentId, email: profile.email, ip: req.ip });
+        return res.redirect(safeLocalReturn(intent.returnTo));
+      }
+      const linkToken = jwt.sign({
+        type: 'student-social-link', provider, providerUserId: profile.providerUserId,
+        email: profile.email, name: profile.name, returnTo: safeLocalReturn(intent.returnTo),
+      }, JWT_SECRET, { expiresIn: '10m' });
+      res.cookie(STUDENT_SOCIAL_LINK_COOKIE, linkToken, cookieOptions(10 * 60 * 1000));
+      const next = safeLocalReturn(intent.returnTo);
+      return res.redirect(`/start?google=link${next !== '/start' ? `&next=${encodeURIComponent(next)}` : ''}`);
+    }
     const user = await findOrCreateSocialUser(profile);
     setSession(res, user.id);
     audit.log('social.login', { provider, userId: user.id, email: user.email, ip: req.ip });
@@ -2167,6 +2263,42 @@ app.post('/api/student/login', (req, res) => {
 
   res.cookie(STUDENT_COOKIE, issueStudentToken(studentId, displayName), cookieOptions(30 * 24 * 60 * 60 * 1000));
   res.json({ name: displayName });
+});
+
+app.get('/api/student/google/pending', (req, res) => {
+  const pending = pendingStudentSocial(req);
+  if (!pending || pending.provider !== 'google') return res.status(404).json({ error: 'Google sign-in has expired. Try again.' });
+  res.json({ provider: 'google', email: pending.email, name: pending.name || '' });
+});
+
+// First Google use: prove the existing learner account once with Student ID
+// and PIN, then attach the verified provider identity to that same record.
+app.post('/api/student/google/link', (req, res) => {
+  const pending = pendingStudentSocial(req);
+  if (!pending || pending.provider !== 'google') return res.status(401).json({ error: 'Google sign-in has expired. Try again.' });
+  const studentId = roster.normalizeStudentId(req.body && req.body.studentId);
+  if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
+  const matches = roster.findStudentAcrossAllTeachers(studentId);
+  if (!matches.length) return res.status(404).json({ error: 'Student ID not found. Check with your teacher.' });
+  if (studentAccount.getAccountState(studentId) === 'unset') {
+    return res.status(428).json({ teacherPinRequired: true, error: 'Ask your teacher to give you a PIN first. Then connect Google again.' });
+  }
+  const pin = String(req.body && req.body.pin || '').trim();
+  if (!pin) return res.status(428).json({ needsPin: true, error: 'Enter your current PIN to connect Google.' });
+  if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
+  if (!studentAccount.verifyPin(studentId, pin)) return res.status(403).json({ error: 'Incorrect PIN.' });
+  const linked = studentAccount.linkIdentity(studentId, pending);
+  if (!linked.ok) {
+    const message = linked.code === 'identity_in_use'
+      ? 'This Google account is already connected to another learner. Ask your teacher for help.'
+      : 'Google could not be connected. Try again.';
+    return res.status(409).json({ error: message });
+  }
+  const displayName = matches[0].name || studentId;
+  res.cookie(STUDENT_COOKIE, issueStudentToken(studentId, displayName), cookieOptions(30 * 24 * 60 * 60 * 1000));
+  res.clearCookie(STUDENT_SOCIAL_LINK_COOKIE);
+  audit.log('student.social_link', { provider: 'google', studentId, email: pending.email, ip: req.ip });
+  res.json({ ok: true, name: displayName, path: safeLocalReturn(pending.returnTo) });
 });
 
 app.post('/api/student/pin/reset-request', (req, res) => {
@@ -4049,6 +4181,7 @@ app.get('/api/roster/:id', requireAuth, (req, res) => {
       pinState: studentAccount.getAccountState(s.id),
       pin: studentAccount.revealPin(s.id),
       pinResetRequested: studentAccount.getResetRequest(s.id),
+      identities: studentAccount.identitySummary(s.id),
     })),
   });
 });
@@ -4065,12 +4198,12 @@ app.post('/api/roster/:rosterId/pins', requireAuth, (req, res) => {
   const all = !!(req.body && req.body.all);
   const issued = [];
   for (const student of r.students || []) {
-    // "Has a PIN" is not the question — "do I have their PIN" is. A student who
-    // set their own is invisible to the teacher, so leaving them out would mean
-    // the class list is incomplete exactly where it matters. Issuing replaces it,
-    // which is the point: the teacher is the authority for these codes now.
+    // The normal bulk action fills genuinely missing PINs and never surprises
+    // learners by replacing codes they already use. "Replace all" is explicit
+    // and is useful when a class list has been lost or compromised.
     const readable = studentAccount.revealPin(student.id);
-    if (readable && !all) {
+    const pinState = studentAccount.getAccountState(student.id);
+    if (pinState === 'set' && !all) {
       issued.push({ id: student.id, name: student.name, pin: readable, changed: false });
       continue;
     }
@@ -4087,10 +4220,24 @@ app.post('/api/roster/:rosterId/student/:studentId/pin', requireAuth, (req, res)
   const studentId = roster.normalizeStudentId(req.params.studentId);
   const student = roster.findStudentInRoster(req.userId, req.params.rosterId, studentId);
   if (!student) return res.status(404).json({ error: 'Student not found in this roster.' });
-  const pin = studentAccount.issuePin(studentId);
+  const requestedPin = req.body && req.body.pin != null ? String(req.body.pin).trim() : undefined;
+  if (requestedPin !== undefined && !/^\d{4}$/.test(requestedPin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
+  const pin = studentAccount.issuePin(studentId, requestedPin);
   if (!pin) return res.status(500).json({ error: 'Could not set a PIN. Try again.' });
   audit.log('roster.pin_reset', { userId: req.userId, rosterId: req.params.rosterId, studentId, ip: req.ip });
   res.json({ id: studentId, name: student.name, pin });
+});
+
+// A teacher can revoke Google access for a child in their own roster without
+// touching the PIN or deleting any learning history.
+app.delete('/api/roster/:rosterId/student/:studentId/google', requireAuth, (req, res) => {
+  const studentId = roster.normalizeStudentId(req.params.studentId);
+  const student = roster.findStudentInRoster(req.userId, req.params.rosterId, studentId);
+  if (!student) return res.status(404).json({ error: 'Student not found in this roster.' });
+  const removed = studentAccount.unlinkProvider(studentId, 'google');
+  if (!removed) return res.status(404).json({ error: 'No Google account is connected.' });
+  audit.log('student.social_unlink', { userId: req.userId, rosterId: req.params.rosterId, studentId, provider: 'google', ip: req.ip });
+  res.json({ ok: true });
 });
 
 // Teacher: approve a student's PIN reset request — clears the PIN so their

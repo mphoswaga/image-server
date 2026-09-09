@@ -48,6 +48,7 @@
   .name-grid button.is-picked { border-color:#16a34a; background:#ecfdf5; }
 </style>
   <link rel="stylesheet" href="/byte-feedback.css" />
+  <link rel="stylesheet" href="/student-auth.css?v=1" />
 </head>
 <body data-byte-ui="student">
   <div class="wrap">
@@ -83,6 +84,7 @@
         <div class="err" id="authErr"></div>
         <div class="err" id="forgotMsg" style="color:var(--ok)"></div>
       </form>
+      <div data-student-google hidden></div>
     </div>
 
     <div id="form" style="display:none">
@@ -368,6 +370,7 @@
 
     init();
   </script>
+  <script src="/student-google.js?v=1"></script>
   <script src="/byte-feedback.js"></script>
 </body>
 </html>

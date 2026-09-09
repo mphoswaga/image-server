@@ -7494,8 +7494,9 @@
             }
           });
 
-          const pinsBtn=document.createElement('button'); pinsBtn.className='btn-progress'; pinsBtn.innerHTML=ICON('i-lock')+' PINs';
+          const pinsBtn=document.createElement('button'); pinsBtn.className='btn-progress'; pinsBtn.innerHTML=ICON('i-lock')+' Student access';
           const pinsPanel=document.createElement('div'); pinsPanel.className='roster-pins-panel'; pinsPanel.style.cssText='display:none;width:100%;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)';
+          pinsPanel.dataset.pinPanel='true';
           pinsBtn.addEventListener('click',()=>{
             const opening=pinsPanel.style.display==='none';
             pinsPanel.style.display=opening?'block':'none';
@@ -7517,14 +7518,14 @@
         const d=await (await fetch('/api/roster/'+rosterId)).json();
         if(!d.students||!d.students.length){ panel.innerHTML='<p class="hint">No students in this roster.</p>'; return; }
         const pending=d.students.filter(s=>s.pinResetRequested).length;
-        // The ones the teacher has no code for — including any the student
-        // chose themselves, which the teacher cannot read.
-        const missing=d.students.filter(s=>!s.pin).length;
+        // Create PINs only for learners who do not yet have an active PIN.
+        const missing=d.students.filter(s=>s.pinState!=='set').length;
         rosterPins[rosterId]=d.students;
         const header=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">`
-          +`<button type="button" class="pin-issue-btn" data-roster-id="${esc(rosterId)}" style="font-size:12px;font-weight:700;padding:6px 12px;border:0;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer">${missing?`Give PINs to ${missing} student${missing!==1?'s':''}`:'All students have a PIN'}</button>`
+          +`<button type="button" class="pin-issue-btn" data-roster-id="${esc(rosterId)}" data-all="false" ${missing?'':'disabled'} style="font-size:12px;font-weight:700;padding:6px 12px;border:0;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer;opacity:${missing?'1':'.55'}">${missing?`Create ${missing} missing PIN${missing!==1?'s':''}`:'No missing PINs'}</button>`
+          +`<button type="button" class="pin-issue-btn" data-roster-id="${esc(rosterId)}" data-all="true" style="font-size:12px;font-weight:600;padding:6px 12px;border:1px solid #d39a41;border-radius:8px;background:#fff8ea;color:#8b5808;cursor:pointer">Replace all PINs</button>`
           +`<button type="button" class="pin-print-btn" data-roster-id="${esc(rosterId)}" style="font-size:12px;font-weight:600;padding:6px 12px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer">Print the list</button>`
-          +`<span class="hint" style="margin:0">Keep this list. A child who forgets theirs just needs a new one.</span>`
+          +`<span class="hint" style="margin:0">PIN login stays available even when Google is connected.</span>`
           +`</div>`;
         panel.innerHTML=header+(pending?`<p class="hint" style="color:#b26a00;font-weight:600;margin-bottom:8px">${pending} student${pending!==1?'s':''} requested a PIN reset</p>`:'')
           +d.students.map(s=>{
@@ -7534,15 +7535,20 @@
               ? `<code style="font-size:15px;font-weight:800;letter-spacing:2px;background:#f1f5f9;padding:3px 9px;border-radius:7px">${esc(s.pin)}</code>`
               : (s.pinState==='set' ? '<span style="font-size:11.5px;color:var(--muted)">student\u2019s own</span>' : '');
             const newBtn=`<button type="button" class="pin-new-btn" data-roster-id="${esc(rosterId)}" data-student-id="${esc(s.id)}" style="font-size:11.5px;font-weight:600;padding:3px 10px;border:1px solid var(--border);border-radius:7px;background:#fff;cursor:pointer">New PIN</button>`;
+            const setPin=`<label style="display:flex;align-items:center;gap:5px"><input class="pin-custom-input" type="text" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" placeholder="4 digits" aria-label="Set PIN for ${esc(s.name)}" style="width:76px;padding:4px 7px;border:1px solid var(--border);border-radius:7px;font:600 12px ui-monospace,monospace"><button type="button" class="pin-set-btn" data-roster-id="${esc(rosterId)}" data-student-id="${esc(s.id)}" style="font-size:11.5px;font-weight:600;padding:3px 9px;border:1px solid var(--border);border-radius:7px;background:#fff;cursor:pointer">Set</button></label>`;
             const setBadge=s.pinState==='set'
               ? '<span style="font-size:11.5px;color:var(--ok,#1f9d55);font-weight:600">PIN set</span>'
               : '<span style="font-size:11.5px;color:var(--muted)">No PIN yet</span>';
+            const google=(s.identities||[]).find(identity=>identity.provider==='google');
+            const googleState=google
+              ? `<span title="${esc(google.email||'Google connected')}" style="font-size:11.5px;color:#1769aa;font-weight:700">Google connected</span><button type="button" class="google-unlink-btn" data-roster-id="${esc(rosterId)}" data-student-id="${esc(s.id)}" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:7px;background:#fff;color:var(--muted);cursor:pointer">Disconnect</button>`
+              : '<span style="font-size:11px;color:var(--muted)">Google not connected</span>';
             const resetRow=s.pinResetRequested
               ? `<button type="button" class="pin-clear-btn" data-roster-id="${esc(rosterId)}" data-student-id="${esc(s.id)}" style="font-size:11.5px;font-weight:600;padding:3px 10px;border:1px solid #f0c674;border-radius:7px;background:#fff8ea;color:#b26a00;cursor:pointer">Reset requested — clear PIN</button>`
               : '';
-            return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--border)">
-              <div><span style="font-size:13px;font-weight:600">${esc(s.name)}</span> <span style="font-size:12px;color:var(--muted)">${esc(s.id)}</span></div>
-              <div style="display:flex;align-items:center;gap:8px">${code}${code?'':setBadge}${newBtn}${resetRow}</div>
+            return `<div class="pin-student-row" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:9px 0;border-top:1px solid var(--border)">
+              <div><span style="font-size:13px;font-weight:600">${esc(s.name)}</span> <span style="font-size:12px;color:var(--muted)">${esc(s.id)}</span><div style="display:flex;gap:7px;align-items:center;margin-top:4px">${googleState}</div></div>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${code}${code?'':setBadge}${setPin}${newBtn}${resetRow}</div>
             </div>`;
           }).join('');
       }catch{ panel.innerHTML='<p class="hint err">Could not load PIN status.</p>'; }
@@ -7575,9 +7581,11 @@
       const issueBtn=e.target.closest('.pin-issue-btn');
       if(issueBtn){
         const rosterId=issueBtn.dataset.rosterId;
+        const replaceAll=issueBtn.dataset.all==='true';
+        if(replaceAll&&!confirm('Replace every learner PIN in this class? Their old PINs will stop working immediately.')) return;
         issueBtn.disabled=true; const o=issueBtn.textContent; issueBtn.textContent='Creating…';
         try{
-          const r=await fetch('/api/roster/'+rosterId+'/pins',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+          const r=await fetch('/api/roster/'+rosterId+'/pins',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({all:replaceAll})});
           const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not create PINs.');
           const made=d.students.filter(x=>x.changed).length;
           toast(made?`${made} PIN${made!==1?'s':''} created. Print the list and hand them out.`:'Everyone already had a PIN.','ok');
@@ -7601,6 +7609,34 @@
         }catch(err){ toast(err.message); newBtn.disabled=false; newBtn.textContent='New PIN'; }
         return;
       }
+      const setBtn=e.target.closest('.pin-set-btn');
+      if(setBtn){
+        const {rosterId,studentId}=setBtn.dataset;
+        const input=setBtn.closest('label').querySelector('.pin-custom-input');
+        const pin=input.value.trim();
+        if(!/^\d{4}$/.test(pin)){ toast('Enter exactly four digits.'); input.focus(); return; }
+        setBtn.disabled=true;
+        try{
+          const r=await fetch(`/api/roster/${rosterId}/student/${encodeURIComponent(studentId)}/pin`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin})});
+          const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not set the PIN.');
+          toast(`${d.name}: PIN updated`,'ok');
+          loadRosterPins(rosterId,setBtn.closest('.roster-pins-panel'));
+        }catch(err){ toast(err.message); setBtn.disabled=false; }
+        return;
+      }
+      const unlinkBtn=e.target.closest('.google-unlink-btn');
+      if(unlinkBtn){
+        const {rosterId,studentId}=unlinkBtn.dataset;
+        if(!confirm('Disconnect Google for this learner? Their PIN and all results will stay unchanged.')) return;
+        unlinkBtn.disabled=true;
+        try{
+          const r=await fetch(`/api/roster/${rosterId}/student/${encodeURIComponent(studentId)}/google`,{method:'DELETE'});
+          const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not disconnect Google.');
+          toast('Google disconnected. The learner can still use their PIN.','ok');
+          loadRosterPins(rosterId,unlinkBtn.closest('.roster-pins-panel'));
+        }catch(err){ toast(err.message); unlinkBtn.disabled=false; }
+        return;
+      }
       const clearBtn=e.target.closest('.pin-clear-btn');
       if(!clearBtn) return;
       const {rosterId,studentId}=clearBtn.dataset;
@@ -7611,6 +7647,16 @@
         toast('PIN cleared — student can set a new one next time they join','ok');
         loadRosterPins(rosterId, clearBtn.closest('.roster-pins-panel'));
       }catch(err){ toast(err.message); clearBtn.disabled=false; }
+    });
+
+    document.addEventListener('input',e=>{
+      if(e.target.matches('.pin-custom-input')) e.target.value=e.target.value.replace(/\D/g,'').slice(0,4);
+    });
+    document.addEventListener('keydown',e=>{
+      if(e.key==='Enter'&&e.target.matches('.pin-custom-input')){
+        e.preventDefault();
+        e.target.closest('label').querySelector('.pin-set-btn').click();
+      }
     });
 
     // ---- Student progress panel ----

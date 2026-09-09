@@ -132,6 +132,77 @@ function verifyPin(studentId, pin) {
   return bcrypt.compareSync(String(pin || ''), acc.pinHash);
 }
 
+function identityKey(provider, providerUserId) {
+  const source = String(provider || '').trim().toLowerCase();
+  const subject = String(providerUserId || '').trim();
+  return source && subject ? `${source}:${subject}` : '';
+}
+
+// Social identities are attached to the existing Student ID account. They do
+// not create a second learner record, so assignments, games and practice all
+// continue to use the same studentId after a Google sign-in.
+function findByIdentity(provider, providerUserId) {
+  const key = identityKey(provider, providerUserId);
+  if (!key) return null;
+  for (const [studentId, account] of Object.entries(loadAccounts())) {
+    const identity = account && account.identities && account.identities[key];
+    if (identity) return { studentId, ...identity };
+  }
+  return null;
+}
+
+function linkIdentity(studentId, { provider, providerUserId, email, name } = {}) {
+  const id = normalizeStudentId(studentId);
+  const key = identityKey(provider, providerUserId);
+  const mail = String(email || '').trim().toLowerCase();
+  if (!id || !key || !mail) return { ok: false, code: 'invalid_identity' };
+  const existing = findByIdentity(provider, providerUserId);
+  if (existing && existing.studentId !== id) return { ok: false, code: 'identity_in_use' };
+
+  const accounts = loadAccounts();
+  const account = accounts[id];
+  // A Google account may only be linked after the learner has proved control
+  // of the existing PIN. The route verifies it; this guard prevents accidental
+  // links from any future caller that forgets that requirement.
+  if (!account || !account.pinHash) return { ok: false, code: 'pin_required' };
+  account.identities = account.identities || {};
+  account.identities[key] = {
+    provider: String(provider).toLowerCase(),
+    email: mail,
+    name: String(name || '').trim().slice(0, 120),
+    linkedAt: existing && existing.linkedAt || new Date().toISOString(),
+  };
+  accounts[id] = account;
+  saveAccounts(accounts);
+  return { ok: true, studentId: id };
+}
+
+function identitySummary(studentId) {
+  const account = loadAccounts()[normalizeStudentId(studentId)];
+  return Object.values(account && account.identities || {}).map(identity => ({
+    provider: identity.provider,
+    email: identity.email,
+    linkedAt: identity.linkedAt,
+  }));
+}
+
+function unlinkProvider(studentId, provider) {
+  const id = normalizeStudentId(studentId);
+  const source = String(provider || '').trim().toLowerCase();
+  const accounts = loadAccounts();
+  const account = accounts[id];
+  if (!account || !account.identities || !source) return 0;
+  let removed = 0;
+  for (const key of Object.keys(account.identities)) {
+    if (key.startsWith(`${source}:`)) { delete account.identities[key]; removed += 1; }
+  }
+  if (removed) {
+    if (!Object.keys(account.identities).length) delete account.identities;
+    saveAccounts(accounts);
+  }
+  return removed;
+}
+
 // Student-initiated — just flags the account for a teacher to see. Doesn't
 // touch pinHash by itself (a bare reset *request* needs no proof of
 // identity, so it must not unlock anything on its own).
@@ -162,4 +233,4 @@ function getResetRequest(studentId) {
   return (acc && acc.pinResetRequested) || null;
 }
 
-module.exports = { getAccountState, setPin, verifyPin, requestPinReset, approvePinReset, getResetRequest, issuePin, revealPin, generatePin };
+module.exports = { getAccountState, setPin, verifyPin, requestPinReset, approvePinReset, getResetRequest, issuePin, revealPin, generatePin, findByIdentity, linkIdentity, identitySummary, unlinkProvider };
