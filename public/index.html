@@ -7217,6 +7217,7 @@
                 : `<a class="btn accent" href="/fishquest/${esc(g.id)}" style="font-size:12px;padding:7px 12px;width:auto;text-decoration:none">${fish?'Open FishQuest control room':'Start FishQuest live'}</a><a class="btn ghost" href="${esc(studentUrl)}" style="font-size:12px;padding:7px 12px;width:auto;text-decoration:none">Preview learner games</a>`}
               <button type="button" class="btn ghost gc-class-btn" data-id="${esc(g.id)}" data-row="${classRowId}" style="font-size:12px;padding:6px 12px;width:auto">Manage classes</button>
               ${colony?'':`<button type="button" class="btn ghost gc-extend-btn" data-id="${esc(g.id)}" data-row="${extRowId}" style="font-size:12px;padding:6px 12px;width:auto">Extend deadline</button>`}
+              <button type="button" class="btn ghost gc-results-btn" data-id="${esc(g.id)}" data-row="res-${esc(g.id)}" style="font-size:12px;padding:6px 12px;width:auto">View results</button>
             </div>
             <div class="gc-class-row" id="${classRowId}">
               <div class="class-picker" role="group" aria-label="Classes assigned to ${esc(g.lessonTitle)}">${classChoices}</div>
@@ -7227,13 +7228,19 @@
               <button type="button" class="gc-extend-save" data-id="${esc(g.id)}" data-row="${extRowId}">Save</button>
               <button type="button" class="gc-extend-cancel" data-row="${extRowId}">Cancel</button>
             </div>`}
-            <div id="res-${g.id}" style="margin-top:10px"></div>
+            <div id="res-${g.id}" style="display:none;margin-top:10px"></div>
           </div>
         </div>`;
       }).join('');
       wrap.innerHTML=html;
-      games.forEach(g=>loadGameResults(g.id,'res-'+g.id));
       wrap.querySelectorAll('.gcopy').forEach(b=>b.addEventListener('click',()=>copyLink(b.dataset.url)));
+      wrap.querySelectorAll('.gc-results-btn').forEach(b=>b.addEventListener('click',async()=>{
+        const row=document.getElementById(b.dataset.row);
+        const opening=row.style.display==='none';
+        row.style.display=opening?'block':'none';
+        b.textContent=opening?'Hide results':'View results';
+        if(opening&&!row.dataset.loaded){row.innerHTML='<span class="status">Loading...</span>';await loadGameResults(b.dataset.id,b.dataset.row);row.dataset.loaded='true';}
+      }));
       wrap.querySelectorAll('.gc-class-btn').forEach(b=>b.addEventListener('click',()=>{
         const row=document.getElementById(b.dataset.row);
         row.style.display=row.style.display==='block'?'none':'block';

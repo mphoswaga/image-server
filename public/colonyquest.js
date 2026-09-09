@@ -694,7 +694,7 @@
         const eligibility = core.raidAvailability(team, item, session);
         const forecast = core.raidForecast(team, item);
         const comparison = `${forecast.attackers} attacking guards vs ${forecast.defenders} home guards. Rooms and walls add ${forecast.supportBonus || 0} defense power`;
-        return `<button type="button" data-target="${esc(item.id)}"${!eligibility.allowed ? ' disabled' : ''}>${esc(item.name)}<small>${esc(core.TEAM_COLORS[item.colorIndex].name)} ants · ${item.food} food · ${item.soldiers} guards · ${esc(core.fortification(item).name)} walls</small><small>${!eligibility.allowed ? esc(eligibility.reason) : `${esc(comparison)}. ${forecast.success ? 'Your group is favoured.' : 'Your group is likely to lose guards.'}`}</small></button>`;
+        return `<button type="button" data-target="${esc(item.id)}"${!eligibility.allowed ? ' disabled' : ''}>${esc(item.name)}<small>${esc(core.TEAM_COLORS[item.colorIndex].name)} ants · ${item.food} food · ${item.soldiers} guards · ${esc(core.fortification(item).name)} walls</small><small>${!eligibility.allowed ? esc(eligibility.reason) : `${esc(comparison)}. ${forecast.success ? 'Your group is favoured.' : 'Some guards may need to rest afterward.'}`}</small></button>`;
       }).join('');
       setOverlay('targetOverlay');
       updateWorld();
@@ -802,8 +802,8 @@
     const resolved = phase === 'result' || phase === 'returning';
     $('raidAttacker').textContent = attacker.name;
     $('raidDefender').textContent = defender.name;
-    $('raidAttackCount').textContent = `${resolved ? attacker.soldiers : event.attackers} guards${resolved && event.attackerLosses ? ` · ${event.attackerLosses} lost` : ''}`;
-    $('raidDefenseCount').textContent = `${resolved ? defender.soldiers : event.defenders} guards${resolved && event.defenderLosses ? ` · ${event.defenderLosses} lost` : ''}`;
+    $('raidAttackCount').textContent = `${resolved ? attacker.soldiers : event.attackers} guards${resolved && event.attackerLosses ? ` · ${event.attackerLosses} resting` : ''}`;
+    $('raidDefenseCount').textContent = `${resolved ? defender.soldiers : event.defenders} guards${resolved && event.defenderLosses ? ` · ${event.defenderLosses} resting` : ''}`;
     $('raidPhase').textContent = phase === 'outbound' ? 'Marching' : phase === 'at-nest' ? 'Battle!' : event.success ? 'Raid won' : 'Raid stopped';
     $('raidPower').textContent = `${event.attack} power vs ${event.guard} defense`;
     document.querySelector('.raid-side.attacking').style.setProperty('--raid-color', attackColor);
@@ -823,10 +823,10 @@
   }
 
   function raidLossLine(event) {
-    const losses = [];
-    if (event.attackerLosses) losses.push(`${event.attackerLosses} attacking ${event.attackerLosses === 1 ? 'guard leaves' : 'guards leave'} the battle`);
-    if (event.defenderLosses) losses.push(`${event.defenderLosses} defending ${event.defenderLosses === 1 ? 'guard leaves' : 'guards leave'} the battle`);
-    return losses.length ? `${losses.join(' and ')}.` : 'Every guard returns safely.';
+    const resting = [];
+    if (event.attackerLosses) resting.push(`${event.attackerLosses} attacking ${event.attackerLosses === 1 ? 'guard returns' : 'guards return'} inside to rest and work`);
+    if (event.defenderLosses) resting.push(`${event.defenderLosses} defending ${event.defenderLosses === 1 ? 'guard returns' : 'guards return'} inside to rest and work`);
+    return resting.length ? `${resting.join(' and ')}.` : 'Every guard returns safely.';
   }
 
   function showRaidStory(event, animate = false) {
@@ -907,9 +907,7 @@
             const lunge = Math.sin(battleProgress * Math.PI * 10 + index) * 8;
             ant.setPosition(meeting.x + side * (20 + (index % 3) * 11) - side * lunge, meeting.y + (index % 3 - 1) * 12);
             ant.sprite.setFlipX(side > 0);
-            if (lost && battleProgress > .58) ant.setAlpha(Math.max(.12, 1 - (battleProgress - .58) * 2.5)).setAngle(side * -70);
-          } else if (phase === 'returning' && lost) {
-            ant.setVisible(false);
+            if (lost && battleProgress > .58) ant.setAlpha(1).setAngle(0);
           } else {
             const t = Phaser.Math.Clamp(distance - index * .014, 0, 1);
             const point = route.getPoint(t), ahead = route.getPoint(Math.min(1, t + .01));
@@ -925,8 +923,7 @@
           const lunge = phase === 'at-nest' ? Math.sin(battleProgress * Math.PI * 10 + index + 1) * 7 : 0;
           ant.setPosition(meeting.x + side * (22 + (index % 3) * 11) - side * lunge, meeting.y + (index % 3 - 1) * 12);
           ant.sprite.setFlipX(side < 0);
-          if (lost && phase !== 'outbound' && battleProgress > .58) ant.setAlpha(Math.max(.12, 1 - (battleProgress - .58) * 2.5)).setAngle(side * 70);
-          if (phase === 'returning' && lost) ant.setVisible(false);
+          if (lost && phase !== 'outbound' && battleProgress > .58) ant.setAlpha(1).setAngle(0);
         }
         const lead = attackActors.find(actor => actor.visible) || attackActors[0];
         camera.setZoom(phase === 'at-nest' ? 2.15 : phase === 'outbound' ? 1.55 + distance * .35 : 1.7);
@@ -1230,7 +1227,7 @@
       const accuracy = entry.team.attempts ? Math.round(entry.team.correct / entry.team.attempts * 100) : 0;
       const tiedFirst = isTie && tiedWinners.some(item => item.team.id === entry.team.id);
       const place = tiedFirst ? 'Winner' : index === 0 ? 'Winner' : `Place ${index + 1}`;
-      return `<div class="podium-place${index === 0 || tiedFirst ? ' first' : ''}" style="--team-color:${colorHex(core.TEAM_COLORS[entry.team.colorIndex].primary)}"><b>${place}: ${esc(entry.team.name)}</b><span>${entry.score} colony strength</span><span>${entry.team.correct}/${entry.team.attempts} answers right (${accuracy}%)</span><small>Answer points ${entry.breakdown.knowledge} · Colony points ${growth} · Food and land ${entry.breakdown.resources + entry.breakdown.territory} · Safety points ${protection}</small><small>Raid record: ${entry.team.successfulAttacks} won · ${entry.team.successfulDefenses} defended · ${entry.team.guardsDefeated || 0} rival guards defeated · ${entry.team.guardsLost || 0} guards lost</small></div>`;
+      return `<div class="podium-place${index === 0 || tiedFirst ? ' first' : ''}" style="--team-color:${colorHex(core.TEAM_COLORS[entry.team.colorIndex].primary)}"><b>${place}: ${esc(entry.team.name)}</b><span>${entry.score} colony strength</span><span>${entry.team.correct}/${entry.team.attempts} answers right (${accuracy}%)</span><small>Answer points ${entry.breakdown.knowledge} · Colony points ${growth} · Food and land ${entry.breakdown.resources + entry.breakdown.territory} · Safety points ${protection}</small><small>Challenge record: ${entry.team.successfulAttacks} won · ${entry.team.successfulDefenses} defended · ${entry.team.guardsDefeated || 0} rival guards sent to rest · ${entry.team.guardsLost || 0} guards changed to worker duty</small></div>`;
     }).join('');
     const knowledge = [...session.teams].sort((a, b) => (b.attempts ? b.correct / b.attempts : 0) - (a.attempts ? a.correct / a.attempts : 0) || b.correct - a.correct)[0];
     const improved = session.teams.filter(team => core.learningImprovement(session, team.id) > 0).sort((a, b) => core.learningImprovement(session, b.id) - core.learningImprovement(session, a.id))[0];
@@ -1248,7 +1245,7 @@
       const outcome = core.rainOutcome(team);
       const improvement = core.learningImprovement(session, team.id);
       const missing = core.rainPreparation(team).filter(goal => !goal.done).map(goal => goal.label.toLowerCase());
-      return `<article class="colony-ending"><h3>${esc(team.name)}: ${outcome.ready}/4 rain jobs done</h3><p>${esc(outcome.text)}</p><p>${team.workers} workers · ${team.soldiers} guards · ${core.colonyRooms(team).length} rooms · ${team.correct}/${team.attempts} answers right.</p><p>${team.successfulAttacks || team.successfulDefenses ? `Raid story: ${team.successfulAttacks} won, ${team.successfulDefenses} defended, and ${team.guardsLost || 0} guards lost.` : 'This colony did not enter a raid.'}</p><p>${improvement === null ? 'Answer more questions next time to show what you know.' : improvement > 0 ? 'Your team got more answers right near the end.' : 'Next time, read each answer and talk before you choose.'}</p><strong>${missing.length ? `Build next: ${esc(missing[0])}.` : 'Your four rain jobs are done.'}</strong></article>`;
+      return `<article class="colony-ending"><h3>${esc(team.name)}: ${outcome.ready}/4 rain jobs done</h3><p>${esc(outcome.text)}</p><p>${team.workers} workers · ${team.soldiers} guards · ${core.colonyRooms(team).length} rooms · ${team.correct}/${team.attempts} answers right.</p><p>${team.successfulAttacks || team.successfulDefenses ? `Challenge story: ${team.successfulAttacks} won, ${team.successfulDefenses} defended, and ${team.guardsLost || 0} guards changed to worker duty.` : 'This colony did not enter a challenge.'}</p><p>${improvement === null ? 'Answer more questions next time to show what you know.' : improvement > 0 ? 'Your team got more answers right near the end.' : 'Next time, read each answer and talk before you choose.'}</p><strong>${missing.length ? `Build next: ${esc(missing[0])}.` : 'Your four rain jobs are done.'}</strong></article>`;
     }).join('');
     setOverlay('finalOverlay');
   }
@@ -1678,6 +1675,7 @@
     const sites = { entrance, nursery, food, guard, center: nursery, expansion: rooms.at(-1) };
     const lastEvent = session.events.at(-1);
     const harvest = session.phase === 'event' && lastEvent?.key === 'round-supplies' ? lastEvent.reports[lastEvent.reportIndex || 0] : null;
+    const sheltering = turnProgress() >= .68 || session.phase === 'event' && lastEvent?.key === 'heavy-rain' || session.phase === 'ended' && session.stormSeen;
 
     drawTunnel(graphics, [entrance, nursery], 14, material);
     for (let index = 1; index < rooms.length; index += 1) {
@@ -1739,13 +1737,14 @@
       const room = building ? sites.expansion : index % 3 === 0 ? food : rooms[index % rooms.length];
       const route = pathTo(room);
       const surface = { x: cx + (index % 2 ? -1 : 1) * zone.w * .3, y: entrance.y - 19 };
-      const path = building ? [{ x: room.x - 12, y: room.y }, { x: room.x + 14, y: room.y + 5 }, { x: room.x, y: room.y - 8 }] : [...route.slice().reverse(), entrance, surface, entrance, ...route];
+      const indoorPath = route.length > 1 ? [...route.slice().reverse(), ...route] : [{ x: nursery.x - 18, y: nursery.y }, { x: nursery.x + 18, y: nursery.y + 5 }];
+      const path = building ? [{ x: room.x - 12, y: room.y }, { x: room.x + 14, y: room.y + 5 }, { x: room.x, y: room.y - 8 }] : sheltering ? indoorPath : [...route.slice().reverse(), entrance, surface, entrance, ...route];
       const recruit = index === team.workers - 1 && session.phase === 'event' && (lastEvent?.key === 'upgrade-workers' && lastEvent.teamId === team.id || harvest?.teamId === team.id && harvest.hatched);
       if (recruit) path.unshift({ x: nursery.x + roomWidth * .28, y: nursery.y + 4 });
       const ant = makeAntAgent('cq-worker', path[0], 29, palette.primary, !building, index < MAX_MOVING_ANTS_PER_ROLE);
       ant.setData('role', 'worker');
       ants.push(ant);
-      if (index === 0 && (harvest?.teamId === team.id && harvest.gathered > 0 || session.phase === 'event' && lastEvent?.key === 'upgrade-food' && lastEvent.teamId === team.id)) deliverHarvest(ant, [surface, entrance, ...pathTo(food)]);
+      if (!sheltering && index === 0 && (harvest?.teamId === team.id && harvest.gathered > 0 || session.phase === 'event' && lastEvent?.key === 'upgrade-food' && lastEvent.teamId === team.id)) deliverHarvest(ant, [surface, entrance, ...pathTo(food)]);
       else animateAnt(ant, path, recruit ? 0 : index, preservePositions && !recruit ? previous.workers[index] : null, recruit ? 1400 : 0);
       if (recruit) revealRecruit(ant);
     }

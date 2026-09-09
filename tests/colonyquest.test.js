@@ -308,7 +308,7 @@ test('knowledge raids reward success or defense but never eliminate a colony', (
   assert.ok(attacker.population >= 1);
 });
 
-test('raid battles use guard numbers, walls and visible losses', () => {
+test('raid battles move resting guards to worker duty without losing ants', () => {
   const outnumbered = teams(2);
   Object.assign(outnumbered[0], { soldiers: 2, population: 4, barracksBuilt: true });
   Object.assign(outnumbered[1], { soldiers: 4, population: 6, barracksBuilt: true });
@@ -318,7 +318,9 @@ test('raid battles use guard numbers, walls and visible losses', () => {
   assert.equal(failed.defenders, 4);
   assert.ok(failed.attackerLosses > 0);
   assert.equal(outnumbered[0].soldiers, 2 - failed.attackerLosses);
+  assert.equal(outnumbered[0].workers, 1 + failed.attackerLosses);
   assert.equal(outnumbered[0].population, 1 + outnumbered[0].workers + outnumbered[0].soldiers);
+  assert.equal(outnumbered[0].population, 4);
   assert.match(failed.reason, /outnumbered/i);
 
   const stronger = teams(2);
@@ -331,6 +333,8 @@ test('raid battles use guard numbers, walls and visible losses', () => {
   assert.equal(stronger[0].guardsLost, won.attackerLosses);
   assert.equal(stronger[0].guardsDefeated, won.defenderLosses);
   assert.equal(stronger[1].guardsLost, won.defenderLosses);
+  assert.equal(stronger[0].population, 7);
+  assert.equal(stronger[1].population, 5);
 });
 
 test('strong walls can stop equal guard groups', () => {

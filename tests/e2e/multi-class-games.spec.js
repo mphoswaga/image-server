@@ -44,6 +44,13 @@ test('a published game can add and remove several classes from My games', async 
   const card = page.locator('.game-card').filter({ hasText: 'file skills' });
   await expect(card).toContainText('Grade 3A');
   await expect(card).toContainText('Grade 3B');
+  const results = card.locator(`#res-${created.gameId}`);
+  await expect(results).toBeHidden();
+  await card.getByRole('button', { name: 'View results' }).click();
+  await expect(results).toBeVisible();
+  await expect(results).toContainText('No students have played yet.');
+  await card.getByRole('button', { name: 'Hide results' }).click();
+  await expect(results).toBeHidden();
   await card.getByRole('button', { name: 'Manage classes' }).click();
   const picker = card.locator('.gc-class-row .class-picker');
   await picker.getByText('Grade 3A', { exact: false }).click();

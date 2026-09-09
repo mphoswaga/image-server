@@ -253,6 +253,9 @@
     const { success, attackerLosses, defenderLosses } = battle;
     attacker.soldiers = Math.max(0, attacker.soldiers - attackerLosses);
     defender.soldiers = Math.max(0, defender.soldiers - defenderLosses);
+    // Defeated guards return to ordinary colony work; no ant is removed.
+    attacker.workers += attackerLosses;
+    defender.workers += defenderLosses;
     attacker.guardsLost = Math.max(0, attacker.guardsLost || 0) + attackerLosses;
     defender.guardsLost = Math.max(0, defender.guardsLost || 0) + defenderLosses;
     attacker.guardsDefeated = Math.max(0, attacker.guardsDefeated || 0) + defenderLosses;

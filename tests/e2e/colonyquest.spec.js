@@ -271,6 +271,8 @@ test('all upgrade cards are available and raids visibly travel, return and recov
   expect(saved.teams[1].food).toBe(0);
   expect(saved.teams[0].soldiers).toBe(4);
   expect(saved.teams[1].soldiers).toBe(1);
+  expect(saved.teams[0].workers).toBe(2);
+  expect(saved.teams[1].workers).toBe(3);
   expect(saved.events.filter(event => event.key === 'raid-result')).toHaveLength(1);
   await page.reload();
   await page.locator('#resumeBtn').click();
@@ -308,6 +310,7 @@ test('a defended raid can be paused without duplicate rewards', async ({ page })
   expect(saved.teams[1].food).toBe(13);
   expect(saved.teams[0].food).toBe(8);
   expect(saved.teams[0].soldiers).toBe(0);
+  expect(saved.teams[0].workers).toBe(2);
   expect(saved.events.filter(event => event.key === 'raid-result')).toHaveLength(1);
   await page.locator('#worldStoryContinue').click();
   await expect(page.locator('#questionOverlay')).toBeVisible();
