@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 
 const CONFIG = Object.freeze({ width:2400, height:1600, initialMass:100, maxMass:900, eatRatio:1.18,
-  foodCount:320, foodGrowth:4, fishGrowthRatio:.25, minimumFishGrowth:24, foodRespawnMs:4000, questionMs:30000, cooldownMs:4000,
+  foodCount:320, foodGrowth:4, fishGrowthRatio:.3, minimumFishGrowth:14, maximumFishGrowth:150, foodRespawnMs:4000, questionMs:30000, cooldownMs:4000,
   protectionMs:5000, escapeMs:3000, respawnMs:2000, inputExpiryMs:400, maxPlayers:30, variantCount:30 });
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const radius=p=>18*Math.sqrt(p.mass/100);
@@ -113,7 +113,7 @@ class FishMatch {
     a.cooldownUntil=t+CONFIG.cooldownMs;b.protectedUntil=t+CONFIG.escapeMs;
     a.attempts.push({interactionId:i.id,questionIndex:i.questionIndex,choice:i.choice??-1,outcome,correct:outcome==='correct',responseMs:t-i.startedAt,trigger:'swallow'});
     if(outcome==='correct'){
-      const fishGrowth=Math.max(CONFIG.minimumFishGrowth,Math.min(100,b.mass*CONFIG.fishGrowthRatio));
+      const fishGrowth=mealGrowth(b.mass);
       a.mass=Math.min(CONFIG.maxMass,a.mass+fishGrowth);a.score+=75;a.swallows++;
       b.mass=b.npc?b.baseMass:Math.max(CONFIG.initialMass,b.mass*.6);b.respawnAt=t+CONFIG.respawnMs;b.dx=0;b.dy=0;
     }
@@ -179,4 +179,7 @@ class FishMatch {
   }
   education(p){const graded=p.attempts.filter(a=>['correct','incorrect','timeout'].includes(a.outcome));return {correct:graded.filter(a=>a.correct).length,answered:graded.length,coverage:new Set(graded.map(a=>a.questionIndex)).size,total:this.game.questions.length,collections:p.collections||0,swallows:p.swallows||0};}
 }
-module.exports={FishMatch,CONFIG,radius};
+function mealGrowth(preyMass){
+  return Math.max(CONFIG.minimumFishGrowth,Math.min(CONFIG.maximumFishGrowth,8+preyMass*CONFIG.fishGrowthRatio));
+}
+module.exports={FishMatch,CONFIG,radius,mealGrowth};

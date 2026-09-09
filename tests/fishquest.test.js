@@ -78,6 +78,23 @@ test('plankton grows a fish gradually before fish meals give a larger jump', () 
   assert.ok(f.a.mass-before>planktonGrowth);
 });
 
+test('larger prey gives a visibly larger growth reward', () => {
+  const growthAfterEating=(preyMass) => {
+    const f=fixture();
+    f.a.mass=600;f.b.mass=preyMass;f.a.x=f.b.x=900;f.a.y=f.b.y=700;
+    const before=f.a.mass,interaction=f.match.claim(f.a,f.b);
+    assert.ok(interaction);
+    f.match.answer(f.a.id,{interactionId:interaction.id,choice:1});
+    return f.a.mass-before;
+  };
+  const small=growthAfterEating(50);
+  const medium=growthAfterEating(150);
+  const large=growthAfterEating(400);
+  assert.ok(small<medium);
+  assert.ok(medium<large);
+  assert.ok(large>=small*3);
+});
+
 test('timeout, disconnect and teacher end cannot leave a learner locked', () => {
   const f=fixture();f.a.mass=200;f.b.mass=100;f.a.x=f.b.x=900;f.a.y=f.b.y=700;
   let interaction=f.match.claim(f.a,f.b);f.advance(CONFIG.questionMs+1);f.match.tick();
