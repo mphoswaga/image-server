@@ -29,6 +29,12 @@ test('a full ocean renders and moves smoothly between packets on desktop and mob
   const canvas = page.locator('#game canvas');
   await expect(canvas).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.motionGame?.scene.scenes[0]?.children.list.filter(o => o.type === 'Container').length)).toBe(30);
+  const labelCounts = await page.evaluate(() => {
+    const labels = window.motionGame.scene.scenes[0].children.list.filter(object => object.type === 'Text');
+    return { visible: labels.filter(label => label.visible).length, own: labels.filter(label => label.visible && label.text === 'You').length };
+  });
+  expect(labelCounts.own).toBe(1);
+  expect(labelCounts.visible).toBeLessThanOrEqual(7);
   const before = await canvas.screenshot();
   const stats = await sharp(before).stats();
   expect(stats.channels.some(channel => channel.stdev > 15)).toBeTruthy();

@@ -366,7 +366,7 @@
     const fin=scene.add.image(style.finX,style.finY,fishTexture(p.variant,'fin',stage)).setOrigin(.68,.28).setScale(style.fin);
     const sprite=scene.add.container(p.x,p.y,[tail,body,fin]);
     const label=scene.add.text(p.x,p.y-style.label,p.name,{font:'bold 15px Arial',color:'#ffffff',stroke:'#052c48',strokeThickness:4}).setOrigin(.5);
-    return {sprite,label,tail,body,fin,stage,tailBase:style.tail,finBase:style.fin,labelOffset:style.label,tx:p.x,ty:p.y,samples:[],scale:Math.pow(p.mass/100,.65),facing:1,phase:p.variant*1.7,swimSpeed:0};
+    return {sprite,label,tail,body,fin,stage,tailBase:style.tail,finBase:style.fin,labelOffset:style.label,id:p.id,name:p.name,npc:!!p.npc,mass:p.mass,connected:p.connected!==false,respawning:!!p.respawning,tx:p.x,ty:p.y,samples:[],scale:Math.pow(p.mass/100,.65),facing:1,phase:p.variant*1.7,swimSpeed:0};
   }
   const bubbles = [];
   let oceanTime=0;
@@ -414,13 +414,20 @@
       const reset = p.respawning || p.locked || state.phase !== 'running' || Math.hypot(p.x-e.tx,p.y-e.ty)>200;
       FishQuestMotion.push(e.samples,p,performance.now(),reset);
       if(reset) e.sprite.setPosition(p.x,p.y);
-      e.tx=p.x; e.ty=p.y; e.scale=Math.pow(p.mass/100,.65); e.locked=p.locked;
-      e.sprite.setAlpha(p.respawning ? .2 : p.protected ? .72 : 1); e.label.setText(p.id === state.me ? 'You' : p.npc ? `${p.name} · ${p.mass}` : p.name).setAlpha(p.respawning ? .3 : 1);
+      e.tx=p.x; e.ty=p.y; e.scale=Math.pow(p.mass/100,.65); e.locked=p.locked;e.mass=p.mass;e.connected=p.connected!==false;e.respawning=!!p.respawning;
+      e.sprite.setAlpha(p.respawning ? .2 : p.protected ? .72 : 1); e.label.setText(p.id === state.me ? 'You' : p.npc ? `${FishQuestMotion.shortName(p.name)} · ${p.mass}` : FishQuestMotion.shortName(p.name));
     }
     for (const [id, e] of entities) if (!seen.has(id)) { e.sprite.destroy(); e.label.destroy(); entities.delete(id); }
     const foodSeen = new Set();
     for (const [id, x, y] of state.food) { foodSeen.add(id); let f = foods.get(id); if (!f) { f = scene.add.image(x,y,planktonTexture(id%3)).setScale(.34); foods.set(id,f); } f.foodX=x; f.foodY=y; f.setVisible(true); }
     for (const [id,f] of foods) if (!foodSeen.has(id)) f.setVisible(false);
+    const labelPlayers=[...entities.values()].map(e=>({id:e.id,npc:e.npc,x:e.tx,y:e.ty,connected:e.connected,respawning:e.respawning}));
+    const visibleLabels=FishQuestMotion.visibleLabels(labelPlayers,state.me,innerWidth<600?3:6,innerWidth<600?2:3);
+    for(const e of entities.values()) {
+      const own=e.id===state.me;
+      e.label.setVisible(visibleLabels.has(e.id)).setAlpha(own?1:e.respawning?.25:.82).setDepth(own?20:6);
+      e.sprite.setDepth(own?19:5);
+    }
   }
   function animate() {
     if (!state || !scene) return;
