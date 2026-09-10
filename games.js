@@ -7,6 +7,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { DATA_DIR, writeJsonAtomic } = require('./storage');
 const colonyQuest = require('./public/colonyquest-core');
+const { repairMathQuestions } = require('./math-question-validator');
 
 const GAMES_DIR = path.join(DATA_DIR, 'games');
 const ROOMS_PATH = path.join(GAMES_DIR, '_rooms.json');
@@ -32,7 +33,14 @@ function hasRoster(game, rosterId) {
 function normalizeGameRecord(game) {
   if (!game) return null;
   const rosterIds = getRosterIds(game);
-  return { ...game, rosterIds, rosterId: rosterIds[0] || null };
+  const checked = repairMathQuestions(game.questions);
+  return { ...game, questions: checked.questions, rosterIds, rosterId: rosterIds[0] || null };
+}
+
+function checkedQuestions(questions) {
+  const checked = repairMathQuestions(questions);
+  if (checked.issues.length) throw new Error(`Check the mathematics answer key. ${checked.issues.join('; ')}`);
+  return checked;
 }
 
 // 6-char room code using unambiguous chars (no 0/O/1/I/L).
@@ -76,6 +84,7 @@ function createGame({ teacherId, teacherName, lessonTitle, subject, topic, grade
   const normalizedMode = mode === 'fishquest' ? 'fishquest' : mode === 'colonyquest' ? 'colonyquest' : 'arcade';
   const roomCode = normalizedMode === 'colonyquest' ? null : genRoomCode();
   const assignedRosterIds = normalizeRosterIds(rosterIds, rosterId);
+  const questions = checkedQuestions(game.questions || []).questions;
   const rec = {
     id, teacherId, teacherName: teacherName || '',
     lessonTitle: lessonTitle || topic, subject, topic, grade,
@@ -87,7 +96,7 @@ function createGame({ teacherId, teacherName, lessonTitle, subject, topic, grade
     fishquest: normalizedMode === 'fishquest' ? { durationMinutes: 10, lateJoin: true, playMode: 'live' } : null,
     colonyquest: normalizedMode === 'colonyquest' ? defaultColonyQuestConfig() : null,
     summary: game.summary || { overview: game.overview || '', concepts: game.concepts || [] },
-    questions: game.questions || [],
+    questions,
     createdAt: new Date().toISOString(),
   };
   writeJsonAtomic(gamePath(id), rec);
@@ -101,7 +110,16 @@ function createGame({ teacherId, teacherName, lessonTitle, subject, topic, grade
 }
 
 function getGame(id) {
-  try { return normalizeGameRecord(JSON.parse(fs.readFileSync(gamePath(String(id)), 'utf8'))); } catch { return null; }
+  try {
+    const p = gamePath(String(id));
+    const stored = JSON.parse(fs.readFileSync(p, 'utf8'));
+    const checked = repairMathQuestions(stored.questions);
+    if (checked.repairedIndexes.length) {
+      stored.questions = checked.questions;
+      writeJsonAtomic(p, stored);
+    }
+    return normalizeGameRecord(stored);
+  } catch { return null; }
 }
 
 function loadResults(id) {
@@ -189,6 +207,7 @@ function updateFishQuest(id, config) {
       correctIndex: Number(q.correctIndex),
       explanation: String(q.explanation || '').trim(),
     })).filter(q => q.question && q.options.length >= 2 && Number.isInteger(q.correctIndex) && q.correctIndex >= 0 && q.correctIndex < q.options.length);
+    g.questions = checkedQuestions(g.questions).questions;
   }
   if (!g.questions.length) throw new Error('Add at least one complete question.');
   writeJsonAtomic(p, g);
@@ -215,6 +234,7 @@ function updateColonyQuest(id, config = {}) {
       correctIndex: Number(q && q.correctIndex),
       explanation: String(q && q.explanation || '').trim().slice(0, 1000),
     })).filter(q => q.question && q.options.filter(Boolean).length >= 2 && Number.isInteger(q.correctIndex) && q.correctIndex >= 0 && q.correctIndex < q.options.length && q.options[q.correctIndex]).slice(0, 40);
+    g.questions = checkedQuestions(g.questions).questions;
   }
   if (!g.questions.length) throw new Error('Add at least one complete question.');
   writeJsonAtomic(p, g);
@@ -245,9 +265,28 @@ function clearColonyQuestSession(id) {
   return true;
 }
 
+function repairStoredMathAnswers() {
+  fs.mkdirSync(GAMES_DIR, { recursive: true });
+  let gamesChanged = 0;
+  let questionsChanged = 0;
+  for (const filename of fs.readdirSync(GAMES_DIR).filter(isGameFile)) {
+    const p = path.join(GAMES_DIR, filename);
+    try {
+      const stored = JSON.parse(fs.readFileSync(p, 'utf8'));
+      const checked = repairMathQuestions(stored.questions);
+      if (!checked.repairedIndexes.length) continue;
+      stored.questions = checked.questions;
+      writeJsonAtomic(p, stored);
+      gamesChanged += 1;
+      questionsChanged += checked.repairedIndexes.length;
+    } catch { /* One damaged game must not block startup repairs for the others. */ }
+  }
+  return { gamesChanged, questionsChanged };
+}
+
 module.exports = {
   createGame, getGame, recordResult, getResults, getHighScores, listTeacherGames, getRoomCode,
   updateGameCutoff, updateGameRosters, updateFishQuest, updateColonyQuest, getColonyQuestSession,
   saveColonyQuestSession, clearColonyQuestSession, normalizeStudentId, normalizeRosterIds,
-  getRosterIds, hasRoster,
+  getRosterIds, hasRoster, repairStoredMathAnswers,
 };

@@ -42,6 +42,11 @@ const { cookieOptions, createRateLimiter, securityHeaders } = require('./securit
 const { requireUploads } = require('./upload-security');
 const observability = require('./observability');
 
+const storedMathRepairs = games.repairStoredMathAnswers();
+if (storedMathRepairs.questionsChanged) {
+  console.warn(`Corrected ${storedMathRepairs.questionsChanged} deterministic math answer key(s) across ${storedMathRepairs.gamesChanged} saved game(s).`);
+}
+
 // Add transitions/animations; never let it break the download.
 function safeAnimate(buffer, band) {
   if (process.env.POWERPOINT_ANIMATIONS === 'false') return buffer;

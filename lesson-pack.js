@@ -6,6 +6,7 @@ const { client: aiClient } = require('./ai-client');
 const { ageFor } = require('./grade');
 const { getTeachingModel, modelPromptBlock, artifactPromptBlock } = require('./teaching-models');
 const { normalizeLessonPurpose } = require('./assessment-draft');
+const { repairMathQuestions } = require('./math-question-validator');
 
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
@@ -428,6 +429,9 @@ function normalizeGame(g) {
     if (ci < 0 || ci > 3) ci = 0;
     return { question: q.question, options: opts, correctIndex: ci, explanation: q.explanation || '' };
   });
+  const checked = repairMathQuestions(g.questions);
+  if (checked.issues.length) throw new Error(`The generated math questions could not be verified: ${checked.issues.join('; ')}`);
+  g.questions = checked.questions;
   g.concepts = (g.concepts || []).filter(c => c && c.term);
   return g;
 }
@@ -436,17 +440,27 @@ async function generateGame(ctx) {
   if (!process.env.OPENAI_API_KEY) return placeholderGame(ctx);
   const { wrap } = require('./cache');
   const n = Math.min(20, Math.max(4, parseInt(ctx.questionCount, 10) || 6));
-  return wrap('game', ctxKey('game', { ...ctx, questionCount: n }), async () => {
-    const prompt = `Create a short REVISION GAME for students based on this lesson.
+  return wrap('game', { ...ctxKey('game', { ...ctx, questionCount: n }), mathValidationVersion: 1 }, async () => {
+    const basePrompt = `Create a short REVISION GAME for students based on this lesson.
 ${ctxBlock(ctx)}
 ${artifactPromptBlock(ctx.teachingModelId, 'revision game')}
 Produce:
 - overview: 2-3 sentences recapping what the lesson was about.
 - concepts: the 3-5 KEY ideas of the lesson, each with a short, clear explanation a student understands (so they can revise before playing).
-- questions: exactly ${n} multiple-choice questions that check the lesson objectives. Each has: "question"; "options" = EXACTLY 4 answer choices; "correctIndex" = the 0-based index (0,1,2,3) of the correct option; and "explanation" = one sentence on why it is correct. Mix easier and harder questions, and make the wrong options plausible (not silly).
+- questions: exactly ${n} multiple-choice questions that check the lesson objectives. Each has: "question"; "options" = EXACTLY 4 answer choices; "correctIndex" = the 0-based index (0,1,2,3) of the correct option; and "explanation" = one sentence on why it is correct. Mix easier and harder questions, and make the wrong options plausible (not silly). For every mathematics question, calculate the answer independently before choosing correctIndex, verify that it appears exactly once in options, and make the explanation agree with that calculation.
 ${calibration(ctx.grade)}
 Plain text only — no markdown.`;
-    return normalizeGame(await callModel(GAME_SCHEMA, 'lesson_game', prompt, Math.max(3500, n * 300)));
+    let lastMathError = '';
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const correction = lastMathError ? `\nYour previous draft failed deterministic checking: ${lastMathError}. Recalculate the affected question and include the correct answer exactly once.` : '';
+        return normalizeGame(await callModel(GAME_SCHEMA, 'lesson_game', basePrompt + correction, Math.max(3500, n * 300)));
+      } catch (err) {
+        if (!/generated math questions could not be verified/i.test(String(err && err.message))) throw err;
+        lastMathError = err.message;
+      }
+    }
+    throw new Error(lastMathError || 'The mathematics answer keys could not be verified.');
   });
 }
 
@@ -460,4 +474,4 @@ function placeholderGame({ topic, questionCount }) {
   });
 }
 
-module.exports = { generateStudyNotes, generateWorksheet, generateExitTicket, generateQuiz, generateHomework, generateActivities, generateGame };
+module.exports = { generateStudyNotes, generateWorksheet, generateExitTicket, generateQuiz, generateHomework, generateActivities, generateGame, normalizeGame };
