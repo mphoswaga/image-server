@@ -6,7 +6,7 @@ const { gradeProfile } = require('./grade');
 const { getTeachingModel, normalizeTeachingModelId, modelPromptBlock } = require('./teaching-models');
 const {
   ASSESSMENT_DRAFT_SCHEMA, normalizeLessonPurpose, normalizeAssessmentOptions,
-  normalizeAssessmentDraft, fallbackDraft, assessmentPromptBlock,
+  normalizeAssessmentDraft, assessmentDraftIssues, fallbackDraft, assessmentPromptBlock,
 } = require('./assessment-draft');
 
 // How much of an uploaded template reaches the prompt. Exported so the upload
@@ -236,6 +236,40 @@ function ensureGradualReleaseVisible(sections) {
   return list;
 }
 
+function ensureAssessmentFlowVisible(sections, lessonPurpose, options = {}) {
+  const purpose = normalizeLessonPurpose(lessonPurpose);
+  if (purpose === 'lesson') return Array.isArray(sections) ? sections : [];
+  const opts = normalizeAssessmentOptions(options);
+  const list = Array.isArray(sections) ? sections.map(section => ({ ...section })) : [];
+  if (!list.length) return list;
+  const allContent = list.map(section => section.content || '').join('\n').toLowerCase();
+  const typeNames = { mcq: 'multiple-choice', 'short-answer': 'short-answer', 'extended-response': 'extended-response', practical: purpose === 'project' ? 'project practical' : 'practical' };
+  const otherTypes = opts.questionTypes.filter(type => type !== 'mcq');
+  const remainingMarks = opts.questionTypes.includes('mcq') && otherTypes.length ? opts.totalMarks - opts.mcqCount : null;
+  const lines = [];
+  opts.questionTypes.forEach((type, index) => {
+    const alreadyVisible = type === 'mcq'
+      ? allContent.includes('multiple-choice') && allContent.includes('lessonscope') && allContent.includes(`${opts.mcqCount} questions`) && (!otherTypes.length || allContent.includes(`${opts.mcqCount} marks`))
+      : type === 'practical' && remainingMarks != null && otherTypes.length === 1
+        ? allContent.includes(typeNames[type]) && allContent.includes(`${remainingMarks} marks`) && allContent.includes('lessonscope')
+        : allContent.includes(typeNames[type]) && allContent.includes('lessonscope');
+    if (alreadyVisible) return;
+    if (type === 'mcq') {
+      lines.push(`Assessment phase ${index + 1} — LessonScope multiple-choice: Students independently answer ${opts.mcqCount} questions${otherTypes.length ? ` (${opts.mcqCount} marks)` : ''}. Teacher starts the section, supervises without explaining answers, and confirms submissions.`);
+    } else if (type === 'practical') {
+      lines.push(`Assessment phase ${index + 1} — ${purpose === 'project' ? 'Project practical' : 'Practical'}: Students complete the assessed task${remainingMarks != null && otherTypes.length === 1 ? ` (${remainingMarks} marks)` : ''}. Teacher displays only safe stage directions, circulates without giving answers, and records evidence in LessonScope.`);
+    } else {
+      lines.push(`Assessment phase ${index + 1} — ${typeNames[type]}: Students complete this section independently in LessonScope. Teacher supervises without explaining answers and marks the responses after submission.`);
+    }
+  });
+  if (!lines.length) return list;
+  let target = list.findIndex(section => /assessment|evaluat|main activit|learner activit|student activit|procedure/i.test(String(section.heading || '')));
+  if (target < 0) target = list.findIndex(section => /plan|create|practi|task|lesson/i.test(String(section.heading || '')));
+  if (target < 0) target = list.length - 1;
+  list[target].content = [String(list[target].content || '').trim(), ...lines].filter(Boolean).join('\n');
+  return list;
+}
+
 function finalizeLessonPlan(raw, { objectives = '', suppliedSuccessCriteria = [], teachingModelId = 'standard' } = {}) {
   const supplied = (Array.isArray(suppliedSuccessCriteria) ? suppliedSuccessCriteria : [])
     .map(value => String(value || '').trim()).filter(Boolean);
@@ -298,7 +332,9 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
       ).flat();
     }
     const assessmentDraft = fallbackDraft({ subject, topic, grade, objectives, lessonPurpose: purpose, assessmentTotalMarks: assessmentOptions.totalMarks, assessmentStructure: assessmentOptions.structure, assessmentDeliveryMode: assessmentOptions.deliveryMode, assessmentBrief: assessmentOptions.brief, assessmentQuestionTypes: assessmentOptions.questionTypes, assessmentMcqCount: assessmentOptions.mcqCount });
-    return { ...finalizeLessonPlan(placeholder, { objectives, suppliedSuccessCriteria: successCriteria, teachingModelId }), teachingModelId, lessonPurpose: purpose, assessmentDraft, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
+    const finalized = finalizeLessonPlan(placeholder, { objectives, suppliedSuccessCriteria: successCriteria, teachingModelId });
+    finalized.sections = ensureAssessmentFlowVisible(finalized.sections, purpose, assessmentOptions);
+    return { ...finalized, teachingModelId, lessonPurpose: purpose, assessmentDraft, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
   }
   const { wrap } = require('./cache');
   const cachedOrGenerated = await wrap('lesson-plan', {
@@ -315,6 +351,7 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     teachingModelId,
     lessonPurpose: purpose,
     assessmentOptions,
+    assessmentDraftVersion: 2,
     sequence: cleanSequence,
     structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber),
     sequenceLessonNumber: cleanLessonNumber,
@@ -322,17 +359,28 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     regenerate,
   }, async () => {
     const client = aiClient();
-    const response = await client.chat.completions.create({
-      model: MODEL,
-      max_tokens: cleanSequence && structuredSequence && !cleanLessonNumber ? 12000 : (purpose === 'lesson' ? 6000 : 12000),
-      messages: [{ role: 'user', content: buildPrompt({ subject, topic, grade, tone, objectives, successCriteria, templateText, unitBlock, sourceMaterialText, planningFrameworkText, teachingModel: teachingModelId, sequence: cleanSequence, structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber), sequenceLessonNumber: cleanLessonNumber, previousLessonPlanText, lessonPurpose: purpose, assessmentOptions }) }],
-      response_format: { type: 'json_schema', json_schema: { name: 'lesson_plan', strict: true, schema: planSchema(model, cleanSequence, !!(cleanSequence && structuredSequence && !cleanLessonNumber), purpose !== 'lesson') } },
-    });
-    const text = response.choices[0]?.message?.content;
-    if (!text) throw new Error('No lesson plan returned from the model');
-    return { ...JSON.parse(text), teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
+    const basePrompt = buildPrompt({ subject, topic, grade, tone, objectives, successCriteria, templateText, unitBlock, sourceMaterialText, planningFrameworkText, teachingModel: teachingModelId, sequence: cleanSequence, structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber), sequenceLessonNumber: cleanLessonNumber, previousLessonPlanText, lessonPurpose: purpose, assessmentOptions });
+    let lastIssues = [];
+    for (let attempt = 1; attempt <= (purpose === 'lesson' ? 1 : 3); attempt++) {
+      const correction = lastIssues.length ? `\n\nYour previous draft failed these required checks: ${lastIssues.join('; ')}. Correct every issue in the new response.` : '';
+      const response = await client.chat.completions.create({
+        model: MODEL,
+        max_tokens: cleanSequence && structuredSequence && !cleanLessonNumber ? 12000 : (purpose === 'lesson' ? 6000 : 12000),
+        messages: [{ role: 'user', content: basePrompt + correction }],
+        response_format: { type: 'json_schema', json_schema: { name: 'lesson_plan', strict: true, schema: planSchema(model, cleanSequence, !!(cleanSequence && structuredSequence && !cleanLessonNumber), purpose !== 'lesson') } },
+      });
+      const text = response.choices[0]?.message?.content;
+      if (!text) throw new Error('No lesson plan returned from the model');
+      const parsed = JSON.parse(text);
+      if (purpose === 'lesson') return { ...parsed, teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
+      const normalizedDraft = normalizeAssessmentDraft(parsed.assessmentDraft, { subject, topic, grade, objectives, lessonPurpose: purpose, ...assessmentOptions });
+      lastIssues = assessmentDraftIssues(normalizedDraft, assessmentOptions);
+      if (!lastIssues.length) return { ...parsed, teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
+    }
+    throw new Error(`The automatic ${purpose} draft did not match your selected structure (${lastIssues.join('; ')}). Please generate it again.`);
   });
   const finalized = finalizeLessonPlan(cachedOrGenerated, { objectives, suppliedSuccessCriteria: successCriteria, teachingModelId });
+  finalized.sections = ensureAssessmentFlowVisible(finalized.sections, purpose, assessmentOptions);
   const assessmentDraft = normalizeAssessmentDraft(cachedOrGenerated.assessmentDraft, { subject, topic, grade, objectives, lessonPurpose: purpose, ...assessmentOptions });
   return { ...finalized, teachingModelId, lessonPurpose: purpose, assessmentDraft, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
 }
@@ -346,4 +394,5 @@ module.exports = {
   TEMPLATE_PROMPT_LIMIT, generateLessonPlan, planToText, planSchema,
   sequencePromptBlock, sequenceStepPromptBlock, buildPrompt,
   deriveSuccessCriteria, finalizeLessonPlan, ensureGradualReleaseVisible,
+  ensureAssessmentFlowVisible,
 };

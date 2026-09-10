@@ -8,21 +8,27 @@ function normalizeLessonPurpose(value) {
 }
 
 function normalizeAssessmentOptions(input = {}) {
-  const total = Math.min(1000, Math.max(1, parseInt(input.assessmentTotalMarks, 10) || 50));
-  const structure = String(input.assessmentStructure || '').trim().toLowerCase();
-  const delivery = String(input.assessmentDeliveryMode || '').trim().toLowerCase();
-  const suppliedTypes = Array.isArray(input.assessmentQuestionTypes)
-    ? input.assessmentQuestionTypes : String(input.assessmentQuestionTypes || '').split(',');
+  const total = Math.min(1000, Math.max(1, parseInt(input.assessmentTotalMarks ?? input.totalMarks, 10) || 50));
+  const structure = String(input.assessmentStructure || input.structure || '').trim().toLowerCase();
+  const delivery = String(input.assessmentDeliveryMode || input.deliveryMode || '').trim().toLowerCase();
+  const rawTypes = input.assessmentQuestionTypes || input.questionTypes || [];
+  const suppliedTypes = Array.isArray(rawTypes) ? rawTypes : String(rawTypes).split(',');
   let questionTypes = [...new Set(suppliedTypes.map(value => String(value).trim().toLowerCase()).filter(value => SECTION_TYPES.has(value)))];
   if (!questionTypes.length) questionTypes = structure === 'knowledge' ? ['mcq', 'short-answer', 'extended-response']
     : structure === 'practical' ? ['practical'] : structure === 'mixed' ? [...SECTION_TYPES] : ['mcq', 'practical'];
+  const requestedMcq = parseInt(input.assessmentMcqCount ?? input.mcqCount, 10);
+  const otherTypeMinimum = questionTypes.filter(type => type !== 'mcq').length;
+  const maximumMcq = Math.max(1, Math.min(50, total - otherTypeMinimum));
+  const mcqCount = questionTypes.includes('mcq')
+    ? Math.min(maximumMcq, Math.max(1, Number.isInteger(requestedMcq) ? requestedMcq : 15))
+    : 0;
   return {
     totalMarks: total,
     structure: STRUCTURES.has(structure) ? structure : 'balanced',
     deliveryMode: delivery === 'self-paced' ? 'self-paced' : 'live',
-    brief: String(input.assessmentBrief || '').trim().slice(0, 1200),
+    brief: String(input.assessmentBrief || input.brief || '').trim().slice(0, 1200),
     questionTypes,
-    mcqCount: Math.min(50, Math.max(0, parseInt(input.assessmentMcqCount, 10) || 0)),
+    mcqCount,
   };
 }
 
@@ -195,6 +201,21 @@ function normalizeAssessmentDraft(raw, context = {}) {
   };
 }
 
+function assessmentDraftIssues(draft, options = {}) {
+  const opts = normalizeAssessmentOptions(options);
+  if (!draft) return ['assessment draft is missing'];
+  const sections = Array.isArray(draft.sections) ? draft.sections : [];
+  const issues = [];
+  for (const type of opts.questionTypes) {
+    if (!sections.some(section => section.type === type && Array.isArray(section.items) && section.items.length)) issues.push(`${type} section is missing`);
+  }
+  const mcqCount = sections.filter(section => section.type === 'mcq').reduce((sum, section) => sum + (section.items || []).length, 0);
+  if (opts.questionTypes.includes('mcq') && mcqCount !== opts.mcqCount) issues.push(`expected ${opts.mcqCount} multiple-choice items but received ${mcqCount}`);
+  const allocated = sections.reduce((sum, section) => sum + (section.items || []).reduce((itemSum, item) => itemSum + (Number(item.marks) || 0), 0), 0);
+  if (allocated !== opts.totalMarks) issues.push(`expected ${opts.totalMarks} total marks but received ${allocated}`);
+  return issues;
+}
+
 function assessmentPromptBlock(purpose, options = {}) {
   purpose = normalizeLessonPurpose(purpose);
   if (purpose === 'lesson') return '';
@@ -208,11 +229,23 @@ function assessmentPromptBlock(purpose, options = {}) {
   }[opts.structure];
   const typeNames = { mcq: 'multiple choice', 'short-answer': 'short answer', 'extended-response': 'extended response', practical: 'practical / observation' };
   const typeRule = opts.questionTypes.map(type => typeNames[type]).join(', ');
+  const otherTypes = opts.questionTypes.filter(type => type !== 'mcq');
+  const mcqMarks = opts.questionTypes.includes('mcq') && otherTypes.length ? opts.mcqCount : null;
+  const remainingMarks = mcqMarks == null ? null : opts.totalMarks - mcqMarks;
+  const deliveryFlow = opts.questionTypes.map((type, index) => {
+    if (type === 'mcq') return `Phase ${index + 1}: students complete ${opts.mcqCount} multiple-choice questions independently in LessonScope${mcqMarks == null ? '' : ` (${mcqMarks} marks)`}; the teacher opens and supervises the section but does not display, read aloud, explain or answer the questions.`;
+    if (type === 'practical') return `Phase ${index + 1}: students complete the practical, performance or product task while the teacher observes and records evidence${remainingMarks != null && otherTypes.length === 1 ? ` (${remainingMarks} marks)` : ''}.`;
+    if (type === 'short-answer') return `Phase ${index + 1}: students complete the short-answer section independently in LessonScope.`;
+    return `Phase ${index + 1}: students complete the extended-response section independently in LessonScope.`;
+  }).join('\n');
   return `\nAUTOMATIC ${purpose.toUpperCase()} DRAFT:
 Also return assessmentDraft. It is an editable draft for the teacher, never a published assessment.
 Create a subject-neutral ${purpose} worth exactly ${opts.totalMarks} marks, structured as ${structureText}.
 Use these teacher-selected item types: ${typeRule}. Do not add other item types.
-${opts.questionTypes.includes('mcq') ? `Create exactly ${opts.mcqCount || Math.min(15, opts.totalMarks)} multiple-choice items unless that would exceed the total marks.` : 'Do not create a multiple-choice section.'}
+${opts.questionTypes.includes('mcq') ? `Create exactly ${opts.mcqCount} multiple-choice items. ${otherTypes.length ? 'Each multiple-choice item is worth exactly 1 mark; allocate all remaining marks across the other selected sections.' : 'Distribute the total marks across those items.'}` : 'Do not create a multiple-choice section.'}
+The LESSON PLAN content must visibly schedule every selected assessment phase in this order, while keeping the school template headings unchanged:
+${deliveryFlow}
+Mention the LessonScope phase, item count and marks in the teacher-facing plan, but never copy the actual questions, answer choices, solutions or private marking guidance into the plan.
 Use only the supplied objectives and source material. Match the exact grade. Give every section a clear type, instructions, and objectiveIndexes using zero-based positions in the supplied objective list.
 Every item needs a prompt and positive whole-number marks. The marks across all items must total exactly ${opts.totalMarks}.
 For multiple choice, provide 2-6 plausible options and the correct zero-based correctIndex. For written responses, provide concise marking guidance in answerKey. For practical criteria, describe observable evidence and leave options empty and answerKey empty.
@@ -222,5 +255,5 @@ ${opts.brief ? `Teacher requirements: ${opts.brief}` : ''}\n`;
 
 module.exports = {
   ASSESSMENT_DRAFT_SCHEMA, normalizeLessonPurpose, normalizeAssessmentOptions,
-  normalizeAssessmentDraft, fallbackDraft, assessmentPromptBlock,
+  normalizeAssessmentDraft, assessmentDraftIssues, fallbackDraft, assessmentPromptBlock,
 };

@@ -2989,7 +2989,7 @@
               <div><label for="assessmentPlanTotal">Total marks</label><input id="assessmentPlanTotal" type="number" min="1" max="1000" step="1" value="50"></div>
               <div><label for="assessmentPlanStructure">Structure</label><select id="assessmentPlanStructure"><option value="balanced">Knowledge + practical/application</option><option value="knowledge">Knowledge questions only</option><option value="practical">Practical / product only</option><option value="mixed">Mixed question types</option><option value="custom">Use my instructions below</option></select></div>
               <div><label for="assessmentPlanDelivery">Classroom delivery</label><select id="assessmentPlanDelivery"><option value="live">Live — teacher controls each section</option><option value="self-paced">Self-paced — students see all sections</option></select></div>
-              <div><label for="assessmentPlanMcqCount">Multiple-choice items</label><input id="assessmentPlanMcqCount" type="number" min="0" max="50" step="1" value="15"></div>
+              <div><label for="assessmentPlanMcqCount">Multiple-choice items</label><input id="assessmentPlanMcqCount" type="number" min="1" max="50" step="1" value="15"></div>
               <div class="full"><label>Item types to generate</label><div style="display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:7px">
                 <label style="font-weight:500"><input type="checkbox" name="assessmentPlanType" value="mcq" checked style="width:auto"> Multiple choice</label>
                 <label style="font-weight:500"><input type="checkbox" name="assessmentPlanType" value="short-answer" style="width:auto"> Short answer</label>
@@ -4710,17 +4710,20 @@
         if(firstBad){ setComposerPage(firstBad==='objectives'?2:1,{push:false}); $(firstBad).focus(); $(firstBad).scrollIntoView({behavior:'smooth',block:'center'}); return; }
       }
       const lessonPurpose=currentLessonPurpose();
-      if(lessonPurpose!=='lesson'&&!selectedAssessmentTypes().length){ setComposerPage(3,{push:false}); toast('Choose at least one item type for the automatic assessment.'); return; }
+      const assessmentTypes=selectedAssessmentTypes(), assessmentTotal=Number($('assessmentPlanTotal').value)||50, assessmentMcqCount=Number($('assessmentPlanMcqCount').value)||0;
+      if(lessonPurpose!=='lesson'&&!assessmentTypes.length){ setComposerPage(3,{push:false}); toast('Choose at least one item type for the automatic assessment.'); return; }
+      if(lessonPurpose!=='lesson'&&assessmentTotal<assessmentTypes.length){ setComposerPage(3,{push:false}); toast('The total must leave at least one mark for every selected item type.'); return; }
+      if(lessonPurpose!=='lesson'&&assessmentTypes.includes('mcq')&&(assessmentMcqCount<1||assessmentMcqCount>assessmentTotal-(assessmentTypes.length-1))){ setComposerPage(3,{push:false}); toast('Reduce the multiple-choice item count so the other selected sections still have marks.'); return; }
       ctx={ subject, topic, grade:$('grade').value||'middle school',
         slideCount:Number($('slideCount').value)||5, tone:$('tone').value, focus:$('focus').value.trim(), objectives,
         teachingModelId:$('teachingModel').value||'standard',
         lessonPurpose,
-        assessmentTotalMarks:Number($('assessmentPlanTotal').value)||50,
+        assessmentTotalMarks:assessmentTotal,
         assessmentStructure:$('assessmentPlanStructure').value||'balanced',
         assessmentDeliveryMode:$('assessmentPlanDelivery').value||'live',
         assessmentBrief:$('assessmentPlanBrief').value.trim(),
-        assessmentQuestionTypes:selectedAssessmentTypes(),
-        assessmentMcqCount:Number($('assessmentPlanMcqCount').value)||0,
+        assessmentQuestionTypes:assessmentTypes,
+        assessmentMcqCount,
         ...lessonSequenceFromForm(),
         sourceMaterialText, sourceMaterialImages,
         templateId:selectedTemplateId,
@@ -4872,8 +4875,10 @@
       const box=$('autoAssessmentSummary'), draft=pendingAssessmentDraft;
       if(!draft){ box.style.display='none'; box.innerHTML=''; return; }
       const itemCount=(draft.sections||[]).reduce((sum,section)=>sum+(section.items||[]).length,0);
+      const typeNames={mcq:'multiple choice','short-answer':'short answer','extended-response':'extended response',practical:'practical / observation'};
+      const breakdown=(draft.sections||[]).map(section=>{ const marks=(section.items||[]).reduce((sum,item)=>sum+(Number(item.marks)||0),0); return `${section.type==='mcq'?(section.items||[]).length+' ':''}${typeNames[section.type]||section.type} (${marks} marks)`; }).join(' · ');
       box.style.display='block';
-      box.innerHTML=`<h3>${ICON('i-clipboard')}Automatic ${esc(draft.assessmentType||'assessment')} draft ready</h3><p>${esc(draft.title)} · ${draft.totalMarks} marks · ${(draft.sections||[]).length} section${(draft.sections||[]).length===1?'':'s'} · ${itemCount} item${itemCount===1?'':'s'}</p><button id="reviewAutoAssessmentBtn" type="button" class="btn accent" style="width:auto;margin-top:11px">Review and edit before publishing</button>`;
+      box.innerHTML=`<h3>${ICON('i-clipboard')}Automatic ${esc(draft.assessmentType||'assessment')} draft ready</h3><p>${esc(draft.title)} · ${draft.totalMarks} marks · ${itemCount} item${itemCount===1?'':'s'}</p><p style="margin-top:5px;color:var(--ink);font-weight:600">${esc(breakdown)}</p><button id="reviewAutoAssessmentBtn" type="button" class="btn accent" style="width:auto;margin-top:11px">Review and edit before publishing</button>`;
       $('reviewAutoAssessmentBtn').addEventListener('click',()=>openGeneratedAssessmentDraft(draft));
     }
     function renderSequencePlanFlow(){

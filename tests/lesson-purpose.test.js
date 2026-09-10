@@ -6,7 +6,7 @@ const assignments = require('../assignments');
 const { generateLessonPlan, buildPrompt, planSchema } = require('../lesson-plan');
 const { generateContent } = require('../content');
 const { getTeachingModel } = require('../teaching-models');
-const { normalizeAssessmentOptions } = require('../assessment-draft');
+const { normalizeAssessmentOptions, assessmentDraftIssues } = require('../assessment-draft');
 
 async function withoutOpenAI(run) {
   const original = process.env.OPENAI_API_KEY;
@@ -24,7 +24,7 @@ test('Plan exposes lesson, project and test with automatic assessment controls',
   for (const id of ['autoAssessmentSettings', 'assessmentPlanTotal', 'assessmentPlanStructure', 'assessmentPlanDelivery', 'assessmentPlanMcqCount', 'assessmentPlanBrief', 'autoAssessmentSummary']) {
     assert.equal([...html.matchAll(new RegExp(`id="${id}"`, 'g'))].length, 1, `${id} should exist exactly once`);
   }
-  assert.match(html, /assessmentQuestionTypes:selectedAssessmentTypes\(\)/);
+  assert.match(html, /assessmentQuestionTypes:assessmentTypes/);
   assert.match(html, /Review and edit before publishing/);
 });
 
@@ -42,6 +42,9 @@ test('project generation returns a valid editable assessment with the requested 
   assert.equal(mcq.items.length, 15);
   assert.equal(mcq.items.reduce((sum, item) => sum + item.marks, 0), 15);
   assert.equal(practical.items.reduce((sum, item) => sum + item.marks, 0), 35);
+  const planText = plan.sections.map(section => section.content).join('\n');
+  assert.match(planText, /LessonScope multiple-choice[\s\S]+15 questions \(15 marks\)/);
+  assert.match(planText, /Project practical[\s\S]+\(35 marks\)/);
   const normalized = assignments.normalizeAssessment(plan.assessmentDraft);
   assert.equal(normalized.questions.reduce((sum, item) => sum + item.marks, 0), 50);
 });
@@ -72,9 +75,23 @@ test('purpose prompts change the teacher role while preserving the school templa
   const assessment = buildPrompt({ ...base, lessonPurpose: 'test', assessmentOptions: { assessmentTotalMarks: 50, assessmentQuestionTypes: ['mcq', 'practical'], assessmentMcqCount: 20 } });
   assert.match(project, /PROJECT SESSION/);
   assert.match(project, /Create exactly 15 multiple-choice items/);
+  assert.match(project, /Phase 1: students complete 15 multiple-choice questions independently in LessonScope \(15 marks\)/);
+  assert.match(project, /practical[\s\S]+\(35 marks\)/i);
   assert.match(assessment, /TEST SESSION/);
   assert.match(assessment, /does not teach, prompt, explain answers/i);
   for (const prompt of [project, assessment]) assert.match(prompt, /Reproduce its section headings and their order EXACTLY/);
+});
+
+test('a selected multiple-choice section cannot be silently omitted', () => {
+  const options = { totalMarks: 50, structure: 'balanced', questionTypes: ['mcq', 'practical'], mcqCount: 15, deliveryMode: 'live' };
+  const incomplete = {
+    totalMarks: 50,
+    sections: [{ type: 'practical', items: [{ prompt: 'Create the product', marks: 50 }] }],
+  };
+  assert.deepEqual(assessmentDraftIssues(incomplete, options), [
+    'mcq section is missing',
+    'expected 15 multiple-choice items but received 0',
+  ]);
 });
 
 test('test decks remove question checks, worked solutions and shortcuts', async () => {

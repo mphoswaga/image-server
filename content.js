@@ -10,7 +10,7 @@
 const { client: aiClient } = require('./ai-client');
 const { gradeProfile, ageFor } = require('./grade');
 const { getTeachingModel, normalizeTeachingModelId, modelPromptBlock, stageSchedule, stageLabel } = require('./teaching-models');
-const { normalizeLessonPurpose } = require('./assessment-draft');
+const { normalizeLessonPurpose, normalizeAssessmentOptions } = require('./assessment-draft');
 
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
@@ -180,6 +180,7 @@ function buildPrompt(subject, topic, grade, slideCount, tone, focus, extras = {}
   const p = gradeProfile(grade).content;
   const teachingModel = getTeachingModel(extras.teachingModelId);
   const lessonPurpose = normalizeLessonPurpose(extras.lessonPurpose);
+  const assessmentOptions = normalizeAssessmentOptions(extras);
   const schedule = stageSchedule(teachingModel, slideCount);
   const scheduleLine = schedule.map((stageId, index) => `${index + 1}. ${stageLabel(teachingModel, stageId)}`).join('\n');
   const objectivesLine = extras.objectives
@@ -199,11 +200,15 @@ function buildPrompt(subject, topic, grade, slideCount, tone, focus, extras = {}
     ? `\nThis deck supports a weekly lesson sequence: ${seq.lessonCount} connected lessons, ${seq.periodMinutes} minutes each. The approved lesson plan contains the period-by-period details. Make the slides follow those lessons in order, clearly signalling transitions such as "Lesson 1", "Lesson 2", and so on where helpful. Do not flatten the week into one repeated lesson.\n`
     : '';
   const age = ageFor(grade);
+  const assessmentTypeNames = { mcq: 'multiple-choice knowledge check', 'short-answer': 'short-answer work', 'extended-response': 'extended response', practical: 'practical or product task' };
+  const phaseSummary = assessmentOptions.questionTypes.map((type, index) => `${index + 1}) ${type === 'mcq' ? `${assessmentOptions.mcqCount}-item ` : ''}${assessmentTypeNames[type]}`).join('; ');
   const purposeBlock = lessonPurpose === 'lesson' ? '' : lessonPurpose === 'project'
     ? `\nTHIS IS A PROJECT INTRODUCTION AND PROGRESS DECK, NOT A NORMAL TEACHING DECK.
 The teacher briefly launches the project and then displays one context-specific stage at a time while students work. Content slides must state the current project stage, what students should produce or do, and one or two useful progress questions. Scale independence and complexity to ${grade}.
+The planned assessment phases are: ${phaseSummary}. Include a safe transition slide for every phase, including the LessonScope multiple-choice phase when selected, but never display its questions or answers.
 Do not reveal a rubric, mark allocation, model final product, answer key, or finished response. Do not display exact keyboard shortcuts such as Ctrl+C or Ctrl+V; use phrases such as "copy using the mouse" or "copy using the keyboard" when that action is assessed. The teacher circulates, observes and grades while students work.\n`
     : `\nTHIS IS A TEST INTRODUCTION AND ADMINISTRATION DECK, NOT A NORMAL TEACHING DECK.
+The planned assessment phases are: ${phaseSummary}. Show only a safe introduction or transition for each phase.
 The deck is safe to leave visible in the room. It may show the test title, purpose, timing, permitted materials, conduct, submission instructions and neutral progress stages. It must NEVER contain live test questions, answer options, answers, hints, worked examples, formulas supplied as help, marking criteria, rubrics, exact assessed procedures, or keyboard shortcuts. The teacher introduces procedures before the test and then supervises silently while students work independently.\n`;
   return `You are an expert teacher creating a complete, classroom-ready lesson deck.
 
@@ -368,6 +373,7 @@ async function generateContent(subject, topic, slideCount, grade = 'middle schoo
     } : null,
     teachingModelId,
     lessonPurpose,
+    assessmentOptions,
     regenerate: !!(extras && extras.regenerate),
   }, async () => {
     const prompt = buildPrompt(subject, topic, grade, slideCount, tone, focus, extras);

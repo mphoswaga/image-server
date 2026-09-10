@@ -1838,6 +1838,9 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
     : null;
   if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
   if (!objectives.trim()) return res.status(400).json({ error: 'Please paste the lesson objectives.' });
+  if (lessonPurpose !== 'lesson' && assessmentOptions.totalMarks < assessmentOptions.questionTypes.length) {
+    return res.status(400).json({ error: 'The total marks must leave at least one mark for every selected item type.' });
+  }
   // Writing the plan costs a credit; rewriting it is free within fair-use, the
   // same deal slides get — landing on a plan that matches the school's format
   // usually takes a pass or two, and that shouldn't cost a credit each time.
@@ -3248,7 +3251,13 @@ app.post('/api/generate', requireAuth, async (req, res) => {
     const materialText = sourceMaterialText(req.body);
     const materialImages = sourceMaterialImages(req.body);
     const lessonPlanText = mergeSourceIntoPlanText(resolvePlanText(req.body) || (unitBlock || ''), materialText);
-    const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives, lessonPlanText, sourceMaterialText: materialText, sourceImages: materialImages, teachingModelId, extras: { regenerate: !!regenerate, lessonSequence, lessonPurpose }, skipAssemble: true, presetId: presetId || null });
+    const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives, lessonPlanText, sourceMaterialText: materialText, sourceImages: materialImages, teachingModelId, extras: {
+      regenerate: !!regenerate, lessonSequence, lessonPurpose,
+      assessmentTotalMarks: req.body.assessmentTotalMarks,
+      assessmentQuestionTypes: req.body.assessmentQuestionTypes,
+      assessmentMcqCount: req.body.assessmentMcqCount,
+      assessmentStructure: req.body.assessmentStructure,
+    }, skipAssemble: true, presetId: presetId || null });
     const id = crypto.randomUUID();
     decks.set(id, {
       ownerId: req.userId,
@@ -3258,6 +3267,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
       objectives: objectives || '', lessonPlanText, sourceMaterialText: materialText, sourceMaterialImages: materialImages, // kept so follow-up resources are grounded in this lesson
       lessonSequence,
       lessonPurpose,
+      assessmentOptions: normalizeAssessmentOptions(req.body || {}),
       teachingModelId,
       presetId: presetId || null,
     });
