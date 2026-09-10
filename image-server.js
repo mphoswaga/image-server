@@ -28,6 +28,7 @@ const { objectivesFromDeck, criteriaFromDeck } = require('./deck-fields');
 const planningSource = require('./planning-source');
 const games = require('./games');
 const assignments = require('./assignments');
+const { normalizeLessonPurpose, normalizeAssessmentOptions } = require('./assessment-draft');
 const gradebook = require('./gradebook');
 const { gradeAnswer } = require('./auto-grade');
 const roster = require('./roster');
@@ -1142,6 +1143,7 @@ function deckPreviewPayload(id, deck) {
     band: deck.band || null,
     slideCount: deck.slides.length,
     teachingModelId: deck.teachingModelId || null,
+    lessonPurpose: deck.lessonPurpose || 'lesson',
     sourceText: deck.lessonPlanText || deck.sourceText || '',
     slides: deck.slides.map((s, i) => previewEntry(s, deck.images[i])),
   };
@@ -1825,6 +1827,8 @@ app.post('/api/source-materials/preview', requireAuth, upload.array('files', 8),
 app.post('/api/lesson-plan', requireAuth, async (req, res) => {
   const { grade, tone, templateId, unitId, lessonIndex, regenerate } = req.body || {};
   const teachingModelId = normalizeTeachingModelId(req.body && req.body.teachingModelId);
+  const lessonPurpose = normalizeLessonPurpose(req.body && req.body.lessonPurpose);
+  const assessmentOptions = normalizeAssessmentOptions(req.body || {});
   const subject = clip(req.body.subject, LIMITS.subject);
   const topic = clip(req.body.topic, LIMITS.topic);
   const objectives = clip(req.body.objectives, LIMITS.objectives);
@@ -1878,6 +1882,13 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
       sourceMaterialText: sourceMaterialText(req.body), planningFrameworkText: planningFramework.promptText(framework),
       teachingModel: teachingModelId, sequence: lessonSequence, structuredSequence: false,
       sequenceLessonNumber, previousLessonPlanText: clip(req.body.previousLessonPlanText, 8000), regenerate: !!regenerate,
+      lessonPurpose,
+      assessmentTotalMarks: assessmentOptions.totalMarks,
+      assessmentStructure: assessmentOptions.structure,
+      assessmentDeliveryMode: assessmentOptions.deliveryMode,
+      assessmentBrief: assessmentOptions.brief,
+      assessmentQuestionTypes: assessmentOptions.questionTypes,
+      assessmentMcqCount: assessmentOptions.mcqCount,
     });
 
     // Show the workbook's fields in their own order, with the objectives and
@@ -1897,7 +1908,7 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
     if (isRewrite) planRegens.set(regenKey, { n: used + 1, at: Date.now() });
 
     res.json({
-      sections, successCriteria: plan.successCriteria, teachingModelId, model: getTeachingModel(teachingModelId),
+      sections, successCriteria: plan.successCriteria, teachingModelId, lessonPurpose, assessmentDraft: plan.assessmentDraft, model: getTeachingModel(teachingModelId),
       sequence: lessonSequence, sequenceLessonNumber,
       weekPlannerFields: plannerOutline ? plannerOutline.map(f => f.label) : null,
       usedTemplate: !!tpl, templateName: tpl ? tpl.name : null, templateId: tpl ? tpl.id : null,
@@ -2022,6 +2033,7 @@ const PACK_RENDER = { notes: studyNotesDocx, worksheet: worksheetDocx, 'exit-tic
 app.post('/api/pack/full', requireAuth, async (req, res) => {
   const { grade, tone, lessonPlan, unitId, lessonIndex } = req.body || {};
   const teachingModelId = normalizeTeachingModelId(req.body && req.body.teachingModelId);
+  const lessonPurpose = normalizeLessonPurpose(req.body && req.body.lessonPurpose);
   const subject = clip(req.body.subject, LIMITS.subject);
   const topic = clip(req.body.topic, LIMITS.topic);
   const objectives = clip(req.body.objectives, LIMITS.objectives);
@@ -2032,7 +2044,7 @@ app.post('/api/pack/full', requireAuth, async (req, res) => {
     const u = unitId ? unit.getUnit(req.userId, unitId) : null;
     const unitBlock = u ? unit.buildUnitBlock(u, lessonIndex) : '';
     const lessonPlanText = resolvePlanText(req.body);
-    const ctx = { subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, unitBlock, teachingModelId };
+    const ctx = { subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, unitBlock, teachingModelId, lessonPurpose };
     const meta = { subject, topic, grade };
 
     const [nData, wData, etData, qData, hwData, acData] = await Promise.all([
@@ -2063,6 +2075,7 @@ app.post('/api/pack/:type', requireAuth, async (req, res) => {
   if (!gen) return res.status(404).json({ error: 'Unknown lesson-pack item.' });
   const { grade, tone, lessonPlan, unitId, lessonIndex, regenerate } = req.body || {};
   const teachingModelId = normalizeTeachingModelId(req.body && req.body.teachingModelId);
+  const lessonPurpose = normalizeLessonPurpose(req.body && req.body.lessonPurpose);
   const subject = clip(req.body.subject, LIMITS.subject);
   const topic = clip(req.body.topic, LIMITS.topic);
   const objectives = clip(req.body.objectives, LIMITS.objectives);
@@ -2073,7 +2086,7 @@ app.post('/api/pack/:type', requireAuth, async (req, res) => {
     const u = unitId ? unit.getUnit(req.userId, unitId) : null;
     const unitBlock = u ? unit.buildUnitBlock(u, lessonIndex) : '';
     const lessonPlanText = resolvePlanText(req.body);
-    const data = await gen({ subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, unitBlock, teachingModelId, regenerate: !!regenerate });
+    const data = await gen({ subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, unitBlock, teachingModelId, lessonPurpose, regenerate: !!regenerate });
     await capture(req, reservation, 'lessonscope.generate_pack_item', req.params.type);
     res.json({ type: req.params.type, data });
   } catch (err) {
@@ -3217,6 +3230,7 @@ async function addLessonToWeekPlanner(req, { subject, topic, objectives, lessonP
 app.post('/api/generate', requireAuth, async (req, res) => {
   const { slideCount, grade, tone, lessonPlan, unitId, lessonIndex, regenerate, presetId } = req.body || {};
   const teachingModelId = normalizeTeachingModelId(req.body && req.body.teachingModelId);
+  const lessonPurpose = normalizeLessonPurpose(req.body && req.body.lessonPurpose);
   const subject = clip(req.body.subject, LIMITS.subject);
   const topic = clip(req.body.topic, LIMITS.topic);
   const objectives = clip(req.body.objectives, LIMITS.objectives);
@@ -3234,7 +3248,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
     const materialText = sourceMaterialText(req.body);
     const materialImages = sourceMaterialImages(req.body);
     const lessonPlanText = mergeSourceIntoPlanText(resolvePlanText(req.body) || (unitBlock || ''), materialText);
-    const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives, lessonPlanText, sourceMaterialText: materialText, sourceImages: materialImages, teachingModelId, extras: { regenerate: !!regenerate, lessonSequence }, skipAssemble: true, presetId: presetId || null });
+    const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives, lessonPlanText, sourceMaterialText: materialText, sourceImages: materialImages, teachingModelId, extras: { regenerate: !!regenerate, lessonSequence, lessonPurpose }, skipAssemble: true, presetId: presetId || null });
     const id = crypto.randomUUID();
     decks.set(id, {
       ownerId: req.userId,
@@ -3243,6 +3257,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
       slides: built.slides, images: built.images, createdAt: Date.now(), touchedAt: Date.now(),
       objectives: objectives || '', lessonPlanText, sourceMaterialText: materialText, sourceMaterialImages: materialImages, // kept so follow-up resources are grounded in this lesson
       lessonSequence,
+      lessonPurpose,
       teachingModelId,
       presetId: presetId || null,
     });
@@ -3259,7 +3274,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
 
     const filename = `${subject}-${topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
     res.json({
-      deckId: id, filename, band: built.band, slideCount: built.slides.length, teachingModelId, lessonSequence,
+      deckId: id, filename, band: built.band, slideCount: built.slides.length, teachingModelId, lessonPurpose, lessonSequence,
       weekPlanner: weekPlannerResult,
       slides: built.slides.map((s, i) => previewEntry(s, built.images[i])),
     });
@@ -3558,6 +3573,7 @@ app.post('/api/slide/:id/regenerate', requireAuth, async (req, res) => {
       tone: deck.tone,
       focus: deck.focus,
       teachingModelId: deck.teachingModelId,
+      lessonPurpose: deck.lessonPurpose,
       preferredStage: deck.slides[i].modelStage,
       avoidTitles,
     });

@@ -4,6 +4,10 @@
 const { client: aiClient } = require('./ai-client');
 const { gradeProfile } = require('./grade');
 const { getTeachingModel, normalizeTeachingModelId, modelPromptBlock } = require('./teaching-models');
+const {
+  ASSESSMENT_DRAFT_SCHEMA, normalizeLessonPurpose, normalizeAssessmentOptions,
+  normalizeAssessmentDraft, fallbackDraft, assessmentPromptBlock,
+} = require('./assessment-draft');
 
 // How much of an uploaded template reaches the prompt. Exported so the upload
 // endpoint can warn when a template exceeds it instead of silently dropping the end.
@@ -11,7 +15,7 @@ const TEMPLATE_PROMPT_LIMIT = 6000;
 
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
-function planSchema(model, sequence = null, structuredSequence = false) {
+function planSchema(model, sequence = null, structuredSequence = false, includeAssessment = false) {
   const lessonCount = Math.min(5, Math.max(2, parseInt(sequence && sequence.lessonCount, 10) || 3));
   const sectionProperties = {
     heading: { type: 'string' },
@@ -23,24 +27,30 @@ function planSchema(model, sequence = null, structuredSequence = false) {
     sectionProperties.lesson = { type: 'integer', enum: Array.from({ length: lessonCount }, (_, index) => index + 1) };
     sectionRequired.push('lesson');
   }
-  return {
-    type: 'object',
-    properties: {
-      successCriteria: {
-        type: 'array',
-        items: { type: 'string' },
-      },
-      sections: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: sectionProperties,
-          required: sectionRequired,
-          additionalProperties: false,
-        },
+  const properties = {
+    successCriteria: {
+      type: 'array',
+      items: { type: 'string' },
+    },
+    sections: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: sectionProperties,
+        required: sectionRequired,
+        additionalProperties: false,
       },
     },
-    required: ['successCriteria', 'sections'],
+  };
+  const required = ['successCriteria', 'sections'];
+  if (includeAssessment) {
+    properties.assessmentDraft = ASSESSMENT_DRAFT_SCHEMA;
+    required.push('assessmentDraft');
+  }
+  return {
+    type: 'object',
+    properties,
+    required,
     additionalProperties: false,
   };
 }
@@ -86,10 +96,11 @@ Include teacher actions, student practice, a check for understanding, and useful
 Do not put "Lesson ${step}" into school template headings; the app labels the step outside the plan.\n`;
 }
 
-function buildPrompt({ subject, topic, grade, tone, objectives, successCriteria = [], templateText, unitBlock, sourceMaterialText, planningFrameworkText = '', teachingModel, sequence, structuredSequence = false, sequenceLessonNumber = null, previousLessonPlanText = '' }) {
+function buildPrompt({ subject, topic, grade, tone, objectives, successCriteria = [], templateText, unitBlock, sourceMaterialText, planningFrameworkText = '', teachingModel, sequence, structuredSequence = false, sequenceLessonNumber = null, previousLessonPlanText = '', lessonPurpose = 'lesson', assessmentOptions = {} }) {
   const pretty = topic.replace(/-/g, ' ');
   const depth = gradeProfile(grade).content.depth;
   const model = getTeachingModel(teachingModel);
+  const purpose = normalizeLessonPurpose(lessonPurpose);
   const unitSection = unitBlock ? `\n${unitBlock}\n` : '';
   const templateBlock = templateText
     ? `The school's LESSON PLAN TEMPLATE is below. Reproduce its section headings and their order EXACTLY as they appear — same names, same sequence (e.g. Starter, Main Activity, Plenary, Exit Card, Resources, etc.). Fill each section with content written specifically for THIS lesson.
@@ -126,6 +137,13 @@ ${templateText.slice(0, TEMPLATE_PROMPT_LIMIT)}
     ? `GRADUAL RELEASE REQUIREMENT:
 In the main teaching/activity field, begin with "Teaching model: Gradual Release" and use these labels exactly: "I Do", "We Do", "You Do Together", and "You Do Alone". Under every label give concrete teacher actions, concrete student actions, the example/task or materials, and a check for understanding or transition. Do not reduce a phase to a single generic sentence. The closing/plenary must provide the Exit and Reflect phase.`
     : '';
+  const purposeBlock = purpose === 'lesson'
+    ? '\nLESSON PURPOSE: Normal taught lesson. The teacher introduces and teaches new content, then students practise and demonstrate learning.\n'
+    : purpose === 'project'
+      ? `\nLESSON PURPOSE: PROJECT SESSION.
+The school template headings and front matter stay exactly as supplied, but the teaching strategy changes. The teacher briefly launches the project, explains the outcome and success criteria, then facilitates while students do the work. Write context-specific student stages that become more independent as the grade rises. Include teacher circulation, checkpoints, observation and feedback. Preparation resources must teach or rehearse prerequisite knowledge and skills without completing the assessed product for students.\n`
+      : `\nLESSON PURPOSE: TEST SESSION.
+The school template headings and front matter stay exactly as supplied, but the teaching strategy changes. The teacher may introduce procedures and expectations before the test, then does not teach, prompt, explain answers or lead checks while students work. Write administration, timing, access arrangements, independent student work, teacher supervision, collection and marking steps. Preparation resources belong before the test and must cover prerequisite knowledge without reproducing live questions or answers.\n`;
 
   return `You are an experienced teacher writing a complete lesson plan.
 
@@ -134,6 +152,7 @@ Topic: ${pretty}
 Grade level: ${grade}
 Tone: ${tone}
 ${modelPromptBlock(model, { structureFromTemplate: !!templateText })}
+${purposeBlock}
 ${unitSection}
 ${sourceBlock}${frameworkBlock}
 ${sequenceBlock}
@@ -143,6 +162,7 @@ ${objectives}
 ${criteriaBlock}
 
 ${templateBlock}
+${assessmentPromptBlock(purpose, assessmentOptions)}
 
 Rules:
   - ${outputShapeRule}
@@ -152,7 +172,7 @@ Rules:
 - VOCABULARY: whenever you list key words or vocabulary, give each one a short, clear definition on the same line (e.g. "Cooperate: to work together to get something done") — never list a term without explaining what it means.
 - GAMES & ACTIVITIES: whenever the plan includes a game or activity, spell it out so another teacher could run it without guessing — state the goal (how to "win" / what success looks like), the materials needed, and the step-by-step rules of how to play. Never just name an activity.
 - SUCCESS CRITERIA: return the lesson's final criteria in the top-level successCriteria array. They must be usable in the downloaded plan even when the school template excluded this field from AI-authored headings.
-- ${modelDetailRule || `Make every teaching phase specific: state what the teacher does, what students do, the concrete example or task, and how understanding is checked.`}
+- ${modelDetailRule || (purpose === 'test' ? 'Make test administration specific: state what the teacher does before, during and after the test, what students do independently, and how work is collected and marked. Do not include in-test teaching or answer checks.' : `Make every phase specific: state what the teacher does, what students do, the concrete task, and how progress or understanding is checked.`)}
 - ${depth}
   - Make the plan fully address the objectives above and be appropriate for ${grade}.
   - ${templateText
@@ -256,9 +276,11 @@ function placeholderPlan(objectives, teachingModel) {
   };
 }
 
-async function generateLessonPlan({ subject, topic, grade = 'middle school', tone = 'clear and engaging', objectives, successCriteria = [], templateText, unitBlock = '', sourceMaterialText = '', planningFrameworkText = '', teachingModel = 'standard', sequence = null, structuredSequence = false, sequenceLessonNumber = null, previousLessonPlanText = '', regenerate = false }) {
+async function generateLessonPlan({ subject, topic, grade = 'middle school', tone = 'clear and engaging', objectives, successCriteria = [], templateText, unitBlock = '', sourceMaterialText = '', planningFrameworkText = '', teachingModel = 'standard', sequence = null, structuredSequence = false, sequenceLessonNumber = null, previousLessonPlanText = '', lessonPurpose = 'lesson', assessmentTotalMarks = 50, assessmentStructure = 'balanced', assessmentDeliveryMode = 'live', assessmentBrief = '', assessmentQuestionTypes = [], assessmentMcqCount = 15, regenerate = false }) {
   const teachingModelId = normalizeTeachingModelId(teachingModel);
   const model = getTeachingModel(teachingModelId);
+  const purpose = normalizeLessonPurpose(lessonPurpose);
+  const assessmentOptions = normalizeAssessmentOptions({ assessmentTotalMarks, assessmentStructure, assessmentDeliveryMode, assessmentBrief, assessmentQuestionTypes, assessmentMcqCount });
   const cleanSequence = sequence && sequence.enabled ? {
     enabled: true,
     lessonCount: Math.min(5, Math.max(2, parseInt(sequence.lessonCount, 10) || 3)),
@@ -275,7 +297,8 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
         placeholder.sections.map(section => ({ ...section, lesson: lessonIndex + 1 }))
       ).flat();
     }
-    return { ...finalizeLessonPlan(placeholder, { objectives, suppliedSuccessCriteria: successCriteria, teachingModelId }), teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
+    const assessmentDraft = fallbackDraft({ subject, topic, grade, objectives, lessonPurpose: purpose, assessmentTotalMarks: assessmentOptions.totalMarks, assessmentStructure: assessmentOptions.structure, assessmentDeliveryMode: assessmentOptions.deliveryMode, assessmentBrief: assessmentOptions.brief, assessmentQuestionTypes: assessmentOptions.questionTypes, assessmentMcqCount: assessmentOptions.mcqCount });
+    return { ...finalizeLessonPlan(placeholder, { objectives, suppliedSuccessCriteria: successCriteria, teachingModelId }), teachingModelId, lessonPurpose: purpose, assessmentDraft, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
   }
   const { wrap } = require('./cache');
   const cachedOrGenerated = await wrap('lesson-plan', {
@@ -290,6 +313,8 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     sourceMaterialText: String(sourceMaterialText || '').slice(0, 5000).trim(),
     planningFrameworkText: String(planningFrameworkText || '').slice(0, 7000).trim(),
     teachingModelId,
+    lessonPurpose: purpose,
+    assessmentOptions,
     sequence: cleanSequence,
     structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber),
     sequenceLessonNumber: cleanLessonNumber,
@@ -299,16 +324,17 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     const client = aiClient();
     const response = await client.chat.completions.create({
       model: MODEL,
-      max_tokens: cleanSequence && structuredSequence && !cleanLessonNumber ? 12000 : 6000,
-      messages: [{ role: 'user', content: buildPrompt({ subject, topic, grade, tone, objectives, successCriteria, templateText, unitBlock, sourceMaterialText, planningFrameworkText, teachingModel: teachingModelId, sequence: cleanSequence, structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber), sequenceLessonNumber: cleanLessonNumber, previousLessonPlanText }) }],
-      response_format: { type: 'json_schema', json_schema: { name: 'lesson_plan', strict: true, schema: planSchema(model, cleanSequence, !!(cleanSequence && structuredSequence && !cleanLessonNumber)) } },
+      max_tokens: cleanSequence && structuredSequence && !cleanLessonNumber ? 12000 : (purpose === 'lesson' ? 6000 : 12000),
+      messages: [{ role: 'user', content: buildPrompt({ subject, topic, grade, tone, objectives, successCriteria, templateText, unitBlock, sourceMaterialText, planningFrameworkText, teachingModel: teachingModelId, sequence: cleanSequence, structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber), sequenceLessonNumber: cleanLessonNumber, previousLessonPlanText, lessonPurpose: purpose, assessmentOptions }) }],
+      response_format: { type: 'json_schema', json_schema: { name: 'lesson_plan', strict: true, schema: planSchema(model, cleanSequence, !!(cleanSequence && structuredSequence && !cleanLessonNumber), purpose !== 'lesson') } },
     });
     const text = response.choices[0]?.message?.content;
     if (!text) throw new Error('No lesson plan returned from the model');
     return { ...JSON.parse(text), teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
   });
   const finalized = finalizeLessonPlan(cachedOrGenerated, { objectives, suppliedSuccessCriteria: successCriteria, teachingModelId });
-  return { ...finalized, teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
+  const assessmentDraft = normalizeAssessmentDraft(cachedOrGenerated.assessmentDraft, { subject, topic, grade, objectives, lessonPurpose: purpose, ...assessmentOptions });
+  return { ...finalized, teachingModelId, lessonPurpose: purpose, assessmentDraft, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
 }
 
 // Render an accepted plan to a compact text block to feed into slide generation.

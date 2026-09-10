@@ -96,3 +96,51 @@ test('teacher can generate, review, create slides, download, and export to Googl
   await expect(page.locator('#driveExportStatus')).toContainText('Saved to Google Slides');
   await expect(page.locator('#driveExportStatus a')).toHaveAttribute('href', /docs\.google\.com\/presentation/);
 });
+
+test('Plan automatically creates an editable project assessment draft', async ({ page }, testInfo) => {
+  test.skip(!['windows-100', 'mobile'].includes(testInfo.project.name), 'Desktop and mobile cover the automatic project flow.');
+  let planPayload;
+  await page.route('**/api/lesson-plan', async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    planPayload = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        teachingModelId: 'standard', lessonPurpose: 'project', usedTemplate: false,
+        successCriteria: ['I can create and edit a document independently.'],
+        sections: [{ heading: 'Project session', stageId: 'practice', content: 'Teacher launches the task. Students complete it independently.' }],
+        assessmentDraft: {
+          title: 'Document creation project', subject: 'ICT', grade: 'Grade 2', assessmentType: 'project', deliveryMode: 'live', totalMarks: 60,
+          objectives: [{ id: 'objective-create-and-edit-a-document', text: 'Create and edit a document' }],
+          instructions: 'Complete each section in class.',
+          sections: [
+            { id: 'auto-section-1', title: 'Knowledge check', type: 'mcq', instructions: 'Choose the best answer.', objectiveIds: ['objective-create-and-edit-a-document'], items: [{ id: 'auto-1-1', prompt: 'Which action checks written work?', marks: 20, options: ['Proofread it', 'Close it'], correctIndex: 0 }] },
+            { id: 'auto-section-2', title: 'Practical task', type: 'practical', instructions: 'Create the document.', objectiveIds: ['objective-create-and-edit-a-document'], items: [{ id: 'auto-2-1', prompt: 'Creates and corrects a short document', marks: 40 }] },
+          ],
+        },
+      }),
+    });
+  });
+
+  await signInDisposableTeacher(page, `-auto-project-${testInfo.project.name}`);
+  await page.getByRole('button', { name: /Start with objectives/ }).click();
+  await page.locator('input[name="lessonPurpose"][value="project"]').check();
+  await page.locator('#subject').fill('ICT');
+  await page.locator('#topic').fill('Document creation');
+  await page.locator('#flowSourceNextBtn').click();
+  await page.locator('#objectives').fill('Create and edit a document');
+  await page.locator('#flowObjectivesNextBtn').click();
+  await expect(page.locator('#autoAssessmentSettings')).toBeVisible();
+  await page.locator('#assessmentPlanTotal').fill('60');
+  await page.locator('#planBtn').click();
+
+  await expect(page.locator('#autoAssessmentSummary')).toContainText('60 marks');
+  expect(planPayload).toMatchObject({ lessonPurpose: 'project', assessmentTotalMarks: 60, assessmentQuestionTypes: ['mcq', 'practical'], assessmentMcqCount: 15 });
+  await page.locator('#reviewAutoAssessmentBtn').click();
+  await expect(page.locator('#assessmentBuilder')).toBeVisible();
+  await expect(page.locator('#assessmentTitle')).toHaveValue('Document creation project');
+  await expect(page.locator('#assessmentTotal')).toHaveValue('60');
+  await expect(page.locator('#assessmentSections .assessment-section')).toHaveCount(2);
+  await expect(page.locator('#assessmentTotalStatus')).toHaveClass(/valid/);
+});

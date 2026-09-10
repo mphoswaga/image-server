@@ -312,6 +312,24 @@
     .sequence-toggle strong { display:block; font-size:13.5px; color:var(--ink); }
     .sequence-toggle span { display:block; margin-top:2px; font-size:12px; color:var(--muted); line-height:1.35; }
     @media(max-width:760px){ .sequence-grid { grid-template-columns:1fr; } }
+    .purpose-picker { margin:0 0 24px; padding:18px; border:1px solid var(--border); border-radius:14px; background:#f8fafc; }
+    .purpose-picker h3 { margin:0; font-size:16px; color:var(--ink); }
+    .purpose-picker > p { margin:5px 0 13px; font-size:13px; color:var(--muted); }
+    .purpose-options { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+    .purpose-option { position:relative; display:block; cursor:pointer; }
+    .purpose-option input { position:absolute; inset:0; z-index:2; width:100%; height:100%; margin:0; opacity:0; cursor:pointer; }
+    .purpose-option span { display:block; height:100%; padding:13px 14px; border:1.5px solid var(--border); border-radius:11px; background:#fff; color:var(--ink); transition:.15s; }
+    .purpose-option strong,.purpose-option small { display:block; }
+    .purpose-option strong { font-size:14px; }
+    .purpose-option small { margin-top:4px; color:var(--muted); font-size:12px; line-height:1.4; }
+    .purpose-option input:checked + span { border-color:var(--accent); background:var(--accent-soft); box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 14%,transparent); }
+    .purpose-option input:focus-visible + span { outline:3px solid color-mix(in srgb,var(--accent) 25%,transparent); outline-offset:2px; }
+    .auto-assessment-settings { margin:16px 0; padding:15px; border:1px solid #b9dfd0; border-radius:11px; background:#f2fbf7; }
+    .auto-assessment-settings .assessment-grid { margin-top:12px; }
+    .auto-assessment-summary { margin:14px 0 4px; padding:15px; border:1px solid #b9dfd0; border-radius:11px; background:#f2fbf7; }
+    .auto-assessment-summary h3 { margin:0 0 4px; font-size:15px; }
+    .auto-assessment-summary p { margin:0; color:var(--muted); font-size:13px; }
+    @media(max-width:700px){ .purpose-options { grid-template-columns:1fr; } }
 
     /* ── Planning source: stepped composer ──────────────────────────────── */
     .ps-step { display:flex; gap:18px; margin-bottom:24px; padding-bottom:24px; border-bottom:1px solid var(--border); }
@@ -2815,6 +2833,16 @@
         </div>
       </details>
 
+      <div class="purpose-picker">
+        <h3>What are you planning?</h3>
+        <p>This choice changes the teacher role, student work, slide deck, preparation resources, and assessment.</p>
+        <div class="purpose-options" role="radiogroup" aria-label="Plan type">
+          <label class="purpose-option"><input type="radio" name="lessonPurpose" value="lesson" checked><span><strong>Normal lesson</strong><small>Teach new content, guide practice, and check learning.</small></span></label>
+          <label class="purpose-option"><input type="radio" name="lessonPurpose" value="project"><span><strong>Project</strong><small>Launch the task, show progress stages, then observe and support student work.</small></span></label>
+          <label class="purpose-option"><input type="radio" name="lessonPurpose" value="test"><span><strong>Test</strong><small>Introduce procedures, supervise independent work, then mark it in LessonScope.</small></span></label>
+        </div>
+      </div>
+
       <!-- Step 1: Planning source -->
       <div class="ps-step">
         <div class="ps-num" id="sourceStepNum">1</div>
@@ -2954,6 +2982,23 @@
           </select>
           <p id="teachingModelHint" class="hint" style="margin:7px 0 12px;font-size:12.5px">A flexible lesson flow that works well for most topics and school templates.</p>
           <div id="teachingModelFlow" class="model-flow" aria-live="polite"></div>
+          <div id="autoAssessmentSettings" class="auto-assessment-settings" style="display:none">
+            <strong id="autoAssessmentHeading">Automatic assessment</strong>
+            <p class="hint" style="margin:4px 0 0">LessonScope will generate this draft with the lesson plan. You can edit every section and mark before publishing.</p>
+            <div class="assessment-grid">
+              <div><label for="assessmentPlanTotal">Total marks</label><input id="assessmentPlanTotal" type="number" min="1" max="1000" step="1" value="50"></div>
+              <div><label for="assessmentPlanStructure">Structure</label><select id="assessmentPlanStructure"><option value="balanced">Knowledge + practical/application</option><option value="knowledge">Knowledge questions only</option><option value="practical">Practical / product only</option><option value="mixed">Mixed question types</option><option value="custom">Use my instructions below</option></select></div>
+              <div><label for="assessmentPlanDelivery">Classroom delivery</label><select id="assessmentPlanDelivery"><option value="live">Live — teacher controls each section</option><option value="self-paced">Self-paced — students see all sections</option></select></div>
+              <div><label for="assessmentPlanMcqCount">Multiple-choice items</label><input id="assessmentPlanMcqCount" type="number" min="0" max="50" step="1" value="15"></div>
+              <div class="full"><label>Item types to generate</label><div style="display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:7px">
+                <label style="font-weight:500"><input type="checkbox" name="assessmentPlanType" value="mcq" checked style="width:auto"> Multiple choice</label>
+                <label style="font-weight:500"><input type="checkbox" name="assessmentPlanType" value="short-answer" style="width:auto"> Short answer</label>
+                <label style="font-weight:500"><input type="checkbox" name="assessmentPlanType" value="extended-response" style="width:auto"> Extended response</label>
+                <label style="font-weight:500"><input type="checkbox" name="assessmentPlanType" value="practical" checked style="width:auto"> Practical / observation</label>
+              </div></div>
+              <div class="full"><label for="assessmentPlanBrief">Requirements <span style="font-weight:400;color:var(--muted)">(optional)</span></label><textarea id="assessmentPlanBrief" rows="2" maxlength="1200" placeholder="e.g. 20 multiple-choice marks, then a 30-mark investigation"></textarea></div>
+            </div>
+          </div>
           <div class="framework-picker">
             <div class="framework-picker-head"><strong><svg class="ic" aria-hidden="true"><use href="#i-compass"/></svg> Planning framework <span class="opt-tag">optional</span></strong><button id="frameworkManageBtn" type="button" class="btn ghost" style="font-size:12px;padding:6px 10px">Manage</button></div>
             <div class="framework-picker-row">
@@ -3022,6 +3067,7 @@
         <button id="nextSequencePlanBtn" type="button" class="btn primary sequence-next"></button>
       </div>
       <div id="planSections"></div>
+      <div id="autoAssessmentSummary" class="auto-assessment-summary" style="display:none"></div>
       <div class="wp-slot-mount" data-wp-mount="stage:plan" style="margin-top:16px"></div>
       <div class="plan-actions" style="margin-top:16px">
         <button id="acceptBtn" class="btn accent"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Accept &amp; create slides</button>
@@ -3057,8 +3103,8 @@
 
       <!-- Lesson pack: student-facing materials from this same lesson -->
       <section id="packSection" class="card wide" style="margin-top:24px">
-        <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg> Lesson pack <span class="hint-i" tabindex="0" role="img" aria-label="Student-facing materials from this same lesson. Generate a worksheet (practice questions + answer key) or an exit ticket (a quick end-of-lesson check), edit them, and download each as a Word document." data-tip="Student-facing materials from this same lesson. Generate a worksheet (practice questions + answer key) or an exit ticket (a quick end-of-lesson check), edit them, and download each as a Word document.">i</span></h2>
-        <p class="hint">Turn this lesson into student-facing materials — generate, tweak, and download each as a Word document.</p>
+        <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg> <span id="packTitleText">Lesson pack</span> <span class="hint-i" tabindex="0" role="img" aria-label="Student-facing materials from this same plan. Generate, edit, and download each as a Word document." data-tip="Student-facing materials from this same plan. Generate, edit, and download each as a Word document.">i</span></h2>
+        <p id="packPurposeHint" class="hint">Turn this lesson into student-facing materials — generate, tweak, and download each as a Word document.</p>
         <div class="pack-actions">
           <button type="button" class="btn ghost" data-pack="notes"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Study notes</button>
           <button type="button" class="btn ghost" data-pack="worksheet"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Worksheet</button>
@@ -3541,7 +3587,7 @@
     const composer=$('composer'), planStage=$('planStage'), results=$('results'), statusEl=$('status');
     let library={subjects:[],topicsBySubject:{}}, ctx=null, currentDeckId=null;
     let currentWorkspaceId=null, workspaceSaveTimer=null, workspaceSaveChain=Promise.resolve(), restoringWorkspace=false;
-    let workspacePacks={}, workspaceAssignmentIds=[], workspaceGameIds=[], lastDeckPreview=null;
+    let workspacePacks={}, workspaceAssignmentIds=[], workspaceGameIds=[], lastDeckPreview=null, pendingAssessmentDraft=null;
     let sequencePlans=[], activeSequencePlanIndex=0, sequencePlanDownloaded=false;
     let sequenceDecks=[], activeSequenceDeckIndex=0, sequenceStartLessonNumber=null;
     let teachingModelsById={standard:{id:'standard',label:'Standard lesson',description:'A flexible lesson flow that works well for most topics and school templates.'}}, selectedTeachingModelId='standard';
@@ -3830,6 +3876,26 @@
       $('teachingModelFlow').innerHTML=(model.stages||[]).map((stage,index)=>`${index?'<span class="arrow" aria-hidden="true">→</span>':''}<span class="stage">${esc(stage.label)}</span>`).join('');
     }
     $('teachingModel').addEventListener('change',updateTeachingModelHint);
+    function currentLessonPurpose(){ return document.querySelector('input[name="lessonPurpose"]:checked')?.value||'lesson'; }
+    function selectedAssessmentTypes(){ return [...document.querySelectorAll('input[name="assessmentPlanType"]:checked')].map(input=>input.value); }
+    function applyAssessmentStructureChoice(){
+      const structure=$('assessmentPlanStructure').value;
+      const presets={balanced:['mcq','practical'],knowledge:['mcq','short-answer','extended-response'],practical:['practical'],mixed:['mcq','short-answer','extended-response','practical']};
+      if(presets[structure]) document.querySelectorAll('input[name="assessmentPlanType"]').forEach(input=>{ input.checked=presets[structure].includes(input.value); });
+      $('assessmentPlanMcqCount').disabled=!selectedAssessmentTypes().includes('mcq');
+    }
+    function updateLessonPurposeUI(){
+      const purpose=currentLessonPurpose(), assessment=purpose!=='lesson';
+      $('autoAssessmentSettings').style.display=assessment?'block':'none';
+      $('autoAssessmentHeading').textContent=purpose==='test'?'Automatic test':'Automatic project assessment';
+      $('objStepLabel').innerHTML=ICON('i-clipboard')+(purpose==='lesson'?' Lesson objectives':' Objectives and assessed skills')+' <span style="color:var(--err)">*</span>';
+      $('planBtn').innerHTML=ICON('i-spark')+` Generate ${purpose==='lesson'?'lesson':purpose} plan`;
+      $('acceptBtn').innerHTML=ICON('i-layers')+` Accept &amp; create ${purpose==='lesson'?'slides':purpose+' slides'}`;
+    }
+    document.querySelectorAll('input[name="lessonPurpose"]').forEach(input=>input.addEventListener('change',updateLessonPurposeUI));
+    $('assessmentPlanStructure').addEventListener('change',applyAssessmentStructureChoice);
+    document.querySelectorAll('input[name="assessmentPlanType"]').forEach(input=>input.addEventListener('change',()=>{ $('assessmentPlanStructure').value='custom'; $('assessmentPlanMcqCount').disabled=!selectedAssessmentTypes().includes('mcq'); }));
+    updateLessonPurposeUI();
     async function loadTeachingModels(){
       try{
         const d=await fetch('/api/teaching-models').then(r=>r.json());
@@ -4643,9 +4709,18 @@
         const firstBad=['subject','topic','objectives'][bad.indexOf(true)];
         if(firstBad){ setComposerPage(firstBad==='objectives'?2:1,{push:false}); $(firstBad).focus(); $(firstBad).scrollIntoView({behavior:'smooth',block:'center'}); return; }
       }
+      const lessonPurpose=currentLessonPurpose();
+      if(lessonPurpose!=='lesson'&&!selectedAssessmentTypes().length){ setComposerPage(3,{push:false}); toast('Choose at least one item type for the automatic assessment.'); return; }
       ctx={ subject, topic, grade:$('grade').value||'middle school',
         slideCount:Number($('slideCount').value)||5, tone:$('tone').value, focus:$('focus').value.trim(), objectives,
         teachingModelId:$('teachingModel').value||'standard',
+        lessonPurpose,
+        assessmentTotalMarks:Number($('assessmentPlanTotal').value)||50,
+        assessmentStructure:$('assessmentPlanStructure').value||'balanced',
+        assessmentDeliveryMode:$('assessmentPlanDelivery').value||'live',
+        assessmentBrief:$('assessmentPlanBrief').value.trim(),
+        assessmentQuestionTypes:selectedAssessmentTypes(),
+        assessmentMcqCount:Number($('assessmentPlanMcqCount').value)||0,
         ...lessonSequenceFromForm(),
         sourceMaterialText, sourceMaterialImages,
         templateId:selectedTemplateId,
@@ -4766,10 +4841,11 @@
     }
     function paintPlan(d){
       planTemplateId=d.templateId||null;
+      const purpose=(ctx&&ctx.lessonPurpose)||d.lessonPurpose||'lesson';
       // Their own slides are already made — this screen is for the plan only.
       $('acceptBtn').innerHTML=deckImported
         ? ICON('i-layers')+' Save plan &amp; continue'
-        : ICON('i-layers')+' Accept &amp; create slides';
+        : ICON('i-layers')+` Accept &amp; create ${purpose==='lesson'?'slides':purpose+' slides'}`;
       $('regenPlanBtn').style.display=deckImported?'none':'';
       if(d.model) teachingModelsById[d.model.id]=d.model;
       const model=teachingModelsById[d.teachingModelId||ctx?.teachingModelId||'standard']||teachingModelsById.standard;
@@ -4791,6 +4867,14 @@
         </div>`).join('');
       planStage.querySelectorAll('textarea.content').forEach(t=>{ t.style.height='auto'; t.style.height=t.scrollHeight+'px'; t.addEventListener('input',()=>{t.style.height='auto';t.style.height=t.scrollHeight+'px'; scheduleWorkspaceSave();}); });
       planStage.querySelectorAll('input.heading').forEach(input=>input.addEventListener('input',scheduleWorkspaceSave));
+    }
+    function renderAutoAssessmentSummary(){
+      const box=$('autoAssessmentSummary'), draft=pendingAssessmentDraft;
+      if(!draft){ box.style.display='none'; box.innerHTML=''; return; }
+      const itemCount=(draft.sections||[]).reduce((sum,section)=>sum+(section.items||[]).length,0);
+      box.style.display='block';
+      box.innerHTML=`<h3>${ICON('i-clipboard')}Automatic ${esc(draft.assessmentType||'assessment')} draft ready</h3><p>${esc(draft.title)} · ${draft.totalMarks} marks · ${(draft.sections||[]).length} section${(draft.sections||[]).length===1?'':'s'} · ${itemCount} item${itemCount===1?'':'s'}</p><button id="reviewAutoAssessmentBtn" type="button" class="btn accent" style="width:auto;margin-top:11px">Review and edit before publishing</button>`;
+      $('reviewAutoAssessmentBtn').addEventListener('click',()=>openGeneratedAssessmentDraft(draft));
     }
     function renderSequencePlanFlow(){
       const flow=$('sequencePlanFlow');
@@ -4821,12 +4905,18 @@
     }
     function renderPlan(d){
       if(ctx&&Array.isArray(d.successCriteria)&&d.successCriteria.length) ctx.successCriteria=d.successCriteria.slice();
+      if(ctx&&d.lessonPurpose) ctx.lessonPurpose=d.lessonPurpose;
+      if(Object.prototype.hasOwnProperty.call(d,'assessmentDraft')){
+        pendingAssessmentDraft=d.assessmentDraft?JSON.parse(JSON.stringify(d.assessmentDraft)):null;
+        if(ctx)ctx.assessmentDraft=pendingAssessmentDraft;
+      }
       if(sequenceMode()&&d.sequenceLessonNumber){
         const index=Math.max(0,Number(d.sequenceLessonNumber)-1);
         sequencePlans[index]={...d,sections:(d.sections||[]).map(section=>({...section}))};
         activeSequencePlanIndex=index;
       }
       paintPlan(d);
+      renderAutoAssessmentSummary();
       renderSequencePlanFlow();
       scheduleWorkspaceSave();
     }
@@ -5169,6 +5259,7 @@
     const BAND={ early:'Early grades · big colourful text', middle:'Middle grades · balanced', senior:'Senior grades · detailed' };
     function renderDeck(d){
       lastDeckPreview=d;
+      const purpose=d.lessonPurpose||(ctx&&ctx.lessonPurpose)||'lesson';
       if(sequenceMode()&&sequenceDecks.length){
         const index=sequenceDecks.findIndex(deck=>deck&&(deck.deckId===d.deckId||deck.deckId===currentDeckId));
         if(index>=0) sequenceDecks[index]={...sequenceDecks[index],...d,deckId:d.deckId||sequenceDecks[index].deckId};
@@ -5176,6 +5267,12 @@
       $('deckTitle').textContent=d.filename.replace('.pptx','');
       const model=teachingModelsById[d.teachingModelId];
       $('deckCount').innerHTML=`· ${d.slideCount} slides ${model?`<span class="band-pill">${ICON('i-target')}${esc(model.label)}</span>`:''} ${d.band?`<span class="band-pill">${ICON('i-target')}${BAND[d.band]||d.band}</span>`:''}`;
+      $('packTitleText').textContent=purpose==='lesson'?'Lesson pack':purpose==='test'?'Test preparation resources':'Project preparation resources';
+      $('packPurposeHint').textContent=purpose==='lesson'
+        ? 'Turn this lesson into student-facing materials — generate, tweak, and download each as a Word document.'
+        : purpose==='test'
+          ? 'Generate revision and practice materials for use before the test. They will not reproduce live questions, answers, or marking criteria.'
+          : 'Generate prerequisite practice and planning support without completing the assessed project for students or revealing marking guidance.';
       deckEl.className='deck'+(d.band?' band-'+d.band:''); deckEl.innerHTML=d.slides.map((s,i)=>cardHTML(s,i)).join('');
       $('packPreview').innerHTML=''; // reset lesson-pack for the new deck
       resetGameSection(); // reset the student-game box for the new deck
@@ -6630,6 +6727,7 @@
       workspaceAssignmentIds=[];
       workspaceGameIds=[];
       lastDeckPreview=null;
+      pendingAssessmentDraft=null;
       packType=null;
       packData=null;
       importedPlanText='';
@@ -6755,6 +6853,17 @@
     function restoreContextFields(saved){
       const fields={subject:'subject',topic:'topic',objectives:'objectives',grade:'grade',slideCount:'slideCount',tone:'tone',focus:'focus',teachingModelId:'teachingModel'};
       Object.entries(fields).forEach(([key,id])=>{ const el=$(id); if(el&&saved[key]!==undefined&&saved[key]!==null) el.value=String(saved[key]); });
+      const purpose=document.querySelector(`input[name="lessonPurpose"][value="${['lesson','project','test'].includes(saved.lessonPurpose)?saved.lessonPurpose:'lesson'}"]`);
+      if(purpose)purpose.checked=true;
+      if(saved.assessmentTotalMarks)$('assessmentPlanTotal').value=String(saved.assessmentTotalMarks);
+      if(saved.assessmentStructure)$('assessmentPlanStructure').value=saved.assessmentStructure;
+      if(saved.assessmentDeliveryMode)$('assessmentPlanDelivery').value=saved.assessmentDeliveryMode;
+      if(saved.assessmentBrief!==undefined)$('assessmentPlanBrief').value=saved.assessmentBrief||'';
+      if(saved.assessmentMcqCount!==undefined)$('assessmentPlanMcqCount').value=String(saved.assessmentMcqCount);
+      if(Array.isArray(saved.assessmentQuestionTypes)) document.querySelectorAll('input[name="assessmentPlanType"]').forEach(input=>{ input.checked=saved.assessmentQuestionTypes.includes(input.value); });
+      pendingAssessmentDraft=saved.assessmentDraft?JSON.parse(JSON.stringify(saved.assessmentDraft)):null;
+      updateLessonPurposeUI();
+      $('assessmentPlanMcqCount').disabled=!selectedAssessmentTypes().includes('mcq');
       if($('sequenceEnabled')) $('sequenceEnabled').checked=!!saved.sequenceEnabled;
       if($('sequenceLessonCount')&&saved.sequenceLessonCount) $('sequenceLessonCount').value=String(saved.sequenceLessonCount);
       if($('periodMinutes')&&saved.periodMinutes) $('periodMinutes').value=String(saved.periodMinutes);
@@ -6913,9 +7022,10 @@
     function closeGames(){ gamesPanel.style.display='none'; stepsEl.style.display='flex'; show('composer'); setStep(1); setActiveNav('homeBtn'); }
     $('gamesBtn').onclick=openGames; $('gamesBack').onclick=closeGames; $('gamesBackTop').onclick=closeGames;
 
-    function openAssignments(){ hideAllPanels(); $('assignmentsPanel').style.display='block'; loadMyAssignments(); setActiveNav('assignmentsBtn'); window.scrollTo({top:0,behavior:'smooth'}); }
-    function closeAssignments(){ $('assignmentsPanel').style.display='none'; stepsEl.style.display='flex'; show('composer'); setStep(1); setActiveNav('homeBtn'); }
-    $('assignmentsBtn').onclick=openAssignments; $('assignmentsBack').onclick=closeAssignments; $('assignmentsBackTop').onclick=closeAssignments;
+    let assignmentReturnStage='composer';
+    function openAssignments(returnStage='composer'){ assignmentReturnStage=returnStage; hideAllPanels(); $('assignmentsPanel').style.display='block'; loadMyAssignments(); setActiveNav('assignmentsBtn'); window.scrollTo({top:0,behavior:'smooth'}); }
+    function closeAssignments(){ $('assignmentsPanel').style.display='none'; stepsEl.style.display='flex'; show(assignmentReturnStage); setStep(assignmentReturnStage==='plan'?2:assignmentReturnStage==='slides'?3:1); setActiveNav(assignmentReturnStage==='composer'?'homeBtn':'lessonsBtn'); }
+    $('assignmentsBtn').onclick=()=>openAssignments(); $('assignmentsBack').onclick=closeAssignments; $('assignmentsBackTop').onclick=closeAssignments;
 
     // ── Marks / gradebook ─────────────────────────────────────────────────────
     let gbClasses=[], gbSelected=null;
@@ -7263,6 +7373,24 @@
     function collectAssessment(){
       syncAssessmentState();
       return {title:$('assessmentTitle').value.trim(),subject:$('assessmentSubject').value.trim(),grade:$('assessmentGrade').value.trim(),assessmentType:$('assessmentKind').value,deliveryMode:$('assessmentDelivery').value,totalMarks:Number($('assessmentTotal').value),objectives:assessmentObjectives(),instructions:$('assessmentInstructions').value.trim(),sections:assessmentSectionsState};
+    }
+    function openGeneratedAssessmentDraft(draft){
+      if(!draft)return;
+      openAssignments('plan');
+      $('assessmentBuilder').style.display='block';
+      $('assessmentKind').value=draft.assessmentType==='project'?'project':'test';
+      $('assessmentTotal').value=String(draft.totalMarks||50);
+      $('assessmentDelivery').value=draft.deliveryMode==='self-paced'?'self-paced':'live';
+      $('assessmentTitle').value=draft.title||'';
+      $('assessmentSubject').value=draft.subject||(ctx&&ctx.subject)||'';
+      $('assessmentGrade').value=draft.grade||(ctx&&ctx.grade)||'';
+      $('assessmentObjectives').value=(draft.objectives||[]).map(objective=>objective.text||objective).filter(Boolean).join('\n');
+      $('assessmentInstructions').value=draft.instructions||'';
+      $('assessmentPublishResult').innerHTML='';
+      assessmentSectionsState=JSON.parse(JSON.stringify(draft.sections||[]));
+      renderAssessmentSections();
+      loadRosters(true);
+      $('assessmentBuilder').scrollIntoView({behavior:'smooth',block:'start'});
     }
     $('newAssessmentBtn').addEventListener('click',()=>{
       const builder=$('assessmentBuilder'); builder.style.display='block';

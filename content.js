@@ -10,6 +10,7 @@
 const { client: aiClient } = require('./ai-client');
 const { gradeProfile, ageFor } = require('./grade');
 const { getTeachingModel, normalizeTeachingModelId, modelPromptBlock, stageSchedule, stageLabel } = require('./teaching-models');
+const { normalizeLessonPurpose } = require('./assessment-draft');
 
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
@@ -178,6 +179,7 @@ function buildPrompt(subject, topic, grade, slideCount, tone, focus, extras = {}
   const focusLine = focus ? `\nSpecial focus / angle: ${focus}` : '';
   const p = gradeProfile(grade).content;
   const teachingModel = getTeachingModel(extras.teachingModelId);
+  const lessonPurpose = normalizeLessonPurpose(extras.lessonPurpose);
   const schedule = stageSchedule(teachingModel, slideCount);
   const scheduleLine = schedule.map((stageId, index) => `${index + 1}. ${stageLabel(teachingModel, stageId)}`).join('\n');
   const objectivesLine = extras.objectives
@@ -197,6 +199,12 @@ function buildPrompt(subject, topic, grade, slideCount, tone, focus, extras = {}
     ? `\nThis deck supports a weekly lesson sequence: ${seq.lessonCount} connected lessons, ${seq.periodMinutes} minutes each. The approved lesson plan contains the period-by-period details. Make the slides follow those lessons in order, clearly signalling transitions such as "Lesson 1", "Lesson 2", and so on where helpful. Do not flatten the week into one repeated lesson.\n`
     : '';
   const age = ageFor(grade);
+  const purposeBlock = lessonPurpose === 'lesson' ? '' : lessonPurpose === 'project'
+    ? `\nTHIS IS A PROJECT INTRODUCTION AND PROGRESS DECK, NOT A NORMAL TEACHING DECK.
+The teacher briefly launches the project and then displays one context-specific stage at a time while students work. Content slides must state the current project stage, what students should produce or do, and one or two useful progress questions. Scale independence and complexity to ${grade}.
+Do not reveal a rubric, mark allocation, model final product, answer key, or finished response. Do not display exact keyboard shortcuts such as Ctrl+C or Ctrl+V; use phrases such as "copy using the mouse" or "copy using the keyboard" when that action is assessed. The teacher circulates, observes and grades while students work.\n`
+    : `\nTHIS IS A TEST INTRODUCTION AND ADMINISTRATION DECK, NOT A NORMAL TEACHING DECK.
+The deck is safe to leave visible in the room. It may show the test title, purpose, timing, permitted materials, conduct, submission instructions and neutral progress stages. It must NEVER contain live test questions, answer options, answers, hints, worked examples, formulas supplied as help, marking criteria, rubrics, exact assessed procedures, or keyboard shortcuts. The teacher introduces procedures before the test and then supervises silently while students work independently.\n`;
   return `You are an expert teacher creating a complete, classroom-ready lesson deck.
 
 Subject: ${subject}
@@ -204,6 +212,7 @@ Topic: ${pretty}
 Grade level: ${grade}
 Tone: ${tone}${focusLine}${objectivesLine}${planBlock}${sourceBlock}${sequenceBlock}
 ${modelPromptBlock(teachingModel)}
+${purposeBlock}
 
 CALIBRATE THE DIFFICULTY CAREFULLY: pitch the content precisely at ${grade} (students are about ${age} years old). Use the vocabulary, examples, sentence length and concepts a typical ${grade} student is ready for. Do NOT oversimplify to a younger grade (e.g. Reception / Grade R / Kindergarten), and do NOT use content beyond ${grade}. Assume the student already mastered the previous grade's work and build on it — this lesson should feel right for ${grade}, neither too easy nor too hard.
 
@@ -228,7 +237,7 @@ The application will enforce this order after generation, so write each slide's 
     • "none" — a normal photo illustrates it better: visual.items = [].
   Prefer a diagram whenever it genuinely helps students follow the idea.
   Each content slide also has a "layoutHint": "TEXT_HEAVY" when the slide's bullets are self-explanatory (a dense list, vocabulary, or facts) and a stock photo next to them would add no teaching value; "STANDARD" whenever a supporting photo genuinely helps (most slides). Default to "STANDARD" unless there's a clear reason the image would just be filler.
-- check: ONE quick "check for understanding" question about the lesson, plus an "answer" of 2-3 short lines (the answer first, then a one-line why) — the teacher reveals these after students try. Include an imageQuery.
+- check: ${lessonPurpose === 'test' ? 'use a neutral readiness reminder such as checking name, materials and submission steps; do not include a content question or answer' : lessonPurpose === 'project' ? 'use a project progress question that helps students reflect without giving an answer or revealing marking guidance' : 'ONE quick "check for understanding" question about the lesson, plus an "answer" of 2-3 short lines (the answer first, then a one-line why) — the teacher reveals these after students try'}. Include an imageQuery.
 - activity: a hands-on "Your Turn" task students physically DO. It MUST be fully runnable, not vague — give: a title; "goal" (one sentence: what students are trying to achieve or how to "win"); "materials" (a list of what's needed, or [] if nothing); "instructions" (3-6 clear, ordered RULES / steps of exactly how to do or play it, including rough timing where useful, so a teacher could run it as-is); and speaker notes. Where it fits the topic, have students ESTIMATE or predict first, then check/try. If it is a game, the instructions ARE the rules of the game.
 - recap: 3-4 key takeaways that summarise the lesson.
 - differentiation: a "support" tip (1 sentence) to help students who find it difficult (scaffold, simpler version, concrete aid), and a "stretch" challenge (1 sentence) to extend fast finishers — both still on this exact grade's topic.
@@ -253,22 +262,23 @@ function truncateBullet(b, maxChars = 160) {
 }
 
 // Flatten the structured deck into the ordered slide array the pipeline renders.
-function flattenDeck(data, teachingModelId = 'standard') {
+function flattenDeck(data, teachingModelId = 'standard', lessonPurpose = 'lesson') {
   const teachingModel = getTeachingModel(teachingModelId);
+  const purpose = normalizeLessonPurpose(lessonPurpose);
   const schedule = stageSchedule(teachingModel, data.slides.length);
   const slides = [];
   slides.push({ type: 'title', layout: 'title', title: data.titleSlide.title, subtitle: data.titleSlide.subtitle, imageQuery: data.titleSlide.imageQuery, modelLabel: teachingModel.label });
-  slides.push({ type: 'objectives', title: 'Learning Objectives', bullets: data.objectives.items, imageQuery: data.objectives.imageQuery, modelLabel: teachingModel.label });
+  slides.push({ type: 'objectives', title: purpose === 'test' ? 'Test information' : purpose === 'project' ? 'Project goals' : 'Learning Objectives', bullets: data.objectives.items, imageQuery: data.objectives.imageQuery, modelLabel: teachingModel.label });
   data.slides.forEach((s, i) => {
-    const vocab = Array.isArray(s.vocab) ? s.vocab.filter(v => v && v.term) : [];
+    const vocab = purpose === 'test' ? [] : (Array.isArray(s.vocab) ? s.vocab.filter(v => v && v.term) : []);
     // On a vocabulary slide, the term–definition lines ARE the teaching content,
     // so they become the bullets (rendered by the existing layout). The example
     // and speaker notes still carry extra explanation for the teacher.
     const bullets = (vocab.length ? vocab.map(v => `${v.term} — ${v.definition}`) : s.bullets).map(b => truncateBullet(b));
-    const shortcuts = Array.isArray(s.shortcuts) ? s.shortcuts.filter(x => x && x.action && x.keys) : [];
-    const worked = (s.worked && s.worked.task && Array.isArray(s.worked.steps) && s.worked.steps.length) ? s.worked : null;
+    const shortcuts = purpose === 'lesson' && Array.isArray(s.shortcuts) ? s.shortcuts.filter(x => x && x.action && x.keys) : [];
+    const worked = purpose === 'test' ? null : ((s.worked && s.worked.task && Array.isArray(s.worked.steps) && s.worked.steps.length) ? s.worked : null);
     slides.push({
-      type: 'content', title: s.title, bullets, example: s.example,
+      type: 'content', title: s.title, bullets, example: purpose === 'test' ? '' : s.example,
       speakerNotes: s.speakerNotes, imageQuery: s.imageQuery, visual: s.visual, vocab, shortcuts, worked,
       modelLabel: teachingModel.label,
       modelStage: schedule[i] || teachingModel.stages[0].id,
@@ -279,7 +289,7 @@ function flattenDeck(data, teachingModelId = 'standard') {
       layoutHint: s.layoutHint === 'TEXT_HEAVY' ? 'TEXT_HEAVY' : 'STANDARD',
     });
   });
-  if (data.check) slides.push({ type: 'check', title: data.check.question, bullets: data.check.answer, imageQuery: data.check.imageQuery, modelLabel: teachingModel.label });
+  if (data.check && purpose !== 'test') slides.push({ type: 'check', title: data.check.question, bullets: purpose === 'project' ? [] : data.check.answer, imageQuery: data.check.imageQuery, modelLabel: teachingModel.label });
   const diff = data.differentiation;
   const act = data.activity;
   // Build a fully runnable task: goal + what's needed + the actual rules/steps.
@@ -293,11 +303,11 @@ function flattenDeck(data, teachingModelId = 'standard') {
   const activityStage = teachingModel.stages.find(stage => /practice|create|elaborate|investigate|independent|you_do/.test(stage.id)) || teachingModel.stages[teachingModel.stages.length - 1];
   const reflectStage = teachingModel.stages.find(stage => /reflect|evaluate|check|share/.test(stage.id)) || teachingModel.stages[teachingModel.stages.length - 1];
   slides.push({ type: 'activity', title: act.title || 'Your Turn', bullets: actBullets, speakerNotes: actNotes, imageQuery: act.imageQuery, differentiation: diff, modelStage: activityStage.id, modelStageLabel: stageLabel(teachingModel, activityStage.id), modelLabel: teachingModel.label });
-  slides.push({ type: 'recap', title: 'Recap', bullets: data.recap.points, imageQuery: data.recap.imageQuery, modelStage: reflectStage.id, modelStageLabel: stageLabel(teachingModel, reflectStage.id), modelLabel: teachingModel.label });
+  slides.push({ type: 'recap', title: purpose === 'test' ? 'Finish and submit' : purpose === 'project' ? 'Project checkpoint' : 'Recap', bullets: data.recap.points, imageQuery: data.recap.imageQuery, modelStage: reflectStage.id, modelStageLabel: stageLabel(teachingModel, reflectStage.id), modelLabel: teachingModel.label });
   return slides;
 }
 
-function placeholderDeck(subject, topic, slideCount, teachingModelId = 'standard') {
+function placeholderDeck(subject, topic, slideCount, teachingModelId = 'standard', lessonPurpose = 'lesson') {
   const pretty = topic.replace(/-/g, ' ');
   const cap = s => s.replace(/\b\w/g, c => c.toUpperCase());
   const q = `${subject} ${pretty}`;
@@ -318,7 +328,7 @@ function placeholderDeck(subject, topic, slideCount, teachingModelId = 'standard
     activity: { title: 'Your Turn', goal: `Practise ${pretty} together`, materials: [], instructions: [`Estimate first, then try a ${pretty} exercise`, 'Share with a partner'], speakerNotes: 'Placeholder activity notes.', imageQuery: q },
     recap: { points: [`${cap(pretty)} recap point 1`, 'recap point 2', 'recap point 3'], imageQuery: q },
     differentiation: { support: `Give a worked example of ${pretty}.`, stretch: `Try a harder ${pretty} problem.` },
-  }, teachingModelId);
+  }, teachingModelId, lessonPurpose);
 }
 
 async function callModel(schema, name, messages, max_tokens = 9000) {
@@ -336,9 +346,10 @@ async function callModel(schema, name, messages, max_tokens = 9000) {
 
 async function generateContent(subject, topic, slideCount, grade = 'middle school', tone = 'clear and engaging', focus = '', extras = {}) {
   const teachingModelId = normalizeTeachingModelId(extras.teachingModelId);
+  const lessonPurpose = normalizeLessonPurpose(extras.lessonPurpose);
   if (!process.env.OPENAI_API_KEY) {
     console.log('No OPENAI_API_KEY set — using placeholder text. Add a key to .env for AI-written slides.');
-    return placeholderDeck(subject, topic, slideCount, teachingModelId);
+    return placeholderDeck(subject, topic, slideCount, teachingModelId, lessonPurpose);
   }
   const { wrap } = require('./cache');
   return wrap('content', {
@@ -356,6 +367,7 @@ async function generateContent(subject, topic, slideCount, grade = 'middle schoo
       periodMinutes: parseInt(extras.lessonSequence.periodMinutes, 10) || 0,
     } : null,
     teachingModelId,
+    lessonPurpose,
     regenerate: !!(extras && extras.regenerate),
   }, async () => {
     const prompt = buildPrompt(subject, topic, grade, slideCount, tone, focus, extras);
@@ -368,30 +380,36 @@ async function generateContent(subject, topic, slideCount, grade = 'middle schoo
       console.log(`Model returned ${data.slides.length}/${slideCount} content slides, retrying (${attempt}/3)…`);
     }
     best.slides = best.slides.slice(0, slideCount);
-    return flattenDeck(best, teachingModelId);
+    return flattenDeck(best, teachingModelId, lessonPurpose);
   });
 }
 
 // Regenerate a single content slide (for the editable preview's "regenerate").
-async function generateOneSlide({ subject, topic, grade, tone = 'clear and engaging', focus = '', teachingModelId = 'standard', preferredStage = '', avoidTitles = [] }) {
+async function generateOneSlide({ subject, topic, grade, tone = 'clear and engaging', focus = '', teachingModelId = 'standard', lessonPurpose = 'lesson', preferredStage = '', avoidTitles = [] }) {
   const teachingModel = getTeachingModel(teachingModelId);
+  const purpose = normalizeLessonPurpose(lessonPurpose);
   if (!process.env.OPENAI_API_KEY) {
     const pretty = topic.replace(/-/g, ' ');
-    return { type: 'content', modelStage: preferredStage || teachingModel.stages[0].id, title: `${pretty} — new idea`, bullets: ['Placeholder A', 'Placeholder B'], example: 'Placeholder example.', speakerNotes: 'Placeholder notes.', imageQuery: `${subject} ${pretty}` };
+    return { type: 'content', modelStage: preferredStage || teachingModel.stages[0].id, title: `${pretty} — new idea`, bullets: ['Placeholder A', 'Placeholder B'], example: purpose === 'test' ? '' : 'Placeholder example.', speakerNotes: 'Placeholder notes.', imageQuery: `${subject} ${pretty}`, vocab: [], shortcuts: [], worked: null };
   }
   const p = gradeProfile(grade).content;
   const pretty = topic.replace(/-/g, ' ');
   const avoid = avoidTitles.length ? `\nDo NOT repeat these existing slide titles: ${avoidTitles.join('; ')}.` : '';
+  const purposeRule = purpose === 'test'
+    ? '\nThis is a test administration slide. Include no test question, answer, hint, worked example, formula, assessed procedure, rubric, marking criterion, vocabulary teaching, or keyboard shortcut. Show only neutral timing, conduct, permitted materials, progress or submission directions.'
+    : purpose === 'project'
+      ? '\nThis is a project progress slide. Give a context-specific student stage and useful progress questions without a model answer, rubric, mark allocation, finished product or exact keyboard shortcut.' : '';
   const prompt = `Write ONE fresh content slide for a ${grade} lesson on "${pretty}" (${subject}). ${tone} tone.${focus ? ' Focus: ' + focus + '.' : ''}
 ${modelPromptBlock(teachingModel)}
+${purposeRule}
 The slide must use stageId "${preferredStage || teachingModel.stages[0].id}" so it fits the existing lesson sequence.
 Give a clear title, ${p.bullets} bullets (${p.wordsPerBullet}), a concrete real-world example sentence, speaker notes (${p.notes}), and a 2-4 keyword imageQuery. If the slide introduces vocabulary/key terms, fill "vocab" with each term and a short clear definition a ${grade} student understands; otherwise "vocab" is []. If it teaches keyboard shortcuts / tool buttons / key combos, fill "shortcuts" with each action and its EXACT keys (e.g. {"action":"Undo","keys":"Ctrl + Z"}); otherwise "shortcuts" is []. If it teaches how to DO/perform a method, calculation or technique, fill "worked" with a task + the actual ordered steps (real values); otherwise "worked" is {"task":"","steps":[]}. ${p.depth}${avoid}`;
   const s = await callModel(ONE_SLIDE_SCHEMA, 'one_slide', [{ role: 'user', content: prompt }], 1800);
-  const vocab = Array.isArray(s.vocab) ? s.vocab.filter(v => v && v.term) : [];
+  const vocab = purpose === 'test' ? [] : (Array.isArray(s.vocab) ? s.vocab.filter(v => v && v.term) : []);
   if (vocab.length) s.bullets = vocab.map(v => `${v.term} — ${v.definition}`);
-  const shortcuts = Array.isArray(s.shortcuts) ? s.shortcuts.filter(x => x && x.action && x.keys) : [];
-  const worked = (s.worked && s.worked.task && Array.isArray(s.worked.steps) && s.worked.steps.length) ? s.worked : null;
-  return { type: 'content', modelStage: s.stageId || preferredStage || teachingModel.stages[0].id, ...s, vocab, shortcuts, worked };
+  const shortcuts = purpose === 'lesson' && Array.isArray(s.shortcuts) ? s.shortcuts.filter(x => x && x.action && x.keys) : [];
+  const worked = purpose === 'test' ? null : ((s.worked && s.worked.task && Array.isArray(s.worked.steps) && s.worked.steps.length) ? s.worked : null);
+  return { type: 'content', modelStage: s.stageId || preferredStage || teachingModel.stages[0].id, ...s, example: purpose === 'test' ? '' : s.example, vocab, shortcuts, worked };
 }
 
 module.exports = { generateContent, generateOneSlide };

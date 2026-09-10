@@ -5,6 +5,7 @@
 const { client: aiClient } = require('./ai-client');
 const { ageFor } = require('./grade');
 const { getTeachingModel, modelPromptBlock, artifactPromptBlock } = require('./teaching-models');
+const { normalizeLessonPurpose } = require('./assessment-draft');
 
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
@@ -69,12 +70,16 @@ function calibration(grade) {
   return `Pitch everything precisely at ${grade} (students about ${age} years old): vocabulary, reading level, and difficulty must suit ${grade} — assume they mastered the previous grade, and do NOT drift easier or harder.`;
 }
 
-function ctxBlock({ subject, topic, grade, objectives, lessonPlanText, unitBlock, teachingModelId }) {
+function ctxBlock({ subject, topic, grade, objectives, lessonPlanText, unitBlock, teachingModelId, lessonPurpose }) {
   const pretty = String(topic || '').replace(/-/g, ' ');
   const model = getTeachingModel(teachingModelId);
   const plan = lessonPlanText ? `\nApproved lesson plan (base the artifact on this):\n--- PLAN ---\n${String(lessonPlanText).slice(0, 5000)}\n--- END ---\n` : '';
   const unit = unitBlock ? `\n${String(unitBlock).slice(0, 1500)}\n` : '';
-  return `Subject: ${subject}\nTopic: ${pretty}\nGrade: ${grade}\n${modelPromptBlock(model)}\nLesson objectives the artifact MUST assess/practise:\n${objectives}\n${unit}${plan}`;
+  const purpose = normalizeLessonPurpose(lessonPurpose);
+  const purposeBlock = purpose === 'lesson' ? '' : purpose === 'test'
+    ? '\nThis resource PREPARES students before a test. Teach and rehearse the prerequisite knowledge and skills, but do not reproduce live test questions, answers, exact assessed procedures, or marking criteria.'
+    : '\nThis resource PREPARES students before or supports them during a project. Teach prerequisite knowledge, planning and self-management without completing the assessed product or revealing the private marking guidance.';
+  return `Subject: ${subject}\nTopic: ${pretty}\nGrade: ${grade}\n${modelPromptBlock(model)}${purposeBlock}\nLearning objectives the artifact MUST prepare/practise:\n${objectives}\n${unit}${plan}`;
 }
 
 async function callModel(schema, name, prompt, max_tokens = 3500) {
@@ -98,6 +103,7 @@ function ctxKey(type, ctx) {
     objectives: String(ctx.objectives || '').trim(),
     lessonPlanText: String(ctx.lessonPlanText || '').slice(0, 5000).trim(),
     teachingModelId: String(ctx.teachingModelId || 'standard'),
+    lessonPurpose: normalizeLessonPurpose(ctx.lessonPurpose),
     regenerate: !!ctx.regenerate,
   };
 }
