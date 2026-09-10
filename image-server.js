@@ -2162,6 +2162,14 @@ app.patch('/api/assignment/:id/live-state', requireAuth, (req, res) => {
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
+app.get('/api/assignment/:id/presentation', requireAuth, (req, res) => {
+  const a = assignments.getAssignment(req.params.id);
+  if (!a) return res.status(404).json({ error: 'Assessment not found.' });
+  if (a.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assessment.' });
+  if (a.type !== 'assessment') return res.status(400).json({ error: 'This item has no assessment presentation.' });
+  res.json({ id: a.id, title: a.title, assessmentType: a.assessmentType, delivery: assignments.deliveryState(a), slides: assignments.presentationSlides(a) });
+});
+
 // Public: resolve a Room Code to EITHER a game or an assignment (shared join flow).
 app.get('/api/join', (req, res) => {
   const code = String(req.query.code || '').trim().toUpperCase();
@@ -4474,6 +4482,7 @@ app.get('/colonyquest/:id', (req, res) => res.sendFile(path.join(__dirname, 'pub
 
 // Student assignment page (worksheet/exit-ticket/quiz online submission).
 app.get('/assignment/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'assignment.html')));
+app.get('/assessment/:id/present', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'assessment-present.html')));
 
 // ── Pagination helper ──────────────────────────────────────────────────────────────
 function parsePagination(query) {

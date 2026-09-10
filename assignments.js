@@ -333,6 +333,47 @@ function draftProgress(record) {
   };
 }
 
+function presentationSlides(record) {
+  if (!record || record.type !== 'assessment') throw new Error('Assessment not found.');
+  const isTest = record.assessmentType === 'test';
+  const slides = [{
+    kind: 'title', title: record.title,
+    subtitle: `${record.subject || ''}${record.grade ? ` · ${record.grade}` : ''} · ${record.totalMarks || 0} marks`,
+    bullets: [],
+  }];
+  slides.push({
+    kind: 'overview', title: isTest ? 'Test overview' : 'Project overview',
+    subtitle: isTest ? 'Listen for instructions before you begin.' : 'Follow each stage and check your progress.',
+    bullets: (record.sections || []).map((section, index) => `${index + 1}. ${section.title} · ${section.marks} marks`),
+  });
+  if (record.content && record.content.instructions) {
+    slides.push({ kind: 'instructions', title: 'Before you begin', subtitle: '', bullets: [record.content.instructions] });
+  }
+  for (const [index, section] of (record.sections || []).entries()) {
+    const safeInstructions = String(section.instructions || '').split(/\n+/).map(line => line.trim()).filter(Boolean);
+    let bullets;
+    if (isTest) {
+      // Shared test slides never include question text, options, answers, or
+      // rubric criteria. Students receive the actual questions privately.
+      bullets = safeInstructions.length ? safeInstructions : [section.type === 'practical' ? 'Complete the practical task as directed by your teacher.' : 'Complete this section independently on your device.'];
+    } else {
+      bullets = [...safeInstructions, ...(section.items || []).map(item => item.prompt)].filter(Boolean);
+    }
+    slides.push({
+      kind: 'section', title: `${index + 1}. ${section.title}`,
+      sectionIndex: index,
+      subtitle: `${section.marks} marks · ${assessmentSectionLabel(section.type)}`,
+      bullets,
+    });
+  }
+  slides.push({ kind: 'finish', title: isTest ? 'Stop and wait' : 'Final check', subtitle: '', bullets: isTest ? ['Check that your work is saved.', 'Wait quietly for your teacher.'] : ['Check every required stage.', 'Save your work.', 'Submit when your teacher asks.'] });
+  return slides;
+}
+
+function assessmentSectionLabel(type) {
+  return ({ mcq: 'Multiple choice', 'short-answer': 'Short answer', 'extended-response': 'Extended response', practical: 'Practical / observation' })[type] || 'Assessment section';
+}
+
 function assessmentReleaseReadiness(record) {
   if (!record || record.type !== 'assessment') return { ready: true, pendingGrades: 0, submissions: 0 };
   const submissions = loadSubmissions(record.id);
@@ -411,7 +452,7 @@ module.exports = {
   createAssignment, createAssessment, normalizeAssessment, getAssignment, updateAssignmentCutoff, getRoomCode,
   releaseResults, isReleased,
   saveSubmission, getSubmissions, getSubmission,
-  assessmentReleaseReadiness, loadDrafts, getDraft, saveDraft, deliveryState, updateDelivery, draftProgress,
+  assessmentReleaseReadiness, loadDrafts, getDraft, saveDraft, deliveryState, updateDelivery, draftProgress, presentationSlides,
   findConfirmedVerdict, recordVerdict, normalizeAnswer, normalizeStudentId,
   listTeacherAssignments,
 };

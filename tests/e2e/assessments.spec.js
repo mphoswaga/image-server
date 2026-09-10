@@ -28,6 +28,11 @@ test('teacher builds a marked assessment and a learner sees practical criteria s
   await expect(page.locator('#assessmentPublishResult')).toContainText('Assessment published');
   await expect(page.locator('#assignmentsList')).toContainText('Document creation project');
 
+  const presentation = await page.context().newPage();
+  await presentation.goto(new URL(`/assessment/${assessment.assessmentId}/present`, page.url()).toString());
+  await expect(presentation.locator('#title')).toHaveText('Document creation project');
+  await expect(presentation.locator('#liveState')).toContainText('Lobby open');
+
   const learnerContext = await browser.newContext();
   const learner = await learnerContext.newPage();
   try {
@@ -42,6 +47,8 @@ test('teacher builds a marked assessment and a learner sees practical criteria s
     await expect(learner.locator('#liveStatusTitle')).toHaveText('Waiting for your teacher');
     const startResponse = await page.request.patch(`/api/assignment/${assessment.assessmentId}/live-state`, { data: { action: 'start' } });
     expect(startResponse.ok()).toBeTruthy();
+    await expect(presentation.locator('#title')).toHaveText('1. Practical / observation');
+    await expect(presentation.locator('#bullets')).toContainText('Creates a document and corrects spelling');
     await expect(learner.locator('.section-head')).toHaveText('Practical / observation');
     await expect(learner.locator('.practical-note')).toContainText('Your teacher will observe it');
     const pauseResponse = await page.request.patch(`/api/assignment/${assessment.assessmentId}/live-state`, { data: { action: 'pause' } });
@@ -76,6 +83,7 @@ test('teacher builds a marked assessment and a learner sees practical criteria s
     await expect(learner.locator('#scoreVal')).toHaveText('8');
     await expect(learner.locator('#scoreMax')).toHaveText('10');
   } finally {
+    await presentation.close();
     await learnerContext.close();
   }
 });

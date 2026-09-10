@@ -7298,7 +7298,7 @@
         const response=await fetch('/api/assessment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({assessment:collectAssessment(),rosterId:$('assessmentRoster').value||null,cutoffAt:$('assessmentCutoff').value||null})});
         const data=await response.json(); if(!response.ok)throw new Error(data.error||'Could not publish assessment.');
         const url=location.origin+data.path;
-        $('assessmentPublishResult').innerHTML=`<div class="assessment-result"><b>Assessment published</b><p style="margin:6px 0">${data.sectionCount} section${data.sectionCount===1?'':'s'} · ${data.totalMarks} marks</p><div class="room-code" style="display:inline-block">${esc(data.roomCode)}</div><p class="hint" style="margin:7px 0">Students join at <b>${esc(location.origin+'/join')}</b> using this room code.</p><div class="game-link"><input readonly value="${esc(url)}"><button type="button" class="btn ghost assessment-copy" data-url="${esc(url)}" style="width:auto">Copy link</button></div></div>`;
+        $('assessmentPublishResult').innerHTML=`<div class="assessment-result"><b>Assessment published</b><p style="margin:6px 0">${data.sectionCount} section${data.sectionCount===1?'':'s'} · ${data.totalMarks} marks</p><div class="room-code" style="display:inline-block">${esc(data.roomCode)}</div><p class="hint" style="margin:7px 0">Students join at <b>${esc(location.origin+'/join')}</b> using this room code.</p><div class="game-link"><input readonly value="${esc(url)}"><button type="button" class="btn ghost assessment-copy" data-url="${esc(url)}" style="width:auto">Copy link</button></div><a class="btn ghost" href="/assessment/${esc(data.assessmentId)}/present" target="_blank" rel="noopener" style="display:inline-flex;width:auto;margin-top:10px;text-decoration:none">Open presentation</a></div>`;
         loadMyAssignments(); toast('Assessment published.','ok');
       }catch(error){ err.textContent=error.message; err.classList.add('show'); }
       btn.disabled=false; btn.innerHTML=original;
@@ -7335,6 +7335,7 @@
               <div class="game-link"><input readonly value="${esc(location.origin+'/assignment/'+a.id)}"><button type="button" class="btn ghost acopy" data-url="${esc(location.origin+'/assignment/'+a.id)}" style="width:auto;padding:9px 13px">${ICON('i-doc')} Copy</button></div>
               <div class="gc-actions" style="margin-top:10px">
                 <button type="button" class="btn ghost a-toggle-btn" data-assign-id="${esc(a.id)}" data-wrap-id="${wrapId}" data-detail-id="${detailId}" data-closed-label="${a.type==='assessment'?'Run classroom / mark':'Review submissions'}" style="font-size:12px;padding:6px 12px;width:auto">${a.type==='assessment'?'Run classroom / mark':'Review submissions'}</button>
+                ${a.type==='assessment'?`<a class="btn ghost" href="/assessment/${esc(a.id)}/present" target="_blank" rel="noopener" style="font-size:12px;padding:6px 12px;width:auto;text-decoration:none">Present</a>`:''}
               </div>
               <div id="${detailId}" style="display:none;margin-top:10px"><div id="${wrapId}"></div></div>
             </div>

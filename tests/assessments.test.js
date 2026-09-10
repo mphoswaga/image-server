@@ -144,3 +144,29 @@ test('self-paced assessments open all sections without a live lobby', () => {
   });
   assert.throws(() => assignments.updateDelivery(record.id, 'start'), /self-paced/);
 });
+
+test('test presentation slides never expose questions, options, or answers', () => {
+  const record = assignments.createAssessment({ teacherId: 'teacher-present-test', data: validAssessment() });
+  const text = JSON.stringify(assignments.presentationSlides(record));
+  assert.doesNotMatch(text, /Which force slows/);
+  assert.doesNotMatch(text, /Friction/);
+  assert.doesNotMatch(text, /Controls the variables/);
+  assert.match(text, /Test overview/);
+  assert.match(text, /Complete this section independently/);
+});
+
+test('project presentation slides show task prompts without marking answers', () => {
+  const project = validAssessment({
+    assessmentType: 'project', totalMarks: 20,
+    sections: [{
+      id: 'writing', title: 'Create your explanation', type: 'extended-response', objectiveIds: ['knowledge'],
+      instructions: 'Write in your own words.',
+      items: [{ id: 'explanation', prompt: 'Explain how force changes motion.', answerKey: 'SECRET MARKING ANSWER', marks: 20 }],
+    }],
+  });
+  const record = assignments.createAssessment({ teacherId: 'teacher-present-project', data: project });
+  const text = JSON.stringify(assignments.presentationSlides(record));
+  assert.match(text, /Explain how force changes motion/);
+  assert.match(text, /Write in your own words/);
+  assert.doesNotMatch(text, /SECRET MARKING ANSWER/);
+});

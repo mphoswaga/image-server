@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Assessment presentation — LessonScope</title>
+  <style>
+    :root{--navy:#0f2b5c;--green:#16a34a;--mint:#41e894;--ink:#16223a;--muted:#697586;--paper:#f7fafc}
+    *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink);background:radial-gradient(circle at 90% 0,rgba(65,232,148,.2),transparent 35%),linear-gradient(135deg,#eef7ff,#fff 58%,#effcf4)}
+    .stage{height:100%;display:grid;grid-template-rows:1fr auto;padding:clamp(22px,4vw,64px)}
+    .slide{width:min(1180px,100%);height:100%;margin:auto;display:flex;flex-direction:column;justify-content:center;padding:clamp(24px,5vw,72px);background:rgba(255,255,255,.94);border:1px solid rgba(15,43,92,.12);border-radius:clamp(20px,3vw,36px);box-shadow:0 26px 80px rgba(15,43,92,.14);position:relative;overflow:hidden}
+    .slide:before{content:"";position:absolute;inset:0 auto 0 0;width:10px;background:linear-gradient(var(--green),var(--mint))}
+    .eyebrow{font-size:clamp(13px,1.4vw,18px);font-weight:800;text-transform:uppercase;letter-spacing:.13em;color:var(--green);margin-bottom:14px}
+    h1{font-size:clamp(38px,6vw,78px);line-height:1.04;letter-spacing:-.04em;color:var(--navy);margin:0 0 16px;max-width:1000px}
+    .subtitle{font-size:clamp(18px,2.2vw,30px);color:var(--muted);font-weight:650;margin-bottom:clamp(18px,3vw,34px)}
+    ul{margin:0;padding-left:1.2em;display:grid;gap:clamp(10px,1.5vh,22px);font-size:clamp(20px,2.5vw,38px);line-height:1.3;font-weight:650;max-width:1050px}li::marker{color:var(--green)}
+    .controls{display:flex;align-items:center;justify-content:space-between;gap:14px;padding-top:18px;color:var(--muted);font-size:13px;font-weight:700}
+    .buttons{display:flex;gap:8px}.btn{border:1px solid rgba(15,43,92,.2);background:#fff;color:var(--navy);border-radius:999px;padding:10px 16px;font:700 13px inherit;cursor:pointer}.btn:hover{border-color:var(--green);color:var(--green)}.btn:disabled{opacity:.35;cursor:default}
+    .live{display:inline-flex;align-items:center;gap:7px}.dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 4px rgba(22,163,74,.13)}
+    @media(max-width:600px){.stage{padding:12px}.slide{padding:28px 22px}.controls{padding-top:10px}.btn{padding:8px 11px}.keyboard{display:none}}
+  </style>
+</head>
+<body>
+  <main class="stage">
+    <section class="slide" aria-live="polite">
+      <div id="eyebrow" class="eyebrow">LessonScope</div>
+      <h1 id="title">Loading presentation…</h1>
+      <div id="subtitle" class="subtitle"></div>
+      <ul id="bullets"></ul>
+    </section>
+    <footer class="controls">
+      <span id="liveState" class="live"><span class="dot"></span><span>Teacher presentation</span></span>
+      <span id="counter"></span>
+      <div class="buttons"><button id="previous" class="btn" type="button">← Previous</button><button id="fullscreen" class="btn" type="button">Full screen</button><button id="next" class="btn" type="button">Next →</button></div>
+    </footer>
+  </main>
+  <script>
+    const assessmentId=location.pathname.split('/').filter(Boolean).slice(-2,-1)[0];
+    const $=id=>document.getElementById(id);
+    let slides=[],index=0,lastDeliveryUpdate='';
+    function render(){
+      const slide=slides[index]; if(!slide)return;
+      $('eyebrow').textContent=slide.kind==='section'?'Current stage':slide.kind==='finish'?'Finish':slide.kind==='title'?'LessonScope assessment':'Get ready';
+      $('title').textContent=slide.title||''; $('subtitle').textContent=slide.subtitle||'';
+      $('bullets').innerHTML=(slide.bullets||[]).map(text=>{const li=document.createElement('li');li.textContent=text;return li.outerHTML}).join('');
+      $('counter').textContent=`${index+1} / ${slides.length}`; $('previous').disabled=index===0; $('next').disabled=index>=slides.length-1;
+      document.title=(slide.title||'Assessment')+' — LessonScope';
+    }
+    function syncToDelivery(data){
+      const delivery=data.delivery||{}; if(!delivery.updatedAt||delivery.updatedAt===lastDeliveryUpdate)return;
+      lastDeliveryUpdate=delivery.updatedAt;
+      if(delivery.phase==='lobby')index=0;
+      else if(delivery.phase==='open'||delivery.phase==='paused'){
+        const found=slides.findIndex(slide=>slide.kind==='section'&&slide.sectionIndex===delivery.activeSectionIndex); if(found>=0)index=found;
+      }else if(delivery.phase==='marking'||delivery.phase==='closed')index=Math.max(0,slides.length-1);
+      $('liveState').lastElementChild.textContent=delivery.mode==='live'?({lobby:'Lobby open',open:'Section open',paused:'Paused',marking:'Marking',closed:'Closed'}[delivery.phase]||'Live classroom'):'Self-paced assessment';
+      render();
+    }
+    async function load(){
+      try{const response=await fetch(`/api/assignment/${assessmentId}/presentation`);const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not load presentation.');slides=data.slides||[];syncToDelivery(data);render();}
+      catch(error){$('title').textContent=error.message;$('subtitle').textContent='Return to LessonScope and open the presentation again.';}
+    }
+    $('previous').onclick=()=>{if(index>0){index--;render();}};$('next').onclick=()=>{if(index<slides.length-1){index++;render();}};
+    $('fullscreen').onclick=async()=>{if(!document.fullscreenElement)await document.documentElement.requestFullscreen();else await document.exitFullscreen();};
+    addEventListener('keydown',event=>{if(event.key==='ArrowLeft')$('previous').click();if(event.key==='ArrowRight'||event.key===' ')$('next').click();if(event.key.toLowerCase()==='f')$('fullscreen').click();});
+    load();setInterval(load,3000);
+  </script>
+</body>
+</html>
