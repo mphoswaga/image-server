@@ -142,7 +142,7 @@ In the main teaching/activity field, begin with "Teaching model: Gradual Release
     : purpose === 'project'
       ? `\nLESSON PURPOSE: PROJECT SESSION.
 The school template headings and front matter stay exactly as supplied, but the teaching strategy changes. This is assessed project work, not a normal teacher-led lesson. Name the concrete product, performance, investigation or solution students will create from the supplied topic and objectives. The teacher's launch is brief: explain the outcome, working conditions, phases and success criteria, then students do the work. Do not pad the launch with a generic discussion, a recap of the topic, or students sharing prior experiences. Do not teach or demonstrate the skills being assessed during the project session.
-Organise the content around student action: understand the brief, plan, create or investigate, reach visible checkpoints, revise from permitted feedback, submit or present, and reflect. State what students produce at every stage and what the teacher observes or records while circulating. Make younger pupils' directions concrete and staged; increase independence, choice and complexity for older pupils. A project plenary is a submission, presentation, progress reflection or next-step checkpoint, not a normal lesson recap. Differentiation gives access support without completing the work, lowering the assessed standard or revealing answers. Resources name the actual materials, devices, references and student preparation needed for this project. Preparation resources must teach or rehearse prerequisite knowledge and skills before the assessment without completing the assessed product for students.\n`
+Organise the content around student action: understand the brief, plan, create or investigate, reach visible checkpoints, revise from permitted feedback, submit or present, and reflect. State what students produce at every stage and what the teacher observes or records while circulating. Make younger pupils' directions concrete and staged; increase independence, choice and complexity for older pupils. A project plenary must include the teacher checking the submission list and confirming that every student has submitted; it may then add a presentation, progress reflection or next-step checkpoint. Differentiation gives access support without completing the work, lowering the assessed standard or revealing answers. Resources name the actual materials, devices, references and student preparation needed for this project. Preparation resources must teach or rehearse prerequisite knowledge and skills before the assessment without completing the assessed product for students.\n`
       : `\nLESSON PURPOSE: TEST SESSION.
 The school template headings and front matter stay exactly as supplied, but the teaching strategy changes. The teacher may introduce procedures and expectations before the test, then does not teach, prompt, explain answers or lead checks while students work. Write administration, timing, access arrangements, independent student work, teacher supervision, collection and marking steps. Preparation resources belong before the test and must cover prerequisite knowledge without reproducing live questions or answers.\n`;
 
@@ -169,7 +169,7 @@ Rules:
   - ${outputShapeRule}
   - stageId MUST be one of: ${model.stages.map(stage => stage.id).join(', ')}. This is only a tag saying which part of the method a section serves — mapping a heading to a stage must NEVER change that heading's name, wording or position.
   - ${templateRule}
-  - Fill EVERY requested section with useful content for this specific ${purpose}. Never return an empty or whitespace-only content field. The only field that may remain blank is a post-lesson reflection field that the app deliberately withholds from you.
+  - Fill EVERY requested section with useful content for this specific ${purpose}. Never return an empty or whitespace-only content field except Phonics when it is irrelevant and Reflection because the teacher completes it after teaching.
   - Never repeat a sentence or block of instructions. Each line must add new information.
   - "content": write as short bullet points, ONE idea per line, separated by newlines. Plain text ONLY — no markdown symbols (no **, no #, no backticks) and do NOT manually number the lines. Keep each line concise and classroom-ready.
 - VOCABULARY: whenever you list key words or vocabulary, give each one a short, clear definition on the same line (e.g. "Cooperate: to work together to get something done") — never list a term without explaining what it means.
@@ -193,6 +193,11 @@ function normalizedPlanLine(value) {
   return String(value || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function isAllowedBlankPlanSection(section) {
+  const heading = normalizedPlanLine(section && section.heading);
+  return heading === 'phonics' || heading.startsWith('phonics ') || heading === 'reflection' || heading.startsWith('reflection ') || heading.startsWith('post lesson reflection');
+}
+
 function dedupeSectionLines(sections) {
   return (Array.isArray(sections) ? sections : []).map(section => {
     const seen = new Set();
@@ -212,7 +217,7 @@ function lessonPlanIssues(raw, { lessonPurpose = 'lesson', templateText = '', st
   const sections = Array.isArray(raw && raw.sections) ? raw.sections : [];
   const issues = [];
   if (!sections.length) return ['lesson-plan sections are missing'];
-  const blankHeadings = sections.filter(section => !String(section && section.content || '').trim()).map(section => String(section && section.heading || 'unnamed section'));
+  const blankHeadings = sections.filter(section => !isAllowedBlankPlanSection(section) && !String(section && section.content || '').trim()).map(section => String(section && section.heading || 'unnamed section'));
   if (blankHeadings.length) issues.push(`these sections are empty: ${blankHeadings.join(', ')}`);
 
   const expected = structuredSequence ? [] : strictTemplateHeadings(templateText);
@@ -248,7 +253,10 @@ function lessonPlanIssues(raw, { lessonPurpose = 'lesson', templateText = '', st
     if (!/teacher\s*(?::|—|-)?\s*(?:will\s+)?(?:circulates?|observes?|monitors?|facilitates?|checks?|records?|grades?|assesses?)/.test(text)) issues.push('the teacher is not positioned as a project facilitator and assessor');
     if (launchText && !(/\b(project|product|performance|investigation|solution|artefact|artifact|outcome)\b/.test(launchText) || /\b(?:project|task|assessment) brief\b/.test(launchText))) issues.push('the project launch is a generic lesson introduction instead of explaining the assessed outcome');
     if (activityText && !projectAction.test(activityText)) issues.push('the main activity is teacher-led instead of students creating the project work');
-    if (plenaryText && !/\b(checkpoint|submit|submission|present|presentation|reflect|reflection|next step)\b/.test(plenaryText)) issues.push('the project plenary does not close, submit or reflect on the work');
+    if (plenaryText && !(/\b(?:all|every)\b[^\n.]{0,100}\b(?:submit|submitted|submission|handed in|uploaded)\b/.test(plenaryText)
+      && /teacher[^\n.]{0,100}\b(?:check|checks|confirm|confirms|verify|verifies)\b/.test(plenaryText))) {
+      issues.push('the project plenary does not require the teacher to confirm that every student submitted');
+    }
     const taughtDuringProject = text.split(/\n+|(?<=[.!?])\s+/).some(line =>
       /^(?:the\s+)?(?:teacher\s*(?::|—|-)?\s*(?:will\s+)?)?(?:demonstrate|demonstrates|model|models|teach|teaches)\b/.test(line.trim())
       && !/\b(before|preparation|prepare)\b/.test(line));
@@ -433,7 +441,7 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     teachingModelId,
     lessonPurpose: purpose,
     assessmentOptions,
-    assessmentDraftVersion: 3,
+    lessonPlanQualityVersion: 4,
     sequence: cleanSequence,
     structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber),
     sequenceLessonNumber: cleanLessonNumber,
@@ -443,7 +451,7 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     const client = aiClient();
     const basePrompt = buildPrompt({ subject, topic, grade, tone, objectives, successCriteria, templateText, unitBlock, sourceMaterialText, planningFrameworkText, teachingModel: teachingModelId, sequence: cleanSequence, structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber), sequenceLessonNumber: cleanLessonNumber, previousLessonPlanText, lessonPurpose: purpose, assessmentOptions });
     let lastIssues = [];
-    for (let attempt = 1; attempt <= (purpose === 'lesson' ? 1 : 3); attempt++) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
       const correction = lastIssues.length ? `\n\nYour previous draft failed these required checks: ${lastIssues.join('; ')}. Correct every issue in the new response.` : '';
       const response = await client.chat.completions.create({
         model: MODEL,
@@ -454,10 +462,15 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
       const text = response.choices[0]?.message?.content;
       if (!text) throw new Error('No lesson plan returned from the model');
       const parsed = JSON.parse(text);
-      if (purpose === 'lesson') return { ...parsed, teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
+      const planIssues = lessonPlanIssues(parsed, { lessonPurpose: purpose, templateText, structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber) });
+      if (purpose === 'lesson') {
+        lastIssues = planIssues;
+        if (!lastIssues.length) return { ...parsed, teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
+        continue;
+      }
       const normalizedDraft = normalizeAssessmentDraft(parsed.assessmentDraft, { subject, topic, grade, objectives, lessonPurpose: purpose, ...assessmentOptions });
       lastIssues = [
-        ...lessonPlanIssues(parsed, { lessonPurpose: purpose, templateText, structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber) }),
+        ...planIssues,
         ...assessmentDraftIssues(normalizedDraft, assessmentOptions),
       ];
       if (!lastIssues.length) return { ...parsed, teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
@@ -479,5 +492,5 @@ module.exports = {
   TEMPLATE_PROMPT_LIMIT, generateLessonPlan, planToText, planSchema,
   sequencePromptBlock, sequenceStepPromptBlock, buildPrompt,
   deriveSuccessCriteria, finalizeLessonPlan, ensureGradualReleaseVisible,
-  ensureAssessmentFlowVisible, strictTemplateHeadings, dedupeSectionLines, lessonPlanIssues,
+  ensureAssessmentFlowVisible, strictTemplateHeadings, dedupeSectionLines, lessonPlanIssues, isAllowedBlankPlanSection,
 };

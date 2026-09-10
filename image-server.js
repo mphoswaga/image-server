@@ -9,7 +9,7 @@ const { buildDeck, rebuildDeck, alternativeImage, findReusableImage, searchLibra
 const quota = require('./quota');
 const { generateOneSlide } = require('./content');
 const { extractText, extractPptxSlides, saveTemplate, listTemplates, getTemplate, renameTemplate, deleteTemplate, loadOriginalById, loadTemplate, loadOriginal, templatePromptText, TYPES } = require('./template');
-const { TEMPLATE_PROMPT_LIMIT, generateLessonPlan, planToText } = require('./lesson-plan');
+const { TEMPLATE_PROMPT_LIMIT, generateLessonPlan, planToText, isAllowedBlankPlanSection } = require('./lesson-plan');
 const { sequenceDetails, groupSectionsByLesson, assertLessonFields, combineOrderedLessons } = require('./lesson-sequence');
 const { getTeachingModel, normalizeTeachingModelId, listTeachingModels } = require('./teaching-models');
 const { fillDocx, fillXlsx } = require('./fill-template');
@@ -1902,10 +1902,16 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
           objectives,
           successCriteria: plan.successCriteria,
           subject, topic,
-          unit: clip(req.body.unitName || req.body.unit, 200),
-          period: clip(req.body.period, 120),
+          unit: clip(req.body.unitName || req.body.unit, 200) || topic,
+          period: clip(req.body.period, 120) || (lessonSequence
+            ? `${lessonSequence.periodMinutes} minutes`
+            : lessonPurpose === 'project' ? 'Project assessment session'
+              : lessonPurpose === 'test' ? 'Test assessment session' : 'Lesson session'),
         })
       : plan.sections;
+
+    const blank = sections.filter(section => !isAllowedBlankPlanSection(section) && !String(section && section.content || '').trim());
+    if (blank.length) throw new Error(`The ${lessonPurpose} plan could not fill these required fields: ${blank.map(section => section.heading).join(', ')}. Please generate it again.`);
 
     await capture(req, reservation, action, `${subject}-${topic}`);
     if (isRewrite) planRegens.set(regenKey, { n: used + 1, at: Date.now() });

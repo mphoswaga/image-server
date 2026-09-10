@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const assignments = require('../assignments');
-const { generateLessonPlan, buildPrompt, planSchema, lessonPlanIssues, dedupeSectionLines } = require('../lesson-plan');
+const { generateLessonPlan, buildPrompt, planSchema, lessonPlanIssues, dedupeSectionLines, isAllowedBlankPlanSection } = require('../lesson-plan');
 const { generateContent } = require('../content');
 const { getTeachingModel } = require('../teaching-models');
 const { normalizeAssessmentOptions, assessmentDraftIssues } = require('../assessment-draft');
@@ -76,7 +76,7 @@ test('purpose prompts change the teacher role while preserving the school templa
   assert.match(project, /PROJECT SESSION/);
   assert.match(project, /assessed project work, not a normal teacher-led lesson/);
   assert.match(project, /Do not pad the launch with a generic discussion/);
-  assert.match(project, /A project plenary is a submission, presentation, progress reflection or next-step checkpoint/);
+  assert.match(project, /project plenary must include the teacher checking the submission list and confirming that every student has submitted/);
   assert.match(project, /Fill EVERY requested section with useful content/);
   assert.match(project, /Create exactly 15 multiple-choice items/);
   assert.match(project, /Phase 1: students complete 15 multiple-choice questions independently in LessonScope \(15 marks\)/);
@@ -112,7 +112,7 @@ test('a complete student-led project fills every school field and passes validat
   const raw = { sections: [
     { heading: 'Intro (10m)', stageId: 'launch', content: 'Teacher launches the document project, explains the letter product and displays the phases.\nPupils prepare their files and identify the required outcome.' },
     { heading: 'Activities (50m)', stageId: 'practice', content: 'Pupils create a letter, check spelling and produce five copies.\nTeacher circulates, observes each checkpoint and records practical evidence.' },
-    { heading: 'Plenary (10m)', stageId: 'reflect', content: 'Pupils submit the finished document and reflect on one improvement.' },
+    { heading: 'Plenary (10m)', stageId: 'reflect', content: 'Teacher checks the submission list and confirms every pupil submitted the finished document.\nPupils reflect on one improvement.' },
     { heading: 'Differentiation', stageId: 'practice', content: 'Provide a visual stage card and extra processing time while keeping the same assessed product.' },
     { heading: 'Assessment', stageId: 'check', content: 'Students complete the LessonScope knowledge section independently, then present the practical product for grading.' },
   ] };
@@ -120,6 +120,25 @@ test('a complete student-led project fills every school field and passes validat
     lessonPurpose: 'project',
     templateText: 'Intro (10m):\nActivities (50m):\nPlenary (10m):\nDifferentiation:\nAssessment:',
   }), []);
+});
+
+test('only reflection and phonics may remain blank', () => {
+  assert.equal(isAllowedBlankPlanSection({ heading: 'Post lesson Reflection & Next Step' }), true);
+  assert.equal(isAllowedBlankPlanSection({ heading: 'Reflection' }), true);
+  assert.equal(isAllowedBlankPlanSection({ heading: 'Phonics (delete row if not applicable)' }), true);
+  for (const heading of ['Plenary (10m)', 'Differentiation', 'Assessment', 'Resources', 'Unit']) {
+    assert.equal(isAllowedBlankPlanSection({ heading }), false, `${heading} must be filled`);
+  }
+  const issues = lessonPlanIssues({ sections: [
+    { heading: 'Project Launch', content: 'Teacher launches the project product and checks the task brief.' },
+    { heading: 'Activity', content: 'Students create the assessed product while teacher circulates and records evidence.' },
+    { heading: 'Plenary', content: 'Teacher checks the submission list and confirms every student submitted.\nStudents reflect on the project.' },
+    { heading: 'Reflection', content: '' },
+    { heading: 'Phonics', content: '' },
+    { heading: 'Assessment', content: '' },
+  ] }, { lessonPurpose: 'project' });
+  assert.ok(issues.some(issue => /these sections are empty: Assessment/.test(issue)));
+  assert.ok(!issues.some(issue => /Reflection|Phonics/.test(issue)));
 });
 
 test('repeated lines are removed as a final display safeguard', () => {
