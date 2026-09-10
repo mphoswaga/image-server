@@ -6,7 +6,7 @@ const { gradeProfile } = require('./grade');
 const { getTeachingModel, normalizeTeachingModelId, modelPromptBlock } = require('./teaching-models');
 const {
   ASSESSMENT_DRAFT_SCHEMA, normalizeLessonPurpose, normalizeAssessmentOptions,
-  normalizeAssessmentDraft, assessmentDraftIssues, fallbackDraft, assessmentPromptBlock,
+  normalizeAssessmentDraft, assessmentDraftIssues, fallbackDraft, assessmentPromptBlock, assessmentOnlyPrompt,
 } = require('./assessment-draft');
 
 // How much of an uploaded template reaches the prompt. Exported so the upload
@@ -212,6 +212,58 @@ function dedupeSectionLines(sections) {
   });
 }
 
+function restoreOptionalTemplateSections(raw, templateText, structuredSequence = false) {
+  if (structuredSequence) return raw;
+  const expected = strictTemplateHeadings(templateText);
+  const sections = Array.isArray(raw && raw.sections) ? raw.sections : [];
+  if (!expected.length || !sections.length) return raw;
+  const used = new Set();
+  const ordered = [];
+  for (const heading of expected) {
+    const index = sections.findIndex((section, sectionIndex) => !used.has(sectionIndex)
+      && normalizedPlanLine(section && section.heading) === normalizedPlanLine(heading));
+    if (index >= 0) {
+      used.add(index);
+      ordered.push({ ...sections[index], heading });
+      continue;
+    }
+    if (!isAllowedBlankPlanSection({ heading })) return raw;
+    ordered.push({ heading, content: '', stageId: 'teach' });
+  }
+  sections.forEach((section, index) => { if (!used.has(index)) ordered.push(section); });
+  return { ...(raw || {}), sections: ordered };
+}
+
+function projectPlenaryHasSubmissionConfirmation(content) {
+  const text = String(content || '').toLowerCase();
+  const submitted = /\b(?:all|every)\b[^\n.]{0,120}\b(?:submit|submitted|submission|handed in|uploaded)\b/.test(text)
+    || /\b(?:submit|submitted|submission|handed in|uploaded)\b[^\n.]{0,120}\b(?:all|every)\b/.test(text);
+  const teacherCheck = /teacher[^\n.]{0,140}\b(?:check|checks|confirm|confirms|verify|verifies|ensure|ensures)\b/.test(text);
+  return submitted && teacherCheck;
+}
+
+function ensureProjectSubmissionConfirmation(raw, lessonPurpose = 'lesson') {
+  if (normalizeLessonPurpose(lessonPurpose) !== 'project') return raw;
+  const sections = Array.isArray(raw && raw.sections) ? raw.sections.map(section => ({ ...section })) : [];
+  const plenaries = sections
+    .map((section, index) => ({ section, index }))
+    .filter(({ section }) => /plenary|exit|closing/i.test(String(section && section.heading || '')));
+  if (!plenaries.length) return raw;
+  const requiredLine = 'Teacher checks the LessonScope submission list and confirms that every student has submitted before the class finishes.';
+  for (const { section, index } of plenaries) {
+    if (projectPlenaryHasSubmissionConfirmation(section.content)) continue;
+    sections[index].content = [String(section.content || '').trim(), requiredLine].filter(Boolean).join('\n');
+  }
+  return { ...(raw || {}), sections };
+}
+
+function repairGeneratedPlan(raw, { lessonPurpose = 'lesson', templateText = '', structuredSequence = false } = {}) {
+  return ensureProjectSubmissionConfirmation(
+    restoreOptionalTemplateSections(raw, templateText, structuredSequence),
+    lessonPurpose,
+  );
+}
+
 function lessonPlanIssues(raw, { lessonPurpose = 'lesson', templateText = '', structuredSequence = false } = {}) {
   const purpose = normalizeLessonPurpose(lessonPurpose);
   const sections = Array.isArray(raw && raw.sections) ? raw.sections : [];
@@ -253,8 +305,7 @@ function lessonPlanIssues(raw, { lessonPurpose = 'lesson', templateText = '', st
     if (!/teacher\s*(?::|—|-)?\s*(?:will\s+)?(?:circulates?|observes?|monitors?|facilitates?|checks?|records?|grades?|assesses?)/.test(text)) issues.push('the teacher is not positioned as a project facilitator and assessor');
     if (launchText && !(/\b(project|product|performance|investigation|solution|artefact|artifact|outcome)\b/.test(launchText) || /\b(?:project|task|assessment) brief\b/.test(launchText))) issues.push('the project launch is a generic lesson introduction instead of explaining the assessed outcome');
     if (activityText && !projectAction.test(activityText)) issues.push('the main activity is teacher-led instead of students creating the project work');
-    if (plenaryText && !(/\b(?:all|every)\b[^\n.]{0,100}\b(?:submit|submitted|submission|handed in|uploaded)\b/.test(plenaryText)
-      && /teacher[^\n.]{0,100}\b(?:check|checks|confirm|confirms|verify|verifies)\b/.test(plenaryText))) {
+    if (plenaryText && !projectPlenaryHasSubmissionConfirmation(plenaryText)) {
       issues.push('the project plenary does not require the teacher to confirm that every student submitted');
     }
     const taughtDuringProject = text.split(/\n+|(?<=[.!?])\s+/).some(line =>
@@ -400,6 +451,149 @@ function placeholderPlan(objectives, teachingModel) {
   };
 }
 
+const MCQ_ITEM_SCHEMA = ASSESSMENT_DRAFT_SCHEMA.properties.sections.items.properties.items.items;
+
+function assessmentContext(input, assessmentOptions) {
+  return {
+    subject: input.subject,
+    topic: input.topic,
+    grade: input.grade,
+    objectives: input.objectives,
+    sourceMaterialText: input.sourceMaterialText,
+    lessonPurpose: input.lessonPurpose,
+    ...assessmentOptions,
+  };
+}
+
+function normalizedAssessmentCandidate(raw, context) {
+  if (!raw || !Array.isArray(raw.sections) || !raw.sections.length) return null;
+  return normalizeAssessmentDraft(raw, context);
+}
+
+function trimExtraMcqItems(draft, requestedCount) {
+  if (!draft || !Array.isArray(draft.sections)) return draft;
+  let remaining = requestedCount;
+  return {
+    ...draft,
+    sections: draft.sections.map(section => {
+      if (section.type !== 'mcq') return section;
+      const items = (section.items || []).slice(0, Math.max(0, remaining));
+      remaining -= items.length;
+      return { ...section, items };
+    }).filter(section => section.type !== 'mcq' || section.items.length),
+  };
+}
+
+async function generateMissingMcqItems(client, count, context, existingPrompts = []) {
+  const items = [];
+  const seenPrompts = existingPrompts.map(value => String(value || '').trim()).filter(Boolean);
+  while (items.length < count) {
+    const batchSize = Math.min(10, count - items.length);
+    const keys = Array.from({ length: batchSize }, (_, index) => `item_${index + 1}`);
+    const properties = Object.fromEntries(keys.map(key => [key, MCQ_ITEM_SCHEMA]));
+    const prompt = `Create exactly ${batchSize} additional multiple-choice question${batchSize === 1 ? '' : 's'} for this assessment.
+Subject: ${String(context.subject || '').trim()}
+Topic: ${String(context.topic || '').replace(/-/g, ' ').trim()}
+Grade level: ${String(context.grade || '').trim()}
+Learning objectives:
+${String(context.objectives || '').trim()}
+
+Return one different question in every required property (${keys.join(', ')}). Each item is worth 1 mark and needs 2-6 plausible options, one unambiguous correct zero-based correctIndex, and an empty answerKey. Do not repeat or rephrase any existing question below.
+${seenPrompts.length ? `Existing questions:\n${seenPrompts.join('\n')}` : ''}
+${context.sourceMaterialText ? `Relevant source material:\n${String(context.sourceMaterialText).slice(0, 5000)}` : ''}`;
+    const response = await client.chat.completions.create({
+      model: MODEL,
+      max_tokens: Math.min(6000, 500 + batchSize * 450),
+      messages: [{ role: 'user', content: prompt }],
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'assessment_mcq_completion',
+          strict: true,
+          schema: { type: 'object', properties, required: keys, additionalProperties: false },
+        },
+      },
+    });
+    const text = response.choices[0]?.message?.content;
+    if (!text) throw new Error('No additional assessment questions returned from the model');
+    const parsed = JSON.parse(text);
+    const generated = keys.map(key => parsed[key]);
+    if (generated.some(item => !item || !String(item.prompt || '').trim())) throw new Error('An additional assessment question was incomplete');
+    items.push(...generated);
+    seenPrompts.push(...generated.map(item => item.prompt));
+  }
+  return items;
+}
+
+async function completeAssessmentMcqs(client, draft, context, options) {
+  if (!draft || !options.questionTypes.includes('mcq')) return draft;
+  let repaired = trimExtraMcqItems(draft, options.mcqCount);
+  const current = repaired.sections.filter(section => section.type === 'mcq')
+    .reduce((sum, section) => sum + (section.items || []).length, 0);
+  if (current >= options.mcqCount) return normalizeAssessmentDraft(repaired, context);
+  const existingPrompts = repaired.sections.filter(section => section.type === 'mcq')
+    .flatMap(section => (section.items || []).map(item => item.prompt));
+  const additions = await generateMissingMcqItems(client, options.mcqCount - current, context, existingPrompts);
+  let target = repaired.sections.find(section => section.type === 'mcq');
+  if (!target) {
+    target = {
+      title: 'Multiple choice', type: 'mcq', instructions: 'Choose the best answer.',
+      objectiveIndexes: objectiveLines(context.objectives).map((_, index) => index), items: [],
+    };
+    const desiredIndex = Math.max(0, options.questionTypes.indexOf('mcq'));
+    repaired.sections.splice(Math.min(desiredIndex, repaired.sections.length), 0, target);
+  }
+  target.items = [...(target.items || []), ...additions];
+  return normalizeAssessmentDraft(repaired, context);
+}
+
+async function repairAssessmentDraft(client, initialDraft, context, options) {
+  let bestDraft = normalizedAssessmentCandidate(initialDraft, context);
+  let bestIssues = assessmentDraftIssues(bestDraft, options);
+  const onlyMcqCountNeedsRepair = issues => issues.length > 0
+    && issues.every(issue => issue === 'mcq section is missing' || /expected \d+ multiple-choice items but received \d+/.test(issue));
+
+  if (onlyMcqCountNeedsRepair(bestIssues)) {
+    try {
+      const completed = await completeAssessmentMcqs(client, bestDraft, context, options);
+      const issues = assessmentDraftIssues(completed, options);
+      if (!issues.length) return completed;
+      bestDraft = completed;
+      bestIssues = issues;
+    } catch (err) {
+      console.error('Targeted assessment question completion failed:', err.message);
+    }
+  }
+
+  let previousIssues = bestIssues;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const correction = previousIssues.length
+      ? `\n\nThe previous assessment failed these checks: ${previousIssues.join('; ')}. Correct every issue, especially the exact item count.`
+      : '';
+    const response = await client.chat.completions.create({
+      model: MODEL,
+      max_tokens: 12000,
+      messages: [{ role: 'user', content: assessmentOnlyPrompt(context) + correction }],
+      response_format: { type: 'json_schema', json_schema: { name: 'assessment_draft', strict: true, schema: ASSESSMENT_DRAFT_SCHEMA } },
+    });
+    const text = response.choices[0]?.message?.content;
+    if (!text) throw new Error('No assessment draft returned from the model');
+    const parsed = JSON.parse(text);
+    let candidate = normalizedAssessmentCandidate(parsed, context);
+    if (candidate && options.questionTypes.includes('mcq')) candidate = await completeAssessmentMcqs(client, candidate, context, options);
+    const issues = assessmentDraftIssues(candidate, options);
+    if (!issues.length) return candidate;
+    if (!bestDraft || issues.length < bestIssues.length) {
+      bestDraft = candidate;
+      bestIssues = issues;
+    }
+    previousIssues = issues;
+  }
+  const error = new Error(`assessment draft did not meet the required checks (${bestIssues.join('; ')})`);
+  error.qualityIssues = bestIssues;
+  throw error;
+}
+
 async function generateLessonPlan({ subject, topic, grade = 'middle school', tone = 'clear and engaging', objectives, successCriteria = [], templateText, unitBlock = '', sourceMaterialText = '', planningFrameworkText = '', teachingModel = 'standard', sequence = null, structuredSequence = false, sequenceLessonNumber = null, previousLessonPlanText = '', lessonPurpose = 'lesson', assessmentTotalMarks = 50, assessmentStructure = 'balanced', assessmentDeliveryMode = 'live', assessmentBrief = '', assessmentQuestionTypes = [], assessmentMcqCount = 15, regenerate = false }) {
   const teachingModelId = normalizeTeachingModelId(teachingModel);
   const model = getTeachingModel(teachingModelId);
@@ -441,7 +635,7 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     teachingModelId,
     lessonPurpose: purpose,
     assessmentOptions,
-    lessonPlanQualityVersion: 4,
+    lessonPlanQualityVersion: 5,
     sequence: cleanSequence,
     structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber),
     sequenceLessonNumber: cleanLessonNumber,
@@ -450,6 +644,7 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
   }, async () => {
     const client = aiClient();
     const basePrompt = buildPrompt({ subject, topic, grade, tone, objectives, successCriteria, templateText, unitBlock, sourceMaterialText, planningFrameworkText, teachingModel: teachingModelId, sequence: cleanSequence, structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber), sequenceLessonNumber: cleanLessonNumber, previousLessonPlanText, lessonPurpose: purpose, assessmentOptions });
+    const draftContext = assessmentContext({ subject, topic, grade, objectives, sourceMaterialText, lessonPurpose: purpose }, assessmentOptions);
     let lastIssues = [];
     for (let attempt = 1; attempt <= 3; attempt++) {
       const correction = lastIssues.length ? `\n\nYour previous draft failed these required checks: ${lastIssues.join('; ')}. Correct every issue in the new response.` : '';
@@ -461,19 +656,29 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
       });
       const text = response.choices[0]?.message?.content;
       if (!text) throw new Error('No lesson plan returned from the model');
-      const parsed = JSON.parse(text);
+      const parsed = repairGeneratedPlan(JSON.parse(text), {
+        lessonPurpose: purpose,
+        templateText,
+        structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber),
+      });
       const planIssues = lessonPlanIssues(parsed, { lessonPurpose: purpose, templateText, structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber) });
       if (purpose === 'lesson') {
         lastIssues = planIssues;
         if (!lastIssues.length) return { ...parsed, teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
         continue;
       }
-      const normalizedDraft = normalizeAssessmentDraft(parsed.assessmentDraft, { subject, topic, grade, objectives, lessonPurpose: purpose, ...assessmentOptions });
-      lastIssues = [
-        ...planIssues,
-        ...assessmentDraftIssues(normalizedDraft, assessmentOptions),
-      ];
-      if (!lastIssues.length) return { ...parsed, teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
+      if (planIssues.length) {
+        lastIssues = planIssues;
+        continue;
+      }
+      try {
+        const assessmentDraft = await repairAssessmentDraft(client, parsed.assessmentDraft, draftContext, assessmentOptions);
+        return { ...parsed, assessmentDraft, teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
+      } catch (err) {
+        lastIssues = Array.isArray(err.qualityIssues) && err.qualityIssues.length
+          ? err.qualityIssues
+          : [err.message || 'assessment draft could not be completed'];
+      }
     }
     throw new Error(`The automatic ${purpose} plan did not meet the required quality checks (${lastIssues.join('; ')}). Please generate it again.`);
   });
@@ -493,4 +698,5 @@ module.exports = {
   sequencePromptBlock, sequenceStepPromptBlock, buildPrompt,
   deriveSuccessCriteria, finalizeLessonPlan, ensureGradualReleaseVisible,
   ensureAssessmentFlowVisible, strictTemplateHeadings, dedupeSectionLines, lessonPlanIssues, isAllowedBlankPlanSection,
+  restoreOptionalTemplateSections, ensureProjectSubmissionConfirmation, repairGeneratedPlan, repairAssessmentDraft,
 };

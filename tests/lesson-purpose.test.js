@@ -3,10 +3,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const assignments = require('../assignments');
-const { generateLessonPlan, buildPrompt, planSchema, lessonPlanIssues, dedupeSectionLines, isAllowedBlankPlanSection } = require('../lesson-plan');
+const { generateLessonPlan, buildPrompt, planSchema, lessonPlanIssues, dedupeSectionLines, isAllowedBlankPlanSection, repairGeneratedPlan, repairAssessmentDraft } = require('../lesson-plan');
 const { generateContent } = require('../content');
 const { getTeachingModel } = require('../teaching-models');
-const { normalizeAssessmentOptions, assessmentDraftIssues } = require('../assessment-draft');
+const { normalizeAssessmentOptions, normalizeAssessmentDraft, assessmentDraftIssues, assessmentOnlyPrompt } = require('../assessment-draft');
 
 async function withoutOpenAI(run) {
   const original = process.env.OPENAI_API_KEY;
@@ -139,6 +139,96 @@ test('only reflection and phonics may remain blank', () => {
   ] }, { lessonPurpose: 'project' });
   assert.ok(issues.some(issue => /these sections are empty: Assessment/.test(issue)));
   assert.ok(!issues.some(issue => /Reflection|Phonics/.test(issue)));
+});
+
+test('project generation repairs an omitted optional Phonics row and submission confirmation', () => {
+  const templateText = [
+    'Red Thread:', 'Key vocabulary:', 'Resources:', 'Phonics (delete row if not applicable):',
+    'Intro(10m):', 'Activities(50m):', 'Plenary(10m):', 'Differentiation:', 'Assessment:',
+  ].join('\n');
+  const repaired = repairGeneratedPlan({ sections: [
+    { heading: 'Red Thread', stageId: 'launch', content: 'Students connect document creation to communicating a clear message.' },
+    { heading: 'Key vocabulary', stageId: 'launch', content: 'Document: a digital page used to record and share information.' },
+    { heading: 'Resources', stageId: 'launch', content: 'Word processor, saved task brief, submission checklist and accessible keyboard.' },
+    { heading: 'Intro(10m)', stageId: 'launch', content: 'Teacher launches the assessed project product and explains the task brief and success criteria.' },
+    { heading: 'Activities(50m)', stageId: 'practice', content: 'Students create and revise the required document through visible checkpoints.\nTeacher circulates, observes progress and records practical evidence.' },
+    { heading: 'Plenary(10m)', stageId: 'reflect', content: 'Students save the finished product and prepare it for upload.' },
+    { heading: 'Differentiation', stageId: 'practice', content: 'Provide a visual stage card and extra processing time while keeping the assessed outcome unchanged.' },
+    { heading: 'Assessment', stageId: 'check', content: 'Students complete the LessonScope knowledge phase independently and submit the project for grading.' },
+  ] }, { lessonPurpose: 'project', templateText });
+  assert.deepEqual(repaired.sections.map(section => section.heading), [
+    'Red Thread', 'Key vocabulary', 'Resources', 'Phonics (delete row if not applicable)',
+    'Intro(10m)', 'Activities(50m)', 'Plenary(10m)', 'Differentiation', 'Assessment',
+  ]);
+  assert.equal(repaired.sections[3].content, '');
+  assert.match(repaired.sections[6].content, /Teacher checks the LessonScope submission list and confirms that every student has submitted/);
+  assert.deepEqual(lessonPlanIssues(repaired, { lessonPurpose: 'project', templateText }), []);
+});
+
+test('focused assessment recovery preserves the teacher requested question count', () => {
+  const prompt = assessmentOnlyPrompt({
+    subject: 'ICT', topic: 'Document creation', grade: 'Grade 2',
+    objectives: 'Create and revise a short letter.', lessonPurpose: 'project',
+    totalMarks: 50, questionTypes: ['mcq', 'practical'], mcqCount: 15, deliveryMode: 'live',
+  });
+  assert.match(prompt, /Create ONLY the editable assessment draft/);
+  assert.match(prompt, /Multiple choice: exactly 15 different questions/);
+  assert.match(prompt, /remaining 35 marks belong to the other selected section/);
+  assert.match(prompt, /Use every selected section type and no unselected type/);
+});
+
+test('mixed assessments reserve one mark per MCQ and allocate the exact remainder to practical work', () => {
+  const mcqItems = Array.from({ length: 15 }, (_, index) => ({
+    prompt: `Question ${index + 1}`, marks: index === 0 ? 4 : 1,
+    options: ['Correct', 'Distractor'], correctIndex: 0, answerKey: '',
+  }));
+  const draft = normalizeAssessmentDraft({ title: 'Project', instructions: 'Complete both parts.', sections: [
+    { title: 'Knowledge', type: 'mcq', instructions: 'Choose one.', objectiveIndexes: [0], items: mcqItems },
+    { title: 'Practical', type: 'practical', instructions: 'Create the product.', objectiveIndexes: [0], items: [
+      { prompt: 'Complete the required product.', marks: 1, options: [], correctIndex: 0, answerKey: '' },
+    ] },
+  ] }, {
+    subject: 'ICT', topic: 'Documents', grade: 'Grade 2', objectives: 'Create a document.', lessonPurpose: 'project',
+    totalMarks: 50, questionTypes: ['mcq', 'practical'], mcqCount: 15,
+  });
+  const mcq = draft.sections.find(section => section.type === 'mcq');
+  const practical = draft.sections.find(section => section.type === 'practical');
+  assert.equal(mcq.items.length, 15);
+  assert.ok(mcq.items.every(item => item.marks === 1));
+  assert.equal(practical.items.reduce((sum, item) => sum + item.marks, 0), 35);
+  assert.deepEqual(assessmentDraftIssues(draft, { totalMarks: 50, questionTypes: ['mcq', 'practical'], mcqCount: 15 }), []);
+});
+
+test('assessment recovery completes a 14-question response without discarding the valid draft', async () => {
+  const existing = Array.from({ length: 14 }, (_, index) => ({
+    prompt: `Existing question ${index + 1}`, marks: 1,
+    options: ['Correct', 'Distractor'], correctIndex: 0, answerKey: '',
+  }));
+  let calls = 0;
+  const client = { chat: { completions: { create: async () => {
+    calls += 1;
+    return { choices: [{ message: { content: JSON.stringify({
+      item_1: { prompt: 'Which action saves a document?', marks: 1, options: ['Choose Save', 'Close the screen'], correctIndex: 0, answerKey: '' },
+    }) } }] };
+  } } } };
+  const options = normalizeAssessmentOptions({ totalMarks: 50, questionTypes: ['mcq', 'practical'], mcqCount: 15 });
+  const context = {
+    subject: 'ICT', topic: 'Documents', grade: 'Grade 2', objectives: 'Create and save a document.',
+    lessonPurpose: 'project', ...options,
+  };
+  const repaired = await repairAssessmentDraft(client, { title: 'Document project', instructions: 'Complete both parts.', sections: [
+    { title: 'Knowledge', type: 'mcq', instructions: 'Choose one.', objectiveIndexes: [0], items: existing },
+    { title: 'Practical', type: 'practical', instructions: 'Create a document.', objectiveIndexes: [0], items: [
+      { prompt: 'Create and save the required document.', marks: 36, options: [], correctIndex: 0, answerKey: '' },
+    ] },
+  ] }, context, options);
+  const mcq = repaired.sections.find(section => section.type === 'mcq');
+  const practical = repaired.sections.find(section => section.type === 'practical');
+  assert.equal(calls, 1);
+  assert.equal(mcq.items.length, 15);
+  assert.equal(mcq.items.reduce((sum, item) => sum + item.marks, 0), 15);
+  assert.equal(practical.items.reduce((sum, item) => sum + item.marks, 0), 35);
+  assert.deepEqual(assessmentDraftIssues(repaired, options), []);
 });
 
 test('repeated lines are removed as a final display safeguard', () => {

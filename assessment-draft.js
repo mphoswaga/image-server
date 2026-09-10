@@ -182,8 +182,18 @@ function normalizeAssessmentDraft(raw, context = {}) {
     };
   }).filter(Boolean);
   if (!sections.length) return fallbackDraft({ ...context, lessonPurpose: purpose, assessmentTotalMarks: opts.totalMarks, assessmentQuestionTypes: opts.questionTypes, assessmentMcqCount: opts.mcqCount });
-  const flat = sections.flatMap((section, sectionIndex) => section.items.map((item, itemIndex) => ({ sectionIndex, itemIndex, item })));
-  const allocated = allocateMarks(flat.map(entry => entry.item), opts.totalMarks);
+  const flat = sections.flatMap((section, sectionIndex) => section.items.map((item, itemIndex) => ({ sectionIndex, itemIndex, type: section.type, item })));
+  const mcqEntries = flat.filter(entry => entry.type === 'mcq');
+  const otherEntries = flat.filter(entry => entry.type !== 'mcq');
+  const fixedMcqMarks = opts.questionTypes.includes('mcq') && otherEntries.length && mcqEntries.length < opts.totalMarks;
+  const otherAllocation = fixedMcqMarks
+    ? allocateMarks(otherEntries.map(entry => entry.item), opts.totalMarks - mcqEntries.length)
+    : [];
+  const allocated = fixedMcqMarks
+    ? flat.map(entry => entry.type === 'mcq'
+      ? { ...entry.item, marks: 1 }
+      : otherAllocation[otherEntries.indexOf(entry)])
+    : allocateMarks(flat.map(entry => entry.item), opts.totalMarks);
   sections = sections.map((section, sectionIndex) => ({
     ...section,
     items: section.items.map((item, itemIndex) => allocated[flat.findIndex(entry => entry.sectionIndex === sectionIndex && entry.itemIndex === itemIndex)]).filter(Boolean),
@@ -206,11 +216,17 @@ function assessmentDraftIssues(draft, options = {}) {
   if (!draft) return ['assessment draft is missing'];
   const sections = Array.isArray(draft.sections) ? draft.sections : [];
   const issues = [];
+  const selected = new Set(opts.questionTypes);
+  for (const section of sections) {
+    if (!selected.has(section.type)) issues.push(`unselected ${section.type} section was added`);
+  }
   for (const type of opts.questionTypes) {
     if (!sections.some(section => section.type === type && Array.isArray(section.items) && section.items.length)) issues.push(`${type} section is missing`);
   }
   const mcqCount = sections.filter(section => section.type === 'mcq').reduce((sum, section) => sum + (section.items || []).length, 0);
   if (opts.questionTypes.includes('mcq') && mcqCount !== opts.mcqCount) issues.push(`expected ${opts.mcqCount} multiple-choice items but received ${mcqCount}`);
+  const mcqMarks = sections.filter(section => section.type === 'mcq').flatMap(section => section.items || []).map(item => Number(item.marks) || 0);
+  if (opts.questionTypes.includes('mcq') && opts.questionTypes.length > 1 && mcqMarks.some(mark => mark !== 1)) issues.push('each multiple-choice item must be worth exactly 1 mark');
   const allocated = sections.reduce((sum, section) => sum + (section.items || []).reduce((itemSum, item) => itemSum + (Number(item.marks) || 0), 0), 0);
   if (allocated !== opts.totalMarks) issues.push(`expected ${opts.totalMarks} total marks but received ${allocated}`);
   return issues;
@@ -253,7 +269,41 @@ ${purpose === 'test' ? 'The test must be valid for independent work. Do not put 
 ${opts.brief ? `Teacher requirements: ${opts.brief}` : ''}\n`;
 }
 
+function assessmentOnlyPrompt({ subject, topic, grade, objectives, sourceMaterialText = '', lessonPurpose = 'project', ...options } = {}) {
+  const purpose = normalizeLessonPurpose(lessonPurpose);
+  const opts = normalizeAssessmentOptions(options);
+  const typeNames = { mcq: 'multiple choice', 'short-answer': 'short answer', 'extended-response': 'extended response', practical: 'practical / observation' };
+  const selectedTypes = opts.questionTypes.map(type => typeNames[type]).join(', ');
+  const otherTypes = opts.questionTypes.filter(type => type !== 'mcq');
+  const mcqAllocation = opts.questionTypes.includes('mcq') && otherTypes.length
+    ? `${opts.mcqCount} marks belong to the ${opts.mcqCount} multiple-choice items and the remaining ${opts.totalMarks - opts.mcqCount} marks belong to the other selected section(s).`
+    : '';
+  const source = String(sourceMaterialText || '').trim();
+  return `Create ONLY the editable assessment draft described below. Do not return a lesson plan or commentary.
+
+Assessment type: ${purpose}
+Subject: ${String(subject || '').trim()}
+Topic: ${String(topic || '').replace(/-/g, ' ').trim()}
+Grade level: ${String(grade || '').trim()}
+Learning objectives:
+${String(objectives || '').trim()}
+
+Teacher settings:
+- Total marks: exactly ${opts.totalMarks}
+- Selected section types, in this order: ${selectedTypes}
+- Delivery: ${opts.deliveryMode === 'live' ? 'live in the classroom under teacher control' : 'self-paced'}
+${opts.questionTypes.includes('mcq') ? `- Multiple choice: exactly ${opts.mcqCount} different questions; do not return ${opts.mcqCount - 1} or any other number` : '- Do not create multiple-choice questions'}
+${opts.brief ? `- Teacher requirements: ${opts.brief}` : ''}
+
+Use every selected section type and no unselected type. ${mcqAllocation}
+Make every question accurate, unambiguous, different from the others, appropriate for the stated grade, and directly connected to the objectives or source material. Multiple-choice items need 2-6 plausible options and one correct zero-based correctIndex. Written items need concise answerKey marking guidance. Practical items must describe observable evidence; leave their options and answerKey empty. Use zero-based objectiveIndexes. Every item must have positive whole-number marks, and all marks together must total exactly ${opts.totalMarks}.
+${purpose === 'test'
+    ? 'The test must be suitable for independent work and must not reveal answers or hints in student-facing wording.'
+    : 'The project must assess meaningful stages of the process and the completed outcome while keeping marking guidance private.'}
+${source ? `\nRelevant source material:\n${source.slice(0, 5000)}` : ''}`;
+}
+
 module.exports = {
   ASSESSMENT_DRAFT_SCHEMA, normalizeLessonPurpose, normalizeAssessmentOptions,
-  normalizeAssessmentDraft, assessmentDraftIssues, fallbackDraft, assessmentPromptBlock,
+  normalizeAssessmentDraft, assessmentDraftIssues, fallbackDraft, assessmentPromptBlock, assessmentOnlyPrompt,
 };
