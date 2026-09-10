@@ -2151,6 +2151,17 @@ app.patch('/api/assignment/:id/cutoff', requireAuth, (req, res) => {
   res.json({ ok: true, cutoffAt: updated.cutoffAt });
 });
 
+app.patch('/api/assignment/:id/live-state', requireAuth, (req, res) => {
+  const a = assignments.getAssignment(req.params.id);
+  if (!a) return res.status(404).json({ error: 'Assessment not found.' });
+  if (a.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assessment.' });
+  try {
+    const updated = assignments.updateDelivery(a.id, String(req.body && req.body.action || ''));
+    if (!updated) return res.status(400).json({ error: 'This item does not support live classroom controls.' });
+    res.json({ ok: true, delivery: assignments.deliveryState(updated), progress: assignments.draftProgress(updated) });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
 // Public: resolve a Room Code to EITHER a game or an assignment (shared join flow).
 app.get('/api/join', (req, res) => {
   const code = String(req.query.code || '').trim().toUpperCase();
@@ -2802,11 +2813,46 @@ app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
   const session = assignmentStudentSession(req, res, a);
   if (req.gameSession && req.gameSession.assignmentId && !session) return res.status(401).json({ code:'ASSIGNMENT_REJOIN_REQUIRED', error: 'Join this assignment to continue. Your other assignment is still saved.' });
   const already = session && assignments.getSubmission(a.id, session.studentId);
+  const delivery = assignments.deliveryState(a);
+  let visibleQuestions = a.content.questions;
+  let activeSection = null;
+  if (a.type === 'assessment' && delivery.mode === 'live') {
+    activeSection = delivery.activeSectionIndex >= 0 ? (a.sections || [])[delivery.activeSectionIndex] || null : null;
+    if (delivery.phase === 'open' && activeSection) visibleQuestions = a.content.questions.filter(q => q.sectionId === activeSection.id);
+    else if (!['marking', 'closed'].includes(delivery.phase)) visibleQuestions = [];
+  }
+  const draft = session ? assignments.getDraft(a.id, session.studentId) : null;
+  const visibleIds = new Set(visibleQuestions.map(q => q.id));
+  const draftAnswers = Object.fromEntries(Object.entries(draft && draft.answers || {}).filter(([id]) => visibleIds.has(id)));
   res.json({
     title: a.title, instructions: a.content.instructions,
-    questions: a.content.questions.map(q => ({ id: q.id, question: q.question, kind: q.kind, options: q.options || null, marks: q.marks, sectionId: q.sectionId || null, sectionTitle: q.sectionTitle || null, sectionInstructions: q.sectionInstructions || '', sectionType: q.sectionType || null })),
+    questions: visibleQuestions.map(q => ({ id: q.id, question: q.question, kind: q.kind, options: q.options || null, marks: q.marks, sectionId: q.sectionId || null, sectionTitle: q.sectionTitle || null, sectionInstructions: q.sectionInstructions || '', sectionType: q.sectionType || null })),
+    delivery, activeSection: activeSection ? { id: activeSection.id, title: activeSection.title, index: delivery.activeSectionIndex, total: a.sections.length } : null,
+    draftAnswers, sectionCompleted: !!(activeSection && draft && (draft.completedSectionIds || []).includes(activeSection.id)),
     alreadySubmitted: !!already,
   });
+});
+
+// Server-side learner drafts make a live test recoverable after a refresh,
+// device change, or temporary connection loss. Only the currently open
+// section is accepted, so future questions cannot be answered early.
+app.post('/api/assignment/:id/draft', requireAssignmentAccess, (req, res) => {
+  const a = assignments.getAssignment(req.params.id);
+  if (!a) return res.status(404).json({ error: 'Assessment not found.' });
+  const session = assignmentStudentSession(req, res, a);
+  if (!session) return res.status(401).json({ error: 'Rejoin this assessment to save your work.' });
+  const delivery = assignments.deliveryState(a);
+  if (a.type === 'assessment' && delivery.mode === 'live' && delivery.phase !== 'open') return res.status(409).json({ error: delivery.phase === 'paused' ? 'Your teacher paused the assessment.' : 'This section is not open.' });
+  const activeSection = delivery.mode === 'live' ? (a.sections || [])[delivery.activeSectionIndex] : null;
+  const allowed = new Map((a.content.questions || []).filter(q => !activeSection || q.sectionId === activeSection.id).map(q => [q.id, q]));
+  const safeAnswers = {};
+  for (const [id, value] of Object.entries(req.body && req.body.answers || {})) {
+    const question = allowed.get(id); if (!question) continue;
+    safeAnswers[id] = question.kind === 'mcq' ? Number(value) : String(value == null ? '' : value).slice(0, 20000);
+  }
+  const complete = !!(req.body && req.body.complete);
+  const saved = assignments.saveDraft(a.id, { studentId: session.studentId, name: session.name, answers: safeAnswers, completedSectionId: complete && activeSection ? activeSection.id : null });
+  res.json({ ok: true, savedAt: saved.updatedAt, sectionCompleted: !!(activeSection && saved.completedSectionIds.includes(activeSection.id)) });
 });
 
 // Student: submit answers — MCQ grades instantly; free-text checks the
@@ -2821,7 +2867,10 @@ app.post('/api/assignment/:id/submit', requireAssignmentAccess, async (req, res)
   const session = assignmentStudentSession(req, res, a);
   if (!session) return res.status(401).json({ error: 'Your session could not be confirmed — rejoin using the Room Code or link, then try again.' });
   if (session.assignmentId !== a.id) return res.status(403).json({ error: 'Session is for a different assignment.' });
-  const answers = (req.body && req.body.answers) || {};
+  const delivery = assignments.deliveryState(a);
+  if (a.type === 'assessment' && delivery.mode === 'live' && delivery.phase !== 'marking') return res.status(409).json({ error: delivery.phase === 'closed' ? 'This assessment is closed.' : 'Wait for your teacher to finish all sections before submitting.' });
+  const storedDraft = assignments.getDraft(a.id, session.studentId);
+  const answers = { ...(storedDraft && storedDraft.answers || {}), ...((req.body && req.body.answers) || {}) };
   const studentId = session.studentId;
   const name = session.name || studentId;
 
@@ -2913,7 +2962,10 @@ app.get('/api/assignment/:id/results', requireAuth, (req, res) => {
   const rosterMap = rosterData ? Object.fromEntries(rosterData.students.map(s => [s.id, s.name])) : {};
   const submissions = assignments.getSubmissions(a.id).map(s => ({ ...s, name: rosterMap[s.studentId] || s.name }));
   const readiness = assignments.assessmentReleaseReadiness(a);
-  res.json({ questions: a.content.questions, sections: a.sections || null, objectives: a.objectives || null, assessmentType: a.assessmentType || null, totalMarks: a.totalMarks || null, submissions, resultsReleased: a.resultsReleased, cutoffAt: a.cutoffAt, effectivelyReleased: assignments.isReleased(a), releaseReady: readiness.ready, pendingGrades: readiness.pendingGrades, releaseReason: readiness.reason || '' });
+  const delivery = assignments.deliveryState(a);
+  const liveProgress = a.type === 'assessment' ? assignments.draftProgress(a) : null;
+  const rosterSize = rosterData ? rosterData.students.length : null;
+  res.json({ questions: a.content.questions, sections: a.sections || null, objectives: a.objectives || null, assessmentType: a.assessmentType || null, totalMarks: a.totalMarks || null, delivery, liveProgress, rosterSize, submissions, resultsReleased: a.resultsReleased, cutoffAt: a.cutoffAt, effectivelyReleased: assignments.isReleased(a), releaseReady: readiness.ready, pendingGrades: readiness.pendingGrades, releaseReason: readiness.reason || '' });
 });
 
 // Teacher: override a student's grade for one question. This both corrects

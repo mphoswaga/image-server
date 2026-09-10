@@ -13,8 +13,9 @@ const DIR = path.join(DATA_DIR, 'assignments');
 const ROOMS_PATH = path.join(DIR, '_rooms.json');
 const recPath = id => path.join(DIR, `${id}.json`);
 const subsPath = id => path.join(DIR, `${id}.submissions.json`);
+const draftsPath = id => path.join(DIR, `${id}.drafts.json`);
 const verdictsPath = id => path.join(DIR, `${id}.verdicts.json`);
-const isAssignmentFile = f => f.endsWith('.json') && !f.endsWith('.submissions.json') && !f.endsWith('.verdicts.json') && f !== '_rooms.json';
+const isAssignmentFile = f => f.endsWith('.json') && !f.endsWith('.submissions.json') && !f.endsWith('.drafts.json') && !f.endsWith('.verdicts.json') && f !== '_rooms.json';
 const normalizeStudentId = value => String(value || '').trim().replace(/\s+/g, '').toUpperCase();
 
 // 6-char room code using unambiguous chars (no 0/O/1/I/L) — same alphabet as games.js.
@@ -81,11 +82,13 @@ function normalizeAssessment(data) {
   const subject = cleanText(data.subject, 100);
   const grade = cleanText(data.grade, 60);
   const assessmentType = cleanText(data.assessmentType, 30).toLowerCase();
+  const deliveryMode = cleanText(data.deliveryMode, 30).toLowerCase() || 'live';
   const totalMarks = Number(data.totalMarks);
   if (!title) throw new Error('Enter an assessment title.');
   if (!subject) throw new Error('Enter a subject.');
   if (!grade) throw new Error('Enter a grade or year group.');
   if (!ASSESSMENT_TYPES.has(assessmentType)) throw new Error('Choose a valid assessment type.');
+  if (!['live', 'self-paced'].includes(deliveryMode)) throw new Error('Choose live classroom or self-paced delivery.');
   if (!Number.isInteger(totalMarks) || totalMarks < 1 || totalMarks > 1000) throw new Error('Total marks must be a whole number from 1 to 1000.');
 
   const objectives = [];
@@ -155,7 +158,7 @@ function normalizeAssessment(data) {
   }
   const allocatedMarks = questions.reduce((sum, q) => sum + q.marks, 0);
   if (allocatedMarks !== totalMarks) throw new Error(`Allocated marks (${allocatedMarks}) must equal the assessment total (${totalMarks}).`);
-  return { title, subject, grade, assessmentType, totalMarks, objectives, sections, questions, instructions: cleanText(data.instructions, 2000) };
+  return { title, subject, grade, assessmentType, deliveryMode, totalMarks, objectives, sections, questions, instructions: cleanText(data.instructions, 2000) };
 }
 
 function createAssessment({ teacherId, teacherName, data, rosterId, cutoffAt }) {
@@ -169,6 +172,9 @@ function createAssessment({ teacherId, teacherName, data, rosterId, cutoffAt }) 
     subject: normalized.subject, topic: normalized.title, grade: normalized.grade,
     totalMarks: normalized.totalMarks, objectives: normalized.objectives,
     sections: normalized.sections, version: 1, status: 'published',
+    delivery: normalized.deliveryMode === 'live'
+      ? { mode: 'live', phase: 'lobby', activeSectionIndex: -1, previousPhase: null, updatedAt: new Date().toISOString() }
+      : { mode: 'self-paced', phase: 'open', activeSectionIndex: null, previousPhase: null, updatedAt: new Date().toISOString() },
     roomCode, rosterId: rosterId || null, cutoffAt: cutoffAt || null,
     resultsReleased: false,
     content: { title: normalized.title, instructions: normalized.instructions, questions: normalized.questions },
@@ -221,6 +227,7 @@ function releaseResults(id, released) {
   if (rec.type === 'assessment') {
     rec.status = released ? 'finalised' : 'published';
     rec.finalisedAt = released ? new Date().toISOString() : null;
+    if (rec.delivery) rec.delivery = { ...rec.delivery, phase: released ? 'closed' : 'marking', updatedAt: new Date().toISOString() };
   }
   writeJsonAtomic(recPath(id), rec);
   return rec;
@@ -252,6 +259,78 @@ function getSubmissions(id) { return loadSubmissions(id); }
 function getSubmission(id, studentId) {
   const target = normalizeStudentId(studentId);
   return loadSubmissions(id).find(s => normalizeStudentId(s.studentId) === target) || null;
+}
+
+function loadDrafts(id) {
+  try { return JSON.parse(fs.readFileSync(draftsPath(String(id)), 'utf8')); } catch { return []; }
+}
+function getDraft(id, studentId) {
+  const target = normalizeStudentId(studentId);
+  return loadDrafts(id).find(draft => normalizeStudentId(draft.studentId) === target) || null;
+}
+function saveDraft(id, { studentId, name, answers, completedSectionId }) {
+  const sid = normalizeStudentId(studentId);
+  const drafts = loadDrafts(id);
+  const index = drafts.findIndex(draft => normalizeStudentId(draft.studentId) === sid);
+  const previous = index >= 0 ? drafts[index] : { studentId: sid, name: name || sid, answers: {}, completedSectionIds: [] };
+  const next = {
+    ...previous, studentId: sid, name: name || previous.name || sid,
+    answers: { ...(previous.answers || {}), ...(answers || {}) },
+    completedSectionIds: [...new Set([...(previous.completedSectionIds || []), ...(completedSectionId ? [completedSectionId] : [])])],
+    updatedAt: new Date().toISOString(),
+  };
+  if (index >= 0) drafts[index] = next; else drafts.push(next);
+  writeJsonAtomic(draftsPath(id), drafts);
+  return next;
+}
+
+function deliveryState(record) {
+  if (record && record.delivery) return record.delivery;
+  return { mode: 'self-paced', phase: 'open', activeSectionIndex: null, previousPhase: null, updatedAt: record && record.createdAt || null };
+}
+
+function updateDelivery(id, action) {
+  const record = getAssignment(id);
+  if (!record || record.type !== 'assessment') return null;
+  const current = deliveryState(record);
+  if (current.mode !== 'live') throw new Error('This assessment is self-paced.');
+  if (record.resultsReleased) throw new Error('Released assessments cannot be restarted.');
+  const last = Math.max(0, (record.sections || []).length - 1);
+  const next = { ...current, updatedAt: new Date().toISOString() };
+  if (action === 'start') {
+    if (current.phase !== 'lobby') throw new Error('The assessment has already started.');
+    Object.assign(next, { phase: 'open', activeSectionIndex: 0, startedAt: next.updatedAt, previousPhase: null });
+  } else if (action === 'next') {
+    if (current.phase !== 'open') throw new Error('Resume the assessment before moving sections.');
+    if (current.activeSectionIndex >= last) Object.assign(next, { phase: 'marking', activeSectionIndex: last, endedAt: next.updatedAt, previousPhase: null });
+    else Object.assign(next, { activeSectionIndex: current.activeSectionIndex + 1, previousPhase: null });
+  } else if (action === 'previous') {
+    if (current.phase !== 'open' || current.activeSectionIndex <= 0) throw new Error('There is no previous open section.');
+    Object.assign(next, { activeSectionIndex: current.activeSectionIndex - 1, previousPhase: null });
+  } else if (action === 'pause') {
+    if (current.phase !== 'open') throw new Error('Only an open section can be paused.');
+    Object.assign(next, { phase: 'paused', previousPhase: 'open', pausedAt: next.updatedAt });
+  } else if (action === 'resume') {
+    if (current.phase !== 'paused') throw new Error('This assessment is not paused.');
+    Object.assign(next, { phase: current.previousPhase || 'open', previousPhase: null, resumedAt: next.updatedAt });
+  } else if (action === 'finish') {
+    if (!['open', 'paused'].includes(current.phase)) throw new Error('This assessment is not in progress.');
+    Object.assign(next, { phase: 'marking', activeSectionIndex: Math.max(0, current.activeSectionIndex), previousPhase: null, endedAt: next.updatedAt });
+  } else throw new Error('Unknown assessment action.');
+  record.delivery = next;
+  writeJsonAtomic(recPath(id), record);
+  return record;
+}
+
+function draftProgress(record) {
+  const state = deliveryState(record);
+  const section = state.mode === 'live' && state.activeSectionIndex >= 0 ? (record.sections || [])[state.activeSectionIndex] : null;
+  const drafts = loadDrafts(record.id);
+  return {
+    draftCount: drafts.length,
+    readyCount: section ? drafts.filter(draft => (draft.completedSectionIds || []).includes(section.id)).length : 0,
+    activeSectionId: section && section.id || null,
+  };
 }
 
 function assessmentReleaseReadiness(record) {
@@ -320,6 +399,7 @@ function listTeacherAssignments(teacherId) {
       id: a.id, type: a.type, title: a.title, subject: a.subject, topic: a.topic, grade: a.grade,
       assessmentType: a.assessmentType || null, totalMarks: a.totalMarks || null,
       sectionCount: Array.isArray(a.sections) ? a.sections.length : null,
+      delivery: a.delivery || null,
       createdAt: a.createdAt, roomCode: a.roomCode, rosterId: a.rosterId, cutoffAt: a.cutoffAt,
       resultsReleased: isReleased(a),
       submissions: loadSubmissions(a.id).length,
@@ -331,7 +411,7 @@ module.exports = {
   createAssignment, createAssessment, normalizeAssessment, getAssignment, updateAssignmentCutoff, getRoomCode,
   releaseResults, isReleased,
   saveSubmission, getSubmissions, getSubmission,
-  assessmentReleaseReadiness,
+  assessmentReleaseReadiness, loadDrafts, getDraft, saveDraft, deliveryState, updateDelivery, draftProgress,
   findConfirmedVerdict, recordVerdict, normalizeAnswer, normalizeStudentId,
   listTeacherAssignments,
 };

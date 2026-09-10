@@ -114,3 +114,33 @@ test('free response items require marking guidance and practical criteria do not
   });
   assert.equal(assignments.normalizeAssessment(practical).questions[0].kind, 'practical');
 });
+
+test('a live assessment moves through teacher-controlled classroom phases', () => {
+  const record = assignments.createAssessment({ teacherId: 'teacher-live', data: validAssessment() });
+  assert.deepEqual(assignments.deliveryState(record).phase, 'lobby');
+  assert.equal(assignments.updateDelivery(record.id, 'start').delivery.activeSectionIndex, 0);
+  assert.equal(assignments.updateDelivery(record.id, 'pause').delivery.phase, 'paused');
+  assert.equal(assignments.updateDelivery(record.id, 'resume').delivery.phase, 'open');
+  assert.equal(assignments.updateDelivery(record.id, 'next').delivery.activeSectionIndex, 1);
+  assert.equal(assignments.updateDelivery(record.id, 'previous').delivery.activeSectionIndex, 0);
+  assignments.updateDelivery(record.id, 'next');
+  assert.equal(assignments.updateDelivery(record.id, 'next').delivery.phase, 'marking');
+});
+
+test('server drafts merge answers and record readiness for the active section', () => {
+  const record = assignments.createAssessment({ teacherId: 'teacher-drafts', data: validAssessment() });
+  assignments.updateDelivery(record.id, 'start');
+  assignments.saveDraft(record.id, { studentId: 'learner-1', name: 'Learner One', answers: { q1: 0 } });
+  assignments.saveDraft(record.id, { studentId: 'learner-1', answers: {}, completedSectionId: 'theory' });
+  assert.deepEqual(assignments.getDraft(record.id, 'LEARNER-1').answers, { q1: 0 });
+  assert.equal(assignments.draftProgress(assignments.getAssignment(record.id)).readyCount, 1);
+  assert.equal(assignments.listTeacherAssignments('teacher-drafts').length, 1, 'draft files never appear as assignments');
+});
+
+test('self-paced assessments open all sections without a live lobby', () => {
+  const record = assignments.createAssessment({ teacherId: 'teacher-self-paced', data: validAssessment({ deliveryMode: 'self-paced' }) });
+  assert.deepEqual(assignments.deliveryState(record), {
+    mode: 'self-paced', phase: 'open', activeSectionIndex: null, previousPhase: null, updatedAt: record.delivery.updatedAt,
+  });
+  assert.throws(() => assignments.updateDelivery(record.id, 'start'), /self-paced/);
+});

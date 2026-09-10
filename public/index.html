@@ -3276,6 +3276,8 @@
         <div class="assessment-grid">
           <div><label for="assessmentKind">Assessment type</label><select id="assessmentKind"><option value="test">Test</option><option value="project">Project</option><option value="practical">Practical</option><option value="performance">Performance</option><option value="oral">Oral</option><option value="portfolio">Portfolio</option><option value="custom">Custom</option></select></div>
           <div><label for="assessmentTotal">Total marks</label><input id="assessmentTotal" type="number" min="1" max="1000" step="1" value="50"></div>
+          <div><label for="assessmentDelivery">Delivery</label><select id="assessmentDelivery"><option value="live">Live classroom — teacher controls sections</option><option value="self-paced">Self-paced — students see all sections</option></select></div>
+          <div></div>
           <div class="full"><label for="assessmentTitle">Title</label><input id="assessmentTitle" maxlength="160" placeholder="e.g. Unit 1 Document Creation"></div>
           <div><label for="assessmentSubject">Subject</label><input id="assessmentSubject" maxlength="100" placeholder="e.g. Computing, English, Science"></div>
           <div><label for="assessmentGrade">Grade or year group</label><input id="assessmentGrade" maxlength="60" placeholder="e.g. Grade 2"></div>
@@ -5627,6 +5629,10 @@
     // both the fresh-publish panel (#packSection) and the persistent
     // "My assignments" tab, since both render the same results markup.
     async function handleAssignmentPanelClick(e){
+      const liveAction=e.target.closest('[data-assessment-live-action]');
+      if(liveAction){ const {assignId,wrapId,assessmentLiveAction}=liveAction.dataset; liveAction.disabled=true;
+        try{ const r=await fetch(`/api/assignment/${assignId}/live-state`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:assessmentLiveAction})}); const d=await r.json(); if(!r.ok)throw new Error(d.error); loadAssignmentResults(assignId,wrapId); }
+        catch(err){ toast(err.message); liveAction.disabled=false; } return; }
       const override=e.target.closest('.grade-override-btn');
       if(override){ const {assignId,studentId,questionId,wrapId}=override.dataset;
         const row=override.closest('.grade-row'); const input=row.querySelector('.grade-marks-input');
@@ -5704,15 +5710,36 @@
       const wrap=$(wrapId); if(!wrap) return;
       const d=assignResultsCache.get(assignId); if(!d) return;
       wrap.dataset.view=view;
-      const releaseBar=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:${d.effectivelyReleased?'#eafaf0':'#fdf6ea'}">
+      const liveBar=assessmentLiveControls(d,assignId,wrapId);
+      const releaseBar=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:${d.effectivelyReleased?'#eafaf0':'#fdf6ea'}">
         <span style="font-size:13px;font-weight:600;color:${d.effectivelyReleased?'var(--ok,#1f9d55)':'#b26a00'}">${d.effectivelyReleased?(d.resultsReleased?'Results released to students':'Results released — due date passed'):'Results hidden from students'}</span>
         ${!d.resultsReleased?`<button type="button" class="release-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" ${d.assessmentType&&!d.releaseReady?'disabled title="'+esc(d.releaseReason||'Finish marking first')+'"':''} style="font-size:12.5px;font-weight:600;padding:6px 12px;border:1px solid var(--primary);border-radius:8px;background:#fff;color:var(--primary);cursor:pointer">${d.assessmentType&&!d.releaseReady?esc(d.pendingGrades?`${d.pendingGrades} grades pending`:'No submissions yet'):'Release results'}</button>`
           :`<button type="button" class="unrelease-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" style="font-size:12.5px;font-weight:600;padding:6px 12px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--muted);cursor:pointer">Hide again</button>`}
       </div>`;
       const tabBtn=(v,label)=>`<button type="button" class="view-tab-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-view="${v}" style="font-size:12.5px;font-weight:600;padding:6px 14px;border:1px solid ${view===v?'var(--primary)':'var(--border)'};border-radius:8px;background:${view===v?'var(--primary)':'#fff'};color:${view===v?'#fff':'var(--ink)'};cursor:pointer">${label}</button>`;
       const tabs=`<div style="display:flex;gap:8px;margin-bottom:10px">${tabBtn('student','By student')}${tabBtn('question','By question')}</div>`;
-      if(!d.submissions||!d.submissions.length){ wrap.innerHTML=releaseBar+tabs+'<p class="hint" style="margin-top:8px">No students have submitted yet.</p>'; return; }
-      wrap.innerHTML=releaseBar+assignmentSummary(d)+tabs+(view==='question'?renderByQuestion(d,assignId,wrapId):renderByStudent(d,assignId,wrapId));
+      if(!d.submissions||!d.submissions.length){ wrap.innerHTML=liveBar+releaseBar+tabs+'<p class="hint" style="margin-top:8px">No students have submitted yet.</p>'; return; }
+      wrap.innerHTML=liveBar+releaseBar+assignmentSummary(d)+tabs+(view==='question'?renderByQuestion(d,assignId,wrapId):renderByStudent(d,assignId,wrapId));
+    }
+
+    function assessmentLiveControls(d,assignId,wrapId){
+      if(!d.delivery||d.delivery.mode!=='live')return'';
+      const phase=d.delivery.phase,sections=d.sections||[],index=Number(d.delivery.activeSectionIndex),section=sections[index];
+      const progress=d.liveProgress||{},audience=d.rosterSize!=null?` of ${d.rosterSize}`:'';
+      const action=(name,label,kind='ghost')=>`<button type="button" class="btn ${kind} assessment-mini" data-assessment-live-action="${name}" data-assign-id="${assignId}" data-wrap-id="${wrapId}">${label}</button>`;
+      let title='Live classroom lobby',detail='Students can join, but questions remain hidden until you start.',buttons=action('start','Start first section','accent');
+      if(phase==='open'){
+        title=`Section ${index+1} of ${sections.length}: ${section?esc(section.title):'Open'}`;
+        detail=`${progress.readyCount||0}${audience} students ready for the next section.`;
+        buttons=(index>0?action('previous','Previous section'):'')+action('pause','Pause')+action('next',index>=sections.length-1?'Finish sections':'Open next section','accent');
+      }else if(phase==='paused'){
+        title=`Paused: ${section?esc(section.title):'Assessment'}`; detail='Student answering and draft updates are paused.'; buttons=action('resume','Resume','accent')+action('finish','Finish sections');
+      }else if(phase==='marking'){
+        title='Sections complete — marking'; detail=`${(d.submissions||[]).length}${audience} students have made their final submission.`; buttons='';
+      }else if(phase==='closed'){
+        title='Assessment closed'; detail='Marks have been released to students.'; buttons='';
+      }
+      return `<div style="margin-bottom:10px;padding:13px 14px;border:1px solid #b9ddcb;border-radius:11px;background:#f5fcf8"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><div><b style="color:#145c3c">${title}</b><div style="font-size:12.5px;color:var(--muted);margin-top:2px">${detail}</div></div><div style="display:flex;gap:7px;flex-wrap:wrap">${buttons}</div></div></div>`;
     }
 
     // At-a-glance analytics for one assignment: class average, submission count,
@@ -7235,7 +7262,7 @@
     }
     function collectAssessment(){
       syncAssessmentState();
-      return {title:$('assessmentTitle').value.trim(),subject:$('assessmentSubject').value.trim(),grade:$('assessmentGrade').value.trim(),assessmentType:$('assessmentKind').value,totalMarks:Number($('assessmentTotal').value),objectives:assessmentObjectives(),instructions:$('assessmentInstructions').value.trim(),sections:assessmentSectionsState};
+      return {title:$('assessmentTitle').value.trim(),subject:$('assessmentSubject').value.trim(),grade:$('assessmentGrade').value.trim(),assessmentType:$('assessmentKind').value,deliveryMode:$('assessmentDelivery').value,totalMarks:Number($('assessmentTotal').value),objectives:assessmentObjectives(),instructions:$('assessmentInstructions').value.trim(),sections:assessmentSectionsState};
     }
     $('newAssessmentBtn').addEventListener('click',()=>{
       const builder=$('assessmentBuilder'); builder.style.display='block';
@@ -7297,7 +7324,7 @@
               <div class="gc-top">
                 <div>
                   <div class="gc-title">${esc(a.title)}</div>
-                  <div class="gc-meta"><span class="gc-chip">${esc(a.type==='assessment'?(a.assessmentType||'Assessment'):typeLabel[a.type]||a.type)}</span>${a.subject?`<span class="gc-chip">${esc(a.subject)}</span>`:''}${a.grade?`<span class="gc-chip">${esc(a.grade)}</span>`:''}${a.totalMarks?`<span class="gc-chip">${a.totalMarks} marks</span>`:''}<span class="gc-chip">${a.submissions} submitted</span></div>
+                  <div class="gc-meta"><span class="gc-chip">${esc(a.type==='assessment'?(a.assessmentType||'Assessment'):typeLabel[a.type]||a.type)}</span>${a.subject?`<span class="gc-chip">${esc(a.subject)}</span>`:''}${a.grade?`<span class="gc-chip">${esc(a.grade)}</span>`:''}${a.totalMarks?`<span class="gc-chip">${a.totalMarks} marks</span>`:''}${a.delivery&&a.delivery.mode==='live'?`<span class="gc-chip">Live · ${esc(a.delivery.phase)}</span>`:''}<span class="gc-chip">${a.submissions} submitted</span></div>
                   <div class="gc-dates"><span>Created ${fmtDate(a.createdAt)}</span>${a.cutoffAt?`<span>Due ${fmtDateTime(a.cutoffAt)}</span>`:'<span>No due date</span>'}${a.resultsReleased?'<span class="gc-status-live">Released</span>':'<span class="gc-status-closed">Hidden</span>'}</div>
                 </div>
                 ${a.roomCode?`<div style="text-align:right"><span class="room-label">Room code</span><div class="room-code">${esc(a.roomCode)}</div></div>`:''}
@@ -7307,7 +7334,7 @@
             <div class="gc-body">
               <div class="game-link"><input readonly value="${esc(location.origin+'/assignment/'+a.id)}"><button type="button" class="btn ghost acopy" data-url="${esc(location.origin+'/assignment/'+a.id)}" style="width:auto;padding:9px 13px">${ICON('i-doc')} Copy</button></div>
               <div class="gc-actions" style="margin-top:10px">
-                <button type="button" class="btn ghost a-toggle-btn" data-assign-id="${esc(a.id)}" data-wrap-id="${wrapId}" data-detail-id="${detailId}" style="font-size:12px;padding:6px 12px;width:auto">Review submissions</button>
+                <button type="button" class="btn ghost a-toggle-btn" data-assign-id="${esc(a.id)}" data-wrap-id="${wrapId}" data-detail-id="${detailId}" data-closed-label="${a.type==='assessment'?'Run classroom / mark':'Review submissions'}" style="font-size:12px;padding:6px 12px;width:auto">${a.type==='assessment'?'Run classroom / mark':'Review submissions'}</button>
               </div>
               <div id="${detailId}" style="display:none;margin-top:10px"><div id="${wrapId}"></div></div>
             </div>
@@ -7324,7 +7351,7 @@
         const detail=$(detailId);
         const opening=detail.style.display==='none';
         detail.style.display=opening?'block':'none';
-        toggle.textContent=opening?'Hide submissions':'Review submissions';
+        toggle.textContent=opening?'Hide controls':toggle.dataset.closedLabel;
         if(opening) loadAssignmentResults(assignId, wrapId);
         return; }
       handleAssignmentPanelClick(e);
