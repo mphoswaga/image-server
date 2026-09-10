@@ -183,10 +183,28 @@ function summarizeStudent(rows) {
 function assignmentResultRows(teacherId) {
   const out = [];
   for (const a of assignments.listTeacherAssignments(teacherId)) {
+    const record = assignments.getAssignment(a.id) || a;
+    const objectiveText = new Map((record.objectives || []).map(objective => [objective.id, objective.text]));
     for (const sub of assignments.getSubmissions(a.id)) {
+      const objectiveEvidence = record.type === 'assessment' ? (record.content.questions || []).flatMap(question => {
+        const grade = (sub.grades || {})[question.id] || {};
+        const teacherConfirmed = grade.source === 'teacher' || grade.source === 'ai-confirmed' || grade.source === 'auto';
+        if (!teacherConfirmed) return [];
+        return (question.objectiveIds || []).map(objectiveId => ({
+          objectiveId, objective: objectiveText.get(objectiveId) || objectiveId,
+          sectionId: question.sectionId || null, section: question.sectionTitle || null,
+          itemId: question.id, item: question.question, evidenceType: question.kind,
+          score: Number(grade.marksAwarded) || 0, total: question.marks,
+          percentage: question.marks > 0 ? Math.round(((Number(grade.marksAwarded) || 0) / question.marks) * 100) : 0,
+          teacherConfirmed,
+          source: grade.source || 'unmarked', at: sub.submittedAt || record.createdAt,
+        }));
+      }) : [];
       out.push({
         kind: 'assignment', type: a.type, assignmentId: a.id, rosterId: a.rosterId || null,
         studentId: sub.studentId, subject: a.subject || null, topic: a.topic || null, title: a.title,
+        assessmentType: record.assessmentType || null, version: record.version || null,
+        finalisedAt: record.finalisedAt || null, objectiveEvidence,
         mode: a.type === 'homework' ? 'homework' : 'classwork', activityId: `assignment:${a.id}`,
         score: sub.totalMarks, total: sub.maxMarks,
         percentage: sub.maxMarks > 0 ? Math.round((sub.totalMarks / sub.maxMarks) * 100) : 0,

@@ -2354,6 +2354,23 @@
       .assistant-panel { top:58px; width:100%; max-width:none; }
       .assistant-compose { padding-bottom:82px; }
     }
+    /* Test or project assessment builder */
+    .assessment-builder { margin-bottom:24px; padding:20px; border:1px solid var(--border); border-radius:16px; background:#fbfdfc; }
+    .assessment-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 14px; }
+    .assessment-grid .full { grid-column:1/-1; }
+    .assessment-presets { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 2px; }
+    .assessment-section { margin-top:14px; padding:16px; border:1px solid #dce8e2; border-radius:14px; background:#fff; }
+    .assessment-section-head,.assessment-total { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .assessment-section-head { margin-bottom:8px; }
+    .assessment-item { margin-top:10px; padding:12px; border:1px solid var(--border); border-radius:11px; background:#f8fafc; }
+    .assessment-item-grid { display:grid; grid-template-columns:minmax(0,1fr) 100px; gap:10px; align-items:end; }
+    .assessment-item-grid .wide { grid-column:1/-1; }
+    .assessment-total { margin-top:16px; padding:12px 14px; border-radius:11px; background:#fff5e7; color:#9a5b00; font-weight:750; }
+    .assessment-total.valid { background:#eafaf1; color:var(--ok); }
+    .assessment-mini { width:auto; padding:7px 11px; min-height:34px; font-size:12.5px; }
+    .assessment-remove { border:0; background:transparent; color:var(--err); font:700 12px inherit; cursor:pointer; padding:6px; }
+    .assessment-result { margin-top:16px; padding:16px; border-radius:12px; background:var(--accent-soft); border:1px solid #b9ddcb; }
+    @media(max-width:700px){ .assessment-grid,.assessment-item-grid { grid-template-columns:1fr; } .assessment-grid .full,.assessment-item-grid .wide { grid-column:auto; } }
   </style>
   <link rel="stylesheet" href="/byte-feedback.css" />
 </head>
@@ -2547,7 +2564,7 @@
     <button id="rostersBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg><span class="app-menu-label">Rosters</span></button>
     <button id="gamesBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-gamepad"/></svg><span class="app-menu-label">My games</span></button>
     <a id="practiceBtn" class="nav-link" href="/practice" style="display:none;text-decoration:none"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg><span class="app-menu-label">Practice</span></a>
-    <button id="assignmentsBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg><span class="app-menu-label">My assignments</span></button>
+    <button id="assignmentsBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg><span class="app-menu-label">Test or project</span></button>
     <button id="marksBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg><span class="app-menu-label">Marks</span></button>
     <button id="creditsBtn" class="nav-link" type="button" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg><span id="creditsNavLabel" class="app-menu-label">Usage</span><span id="creditsNavBadge" class="credits-badge" style="display:none"></span></button>
     <button id="adminBtn" class="nav-link" type="button" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-sliders"/></svg><span class="app-menu-label">Admin</span></button>
@@ -3245,9 +3262,34 @@
         <button class="back-btn" id="assignmentsBackTop"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back</button>
         <div class="phd-icon" style="background:var(--accent-soft);color:var(--accent)"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg></div>
         <div>
-          <h2>My assignments</h2>
-          <p class="page-sub">Worksheets, exit tickets, and quizzes published online — review student work and release results.</p>
+          <h2>Test or project</h2>
+          <p class="page-sub">Build a flexible assessment for any subject or grade, run it with your class, and mark everything in LessonScope.</p>
         </div>
+      </div>
+      <button id="newAssessmentBtn" type="button" class="btn accent" style="width:auto;margin-bottom:16px"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Create test or project</button>
+      <div id="assessmentBuilder" class="assessment-builder" style="display:none">
+        <div class="assessment-section-head"><div><h3 style="margin:0">Assessment structure</h3><p class="hint" style="margin:3px 0 0">Set the total, then decide exactly how students will earn those marks.</p></div><button id="closeAssessmentBtn" type="button" class="assessment-remove">Close</button></div>
+        <div class="assessment-presets">
+          <button type="button" class="btn ghost assessment-mini" data-assessment-preset="blank">Blank</button>
+          <button type="button" class="btn ghost assessment-mini" data-assessment-preset="theory-practical">50 marks: theory + practical</button>
+        </div>
+        <div class="assessment-grid">
+          <div><label for="assessmentKind">Assessment type</label><select id="assessmentKind"><option value="test">Test</option><option value="project">Project</option><option value="practical">Practical</option><option value="performance">Performance</option><option value="oral">Oral</option><option value="portfolio">Portfolio</option><option value="custom">Custom</option></select></div>
+          <div><label for="assessmentTotal">Total marks</label><input id="assessmentTotal" type="number" min="1" max="1000" step="1" value="50"></div>
+          <div class="full"><label for="assessmentTitle">Title</label><input id="assessmentTitle" maxlength="160" placeholder="e.g. Unit 1 Document Creation"></div>
+          <div><label for="assessmentSubject">Subject</label><input id="assessmentSubject" maxlength="100" placeholder="e.g. Computing, English, Science"></div>
+          <div><label for="assessmentGrade">Grade or year group</label><input id="assessmentGrade" maxlength="60" placeholder="e.g. Grade 2"></div>
+          <div class="full"><label for="assessmentObjectives">Learning objectives or skills <span style="font-weight:400;color:var(--muted)">(one per line)</span></label><textarea id="assessmentObjectives" rows="3" placeholder="I can open Word or Google Docs&#10;I can enter and format text"></textarea></div>
+          <div class="full"><label for="assessmentInstructions">Student instructions <span style="font-weight:400;color:var(--muted)">(optional)</span></label><textarea id="assessmentInstructions" rows="2" placeholder="What students need to know before they begin"></textarea></div>
+          <div><label for="assessmentRoster">Class roster <span style="font-weight:400;color:var(--muted)">(optional)</span></label><select id="assessmentRoster"><option value="">— No roster —</option></select></div>
+          <div><label for="assessmentCutoff">Due date <span style="font-weight:400;color:var(--muted)">(optional)</span></label><input id="assessmentCutoff" type="datetime-local"></div>
+        </div>
+        <div id="assessmentSections"></div>
+        <div style="margin-top:12px"><button id="addAssessmentSection" type="button" class="btn ghost assessment-mini">+ Add section</button></div>
+        <div id="assessmentTotalStatus" class="assessment-total"><span>Allocated: 0 marks</span><span>Total: 50 marks</span></div>
+        <div id="assessmentError" class="field-err" role="alert"></div>
+        <button id="publishAssessmentBtn" type="button" class="btn accent" style="margin-top:14px">Publish assessment</button>
+        <div id="assessmentPublishResult"></div>
       </div>
       <div id="assignmentsList"></div>
       <div style="margin-top:28px;padding-top:18px;border-top:1px solid var(--border)"><button id="assignmentsBack" class="back-btn"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back to lesson planner</button></div>
@@ -5588,8 +5630,8 @@
       const override=e.target.closest('.grade-override-btn');
       if(override){ const {assignId,studentId,questionId,wrapId}=override.dataset;
         const row=override.closest('.grade-row'); const input=row.querySelector('.grade-marks-input');
-        const marksAwarded=Number(input.value); override.disabled=true;
-        try{ const r=await fetch(`/api/assignment/${assignId}/grade`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({studentId,questionId,marksAwarded})});
+        const marksAwarded=Number(input.value),rationale=row.querySelector('.grade-rationale-input')?.value.trim()||''; override.disabled=true;
+        try{ const r=await fetch(`/api/assignment/${assignId}/grade`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({studentId,questionId,marksAwarded,rationale})});
           const d=await r.json(); if(!r.ok) throw new Error(d.error);
           toast('Grade updated','ok'); loadAssignmentResults(assignId, wrapId||'assignSubmissions');
         }catch(err){ toast(err.message); override.disabled=false; } return; }
@@ -5616,17 +5658,18 @@
     // answers to one question). Same fields, different grouping.
     function gradeRowHTML(q, s, assignId, wrapId, headingText){
       const g=s.grades[q.id]||{}; const ans=s.answers[q.id];
-      const ansText=q.kind==='mcq' ? (q.options&&q.options[ans]!=null?q.options[ans]:'(no answer)') : (ans||'(no answer)');
+      const ansText=q.kind==='practical' ? 'Teacher observation' : q.kind==='mcq' ? (q.options&&q.options[ans]!=null?q.options[ans]:'(no answer)') : (ans||'(no answer)');
       const confirmed=g.source==='teacher'||g.source==='ai-confirmed';
       // MCQ is deterministically auto-graded — no AI verdict to confirm,
       // so it gets no badge instead of a misleading "AI — unconfirmed".
-      const badge = q.kind==='mcq' ? '' : (confirmed
+      const badge = q.kind==='mcq' ? '' : q.kind==='practical'&&g.source==='teacher-required'
+        ? '<span style="font-size:11.5px;color:#b26a00;font-weight:600">awaiting teacher</span>' : (confirmed
         ? '<span style="font-size:11.5px;color:var(--ok,#1f9d55);font-weight:600">confirmed</span>'
         : '<span style="font-size:11.5px;color:var(--muted)">AI — unconfirmed</span>');
       return `<div class="grade-row" style="padding:10px 0;border-top:1px solid var(--border)">
         <div style="font-size:13px;font-weight:600">${esc(headingText)}</div>
         <div style="font-size:13.5px;background:#f4f6fb;border-radius:8px;padding:8px 10px;margin:4px 0"><b style="display:block;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;margin-bottom:2px">Answer</b>${esc(String(ansText))}</div>
-        ${g.rationale&&q.kind!=='mcq'?`<div style="display:flex;gap:6px;font-size:12.5px;color:var(--muted);font-style:italic;margin-bottom:6px"><span style="flex-shrink:0">💬</span><span>${esc(g.rationale)}</span></div>`:''}
+        ${q.kind!=='mcq'?`<textarea class="grade-rationale-input" rows="2" placeholder="Feedback shown to the student after release" style="margin:0 0 7px;font-size:12.5px;padding:7px 9px">${esc(g.rationale||'')}</textarea>`:''}
         <div style="display:flex;align-items:center;gap:8px">
           <input class="grade-marks-input" type="number" min="0" max="${q.marks}" value="${g.marksAwarded||0}" style="width:56px;font-size:13px;padding:4px 6px" />
           <span style="font-size:12.5px;color:var(--muted)">/ ${q.marks} marks</span>
@@ -5639,7 +5682,7 @@
 
     function renderByStudent(d, assignId, wrapId){
       return d.submissions.map(s=>{
-        const rows=d.questions.map(q=>gradeRowHTML(q, s, assignId, wrapId, stripMarksText(q.question))).join('');
+        const rows=d.questions.map(q=>gradeRowHTML(q, s, assignId, wrapId, (q.sectionTitle?`${q.sectionTitle} · `:'')+stripMarksText(q.question))).join('');
         return `<div style="margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:10px">
           <div style="display:flex;justify-content:space-between;font-weight:700;font-size:14px"><span>${esc(s.name)}</span><span>${s.totalMarks}/${s.maxMarks}</span></div>
           ${rows}
@@ -5651,7 +5694,7 @@
       return d.questions.map((q,qi)=>{
         const rows=d.submissions.map(s=>gradeRowHTML(q, s, assignId, wrapId, s.name)).join('');
         return `<div style="margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:10px">
-          <div style="font-weight:700;font-size:14px;margin-bottom:2px">${qi+1}. ${esc(stripMarksText(q.question))}</div>
+          <div style="font-weight:700;font-size:14px;margin-bottom:2px">${q.sectionTitle?`<span style="display:block;font-size:11px;text-transform:uppercase;color:var(--muted);letter-spacing:.4px">${esc(q.sectionTitle)}</span>`:''}${qi+1}. ${esc(stripMarksText(q.question))}</div>
           ${rows}
         </div>`;
       }).join('');
@@ -5663,7 +5706,7 @@
       wrap.dataset.view=view;
       const releaseBar=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:${d.effectivelyReleased?'#eafaf0':'#fdf6ea'}">
         <span style="font-size:13px;font-weight:600;color:${d.effectivelyReleased?'var(--ok,#1f9d55)':'#b26a00'}">${d.effectivelyReleased?(d.resultsReleased?'Results released to students':'Results released — due date passed'):'Results hidden from students'}</span>
-        ${!d.resultsReleased?`<button type="button" class="release-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" style="font-size:12.5px;font-weight:600;padding:6px 12px;border:1px solid var(--primary);border-radius:8px;background:#fff;color:var(--primary);cursor:pointer">Release results</button>`
+        ${!d.resultsReleased?`<button type="button" class="release-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" ${d.assessmentType&&!d.releaseReady?'disabled title="'+esc(d.releaseReason||'Finish marking first')+'"':''} style="font-size:12.5px;font-weight:600;padding:6px 12px;border:1px solid var(--primary);border-radius:8px;background:#fff;color:var(--primary);cursor:pointer">${d.assessmentType&&!d.releaseReady?esc(d.pendingGrades?`${d.pendingGrades} grades pending`:'No submissions yet'):'Release results'}</button>`
           :`<button type="button" class="unrelease-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" style="font-size:12.5px;font-weight:600;padding:6px 12px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--muted);cursor:pointer">Hide again</button>`}
       </div>`;
       const tabBtn=(v,label)=>`<button type="button" class="view-tab-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-view="${v}" style="font-size:12.5px;font-weight:600;padding:6px 14px;border:1px solid ${view===v?'var(--primary)':'var(--border)'};border-radius:8px;background:${view===v?'var(--primary)':'#fff'};color:${view===v?'#fff':'var(--ink)'};cursor:pointer">${label}</button>`;
@@ -7101,6 +7144,140 @@
         <p class="hint" style="margin-top:10px;font-size:12px">Marks combine assignments and games for this class. A dash means the student hasn't taken part yet.</p>`;
     }
 
+    // ── Flexible test/project builder ────────────────────────────────────────
+    let assessmentSectionsState=[];
+    let assessmentItemSeq=0;
+    const assessmentTypeNames={mcq:'Multiple choice','short-answer':'Short answer','extended-response':'Extended response',practical:'Practical / observation'};
+    function assessmentObjectives(){
+      const used=new Set();
+      return $('assessmentObjectives').value.split(/\n+/).map(x=>x.trim()).filter(Boolean).map((text,i)=>{
+        let id='objective-'+text.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,48);
+        if(id==='objective-')id+='skill-'+(i+1);
+        while(used.has(id))id+='-2'; used.add(id); return {id,text};
+      });
+    }
+    function newAssessmentItem(type,marks=1){
+      return {id:'builder-item-'+(++assessmentItemSeq),prompt:'',marks,options:type==='mcq'?['','','','']:undefined,correctIndex:0,answerKey:''};
+    }
+    function newAssessmentSection(type='mcq',title){
+      const refs=assessmentObjectives().map(o=>o.id);
+      return {id:'builder-section-'+Date.now()+'-'+Math.random().toString(16).slice(2,6),title:title||assessmentTypeNames[type],type,instructions:'',objectiveIds:refs,items:[newAssessmentItem(type)]};
+    }
+    function syncAssessmentState(){
+      const objectives=assessmentObjectives();
+      [...$('assessmentSections').querySelectorAll('.assessment-section')].forEach((node,index)=>{
+        const section=assessmentSectionsState[index]; if(!section)return;
+        section.title=node.querySelector('[data-section-title]').value.trim();
+        section.type=node.querySelector('[data-section-type]').value;
+        section.instructions=node.querySelector('[data-section-instructions]').value.trim();
+        section.objectiveIds=[...node.querySelector('[data-section-objectives]').selectedOptions].map(o=>o.value);
+        section.items=[...node.querySelectorAll('.assessment-item')].map(item=>{
+          const type=section.type;
+          const result={id:item.dataset.itemId,prompt:item.querySelector('[data-item-prompt]').value.trim(),marks:Number(item.querySelector('[data-item-marks]').value)||0};
+          if(type==='mcq'){
+            result.options=item.querySelector('[data-item-options]').value.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+            result.correctIndex=Math.max(0,(Number(item.querySelector('[data-item-correct]').value)||1)-1);
+          }else if(type!=='practical') result.answerKey=item.querySelector('[data-item-key]').value.trim();
+          return result;
+        });
+        section.objectiveIds=section.objectiveIds.filter(id=>objectives.some(o=>o.id===id));
+      });
+    }
+    function renderAssessmentSections(){
+      const objectives=assessmentObjectives();
+      $('assessmentSections').innerHTML=assessmentSectionsState.map((section,si)=>{
+        const objectiveOptions=objectives.map(o=>`<option value="${esc(o.id)}" ${section.objectiveIds.includes(o.id)?'selected':''}>${esc(o.text)}</option>`).join('');
+        const items=section.items.map((item,ii)=>{
+          const promptLabel=section.type==='practical'?'Observable criterion or task':'Question';
+          const extra=section.type==='mcq'
+            ? `<div class="wide"><label>Answer options <span style="font-weight:400;color:var(--muted)">(one per line)</span></label><textarea rows="4" data-item-options placeholder="Option 1&#10;Option 2&#10;Option 3&#10;Option 4">${esc((item.options||[]).join('\n'))}</textarea></div><div><label>Correct option number</label><input data-item-correct type="number" min="1" value="${Number(item.correctIndex||0)+1}"></div>`
+            : section.type==='practical' ? '' : `<div class="wide"><label>Answer key or marking guidance</label><textarea rows="2" data-item-key placeholder="What earns the marks?">${esc(item.answerKey||'')}</textarea></div>`;
+          return `<div class="assessment-item" data-item-id="${esc(item.id)}">
+            <div class="assessment-section-head"><b style="font-size:13px">${section.type==='practical'?'Criterion':'Item'} ${ii+1}</b><div><button type="button" class="assessment-remove" data-move-assessment-item="up" aria-label="Move item up">↑</button><button type="button" class="assessment-remove" data-move-assessment-item="down" aria-label="Move item down">↓</button><button type="button" class="assessment-remove" data-remove-assessment-item="${ii}">Remove</button></div></div>
+            <div class="assessment-item-grid"><div><label>${promptLabel}</label><textarea rows="2" data-item-prompt placeholder="${section.type==='practical'?'What will the teacher observe?':'Enter the question'}">${esc(item.prompt||'')}</textarea></div><div><label>Marks</label><input data-item-marks type="number" min="1" max="1000" step="1" value="${item.marks||1}"></div>${extra}</div>
+          </div>`;
+        }).join('');
+        return `<div class="assessment-section" data-section-index="${si}">
+          <div class="assessment-section-head"><b>Section ${si+1}</b><div><button type="button" class="assessment-remove" data-move-assessment-section="up" aria-label="Move section up">↑</button><button type="button" class="assessment-remove" data-move-assessment-section="down" aria-label="Move section down">↓</button><button type="button" class="assessment-remove" data-remove-assessment-section="${si}">Remove section</button></div></div>
+          <div class="assessment-grid"><div><label>Section title</label><input data-section-title value="${esc(section.title)}"></div><div><label>Section type</label><select data-section-type>${Object.entries(assessmentTypeNames).map(([value,label])=>`<option value="${value}" ${section.type===value?'selected':''}>${label}</option>`).join('')}</select></div>
+          <div class="full"><label>Instructions <span style="font-weight:400;color:var(--muted)">(optional)</span></label><textarea rows="2" data-section-instructions>${esc(section.instructions||'')}</textarea></div>
+          <div class="full"><label>Objectives assessed in this section</label><select data-section-objectives multiple size="${Math.min(4,Math.max(2,objectives.length))}">${objectiveOptions}</select></div></div>
+          <div>${items}</div><button type="button" class="btn ghost assessment-mini" data-add-assessment-item="${si}" style="margin-top:10px">+ Add ${section.type==='practical'?'criterion':'item'}</button>
+        </div>`;
+      }).join('');
+      updateAssessmentTotal();
+    }
+    function updateAssessmentTotal(){
+      let allocated=0;
+      $('assessmentSections').querySelectorAll('[data-item-marks]').forEach(input=>allocated+=Number(input.value)||0);
+      const total=Number($('assessmentTotal').value)||0;
+      const status=$('assessmentTotalStatus');
+      status.innerHTML=`<span>Allocated: ${allocated} mark${allocated===1?'':'s'}</span><span>Total: ${total} mark${total===1?'':'s'}</span>`;
+      status.classList.toggle('valid',allocated===total&&total>0);
+    }
+    function applyAssessmentPreset(name){
+      if(name==='theory-practical'){
+        $('assessmentKind').value='test'; $('assessmentTotal').value=50;
+        if(!$('assessmentObjectives').value.trim()) $('assessmentObjectives').value='Knowledge and understanding\nPractical application of skills';
+        const presetObjectives=assessmentObjectives();
+        const theory=newAssessmentSection('mcq','Knowledge check');
+        theory.objectiveIds=[presetObjectives[0].id]; theory.items=Array.from({length:15},()=>newAssessmentItem('mcq',1));
+        const practical=newAssessmentSection('practical','Practical task');
+        practical.objectiveIds=[(presetObjectives[1]||presetObjectives[0]).id]; practical.items=[10,10,10,5].map(m=>newAssessmentItem('practical',m));
+        assessmentSectionsState=[theory,practical];
+      }else{
+        $('assessmentTotal').value=10;
+        if(!$('assessmentObjectives').value.trim()) $('assessmentObjectives').value='Assessed learning objective';
+        const section=newAssessmentSection('short-answer','Assessment section'); section.items=[newAssessmentItem('short-answer',10)];
+        assessmentSectionsState=[section];
+      }
+      renderAssessmentSections();
+    }
+    function collectAssessment(){
+      syncAssessmentState();
+      return {title:$('assessmentTitle').value.trim(),subject:$('assessmentSubject').value.trim(),grade:$('assessmentGrade').value.trim(),assessmentType:$('assessmentKind').value,totalMarks:Number($('assessmentTotal').value),objectives:assessmentObjectives(),instructions:$('assessmentInstructions').value.trim(),sections:assessmentSectionsState};
+    }
+    $('newAssessmentBtn').addEventListener('click',()=>{
+      const builder=$('assessmentBuilder'); builder.style.display='block';
+      if(!assessmentSectionsState.length) applyAssessmentPreset('blank');
+      loadRosters(true); builder.scrollIntoView({behavior:'smooth',block:'start'});
+    });
+    $('closeAssessmentBtn').addEventListener('click',()=>$('assessmentBuilder').style.display='none');
+    $('assessmentBuilder').addEventListener('click',e=>{
+      const preset=e.target.closest('[data-assessment-preset]'); if(preset){ applyAssessmentPreset(preset.dataset.assessmentPreset); return; }
+      const add=e.target.closest('[data-add-assessment-item]'); if(add){ syncAssessmentState(); const s=assessmentSectionsState[Number(add.dataset.addAssessmentItem)]; s.items.push(newAssessmentItem(s.type)); renderAssessmentSections(); return; }
+      const moveItem=e.target.closest('[data-move-assessment-item]'); if(moveItem){ const node=moveItem.closest('.assessment-section'),item=moveItem.closest('.assessment-item'); syncAssessmentState(); const si=Number(node.dataset.sectionIndex),ii=[...node.querySelectorAll('.assessment-item')].indexOf(item),to=moveItem.dataset.moveAssessmentItem==='up'?ii-1:ii+1; if(to>=0&&to<assessmentSectionsState[si].items.length){ const [moved]=assessmentSectionsState[si].items.splice(ii,1); assessmentSectionsState[si].items.splice(to,0,moved); } renderAssessmentSections(); return; }
+      const removeItem=e.target.closest('[data-remove-assessment-item]'); if(removeItem){ const section=removeItem.closest('.assessment-section'); syncAssessmentState(); const si=Number(section.dataset.sectionIndex); assessmentSectionsState[si].items.splice(Number(removeItem.dataset.removeAssessmentItem),1); renderAssessmentSections(); return; }
+      const moveSection=e.target.closest('[data-move-assessment-section]'); if(moveSection){ const node=moveSection.closest('.assessment-section'); syncAssessmentState(); const from=Number(node.dataset.sectionIndex),to=moveSection.dataset.moveAssessmentSection==='up'?from-1:from+1; if(to>=0&&to<assessmentSectionsState.length){ const [moved]=assessmentSectionsState.splice(from,1); assessmentSectionsState.splice(to,0,moved); } renderAssessmentSections(); return; }
+      const removeSection=e.target.closest('[data-remove-assessment-section]'); if(removeSection){ syncAssessmentState(); assessmentSectionsState.splice(Number(removeSection.dataset.removeAssessmentSection),1); renderAssessmentSections(); }
+    });
+    $('assessmentBuilder').addEventListener('input',updateAssessmentTotal);
+    $('assessmentBuilder').addEventListener('change',e=>{
+      if(e.target.matches('[data-section-type]')){
+        const node=e.target.closest('.assessment-section'),index=Number(node.dataset.sectionIndex),nextType=e.target.value;
+        e.target.value=assessmentSectionsState[index].type; syncAssessmentState();
+        const section=assessmentSectionsState[index]; section.type=nextType; section.items=[newAssessmentItem(nextType)]; section.title=assessmentTypeNames[nextType]; renderAssessmentSections();
+      }
+    });
+    $('assessmentObjectives').addEventListener('blur',()=>{
+      syncAssessmentState(); const ids=assessmentObjectives().map(objective=>objective.id);
+      assessmentSectionsState.forEach(section=>{ if(!section.objectiveIds.length)section.objectiveIds=[...ids]; });
+      renderAssessmentSections();
+    });
+    $('addAssessmentSection').addEventListener('click',()=>{ syncAssessmentState(); assessmentSectionsState.push(newAssessmentSection('mcq')); renderAssessmentSections(); });
+    $('publishAssessmentBtn').addEventListener('click',async()=>{
+      const btn=$('publishAssessmentBtn'), err=$('assessmentError'); err.textContent=''; err.classList.remove('show'); btn.disabled=true; const original=btn.innerHTML; btn.innerHTML='<span class="spinner"></span>Publishing…';
+      try{
+        const response=await fetch('/api/assessment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({assessment:collectAssessment(),rosterId:$('assessmentRoster').value||null,cutoffAt:$('assessmentCutoff').value||null})});
+        const data=await response.json(); if(!response.ok)throw new Error(data.error||'Could not publish assessment.');
+        const url=location.origin+data.path;
+        $('assessmentPublishResult').innerHTML=`<div class="assessment-result"><b>Assessment published</b><p style="margin:6px 0">${data.sectionCount} section${data.sectionCount===1?'':'s'} · ${data.totalMarks} marks</p><div class="room-code" style="display:inline-block">${esc(data.roomCode)}</div><p class="hint" style="margin:7px 0">Students join at <b>${esc(location.origin+'/join')}</b> using this room code.</p><div class="game-link"><input readonly value="${esc(url)}"><button type="button" class="btn ghost assessment-copy" data-url="${esc(url)}" style="width:auto">Copy link</button></div></div>`;
+        loadMyAssignments(); toast('Assessment published.','ok');
+      }catch(error){ err.textContent=error.message; err.classList.add('show'); }
+      btn.disabled=false; btn.innerHTML=original;
+    });
+    $('assessmentPublishResult').addEventListener('click',e=>{ const button=e.target.closest('.assessment-copy'); if(button)copyLink(button.dataset.url); });
+
     async function loadMyAssignments(){
       const wrap=$('assignmentsList');
       wrap.innerHTML='<span class="status">Loading…</span>';
@@ -7108,10 +7285,10 @@
         const d=await (await fetch('/api/assignments')).json();
         const list=d.assignments||[];
         if(!list.length){
-          wrap.innerHTML='<div class="empty-state"><svg class="ic" aria-hidden="true" style="width:36px;height:36px;opacity:.3"><use href="#i-clipboard"/></svg><p>No assignments yet</p><p style="font-size:13px;color:var(--muted)">Publish one from the Lesson pack section — look for "Create online version" under a worksheet, exit ticket, or quiz.</p></div>';
+          wrap.innerHTML='<div class="empty-state"><svg class="ic" aria-hidden="true" style="width:36px;height:36px;opacity:.3"><use href="#i-clipboard"/></svg><p>No assessments yet</p><p style="font-size:13px;color:var(--muted)">Create a test or project above, or publish a worksheet, exit ticket, or quiz from a lesson pack.</p></div>';
           return;
         }
-        const typeLabel={worksheet:'Worksheet','exit-ticket':'Exit ticket',quiz:'Quiz'};
+        const typeLabel={worksheet:'Worksheet','exit-ticket':'Exit ticket',quiz:'Quiz',assessment:'Assessment'};
         wrap.innerHTML=list.map(a=>{
           const wrapId='ares-'+a.id;
           const detailId='adet-'+a.id;
@@ -7120,7 +7297,7 @@
               <div class="gc-top">
                 <div>
                   <div class="gc-title">${esc(a.title)}</div>
-                  <div class="gc-meta"><span class="gc-chip">${esc(typeLabel[a.type]||a.type)}</span>${a.subject?`<span class="gc-chip">${esc(a.subject)}</span>`:''}${a.grade?`<span class="gc-chip">${esc(a.grade)}</span>`:''}<span class="gc-chip">${a.submissions} submitted</span></div>
+                  <div class="gc-meta"><span class="gc-chip">${esc(a.type==='assessment'?(a.assessmentType||'Assessment'):typeLabel[a.type]||a.type)}</span>${a.subject?`<span class="gc-chip">${esc(a.subject)}</span>`:''}${a.grade?`<span class="gc-chip">${esc(a.grade)}</span>`:''}${a.totalMarks?`<span class="gc-chip">${a.totalMarks} marks</span>`:''}<span class="gc-chip">${a.submissions} submitted</span></div>
                   <div class="gc-dates"><span>Created ${fmtDate(a.createdAt)}</span>${a.cutoffAt?`<span>Due ${fmtDateTime(a.cutoffAt)}</span>`:'<span>No due date</span>'}${a.resultsReleased?'<span class="gc-status-live">Released</span>':'<span class="gc-status-closed">Hidden</span>'}</div>
                 </div>
                 ${a.roomCode?`<div style="text-align:right"><span class="room-label">Room code</span><div class="room-code">${esc(a.roomCode)}</div></div>`:''}
@@ -7391,6 +7568,8 @@
           populateClassPicker($('pptxRosterPick'),d.rosters||[]);
           const assignmentPick=$('assignRosterPick');
           if(assignmentPick){const cur=assignmentPick.value;assignmentPick.innerHTML=rosterOpts;if(cur)assignmentPick.value=cur;}
+          const assessmentPick=$('assessmentRoster');
+          if(assessmentPick){const cur=assessmentPick.value;assessmentPick.innerHTML=rosterOpts;if(cur)assessmentPick.value=cur;}
         }
         if(!wrap) return;
         if(!d.rosters||!d.rosters.length){ wrap.innerHTML='<div class="empty-state"><svg class="ic" aria-hidden="true" style="width:36px;height:36px;opacity:.3"><use href="#i-doc"/></svg><p>No rosters yet</p><p style="font-size:13px;color:var(--muted)">Add your first class list below.</p></div>'; return; }

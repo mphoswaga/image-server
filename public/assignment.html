@@ -41,6 +41,10 @@
     .my-answer b { display:block; font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); font-weight:700; margin-bottom:2px; }
     .feedback { display:flex; gap:6px; margin-top:8px; font-size:13px; color:var(--muted); font-style:italic; }
     .feedback .fb-icon { flex-shrink:0; }
+    .section-head { margin:18px -2px 2px; padding:12px 2px 7px; border-bottom:2px solid var(--primary); color:var(--primary); font-size:16px; font-weight:800; }
+    .section-head:first-child { margin-top:0; }
+    .section-instructions { color:var(--muted); font-size:13.5px; font-weight:500; margin-top:4px; }
+    .practical-note { margin-top:8px; padding:11px 12px; border-radius:10px; background:#fff7e8; border:1px solid #f2d59d; color:#805400; font-size:13.5px; }
     .name-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; margin:4px 0 6px; }
   .name-grid button { padding:16px 12px; font-size:17px; font-weight:700; border-radius:12px;
     border:2px solid #d9e1ea; background:#fff; color:#12263f; cursor:pointer; text-align:center; }
@@ -137,17 +141,26 @@
     }
 
     function renderQuestions() {
+      let previousSection = null;
       $('questions').innerHTML = questions.map((q, i) => {
+        const sectionHead=q.sectionTitle&&q.sectionTitle!==previousSection?`<div class="section-head">${esc(q.sectionTitle)}${q.sectionInstructions?`<div class="section-instructions">${esc(q.sectionInstructions)}</div>`:''}</div>`:'';
+        if(q.sectionTitle)previousSection=q.sectionTitle;
+        if (q.kind === 'practical') {
+          return `${sectionHead}<div class="q">
+            <div class="qtext">${i + 1}. ${esc(stripMarks(q.question))} <span class="marks">(${q.marks} mark${q.marks !== 1 ? 's' : ''})</span></div>
+            <div class="practical-note">Complete this task when your teacher asks. Your teacher will observe it and award the marks.</div>
+          </div>`;
+        }
         if (q.kind === 'mcq') {
           const saved = Number(answers[q.id]);
-          return `<div class="q">
+          return `${sectionHead}<div class="q">
             <div class="qtext">${i + 1}. ${esc(stripMarks(q.question))} <span class="marks">(${q.marks} mark${q.marks !== 1 ? 's' : ''})</span></div>
             <div class="opts" data-qid="${q.id}">
               ${(q.options || []).map((o, j) => `<label class="opt${saved === j ? ' sel' : ''}" data-i="${j}"><input type="radio" name="${q.id}" value="${j}"${saved === j ? ' checked' : ''}> ${esc(o)}</label>`).join('')}
             </div>
           </div>`;
         }
-        return `<div class="q">
+        return `${sectionHead}<div class="q">
           <div class="qtext">${i + 1}. ${esc(stripMarks(q.question))} <span class="marks">(${q.marks} mark${q.marks !== 1 ? 's' : ''})</span></div>
           <textarea data-qid="${q.id}" placeholder="Type your answer…">${esc(answers[q.id] || '')}</textarea>
         </div>`;
@@ -180,7 +193,7 @@
       if (d.released) { $('scoreVal').textContent = d.totalMarks; $('scoreMax').textContent = d.maxMarks; }
       $('gradeBreakdown').innerHTML = questions.map((q, i) => {
         const given = givenAnswers ? givenAnswers[q.id] : undefined;
-        const answerText = q.kind === 'mcq' ? (q.options && given != null ? q.options[given] : '(no answer)') : (given || '(no answer)');
+        const answerText = q.kind === 'practical' ? 'Observed and marked by your teacher' : q.kind === 'mcq' ? (q.options && given != null ? q.options[given] : '(no answer)') : (given || '(no answer)');
         const g = d.released && d.grades ? (d.grades[q.id] || {}) : null;
         return `<div class="result-grade">
           <div style="flex:1">

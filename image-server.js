@@ -2122,6 +2122,26 @@ app.post('/api/pack/:type/publish', requireAuth, (req, res) => {
 
 app.get('/api/assignments', requireAuth, (req, res) => res.json({ assignments: assignments.listTeacherAssignments(req.userId) }));
 
+// Teacher-built, subject-neutral tests and projects. These publish into the
+// existing assignment runtime, but retain their section/objective structure
+// for marking, reporting, and future TeacherScope evidence transfer.
+app.post('/api/assessment', requireAuth, (req, res) => {
+  const { assessment, rosterId, cutoffAt } = req.body || {};
+  try {
+    const rec = assignments.createAssessment({
+      teacherId: req.userId, teacherName: req.user.name,
+      data: assessment, rosterId: rosterId || null, cutoffAt: cutoffAt || null,
+    });
+    res.json({
+      assessmentId: rec.id, assignmentId: rec.id, path: `/assignment/${rec.id}`,
+      roomCode: rec.roomCode, totalMarks: rec.totalMarks,
+      sectionCount: rec.sections.length, questionCount: rec.content.questions.length,
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // Teacher: update the cutoff date for an assignment they own.
 app.patch('/api/assignment/:id/cutoff', requireAuth, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
@@ -2772,7 +2792,7 @@ app.get('/api/assignment/:id', requireAssignmentAccess, (req, res) => {
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
   const session = assignmentStudentSession(req, res, a);
   if (req.gameSession && req.gameSession.assignmentId && !session) return res.status(401).json({ code:'ASSIGNMENT_REJOIN_REQUIRED', error: 'Join this assignment to continue. Your other assignment is still saved.' });
-  res.json({ id: a.id, type: a.type, title: a.title, subject: a.subject, topic: a.topic, grade: a.grade, teacherName: a.teacherName, hasRoster: !!a.rosterId, students: a.rosterId ? classListFor(a.teacherId, a.rosterId, a.id) : [], instructions: a.content.instructions, questionCount: a.content.questions.length });
+  res.json({ id: a.id, type: a.type, assessmentType: a.assessmentType || null, title: a.title, subject: a.subject, topic: a.topic, grade: a.grade, totalMarks: a.totalMarks || null, teacherName: a.teacherName, hasRoster: !!a.rosterId, students: a.rosterId ? classListFor(a.teacherId, a.rosterId, a.id) : [], instructions: a.content.instructions, questionCount: a.content.questions.length });
 });
 
 // Student: the questions, WITHOUT answer keys/correctIndex.
@@ -2784,7 +2804,7 @@ app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
   const already = session && assignments.getSubmission(a.id, session.studentId);
   res.json({
     title: a.title, instructions: a.content.instructions,
-    questions: a.content.questions.map(q => ({ id: q.id, question: q.question, kind: q.kind, options: q.options || null, marks: q.marks })),
+    questions: a.content.questions.map(q => ({ id: q.id, question: q.question, kind: q.kind, options: q.options || null, marks: q.marks, sectionId: q.sectionId || null, sectionTitle: q.sectionTitle || null, sectionInstructions: q.sectionInstructions || '', sectionType: q.sectionType || null })),
     alreadySubmitted: !!already,
   });
 });
@@ -2814,6 +2834,11 @@ app.post('/api/assignment/:id/submit', requireAssignmentAccess, async (req, res)
       if (q.kind === 'mcq') {
         const correct = Number.isInteger(given) && given === q.correctIndex;
         grades[q.id] = { marksAwarded: correct ? q.marks : 0, verdict: correct ? 'correct' : 'incorrect', rationale: correct ? 'Correct option selected.' : 'Not the correct option.', source: 'auto' };
+      } else if (q.kind === 'practical') {
+        // Observation/performance criteria are completed away from the answer
+        // box. They begin pending and the teacher awards the marks while
+        // circulating, presenting, listening, or reviewing the product.
+        grades[q.id] = { marksAwarded: 0, verdict: 'pending', rationale: '', source: 'teacher-required' };
       } else {
         const cached = assignments.findConfirmedVerdict(a.id, q.id, given);
         if (cached) {
@@ -2845,6 +2870,10 @@ app.patch('/api/assignment/:id/release', requireAuth, (req, res) => {
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
   if (a.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assignment.' });
   const released = !!(req.body && req.body.released);
+  if (released && a.type === 'assessment') {
+    const readiness = assignments.assessmentReleaseReadiness(a);
+    if (!readiness.ready) return res.status(400).json({ error: readiness.reason, ...readiness });
+  }
   const updated = assignments.releaseResults(req.params.id, released);
   res.json({ ok: true, resultsReleased: updated.resultsReleased });
 });
@@ -2883,7 +2912,8 @@ app.get('/api/assignment/:id/results', requireAuth, (req, res) => {
   const rosterData = a.rosterId ? roster.getRoster(req.userId, a.rosterId) : null;
   const rosterMap = rosterData ? Object.fromEntries(rosterData.students.map(s => [s.id, s.name])) : {};
   const submissions = assignments.getSubmissions(a.id).map(s => ({ ...s, name: rosterMap[s.studentId] || s.name }));
-  res.json({ questions: a.content.questions, submissions, resultsReleased: a.resultsReleased, cutoffAt: a.cutoffAt, effectivelyReleased: assignments.isReleased(a) });
+  const readiness = assignments.assessmentReleaseReadiness(a);
+  res.json({ questions: a.content.questions, sections: a.sections || null, objectives: a.objectives || null, assessmentType: a.assessmentType || null, totalMarks: a.totalMarks || null, submissions, resultsReleased: a.resultsReleased, cutoffAt: a.cutoffAt, effectivelyReleased: assignments.isReleased(a), releaseReady: readiness.ready, pendingGrades: readiness.pendingGrades, releaseReason: readiness.reason || '' });
 });
 
 // Teacher: override a student's grade for one question. This both corrects
@@ -4701,10 +4731,16 @@ app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:r
     }
   }
   for (const a of gradebook.assignmentResultRows(foundTeacherId)) {
+    // Tests/projects become evidence only after the teacher has reviewed and
+    // explicitly released them. Ordinary legacy assignments keep their
+    // existing behavior.
+    if (a.type === 'assessment' && !a.finalisedAt) continue;
     if (!inRoster(a.studentId)) continue;
     push(a.studentId, { kind: 'assignment', type: a.type, assignmentId: a.assignmentId, topic: a.topic, subject: a.subject,
       title: a.title, mode: a.type === 'homework' ? 'homework' : 'classwork', activityId: `assignment:${a.assignmentId}`,
-      score: a.score, total: a.total, percentage: a.percentage, at: a.at, updatedAt: a.at });
+      score: a.score, total: a.total, percentage: a.percentage,
+      assessmentType: a.assessmentType, version: a.version, finalisedAt: a.finalisedAt,
+      objectiveEvidence: a.objectiveEvidence || [], at: a.at, updatedAt: a.at });
   }
   const practiceCatalog = new Map(practice.listActivities().map(activity => [activity.id, activity]));
   const masteryPercentage = mastery => mastery === 'independent' ? 95 : mastery === 'developing_independence' ? 68 : 38;

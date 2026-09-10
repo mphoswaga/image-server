@@ -64,6 +64,123 @@ function normalizeContent(data, type) {
   return { title: data.title, instructions: data.instructions || '', questions: [...mcq, ...shortAnswer] };
 }
 
+const ASSESSMENT_TYPES = new Set(['test', 'project', 'practical', 'performance', 'oral', 'portfolio', 'custom']);
+const SECTION_TYPES = new Set(['mcq', 'short-answer', 'extended-response', 'practical']);
+
+function cleanText(value, max = 500) {
+  return String(value == null ? '' : value).trim().slice(0, max);
+}
+
+// A test/project is stored beside existing assignments so it immediately uses
+// the proven room-code, roster, submission, release, and gradebook paths. The
+// section model remains intact on the record; content.questions is a flattened
+// compatibility view used by the existing marking and student infrastructure.
+function normalizeAssessment(data) {
+  if (!data || typeof data !== 'object') throw new Error('Assessment details are required.');
+  const title = cleanText(data.title, 160);
+  const subject = cleanText(data.subject, 100);
+  const grade = cleanText(data.grade, 60);
+  const assessmentType = cleanText(data.assessmentType, 30).toLowerCase();
+  const totalMarks = Number(data.totalMarks);
+  if (!title) throw new Error('Enter an assessment title.');
+  if (!subject) throw new Error('Enter a subject.');
+  if (!grade) throw new Error('Enter a grade or year group.');
+  if (!ASSESSMENT_TYPES.has(assessmentType)) throw new Error('Choose a valid assessment type.');
+  if (!Number.isInteger(totalMarks) || totalMarks < 1 || totalMarks > 1000) throw new Error('Total marks must be a whole number from 1 to 1000.');
+
+  const objectives = [];
+  const objectiveIds = new Set();
+  for (const [index, raw] of (Array.isArray(data.objectives) ? data.objectives : []).entries()) {
+    const text = cleanText(typeof raw === 'string' ? raw : raw && raw.text, 500);
+    if (!text) continue;
+    const proposed = cleanText(raw && raw.id, 80) || `objective-${index + 1}`;
+    let id = proposed.replace(/[^a-zA-Z0-9_-]/g, '-');
+    while (objectiveIds.has(id)) id += '-2';
+    objectiveIds.add(id);
+    objectives.push({ id, text });
+  }
+  if (!objectives.length) throw new Error('Add at least one learning objective or skill.');
+
+  const sections = [];
+  const questions = [];
+  const sectionIds = new Set();
+  const questionIds = new Set();
+  const rawSections = Array.isArray(data.sections) ? data.sections : [];
+  if (!rawSections.length) throw new Error('Add at least one assessment section.');
+  for (const [sectionIndex, rawSection] of rawSections.entries()) {
+    const type = cleanText(rawSection && rawSection.type, 40).toLowerCase();
+    if (!SECTION_TYPES.has(type)) throw new Error(`Section ${sectionIndex + 1} has an unsupported type.`);
+    const title = cleanText(rawSection && rawSection.title, 120) || `Section ${sectionIndex + 1}`;
+    const instructions = cleanText(rawSection && rawSection.instructions, 2000);
+    let id = cleanText(rawSection && rawSection.id, 80).replace(/[^a-zA-Z0-9_-]/g, '-') || `section-${sectionIndex + 1}`;
+    while (sectionIds.has(id)) id += '-2';
+    sectionIds.add(id);
+    const inheritedObjectives = (Array.isArray(rawSection.objectiveIds) ? rawSection.objectiveIds : [])
+      .map(x => cleanText(x, 80)).filter(x => objectiveIds.has(x));
+    if (!inheritedObjectives.length) throw new Error(`${title}: connect at least one learning objective or skill.`);
+    const items = [];
+    for (const [itemIndex, rawItem] of (Array.isArray(rawSection.items) ? rawSection.items : []).entries()) {
+      const prompt = cleanText(rawItem && (rawItem.prompt || rawItem.question), 2000);
+      const marks = Number(rawItem && rawItem.marks);
+      if (!prompt) throw new Error(`${title}, item ${itemIndex + 1}: enter a question or criterion.`);
+      if (!Number.isInteger(marks) || marks < 1 || marks > 1000) throw new Error(`${title}, item ${itemIndex + 1}: marks must be a positive whole number.`);
+      let itemId = cleanText(rawItem && rawItem.id, 80).replace(/[^a-zA-Z0-9_-]/g, '-') || `${id}-item-${itemIndex + 1}`;
+      while (questionIds.has(itemId)) itemId += '-2';
+      questionIds.add(itemId);
+      const refs = (Array.isArray(rawItem && rawItem.objectiveIds) ? rawItem.objectiveIds : inheritedObjectives)
+        .map(x => cleanText(x, 80)).filter(x => objectiveIds.has(x));
+      const objectiveRefs = refs.length ? [...new Set(refs)] : [...inheritedObjectives];
+      const item = { id: itemId, prompt, marks, objectiveIds: objectiveRefs };
+      const question = { id: itemId, question: prompt, marks, sectionId: id, sectionTitle: title, sectionInstructions: instructions, sectionType: type, objectiveIds: objectiveRefs };
+      if (type === 'mcq') {
+        const options = (Array.isArray(rawItem.options) ? rawItem.options : []).map(x => cleanText(x, 500)).filter(Boolean);
+        const correctIndex = Number(rawItem.correctIndex);
+        if (options.length < 2) throw new Error(`${title}, item ${itemIndex + 1}: add at least two answer options.`);
+        if (!Number.isInteger(correctIndex) || correctIndex < 0 || correctIndex >= options.length) throw new Error(`${title}, item ${itemIndex + 1}: choose the correct answer.`);
+        Object.assign(item, { options, correctIndex });
+        Object.assign(question, { kind: 'mcq', options, correctIndex });
+      } else if (type === 'practical') {
+        question.kind = 'practical';
+      } else {
+        const answerKey = cleanText(rawItem.answerKey, 4000);
+        if (!answerKey) throw new Error(`${title}, item ${itemIndex + 1}: add marking guidance or an answer key.`);
+        item.answerKey = answerKey;
+        Object.assign(question, { kind: type === 'extended-response' ? 'extended' : 'text', answerKey });
+      }
+      items.push(item);
+      questions.push(question);
+    }
+    if (!items.length) throw new Error(`${title}: add at least one question or criterion.`);
+    sections.push({ id, title, type, instructions, objectiveIds: inheritedObjectives, marks: items.reduce((sum, item) => sum + item.marks, 0), items });
+  }
+  const allocatedMarks = questions.reduce((sum, q) => sum + q.marks, 0);
+  if (allocatedMarks !== totalMarks) throw new Error(`Allocated marks (${allocatedMarks}) must equal the assessment total (${totalMarks}).`);
+  return { title, subject, grade, assessmentType, totalMarks, objectives, sections, questions, instructions: cleanText(data.instructions, 2000) };
+}
+
+function createAssessment({ teacherId, teacherName, data, rosterId, cutoffAt }) {
+  fs.mkdirSync(DIR, { recursive: true });
+  const normalized = normalizeAssessment(data);
+  const id = crypto.randomUUID().slice(0, 8);
+  const roomCode = genRoomCode();
+  const rec = {
+    id, teacherId, teacherName: teacherName || '', type: 'assessment',
+    assessmentType: normalized.assessmentType, title: normalized.title,
+    subject: normalized.subject, topic: normalized.title, grade: normalized.grade,
+    totalMarks: normalized.totalMarks, objectives: normalized.objectives,
+    sections: normalized.sections, version: 1, status: 'published',
+    roomCode, rosterId: rosterId || null, cutoffAt: cutoffAt || null,
+    resultsReleased: false,
+    content: { title: normalized.title, instructions: normalized.instructions, questions: normalized.questions },
+    createdAt: new Date().toISOString(),
+  };
+  writeJsonAtomic(recPath(id), rec);
+  const rooms = loadRooms();
+  rooms[roomCode] = id;
+  saveRooms(rooms);
+  return rec;
+}
+
 function createAssignment({ teacherId, teacherName, type, subject, topic, grade, data, rosterId, cutoffAt }) {
   fs.mkdirSync(DIR, { recursive: true });
   const id = crypto.randomUUID().slice(0, 8); // short + shareable, same convention as games
@@ -101,6 +218,10 @@ function releaseResults(id, released) {
   const rec = getAssignment(id);
   if (!rec) return null;
   rec.resultsReleased = !!released;
+  if (rec.type === 'assessment') {
+    rec.status = released ? 'finalised' : 'published';
+    rec.finalisedAt = released ? new Date().toISOString() : null;
+  }
   writeJsonAtomic(recPath(id), rec);
   return rec;
 }
@@ -110,6 +231,7 @@ function releaseResults(id, released) {
 function isReleased(a) {
   if (!a) return false;
   if (a.resultsReleased) return true;
+  if (a.type === 'assessment') return false;
   if (a.cutoffAt && Date.now() > new Date(a.cutoffAt).getTime()) return true;
   return false;
 }
@@ -130,6 +252,24 @@ function getSubmissions(id) { return loadSubmissions(id); }
 function getSubmission(id, studentId) {
   const target = normalizeStudentId(studentId);
   return loadSubmissions(id).find(s => normalizeStudentId(s.studentId) === target) || null;
+}
+
+function assessmentReleaseReadiness(record) {
+  if (!record || record.type !== 'assessment') return { ready: true, pendingGrades: 0, submissions: 0 };
+  const submissions = loadSubmissions(record.id);
+  if (!submissions.length) return { ready: false, pendingGrades: 0, submissions: 0, reason: 'Wait for at least one student submission before releasing results.' };
+  let pendingGrades = 0;
+  for (const sub of submissions) {
+    for (const question of record.content.questions || []) {
+      const grade = (sub.grades || {})[question.id];
+      const confirmed = grade && (grade.source === 'auto' || grade.source === 'teacher' || grade.source === 'ai-confirmed');
+      if (!confirmed) pendingGrades += 1;
+    }
+  }
+  return {
+    ready: pendingGrades === 0, pendingGrades, submissions: submissions.length,
+    reason: pendingGrades ? `Review ${pendingGrades} pending grade${pendingGrades === 1 ? '' : 's'} before releasing results.` : '',
+  };
 }
 
 // ── Verdict cache: per-question list of gradings, some teacher-confirmed ───
@@ -178,6 +318,8 @@ function listTeacherAssignments(teacherId) {
     .filter(a => a && a.teacherId === teacherId)
     .map(a => ({
       id: a.id, type: a.type, title: a.title, subject: a.subject, topic: a.topic, grade: a.grade,
+      assessmentType: a.assessmentType || null, totalMarks: a.totalMarks || null,
+      sectionCount: Array.isArray(a.sections) ? a.sections.length : null,
       createdAt: a.createdAt, roomCode: a.roomCode, rosterId: a.rosterId, cutoffAt: a.cutoffAt,
       resultsReleased: isReleased(a),
       submissions: loadSubmissions(a.id).length,
@@ -186,9 +328,10 @@ function listTeacherAssignments(teacherId) {
 }
 
 module.exports = {
-  createAssignment, getAssignment, updateAssignmentCutoff, getRoomCode,
+  createAssignment, createAssessment, normalizeAssessment, getAssignment, updateAssignmentCutoff, getRoomCode,
   releaseResults, isReleased,
   saveSubmission, getSubmissions, getSubmission,
+  assessmentReleaseReadiness,
   findConfirmedVerdict, recordVerdict, normalizeAnswer, normalizeStudentId,
   listTeacherAssignments,
 };
