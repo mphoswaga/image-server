@@ -122,6 +122,21 @@ test('Plan automatically creates an editable project assessment draft', async ({
       }),
     });
   });
+  await page.route('**/api/generate', async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        deckId: 'project-deck', filename: 'Document-creation-project.pptx', band: 'early', slideCount: 2,
+        teachingModelId: 'standard', lessonPurpose: 'project',
+        slides: [
+          { type: 'title', title: 'Document creation project', subtitle: 'ICT', bullets: [], image: null, imageSource: null },
+          { type: 'content', title: 'Create your document', bullets: ['Follow the project stages.'], example: '', image: null, imageSource: null, modelStage: 'practice' },
+        ],
+      }),
+    });
+  });
 
   await signInDisposableTeacher(page, `-auto-project-${testInfo.project.name}`);
   await page.getByRole('button', { name: /Start with objectives/ }).click();
@@ -143,4 +158,14 @@ test('Plan automatically creates an editable project assessment draft', async ({
   await expect(page.locator('#assessmentTotal')).toHaveValue('60');
   await expect(page.locator('#assessmentSections .assessment-section')).toHaveCount(2);
   await expect(page.locator('#assessmentTotalStatus')).toHaveClass(/valid/);
+  await page.locator('#assignmentsBackTop').click();
+  await page.locator('#acceptBtn').click();
+  await expect(page.locator('#results')).toBeVisible();
+  await expect(page.locator('#automaticAssessmentResult')).toBeVisible();
+  await expect(page.locator('#automaticAssessmentResultTitle')).toHaveText('Project assessment ready');
+  await expect(page.locator('#automaticAssessmentResultBreakdown')).toContainText('60 marks');
+  await expect(page.locator('#automaticAssessmentResultBreakdown')).toContainText('multiple choice');
+  await page.locator('#reviewResultAssessmentBtn').click();
+  await expect(page.locator('#assessmentBuilder')).toBeVisible();
+  await expect(page.locator('#assessmentTitle')).toHaveValue('Document creation project');
 });

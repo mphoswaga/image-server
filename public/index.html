@@ -3101,6 +3101,13 @@
       <div id="deckCostNote" class="cost-note" style="display:none"></div>
       <div id="deck" class="deck"></div>
 
+      <section id="automaticAssessmentResult" class="card wide" style="display:none;margin-top:24px">
+        <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg> <span id="automaticAssessmentResultTitle">Assessment ready</span></h2>
+        <p id="automaticAssessmentResultIntro" class="hint" style="margin:5px 0 0"></p>
+        <p id="automaticAssessmentResultBreakdown" style="margin:9px 0 0;color:var(--ink);font-size:13px;font-weight:700"></p>
+        <button id="reviewResultAssessmentBtn" type="button" class="btn accent" style="width:auto;margin-top:13px">Review and publish assessment</button>
+      </section>
+
       <!-- Lesson pack: student-facing materials from this same lesson -->
       <section id="packSection" class="card wide" style="margin-top:24px">
         <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg> <span id="packTitleText">Lesson pack</span> <span class="hint-i" tabindex="0" role="img" aria-label="Student-facing materials from this same plan. Generate, edit, and download each as a Word document." data-tip="Student-facing materials from this same plan. Generate, edit, and download each as a Word document.">i</span></h2>
@@ -4047,6 +4054,7 @@
       $('importSlidesCard').style.display=(choseStart && startMode==='haveSlides')?'block':'none';
       planStage.style.display=stage==='plan'?'block':'none';
       results.style.display=stage==='slides'?'block':'none';
+      if(stage==='slides') renderResultAssessment();
       if($('workspaceSaveStatus')) $('workspaceSaveStatus').style.display=currentWorkspaceId?'':'none';
       if(choseStart && startMode==='plan') renderComposerPage();
       if(weekPlannerState && weekPlannerState.present) renderSlotPickers();
@@ -4881,6 +4889,23 @@
       box.innerHTML=`<h3>${ICON('i-clipboard')}Automatic ${esc(draft.assessmentType||'assessment')} draft ready</h3><p>${esc(draft.title)} · ${draft.totalMarks} marks · ${itemCount} item${itemCount===1?'':'s'}</p><p style="margin-top:5px;color:var(--ink);font-weight:600">${esc(breakdown)}</p><button id="reviewAutoAssessmentBtn" type="button" class="btn accent" style="width:auto;margin-top:11px">Review and edit before publishing</button>`;
       $('reviewAutoAssessmentBtn').addEventListener('click',()=>openGeneratedAssessmentDraft(draft));
     }
+    function renderResultAssessment(){
+      const section=$('automaticAssessmentResult'), draft=pendingAssessmentDraft;
+      if(!section)return;
+      if(!draft){ section.style.display='none'; return; }
+      const purpose=draft.assessmentType==='project'?'Project':'Test';
+      const typeNames={mcq:'multiple choice','short-answer':'short answer','extended-response':'extended response',practical:'practical / observation'};
+      const breakdown=(draft.sections||[]).map(part=>{
+        const marks=(part.items||[]).reduce((sum,item)=>sum+(Number(item.marks)||0),0);
+        return `${part.type==='mcq'?(part.items||[]).length+' ':''}${typeNames[part.type]||part.type} · ${marks} marks`;
+      }).join(' · ');
+      section.style.display='block';
+      $('automaticAssessmentResultTitle').textContent=`${purpose} assessment ready`;
+      $('automaticAssessmentResultIntro').textContent=`${draft.title} was generated with this plan. Review the questions and marking criteria, choose the class, then publish it for students.`;
+      $('automaticAssessmentResultBreakdown').textContent=`${draft.totalMarks} marks${breakdown?' · '+breakdown:''}`;
+      $('reviewResultAssessmentBtn').textContent=`Review and publish ${purpose.toLowerCase()}`;
+    }
+    $('reviewResultAssessmentBtn').addEventListener('click',()=>openGeneratedAssessmentDraft(pendingAssessmentDraft));
     function renderSequencePlanFlow(){
       const flow=$('sequencePlanFlow');
       if(!sequenceMode()){
