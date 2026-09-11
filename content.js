@@ -352,6 +352,7 @@ async function callModel(schema, name, messages, max_tokens = 9000) {
 async function generateContent(subject, topic, slideCount, grade = 'middle school', tone = 'clear and engaging', focus = '', extras = {}) {
   const teachingModelId = normalizeTeachingModelId(extras.teachingModelId);
   const lessonPurpose = normalizeLessonPurpose(extras.lessonPurpose);
+  const assessmentOptions = normalizeAssessmentOptions(extras);
   if (!process.env.OPENAI_API_KEY) {
     console.log('No OPENAI_API_KEY set — using placeholder text. Add a key to .env for AI-written slides.');
     return placeholderDeck(subject, topic, slideCount, teachingModelId, lessonPurpose);
