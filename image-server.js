@@ -5015,7 +5015,7 @@ app.post('/oauth/authorize', requireAuth, (req, res) => {
 });
 
 // Token endpoint: exchange an authorization code for an access token.
-app.post('/oauth/token', async (req, res) => {
+app.post('/oauth/token', express.urlencoded({ extended: false, limit: '20kb' }), async (req, res) => {
   const { grant_type, code, redirect_uri, client_id, client_secret } = req.body || {};
   if (grant_type !== 'authorization_code') return res.status(400).json({ error: 'unsupported_grant_type' });
   if (!client_id || !client_secret || !code || !redirect_uri) {
@@ -5037,7 +5037,7 @@ app.post('/oauth/token', async (req, res) => {
 });
 
 // Revoke endpoint: invalidate an access token.
-app.post('/oauth/revoke', (req, res) => {
+app.post('/oauth/revoke', express.urlencoded({ extended: false, limit: '20kb' }), (req, res) => {
   const token = (req.body || {}).token;
   if (!token) return res.status(400).json({ error: 'token required' });
   const rec = oauth.verifyAccessToken(token);

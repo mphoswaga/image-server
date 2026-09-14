@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const oauth = require('../oauth');
+const fs = require('node:fs');
 
 test('the configured TeacherScope OAuth client survives without a volume record', async t => {
   const names = [
@@ -28,4 +29,10 @@ test('the configured TeacherScope OAuth client survives without a volume record'
   assert.equal(await oauth.verifyClientSecret(client.clientId, 'lcs_sec_configured_for_test_only'), true);
   assert.equal(await oauth.verifyClientSecret(client.clientId, 'wrong-secret'), false);
   assert.equal(JSON.stringify(oauth.listClients()).includes('lcs_sec_configured_for_test_only'), false);
+});
+
+test('the OAuth token and revoke endpoints accept standard form-encoded requests', () => {
+  const server = fs.readFileSync(require.resolve('../image-server.js'), 'utf8');
+  assert.match(server, /app\.post\('\/oauth\/token', express\.urlencoded\(\{ extended: false, limit: '20kb' \}\)/);
+  assert.match(server, /app\.post\('\/oauth\/revoke', express\.urlencoded\(\{ extended: false, limit: '20kb' \}\)/);
 });
