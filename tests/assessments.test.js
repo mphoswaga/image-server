@@ -7,6 +7,39 @@ const path = require('node:path');
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ls-assessments-'));
 const assignments = require('../assignments');
 const gradebook = require('../gradebook');
+
+test('question evidence preserves marked assessment items without learner identity', () => {
+  const evidence = gradebook.questionEvidenceForSubmission({
+    type: 'assessment', finalisedAt: '2026-09-14T10:00:00Z',
+    objectives: [{ id: 'copy', text: 'Use copy and paste commands.' }],
+    content: { questions: [{ id: 'q1', question: 'Which command copies text?', kind: 'mcq', options: ['Ctrl+C', 'Ctrl+V'], correctIndex: 0, marks: 1, objectiveIds: ['copy'], sectionId: 'written', sectionTitle: 'Written test' }] }
+  }, {
+    studentId: 'PRIVATE-ID', name: 'Private Learner', answers: { q1: 0 },
+    grades: { q1: { marksAwarded: 1, source: 'auto' } }, submittedAt: '2026-09-14T09:00:00Z'
+  });
+  assert.equal(evidence.length, 1);
+  assert.equal(evidence[0].item, 'Which command copies text?');
+  assert.equal(evidence[0].studentResponse, 'Ctrl+C');
+  assert.equal(evidence[0].expectedAnswer, 'Ctrl+C');
+  assert.equal(evidence[0].percentage, 100);
+  assert.deepEqual(evidence[0].objectives, ['Use copy and paste commands.']);
+  assert.equal(JSON.stringify(evidence).includes('PRIVATE-ID'), false);
+  assert.equal(JSON.stringify(evidence).includes('Private Learner'), false);
+});
+
+test('game question evidence reconstructs historical answer outcomes', () => {
+  const evidence = gradebook.gameQuestionEvidence({
+    createdAt: '2026-09-14T08:00:00Z', questions: [
+      { question: 'Round 84 to the nearest 10.', options: ['80', '84', '90', '85'], correctIndex: 2, explanation: 'The ones digit is 4.' },
+      { question: 'Unanswered question', options: ['A', 'B'], correctIndex: 0 }
+    ]
+  }, { answers: [2], at: '2026-09-14T08:30:00Z' });
+  assert.equal(evidence[0].correct, true);
+  assert.equal(evidence[0].studentResponse, '90');
+  assert.equal(evidence[0].percentage, 100);
+  assert.equal(evidence[1].attempted, false);
+  assert.equal(evidence[1].percentage, null);
+});
 const roster = require('../roster');
 
 function validAssessment(overrides = {}) {

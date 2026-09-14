@@ -5321,15 +5321,19 @@ app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:r
     if (!byStudent.has(sid)) byStudent.set(sid, []);
     byStudent.get(sid).push(row);
   };
-  for (const g of games.listTeacherGames(foundTeacherId)) {
-    if (!games.hasRoster(g, foundRoster.id)) continue;
+  for (const summary of games.listTeacherGames(foundTeacherId)) {
+    if (!games.hasRoster(summary, foundRoster.id)) continue;
+    const g = games.getGame(summary.id) || summary;
     for (const result of games.getResults(g.id)) {
       if (result.rosterId && result.rosterId !== foundRoster.id) continue;
       if (!inRoster(result.studentId)) continue;
       push(result.studentId, { kind: 'game', gameId: g.id, topic: g.topic, subject: g.subject,
         title: g.lessonTitle, mode: g.mode || 'arcade', activityId: `game:${g.id}`,
+        activityVersion: g.updatedAt || g.createdAt || null,
+        attemptCount: Math.max(1, Number(result.attempts) || 1), gameType: result.gameType || g.mode || 'arcade',
         score: result.score, total: result.total,
         percentage: result.total > 0 ? Math.round((result.score / result.total) * 100) : 0,
+        questionEvidence: gradebook.gameQuestionEvidence(g, result),
         at: result.at, updatedAt: result.at });
     }
   }
@@ -5343,7 +5347,7 @@ app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:r
       assessmentType: a.assessmentType, version: a.version, finalisedAt: a.finalisedAt,
       provisional: !!a.provisional, status: a.status,
       lessonWorkspaceId: a.lessonWorkspaceId || null, unitId: a.unitId || null, unitName: a.unitName || null,
-      objectiveEvidence: a.objectiveEvidence || [], at: a.at, updatedAt: a.at });
+      objectiveEvidence: a.objectiveEvidence || [], questionEvidence: a.questionEvidence || [], at: a.at, updatedAt: a.at });
   }
   const practiceCatalog = new Map(practice.listActivities().map(activity => [activity.id, activity]));
   const masteryPercentage = mastery => mastery === 'independent' ? 95 : mastery === 'developing_independence' ? 68 : 38;

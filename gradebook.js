@@ -80,6 +80,118 @@ function objectiveEvidenceForSubmission(record, sub) {
   });
 }
 
+function boundedText(value, max = 700) {
+  return String(value == null ? '' : value).trim().slice(0, max);
+}
+
+function submittedAnswer(sub, question, index) {
+  const answers = sub && sub.answers;
+  if (Array.isArray(answers)) return answers[index];
+  if (answers && typeof answers === 'object') return answers[question.id];
+  return undefined;
+}
+
+function answerDisplay(question, answer) {
+  if (answer === undefined || answer === null || answer === '') return '';
+  if (question.kind === 'mcq' && Array.isArray(question.options)) {
+    const selectedIndex = Number(answer);
+    if (Number.isInteger(selectedIndex) && selectedIndex >= 0 && selectedIndex < question.options.length) {
+      return boundedText(question.options[selectedIndex], 500);
+    }
+  }
+  return boundedText(answer, 500);
+}
+
+// Question-level evidence is deliberately separate from objective evidence:
+// every covered item survives the LessonScope -> TeacherScope sync, even when
+// a teacher did not map that item to a tracker objective. Unmarked responses
+// remain coverage-only evidence and therefore cannot inflate progress.
+function questionEvidenceForSubmission(record, sub) {
+  if (!record || !sub) return [];
+  const questions = record.content && Array.isArray(record.content.questions)
+    ? record.content.questions
+    : [];
+  const objectiveText = new Map((record.objectives || []).map(objective => [objective.id, objective.text]));
+  return questions.map((question, index) => {
+    const answer = submittedAnswer(sub, question, index);
+    const grade = (sub.grades || {})[question.id] || (sub.observationGrades || {})[question.id] || {};
+    const available = Number(question.marks);
+    let awarded = grade.marksAwarded === null || grade.marksAwarded === undefined || grade.marksAwarded === ''
+      ? NaN
+      : Number(grade.marksAwarded);
+    let source = boundedText(grade.source, 80);
+    let automaticallyMarked = source === 'auto';
+
+    if (!Number.isFinite(awarded) && question.kind === 'mcq' && Number.isInteger(Number(answer))) {
+      awarded = Number(answer) === Number(question.correctIndex) ? available : 0;
+      source = 'auto';
+      automaticallyMarked = true;
+    }
+    const scored = Number.isFinite(available) && available > 0 && Number.isFinite(awarded);
+    const score = scored ? Math.max(0, Math.min(available, awarded)) : null;
+    const expectedAnswer = question.kind === 'mcq' && Array.isArray(question.options)
+      ? question.options[Number(question.correctIndex)]
+      : question.answerKey;
+    const objectiveIds = Array.isArray(question.objectiveIds) ? question.objectiveIds : [];
+    return {
+      itemId: question.id || `question-${index + 1}`,
+      item: boundedText(question.question, 700),
+      sectionId: question.sectionId || null,
+      section: question.sectionTitle || null,
+      evidenceType: question.kind || 'text',
+      objectiveIds,
+      objectives: objectiveIds.map(id => objectiveText.get(id) || id),
+      attempted: answer !== undefined && answer !== null && answer !== '' || scored,
+      attemptCount: answer !== undefined && answer !== null && answer !== '' || scored ? 1 : 0,
+      supportUsed: false,
+      studentResponse: answerDisplay(question, answer),
+      expectedAnswer: boundedText(expectedAnswer, 500),
+      score,
+      total: Number.isFinite(available) && available > 0 ? available : null,
+      percentage: scored ? Math.round((score / available) * 100) : null,
+      correct: scored ? score === available : null,
+      teacherConfirmed: source === 'teacher' || source === 'ai-confirmed',
+      automaticallyMarked,
+      source: source || 'submitted',
+      rationale: boundedText(grade.rationale, 500),
+      at: record.finalisedAt || sub.submittedAt || record.createdAt,
+    };
+  }).filter(item => item.item);
+}
+
+function gameQuestionEvidence(game, result) {
+  if (!game || !result || !Array.isArray(game.questions)) return [];
+  return game.questions.map((question, index) => {
+    const answer = Array.isArray(result.answers) ? result.answers[index]
+      : result.answers && typeof result.answers === 'object' ? result.answers[index] ?? result.answers[`q${index}`] : undefined;
+    const selectedIndex = Number(answer);
+    const attempted = Number.isInteger(selectedIndex) && selectedIndex >= 0 && selectedIndex < (question.options || []).length;
+    const correct = attempted ? selectedIndex === Number(question.correctIndex) : null;
+    const fishAttempts = Array.isArray(result.fishquest && result.fishquest.attempts)
+      ? result.fishquest.attempts.filter(item => Number(item.questionIndex) === index)
+      : [];
+    return {
+      itemId: `question-${index + 1}`,
+      item: boundedText(question.question, 700),
+      evidenceType: 'mcq',
+      attempted,
+      attemptCount: fishAttempts.length || (attempted ? 1 : 0),
+      supportUsed: fishAttempts.some(item => item.outcome === 'timeout'),
+      studentResponse: attempted ? boundedText(question.options[selectedIndex], 500) : '',
+      expectedAnswer: boundedText((question.options || [])[Number(question.correctIndex)], 500),
+      score: attempted ? (correct ? 1 : 0) : null,
+      total: attempted ? 1 : null,
+      percentage: attempted ? (correct ? 100 : 0) : null,
+      correct,
+      teacherConfirmed: false,
+      automaticallyMarked: true,
+      source: 'auto',
+      rationale: boundedText(question.explanation, 500),
+      at: result.at || game.createdAt,
+    };
+  }).filter(item => item.item);
+}
+
 // The classes a teacher can open a gradebook for, with how much is in each.
 function listClasses(userId) {
   const rosters = roster.listRosters(userId);
@@ -214,6 +326,7 @@ function gatherStudentResults(teacherIds, studentId) {
           finalisedAt: record.finalisedAt || null,
           provisional: record.type === 'assessment' && !isFinalisedAssessment(record),
           objectiveEvidence: objectiveEvidenceForSubmission(record, sub),
+          questionEvidence: questionEvidenceForSubmission(record, sub),
           mark: result.mark, max: result.max, percentage: result.max > 0 ? Math.round((result.mark / result.max) * 100) : 0,
           at: record.type === 'assessment' ? record.finalisedAt : (sub.submittedAt || a.createdAt) });
       }
@@ -278,6 +391,7 @@ function assignmentProgressRows(teacherId, { includePending = false } = {}) {
       if (!result && !includePending) continue;
       const finalised = isFinalisedAssessment(record);
       const objectiveEvidence = result ? objectiveEvidenceForSubmission(record, sub) : [];
+      const questionEvidence = questionEvidenceForSubmission(record, sub);
       out.push({
         kind: 'assignment', type: a.type, assignmentId: a.id, rosterId: a.rosterId || null,
         studentId: sub.studentId, subject: a.subject || null, topic: a.topic || null, title: a.title,
@@ -289,6 +403,7 @@ function assignmentProgressRows(teacherId, { includePending = false } = {}) {
         provisional: record.type === 'assessment' && !finalised,
         status: result ? (finalised || assignments.isReleased(record) ? 'released' : 'marked') : 'awaiting-marking',
         objectiveEvidence,
+        questionEvidence,
         mode: a.type === 'homework' ? 'homework' : 'classwork', activityId: `assignment:${a.id}`,
         score: result ? result.mark : null, total: result ? result.max : (record.totalMarks || sub.maxMarks || null),
         percentage: result && result.max > 0 ? Math.round((result.mark / result.max) * 100) : null,
@@ -303,4 +418,4 @@ function assignmentResultRows(teacherId) {
   return assignmentProgressRows(teacherId);
 }
 
-module.exports = { listClasses, buildGradebook, toWorkbook, gatherStudentResults, summarizeStudent, assignmentResultRows, assignmentProgressRows, teacherSubmissionResult, isFinalisedAssessment };
+module.exports = { listClasses, buildGradebook, toWorkbook, gatherStudentResults, summarizeStudent, assignmentResultRows, assignmentProgressRows, teacherSubmissionResult, isFinalisedAssessment, questionEvidenceForSubmission, gameQuestionEvidence };
