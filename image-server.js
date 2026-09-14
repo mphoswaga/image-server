@@ -4762,6 +4762,26 @@ app.patch('/api/roster/:rosterId/student/:studentId/pin-reset', requireAuth, (re
   res.json({ ok: true });
 });
 
+// Correct an imported learner name while preserving the Student ID that owns
+// their PIN, Google link, submissions, marks and TeacherScope evidence.
+app.patch('/api/roster/:rosterId/student/:studentId', requireAuth, (req, res) => {
+  const name = String((req.body && req.body.name) || '').replace(/\s+/g, ' ').trim();
+  if (!name) return res.status(400).json({ error: 'Enter the learner’s name.' });
+  const student = roster.renameStudent(req.userId, req.params.rosterId, req.params.studentId, name);
+  if (!student) return res.status(404).json({ error: 'Learner not found in this class.' });
+  const assessmentSnapshotsUpdated = assignments.renameAssessmentStudent(
+    req.userId, req.params.rosterId, student.id, student.name);
+  audit.log('roster.student_renamed', {
+    userId: req.userId, rosterId: req.params.rosterId, studentId: student.id,
+    assessmentSnapshotsUpdated, ip: req.ip,
+  });
+  setImmediate(() => webhooks.dispatch('roster.updated', {
+    rosterId: req.params.rosterId, teacherId: req.userId, studentId: student.id,
+    action: 'student_renamed',
+  }).catch(() => {}));
+  res.json({ id: student.id, name: student.name });
+});
+
 // Rename a class. Deliberately not a re-upload: the students, their PINs and
 // every result already recorded against this roster stay exactly as they are.
 app.patch('/api/roster/:id', requireAuth, (req, res) => {

@@ -833,6 +833,25 @@ function listTeacherAssignments(teacherId) {
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
+// Assessment cohorts are snapshots so membership cannot drift after
+// publication. A name correction is safe to carry into those snapshots because
+// it leaves the student identity and cohort membership unchanged.
+function renameAssessmentStudent(teacherId, rosterId, studentId, name) {
+  const wanted = normalizeStudentId(studentId);
+  let updated = 0;
+  for (const summary of listTeacherAssignments(teacherId)) {
+    if (summary.type !== 'assessment' || summary.rosterId !== rosterId) continue;
+    const record = getAssignment(summary.id);
+    if (!record || !Array.isArray(record.rosterSnapshot)) continue;
+    const student = record.rosterSnapshot.find(item => normalizeStudentId(item.id) === wanted);
+    if (!student || student.name === name) continue;
+    student.name = name;
+    writeJsonAtomic(recPath(record.id), record);
+    updated += 1;
+  }
+  return updated;
+}
+
 module.exports = {
   createAssignment, createAssessment, copyAssessmentToRoster, normalizeAssessment, getAssignment, updateAssignmentCutoff, updateAssessmentRoster, getRoomCode,
   publishedAssessmentGenerationContext,
@@ -840,6 +859,6 @@ module.exports = {
   assessmentIsFinalised, saveSubmission, saveNewSubmission, getSubmissions, getSubmission,
   assessmentReleaseReadiness, loadDrafts, getDraft, saveDraft, saveDraftGrade, deliveryState, updateDelivery, draftProgress, presentationSlides,
   sanitizeLearnerAnswers, incompleteAssessmentAnswers, filterAssignmentEvidenceForRoster,
-  findConfirmedVerdict, recordVerdict, normalizeAnswer, normalizeStudentId,
+  findConfirmedVerdict, recordVerdict, normalizeAnswer, normalizeStudentId, renameAssessmentStudent,
   listTeacherAssignments,
 };

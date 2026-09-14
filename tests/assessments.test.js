@@ -211,6 +211,9 @@ test('another class receives an isolated run of the same assessment', () => {
   assert.deepEqual(assignments.deliveryState(copy), {
     mode: 'live', phase: 'lobby', activeSectionIndex: -1, previousPhase: null, updatedAt: copy.delivery.updatedAt,
   });
+  assert.equal(assignments.renameAssessmentStudent('teacher-class-runs', 'class-b', 'b-1', 'Corrected Learner B'), 1);
+  assert.equal(assignments.getAssignment(copy.id).rosterSnapshot[0].name, 'Corrected Learner B');
+  assert.equal(assignments.getAssignment(source.id).rosterSnapshot[0].name, 'Learner A');
   assert.throws(
     () => assignments.copyAssessmentToRoster({
       id: copy.id, teacherId: 'teacher-class-runs', rosterId: 'class-b',

@@ -128,6 +128,22 @@ function renameRoster(teacherId, id, name) {
   return record;
 }
 
+// Correct a learner's display name without changing their stable Student ID.
+// Results, PINs, linked Google identity and cross-app evidence all use the ID,
+// so a spelling correction must update this roster in place.
+function renameStudent(teacherId, rosterId, studentId, name) {
+  const record = getRoster(teacherId, rosterId);
+  if (!record) return null;
+  const wanted = normalizeStudentId(studentId);
+  const student = (record.students || []).find(item => normalizeStudentId(item.id) === wanted);
+  if (!student) return null;
+  const next = String(name || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+  if (!next) return null;
+  student.name = next;
+  writeJsonAtomic(rosterPath(teacherId, rosterId), record);
+  return { ...student };
+}
+
 function listRosters(teacherId) {
   const dir = rosterDir(teacherId);
   if (!fs.existsSync(dir)) return [];
@@ -289,7 +305,7 @@ function buildStudentsFromMapping(rows, idCol, nameCol, genderCol) {
 }
 
 module.exports = {
-  displayNameFrom, normalizeGender, renameRoster,
+  displayNameFrom, normalizeGender, renameRoster, renameStudent,
   saveRoster, getRoster, listRosters, deleteRoster,
   findStudent, findStudentInRoster, findStudentAcrossAllTeachers, parseCSV,
   parseRosterFile, buildStudentsFromMapping, normalizeStudentId,

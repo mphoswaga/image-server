@@ -327,3 +327,24 @@ test('a rename is refused rather than half-applied', async () => {
     for (const m of ['../roster.js', '../storage.js']) delete require.cache[require.resolve(m)];
   }
 });
+
+test('a learner name correction preserves their stable roster identity', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const previous = process.env.DATA_DIR;
+  process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lc-student-rename-'));
+  try {
+    for (const m of ['../roster.js', '../storage.js']) delete require.cache[require.resolve(m)];
+    const r = require('../roster.js');
+    const saved = r.saveRoster('teacher', { name: '2B1', students: [{ id: 'VN-7', name: 'Mỹ Chi', gender: 'F' }] });
+    const corrected = r.renameStudent('teacher', saved.id, ' vn-7 ', '  Hoàng   Mỹ Chi  ');
+    assert.deepEqual(corrected, { id: 'VN-7', name: 'Hoàng Mỹ Chi', gender: 'female' });
+    assert.deepEqual(r.getRoster('teacher', saved.id).students, [corrected]);
+    assert.equal(r.renameStudent('teacher', saved.id, 'VN-7', '   '), null);
+    assert.equal(r.renameStudent('another-teacher', saved.id, 'VN-7', 'Wrong'), null);
+  } finally {
+    process.env.DATA_DIR = previous;
+    for (const m of ['../roster.js', '../storage.js']) delete require.cache[require.resolve(m)];
+  }
+});

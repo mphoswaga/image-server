@@ -26,12 +26,17 @@ test('teacher builds a marked assessment and a learner sees practical criteria s
   const replacementRoster = await replacementRosterResponse.json();
   const anotherRosterResponse = await page.request.post('/api/roster', {
     data: { name: 'Grade 2 ICT C', rows: [
-      { ID: `${learnerId}-C`, Name: 'Hoàng Mỹ Chi' },
+      { ID: `${learnerId}-C`, Name: 'Hoàng My Chi' },
       { ID: `${learnerId}-D`, Name: 'Nguyễn Mỹ Chi' },
     ], idCol: 'ID', nameCol: 'Name' },
   });
   expect(anotherRosterResponse.ok(), await anotherRosterResponse.text()).toBeTruthy();
   const anotherRoster = await anotherRosterResponse.json();
+  const correctedNameResponse = await page.request.patch(`/api/roster/${anotherRoster.id}/student/${learnerId}-C`, {
+    data: { name: 'Hoàng Mỹ Chi' },
+  });
+  expect(correctedNameResponse.ok(), await correctedNameResponse.text()).toBeTruthy();
+  expect((await correctedNameResponse.json()).name).toBe('Hoàng Mỹ Chi');
 
   await page.locator('#assignmentsBtn').click();
   await expect(page.getByRole('heading', { name: 'Test or project' })).toBeVisible();
