@@ -3247,7 +3247,7 @@
       <div id="adminStatus" class="status"></div>
 
       <div class="section-divider"><h3><svg class="ic" aria-hidden="true"><use href="#i-shuffle"/></svg> External API keys</h3></div>
-      <p class="hint">API keys let your external apps (e.g. report card writer) pull all student names, IDs, and game results across every class. Keys are shown once — keep them safe!</p>
+      <p class="hint">API keys let approved external apps pull class rosters and learning results from games, practice, assignments, tests and projects. Keys are shown once — keep them safe!</p>
       <details id="apiGenDetails" style="margin-bottom:18px">
         <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--primary)">+ Generate new API key</summary>
         <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
@@ -7663,7 +7663,7 @@
         <div class="gb-stat"><div class="v">${g.students.length}</div><div class="l">Students</div></div>
         <div class="gb-stat"><div class="v">${doneCount}/${g.students.length}</div><div class="l">Have taken part</div></div>
       </div>`;
-      const head=`<tr><th class="sticky">Student</th>${g.assessments.map(a=>`<th title="${esc(a.title)}"><span class="gb-th-type">${a.kind==='game'?'🎮 Game':'📝 '+esc(a.type||'Task')}</span>${esc(a.title.length>18?a.title.slice(0,17)+'…':a.title)}</th>`).join('')}<th>Average</th></tr>`;
+      const head=`<tr><th class="sticky">Student</th>${g.assessments.map(a=>`<th title="${esc(a.title)}"><span class="gb-th-type">${a.kind==='game'?'🎮 Game':'📝 '+esc(a.type||'Task')}${a.provisional?' · Marked, results hidden':''}</span>${esc(a.title.length>18?a.title.slice(0,17)+'…':a.title)}</th>`).join('')}<th>Average</th></tr>`;
       const body=g.rows.map(r=>`<tr>
         <td class="sticky">${esc(r.name)}</td>
         ${g.assessments.map(a=>{ const c=r.cells[a.id]; return `<td>${c?`<span class="gb-cell ${pctClass(c.pct)}">${c.mark}/${c.max}</span>`:'<span class="gb-none">—</span>'}</td>`; }).join('')}
@@ -8650,18 +8650,20 @@
       const view = students.map(s => {
         const results = currentSubject ? s.results.filter(r => r.subject === currentSubject) : s.results;
         const gamesPlayed = results.length;
-        const avgPct = gamesPlayed ? Math.round(results.reduce((sum, r) => sum + r.pct, 0) / gamesPlayed) : null;
+        const scored = results.filter(result => Number.isFinite(Number(result.pct)));
+        const avgPct = scored.length ? Math.round(scored.reduce((sum, result) => sum + Number(result.pct), 0) / scored.length) : null;
         const lastAt = results.length ? results[0].at : null;
         return { ...s, results, gamesPlayed, avgPct, lastAt };
       });
 
       // Stats bar (reflects current subject filter)
       const active     = view.filter(s => s.gamesPlayed > 0);
+      const scoredActive = active.filter(s => s.avgPct !== null);
       const totalPlays = view.reduce((s, st) => s + st.gamesPlayed, 0);
-      const classAvg   = active.length ? Math.round(active.reduce((s, st) => s + st.avgPct, 0) / active.length) : null;
+      const classAvg   = scoredActive.length ? Math.round(scoredActive.reduce((s, st) => s + st.avgPct, 0) / scoredActive.length) : null;
       $('progressStats').innerHTML =
         `<div class="prog-stat"><div class="v">${students.length}</div><div class="l">Students</div></div>` +
-        `<div class="prog-stat"><div class="v">${totalPlays}</div><div class="l">Game plays</div></div>` +
+        `<div class="prog-stat"><div class="v">${totalPlays}</div><div class="l">Activities</div></div>` +
         (classAvg !== null ? `<div class="prog-stat"><div class="v ${pctCls(classAvg)}">${classAvg}%</div><div class="l">Class average</div></div>` : '') +
         `<div class="prog-stat"><div class="v">${active.length}</div><div class="l">Active students</div></div>`;
 
@@ -8679,19 +8681,20 @@
         const pct = s.avgPct;
         const cls = pct !== null ? pctCls(pct) : 'none';
         const barFill = pct !== null ? `<div class="prog-bar" style="margin:0 12px 0 4px"><div class="prog-bar-fill" style="width:${pct}%;background:${pctColor(pct)}"></div></div>` : '';
-        const badge = pct !== null ? `<span class="stu-badge ${cls}">${pct}%</span>` : `<span class="stu-badge none">No plays</span>`;
+        const hasPending=s.results.some(result=>result.status==='awaiting-marking');
+        const badge = pct !== null ? `<span class="stu-badge ${cls}">${pct}%</span>` : hasPending ? `<span class="stu-badge amber">Awaiting marking</span>` : `<span class="stu-badge none">No activity</span>`;
 
         const detailRows = s.results.length
           ? `<div class="stu-res-table">
-              <div class="stu-res-row"><span>Lesson</span><span style="text-align:right">Score</span><span style="text-align:right">%</span><span style="text-align:right">When</span></div>
-              ${s.results.map(r => `<div class="stu-res-row">
+              <div class="stu-res-row"><span>Activity</span><span style="text-align:right">Score</span><span style="text-align:right">Status</span><span style="text-align:right">When</span></div>
+              ${s.results.map(r => { const pending=r.status==='awaiting-marking'||!Number.isFinite(Number(r.pct)); return `<div class="stu-res-row">
                 <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(r.lessonTitle)}">${esc(r.lessonTitle)}</span>
-                <span class="sc">${r.score}/${r.total}</span>
-                <span class="pc" style="color:${pctColor(r.pct)}">${r.pct}%</span>
+                <span class="sc">${pending?'—':`${r.score}/${r.total}`}</span>
+                <span class="pc" style="color:${pending?'#c77700':pctColor(r.pct)}">${pending?'Awaiting marking':`${r.pct}%${r.provisional?' · Marked':''}`}</span>
                 <span class="dt">${relTime(r.at)}</span>
-              </div>`).join('')}
+              </div>`; }).join('')}
             </div>`
-          : `<p style="margin:0;font-size:13px;color:var(--muted)">${currentSubject ? 'No ' + currentSubject + ' games played yet.' : 'This student hasn\'t played any games yet.'}</p>`;
+          : `<p style="margin:0;font-size:13px;color:var(--muted)">${currentSubject ? 'No ' + currentSubject + ' activity yet.' : 'This student has no recorded activity yet.'}</p>`;
 
         const metaSubject = currentSubject ? '' : (s.bestSubject ? ' · best: ' + esc(s.bestSubject) : '');
         return `<div class="stu-card">
@@ -8699,7 +8702,7 @@
             <div class="stu-avatar">${esc(initials)}</div>
             <div style="flex:1;min-width:0">
               <div style="font-weight:700;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.name)}</div>
-              <div style="font-size:11.5px;color:var(--muted);margin-top:1px">${s.id}${s.gamesPlayed ? ' · ' + s.gamesPlayed + ' game' + (s.gamesPlayed!==1?'s':'') : ''}${metaSubject}${s.lastAt ? ' · ' + relTime(s.lastAt) : ''}</div>
+              <div style="font-size:11.5px;color:var(--muted);margin-top:1px">${s.id}${s.gamesPlayed ? ' · ' + s.gamesPlayed + ' activit' + (s.gamesPlayed===1?'y':'ies') : ''}${metaSubject}${s.lastAt ? ' · ' + relTime(s.lastAt) : ''}</div>
             </div>
             ${barFill}${badge}
             <svg class="ic stu-chevron" style="color:var(--muted);transition:transform .2s;flex:none;margin-left:8px" aria-hidden="true"><use href="#i-arrow"/></svg>

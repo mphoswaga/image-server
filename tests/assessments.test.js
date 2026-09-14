@@ -306,7 +306,7 @@ test('project/test deck generation rejects missing, foreign and mismatched publi
   );
 });
 
-test('assessment results require teacher release and expose objective-level evidence', () => {
+test('fully marked assessments reach teacher progress before learner release and expose objective evidence', () => {
   const record = assignments.createAssessment({
     teacherId: 'teacher-evidence',
     data: validAssessment({ lessonWorkspaceId: 'lesson-workspace-7', unitId: 'unit-forces', unitName: 'Forces and motion' }),
@@ -337,10 +337,17 @@ test('assessment results require teacher release and expose objective-level evid
     totalMarks: 17,
   });
   assert.equal(assignments.assessmentReleaseReadiness(record).ready, true);
-  assert.deepEqual(gradebook.assignmentResultRows('teacher-evidence'), [], 'fully marked results remain private until release');
+  const provisionalRow = gradebook.assignmentResultRows('teacher-evidence')[0];
+  assert.equal(provisionalRow.score, 17);
+  assert.equal(provisionalRow.provisional, true);
+  assert.equal(provisionalRow.status, 'marked');
+  assert.equal(provisionalRow.finalisedAt, null);
+  assert.equal(gradebook.gatherStudentResults(['teacher-evidence'], 'student-1').rows[0].provisional, true);
   assert.equal(assignments.releaseResults(record.id, true).status, 'finalised');
   assert.equal(assignments.isReleased(assignments.getAssignment(record.id)), true);
   const row = gradebook.assignmentResultRows('teacher-evidence')[0];
+  assert.equal(row.provisional, false);
+  assert.equal(row.status, 'released');
   assert.equal(row.objectiveEvidence.length, 3);
   assert.equal(row.objectiveEvidence[0].objective, 'Explain how forces affect motion');
   assert.deepEqual(row.objectiveEvidence.map(evidence => evidence.source), ['auto', 'teacher', 'teacher']);
@@ -359,7 +366,7 @@ test('assessment results require teacher release and expose objective-level evid
   assert.equal(row.at, row.finalisedAt, 'incremental exports use the release time');
 });
 
-test('gradebook excludes unreleased and pending assessment marks from progress', () => {
+test('gradebook shows submitted assessments everywhere without counting unfinished marks', () => {
   const teacherId = 'teacher-final-progress';
   const classRoster = roster.saveRoster(teacherId, {
     name: 'Grade 6A',
@@ -381,11 +388,13 @@ test('gradebook excludes unreleased and pending assessment marks from progress',
   });
 
   let book = gradebook.buildGradebook(teacherId, classRoster.id);
-  assert.equal(gradebook.listClasses(teacherId)[0].assignments, 0);
-  assert.equal(book.assessments.length, 0);
+  assert.equal(gradebook.listClasses(teacherId)[0].assignments, 1);
+  assert.equal(book.assessments.length, 1);
+  assert.equal(book.assessments[0].provisional, true);
   assert.equal(book.rows[0].done, 0);
   assert.equal(book.rows[0].average, null);
   assert.deepEqual(gradebook.assignmentResultRows(teacherId), []);
+  assert.equal(gradebook.assignmentProgressRows(teacherId, { includePending: true })[0].status, 'awaiting-marking');
 
   // Defend the reporting boundary even if a malformed caller finalises a
   // record before all teacher-required grades have been supplied.
@@ -409,7 +418,11 @@ test('gradebook excludes unreleased and pending assessment marks from progress',
     // The final projection is rebuilt from item grades, not this stale field.
     totalMarks: 0,
   });
-  assert.deepEqual(gradebook.assignmentResultRows(teacherId), [], 'explicitly unreleased corrections remain private');
+  assert.equal(gradebook.assignmentResultRows(teacherId)[0].score, 17);
+  assert.equal(gradebook.assignmentResultRows(teacherId)[0].provisional, true);
+  book = gradebook.buildGradebook(teacherId, classRoster.id);
+  assert.equal(book.rows[0].cells[record.id].mark, 17);
+  assert.equal(book.assessments[0].provisional, true);
   assignments.releaseResults(record.id, true);
 
   book = gradebook.buildGradebook(teacherId, classRoster.id);

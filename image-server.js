@@ -4871,8 +4871,10 @@ app.delete('/api/roster/:id', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
-// Student progress: aggregates every game result for each student in a roster.
-// Returns roster summary + per-student { gamesPlayed, avgPct, bestSubject, lastAt, results[] }.
+// Student progress: one teacher-facing timeline for every roster-linked game,
+// assignment, test/project and completed practice activity. A submitted formal
+// assessment may appear before learner release, but unfinished marking is
+// labelled pending and never contributes a provisional percentage.
 app.get('/api/roster/:id/progress', requireAuth, (req, res) => {
   const r = roster.getRoster(req.userId, req.params.id);
   if (!r) return res.status(404).json({ error: 'Roster not found.' });
@@ -4890,6 +4892,7 @@ app.get('/api/roster/:id/progress', requireAuth, (req, res) => {
       if (!rosterMap.has(studentId)) continue;
       if (!byStudent.has(studentId)) byStudent.set(studentId, []);
       byStudent.get(studentId).push({
+        kind: 'game', status: 'marked',
         gameId: g.id,
         lessonTitle: g.lessonTitle || g.topic,
         topic: g.topic,
@@ -4903,16 +4906,49 @@ app.get('/api/roster/:id/progress', requireAuth, (req, res) => {
     }
   }
 
+  for (const result of assignments.filterAssignmentEvidenceForRoster(
+    gradebook.assignmentProgressRows(req.userId, { includePending: true }), r.id
+  )) {
+    const studentId = roster.normalizeStudentId(result.studentId);
+    if (!rosterMap.has(studentId)) continue;
+    if (!byStudent.has(studentId)) byStudent.set(studentId, []);
+    byStudent.get(studentId).push({
+      kind: 'assignment', status: result.status, provisional: !!result.provisional,
+      assignmentId: result.assignmentId, lessonTitle: result.title, title: result.title,
+      topic: result.topic, subject: result.subject,
+      score: result.score, total: result.total, pct: result.percentage,
+      at: result.at, attempts: 1, assessmentType: result.assessmentType || null,
+    });
+  }
+
+  const practiceCatalog = new Map(practice.listActivities().map(activity => [activity.id, activity]));
+  for (const result of practice.teacherResults(r.students.map(student => student.id))) {
+    if (result.status !== 'completed') continue;
+    const studentId = roster.normalizeStudentId(result.studentId);
+    if (!rosterMap.has(studentId)) continue;
+    const activity = practiceCatalog.get(result.activityId);
+    if (!byStudent.has(studentId)) byStudent.set(studentId, []);
+    byStudent.get(studentId).push({
+      kind: 'practice', status: 'marked', activityId: result.activityId,
+      lessonTitle: activity && activity.title || result.activityId,
+      topic: activity && activity.description || result.activityId, subject: 'ICT',
+      score: result.score, total: result.baseScore || result.score || 1,
+      pct: Number.isFinite(Number(result.accuracyPercent)) ? Number(result.accuracyPercent) : null,
+      at: result.completedAt || result.updatedAt, attempts: 1,
+    });
+  }
+
   const students = r.students.map(s => {
     const results = (byStudent.get(roster.normalizeStudentId(s.id)) || []).sort((a, b) => (b.at || '').localeCompare(a.at || ''));
+    const scored = results.filter(result => Number.isFinite(Number(result.pct)));
     const gamesPlayed = results.length;
-    const avgPct = gamesPlayed ? Math.round(results.reduce((sum, r) => sum + r.pct, 0) / gamesPlayed) : null;
+    const avgPct = scored.length ? Math.round(scored.reduce((sum, result) => sum + Number(result.pct), 0) / scored.length) : null;
     const lastAt = results.length ? results[0].at : null;
     // Subject with highest average score.
     const subjTotals = {};
-    for (const r of results) {
+    for (const r of scored) {
       if (!subjTotals[r.subject]) subjTotals[r.subject] = { sum: 0, n: 0 };
-      subjTotals[r.subject].sum += r.pct; subjTotals[r.subject].n++;
+      subjTotals[r.subject].sum += Number(r.pct); subjTotals[r.subject].n++;
     }
     const bestSubject = Object.entries(subjTotals)
       .sort((a, b) => (b[1].sum / b[1].n) - (a[1].sum / a[1].n))[0]?.[0] || null;
@@ -5298,15 +5334,14 @@ app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:r
     }
   }
   for (const a of assignments.filterAssignmentEvidenceForRoster(gradebook.assignmentResultRows(foundTeacherId), foundRoster.id)) {
-    // Tests/projects become evidence only after the teacher has reviewed and
-    // explicitly released them. Ordinary legacy assignments keep their
-    // existing behavior.
-    if (a.type === 'assessment' && !a.finalisedAt) continue;
+    // Fully marked tests/projects are teacher evidence immediately. The
+    // provisional flag keeps learner release separate from teacher reporting.
     if (!inRoster(a.studentId)) continue;
     push(a.studentId, { kind: 'assignment', type: a.type, assignmentId: a.assignmentId, topic: a.topic, subject: a.subject,
       title: a.title, mode: a.type === 'homework' ? 'homework' : 'classwork', activityId: `assignment:${a.assignmentId}`,
       score: a.score, total: a.total, percentage: a.percentage,
       assessmentType: a.assessmentType, version: a.version, finalisedAt: a.finalisedAt,
+      provisional: !!a.provisional, status: a.status,
       lessonWorkspaceId: a.lessonWorkspaceId || null, unitId: a.unitId || null, unitName: a.unitName || null,
       objectiveEvidence: a.objectiveEvidence || [], at: a.at, updatedAt: a.at });
   }
