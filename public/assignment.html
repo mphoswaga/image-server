@@ -61,7 +61,7 @@
     <div id="loading" class="card center">Loading…</div>
 
     <div id="authScreen" class="card" style="display:none">
-      <h1>Join this assignment</h1>
+      <h1 id="authTitle">Join this assignment</h1>
       <p class="sub" id="authSub">Enter your Student ID to continue.</p>
       <form id="authForm" style="margin-top:16px">
         <!-- A class list, tapped rather than typed. A seven-year-old can find
@@ -125,7 +125,9 @@
     const assignmentId = location.pathname.split('/').pop();
     let questions = [];
     const answers = {};
-    const draftKey = 'lessonscope_assignment_draft_' + assignmentId;
+    const draftKeyBase = 'lessonscope_assignment_draft_' + assignmentId;
+    let draftKey = null;
+    let assignmentType = '';
     let delivery = { mode: 'self-paced', phase: 'open' };
     let liveStateKey = '';
     let serverDraftTimer = null;
@@ -137,10 +139,15 @@
     // strip it since the marks badge is always rendered separately below.
     function stripMarks(q) { return String(q || '').replace(/\s*\(\d+\s*marks?\)\s*$/i, ''); }
     function saveDraft() {
-      try { localStorage.setItem(draftKey, JSON.stringify({ answers, savedAt: Date.now() })); } catch {}
-      if (delivery.mode === 'live' && delivery.phase === 'open') {
+      // Formal assessments use the authenticated server draft only. Ordinary
+      // lesson-pack assignments retain local recovery, keyed to this learner
+      // so another child on the same device cannot inherit the answers.
+      if (assignmentType !== 'assessment' && draftKey) {
+        try { localStorage.setItem(draftKey, JSON.stringify({ answers, savedAt: Date.now() })); } catch {}
+      }
+      if (assignmentType === 'assessment' && delivery.phase === 'open') {
         clearTimeout(serverDraftTimer);
-        serverDraftTimer = setTimeout(() => saveServerDraft(false), 650);
+        serverDraftTimer = setTimeout(() => saveServerDraft(false).catch(() => {}), 650);
       }
     }
 
@@ -155,13 +162,20 @@
       return data;
     }
     function restoreDraft() {
+      if (assignmentType === 'assessment' || !draftKey) return {};
       try {
         const saved = JSON.parse(localStorage.getItem(draftKey) || '{}');
-        if (saved && saved.answers && typeof saved.answers === 'object') Object.assign(answers, saved.answers);
+        if (saved && saved.answers && typeof saved.answers === 'object') return saved.answers;
       } catch {}
+      return {};
     }
     function clearDraft() {
+      if (!draftKey) return;
       try { localStorage.removeItem(draftKey); } catch {}
+    }
+    function replaceAnswers(next) {
+      for (const id of Object.keys(answers)) delete answers[id];
+      Object.assign(answers, next && typeof next === 'object' ? next : {});
     }
 
     function renderQuestions() {
@@ -246,7 +260,9 @@
       if (stateKey === liveStateKey) return;
       liveStateKey = stateKey;
       questions = take.questions || [];
-      Object.assign(answers, take.draftAnswers || {});
+      // The authenticated server draft is authoritative on every live-state
+      // transition; clear any previous learner's in-memory answers first.
+      replaceAnswers(take.draftAnswers || {});
       if (delivery.phase === 'lobby') return showLiveStatus('Waiting for your teacher', 'You are safely in the classroom lobby. The first section will appear when your teacher starts.');
       if (delivery.phase === 'paused') return showLiveStatus('Assessment paused', 'Your answers are saved. Wait for your teacher to resume.');
       if (delivery.phase === 'closed') return showLiveStatus('Assessment closed', 'Your teacher has closed this assessment.');
@@ -285,8 +301,20 @@
         const meta = await metaRes.json();
         if (metaRes.status === 401 || (metaRes.status === 403 && meta.error === 'Session is for a different assignment.')) {
           // No session yet (or it expired) — this happens whenever the raw
-          // link is opened directly instead of via /join. Prompt inline
-          // rather than rendering a broken/partial form.
+          // link is opened directly instead of via /join. Load the deliberately
+          // public, privacy-safe join metadata before prompting so younger
+          // pupils can tap their name without exposing school IDs.
+          const joinRes = await fetch('/api/assignment/' + assignmentId + '/join');
+          const joinMeta = await joinRes.json();
+          if (!joinRes.ok) throw new Error(joinMeta.error || 'Could not open this assignment.');
+          if (joinMeta.hasRoster && renderNameGrid(joinMeta.students)) {
+            $('authTitle').textContent = 'Choose your name';
+            $('authSub').textContent = 'Tap your name, then enter your PIN.';
+          } else if (joinMeta.hasRoster === false) {
+            $('sidLabel').textContent = 'Your name';
+            $('auSid').placeholder = 'First and last name';
+            $('authSub').textContent = 'Type your name to continue.';
+          }
           $('loading').style.display = 'none';
           $('authScreen').style.display = 'block';
           if (prefillSid) { $('auSid').value = prefillSid; $('authForm').requestSubmit(); }
@@ -295,12 +323,10 @@
         if (!metaRes.ok) throw new Error(meta.error || 'Could not load this assignment.');
         $('title').textContent = meta.title || 'Assignment';
         $('instructions').textContent = meta.instructions || '';
-        // The gated meta only arrives once they are in, so the join screen
-        // asks the public endpoint for the class list.
-        try {
-          const j = await (await fetch('/api/assignment/' + assignmentId + '/join')).json();
-          if (j.hasRoster) renderNameGrid(j.students);
-        } catch {}
+        assignmentType = meta.type || '';
+        draftKey = meta.draftScope ? `${draftKeyBase}_${meta.draftScope}` : null;
+        replaceAnswers({});
+        liveStateKey = '';
         if (meta.hasRoster === false) {
           $('sidLabel').textContent = 'Your name';
           $('auSid').placeholder = 'First and last name';
@@ -321,8 +347,10 @@
           return;
         }
 
-        restoreDraft();
-        Object.assign(answers, take.draftAnswers || {});
+        const localAnswers = restoreDraft();
+        // Start from a clean object when the authenticated identity changes;
+        // the server copy wins over the same learner's scoped local fallback.
+        replaceAnswers({ ...localAnswers, ...(take.draftAnswers || {}) });
         delivery = take.delivery || delivery;
         if (delivery.mode === 'live') {
           applyLiveTake(take);
@@ -358,21 +386,22 @@
     function renderNameGrid(students) {
       const grid = $('nameGrid');
       if (!grid || !students || !students.length) return false;
-      grid.innerHTML = students.map(s =>
-        `<button type="button" data-sid="${String(s.handle).replace(/"/g, '&quot;')}">${String(s.label).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}</button>`
+      const safeStudents = students.filter(student => student && student.handle && student.label);
+      if (!safeStudents.length) return false;
+      grid.innerHTML = safeStudents.map(s =>
+        `<button type="button" data-handle="${String(s.handle).replace(/"/g, '&quot;')}">${String(s.label).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}</button>`
       ).join('');
       grid.style.display = 'grid';
       $('nameGridHint').style.display = 'block';
-      // The typed box is the fallback for a child who is not on the list.
       $('auSid').style.display = 'none';
+      $('auSid').required = false;
       $('sidLabel').style.display = 'none';
       grid.addEventListener('click', (e) => {
-        const b = e.target.closest('button[data-sid]');
+        const b = e.target.closest('button[data-handle]');
         if (!b) return;
         [...grid.querySelectorAll('button')].forEach(x => x.classList.remove('is-picked'));
         b.classList.add('is-picked');
-        pickedHandle = b.dataset.sid;
-        $('auSid').value = b.dataset.sid;
+        pickedHandle = b.dataset.handle;
         // Straight to the PIN — the name is chosen, so there is nothing else
         // on this screen for them to do.
         $('authForm').requestSubmit ? $('authForm').requestSubmit() : $('authForm').dispatchEvent(new Event('submit', { cancelable: true }));
@@ -393,7 +422,7 @@
       // A tapped name sends its handle; a typed one sends text. The server
       // accepts either, and only the handle resolves to a roster student.
       const handle = pickedHandle || undefined;
-      if (!studentId) { $('authErr').textContent = 'Please enter your ID.'; btn.disabled = false; return; }
+      if (!handle && !studentId) { $('authErr').textContent = 'Choose your name or enter your Student ID.'; btn.disabled = false; return; }
 
       let pin;
       if (authStep === 'setup') {
@@ -409,7 +438,7 @@
       try {
         const r = await fetch('/api/assignment/' + assignmentId + '/enter', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ studentId, handle, name: typedName, pin }),
+          body: JSON.stringify(handle ? { handle, pin } : { studentId, name: typedName, pin }),
         });
         const d = await r.json();
         if (r.status === 428 && d.needsPinSetup) { showPinSetup(); btn.disabled = false; return; }
@@ -429,12 +458,12 @@
       // A tapped name sends its handle; a typed one sends text. The server
       // accepts either, and only the handle resolves to a roster student.
       const handle = pickedHandle || undefined;
-      if (!studentId) { $('authErr').textContent = 'Enter your Student ID first.'; return; }
+      if (!handle && !studentId) { $('authErr').textContent = 'Choose your name or enter your Student ID first.'; return; }
       const btn = $('forgotPinBtn'); btn.disabled = true;
       try {
         const r = await fetch('/api/assignment/' + assignmentId + '/pin/reset-request', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ studentId, handle, name: typedName }),
+          body: JSON.stringify(handle ? { handle } : { studentId, name: typedName }),
         });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error);

@@ -41,11 +41,13 @@ test('AI slide generation carries assessment settings through the cache and appr
       lessonPurpose, lessonPlanText: 'Approved plan: students create and submit a letter.',
       assessmentTotalMarks: 80, assessmentQuestionTypes: ['mcq', 'practical'], assessmentMcqCount: 20,
     });
-    assert.equal(slides.filter(slide => slide.type === 'content').length, 1);
+    const expectedContentSlides = { lesson: 1, project: 2, test: 4 }[lessonPurpose];
+    assert.equal(slides.filter(slide => slide.type === 'content').length, expectedContentSlides,
+      'assessment decks include every selected phase plus the required administration slides');
     assert.equal(cacheInputs.at(-1).assessmentOptions.totalMarks, 80);
     assert.equal(cacheInputs.at(-1).assessmentOptions.mcqCount, 20);
     assert.match(requests.at(-1).messages[0].content, /Approved plan: students create and submit a letter/);
     if (lessonPurpose !== 'lesson') assert.match(requests.at(-1).messages[0].content, /20-item multiple-choice knowledge check/);
   }
-  assert.equal(requests.length, 3);
+  assert.equal(requests.length, 7, 'project and test retry weak model responses before applying deterministic phase repair');
 });

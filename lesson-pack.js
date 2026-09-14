@@ -71,16 +71,149 @@ function calibration(grade) {
   return `Pitch everything precisely at ${grade} (students about ${age} years old): vocabulary, reading level, and difficulty must suit ${grade} — assume they mastered the previous grade, and do NOT drift easier or harder.`;
 }
 
-function ctxBlock({ subject, topic, grade, objectives, lessonPlanText, unitBlock, teachingModelId, lessonPurpose }) {
+function compactPlanForPack(value, maxChars = 10000) {
+  const text = String(value || '').trim();
+  if (text.length <= maxChars) return text;
+  const sections = text.split(/(?=^##\s+)/m).map(section => section.trim()).filter(Boolean);
+  if (sections.length < 2) return text.slice(0, maxChars);
+  const budget = Math.max(280, Math.floor((maxChars - (sections.length - 1) * 2) / sections.length));
+  return sections.map(section => section.length <= budget ? section : section.slice(0, budget - 1).trimEnd() + '…').join('\n\n').slice(0, maxChars);
+}
+
+function publicAssessmentSummary(ctx) {
+  const draft = ctx && ctx.assessmentDraft;
+  if (!draft || !Array.isArray(draft.sections)) return '';
+  const labels = { mcq: 'multiple choice', 'short-answer': 'short answer', 'extended-response': 'extended response', practical: 'practical / observation' };
+  const purpose = normalizeLessonPurpose(ctx && ctx.lessonPurpose);
+  const safeSectionTitle = section => {
+    const fallback = labels[section && section.type] || 'assessment section';
+    const title = String(section && section.title || '').trim();
+    if (purpose === 'test' || /\?|\b(?:answer|hint|solution|question|rubric|criteri(?:on|a)|marking)\b/i.test(title)) return fallback;
+    return title || fallback;
+  };
+  const phases = draft.sections.map((section, index) => {
+    const items = Array.isArray(section.items) ? section.items : [];
+    const marks = items.reduce((sum, item) => sum + (Number(item && item.marks) || 0), 0);
+    return 'Phase ' + (index + 1) + ': ' + safeSectionTitle(section)
+      + ' — ' + (labels[section.type] || section.type) + ', ' + items.length + ' item' + (items.length === 1 ? '' : 's') + ', ' + marks + ' marks';
+  });
+  return phases.length ? '\nPublic assessment structure (use only to target preparation; never copy private items):\n' + phases.join('\n') + '\n' : '';
+}
+
+function ctxBlock({ subject, topic, grade, objectives, lessonPlanText, unitBlock, teachingModelId, lessonPurpose, assessmentDraft }) {
   const pretty = String(topic || '').replace(/-/g, ' ');
   const model = getTeachingModel(teachingModelId);
-  const plan = lessonPlanText ? `\nApproved lesson plan (base the artifact on this):\n--- PLAN ---\n${String(lessonPlanText).slice(0, 5000)}\n--- END ---\n` : '';
+  const safePlanText = redactLiveAssessmentContent(lessonPlanText, { assessmentDraft });
+  const plan = safePlanText ? `\nApproved lesson plan (base the artifact on this):\n--- PLAN ---\n${compactPlanForPack(safePlanText)}\n--- END ---\n` : '';
   const unit = unitBlock ? `\n${String(unitBlock).slice(0, 1500)}\n` : '';
   const purpose = normalizeLessonPurpose(lessonPurpose);
   const purposeBlock = purpose === 'lesson' ? '' : purpose === 'test'
     ? '\nThis resource PREPARES students before a test. Teach and rehearse the prerequisite knowledge and skills, but do not reproduce live test questions, answers, exact assessed procedures, or marking criteria.'
     : '\nThis resource PREPARES students before or supports them during a project. Teach prerequisite knowledge, planning and self-management without completing the assessed product or revealing the private marking guidance.';
-  return `Subject: ${subject}\nTopic: ${pretty}\nGrade: ${grade}\n${modelPromptBlock(model)}${purposeBlock}\nLearning objectives the artifact MUST prepare/practise:\n${objectives}\n${unit}${plan}`;
+  return `Subject: ${subject}\nTopic: ${pretty}\nGrade: ${grade}\n${modelPromptBlock(model)}${purposeBlock}\nLearning objectives the artifact MUST prepare/practise:\n${objectives}\n${unit}${publicAssessmentSummary({ assessmentDraft })}${plan}`;
+}
+
+function purposeArtifactPrompt(ctx, artifact) {
+  const purpose = normalizeLessonPurpose(ctx.lessonPurpose);
+  if (purpose === 'lesson') return '';
+  const projectRoles = {
+    'study notes': 'a PROJECT PREPARATION GUIDE that explains the brief, prerequisite knowledge, planning approach and self-management students need before beginning',
+    worksheet: 'a PROJECT PLANNING ORGANISER with prompts that help students interpret the brief, plan stages and prepare their own work without completing the assessed product',
+    'exit ticket': 'a PROJECT READINESS OR PROGRESS CHECK that helps students identify their current stage, what is complete and what they must prepare next',
+    quiz: 'an UNASSESSED PROJECT READINESS QUIZ covering prerequisite knowledge only; it must be clearly separate from the live project assessment',
+    homework: 'a PROJECT PREPARATION TASK completed before the assessed session, using home-friendly materials and never completing the assessed product',
+    'differentiated activity sheets': 'PROJECT PREPARATION SUPPORT SHEETS for Support, Core and Stretch learners, all preparing for the same project without revealing or producing the assessed answer',
+    'revision game': 'an UNASSESSED PROJECT PREPARATION GAME that rehearses prerequisite knowledge without reproducing the live project task',
+  };
+  const testRoles = {
+    'study notes': 'a TEST REVISION GUIDE that teaches the required knowledge and skills without copying any live test item',
+    worksheet: 'an UNASSESSED TEST PRACTICE SHEET using fresh practice questions that prepare students without reproducing the live test',
+    'exit ticket': 'a TEST READINESS CHECK students use before the test to find remaining revision needs',
+    quiz: 'an UNASSESSED PRACTICE QUIZ whose questions differ from the live test while covering the same objectives',
+    homework: 'a TEST REVISION TASK students can complete independently before the test',
+    'differentiated activity sheets': 'DIFFERENTIATED TEST REVISION SHEETS for Support, Core and Stretch learners using fresh practice content only',
+    'revision game': 'an UNASSESSED TEST REVISION GAME using fresh questions that differ from the live test',
+  };
+  const role = (purpose === 'project' ? projectRoles : testRoles)[artifact];
+  const identityRule = artifact === 'revision game'
+    ? `Begin the overview by stating clearly that this is ${purpose === 'project' ? 'project' : 'test'} preparation.`
+    : `Put "${purpose === 'project' ? 'Project preparation' : 'Test preparation'}" in the title.`;
+  return `\nRESOURCE ROLE: Create ${role || 'a preparation resource for this assessment'}. ${identityRule} This resource is preparation, not the live ${purpose}. Never expose the generated assessment's questions, answer choices, answers, exact assessed procedure, rubric or private marking guidance.\n`;
+}
+
+function assessmentPrivateStrings(ctx) {
+  const draft = ctx && ctx.assessmentDraft;
+  if (!draft || !Array.isArray(draft.sections)) return [];
+  const values = [draft.instructions];
+  for (const section of draft.sections) {
+    if (/\?|\b(?:answer|hint|solution|question|rubric|criteri(?:on|a)|marking)\b/i.test(String(section && section.title || ''))) values.push(section.title);
+    values.push(section && section.instructions);
+    for (const item of (Array.isArray(section && section.items) ? section.items : [])) {
+      values.push(item && (item.prompt || item.question), item && item.answerKey);
+      if (Array.isArray(item && item.options)) values.push(...item.options);
+    }
+  }
+  return [...new Set(values.map(value => String(value || '').trim()).filter(value => value.length >= 8))]
+    .sort((a, b) => b.length - a.length);
+}
+
+function redactLiveAssessmentContent(value, ctx) {
+  const privateStrings = assessmentPrivateStrings(ctx);
+  const redactString = text => {
+    let safe = String(text || '');
+    for (const secret of privateStrings) {
+      safe = safe.replace(new RegExp(secret.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '[live assessment content withheld]');
+    }
+    return safe;
+  };
+  const visit = item => {
+    if (typeof item === 'string') return redactString(item);
+    if (Array.isArray(item)) return item.map(visit);
+    if (item && typeof item === 'object') return Object.fromEntries(Object.entries(item).map(([key, child]) => [key, visit(child)]));
+    return item;
+  };
+  return visit(value);
+}
+
+function purposeArtifactTitle(ctx, artifact) {
+  const purpose = normalizeLessonPurpose(ctx.lessonPurpose);
+  const topic = String(ctx.topic || 'Learning').replace(/-/g, ' ').trim();
+  const names = purpose === 'project' ? {
+    'study notes': 'Project preparation guide', worksheet: 'Project preparation planning organiser',
+    'exit ticket': 'Project preparation readiness check', quiz: 'Project preparation unassessed quiz',
+    homework: 'Project preparation task', 'differentiated activity sheets': 'Project preparation support sheets',
+  } : {
+    'study notes': 'Test preparation revision guide', worksheet: 'Test preparation unassessed practice sheet',
+    'exit ticket': 'Test preparation readiness check', quiz: 'Test preparation unassessed practice quiz',
+    homework: 'Test preparation revision task', 'differentiated activity sheets': 'Test preparation revision sheets',
+  };
+  return `${topic} — ${names[artifact] || `${purpose === 'project' ? 'Project' : 'Test'} preparation resource`}`;
+}
+
+function finalizePurposeArtifact(ctx, artifact, output) {
+  const purpose = normalizeLessonPurpose(ctx.lessonPurpose);
+  let safe = redactLiveAssessmentContent(output, ctx);
+  if (purpose === 'lesson' || !safe || typeof safe !== 'object') return safe;
+  const preparationWording = value => {
+    if (typeof value === 'string') return value
+      .replace(/\btoday(?:'|’)s lesson\b/gi, 'this preparation')
+      .replace(/\bthis lesson\b/gi, 'this preparation')
+      .replace(/\bthe lesson\b/gi, 'the preparation');
+    if (Array.isArray(value)) return value.map(preparationWording);
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, preparationWording(child)]));
+    return value;
+  };
+  safe = preparationWording(safe);
+  if (Object.prototype.hasOwnProperty.call(safe, 'title')) safe.title = purposeArtifactTitle(ctx, artifact);
+  const notice = purpose === 'test'
+    ? 'Use this unassessed revision and practice to prepare for the test. It does not contain questions or answers from the assessed test.'
+    : 'Use this resource to prepare and plan for the project without completing the assessed product or revealing private marking guidance.';
+  if (artifact === 'study notes') safe.summary = `${notice} ${String(safe.summary || '').trim()}`.trim();
+  else if (artifact === 'worksheet') safe.focus = `${notice} ${String(safe.focus || '').trim()}`.trim();
+  else if (artifact === 'quiz' || artifact === 'homework') safe.instructions = `${notice} ${String(safe.instructions || '').trim()}`.trim();
+  else if (artifact === 'differentiated activity sheets') safe.focus = `${notice} ${String(safe.focus || '').trim()}`.trim();
+  else if (artifact === 'revision game') safe.overview = `${notice} ${String(safe.overview || '').trim()}`.trim();
+  return safe;
 }
 
 async function callModel(schema, name, prompt, max_tokens = 3500) {
@@ -102,19 +235,22 @@ function ctxKey(type, ctx) {
     topic: String(ctx.topic || '').toLowerCase().trim(),
     grade: String(ctx.grade || 'middle school').trim(),
     objectives: String(ctx.objectives || '').trim(),
-    lessonPlanText: String(ctx.lessonPlanText || '').slice(0, 5000).trim(),
+    lessonPlanText: compactPlanForPack(redactLiveAssessmentContent(ctx.lessonPlanText, ctx)),
+    assessmentStructure: publicAssessmentSummary(ctx),
     teachingModelId: String(ctx.teachingModelId || 'standard'),
     lessonPurpose: normalizeLessonPurpose(ctx.lessonPurpose),
+    assessmentPreparationPolicyVersion: 4,
     regenerate: !!ctx.regenerate,
   };
 }
 
 async function generateWorksheet(ctx) {
-  if (!process.env.OPENAI_API_KEY) return placeholderWorksheet(ctx);
+  if (!process.env.OPENAI_API_KEY) return finalizePurposeArtifact(ctx, 'worksheet', placeholderWorksheet(ctx));
   const { wrap } = require('./cache');
   return wrap('worksheet', ctxKey('worksheet', ctx), async () => {
     const prompt = `You are an expert teacher creating a printable STUDENT WORKSHEET for this lesson.
 ${ctxBlock(ctx)}
+${purposeArtifactPrompt(ctx, 'worksheet')}
 ${artifactPromptBlock(ctx.teachingModelId, 'worksheet')}
 Produce:
 - title: a clear worksheet title.
@@ -126,16 +262,17 @@ Produce:
 - answerKey: the correct answer to each practice question IN THE SAME ORDER, then the challenge's answer LAST.
 ${calibration(ctx.grade)}
 Plain text only — no markdown symbols.`;
-    return callModel(WORKSHEET_SCHEMA, 'worksheet', prompt, 4000);
+    return finalizePurposeArtifact(ctx, 'worksheet', await callModel(WORKSHEET_SCHEMA, 'worksheet', prompt, 4000));
   });
 }
 
 async function generateExitTicket(ctx) {
-  if (!process.env.OPENAI_API_KEY) return placeholderExitTicket(ctx);
+  if (!process.env.OPENAI_API_KEY) return finalizePurposeArtifact(ctx, 'exit ticket', placeholderExitTicket(ctx));
   const { wrap } = require('./cache');
   return wrap('exit-ticket', ctxKey('exit-ticket', ctx), async () => {
     const prompt = `Create a short EXIT TICKET (a quick end-of-lesson check students complete in a few minutes) for this lesson.
 ${ctxBlock(ctx)}
+${purposeArtifactPrompt(ctx, 'exit ticket')}
 ${artifactPromptBlock(ctx.teachingModelId, 'exit ticket')}
 Produce:
 - title: a short title.
@@ -143,16 +280,17 @@ Produce:
 - answerKey: the expected answer to each question, in the same order.
 ${calibration(ctx.grade)}
 Plain text only — no markdown symbols.`;
-    return callModel(EXIT_TICKET_SCHEMA, 'exit_ticket', prompt, 1500);
+    return finalizePurposeArtifact(ctx, 'exit ticket', await callModel(EXIT_TICKET_SCHEMA, 'exit_ticket', prompt, 1500));
   });
 }
 
 async function generateStudyNotes(ctx) {
-  if (!process.env.OPENAI_API_KEY) return placeholderStudyNotes(ctx);
+  if (!process.env.OPENAI_API_KEY) return finalizePurposeArtifact(ctx, 'study notes', placeholderStudyNotes(ctx));
   const { wrap } = require('./cache');
   return wrap('study-notes', ctxKey('study-notes', ctx), async () => {
     const prompt = `You are an expert teacher creating clear STUDY NOTES that a student can use independently before or after this lesson.
 ${ctxBlock(ctx)}
+${purposeArtifactPrompt(ctx, 'study notes')}
 ${artifactPromptBlock(ctx.teachingModelId, 'study notes')}
 Produce:
 - title: a clear, student-friendly title.
@@ -165,7 +303,7 @@ Produce:
 The notes must contain the knowledge needed for the worksheet and quiz, without revealing their answer keys.
 ${calibration(ctx.grade)}
 Plain text only — no markdown symbols.`;
-    return callModel(STUDY_NOTES_SCHEMA, 'study_notes', prompt, 3500);
+    return finalizePurposeArtifact(ctx, 'study notes', await callModel(STUDY_NOTES_SCHEMA, 'study_notes', prompt, 3500));
   });
 }
 
@@ -238,11 +376,12 @@ const QUIZ_SCHEMA = {
 };
 
 async function generateQuiz(ctx) {
-  if (!process.env.OPENAI_API_KEY) return placeholderQuiz(ctx);
+  if (!process.env.OPENAI_API_KEY) return finalizePurposeArtifact(ctx, 'quiz', placeholderQuiz(ctx));
   const { wrap } = require('./cache');
   return wrap('quiz', ctxKey('quiz', ctx), async () => {
     const prompt = `Create a printable QUIZ for this lesson — a mix of multiple-choice and short-answer questions the teacher can hand out and mark.
 ${ctxBlock(ctx)}
+${purposeArtifactPrompt(ctx, 'quiz')}
 ${artifactPromptBlock(ctx.teachingModelId, 'quiz')}
 Produce:
 - title: a clear quiz title.
@@ -252,7 +391,7 @@ Produce:
 - totalMarks: sum of all marks (mcq = 1 each; short-answer as specified).
 ${calibration(ctx.grade)}
 Plain text only — no markdown.`;
-    return callModel(QUIZ_SCHEMA, 'quiz', prompt, 3000);
+    return finalizePurposeArtifact(ctx, 'quiz', await callModel(QUIZ_SCHEMA, 'quiz', prompt, 3000));
   });
 }
 
@@ -293,11 +432,12 @@ const HOMEWORK_SCHEMA = {
 };
 
 async function generateHomework(ctx) {
-  if (!process.env.OPENAI_API_KEY) return placeholderHomework(ctx);
+  if (!process.env.OPENAI_API_KEY) return finalizePurposeArtifact(ctx, 'homework', placeholderHomework(ctx));
   const { wrap } = require('./cache');
   return wrap('homework', ctxKey('homework', ctx), async () => {
     const prompt = `Create take-home HOMEWORK for this lesson — work a student completes ON THEIR OWN at home to reinforce what they learned in class.
 ${ctxBlock(ctx)}
+${purposeArtifactPrompt(ctx, 'homework')}
 ${artifactPromptBlock(ctx.teachingModelId, 'homework')}
 Produce:
 - title: a clear homework title.
@@ -309,7 +449,7 @@ Produce:
 - answerKey: the expected answer to each task IN THE SAME ORDER, then the applyTask's answer LAST (for open tasks, describe what a good response includes).
 ${calibration(ctx.grade)}
 Plain text only — no markdown symbols.`;
-    return callModel(HOMEWORK_SCHEMA, 'homework', prompt, 3500);
+    return finalizePurposeArtifact(ctx, 'homework', await callModel(HOMEWORK_SCHEMA, 'homework', prompt, 3500));
   });
 }
 
@@ -356,11 +496,12 @@ const DIFFERENTIATED_SCHEMA = {
 };
 
 async function generateActivities(ctx) {
-  if (!process.env.OPENAI_API_KEY) return placeholderActivities(ctx);
+  if (!process.env.OPENAI_API_KEY) return finalizePurposeArtifact(ctx, 'differentiated activity sheets', placeholderActivities(ctx));
   const { wrap } = require('./cache');
   return wrap('activities', ctxKey('activities', ctx), async () => {
     const prompt = `Create DIFFERENTIATED ACTIVITY SHEETS for this lesson — the SAME learning goal delivered as THREE separate sheets pitched at different ability groups, so every student works at the right level.
 ${ctxBlock(ctx)}
+${purposeArtifactPrompt(ctx, 'differentiated activity sheets')}
 ${artifactPromptBlock(ctx.teachingModelId, 'differentiated activity sheets')}
 Produce:
 - title: a clear title for the activity set.
@@ -372,7 +513,7 @@ Produce:
 All three tiers must assess the SAME objective — only the scaffolding and difficulty change.
 ${calibration(ctx.grade)}
 Plain text only — no markdown symbols.`;
-    return callModel(DIFFERENTIATED_SCHEMA, 'differentiated_activities', prompt, 4500);
+    return finalizePurposeArtifact(ctx, 'differentiated activity sheets', await callModel(DIFFERENTIATED_SCHEMA, 'differentiated_activities', prompt, 4500));
   });
 }
 
@@ -437,12 +578,13 @@ function normalizeGame(g) {
 }
 
 async function generateGame(ctx) {
-  if (!process.env.OPENAI_API_KEY) return placeholderGame(ctx);
+  if (!process.env.OPENAI_API_KEY) return finalizePurposeArtifact(ctx, 'revision game', placeholderGame(ctx));
   const { wrap } = require('./cache');
   const n = Math.min(20, Math.max(4, parseInt(ctx.questionCount, 10) || 6));
   return wrap('game', { ...ctxKey('game', { ...ctx, questionCount: n }), mathValidationVersion: 1 }, async () => {
     const basePrompt = `Create a short REVISION GAME for students based on this lesson.
 ${ctxBlock(ctx)}
+${purposeArtifactPrompt(ctx, 'revision game')}
 ${artifactPromptBlock(ctx.teachingModelId, 'revision game')}
 Produce:
 - overview: 2-3 sentences recapping what the lesson was about.
@@ -454,7 +596,7 @@ Plain text only — no markdown.`;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         const correction = lastMathError ? `\nYour previous draft failed deterministic checking: ${lastMathError}. Recalculate the affected question and include the correct answer exactly once.` : '';
-        return normalizeGame(await callModel(GAME_SCHEMA, 'lesson_game', basePrompt + correction, Math.max(3500, n * 300)));
+        return finalizePurposeArtifact(ctx, 'revision game', normalizeGame(await callModel(GAME_SCHEMA, 'lesson_game', basePrompt + correction, Math.max(3500, n * 300))));
       } catch (err) {
         if (!/generated math questions could not be verified/i.test(String(err && err.message))) throw err;
         lastMathError = err.message;

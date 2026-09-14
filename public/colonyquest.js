@@ -2565,7 +2565,10 @@
     const number = Number(event.key);
     if (number >= 1 && number <= 4) document.querySelector(`.answer[data-choice="${number - 1}"]`)?.click();
   });
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && session) saveState(); });
+  // A fetch started while the page is being hidden is not guaranteed to finish
+  // (notably during WebKit reloads). State transitions already save remotely;
+  // keep the synchronous local snapshot as the reliable navigation fallback.
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && session) saveLocal(); });
 
   (async function load() {
     try {

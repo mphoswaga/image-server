@@ -100,6 +100,8 @@ test('teacher can generate, review, create slides, download, and export to Googl
 test('Plan automatically creates an editable project assessment draft', async ({ page }, testInfo) => {
   test.skip(!['windows-100', 'mobile'].includes(testInfo.project.name), 'Desktop and mobile cover the automatic project flow.');
   let planPayload;
+  let generatePayload = null;
+  let publishedAssessmentPayload;
   await page.route('**/api/lesson-plan', async route => {
     if (route.request().method() !== 'POST') return route.continue();
     planPayload = route.request().postDataJSON();
@@ -109,14 +111,18 @@ test('Plan automatically creates an editable project assessment draft', async ({
       body: JSON.stringify({
         teachingModelId: 'standard', lessonPurpose: 'project', usedTemplate: false,
         successCriteria: ['I can create and edit a document independently.'],
-        sections: [{ heading: 'Project session', stageId: 'practice', content: 'Teacher launches the task. Students complete it independently.' }],
+        sections: [
+          { heading: 'Project session', stageId: 'practice', content: 'Teacher launches the task. Students complete it independently.' },
+          { heading: 'Assessment', fieldKey: 'assessment', stageId: 'check', content: 'Students complete the knowledge and practical phases.' },
+          { heading: 'Plenary', fieldKey: 'plenary', stageId: 'reflect', content: 'Teacher confirms every submission.' },
+        ],
         assessmentDraft: {
           title: 'Document creation project', subject: 'ICT', grade: 'Grade 2', assessmentType: 'project', deliveryMode: 'live', totalMarks: 60,
           objectives: [{ id: 'objective-create-and-edit-a-document', text: 'Create and edit a document' }],
           instructions: 'Complete each section in class.',
           sections: [
-            { id: 'auto-section-1', title: 'Knowledge check', type: 'mcq', instructions: 'Choose the best answer.', objectiveIds: ['objective-create-and-edit-a-document'], items: [{ id: 'auto-1-1', prompt: 'Which action checks written work?', marks: 20, options: ['Proofread it', 'Close it'], correctIndex: 0 }] },
-            { id: 'auto-section-2', title: 'Practical task', type: 'practical', instructions: 'Create the document.', objectiveIds: ['objective-create-and-edit-a-document'], items: [{ id: 'auto-2-1', prompt: 'Creates and corrects a short document', marks: 40 }] },
+            { id: 'auto-section-1', title: 'Knowledge check', type: 'mcq', instructions: 'Choose the best answer.', objectiveIds: ['objective-create-and-edit-a-document'], items: Array.from({ length: 15 }, (_, index) => ({ id: 'auto-1-'+(index+1), prompt: 'Document knowledge question '+(index+1), marks: 1, options: ['Checked answer', 'Different answer'], correctIndex: 0 })) },
+            { id: 'auto-section-2', title: 'Practical task', type: 'practical', instructions: 'Create the document.', objectiveIds: ['objective-create-and-edit-a-document'], items: [{ id: 'auto-2-1', prompt: 'Creates and corrects a short document', marks: 45 }] },
           ],
         },
       }),
@@ -124,6 +130,7 @@ test('Plan automatically creates an editable project assessment draft', async ({
   });
   await page.route('**/api/generate', async route => {
     if (route.request().method() !== 'POST') return route.continue();
+    generatePayload = route.request().postDataJSON();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -135,6 +142,23 @@ test('Plan automatically creates an editable project assessment draft', async ({
           { type: 'content', title: 'Create your document', bullets: ['Follow the project stages.'], example: '', image: null, imageSource: null, modelStage: 'practice' },
         ],
       }),
+    });
+  });
+  await page.route('**/api/assessment', async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    publishedAssessmentPayload = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ assessmentId: 'published-project', path: '/assignment/published-project', roomCode: '246810', sectionCount: 2, totalMarks: 60 }),
+    });
+  });
+  await page.route('**/api/rosters', async route => {
+    if (route.request().method() !== 'GET') return route.continue();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ rosters: [{ id: 'grade-2-class', name: 'Grade 2 ICT', count: 25 }] }),
     });
   });
 
@@ -152,20 +176,33 @@ test('Plan automatically creates an editable project assessment draft', async ({
 
   await expect(page.locator('#autoAssessmentSummary')).toContainText('60 marks');
   expect(planPayload).toMatchObject({ lessonPurpose: 'project', assessmentTotalMarks: 60, assessmentQuestionTypes: ['mcq', 'practical'], assessmentMcqCount: 15 });
-  await page.locator('#reviewAutoAssessmentBtn').click();
+  await page.locator('#acceptBtn').click();
   await expect(page.locator('#assessmentBuilder')).toBeVisible();
+  expect(generatePayload).toBeNull();
   await expect(page.locator('#assessmentTitle')).toHaveValue('Document creation project');
   await expect(page.locator('#assessmentTotal')).toHaveValue('60');
   await expect(page.locator('#assessmentSections .assessment-section')).toHaveCount(2);
   await expect(page.locator('#assessmentTotalStatus')).toHaveClass(/valid/);
+  await page.locator('#assessmentSections [data-section-title]').nth(1).fill('Document performance');
+  await page.locator('#assessmentRoster').selectOption('grade-2-class');
+  await page.locator('#publishAssessmentBtn').click();
+  await expect(page.locator('#assessmentPublishResult')).toContainText('Assessment published');
+  expect(publishedAssessmentPayload.assessment.sections.map(section => section.title)).toEqual(['Knowledge check', 'Document performance']);
+  expect(publishedAssessmentPayload.assessment.totalMarks).toBe(60);
+  expect(publishedAssessmentPayload.rosterId).toBe('grade-2-class');
   await page.locator('#assignmentsBackTop').click();
   await page.locator('#acceptBtn').click();
   await expect(page.locator('#results')).toBeVisible();
   await expect(page.locator('#automaticAssessmentResult')).toBeVisible();
-  await expect(page.locator('#automaticAssessmentResultTitle')).toHaveText('Project assessment ready');
+  await expect(page.locator('#automaticAssessmentResultTitle')).toHaveText('Project assessment published');
   await expect(page.locator('#automaticAssessmentResultBreakdown')).toContainText('60 marks');
   await expect(page.locator('#automaticAssessmentResultBreakdown')).toContainText('multiple choice');
+  expect(generatePayload.assessmentDraft.sections.map(section => section.title)).toEqual(['Knowledge check', 'Document performance']);
+  expect(generatePayload.assessmentPublishedId).toBe('published-project');
+  expect(generatePayload.assessmentDraft.sections[0].items).toHaveLength(15);
+  expect(generatePayload.lessonPlan.sections.find(section => section.heading === 'Assessment').content).toContain('15 multiple-choice questions');
+  expect(generatePayload.lessonPlan.sections.find(section => section.heading === 'Assessment').content).toContain('45 marks');
   await page.locator('#reviewResultAssessmentBtn').click();
-  await expect(page.locator('#assessmentBuilder')).toBeVisible();
-  await expect(page.locator('#assessmentTitle')).toHaveValue('Document creation project');
+  await expect(page.locator('#assignmentsPanel')).toBeVisible();
+  await expect(page.locator('#assessmentBuilder')).toBeHidden();
 });

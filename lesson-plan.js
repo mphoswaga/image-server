@@ -55,17 +55,23 @@ function planSchema(model, sequence = null, structuredSequence = false, includeA
   };
 }
 
-function sequencePromptBlock(sequence, hasTemplate, structuredSequence = false) {
+function sequencePromptBlock(sequence, hasTemplate, structuredSequence = false, lessonPurpose = 'lesson') {
   if (!sequence || !sequence.enabled) return '';
+  const purpose = normalizeLessonPurpose(lessonPurpose);
   const lessonCount = Math.min(5, Math.max(2, parseInt(sequence.lessonCount, 10) || 3));
   const periodMinutes = Math.min(180, Math.max(5, parseInt(sequence.periodMinutes, 10) || 35));
+  const periodRequirements = purpose === 'project'
+    ? 'Every lesson must include its project phase, concrete student work, teacher observation, a visible checkpoint or submission check, and the resources needed for that phase. Students do the assessed work; do not add teacher modelling or guided practice.'
+    : purpose === 'test'
+      ? 'Every lesson must include administration and timing, access arrangements, independent student work, teacher supervision, and collection or submission. Do not add teaching, modelling, guided practice, hints, worked examples or answer checks.'
+      : `Every lesson must include a timing breakdown totalling ${periodMinutes} minutes, teacher actions, student practice, a check for understanding, and useful resources or homework in the relevant school fields.`;
   if (structuredSequence) {
     return `\nWEEKLY LESSON SEQUENCE:
 Create exactly ${lessonCount} connected lessons for the same week, each lasting exactly ${periodMinutes} minutes.
 For EVERY school template heading, return one separate section for EACH lesson. Repeat the heading exactly and set its "lesson" property to the period number (1 through ${lessonCount}).
 For example, a template with 8 authored fields must produce ${lessonCount * 8} sections: all 8 fields for lesson 1, all 8 for lesson 2, and so on.
 Do not combine several lessons in one section. Do not write "continued" and do not put "Lesson N" markers inside content; the app adds those after validating the complete sequence.
-Every lesson must include a timing breakdown totalling ${periodMinutes} minutes, teacher actions, student practice, a check for understanding, and useful resources or homework in the relevant school fields.
+${periodRequirements}
 The lessons must build on each other and must not repeat the same lesson ${lessonCount} times.
 Keep every school heading exactly as supplied, including punctuation and timing notes.\n`;
   }
@@ -76,23 +82,29 @@ Clearly label the content for each period as:
 Lesson 1 of ${lessonCount} (${periodMinutes} minutes)
 Lesson 2 of ${lessonCount} (${periodMinutes} minutes)
 ...up to Lesson ${lessonCount} of ${lessonCount} (${periodMinutes} minutes).
-Every lesson must include: objective for that period, a minute-by-minute or stage-by-stage timing breakdown that totals ${periodMinutes} minutes, teacher actions, student practice/activity, check for understanding, and resources or homework where useful.
+${purpose === 'lesson' ? `Every lesson must include: objective for that period, a minute-by-minute or stage-by-stage timing breakdown that totals ${periodMinutes} minutes, teacher actions, student practice/activity, check for understanding, and resources or homework where useful.` : periodRequirements}
 The lessons must build on each other across the week. Do not repeat the same lesson ${lessonCount} times.
 ${hasTemplate ? 'Keep the school template headings exactly as given, but inside the relevant content fields separate the work into Lesson 1, Lesson 2, and so on with timings.' : 'Use clear headings and subheadings so the teacher can see the separate lessons.'}\n`;
 }
 
-function sequenceStepPromptBlock(sequence, lessonNumber, previousLessonPlanText = '') {
+function sequenceStepPromptBlock(sequence, lessonNumber, previousLessonPlanText = '', lessonPurpose = 'lesson') {
   if (!sequence || !sequence.enabled || !lessonNumber) return '';
+  const purpose = normalizeLessonPurpose(lessonPurpose);
   const lessonCount = Math.min(5, Math.max(2, parseInt(sequence.lessonCount, 10) || 3));
   const periodMinutes = Math.min(180, Math.max(5, parseInt(sequence.periodMinutes, 10) || 35));
   const step = Math.min(lessonCount, Math.max(1, parseInt(lessonNumber, 10) || 1));
   const previous = String(previousLessonPlanText || '').slice(0, 8000).trim();
+  const periodRequirements = purpose === 'project'
+    ? 'Include the concrete student project work for this phase, teacher observation, a visible checkpoint or submission check, and useful resources. Students perform the assessed skills; do not add teacher modelling or guided practice.'
+    : purpose === 'test'
+      ? 'Include administration and timing, access arrangements, independent student work, teacher supervision, and collection or submission. Do not add teaching, modelling, guided practice, hints, worked examples or answer checks.'
+      : 'Include teacher actions, student practice, a check for understanding, and useful resources or homework in the relevant fields.';
   return `\nSTAGED WEEKLY LESSON SEQUENCE:
 Create ONLY Lesson ${step} of ${lessonCount}. Do not create, outline, preview, or append any other lesson in this response.
 This lesson lasts exactly ${periodMinutes} minutes. Its activities and timing must total ${periodMinutes} minutes.
 The complete sequence covers the same objectives across the week, but this response must contain a complete, classroom-ready plan for period ${step} only.
 ${step > 1 ? `Build naturally on the earlier lesson plans below. Advance the learning instead of repeating them.\n\n--- EARLIER LESSONS START ---\n${previous || 'No earlier lesson summary was supplied.'}\n--- EARLIER LESSONS END ---` : 'Establish the foundations that later lessons can build on.'}
-Include teacher actions, student practice, a check for understanding, and useful resources or homework in the relevant fields.
+${periodRequirements}
 Do not put "Lesson ${step}" into school template headings; the app labels the step outside the plan.\n`;
 }
 
@@ -102,13 +114,20 @@ function buildPrompt({ subject, topic, grade, tone, objectives, successCriteria 
   const model = getTeachingModel(teachingModel);
   const purpose = normalizeLessonPurpose(lessonPurpose);
   const unitSection = unitBlock ? `\n${unitBlock}\n` : '';
+  const defaultSections = purpose === 'project'
+    ? 'Project Overview, Learning Objectives, Project Launch, Project Work and Checkpoints, Submission and Plenary, Resources and Differentiation, Assessment'
+    : purpose === 'test'
+      ? 'Test Overview, Learning Objectives, Test Procedures, Independent Test, Submission and Collection, Access Arrangements, Assessment and Marking'
+      : '';
   const templateBlock = templateText
     ? `The school's LESSON PLAN TEMPLATE is below. Reproduce its section headings and their order EXACTLY as they appear — same names, same sequence (e.g. Starter, Main Activity, Plenary, Exit Card, Resources, etc.). Fill each section with content written specifically for THIS lesson.
 
 --- TEMPLATE START ---
 ${templateText.slice(0, TEMPLATE_PROMPT_LIMIT)}
 --- TEMPLATE END ---`
-    : model.id === 'standard'
+    : purpose !== 'lesson'
+      ? `No template was provided. Use these purpose-specific sections in this exact order: ${defaultSections}.`
+      : model.id === 'standard'
       ? 'No template was provided. Use a standard, well-structured lesson plan with these sections in order: Lesson Overview, Learning Objectives, Starter / Hook, Main Teaching, Guided Practice / Activity, Plenary / Exit Card, Resources & Differentiation.'
       : `No template was provided. Use one section for each important stage of the selected teaching model, in this order: ${model.stages.map(stage => stage.label).join(', ')}. Include a short lesson overview and learning objectives where they fit naturally.`;
   const sourceBlock = sourceMaterialText
@@ -118,8 +137,8 @@ ${templateText.slice(0, TEMPLATE_PROMPT_LIMIT)}
     ? `\nThe teacher approved the PLANNING FRAMEWORK below. It guides the quality of teaching, student thinking, assessment and reflection. Apply requirements where they are relevant to this lesson without changing supplied curriculum objectives, inventing school rules, adding new template headings, or mechanically forcing every strategy into every lesson.\n\n--- PLANNING FRAMEWORK START ---\n${String(planningFrameworkText).slice(0, 7000)}\n--- PLANNING FRAMEWORK END ---\n`
     : '';
   const sequenceBlock = sequenceLessonNumber
-    ? sequenceStepPromptBlock(sequence, sequenceLessonNumber, previousLessonPlanText)
-    : sequencePromptBlock(sequence, !!templateText, structuredSequence);
+    ? sequenceStepPromptBlock(sequence, sequenceLessonNumber, previousLessonPlanText, purpose)
+    : sequencePromptBlock(sequence, !!templateText, structuredSequence, purpose);
   const outputShapeRule = structuredSequence
     ? 'Output one section per template heading PER LESSON, in lesson order, each as {heading, content, stageId, lesson}. The lesson number must match the period the content belongs to.'
     : 'Output one section per template heading, in the same order, each as {heading, content, stageId}.';
@@ -127,7 +146,9 @@ ${templateText.slice(0, TEMPLATE_PROMPT_LIMIT)}
     ? (structuredSequence
       ? 'A school template is provided, so it decides the fields outright: for every lesson output every authored template heading exactly once and in template order. Do not add, rename, merge or omit fields.'
       : 'A school template is provided, so it decides the sections outright: output exactly its headings, exactly once each, in its order — no extras, no renames, nothing merged or split, even if the teaching method would suggest a different arrangement.')
-    : 'There is no school template, so create clear headings that follow the selected model stages in order.';
+    : purpose === 'lesson'
+      ? 'There is no school template, so create clear headings that follow the selected model stages in order.'
+      : `There is no school template, so use the purpose-specific ${purpose} headings listed above in that exact order.`;
   const suppliedCriteria = (Array.isArray(successCriteria) ? successCriteria : [])
     .map(value => String(value || '').trim()).filter(Boolean);
   const criteriaBlock = suppliedCriteria.length
@@ -137,6 +158,10 @@ ${templateText.slice(0, TEMPLATE_PROMPT_LIMIT)}
     ? `GRADUAL RELEASE REQUIREMENT:
 In the main teaching/activity field, begin with "Teaching model: Gradual Release" and use these labels exactly: "I Do", "We Do", "You Do Together", and "You Do Alone". Under every label give concrete teacher actions, concrete student actions, the example/task or materials, and a check for understanding or transition. Do not reduce a phase to a single generic sentence. The closing/plenary must provide the Exit and Reflect phase.`
     : '';
+  const modelBlock = purpose === 'lesson'
+    ? modelPromptBlock(model, { structureFromTemplate: !!templateText })
+    : `Selected planning approach: ${model.label}.
+The ${purpose} purpose overrides instructional actions from this approach. Do not import teacher explanation, modelling, guided practice, worked examples or checks that reveal assessed content. Use stageId only as the closest organisational tag for each unchanged school-template row.`;
   const purposeBlock = purpose === 'lesson'
     ? '\nLESSON PURPOSE: Normal taught lesson. The teacher introduces and teaches new content, then students practise and demonstrate learning.\n'
     : purpose === 'project'
@@ -152,7 +177,7 @@ Subject: ${subject}
 Topic: ${pretty}
 Grade level: ${grade}
 Tone: ${tone}
-${modelPromptBlock(model, { structureFromTemplate: !!templateText })}
+${modelBlock}
 ${purposeBlock}
 ${unitSection}
 ${sourceBlock}${frameworkBlock}
@@ -175,12 +200,20 @@ Rules:
 - VOCABULARY: whenever you list key words or vocabulary, give each one a short, clear definition on the same line (e.g. "Cooperate: to work together to get something done") — never list a term without explaining what it means.
 - GAMES & ACTIVITIES: whenever the plan includes a game or activity, spell it out so another teacher could run it without guessing — state the goal (how to "win" / what success looks like), the materials needed, and the step-by-step rules of how to play. Never just name an activity.
 - SUCCESS CRITERIA: return the lesson's final criteria in the top-level successCriteria array. They must be usable in the downloaded plan even when the school template excluded this field from AI-authored headings.
-- ${modelDetailRule || (purpose === 'test' ? 'Make test administration specific: state what the teacher does before, during and after the test, what students do independently, and how work is collected and marked. Do not include in-test teaching or answer checks.' : `Make every phase specific: state what the teacher does, what students do, the concrete task, and how progress or understanding is checked.`)}
+- ${purpose === 'test'
+    ? 'Make test administration specific: state what the teacher does before, during and after the test, what students do independently, and how work is collected and marked. Do not include a mini-lesson, modelling, guided practice, hints, worked examples, solutions or answer checks.'
+    : purpose === 'project'
+      ? 'Make every project phase student-led: state the concrete work students produce, the checkpoint they reach, and the evidence the teacher observes or records while circulating. Do not include teacher modelling, demonstrations or guided practice of assessed skills.'
+      : modelDetailRule || 'Make every phase specific: state what the teacher does, what students do, the concrete task, and how progress or understanding is checked.'}
 - ${depth}
   - Make the plan fully address the objectives above and be appropriate for ${grade}.
-  - ${templateText
-    ? `The teaching should feel like ${model.label} in HOW each section is written — the teacher actions, student actions, practice and checks. The section headings and their order come from the school's template ONLY; never add, rename or reorder a section to fit the method.`
-    : `The lesson must visibly feel like ${model.label}; do not merely mention the model in a note. The activities, teacher actions, student actions, checks, and closing must follow its sequence.`}`;
+  - ${purpose === 'lesson'
+    ? (templateText
+      ? `The teaching should feel like ${model.label} in HOW each section is written — the teacher actions, student actions, practice and checks. The section headings and their order come from the school's template ONLY; never add, rename or reorder a section to fit the method.`
+      : `The lesson must visibly feel like ${model.label}; do not merely mention the model in a note. The activities, teacher actions, student actions, checks, and closing must follow its sequence.`)
+    : templateText
+      ? `The school template still owns every heading and its order. Fill those rows with ${purpose}-appropriate actions even when a heading sounds instructional; never turn it into teaching, modelling or guided practice.`
+      : `Follow the purpose-specific ${purpose} flow above rather than the selected teaching model's instructional sequence.`}`;
 }
 
 function strictTemplateHeadings(templateText) {
@@ -196,6 +229,86 @@ function normalizedPlanLine(value) {
 function isAllowedBlankPlanSection(section) {
   const heading = normalizedPlanLine(section && section.heading);
   return heading === 'phonics' || heading.startsWith('phonics ') || heading === 'reflection' || heading.startsWith('reflection ') || heading.startsWith('post lesson reflection');
+}
+
+function isPlaceholderPlanContent(content) {
+  const normalized = normalizedPlanLine(content);
+  if (!normalized) return true;
+  return /^(?:not set|not generated|not applicable|n a|none|tbc|tbd|placeholder|left blank|fill (?:this|it) in|type (?:what|the)|to be (?:added|completed|confirmed)|complete (?:this|later))(?:\s|$)/.test(normalized);
+}
+
+function projectClosingSection(section) {
+  const heading = normalizedPlanLine(section && section.heading);
+  return /\b(?:plenary|exit|closing|close|wrap up)\b/.test(heading)
+    || /\bshare\b.*\breflect\b/.test(heading)
+    || /\b(?:final|submission)\b.*\bcheck\b/.test(heading);
+}
+
+function planContentLines(sections, { excludeHeadings = null } = {}) {
+  return (Array.isArray(sections) ? sections : []).flatMap(section => {
+    if (excludeHeadings && excludeHeadings.test(String(section && section.heading || ''))) return [];
+    return String(section && section.content || '').replace(/\r/g, '').split(/\n+|(?<=[.!?])\s+/)
+      .map(line => line.trim()).filter(Boolean);
+  });
+}
+
+function projectInstructionViolation(sections) {
+  return planContentLines(sections, { excludeHeadings: /resources?|preparation/i }).find(line => {
+    if (/\b(?:before|prior to)\b[^.!?]{0,100}\b(?:project|assessment|session)\b/i.test(line)) return false;
+    return /^(?:the\s+)?(?:teacher\s*(?::|—|-)?\s*(?:will\s+)?)?(?:teach(?:es)?\b|demonstrat(?:e|es)\b|model(?:s)?\b|show(?:s)?\s+(?:students?|learners?|pupils?)\s+how|explain(?:s)?\s+how|lead(?:s)?\s+guided practice|guide(?:s)?\s+(?:students?|learners?|pupils?)\s+through)/i.test(line)
+      || /^(?:introduce|review|recap)\s+(?:the\s+)?(?:lesson\s+)?(?:\w+\s+){0,2}(?:concept|content|skills?|methods?|shortcuts?|vocabulary|topic)\b/i.test(line);
+  });
+}
+
+function testInstructionViolation(sections) {
+  return (Array.isArray(sections) ? sections : []).flatMap(section => {
+    const heading = normalizedPlanLine(section && section.heading);
+    return String(section && section.content || '').replace(/\r/g, '').split(/\n+|(?<=[.!?])\s+/)
+      .map(line => ({ heading, line: line.trim() })).filter(item => item.line);
+  }).find(({ heading, line }) => {
+    const lowered = line.toLowerCase()
+      .replace(/\b(?:does not|do not|will not|must not|never)\s+(?:teach|model|demonstrate|prompt|explain|give|provide|reveal)[^,;.]*/g, '')
+      .replace(/\bwithout\s+(?:teaching|modelling|modeling|demonstrating|prompting|explaining|giving|providing|revealing)[^,;.]*/g, '')
+      .replace(/\bno\s+(?:mini[ -]?lesson|guided practice|worked examples?|model answers?|hints?|answers?|solutions?)\b/g, '')
+      .trim();
+    const administrativeAction = /\b(?:test|assessment)?\s*(?:instructions?|procedures?|rules?|conditions?|expectations?|timing|duration|permitted materials?|access arrangements?|accommodations?|submission|collection|room code|login|begin|start|stop|submit)\b/.test(lowered);
+    return /\b(?:mini[ -]?lesson|guided practice|worked example|model answer)\b/.test(lowered)
+      || /^(?:the\s+)?teacher\s*(?::|—|-)?\s*(?:will\s+)?(?:teach(?:es)?|demonstrat(?:e|es)|model(?:s)?)\b/.test(lowered)
+      || (/^(?:the\s+)?teacher\s*(?::|—|-)?\s*(?:will\s+)?(?:explain(?:s)?|show(?:s)?|instruct(?:s)?)\b/.test(lowered) && !administrativeAction)
+      || (/\b(?:mini lesson|model|guided practice|teacher input|explanation)\b/.test(heading)
+        && /^(?:teach|demonstrate|model|explain|show|guide|practise|practice|review|recap)\b/.test(lowered)
+        && !administrativeAction)
+      || /\b(?:teacher|invigilator)\b[^.!?]{0,80}\b(?:review|recap)\b[^.!?]{0,80}\b(?:topic|content|concept|skill|method|questions?|answers?)\b/.test(lowered)
+      || /\b(?:guide|lead)\b[^.!?]{0,80}\bpractice\b/.test(lowered)
+      || /\b(?:give|provide|offer|reveal|show)\b[^.!?]{0,60}\b(?:a\s+)?(?:hint|answer|solution)\b/.test(lowered)
+      || /\b(?:correct answer|answer is|solution is|answer key\s*:)/.test(lowered)
+      || /\b(?:explain|show)\b[^.!?]{0,60}\bhow to\b[^.!?]{0,60}\b(?:answer|solve|calculate|complete)\b/.test(lowered);
+  });
+}
+
+function assessmentPreparationResourceIssue(sections) {
+  const list = Array.isArray(sections) ? sections : [];
+  const namedResources = list.filter(section => /\b(?:resources?|preparation|revision|study materials?|reference materials?)\b/i.test(String(section && section.heading || '')));
+  // Some school templates have no dedicated Resources row. In that case the
+  // preparation support still has to appear in one of the existing fields; the
+  // template headings and order remain untouched.
+  const allLines = (namedResources.length ? namedResources : list).flatMap(section => String(section && section.content || '')
+    .replace(/\r/g, '').split(/\n+|(?<=[.!?])\s+/).map(line => line.trim()).filter(Boolean));
+  const preparationLines = namedResources.length ? allLines : allLines.filter(line => /\b(?:before|prior to|ahead of|in preparation for|pre-assessment|pre assessment)\b/i.test(line));
+  const text = preparationLines.join('\n').toLowerCase();
+  const disclosureText = text.replace(/\b(?:without|do not|does not|must not|never)\s+(?:reproduc(?:e|ing)|includ(?:e|ing)|provid(?:e|ing)|show(?:ing)?|expos(?:e|ing)|us(?:e|ing))\b[^.;\n]*/g, '');
+  const exposesAssessment = /\b(?:answer key|correct answers?|model answers?|marking (?:guide|scheme)|worked solutions?|teacher[- ]only answers?)\b/.test(disclosureText)
+    || /\b(?:live|actual|final|current)\s+(?:test|assessment|project)?\s*(?:questions?|answers?|solutions?|rubric|criteria)\b/.test(disclosureText)
+    || /\b(?:completed|finished|ready-made|fully worked)\s+(?:assessed\s+)?(?:project|product|task|investigation|response|letter|document)\b/.test(disclosureText);
+  if (exposesAssessment) return 'preparation resources expose live assessment content, answers or a completed assessed product';
+
+  const beforeAssessment = /\b(?:before|prior to|ahead of|in preparation for|pre-assessment|pre assessment)\b/.test(text);
+  const preparationAction = /\b(?:practise|practice|rehearse|rehearsal|review|revise|revision|study|prepare|preparation|refresh)\b/.test(text);
+  const learningSupport = /\b(?:activity|exercise|task|quiz|questions?|guide|checklist|reference|prompt card|cue card|vocabulary|glossary|flashcards?|handout|worksheet|tutorial|video|example|sample|knowledge|concepts?|skills?|techniques?|methods?)\b/.test(text);
+  if (!beforeAssessment || !preparationAction || !learningSupport) {
+    return 'preparation resources must include a before-assessment review, rehearsal or reference activity';
+  }
+  return '';
 }
 
 function dedupeSectionLines(sections) {
@@ -247,7 +360,7 @@ function ensureProjectSubmissionConfirmation(raw, lessonPurpose = 'lesson') {
   const sections = Array.isArray(raw && raw.sections) ? raw.sections.map(section => ({ ...section })) : [];
   const plenaries = sections
     .map((section, index) => ({ section, index }))
-    .filter(({ section }) => /plenary|exit|closing/i.test(String(section && section.heading || '')));
+    .filter(({ section }) => projectClosingSection(section));
   if (!plenaries.length) return raw;
   const requiredLine = 'Teacher checks the LessonScope submission list and confirms that every student has submitted before the class finishes.';
   for (const { section, index } of plenaries) {
@@ -271,6 +384,12 @@ function lessonPlanIssues(raw, { lessonPurpose = 'lesson', templateText = '', st
   if (!sections.length) return ['lesson-plan sections are missing'];
   const blankHeadings = sections.filter(section => !isAllowedBlankPlanSection(section) && !String(section && section.content || '').trim()).map(section => String(section && section.heading || 'unnamed section'));
   if (blankHeadings.length) issues.push(`these sections are empty: ${blankHeadings.join(', ')}`);
+  if (purpose !== 'lesson') {
+    const placeholderHeadings = sections.filter(section => !isAllowedBlankPlanSection(section)
+      && String(section && section.content || '').trim()
+      && isPlaceholderPlanContent(section.content)).map(section => String(section && section.heading || 'unnamed section'));
+    if (placeholderHeadings.length) issues.push(`these sections still contain placeholder content: ${placeholderHeadings.join(', ')}`);
+  }
 
   const expected = structuredSequence ? [] : strictTemplateHeadings(templateText);
   if (expected.length) {
@@ -294,29 +413,40 @@ function lessonPlanIssues(raw, { lessonPurpose = 'lesson', templateText = '', st
 
   const text = sections.map(section => String(section && section.content || '')).join('\n').toLowerCase();
   if (purpose === 'project') {
-    const projectAction = /(?:students?|learners?|pupils?|candidates?)\s*(?::|—|-)?\s*(?:will\s+)?(?:create|produce|design|build|draft|investigate|complete|prepare|compose|construct|make|revise|present|submit)/;
+    const projectAction = /(?:students?|learners?|pupils?|candidates?)\s*(?::|—|-)?\s*(?:will\s+)?(?:create|produce|design|build|draft|investigate|complete|prepare|compose|construct|make|revise|present|submit|write|edit|solve|perform|apply|assemble|program|calculate|draw|record|research|test|evaluate|refine|upload)/;
     const findSectionText = pattern => String((sections.find(section => pattern.test(String(section && section.heading || ''))) || {}).content || '').toLowerCase();
     const launchText = findSectionText(/intro|starter|hook|launch/i);
     const activityText = findSectionText(/activit|main|create|project work|task/i);
-    const plenaryText = findSectionText(/plenary|exit|closing|reflection/i);
+    const plenarySections = sections.filter(projectClosingSection);
+    const plenaryText = plenarySections.map(section => String(section && section.content || '')).join('\n').toLowerCase();
     if (!/\b(project|product|performance|investigation|solution|artefact|artifact)\b/.test(text)) issues.push('the plan does not identify the assessed project outcome');
     if (!projectAction.test(text)) issues.push('the plan does not state what students independently produce or do');
     if (!/\b(checkpoint|milestone|revise|feedback|submit|submission|present|presentation|reflect|reflection)\b/.test(text)) issues.push('the plan has no project checkpoint, revision, submission, presentation or reflection');
     if (!/teacher\s*(?::|—|-)?\s*(?:will\s+)?(?:circulates?|observes?|monitors?|facilitates?|checks?|records?|grades?|assesses?)/.test(text)) issues.push('the teacher is not positioned as a project facilitator and assessor');
     if (launchText && !(/\b(project|product|performance|investigation|solution|artefact|artifact|outcome)\b/.test(launchText) || /\b(?:project|task|assessment) brief\b/.test(launchText))) issues.push('the project launch is a generic lesson introduction instead of explaining the assessed outcome');
     if (activityText && !projectAction.test(activityText)) issues.push('the main activity is teacher-led instead of students creating the project work');
-    if (plenaryText && !projectPlenaryHasSubmissionConfirmation(plenaryText)) {
+    if (!plenarySections.length) {
+      issues.push('the project plan has no plenary or closing section for submission confirmation');
+    } else if (!projectPlenaryHasSubmissionConfirmation(plenaryText)) {
       issues.push('the project plenary does not require the teacher to confirm that every student submitted');
     }
-    const taughtDuringProject = text.split(/\n+|(?<=[.!?])\s+/).some(line =>
-      /^(?:the\s+)?(?:teacher\s*(?::|—|-)?\s*(?:will\s+)?)?(?:demonstrate|demonstrates|model|models|teach|teaches)\b/.test(line.trim())
-      && !/\b(before|preparation|prepare)\b/.test(line));
+    const taughtDuringProject = projectInstructionViolation(sections);
     if (taughtDuringProject) issues.push('the project session teaches or demonstrates assessed skills instead of letting students perform them');
+    if (launchText && /\b(?:brief discussion|prior knowledge|share[^.!?]{0,80}(?:experience|already know)|what [^.!?]{0,50} is and why|introduce (?:the )?(?:lesson )?objectives?)\b/.test(launchText)) {
+      issues.push('the project launch uses a generic lesson discussion instead of the task brief, phases and success criteria');
+    }
+    const resourceIssue = assessmentPreparationResourceIssue(sections);
+    if (resourceIssue) issues.push(resourceIssue);
   }
   if (purpose === 'test') {
     if (!/\b(independent|independently)\b/.test(text)) issues.push('the test plan does not state that students work independently');
     if (!/\b(supervise|supervises|supervision|invigilate|invigilation|monitor|monitors)\b/.test(text)) issues.push('the test plan does not explain teacher supervision');
     if (!/\b(submit|submission|collect|collection)\b/.test(text)) issues.push('the test plan does not explain collection or submission');
+    if (!/\b(procedure|instructions?|conditions?|expectations?|timing|duration|access arrangements?|accommodations?|permitted materials?|room code|login)\b/.test(text)) issues.push('the test plan does not explain test procedures or access arrangements');
+    if (!/\b(mark|marks|marked|marking|grade|grades|graded|grading|score|scores|scoring)\b/.test(text)) issues.push('the test plan does not explain marking or score recording');
+    if (testInstructionViolation(sections)) issues.push('the test plan contains teaching, modelling, guided practice, hints or answers instead of administration only');
+    const resourceIssue = assessmentPreparationResourceIssue(sections);
+    if (resourceIssue) issues.push(resourceIssue);
   }
   return issues;
 }
@@ -377,52 +507,115 @@ function ensureGradualReleaseVisible(sections) {
   return list;
 }
 
-function ensureAssessmentFlowVisible(sections, lessonPurpose, options = {}) {
+function assessmentPhaseLines(lessonPurpose, options = {}, assessmentDraft = null) {
   const purpose = normalizeLessonPurpose(lessonPurpose);
-  if (purpose === 'lesson') return Array.isArray(sections) ? sections : [];
+  if (purpose === 'lesson') return [];
   const opts = normalizeAssessmentOptions(options);
-  const list = Array.isArray(sections) ? sections.map(section => ({ ...section })) : [];
-  if (!list.length) return list;
-  const allContent = list.map(section => section.content || '').join('\n').toLowerCase();
-  const typeNames = { mcq: 'multiple-choice', 'short-answer': 'short-answer', 'extended-response': 'extended-response', practical: purpose === 'project' ? 'project practical' : 'practical' };
+  const typeNames = { mcq: 'multiple-choice', 'short-answer': 'short-answer', 'extended-response': 'extended-response', practical: purpose === 'project' ? 'Project practical' : 'Practical' };
+  const draftSections = Array.isArray(assessmentDraft && assessmentDraft.sections)
+    ? assessmentDraft.sections.filter(section => section && Array.isArray(section.items) && section.items.length)
+    : [];
+  if (draftSections.length) {
+    return draftSections.map((section, index) => {
+      const type = typeNames[section.type] || String(section.type || 'assessment section').replace(/-/g, ' ');
+      const title = String(section.title || type).trim();
+      const itemCount = section.items.length;
+      const marks = section.items.reduce((sum, item) => sum + (Number(item && item.marks) || 0), 0);
+      const countLabel = `${itemCount} ${section.type === 'practical'
+        ? (itemCount === 1 ? 'criterion' : 'criteria')
+        : section.type === 'mcq'
+          ? (itemCount === 1 ? 'question' : 'questions')
+          : (itemCount === 1 ? 'item' : 'items')}`;
+      if (section.type === 'mcq') {
+        return `Assessment phase ${index + 1} — ${title} (LessonScope ${type}): Students independently answer ${countLabel} (${marks} marks). Teacher starts the section, supervises without displaying or explaining the questions, and confirms submissions.`;
+      }
+      if (section.type === 'practical') {
+        return purpose === 'project'
+          ? `Assessment phase ${index + 1} — ${title} (${type}): Students complete ${countLabel} (${marks} marks). Teacher displays only safe stage directions, circulates without giving answers, and records evidence in LessonScope.`
+          : `Assessment phase ${index + 1} — ${title} (${type}): Students complete ${countLabel} (${marks} marks). Teacher announces only timing, permitted materials and submission instructions, supervises without prompting, and records marks in LessonScope.`;
+      }
+      return `Assessment phase ${index + 1} — ${title} (${type}): Students complete ${countLabel} independently in LessonScope (${marks} marks). Teacher supervises without explaining answers and marks the responses after submission.`;
+    });
+  }
+
   const otherTypes = opts.questionTypes.filter(type => type !== 'mcq');
   const remainingMarks = opts.questionTypes.includes('mcq') && otherTypes.length ? opts.totalMarks - opts.mcqCount : null;
-  const lines = [];
-  opts.questionTypes.forEach((type, index) => {
-    const alreadyVisible = type === 'mcq'
-      ? allContent.includes('multiple-choice') && allContent.includes('lessonscope') && allContent.includes(`${opts.mcqCount} questions`) && (!otherTypes.length || allContent.includes(`${opts.mcqCount} marks`))
-      : type === 'practical' && remainingMarks != null && otherTypes.length === 1
-        ? allContent.includes(typeNames[type]) && allContent.includes(`${remainingMarks} marks`) && allContent.includes('lessonscope')
-        : allContent.includes(typeNames[type]) && allContent.includes('lessonscope');
-    if (alreadyVisible) return;
+  return opts.questionTypes.map((type, index) => {
     if (type === 'mcq') {
-      lines.push(`Assessment phase ${index + 1} — LessonScope multiple-choice: Students independently answer ${opts.mcqCount} questions${otherTypes.length ? ` (${opts.mcqCount} marks)` : ''}. Teacher starts the section, supervises without explaining answers, and confirms submissions.`);
-    } else if (type === 'practical') {
-      lines.push(`Assessment phase ${index + 1} — ${purpose === 'project' ? 'Project practical' : 'Practical'}: Students complete the assessed task${remainingMarks != null && otherTypes.length === 1 ? ` (${remainingMarks} marks)` : ''}. Teacher displays only safe stage directions, circulates without giving answers, and records evidence in LessonScope.`);
-    } else {
-      lines.push(`Assessment phase ${index + 1} — ${typeNames[type]}: Students complete this section independently in LessonScope. Teacher supervises without explaining answers and marks the responses after submission.`);
+      return `Assessment phase ${index + 1} — LessonScope multiple-choice: Students independently answer ${opts.mcqCount} questions${otherTypes.length ? ` (${opts.mcqCount} marks)` : ''}. Teacher starts the section, supervises without displaying or explaining the questions, and confirms submissions.`;
     }
+    if (type === 'practical') {
+      return purpose === 'project'
+        ? `Assessment phase ${index + 1} — Project practical: Students complete the assessed task${remainingMarks != null && otherTypes.length === 1 ? ` (${remainingMarks} marks)` : ''}. Teacher displays only safe stage directions, circulates without giving answers, and records evidence in LessonScope.`
+        : `Assessment phase ${index + 1} — Practical: Students complete the assessed task${remainingMarks != null && otherTypes.length === 1 ? ` (${remainingMarks} marks)` : ''}. Teacher announces only timing, permitted materials and submission instructions, supervises without prompting, and records marks in LessonScope.`;
+    }
+    return `Assessment phase ${index + 1} — ${typeNames[type]}: Students complete this section independently in LessonScope. Teacher supervises without explaining answers and marks the responses after submission.`;
   });
+}
+
+function ensureAssessmentFlowVisible(sections, lessonPurpose, options = {}, assessmentDraft = null) {
+  const purpose = normalizeLessonPurpose(lessonPurpose);
+  if (purpose === 'lesson') return Array.isArray(sections) ? sections : [];
+  const list = Array.isArray(sections) ? sections.map(section => ({ ...section })) : [];
+  if (!list.length) return list;
+  const lines = assessmentPhaseLines(purpose, options, assessmentDraft);
   if (!lines.length) return list;
-  let target = list.findIndex(section => /assessment|evaluat|main activit|learner activit|student activit|procedure/i.test(String(section.heading || '')));
+  let target = list.findIndex(section => /assessment|evaluat|marking/i.test(String(section.heading || '')));
+  if (target >= 0) {
+    // The assessment row is the teacher-facing source of truth. Replace model
+    // prose here so stale counts or allocations cannot contradict the editable
+    // assessment draft that will be published and shown in the slide flow.
+    list[target].content = lines.join('\n');
+    return list;
+  }
+  target = list.findIndex(section => /main activit|learner activit|student activit|procedure/i.test(String(section.heading || '')));
   if (target < 0) target = list.findIndex(section => /plan|create|practi|task|lesson/i.test(String(section.heading || '')));
   if (target < 0) target = list.length - 1;
   list[target].content = [String(list[target].content || '').trim(), ...lines].filter(Boolean).join('\n');
   return list;
 }
 
-function finalizeLessonPlan(raw, { objectives = '', suppliedSuccessCriteria = [], teachingModelId = 'standard' } = {}) {
+function finalizeLessonPlan(raw, { objectives = '', suppliedSuccessCriteria = [], teachingModelId = 'standard', lessonPurpose = 'lesson' } = {}) {
   const supplied = (Array.isArray(suppliedSuccessCriteria) ? suppliedSuccessCriteria : [])
     .map(value => String(value || '').trim()).filter(Boolean);
   const successCriteria = supplied.length ? supplied : normalizeGeneratedCriteria(raw && raw.successCriteria, objectives);
-  const sections = dedupeSectionLines(teachingModelId === 'gradual_release'
+  const sections = dedupeSectionLines(normalizeLessonPurpose(lessonPurpose) === 'lesson' && teachingModelId === 'gradual_release'
     ? ensureGradualReleaseVisible(raw && raw.sections)
     : (Array.isArray(raw && raw.sections) ? raw.sections : []));
   return { ...(raw || {}), sections, successCriteria };
 }
 
-function placeholderPlan(objectives, teachingModel) {
+function placeholderPlan(objectives, teachingModel, lessonPurpose = 'lesson') {
   const model = getTeachingModel(teachingModel);
+  const purpose = normalizeLessonPurpose(lessonPurpose);
+  const stageAt = index => model.stages[Math.min(index, model.stages.length - 1)].id;
+  if (purpose === 'project') {
+    return {
+      sections: [
+        { heading: 'Project Overview', stageId: stageAt(0), content: 'Students complete an assessed project product based on the supplied objectives.' },
+        { heading: 'Learning Objectives', stageId: stageAt(0), content: objectives || 'Students demonstrate the supplied project objectives through their finished product.' },
+        { heading: 'Project Launch', stageId: stageAt(0), content: 'Teacher launches the project brief, outcome, working conditions, phases and success criteria.' },
+        { heading: 'Project Work and Checkpoints', stageId: stageAt(2), content: 'Students create and revise the required product through visible checkpoints.\nTeacher circulates, observes progress and records assessment evidence without demonstrating the assessed skills.' },
+        { heading: 'Submission and Plenary', stageId: stageAt(4), content: 'Teacher checks the LessonScope submission list and confirms that every student has submitted before the class finishes.' },
+        { heading: 'Resources and Differentiation', stageId: stageAt(2), content: 'Before the project, students use an unassessed practice activity and a prerequisite-skills reference checklist to rehearse on a separate sample. Provide the project brief, required materials, a stage checklist and access support while keeping the assessed outcome unchanged.' },
+        { heading: 'Assessment', stageId: stageAt(3), content: 'Teacher grades the submitted product against the approved criteria and records evidence in LessonScope.' },
+      ],
+    };
+  }
+  if (purpose === 'test') {
+    return {
+      sections: [
+        { heading: 'Test Overview', stageId: stageAt(0), content: 'Students complete the configured assessment under formal test conditions.' },
+        { heading: 'Learning Objectives', stageId: stageAt(0), content: objectives || 'Students independently demonstrate the supplied assessment objectives.' },
+        { heading: 'Test Procedures', stageId: stageAt(1), content: 'Teacher states the test instructions, permitted materials, timing and access arrangements before the assessment starts.' },
+        { heading: 'Independent Test', stageId: stageAt(2), content: 'Students work independently while the teacher supervises the room and records procedural concerns.' },
+        { heading: 'Submission and Collection', stageId: stageAt(4), content: 'Students submit their work when instructed.\nTeacher confirms collection before dismissing the class.' },
+        { heading: 'Preparation Resources', stageId: stageAt(0), content: 'Before the test, students use a revision worksheet and an unassessed rehearsal activity to review the prerequisite knowledge and skills on separate material.' },
+        { heading: 'Access Arrangements', stageId: stageAt(2), content: 'Teacher applies approved accommodations without changing the assessed standard.' },
+        { heading: 'Assessment and Marking', stageId: stageAt(3), content: 'Teacher marks the collected work and records scores in LessonScope before releasing results.' },
+      ],
+    };
+  }
   const contents = {
     launch: 'Connect to prior knowledge and introduce the lesson.',
     teach: 'Explain the new idea with a clear example.',
@@ -551,7 +744,11 @@ async function repairAssessmentDraft(client, initialDraft, context, options) {
   let bestDraft = normalizedAssessmentCandidate(initialDraft, context);
   let bestIssues = assessmentDraftIssues(bestDraft, options);
   const onlyMcqCountNeedsRepair = issues => issues.length > 0
-    && issues.every(issue => issue === 'mcq section is missing' || /expected \d+ multiple-choice items but received \d+/.test(issue));
+    && issues.every(issue => issue === 'mcq section is missing'
+      || /expected \d+ multiple-choice items but received \d+/.test(issue)
+      || issue === 'each multiple-choice item must be worth exactly 1 mark'
+      || /^phase \d+ \(mcq\) must be worth \d+ marks but received \d+$/.test(issue)
+      || /^expected \d+ total marks but received \d+$/.test(issue));
 
   if (onlyMcqCountNeedsRepair(bestIssues)) {
     try {
@@ -594,11 +791,11 @@ async function repairAssessmentDraft(client, initialDraft, context, options) {
   throw error;
 }
 
-async function generateLessonPlan({ subject, topic, grade = 'middle school', tone = 'clear and engaging', objectives, successCriteria = [], templateText, unitBlock = '', sourceMaterialText = '', planningFrameworkText = '', teachingModel = 'standard', sequence = null, structuredSequence = false, sequenceLessonNumber = null, previousLessonPlanText = '', lessonPurpose = 'lesson', assessmentTotalMarks = 50, assessmentStructure = 'balanced', assessmentDeliveryMode = 'live', assessmentBrief = '', assessmentQuestionTypes = [], assessmentMcqCount = 15, regenerate = false }) {
+async function generateLessonPlan({ subject, topic, grade = 'middle school', tone = 'clear and engaging', objectives, successCriteria = [], templateText, unitBlock = '', sourceMaterialText = '', planningFrameworkText = '', teachingModel = 'standard', sequence = null, structuredSequence = false, sequenceLessonNumber = null, previousLessonPlanText = '', lessonPurpose = 'lesson', assessmentTotalMarks = 50, assessmentStructure = 'balanced', assessmentDeliveryMode = 'live', assessmentBrief = '', assessmentQuestionTypes = [], assessmentMcqCount = 15, assessmentPhases = [], regenerate = false }) {
   const teachingModelId = normalizeTeachingModelId(teachingModel);
   const model = getTeachingModel(teachingModelId);
   const purpose = normalizeLessonPurpose(lessonPurpose);
-  const assessmentOptions = normalizeAssessmentOptions({ assessmentTotalMarks, assessmentStructure, assessmentDeliveryMode, assessmentBrief, assessmentQuestionTypes, assessmentMcqCount });
+  const assessmentOptions = normalizeAssessmentOptions({ assessmentTotalMarks, assessmentStructure, assessmentDeliveryMode, assessmentBrief, assessmentQuestionTypes, assessmentMcqCount, assessmentPhases });
   const cleanSequence = sequence && sequence.enabled ? {
     enabled: true,
     lessonCount: Math.min(5, Math.max(2, parseInt(sequence.lessonCount, 10) || 3)),
@@ -609,15 +806,15 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     : null;
   if (!process.env.OPENAI_API_KEY) {
     console.log('No OPENAI_API_KEY set — using placeholder lesson plan.');
-    const placeholder = placeholderPlan(objectives, teachingModelId);
+    const placeholder = placeholderPlan(objectives, teachingModelId, purpose);
     if (cleanSequence && structuredSequence && !cleanLessonNumber) {
       placeholder.sections = Array.from({ length: cleanSequence.lessonCount }, (_, lessonIndex) =>
         placeholder.sections.map(section => ({ ...section, lesson: lessonIndex + 1 }))
       ).flat();
     }
-    const assessmentDraft = fallbackDraft({ subject, topic, grade, objectives, lessonPurpose: purpose, assessmentTotalMarks: assessmentOptions.totalMarks, assessmentStructure: assessmentOptions.structure, assessmentDeliveryMode: assessmentOptions.deliveryMode, assessmentBrief: assessmentOptions.brief, assessmentQuestionTypes: assessmentOptions.questionTypes, assessmentMcqCount: assessmentOptions.mcqCount });
-    const finalized = finalizeLessonPlan(placeholder, { objectives, suppliedSuccessCriteria: successCriteria, teachingModelId });
-    finalized.sections = ensureAssessmentFlowVisible(finalized.sections, purpose, assessmentOptions);
+    const assessmentDraft = fallbackDraft({ subject, topic, grade, objectives, lessonPurpose: purpose, assessmentTotalMarks: assessmentOptions.totalMarks, assessmentStructure: assessmentOptions.structure, assessmentDeliveryMode: assessmentOptions.deliveryMode, assessmentBrief: assessmentOptions.brief, assessmentQuestionTypes: assessmentOptions.questionTypes, assessmentMcqCount: assessmentOptions.mcqCount, assessmentPhases: assessmentOptions.phaseRequirements });
+    const finalized = finalizeLessonPlan(placeholder, { objectives, suppliedSuccessCriteria: successCriteria, teachingModelId, lessonPurpose: purpose });
+    finalized.sections = ensureAssessmentFlowVisible(finalized.sections, purpose, assessmentOptions, assessmentDraft);
     return { ...finalized, teachingModelId, lessonPurpose: purpose, assessmentDraft, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
   }
   const { wrap } = require('./cache');
@@ -635,7 +832,7 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     teachingModelId,
     lessonPurpose: purpose,
     assessmentOptions,
-    lessonPlanQualityVersion: 5,
+    lessonPlanQualityVersion: 8,
     sequence: cleanSequence,
     structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber),
     sequenceLessonNumber: cleanLessonNumber,
@@ -682,9 +879,9 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     }
     throw new Error(`The automatic ${purpose} plan did not meet the required quality checks (${lastIssues.join('; ')}). Please generate it again.`);
   });
-  const finalized = finalizeLessonPlan(cachedOrGenerated, { objectives, suppliedSuccessCriteria: successCriteria, teachingModelId });
-  finalized.sections = ensureAssessmentFlowVisible(finalized.sections, purpose, assessmentOptions);
+  const finalized = finalizeLessonPlan(cachedOrGenerated, { objectives, suppliedSuccessCriteria: successCriteria, teachingModelId, lessonPurpose: purpose });
   const assessmentDraft = normalizeAssessmentDraft(cachedOrGenerated.assessmentDraft, { subject, topic, grade, objectives, lessonPurpose: purpose, ...assessmentOptions });
+  finalized.sections = ensureAssessmentFlowVisible(finalized.sections, purpose, assessmentOptions, assessmentDraft);
   return { ...finalized, teachingModelId, lessonPurpose: purpose, assessmentDraft, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
 }
 

@@ -18,6 +18,30 @@ async function withoutOpenAI(run) {
   }
 }
 
+const DOCUMENT_MCQ_BANK = [
+  ['Which command keeps recent changes in a document?', ['Save', 'Print', 'Close', 'Undo'], 0],
+  ['What does a red wavy underline usually show in a document?', ['A possible spelling error', 'A saved file', 'A printed page', 'A selected picture'], 0],
+  ['Which action duplicates selected text without removing the original?', ['Copy', 'Cut', 'Delete', 'Undo'], 0],
+  ['Which action inserts text that has already been copied?', ['Paste', 'Save', 'Rename', 'Print'], 0],
+  ['Where does typed text appear in a document?', ['At the text cursor', 'In the title bar', 'On the taskbar', 'Inside the printer'], 0],
+  ['Which file name is easiest to recognise later?', ['Class_Letter_Monday', 'Document1', 'Untitled', 'New File'], 0],
+  ['Which tool checks a document for possible spelling mistakes?', ['Spelling checker', 'Zoom control', 'Print preview', 'Page colour'], 0],
+  ['What should you do before changing the format of a sentence?', ['Select the sentence', 'Close the document', 'Turn off the screen', 'Open the printer'], 0],
+  ['Which command reverses the most recent editing action?', ['Undo', 'Paste', 'Save As', 'Print'], 0],
+  ['Which key removes the character immediately before the cursor?', ['Backspace', 'Shift', 'Caps Lock', 'Tab'], 0],
+  ['Which change makes a heading stand out more clearly?', ['Apply bold formatting', 'Remove every space', 'Hide the document', 'Close the program'], 0],
+  ['What separates two words when typing a sentence?', ['One space', 'A full stop', 'A slash', 'A quotation mark'], 0],
+  ['What should you check before submitting a document?', ['That it is saved with the required name', 'That the screen is blank', 'That the file has no title', 'That every word is deleted'], 0],
+  ['Which command creates a second copy with a different file name?', ['Save As', 'Paste', 'Undo', 'Find'], 0],
+  ['What is the safest action before closing a document you changed?', ['Save the changes', 'Delete the text', 'Turn off the monitor', 'Open a new blank file'], 0],
+];
+
+function documentMcqItems(count, marks = () => 1) {
+  return DOCUMENT_MCQ_BANK.slice(0, count).map(([prompt, options, correctIndex], index) => ({
+    prompt, options, correctIndex, marks: marks(index), answerKey: '',
+  }));
+}
+
 test('Plan exposes lesson, project and test with automatic assessment controls', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
   for (const value of ['lesson', 'project', 'test']) assert.match(html, new RegExp(`name="lessonPurpose" value="${value}"`));
@@ -45,8 +69,25 @@ test('project generation returns a valid editable assessment with the requested 
   const planText = plan.sections.map(section => section.content).join('\n');
   assert.match(planText, /LessonScope multiple-choice[\s\S]+15 questions \(15 marks\)/);
   assert.match(planText, /Project practical[\s\S]+\(35 marks\)/);
-  const normalized = assignments.normalizeAssessment(plan.assessmentDraft);
-  assert.equal(normalized.questions.reduce((sum, item) => sum + item.marks, 0), 50);
+  assert.match(plan.assessmentDraft.instructions, /\[REVIEW REQUIRED\]/);
+  assert.throws(() => assignments.normalizeAssessment(plan.assessmentDraft), /replace placeholder text/i);
+});
+
+test('offline generation preserves an explicitly structured duplicate phase plan', async () => {
+  const assessmentPhases = [
+    { type: 'short-answer', title: 'Plan', marks: 5 },
+    { type: 'short-answer', title: 'Evaluate', marks: 10 },
+    { type: 'practical', title: 'Create', marks: 15 },
+  ];
+  const plan = await withoutOpenAI(() => generateLessonPlan({
+    subject: 'Design', topic: 'Purposeful design', grade: 'Grade 8',
+    objectives: 'Create and evaluate a purposeful design.', lessonPurpose: 'project',
+    assessmentTotalMarks: 30, assessmentQuestionTypes: ['short-answer', 'practical'], assessmentMcqCount: 0,
+    assessmentPhases,
+  }));
+  assert.deepEqual(plan.assessmentDraft.sections.map(section => section.type), ['short-answer', 'short-answer', 'practical']);
+  assert.deepEqual(plan.assessmentDraft.sections.map(section => section.title), ['Plan', 'Evaluate', 'Create']);
+  assert.deepEqual(plan.assessmentDraft.sections.map(section => section.items.reduce((sum, item) => sum + item.marks, 0)), [5, 10, 15]);
 });
 
 test('assessment settings keep teacher-selected item types and counts', () => {
@@ -113,7 +154,7 @@ test('a complete student-led project fills every school field and passes validat
     { heading: 'Intro (10m)', stageId: 'launch', content: 'Teacher launches the document project, explains the letter product and displays the phases.\nPupils prepare their files and identify the required outcome.' },
     { heading: 'Activities (50m)', stageId: 'practice', content: 'Pupils create a letter, check spelling and produce five copies.\nTeacher circulates, observes each checkpoint and records practical evidence.' },
     { heading: 'Plenary (10m)', stageId: 'reflect', content: 'Teacher checks the submission list and confirms every pupil submitted the finished document.\nPupils reflect on one improvement.' },
-    { heading: 'Differentiation', stageId: 'practice', content: 'Provide a visual stage card and extra processing time while keeping the same assessed product.' },
+    { heading: 'Differentiation', stageId: 'practice', content: 'Before the project, pupils use an unassessed typing rehearsal and a vocabulary reference card to review prerequisite skills. Provide a visual stage card and extra processing time while keeping the same assessed product.' },
     { heading: 'Assessment', stageId: 'check', content: 'Students complete the LessonScope knowledge section independently, then present the practical product for grading.' },
   ] };
   assert.deepEqual(lessonPlanIssues(raw, {
@@ -149,7 +190,7 @@ test('project generation repairs an omitted optional Phonics row and submission 
   const repaired = repairGeneratedPlan({ sections: [
     { heading: 'Red Thread', stageId: 'launch', content: 'Students connect document creation to communicating a clear message.' },
     { heading: 'Key vocabulary', stageId: 'launch', content: 'Document: a digital page used to record and share information.' },
-    { heading: 'Resources', stageId: 'launch', content: 'Word processor, saved task brief, submission checklist and accessible keyboard.' },
+    { heading: 'Resources', stageId: 'launch', content: 'Before the project, students use an unassessed word-processing rehearsal and a vocabulary reference checklist to review prerequisite skills on a separate sample. Provide the word processor, saved task brief, submission checklist and accessible keyboard for the project.' },
     { heading: 'Intro(10m)', stageId: 'launch', content: 'Teacher launches the assessed project product and explains the task brief and success criteria.' },
     { heading: 'Activities(50m)', stageId: 'practice', content: 'Students create and revise the required document through visible checkpoints.\nTeacher circulates, observes progress and records practical evidence.' },
     { heading: 'Plenary(10m)', stageId: 'reflect', content: 'Students save the finished product and prepare it for upload.' },
@@ -178,10 +219,7 @@ test('focused assessment recovery preserves the teacher requested question count
 });
 
 test('mixed assessments reserve one mark per MCQ and allocate the exact remainder to practical work', () => {
-  const mcqItems = Array.from({ length: 15 }, (_, index) => ({
-    prompt: `Question ${index + 1}`, marks: index === 0 ? 4 : 1,
-    options: ['Correct', 'Distractor'], correctIndex: 0, answerKey: '',
-  }));
+  const mcqItems = documentMcqItems(15, index => index === 0 ? 4 : 1);
   const draft = normalizeAssessmentDraft({ title: 'Project', instructions: 'Complete both parts.', sections: [
     { title: 'Knowledge', type: 'mcq', instructions: 'Choose one.', objectiveIndexes: [0], items: mcqItems },
     { title: 'Practical', type: 'practical', instructions: 'Create the product.', objectiveIndexes: [0], items: [
@@ -200,10 +238,7 @@ test('mixed assessments reserve one mark per MCQ and allocate the exact remainde
 });
 
 test('assessment recovery completes a 14-question response without discarding the valid draft', async () => {
-  const existing = Array.from({ length: 14 }, (_, index) => ({
-    prompt: `Existing question ${index + 1}`, marks: 1,
-    options: ['Correct', 'Distractor'], correctIndex: 0, answerKey: '',
-  }));
+  const existing = documentMcqItems(14);
   let calls = 0;
   const client = { chat: { completions: { create: async () => {
     calls += 1;
@@ -245,6 +280,7 @@ test('a selected multiple-choice section cannot be silently omitted', () => {
   };
   assert.deepEqual(assessmentDraftIssues(incomplete, options), [
     'mcq section is missing',
+    'expected assessment phase order mcq -> practical but received practical',
     'expected 15 multiple-choice items but received 0',
   ]);
 });
@@ -262,5 +298,5 @@ test('project decks retain progress questions without answer bullets or shortcut
   assert.ok(check);
   assert.deepEqual(check.bullets, []);
   assert.ok(slides.filter(slide => slide.type === 'content').every(slide => slide.shortcuts.length === 0));
-  assert.equal(slides.at(-1).title, 'Project checkpoint');
+  assert.equal(slides.at(-1).title, 'Project submission');
 });

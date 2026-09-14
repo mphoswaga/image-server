@@ -2839,7 +2839,7 @@
         <div class="purpose-options" role="radiogroup" aria-label="Plan type">
           <label class="purpose-option"><input type="radio" name="lessonPurpose" value="lesson" checked><span><strong>Normal lesson</strong><small>Teach new content, guide practice, and check learning.</small></span></label>
           <label class="purpose-option"><input type="radio" name="lessonPurpose" value="project"><span><strong>Project</strong><small>Launch the task, show progress stages, then observe and support student work.</small></span></label>
-          <label class="purpose-option"><input type="radio" name="lessonPurpose" value="test"><span><strong>Test</strong><small>Introduce procedures, supervise independent work, then mark it in LessonScope.</small></span></label>
+          <label class="purpose-option"><input type="radio" name="lessonPurpose" value="test"><span><strong>Test</strong><small>Set the conditions before it begins, supervise silently, then mark it in LessonScope.</small></span></label>
         </div>
       </div>
 
@@ -3113,12 +3113,12 @@
         <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg> <span id="packTitleText">Lesson pack</span> <span class="hint-i" tabindex="0" role="img" aria-label="Student-facing materials from this same plan. Generate, edit, and download each as a Word document." data-tip="Student-facing materials from this same plan. Generate, edit, and download each as a Word document.">i</span></h2>
         <p id="packPurposeHint" class="hint">Turn this lesson into student-facing materials — generate, tweak, and download each as a Word document.</p>
         <div class="pack-actions">
-          <button type="button" class="btn ghost" data-pack="notes"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Study notes</button>
-          <button type="button" class="btn ghost" data-pack="worksheet"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Worksheet</button>
-          <button type="button" class="btn ghost" data-pack="exit-ticket"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg> Exit ticket</button>
-          <button type="button" class="btn ghost" data-pack="quiz"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> Quiz</button>
-          <button type="button" class="btn ghost" data-pack="homework"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg> Homework</button>
-          <button type="button" class="btn ghost" data-pack="activities"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg> Differentiated</button>
+          <button type="button" class="btn ghost" data-pack="notes"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> <span data-pack-label>Study notes</span></button>
+          <button type="button" class="btn ghost" data-pack="worksheet"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> <span data-pack-label>Worksheet</span></button>
+          <button type="button" class="btn ghost" data-pack="exit-ticket"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg> <span data-pack-label>Exit ticket</span></button>
+          <button type="button" class="btn ghost" data-pack="quiz"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> <span data-pack-label>Quiz</span></button>
+          <button type="button" class="btn ghost" data-pack="homework"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg> <span data-pack-label>Homework</span></button>
+          <button type="button" class="btn ghost" data-pack="activities"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg> <span data-pack-label>Differentiated</span></button>
         </div>
         <div id="packPreview"></div>
         <div class="wp-slot-mount" data-wp-mount="stage:slides" style="margin-top:14px"></div>
@@ -3133,7 +3133,8 @@
 
       <!-- Lesson games: individual, multiplayer, or one-screen whole class -->
       <section id="gameSection" class="card wide" style="margin-top:24px">
-        <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-gamepad"/></svg> Lesson game <span class="hint-i" tabindex="0" role="img" aria-label="Use the same lesson questions for individual arcade, live multiplayer, or a teacher-controlled whole-class game." data-tip="Use the same lesson questions for individual arcade, live multiplayer, or a teacher-controlled whole-class game.">i</span></h2>
+        <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-gamepad"/></svg> <span id="gameTitleText">Lesson game</span> <span id="gameInfoTip" class="hint-i" tabindex="0" role="img" aria-label="Use the same lesson questions for individual arcade, live multiplayer, or a teacher-controlled whole-class game." data-tip="Use the same lesson questions for individual arcade, live multiplayer, or a teacher-controlled whole-class game.">i</span></h2>
+        <p id="gamePurposeHint" class="hint" style="margin-top:-5px">Optional practice based on this lesson.</p>
         <label style="font-size:13px;font-weight:700">Game format</label>
         <div id="gameModePick" class="game-format" role="group" aria-label="Game format">
           <button type="button" class="active" data-game-mode="arcade" aria-pressed="true"><strong><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> Individual arcade</strong><span>Learners play on their own devices.</span></button>
@@ -3336,7 +3337,7 @@
           <div><label for="assessmentGrade">Grade or year group</label><input id="assessmentGrade" maxlength="60" placeholder="e.g. Grade 2"></div>
           <div class="full"><label for="assessmentObjectives">Learning objectives or skills <span style="font-weight:400;color:var(--muted)">(one per line)</span></label><textarea id="assessmentObjectives" rows="3" placeholder="I can open Word or Google Docs&#10;I can enter and format text"></textarea></div>
           <div class="full"><label for="assessmentInstructions">Student instructions <span style="font-weight:400;color:var(--muted)">(optional)</span></label><textarea id="assessmentInstructions" rows="2" placeholder="What students need to know before they begin"></textarea></div>
-          <div><label for="assessmentRoster">Class roster <span style="font-weight:400;color:var(--muted)">(optional)</span></label><select id="assessmentRoster"><option value="">— No roster —</option></select></div>
+          <div><label for="assessmentRoster">Class roster <span style="font-weight:400;color:var(--muted)">(required for results and TeacherScope)</span></label><select id="assessmentRoster"><option value="">— Choose a class roster —</option></select></div>
           <div><label for="assessmentCutoff">Due date <span style="font-weight:400;color:var(--muted)">(optional)</span></label><input id="assessmentCutoff" type="datetime-local"></div>
         </div>
         <div id="assessmentSections"></div>
@@ -3672,6 +3673,15 @@
       return ({start:'Starting a lesson',source:'Lesson source',content:'Learning content',setup:'Lesson setup',plan:'Reviewing the lesson plan',slides:'Reviewing the slide deck'})[key]||'Planning a lesson';
     }
     function assistantValue(id){ const el=$(id); return el&&String(el.value||'').trim(); }
+    function assistantAssessmentSummary(){
+      const draft=(ctx&&ctx.assessmentDraft)||pendingAssessmentDraft;
+      if(!draft||!Array.isArray(draft.sections))return '';
+      return draft.sections.map((section,index)=>{
+        const items=Array.isArray(section.items)?section.items:[];
+        const marks=items.reduce((sum,item)=>sum+(Number(item.marks)||0),0);
+        return `Phase ${index+1}: ${section.title||section.type||'Assessment section'} · ${section.type||'section'} · ${items.length} item${items.length===1?'':'s'} · ${marks} marks`;
+      }).join('\n');
+    }
     function assistantContextData(){
       const key=assistantStageKey();
       const model=teachingModelsById[assistantValue('teachingModel')||selectedTeachingModelId]||{};
@@ -3690,6 +3700,14 @@
         objectives:assistantValue('objectives')||(ctx&&ctx.objectives)||'',
         focus:assistantValue('focus')||(ctx&&ctx.focus)||'',
         teachingModel:model.label||'',
+        lessonPurpose:(ctx&&ctx.lessonPurpose)||currentLessonPurpose(),
+        assessmentTotalMarks:(ctx&&ctx.assessmentTotalMarks)||assistantValue('assessmentPlanTotal')||'',
+        assessmentStructure:(ctx&&ctx.assessmentStructure)||assistantValue('assessmentPlanStructure')||'',
+        assessmentDeliveryMode:(ctx&&ctx.assessmentDeliveryMode)||assistantValue('assessmentPlanDelivery')||'',
+        assessmentBrief:(ctx&&ctx.assessmentBrief)||assistantValue('assessmentPlanBrief')||'',
+        assessmentQuestionTypes:Array.isArray(ctx&&ctx.assessmentQuestionTypes)?ctx.assessmentQuestionTypes.join(', '):selectedAssessmentTypes().join(', '),
+        assessmentMcqCount:(ctx&&ctx.assessmentMcqCount)||assistantValue('assessmentPlanMcqCount')||'',
+        assessmentSummary:assistantAssessmentSummary(),
         lessonCount:(ctx&&ctx.sequenceLessonCount)||assistantValue('sequenceLessonCount')||'',
         periodMinutes:(ctx&&ctx.periodMinutes)||assistantValue('periodMinutes')||'',
         sourceSummary:sourceMaterialText?sourceMaterialText.slice(0,1400):'',
@@ -3698,13 +3716,14 @@
     }
     function planAssistantTarget(index){
       const section=document.querySelector(`#planSections .plan-section[data-i="${index}"]`); if(!section) return null;
-      return {type:'plan-section',items:[{index:Number(index),heading:section.querySelector('.heading')?.value||'',content:section.querySelector('.content')?.value||''}]};
+      if(section.dataset.assessmentProtected==='true') return null;
+      return {type:'plan-section',items:[{index:Number(index),heading:section.querySelector('.heading')?.value||'',content:section.querySelector('.content')?.value||'',fieldKey:section.dataset.field||'',protected:false}]};
     }
     function slideAssistantItem(card){
-      return {index:Number(card.dataset.index),title:card.querySelector('[data-field="title"]')?.innerText||'',subtitle:card.querySelector('[data-field="subtitle"]')?.innerText||'',bullets:[...card.querySelectorAll('[data-field="bullet"]')].map(el=>el.innerText.trim()).filter(Boolean),example:card.querySelector('[data-field="example"]')?.innerText||''};
+      return {index:Number(card.dataset.index),slideType:card.dataset.slideType||'',assessmentPhaseType:card.dataset.assessmentPhaseType||'',protected:card.dataset.assessmentProtected==='true',title:card.querySelector('[data-field="title"]')?.innerText||'',subtitle:card.querySelector('[data-field="subtitle"]')?.innerText||'',bullets:[...card.querySelectorAll('[data-field="bullet"]')].map(el=>el.innerText.trim()).filter(Boolean),example:card.querySelector('[data-field="example"]')?.innerText||''};
     }
-    function slideAssistantTarget(index){ const card=document.querySelector(`#deck .slide[data-index="${index}"]`); return card?{type:'slide',items:[slideAssistantItem(card)]}:null; }
-    function deckAssistantTarget(){ const cards=[...document.querySelectorAll('#deck .slide[data-index]')]; return cards.length?{type:'deck',items:cards.map(slideAssistantItem)}:null; }
+    function slideAssistantTarget(index){ const card=document.querySelector(`#deck .slide[data-index="${index}"]`); return card&&card.dataset.assessmentProtected!=='true'?{type:'slide',items:[slideAssistantItem(card)]}:null; }
+    function deckAssistantTarget(){ const cards=[...document.querySelectorAll('#deck .slide[data-index]')].filter(card=>card.dataset.assessmentProtected!=='true'); return cards.length?{type:'deck',items:cards.map(slideAssistantItem)}:null; }
     function renderAssistantChoices(items,mode='ask'){
       $('assistantChoices').innerHTML=(items||[]).map(([label,prompt])=>`<button type="button" class="assistant-choice" data-assistant-prompt="${esc(prompt)}" data-assistant-mode="${mode}">${ICON('i-spark')}${esc(label)}</button>`).join('');
     }
@@ -3770,10 +3789,12 @@
       proposal.edits.forEach(edit=>{
         if(proposal.targetType==='plan-section'){
           const section=document.querySelector(`#planSections .plan-section[data-i="${edit.index}"]`), field=section?.querySelector('.content'); if(!field) return;
+          if(section.dataset.assessmentProtected==='true') return;
           proposal.before.push({index:edit.index,content:field.value}); field.value=edit.content; field.style.height='auto'; field.style.height=field.scrollHeight+'px';
           return;
         }
         const card=document.querySelector(`#deck .slide[data-index="${edit.index}"]`); if(!card) return;
+        if(card.dataset.assessmentProtected==='true') return;
         proposal.before.push({index:edit.index,...slideAssistantItem(card)});
         const title=card.querySelector('[data-field="title"]'), subtitle=card.querySelector('[data-field="subtitle"]'), example=card.querySelector('[data-field="example"]'), list=card.querySelector('ul');
         if(title&&edit.title) title.innerText=edit.title;
@@ -3827,8 +3848,8 @@
     $('assistantCustomToggle').addEventListener('click',()=>{ $('assistantCompose').classList.add('visible'); $('assistantInput').focus(); });
     $('assistantCompose').addEventListener('submit',e=>{ e.preventDefault(); const input=$('assistantInput'), value=input.value; input.value=''; assistantTarget?requestAssistantEdit(value):askAssistant(value); });
     document.addEventListener('click',e=>{
-      const planBtn=e.target.closest('[data-assistant-plan]'); if(planBtn){ openAssistant(planAssistantTarget(Number(planBtn.dataset.assistantPlan))); return; }
-      const slideBtn=e.target.closest('[data-assistant-slide]'); if(slideBtn){ openAssistant(slideAssistantTarget(Number(slideBtn.dataset.assistantSlide))); }
+      const planBtn=e.target.closest('[data-assistant-plan]'); if(planBtn){ const target=planAssistantTarget(Number(planBtn.dataset.assistantPlan)); if(target)openAssistant(target); return; }
+      const slideBtn=e.target.closest('[data-assistant-slide]'); if(slideBtn){ const target=slideAssistantTarget(Number(slideBtn.dataset.assistantSlide)); if(target)openAssistant(target); }
     });
     document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&$('assistantPanel').classList.contains('open')) closeAssistant(); });
 
@@ -4850,6 +4871,12 @@
       if(!sequenceMode()||!sequencePlans[activeSequencePlanIndex]) return;
       sequencePlans[activeSequencePlanIndex]={...sequencePlans[activeSequencePlanIndex],...collectPlan()};
     }
+    function planSectionAssistantProtected(purpose,section){
+      if(purpose==='test')return true;
+      if(purpose!=='project')return false;
+      const identity=[section&&section.heading,section&&section.fieldKey,section&&section.content].filter(Boolean).join(' ');
+      return /assessment|evaluat|marking|assessment\s+(?:flow|phase)/i.test(identity);
+    }
     function paintPlan(d){
       planTemplateId=d.templateId||null;
       const purpose=(ctx&&ctx.lessonPurpose)||d.lessonPurpose||'lesson';
@@ -4868,29 +4895,34 @@
       const seq=d.sequence||((ctx&&ctx.sequenceEnabled)?{lessonCount:ctx.sequenceLessonCount,periodMinutes:ctx.periodMinutes}:null);
       const seqNote=seq?` · ${seq.lessonCount} lessons, ${seq.periodMinutes} min each`:'';
       $('planSrc').textContent=modelNote+templateNote+seqNote;
-      $('planSections').innerHTML=d.sections.map((s,i)=>`
-        <div class="plan-section" data-i="${i}" data-stage="${esc(s.stageId||'')}" data-field="${esc(s.fieldKey||'')}">
+      $('planSections').innerHTML=d.sections.map((s,i)=>{
+        const assistantProtected=planSectionAssistantProtected(purpose,s);
+        return `
+        <div class="plan-section" data-i="${i}" data-stage="${esc(s.stageId||'')}" data-field="${esc(s.fieldKey||'')}" data-assessment-protected="${assistantProtected?'true':'false'}">
           ${s.stageId&&model?.stages?.find(stage=>stage.id===s.stageId)?`<span class="plan-stage">${esc(model.stages.find(stage=>stage.id===s.stageId).label)}</span>`:''}
           <input class="heading" value="${esc(s.heading)}"${s.fieldKey?' readonly title="This is a row in your own lesson-plan form, so its name is fixed."':''} />
           <textarea class="content" rows="3" placeholder="Type what should go in this row of your form…">${esc(s.content)}</textarea>
-          <button type="button" class="assistant-inline" data-assistant-plan="${i}">${ICON('i-spark')}Improve with Assistant</button>
+          ${assistantProtected?'<span class="hint">Linked to the assessment setup</span>':`<button type="button" class="assistant-inline" data-assistant-plan="${i}">${ICON('i-spark')}Improve with Assistant</button>`}
           ${s.note?`<p class="plan-note">${esc(s.note)}</p>`:''}
-        </div>`).join('');
+        </div>`;
+      }).join('');
       planStage.querySelectorAll('textarea.content').forEach(t=>{ t.style.height='auto'; t.style.height=t.scrollHeight+'px'; t.addEventListener('input',()=>{t.style.height='auto';t.style.height=t.scrollHeight+'px'; scheduleWorkspaceSave();}); });
       planStage.querySelectorAll('input.heading').forEach(input=>input.addEventListener('input',scheduleWorkspaceSave));
     }
+    function currentAutomaticAssessment(){ return pendingAssessmentDraft||(ctx&&ctx.assessmentDraft)||null; }
+    function automaticAssessmentIsPublished(){ return !!(ctx&&ctx.assessmentPublishedId&&ctx.assessmentDraft&&!pendingAssessmentDraft); }
     function renderAutoAssessmentSummary(){
-      const box=$('autoAssessmentSummary'), draft=pendingAssessmentDraft;
+      const box=$('autoAssessmentSummary'), draft=currentAutomaticAssessment(), published=automaticAssessmentIsPublished();
       if(!draft){ box.style.display='none'; box.innerHTML=''; return; }
       const itemCount=(draft.sections||[]).reduce((sum,section)=>sum+(section.items||[]).length,0);
       const typeNames={mcq:'multiple choice','short-answer':'short answer','extended-response':'extended response',practical:'practical / observation'};
       const breakdown=(draft.sections||[]).map(section=>{ const marks=(section.items||[]).reduce((sum,item)=>sum+(Number(item.marks)||0),0); return `${section.type==='mcq'?(section.items||[]).length+' ':''}${typeNames[section.type]||section.type} (${marks} marks)`; }).join(' · ');
       box.style.display='block';
-      box.innerHTML=`<h3>${ICON('i-clipboard')}Automatic ${esc(draft.assessmentType||'assessment')} draft ready</h3><p>${esc(draft.title)} · ${draft.totalMarks} marks · ${itemCount} item${itemCount===1?'':'s'}</p><p style="margin-top:5px;color:var(--ink);font-weight:600">${esc(breakdown)}</p><button id="reviewAutoAssessmentBtn" type="button" class="btn accent" style="width:auto;margin-top:11px">Review and edit before publishing</button>`;
-      $('reviewAutoAssessmentBtn').addEventListener('click',()=>openGeneratedAssessmentDraft(draft));
+      box.innerHTML=`<h3>${ICON('i-clipboard')}Automatic ${esc(draft.assessmentType||'assessment')} ${published?'published':'draft ready'}</h3><p>${esc(draft.title)} · ${draft.totalMarks} marks · ${itemCount} item${itemCount===1?'':'s'}</p><p style="margin-top:5px;color:var(--ink);font-weight:600">${esc(breakdown)}</p><button id="reviewAutoAssessmentBtn" type="button" class="btn accent" style="width:auto;margin-top:11px">${published?'Open published assessment':'Review and edit before publishing'}</button>`;
+      $('reviewAutoAssessmentBtn').addEventListener('click',()=>published?openAssignments('plan'):openGeneratedAssessmentDraft(draft));
     }
     function renderResultAssessment(){
-      const section=$('automaticAssessmentResult'), draft=pendingAssessmentDraft;
+      const section=$('automaticAssessmentResult'), draft=currentAutomaticAssessment(), published=automaticAssessmentIsPublished();
       if(!section)return;
       if(!draft){ section.style.display='none'; return; }
       const purpose=draft.assessmentType==='project'?'Project':'Test';
@@ -4900,12 +4932,22 @@
         return `${part.type==='mcq'?(part.items||[]).length+' ':''}${typeNames[part.type]||part.type} · ${marks} marks`;
       }).join(' · ');
       section.style.display='block';
-      $('automaticAssessmentResultTitle').textContent=`${purpose} assessment ready`;
-      $('automaticAssessmentResultIntro').textContent=`${draft.title} was generated with this plan. Review the questions and marking criteria, choose the class, then publish it for students.`;
+      $('automaticAssessmentResultTitle').textContent=`${purpose} assessment ${published?'published':'ready'}`;
+      $('automaticAssessmentResultIntro').textContent=published
+        ? `${draft.title} is published and linked to this deck. Open Test or project to run the live phases, mark student work and release results.`
+        : `${draft.title} was generated with this plan. Review the questions and marking criteria, choose the class, then publish it for students.`;
       $('automaticAssessmentResultBreakdown').textContent=`${draft.totalMarks} marks${breakdown?' · '+breakdown:''}`;
-      $('reviewResultAssessmentBtn').textContent=`Review and publish ${purpose.toLowerCase()}`;
+      $('reviewResultAssessmentBtn').textContent=published?`Open published ${purpose.toLowerCase()}`:`Review and publish ${purpose.toLowerCase()}`;
+      $('reviewResultAssessmentBtn').dataset.assessmentState=published?'published':'draft';
     }
-    $('reviewResultAssessmentBtn').addEventListener('click',()=>openGeneratedAssessmentDraft(pendingAssessmentDraft));
+    $('reviewResultAssessmentBtn').addEventListener('click',()=>{
+      if($('reviewResultAssessmentBtn').dataset.assessmentState==='published'){
+        editingGeneratedAssessmentDraft=false;
+        $('assessmentBuilder').style.display='none';
+        openAssignments('slides');
+      }
+      else openGeneratedAssessmentDraft(currentAutomaticAssessment());
+    });
     function renderSequencePlanFlow(){
       const flow=$('sequencePlanFlow');
       if(!sequenceMode()){
@@ -4933,12 +4975,13 @@
       $('dlPlanBtn').disabled=!complete;
       $('dlPlanBtn').innerHTML=ICON('i-download')+(complete?' Download updated lesson plan':' Complete all plans to download');
     }
-    function renderPlan(d){
+    function renderPlan(d,{preservePublishedAssessment=false}={}){
       if(ctx&&Array.isArray(d.successCriteria)&&d.successCriteria.length) ctx.successCriteria=d.successCriteria.slice();
       if(ctx&&d.lessonPurpose) ctx.lessonPurpose=d.lessonPurpose;
-      if(Object.prototype.hasOwnProperty.call(d,'assessmentDraft')){
+      const keepPublishedAssessment=preservePublishedAssessment&&automaticAssessmentIsPublished();
+      if(Object.prototype.hasOwnProperty.call(d,'assessmentDraft')&&!keepPublishedAssessment){
         pendingAssessmentDraft=d.assessmentDraft?JSON.parse(JSON.stringify(d.assessmentDraft)):null;
-        if(ctx)ctx.assessmentDraft=pendingAssessmentDraft;
+        if(ctx){ ctx.assessmentDraft=pendingAssessmentDraft; ctx.assessmentPublishedId=null; }
       }
       if(sequenceMode()&&d.sequenceLessonNumber){
         const index=Math.max(0,Number(d.sequenceLessonNumber)-1);
@@ -5158,7 +5201,7 @@
       let i=0; statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>'+STEPS[0];
       const tmr=setInterval(()=>{ i=Math.min(i+1,STEPS.length-1); statusEl.innerHTML='<span class="spinner"></span>'+STEPS[i]; },1900);
       try{
-        const body={...ctx,sequenceEnabled:false,lessonPlan:{sections:plan.sections},presetId:selectedPresetId,
+        const body={...ctx,lessonWorkspaceId:currentWorkspaceId||undefined,sequenceEnabled:false,lessonPlan:{sections:plan.sections},presetId:selectedPresetId,
           lessonNumber:Number.isFinite(sequenceStartLessonNumber)?sequenceStartLessonNumber+index:undefined,
           focus:[ctx.focus,`This is lesson ${index+1} of ${total}. Build slides only for this lesson plan.`].filter(Boolean).join(' ')};
         const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -5179,6 +5222,14 @@
     });
     $('acceptBtn').addEventListener('click', async ()=>{
       const lessonPlan=collectPlan();
+      if(['project','test'].includes((ctx&&ctx.lessonPurpose)||'lesson')&&!automaticAssessmentIsPublished()){
+        const draft=currentAutomaticAssessment();
+        if(draft){
+          toast(`Review and publish the ${ctx.lessonPurpose} assessment before creating slides so the deck uses the exact approved phases.`);
+          openGeneratedAssessmentDraft(draft);
+        }else toast(`The automatic ${ctx.lessonPurpose} assessment is missing. Regenerate the plan before creating slides.`);
+        return;
+      }
       // Ask which week before starting, not after — a lesson generated without
       // one has nowhere to be filed in the workbook. Cancelling here cancels
       // the whole thing rather than generating something that can't be filed.
@@ -5196,7 +5247,7 @@
       $('acceptBtn').disabled=true; let i=0; statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>'+STEPS[0];
       const tmr=setInterval(()=>{ i=Math.min(i+1,STEPS.length-1); statusEl.innerHTML='<span class="spinner"></span>'+STEPS[i]; },1900);
       try{
-        const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...ctx,lessonPlan,presetId:selectedPresetId})});
+        const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...ctx,lessonWorkspaceId:currentWorkspaceId||undefined,lessonPlan,presetId:selectedPresetId})});
         const d=await r.json();
         if(creditBlocked(r,d)){ clearInterval(tmr); statusEl.innerHTML=''; $('acceptBtn').disabled=false; return; }
         if(!r.ok) throw new Error(d.error);
@@ -5235,6 +5286,7 @@
     }
     function cardHTML(s,i){
       const bm=badgeMeta(s.imageSource);
+      const assessmentProtected=!!s.assessmentProtected||!!s.assessmentPhaseType;
       let thumb;
       if(s.type==='video'&&s.youtube){
         thumb=`<div class="thumb"><img src="${esc(s.youtube.thumbnail)}" loading="lazy"><span class="badge" style="background:#ff0033;color:#fff">YouTube</span></div>`;
@@ -5260,31 +5312,37 @@
           ? `<div class="thumb"><img src="${esc(s.image)}" loading="lazy">${badge}<div class="thumb-actions">${gifBtn}<button class="swap-btn" data-action="swap" data-i="${i}">${SWAP_HTML}</button></div></div>`
           : `<div class="thumb thumb-empty"><div class="thumb-actions">${gifBtn}<button class="swap-btn" data-action="swap" data-i="${i}">${ICON('i-image')}Add a picture</button></div></div>`;
       }
-      const k=KICKER[s.type]; const kicker=k?`<span class="kicker ${k[0]}">${ICON(k[1])}${k[2]}${s.modelStage?`<span class="model-stage">${esc(modelStageLabel(s.modelStage))}</span>`:''}</span>`:'';
-      const stageKicker=!k&&s.modelStage?`<span class="kicker"><span class="model-stage">${esc(modelStageLabel(s.modelStage))}</span></span>`:'';
+      const k=s.type==='objectives'?['objectives','i-target',s.title||'Learning Objectives']:KICKER[s.type]; const kicker=k?`<span class="kicker ${k[0]}">${ICON(k[1])}${k[2]}${s.modelStage?`<span class="model-stage">${esc(s.modelStageLabel||modelStageLabel(s.modelStage))}</span>`:''}</span>`:'';
+      const stageKicker=!k&&s.modelStage?`<span class="kicker"><span class="model-stage">${esc(s.modelStageLabel||modelStageLabel(s.modelStage))}</span></span>`:'';
       let body;
-      if(s.type==='title'){ body=`${kicker}<h3 contenteditable data-field="title">${esc(s.title)}</h3><p class="sub" contenteditable data-field="subtitle">${esc(s.subtitle)}</p><div class="card-actions"><button type="button" data-assistant-slide="${i}">${ICON('i-spark')}Edit with Assistant</button></div>`; }
+      if(s.type==='title'){
+        const editable=assessmentProtected?'':' contenteditable';
+        const actions=assessmentProtected?'<span class="hint">Assessment administration slide</span>':`<button type="button" data-assistant-slide="${i}">${ICON('i-spark')}Edit with Assistant</button>`;
+        body=`${kicker}<h3${editable} data-field="title">${esc(s.title)}</h3><p class="sub"${editable} data-field="subtitle">${esc(s.subtitle)}</p><div class="card-actions">${actions}</div>`;
+      }
       else if(s.type==='video'&&s.youtube){
         body=`<span class="kicker activity">${ICON('i-play')}Lesson video</span><h3 contenteditable data-field="title">${esc(s.title||s.youtube.title||'Lesson video')}</h3><div class="youtube-chip"><img src="${esc(s.youtube.thumbnail)}" alt=""><span><a href="${esc(s.youtube.url)}" target="_blank" rel="noopener">${esc(s.youtube.title)}</a><br><span>${esc(s.youtube.channelTitle||'YouTube')} · Teacher review required</span></span><button type="button" data-action="remove-youtube" data-i="${i}" title="Remove video slide" aria-label="Remove video slide">×</button></div><div class="card-actions"><button data-action="remove-youtube" data-i="${i}" title="Remove this video slide">Remove video</button></div>`;
       }
       else{
-        const bl=`<ul>${s.bullets.map(b=>`<li contenteditable data-field="bullet">${esc(b)}</li>`).join('')}</ul>`;
-        const ex=s.example?`<div class="example"><div class="box"><b>${ICON('i-spark')}Example</b><span contenteditable data-field="example">${esc(s.example)}</span></div></div>`:'';
+        const editable=assessmentProtected?'':' contenteditable';
+        const bl=`<ul>${s.bullets.map(b=>`<li${editable} data-field="bullet">${esc(b)}</li>`).join('')}</ul>`;
+        const ex=s.example?`<div class="example"><div class="box"><b>${ICON('i-spark')}Example</b><span${editable} data-field="example">${esc(s.example)}</span></div></div>`:'';
         // Example/task slides can get an accurate AI-generated illustration.
-        const aiBtn=(s.type==='content'||s.type==='activity')?`<button data-action="ai" data-i="${i}" title="Generate an accurate AI illustration — ${costWords('lessonscope.generate_ai_image')}">${AI_HTML}${costPill('lessonscope.generate_ai_image')}</button>`:'';
-        const regenBtn=s.type==='content'?`<button data-action="regen" data-i="${i}" title="${billingLive()?`First ${pricesState.fairUse.freeRegensPerLesson} regenerations per lesson are free, then 1 usage unit`:'Regenerate this slide'}">${REGEN_HTML}</button>`:'';
+        const aiBtn=!assessmentProtected&&(s.type==='content'||s.type==='activity')?`<button data-action="ai" data-i="${i}" title="Generate an accurate AI illustration — ${costWords('lessonscope.generate_ai_image')}">${AI_HTML}${costPill('lessonscope.generate_ai_image')}</button>`:'';
+        const regenBtn=s.type==='content'&&!assessmentProtected?`<button data-action="regen" data-i="${i}" title="${billingLive()?`First ${pricesState.fairUse.freeRegensPerLesson} regenerations per lesson are free, then 1 usage unit`:'Regenerate this slide'}">${REGEN_HTML}</button>`:'';
         // a photo content slide can be turned into a labelled diagram
-        const diaBtn=(s.type==='content'&&!s.fraction&&!s.visual&&!s.labelled)?`<button data-action="diagram" data-i="${i}" title="Turn this into a labelled diagram — ${costWords('lessonscope.generate_diagram')}">${DIA_HTML}${costPill('lessonscope.generate_diagram')}</button>`:'';
-        const videoBtn=`<button data-action="youtube" data-i="${i}" title="Add or suggest a YouTube lesson video">${ICON('i-play')}Video</button>`;
-        const assistantBtn=`<button type="button" data-assistant-slide="${i}">${ICON('i-spark')}Edit with Assistant</button>`;
-        const actions=`<div class="card-actions">${assistantBtn}${videoBtn}${regenBtn}${diaBtn}${aiBtn}</div>`;
+        const diaBtn=(s.type==='content'&&!assessmentProtected&&!s.fraction&&!s.visual&&!s.labelled)?`<button data-action="diagram" data-i="${i}" title="Turn this into a labelled diagram — ${costWords('lessonscope.generate_diagram')}">${DIA_HTML}${costPill('lessonscope.generate_diagram')}</button>`:'';
+        const videoBtn=assessmentProtected?'':`<button data-action="youtube" data-i="${i}" title="Add or suggest a YouTube lesson video">${ICON('i-play')}Video</button>`;
+        const assistantBtn=assessmentProtected?'':`<button type="button" data-assistant-slide="${i}">${ICON('i-spark')}Edit with Assistant</button>`;
+        const locked=assessmentProtected?'<span class="hint">Linked to the assessment setup</span>':'';
+        const actions=`<div class="card-actions">${locked}${assistantBtn}${videoBtn}${regenBtn}${diaBtn}${aiBtn}</div>`;
         const yt=s.youtube?`<div class="youtube-chip"><img src="${esc(s.youtube.thumbnail)}" alt=""><span><a href="${esc(s.youtube.url)}" target="_blank" rel="noopener">${esc(s.youtube.title)}</a><br><span>${esc(s.youtube.channelTitle||'YouTube')} · Teacher review required</span></span><button type="button" data-action="remove-youtube" data-i="${i}" title="Remove video" aria-label="Remove video">×</button></div>`:'';
         const diff=s.differentiation?`<div class="diff"><div><b style="color:#15824b">Support</b> ${esc(s.differentiation.support)}</div><div><b style="color:#1f4e79">Stretch</b> ${esc(s.differentiation.stretch)}</div></div>`:'';
         const sc=(s.shortcuts&&s.shortcuts.length)?`<div class="shortcuts">${s.shortcuts.map(x=>`<div class="sc-row"><span class="sc-act">${esc(x.action)}</span><span class="sc-keys">${String(x.keys).split('+').map(k=>k.trim()).filter(Boolean).map((k,n)=>(n>0?'<span class="sc-plus">+</span>':'')+'<kbd class="keycap">'+esc(k)+'</kbd>').join('')}</span></div>`).join('')}</div>`:'';
         const wk=(s.worked&&s.worked.steps&&s.worked.steps.length)?`<div class="worked">${s.worked.task?`<div class="wtask">${esc(s.worked.task)}</div>`:''}<ol>${s.worked.steps.map(st=>`<li>${esc(st)}</li>`).join('')}</ol></div>`:'';
-        body=`${kicker||stageKicker}<h3 contenteditable data-field="title">${esc(s.title)}</h3>${bl}${sc}${wk}${ex}${diff}${yt}${actions}`;
+        body=`${kicker||stageKicker}<h3${editable} data-field="title">${esc(s.title)}</h3>${bl}${sc}${wk}${ex}${diff}${yt}${actions}`;
       }
-      return `<div class="slide" data-index="${i}">${thumb}<div class="body">${body}</div></div>`;
+      return `<div class="slide" data-index="${i}" data-slide-type="${esc(s.type||'')}" data-assessment-phase-type="${esc(s.assessmentPhaseType||'')}" data-assessment-protected="${assessmentProtected?'true':'false'}">${thumb}<div class="body">${body}</div></div>`;
     }
     const BAND={ early:'Early grades · big colourful text', middle:'Middle grades · balanced', senior:'Senior grades · detailed' };
     function renderDeck(d){
@@ -5296,13 +5354,30 @@
       }
       $('deckTitle').textContent=d.filename.replace('.pptx','');
       const model=teachingModelsById[d.teachingModelId];
-      $('deckCount').innerHTML=`· ${d.slideCount} slides ${model?`<span class="band-pill">${ICON('i-target')}${esc(model.label)}</span>`:''} ${d.band?`<span class="band-pill">${ICON('i-target')}${BAND[d.band]||d.band}</span>`:''}`;
+      const flowLabel=purpose==='project'?'Project session':purpose==='test'?'Test session':(model&&model.label);
+      $('deckCount').innerHTML=`· ${d.slideCount} slides ${flowLabel?`<span class="band-pill">${ICON('i-target')}${esc(flowLabel)}</span>`:''} ${d.band?`<span class="band-pill">${ICON('i-target')}${BAND[d.band]||d.band}</span>`:''}`;
       $('packTitleText').textContent=purpose==='lesson'?'Lesson pack':purpose==='test'?'Test preparation resources':'Project preparation resources';
       $('packPurposeHint').textContent=purpose==='lesson'
         ? 'Turn this lesson into student-facing materials — generate, tweak, and download each as a Word document.'
         : purpose==='test'
           ? 'Generate revision and practice materials for use before the test. They will not reproduce live questions, answers, or marking criteria.'
           : 'Generate prerequisite practice and planning support without completing the assessed project for students or revealing marking guidance.';
+      const packLabels=purpose==='project'
+        ? {notes:'Project preparation guide',worksheet:'Planning organiser','exit-ticket':'Progress check',quiz:'Readiness quiz',homework:'Preparation task',activities:'Support sheets'}
+        : purpose==='test'
+          ? {notes:'Revision guide',worksheet:'Practice sheet','exit-ticket':'Readiness check',quiz:'Practice quiz',homework:'Revision task',activities:'Revision support'}
+          : {notes:'Study notes',worksheet:'Worksheet','exit-ticket':'Exit ticket',quiz:'Quiz',homework:'Homework',activities:'Differentiated'};
+      document.querySelectorAll('#packSection [data-pack]').forEach(button=>{ const label=button.querySelector('[data-pack-label]'); if(label)label.textContent=packLabels[button.dataset.pack]||button.dataset.pack; });
+      const packListText=Object.values(packLabels).map(label=>label.toLowerCase()).join(' + ');
+      $('fullPackBtn').innerHTML=`${ICON('i-download')} Generate full pack <span style="font-size:12px;font-weight:400;opacity:.8">(.zip — ${esc(packListText)})</span>`;
+      $('gameTitleText').textContent=purpose==='lesson'?'Lesson game':'Optional preparation game';
+      $('gamePurposeHint').textContent=purpose==='lesson'
+        ? 'Optional practice based on this lesson.'
+        : purpose==='test'
+          ? 'Unassessed revision for use before the test. This is separate from the test questions.'
+          : 'Unassessed prerequisite practice for use before the project. This is separate from the project assessment.';
+      $('gameInfoTip').dataset.tip=$('gamePurposeHint').textContent;
+      $('gameInfoTip').setAttribute('aria-label',$('gamePurposeHint').textContent);
       deckEl.className='deck'+(d.band?' band-'+d.band:''); deckEl.innerHTML=d.slides.map((s,i)=>cardHTML(s,i)).join('');
       $('packPreview').innerHTML=''; // reset lesson-pack for the new deck
       resetGameSection(); // reset the student-game box for the new deck
@@ -5407,7 +5482,19 @@
         const d=await r.json().catch(()=>({error:'Could not reopen your deck.'}));
         if(!r.ok) throw new Error(d.error||'Could not reopen your deck.');
         currentDeckId=d.deckId;
-        renderDeck(d);
+        if(d.context){
+          ctx={...(ctx||{}),...d.context};
+          sourceMaterialText=ctx.sourceMaterialText||'';
+          sourceMaterialImages=Array.isArray(ctx.sourceMaterialImages)?ctx.sourceMaterialImages:[];
+          importedPlanText=ctx.lessonPlanText||d.sourceText||'';
+          if(ctx.presetId)selectedPresetId=ctx.presetId;
+          if(ctx.teachingModelId)selectedTeachingModelId=ctx.teachingModelId;
+          restoreContextFields(ctx);
+          updateTeachingModelHint();
+        }
+        const wasRestoring=restoringWorkspace;
+        restoringWorkspace=true;
+        try{ renderDeck(d); }finally{ restoringWorkspace=wasRestoring; }
         show('slides');
         setStep(3);
         results.scrollIntoView({behavior:'smooth', block:'start'});
@@ -5785,17 +5872,87 @@
     }
 
     const assignResultsCache=new Map(); // assignId -> last-fetched {questions, submissions, ...}
+    const assignmentResultsInFlight=new Map(); // assignId/wrapId -> active fetch promise
+    const assignmentResultsPollers=new Map(); // detailId -> one non-overlapping timer
+    const ASSIGNMENT_RESULTS_POLL_MS=1200;
+
+    function assignmentResultsDetailVisible(detailId,wrapId){
+      const panel=$('assignmentsPanel'),detail=$(detailId),wrap=$(wrapId);
+      return !!(panel&&panel.style.display!=='none'&&detail&&detail.style.display!=='none'&&wrap&&document.body.contains(wrap));
+    }
+
+    function stopAssignmentResultsPolling(detailId){
+      const ids=detailId?[detailId]:[...assignmentResultsPollers.keys()];
+      ids.forEach(id=>{
+        const poller=assignmentResultsPollers.get(id);
+        if(poller&&poller.timer)clearTimeout(poller.timer);
+        assignmentResultsPollers.delete(id);
+      });
+    }
+
+    function startAssignmentResultsPolling(assignId,wrapId,detailId){
+      stopAssignmentResultsPolling(detailId);
+      const poller={assignId,wrapId,detailId,timer:null};
+      assignmentResultsPollers.set(detailId,poller);
+      const tick=async()=>{
+        if(assignmentResultsPollers.get(detailId)!==poller||!assignmentResultsDetailVisible(detailId,wrapId)){
+          stopAssignmentResultsPolling(detailId); return;
+        }
+        await loadAssignmentResults(assignId,wrapId,undefined,{silent:true});
+        if(assignmentResultsPollers.get(detailId)===poller&&assignmentResultsDetailVisible(detailId,wrapId)){
+          poller.timer=setTimeout(tick,ASSIGNMENT_RESULTS_POLL_MS);
+        }else stopAssignmentResultsPolling(detailId);
+      };
+      poller.timer=setTimeout(tick,ASSIGNMENT_RESULTS_POLL_MS);
+    }
+
+    function captureAssignmentEditorState(wrap){
+      const values=new Map();
+      wrap.querySelectorAll('.grade-row').forEach(row=>{
+        const save=row.querySelector('.grade-override-btn'); if(!save)return;
+        const key=`${save.dataset.studentId}\u001f${save.dataset.questionId}`;
+        const marks=row.querySelector('.grade-marks-input'),rationale=row.querySelector('.grade-rationale-input');
+        if(marks&&marks.dataset.teacherEdited==='1')values.set(key+'\u001fmarks',marks.value);
+        if(rationale&&rationale.dataset.teacherEdited==='1')values.set(key+'\u001frationale',rationale.value);
+      });
+      const active=document.activeElement;
+      let focus=null;
+      if(active&&wrap.contains(active)&&active.matches('.grade-marks-input,.grade-rationale-input')){
+        const save=active.closest('.grade-row')?.querySelector('.grade-override-btn');
+        if(save)focus={key:`${save.dataset.studentId}\u001f${save.dataset.questionId}`,kind:active.classList.contains('grade-marks-input')?'marks':'rationale',start:active.selectionStart,end:active.selectionEnd};
+      }
+      return {values,focus};
+    }
+
+    function restoreAssignmentEditorState(wrap,state){
+      if(!state)return;
+      let focusField=null;
+      wrap.querySelectorAll('.grade-row').forEach(row=>{
+        const save=row.querySelector('.grade-override-btn'); if(!save)return;
+        const key=`${save.dataset.studentId}\u001f${save.dataset.questionId}`;
+        [['marks','.grade-marks-input'],['rationale','.grade-rationale-input']].forEach(([kind,selector])=>{
+          const field=row.querySelector(selector),saved=state.values.get(key+'\u001f'+kind);
+          if(field&&saved!==undefined){field.value=saved;field.dataset.teacherEdited='1';}
+          if(field&&state.focus&&state.focus.key===key&&state.focus.kind===kind)focusField=field;
+        });
+      });
+      if(focusField){
+        focusField.focus({preventScroll:true});
+        if(Number.isInteger(state.focus.start)&&typeof focusField.setSelectionRange==='function')focusField.setSelectionRange(state.focus.start,state.focus.end);
+      }
+    }
 
     // One grade row's markup — shared by both view modes below (by-student
     // shows all of one student's questions; by-question shows all students'
     // answers to one question). Same fields, different grouping.
     function gradeRowHTML(q, s, assignId, wrapId, headingText){
-      const g=s.grades[q.id]||{}; const ans=s.answers[q.id];
+      const g=(s.grades||{})[q.id]||{}; const ans=(s.answers||{})[q.id];
       const ansText=q.kind==='practical' ? 'Teacher observation' : q.kind==='mcq' ? (q.options&&q.options[ans]!=null?q.options[ans]:'(no answer)') : (ans||'(no answer)');
+      if(s.draftOnly&&q.kind!=='practical') return `<div class="grade-row" style="padding:10px 0;border-top:1px solid var(--border)"><div style="font-size:13px;font-weight:600">${esc(headingText)}</div><div style="font-size:12.5px;color:var(--muted);margin-top:4px">Available after this student submits.</div></div>`;
       const confirmed=g.source==='teacher'||g.source==='ai-confirmed';
       // MCQ is deterministically auto-graded — no AI verdict to confirm,
       // so it gets no badge instead of a misleading "AI — unconfirmed".
-      const badge = q.kind==='mcq' ? '' : q.kind==='practical'&&g.source==='teacher-required'
+      const badge = q.kind==='mcq' ? '' : q.kind==='practical'&&(!g.source||g.source==='teacher-required')
         ? '<span style="font-size:11.5px;color:#b26a00;font-weight:600">awaiting teacher</span>' : (confirmed
         ? '<span style="font-size:11.5px;color:var(--ok,#1f9d55);font-weight:600">confirmed</span>'
         : '<span style="font-size:11.5px;color:var(--muted)">AI — unconfirmed</span>');
@@ -5817,7 +5974,7 @@
       return d.submissions.map(s=>{
         const rows=d.questions.map(q=>gradeRowHTML(q, s, assignId, wrapId, (q.sectionTitle?`${q.sectionTitle} · `:'')+stripMarksText(q.question))).join('');
         return `<div style="margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:10px">
-          <div style="display:flex;justify-content:space-between;font-weight:700;font-size:14px"><span>${esc(s.name)}</span><span>${s.totalMarks}/${s.maxMarks}</span></div>
+          <div style="display:flex;justify-content:space-between;font-weight:700;font-size:14px"><span>${esc(s.name)}${s.draftOnly?' <small style="color:var(--muted);font-weight:500">working</small>':''}</span><span>${s.totalMarks}/${s.maxMarks}</span></div>
           ${rows}
         </div>`;
       }).join('');
@@ -5840,7 +5997,7 @@
       const liveBar=assessmentLiveControls(d,assignId,wrapId);
       const releaseBar=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:${d.effectivelyReleased?'#eafaf0':'#fdf6ea'}">
         <span style="font-size:13px;font-weight:600;color:${d.effectivelyReleased?'var(--ok,#1f9d55)':'#b26a00'}">${d.effectivelyReleased?(d.resultsReleased?'Results released to students':'Results released — due date passed'):'Results hidden from students'}</span>
-        ${!d.resultsReleased?`<button type="button" class="release-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" ${d.assessmentType&&!d.releaseReady?'disabled title="'+esc(d.releaseReason||'Finish marking first')+'"':''} style="font-size:12.5px;font-weight:600;padding:6px 12px;border:1px solid var(--primary);border-radius:8px;background:#fff;color:var(--primary);cursor:pointer">${d.assessmentType&&!d.releaseReady?esc(d.pendingGrades?`${d.pendingGrades} grades pending`:'No submissions yet'):'Release results'}</button>`
+        ${!d.resultsReleased?`<button type="button" class="release-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" ${d.assessmentType&&!d.releaseReady?'disabled title="'+esc(d.releaseReason||'Finish marking first')+'"':''} style="font-size:12.5px;font-weight:600;padding:6px 12px;border:1px solid var(--primary);border-radius:8px;background:#fff;color:var(--primary);cursor:pointer">${d.assessmentType&&!d.releaseReady?esc(d.missingStudents?`${d.missingStudents} submissions missing`:d.pendingGrades?`${d.pendingGrades} grades pending`:'No submissions yet'):'Release results'}</button>`
           :`<button type="button" class="unrelease-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" style="font-size:12.5px;font-weight:600;padding:6px 12px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--muted);cursor:pointer">Hide again</button>`}
       </div>`;
       const tabBtn=(v,label)=>`<button type="button" class="view-tab-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-view="${v}" style="font-size:12.5px;font-weight:600;padding:6px 14px;border:1px solid ${view===v?'var(--primary)':'var(--border)'};border-radius:8px;background:${view===v?'var(--primary)':'#fff'};color:${view===v?'#fff':'var(--ink)'};cursor:pointer">${label}</button>`;
@@ -5857,22 +6014,24 @@
       let title='Live classroom lobby',detail='Students can join, but questions remain hidden until you start.',buttons=action('start','Start first section','accent');
       if(phase==='open'){
         title=`Section ${index+1} of ${sections.length}: ${section?esc(section.title):'Open'}`;
-        detail=`${progress.readyCount||0}${audience} students ready for the next section.`;
+        detail=section&&section.type==='practical'
+          ? `${progress.readyCount||0}${audience} students ready. Record practical marks below while you circulate.`
+          : `${progress.readyCount||0}${audience} students ready for the next section.`;
         buttons=(index>0?action('previous','Previous section'):'')+action('pause','Pause')+action('next',index>=sections.length-1?'Finish sections':'Open next section','accent');
       }else if(phase==='paused'){
         title=`Paused: ${section?esc(section.title):'Assessment'}`; detail='Student answering and draft updates are paused.'; buttons=action('resume','Resume','accent')+action('finish','Finish sections');
       }else if(phase==='marking'){
-        title='Sections complete — marking'; detail=`${(d.submissions||[]).length}${audience} students have made their final submission.`; buttons='';
+        title='Sections complete — marking'; detail=`${d.submittedCount!=null?d.submittedCount:(d.submissions||[]).filter(student=>!student.draftOnly).length}${audience} students have made their final submission.`; buttons='';
       }else if(phase==='closed'){
         title='Assessment closed'; detail='Marks have been released to students.'; buttons='';
       }
-      return `<div style="margin-bottom:10px;padding:13px 14px;border:1px solid #b9ddcb;border-radius:11px;background:#f5fcf8"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><div><b style="color:#145c3c">${title}</b><div style="font-size:12.5px;color:var(--muted);margin-top:2px">${detail}</div></div><div style="display:flex;gap:7px;flex-wrap:wrap">${buttons}</div></div></div>`;
+      return `<div style="margin-bottom:10px;padding:13px 14px;border:1px solid #b9ddcb;border-radius:11px;background:#f5fcf8"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><div><b style="color:#145c3c">${title}</b><div style="font-size:12.5px;color:var(--muted);margin-top:2px">${detail}</div><div style="font-size:11.5px;color:#39745b;margin-top:4px">Updates automatically while these controls are open.</div></div><div style="display:flex;gap:7px;flex-wrap:wrap">${buttons}</div></div></div>`;
     }
 
     // At-a-glance analytics for one assignment: class average, submission count,
     // and the questions students found hardest — before the row-by-row grading.
     function assignmentSummary(d){
-      const subs=d.submissions||[]; if(!subs.length) return '';
+      const subs=(d.submissions||[]).filter(student=>!student.draftOnly); if(!subs.length) return '';
       const pcts=subs.map(s=>s.maxMarks?s.totalMarks/s.maxMarks:0);
       const avg=pcts.reduce((a,b)=>a+b,0)/pcts.length;
       // per-question difficulty: mean of (marksAwarded/marks) across submissions
@@ -5890,15 +6049,30 @@
       </div>${hardestBlock}`;
     }
 
-    async function loadAssignmentResults(assignId, wrapId='assignSubmissions', view){
+    async function loadAssignmentResults(assignId, wrapId='assignSubmissions', view,options={}){
       const wrap=$(wrapId); if(!wrap) return;
-      const keepView=view||wrap.dataset.view||'student';
-      wrap.innerHTML='<span class="status">Loading…</span>';
-      try{
-        const d=await (await fetch('/api/assignment/'+assignId+'/results')).json();
-        assignResultsCache.set(assignId, d);
-        renderAssignmentResults(assignId, wrapId, keepView);
-      }catch{ wrap.innerHTML='<p class="hint">Could not load submissions.</p>'; }
+      const silent=!!options.silent,key=`${assignId}\u001f${wrapId}`;
+      const pending=assignmentResultsInFlight.get(key);
+      if(pending){
+        if(silent){try{return await pending;}catch{return null;}}
+        try{await pending;}catch{}
+        return loadAssignmentResults(assignId,wrapId,view,options);
+      }
+      if(!silent)wrap.innerHTML='<span class="status">Loading…</span>';
+      const request=(async()=>{
+        const response=await fetch('/api/assignment/'+assignId+'/results');
+        const d=await response.json(); if(!response.ok)throw new Error(d.error||'Could not load submissions.');
+        assignResultsCache.set(assignId,d);
+        if(!document.body.contains(wrap))return d;
+        const editorState=silent?captureAssignmentEditorState(wrap):null;
+        renderAssignmentResults(assignId,wrapId,view||wrap.dataset.view||'student');
+        if(silent)restoreAssignmentEditorState(wrap,editorState);
+        return d;
+      })();
+      assignmentResultsInFlight.set(key,request);
+      try{return await request;}
+      catch{if(!silent&&document.body.contains(wrap))wrap.innerHTML='<p class="hint">Could not load submissions.</p>';return null;}
+      finally{if(assignmentResultsInFlight.get(key)===request)assignmentResultsInFlight.delete(key);}
     }
 
     $('fullPackBtn').addEventListener('click', async()=>{
@@ -6779,6 +6953,16 @@
       if($('deck')) $('deck').innerHTML='';
       if($('packPreview')) $('packPreview').innerHTML='';
       ['subject','topic','objectives','focus','ipSubject','ipTopic','isSubject','isTopic'].forEach(id=>{ if($(id)) $(id).value=''; });
+      const normalPurpose=document.querySelector('input[name="lessonPurpose"][value="lesson"]');
+      if(normalPurpose) normalPurpose.checked=true;
+      if($('assessmentPlanTotal')) $('assessmentPlanTotal').value='50';
+      if($('assessmentPlanStructure')) $('assessmentPlanStructure').value='balanced';
+      if($('assessmentPlanDelivery')) $('assessmentPlanDelivery').value='live';
+      if($('assessmentPlanMcqCount')) $('assessmentPlanMcqCount').value='15';
+      if($('assessmentPlanBrief')) $('assessmentPlanBrief').value='';
+      document.querySelectorAll('input[name="assessmentPlanType"]').forEach(input=>{ input.checked=input.value==='mcq'||input.value==='practical'; });
+      applyAssessmentStructureChoice();
+      updateLessonPurposeUI();
       const box=$('workspaceSaveStatus');
       if(box){ box.className='workspace-save-status'; box.style.display='none'; }
     }
@@ -6891,12 +7075,31 @@
       if(saved.assessmentBrief!==undefined)$('assessmentPlanBrief').value=saved.assessmentBrief||'';
       if(saved.assessmentMcqCount!==undefined)$('assessmentPlanMcqCount').value=String(saved.assessmentMcqCount);
       if(Array.isArray(saved.assessmentQuestionTypes)) document.querySelectorAll('input[name="assessmentPlanType"]').forEach(input=>{ input.checked=saved.assessmentQuestionTypes.includes(input.value); });
-      pendingAssessmentDraft=saved.assessmentDraft?JSON.parse(JSON.stringify(saved.assessmentDraft)):null;
+      pendingAssessmentDraft=saved.assessmentDraft&&!saved.assessmentPublishedId?JSON.parse(JSON.stringify(saved.assessmentDraft)):null;
       updateLessonPurposeUI();
       $('assessmentPlanMcqCount').disabled=!selectedAssessmentTypes().includes('mcq');
       if($('sequenceEnabled')) $('sequenceEnabled').checked=!!saved.sequenceEnabled;
       if($('sequenceLessonCount')&&saved.sequenceLessonCount) $('sequenceLessonCount').value=String(saved.sequenceLessonCount);
       if($('periodMinutes')&&saved.periodMinutes) $('periodMinutes').value=String(saved.periodMinutes);
+    }
+
+    async function validateRestoredAssessmentPublication(){
+      const purpose=(ctx&&ctx.lessonPurpose)||'lesson';
+      const publishedId=String((ctx&&ctx.assessmentPublishedId)||'').trim();
+      if(!['project','test'].includes(purpose)||!publishedId)return false;
+      let valid=false;
+      try{
+        const r=await fetch('/api/assignments');
+        const d=await r.json();
+        const published=r.ok&&(d.assignments||[]).find(item=>item.id===publishedId);
+        valid=!!(published&&published.type==='assessment'&&published.assessmentType===purpose&&['published','finalised'].includes(published.status)&&ctx.assessmentDraft&&workspaceAssignmentIds.includes(publishedId)&&published.lessonWorkspaceId===currentWorkspaceId);
+      }catch{}
+      if(valid){ pendingAssessmentDraft=null; return true; }
+      ctx.assessmentPublishedId=null;
+      pendingAssessmentDraft=ctx.assessmentDraft?JSON.parse(JSON.stringify(ctx.assessmentDraft)):null;
+      workspaceAssignmentIds=workspaceAssignmentIds.filter(id=>id!==publishedId);
+      toast('The linked assessment could not be verified. Review and publish it again before creating slides.');
+      return false;
     }
 
     async function resumeLessonWorkspace(id){
@@ -6926,13 +7129,14 @@
         activeSequenceDeckIndex=Math.max(0,sequenceDecks.findIndex(deck=>deck.deckId===saved.activeDeckId));
         currentDeckId=saved.activeDeckId||(sequenceDecks[activeSequenceDeckIndex]&&sequenceDecks[activeSequenceDeckIndex].deckId)||null;
         restoreContextFields(ctx);
+        const preservePublishedAssessment=await validateRestoredAssessmentPublication();
         hideAllPanels();
         stepsEl.style.display='flex';
         if(sequencePlans.length){
           const selectedPlan=sequencePlans[activeSequencePlanIndex]||sequencePlans.find(Boolean);
-          if(selectedPlan) renderPlan(selectedPlan);
+          if(selectedPlan) renderPlan(selectedPlan,{preservePublishedAssessment});
         }else if(saved.plan&&Array.isArray(saved.plan.sections)){
-          renderPlan(saved.plan);
+          renderPlan(saved.plan,{preservePublishedAssessment});
         }else{
           $('planSections').innerHTML='';
         }
@@ -7047,14 +7251,21 @@
 
     // ---- "My games" view ----
     const gamesPanel=$('gamesPanel');
-    function hideAllPanels(){ composer.style.display='none'; planStage.style.display='none'; results.style.display='none'; adminPanel.style.display='none'; gamesPanel.style.display='none'; if($('lessonsPanel')) $('lessonsPanel').style.display='none'; if($('workspaceSaveStatus')) $('workspaceSaveStatus').style.display='none'; if($('modeSelect')) $('modeSelect').style.display='none'; if($('importPlanCard')) $('importPlanCard').style.display='none'; if($('importSlidesCard')) $('importSlidesCard').style.display='none'; if($('rostersPanel')) $('rostersPanel').style.display='none'; if($('assignmentsPanel')) $('assignmentsPanel').style.display='none'; if($('marksPanel')) $('marksPanel').style.display='none'; if($('creditsPanel')) $('creditsPanel').style.display='none'; if($('progressWrap')) $('progressWrap').style.display='none'; stepsEl.style.display='none'; statusEl.innerHTML=''; }
+    function hideAllPanels(){ stopAssignmentResultsPolling(); composer.style.display='none'; planStage.style.display='none'; results.style.display='none'; adminPanel.style.display='none'; gamesPanel.style.display='none'; if($('lessonsPanel')) $('lessonsPanel').style.display='none'; if($('workspaceSaveStatus')) $('workspaceSaveStatus').style.display='none'; if($('modeSelect')) $('modeSelect').style.display='none'; if($('importPlanCard')) $('importPlanCard').style.display='none'; if($('importSlidesCard')) $('importSlidesCard').style.display='none'; if($('rostersPanel')) $('rostersPanel').style.display='none'; if($('assignmentsPanel')) $('assignmentsPanel').style.display='none'; if($('marksPanel')) $('marksPanel').style.display='none'; if($('creditsPanel')) $('creditsPanel').style.display='none'; if($('progressWrap')) $('progressWrap').style.display='none'; stepsEl.style.display='none'; statusEl.innerHTML=''; }
     function openGames(){ hideAllPanels(); gamesPanel.style.display='block'; loadMyGames(); loadRosters(true); setActiveNav('gamesBtn'); window.scrollTo({top:0,behavior:'smooth'}); }
     function closeGames(){ gamesPanel.style.display='none'; stepsEl.style.display='flex'; show('composer'); setStep(1); setActiveNav('homeBtn'); }
     $('gamesBtn').onclick=openGames; $('gamesBack').onclick=closeGames; $('gamesBackTop').onclick=closeGames;
 
     let assignmentReturnStage='composer';
     function openAssignments(returnStage='composer'){ assignmentReturnStage=returnStage; hideAllPanels(); $('assignmentsPanel').style.display='block'; loadMyAssignments(); setActiveNav('assignmentsBtn'); window.scrollTo({top:0,behavior:'smooth'}); }
-    function closeAssignments(){ $('assignmentsPanel').style.display='none'; stepsEl.style.display='flex'; show(assignmentReturnStage); setStep(assignmentReturnStage==='plan'?2:assignmentReturnStage==='slides'?3:1); setActiveNav(assignmentReturnStage==='composer'?'homeBtn':'lessonsBtn'); }
+    function closeAssignments(){
+      stopAssignmentResultsPolling();
+      captureGeneratedAssessmentEdits();
+      editingGeneratedAssessmentDraft=false;
+      $('assignmentsPanel').style.display='none'; stepsEl.style.display='flex'; show(assignmentReturnStage);
+      setStep(assignmentReturnStage==='plan'?2:assignmentReturnStage==='slides'?3:1);
+      setActiveNav(assignmentReturnStage==='composer'?'homeBtn':'lessonsBtn');
+    }
     $('assignmentsBtn').onclick=()=>openAssignments(); $('assignmentsBack').onclick=closeAssignments; $('assignmentsBackTop').onclick=closeAssignments;
 
     // ── Marks / gradebook ─────────────────────────────────────────────────────
@@ -7313,6 +7524,7 @@
 
     // ── Flexible test/project builder ────────────────────────────────────────
     let assessmentSectionsState=[];
+    let editingGeneratedAssessmentDraft=false, assessmentDraftSyncTimer=null;
     let assessmentItemSeq=0;
     const assessmentTypeNames={mcq:'Multiple choice','short-answer':'Short answer','extended-response':'Extended response',practical:'Practical / observation'};
     function assessmentObjectives(){
@@ -7373,6 +7585,7 @@
         </div>`;
       }).join('');
       updateAssessmentTotal();
+      queueGeneratedAssessmentCapture();
     }
     function updateAssessmentTotal(){
       let allocated=0;
@@ -7404,8 +7617,84 @@
       syncAssessmentState();
       return {title:$('assessmentTitle').value.trim(),subject:$('assessmentSubject').value.trim(),grade:$('assessmentGrade').value.trim(),assessmentType:$('assessmentKind').value,deliveryMode:$('assessmentDelivery').value,totalMarks:Number($('assessmentTotal').value),objectives:assessmentObjectives(),instructions:$('assessmentInstructions').value.trim(),sections:assessmentSectionsState};
     }
+    function generatedAssessmentSnapshot(){
+      return {
+        title:$('assessmentTitle').value.trim(),
+        subject:$('assessmentSubject').value.trim(),
+        grade:$('assessmentGrade').value.trim(),
+        assessmentType:$('assessmentKind').value,
+        deliveryMode:$('assessmentDelivery').value,
+        totalMarks:Number($('assessmentTotal').value)||0,
+        objectives:assessmentObjectives(),
+        instructions:$('assessmentInstructions').value.trim(),
+        sections:JSON.parse(JSON.stringify(assessmentSectionsState)),
+      };
+    }
+    function assessmentPlanSummary(draft){
+      const sections=Array.isArray(draft.sections)?draft.sections:[];
+      const isTest=draft.assessmentType==='test';
+      const phaseLines=sections.map((section,index)=>{
+        const items=Array.isArray(section.items)?section.items:[];
+        const marks=items.reduce((sum,item)=>sum+(Number(item.marks)||0),0);
+        const name=section.title||assessmentTypeNames[section.type]||'Assessment section';
+        if(section.type==='mcq') return 'Phase '+(index+1)+' — '+name+': Students independently answer all '+items.length+' multiple-choice questions in LessonScope ('+marks+' marks), submit the section, and wait. The teacher opens and supervises the phase without displaying, reading aloud, explaining or answering the questions.';
+        if(section.type==='practical') return isTest
+          ? 'Phase '+(index+1)+' — '+name+': Students complete the practical or performance section independently ('+marks+' marks). The teacher announces only timing, permitted materials and submission instructions, supervises without prompting, and records marks in LessonScope.'
+          : 'Phase '+(index+1)+' — '+name+': Students complete the practical, product or performance task ('+marks+' marks). The teacher displays one safe stage at a time, circulates without completing assessed work for students, and records observations and marks in LessonScope.';
+        if(section.type==='short-answer') return 'Phase '+(index+1)+' — '+name+': Students complete the short-answer section independently in LessonScope ('+marks+' marks), save their responses, submit and wait.';
+        return 'Phase '+(index+1)+' — '+name+': Students complete the extended-response section independently in LessonScope ('+marks+' marks), save their response, submit and wait.';
+      });
+      return ['Total: '+draft.totalMarks+' marks. Complete the phases in this exact order.',...phaseLines].join('\n');
+    }
+    function captureGeneratedAssessmentEdits(){
+      if(!editingGeneratedAssessmentDraft||!ctx)return;
+      syncAssessmentState();
+      const draft=generatedAssessmentSnapshot();
+      pendingAssessmentDraft=JSON.parse(JSON.stringify(draft));
+      ctx.assessmentDraft=JSON.parse(JSON.stringify(draft));
+      ctx.assessmentTotalMarks=draft.totalMarks;
+      ctx.assessmentDeliveryMode=draft.deliveryMode;
+      ctx.assessmentStructure='custom';
+      ctx.assessmentBrief=draft.instructions;
+      ctx.assessmentQuestionTypes=[...new Set(draft.sections.map(section=>section.type))];
+      ctx.assessmentMcqCount=draft.sections.filter(section=>section.type==='mcq').reduce((sum,section)=>sum+(section.items||[]).length,0);
+      const planRows=[...planStage.querySelectorAll('.plan-section')];
+      let assessmentRow=planRows.find(node=>{
+        const label=((node.dataset.field||'')+' '+(node.querySelector('.heading')?.value||'')).toLowerCase();
+        return /assessment|evaluation|marking/.test(label);
+      });
+      const hasDedicatedAssessmentRow=!!assessmentRow;
+      if(!assessmentRow) assessmentRow=planRows.find(node=>{
+        const label=((node.dataset.field||'')+' '+(node.querySelector('.heading')?.value||'')).toLowerCase();
+        return /main activit|learner activit|student activit|procedure|plan|create|practi|task/.test(label);
+      })||[...planRows].reverse().find(node=>{
+        const label=((node.dataset.field||'')+' '+(node.querySelector('.heading')?.value||'')).toLowerCase();
+        return !/reflection|phonic/.test(label);
+      });
+      if(assessmentRow){
+        const textarea=assessmentRow.querySelector('.content');
+        const summary=assessmentPlanSummary(draft);
+        if(hasDedicatedAssessmentRow) textarea.value=summary;
+        else{
+          const base=textarea.value
+            .replace(/\n*Assessment flow:\n[\s\S]*$/i,'')
+            .split('\n').filter(line=>!/^\s*Assessment phase\s+\d+\s+—/i.test(line)).join('\n').trim();
+          textarea.value=[base,'Assessment flow:\n'+summary].filter(Boolean).join('\n\n');
+        }
+        textarea.style.height='auto'; textarea.style.height=textarea.scrollHeight+'px';
+      }
+      renderAutoAssessmentSummary();
+      renderResultAssessment();
+      scheduleWorkspaceSave();
+    }
+    function queueGeneratedAssessmentCapture(){
+      if(!editingGeneratedAssessmentDraft)return;
+      clearTimeout(assessmentDraftSyncTimer);
+      assessmentDraftSyncTimer=setTimeout(captureGeneratedAssessmentEdits,180);
+    }
     function openGeneratedAssessmentDraft(draft){
       if(!draft)return;
+      editingGeneratedAssessmentDraft=true;
       openAssignments('plan');
       $('assessmentBuilder').style.display='block';
       $('assessmentKind').value=draft.assessmentType==='project'?'project':'test';
@@ -7419,15 +7708,18 @@
       $('assessmentPublishResult').innerHTML='';
       assessmentSectionsState=JSON.parse(JSON.stringify(draft.sections||[]));
       renderAssessmentSections();
+      $('publishAssessmentBtn').disabled=false;
+      $('publishAssessmentBtn').innerHTML='Publish assessment';
       loadRosters(true);
       $('assessmentBuilder').scrollIntoView({behavior:'smooth',block:'start'});
     }
     $('newAssessmentBtn').addEventListener('click',()=>{
+      editingGeneratedAssessmentDraft=false;
       const builder=$('assessmentBuilder'); builder.style.display='block';
       if(!assessmentSectionsState.length) applyAssessmentPreset('blank');
       loadRosters(true); builder.scrollIntoView({behavior:'smooth',block:'start'});
     });
-    $('closeAssessmentBtn').addEventListener('click',()=>$('assessmentBuilder').style.display='none');
+    $('closeAssessmentBtn').addEventListener('click',()=>{ captureGeneratedAssessmentEdits(); editingGeneratedAssessmentDraft=false; $('assessmentBuilder').style.display='none'; });
     $('assessmentBuilder').addEventListener('click',e=>{
       const preset=e.target.closest('[data-assessment-preset]'); if(preset){ applyAssessmentPreset(preset.dataset.assessmentPreset); return; }
       const add=e.target.closest('[data-add-assessment-item]'); if(add){ syncAssessmentState(); const s=assessmentSectionsState[Number(add.dataset.addAssessmentItem)]; s.items.push(newAssessmentItem(s.type)); renderAssessmentSections(); return; }
@@ -7436,13 +7728,14 @@
       const moveSection=e.target.closest('[data-move-assessment-section]'); if(moveSection){ const node=moveSection.closest('.assessment-section'); syncAssessmentState(); const from=Number(node.dataset.sectionIndex),to=moveSection.dataset.moveAssessmentSection==='up'?from-1:from+1; if(to>=0&&to<assessmentSectionsState.length){ const [moved]=assessmentSectionsState.splice(from,1); assessmentSectionsState.splice(to,0,moved); } renderAssessmentSections(); return; }
       const removeSection=e.target.closest('[data-remove-assessment-section]'); if(removeSection){ syncAssessmentState(); assessmentSectionsState.splice(Number(removeSection.dataset.removeAssessmentSection),1); renderAssessmentSections(); }
     });
-    $('assessmentBuilder').addEventListener('input',updateAssessmentTotal);
+    $('assessmentBuilder').addEventListener('input',()=>{ updateAssessmentTotal(); queueGeneratedAssessmentCapture(); });
     $('assessmentBuilder').addEventListener('change',e=>{
       if(e.target.matches('[data-section-type]')){
         const node=e.target.closest('.assessment-section'),index=Number(node.dataset.sectionIndex),nextType=e.target.value;
         e.target.value=assessmentSectionsState[index].type; syncAssessmentState();
         const section=assessmentSectionsState[index]; section.type=nextType; section.items=[newAssessmentItem(nextType)]; section.title=assessmentTypeNames[nextType]; renderAssessmentSections();
       }
+      queueGeneratedAssessmentCapture();
     });
     $('assessmentObjectives').addEventListener('blur',()=>{
       syncAssessmentState(); const ids=assessmentObjectives().map(objective=>objective.id);
@@ -7452,18 +7745,46 @@
     $('addAssessmentSection').addEventListener('click',()=>{ syncAssessmentState(); assessmentSectionsState.push(newAssessmentSection('mcq')); renderAssessmentSections(); });
     $('publishAssessmentBtn').addEventListener('click',async()=>{
       const btn=$('publishAssessmentBtn'), err=$('assessmentError'); err.textContent=''; err.classList.remove('show'); btn.disabled=true; const original=btn.innerHTML; btn.innerHTML='<span class="spinner"></span>Publishing…';
+      const generatedDraft=editingGeneratedAssessmentDraft;
+      let keepDisabled=false;
       try{
-        const response=await fetch('/api/assessment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({assessment:collectAssessment(),rosterId:$('assessmentRoster').value||null,cutoffAt:$('assessmentCutoff').value||null})});
+        const assessment=collectAssessment();
+        if(generatedDraft)captureGeneratedAssessmentEdits();
+        const selectedRosterId=$('assessmentRoster').value||null;
+        if(!selectedRosterId) throw new Error('Choose the class roster before publishing this assessment. This is how LessonScope confirms that every learner submitted and sends reliable evidence to TeacherScope.');
+        if(generatedDraft){
+          const workspaceSaved=await saveWorkspaceNow();
+          if(!workspaceSaved||!currentWorkspaceId) throw new Error('This lesson could not be saved, so its assessment was not published. Check your connection and try again.');
+        }
+        assessment.lessonWorkspaceId=currentWorkspaceId||null;
+        assessment.unitId=(ctx&&ctx.unitId)||null;
+        assessment.unitName=(ctx&&ctx.unitName)||null;
+        const response=await fetch('/api/assessment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({assessment,rosterId:selectedRosterId,cutoffAt:$('assessmentCutoff').value||null})});
         const data=await response.json(); if(!response.ok)throw new Error(data.error||'Could not publish assessment.');
         const url=location.origin+data.path;
         $('assessmentPublishResult').innerHTML=`<div class="assessment-result"><b>Assessment published</b><p style="margin:6px 0">${data.sectionCount} section${data.sectionCount===1?'':'s'} · ${data.totalMarks} marks</p><div class="room-code" style="display:inline-block">${esc(data.roomCode)}</div><p class="hint" style="margin:7px 0">Students join at <b>${esc(location.origin+'/join')}</b> using this room code.</p><div class="game-link"><input readonly value="${esc(url)}"><button type="button" class="btn ghost assessment-copy" data-url="${esc(url)}" style="width:auto">Copy link</button></div><a class="btn ghost" href="/assessment/${esc(data.assessmentId)}/present" target="_blank" rel="noopener" style="display:inline-flex;width:auto;margin-top:10px;text-decoration:none">Open presentation</a></div>`;
+        if(data.assessmentId&&!workspaceAssignmentIds.includes(data.assessmentId))workspaceAssignmentIds.push(data.assessmentId);
+        if(generatedDraft){
+          pendingAssessmentDraft=null;
+          if(ctx){
+            // Keep the exact published snapshot for slide creation and future
+            // regeneration. Only the pending-publish prompt is cleared.
+            ctx.assessmentDraft=JSON.parse(JSON.stringify(assessment));
+            ctx.assessmentPublishedId=data.assessmentId;
+          }
+          editingGeneratedAssessmentDraft=false;
+          renderAutoAssessmentSummary(); renderResultAssessment();
+          keepDisabled=true;
+        }
+        scheduleWorkspaceSave();
         loadMyAssignments(); toast('Assessment published.','ok');
       }catch(error){ err.textContent=error.message; err.classList.add('show'); }
-      btn.disabled=false; btn.innerHTML=original;
+      btn.disabled=keepDisabled; btn.innerHTML=keepDisabled?'Assessment published':original;
     });
     $('assessmentPublishResult').addEventListener('click',e=>{ const button=e.target.closest('.assessment-copy'); if(button)copyLink(button.dataset.url); });
 
     async function loadMyAssignments(){
+      stopAssignmentResultsPolling();
       const wrap=$('assignmentsList');
       wrap.innerHTML='<span class="status">Loading…</span>';
       try{
@@ -7511,9 +7832,13 @@
         const opening=detail.style.display==='none';
         detail.style.display=opening?'block':'none';
         toggle.textContent=opening?'Hide controls':toggle.dataset.closedLabel;
-        if(opening) loadAssignmentResults(assignId, wrapId);
+        if(opening){loadAssignmentResults(assignId,wrapId);startAssignmentResultsPolling(assignId,wrapId,detailId);}
+        else stopAssignmentResultsPolling(detailId);
         return; }
       handleAssignmentPanelClick(e);
+    });
+    $('assignmentsList').addEventListener('input',e=>{
+      if(e.target.matches('.grade-marks-input,.grade-rationale-input'))e.target.dataset.teacherEdited='1';
     });
     function fmtDate(iso){if(!iso)return'';const d=new Date(iso);return d.toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'});}
     function fmtDateTime(iso){if(!iso)return'';const d=new Date(iso);return d.toLocaleString(undefined,{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}
@@ -7750,12 +8075,13 @@
         const d=await (await fetch('/api/rosters')).json();
         if(populatePicker){
           const rosterOpts='<option value="">— No roster (free-form names) —</option>'+(d.rosters||[]).map(r=>`<option value="${esc(r.id)}">${esc(r.name)} (${r.count} students)</option>`).join('');
+          const assessmentRosterOpts='<option value="">— Choose a class roster —</option>'+(d.rosters||[]).map(r=>`<option value="${esc(r.id)}">${esc(r.name)} (${r.count} students)</option>`).join('');
           populateClassPicker($('gameRosterPick'),d.rosters||[]);
           populateClassPicker($('pptxRosterPick'),d.rosters||[]);
           const assignmentPick=$('assignRosterPick');
           if(assignmentPick){const cur=assignmentPick.value;assignmentPick.innerHTML=rosterOpts;if(cur)assignmentPick.value=cur;}
           const assessmentPick=$('assessmentRoster');
-          if(assessmentPick){const cur=assessmentPick.value;assessmentPick.innerHTML=rosterOpts;if(cur)assessmentPick.value=cur;}
+          if(assessmentPick){const cur=assessmentPick.value;assessmentPick.innerHTML=assessmentRosterOpts;if(cur)assessmentPick.value=cur;}
         }
         if(!wrap) return;
         if(!d.rosters||!d.rosters.length){ wrap.innerHTML='<div class="empty-state"><svg class="ic" aria-hidden="true" style="width:36px;height:36px;opacity:.3"><use href="#i-doc"/></svg><p>No rosters yet</p><p style="font-size:13px;color:var(--muted)">Add your first class list below.</p></div>'; return; }

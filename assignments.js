@@ -8,6 +8,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { DATA_DIR, writeJsonAtomic } = require('./storage');
+const { repairMathQuestion } = require('./math-question-validator');
+const { assessmentDraftContentIssues } = require('./assessment-draft');
 
 const DIR = path.join(DATA_DIR, 'assignments');
 const ROOMS_PATH = path.join(DIR, '_rooms.json');
@@ -126,6 +128,10 @@ function normalizeAssessment(data) {
       const prompt = cleanText(rawItem && (rawItem.prompt || rawItem.question), 2000);
       const marks = Number(rawItem && rawItem.marks);
       if (!prompt) throw new Error(`${title}, item ${itemIndex + 1}: enter a question or criterion.`);
+      if (/\[REVIEW REQUIRED\]|^\s*REVIEW REQUIRED:/i.test(prompt)
+        || /\[REVIEW REQUIRED\]|^\s*REVIEW REQUIRED:/i.test(cleanText(rawItem && rawItem.answerKey, 4000))) {
+        throw new Error(`${title}, item ${itemIndex + 1}: replace placeholder text with a real, checked question, criterion, and answer.`);
+      }
       if (!Number.isInteger(marks) || marks < 1 || marks > 1000) throw new Error(`${title}, item ${itemIndex + 1}: marks must be a positive whole number.`);
       let itemId = cleanText(rawItem && rawItem.id, 80).replace(/[^a-zA-Z0-9_-]/g, '-') || `${id}-item-${itemIndex + 1}`;
       while (questionIds.has(itemId)) itemId += '-2';
@@ -140,8 +146,16 @@ function normalizeAssessment(data) {
         const correctIndex = Number(rawItem.correctIndex);
         if (options.length < 2) throw new Error(`${title}, item ${itemIndex + 1}: add at least two answer options.`);
         if (!Number.isInteger(correctIndex) || correctIndex < 0 || correctIndex >= options.length) throw new Error(`${title}, item ${itemIndex + 1}: choose the correct answer.`);
-        Object.assign(item, { options, correctIndex });
-        Object.assign(question, { kind: 'mcq', options, correctIndex });
+        const uniqueOptions = new Set(options.map(option => option.toLowerCase().replace(/\s+/g, ' ').trim()));
+        if (uniqueOptions.size !== options.length) throw new Error(`${title}, item ${itemIndex + 1}: answer options must be different.`);
+        if (/^(?:correct answer|plausible alternative|option [a-f])$/i.test(options[correctIndex])
+          || /^(?:knowledge|multiple[- ]choice) question \d+ about\b/i.test(prompt)) {
+          throw new Error(`${title}, item ${itemIndex + 1}: replace placeholder text with a real, checked question and answer.`);
+        }
+        const checked = repairMathQuestion({ question: prompt, options, correctIndex });
+        if (checked.issue) throw new Error(`${title}, item ${itemIndex + 1}: check the mathematics answer key; ${checked.issue}.`);
+        Object.assign(item, { options, correctIndex: checked.question.correctIndex });
+        Object.assign(question, { kind: 'mcq', options, correctIndex: checked.question.correctIndex });
       } else if (type === 'practical') {
         question.kind = 'practical';
       } else {
@@ -156,12 +170,40 @@ function normalizeAssessment(data) {
     if (!items.length) throw new Error(`${title}: add at least one question or criterion.`);
     sections.push({ id, title, type, instructions, objectiveIds: inheritedObjectives, marks: items.reduce((sum, item) => sum + item.marks, 0), items });
   }
+  const seenPrompts = new Set();
+  for (const question of questions) {
+    const normalizedPrompt = question.question.toLowerCase().replace(/\s+/g, ' ').trim();
+    if (seenPrompts.has(normalizedPrompt)) throw new Error('Every assessment question or practical criterion must be unique.');
+    seenPrompts.add(normalizedPrompt);
+  }
+  const contentIssues = assessmentDraftContentIssues({ sections: rawSections });
+  if (contentIssues.length) {
+    throw new Error(`Assessment: replace placeholder text with real, checked questions, criteria, options and answers (${contentIssues.join('; ')}).`);
+  }
   const allocatedMarks = questions.reduce((sum, q) => sum + q.marks, 0);
   if (allocatedMarks !== totalMarks) throw new Error(`Allocated marks (${allocatedMarks}) must equal the assessment total (${totalMarks}).`);
-  return { title, subject, grade, assessmentType, deliveryMode, totalMarks, objectives, sections, questions, instructions: cleanText(data.instructions, 2000) };
+  return {
+    title, subject, grade, assessmentType, deliveryMode, totalMarks, objectives, sections, questions,
+    instructions: cleanText(data.instructions, 2000),
+    lessonWorkspaceId: cleanText(data.lessonWorkspaceId, 120) || null,
+    unitId: cleanText(data.unitId, 120) || null,
+    unitName: cleanText(data.unitName, 240) || null,
+  };
 }
 
-function createAssessment({ teacherId, teacherName, data, rosterId, cutoffAt }) {
+function normalizeRosterSnapshot(students) {
+  const seen = new Set();
+  const snapshot = [];
+  for (const student of (Array.isArray(students) ? students : [])) {
+    const id = normalizeStudentId(student && (student.id || student.studentId));
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    snapshot.push({ id, name: cleanText(student && student.name, 160) || id });
+  }
+  return snapshot;
+}
+
+function createAssessment({ teacherId, teacherName, data, rosterId, rosterSnapshot, cutoffAt }) {
   fs.mkdirSync(DIR, { recursive: true });
   const normalized = normalizeAssessment(data);
   const id = crypto.randomUUID().slice(0, 8);
@@ -172,10 +214,14 @@ function createAssessment({ teacherId, teacherName, data, rosterId, cutoffAt }) 
     subject: normalized.subject, topic: normalized.title, grade: normalized.grade,
     totalMarks: normalized.totalMarks, objectives: normalized.objectives,
     sections: normalized.sections, version: 1, status: 'published',
+    lessonWorkspaceId: normalized.lessonWorkspaceId,
+    unitId: normalized.unitId,
+    unitName: normalized.unitName,
     delivery: normalized.deliveryMode === 'live'
       ? { mode: 'live', phase: 'lobby', activeSectionIndex: -1, previousPhase: null, updatedAt: new Date().toISOString() }
       : { mode: 'self-paced', phase: 'open', activeSectionIndex: null, previousPhase: null, updatedAt: new Date().toISOString() },
     roomCode, rosterId: rosterId || null, cutoffAt: cutoffAt || null,
+    rosterSnapshot: Array.isArray(rosterSnapshot) ? normalizeRosterSnapshot(rosterSnapshot) : null,
     resultsReleased: false,
     content: { title: normalized.title, instructions: normalized.instructions, questions: normalized.questions },
     createdAt: new Date().toISOString(),
@@ -212,6 +258,117 @@ function getAssignment(id) {
   try { return JSON.parse(fs.readFileSync(recPath(String(id)), 'utf8')); } catch { return null; }
 }
 
+function assessmentGenerationError(message, status, code) {
+  const err = new Error(message);
+  err.status = status;
+  err.code = code;
+  return err;
+}
+
+function sameAssessmentContext(left, right) {
+  const key = value => String(value == null ? '' : value).trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  return key(left) === key(right);
+}
+
+// Deck generation must use the immutable server copy created at publication,
+// not a browser-supplied draft that can be stale or edited after publishing.
+// Subject and grade, plus the unit when supplied, bind that copy to the lesson
+// currently being turned into slides. The workspace is mandatory and compared
+// byte-for-byte after trimming because it is the saved lesson's identity.
+function publishedAssessmentGenerationContext({ assessmentId, teacherId, lessonPurpose, subject, grade, unitId, lessonWorkspaceId }) {
+  const purpose = String(lessonPurpose || '').trim().toLowerCase();
+  if (!['project', 'test'].includes(purpose)) {
+    throw assessmentGenerationError('A published assessment is only required for project or test decks.', 400, 'assessment_purpose_invalid');
+  }
+  const id = String(assessmentId || '').trim();
+  if (!id) {
+    throw assessmentGenerationError(`Review and publish the ${purpose} assessment before creating slides.`, 400, 'assessment_publish_required');
+  }
+  const record = getAssignment(id);
+  if (!record || record.type !== 'assessment') {
+    throw assessmentGenerationError('The published assessment could not be found. Review and publish it again before creating slides.', 404, 'assessment_not_found');
+  }
+  if (record.teacherId !== teacherId) {
+    throw assessmentGenerationError('This published assessment does not belong to the signed-in teacher.', 403, 'assessment_not_owned');
+  }
+  if (!['published', 'finalised'].includes(record.status)) {
+    throw assessmentGenerationError('This assessment is not published. Review and publish it before creating slides.', 409, 'assessment_not_published');
+  }
+  const requestedWorkspaceId = String(lessonWorkspaceId || '').trim();
+  if (!requestedWorkspaceId) {
+    throw assessmentGenerationError(`Save this lesson before creating ${purpose} slides.`, 400, 'assessment_workspace_required');
+  }
+
+  const deliveryMode = record.delivery && record.delivery.mode === 'self-paced' ? 'self-paced' : 'live';
+  let normalized;
+  try {
+    normalized = normalizeAssessment({
+      title: record.title,
+      subject: record.subject,
+      grade: record.grade,
+      assessmentType: record.assessmentType,
+      deliveryMode,
+      totalMarks: record.totalMarks,
+      objectives: record.objectives,
+      instructions: record.content && record.content.instructions,
+      sections: record.sections,
+      lessonWorkspaceId: record.lessonWorkspaceId,
+      unitId: record.unitId,
+      unitName: record.unitName,
+    });
+  } catch {
+    throw assessmentGenerationError('The published assessment is incomplete. Review and publish it again before creating slides.', 409, 'assessment_invalid');
+  }
+
+  if (normalized.assessmentType !== purpose) {
+    throw assessmentGenerationError(`The published assessment is a ${normalized.assessmentType}, not a ${purpose}.`, 409, 'assessment_context_mismatch');
+  }
+  if (!sameAssessmentContext(normalized.subject, subject) || !sameAssessmentContext(normalized.grade, grade)) {
+    throw assessmentGenerationError('The published assessment does not match this lesson subject and grade.', 409, 'assessment_context_mismatch');
+  }
+  if (unitId !== undefined && !sameAssessmentContext(normalized.unitId, unitId)) {
+    throw assessmentGenerationError('The published assessment does not match this lesson unit.', 409, 'assessment_context_mismatch');
+  }
+  if (!normalized.lessonWorkspaceId) {
+    throw assessmentGenerationError('The published assessment is not linked to a saved lesson workspace. Review and publish it again.', 409, 'assessment_workspace_missing');
+  }
+  if (String(normalized.lessonWorkspaceId).trim() !== requestedWorkspaceId) {
+    throw assessmentGenerationError('The published assessment does not match this lesson workspace.', 409, 'assessment_context_mismatch');
+  }
+
+  const sections = JSON.parse(JSON.stringify(normalized.sections));
+  const assessmentDraft = {
+    title: normalized.title,
+    subject: normalized.subject,
+    grade: normalized.grade,
+    assessmentType: normalized.assessmentType,
+    deliveryMode: normalized.deliveryMode,
+    totalMarks: normalized.totalMarks,
+    objectives: JSON.parse(JSON.stringify(normalized.objectives)),
+    instructions: normalized.instructions,
+    sections,
+    lessonWorkspaceId: normalized.lessonWorkspaceId,
+    unitId: normalized.unitId,
+    unitName: normalized.unitName,
+  };
+  const assessmentPhases = sections.map(section => ({
+    type: section.type,
+    title: section.title,
+    marks: section.marks,
+  }));
+  return {
+    assessmentPublishedId: record.id,
+    assessmentDraft,
+    assessmentTotalMarks: normalized.totalMarks,
+    assessmentStructure: 'custom',
+    assessmentDeliveryMode: normalized.deliveryMode,
+    assessmentBrief: normalized.instructions,
+    assessmentQuestionTypes: [...new Set(sections.map(section => section.type))],
+    assessmentMcqCount: sections.filter(section => section.type === 'mcq').reduce((sum, section) => sum + section.items.length, 0),
+    assessmentPhases,
+  };
+}
+
 function updateAssignmentCutoff(id, cutoffAt) {
   const rec = getAssignment(id);
   if (!rec) return null;
@@ -220,14 +377,38 @@ function updateAssignmentCutoff(id, cutoffAt) {
   return rec;
 }
 
+function assessmentIsFinalised(record) {
+  return !!record && record.type === 'assessment' && (record.resultsReleased || record.status === 'finalised');
+}
+
+function assessmentStateError(message, code) {
+  const error = new Error(message);
+  error.status = 409;
+  error.code = code;
+  return error;
+}
+
+function assertAssessmentMutable(record) {
+  if (assessmentIsFinalised(record)) {
+    throw assessmentStateError('This assessment is finalised. Unrelease the results before changing marks.', 'assessment_finalised');
+  }
+}
+
 function releaseResults(id, released) {
   const rec = getAssignment(id);
   if (!rec) return null;
-  rec.resultsReleased = !!released;
+  const targetReleased = !!released;
+  const stateAlreadyMatches = rec.type === 'assessment'
+    ? targetReleased
+      ? !!rec.resultsReleased && rec.status === 'finalised' && !!rec.finalisedAt
+      : !rec.resultsReleased && rec.status !== 'finalised' && !rec.finalisedAt
+    : !!rec.resultsReleased === targetReleased;
+  if (stateAlreadyMatches) return rec;
+  rec.resultsReleased = targetReleased;
   if (rec.type === 'assessment') {
-    rec.status = released ? 'finalised' : 'published';
-    rec.finalisedAt = released ? new Date().toISOString() : null;
-    if (rec.delivery) rec.delivery = { ...rec.delivery, phase: released ? 'closed' : 'marking', updatedAt: new Date().toISOString() };
+    rec.status = targetReleased ? 'finalised' : 'published';
+    rec.finalisedAt = targetReleased ? new Date().toISOString() : null;
+    if (rec.delivery) rec.delivery = { ...rec.delivery, phase: targetReleased ? 'closed' : 'marking', updatedAt: new Date().toISOString() };
   }
   writeJsonAtomic(recPath(id), rec);
   return rec;
@@ -248,12 +429,23 @@ function loadSubmissions(id) {
   try { return JSON.parse(fs.readFileSync(subsPath(String(id)), 'utf8')); } catch { return []; }
 }
 function saveSubmission(id, sub) {
+  const record = getAssignment(id);
+  assertAssessmentMutable(record);
   sub = { ...sub, studentId: normalizeStudentId(sub.studentId) };
   const subs = loadSubmissions(id);
   const i = subs.findIndex(s => normalizeStudentId(s.studentId) === sub.studentId);
   if (i >= 0) subs[i] = sub; else subs.push(sub);
   writeJsonAtomic(subsPath(id), subs);
   return subs;
+}
+function saveNewSubmission(id, sub) {
+  const record = getAssignment(id);
+  assertAssessmentMutable(record);
+  const studentId = normalizeStudentId(sub && sub.studentId);
+  if (record && record.type === 'assessment' && getSubmission(id, studentId)) {
+    throw assessmentStateError('This assessment has already been submitted. Ask your teacher if it needs to be reopened.', 'assessment_already_submitted');
+  }
+  return saveSubmission(id, sub);
 }
 function getSubmissions(id) { return loadSubmissions(id); }
 function getSubmission(id, studentId) {
@@ -269,6 +461,7 @@ function getDraft(id, studentId) {
   return loadDrafts(id).find(draft => normalizeStudentId(draft.studentId) === target) || null;
 }
 function saveDraft(id, { studentId, name, answers, completedSectionId }) {
+  assertAssessmentMutable(getAssignment(id));
   const sid = normalizeStudentId(studentId);
   const drafts = loadDrafts(id);
   const index = drafts.findIndex(draft => normalizeStudentId(draft.studentId) === sid);
@@ -277,6 +470,27 @@ function saveDraft(id, { studentId, name, answers, completedSectionId }) {
     ...previous, studentId: sid, name: name || previous.name || sid,
     answers: { ...(previous.answers || {}), ...(answers || {}) },
     completedSectionIds: [...new Set([...(previous.completedSectionIds || []), ...(completedSectionId ? [completedSectionId] : [])])],
+    updatedAt: new Date().toISOString(),
+  };
+  if (index >= 0) drafts[index] = next; else drafts.push(next);
+  writeJsonAtomic(draftsPath(id), drafts);
+  return next;
+}
+
+// Practical/project evidence is often awarded while students are still
+// working. Keep those teacher marks on the recoverable draft, then carry them
+// into the final submission so circulating teachers can grade in real time.
+function saveDraftGrade(id, { studentId, name, questionId, grade }) {
+  assertAssessmentMutable(getAssignment(id));
+  const sid = normalizeStudentId(studentId);
+  const drafts = loadDrafts(id);
+  const index = drafts.findIndex(draft => normalizeStudentId(draft.studentId) === sid);
+  const previous = index >= 0 ? drafts[index] : { studentId: sid, name: name || sid, answers: {}, completedSectionIds: [] };
+  const next = {
+    ...previous,
+    studentId: sid,
+    name: name || previous.name || sid,
+    observationGrades: { ...(previous.observationGrades || {}), [questionId]: grade },
     updatedAt: new Date().toISOString(),
   };
   if (index >= 0) drafts[index] = next; else drafts.push(next);
@@ -294,7 +508,7 @@ function updateDelivery(id, action) {
   if (!record || record.type !== 'assessment') return null;
   const current = deliveryState(record);
   if (current.mode !== 'live') throw new Error('This assessment is self-paced.');
-  if (record.resultsReleased) throw new Error('Released assessments cannot be restarted.');
+  if (assessmentIsFinalised(record)) throw new Error('Released assessments cannot be restarted.');
   const last = Math.max(0, (record.sections || []).length - 1);
   const next = { ...current, updatedAt: new Date().toISOString() };
   if (action === 'start') {
@@ -333,34 +547,83 @@ function draftProgress(record) {
   };
 }
 
+function sanitizeProjectPresentationText(value) {
+  const key = '(?:[a-z0-9]|f\\d{1,2}|enter|return|backspace|delete|tab|escape|esc|home|end|left|right|up|down)';
+  const modifiers = '(?:(?:shift|alt|option)(?:\\s*\\+\\s*|\\s*-\\s*|\\s+))*';
+  const replacement = (_match, pressedKey) => {
+    const action = ({ c: 'copy', v: 'paste', x: 'cut', s: 'save', z: 'undo', y: 'redo' })[String(pressedKey || '').toLowerCase()];
+    return action ? `${action} using the keyboard` : 'the keyboard command';
+  };
+  return String(value || '')
+    .replace(new RegExp(`\\b(?:ctrl|control|cmd|command)(?:\\s*\\+\\s*|\\s*-\\s*|\\s+)${modifiers}(${key})\\b`, 'gi'), replacement)
+    .replace(new RegExp(`⌘\\s*(?:\\+\\s*|-\\s*)?${modifiers}(${key})\\b`, 'gi'), replacement)
+    .trim();
+}
+
+function safeProjectPresentationLines(value) {
+  return String(value || '').split(/\n+/)
+    .map(line => sanitizeProjectPresentationText(line))
+    .filter(Boolean)
+    .filter(line => !/\b(?:answer key|correct answer|model answer|marking (?:guide|guidance|scheme)|teacher[- ]only|rubric|worked solution)\b/i.test(line));
+}
+
 function presentationSlides(record) {
   if (!record || record.type !== 'assessment') throw new Error('Assessment not found.');
   const isTest = record.assessmentType === 'test';
   const slides = [{
-    kind: 'title', title: record.title,
+    kind: 'title', title: isTest ? `${record.subject || 'Assessment'} test` : sanitizeProjectPresentationText(record.title),
     subtitle: `${record.subject || ''}${record.grade ? ` · ${record.grade}` : ''} · ${record.totalMarks || 0} marks`,
     bullets: [],
   }];
   slides.push({
     kind: 'overview', title: isTest ? 'Test overview' : 'Project overview',
     subtitle: isTest ? 'Listen for instructions before you begin.' : 'Follow each stage and check your progress.',
-    bullets: (record.sections || []).map((section, index) => `${index + 1}. ${section.title} · ${section.marks} marks`),
+    bullets: (record.sections || []).map((section, index) => {
+      const title = !isTest && section.type === 'practical'
+        ? sanitizeProjectPresentationText(section.title)
+        : assessmentSectionLabel(section.type);
+      return `${index + 1}. ${title} · ${section.marks} marks`;
+    }),
   });
-  if (record.content && record.content.instructions) {
-    slides.push({ kind: 'instructions', title: 'Before you begin', subtitle: '', bullets: [record.content.instructions] });
+  if (isTest) {
+    slides.push({
+      kind: 'instructions', title: 'Before you begin', subtitle: '',
+      bullets: ['Wait until your teacher starts the section.', 'Read the assessment privately on your device.', 'Use only the materials your teacher permits.'],
+    });
+  } else {
+    const instructions = safeProjectPresentationLines(record.content && record.content.instructions);
+    if (instructions.length) slides.push({ kind: 'instructions', title: 'Before you begin', subtitle: '', bullets: instructions });
   }
   for (const [index, section] of (record.sections || []).entries()) {
-    const safeInstructions = String(section.instructions || '').split(/\n+/).map(line => line.trim()).filter(Boolean);
+    const safeInstructions = safeProjectPresentationLines(section.instructions);
     let bullets;
+    let title;
     if (isTest) {
       // Shared test slides never include question text, options, answers, or
-      // rubric criteria. Students receive the actual questions privately.
-      bullets = safeInstructions.length ? safeInstructions : [section.type === 'practical' ? 'Complete the practical task as directed by your teacher.' : 'Complete this section independently on your device.'];
+      // rubric criteria. Even teacher-entered section instructions stay
+      // private because they may contain assessed procedures or hints.
+      const count = (section.items || []).length;
+      title = `${index + 1}. ${assessmentSectionLabel(section.type)}`;
+      if (section.type === 'mcq') bullets = [`Answer ${count} multiple-choice ${count === 1 ? 'question' : 'questions'} independently in LessonScope.`];
+      else if (section.type === 'practical') bullets = ['Begin only when your teacher starts this section.', 'Complete the assessed task independently.'];
+      else bullets = [`Complete ${count} ${assessmentSectionLabel(section.type).toLowerCase()} ${count === 1 ? 'item' : 'items'} independently in LessonScope.`];
+    } else if (section.type !== 'practical') {
+      // Every marked written or multiple-choice item stays private on learner
+      // devices. Shared project slides identify only the neutral phase type.
+      const count = (section.items || []).length;
+      title = `${index + 1}. ${assessmentSectionLabel(section.type)}`;
+      bullets = [`Complete ${count} ${assessmentSectionLabel(section.type).toLowerCase()} ${count === 1 ? 'item' : 'items'} independently in LessonScope.`];
     } else {
-      bullets = [...safeInstructions, ...(section.items || []).map(item => item.prompt)].filter(Boolean);
+      title = `${index + 1}. ${sanitizeProjectPresentationText(section.title)}`;
+      // Item prompts are private assessment content, including practical
+      // observation criteria that may look like ordinary student directions.
+      // The shared board receives only explicitly public section instructions.
+      bullets = safeInstructions.length
+        ? safeInstructions
+        : ['Complete this section independently when your teacher asks.'];
     }
     slides.push({
-      kind: 'section', title: `${index + 1}. ${section.title}`,
+      kind: 'section', title,
       sectionIndex: index,
       subtitle: `${section.marks} marks · ${assessmentSectionLabel(section.type)}`,
       bullets,
@@ -370,13 +633,52 @@ function presentationSlides(record) {
   return slides;
 }
 
+function sanitizeLearnerAnswers(questions, rawAnswers) {
+  const raw = rawAnswers && typeof rawAnswers === 'object' ? rawAnswers : {};
+  const safe = {};
+  for (const question of (questions || [])) {
+    if (!Object.prototype.hasOwnProperty.call(raw, question.id) || question.kind === 'practical') continue;
+    const value = raw[question.id];
+    if (question.kind === 'mcq') {
+      const number = typeof value === 'number'
+        ? value
+        : typeof value === 'string' && /^\d+$/.test(value.trim()) ? Number(value.trim()) : NaN;
+      if (Number.isInteger(number) && number >= 0 && number < (question.options || []).length) safe[question.id] = number;
+    } else {
+      safe[question.id] = String(value == null ? '' : value).slice(0, 20000);
+    }
+  }
+  return safe;
+}
+
+function incompleteAssessmentAnswers(questions, answers) {
+  const supplied = answers && typeof answers === 'object' ? answers : {};
+  return (questions || []).filter(question => {
+    if (question.kind === 'practical') return false;
+    const value = supplied[question.id];
+    if (question.kind === 'mcq') {
+      return !Number.isInteger(value) || value < 0 || value >= (question.options || []).length;
+    }
+    return !String(value == null ? '' : value).trim();
+  });
+}
+
 function assessmentSectionLabel(type) {
   return ({ mcq: 'Multiple choice', 'short-answer': 'Short answer', 'extended-response': 'Extended response', practical: 'Practical / observation' })[type] || 'Assessment section';
 }
 
-function assessmentReleaseReadiness(record) {
+function assessmentReleaseReadiness(record, expectedStudentIds = []) {
   if (!record || record.type !== 'assessment') return { ready: true, pendingGrades: 0, submissions: 0 };
   const submissions = loadSubmissions(record.id);
+  const submittedIds = new Set(submissions.map(submission => normalizeStudentId(submission.studentId)));
+  const missingStudents = [...new Set((expectedStudentIds || []).map(normalizeStudentId).filter(Boolean))].filter(id => !submittedIds.has(id));
+  if (missingStudents.length) {
+    return {
+      ready: false, pendingGrades: 0, submissions: submissions.length, missingStudents: missingStudents.length,
+      missingStudentIds: missingStudents,
+      reason: `${missingStudents.length} student${missingStudents.length === 1 ? ' has' : 's have'} not submitted yet.`,
+    };
+  }
   if (!submissions.length) return { ready: false, pendingGrades: 0, submissions: 0, reason: 'Wait for at least one student submission before releasing results.' };
   let pendingGrades = 0;
   for (const sub of submissions) {
@@ -390,6 +692,10 @@ function assessmentReleaseReadiness(record) {
     ready: pendingGrades === 0, pendingGrades, submissions: submissions.length,
     reason: pendingGrades ? `Review ${pendingGrades} pending grade${pendingGrades === 1 ? '' : 's'} before releasing results.` : '',
   };
+}
+
+function filterAssignmentEvidenceForRoster(rows, rosterId) {
+  return (rows || []).filter(row => row && row.rosterId === rosterId);
 }
 
 // ── Verdict cache: per-question list of gradings, some teacher-confirmed ───
@@ -440,6 +746,8 @@ function listTeacherAssignments(teacherId) {
       id: a.id, type: a.type, title: a.title, subject: a.subject, topic: a.topic, grade: a.grade,
       assessmentType: a.assessmentType || null, totalMarks: a.totalMarks || null,
       sectionCount: Array.isArray(a.sections) ? a.sections.length : null,
+      version: a.version || null, status: a.status || null, finalisedAt: a.finalisedAt || null,
+      lessonWorkspaceId: a.lessonWorkspaceId || null, unitId: a.unitId || null, unitName: a.unitName || null,
       delivery: a.delivery || null,
       createdAt: a.createdAt, roomCode: a.roomCode, rosterId: a.rosterId, cutoffAt: a.cutoffAt,
       resultsReleased: isReleased(a),
@@ -450,9 +758,11 @@ function listTeacherAssignments(teacherId) {
 
 module.exports = {
   createAssignment, createAssessment, normalizeAssessment, getAssignment, updateAssignmentCutoff, getRoomCode,
+  publishedAssessmentGenerationContext,
   releaseResults, isReleased,
-  saveSubmission, getSubmissions, getSubmission,
-  assessmentReleaseReadiness, loadDrafts, getDraft, saveDraft, deliveryState, updateDelivery, draftProgress, presentationSlides,
+  assessmentIsFinalised, saveSubmission, saveNewSubmission, getSubmissions, getSubmission,
+  assessmentReleaseReadiness, loadDrafts, getDraft, saveDraft, saveDraftGrade, deliveryState, updateDelivery, draftProgress, presentationSlides,
+  sanitizeLearnerAnswers, incompleteAssessmentAnswers, filterAssignmentEvidenceForRoster,
   findConfirmedVerdict, recordVerdict, normalizeAnswer, normalizeStudentId,
   listTeacherAssignments,
 };

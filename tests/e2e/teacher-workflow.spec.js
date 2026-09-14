@@ -12,6 +12,58 @@ async function simpleLessonDeck() {
   return pptx.write({ outputType: 'nodebuffer' });
 }
 
+function savedProjectAssessment() {
+  return {
+    title: 'Document creation project', subject: 'ICT', grade: 'Grade 2', assessmentType: 'project', deliveryMode: 'self-paced', totalMarks: 50,
+    objectives: [{ id: 'create-document', text: 'Create and edit a document independently' }],
+    instructions: 'Complete each project stage independently.',
+    sections: [{
+      id: 'practical', title: 'Document task', type: 'practical', objectiveIds: ['create-document'], instructions: 'Create your own document.',
+      items: [{ id: 'document-evidence', prompt: 'Creates, proofreads, saves and submits the required document independently', marks: 50 }],
+    }],
+  };
+}
+
+function savedProjectSequence(draft) {
+  return [1, 2].map(number => ({
+    teachingModelId: 'standard', lessonPurpose: 'project', sequenceLessonNumber: number, assessmentDraft: draft,
+    sections: [
+      { heading: 'Project session', stageId: 'practice', content: `Students complete document stage ${number} independently.` },
+      { heading: 'Assessment', fieldKey: 'assessment', stageId: 'check', content: 'Students complete the practical assessment in LessonScope.' },
+      { heading: 'Plenary', fieldKey: 'plenary', stageId: 'reflect', content: 'Teacher confirms every submission.' },
+    ],
+  }));
+}
+
+async function saveGrade2Roster(page, suffix) {
+  const response = await page.request.post('/api/roster', {
+    data: {
+      name: `Grade 2 ICT ${suffix}`,
+      rows: [{ ID: `G2-${suffix}`, Name: 'Amina Learner' }],
+      idCol: 'ID',
+      nameCol: 'Name',
+    },
+  });
+  const saved = await response.json();
+  expect(response.ok(), JSON.stringify(saved)).toBeTruthy();
+  return saved;
+}
+
+async function saveProjectWorkspace(page, context, draft) {
+  const response = await page.request.post('/api/lesson-workspaces', {
+    data: {
+      context,
+      sequencePlans: savedProjectSequence(draft),
+      stage: 'assigned',
+      assignmentIds: [],
+      deckRefs: [],
+    },
+  });
+  const saved = await response.json();
+  expect(response.ok(), JSON.stringify(saved)).toBeTruthy();
+  return saved.workspace;
+}
+
 test.beforeEach(async ({ page }, testInfo) => {
   await signInDisposableTeacher(page, `-${testInfo.project.name}`);
 });
@@ -103,6 +155,106 @@ test('saved lesson restores its working view and editable deck without regenerat
   await expect(page.locator('#results')).toBeVisible();
   await expect(page.locator('#deck')).toContainText('Plants and habitats');
   await expectNoPageOverflow(page);
+});
+
+test('saved project sequence retains a valid published assessment when it is resumed', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100', 'The restored publication contract needs one browser viewport.');
+  const draft = savedProjectAssessment();
+  const classRoster = await saveGrade2Roster(page, 'saved-project');
+  const context = {
+    subject: 'ICT', topic: 'Document creation', grade: 'Grade 2', objectives: 'Create and edit a document independently.',
+    slideCount: 4, tone: 'clear and engaging', teachingModelId: 'standard', lessonPurpose: 'project',
+    assessmentTotalMarks: 50, assessmentStructure: 'practical', assessmentDeliveryMode: 'self-paced', assessmentQuestionTypes: ['practical'], assessmentMcqCount: 0,
+    assessmentDraft: draft,
+    sequenceEnabled: true, sequenceLessonCount: 2, periodMinutes: 45, workspaceView: 'plan', useWeekPlanner: false,
+  };
+  const workspace = await saveProjectWorkspace(page, context, draft);
+  const publishedDraft = { ...draft, lessonWorkspaceId: workspace.id };
+  const publication = await page.request.post('/api/assessment', {
+    data: { assessment: publishedDraft, rosterId: classRoster.id },
+  });
+  const published = await publication.json();
+  expect(publication.ok(), JSON.stringify(published)).toBeTruthy();
+  const update = await page.request.patch(`/api/lesson-workspaces/${workspace.id}`, {
+    data: {
+      context: { ...context, assessmentDraft: publishedDraft, assessmentPublishedId: published.assessmentId },
+      sequencePlans: savedProjectSequence(publishedDraft),
+      stage: 'assigned',
+      assignmentIds: [published.assessmentId],
+      deckRefs: [],
+    },
+  });
+  expect(update.ok(), await update.text()).toBeTruthy();
+
+  let generatePayload = null;
+  await page.route('**/api/generate', async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    generatePayload = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        deckId: 'restored-project-deck', filename: 'ICT-Document_creation.pptx', band: 'early', slideCount: 2, lessonPurpose: 'project',
+        slides: [
+          { type: 'title', title: 'Document creation project', subtitle: 'ICT', bullets: [], image: null, imageSource: null },
+          { type: 'content', title: 'Project stage', bullets: ['Complete your own work.'], example: '', image: null, imageSource: null, modelStage: 'project-stage-1' },
+        ],
+      }),
+    });
+  });
+
+  await page.locator('#lessonsBtn').click();
+  await page.locator(`[data-workspace-resume="${workspace.id}"]`).click();
+  await expect(page.locator('#planStage')).toBeVisible();
+  await expect(page.locator('#autoAssessmentSummary')).toContainText('Automatic project published');
+  await page.locator('#acceptBtn').click();
+  await expect(page.locator('#results')).toBeVisible();
+  expect(generatePayload).not.toBeNull();
+  expect(generatePayload.assessmentPublishedId).toBe(published.assessmentId);
+  expect(generatePayload.lessonWorkspaceId).toBe(workspace.id);
+  expect(generatePayload.assessmentDraft.sections[0].title).toBe('Document task');
+});
+
+test('saved project sequence requires republishing when its assessment reference is stale', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100', 'The restored publication contract needs one browser viewport.');
+  const draft = savedProjectAssessment();
+  const classRoster = await saveGrade2Roster(page, 'stale-project');
+  const context = {
+    subject: 'ICT', topic: 'Document creation', grade: 'Grade 2', objectives: 'Create and edit a document independently.',
+    slideCount: 4, tone: 'clear and engaging', teachingModelId: 'standard', lessonPurpose: 'project',
+    assessmentTotalMarks: 50, assessmentStructure: 'practical', assessmentDeliveryMode: 'self-paced', assessmentQuestionTypes: ['practical'], assessmentMcqCount: 0,
+    assessmentDraft: draft,
+    sequenceEnabled: true, sequenceLessonCount: 2, periodMinutes: 45, workspaceView: 'plan', useWeekPlanner: false,
+  };
+  const sourceWorkspace = await saveProjectWorkspace(page, { ...context, topic: 'Source project' }, draft);
+  const publishedDraft = { ...draft, lessonWorkspaceId: sourceWorkspace.id };
+  const publication = await page.request.post('/api/assessment', {
+    data: { assessment: publishedDraft, rosterId: classRoster.id },
+  });
+  const published = await publication.json();
+  expect(publication.ok(), JSON.stringify(published)).toBeTruthy();
+  const resumedWorkspace = await saveProjectWorkspace(page, context, draft);
+  const resumedDraft = { ...draft, lessonWorkspaceId: resumedWorkspace.id };
+  const update = await page.request.patch(`/api/lesson-workspaces/${resumedWorkspace.id}`, {
+    data: {
+      context: { ...context, assessmentDraft: resumedDraft, assessmentPublishedId: published.assessmentId },
+      sequencePlans: savedProjectSequence(resumedDraft),
+      assignmentIds: [published.assessmentId],
+    },
+  });
+  expect(update.ok(), await update.text()).toBeTruthy();
+  let generateCalls = 0;
+  await page.route('**/api/generate', async route => {
+    generateCalls += 1;
+    await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Deck generation should remain gated.' }) });
+  });
+
+  await page.locator('#lessonsBtn').click();
+  await page.locator(`[data-workspace-resume="${resumedWorkspace.id}"]`).click();
+  await expect(page.locator('#planStage')).toBeVisible();
+  await expect(page.locator('#autoAssessmentSummary')).toContainText('Automatic project draft ready');
+  await page.locator('#acceptBtn').click();
+  await expect(page.locator('#assessmentBuilder')).toBeVisible();
+  expect(generateCalls).toBe(0);
 });
 
 test('roster upload controls keep their actions visible and separated', async ({ page }) => {

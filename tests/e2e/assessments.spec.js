@@ -3,7 +3,22 @@ const { expectNoPageOverflow, signInDisposableTeacher } = require('./helpers');
 
 test('teacher builds a marked assessment and a learner sees practical criteria safely', async ({ page, browser }, testInfo) => {
   test.skip(!['windows-100', 'mobile'].includes(testInfo.project.name), 'Desktop and mobile cover the new responsive assessment flow.');
+  const learnerId = `G2-${testInfo.project.name}`;
   await signInDisposableTeacher(page, `-assessment-${testInfo.project.name}`);
+  const unrosteredLive = await page.request.post('/api/assessment', {
+    data: { assessment: {
+      title: 'Unrostered live project', subject: 'Computing', grade: 'Grade 2', assessmentType: 'project', deliveryMode: 'live', totalMarks: 10,
+      objectives: [{ id: 'create-document', text: 'Create and edit a document' }], instructions: 'Complete the project independently.',
+      sections: [{ id: 'practical', title: 'Document task', type: 'practical', objectiveIds: ['create-document'], instructions: 'Complete your own document.', items: [{ id: 'criterion', prompt: 'Creates a document and corrects its spelling independently', marks: 10 }] }],
+    } },
+  });
+  expect(unrosteredLive.status()).toBe(400);
+  expect((await unrosteredLive.json()).error).toMatch(/Choose a class roster/);
+  const rosterResponse = await page.request.post('/api/roster', {
+    data: { name: 'Grade 2 ICT', rows: [{ ID: learnerId, Name: 'Amina Learner' }], idCol: 'ID', nameCol: 'Name' },
+  });
+  expect(rosterResponse.ok(), await rosterResponse.text()).toBeTruthy();
+  const classRoster = await rosterResponse.json();
 
   await page.locator('#assignmentsBtn').click();
   await expect(page.getByRole('heading', { name: 'Test or project' })).toBeVisible();
@@ -17,6 +32,7 @@ test('teacher builds a marked assessment and a learner sees practical criteria s
   await page.locator('[data-section-type]').selectOption('practical');
   await page.locator('[data-item-prompt]').fill('Creates a document and corrects spelling');
   await page.locator('[data-item-marks]').fill('10');
+  await page.locator('#assessmentRoster').selectOption(classRoster.id);
   await expect(page.locator('#assessmentTotalStatus')).toHaveClass(/valid/);
   await expectNoPageOverflow(page);
 
@@ -38,8 +54,9 @@ test('teacher builds a marked assessment and a learner sees practical criteria s
   try {
     await learner.goto(new URL(assessment.path, page.url()).toString());
     await expect(learner.locator('#authScreen')).toBeVisible();
-    await learner.locator('#auSid').fill('Amina Learner');
-    await learner.locator('#authBtn').click();
+    await expect(learner.locator('#authTitle')).toHaveText('Choose your name');
+    await expect(learner.locator('#auSid')).toBeHidden();
+    await learner.getByRole('button', { name: 'Amina L.' }).click();
     await expect(learner.locator('#pinSetupBlock')).toBeVisible();
     await learner.locator('#auPinNew').fill('4826');
     await learner.locator('#auPinConfirm').fill('4826');
@@ -48,7 +65,8 @@ test('teacher builds a marked assessment and a learner sees practical criteria s
     const startResponse = await page.request.patch(`/api/assignment/${assessment.assessmentId}/live-state`, { data: { action: 'start' } });
     expect(startResponse.ok()).toBeTruthy();
     await expect(presentation.locator('#title')).toHaveText('1. Practical / observation');
-    await expect(presentation.locator('#bullets')).toContainText('Creates a document and corrects spelling');
+    await expect(presentation.locator('#bullets')).toContainText('Complete this section independently');
+    await expect(presentation.locator('#bullets')).not.toContainText('Creates a document and corrects spelling');
     await expect(learner.locator('.section-head')).toHaveText('Practical / observation');
     await expect(learner.locator('.practical-note')).toContainText('Your teacher will observe it');
     const pauseResponse = await page.request.patch(`/api/assignment/${assessment.assessmentId}/live-state`, { data: { action: 'pause' } });
@@ -86,4 +104,91 @@ test('teacher builds a marked assessment and a learner sees practical criteria s
     await presentation.close();
     await learnerContext.close();
   }
+});
+
+test('an open My assignments panel updates learner readiness without being reopened', async ({ page, browser }, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100', 'One desktop browser covers the live teacher polling contract.');
+  await signInDisposableTeacher(page, '-assessment-results-polling');
+  const learnerId = `POLL-${Date.now()}`;
+  const rosterResponse = await page.request.post('/api/roster', {
+    data: { name: 'Grade 2 ICT polling', rows: [{ ID: learnerId, Name: 'Amina Learner' }], idCol: 'ID', nameCol: 'Name' },
+  });
+  const classRoster = await rosterResponse.json();
+  expect(rosterResponse.ok(), JSON.stringify(classRoster)).toBeTruthy();
+  const assessmentResponse = await page.request.post('/api/assessment', {
+    data: {
+      rosterId: classRoster.id,
+      assessment: {
+        title: 'Live document project', subject: 'ICT', grade: 'Grade 2', assessmentType: 'project', deliveryMode: 'live', totalMarks: 10,
+        objectives: [{ id: 'document', text: 'Create a document independently' }],
+        instructions: 'Complete the project independently.',
+        sections: [{
+          id: 'practical', title: 'Document task', type: 'practical', objectiveIds: ['document'], instructions: 'Create and check your document.',
+          items: [{ id: 'criterion', prompt: 'Creates and checks a document independently', marks: 10 }],
+        }],
+      },
+    },
+  });
+  const assessment = await assessmentResponse.json();
+  expect(assessmentResponse.ok(), JSON.stringify(assessment)).toBeTruthy();
+
+  let resultsRequests = 0;
+  page.on('request', request => {
+    if(request.method()==='GET'&&request.url().endsWith(`/api/assignment/${assessment.assessmentId}/results`))resultsRequests += 1;
+  });
+  await page.locator('#assignmentsBtn').click();
+  const card = page.locator('#assignmentsList .game-card').filter({ hasText: 'Live document project' });
+  await expect(card).toBeVisible();
+  const toggle = card.locator('.a-toggle-btn');
+  await expect(toggle).toHaveText('Run classroom / mark');
+  await toggle.click();
+  const results = card.locator(`#ares-${assessment.assessmentId}`);
+  await expect(results).toContainText('Live classroom lobby');
+  await expect(results).toContainText('Updates automatically while these controls are open.');
+  await results.getByRole('button', { name: 'By question' }).click();
+  await expect(results).toHaveAttribute('data-view', 'question');
+
+  const learnerContext = await browser.newContext();
+  try {
+    const join = await (await learnerContext.request.get(`/api/assignment/${assessment.assessmentId}/join`)).json();
+    const entered = await learnerContext.request.post(`/api/assignment/${assessment.assessmentId}/enter`, {
+      data: { handle: join.students[0].handle, pin: '4826' },
+    });
+    expect(entered.ok(), await entered.text()).toBeTruthy();
+    const started = await page.request.patch(`/api/assignment/${assessment.assessmentId}/live-state`, { data: { action: 'start' } });
+    expect(started.ok(), await started.text()).toBeTruthy();
+    await expect(results).toContainText('0 of 1 students ready');
+
+    const ready = await learnerContext.request.post(`/api/assignment/${assessment.assessmentId}/draft`, {
+      data: { answers: {}, complete: true },
+    });
+    expect(ready.ok(), await ready.text()).toBeTruthy();
+    await expect(results).toContainText('1 of 1 students ready');
+    await expect(toggle).toHaveText('Hide controls');
+    await expect(results).toHaveAttribute('data-view', 'question');
+
+    const finished = await page.request.patch(`/api/assignment/${assessment.assessmentId}/live-state`, { data: { action: 'next' } });
+    expect(finished.ok(), await finished.text()).toBeTruthy();
+    const submitted = await learnerContext.request.post(`/api/assignment/${assessment.assessmentId}/submit`, { data: { answers: {} } });
+    expect(submitted.ok(), await submitted.text()).toBeTruthy();
+    await expect(results).toContainText('Amina Learner');
+    await expect(results.getByRole('button', { name: /grades? pending/ })).toBeDisabled();
+
+    const graded = await page.request.patch(`/api/assignment/${assessment.assessmentId}/grade`, {
+      data: { studentId: learnerId, questionId: 'criterion', marksAwarded: 8 },
+    });
+    expect(graded.ok(), await graded.text()).toBeTruthy();
+    await expect(results.getByRole('button', { name: 'Release results' })).toBeEnabled();
+    const released = await page.request.patch(`/api/assignment/${assessment.assessmentId}/release`, { data: { released: true } });
+    expect(released.ok(), await released.text()).toBeTruthy();
+    await expect(results).toContainText('Results released to students');
+  } finally {
+    await learnerContext.close();
+  }
+
+  await page.locator('#assignmentsBackTop').click();
+  await page.waitForTimeout(100);
+  const requestsAfterClose = resultsRequests;
+  await page.waitForTimeout(1600);
+  expect(resultsRequests).toBe(requestsAfterClose);
 });

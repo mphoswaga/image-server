@@ -692,7 +692,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
     }
     case 'objectives': {
       slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 5.4, h: 5.625, fill: { color: thm.primary } });
-      slide.addText('LEARNING OBJECTIVES', { x: 0.5, y: 0.6, w: 4.4, h: 0.5, fontFace: thm.font, fontSize: 15, bold: true, color: soft.accentSoft, charSpacing: 2 });
+      slide.addText(String(slideData.title || 'Learning objectives').toUpperCase(), { x: 0.5, y: 0.6, w: 4.4, h: 0.5, fontFace: thm.font, fontSize: 15, bold: true, color: soft.accentSoft, charSpacing: 2 });
       // Pagination can split a list across slides but never within one bullet,
       // so a single long objective still needs to shrink to fit.
       const objSize = fitBulletSize(slideData.bullets, t, 4.5, 3.8, Math.max(16, t.bulletSize - 2), LEAD_NUMBERED);

@@ -144,6 +144,10 @@
           needsPin = true; $('pinBlock').style.display = 'block'; $('pinInput').focus();
           btn.disabled = false; return;
         }
+        if (status === 428 && d.needsPinSetup) {
+          location.assign(d.path || '/start');
+          return;
+        }
         if (!ok) throw new Error(d.error);
         $('form').style.display = 'none';
         $('greet').textContent = `Hi ${d.name} — here's everything you've submitted:`;

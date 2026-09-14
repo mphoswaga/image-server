@@ -10,13 +10,19 @@ async function createClass(page, name, studentId, studentName) {
   return response.json();
 }
 
-test('a published game can add and remove several classes from My games', async ({ page }) => {
+test('a published game can add and remove several classes from My games', async ({ page }, testInfo) => {
   test.setTimeout(60_000);
   await signInDisposableTeacher(page, '-multi-class-game');
+  const runId = testInfo.project.name.replace(/[^a-z0-9]+/gi, '').toUpperCase();
+  const studentIds = {
+    classA: `G3A-${runId}`,
+    classB: `G3B-${runId}`,
+    classC: `G3C-${runId}`,
+  };
   const [classA, classB, classC] = await Promise.all([
-    createClass(page, 'Grade 3A', 'G3A-1', 'Amina One'),
-    createClass(page, 'Grade 3B', 'G3B-1', 'Bao Two'),
-    createClass(page, 'Grade 3C', 'G3C-1', 'Chi Three'),
+    createClass(page, 'Grade 3A', studentIds.classA, 'Amina One'),
+    createClass(page, 'Grade 3B', studentIds.classB, 'Bao Two'),
+    createClass(page, 'Grade 3C', studentIds.classC, 'Chi Three'),
   ]);
 
   const deck = new pptxgen();
@@ -38,6 +44,32 @@ test('a published game can add and remove several classes from My games', async 
   const initialJoin = await (await page.request.get(`/api/game/${created.gameId}/join`)).json();
   expect(initialJoin.hasRoster).toBe(true);
   expect(initialJoin.students).toHaveLength(2);
+  const setupChallengeResponse = await page.request.post(`/api/game/${created.gameId}/enter`, {
+    data: { handle: initialJoin.students[0].handle },
+  });
+  expect(setupChallengeResponse.status()).toBe(428);
+  const setupChallenge = await setupChallengeResponse.json();
+  expect(setupChallenge).toMatchObject({ needsPinSetup: true });
+  expect(setupChallenge).not.toHaveProperty('name');
+  expect(JSON.stringify(setupChallenge)).not.toContain(studentIds.classA);
+  expect(JSON.stringify(setupChallenge)).not.toContain('Amina One');
+  const firstEntry = await page.request.post(`/api/game/${created.gameId}/enter`, {
+    data: { handle: initialJoin.students[0].handle, pin: '2468' },
+  });
+  expect(firstEntry.ok(), await firstEntry.text()).toBeTruthy();
+  const pinChallengeResponse = await page.request.post(`/api/game/${created.gameId}/enter`, {
+    data: { handle: initialJoin.students[0].handle },
+  });
+  expect(pinChallengeResponse.status()).toBe(428);
+  const pinChallenge = await pinChallengeResponse.json();
+  expect(pinChallenge).toMatchObject({ needsPin: true });
+  expect(pinChallenge).not.toHaveProperty('name');
+  expect(JSON.stringify(pinChallenge)).not.toContain(studentIds.classA);
+  expect(JSON.stringify(pinChallenge)).not.toContain('Amina One');
+  const resetFromHandle = await page.request.post(`/api/game/${created.gameId}/pin/reset-request`, {
+    data: { handle: initialJoin.students[0].handle },
+  });
+  expect(resetFromHandle.ok(), await resetFromHandle.text()).toBeTruthy();
 
   await page.goto('/');
   await page.locator('#gamesBtn').click();
@@ -64,11 +96,11 @@ test('a published game can add and remove several classes from My games', async 
   const updatedJoin = await (await page.request.get(`/api/game/${created.gameId}/join`)).json();
   expect(updatedJoin.students).toHaveLength(2);
   const removedClassJoin = await page.request.post(`/api/game/${created.gameId}/enter`, {
-    data: { studentId: 'G3A-1', pin: '2468' },
+    data: { studentId: studentIds.classA, pin: '2468' },
   });
   expect(removedClassJoin.status()).toBe(403);
   const addedClassJoin = await page.request.post(`/api/game/${created.gameId}/enter`, {
-    data: { studentId: 'G3C-1', pin: '2468' },
+    data: { studentId: studentIds.classC, pin: '2468' },
   });
   expect(addedClassJoin.ok(), await addedClassJoin.text()).toBeTruthy();
   const gradebooks = await (await page.request.get('/api/gradebook')).json();

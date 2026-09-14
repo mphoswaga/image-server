@@ -149,6 +149,16 @@ function requireGameAccess(req, res, next) {
 // Keep this separate from requireGameAccess so game routes still require a
 // session scoped to the current game.
 function requireAssignmentAccess(req, res, next) {
+  // The owner may preview an assignment while an old learner cookie is still
+  // present in the browser. Resolve the signed-in teacher first and authorise
+  // ownership in the route before returning any questions.
+  const teacherTok = req.cookies && req.cookies[COOKIE_NAME];
+  if (teacherTok) {
+    try {
+      const p = verifyToken(teacherTok);
+      if (p) { req.userId = p; req.user = getUserById(p) || {}; return next(); }
+    } catch {}
+  }
   const gameTok = req.cookies && req.cookies[GAME_COOKIE];
   if (gameTok) {
     try {
@@ -163,13 +173,6 @@ function requireAssignmentAccess(req, res, next) {
   }
   const student = optionalStudentSession(req);
   if (student) { req.studentSession = student; return next(); }
-  const tok = req.cookies && req.cookies[COOKIE_NAME];
-  if (tok) {
-    try {
-      const p = verifyToken(tok);
-      if (p) { req.userId = p; req.user = getUserById(p) || {}; return next(); }
-    } catch {}
-  }
   res.status(401).json({ error: 'Not authenticated.' });
 }
 
@@ -210,7 +213,12 @@ function requirePracticeEnabled(req, res, next) {
 }
 
 function assignmentStudentSession(req, res, a) {
-  if (req.gameSession && req.gameSession.assignmentId === a.id) return req.gameSession;
+  if (req.userId) return null;
+  if (req.gameSession && req.gameSession.assignmentId === a.id) {
+    const matched = assignmentStudentInCohort(a, req.gameSession.studentId);
+    if (a.rosterId && !matched) return null;
+    return { ...req.gameSession, name: matched ? matched.name : req.gameSession.name };
+  }
   if (req.gameSession && req.gameSession.assignmentId && req.gameSession.assignmentId !== a.id) return null;
 
   const student = optionalStudentSession(req);
@@ -218,7 +226,7 @@ function assignmentStudentSession(req, res, a) {
 
   let displayName = student.name || student.studentId;
   if (a.rosterId) {
-    const s = roster.findStudentInRoster(a.teacherId, a.rosterId, student.studentId);
+    const s = assignmentStudentInCohort(a, student.studentId);
     if (!s) return null;
     displayName = s.name;
   }
@@ -226,6 +234,15 @@ function assignmentStudentSession(req, res, a) {
   const recovered = { studentId: student.studentId, assignmentId: a.id, name: displayName };
   res.cookie(GAME_COOKIE, issueGameToken(recovered, 'assignment'), cookieOptions(30 * 24 * 60 * 60 * 1000));
   return recovered;
+}
+
+function assignmentViewer(req, res, assignment) {
+  const session = assignmentStudentSession(req, res, assignment);
+  if (session) return { session, teacherPreview: false };
+  if (req.userId === assignment.teacherId) return { session: null, teacherPreview: true };
+  if (req.userId) res.status(403).json({ error: 'Not your assignment.' });
+  else res.status(401).json({ code: 'ASSIGNMENT_REJOIN_REQUIRED', error: 'Join this assignment with the learner account assigned to it.' });
+  return null;
 }
 
 const app = express();
@@ -1107,6 +1124,9 @@ function previewEntry(slide, image) {
     modelStage: slide.modelStage || null,
     modelStageLabel: slide.modelStageLabel || null,
     modelLabel: slide.modelLabel || null,
+    assessmentPhaseType: slide.assessmentPhaseType || null,
+    assessmentPhaseIndex: Number.isInteger(slide.assessmentPhaseIndex) ? slide.assessmentPhaseIndex : null,
+    assessmentProtected: !!slide.assessmentProtected || !!slide.assessmentPhaseType,
     title: slide.title,
     subtitle: slide.subtitle || null,
     bullets: slide.bullets || [],
@@ -1137,7 +1157,51 @@ function makeVideoSlide(video, sourceSlide = {}) {
     modelStage: sourceSlide.modelStage || null,
     modelStageLabel: sourceSlide.modelStageLabel || null,
     modelLabel: sourceSlide.modelLabel || null,
+    assessmentPhaseType: sourceSlide.assessmentPhaseType || null,
+    assessmentPhaseIndex: Number.isInteger(sourceSlide.assessmentPhaseIndex) ? sourceSlide.assessmentPhaseIndex : null,
+    assessmentProtected: !!sourceSlide.assessmentProtected || !!sourceSlide.assessmentPhaseType,
     speakerNotes: `Teacher-reviewed video for: ${sourceSlide.title || 'this lesson slide'}`,
+  };
+}
+
+function deckContextPayload(deck) {
+  const assessment = normalizeAssessmentOptions(deck.assessmentOptions || {});
+  const sequence = deck.lessonSequence && deck.lessonSequence.enabled ? deck.lessonSequence : null;
+  return {
+    subject: deck.subject || '',
+    topic: deck.topic || '',
+    grade: deck.grade || 'middle school',
+    slideCount: Number(deck.requestedSlideCount) || 5,
+    tone: deck.tone || 'clear and engaging',
+    focus: deck.focus || '',
+    objectives: deck.objectives || '',
+    teachingModelId: deck.teachingModelId || 'standard',
+    lessonPurpose: deck.lessonPurpose || 'lesson',
+    assessmentTotalMarks: assessment.totalMarks,
+    assessmentStructure: assessment.structure,
+    assessmentDeliveryMode: assessment.deliveryMode,
+    assessmentBrief: assessment.brief,
+    assessmentQuestionTypes: assessment.questionTypes,
+    assessmentMcqCount: assessment.mcqCount,
+    assessmentDraft: deck.assessmentDraft || null,
+    assessmentPublishedId: deck.assessmentPublishedId || null,
+    sequenceEnabled: !!sequence,
+    sequenceLessonCount: sequence ? sequence.lessonCount : undefined,
+    periodMinutes: sequence ? sequence.periodMinutes : undefined,
+    lessonPlanText: deck.lessonPlanText || '',
+    sourceMaterialText: deck.sourceMaterialText || '',
+    sourceMaterialImages: Array.isArray(deck.sourceMaterialImages) ? deck.sourceMaterialImages : [],
+    templateId: deck.templateId || null,
+    planningFrameworkId: deck.planningFrameworkId || null,
+    successCriteria: Array.isArray(deck.successCriteria) ? deck.successCriteria : [],
+    resources: Array.isArray(deck.resources) ? deck.resources : [],
+    unitId: deck.unitId || null,
+    unitName: deck.unitName || '',
+    lessonIndex: deck.lessonIndex == null ? null : deck.lessonIndex,
+    weekNumber: deck.weekNumber == null ? null : deck.weekNumber,
+    useWeekPlanner: !!deck.useWeekPlanner,
+    weekPlannerId: deck.weekPlannerId || null,
+    presetId: deck.presetId || null,
   };
 }
 
@@ -1149,8 +1213,12 @@ function deckPreviewPayload(id, deck) {
     slideCount: deck.slides.length,
     teachingModelId: deck.teachingModelId || null,
     lessonPurpose: deck.lessonPurpose || 'lesson',
+    context: deckContextPayload(deck),
     sourceText: deck.lessonPlanText || deck.sourceText || '',
-    slides: deck.slides.map((s, i) => previewEntry(s, deck.images[i])),
+    slides: deck.slides.map((s, i) => ({
+      ...previewEntry(s, deck.images[i]),
+      assessmentProtected: deck.lessonPurpose === 'test' || !!s.assessmentProtected || !!s.assessmentPhaseType,
+    })),
   };
 }
 
@@ -1530,6 +1598,7 @@ app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
           console.error('Week planner could not be read for the plan prompt:', err.message);
         }
       }
+      const storedAssessmentOptions = normalizeAssessmentOptions(deck.assessmentOptions || {});
       const plan = await generateLessonPlan({
         subject: String(deck.subject || '').toLowerCase(),
         topic: String(deck.topic || '').toLowerCase(),
@@ -1541,6 +1610,13 @@ app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
         templateText: tpl ? templatePromptText(req.userId, tpl) : plannerText,
         sourceMaterialText: source,
         teachingModel: deck.teachingModelId,
+        lessonPurpose: deck.lessonPurpose,
+        assessmentTotalMarks: storedAssessmentOptions.totalMarks,
+        assessmentStructure: storedAssessmentOptions.structure,
+        assessmentDeliveryMode: storedAssessmentOptions.deliveryMode,
+        assessmentBrief: storedAssessmentOptions.brief,
+        assessmentQuestionTypes: storedAssessmentOptions.questionTypes,
+        assessmentMcqCount: storedAssessmentOptions.mcqCount,
         sequence: deck.lessonSequence || null,
         structuredSequence: !!(outline && deck.lessonSequence && deck.lessonSequence.enabled),
       });
@@ -1843,6 +1919,9 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
     : null;
   if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
   if (!objectives.trim()) return res.status(400).json({ error: 'Please paste the lesson objectives.' });
+  if (lessonPurpose !== 'lesson' && assessmentOptions.phaseRequirementIssue) {
+    return res.status(400).json({ error: `Check the assessment Requirements: ${assessmentOptions.phaseRequirementIssue}.` });
+  }
   if (lessonPurpose !== 'lesson' && assessmentOptions.totalMarks < assessmentOptions.questionTypes.length) {
     return res.status(400).json({ error: 'The total marks must leave at least one mark for every selected item type.' });
   }
@@ -1897,6 +1976,7 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
       assessmentBrief: assessmentOptions.brief,
       assessmentQuestionTypes: assessmentOptions.questionTypes,
       assessmentMcqCount: assessmentOptions.mcqCount,
+      assessmentPhases: assessmentOptions.phaseRequirements,
     });
 
     // Show the workbook's fields in their own order, with the objectives and
@@ -2058,7 +2138,7 @@ app.post('/api/pack/full', requireAuth, async (req, res) => {
     const u = unitId ? unit.getUnit(req.userId, unitId) : null;
     const unitBlock = u ? unit.buildUnitBlock(u, lessonIndex) : '';
     const lessonPlanText = resolvePlanText(req.body);
-    const ctx = { subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, unitBlock, teachingModelId, lessonPurpose };
+    const ctx = { subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, unitBlock, teachingModelId, lessonPurpose, assessmentDraft: req.body.assessmentDraft || null };
     const meta = { subject, topic, grade };
 
     const [nData, wData, etData, qData, hwData, acData] = await Promise.all([
@@ -2100,7 +2180,7 @@ app.post('/api/pack/:type', requireAuth, async (req, res) => {
     const u = unitId ? unit.getUnit(req.userId, unitId) : null;
     const unitBlock = u ? unit.buildUnitBlock(u, lessonIndex) : '';
     const lessonPlanText = resolvePlanText(req.body);
-    const data = await gen({ subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, unitBlock, teachingModelId, lessonPurpose, regenerate: !!regenerate });
+    const data = await gen({ subject: subject.toLowerCase(), topic: topic.toLowerCase(), grade, tone, objectives, lessonPlanText, unitBlock, teachingModelId, lessonPurpose, assessmentDraft: req.body.assessmentDraft || null, regenerate: !!regenerate });
     await capture(req, reservation, 'lessonscope.generate_pack_item', req.params.type);
     res.json({ type: req.params.type, data });
   } catch (err) {
@@ -2155,9 +2235,29 @@ app.get('/api/assignments', requireAuth, (req, res) => res.json({ assignments: a
 app.post('/api/assessment', requireAuth, (req, res) => {
   const { assessment, rosterId, cutoffAt } = req.body || {};
   try {
+    const selectedRosterId = String(rosterId || '').trim();
+    if (!selectedRosterId) {
+      return res.status(400).json({ error: 'Choose a class roster before publishing a test or project.' });
+    }
+    const selectedRoster = roster.getRoster(req.userId, selectedRosterId);
+    if (!selectedRoster) {
+      return res.status(404).json({ error: 'That saved class could not be found.' });
+    }
+    if (!Array.isArray(selectedRoster.students) || !selectedRoster.students.length) {
+      return res.status(400).json({ error: 'The selected class has no learners.' });
+    }
+    // Plan-created tests/projects carry the saved lesson workspace that owns
+    // their plan and deck. Resolve it inside the signed-in teacher's storage;
+    // accepting an arbitrary matching string would let a forged client bypass
+    // the workspace binding used during deck generation. The separate manual
+    // assessment builder intentionally has no workspace and remains supported.
+    const assessmentWorkspaceId = String(assessment && assessment.lessonWorkspaceId || '').trim();
+    if (assessmentWorkspaceId && !lessonWorkspaces.get(req.userId, assessmentWorkspaceId)) {
+      return res.status(404).json({ code: 'assessment_workspace_not_found', error: 'The saved lesson workspace could not be found.' });
+    }
     const rec = assignments.createAssessment({
       teacherId: req.userId, teacherName: req.user.name,
-      data: assessment, rosterId: rosterId || null, cutoffAt: cutoffAt || null,
+      data: assessment, rosterId: selectedRosterId, rosterSnapshot: selectedRoster.students, cutoffAt: cutoffAt || null,
     });
     res.json({
       assessmentId: rec.id, assignmentId: rec.id, path: `/assignment/${rec.id}`,
@@ -2208,10 +2308,10 @@ app.get('/api/join', (req, res) => {
   res.status(404).json({ error: 'Room not found. Check the code and try again.' });
 });
 
-// Public, no-login "my work": a student types their Student ID once and sees
-// every game/assignment they've submitted, across every roster that ID
-// appears in — same accepted trust model as joining a single game/assignment
-// (Student ID is the credential throughout this app), just aggregated.
+// Legacy "my work" lookup: a student with an established PIN can see every
+// game/assignment they have submitted across rosters. First-time rostered
+// learners are sent through /start so a raw Student ID is never enough to
+// disclose their work or full name.
 // Only rostered games/assignments are included — a free-form typed name on a
 // no-roster activity can't be reliably tied back to this ID.
 // Pure data gather, no auth/response concerns — shared by the legacy
@@ -2288,14 +2388,20 @@ app.get('/api/my-work', (req, res) => {
   const includeFreeform = req.query.includeFreeform === '1' || req.query.includeFreeform === 'true';
 
   const matches = roster.findStudentAcrossAllTeachers(studentId);
-  // PIN is a single global account per Student ID (student-account.js) —
-  // one check covers every roster this ID appears in. 'unset' stays open
-  // (same as before this feature existed — protection only starts once the
-  // student actually sets a PIN via /enter or /api/student/login).
+  // PIN is a single global account per Student ID (student-account.js), so one
+  // check covers every roster this ID appears in. A known rostered ID with no
+  // PIN must establish its verified student session through /start first.
   const pinState = studentAccount.getAccountState(studentId);
   if (pinState === 'set') {
-    if (!pin) return res.status(428).json({ needsPin: true, name: matches[0] && matches[0].name, error: 'Enter your PIN to continue.' });
+    if (!pin) return res.status(428).json({ needsPin: true, error: 'Enter your PIN to continue.' });
     if (!studentAccount.verifyPin(studentId, pin)) return res.status(403).json({ error: 'Incorrect PIN.' });
+  } else if (matches.length) {
+    return res.status(428).json({
+      code: 'STUDENT_PIN_SETUP_REQUIRED',
+      needsPinSetup: true,
+      path: '/start',
+      error: 'Set up your learner PIN on the student sign-in page to view your work.',
+    });
   }
 
   const { name, work } = gatherWork(studentId, includeFreeform);
@@ -2319,11 +2425,11 @@ app.post('/api/student/login', (req, res) => {
 
   const pinState = studentAccount.getAccountState(studentId);
   if (pinState === 'unset') {
-    if (!pin) return res.status(428).json({ needsPinSetup: true, name: displayName, error: 'Set up a 4-digit PIN to continue.' });
+    if (!pin) return res.status(428).json({ needsPinSetup: true, error: 'Set up a 4-digit PIN to continue.' });
     if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
     if (!studentAccount.setPin(studentId, pin)) return res.status(409).json({ error: 'A PIN was just set for this ID — enter it instead.' });
   } else {
-    if (!pin) return res.status(428).json({ needsPin: true, name: displayName, error: 'Enter your PIN to continue.' });
+    if (!pin) return res.status(428).json({ needsPin: true, error: 'Enter your PIN to continue.' });
     if (!studentAccount.verifyPin(studentId, pin)) return res.status(403).json({ error: 'Incorrect PIN.' });
   }
 
@@ -2378,7 +2484,11 @@ app.post('/api/student/pin/reset-request', (req, res) => {
 // Already-logged-in check — lets /start skip straight to the dashboard on repeat visits.
 app.get('/api/student/me', requireStudentAccess, (req, res) => res.json({ studentId: req.studentSession.studentId, name: req.studentSession.name }));
 
-app.post('/api/student/logout', (req, res) => { res.clearCookie(STUDENT_COOKIE); res.json({ ok: true }); });
+app.post('/api/student/logout', (req, res) => {
+  res.clearCookie(STUDENT_COOKIE);
+  res.clearCookie(GAME_COOKIE);
+  res.json({ ok: true });
+});
 
 // Same data as /api/my-work, but identity comes from the verified session —
 // no PIN passed in a URL query string.
@@ -2418,7 +2528,7 @@ app.post('/api/student/join-room', requireStudentAccess, (req, res) => {
   const a = assignments.getAssignment(assignmentId);
   let displayName = name;
   if (a.rosterId) {
-    const s = roster.findStudentInRoster(a.teacherId, a.rosterId, studentId);
+    const s = assignmentStudentInCohort(a, studentId);
     if (!s) return res.status(403).json({ error: "You're not on the roster for this assignment." });
     displayName = s.name;
   }
@@ -2679,6 +2789,40 @@ function classListFor(teacherId, rosterId, activityId) {
   });
 }
 
+// Formal assessments keep the exact selected class as a publication snapshot.
+// Later edits to the reusable master roster must not add ghost non-submitters
+// or lock out a learner who was in the class when the assessment was issued.
+function assignmentCohortStudents(assignment) {
+  if (assignment && assignment.type === 'assessment' && Array.isArray(assignment.rosterSnapshot)) {
+    return assignment.rosterSnapshot;
+  }
+  const classRoster = assignment && assignment.rosterId
+    ? roster.getRoster(assignment.teacherId, assignment.rosterId)
+    : null;
+  return classRoster && Array.isArray(classRoster.students) ? classRoster.students : [];
+}
+
+function assignmentStudentInCohort(assignment, studentId) {
+  const wanted = roster.normalizeStudentId(studentId);
+  return assignmentCohortStudents(assignment).find(student => roster.normalizeStudentId(student.id) === wanted) || null;
+}
+
+function studentFromAssignmentHandle(assignment, handle) {
+  const wanted = String(handle || '');
+  if (!wanted) return null;
+  return assignmentCohortStudents(assignment)
+    .find(student => studentHandle(assignment.id, student.id) === wanted) || null;
+}
+
+function classListForAssignment(assignment) {
+  return assignmentCohortStudents(assignment).map(student => {
+    const parts = String(student.name || '').trim().split(/\s+/).filter(Boolean);
+    const first = parts[0] || 'Student';
+    const initial = parts.length > 1 ? ` ${parts[parts.length - 1][0].toUpperCase()}.` : '';
+    return { handle: studentHandle(assignment.id, student.id), label: `${first}${initial}` };
+  });
+}
+
 function gameRosterRecords(game) {
   return games.getRosterIds(game)
     .map(rosterId => roster.getRoster(game.teacherId, rosterId))
@@ -2757,7 +2901,7 @@ app.get('/api/assignment/:id/join', (req, res) => {
   res.json({
     title: a.title, teacherName: a.teacherName || null,
     hasRoster: !!a.rosterId,
-    students: a.rosterId ? classListFor(a.teacherId, a.rosterId, a.id) : [],
+    students: a.rosterId ? classListForAssignment(a) : [],
   });
 });
 
@@ -2778,7 +2922,7 @@ app.post('/api/assignment/:id/enter', async (req, res) => {
   // The join screen sends a handle, not the school's own ID — see studentHandle.
   // A typed entry (no roster, or a child not on the list) still arrives as text.
   const fromList = a.rosterId
-    ? studentFromHandle(a.teacherId, a.rosterId, a.id, req.body && req.body.handle)
+    ? studentFromAssignmentHandle(a, req.body && req.body.handle)
     : null;
   const studentId = fromList
     ? roster.normalizeStudentId(fromList.id)
@@ -2787,16 +2931,16 @@ app.post('/api/assignment/:id/enter', async (req, res) => {
   const pin = req.body && req.body.pin ? String(req.body.pin).trim() : '';
   let displayName = roster.displayNameFrom(req.body && req.body.name, studentId);
   if (a.rosterId) {
-    const s = roster.findStudentInRoster(a.teacherId, a.rosterId, studentId);
+    const s = fromList || assignmentStudentInCohort(a, studentId);
     if (!s) return res.status(403).json({ error: 'Student ID not found. Check with your teacher.' });
     displayName = s.name;
     const pinState = studentAccount.getAccountState(studentId);
     if (pinState === 'unset') {
-      if (!pin) return res.status(428).json({ needsPinSetup: true, name: displayName, error: 'Set up a 4-digit PIN to continue.' });
+      if (!pin) return res.status(428).json({ needsPinSetup: true, error: 'Set up a 4-digit PIN to continue.' });
       if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
       if (!studentAccount.setPin(studentId, pin)) return res.status(409).json({ error: 'A PIN was just set for this ID — enter it instead.' });
     } else {
-      if (!pin) return res.status(428).json({ needsPin: true, name: displayName, error: 'Enter your PIN to continue.' });
+      if (!pin) return res.status(428).json({ needsPin: true, error: 'Enter your PIN to continue.' });
       if (!studentAccount.verifyPin(studentId, pin)) return res.status(403).json({ error: 'Incorrect PIN.' });
     }
   } else {
@@ -2806,11 +2950,11 @@ app.post('/api/assignment/:id/enter', async (req, res) => {
     const key = pinKeyFor(a.id, studentId, false);
     const pinState = studentAccount.getAccountState(key);
     if (pinState === 'unset') {
-      if (!pin) return res.status(428).json({ needsPinSetup: true, name: displayName, error: 'Choose a 4-digit PIN. You will need it to come back.' });
+      if (!pin) return res.status(428).json({ needsPinSetup: true, error: 'Choose a 4-digit PIN. You will need it to come back.' });
       if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
       if (!studentAccount.setPin(key, pin)) return res.status(409).json({ error: 'That name was just taken — pick another, or ask your teacher.' });
     } else {
-      if (!pin) return res.status(428).json({ needsPin: true, name: displayName, error: 'Enter your PIN to continue.' });
+      if (!pin) return res.status(428).json({ needsPin: true, error: 'Enter your PIN to continue.' });
       if (!studentAccount.verifyPin(key, pin)) return res.status(403).json({ error: 'Incorrect PIN. Ask your teacher if you have forgotten it.' });
     }
   }
@@ -2825,7 +2969,11 @@ app.post('/api/assignment/:id/enter', async (req, res) => {
 app.post('/api/assignment/:id/pin/reset-request', (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a || !a.rosterId) return res.status(404).json({ error: 'Assignment not found.' });
-  const studentId = roster.normalizeStudentId(req.body && req.body.studentId);
+  const fromList = studentFromAssignmentHandle(a, req.body && req.body.handle);
+  const suppliedId = roster.normalizeStudentId(req.body && req.body.studentId);
+  const student = fromList || assignmentStudentInCohort(a, suppliedId);
+  if (!student) return res.status(403).json({ error: 'Student is not in the class for this assignment.' });
+  const studentId = roster.normalizeStudentId(student.id);
   if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
   const ok = studentAccount.requestPinReset(studentId);
   if (!ok) return res.status(404).json({ error: 'No account found for this ID yet.' });
@@ -2836,17 +2984,18 @@ app.post('/api/assignment/:id/pin/reset-request', (req, res) => {
 app.get('/api/assignment/:id', requireAssignmentAccess, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
-  const session = assignmentStudentSession(req, res, a);
-  if (req.gameSession && req.gameSession.assignmentId && !session) return res.status(401).json({ code:'ASSIGNMENT_REJOIN_REQUIRED', error: 'Join this assignment to continue. Your other assignment is still saved.' });
-  res.json({ id: a.id, type: a.type, assessmentType: a.assessmentType || null, title: a.title, subject: a.subject, topic: a.topic, grade: a.grade, totalMarks: a.totalMarks || null, teacherName: a.teacherName, hasRoster: !!a.rosterId, students: a.rosterId ? classListFor(a.teacherId, a.rosterId, a.id) : [], instructions: a.content.instructions, questionCount: a.content.questions.length });
+  const viewer = assignmentViewer(req, res, a);
+  if (!viewer) return;
+  res.json({ id: a.id, type: a.type, assessmentType: a.assessmentType || null, title: a.title, subject: a.subject, topic: a.topic, grade: a.grade, totalMarks: a.totalMarks || null, teacherName: a.teacherName, hasRoster: !!a.rosterId, students: a.rosterId ? classListForAssignment(a) : [], instructions: a.content.instructions, questionCount: a.content.questions.length, teacherPreview: viewer.teacherPreview, draftScope: viewer.session ? studentHandle(a.id, viewer.session.studentId) : null });
 });
 
 // Student: the questions, WITHOUT answer keys/correctIndex.
 app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
-  const session = assignmentStudentSession(req, res, a);
-  if (req.gameSession && req.gameSession.assignmentId && !session) return res.status(401).json({ code:'ASSIGNMENT_REJOIN_REQUIRED', error: 'Join this assignment to continue. Your other assignment is still saved.' });
+  const viewer = assignmentViewer(req, res, a);
+  if (!viewer) return;
+  const session = viewer.session;
   const already = session && assignments.getSubmission(a.id, session.studentId);
   const delivery = assignments.deliveryState(a);
   let visibleQuestions = a.content.questions;
@@ -2876,16 +3025,24 @@ app.post('/api/assignment/:id/draft', requireAssignmentAccess, (req, res) => {
   if (!a) return res.status(404).json({ error: 'Assessment not found.' });
   const session = assignmentStudentSession(req, res, a);
   if (!session) return res.status(401).json({ error: 'Rejoin this assessment to save your work.' });
+  if (assignments.assessmentIsFinalised(a)) return res.status(409).json({ code: 'assessment_finalised', error: 'This assessment is finalised.' });
+  if (a.type === 'assessment' && assignments.getSubmission(a.id, session.studentId)) {
+    return res.status(409).json({ code: 'assessment_already_submitted', error: 'This assessment has already been submitted.' });
+  }
   const delivery = assignments.deliveryState(a);
   if (a.type === 'assessment' && delivery.mode === 'live' && delivery.phase !== 'open') return res.status(409).json({ error: delivery.phase === 'paused' ? 'Your teacher paused the assessment.' : 'This section is not open.' });
   const activeSection = delivery.mode === 'live' ? (a.sections || [])[delivery.activeSectionIndex] : null;
-  const allowed = new Map((a.content.questions || []).filter(q => !activeSection || q.sectionId === activeSection.id).map(q => [q.id, q]));
-  const safeAnswers = {};
-  for (const [id, value] of Object.entries(req.body && req.body.answers || {})) {
-    const question = allowed.get(id); if (!question) continue;
-    safeAnswers[id] = question.kind === 'mcq' ? Number(value) : String(value == null ? '' : value).slice(0, 20000);
-  }
+  const allowedQuestions = (a.content.questions || []).filter(q => !activeSection || q.sectionId === activeSection.id);
+  const safeAnswers = assignments.sanitizeLearnerAnswers(allowedQuestions, req.body && req.body.answers);
   const complete = !!(req.body && req.body.complete);
+  if (a.type === 'assessment' && complete) {
+    const existing = assignments.getDraft(a.id, session.studentId);
+    const combined = { ...(existing && existing.answers || {}), ...safeAnswers };
+    const missing = assignments.incompleteAssessmentAnswers(allowedQuestions, combined);
+    if (missing.length) {
+      return res.status(400).json({ code: 'assessment_section_incomplete', error: `Answer every question in this section before continuing (${missing.length} remaining).`, missingQuestionIds: missing.map(question => question.id) });
+    }
+  }
   const saved = assignments.saveDraft(a.id, { studentId: session.studentId, name: session.name, answers: safeAnswers, completedSectionId: complete && activeSection ? activeSection.id : null });
   res.json({ ok: true, savedAt: saved.updatedAt, sectionCompleted: !!(activeSection && saved.completedSectionIds.includes(activeSection.id)) });
 });
@@ -2902,10 +3059,26 @@ app.post('/api/assignment/:id/submit', requireAssignmentAccess, async (req, res)
   const session = assignmentStudentSession(req, res, a);
   if (!session) return res.status(401).json({ error: 'Your session could not be confirmed — rejoin using the Room Code or link, then try again.' });
   if (session.assignmentId !== a.id) return res.status(403).json({ error: 'Session is for a different assignment.' });
+  if (assignments.assessmentIsFinalised(a)) return res.status(409).json({ code: 'assessment_finalised', error: 'This assessment is finalised.' });
+  if (a.type === 'assessment' && assignments.getSubmission(a.id, session.studentId)) {
+    return res.status(409).json({ code: 'assessment_already_submitted', error: 'This assessment has already been submitted.' });
+  }
   const delivery = assignments.deliveryState(a);
   if (a.type === 'assessment' && delivery.mode === 'live' && delivery.phase !== 'marking') return res.status(409).json({ error: delivery.phase === 'closed' ? 'This assessment is closed.' : 'Wait for your teacher to finish all sections before submitting.' });
   const storedDraft = assignments.getDraft(a.id, session.studentId);
-  const answers = { ...(storedDraft && storedDraft.answers || {}), ...((req.body && req.body.answers) || {}) };
+  const browserAnswers = (req.body && req.body.answers) || {};
+  const submittedAnswers = a.type === 'assessment' && delivery.mode === 'live'
+    ? (storedDraft && storedDraft.answers || {})
+    : { ...(storedDraft && storedDraft.answers || {}), ...browserAnswers };
+  const answers = a.type === 'assessment'
+    ? assignments.sanitizeLearnerAnswers(a.content.questions || [], submittedAnswers)
+    : submittedAnswers;
+  if (a.type === 'assessment') {
+    const missing = assignments.incompleteAssessmentAnswers(a.content.questions || [], answers);
+    if (missing.length) {
+      return res.status(400).json({ code: 'assessment_incomplete', error: `Answer every question before submitting (${missing.length} remaining).`, missingQuestionIds: missing.map(question => question.id) });
+    }
+  }
   const studentId = session.studentId;
   const name = session.name || studentId;
 
@@ -2920,9 +3093,12 @@ app.post('/api/assignment/:id/submit', requireAssignmentAccess, async (req, res)
         grades[q.id] = { marksAwarded: correct ? q.marks : 0, verdict: correct ? 'correct' : 'incorrect', rationale: correct ? 'Correct option selected.' : 'Not the correct option.', source: 'auto' };
       } else if (q.kind === 'practical') {
         // Observation/performance criteria are completed away from the answer
-        // box. They begin pending and the teacher awards the marks while
-        // circulating, presenting, listening, or reviewing the product.
-        grades[q.id] = { marksAwarded: 0, verdict: 'pending', rationale: '', source: 'teacher-required' };
+        // box. A mark recorded while the teacher circulates is carried from
+        // the live draft into the final submission; otherwise it stays pending.
+        const observed = storedDraft && storedDraft.observationGrades && storedDraft.observationGrades[q.id];
+        grades[q.id] = observed
+          ? { ...observed, source: 'teacher' }
+          : { marksAwarded: 0, verdict: 'pending', rationale: '', source: 'teacher-required' };
       } else {
         const cached = assignments.findConfirmedVerdict(a.id, q.id, given);
         if (cached) {
@@ -2940,7 +3116,11 @@ app.post('/api/assignment/:id/submit', requireAssignmentAccess, async (req, res)
     return res.status(400).json({ error: 'Grading failed: ' + err.message });
   }
 
-  assignments.saveSubmission(a.id, { studentId, name, answers, grades, totalMarks, maxMarks, submittedAt: new Date().toISOString() });
+  try {
+    assignments.saveNewSubmission(a.id, { studentId, name, answers, grades, totalMarks, maxMarks, submittedAt: new Date().toISOString() });
+  } catch (error) {
+    return res.status(error.status || 409).json({ code: error.code || 'assessment_submission_locked', error: error.message });
+  }
   // Grading always runs (the teacher needs it ready to review), but the
   // student only sees marks/verdicts once released or the due date has
   // passed — their own answers are always visible, just not the scoring yet.
@@ -2954,11 +3134,27 @@ app.patch('/api/assignment/:id/release', requireAuth, (req, res) => {
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
   if (a.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assignment.' });
   const released = !!(req.body && req.body.released);
+  const wasReleased = !!a.resultsReleased;
   if (released && a.type === 'assessment') {
-    const readiness = assignments.assessmentReleaseReadiness(a);
+    const readiness = assignments.assessmentReleaseReadiness(a, assignmentCohortStudents(a).map(student => student.id));
     if (!readiness.ready) return res.status(400).json({ error: readiness.reason, ...readiness });
   }
   const updated = assignments.releaseResults(req.params.id, released);
+  if (updated.type === 'assessment' && released && !wasReleased) {
+    const at = updated.finalisedAt || new Date().toISOString();
+    for (const submission of assignments.getSubmissions(updated.id)) {
+      setImmediate(() => webhooks.dispatch('result.created', {
+        assessmentId: updated.id,
+        assessmentVersion: updated.version || 1,
+        rosterId: updated.rosterId || null,
+        lessonWorkspaceId: updated.lessonWorkspaceId || null,
+        unitId: updated.unitId || null,
+        unitName: updated.unitName || null,
+        studentId: submission.studentId,
+        at,
+      }).catch(() => {}));
+    }
+  }
   res.json({ ok: true, resultsReleased: updated.resultsReleased });
 });
 
@@ -2993,14 +3189,38 @@ app.get('/api/assignment/:id/results', requireAuth, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
   if (a.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assignment.' });
-  const rosterData = a.rosterId ? roster.getRoster(req.userId, a.rosterId) : null;
-  const rosterMap = rosterData ? Object.fromEntries(rosterData.students.map(s => [s.id, s.name])) : {};
-  const submissions = assignments.getSubmissions(a.id).map(s => ({ ...s, name: rosterMap[s.studentId] || s.name }));
-  const readiness = assignments.assessmentReleaseReadiness(a);
+  const cohort = a.rosterId ? assignmentCohortStudents(a) : [];
+  const rosterMap = Object.fromEntries(cohort.map(s => [roster.normalizeStudentId(s.id), s.name]));
+  const submissions = assignments.getSubmissions(a.id).map(s => ({ ...s, name: rosterMap[roster.normalizeStudentId(s.studentId)] || s.name }));
+  const submittedCount = submissions.length;
+  // During a live practical phase, show joined learners and the selected
+  // roster before final submission so the teacher can mark observations while
+  // circulating. Draft-only rows later merge into the real submission.
+  if (a.type === 'assessment' && assignments.deliveryState(a).mode === 'live' && !a.resultsReleased) {
+    const seen = new Set(submissions.map(submission => roster.normalizeStudentId(submission.studentId)));
+    const drafts = assignments.loadDrafts(a.id);
+    const draftMap = new Map(drafts.map(draft => [roster.normalizeStudentId(draft.studentId), draft]));
+    const candidates = cohort.length ? cohort.map(student => ({ studentId: student.id, name: student.name }))
+      : drafts.map(draft => ({ studentId: draft.studentId, name: draft.name }));
+    for (const candidate of candidates) {
+      const studentId = roster.normalizeStudentId(candidate.studentId);
+      if (!studentId || seen.has(studentId)) continue;
+      const draft = draftMap.get(studentId) || {};
+      const grades = { ...(draft.observationGrades || {}) };
+      submissions.push({
+        studentId, name: candidate.name || draft.name || studentId, answers: draft.answers || {}, grades,
+        totalMarks: Object.values(grades).reduce((sum, grade) => sum + (Number(grade.marksAwarded) || 0), 0),
+        maxMarks: a.totalMarks || (a.content.questions || []).reduce((sum, question) => sum + question.marks, 0),
+        draftOnly: true, submittedAt: null,
+      });
+      seen.add(studentId);
+    }
+  }
+  const readiness = assignments.assessmentReleaseReadiness(a, cohort.map(student => student.id));
   const delivery = assignments.deliveryState(a);
   const liveProgress = a.type === 'assessment' ? assignments.draftProgress(a) : null;
-  const rosterSize = rosterData ? rosterData.students.length : null;
-  res.json({ questions: a.content.questions, sections: a.sections || null, objectives: a.objectives || null, assessmentType: a.assessmentType || null, totalMarks: a.totalMarks || null, delivery, liveProgress, rosterSize, submissions, resultsReleased: a.resultsReleased, cutoffAt: a.cutoffAt, effectivelyReleased: assignments.isReleased(a), releaseReady: readiness.ready, pendingGrades: readiness.pendingGrades, releaseReason: readiness.reason || '' });
+  const rosterSize = a.rosterId ? cohort.length : null;
+  res.json({ questions: a.content.questions, sections: a.sections || null, objectives: a.objectives || null, assessmentType: a.assessmentType || null, totalMarks: a.totalMarks || null, delivery, liveProgress, rosterSize, submittedCount, submissions, resultsReleased: a.resultsReleased, cutoffAt: a.cutoffAt, effectivelyReleased: assignments.isReleased(a), releaseReady: readiness.ready, pendingGrades: readiness.pendingGrades, missingStudents: readiness.missingStudents || 0, releaseReason: readiness.reason || '' });
 });
 
 // Teacher: override a student's grade for one question. This both corrects
@@ -3010,17 +3230,27 @@ app.patch('/api/assignment/:id/grade', requireAuth, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
   if (a.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assignment.' });
+  if (assignments.assessmentIsFinalised(a)) return res.status(409).json({ code: 'assessment_finalised', error: 'Unrelease the results before changing assessment marks.' });
   const { questionId, marksAwarded, verdict, rationale } = req.body || {};
   const studentId = roster.normalizeStudentId(req.body && req.body.studentId);
-  const sub = assignments.getSubmission(a.id, studentId);
-  if (!sub) return res.status(404).json({ error: 'Submission not found.' });
+  if (!studentId) return res.status(400).json({ error: 'Student is required.' });
   const q = a.content.questions.find(q => q.id === questionId);
   if (!q) return res.status(404).json({ error: 'Question not found.' });
+  const sub = assignments.getSubmission(a.id, studentId);
   const marks = Math.max(0, Math.min(q.marks, parseInt(marksAwarded, 10) || 0));
   const v = verdict || (marks === q.marks ? 'correct' : marks === 0 ? 'incorrect' : 'partial');
+  if (!sub) {
+    if (a.type !== 'assessment' || q.kind !== 'practical') return res.status(404).json({ error: 'Submission not found.' });
+    const rosterStudent = a.rosterId ? assignmentStudentInCohort(a, studentId) : null;
+    const existingDraft = assignments.getDraft(a.id, studentId);
+    if (a.rosterId && !rosterStudent) return res.status(404).json({ error: 'Student is not in the selected class.' });
+    const grade = { marksAwarded: marks, verdict: v, rationale: rationale || '', source: 'teacher' };
+    const draft = assignments.saveDraftGrade(a.id, { studentId, name: rosterStudent && rosterStudent.name || existingDraft && existingDraft.name || studentId, questionId, grade });
+    return res.json({ ok: true, draftOnly: true, draft });
+  }
   const answerText = sub.answers[questionId];
 
-  assignments.recordVerdict(a.id, questionId, { answerText, marksAwarded: marks, verdict: v, rationale: rationale || (sub.grades[questionId] || {}).rationale || '', confirmed: true, source: 'teacher' });
+  if (q.kind !== 'practical') assignments.recordVerdict(a.id, questionId, { answerText, marksAwarded: marks, verdict: v, rationale: rationale || (sub.grades[questionId] || {}).rationale || '', confirmed: true, source: 'teacher' });
 
   sub.grades[questionId] = { marksAwarded: marks, verdict: v, rationale: rationale || (sub.grades[questionId] || {}).rationale || '', source: 'teacher' };
   sub.totalMarks = Object.values(sub.grades).reduce((s, g) => s + g.marksAwarded, 0);
@@ -3251,6 +3481,41 @@ app.post('/api/generate', requireAuth, async (req, res) => {
   const focus = clip(req.body.focus, LIMITS.focus);
   const lessonSequence = lessonSequenceFromBody(req.body);
   if (!subject || !topic) return res.status(400).json({ error: 'subject and topic are required' });
+  let generationAssessment = {
+    assessmentTotalMarks: req.body.assessmentTotalMarks,
+    assessmentQuestionTypes: req.body.assessmentQuestionTypes,
+    assessmentMcqCount: req.body.assessmentMcqCount,
+    assessmentStructure: req.body.assessmentStructure,
+    assessmentDeliveryMode: req.body.assessmentDeliveryMode,
+    assessmentBrief: req.body.assessmentBrief,
+    assessmentPhases: req.body.assessmentPhases || req.body.phaseRequirements,
+    assessmentDraft: req.body.assessmentDraft || null,
+    assessmentPublishedId: req.body.assessmentPublishedId || null,
+  };
+  if (lessonPurpose === 'project' || lessonPurpose === 'test') {
+    try {
+      const publishedAssessmentId = String(req.body.assessmentPublishedId || '').trim();
+      const requestedWorkspaceId = String(req.body.lessonWorkspaceId || '').trim();
+      // Preserve the domain helper's specific missing-publication/workspace
+      // errors. Once both identifiers are present, also prove that the
+      // workspace exists under this teacher before trusting the binding.
+      if (publishedAssessmentId && requestedWorkspaceId
+        && !lessonWorkspaces.get(req.userId, requestedWorkspaceId)) {
+        return res.status(404).json({ code: 'assessment_workspace_not_found', error: 'The saved lesson workspace could not be found.' });
+      }
+      generationAssessment = assignments.publishedAssessmentGenerationContext({
+        assessmentId: req.body.assessmentPublishedId,
+        teacherId: req.userId,
+        lessonPurpose,
+        subject,
+        grade,
+        unitId: req.body.unitId,
+        lessonWorkspaceId: req.body.lessonWorkspaceId,
+      });
+    } catch (err) {
+      return res.status(err.status || 400).json({ error: err.message, code: err.code || 'assessment_invalid' });
+    }
+  }
   const { reservation, block } = await reserve(req, 'lessonscope.generate_slide_deck');
   if (block) return res.status(402).json(block);
   try {
@@ -3264,23 +3529,33 @@ app.post('/api/generate', requireAuth, async (req, res) => {
     const lessonPlanText = mergeSourceIntoPlanText(resolvePlanText(req.body) || (unitBlock || ''), materialText);
     const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives, lessonPlanText, sourceMaterialText: materialText, sourceImages: materialImages, teachingModelId, extras: {
       regenerate: !!regenerate, lessonSequence, lessonPurpose,
-      assessmentTotalMarks: req.body.assessmentTotalMarks,
-      assessmentQuestionTypes: req.body.assessmentQuestionTypes,
-      assessmentMcqCount: req.body.assessmentMcqCount,
-      assessmentStructure: req.body.assessmentStructure,
+      ...generationAssessment,
     }, skipAssemble: true, presetId: presetId || null });
     const id = crypto.randomUUID();
     decks.set(id, {
       ownerId: req.userId,
       subject: String(subject).toLowerCase(), topic: String(topic).toLowerCase(),
       grade: grade || 'middle school', tone, focus, band: built.band,
+      requestedSlideCount: Number(slideCount) || 5,
       slides: built.slides, images: built.images, createdAt: Date.now(), touchedAt: Date.now(),
       objectives: objectives || '', lessonPlanText, sourceMaterialText: materialText, sourceMaterialImages: materialImages, // kept so follow-up resources are grounded in this lesson
       lessonSequence,
       lessonPurpose,
-      assessmentOptions: normalizeAssessmentOptions(req.body || {}),
+      assessmentOptions: normalizeAssessmentOptions(generationAssessment),
+      assessmentDraft: generationAssessment.assessmentDraft,
+      assessmentPublishedId: generationAssessment.assessmentPublishedId,
       teachingModelId,
       presetId: presetId || null,
+      templateId: req.body.templateId || null,
+      planningFrameworkId: req.body.planningFrameworkId || null,
+      successCriteria: Array.isArray(req.body.successCriteria) ? req.body.successCriteria : [],
+      resources: Array.isArray(req.body.resources) ? req.body.resources : [],
+      unitId: req.body.unitId || null,
+      unitName: req.body.unitName || '',
+      lessonIndex: req.body.lessonIndex == null ? null : req.body.lessonIndex,
+      weekNumber: req.body.weekNumber == null ? null : req.body.weekNumber,
+      useWeekPlanner: !!req.body.useWeekPlanner,
+      weekPlannerId: req.body.weekPlannerId || null,
     });
     await capture(req, reservation, 'lessonscope.generate_slide_deck', id);   // 1 credit per lesson (no-op unless billing on)
 
@@ -3306,12 +3581,24 @@ app.post('/api/generate', requireAuth, async (req, res) => {
   }
 });
 
+function rejectProtectedAssessmentSlideMutation(res, deck, index) {
+  const slide = deck && deck.slides && deck.slides[index];
+  const sourceSlide = slide && slide.type === 'video' ? deck.slides[index - 1] : null;
+  const locked = !!slide && (deck.lessonPurpose === 'test'
+    || !!slide.assessmentProtected || !!slide.assessmentPhaseType
+    || !!(sourceSlide && (sourceSlide.assessmentProtected || sourceSlide.assessmentPhaseType)));
+  if (!locked) return false;
+  res.status(400).json({ error: 'Required assessment administration and phase slides stay linked to the approved assessment.' });
+  return true;
+}
+
 // Swap a slide's image for a different library image.
 app.post('/api/slide/:id/swap-image', requireAuth, (req, res) => {
   const deck = decks.get(req.params.id);
   if (!deck) return res.status(404).json({ error: 'Deck expired — generate again.' });
   const i = Number(req.body.index);
   if (!Number.isInteger(i) || i < 0 || i >= deck.slides.length) return res.status(400).json({ error: 'bad index' });
+  if (rejectProtectedAssessmentSlideMutation(res, deck, i)) return;
 
   const exclude = deck.images.map(im => im.relpath); // avoid every image already in the deck
   const alt = alternativeImage({ subject: deck.subject, topic: deck.topic, imageQuery: deck.slides[i].imageQuery, exclude });
@@ -3327,6 +3614,7 @@ app.post('/api/slide/:id/youtube', requireAuth, async (req, res) => {
   if (!deck) return res.status(404).json({ error: 'Deck expired — generate again.' });
   const i = Number(req.body.index);
   if (!Number.isInteger(i) || i < 0 || i >= deck.slides.length) return res.status(400).json({ error: 'bad index' });
+  if (rejectProtectedAssessmentSlideMutation(res, deck, i)) return;
   if (deck.slides[i].type === 'video') return res.status(400).json({ error: 'Choose a lesson-content slide, then add the video after it.' });
   const video = normalizeVideo(req.body.url || req.body.videoId, {
     title: clip(req.body.title, 180),
@@ -3358,6 +3646,7 @@ app.delete('/api/slide/:id/youtube', requireAuth, (req, res) => {
   if (!deck) return res.status(404).json({ error: 'Deck expired — generate again.' });
   const i = Number(req.body.index);
   if (!Number.isInteger(i) || i < 0 || i >= deck.slides.length) return res.status(400).json({ error: 'bad index' });
+  if (rejectProtectedAssessmentSlideMutation(res, deck, i)) return;
   if (deck.slides[i].type === 'video') {
     deck.slides.splice(i, 1);
     deck.images.splice(i, 1);
@@ -3469,6 +3758,7 @@ app.post('/api/slide/:id/set-image', requireAuth, (req, res) => {
   if (!deck) return res.status(404).json({ error: 'Deck expired — generate again.' });
   const i = Number(req.body.index);
   if (!Number.isInteger(i) || i < 0 || i >= deck.slides.length) return res.status(400).json({ error: 'bad index' });
+  if (rejectProtectedAssessmentSlideMutation(res, deck, i)) return;
   const entry = getLibraryImage(String(req.body.relpath || ''));
   if (!entry) return res.status(404).json({ error: 'Image not found.' });
   deck.images[i] = entry;
@@ -3482,6 +3772,7 @@ app.post('/api/slide/:id/ai-image', requireAuth, async (req, res) => {
   if (!deck) return res.status(404).json({ error: 'Deck expired — generate again.' });
   const i = Number(req.body.index);
   if (!Number.isInteger(i) || i < 0 || i >= deck.slides.length) return res.status(400).json({ error: 'bad index' });
+  if (rejectProtectedAssessmentSlideMutation(res, deck, i)) return;
   const slide = deck.slides[i];
   const concept = (slide.example || slide.imageQuery || slide.title || '').trim();
   let reservation = null;
@@ -3529,6 +3820,7 @@ app.post('/api/slide/:id/diagram', requireAuth, async (req, res) => {
   if (!deck) return res.status(404).json({ error: 'Deck expired — generate again.' });
   const i = Number(req.body.index);
   if (!Number.isInteger(i) || i < 0 || i >= deck.slides.length) return res.status(400).json({ error: 'bad index' });
+  if (rejectProtectedAssessmentSlideMutation(res, deck, i)) return;
   const slide = deck.slides[i];
   let reservation = null;
   try {
@@ -3578,6 +3870,7 @@ app.post('/api/slide/:id/regenerate', requireAuth, async (req, res) => {
   const i = Number(req.body.index);
   if (!Number.isInteger(i) || i < 0 || i >= deck.slides.length) return res.status(400).json({ error: 'bad index' });
   if (deck.slides[i].type !== 'content') return res.status(400).json({ error: 'Only content slides can be regenerated.' });
+  if (rejectProtectedAssessmentSlideMutation(res, deck, i)) return;
 
   // Fair-use: the first FREE_REGENS regenerations of a lesson are free; after
   // that another small batch costs REGEN_BATCH_COST. The counter is per-deck.
@@ -3595,6 +3888,8 @@ app.post('/api/slide/:id/regenerate', requireAuth, async (req, res) => {
       focus: deck.focus,
       teachingModelId: deck.teachingModelId,
       lessonPurpose: deck.lessonPurpose,
+      lessonPlanText: deck.lessonPlanText,
+      assessmentDraft: deck.assessmentDraft,
       preferredStage: deck.slides[i].modelStage,
       avoidTitles,
     });
@@ -3616,6 +3911,10 @@ function applyDeckEdits(deck, edits) {
   for (const edit of (edits || [])) {
     const s = deck.slides[edit.index];
     if (!s) continue;
+    // Required phase slides are derived from the accepted assessment. Ignore
+    // stale or forged browser edits so item counts, marks and safe wording
+    // cannot drift between preview and export.
+    if (deck.lessonPurpose === 'test' || s.assessmentProtected || s.assessmentPhaseType) continue;
     if (typeof edit.title === 'string') s.title = edit.title;
     if (Array.isArray(edit.bullets)) s.bullets = edit.bullets.filter(b => b.trim());
     if (typeof edit.example === 'string') s.example = edit.example;
@@ -3651,16 +3950,8 @@ app.post('/api/download/:id', requireAuth, async (req, res) => {
 
 app.get('/api/deck/:id', requireAuth, (req, res) => {
   const deck = decks.get(req.params.id);
-  if (!deck) return res.status(404).json({ error: 'Deck not found or expired — generate it again.' });
-  res.json({
-    deckId: req.params.id,
-    filename: deckFilename(deck),
-    band: deck.band || null,
-    slideCount: deck.slides.length,
-    teachingModelId: deck.teachingModelId || null,
-    sourceText: deck.lessonPlanText || deck.sourceText || '',
-    slides: deck.slides.map((s, i) => previewEntry(s, deck.images[i])),
-  });
+  if (!deck || (deck.ownerId && deck.ownerId !== req.userId)) return res.status(404).json({ error: 'Deck not found or expired — generate it again.' });
+  res.json(deckPreviewPayload(req.params.id, deck));
 });
 
 // ── Persistent lesson workspaces ─────────────────────────────────────────
@@ -4039,11 +4330,11 @@ app.post('/api/game/:id/enter', async (req, res) => {
     matchedRosterId = match.rosterId;
     const pinState = studentAccount.getAccountState(studentId);
     if (pinState === 'unset') {
-      if (!pin) return res.status(428).json({ needsPinSetup: true, name: displayName, error: 'Set up a 4-digit PIN to continue.' });
+      if (!pin) return res.status(428).json({ needsPinSetup: true, error: 'Set up a 4-digit PIN to continue.' });
       if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
       if (!studentAccount.setPin(studentId, pin)) return res.status(409).json({ error: 'A PIN was just set for this ID — enter it instead.' });
     } else {
-      if (!pin) return res.status(428).json({ needsPin: true, name: displayName, error: 'Enter your PIN to continue.' });
+      if (!pin) return res.status(428).json({ needsPin: true, error: 'Enter your PIN to continue.' });
       if (!studentAccount.verifyPin(studentId, pin)) return res.status(403).json({ error: 'Incorrect PIN.' });
     }
   } else {
@@ -4053,11 +4344,11 @@ app.post('/api/game/:id/enter', async (req, res) => {
     const key = pinKeyFor(g.id, studentId, false);
     const pinState = studentAccount.getAccountState(key);
     if (pinState === 'unset') {
-      if (!pin) return res.status(428).json({ needsPinSetup: true, name: displayName, error: 'Choose a 4-digit PIN. You will need it to come back.' });
+      if (!pin) return res.status(428).json({ needsPinSetup: true, error: 'Choose a 4-digit PIN. You will need it to come back.' });
       if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
       if (!studentAccount.setPin(key, pin)) return res.status(409).json({ error: 'That name was just taken — pick another, or ask your teacher.' });
     } else {
-      if (!pin) return res.status(428).json({ needsPin: true, name: displayName, error: 'Enter your PIN to continue.' });
+      if (!pin) return res.status(428).json({ needsPin: true, error: 'Enter your PIN to continue.' });
       if (!studentAccount.verifyPin(key, pin)) return res.status(403).json({ error: 'Incorrect PIN. Ask your teacher if you have forgotten it.' });
     }
   }
@@ -4072,8 +4363,11 @@ app.post('/api/game/:id/enter', async (req, res) => {
 app.post('/api/game/:id/pin/reset-request', (req, res) => {
   const g = games.getGame(req.params.id);
   if (!g || !games.getRosterIds(g).length) return res.status(404).json({ error: 'Game not found.' });
-  const studentId = roster.normalizeStudentId(req.body && req.body.studentId);
-  if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
+  const fromList = studentFromGameHandle(g, req.body && req.body.handle);
+  const suppliedId = roster.normalizeStudentId(req.body && req.body.studentId);
+  const matched = fromList || studentInGameRosters(g, suppliedId);
+  if (!matched) return res.status(403).json({ error: 'Student is not in a class assigned to this game.' });
+  const studentId = roster.normalizeStudentId(matched.student.id);
   const ok = studentAccount.requestPinReset(studentId);
   if (!ok) return res.status(404).json({ error: 'No account found for this ID yet.' });
   res.json({ ok: true });
@@ -4828,7 +5122,7 @@ app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:r
         at: result.at, updatedAt: result.at });
     }
   }
-  for (const a of gradebook.assignmentResultRows(foundTeacherId)) {
+  for (const a of assignments.filterAssignmentEvidenceForRoster(gradebook.assignmentResultRows(foundTeacherId), foundRoster.id)) {
     // Tests/projects become evidence only after the teacher has reviewed and
     // explicitly released them. Ordinary legacy assignments keep their
     // existing behavior.
@@ -4838,6 +5132,7 @@ app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:r
       title: a.title, mode: a.type === 'homework' ? 'homework' : 'classwork', activityId: `assignment:${a.assignmentId}`,
       score: a.score, total: a.total, percentage: a.percentage,
       assessmentType: a.assessmentType, version: a.version, finalisedAt: a.finalisedAt,
+      lessonWorkspaceId: a.lessonWorkspaceId || null, unitId: a.unitId || null, unitName: a.unitName || null,
       objectiveEvidence: a.objectiveEvidence || [], at: a.at, updatedAt: a.at });
   }
   const practiceCatalog = new Map(practice.listActivities().map(activity => [activity.id, activity]));
@@ -4933,7 +5228,13 @@ app.get('/api/v1/roster/:id/activities', requireApiAccess, requireScope('results
     .map(g => ({ kind: 'game', id: g.id, title: g.lessonTitle, subject: g.subject, topic: g.topic, grade: g.grade, questionCount: (g.questions || []).length, createdAt: g.createdAt, roomCode: g.roomCode }));
   const assignmentActivities = assignments.listTeacherAssignments(foundTeacherId)
     .filter(a => a.rosterId === foundRoster.id)
-    .map(a => ({ kind: 'assignment', type: a.type, id: a.id, title: a.title, subject: a.subject, topic: a.topic, grade: a.grade, submissions: a.submissions, createdAt: a.createdAt, roomCode: a.roomCode }));
+    .map(a => ({
+      kind: 'assignment', type: a.type, id: a.id, title: a.title, subject: a.subject, topic: a.topic, grade: a.grade,
+      assessmentType: a.assessmentType || null, version: a.version || null, status: a.status || null,
+      resultsReleased: !!a.resultsReleased, finalisedAt: a.finalisedAt || null,
+      lessonWorkspaceId: a.lessonWorkspaceId || null, unitId: a.unitId || null, unitName: a.unitName || null,
+      submissions: a.submissions, createdAt: a.createdAt, roomCode: a.roomCode,
+    }));
   const activities = [...gameActivities, ...assignmentActivities].sort((x, y) => (y.createdAt || '').localeCompare(x.createdAt || ''));
 
   res.json({ roster: { id: foundRoster.id, name: foundRoster.name }, activities });
@@ -4984,7 +5285,10 @@ app.get('/api/v1/results', requireApiAccess, requireScope('results:read'), (req,
     // them into the same results feed so TeacherScope sees the full picture.
     for (const a of gradebook.assignmentResultRows(tid)) {
       if (updatedSince && a.at < updatedSince) continue;
-      all.push({ id: `${a.assignmentId}_${a.studentId}_${a.at}`, updatedAt: a.at, ...a });
+      const stableId = a.type === 'assessment'
+        ? `${a.assignmentId}_v${a.version || 1}_${a.studentId}`
+        : `${a.assignmentId}_${a.studentId}_${a.at}`;
+      all.push({ id: stableId, updatedAt: a.at, ...a });
     }
   }
 

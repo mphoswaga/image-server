@@ -26,6 +26,11 @@
     .divider { border:none; border-top:1px solid var(--border); margin:20px 0; }
     #step2 { display:none; }
     .game-pill { background:#e8f0fb; color:var(--primary); font-size:13px; font-weight:600; border-radius:20px; padding:4px 12px; display:inline-block; margin-bottom:14px; }
+    .name-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:4px 0 8px; }
+    .name-grid button { padding:15px 10px; font-size:16px; font-weight:700; border-radius:12px; border:2px solid var(--border); background:#fff; color:var(--ink); cursor:pointer; text-align:center; }
+    .name-grid button:hover,.name-grid button:focus-visible { border-color:var(--primary); outline:none; }
+    .name-grid button.is-picked { border-color:var(--primary); background:#eaf1fb; }
+    .name-grid-hint { margin:0 0 16px; }
   </style>
   <link rel="stylesheet" href="/byte-feedback.css" />
 </head>
@@ -61,6 +66,8 @@
       <h1>Enter your ID</h1>
       <p class="sub" id="sidSub">Type your Student ID to join.</p>
       <form id="idForm">
+        <div id="nameGrid" class="name-grid" style="display:none"></div>
+        <p id="nameGridHint" class="sub name-grid-hint" style="display:none">Can't see your name? Ask your teacher.</p>
         <label for="studentId" id="sidLbl">Student ID</label>
         <input id="studentId" class="sid-input" type="text" maxlength="40" placeholder="e.g. STU-99432" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" required />
 
@@ -88,6 +95,30 @@
   <script>
     const $ = id => document.getElementById(id);
     let resolvedId = null, resolvedType = null; // 'game' | 'assignment'
+    let pickedHandle = null;
+
+    function renderNameGrid(students) {
+      const safeStudents = Array.isArray(students) ? students.filter(student => student && student.handle && student.label) : [];
+      if (!safeStudents.length) return false;
+      const grid = $('nameGrid');
+      grid.innerHTML = safeStudents.map(student =>
+        `<button type="button" data-handle="${String(student.handle).replace(/"/g, '&quot;')}">${String(student.label).replace(/[&<>\"]/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[character]))}</button>`
+      ).join('');
+      grid.style.display = 'grid';
+      $('nameGridHint').style.display = 'block';
+      $('sidLbl').style.display = 'none';
+      $('studentId').style.display = 'none';
+      $('studentId').required = false;
+      grid.addEventListener('click', event => {
+        const button = event.target.closest('button[data-handle]');
+        if (!button) return;
+        [...grid.querySelectorAll('button')].forEach(item => item.classList.remove('is-picked'));
+        button.classList.add('is-picked');
+        pickedHandle = button.dataset.handle;
+        $('idForm').requestSubmit ? $('idForm').requestSubmit() : $('idForm').dispatchEvent(new Event('submit', { cancelable: true }));
+      });
+      return true;
+    }
 
     // Auto-fill Student ID from QR scan (?sid=...).
     const params = new URLSearchParams(location.search);
@@ -106,19 +137,26 @@
         const d = await r.json();
         if (!r.ok) throw new Error(d.error);
         resolvedId = d.id; resolvedType = d.type;
-        const metaUrl = resolvedType === 'assignment' ? '/api/assignment/' + resolvedId : '/api/game/' + resolvedId;
-        const meta = await fetch(metaUrl).then(r => r.json()).catch(() => ({}));
+        const metaUrl = resolvedType === 'assignment' ? '/api/assignment/' + resolvedId + '/join' : '/api/game/' + resolvedId + '/join';
+        const metaResponse = await fetch(metaUrl);
+        const meta = await metaResponse.json();
+        if (!metaResponse.ok) throw new Error(meta.error || 'Could not open this activity.');
         if (meta.hasRoster === false) {
           $('sidLbl').textContent = 'Your name';
           $('studentId').placeholder = 'Enter your first name';
           $('sidSub').textContent = 'Type your name to join.';
+        } else if (renderNameGrid(meta.students)) {
+          $('step2').querySelector('h1').textContent = 'Choose your name';
+          $('sidSub').textContent = 'Tap your name, then enter your PIN.';
         }
         $('gamePill').textContent = meta.lessonTitle || meta.title || (resolvedType === 'assignment' ? 'Assignment' : 'Lesson game');
+        $('idBtn').textContent = resolvedType === 'assignment' ? 'Join assignment →' : 'Join game →';
         $('step1').style.display = 'none';
         $('step2').style.display = 'block';
         // If QR pre-filled ID, go straight to submission.
         if (prefillSid) { $('idForm').requestSubmit(); return; }
-        $('studentId').focus();
+        const firstName = $('nameGrid').querySelector('button');
+        if (firstName) firstName.focus(); else $('studentId').focus();
       } catch (err) { $('codeErr').textContent = err.message; }
       btn.disabled = false;
     });
@@ -134,6 +172,7 @@
       e.preventDefault();
       const btn = $('idBtn'); btn.disabled = true; $('idErr').textContent = ''; $('forgotMsg').textContent = '';
       const studentId = $('studentId').value.trim().toUpperCase();
+      if (!pickedHandle && !studentId) { $('idErr').textContent = 'Choose your name or enter your Student ID.'; btn.disabled = false; return; }
 
       let pin;
       if (authStep === 'setup') {
@@ -149,7 +188,7 @@
       try {
         const r = await fetch(enterUrlFor(resolvedType), {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ studentId, pin }),
+          body: JSON.stringify({ studentId: pickedHandle ? undefined : studentId, handle: pickedHandle || undefined, pin }),
         });
         const d = await r.json();
         if (r.status === 428 && d.needsPinSetup) { showPinSetup(); btn.disabled = false; return; }
@@ -161,11 +200,11 @@
 
     $('forgotPinBtn').addEventListener('click', async () => {
       const studentId = $('studentId').value.trim().toUpperCase();
-      if (!studentId) { $('idErr').textContent = 'Enter your Student ID first.'; return; }
+      if (!pickedHandle && !studentId) { $('idErr').textContent = 'Choose your name or enter your Student ID first.'; return; }
       const btn = $('forgotPinBtn'); btn.disabled = true;
       try {
         const resetUrl = resolvedType === 'assignment' ? '/api/assignment/' + resolvedId + '/pin/reset-request' : '/api/game/' + resolvedId + '/pin/reset-request';
-        const r = await fetch(resetUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId }) });
+        const r = await fetch(resetUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId: pickedHandle ? undefined : studentId, handle: pickedHandle || undefined }) });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error);
         $('forgotMsg').textContent = "Your teacher has been notified — check back with them, then try again once they've cleared it.";
