@@ -2278,6 +2278,28 @@ app.patch('/api/assignment/:id/cutoff', requireAuth, (req, res) => {
   res.json({ ok: true, cutoffAt: updated.cutoffAt });
 });
 
+// Teachers may attach an older open assessment to a saved class, or correct
+// the selected class, until learner work begins. The room code and assessment
+// content stay unchanged; the selected roster is snapshotted at this point.
+app.patch('/api/assignment/:id/class', requireAuth, (req, res) => {
+  const assessment = assignments.getAssignment(req.params.id);
+  if (!assessment) return res.status(404).json({ error: 'Assessment not found.' });
+  if (assessment.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assessment.' });
+  if (assessment.type !== 'assessment') return res.status(400).json({ error: 'Only tests and projects can be assigned here.' });
+  const rosterId = String(req.body && req.body.rosterId || '').trim();
+  const selectedRoster = rosterId ? roster.getRoster(req.userId, rosterId) : null;
+  if (!selectedRoster) return res.status(404).json({ error: 'Choose a saved class roster.' });
+  if (!Array.isArray(selectedRoster.students) || !selectedRoster.students.length) {
+    return res.status(400).json({ error: 'The selected class has no learners.' });
+  }
+  try {
+    const updated = assignments.updateAssessmentRoster(assessment.id, selectedRoster.id, selectedRoster.students);
+    res.json({ ok: true, rosterId: updated.rosterId, rosterName: selectedRoster.name, rosterSize: updated.rosterSnapshot.length });
+  } catch (err) {
+    res.status(err.status || 400).json({ code: err.code || 'assessment_roster_update_failed', error: err.message });
+  }
+});
+
 app.patch('/api/assignment/:id/live-state', requireAuth, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assessment not found.' });

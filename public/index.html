@@ -7783,12 +7783,17 @@
     });
     $('assessmentPublishResult').addEventListener('click',e=>{ const button=e.target.closest('.assessment-copy'); if(button)copyLink(button.dataset.url); });
 
+    let assessmentClassRosters=[];
     async function loadMyAssignments(){
       stopAssignmentResultsPolling();
       const wrap=$('assignmentsList');
       wrap.innerHTML='<span class="status">Loading…</span>';
       try{
-        const d=await (await fetch('/api/assignments')).json();
+        const [d,rosterData]=await Promise.all([
+          fetch('/api/assignments').then(response=>response.json()),
+          fetch('/api/rosters').then(response=>response.json()),
+        ]);
+        assessmentClassRosters=rosterData.rosters||[];
         const list=d.assignments||[];
         if(!list.length){
           wrap.innerHTML='<div class="empty-state"><svg class="ic" aria-hidden="true" style="width:36px;height:36px;opacity:.3"><use href="#i-clipboard"/></svg><p>No assessments yet</p><p style="font-size:13px;color:var(--muted)">Create a test or project above, or publish a worksheet, exit ticket, or quiz from a lesson pack.</p></div>';
@@ -7798,12 +7803,16 @@
         wrap.innerHTML=list.map(a=>{
           const wrapId='ares-'+a.id;
           const detailId='adet-'+a.id;
+          const classRowId='aclass-'+a.id;
+          const selectedClass=assessmentClassRosters.find(item=>item.id===a.rosterId);
+          const classOptions='<option value="">— Choose a class —</option>'+assessmentClassRosters.map(item=>`<option value="${esc(item.id)}" ${item.id===a.rosterId?'selected':''}>${esc(item.name)} (${item.count} students)</option>`).join('');
+          const classChip=a.type==='assessment'?`<span class="gc-chip">${selectedClass?esc(selectedClass.name):'No class assigned'}</span>`:'';
           return `<div class="game-card">
             <div class="gc-head">
               <div class="gc-top">
                 <div>
                   <div class="gc-title">${esc(a.title)}</div>
-                  <div class="gc-meta"><span class="gc-chip">${esc(a.type==='assessment'?(a.assessmentType||'Assessment'):typeLabel[a.type]||a.type)}</span>${a.subject?`<span class="gc-chip">${esc(a.subject)}</span>`:''}${a.grade?`<span class="gc-chip">${esc(a.grade)}</span>`:''}${a.totalMarks?`<span class="gc-chip">${a.totalMarks} marks</span>`:''}${a.delivery&&a.delivery.mode==='live'?`<span class="gc-chip">Live · ${esc(a.delivery.phase)}</span>`:''}<span class="gc-chip">${a.submissions} submitted</span></div>
+                  <div class="gc-meta"><span class="gc-chip">${esc(a.type==='assessment'?(a.assessmentType||'Assessment'):typeLabel[a.type]||a.type)}</span>${a.subject?`<span class="gc-chip">${esc(a.subject)}</span>`:''}${a.grade?`<span class="gc-chip">${esc(a.grade)}</span>`:''}${a.totalMarks?`<span class="gc-chip">${a.totalMarks} marks</span>`:''}${classChip}${a.delivery&&a.delivery.mode==='live'?`<span class="gc-chip">Live · ${esc(a.delivery.phase)}</span>`:''}<span class="gc-chip">${a.submissions} submitted</span></div>
                   <div class="gc-dates"><span>Created ${fmtDate(a.createdAt)}</span>${a.cutoffAt?`<span>Due ${fmtDateTime(a.cutoffAt)}</span>`:'<span>No due date</span>'}${a.resultsReleased?'<span class="gc-status-live">Released</span>':'<span class="gc-status-closed">Hidden</span>'}</div>
                 </div>
                 ${a.roomCode?`<div style="text-align:right"><span class="room-label">Room code</span><div class="room-code">${esc(a.roomCode)}</div></div>`:''}
@@ -7815,7 +7824,9 @@
               <div class="gc-actions" style="margin-top:10px">
                 <button type="button" class="btn ghost a-toggle-btn" data-assign-id="${esc(a.id)}" data-wrap-id="${wrapId}" data-detail-id="${detailId}" data-closed-label="${a.type==='assessment'?'Run classroom / mark':'Review submissions'}" style="font-size:12px;padding:6px 12px;width:auto">${a.type==='assessment'?'Run classroom / mark':'Review submissions'}</button>
                 ${a.type==='assessment'?`<a class="btn ghost" href="/assessment/${esc(a.id)}/present" target="_blank" rel="noopener" style="font-size:12px;padding:6px 12px;width:auto;text-decoration:none">Present</a>`:''}
+                ${a.type==='assessment'?`<button type="button" class="btn ghost a-class-btn" data-row="${classRowId}" ${a.resultsReleased?'disabled title="Hide the released results before changing the class."':''} style="font-size:12px;padding:6px 12px;width:auto">${a.rosterId?'Change class':'Assign class'}</button>`:''}
               </div>
+              ${a.type==='assessment'?`<div class="gc-class-row" id="${classRowId}"><label style="display:grid;gap:5px;min-width:min(360px,100%)"><span style="font-size:12px;font-weight:700;color:var(--muted)">Class for this ${esc(a.assessmentType||'assessment')}</span><select class="a-class-picker">${classOptions}</select></label><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="gc-class-save a-class-save" data-id="${esc(a.id)}" data-row="${classRowId}">Save class</button><button type="button" class="gc-class-cancel a-class-cancel" data-row="${classRowId}">Cancel</button><small style="color:var(--muted)">You can change the class until the first learner starts.</small></div></div>`:''}
               <div id="${detailId}" style="display:none;margin-top:10px"><div id="${wrapId}"></div></div>
             </div>
           </div>`;
@@ -7826,6 +7837,12 @@
     $('assignmentsList').addEventListener('click', e=>{
       const copyBtn=e.target.closest('.acopy');
       if(copyBtn){ copyLink(copyBtn.dataset.url); return; }
+      const classBtn=e.target.closest('.a-class-btn');
+      if(classBtn){ const row=$(classBtn.dataset.row); row.style.display=row.style.display==='block'?'none':'block'; return; }
+      const classCancel=e.target.closest('.a-class-cancel');
+      if(classCancel){ $(classCancel.dataset.row).style.display='none'; return; }
+      const classSave=e.target.closest('.a-class-save');
+      if(classSave){ saveAssessmentClass(classSave.dataset.id,classSave.dataset.row); return; }
       const toggle=e.target.closest('.a-toggle-btn');
       if(toggle){ const {assignId,wrapId,detailId}=toggle.dataset;
         const detail=$(detailId);
@@ -7837,6 +7854,18 @@
         return; }
       handleAssignmentPanelClick(e);
     });
+    async function saveAssessmentClass(assessmentId,rowId){
+      const row=$(rowId),button=row&&row.querySelector('.a-class-save'),rosterId=row&&row.querySelector('.a-class-picker')?.value;
+      if(!row||!button)return;
+      if(!rosterId){toast('Choose a class first.');return;}
+      const original=button.textContent;button.disabled=true;button.textContent='Saving…';
+      try{
+        const response=await fetch('/api/assignment/'+encodeURIComponent(assessmentId)+'/class',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({rosterId})});
+        const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not assign this class.');
+        toast(`${data.rosterName} assigned. Learners can now select their accounts.`,'ok');
+        await loadMyAssignments();
+      }catch(err){toast(err.message);button.disabled=false;button.textContent=original;}
+    }
     $('assignmentsList').addEventListener('input',e=>{
       if(e.target.matches('.grade-marks-input,.grade-rationale-input'))e.target.dataset.teacherEdited='1';
     });

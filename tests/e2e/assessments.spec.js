@@ -19,6 +19,11 @@ test('teacher builds a marked assessment and a learner sees practical criteria s
   });
   expect(rosterResponse.ok(), await rosterResponse.text()).toBeTruthy();
   const classRoster = await rosterResponse.json();
+  const replacementRosterResponse = await page.request.post('/api/roster', {
+    data: { name: 'Grade 2 ICT B', rows: [{ ID: `${learnerId}-B`, Name: 'Bao Learner' }], idCol: 'ID', nameCol: 'Name' },
+  });
+  expect(replacementRosterResponse.ok(), await replacementRosterResponse.text()).toBeTruthy();
+  const replacementRoster = await replacementRosterResponse.json();
 
   await page.locator('#assignmentsBtn').click();
   await expect(page.getByRole('heading', { name: 'Test or project' })).toBeVisible();
@@ -43,6 +48,13 @@ test('teacher builds a marked assessment and a learner sees practical criteria s
   const assessment = await response.json();
   await expect(page.locator('#assessmentPublishResult')).toContainText('Assessment published');
   await expect(page.locator('#assignmentsList')).toContainText('Document creation project');
+  const assessmentCard=page.locator('#assignmentsList .game-card').filter({hasText:'Document creation project'});
+  await assessmentCard.getByRole('button',{name:'Change class'}).click();
+  await assessmentCard.locator('.a-class-picker').selectOption(replacementRoster.id);
+  const classUpdate=page.waitForResponse(result=>result.url().endsWith(`/api/assignment/${assessment.assessmentId}/class`)&&result.request().method()==='PATCH');
+  await assessmentCard.getByRole('button',{name:'Save class'}).click();
+  expect((await classUpdate).ok()).toBeTruthy();
+  await expect(page.locator('#assignmentsList .game-card').filter({hasText:'Document creation project'})).toContainText('Grade 2 ICT B');
 
   const presentation = await page.context().newPage();
   await presentation.goto(new URL(`/assessment/${assessment.assessmentId}/present`, page.url()).toString());
@@ -56,7 +68,7 @@ test('teacher builds a marked assessment and a learner sees practical criteria s
     await expect(learner.locator('#authScreen')).toBeVisible();
     await expect(learner.locator('#authTitle')).toHaveText('Choose your name');
     await expect(learner.locator('#auSid')).toBeHidden();
-    await learner.getByRole('button', { name: 'Amina L.' }).click();
+    await learner.getByRole('button', { name: 'Bao L.' }).click();
     await expect(learner.locator('#pinSetupBlock')).toBeVisible();
     await learner.locator('#auPinNew').fill('4826');
     await learner.locator('#auPinConfirm').fill('4826');

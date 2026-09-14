@@ -377,6 +377,32 @@ function updateAssignmentCutoff(id, cutoffAt) {
   return rec;
 }
 
+function updateAssessmentRoster(id, rosterId, rosterSnapshot) {
+  const rec = getAssignment(id);
+  if (!rec || rec.type !== 'assessment') return null;
+  const nextRosterId = cleanText(rosterId, 160);
+  const nextSnapshot = normalizeRosterSnapshot(rosterSnapshot);
+  if (!nextRosterId || !nextSnapshot.length) {
+    throw assessmentStateError('Choose a class with at least one learner.', 'assessment_roster_required');
+  }
+  // Saving the already attached class is harmless, but never refresh its
+  // snapshot after learners start: the published cohort must stay immutable.
+  if (rec.rosterId === nextRosterId) return rec;
+  assertAssessmentMutable(rec);
+  if (loadSubmissions(id).length || loadDrafts(id).length) {
+    throw assessmentStateError('The class cannot be changed after a learner has started this assessment.', 'assessment_roster_locked');
+  }
+  const delivery = deliveryState(rec);
+  if (delivery.mode === 'live' && delivery.phase !== 'lobby') {
+    throw assessmentStateError('The class cannot be changed after the first section has started.', 'assessment_roster_locked');
+  }
+  rec.rosterId = nextRosterId;
+  rec.rosterSnapshot = nextSnapshot;
+  rec.rosterAssignedAt = new Date().toISOString();
+  writeJsonAtomic(recPath(id), rec);
+  return rec;
+}
+
 function assessmentIsFinalised(record) {
   return !!record && record.type === 'assessment' && (record.resultsReleased || record.status === 'finalised');
 }
@@ -757,7 +783,7 @@ function listTeacherAssignments(teacherId) {
 }
 
 module.exports = {
-  createAssignment, createAssessment, normalizeAssessment, getAssignment, updateAssignmentCutoff, getRoomCode,
+  createAssignment, createAssessment, normalizeAssessment, getAssignment, updateAssignmentCutoff, updateAssessmentRoster, getRoomCode,
   publishedAssessmentGenerationContext,
   releaseResults, isReleased,
   assessmentIsFinalised, saveSubmission, saveNewSubmission, getSubmissions, getSubmission,

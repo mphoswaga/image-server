@@ -166,6 +166,30 @@ test('published assessments snapshot and normalize the selected cohort', () => {
   ]);
 });
 
+test('an unused older assessment can gain or change its class after publication', () => {
+  const record = assignments.createAssessment({
+    teacherId: 'teacher-late-class', data: validAssessment(),
+  });
+  assert.equal(record.rosterId, null);
+  const updated = assignments.updateAssessmentRoster(record.id, 'grade-2-ict', [
+    { id: ' g2-01 ', name: 'Amina Learner' },
+    { id: 'G2-02', name: 'Bao Learner' },
+  ]);
+  assert.equal(updated.id, record.id);
+  assert.equal(updated.roomCode, record.roomCode);
+  assert.equal(updated.rosterId, 'grade-2-ict');
+  assert.deepEqual(updated.rosterSnapshot, [
+    { id: 'G2-01', name: 'Amina Learner' },
+    { id: 'G2-02', name: 'Bao Learner' },
+  ]);
+
+  assignments.saveDraft(updated.id, { studentId: 'G2-01', name: 'Amina Learner', answers: { q1: 0 } });
+  assert.throws(
+    () => assignments.updateAssessmentRoster(updated.id, 'another-class', [{ id: 'G2-03', name: 'Chi Learner' }]),
+    error => error && error.code === 'assessment_roster_locked' && /after a learner has started/i.test(error.message),
+  );
+});
+
 test('project deck generation receives the canonical published assessment snapshot', () => {
   const record = assignments.createAssessment({
     teacherId: 'teacher-deck-context',
