@@ -439,7 +439,12 @@ app.get('/api/educscope/session', async (req, res) => {
       providerUserId: profile.userId,
       email: profile.email,
       name: profile.name,
+      organizationId: profile.organizationId,
     });
+    roster.assignOrganization(user.id, profile.organizationId);
+    const correctedNames = roster.reconcileOrganizationStudentNames(profile.organizationId);
+    correctedNames.forEach(item => assignments.renameAssessmentStudent(
+      item.teacherId, item.rosterId, item.studentId, item.name));
     setSession(res, user.id);
     audit.log('educscope.session', {
       userId: user.id,
@@ -470,7 +475,12 @@ app.post('/api/educscope/token', async (req, res) => {
       providerUserId: profile.userId,
       email: profile.email,
       name: profile.name,
+      organizationId: profile.organizationId,
     });
+    roster.assignOrganization(user.id, profile.organizationId);
+    const correctedNames = roster.reconcileOrganizationStudentNames(profile.organizationId);
+    correctedNames.forEach(item => assignments.renameAssessmentStudent(
+      item.teacherId, item.rosterId, item.studentId, item.name));
     setSession(res, user.id);
     audit.log('educscope.token_session', {
       userId: user.id,
@@ -4661,12 +4671,12 @@ app.post('/api/roster', requireAuth, (req, res, next) => {
       if (!idCol) return res.status(400).json({ error: 'idCol is required.' });
       const students = roster.buildStudentsFromMapping(rows, idCol, nameCol, genderCol);
       if (!students.length) return res.status(400).json({ error: 'No valid students found in the selected columns.' });
-      r = roster.saveRoster(req.userId, { name, students });
+      r = roster.saveRoster(req.userId, { name, students, organizationId: req.user.organizationId });
     } else {
       // Legacy CSV text path
       const csvText = String(req.body || '').trim();
       if (!csvText) return res.status(400).json({ error: 'CSV is empty.' });
-      r = roster.saveRoster(req.userId, { name, csvText });
+      r = roster.saveRoster(req.userId, { name, csvText, organizationId: req.user.organizationId });
     }
     setImmediate(() => webhooks.dispatch('roster.updated', { rosterId: r.id, teacherId: req.userId, studentCount: r.students.length, action: 'created' }).catch(() => {}));
     res.json({ id: r.id, name: r.name, count: r.students.length });

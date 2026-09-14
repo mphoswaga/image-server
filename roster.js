@@ -84,7 +84,7 @@ function parseCSV(text) {
   return out;
 }
 
-function saveRoster(teacherId, { name, students, csvText }) {
+function saveRoster(teacherId, { name, students, csvText, organizationId }) {
   fs.mkdirSync(rosterDir(teacherId), { recursive: true });
   const inputStudents = csvText ? parseCSV(csvText) : (Array.isArray(students) ? students : []);
   const seen = new Set();
@@ -102,10 +102,83 @@ function saveRoster(teacherId, { name, students, csvText }) {
     id,
     name: String(name || 'Class roster').trim(),
     students: parsedStudents,
+    ...(organizationId ? { organizationId: String(organizationId) } : {}),
     createdAt: new Date().toISOString(),
   };
   writeJsonAtomic(rosterPath(teacherId, id), record);
   return record;
+}
+
+function usableHumanName(value, studentId) {
+  const name = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!name || normalizeStudentId(name) === normalizeStudentId(studentId)) return '';
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(name)) return '';
+  return name;
+}
+
+// A school may upload the same stable Student ID in several teachers' class
+// lists. If one upload contains only the learner email and another contains a
+// real name, carry the real name across that EducScope organization. Roster
+// IDs, Student IDs, PINs, submissions, marks and class ownership stay intact.
+function reconcileOrganizationStudentNames(organizationId) {
+  const wantedOrg = String(organizationId || '').trim();
+  if (!wantedOrg) return [];
+  const usersDir = path.join(DATA_DIR, 'users');
+  if (!fs.existsSync(usersDir)) return [];
+  const records = [];
+  for (const teacherId of fs.readdirSync(usersDir)) {
+    const dir = rosterDir(teacherId);
+    if (!fs.existsSync(dir)) continue;
+    for (const file of fs.readdirSync(dir).filter(name => name.endsWith('.json'))) {
+      try {
+        const record = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'));
+        if (String(record.organizationId || '') !== wantedOrg) continue;
+        records.push({ teacherId, record });
+      } catch {}
+    }
+  }
+
+  const canonical = new Map();
+  for (const { record } of records) {
+    for (const student of record.students || []) {
+      const id = normalizeStudentId(student.id);
+      const human = usableHumanName(student.name, id);
+      if (id && human && !canonical.has(id)) canonical.set(id, human);
+    }
+  }
+
+  const corrections = [];
+  for (const { teacherId, record } of records) {
+    let changed = false;
+    for (const student of record.students || []) {
+      const id = normalizeStudentId(student.id);
+      const preferred = canonical.get(id);
+      if (!preferred || usableHumanName(student.name, id)) continue;
+      student.name = preferred;
+      changed = true;
+      corrections.push({ teacherId, rosterId: record.id, studentId: student.id, name: preferred });
+    }
+    if (changed) writeJsonAtomic(rosterPath(teacherId, record.id), record);
+  }
+  return corrections;
+}
+
+function assignOrganization(teacherId, organizationId) {
+  const value = String(organizationId || '').trim();
+  if (!value) return 0;
+  const dir = rosterDir(teacherId);
+  if (!fs.existsSync(dir)) return 0;
+  let updated = 0;
+  for (const file of fs.readdirSync(dir).filter(name => name.endsWith('.json'))) {
+    try {
+      const record = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'));
+      if (String(record.organizationId || '') === value) continue;
+      record.organizationId = value;
+      writeJsonAtomic(rosterPath(teacherId, record.id), record);
+      updated += 1;
+    } catch {}
+  }
+  return updated;
 }
 
 function getRoster(teacherId, id) {
@@ -305,7 +378,7 @@ function buildStudentsFromMapping(rows, idCol, nameCol, genderCol) {
 }
 
 module.exports = {
-  displayNameFrom, normalizeGender, renameRoster, renameStudent,
+  displayNameFrom, normalizeGender, renameRoster, renameStudent, assignOrganization, reconcileOrganizationStudentNames,
   saveRoster, getRoster, listRosters, deleteRoster,
   findStudent, findStudentInRoster, findStudentAcrossAllTeachers, parseCSV,
   parseRosterFile, buildStudentsFromMapping, normalizeStudentId,

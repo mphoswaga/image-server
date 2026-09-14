@@ -70,7 +70,7 @@ async function login(email, password) {
 function findByIdentity(users, key) {
   return Object.values(users).find(u => u.identities && u.identities[key]) || null;
 }
-async function findOrCreateSocialUser({ provider, providerUserId, email, name }) {
+async function findOrCreateSocialUser({ provider, providerUserId, email, name, organizationId }) {
   email = String(email || '').trim().toLowerCase();
   if (!provider || !providerUserId || !email) throw new Error('Incomplete profile from provider.');
   const key = `${provider}:${providerUserId}`;
@@ -81,6 +81,7 @@ async function findOrCreateSocialUser({ provider, providerUserId, email, name })
     u.identities = u.identities || {};
     if (!u.identities[key]) u.identities[key] = { email, linkedAt: new Date().toISOString() };
     if (!u.name && name) u.name = name;
+    if (organizationId) u.organizationId = String(organizationId);
     saveUsers(users);
     return publicUser(u);
   }
@@ -90,6 +91,7 @@ async function findOrCreateSocialUser({ provider, providerUserId, email, name })
   const id = crypto.randomUUID();
   users[id] = {
     id, email, name: (name || '').trim() || email.split('@')[0], role,
+    ...(organizationId ? { organizationId: String(organizationId) } : {}),
     identities: { [key]: { email, linkedAt: new Date().toISOString() } },
     createdAt: new Date().toISOString(),
   };
@@ -97,7 +99,7 @@ async function findOrCreateSocialUser({ provider, providerUserId, email, name })
   return publicUser(users[id]);
 }
 
-function publicUser(u) { return { id: u.id, email: u.email, name: u.name, role: u.role || 'teacher' }; }
+function publicUser(u) { return { id: u.id, email: u.email, name: u.name, role: u.role || 'teacher', organizationId: u.organizationId || '' }; }
 
 function issueToken(userId) { return jwt.sign({ uid: userId }, SECRET, { expiresIn: TOKEN_TTL }); }
 function verifyToken(token) {

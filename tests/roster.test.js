@@ -348,3 +348,38 @@ test('a learner name correction preserves their stable roster identity', () => {
     for (const m of ['../roster.js', '../storage.js']) delete require.cache[require.resolve(m)];
   }
 });
+
+test('the same EducScope school reuses a human learner name without merging class data', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const previous = process.env.DATA_DIR;
+  process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lc-school-names-'));
+  try {
+    for (const m of ['../roster.js', '../storage.js']) delete require.cache[require.resolve(m)];
+    const r = require('../roster.js');
+    const correct = r.saveRoster('teacher-a', {
+      name: 'Grade 2B3', organizationId: 'school-1',
+      students: [{ id: 'VS114131', name: 'Thái Quang Vinh' }]
+    });
+    const emailCopy = r.saveRoster('teacher-b', {
+      name: '2B3', organizationId: 'school-1',
+      students: [{ id: 'VS114131', name: 'vinh114131@stu.vinschool.edu.vn' }]
+    });
+    const otherSchool = r.saveRoster('teacher-c', {
+      name: '2B3', organizationId: 'school-2',
+      students: [{ id: 'VS114131', name: 'other114131@example.com' }]
+    });
+
+    assert.deepEqual(r.reconcileOrganizationStudentNames('school-1'), [{
+      teacherId: 'teacher-b', rosterId: emailCopy.id, studentId: 'VS114131', name: 'Thái Quang Vinh'
+    }]);
+    assert.equal(r.getRoster('teacher-a', correct.id).students[0].name, 'Thái Quang Vinh');
+    assert.equal(r.getRoster('teacher-b', emailCopy.id).students[0].name, 'Thái Quang Vinh');
+    assert.equal(r.getRoster('teacher-c', otherSchool.id).students[0].name, 'other114131@example.com');
+    assert.notEqual(correct.id, emailCopy.id, 'each teacher keeps a separate class roster');
+  } finally {
+    process.env.DATA_DIR = previous;
+    for (const m of ['../roster.js', '../storage.js']) delete require.cache[require.resolve(m)];
+  }
+});
