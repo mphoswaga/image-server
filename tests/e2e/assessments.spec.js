@@ -231,12 +231,12 @@ test('an open My assignments panel updates learner readiness without being reope
 
     await results.locator('.bulk-grade-student').check();
     await results.getByLabel('Mark for selected learners').fill('4');
-    await results.getByRole('button', { name: 'Apply mark to 1 learner' }).click();
+    await results.getByRole('button', { name: 'Apply to 1 selected' }).click();
     await expect(page.locator('#toastWrap')).toContainText('Mark applied to 1 learner');
     await results.getByLabel('Question to mark').selectOption('criterion-check');
     await results.locator('.bulk-grade-student').check();
     await results.getByLabel('Mark for selected learners').fill('4');
-    await results.getByRole('button', { name: 'Apply mark to 1 learner' }).click();
+    await results.getByRole('button', { name: 'Apply to 1 selected' }).click();
     await expect(page.locator('#toastWrap')).toContainText('Mark applied to 1 learner');
     await expect(results.getByRole('button', { name: 'Release results' })).toBeEnabled();
     const released = await page.request.patch(`/api/assignment/${assessment.assessmentId}/release`, { data: { released: true } });
@@ -251,6 +251,63 @@ test('an open My assignments panel updates learner readiness without being reope
   const requestsAfterClose = resultsRequests;
   await page.waitForTimeout(1600);
   expect(resultsRequests).toBe(requestsAfterClose);
+});
+
+test('multiple-choice answers are visibly auto-confirmed without per-learner save buttons', async ({ page, browser }, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100', 'One desktop browser covers deterministic MCQ marking.');
+  await signInDisposableTeacher(page, '-assessment-mcq-auto-confirm');
+  const learnerId = `MCQ-${Date.now()}`;
+  const rosterResponse = await page.request.post('/api/roster', {
+    data: { name: 'Grade 4 Science MCQ', rows: [{ ID: learnerId, Name: 'Minh Anh' }], idCol: 'ID', nameCol: 'Name' },
+  });
+  const classRoster = await rosterResponse.json();
+  expect(rosterResponse.ok(), JSON.stringify(classRoster)).toBeTruthy();
+  const assessmentResponse = await page.request.post('/api/assessment', {
+    data: {
+      rosterId: classRoster.id,
+      assessment: {
+        title: 'Plant knowledge test', subject: 'Science', grade: 'Grade 4', assessmentType: 'test', deliveryMode: 'self-paced', totalMarks: 2,
+        objectives: [{ id: 'plants', text: 'Identify what plants need to grow' }],
+        instructions: 'Choose one answer for each question.',
+        sections: [{
+          id: 'knowledge', title: 'Multiple choice', type: 'mcq', objectiveIds: ['plants'], instructions: 'Choose the best answer.',
+          items: [
+            { id: 'sunlight', prompt: 'Which resource helps a plant make food?', marks: 1, options: ['Sunlight', 'Plastic', 'Metal', 'Glass'], correctIndex: 0 },
+            { id: 'roots', prompt: 'Which part usually absorbs water?', marks: 1, options: ['Flower', 'Roots', 'Fruit', 'Seed'], correctIndex: 1 },
+          ],
+        }],
+      },
+    },
+  });
+  const assessment = await assessmentResponse.json();
+  expect(assessmentResponse.ok(), JSON.stringify(assessment)).toBeTruthy();
+
+  const learnerContext = await browser.newContext();
+  try {
+    const join = await (await learnerContext.request.get(`/api/assignment/${assessment.assessmentId}/join`)).json();
+    const entered = await learnerContext.request.post(`/api/assignment/${assessment.assessmentId}/enter`, {
+      data: { handle: join.students[0].handle, pin: '4826' },
+    });
+    expect(entered.ok(), await entered.text()).toBeTruthy();
+    const submitted = await learnerContext.request.post(`/api/assignment/${assessment.assessmentId}/submit`, {
+      data: { answers: { sunlight: 0, roots: 0 } },
+    });
+    expect(submitted.ok(), await submitted.text()).toBeTruthy();
+
+    await page.locator('#assignmentsBtn').click();
+    const card = page.locator('#assignmentsList .game-card').filter({ hasText: 'Plant knowledge test' });
+    await card.locator('.a-toggle-btn').click();
+    const results = card.locator(`#ares-${assessment.assessmentId}`);
+    await results.getByRole('button', { name: 'By question' }).click();
+    await expect(results.locator('.mcq-auto-note')).toContainText('marked and confirmed every submitted answer automatically');
+    await expect(results.locator('.auto-marked-badge')).toHaveText('Automatically marked & confirmed');
+    await expect(results.locator('.grade-auto-result b')).toHaveText('1/1');
+    await expect(results.locator('.grade-override-btn')).toHaveCount(0);
+    await expect(results.getByRole('button', { name: 'Release results' })).toBeEnabled();
+    await expectNoPageOverflow(page);
+  } finally {
+    await learnerContext.close();
+  }
 });
 
 test('one bulk question mark updates every selected learner and rejects a mixed invalid selection', async ({ page }, testInfo) => {

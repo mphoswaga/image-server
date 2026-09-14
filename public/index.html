@@ -2389,6 +2389,53 @@
     .assessment-remove { border:0; background:transparent; color:var(--err); font:700 12px inherit; cursor:pointer; padding:6px; }
     .assessment-result { margin-top:16px; padding:16px; border-radius:12px; background:var(--accent-soft); border:1px solid #b9ddcb; }
     @media(max-width:700px){ .assessment-grid,.assessment-item-grid { grid-template-columns:1fr; } .assessment-grid .full,.assessment-item-grid .wide { grid-column:auto; } }
+    /* Compact question-by-question marking workspace. */
+    .bulk-grade-toolbar { display:grid;grid-template-columns:auto minmax(150px,190px) auto;align-items:end;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid #d4e8de; }
+    .bulk-grade-toolbar .mcq-auto-note { grid-column:1/-1;padding:9px 11px;border-radius:8px;background:#eaf8f0;color:#216244;font-size:12.5px;line-height:1.4; }
+    .bulk-select-all { display:flex;align-items:center;gap:7px;margin:0;padding:9px 0;font-size:12.5px;cursor:pointer; }
+    .bulk-select-all input,.grade-learner input { width:18px;height:18px;flex:none;margin:0; }
+    .bulk-mark-field { margin:0;font-size:11.5px;color:#145c3c; }
+    .bulk-mark-field>span:first-child { display:block;font-weight:700;margin-bottom:4px; }
+    .bulk-mark-field>span:last-child { display:flex;align-items:center;gap:5px;color:var(--muted);font-size:12px; }
+    .bulk-mark-field input { width:76px;padding:7px 8px; }
+    .bulk-grade-toolbar .bulk-grade-apply { width:auto;min-height:38px;padding:8px 13px; }
+    .question-marking-list { margin-top:12px;border:1px solid var(--border);border-radius:11px;overflow:hidden;background:#fff; }
+    .question-marking-title { display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 14px;background:#f7f9fc;font-size:14px;font-weight:700;border-bottom:1px solid var(--border); }
+    .question-marking-title>span { width:100%;font-size:10.5px;text-transform:uppercase;color:var(--muted);letter-spacing:.4px; }
+    .question-marking-title small { margin-left:auto;padding:3px 8px;border-radius:999px;background:#e8f0fb;color:var(--primary);font-size:11px; }
+    .grade-row { padding:12px 14px;border-top:1px solid var(--border); }
+    .question-marking-list .grade-row:first-of-type { border-top:0; }
+    .grade-row-compact { display:grid;grid-template-columns:minmax(145px,.8fr) minmax(240px,1.7fr) minmax(205px,auto);gap:10px 14px;align-items:center; }
+    .grade-learner { min-width:0;font-size:13px;font-weight:700; }
+    .grade-learner label { display:flex;align-items:center;gap:9px;margin:0;color:var(--ink);font-size:13px;cursor:pointer; }
+    .grade-learner small { color:var(--muted);font-weight:500; }
+    .grade-answer { min-width:0;padding:8px 10px;border-radius:8px;background:#f4f6fb;font-size:13px;overflow-wrap:anywhere; }
+    .grade-answer b { display:block;margin-bottom:2px;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted); }
+    .grade-mark-control { display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap; }
+    .grade-mark-control input { width:62px;padding:6px 7px;font-size:13px; }
+    .grade-mark-control>span { font-size:12px;color:var(--muted); }
+    .grade-mark-control button { padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--primary);font:600 12px inherit;cursor:pointer; }
+    .grade-auto-result { display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap; }
+    .grade-auto-result>b { min-width:48px;text-align:center;padding:6px 9px;border-radius:8px;background:#eaf8f0;color:#176b43;font-size:13px; }
+    .auto-marked-badge { font-size:11px;color:#176b43;font-weight:700; }
+    .grade-feedback { grid-column:2/-1;font-size:12px; }
+    .grade-feedback summary { width:max-content;color:var(--primary);font-weight:600;cursor:pointer; }
+    .grade-feedback textarea { margin-top:7px;padding:8px 9px;font-size:12.5px; }
+    @media(max-width:760px){
+      .bulk-grade-toolbar { grid-template-columns:1fr 1fr; }
+      .bulk-grade-toolbar .bulk-select-all { grid-column:1/-1; }
+      .grade-row-compact { grid-template-columns:1fr auto; }
+      .grade-row-compact .grade-answer { grid-column:1/-1;grid-row:2; }
+      .grade-row-compact .grade-mark-control,.grade-row-compact .grade-auto-result { grid-column:2;grid-row:1; }
+      .grade-feedback { grid-column:1/-1; }
+    }
+    @media(max-width:480px){
+      .bulk-grade-toolbar { grid-template-columns:1fr; }
+      .bulk-grade-toolbar .bulk-select-all,.bulk-grade-toolbar .mcq-auto-note { grid-column:1; }
+      .bulk-grade-toolbar .bulk-grade-apply { width:100%; }
+      .grade-row-compact { grid-template-columns:1fr; }
+      .grade-row-compact .grade-answer,.grade-row-compact .grade-mark-control,.grade-row-compact .grade-auto-result { grid-column:1;grid-row:auto;justify-content:flex-start; }
+    }
   </style>
   <link rel="stylesheet" href="/byte-feedback.css" />
 </head>
@@ -5861,7 +5908,7 @@
           assessmentBulkMarks.delete(`${assignId}\u001f${questionId}`);
           toast(`Mark applied to ${d.updated} learner${d.updated===1?'':'s'}.`,'ok');
           loadAssignmentResults(assignId,wrapId||'assignSubmissions');
-        }catch(err){toast(err.message);bulkApply.disabled=false;bulkApply.textContent=`Apply mark to ${selected.length} learner${selected.length===1?'':'s'}`;}
+        }catch(err){toast(err.message);bulkApply.disabled=false;bulkApply.textContent=`Apply to ${selected.length} selected`;}
         return;
       }
       const questionNav=e.target.closest('.assessment-question-nav');
@@ -5912,7 +5959,7 @@
         if(studentPicker.checked)selected.add(String(studentId));else selected.delete(String(studentId));
         assessmentBulkSelections.set(key,selected);
         const wrap=$(wrapId),apply=wrap?.querySelector('.bulk-grade-apply'),all=wrap?.querySelector('.bulk-grade-all');
-        if(apply){apply.disabled=!selected.size;apply.textContent=`Apply mark to ${selected.size} learner${selected.size===1?'':'s'}`;}
+        if(apply){apply.disabled=!selected.size;apply.textContent=`Apply to ${selected.size} selected`;}
         if(all){const boxes=[...wrap.querySelectorAll('.bulk-grade-student')];all.checked=!!boxes.length&&boxes.every(input=>input.checked);}
         return;
       }
@@ -5926,7 +5973,7 @@
         });
         assessmentBulkSelections.set(`${assignId}\u001f${questionId}`,selected);
         const apply=wrap?.querySelector('.bulk-grade-apply');
-        if(apply){apply.disabled=!selected.size;apply.textContent=`Apply mark to ${selected.size} learner${selected.size===1?'':'s'}`;}
+        if(apply){apply.disabled=!selected.size;apply.textContent=`Apply to ${selected.size} selected`;}
         return;
       }
       const select=e.target.closest('.assessment-question-select');
@@ -6023,25 +6070,30 @@
       const g=(s.grades||{})[q.id]||{}; const ans=(s.answers||{})[q.id];
       const ansText=q.kind==='practical' ? 'Teacher observation' : q.kind==='mcq' ? (q.options&&q.options[ans]!=null?q.options[ans]:'(no answer)') : (ans||'(no answer)');
       if(s.draftOnly&&q.kind!=='practical') return `<div class="grade-row" style="padding:10px 0;border-top:1px solid var(--border)"><div style="font-size:13px;font-weight:600">${esc(headingText)}</div><div style="font-size:12.5px;color:var(--muted);margin-top:4px">Available after this student submits.</div></div>`;
-      const confirmed=g.source==='teacher'||g.source==='ai-confirmed';
-      // MCQ is deterministically auto-graded — no AI verdict to confirm,
-      // so it gets no badge instead of a misleading "AI — unconfirmed".
-      const badge = q.kind==='mcq' ? '' : q.kind==='practical'&&(!g.source||g.source==='teacher-required')
+      const autoMarked=q.kind==='mcq'&&g.source==='auto';
+      const confirmed=autoMarked||g.source==='teacher'||g.source==='ai-confirmed';
+      // MCQ is deterministically auto-graded, so show that it is already
+      // confirmed and remove the per-learner Save action.
+      const badge = autoMarked ? '<span class="auto-marked-badge">Automatically marked &amp; confirmed</span>' : q.kind==='practical'&&(!g.source||g.source==='teacher-required')
         ? '<span style="font-size:11.5px;color:#b26a00;font-weight:600">awaiting teacher</span>' : (confirmed
         ? '<span style="font-size:11.5px;color:var(--ok,#1f9d55);font-weight:600">confirmed</span>'
         : '<span style="font-size:11.5px;color:var(--muted)">AI — unconfirmed</span>');
       const selected=assessmentBulkSelections.get(`${assignId}\u001f${q.id}`)?.has(String(s.studentId))||false;
       const picker=selectable?`<label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" class="bulk-grade-student" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-id="${esc(q.id)}" data-student-id="${esc(s.studentId)}" ${selected?'checked':''}> <span>${esc(headingText)}</span></label>`:esc(headingText);
-      return `<div class="grade-row" style="padding:10px 0;border-top:1px solid var(--border)">
-        <div style="font-size:13px;font-weight:600">${picker}</div>
-        <div style="font-size:13.5px;background:#f4f6fb;border-radius:8px;padding:8px 10px;margin:4px 0"><b style="display:block;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;margin-bottom:2px">Answer</b>${esc(String(ansText))}</div>
-        ${q.kind!=='mcq'?`<textarea class="grade-rationale-input" rows="2" placeholder="Feedback shown to the student after release" style="margin:0 0 7px;font-size:12.5px;padding:7px 9px">${esc(g.rationale||'')}</textarea>`:''}
-        <div style="display:flex;align-items:center;gap:8px">
-          <input class="grade-marks-input" type="number" min="0" max="${q.marks}" value="${g.marksAwarded||0}" style="width:56px;font-size:13px;padding:4px 6px" />
-          <span style="font-size:12.5px;color:var(--muted)">/ ${q.marks} marks</span>
-          <button type="button" class="grade-override-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-student-id="${esc(s.studentId)}" data-question-id="${esc(q.id)}" style="font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer">Save</button>
-          ${badge}
-        </div>
+      const markControl=autoMarked
+        ? `<div class="grade-auto-result"><b>${Number(g.marksAwarded)||0}/${q.marks}</b>${badge}</div>`
+        : `<div class="grade-mark-control">
+            <input class="grade-marks-input" aria-label="Mark for ${esc(headingText)}" type="number" min="0" max="${q.marks}" step="0.5" value="${Number(g.marksAwarded)||0}" />
+            <span>/ ${q.marks}</span>
+            <button type="button" class="grade-override-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-student-id="${esc(s.studentId)}" data-question-id="${esc(q.id)}">Save</button>
+            ${badge}
+          </div>`;
+      const feedback=q.kind==='mcq'?'':`<details class="grade-feedback" ${g.rationale?'open':''}><summary>${g.rationale?'Edit feedback':'Add feedback (optional)'}</summary><textarea class="grade-rationale-input" rows="2" placeholder="Feedback shown to the student after release">${esc(g.rationale||'')}</textarea></details>`;
+      return `<div class="grade-row ${selectable?'grade-row-compact':''} ${autoMarked?'grade-row-auto':''}">
+        <div class="grade-learner">${picker}${s.draftOnly?' <small>working</small>':''}</div>
+        <div class="grade-answer"><b>Answer</b><span>${esc(String(ansText))}</span></div>
+        ${markControl}
+        ${feedback}
       </div>`;
     }
     const stripMarksText=t=>String(t||'').replace(/\s*\(\d+\s*marks?\)\s*$/i,'');
@@ -6077,16 +6129,15 @@
           <button type="button" class="btn ghost assessment-question-nav" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-index="${qi+1}" ${qi===questions.length-1?'disabled':''} style="width:auto;padding:7px 10px">Next</button>
           <span style="font-size:12px;color:var(--muted);font-weight:600">${qi+1} of ${questions.length}</span>
         </div>
-        <div style="display:flex;align-items:end;gap:9px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid #d4e8de">
-          <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding-bottom:8px"><input type="checkbox" class="bulk-grade-all" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-id="${esc(q.id)}" ${markable.length&&selected.size===markable.length?'checked':''}> Select all shown</label>
-          <label style="font-size:11.5px;font-weight:700;color:#145c3c">Mark for selected learners
-            <span style="display:flex;align-items:center;gap:5px;margin-top:4px"><input type="number" class="bulk-grade-mark" data-assign-id="${assignId}" data-question-id="${esc(q.id)}" min="0" max="${q.marks}" step="0.5" value="${esc(bulkMark)}" style="width:72px;padding:7px 8px" aria-label="Mark for selected learners"><span style="font-size:12px;color:var(--muted)">/ ${q.marks}</span></span>
-          </label>
-          <button type="button" class="btn accent bulk-grade-apply" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-id="${esc(q.id)}" ${selected.size?'':'disabled'} style="width:auto;padding:8px 12px">Apply mark to ${selected.size} learner${selected.size===1?'':'s'}</button>
+        <div class="bulk-grade-toolbar">
+          ${q.kind==='mcq'?'<div class="mcq-auto-note"><b>Multiple choice is complete.</b> LessonScope has marked and confirmed every submitted answer automatically. Use the controls below only to correct or override a mark.</div>':''}
+          <label class="bulk-select-all"><input type="checkbox" class="bulk-grade-all" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-id="${esc(q.id)}" ${markable.length&&selected.size===markable.length?'checked':''}> Select all learners</label>
+          <label class="bulk-mark-field"><span>${q.kind==='mcq'?'Override mark':'Mark for selected learners'}</span><span><input type="number" class="bulk-grade-mark" data-assign-id="${assignId}" data-question-id="${esc(q.id)}" min="0" max="${q.marks}" step="0.5" value="${esc(bulkMark)}" aria-label="Mark for selected learners"> / ${q.marks}</span></label>
+          <button type="button" class="btn accent bulk-grade-apply" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-id="${esc(q.id)}" ${selected.size?'':'disabled'}>Apply to ${selected.size} selected</button>
         </div>
       </div>
-      <div style="margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:10px">
-        <div style="font-weight:700;font-size:14px;margin-bottom:2px">${q.sectionTitle?`<span style="display:block;font-size:11px;text-transform:uppercase;color:var(--muted);letter-spacing:.4px">${esc(q.sectionTitle)}</span>`:''}${qi+1}. ${esc(stripMarksText(q.question))}</div>
+      <div class="question-marking-list">
+        <div class="question-marking-title">${q.sectionTitle?`<span>${esc(q.sectionTitle)}</span>`:''}${qi+1}. ${esc(stripMarksText(q.question))}<small>${q.marks} mark${Number(q.marks)===1?'':'s'}</small></div>
         ${rows}
       </div>`;
     }
