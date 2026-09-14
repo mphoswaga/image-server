@@ -46,6 +46,25 @@ setInterval(() => {
 
 const ALL_SCOPES = ['profile:read', 'rosters:read', 'results:read', 'credits:read', 'credits:write'];
 
+// The production TeacherScope client is provisioned through Railway variables.
+// Keeping this client in deployment configuration means a restored volume does
+// not silently remove the connection button or invalidate future sign-ins.
+function configuredTeacherScopeClient() {
+  const clientId = String(process.env.TEACHERSCOPE_OAUTH_CLIENT_ID || '').trim();
+  const clientSecret = String(process.env.TEACHERSCOPE_OAUTH_CLIENT_SECRET || '').trim();
+  const redirectUri = String(process.env.TEACHERSCOPE_OAUTH_REDIRECT_URI || '').trim();
+  if (!clientId || !clientSecret || !redirectUri) return null;
+  return {
+    clientId,
+    name: 'TeacherScope',
+    redirectUris: [redirectUri],
+    allowedScopes: ['profile:read', 'rosters:read', 'results:read'],
+    createdAt: null,
+    status: 'active',
+    configured: true,
+  };
+}
+
 // Create a new OAuth client. Returns { clientId, clientSecret (plaintext, show once) }.
 async function registerClient({ name, redirectUris, allowedScopes }) {
   ensureDir();
@@ -69,16 +88,21 @@ async function registerClient({ name, redirectUris, allowedScopes }) {
 }
 
 function getClient(clientId) {
+  const configured = configuredTeacherScopeClient();
+  if (configured && configured.clientId === clientId) return configured;
   const c = loadClients()[clientId];
   return (c && c.status === 'active') ? c : null;
 }
 
 function listClients() {
-  return Object.values(loadClients()).map(c => ({
+  const clients = Object.values(loadClients()).map(c => ({
     clientId: c.clientId, name: c.name,
     redirectUris: c.redirectUris, allowedScopes: c.allowedScopes,
     createdAt: c.createdAt, status: c.status,
   }));
+  const configured = configuredTeacherScopeClient();
+  if (configured && !clients.some(client => client.clientId === configured.clientId)) clients.unshift(configured);
+  return clients;
 }
 
 function setClientStatus(clientId, status) {
@@ -90,6 +114,12 @@ function setClientStatus(clientId, status) {
 }
 
 async function verifyClientSecret(clientId, plainSecret) {
+  const configured = configuredTeacherScopeClient();
+  if (configured && configured.clientId === clientId) {
+    const expected = crypto.createHash('sha256').update(String(process.env.TEACHERSCOPE_OAUTH_CLIENT_SECRET || '')).digest();
+    const supplied = crypto.createHash('sha256').update(String(plainSecret || '')).digest();
+    return crypto.timingSafeEqual(expected, supplied);
+  }
   const c = loadClients()[clientId];
   if (!c || !c.secretHash) return false;
   return bcrypt.compare(String(plainSecret || ''), c.secretHash);
