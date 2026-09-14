@@ -25,7 +25,10 @@ test('teacher builds a marked assessment and a learner sees practical criteria s
   expect(replacementRosterResponse.ok(), await replacementRosterResponse.text()).toBeTruthy();
   const replacementRoster = await replacementRosterResponse.json();
   const anotherRosterResponse = await page.request.post('/api/roster', {
-    data: { name: 'Grade 2 ICT C', rows: [{ ID: `${learnerId}-C`, Name: 'Hoàng Mỹ Chi' }], idCol: 'ID', nameCol: 'Name' },
+    data: { name: 'Grade 2 ICT C', rows: [
+      { ID: `${learnerId}-C`, Name: 'Hoàng Mỹ Chi' },
+      { ID: `${learnerId}-D`, Name: 'Nguyễn Mỹ Chi' },
+    ], idCol: 'ID', nameCol: 'Name' },
   });
   expect(anotherRosterResponse.ok(), await anotherRosterResponse.text()).toBeTruthy();
   const anotherRoster = await anotherRosterResponse.json();
@@ -76,8 +79,9 @@ test('teacher builds a marked assessment and a learner sees practical criteria s
     page.request.get(`/api/assignment/${classCopy.assessmentId}/join`).then(result=>result.json()),
   ]);
   expect(originalJoin.students.map(student=>student.label)).toEqual(['Bao L.']);
-  expect(copyJoin.students.map(student=>student.label)).toEqual(['Mỹ Chi']);
+  expect(copyJoin.students.map(student=>student.label)).toEqual(['Mỹ Chi (Hoàng)','Mỹ Chi (Nguyễn)']);
   expect(JSON.stringify(copyJoin)).not.toContain('Hoàng Mỹ Chi');
+  expect(JSON.stringify(copyJoin)).not.toContain('Nguyễn Mỹ Chi');
   expect(JSON.stringify(originalJoin)).not.toContain('Mỹ Chi');
   expect(JSON.stringify(copyJoin)).not.toContain('Bao L.');
 

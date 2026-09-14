@@ -2841,13 +2841,46 @@ function learnerPickerLabel(name) {
   return parts[0];
 }
 
+function learnerPickerEntries(students, activityId) {
+  const prepared = students.map(student => {
+    const parts = String(student.name || '').trim().split(/\s+/).filter(Boolean);
+    return {
+      student,
+      base: learnerPickerLabel(student.name),
+      family: parts.length >= 3 ? parts[0] : '',
+      prefix: parts.length >= 3 ? parts.slice(0, -2).join(' ') : '',
+    };
+  });
+  const baseCounts = new Map();
+  for (const item of prepared) baseCounts.set(item.base, (baseCounts.get(item.base) || 0) + 1);
+  const firstPass = prepared.map(item => ({
+    ...item,
+    label: baseCounts.get(item.base) > 1 && item.family ? `${item.base} (${item.family})` : item.base,
+  }));
+  const labelCounts = new Map();
+  for (const item of firstPass) labelCounts.set(item.label, (labelCounts.get(item.label) || 0) + 1);
+  const secondPass = firstPass.map(item => ({
+    ...item,
+    label: labelCounts.get(item.label) > 1 && item.prefix ? `${item.base} (${item.prefix})` : item.label,
+  }));
+  const finalCounts = new Map();
+  for (const item of secondPass) finalCounts.set(item.label, (finalCounts.get(item.label) || 0) + 1);
+  const seen = new Map();
+  return secondPass.map(item => {
+    let label = item.label;
+    if (finalCounts.get(label) > 1) {
+      const number = (seen.get(label) || 0) + 1;
+      seen.set(label, number);
+      label = `${label} · ${number}`;
+    }
+    return { handle: studentHandle(activityId, item.student.id), label };
+  });
+}
+
 function classListFor(teacherId, rosterId, activityId) {
   const r = roster.getRoster(teacherId, rosterId);
   if (!r || !Array.isArray(r.students)) return [];
-  return r.students.map(student => ({
-    handle: studentHandle(activityId, student.id),
-    label: learnerPickerLabel(student.name),
-  }));
+  return learnerPickerEntries(r.students, activityId);
 }
 
 // Formal assessments keep the exact selected class as a publication snapshot.
@@ -2876,10 +2909,7 @@ function studentFromAssignmentHandle(assignment, handle) {
 }
 
 function classListForAssignment(assignment) {
-  return assignmentCohortStudents(assignment).map(student => ({
-    handle: studentHandle(assignment.id, student.id),
-    label: learnerPickerLabel(student.name),
-  }));
+  return learnerPickerEntries(assignmentCohortStudents(assignment), assignment.id);
 }
 
 function gameRosterRecords(game) {
