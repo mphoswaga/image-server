@@ -170,7 +170,10 @@ test('an open My assignments panel updates learner readiness without being reope
         instructions: 'Complete the project independently.',
         sections: [{
           id: 'practical', title: 'Document task', type: 'practical', objectiveIds: ['document'], instructions: 'Create and check your document.',
-          items: [{ id: 'criterion', prompt: 'Creates and checks a document independently', marks: 10 }],
+          items: [
+            { id: 'criterion', prompt: 'Creates a document independently', marks: 5 },
+            { id: 'criterion-check', prompt: 'Checks and improves the document', marks: 5 },
+          ],
         }],
       },
     },
@@ -193,6 +196,12 @@ test('an open My assignments panel updates learner readiness without being reope
   await expect(results).toContainText('Updates automatically while these controls are open.');
   await results.getByRole('button', { name: 'By question' }).click();
   await expect(results).toHaveAttribute('data-view', 'question');
+  const questionSelect = results.getByLabel('Question to mark');
+  await expect(questionSelect.locator('option')).toHaveCount(2);
+  await questionSelect.selectOption('criterion-check');
+  await expect(results.locator('.assessment-question-navigator + div')).toContainText('2. Checks and improves the document');
+  await results.getByRole('button', { name: 'Previous' }).click();
+  await expect(questionSelect).toHaveValue('criterion');
 
   const learnerContext = await browser.newContext();
   try {
@@ -221,9 +230,13 @@ test('an open My assignments panel updates learner readiness without being reope
     await expect(results.getByRole('button', { name: /grades? pending/ })).toBeDisabled();
 
     const graded = await page.request.patch(`/api/assignment/${assessment.assessmentId}/grade`, {
-      data: { studentId: learnerId, questionId: 'criterion', marksAwarded: 8 },
+      data: { studentId: learnerId, questionId: 'criterion', marksAwarded: 4 },
     });
     expect(graded.ok(), await graded.text()).toBeTruthy();
+    const secondGrade = await page.request.patch(`/api/assignment/${assessment.assessmentId}/grade`, {
+      data: { studentId: learnerId, questionId: 'criterion-check', marksAwarded: 4 },
+    });
+    expect(secondGrade.ok(), await secondGrade.text()).toBeTruthy();
     await expect(results.getByRole('button', { name: 'Release results' })).toBeEnabled();
     const released = await page.request.patch(`/api/assignment/${assessment.assessmentId}/release`, { data: { released: true } });
     expect(released.ok(), await released.text()).toBeTruthy();

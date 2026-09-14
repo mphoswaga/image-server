@@ -5843,6 +5843,18 @@
     // both the fresh-publish panel (#packSection) and the persistent
     // "My assignments" tab, since both render the same results markup.
     async function handleAssignmentPanelClick(e){
+      const questionNav=e.target.closest('.assessment-question-nav');
+      if(questionNav){
+        const {assignId,wrapId}=questionNav.dataset;
+        const d=assignResultsCache.get(assignId),wrap=$(wrapId);
+        const index=Number(questionNav.dataset.questionIndex);
+        if(d&&wrap&&d.questions[index]){
+          wrap.dataset.questionId=d.questions[index].id;
+          renderAssignmentResults(assignId,wrapId,'question');
+          wrap.querySelector('.assessment-question-select')?.focus({preventScroll:true});
+        }
+        return;
+      }
       const liveAction=e.target.closest('[data-assessment-live-action]');
       if(liveAction){ const {assignId,wrapId,assessmentLiveAction}=liveAction.dataset; liveAction.disabled=true;
         try{ const r=await fetch(`/api/assignment/${assignId}/live-state`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:assessmentLiveAction})}); const d=await r.json(); if(!r.ok)throw new Error(d.error); loadAssignmentResults(assignId,wrapId); }
@@ -5870,6 +5882,16 @@
       if(tabBtn){ const {assignId,wrapId,view}=tabBtn.dataset;
         renderAssignmentResults(assignId, wrapId, view); } // cached — no refetch needed
     }
+
+    document.addEventListener('change',e=>{
+      const select=e.target.closest('.assessment-question-select');
+      if(!select)return;
+      const {assignId,wrapId}=select.dataset,wrap=$(wrapId);
+      if(!wrap)return;
+      wrap.dataset.questionId=select.value;
+      renderAssignmentResults(assignId,wrapId,'question');
+      wrap.querySelector('.assessment-question-select')?.focus({preventScroll:true});
+    });
 
     const assignResultsCache=new Map(); // assignId -> last-fetched {questions, submissions, ...}
     const assignmentResultsInFlight=new Map(); // assignId/wrapId -> active fetch promise
@@ -5981,13 +6003,28 @@
     }
 
     function renderByQuestion(d, assignId, wrapId){
-      return d.questions.map((q,qi)=>{
-        const rows=d.submissions.map(s=>gradeRowHTML(q, s, assignId, wrapId, s.name)).join('');
-        return `<div style="margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:10px">
-          <div style="font-weight:700;font-size:14px;margin-bottom:2px">${q.sectionTitle?`<span style="display:block;font-size:11px;text-transform:uppercase;color:var(--muted);letter-spacing:.4px">${esc(q.sectionTitle)}</span>`:''}${qi+1}. ${esc(stripMarksText(q.question))}</div>
-          ${rows}
-        </div>`;
-      }).join('');
+      const wrap=$(wrapId),questions=d.questions||[];
+      if(!questions.length)return'<p class="hint">No questions are available.</p>';
+      let qi=Math.max(0,questions.findIndex(q=>q.id===wrap?.dataset.questionId));
+      if(qi<0)qi=0;
+      const q=questions[qi];
+      if(wrap)wrap.dataset.questionId=q.id;
+      const label=(item,index)=>`${index+1}. ${stripMarksText(item.question).slice(0,90)} — ${item.marks} mark${Number(item.marks)===1?'':'s'}`;
+      const options=questions.map((item,index)=>`<option value="${esc(item.id)}" ${item.id===q.id?'selected':''}>${esc(label(item,index))}</option>`).join('');
+      const rows=d.submissions.map(s=>gradeRowHTML(q, s, assignId, wrapId, s.name)).join('');
+      return `<div class="assessment-question-navigator" style="position:sticky;top:8px;z-index:4;margin:12px 0;padding:11px 12px;border:1px solid #b8d5c7;border-radius:10px;background:#f5fcf8;box-shadow:0 4px 12px rgba(22,67,50,.08)">
+        <label style="display:block;font-size:11.5px;font-weight:700;color:#145c3c;margin-bottom:5px" for="question-select-${wrapId}">Question to mark</label>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <select id="question-select-${wrapId}" class="assessment-question-select" data-assign-id="${assignId}" data-wrap-id="${wrapId}" style="flex:1;min-width:230px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#fff">${options}</select>
+          <button type="button" class="btn ghost assessment-question-nav" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-index="${qi-1}" ${qi===0?'disabled':''} style="width:auto;padding:7px 10px">Previous</button>
+          <button type="button" class="btn ghost assessment-question-nav" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-index="${qi+1}" ${qi===questions.length-1?'disabled':''} style="width:auto;padding:7px 10px">Next</button>
+          <span style="font-size:12px;color:var(--muted);font-weight:600">${qi+1} of ${questions.length}</span>
+        </div>
+      </div>
+      <div style="margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:10px">
+        <div style="font-weight:700;font-size:14px;margin-bottom:2px">${q.sectionTitle?`<span style="display:block;font-size:11px;text-transform:uppercase;color:var(--muted);letter-spacing:.4px">${esc(q.sectionTitle)}</span>`:''}${qi+1}. ${esc(stripMarksText(q.question))}</div>
+        ${rows}
+      </div>`;
     }
 
     function renderAssignmentResults(assignId, wrapId, view){
