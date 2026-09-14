@@ -229,14 +229,15 @@ test('an open My assignments panel updates learner readiness without being reope
     await expect(results).toContainText('Amina Learner');
     await expect(results.getByRole('button', { name: /grades? pending/ })).toBeDisabled();
 
-    const graded = await page.request.patch(`/api/assignment/${assessment.assessmentId}/grade`, {
-      data: { studentId: learnerId, questionId: 'criterion', marksAwarded: 4 },
-    });
-    expect(graded.ok(), await graded.text()).toBeTruthy();
-    const secondGrade = await page.request.patch(`/api/assignment/${assessment.assessmentId}/grade`, {
-      data: { studentId: learnerId, questionId: 'criterion-check', marksAwarded: 4 },
-    });
-    expect(secondGrade.ok(), await secondGrade.text()).toBeTruthy();
+    await results.locator('.bulk-grade-student').check();
+    await results.getByLabel('Mark for selected learners').fill('4');
+    await results.getByRole('button', { name: 'Apply mark to 1 learner' }).click();
+    await expect(page.locator('#toastWrap')).toContainText('Mark applied to 1 learner');
+    await results.getByLabel('Question to mark').selectOption('criterion-check');
+    await results.locator('.bulk-grade-student').check();
+    await results.getByLabel('Mark for selected learners').fill('4');
+    await results.getByRole('button', { name: 'Apply mark to 1 learner' }).click();
+    await expect(page.locator('#toastWrap')).toContainText('Mark applied to 1 learner');
     await expect(results.getByRole('button', { name: 'Release results' })).toBeEnabled();
     const released = await page.request.patch(`/api/assignment/${assessment.assessmentId}/release`, { data: { released: true } });
     expect(released.ok(), await released.text()).toBeTruthy();
@@ -250,4 +251,48 @@ test('an open My assignments panel updates learner readiness without being reope
   const requestsAfterClose = resultsRequests;
   await page.waitForTimeout(1600);
   expect(resultsRequests).toBe(requestsAfterClose);
+});
+
+test('one bulk question mark updates every selected learner and rejects a mixed invalid selection', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100', 'One desktop browser covers the bulk marking API.');
+  await signInDisposableTeacher(page, '-assessment-bulk-marking');
+  const rosterResponse = await page.request.post('/api/roster', {
+    data: {
+      name: 'Grade 2 bulk marking',
+      rows: [{ ID: 'BULK-1', Name: 'Amina Learner' }, { ID: 'BULK-2', Name: 'Bao Learner' }],
+      idCol: 'ID', nameCol: 'Name',
+    },
+  });
+  const classRoster = await rosterResponse.json();
+  expect(rosterResponse.ok(), JSON.stringify(classRoster)).toBeTruthy();
+  const createdResponse = await page.request.post('/api/assessment', {
+    data: {
+      rosterId: classRoster.id,
+      assessment: {
+        title: 'Bulk practical', subject: 'ICT', grade: 'Grade 2', assessmentType: 'project', deliveryMode: 'live', totalMarks: 5,
+        objectives: [{ id: 'document', text: 'Create a document' }],
+        instructions: 'Complete the task.',
+        sections: [{
+          id: 'practical', title: 'Practical', type: 'practical', objectiveIds: ['document'], instructions: 'Create the document.',
+          items: [{ id: 'criterion', prompt: 'Creates the document', marks: 5 }],
+        }],
+      },
+    },
+  });
+  const assessment = await createdResponse.json();
+  expect(createdResponse.ok(), JSON.stringify(assessment)).toBeTruthy();
+
+  const applied = await page.request.patch(`/api/assignment/${assessment.assessmentId}/grade/bulk`, {
+    data: { questionId: 'criterion', studentIds: ['BULK-1', 'BULK-2'], marksAwarded: 4 },
+  });
+  expect(applied.ok(), await applied.text()).toBeTruthy();
+  expect((await applied.json()).updated).toBe(2);
+
+  const rejected = await page.request.patch(`/api/assignment/${assessment.assessmentId}/grade/bulk`, {
+    data: { questionId: 'criterion', studentIds: ['BULK-1', 'NOT-IN-CLASS'], marksAwarded: 1 },
+  });
+  expect(rejected.status()).toBe(404);
+  const results = await (await page.request.get(`/api/assignment/${assessment.assessmentId}/results`)).json();
+  expect(results.submissions).toHaveLength(2);
+  expect(results.submissions.map(student => student.grades.criterion.marksAwarded)).toEqual([4, 4]);
 });

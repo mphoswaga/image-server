@@ -3357,6 +3357,62 @@ app.patch('/api/assignment/:id/grade', requireAuth, (req, res) => {
   res.json({ ok: true, submission: sub });
 });
 
+// Teacher: award one question mark to a selected set of learners. Validate the
+// entire selection before writing anything so a bad learner ID cannot leave a
+// partially applied classroom mark.
+app.patch('/api/assignment/:id/grade/bulk', requireAuth, (req, res) => {
+  const a = assignments.getAssignment(req.params.id);
+  if (!a) return res.status(404).json({ error: 'Assignment not found.' });
+  if (a.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assignment.' });
+  if (assignments.assessmentIsFinalised(a)) return res.status(409).json({ code: 'assessment_finalised', error: 'Unrelease the results before changing assessment marks.' });
+  const { questionId, marksAwarded, rationale } = req.body || {};
+  const q = a.content.questions.find(question => question.id === questionId);
+  if (!q) return res.status(404).json({ error: 'Question not found.' });
+  const rawIds = Array.isArray(req.body && req.body.studentIds) ? req.body.studentIds : [];
+  const studentIds = [...new Set(rawIds.map(roster.normalizeStudentId).filter(Boolean))].slice(0, 500);
+  if (!studentIds.length) return res.status(400).json({ error: 'Select at least one learner.' });
+  const numericMarks = Number(marksAwarded);
+  if (!Number.isFinite(numericMarks) || numericMarks < 0 || numericMarks > Number(q.marks)) {
+    return res.status(400).json({ error: `Enter a mark from 0 to ${q.marks}.` });
+  }
+  const marks = Math.round(numericMarks * 100) / 100;
+  const cohort = a.rosterId ? assignmentCohortStudents(a) : [];
+  const cohortMap = new Map(cohort.map(student => [roster.normalizeStudentId(student.id), student]));
+  const targets = studentIds.map(studentId => ({
+    studentId,
+    submission: assignments.getSubmission(a.id, studentId),
+    rosterStudent: cohortMap.get(studentId),
+    draft: assignments.getDraft(a.id, studentId),
+  }));
+  const invalid = targets.find(target => !target.submission && (
+    a.type !== 'assessment' || q.kind !== 'practical' || (a.rosterId && !target.rosterStudent)
+  ));
+  if (invalid) return res.status(404).json({ error: `No markable response was found for ${invalid.studentId}.` });
+
+  const verdict = marks === Number(q.marks) ? 'correct' : marks === 0 ? 'incorrect' : 'partial';
+  for (const target of targets) {
+    const grade = { marksAwarded: marks, verdict, rationale: String(rationale || '').trim(), source: 'teacher' };
+    if (!target.submission) {
+      assignments.saveDraftGrade(a.id, {
+        studentId: target.studentId,
+        name: target.rosterStudent && target.rosterStudent.name || target.draft && target.draft.name || target.studentId,
+        questionId,
+        grade,
+      });
+      continue;
+    }
+    const previous = target.submission.grades[questionId] || {};
+    grade.rationale = grade.rationale || previous.rationale || '';
+    if (q.kind !== 'practical') assignments.recordVerdict(a.id, questionId, {
+      answerText: target.submission.answers[questionId], ...grade, confirmed: true,
+    });
+    target.submission.grades[questionId] = grade;
+    target.submission.totalMarks = Object.values(target.submission.grades).reduce((sum, item) => sum + Number(item.marksAwarded || 0), 0);
+    assignments.saveSubmission(a.id, target.submission);
+  }
+  res.json({ ok: true, updated: targets.length, questionId, marksAwarded: marks });
+});
+
 // Everything a generated (or uploaded) deck already knows about the lesson,
 // laid out for the plan generator. A deck carries the whole lesson — titles,
 // the points taught, worked examples, vocabulary with definitions and the

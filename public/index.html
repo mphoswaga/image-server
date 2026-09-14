@@ -5843,6 +5843,27 @@
     // both the fresh-publish panel (#packSection) and the persistent
     // "My assignments" tab, since both render the same results markup.
     async function handleAssignmentPanelClick(e){
+      const bulkApply=e.target.closest('.bulk-grade-apply');
+      if(bulkApply){
+        const {assignId,wrapId,questionId}=bulkApply.dataset,wrap=$(wrapId);
+        const selected=[...(assessmentBulkSelections.get(`${assignId}\u001f${questionId}`)||new Set())];
+        const input=wrap?.querySelector('.bulk-grade-mark'),marksAwarded=Number(input?.value);
+        const question=assignResultsCache.get(assignId)?.questions?.find(item=>item.id===questionId);
+        if(!selected.length){toast('Select at least one learner.');return;}
+        if(!input?.value||!Number.isFinite(marksAwarded)||marksAwarded<0||marksAwarded>Number(question?.marks)){
+          toast(`Enter a mark from 0 to ${question?.marks||0}.`);input?.focus();return;
+        }
+        bulkApply.disabled=true;bulkApply.textContent='Applying…';
+        try{
+          const r=await fetch(`/api/assignment/${assignId}/grade/bulk`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({questionId,studentIds:selected,marksAwarded})});
+          const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not apply the mark.');
+          assessmentBulkSelections.delete(`${assignId}\u001f${questionId}`);
+          assessmentBulkMarks.delete(`${assignId}\u001f${questionId}`);
+          toast(`Mark applied to ${d.updated} learner${d.updated===1?'':'s'}.`,'ok');
+          loadAssignmentResults(assignId,wrapId||'assignSubmissions');
+        }catch(err){toast(err.message);bulkApply.disabled=false;bulkApply.textContent=`Apply mark to ${selected.length} learner${selected.length===1?'':'s'}`;}
+        return;
+      }
       const questionNav=e.target.closest('.assessment-question-nav');
       if(questionNav){
         const {assignId,wrapId}=questionNav.dataset;
@@ -5884,6 +5905,30 @@
     }
 
     document.addEventListener('change',e=>{
+      const studentPicker=e.target.closest('.bulk-grade-student');
+      if(studentPicker){
+        const {assignId,wrapId,questionId,studentId}=studentPicker.dataset;
+        const key=`${assignId}\u001f${questionId}`,selected=assessmentBulkSelections.get(key)||new Set();
+        if(studentPicker.checked)selected.add(String(studentId));else selected.delete(String(studentId));
+        assessmentBulkSelections.set(key,selected);
+        const wrap=$(wrapId),apply=wrap?.querySelector('.bulk-grade-apply'),all=wrap?.querySelector('.bulk-grade-all');
+        if(apply){apply.disabled=!selected.size;apply.textContent=`Apply mark to ${selected.size} learner${selected.size===1?'':'s'}`;}
+        if(all){const boxes=[...wrap.querySelectorAll('.bulk-grade-student')];all.checked=!!boxes.length&&boxes.every(input=>input.checked);}
+        return;
+      }
+      const allPicker=e.target.closest('.bulk-grade-all');
+      if(allPicker){
+        const {assignId,wrapId,questionId}=allPicker.dataset,wrap=$(wrapId);
+        const selected=new Set();
+        wrap?.querySelectorAll('.bulk-grade-student').forEach(input=>{
+          input.checked=allPicker.checked;
+          if(allPicker.checked)selected.add(String(input.dataset.studentId));
+        });
+        assessmentBulkSelections.set(`${assignId}\u001f${questionId}`,selected);
+        const apply=wrap?.querySelector('.bulk-grade-apply');
+        if(apply){apply.disabled=!selected.size;apply.textContent=`Apply mark to ${selected.size} learner${selected.size===1?'':'s'}`;}
+        return;
+      }
       const select=e.target.closest('.assessment-question-select');
       if(!select)return;
       const {assignId,wrapId}=select.dataset,wrap=$(wrapId);
@@ -5893,7 +5938,14 @@
       wrap.querySelector('.assessment-question-select')?.focus({preventScroll:true});
     });
 
+    document.addEventListener('input',e=>{
+      const input=e.target.closest('.bulk-grade-mark');
+      if(input)assessmentBulkMarks.set(`${input.dataset.assignId}\u001f${input.dataset.questionId}`,input.value);
+    });
+
     const assignResultsCache=new Map(); // assignId -> last-fetched {questions, submissions, ...}
+    const assessmentBulkSelections=new Map(); // assignment/question -> selected Student IDs
+    const assessmentBulkMarks=new Map(); // assignment/question -> draft mark during live refresh
     const assignmentResultsInFlight=new Map(); // assignId/wrapId -> active fetch promise
     const assignmentResultsPollers=new Map(); // detailId -> one non-overlapping timer
     const ASSIGNMENT_RESULTS_POLL_MS=1200;
@@ -5967,7 +6019,7 @@
     // One grade row's markup — shared by both view modes below (by-student
     // shows all of one student's questions; by-question shows all students'
     // answers to one question). Same fields, different grouping.
-    function gradeRowHTML(q, s, assignId, wrapId, headingText){
+    function gradeRowHTML(q, s, assignId, wrapId, headingText, selectable=false){
       const g=(s.grades||{})[q.id]||{}; const ans=(s.answers||{})[q.id];
       const ansText=q.kind==='practical' ? 'Teacher observation' : q.kind==='mcq' ? (q.options&&q.options[ans]!=null?q.options[ans]:'(no answer)') : (ans||'(no answer)');
       if(s.draftOnly&&q.kind!=='practical') return `<div class="grade-row" style="padding:10px 0;border-top:1px solid var(--border)"><div style="font-size:13px;font-weight:600">${esc(headingText)}</div><div style="font-size:12.5px;color:var(--muted);margin-top:4px">Available after this student submits.</div></div>`;
@@ -5978,8 +6030,10 @@
         ? '<span style="font-size:11.5px;color:#b26a00;font-weight:600">awaiting teacher</span>' : (confirmed
         ? '<span style="font-size:11.5px;color:var(--ok,#1f9d55);font-weight:600">confirmed</span>'
         : '<span style="font-size:11.5px;color:var(--muted)">AI — unconfirmed</span>');
+      const selected=assessmentBulkSelections.get(`${assignId}\u001f${q.id}`)?.has(String(s.studentId))||false;
+      const picker=selectable?`<label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" class="bulk-grade-student" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-id="${esc(q.id)}" data-student-id="${esc(s.studentId)}" ${selected?'checked':''}> <span>${esc(headingText)}</span></label>`:esc(headingText);
       return `<div class="grade-row" style="padding:10px 0;border-top:1px solid var(--border)">
-        <div style="font-size:13px;font-weight:600">${esc(headingText)}</div>
+        <div style="font-size:13px;font-weight:600">${picker}</div>
         <div style="font-size:13.5px;background:#f4f6fb;border-radius:8px;padding:8px 10px;margin:4px 0"><b style="display:block;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;margin-bottom:2px">Answer</b>${esc(String(ansText))}</div>
         ${q.kind!=='mcq'?`<textarea class="grade-rationale-input" rows="2" placeholder="Feedback shown to the student after release" style="margin:0 0 7px;font-size:12.5px;padding:7px 9px">${esc(g.rationale||'')}</textarea>`:''}
         <div style="display:flex;align-items:center;gap:8px">
@@ -6011,7 +6065,10 @@
       if(wrap)wrap.dataset.questionId=q.id;
       const label=(item,index)=>`${index+1}. ${stripMarksText(item.question).slice(0,90)} — ${item.marks} mark${Number(item.marks)===1?'':'s'}`;
       const options=questions.map((item,index)=>`<option value="${esc(item.id)}" ${item.id===q.id?'selected':''}>${esc(label(item,index))}</option>`).join('');
-      const rows=d.submissions.map(s=>gradeRowHTML(q, s, assignId, wrapId, s.name)).join('');
+      const selectionKey=`${assignId}\u001f${q.id}`,selected=assessmentBulkSelections.get(selectionKey)||new Set();
+      const bulkMark=assessmentBulkMarks.get(selectionKey)||'';
+      const markable=d.submissions.filter(s=>!(s.draftOnly&&q.kind!=='practical'));
+      const rows=d.submissions.map(s=>gradeRowHTML(q, s, assignId, wrapId, s.name,true)).join('');
       return `<div class="assessment-question-navigator" style="position:sticky;top:8px;z-index:4;margin:12px 0;padding:11px 12px;border:1px solid #b8d5c7;border-radius:10px;background:#f5fcf8;box-shadow:0 4px 12px rgba(22,67,50,.08)">
         <label style="display:block;font-size:11.5px;font-weight:700;color:#145c3c;margin-bottom:5px" for="question-select-${wrapId}">Question to mark</label>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -6019,6 +6076,13 @@
           <button type="button" class="btn ghost assessment-question-nav" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-index="${qi-1}" ${qi===0?'disabled':''} style="width:auto;padding:7px 10px">Previous</button>
           <button type="button" class="btn ghost assessment-question-nav" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-index="${qi+1}" ${qi===questions.length-1?'disabled':''} style="width:auto;padding:7px 10px">Next</button>
           <span style="font-size:12px;color:var(--muted);font-weight:600">${qi+1} of ${questions.length}</span>
+        </div>
+        <div style="display:flex;align-items:end;gap:9px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid #d4e8de">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding-bottom:8px"><input type="checkbox" class="bulk-grade-all" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-id="${esc(q.id)}" ${markable.length&&selected.size===markable.length?'checked':''}> Select all shown</label>
+          <label style="font-size:11.5px;font-weight:700;color:#145c3c">Mark for selected learners
+            <span style="display:flex;align-items:center;gap:5px;margin-top:4px"><input type="number" class="bulk-grade-mark" data-assign-id="${assignId}" data-question-id="${esc(q.id)}" min="0" max="${q.marks}" step="0.5" value="${esc(bulkMark)}" style="width:72px;padding:7px 8px" aria-label="Mark for selected learners"><span style="font-size:12px;color:var(--muted)">/ ${q.marks}</span></span>
+          </label>
+          <button type="button" class="btn accent bulk-grade-apply" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-id="${esc(q.id)}" ${selected.size?'':'disabled'} style="width:auto;padding:8px 12px">Apply mark to ${selected.size} learner${selected.size===1?'':'s'}</button>
         </div>
       </div>
       <div style="margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:10px">
