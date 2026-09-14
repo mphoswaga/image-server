@@ -233,6 +233,56 @@ function createAssessment({ teacherId, teacherName, data, rosterId, rosterSnapsh
   return rec;
 }
 
+function copyAssessmentToRoster({ id, teacherId, teacherName, rosterId, rosterSnapshot, cutoffAt }) {
+  const source = getAssignment(id);
+  if (!source || source.type !== 'assessment') return null;
+  if (source.teacherId !== teacherId) {
+    const error = new Error('Not your assessment.');
+    error.status = 403;
+    error.code = 'assessment_not_owned';
+    throw error;
+  }
+  const targetRosterId = cleanText(rosterId, 160);
+  const targetSnapshot = normalizeRosterSnapshot(rosterSnapshot);
+  if (!targetRosterId || !targetSnapshot.length) {
+    throw assessmentStateError('Choose a class with at least one learner.', 'assessment_roster_required');
+  }
+  const seriesId = source.assessmentSeriesId || source.id;
+  const alreadyAssigned = listTeacherAssignments(teacherId).some(summary => {
+    if (summary.type !== 'assessment' || summary.rosterId !== targetRosterId) return false;
+    return summary.id === seriesId || summary.assessmentSeriesId === seriesId;
+  });
+  if (alreadyAssigned) {
+    throw assessmentStateError('This assessment has already been given to that class.', 'assessment_class_already_assigned');
+  }
+  const copied = createAssessment({
+    teacherId,
+    teacherName: teacherName || source.teacherName,
+    rosterId: targetRosterId,
+    rosterSnapshot: targetSnapshot,
+    cutoffAt: cutoffAt === undefined ? source.cutoffAt : cutoffAt,
+    data: {
+      title: source.title,
+      subject: source.subject,
+      grade: source.grade,
+      assessmentType: source.assessmentType,
+      deliveryMode: deliveryState(source).mode,
+      totalMarks: source.totalMarks,
+      objectives: source.objectives,
+      instructions: source.content && source.content.instructions,
+      sections: source.sections,
+      lessonWorkspaceId: source.lessonWorkspaceId,
+      unitId: source.unitId,
+      unitName: source.unitName,
+    },
+  });
+  copied.assessmentSeriesId = seriesId;
+  copied.copiedFromAssessmentId = source.id;
+  copied.classRunCreatedAt = new Date().toISOString();
+  writeJsonAtomic(recPath(copied.id), copied);
+  return copied;
+}
+
 function createAssignment({ teacherId, teacherName, type, subject, topic, grade, data, rosterId, cutoffAt }) {
   fs.mkdirSync(DIR, { recursive: true });
   const id = crypto.randomUUID().slice(0, 8); // short + shareable, same convention as games
@@ -773,6 +823,7 @@ function listTeacherAssignments(teacherId) {
       assessmentType: a.assessmentType || null, totalMarks: a.totalMarks || null,
       sectionCount: Array.isArray(a.sections) ? a.sections.length : null,
       version: a.version || null, status: a.status || null, finalisedAt: a.finalisedAt || null,
+      assessmentSeriesId: a.assessmentSeriesId || null, copiedFromAssessmentId: a.copiedFromAssessmentId || null,
       lessonWorkspaceId: a.lessonWorkspaceId || null, unitId: a.unitId || null, unitName: a.unitName || null,
       delivery: a.delivery || null,
       createdAt: a.createdAt, roomCode: a.roomCode, rosterId: a.rosterId, cutoffAt: a.cutoffAt,
@@ -783,7 +834,7 @@ function listTeacherAssignments(teacherId) {
 }
 
 module.exports = {
-  createAssignment, createAssessment, normalizeAssessment, getAssignment, updateAssignmentCutoff, updateAssessmentRoster, getRoomCode,
+  createAssignment, createAssessment, copyAssessmentToRoster, normalizeAssessment, getAssignment, updateAssignmentCutoff, updateAssessmentRoster, getRoomCode,
   publishedAssessmentGenerationContext,
   releaseResults, isReleased,
   assessmentIsFinalised, saveSubmission, saveNewSubmission, getSubmissions, getSubmission,

@@ -190,6 +190,36 @@ test('an unused older assessment can gain or change its class after publication'
   );
 });
 
+test('another class receives an isolated run of the same assessment', () => {
+  const source = assignments.createAssessment({
+    teacherId: 'teacher-class-runs', teacherName: 'Teacher One', data: validAssessment(),
+    rosterId: 'class-a', rosterSnapshot: [{ id: 'A-1', name: 'Learner A' }],
+  });
+  assignments.updateDelivery(source.id, 'start');
+  assignments.saveDraft(source.id, { studentId: 'A-1', name: 'Learner A', answers: { q1: 0 } });
+  const copy = assignments.copyAssessmentToRoster({
+    id: source.id, teacherId: 'teacher-class-runs', teacherName: 'Teacher One',
+    rosterId: 'class-b', rosterSnapshot: [{ id: 'B-1', name: 'Learner B' }],
+  });
+  assert.notEqual(copy.id, source.id);
+  assert.notEqual(copy.roomCode, source.roomCode);
+  assert.equal(copy.assessmentSeriesId, source.id);
+  assert.equal(copy.copiedFromAssessmentId, source.id);
+  assert.equal(copy.rosterId, 'class-b');
+  assert.deepEqual(copy.rosterSnapshot, [{ id: 'B-1', name: 'Learner B' }]);
+  assert.equal(assignments.getDraft(copy.id, 'A-1'), null);
+  assert.deepEqual(assignments.deliveryState(copy), {
+    mode: 'live', phase: 'lobby', activeSectionIndex: -1, previousPhase: null, updatedAt: copy.delivery.updatedAt,
+  });
+  assert.throws(
+    () => assignments.copyAssessmentToRoster({
+      id: copy.id, teacherId: 'teacher-class-runs', rosterId: 'class-b',
+      rosterSnapshot: [{ id: 'B-1', name: 'Learner B' }],
+    }),
+    error => error && error.code === 'assessment_class_already_assigned',
+  );
+});
+
 test('project deck generation receives the canonical published assessment snapshot', () => {
   const record = assignments.createAssessment({
     teacherId: 'teacher-deck-context',

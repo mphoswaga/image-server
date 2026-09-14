@@ -24,6 +24,11 @@ test('teacher builds a marked assessment and a learner sees practical criteria s
   });
   expect(replacementRosterResponse.ok(), await replacementRosterResponse.text()).toBeTruthy();
   const replacementRoster = await replacementRosterResponse.json();
+  const anotherRosterResponse = await page.request.post('/api/roster', {
+    data: { name: 'Grade 2 ICT C', rows: [{ ID: `${learnerId}-C`, Name: 'Hoàng Mỹ Chi' }], idCol: 'ID', nameCol: 'Name' },
+  });
+  expect(anotherRosterResponse.ok(), await anotherRosterResponse.text()).toBeTruthy();
+  const anotherRoster = await anotherRosterResponse.json();
 
   await page.locator('#assignmentsBtn').click();
   await expect(page.getByRole('heading', { name: 'Test or project' })).toBeVisible();
@@ -55,6 +60,26 @@ test('teacher builds a marked assessment and a learner sees practical criteria s
   await assessmentCard.getByRole('button',{name:'Save class'}).click();
   expect((await classUpdate).ok()).toBeTruthy();
   await expect(page.locator('#assignmentsList .game-card').filter({hasText:'Document creation project'})).toContainText('Grade 2 ICT B');
+  const changedAssessmentCard=page.locator('#assignmentsList .game-card').filter({hasText:'Grade 2 ICT B'});
+  await changedAssessmentCard.getByRole('button',{name:'Give to another class'}).click();
+  await changedAssessmentCard.locator('.a-class-copy-picker').selectOption(anotherRoster.id);
+  const classCopyResponse=page.waitForResponse(result=>result.url().endsWith(`/api/assignment/${assessment.assessmentId}/class-copy`)&&result.request().method()==='POST');
+  await changedAssessmentCard.getByRole('button',{name:'Create class run'}).click();
+  const classCopyResult=await classCopyResponse;
+  expect(classCopyResult.ok(),await classCopyResult.text()).toBeTruthy();
+  const classCopy=await classCopyResult.json();
+  expect(classCopy.assessmentId).not.toBe(assessment.assessmentId);
+  expect(classCopy.roomCode).not.toBe(assessment.roomCode);
+  await expect(page.locator(`#assignmentsList .game-card[data-assignment-id="${classCopy.assessmentId}"]`)).toContainText('Grade 2 ICT C');
+  const [originalJoin,copyJoin]=await Promise.all([
+    page.request.get(`/api/assignment/${assessment.assessmentId}/join`).then(result=>result.json()),
+    page.request.get(`/api/assignment/${classCopy.assessmentId}/join`).then(result=>result.json()),
+  ]);
+  expect(originalJoin.students.map(student=>student.label)).toEqual(['Bao L.']);
+  expect(copyJoin.students.map(student=>student.label)).toEqual(['Mỹ Chi']);
+  expect(JSON.stringify(copyJoin)).not.toContain('Hoàng Mỹ Chi');
+  expect(JSON.stringify(originalJoin)).not.toContain('Mỹ Chi');
+  expect(JSON.stringify(copyJoin)).not.toContain('Bao L.');
 
   const presentation = await page.context().newPage();
   await presentation.goto(new URL(`/assessment/${assessment.assessmentId}/present`, page.url()).toString());

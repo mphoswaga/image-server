@@ -2300,6 +2300,38 @@ app.patch('/api/assignment/:id/class', requireAuth, (req, res) => {
   }
 });
 
+// A second class needs its own room and live phase timing. Copying the
+// assessment keeps the content identical while isolating each class's roster,
+// submissions, marks, and result release.
+app.post('/api/assignment/:id/class-copy', requireAuth, (req, res) => {
+  const assessment = assignments.getAssignment(req.params.id);
+  if (!assessment) return res.status(404).json({ error: 'Assessment not found.' });
+  if (assessment.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assessment.' });
+  if (assessment.type !== 'assessment') return res.status(400).json({ error: 'Only tests and projects can be given to another class.' });
+  const rosterId = String(req.body && req.body.rosterId || '').trim();
+  const selectedRoster = rosterId ? roster.getRoster(req.userId, rosterId) : null;
+  if (!selectedRoster) return res.status(404).json({ error: 'Choose a saved class roster.' });
+  if (!Array.isArray(selectedRoster.students) || !selectedRoster.students.length) {
+    return res.status(400).json({ error: 'The selected class has no learners.' });
+  }
+  try {
+    const copy = assignments.copyAssessmentToRoster({
+      id: assessment.id,
+      teacherId: req.userId,
+      teacherName: req.user.name,
+      rosterId: selectedRoster.id,
+      rosterSnapshot: selectedRoster.students,
+      cutoffAt: req.body && Object.prototype.hasOwnProperty.call(req.body, 'cutoffAt') ? req.body.cutoffAt : undefined,
+    });
+    res.json({
+      ok: true, assessmentId: copy.id, path: `/assignment/${copy.id}`, roomCode: copy.roomCode,
+      rosterId: copy.rosterId, rosterName: selectedRoster.name, rosterSize: copy.rosterSnapshot.length,
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({ code: err.code || 'assessment_class_copy_failed', error: err.message });
+  }
+});
+
 app.patch('/api/assignment/:id/live-state', requireAuth, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assessment not found.' });
@@ -2769,8 +2801,10 @@ function pinKeyFor(activityId, studentId, hasRoster) {
 }
 
 // Names shown on a join screen belong to children, and a game link is
-// shareable by definition. First name and last initial is enough for a child
-// to find themselves in their own class and not enough to be a class list.
+// shareable by definition. In Vietnamese school lists the family name is
+// commonly first, while learners recognise the final two name parts. Keep the
+// older first-name + surname-initial form for two-part names and show only the
+// final two parts of longer names (for example Hoàng Mỹ Chi -> Mỹ Chi).
 // A handle standing in for a student ID on a public page.
 //
 // The join screen has to name the children so a child can find themselves,
@@ -2799,16 +2833,21 @@ function studentFromHandle(teacherId, rosterId, activityId, handle) {
   return r.students.find((student) => studentHandle(activityId, student.id) === wanted) || null;
 }
 
+function learnerPickerLabel(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return 'Student';
+  if (parts.length >= 3) return parts.slice(-2).join(' ');
+  if (parts.length === 2) return `${parts[0]} ${parts[1][0].toUpperCase()}.`;
+  return parts[0];
+}
+
 function classListFor(teacherId, rosterId, activityId) {
   const r = roster.getRoster(teacherId, rosterId);
   if (!r || !Array.isArray(r.students)) return [];
-  return r.students.map((student) => {
-    const parts = String(student.name || '').trim().split(/\s+/).filter(Boolean);
-    // Falling back to the ID here would put it on the page after all.
-    const first = parts[0] || 'Student';
-    const initial = parts.length > 1 ? ` ${parts[parts.length - 1][0].toUpperCase()}.` : '';
-    return { handle: studentHandle(activityId, student.id), label: `${first}${initial}` };
-  });
+  return r.students.map(student => ({
+    handle: studentHandle(activityId, student.id),
+    label: learnerPickerLabel(student.name),
+  }));
 }
 
 // Formal assessments keep the exact selected class as a publication snapshot.
@@ -2837,12 +2876,10 @@ function studentFromAssignmentHandle(assignment, handle) {
 }
 
 function classListForAssignment(assignment) {
-  return assignmentCohortStudents(assignment).map(student => {
-    const parts = String(student.name || '').trim().split(/\s+/).filter(Boolean);
-    const first = parts[0] || 'Student';
-    const initial = parts.length > 1 ? ` ${parts[parts.length - 1][0].toUpperCase()}.` : '';
-    return { handle: studentHandle(assignment.id, student.id), label: `${first}${initial}` };
-  });
+  return assignmentCohortStudents(assignment).map(student => ({
+    handle: studentHandle(assignment.id, student.id),
+    label: learnerPickerLabel(student.name),
+  }));
 }
 
 function gameRosterRecords(game) {

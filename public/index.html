@@ -7804,10 +7804,15 @@
           const wrapId='ares-'+a.id;
           const detailId='adet-'+a.id;
           const classRowId='aclass-'+a.id;
+          const copyClassRowId='acopyclass-'+a.id;
           const selectedClass=assessmentClassRosters.find(item=>item.id===a.rosterId);
           const classOptions='<option value="">— Choose a class —</option>'+assessmentClassRosters.map(item=>`<option value="${esc(item.id)}" ${item.id===a.rosterId?'selected':''}>${esc(item.name)} (${item.count} students)</option>`).join('');
+          const seriesId=a.assessmentSeriesId||a.id;
+          const assignedClassIds=new Set(list.filter(item=>item.type==='assessment'&&(item.assessmentSeriesId||item.id)===seriesId).map(item=>item.rosterId).filter(Boolean));
+          const availableCopyClasses=assessmentClassRosters.filter(item=>!assignedClassIds.has(item.id));
+          const copyClassOptions='<option value="">— Choose another class —</option>'+availableCopyClasses.map(item=>`<option value="${esc(item.id)}">${esc(item.name)} (${item.count} students)</option>`).join('');
           const classChip=a.type==='assessment'?`<span class="gc-chip">${selectedClass?esc(selectedClass.name):'No class assigned'}</span>`:'';
-          return `<div class="game-card">
+          return `<div class="game-card" data-assignment-id="${esc(a.id)}">
             <div class="gc-head">
               <div class="gc-top">
                 <div>
@@ -7825,8 +7830,10 @@
                 <button type="button" class="btn ghost a-toggle-btn" data-assign-id="${esc(a.id)}" data-wrap-id="${wrapId}" data-detail-id="${detailId}" data-closed-label="${a.type==='assessment'?'Run classroom / mark':'Review submissions'}" style="font-size:12px;padding:6px 12px;width:auto">${a.type==='assessment'?'Run classroom / mark':'Review submissions'}</button>
                 ${a.type==='assessment'?`<a class="btn ghost" href="/assessment/${esc(a.id)}/present" target="_blank" rel="noopener" style="font-size:12px;padding:6px 12px;width:auto;text-decoration:none">Present</a>`:''}
                 ${a.type==='assessment'?`<button type="button" class="btn ghost a-class-btn" data-row="${classRowId}" ${a.resultsReleased?'disabled title="Hide the released results before changing the class."':''} style="font-size:12px;padding:6px 12px;width:auto">${a.rosterId?'Change class':'Assign class'}</button>`:''}
+                ${a.type==='assessment'&&a.rosterId?`<button type="button" class="btn ghost a-class-copy-btn" data-row="${copyClassRowId}" ${availableCopyClasses.length?'':'disabled title="This assessment has already been given to every saved class."'} style="font-size:12px;padding:6px 12px;width:auto">Give to another class</button>`:''}
               </div>
               ${a.type==='assessment'?`<div class="gc-class-row" id="${classRowId}"><label style="display:grid;gap:5px;min-width:min(360px,100%)"><span style="font-size:12px;font-weight:700;color:var(--muted)">Class for this ${esc(a.assessmentType||'assessment')}</span><select class="a-class-picker">${classOptions}</select></label><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="gc-class-save a-class-save" data-id="${esc(a.id)}" data-row="${classRowId}">Save class</button><button type="button" class="gc-class-cancel a-class-cancel" data-row="${classRowId}">Cancel</button><small style="color:var(--muted)">You can change the class until the first learner starts.</small></div></div>`:''}
+              ${a.type==='assessment'&&a.rosterId?`<div class="gc-class-row" id="${copyClassRowId}"><label style="display:grid;gap:5px;min-width:min(360px,100%)"><span style="font-size:12px;font-weight:700;color:var(--muted)">Give the same ${esc(a.assessmentType||'assessment')} to another class</span><select class="a-class-copy-picker">${copyClassOptions}</select></label><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="gc-class-save a-class-copy-save" data-id="${esc(a.id)}" data-row="${copyClassRowId}">Create class run</button><button type="button" class="gc-class-cancel a-class-copy-cancel" data-row="${copyClassRowId}">Cancel</button><small style="color:var(--muted)">The new class gets its own room code, submissions, marks and live controls.</small></div></div>`:''}
               <div id="${detailId}" style="display:none;margin-top:10px"><div id="${wrapId}"></div></div>
             </div>
           </div>`;
@@ -7839,10 +7846,16 @@
       if(copyBtn){ copyLink(copyBtn.dataset.url); return; }
       const classBtn=e.target.closest('.a-class-btn');
       if(classBtn){ const row=$(classBtn.dataset.row); row.style.display=row.style.display==='block'?'none':'block'; return; }
+      const copyClassBtn=e.target.closest('.a-class-copy-btn');
+      if(copyClassBtn){ const row=$(copyClassBtn.dataset.row); row.style.display=row.style.display==='block'?'none':'block'; return; }
       const classCancel=e.target.closest('.a-class-cancel');
       if(classCancel){ $(classCancel.dataset.row).style.display='none'; return; }
+      const copyClassCancel=e.target.closest('.a-class-copy-cancel');
+      if(copyClassCancel){ $(copyClassCancel.dataset.row).style.display='none'; return; }
       const classSave=e.target.closest('.a-class-save');
       if(classSave){ saveAssessmentClass(classSave.dataset.id,classSave.dataset.row); return; }
+      const copyClassSave=e.target.closest('.a-class-copy-save');
+      if(copyClassSave){ copyAssessmentToClass(copyClassSave.dataset.id,copyClassSave.dataset.row); return; }
       const toggle=e.target.closest('.a-toggle-btn');
       if(toggle){ const {assignId,wrapId,detailId}=toggle.dataset;
         const detail=$(detailId);
@@ -7863,6 +7876,18 @@
         const response=await fetch('/api/assignment/'+encodeURIComponent(assessmentId)+'/class',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({rosterId})});
         const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not assign this class.');
         toast(`${data.rosterName} assigned. Learners can now select their accounts.`,'ok');
+        await loadMyAssignments();
+      }catch(err){toast(err.message);button.disabled=false;button.textContent=original;}
+    }
+    async function copyAssessmentToClass(assessmentId,rowId){
+      const row=$(rowId),button=row&&row.querySelector('.a-class-copy-save'),rosterId=row&&row.querySelector('.a-class-copy-picker')?.value;
+      if(!row||!button)return;
+      if(!rosterId){toast('Choose another class first.');return;}
+      const original=button.textContent;button.disabled=true;button.textContent='Creating…';
+      try{
+        const response=await fetch('/api/assignment/'+encodeURIComponent(assessmentId)+'/class-copy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rosterId})});
+        const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not create this class run.');
+        toast(`${data.rosterName} now has its own room code: ${data.roomCode}`,'ok');
         await loadMyAssignments();
       }catch(err){toast(err.message);button.disabled=false;button.textContent=original;}
     }
