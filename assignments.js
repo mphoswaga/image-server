@@ -218,7 +218,7 @@ function createAssessment({ teacherId, teacherName, data, rosterId, rosterSnapsh
     unitId: normalized.unitId,
     unitName: normalized.unitName,
     delivery: normalized.deliveryMode === 'live'
-      ? { mode: 'live', phase: 'lobby', activeSectionIndex: -1, previousPhase: null, updatedAt: new Date().toISOString() }
+      ? { mode: 'live', phase: 'lobby', activeSectionIndex: -1, activeQuestionIndex: 0, questionSyncEnabled: false, previousPhase: null, updatedAt: new Date().toISOString() }
       : { mode: 'self-paced', phase: 'open', activeSectionIndex: null, previousPhase: null, updatedAt: new Date().toISOString() },
     roomCode, rosterId: rosterId || null, cutoffAt: cutoffAt || null,
     rosterSnapshot: Array.isArray(rosterSnapshot) ? normalizeRosterSnapshot(rosterSnapshot) : null,
@@ -510,7 +510,7 @@ function updateAssessmentContent(id, data, cutoffAt) {
   rec.unitId = rec.unitId || null;
   rec.unitName = rec.unitName || null;
   rec.delivery = normalized.deliveryMode === 'live'
-    ? { mode: 'live', phase: 'lobby', activeSectionIndex: -1, previousPhase: null, updatedAt: new Date().toISOString() }
+    ? { mode: 'live', phase: 'lobby', activeSectionIndex: -1, activeQuestionIndex: 0, questionSyncEnabled: false, previousPhase: null, updatedAt: new Date().toISOString() }
     : { mode: 'self-paced', phase: 'open', activeSectionIndex: null, previousPhase: null, updatedAt: new Date().toISOString() };
   if (cutoffAt !== undefined) rec.cutoffAt = cutoffAt || null;
   rec.version = Number(rec.version || 1) + 1;
@@ -660,7 +660,56 @@ function learnerSectionProgress(record, draft) {
   };
 }
 
-function updateDelivery(id, action) {
+function sectionQuestions(record, section) {
+  if (!section) return [];
+  return (record && record.content && Array.isArray(record.content.questions) ? record.content.questions : [])
+    .filter(question => question.sectionId === section.id);
+}
+
+function learnerQuestionProgress(record, draft, sectionProgress) {
+  const state = deliveryState(record);
+  const progress = sectionProgress || learnerSectionProgress(record, draft);
+  const section = progress && progress.section;
+  const questions = sectionQuestions(record, section);
+  if (!state.questionSyncEnabled || !questions.length || section.type === 'practical') {
+    return { question: null, index: -1, total: questions.length, catchingUp: false };
+  }
+  const classSectionIndex = Math.max(0, Number(state.activeSectionIndex) || 0);
+  const learnerBehindSection = progress.index < classSectionIndex || state.phase === 'marking';
+  const lastReleasedIndex = learnerBehindSection
+    ? questions.length - 1
+    : Math.min(Math.max(Number(state.activeQuestionIndex) || 0, 0), questions.length - 1);
+  const released = questions.slice(0, lastReleasedIndex + 1);
+  const missing = incompleteAssessmentAnswers(released, draft && draft.answers);
+  const question = missing[0] || questions[lastReleasedIndex] || null;
+  const index = question ? questions.findIndex(item => item.id === question.id) : -1;
+  return {
+    question, index, total: questions.length,
+    catchingUp: learnerBehindSection || (index >= 0 && index < lastReleasedIndex),
+  };
+}
+
+function questionAnswerProgress(record) {
+  const state = deliveryState(record);
+  const section = state.mode === 'live' && state.activeSectionIndex >= 0
+    ? (record.sections || [])[state.activeSectionIndex] || null
+    : null;
+  const questions = sectionQuestions(record, section);
+  const index = Math.min(Math.max(Number(state.activeQuestionIndex) || 0, 0), Math.max(0, questions.length - 1));
+  const question = state.questionSyncEnabled && ['open', 'paused'].includes(state.phase) && section && section.type !== 'practical'
+    ? questions[index] || null
+    : null;
+  const drafts = loadDrafts(record.id);
+  const answeredCount = question
+    ? drafts.filter(draft => incompleteAssessmentAnswers([question], draft.answers).length === 0).length
+    : 0;
+  return {
+    question, questionIndex: question ? index : -1, questionCount: questions.length,
+    answeredCount, participantCount: drafts.length,
+  };
+}
+
+function updateDelivery(id, action, requestedQuestionIndex) {
   const record = getAssignment(id);
   if (!record || record.type !== 'assessment') return null;
   const current = deliveryState(record);
@@ -670,14 +719,33 @@ function updateDelivery(id, action) {
   const next = { ...current, updatedAt: new Date().toISOString() };
   if (action === 'start') {
     if (current.phase !== 'lobby') throw new Error('The assessment has already started.');
-    Object.assign(next, { phase: 'open', activeSectionIndex: 0, startedAt: next.updatedAt, previousPhase: null });
+    Object.assign(next, { phase: 'open', activeSectionIndex: 0, activeQuestionIndex: 0, startedAt: next.updatedAt, previousPhase: null });
   } else if (action === 'next') {
     if (current.phase !== 'open') throw new Error('Resume the assessment before moving sections.');
-    if (current.activeSectionIndex >= last) Object.assign(next, { phase: 'marking', activeSectionIndex: last, endedAt: next.updatedAt, previousPhase: null });
-    else Object.assign(next, { activeSectionIndex: current.activeSectionIndex + 1, previousPhase: null });
+    if (current.activeSectionIndex >= last) Object.assign(next, { phase: 'marking', activeSectionIndex: last, activeQuestionIndex: 0, endedAt: next.updatedAt, previousPhase: null });
+    else Object.assign(next, { activeSectionIndex: current.activeSectionIndex + 1, activeQuestionIndex: 0, previousPhase: null });
   } else if (action === 'previous') {
     if (current.phase !== 'open' || current.activeSectionIndex <= 0) throw new Error('There is no previous open section.');
-    Object.assign(next, { activeSectionIndex: current.activeSectionIndex - 1, previousPhase: null });
+    Object.assign(next, { activeSectionIndex: current.activeSectionIndex - 1, activeQuestionIndex: 0, previousPhase: null });
+  } else if (action === 'enable-question-sync') {
+    if (current.phase !== 'open') throw new Error('Start or resume the assessment before syncing questions.');
+    const section = (record.sections || [])[current.activeSectionIndex];
+    if (!section || section.type === 'practical' || !sectionQuestions(record, section).length) throw new Error('This section has no learner questions to sync.');
+    Object.assign(next, { questionSyncEnabled: true, activeQuestionIndex: 0, previousPhase: null });
+  } else if (action === 'disable-question-sync') {
+    if (!['open', 'paused'].includes(current.phase)) throw new Error('Question sync is not active.');
+    Object.assign(next, { questionSyncEnabled: false, activeQuestionIndex: 0 });
+  } else if (['next-question', 'previous-question', 'set-question'].includes(action)) {
+    if (current.phase !== 'open' || !current.questionSyncEnabled) throw new Error('Turn on teacher-led question sync first.');
+    const section = (record.sections || [])[current.activeSectionIndex];
+    const questions = sectionQuestions(record, section);
+    if (!questions.length || section.type === 'practical') throw new Error('This section has no learner questions to sync.');
+    const currentIndex = Math.min(Math.max(Number(current.activeQuestionIndex) || 0, 0), questions.length - 1);
+    const targetIndex = action === 'next-question' ? currentIndex + 1
+      : action === 'previous-question' ? currentIndex - 1
+        : Number(requestedQuestionIndex);
+    if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= questions.length) throw new Error('Choose a question in the current section.');
+    Object.assign(next, { activeQuestionIndex: targetIndex, previousPhase: null });
   } else if (action === 'pause') {
     if (current.phase !== 'open') throw new Error('Only an open section can be paused.');
     Object.assign(next, { phase: 'paused', previousPhase: 'open', pausedAt: next.updatedAt });
@@ -940,7 +1008,7 @@ module.exports = {
   publishedAssessmentGenerationContext,
   releaseResults, isReleased,
   assessmentIsFinalised, saveSubmission, saveNewSubmission, getSubmissions, getSubmission,
-  assessmentReleaseReadiness, loadDrafts, getDraft, saveDraft, saveDraftGrade, deliveryState, learnerSectionProgress, updateDelivery, draftProgress, presentationSlides,
+  assessmentReleaseReadiness, loadDrafts, getDraft, saveDraft, saveDraftGrade, deliveryState, learnerSectionProgress, learnerQuestionProgress, questionAnswerProgress, updateDelivery, draftProgress, presentationSlides,
   sanitizeLearnerAnswers, incompleteAssessmentAnswers, filterAssignmentEvidenceForRoster,
   findConfirmedVerdict, recordVerdict, normalizeAnswer, normalizeStudentId, renameAssessmentStudent,
   listTeacherAssignments,

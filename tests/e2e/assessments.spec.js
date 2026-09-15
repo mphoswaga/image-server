@@ -358,6 +358,78 @@ test('an unfinished learner catches up after the teacher advances sections', asy
   }
 });
 
+test('teacher presentation synchronizes questions and shows anonymous answer totals', async ({ page, browser }, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100', 'One desktop projector and two learner sessions cover question sync.');
+  await signInDisposableTeacher(page, '-assessment-presentation-sync');
+  const rosterResponse = await page.request.post('/api/roster', { data: {
+    name: 'Grade 2 presentation sync',
+    rows: [{ ID: 'SYNC-ONE', Name: 'Learner One' }, { ID: 'SYNC-TWO', Name: 'Learner Two' }],
+    idCol: 'ID', nameCol: 'Name',
+  } });
+  const classRoster = await rosterResponse.json();
+  expect(rosterResponse.ok(), JSON.stringify(classRoster)).toBeTruthy();
+  expect((await page.request.post(`/api/roster/${classRoster.id}/pins`, { data: { all: true, sharedPin: '4826' } })).ok()).toBeTruthy();
+  const assessmentResponse = await page.request.post('/api/assessment', { data: { rosterId: classRoster.id, assessment: {
+    title: 'Materials read-aloud test', subject: 'Science', grade: 'Grade 2', assessmentType: 'test', deliveryMode: 'live', totalMarks: 2,
+    objectives: [{ id: 'materials', text: 'Identify properties of materials' }], instructions: 'Listen to each question.',
+    sections: [{ id: 'written', title: 'Written questions', type: 'mcq', objectiveIds: ['materials'], items: [
+      { id: 'glass', prompt: 'Which material is transparent?', options: ['Clear glass', 'Wood'], correctIndex: 0, marks: 1 },
+      { id: 'magnet', prompt: 'Which object is attracted to a magnet?', options: ['Iron nail', 'Paper'], correctIndex: 0, marks: 1 },
+    ] }],
+  } } });
+  const assessment = await assessmentResponse.json();
+  expect(assessmentResponse.ok(), JSON.stringify(assessment)).toBeTruthy();
+  const join = await (await page.request.get(`/api/assignment/${assessment.assessmentId}/join`)).json();
+  const firstContext = await browser.newContext();
+  const secondContext = await browser.newContext();
+  const presentation = await page.context().newPage();
+  try {
+    expect((await firstContext.request.post(`/api/assignment/${assessment.assessmentId}/enter`, { data: { handle: join.students[0].handle, pin: '4826' } })).ok()).toBeTruthy();
+    expect((await secondContext.request.post(`/api/assignment/${assessment.assessmentId}/enter`, { data: { handle: join.students[1].handle, pin: '4826' } })).ok()).toBeTruthy();
+    await presentation.goto(new URL(`/assessment/${assessment.assessmentId}/present`, page.url()).toString());
+    expect((await page.request.patch(`/api/assignment/${assessment.assessmentId}/live-state`, { data: { action: 'start' } })).ok()).toBeTruthy();
+    await expect(presentation.locator('#sync')).toBeVisible();
+    await presentation.locator('#sync').click();
+    await expect(presentation.locator('#title')).toHaveText('Which material is transparent?');
+    await expect(presentation.locator('#bullets')).toContainText('A. Clear glass');
+    await expect(presentation.locator('#answerProgress')).toHaveText('0 of 2 students answered');
+    await expect(presentation.locator('body')).not.toContainText('Learner One');
+    await expect(presentation.locator('body')).not.toContainText('1 mark');
+
+    const firstQuestion = await (await firstContext.request.get(`/api/assignment/${assessment.assessmentId}/take`)).json();
+    expect(firstQuestion.questions.map(question => question.id)).toEqual(['glass']);
+    expect((await firstContext.request.post(`/api/assignment/${assessment.assessmentId}/draft`, { data: { answers: { glass: 0 }, complete: false } })).ok()).toBeTruthy();
+    await expect(presentation.locator('#answerProgress')).toHaveText('1 of 2 students answered', { timeout: 6000 });
+
+    await presentation.locator('#next').click();
+    await expect(presentation.locator('#title')).toHaveText('Which object is attracted to a magnet?');
+    const [firstSecond, secondCatchUp] = await Promise.all([
+      firstContext.request.get(`/api/assignment/${assessment.assessmentId}/take`).then(response => response.json()),
+      secondContext.request.get(`/api/assignment/${assessment.assessmentId}/take`).then(response => response.json()),
+    ]);
+    expect(firstSecond.questions.map(question => question.id)).toEqual(['magnet']);
+    expect(secondCatchUp.questions.map(question => question.id)).toEqual(['glass']);
+    expect(secondCatchUp.delivery.catchingUp).toBe(true);
+    expect((await secondContext.request.post(`/api/assignment/${assessment.assessmentId}/draft`, { data: { answers: { glass: 0 }, complete: false } })).ok()).toBeTruthy();
+    const secondNow = await (await secondContext.request.get(`/api/assignment/${assessment.assessmentId}/take`)).json();
+    expect(secondNow.questions.map(question => question.id)).toEqual(['magnet']);
+    expect((await firstContext.request.post(`/api/assignment/${assessment.assessmentId}/draft`, { data: { answers: { magnet: 0 }, complete: false } })).ok()).toBeTruthy();
+    expect((await secondContext.request.post(`/api/assignment/${assessment.assessmentId}/draft`, { data: { answers: { magnet: 0 }, complete: false } })).ok()).toBeTruthy();
+    await expect(presentation.locator('#answerProgress')).toHaveText('2 of 2 students answered', { timeout: 6000 });
+
+    const safePresentation = await (await page.request.get(`/api/assignment/${assessment.assessmentId}/presentation`)).json();
+    expect(safePresentation.currentQuestion).toEqual({ id: 'magnet', question: 'Which object is attracted to a magnet?', options: ['Iron nail', 'Paper'], number: 2, total: 2, sectionTitle: 'Written questions' });
+    expect(JSON.stringify(safePresentation.currentQuestion)).not.toMatch(/correctIndex|marks|answers|student/i);
+    await presentation.locator('#next').click();
+    await expect(presentation.locator('#liveState')).toContainText('Marking');
+    await expect(presentation.locator('#title')).toHaveText('Stop and wait');
+  } finally {
+    await presentation.close();
+    await firstContext.close();
+    await secondContext.close();
+  }
+});
+
 test('multiple-choice answers are visibly auto-confirmed without per-learner save buttons', async ({ page, browser }, testInfo) => {
   test.skip(testInfo.project.name !== 'windows-100', 'One desktop browser covers deterministic MCQ marking.');
   await signInDisposableTeacher(page, '-assessment-mcq-auto-confirm');

@@ -2409,9 +2409,18 @@ app.patch('/api/assignment/:id/live-state', requireAuth, (req, res) => {
   if (a.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assessment.' });
   if (a.status === 'draft') return res.status(409).json({ code: 'assessment_not_published', error: 'Review and publish the duplicated assessment before starting it.' });
   try {
-    const updated = assignments.updateDelivery(a.id, String(req.body && req.body.action || ''));
+    const updated = assignments.updateDelivery(
+      a.id,
+      String(req.body && req.body.action || ''),
+      req.body && req.body.questionIndex,
+    );
     if (!updated) return res.status(400).json({ error: 'This item does not support live classroom controls.' });
-    res.json({ ok: true, delivery: assignments.deliveryState(updated), progress: assignments.draftProgress(updated) });
+    res.json({
+      ok: true,
+      delivery: assignments.deliveryState(updated),
+      progress: assignments.draftProgress(updated),
+      questionProgress: assignments.questionAnswerProgress(updated),
+    });
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
@@ -2420,7 +2429,32 @@ app.get('/api/assignment/:id/presentation', requireAuth, (req, res) => {
   if (!a) return res.status(404).json({ error: 'Assessment not found.' });
   if (a.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assessment.' });
   if (a.type !== 'assessment') return res.status(400).json({ error: 'This item has no assessment presentation.' });
-  res.json({ id: a.id, title: a.title, assessmentType: a.assessmentType, delivery: assignments.deliveryState(a), slides: assignments.presentationSlides(a) });
+  const questionProgress = assignments.questionAnswerProgress(a);
+  const cohortSize = a.rosterId ? assignmentCohortStudents(a).length : null;
+  const question = questionProgress.question;
+  const delivery = assignments.deliveryState(a);
+  const activeSection = delivery.activeSectionIndex >= 0 ? (a.sections || [])[delivery.activeSectionIndex] || null : null;
+  res.json({
+    id: a.id,
+    title: a.title,
+    assessmentType: a.assessmentType,
+    delivery,
+    slides: assignments.presentationSlides(a),
+    questionSyncAvailable: !!(activeSection && activeSection.type !== 'practical' && questionProgress.questionCount),
+    currentQuestion: question ? {
+      id: question.id,
+      question: question.question,
+      options: question.kind === 'mcq' ? question.options || [] : null,
+      number: questionProgress.questionIndex + 1,
+      total: questionProgress.questionCount,
+      sectionTitle: question.sectionTitle || '',
+    } : null,
+    responseProgress: {
+      answered: questionProgress.answeredCount,
+      joined: questionProgress.participantCount,
+      assigned: cohortSize,
+    },
+  });
 });
 
 // Public: resolve a Room Code to EITHER a game or an assignment (shared join flow).
@@ -3175,16 +3209,19 @@ app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
   let activeSection = null;
   const draft = session ? assignments.getDraft(a.id, session.studentId) : null;
   let sectionCompleted = false;
+  let learnerProgress = null;
+  let activeQuestion = null;
+  let questionSyncActive = false;
   if (a.type === 'assessment' && classDelivery.mode === 'live') {
     if (session && ['open', 'marking'].includes(classDelivery.phase)) {
-      const progress = assignments.learnerSectionProgress(a, draft);
-      activeSection = progress.section;
-      sectionCompleted = progress.completed;
-      if (activeSection && (progress.index !== classDelivery.activeSectionIndex || classDelivery.phase === 'marking')) {
+      learnerProgress = assignments.learnerSectionProgress(a, draft);
+      activeSection = learnerProgress.section;
+      sectionCompleted = learnerProgress.completed;
+      if (activeSection && (learnerProgress.index !== classDelivery.activeSectionIndex || classDelivery.phase === 'marking')) {
         delivery = {
           ...classDelivery,
           phase: 'open',
-          activeSectionIndex: progress.index,
+          activeSectionIndex: learnerProgress.index,
           catchingUp: true,
           classPhase: classDelivery.phase,
           classActiveSectionIndex: classDelivery.activeSectionIndex,
@@ -3196,6 +3233,27 @@ app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
     }
     if (delivery.phase === 'open' && activeSection) visibleQuestions = a.content.questions.filter(q => q.sectionId === activeSection.id);
     else if (!['marking', 'closed'].includes(delivery.phase)) visibleQuestions = [];
+    if (session && activeSection && delivery.phase === 'open' && classDelivery.questionSyncEnabled && activeSection.type !== 'practical') {
+      const questionProgress = assignments.learnerQuestionProgress(a, draft, learnerProgress);
+      if (questionProgress.question) {
+        visibleQuestions = [questionProgress.question];
+        questionSyncActive = true;
+        activeQuestion = {
+          id: questionProgress.question.id,
+          number: questionProgress.index + 1,
+          total: questionProgress.total,
+        };
+        if (questionProgress.catchingUp && !delivery.catchingUp) {
+          delivery = {
+            ...delivery,
+            catchingUp: true,
+            classPhase: classDelivery.phase,
+            classActiveSectionIndex: classDelivery.activeSectionIndex,
+            classActiveQuestionIndex: classDelivery.activeQuestionIndex,
+          };
+        }
+      }
+    }
   }
   const visibleIds = new Set(visibleQuestions.map(q => q.id));
   const draftAnswers = Object.fromEntries(Object.entries(draft && draft.answers || {}).filter(([id]) => visibleIds.has(id)));
@@ -3203,7 +3261,7 @@ app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
     title: a.title, instructions: a.content.instructions,
     questions: visibleQuestions.map(q => ({ id: q.id, question: q.question, kind: q.kind, options: q.options || null, marks: q.marks, sectionId: q.sectionId || null, sectionTitle: q.sectionTitle || null, sectionInstructions: q.sectionInstructions || '', sectionType: q.sectionType || null })),
     delivery, activeSection: activeSection ? { id: activeSection.id, title: activeSection.title, index: delivery.activeSectionIndex, total: a.sections.length } : null,
-    draftAnswers, sectionCompleted,
+    draftAnswers, sectionCompleted, activeQuestion, questionSyncActive,
     alreadySubmitted: !!already,
   });
 });
@@ -3229,12 +3287,20 @@ app.post('/api/assignment/:id/draft', requireAssignmentAccess, (req, res) => {
   if (a.type === 'assessment' && delivery.mode === 'live' && !activeSection) {
     return res.status(409).json({ code: 'assessment_sections_complete', error: 'All released sections are complete. Submit your assessment.' });
   }
-  const allowedQuestions = (a.content.questions || []).filter(q => !activeSection || q.sectionId === activeSection.id);
+  const sectionQuestions = (a.content.questions || []).filter(q => !activeSection || q.sectionId === activeSection.id);
+  const questionProgress = delivery.mode === 'live' && delivery.questionSyncEnabled
+    ? assignments.learnerQuestionProgress(a, existing, learnerProgress)
+    : null;
+  const allowedQuestions = questionProgress && questionProgress.question
+    ? [questionProgress.question]
+    : sectionQuestions;
   const safeAnswers = assignments.sanitizeLearnerAnswers(allowedQuestions, req.body && req.body.answers);
-  const complete = !!(req.body && req.body.complete);
-  if (a.type === 'assessment' && complete) {
-    const combined = { ...(existing && existing.answers || {}), ...safeAnswers };
-    const missing = assignments.incompleteAssessmentAnswers(allowedQuestions, combined);
+  const combined = { ...(existing && existing.answers || {}), ...safeAnswers };
+  const missing = assignments.incompleteAssessmentAnswers(sectionQuestions, combined);
+  const requestedComplete = !!(req.body && req.body.complete);
+  const automaticallyComplete = !!(questionProgress && questionProgress.question && missing.length === 0);
+  const complete = requestedComplete || automaticallyComplete;
+  if (a.type === 'assessment' && requestedComplete) {
     if (missing.length) {
       return res.status(400).json({ code: 'assessment_section_incomplete', error: `Answer every question in this section before continuing (${missing.length} remaining).`, missingQuestionIds: missing.map(question => question.id) });
     }

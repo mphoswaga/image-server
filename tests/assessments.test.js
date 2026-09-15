@@ -245,7 +245,7 @@ test('another class receives an isolated run of the same assessment', () => {
   assert.deepEqual(copy.rosterSnapshot, [{ id: 'B-1', name: 'Learner B' }]);
   assert.equal(assignments.getDraft(copy.id, 'A-1'), null);
   assert.deepEqual(assignments.deliveryState(copy), {
-    mode: 'live', phase: 'lobby', activeSectionIndex: -1, previousPhase: null, updatedAt: copy.delivery.updatedAt,
+    mode: 'live', phase: 'lobby', activeSectionIndex: -1, activeQuestionIndex: 0, questionSyncEnabled: false, previousPhase: null, updatedAt: copy.delivery.updatedAt,
   });
   const revised = validAssessment({
     title: 'Forces assessment for class B',
@@ -589,6 +589,36 @@ test('a live assessment moves through teacher-controlled classroom phases', () =
   assert.equal(assignments.updateDelivery(record.id, 'previous').delivery.activeSectionIndex, 0);
   assignments.updateDelivery(record.id, 'next');
   assert.equal(assignments.updateDelivery(record.id, 'next').delivery.phase, 'marking');
+});
+
+test('teacher-led question sync releases one question and reports anonymous answer counts', () => {
+  const record = assignments.createAssessment({ teacherId: 'teacher-question-sync', data: validAssessment({
+    totalMarks: 2,
+    sections: [{
+      id: 'knowledge', title: 'Knowledge check', type: 'mcq', objectiveIds: ['knowledge'],
+      items: [
+        { id: 'q-one', prompt: 'Which object is magnetic?', options: ['Iron nail', 'Paper'], correctIndex: 0, marks: 1 },
+        { id: 'q-two', prompt: 'Which material is transparent?', options: ['Clear glass', 'Wood'], correctIndex: 0, marks: 1 },
+      ],
+    }],
+  }) });
+  assignments.updateDelivery(record.id, 'start');
+  assignments.updateDelivery(record.id, 'enable-question-sync');
+  let current = assignments.getAssignment(record.id);
+  assert.equal(current.delivery.questionSyncEnabled, true);
+  assert.equal(assignments.questionAnswerProgress(current).question.id, 'q-one');
+
+  const firstDraft = assignments.saveDraft(record.id, { studentId: 'learner-one', answers: { 'q-one': 0 } });
+  assert.equal(assignments.questionAnswerProgress(current).answeredCount, 1);
+  assignments.updateDelivery(record.id, 'next-question');
+  current = assignments.getAssignment(record.id);
+  const behind = assignments.learnerQuestionProgress(current, null, assignments.learnerSectionProgress(current, null));
+  const caughtUp = assignments.learnerQuestionProgress(current, firstDraft, assignments.learnerSectionProgress(current, firstDraft));
+  assert.equal(behind.question.id, 'q-one');
+  assert.equal(behind.catchingUp, true);
+  assert.equal(caughtUp.question.id, 'q-two');
+  assert.equal(assignments.questionAnswerProgress(current).answeredCount, 0);
+  assert.throws(() => assignments.updateDelivery(record.id, 'set-question', 4), /current section/);
 });
 
 test('server drafts merge answers and record readiness for the active section', () => {
