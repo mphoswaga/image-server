@@ -34,8 +34,12 @@ test('teachers can manage bulk, individual and Google learner access', () => {
   assert.match(dashboard, /Student access/);
   assert.match(dashboard, /Create \$\{missing\} missing PIN/);
   assert.match(dashboard, /Replace all PINs/);
+  assert.match(dashboard, /One PIN for the whole class/);
+  assert.match(dashboard, /Set for every learner/);
+  assert.match(dashboard, /sharedPin:pin/);
   assert.match(dashboard, /pin-custom-input/);
   assert.match(server, /app\.post\('\/api\/roster\/:rosterId\/pins'/);
   assert.match(server, /requestedPin/);
+  assert.match(server, /Class PIN must be exactly 4 digits/);
   assert.match(server, /app\.delete\('\/api\/roster\/:rosterId\/student\/:studentId\/google'/);
 });

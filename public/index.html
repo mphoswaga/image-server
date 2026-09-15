@@ -8468,6 +8468,10 @@
           +`<button type="button" class="pin-issue-btn" data-roster-id="${esc(rosterId)}" data-all="true" style="font-size:12px;font-weight:600;padding:6px 12px;border:1px solid #d39a41;border-radius:8px;background:#fff8ea;color:#8b5808;cursor:pointer">Replace all PINs</button>`
           +`<button type="button" class="pin-print-btn" data-roster-id="${esc(rosterId)}" style="font-size:12px;font-weight:600;padding:6px 12px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer">Print the list</button>`
           +`<span class="hint" style="margin:0">PIN login stays available even when Google is connected.</span>`
+          +`</div>`
+          +`<div class="pin-class-controls" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 12px;margin-bottom:10px;border:1px solid #f0c674;border-radius:10px;background:#fff8ea">`
+          +`<label style="display:flex;gap:7px;align-items:center;flex-wrap:wrap"><span style="font-size:12px;font-weight:700;color:#714707">One PIN for the whole class</span><input class="pin-class-input" type="text" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" placeholder="4 digits" aria-label="One PIN for the whole class" style="width:82px;padding:6px 8px;border:1px solid #d39a41;border-radius:7px;font:700 13px ui-monospace,monospace"><button type="button" class="pin-class-set-btn" data-roster-id="${esc(rosterId)}" style="font-size:12px;font-weight:700;padding:6px 12px;border:0;border-radius:8px;background:#8b5808;color:#fff;cursor:pointer">Set for every learner</button></label>`
+          +`<span style="font-size:11.5px;color:#714707;line-height:1.4">This replaces every learner’s current LessonScope PIN everywhere. Because everyone will know the same PIN, a learner could enter another classmate’s account if they choose the wrong name.</span>`
           +`</div>`;
         panel.innerHTML=header+(pending?`<p class="hint" style="color:#b26a00;font-weight:600;margin-bottom:8px">${pending} student${pending!==1?'s':''} requested a PIN reset</p>`:'')
           +d.students.map(s=>{
@@ -8550,6 +8554,22 @@
           const panel=issueBtn.closest('[data-pin-panel]')||issueBtn.parentElement.parentElement;
           loadRosterPins(rosterId,panel);
         }catch(err){ toast(err.message); issueBtn.disabled=false; issueBtn.textContent=o; }
+        return;
+      }
+      const classPinBtn=e.target.closest('.pin-class-set-btn');
+      if(classPinBtn){
+        const rosterId=classPinBtn.dataset.rosterId;
+        const input=classPinBtn.closest('.pin-class-controls').querySelector('.pin-class-input');
+        const pin=input.value.trim();
+        if(!/^\d{4}$/.test(pin)){toast('Enter exactly four digits for the class PIN.');input.focus();return;}
+        if(!confirm('Set the same PIN for every learner in this class? All current PINs will stop working, and learners who know this PIN could enter a classmate’s account.'))return;
+        classPinBtn.disabled=true;const original=classPinBtn.textContent;classPinBtn.textContent='Setting…';
+        try{
+          const response=await fetch('/api/roster/'+encodeURIComponent(rosterId)+'/pins',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({all:true,sharedPin:pin})});
+          const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not set the class PIN.');
+          toast(`One PIN set for ${data.students.length} learner${data.students.length===1?'':'s'}.`,'ok');
+          loadRosterPins(rosterId,classPinBtn.closest('[data-pin-panel]'));
+        }catch(err){toast(err.message);classPinBtn.disabled=false;classPinBtn.textContent=original;}
         return;
       }
       const printBtn=e.target.closest('.pin-print-btn');

@@ -37,6 +37,18 @@ test('teacher builds a marked assessment and a learner sees practical criteria s
   });
   expect(correctedNameResponse.ok(), await correctedNameResponse.text()).toBeTruthy();
   expect((await correctedNameResponse.json()).name).toBe('Hoàng Mỹ Chi');
+  const invalidClassPin=await page.request.post(`/api/roster/${anotherRoster.id}/pins`,{data:{all:true,sharedPin:'12'}});
+  expect(invalidClassPin.status()).toBe(400);
+
+  await page.locator('#rostersBtn').click();
+  const sharedPinRoster=page.locator('#rosterList .roster-row').filter({hasText:'Grade 2 ICT C'});
+  await sharedPinRoster.getByRole('button',{name:'Student access'}).click();
+  await sharedPinRoster.getByLabel('One PIN for the whole class').fill('4826');
+  page.once('dialog',dialog=>dialog.accept());
+  await sharedPinRoster.getByRole('button',{name:'Set for every learner'}).click();
+  await expect(page.locator('#toastWrap')).toContainText('One PIN set for 2 learners');
+  const classPinResult=await (await page.request.get(`/api/roster/${anotherRoster.id}`)).json();
+  expect(classPinResult.students.map(student=>student.pin)).toEqual(['4826','4826']);
 
   await page.locator('#assignmentsBtn').click();
   await expect(page.getByRole('heading', { name: 'Test or project' })).toBeVisible();
@@ -101,6 +113,13 @@ test('teacher builds a marked assessment and a learner sees practical criteria s
   expect(JSON.stringify(copyJoin)).not.toContain('Nguyễn Mỹ Chi');
   expect(JSON.stringify(originalJoin)).not.toContain('Mỹ Chi');
   expect(JSON.stringify(copyJoin)).not.toContain('Bao L.');
+  const sharedPinContext=await browser.newContext();
+  try{
+    const sharedPinEntry=await sharedPinContext.request.post(`/api/assignment/${classCopy.assessmentId}/enter`,{data:{handle:copyJoin.students[0].handle,pin:'4826'}});
+    expect(sharedPinEntry.ok(),await sharedPinEntry.text()).toBeTruthy();
+  }finally{
+    await sharedPinContext.close();
+  }
 
   const presentation = await page.context().newPage();
   await presentation.goto(new URL(`/assessment/${assessment.assessmentId}/present`, page.url()).toString());

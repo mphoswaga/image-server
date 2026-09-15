@@ -4848,6 +4848,13 @@ app.post('/api/roster/:rosterId/pins', requireAuth, (req, res) => {
   const r = roster.getRoster(req.userId, req.params.rosterId);
   if (!r) return res.status(404).json({ error: 'Roster not found.' });
   const all = !!(req.body && req.body.all);
+  const sharedPin = req.body && req.body.sharedPin != null ? String(req.body.sharedPin).trim() : null;
+  if (sharedPin !== null && !/^\d{4}$/.test(sharedPin)) {
+    return res.status(400).json({ error: 'Class PIN must be exactly 4 digits.' });
+  }
+  if (sharedPin !== null && !all) {
+    return res.status(400).json({ error: 'A shared class PIN must replace every learner PIN in the class.' });
+  }
   const issued = [];
   for (const student of r.students || []) {
     // The normal bulk action fills genuinely missing PINs and never surprises
@@ -4859,10 +4866,10 @@ app.post('/api/roster/:rosterId/pins', requireAuth, (req, res) => {
       issued.push({ id: student.id, name: student.name, pin: readable, changed: false });
       continue;
     }
-    issued.push({ id: student.id, name: student.name, pin: studentAccount.issuePin(student.id), changed: true });
+    issued.push({ id: student.id, name: student.name, pin: studentAccount.issuePin(student.id, sharedPin || undefined), changed: true });
   }
-  audit.log('roster.pins_issued', { userId: req.userId, rosterId: r.id, count: issued.filter(i => i.changed).length, all, ip: req.ip });
-  res.json({ students: issued });
+  audit.log('roster.pins_issued', { userId: req.userId, rosterId: r.id, count: issued.filter(i => i.changed).length, all, shared: sharedPin !== null, ip: req.ip });
+  res.json({ students: issued, shared: sharedPin !== null });
 });
 
 // Teacher: give one student a new PIN and show it. This IS the reset — a
