@@ -283,6 +283,21 @@ test('another class receives an isolated run of the same assessment', () => {
   );
 });
 
+test('an older assessment without a class can still be duplicated to a class', () => {
+  const source = assignments.createAssessment({
+    teacherId: 'teacher-old-test', teacherName: 'Teacher One', data: validAssessment(),
+  });
+  assert.equal(source.rosterId, null);
+  const copy = assignments.copyAssessmentToRoster({
+    id: source.id, teacherId: 'teacher-old-test', teacherName: 'Teacher One',
+    rosterId: 'new-class', rosterSnapshot: [{ id: 'N-1', name: 'New Learner' }],
+  });
+  assert.equal(copy.status, 'draft');
+  assert.equal(copy.rosterId, 'new-class');
+  assert.deepEqual(copy.rosterSnapshot, [{ id: 'N-1', name: 'New Learner' }]);
+  assert.equal(assignments.getAssignment(source.id).rosterId, null);
+});
+
 test('assessment questions lock as soon as a learner starts', () => {
   const record = assignments.createAssessment({
     teacherId: 'teacher-content-lock', data: validAssessment(), rosterId: 'class-lock',
