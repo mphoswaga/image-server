@@ -3169,22 +3169,41 @@ app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
   if (!viewer) return;
   const session = viewer.session;
   const already = session && assignments.getSubmission(a.id, session.studentId);
-  const delivery = assignments.deliveryState(a);
+  const classDelivery = assignments.deliveryState(a);
+  let delivery = classDelivery;
   let visibleQuestions = a.content.questions;
   let activeSection = null;
-  if (a.type === 'assessment' && delivery.mode === 'live') {
-    activeSection = delivery.activeSectionIndex >= 0 ? (a.sections || [])[delivery.activeSectionIndex] || null : null;
+  const draft = session ? assignments.getDraft(a.id, session.studentId) : null;
+  let sectionCompleted = false;
+  if (a.type === 'assessment' && classDelivery.mode === 'live') {
+    if (session && ['open', 'marking'].includes(classDelivery.phase)) {
+      const progress = assignments.learnerSectionProgress(a, draft);
+      activeSection = progress.section;
+      sectionCompleted = progress.completed;
+      if (activeSection && (progress.index !== classDelivery.activeSectionIndex || classDelivery.phase === 'marking')) {
+        delivery = {
+          ...classDelivery,
+          phase: 'open',
+          activeSectionIndex: progress.index,
+          catchingUp: true,
+          classPhase: classDelivery.phase,
+          classActiveSectionIndex: classDelivery.activeSectionIndex,
+        };
+      }
+    } else {
+      activeSection = classDelivery.activeSectionIndex >= 0 ? (a.sections || [])[classDelivery.activeSectionIndex] || null : null;
+      sectionCompleted = !!(activeSection && draft && (draft.completedSectionIds || []).includes(activeSection.id));
+    }
     if (delivery.phase === 'open' && activeSection) visibleQuestions = a.content.questions.filter(q => q.sectionId === activeSection.id);
     else if (!['marking', 'closed'].includes(delivery.phase)) visibleQuestions = [];
   }
-  const draft = session ? assignments.getDraft(a.id, session.studentId) : null;
   const visibleIds = new Set(visibleQuestions.map(q => q.id));
   const draftAnswers = Object.fromEntries(Object.entries(draft && draft.answers || {}).filter(([id]) => visibleIds.has(id)));
   res.json({
     title: a.title, instructions: a.content.instructions,
     questions: visibleQuestions.map(q => ({ id: q.id, question: q.question, kind: q.kind, options: q.options || null, marks: q.marks, sectionId: q.sectionId || null, sectionTitle: q.sectionTitle || null, sectionInstructions: q.sectionInstructions || '', sectionType: q.sectionType || null })),
     delivery, activeSection: activeSection ? { id: activeSection.id, title: activeSection.title, index: delivery.activeSectionIndex, total: a.sections.length } : null,
-    draftAnswers, sectionCompleted: !!(activeSection && draft && (draft.completedSectionIds || []).includes(activeSection.id)),
+    draftAnswers, sectionCompleted,
     alreadySubmitted: !!already,
   });
 });
@@ -3203,13 +3222,17 @@ app.post('/api/assignment/:id/draft', requireAssignmentAccess, (req, res) => {
     return res.status(409).json({ code: 'assessment_already_submitted', error: 'This assessment has already been submitted.' });
   }
   const delivery = assignments.deliveryState(a);
-  if (a.type === 'assessment' && delivery.mode === 'live' && delivery.phase !== 'open') return res.status(409).json({ error: delivery.phase === 'paused' ? 'Your teacher paused the assessment.' : 'This section is not open.' });
-  const activeSection = delivery.mode === 'live' ? (a.sections || [])[delivery.activeSectionIndex] : null;
+  if (a.type === 'assessment' && delivery.mode === 'live' && !['open', 'marking'].includes(delivery.phase)) return res.status(409).json({ error: delivery.phase === 'paused' ? 'Your teacher paused the assessment.' : 'This section is not open.' });
+  const existing = assignments.getDraft(a.id, session.studentId);
+  const learnerProgress = delivery.mode === 'live' ? assignments.learnerSectionProgress(a, existing) : null;
+  const activeSection = learnerProgress ? learnerProgress.section : null;
+  if (a.type === 'assessment' && delivery.mode === 'live' && !activeSection) {
+    return res.status(409).json({ code: 'assessment_sections_complete', error: 'All released sections are complete. Submit your assessment.' });
+  }
   const allowedQuestions = (a.content.questions || []).filter(q => !activeSection || q.sectionId === activeSection.id);
   const safeAnswers = assignments.sanitizeLearnerAnswers(allowedQuestions, req.body && req.body.answers);
   const complete = !!(req.body && req.body.complete);
   if (a.type === 'assessment' && complete) {
-    const existing = assignments.getDraft(a.id, session.studentId);
     const combined = { ...(existing && existing.answers || {}), ...safeAnswers };
     const missing = assignments.incompleteAssessmentAnswers(allowedQuestions, combined);
     if (missing.length) {

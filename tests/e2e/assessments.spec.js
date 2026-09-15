@@ -284,6 +284,80 @@ test('an open My assignments panel updates learner readiness without being reope
   expect(resultsRequests).toBe(requestsAfterClose);
 });
 
+test('an unfinished learner catches up after the teacher advances sections', async ({ page, browser }, testInfo) => {
+  test.skip(!['windows-100','mobile'].includes(testInfo.project.name), 'Desktop and mobile cover independent live section progression.');
+  await signInDisposableTeacher(page, `-assessment-catch-up-${testInfo.project.name}`);
+  const fastId=`FAST-${testInfo.project.name}`;
+  const slowId=`SLOW-${testInfo.project.name}`;
+  const rosterResponse=await page.request.post('/api/roster',{data:{
+    name:'Grade 4 catch-up', rows:[{ID:fastId,Name:'Fast Learner'},{ID:slowId,Name:'Slow Learner'}], idCol:'ID', nameCol:'Name',
+  }});
+  const classRoster=await rosterResponse.json();
+  expect(rosterResponse.ok(),JSON.stringify(classRoster)).toBeTruthy();
+  const pins=await page.request.post(`/api/roster/${classRoster.id}/pins`,{data:{all:true,sharedPin:'4826'}});
+  expect(pins.ok(),await pins.text()).toBeTruthy();
+  const assessmentResponse=await page.request.post('/api/assessment',{data:{rosterId:classRoster.id,assessment:{
+    title:'Two-section science test',subject:'Science',grade:'Grade 4',assessmentType:'test',deliveryMode:'live',totalMarks:2,
+    objectives:[{id:'materials',text:'Identify properties of materials'}],instructions:'Complete each released section.',
+    sections:[
+      {id:'first',title:'First section',type:'mcq',objectiveIds:['materials'],items:[{id:'first-q',prompt:'Which material is transparent?',options:['Clear glass','Wood','Brick','Cardboard'],correctIndex:0,marks:1}]},
+      {id:'second',title:'Second section',type:'mcq',objectiveIds:['materials'],items:[{id:'second-q',prompt:'Which material is attracted to a magnet?',options:['Iron','Paper','Rubber','Glass'],correctIndex:0,marks:1}]},
+    ],
+  }}});
+  const assessment=await assessmentResponse.json();
+  expect(assessmentResponse.ok(),JSON.stringify(assessment)).toBeTruthy();
+  const join=await (await page.request.get(`/api/assignment/${assessment.assessmentId}/join`)).json();
+  const fastContext=await browser.newContext();
+  const slowContext=await browser.newContext();
+  try{
+    expect((await fastContext.request.post(`/api/assignment/${assessment.assessmentId}/enter`,{data:{handle:join.students[0].handle,pin:'4826'}})).ok()).toBeTruthy();
+    expect((await slowContext.request.post(`/api/assignment/${assessment.assessmentId}/enter`,{data:{handle:join.students[1].handle,pin:'4826'}})).ok()).toBeTruthy();
+    expect((await page.request.patch(`/api/assignment/${assessment.assessmentId}/live-state`,{data:{action:'start'}})).ok()).toBeTruthy();
+    const fastFirst=await (await fastContext.request.get(`/api/assignment/${assessment.assessmentId}/take`)).json();
+    const slowFirst=await (await slowContext.request.get(`/api/assignment/${assessment.assessmentId}/take`)).json();
+    expect(fastFirst.activeSection.id).toBe('first');
+    expect(slowFirst.activeSection.id).toBe('first');
+    const slowPage=await slowContext.newPage();
+    await slowPage.goto(new URL(assessment.path,page.url()).toString());
+    await expect(slowPage.locator('.qtext')).toContainText('Which material is transparent?');
+    expect((await fastContext.request.post(`/api/assignment/${assessment.assessmentId}/draft`,{data:{answers:{[fastFirst.questions[0].id]:0},complete:true}})).ok()).toBeTruthy();
+
+    expect((await page.request.patch(`/api/assignment/${assessment.assessmentId}/live-state`,{data:{action:'next'}})).ok()).toBeTruthy();
+    const fastSecond=await (await fastContext.request.get(`/api/assignment/${assessment.assessmentId}/take`)).json();
+    const slowCatchUp=await (await slowContext.request.get(`/api/assignment/${assessment.assessmentId}/take`)).json();
+    expect(fastSecond.activeSection.id).toBe('second');
+    expect(slowCatchUp.activeSection.id).toBe('first');
+    expect(slowCatchUp.delivery.catchingUp).toBe(true);
+    expect(slowCatchUp.delivery.classActiveSectionIndex).toBe(1);
+    await expect(slowPage.locator('#submitErr')).toContainText('Your class has moved ahead');
+    await expect(slowPage.locator('.qtext')).toContainText('Which material is transparent?');
+    expect((await slowContext.request.post(`/api/assignment/${assessment.assessmentId}/draft`,{data:{answers:{[slowCatchUp.questions[0].id]:0},complete:true}})).ok()).toBeTruthy();
+    const slowSecond=await (await slowContext.request.get(`/api/assignment/${assessment.assessmentId}/take`)).json();
+    expect(slowSecond.activeSection.id).toBe('second');
+    await expect(slowPage.locator('.qtext')).toContainText('Which material is attracted to a magnet?');
+
+    expect((await fastContext.request.post(`/api/assignment/${assessment.assessmentId}/draft`,{data:{answers:{[fastSecond.questions[0].id]:0},complete:true}})).ok()).toBeTruthy();
+    expect((await page.request.patch(`/api/assignment/${assessment.assessmentId}/live-state`,{data:{action:'next'}})).ok()).toBeTruthy();
+    const slowAfterClassFinished=await (await slowContext.request.get(`/api/assignment/${assessment.assessmentId}/take`)).json();
+    expect(slowAfterClassFinished.activeSection.id).toBe('second');
+    expect(slowAfterClassFinished.delivery.phase).toBe('open');
+    expect(slowAfterClassFinished.delivery.classPhase).toBe('marking');
+    await expect(slowPage.locator('#submitErr')).toContainText('Your class has moved ahead');
+    await expect(slowPage.locator('.qtext')).toContainText('Which material is attracted to a magnet?');
+    expect((await slowContext.request.post(`/api/assignment/${assessment.assessmentId}/draft`,{data:{answers:{[slowAfterClassFinished.questions[0].id]:0},complete:true}})).ok()).toBeTruthy();
+    const slowReadyToSubmit=await (await slowContext.request.get(`/api/assignment/${assessment.assessmentId}/take`)).json();
+    expect(slowReadyToSubmit.delivery.phase).toBe('marking');
+    await expect(slowPage.locator('#submitBtn')).toHaveText('Submit assessment');
+    const submitted=await slowContext.request.post(`/api/assignment/${assessment.assessmentId}/submit`,{data:{answers:{}}});
+    expect(submitted.ok(),await submitted.text()).toBeTruthy();
+    const results=await (await page.request.get(`/api/assignment/${assessment.assessmentId}/results`)).json();
+    expect(results.submissions[0].totalMarks).toBe(2);
+  }finally{
+    await fastContext.close();
+    await slowContext.close();
+  }
+});
+
 test('multiple-choice answers are visibly auto-confirmed without per-learner save buttons', async ({ page, browser }, testInfo) => {
   test.skip(testInfo.project.name !== 'windows-100', 'One desktop browser covers deterministic MCQ marking.');
   await signInDisposableTeacher(page, '-assessment-mcq-auto-confirm');

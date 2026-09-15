@@ -601,6 +601,34 @@ test('server drafts merge answers and record readiness for the active section', 
   assert.equal(assignments.listTeacherAssignments('teacher-drafts').length, 1, 'draft files never appear as assignments');
 });
 
+test('unfinished learners remain on their earliest released section until they catch up', () => {
+  const record = assignments.createAssessment({ teacherId: 'teacher-catch-up', data: validAssessment() });
+  assignments.updateDelivery(record.id, 'start');
+  assignments.updateDelivery(record.id, 'next');
+  const advanced = assignments.getAssignment(record.id);
+  const slow = assignments.learnerSectionProgress(advanced, null);
+  assert.equal(slow.section.id, 'theory');
+  assert.equal(slow.index, 0);
+  assert.equal(slow.catchingUp, true);
+
+  const firstComplete = assignments.saveDraft(record.id, {
+    studentId: 'learner-slow', name: 'Learner Slow', answers: { q1: 0 }, completedSectionId: 'theory',
+  });
+  const caughtUp = assignments.learnerSectionProgress(advanced, firstComplete);
+  assert.equal(caughtUp.section.id, 'practical');
+  assert.equal(caughtUp.index, 1);
+  assert.equal(caughtUp.catchingUp, false);
+
+  assignments.updateDelivery(record.id, 'next');
+  const marking = assignments.getAssignment(record.id);
+  const stillWorking = assignments.learnerSectionProgress(marking, firstComplete);
+  assert.equal(stillWorking.section.id, 'practical');
+  assert.equal(stillWorking.catchingUp, true);
+  const finished = assignments.saveDraft(record.id, { studentId: 'learner-slow', completedSectionId: 'practical' });
+  assert.equal(assignments.learnerSectionProgress(marking, finished).section, null);
+  assert.equal(assignments.learnerSectionProgress(marking, finished).completed, true);
+});
+
 test('assessment answers reject malformed or incomplete knowledge responses but allow practical observation', () => {
   const questions = assignments.normalizeAssessment(validAssessment()).questions;
   assert.deepEqual(assignments.sanitizeLearnerAnswers(questions, {

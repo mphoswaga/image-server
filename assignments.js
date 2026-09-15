@@ -630,6 +630,36 @@ function deliveryState(record) {
   return { mode: 'self-paced', phase: 'open', activeSectionIndex: null, previousPhase: null, updatedAt: record && record.createdAt || null };
 }
 
+// The teacher releases sections in order, but each learner completes the
+// released sections at their own pace. Returning the earliest incomplete
+// section prevents a class-wide "next" action from ejecting slower learners.
+function learnerSectionProgress(record, draft) {
+  const state = deliveryState(record);
+  const sections = Array.isArray(record && record.sections) ? record.sections : [];
+  if (state.mode !== 'live' || !sections.length || !['open', 'marking'].includes(state.phase)) {
+    return { section: null, index: -1, completed: false, catchingUp: false };
+  }
+  const lastReleasedIndex = state.phase === 'marking'
+    ? sections.length - 1
+    : Math.min(Math.max(Number(state.activeSectionIndex) || 0, 0), sections.length - 1);
+  const completedIds = new Set(Array.isArray(draft && draft.completedSectionIds) ? draft.completedSectionIds : []);
+  for (let index = 0; index <= lastReleasedIndex; index += 1) {
+    if (!completedIds.has(sections[index].id)) {
+      return {
+        section: sections[index], index, completed: false,
+        catchingUp: state.phase === 'marking' || index < lastReleasedIndex,
+      };
+    }
+  }
+  const current = sections[lastReleasedIndex] || null;
+  return {
+    section: state.phase === 'open' ? current : null,
+    index: state.phase === 'open' ? lastReleasedIndex : -1,
+    completed: true,
+    catchingUp: false,
+  };
+}
+
 function updateDelivery(id, action) {
   const record = getAssignment(id);
   if (!record || record.type !== 'assessment') return null;
@@ -910,7 +940,7 @@ module.exports = {
   publishedAssessmentGenerationContext,
   releaseResults, isReleased,
   assessmentIsFinalised, saveSubmission, saveNewSubmission, getSubmissions, getSubmission,
-  assessmentReleaseReadiness, loadDrafts, getDraft, saveDraft, saveDraftGrade, deliveryState, updateDelivery, draftProgress, presentationSlides,
+  assessmentReleaseReadiness, loadDrafts, getDraft, saveDraft, saveDraftGrade, deliveryState, learnerSectionProgress, updateDelivery, draftProgress, presentationSlides,
   sanitizeLearnerAnswers, incompleteAssessmentAnswers, filterAssignmentEvidenceForRoster,
   findConfirmedVerdict, recordVerdict, normalizeAnswer, normalizeStudentId, renameAssessmentStudent,
   listTeacherAssignments,

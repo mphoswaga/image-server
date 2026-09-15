@@ -256,7 +256,7 @@
 
     function applyLiveTake(take) {
       delivery = take.delivery || delivery;
-      const stateKey = [delivery.phase, delivery.activeSectionIndex, take.sectionCompleted].join(':');
+      const stateKey = [delivery.phase, delivery.activeSectionIndex, delivery.classPhase || '', delivery.classActiveSectionIndex == null ? '' : delivery.classActiveSectionIndex, take.sectionCompleted].join(':');
       if (stateKey === liveStateKey) return;
       liveStateKey = stateKey;
       questions = take.questions || [];
@@ -274,7 +274,10 @@
       }
       if (take.sectionCompleted) return showLiveStatus('Section saved', 'Your answers are safe. Wait for your teacher to open the next section.');
       $('liveStatus').style.display = 'none'; $('questions').style.display = 'block'; $('form').style.display = 'block';
-      $('submitErr').textContent = ''; $('submitBtn').dataset.mode = 'section'; $('submitBtn').textContent = 'I’m ready for the next section';
+      $('submitErr').textContent = delivery.catchingUp
+        ? 'Your class has moved ahead. Finish this section, then LessonScope will take you to the next released section.'
+        : '';
+      $('submitBtn').dataset.mode = 'section'; $('submitBtn').textContent = 'I’m ready for the next section';
       renderQuestions();
     }
 
