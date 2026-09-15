@@ -245,6 +245,13 @@ function assignmentViewer(req, res, assignment) {
   return null;
 }
 
+function rejectUnpublishedAssessment(req, res, assignment) {
+  if (!assignment || assignment.type !== 'assessment' || assignment.status !== 'draft') return false;
+  if (req.userId && req.userId === assignment.teacherId) return false;
+  res.status(409).json({ code: 'assessment_not_published', error: 'Your teacher is still editing this test or project.' });
+  return true;
+}
+
 const app = express();
 app.disable('x-powered-by');
 // Behind Railway's TLS-terminating proxy: honour X-Forwarded-Proto/For so
@@ -2318,6 +2325,7 @@ app.post('/api/assignment/:id/class-copy', requireAuth, (req, res) => {
   if (!assessment) return res.status(404).json({ error: 'Assessment not found.' });
   if (assessment.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assessment.' });
   if (assessment.type !== 'assessment') return res.status(400).json({ error: 'Only tests and projects can be given to another class.' });
+  if (assessment.status === 'draft') return res.status(409).json({ code: 'assessment_not_published', error: 'Finish editing and publish this copy before duplicating it again.' });
   const rosterId = String(req.body && req.body.rosterId || '').trim();
   const selectedRoster = rosterId ? roster.getRoster(req.userId, rosterId) : null;
   if (!selectedRoster) return res.status(404).json({ error: 'Choose a saved class roster.' });
@@ -2336,9 +2344,62 @@ app.post('/api/assignment/:id/class-copy', requireAuth, (req, res) => {
     res.json({
       ok: true, assessmentId: copy.id, path: `/assignment/${copy.id}`, roomCode: copy.roomCode,
       rosterId: copy.rosterId, rosterName: selectedRoster.name, rosterSize: copy.rosterSnapshot.length,
+      status: copy.status, editRequired: true,
     });
   } catch (err) {
     res.status(err.status || 400).json({ code: err.code || 'assessment_class_copy_failed', error: err.message });
+  }
+});
+
+app.get('/api/assignment/:id/edit', requireAuth, (req, res) => {
+  const assessment = assignments.getAssignment(req.params.id);
+  if (!assessment) return res.status(404).json({ error: 'Assessment not found.' });
+  if (assessment.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assessment.' });
+  if (assessment.type !== 'assessment') return res.status(400).json({ error: 'Only tests and projects can be edited here.' });
+  if (!assignments.assessmentContentEditable(assessment)) {
+    return res.status(409).json({ code: 'assessment_content_locked', error: 'Questions cannot be changed after a learner has started this class run.' });
+  }
+  res.json({
+    assessmentId: assessment.id,
+    rosterId: assessment.rosterId || null,
+    cutoffAt: assessment.cutoffAt || null,
+    status: assessment.status,
+    assessment: {
+      title: assessment.title,
+      subject: assessment.subject,
+      grade: assessment.grade,
+      assessmentType: assessment.assessmentType,
+      deliveryMode: assignments.deliveryState(assessment).mode,
+      totalMarks: assessment.totalMarks,
+      objectives: assessment.objectives || [],
+      instructions: assessment.content && assessment.content.instructions || '',
+      sections: assessment.sections || [],
+      lessonWorkspaceId: assessment.lessonWorkspaceId || null,
+      unitId: assessment.unitId || null,
+      unitName: assessment.unitName || null,
+    },
+  });
+});
+
+app.patch('/api/assignment/:id/content', requireAuth, (req, res) => {
+  const assessment = assignments.getAssignment(req.params.id);
+  if (!assessment) return res.status(404).json({ error: 'Assessment not found.' });
+  if (assessment.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assessment.' });
+  if (assessment.type !== 'assessment') return res.status(400).json({ error: 'Only tests and projects can be edited here.' });
+  try {
+    const updated = assignments.updateAssessmentContent(
+      assessment.id,
+      req.body && req.body.assessment,
+      req.body && Object.prototype.hasOwnProperty.call(req.body, 'cutoffAt') ? req.body.cutoffAt : undefined,
+    );
+    res.json({
+      ok: true, assessmentId: updated.id, assignmentId: updated.id, path: `/assignment/${updated.id}`,
+      roomCode: updated.roomCode, totalMarks: updated.totalMarks,
+      sectionCount: updated.sections.length, questionCount: updated.content.questions.length,
+      version: updated.version, status: updated.status,
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({ code: err.code || 'assessment_content_update_failed', error: err.message });
   }
 });
 
@@ -2346,6 +2407,7 @@ app.patch('/api/assignment/:id/live-state', requireAuth, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assessment not found.' });
   if (a.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assessment.' });
+  if (a.status === 'draft') return res.status(409).json({ code: 'assessment_not_published', error: 'Review and publish the duplicated assessment before starting it.' });
   try {
     const updated = assignments.updateDelivery(a.id, String(req.body && req.body.action || ''));
     if (!updated) return res.status(400).json({ error: 'This item does not support live classroom controls.' });
@@ -2368,7 +2430,13 @@ app.get('/api/join', (req, res) => {
   const gameId = games.getRoomCode(code);
   if (gameId) return res.json({ type: 'game', id: gameId });
   const assignmentId = assignments.getRoomCode(code);
-  if (assignmentId) return res.json({ type: 'assignment', id: assignmentId });
+  if (assignmentId) {
+    const assignment = assignments.getAssignment(assignmentId);
+    if (assignment && assignment.type === 'assessment' && assignment.status === 'draft') {
+      return res.status(409).json({ code: 'assessment_not_published', error: 'Your teacher is still editing this test or project.' });
+    }
+    return res.json({ type: 'assignment', id: assignmentId });
+  }
   res.status(404).json({ error: 'Room not found. Check the code and try again.' });
 });
 
@@ -2997,6 +3065,7 @@ function gameSessionCanAccess(game, session) {
 app.get('/api/assignment/:id/join', (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
+  if (rejectUnpublishedAssessment(req, res, a)) return;
   res.json({
     title: a.title, teacherName: a.teacherName || null,
     hasRoster: !!a.rosterId,
@@ -3018,6 +3087,7 @@ app.get('/api/game/:id/join', (req, res) => {
 app.post('/api/assignment/:id/enter', async (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
+  if (rejectUnpublishedAssessment(req, res, a)) return;
   // The join screen sends a handle, not the school's own ID — see studentHandle.
   // A typed entry (no roster, or a child not on the list) still arrives as text.
   const fromList = a.rosterId
@@ -3068,6 +3138,7 @@ app.post('/api/assignment/:id/enter', async (req, res) => {
 app.post('/api/assignment/:id/pin/reset-request', (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a || !a.rosterId) return res.status(404).json({ error: 'Assignment not found.' });
+  if (rejectUnpublishedAssessment(req, res, a)) return;
   const fromList = studentFromAssignmentHandle(a, req.body && req.body.handle);
   const suppliedId = roster.normalizeStudentId(req.body && req.body.studentId);
   const student = fromList || assignmentStudentInCohort(a, suppliedId);
@@ -3083,6 +3154,7 @@ app.post('/api/assignment/:id/pin/reset-request', (req, res) => {
 app.get('/api/assignment/:id', requireAssignmentAccess, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
+  if (rejectUnpublishedAssessment(req, res, a)) return;
   const viewer = assignmentViewer(req, res, a);
   if (!viewer) return;
   res.json({ id: a.id, type: a.type, assessmentType: a.assessmentType || null, title: a.title, subject: a.subject, topic: a.topic, grade: a.grade, totalMarks: a.totalMarks || null, teacherName: a.teacherName, hasRoster: !!a.rosterId, students: a.rosterId ? classListForAssignment(a) : [], instructions: a.content.instructions, questionCount: a.content.questions.length, teacherPreview: viewer.teacherPreview, draftScope: viewer.session ? studentHandle(a.id, viewer.session.studentId) : null });
@@ -3092,6 +3164,7 @@ app.get('/api/assignment/:id', requireAssignmentAccess, (req, res) => {
 app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
+  if (rejectUnpublishedAssessment(req, res, a)) return;
   const viewer = assignmentViewer(req, res, a);
   if (!viewer) return;
   const session = viewer.session;
@@ -3122,6 +3195,7 @@ app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
 app.post('/api/assignment/:id/draft', requireAssignmentAccess, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assessment not found.' });
+  if (rejectUnpublishedAssessment(req, res, a)) return;
   const session = assignmentStudentSession(req, res, a);
   if (!session) return res.status(401).json({ error: 'Rejoin this assessment to save your work.' });
   if (assignments.assessmentIsFinalised(a)) return res.status(409).json({ code: 'assessment_finalised', error: 'This assessment is finalised.' });
@@ -3155,6 +3229,7 @@ app.post('/api/assignment/:id/submit', requireAssignmentAccess, async (req, res)
   // real student session, so reject explicitly instead of crashing below.
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
+  if (rejectUnpublishedAssessment(req, res, a)) return;
   const session = assignmentStudentSession(req, res, a);
   if (!session) return res.status(401).json({ error: 'Your session could not be confirmed — rejoin using the Room Code or link, then try again.' });
   if (session.assignmentId !== a.id) return res.status(403).json({ error: 'Session is for a different assignment.' });
@@ -3263,6 +3338,7 @@ app.patch('/api/assignment/:id/release', requireAuth, (req, res) => {
 app.get('/api/assignment/:id/my-results', requireAssignmentAccess, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
+  if (rejectUnpublishedAssessment(req, res, a)) return;
   const session = assignmentStudentSession(req, res, a);
   if (!session) return res.status(401).json({ error: 'Your session could not be confirmed — rejoin using the Room Code or link.' });
   if (session.assignmentId !== a.id) return res.status(403).json({ error: 'Session is for a different assignment.' });

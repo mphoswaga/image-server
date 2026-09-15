@@ -238,12 +238,39 @@ test('another class receives an isolated run of the same assessment', () => {
   assert.notEqual(copy.roomCode, source.roomCode);
   assert.equal(copy.assessmentSeriesId, source.id);
   assert.equal(copy.copiedFromAssessmentId, source.id);
+  assert.equal(copy.status, 'draft');
+  assert.equal(copy.copyNeedsReview, true);
+  assert.equal(assignments.assessmentContentEditable(copy), true);
   assert.equal(copy.rosterId, 'class-b');
   assert.deepEqual(copy.rosterSnapshot, [{ id: 'B-1', name: 'Learner B' }]);
   assert.equal(assignments.getDraft(copy.id, 'A-1'), null);
   assert.deepEqual(assignments.deliveryState(copy), {
     mode: 'live', phase: 'lobby', activeSectionIndex: -1, previousPhase: null, updatedAt: copy.delivery.updatedAt,
   });
+  const revised = validAssessment({
+    title: 'Forces assessment for class B',
+    sections: [
+      {
+        id: 'theory', title: 'Knowledge check', type: 'mcq', objectiveIds: ['knowledge'],
+        items: [{ id: 'q1', prompt: 'Which force resists motion between two surfaces?', options: ['Friction', 'Magnetism'], correctIndex: 0, marks: 5 }],
+      },
+      {
+        id: 'practical', title: 'Investigation', type: 'practical', objectiveIds: ['investigation'],
+        items: [
+          { id: 'criterion-1', prompt: 'Keeps the test conditions the same', marks: 5 },
+          { id: 'criterion-2', prompt: 'Records and explains the results', marks: 10 },
+        ],
+      },
+    ],
+  });
+  const publishedCopy = assignments.updateAssessmentContent(copy.id, revised, '2026-09-20T10:00');
+  assert.equal(publishedCopy.status, 'published');
+  assert.equal(publishedCopy.copyNeedsReview, false);
+  assert.equal(publishedCopy.version, 2);
+  assert.equal(publishedCopy.title, 'Forces assessment for class B');
+  assert.equal(publishedCopy.content.questions[0].question, 'Which force resists motion between two surfaces?');
+  assert.equal(assignments.getAssignment(source.id).title, 'Forces assessment');
+  assert.equal(assignments.getAssignment(source.id).content.questions[0].question, 'Which force slows a moving object?');
   assert.equal(assignments.renameAssessmentStudent('teacher-class-runs', 'class-b', 'b-1', 'Corrected Learner B'), 1);
   assert.equal(assignments.getAssignment(copy.id).rosterSnapshot[0].name, 'Corrected Learner B');
   assert.equal(assignments.getAssignment(source.id).rosterSnapshot[0].name, 'Learner A');
@@ -254,6 +281,21 @@ test('another class receives an isolated run of the same assessment', () => {
     }),
     error => error && error.code === 'assessment_class_already_assigned',
   );
+});
+
+test('assessment questions lock as soon as a learner starts', () => {
+  const record = assignments.createAssessment({
+    teacherId: 'teacher-content-lock', data: validAssessment(), rosterId: 'class-lock',
+    rosterSnapshot: [{ id: 'L-1', name: 'Learner One' }],
+  });
+  assert.equal(assignments.assessmentContentEditable(record), true);
+  assignments.saveDraft(record.id, { studentId: 'L-1', name: 'Learner One', answers: { q1: 0 } });
+  assert.equal(assignments.assessmentContentEditable(assignments.getAssignment(record.id)), false);
+  assert.throws(
+    () => assignments.updateAssessmentContent(record.id, validAssessment({ title: 'Changed too late' })),
+    error => error && error.code === 'assessment_content_locked' && /after a learner has started/i.test(error.message),
+  );
+  assert.equal(assignments.getAssignment(record.id).title, 'Forces assessment');
 });
 
 test('project deck generation receives the canonical published assessment snapshot', () => {

@@ -7676,7 +7676,7 @@
 
     // ── Flexible test/project builder ────────────────────────────────────────
     let assessmentSectionsState=[];
-    let editingGeneratedAssessmentDraft=false, assessmentDraftSyncTimer=null;
+    let editingGeneratedAssessmentDraft=false, editingAssessmentId=null, assessmentDraftSyncTimer=null;
     let assessmentItemSeq=0;
     const assessmentTypeNames={mcq:'Multiple choice','short-answer':'Short answer','extended-response':'Extended response',practical:'Practical / observation'};
     function assessmentObjectives(){
@@ -7844,9 +7844,38 @@
       clearTimeout(assessmentDraftSyncTimer);
       assessmentDraftSyncTimer=setTimeout(captureGeneratedAssessmentEdits,180);
     }
+    async function openExistingAssessmentEditor(assessmentId){
+      const response=await fetch('/api/assignment/'+encodeURIComponent(assessmentId)+'/edit');
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.error||'This assessment cannot be edited.');
+      const draft=data.assessment||{};
+      editingGeneratedAssessmentDraft=false;
+      editingAssessmentId=data.assessmentId;
+      openAssignments('plan');
+      $('assessmentBuilder').style.display='block';
+      $('assessmentKind').value=draft.assessmentType==='project'?'project':'test';
+      $('assessmentTotal').value=String(draft.totalMarks||50);
+      $('assessmentDelivery').value=draft.deliveryMode==='self-paced'?'self-paced':'live';
+      $('assessmentTitle').value=draft.title||'';
+      $('assessmentSubject').value=draft.subject||'';
+      $('assessmentGrade').value=draft.grade||'';
+      $('assessmentObjectives').value=(draft.objectives||[]).map(objective=>objective.text||objective).filter(Boolean).join('\n');
+      $('assessmentInstructions').value=draft.instructions||'';
+      $('assessmentCutoff').value=data.cutoffAt?String(data.cutoffAt).slice(0,16):'';
+      $('assessmentPublishResult').innerHTML='<div class="assessment-result"><b>Editing this class run</b><p style="margin:6px 0">Students cannot enter a duplicated draft until you save and publish it. Once a learner starts, its questions lock.</p></div>';
+      assessmentSectionsState=JSON.parse(JSON.stringify(draft.sections||[]));
+      renderAssessmentSections();
+      await loadRosters(true);
+      $('assessmentRoster').value=data.rosterId||'';
+      $('assessmentRoster').disabled=true;
+      $('publishAssessmentBtn').disabled=false;
+      $('publishAssessmentBtn').innerHTML='Save and publish changes';
+      $('assessmentBuilder').scrollIntoView({behavior:'smooth',block:'start'});
+    }
     function openGeneratedAssessmentDraft(draft){
       if(!draft)return;
       editingGeneratedAssessmentDraft=true;
+      editingAssessmentId=null;
       openAssignments('plan');
       $('assessmentBuilder').style.display='block';
       $('assessmentKind').value=draft.assessmentType==='project'?'project':'test';
@@ -7862,16 +7891,19 @@
       renderAssessmentSections();
       $('publishAssessmentBtn').disabled=false;
       $('publishAssessmentBtn').innerHTML='Publish assessment';
+      $('assessmentRoster').disabled=false;
       loadRosters(true);
       $('assessmentBuilder').scrollIntoView({behavior:'smooth',block:'start'});
     }
     $('newAssessmentBtn').addEventListener('click',()=>{
       editingGeneratedAssessmentDraft=false;
+      editingAssessmentId=null;
+      $('assessmentRoster').disabled=false;
       const builder=$('assessmentBuilder'); builder.style.display='block';
       if(!assessmentSectionsState.length) applyAssessmentPreset('blank');
       loadRosters(true); builder.scrollIntoView({behavior:'smooth',block:'start'});
     });
-    $('closeAssessmentBtn').addEventListener('click',()=>{ captureGeneratedAssessmentEdits(); editingGeneratedAssessmentDraft=false; $('assessmentBuilder').style.display='none'; });
+    $('closeAssessmentBtn').addEventListener('click',()=>{ captureGeneratedAssessmentEdits(); editingGeneratedAssessmentDraft=false; editingAssessmentId=null; $('assessmentRoster').disabled=false; $('assessmentBuilder').style.display='none'; });
     $('assessmentBuilder').addEventListener('click',e=>{
       const preset=e.target.closest('[data-assessment-preset]'); if(preset){ applyAssessmentPreset(preset.dataset.assessmentPreset); return; }
       const add=e.target.closest('[data-add-assessment-item]'); if(add){ syncAssessmentState(); const s=assessmentSectionsState[Number(add.dataset.addAssessmentItem)]; s.items.push(newAssessmentItem(s.type)); renderAssessmentSections(); return; }
@@ -7898,6 +7930,7 @@
     $('publishAssessmentBtn').addEventListener('click',async()=>{
       const btn=$('publishAssessmentBtn'), err=$('assessmentError'); err.textContent=''; err.classList.remove('show'); btn.disabled=true; const original=btn.innerHTML; btn.innerHTML='<span class="spinner"></span>Publishing…';
       const generatedDraft=editingGeneratedAssessmentDraft;
+      const existingAssessmentId=editingAssessmentId;
       let keepDisabled=false;
       try{
         const assessment=collectAssessment();
@@ -7908,13 +7941,18 @@
           const workspaceSaved=await saveWorkspaceNow();
           if(!workspaceSaved||!currentWorkspaceId) throw new Error('This lesson could not be saved, so its assessment was not published. Check your connection and try again.');
         }
-        assessment.lessonWorkspaceId=currentWorkspaceId||null;
-        assessment.unitId=(ctx&&ctx.unitId)||null;
-        assessment.unitName=(ctx&&ctx.unitName)||null;
-        const response=await fetch('/api/assessment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({assessment,rosterId:selectedRosterId,cutoffAt:$('assessmentCutoff').value||null})});
+        if(!existingAssessmentId){
+          assessment.lessonWorkspaceId=currentWorkspaceId||null;
+          assessment.unitId=(ctx&&ctx.unitId)||null;
+          assessment.unitName=(ctx&&ctx.unitName)||null;
+        }
+        const requestBody=JSON.stringify({assessment,rosterId:selectedRosterId,cutoffAt:$('assessmentCutoff').value||null});
+        const response=existingAssessmentId
+          ?await fetch('/api/assignment/'+encodeURIComponent(existingAssessmentId)+'/content',{method:'PATCH',headers:{'Content-Type':'application/json'},body:requestBody})
+          :await fetch('/api/assessment',{method:'POST',headers:{'Content-Type':'application/json'},body:requestBody});
         const data=await response.json(); if(!response.ok)throw new Error(data.error||'Could not publish assessment.');
         const url=location.origin+data.path;
-        $('assessmentPublishResult').innerHTML=`<div class="assessment-result"><b>Assessment published</b><p style="margin:6px 0">${data.sectionCount} section${data.sectionCount===1?'':'s'} · ${data.totalMarks} marks</p><div class="room-code" style="display:inline-block">${esc(data.roomCode)}</div><p class="hint" style="margin:7px 0">Students join at <b>${esc(location.origin+'/join')}</b> using this room code.</p><div class="game-link"><input readonly value="${esc(url)}"><button type="button" class="btn ghost assessment-copy" data-url="${esc(url)}" style="width:auto">Copy link</button></div><a class="btn ghost" href="/assessment/${esc(data.assessmentId)}/present" target="_blank" rel="noopener" style="display:inline-flex;width:auto;margin-top:10px;text-decoration:none">Open presentation</a></div>`;
+        $('assessmentPublishResult').innerHTML=`<div class="assessment-result"><b>${existingAssessmentId?'Changes saved and published':'Assessment published'}</b><p style="margin:6px 0">${data.sectionCount} section${data.sectionCount===1?'':'s'} · ${data.totalMarks} marks</p><div class="room-code" style="display:inline-block">${esc(data.roomCode)}</div><p class="hint" style="margin:7px 0">Students join at <b>${esc(location.origin+'/join')}</b> using this room code.</p><div class="game-link"><input readonly value="${esc(url)}"><button type="button" class="btn ghost assessment-copy" data-url="${esc(url)}" style="width:auto">Copy link</button></div><a class="btn ghost" href="/assessment/${esc(data.assessmentId)}/present" target="_blank" rel="noopener" style="display:inline-flex;width:auto;margin-top:10px;text-decoration:none">Open presentation</a></div>`;
         if(data.assessmentId&&!workspaceAssignmentIds.includes(data.assessmentId))workspaceAssignmentIds.push(data.assessmentId);
         if(generatedDraft){
           pendingAssessmentDraft=null;
@@ -7928,8 +7966,10 @@
           renderAutoAssessmentSummary(); renderResultAssessment();
           keepDisabled=true;
         }
+        editingAssessmentId=null;
+        $('assessmentRoster').disabled=false;
         scheduleWorkspaceSave();
-        loadMyAssignments(); toast('Assessment published.','ok');
+        loadMyAssignments(); toast(existingAssessmentId?'Assessment questions updated.':'Assessment published.','ok');
       }catch(error){ err.textContent=error.message; err.classList.add('show'); }
       btn.disabled=keepDisabled; btn.innerHTML=keepDisabled?'Assessment published':original;
     });
@@ -7963,29 +8003,31 @@
           const assignedClassIds=new Set(list.filter(item=>item.type==='assessment'&&(item.assessmentSeriesId||item.id)===seriesId).map(item=>item.rosterId).filter(Boolean));
           const availableCopyClasses=assessmentClassRosters.filter(item=>!assignedClassIds.has(item.id));
           const copyClassOptions='<option value="">— Choose another class —</option>'+availableCopyClasses.map(item=>`<option value="${esc(item.id)}">${esc(item.name)} (${item.count} students)</option>`).join('');
+          const isDraft=a.type==='assessment'&&a.status==='draft';
           const classChip=a.type==='assessment'?`<span class="gc-chip">${selectedClass?esc(selectedClass.name):'No class assigned'}</span>`:'';
           return `<div class="game-card" data-assignment-id="${esc(a.id)}">
             <div class="gc-head">
               <div class="gc-top">
                 <div>
                   <div class="gc-title">${esc(a.title)}</div>
-                  <div class="gc-meta"><span class="gc-chip">${esc(a.type==='assessment'?(a.assessmentType||'Assessment'):typeLabel[a.type]||a.type)}</span>${a.subject?`<span class="gc-chip">${esc(a.subject)}</span>`:''}${a.grade?`<span class="gc-chip">${esc(a.grade)}</span>`:''}${a.totalMarks?`<span class="gc-chip">${a.totalMarks} marks</span>`:''}${classChip}${a.delivery&&a.delivery.mode==='live'?`<span class="gc-chip">Live · ${esc(a.delivery.phase)}</span>`:''}<span class="gc-chip">${a.submissions} submitted</span></div>
+                  <div class="gc-meta"><span class="gc-chip">${esc(a.type==='assessment'?(a.assessmentType||'Assessment'):typeLabel[a.type]||a.type)}</span>${a.subject?`<span class="gc-chip">${esc(a.subject)}</span>`:''}${a.grade?`<span class="gc-chip">${esc(a.grade)}</span>`:''}${a.totalMarks?`<span class="gc-chip">${a.totalMarks} marks</span>`:''}${classChip}${isDraft?'<span class="gc-chip">Draft · edit before learners enter</span>':a.delivery&&a.delivery.mode==='live'?`<span class="gc-chip">Live · ${esc(a.delivery.phase)}</span>`:''}<span class="gc-chip">${a.submissions} submitted</span></div>
                   <div class="gc-dates"><span>Created ${fmtDate(a.createdAt)}</span>${a.cutoffAt?`<span>Due ${fmtDateTime(a.cutoffAt)}</span>`:'<span>No due date</span>'}${a.resultsReleased?'<span class="gc-status-live">Released</span>':'<span class="gc-status-closed">Hidden</span>'}</div>
                 </div>
-                ${a.roomCode?`<div style="text-align:right"><span class="room-label">Room code</span><div class="room-code">${esc(a.roomCode)}</div></div>`:''}
+                ${a.roomCode&&!isDraft?`<div style="text-align:right"><span class="room-label">Room code</span><div class="room-code">${esc(a.roomCode)}</div></div>`:''}
               </div>
-              ${a.roomCode?`<p class="hint" style="margin:4px 0 0;font-size:12px">Students join at <b>${esc(location.origin+'/join')}</b> and enter this code</p>`:''}
+              ${a.roomCode&&!isDraft?`<p class="hint" style="margin:4px 0 0;font-size:12px">Students join at <b>${esc(location.origin+'/join')}</b> and enter this code</p>`:isDraft?'<p class="hint" style="margin:4px 0 0;font-size:12px">Private copy: review and publish the questions before giving it to learners.</p>':''}
             </div>
             <div class="gc-body">
-              <div class="game-link"><input readonly value="${esc(location.origin+'/assignment/'+a.id)}"><button type="button" class="btn ghost acopy" data-url="${esc(location.origin+'/assignment/'+a.id)}" style="width:auto;padding:9px 13px">${ICON('i-doc')} Copy</button></div>
+              ${!isDraft?`<div class="game-link"><input readonly value="${esc(location.origin+'/assignment/'+a.id)}"><button type="button" class="btn ghost acopy" data-url="${esc(location.origin+'/assignment/'+a.id)}" style="width:auto;padding:9px 13px">${ICON('i-doc')} Copy</button></div>`:''}
               <div class="gc-actions" style="margin-top:10px">
-                <button type="button" class="btn ghost a-toggle-btn" data-assign-id="${esc(a.id)}" data-wrap-id="${wrapId}" data-detail-id="${detailId}" data-closed-label="${a.type==='assessment'?'Run classroom / mark':'Review submissions'}" style="font-size:12px;padding:6px 12px;width:auto">${a.type==='assessment'?'Run classroom / mark':'Review submissions'}</button>
-                ${a.type==='assessment'?`<a class="btn ghost" href="/assessment/${esc(a.id)}/present" target="_blank" rel="noopener" style="font-size:12px;padding:6px 12px;width:auto;text-decoration:none">Present</a>`:''}
+                ${!isDraft?`<button type="button" class="btn ghost a-toggle-btn" data-assign-id="${esc(a.id)}" data-wrap-id="${wrapId}" data-detail-id="${detailId}" data-closed-label="${a.type==='assessment'?'Run classroom / mark':'Review submissions'}" style="font-size:12px;padding:6px 12px;width:auto">${a.type==='assessment'?'Run classroom / mark':'Review submissions'}</button>`:''}
+                ${a.type==='assessment'&&!isDraft?`<a class="btn ghost" href="/assessment/${esc(a.id)}/present" target="_blank" rel="noopener" style="font-size:12px;padding:6px 12px;width:auto;text-decoration:none">Present</a>`:''}
+                ${a.type==='assessment'&&a.contentEditable?`<button type="button" class="btn accent a-edit-btn" data-id="${esc(a.id)}" style="font-size:12px;padding:6px 12px;width:auto">${isDraft?'Edit questions and publish':'Edit questions'}</button>`:''}
                 ${a.type==='assessment'?`<button type="button" class="btn ghost a-class-btn" data-row="${classRowId}" ${a.resultsReleased?'disabled title="Hide the released results before changing the class."':''} style="font-size:12px;padding:6px 12px;width:auto">${a.rosterId?'Change class':'Assign class'}</button>`:''}
-                ${a.type==='assessment'&&a.rosterId?`<button type="button" class="btn ghost a-class-copy-btn" data-row="${copyClassRowId}" ${availableCopyClasses.length?'':'disabled title="This assessment has already been given to every saved class."'} style="font-size:12px;padding:6px 12px;width:auto">Give to another class</button>`:''}
+                ${a.type==='assessment'&&a.rosterId&&!isDraft?`<button type="button" class="btn ghost a-class-copy-btn" data-row="${copyClassRowId}" ${availableCopyClasses.length?'':'disabled title="This assessment has already been given to every saved class."'} style="font-size:12px;padding:6px 12px;width:auto">Give to another class</button>`:''}
               </div>
               ${a.type==='assessment'?`<div class="gc-class-row" id="${classRowId}"><label style="display:grid;gap:5px;min-width:min(360px,100%)"><span style="font-size:12px;font-weight:700;color:var(--muted)">Class for this ${esc(a.assessmentType||'assessment')}</span><select class="a-class-picker">${classOptions}</select></label><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="gc-class-save a-class-save" data-id="${esc(a.id)}" data-row="${classRowId}">Save class</button><button type="button" class="gc-class-cancel a-class-cancel" data-row="${classRowId}">Cancel</button><small style="color:var(--muted)">You can change the class until the first learner starts.</small></div></div>`:''}
-              ${a.type==='assessment'&&a.rosterId?`<div class="gc-class-row" id="${copyClassRowId}"><label style="display:grid;gap:5px;min-width:min(360px,100%)"><span style="font-size:12px;font-weight:700;color:var(--muted)">Give the same ${esc(a.assessmentType||'assessment')} to another class</span><select class="a-class-copy-picker">${copyClassOptions}</select></label><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="gc-class-save a-class-copy-save" data-id="${esc(a.id)}" data-row="${copyClassRowId}">Create class run</button><button type="button" class="gc-class-cancel a-class-copy-cancel" data-row="${copyClassRowId}">Cancel</button><small style="color:var(--muted)">The new class gets its own room code, submissions, marks and live controls.</small></div></div>`:''}
+              ${a.type==='assessment'&&a.rosterId&&!isDraft?`<div class="gc-class-row" id="${copyClassRowId}"><label style="display:grid;gap:5px;min-width:min(360px,100%)"><span style="font-size:12px;font-weight:700;color:var(--muted)">Duplicate this ${esc(a.assessmentType||'assessment')} for another class</span><select class="a-class-copy-picker">${copyClassOptions}</select></label><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="gc-class-save a-class-copy-save" data-id="${esc(a.id)}" data-row="${copyClassRowId}">Duplicate and edit</button><button type="button" class="gc-class-cancel a-class-copy-cancel" data-row="${copyClassRowId}">Cancel</button><small style="color:var(--muted)">A private copy opens so you can change its questions before publishing it for the new class.</small></div></div>`:''}
               <div id="${detailId}" style="display:none;margin-top:10px"><div id="${wrapId}"></div></div>
             </div>
           </div>`;
@@ -7996,6 +8038,8 @@
     $('assignmentsList').addEventListener('click', e=>{
       const copyBtn=e.target.closest('.acopy');
       if(copyBtn){ copyLink(copyBtn.dataset.url); return; }
+      const editBtn=e.target.closest('.a-edit-btn');
+      if(editBtn){ openExistingAssessmentEditor(editBtn.dataset.id).catch(error=>toast(error.message)); return; }
       const classBtn=e.target.closest('.a-class-btn');
       if(classBtn){ const row=$(classBtn.dataset.row); row.style.display=row.style.display==='block'?'none':'block'; return; }
       const copyClassBtn=e.target.closest('.a-class-copy-btn');
@@ -8039,8 +8083,9 @@
       try{
         const response=await fetch('/api/assignment/'+encodeURIComponent(assessmentId)+'/class-copy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rosterId})});
         const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not create this class run.');
-        toast(`${data.rosterName} now has its own room code: ${data.roomCode}`,'ok');
+        toast(`${data.rosterName} copy created. Review its questions, then publish it.`,'ok');
         await loadMyAssignments();
+        await openExistingAssessmentEditor(data.assessmentId);
       }catch(err){toast(err.message);button.disabled=false;button.textContent=original;}
     }
     $('assignmentsList').addEventListener('input',e=>{

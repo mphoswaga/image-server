@@ -279,6 +279,11 @@ function copyAssessmentToRoster({ id, teacherId, teacherName, rosterId, rosterSn
   copied.assessmentSeriesId = seriesId;
   copied.copiedFromAssessmentId = source.id;
   copied.classRunCreatedAt = new Date().toISOString();
+  // A duplicated class run is private until the teacher has reviewed it. This
+  // gives the teacher a safe place to adapt questions for the next class
+  // without changing the original run or briefly exposing the old questions.
+  copied.status = 'draft';
+  copied.copyNeedsReview = true;
   writeJsonAtomic(recPath(copied.id), copied);
   return copied;
 }
@@ -468,6 +473,52 @@ function assertAssessmentMutable(record) {
   if (assessmentIsFinalised(record)) {
     throw assessmentStateError('This assessment is finalised. Unrelease the results before changing marks.', 'assessment_finalised');
   }
+}
+
+function assessmentContentEditable(record) {
+  if (!record || record.type !== 'assessment' || assessmentIsFinalised(record)) return false;
+  if (loadSubmissions(record.id).length || loadDrafts(record.id).length) return false;
+  const delivery = deliveryState(record);
+  return delivery.mode !== 'live' || delivery.phase === 'lobby';
+}
+
+function assertAssessmentContentEditable(record) {
+  if (!record || record.type !== 'assessment') {
+    throw assessmentStateError('This item is not a test or project.', 'assessment_content_not_supported');
+  }
+  if (!assessmentContentEditable(record)) {
+    throw assessmentStateError('Questions cannot be changed after a learner has started this class run.', 'assessment_content_locked');
+  }
+}
+
+function updateAssessmentContent(id, data, cutoffAt) {
+  const rec = getAssignment(id);
+  assertAssessmentContentEditable(rec);
+  const normalized = normalizeAssessment(data);
+  rec.assessmentType = normalized.assessmentType;
+  rec.title = normalized.title;
+  rec.subject = normalized.subject;
+  rec.topic = normalized.title;
+  rec.grade = normalized.grade;
+  rec.totalMarks = normalized.totalMarks;
+  rec.objectives = normalized.objectives;
+  rec.sections = normalized.sections;
+  rec.content = { title: normalized.title, instructions: normalized.instructions, questions: normalized.questions };
+  // The lesson/workspace binding identifies the source of this class run and
+  // is not editable through the question editor.
+  rec.lessonWorkspaceId = rec.lessonWorkspaceId || null;
+  rec.unitId = rec.unitId || null;
+  rec.unitName = rec.unitName || null;
+  rec.delivery = normalized.deliveryMode === 'live'
+    ? { mode: 'live', phase: 'lobby', activeSectionIndex: -1, previousPhase: null, updatedAt: new Date().toISOString() }
+    : { mode: 'self-paced', phase: 'open', activeSectionIndex: null, previousPhase: null, updatedAt: new Date().toISOString() };
+  if (cutoffAt !== undefined) rec.cutoffAt = cutoffAt || null;
+  rec.version = Number(rec.version || 1) + 1;
+  rec.status = 'published';
+  rec.copyNeedsReview = false;
+  rec.editedAt = new Date().toISOString();
+  writeJsonAtomic(recPath(id), rec);
+  return rec;
 }
 
 function releaseResults(id, released) {
@@ -824,11 +875,13 @@ function listTeacherAssignments(teacherId) {
       sectionCount: Array.isArray(a.sections) ? a.sections.length : null,
       version: a.version || null, status: a.status || null, finalisedAt: a.finalisedAt || null,
       assessmentSeriesId: a.assessmentSeriesId || null, copiedFromAssessmentId: a.copiedFromAssessmentId || null,
+      copyNeedsReview: !!a.copyNeedsReview,
       lessonWorkspaceId: a.lessonWorkspaceId || null, unitId: a.unitId || null, unitName: a.unitName || null,
       delivery: a.delivery || null,
       createdAt: a.createdAt, roomCode: a.roomCode, rosterId: a.rosterId, cutoffAt: a.cutoffAt,
       resultsReleased: isReleased(a),
       submissions: loadSubmissions(a.id).length,
+      contentEditable: assessmentContentEditable(a),
     }))
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
@@ -853,7 +906,7 @@ function renameAssessmentStudent(teacherId, rosterId, studentId, name) {
 }
 
 module.exports = {
-  createAssignment, createAssessment, copyAssessmentToRoster, normalizeAssessment, getAssignment, updateAssignmentCutoff, updateAssessmentRoster, getRoomCode,
+  createAssignment, createAssessment, copyAssessmentToRoster, normalizeAssessment, getAssignment, updateAssignmentCutoff, updateAssessmentRoster, updateAssessmentContent, assessmentContentEditable, getRoomCode,
   publishedAssessmentGenerationContext,
   releaseResults, isReleased,
   assessmentIsFinalised, saveSubmission, saveNewSubmission, getSubmissions, getSubmission,

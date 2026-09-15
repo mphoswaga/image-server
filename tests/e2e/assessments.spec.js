@@ -72,13 +72,25 @@ test('teacher builds a marked assessment and a learner sees practical criteria s
   await changedAssessmentCard.getByRole('button',{name:'Give to another class'}).click();
   await changedAssessmentCard.locator('.a-class-copy-picker').selectOption(anotherRoster.id);
   const classCopyResponse=page.waitForResponse(result=>result.url().endsWith(`/api/assignment/${assessment.assessmentId}/class-copy`)&&result.request().method()==='POST');
-  await changedAssessmentCard.getByRole('button',{name:'Create class run'}).click();
+  await changedAssessmentCard.getByRole('button',{name:'Duplicate and edit'}).click();
   const classCopyResult=await classCopyResponse;
   expect(classCopyResult.ok(),await classCopyResult.text()).toBeTruthy();
   const classCopy=await classCopyResult.json();
   expect(classCopy.assessmentId).not.toBe(assessment.assessmentId);
   expect(classCopy.roomCode).not.toBe(assessment.roomCode);
-  await expect(page.locator(`#assignmentsList .game-card[data-assignment-id="${classCopy.assessmentId}"]`)).toContainText('Grade 2 ICT C');
+  expect(classCopy.status).toBe('draft');
+  const draftJoin=await page.request.get(`/api/assignment/${classCopy.assessmentId}/join`);
+  expect(draftJoin.status()).toBe(409);
+  expect((await draftJoin.json()).error).toMatch(/still editing/i);
+  await expect(page.locator('#publishAssessmentBtn')).toHaveText('Save and publish changes');
+  await expect(page.locator('#assessmentRoster')).toHaveValue(anotherRoster.id);
+  await expect(page.locator('#assessmentRoster')).toBeDisabled();
+  await page.locator('[data-item-prompt]').fill('Creates a document and checks every word carefully');
+  const editedCopyResponse=page.waitForResponse(result=>result.url().endsWith(`/api/assignment/${classCopy.assessmentId}/content`)&&result.request().method()==='PATCH');
+  await page.locator('#publishAssessmentBtn').click();
+  const editedCopyResult=await editedCopyResponse;
+  expect(editedCopyResult.ok(),await editedCopyResult.text()).toBeTruthy();
+  await expect(page.locator('#assessmentPublishResult')).toContainText('Changes saved and published');
   const [originalJoin,copyJoin]=await Promise.all([
     page.request.get(`/api/assignment/${assessment.assessmentId}/join`).then(result=>result.json()),
     page.request.get(`/api/assignment/${classCopy.assessmentId}/join`).then(result=>result.json()),
