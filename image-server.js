@@ -2430,10 +2430,24 @@ app.get('/api/assignment/:id/presentation', requireAuth, (req, res) => {
   if (a.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assessment.' });
   if (a.type !== 'assessment') return res.status(400).json({ error: 'This item has no assessment presentation.' });
   const questionProgress = assignments.questionAnswerProgress(a);
-  const cohortSize = a.rosterId ? assignmentCohortStudents(a).length : null;
+  const cohort = a.rosterId ? assignmentCohortStudents(a) : [];
+  const cohortSize = a.rosterId ? cohort.length : null;
   const question = questionProgress.question;
   const delivery = assignments.deliveryState(a);
   const activeSection = delivery.activeSectionIndex >= 0 ? (a.sections || [])[delivery.activeSectionIndex] || null : null;
+  // The classroom presentation is teacher-authenticated. Give the teacher a
+  // useful, class-scoped follow-up list, but never send answers, marks, or
+  // school IDs to the projector page.
+  const pickerLabels = new Map(classListForAssignment(a)
+    .map(student => [student.handle, student.label]));
+  const draftsByStudent = new Map(assignments.loadDrafts(a.id)
+    .map(draft => [roster.normalizeStudentId(draft.studentId), draft]));
+  const awaitingLearners = question
+    ? cohort.filter(student => {
+      const draft = draftsByStudent.get(roster.normalizeStudentId(student.id));
+      return assignments.incompleteAssessmentAnswers([question], draft && draft.answers).length > 0;
+    }).map(student => pickerLabels.get(studentHandle(a.id, student.id)) || learnerPickerLabel(student.name))
+    : [];
   res.json({
     id: a.id,
     title: a.title,
@@ -2453,6 +2467,8 @@ app.get('/api/assignment/:id/presentation', requireAuth, (req, res) => {
       answered: questionProgress.answeredCount,
       joined: questionProgress.participantCount,
       assigned: cohortSize,
+      awaitingCount: awaitingLearners.length,
+      awaitingLearners,
     },
   });
 });

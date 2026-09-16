@@ -94,3 +94,13 @@ test('learner visibility is separate from official assessment analysis', () => {
   assert.match(learner, /if \(assignmentType !== 'assessment'\) clearInterval\(livePollTimer\)/);
   assert.match(learner, /livePollTimer = setInterval\(refreshLiveTake, 2500\)/);
 });
+
+test('teacher presentation offers a live, class-scoped list of learners still to answer', () => {
+  const presentation = fs.readFileSync(path.join(__dirname, '..', 'public', 'assessment-present.html'), 'utf8');
+  assert.match(server, /awaitingLearners/);
+  assert.match(server, /classListForAssignment\(a\)/);
+  assert.match(server, /incompleteAssessmentAnswers\(\[question\], draft && draft\.answers\)/);
+  assert.match(presentation, /Still to answer this question/);
+  assert.match(presentation, /teacher list/);
+  assert.match(presentation, /awaitingLearners/);
+});

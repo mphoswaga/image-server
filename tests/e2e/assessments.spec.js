@@ -358,7 +358,7 @@ test('an unfinished learner catches up after the teacher advances sections', asy
   }
 });
 
-test('teacher presentation synchronizes questions and shows anonymous answer totals', async ({ page, browser }, testInfo) => {
+test('teacher presentation synchronizes questions and shows the teacher who is still to answer', async ({ page, browser }, testInfo) => {
   test.skip(testInfo.project.name !== 'windows-100', 'One desktop projector and two learner sessions cover question sync.');
   await signInDisposableTeacher(page, '-assessment-presentation-sync');
   const rosterResponse = await page.request.post('/api/roster', { data: {
@@ -400,6 +400,10 @@ test('teacher presentation synchronizes questions and shows anonymous answer tot
     expect(firstQuestion.questions.map(question => question.id)).toEqual(['glass']);
     expect((await firstContext.request.post(`/api/assignment/${assessment.assessmentId}/draft`, { data: { answers: { glass: 0 }, complete: false } })).ok()).toBeTruthy();
     await expect(presentation.locator('#answerProgress')).toHaveText('1 of 2 students answered', { timeout: 6000 });
+    await expect(presentation.locator('#awaitingToggle')).toContainText('1 still to answer');
+    await presentation.locator('#awaitingToggle').click();
+    await expect(presentation.locator('#awaitingNames')).toContainText('Learner T.');
+    await expect(presentation.locator('#awaitingNames')).not.toContainText('Learner O.');
 
     await presentation.locator('#next').click();
     await expect(presentation.locator('#title')).toHaveText('Which object is attracted to a magnet?');
@@ -416,6 +420,7 @@ test('teacher presentation synchronizes questions and shows anonymous answer tot
     expect((await firstContext.request.post(`/api/assignment/${assessment.assessmentId}/draft`, { data: { answers: { magnet: 0 }, complete: false } })).ok()).toBeTruthy();
     expect((await secondContext.request.post(`/api/assignment/${assessment.assessmentId}/draft`, { data: { answers: { magnet: 0 }, complete: false } })).ok()).toBeTruthy();
     await expect(presentation.locator('#answerProgress')).toHaveText('2 of 2 students answered', { timeout: 6000 });
+    await expect(presentation.locator('#awaitingToggle')).toHaveText('Everyone has answered');
 
     const safePresentation = await (await page.request.get(`/api/assignment/${assessment.assessmentId}/presentation`)).json();
     expect(safePresentation.currentQuestion).toEqual({ id: 'magnet', question: 'Which object is attracted to a magnet?', options: ['Iron nail', 'Paper'], number: 2, total: 2, sectionTitle: 'Written questions' });
