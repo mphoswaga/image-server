@@ -695,6 +695,22 @@ function getRoom(code) {
   return publicRoom(room);
 }
 
+// Trusted server-side join metadata. This is deliberately not the public
+// response: image-server turns each roster ID into a room-scoped opaque handle
+// before any learner sees the class list.
+function getJoinRoster(code) {
+  const room = requireOpenRoom(code);
+  return {
+    code: room.code,
+    activityTitle: (practice.getActivity(room.activityId, room.activityVersion) || {}).title || 'Byte Skill Lab',
+    roster: room.roster ? {
+      id: room.roster.id,
+      name: room.roster.name,
+      students: room.roster.students.map((student) => ({ id: student.id, name: student.name })),
+    } : null,
+  };
+}
+
 function getRoomForParticipant(code, token = '') {
   const room = loadRoom(code);
   if (!room || !roomIsReadable(room)) {
@@ -753,6 +769,7 @@ module.exports = {
   updateRoomAudio,
   checkpointRoom,
   getRoom,
+  getJoinRoster,
   getRoomForParticipant,
   teacherRooms,
   closeRoom,

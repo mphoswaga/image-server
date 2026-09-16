@@ -2806,9 +2806,46 @@ app.get('/api/practice/live-sessions/:code', requirePracticeEnabled, (req, res) 
   }
 });
 
+app.get('/api/practice/live-sessions/:code/join', requirePracticeEnabled, (req, res) => {
+  try {
+    const join = practiceLive.getJoinRoster(req.params.code);
+    const activityId = `practice:${join.code}`;
+    res.json({
+      code: join.code,
+      title: join.activityTitle,
+      hasRoster: Boolean(join.roster),
+      rosterName: join.roster && join.roster.name,
+      students: join.roster ? learnerPickerEntries(join.roster.students, activityId) : [],
+    });
+  } catch (err) {
+    const status = err.code === 'room_not_found' ? 404 : err.code === 'room_closed' ? 410 : 400;
+    res.status(status).json({ error: err.message, code: err.code || 'room_unavailable' });
+  }
+});
+
 app.post('/api/practice/live-sessions/:code/join', requirePracticeEnabled, (req, res) => {
   try {
-    res.status(201).json(practiceLive.joinRoom(req.params.code, req.body || {}));
+    const join = practiceLive.getJoinRoster(req.params.code);
+    let input = req.body || {};
+    if (join.roster) {
+      const activityId = `practice:${join.code}`;
+      const wantedHandle = String(input.handle || '');
+      const student = join.roster.students.find((candidate) => studentHandle(activityId, candidate.id) === wantedHandle);
+      if (!student) return res.status(403).json({ error: 'Choose your name from this class.', code: 'student_not_in_roster' });
+      const studentId = roster.normalizeStudentId(student.id);
+      const pin = String(input.pin || '').trim();
+      const pinState = studentAccount.getAccountState(studentId);
+      if (pinState === 'unset') {
+        if (!pin) return res.status(428).json({ needsPinSetup: true, error: 'Set up a 4-digit PIN to continue.' });
+        if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
+        if (!studentAccount.setPin(studentId, pin)) return res.status(409).json({ error: 'A PIN was just set for this learner. Enter it instead.' });
+      } else {
+        if (!pin) return res.status(428).json({ needsPin: true, error: 'Enter your PIN to continue.' });
+        if (!studentAccount.verifyPin(studentId, pin)) return res.status(403).json({ error: 'Incorrect PIN.' });
+      }
+      input = { studentId };
+    }
+    res.status(201).json(practiceLive.joinRoom(req.params.code, input));
   } catch (err) {
     const status = err.code === 'room_not_found' ? 404 : err.code === 'room_closed' ? 410 : 400;
     res.status(status).json({ error: err.message, code: err.code || 'room_join_failed' });

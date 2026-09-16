@@ -72,6 +72,14 @@
     .join-field label { display:block; margin-bottom:5px; color:#a9ddeb; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.6px; }
     .join-field input { width:100%; min-height:46px; padding:10px 12px; border:1px solid #466989; border-radius:8px; background:#fff; color:var(--navy); font:800 16px/1 inherit; }
     .join-field.code input { text-transform:uppercase; letter-spacing:3px; }
+    .practice-name-step { margin-top:14px; padding-top:14px; border-top:1px solid #284a68; }
+    .practice-name-step h3 { margin:0 0 4px; color:#fff; font-size:17px; }
+    .practice-name-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:12px; }
+    .practice-name-grid button { min-height:48px; padding:9px 7px; border:2px solid #466989; border-radius:9px; background:#fff; color:var(--navy); font:800 14px/1.2 inherit; cursor:pointer; }
+    .practice-name-grid button:hover,.practice-name-grid button:focus-visible { border-color:#25cddc; outline:none; }
+    .practice-name-grid button.is-picked { border-color:#52e69a; background:#e7fbf3; }
+    .practice-pin-step { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+    .practice-pin-step.single { grid-template-columns:1fr; }
     .join-error { min-height:20px; margin-top:8px; color:#ffd28a; font-size:13px; font-weight:700; }
     .solo-choice { display:flex; align-items:center; justify-content:center; gap:10px; margin-top:12px; color:#9fb2c5; font-size:12px; }
     .solo-choice button { border:0; background:transparent; color:#8cecf4; font-weight:800; text-decoration:underline; cursor:pointer; }
@@ -666,6 +674,8 @@
       body.playing .controls .btn { width:100%; min-width:0; padding-inline:8px; font-size:15px; }
       .activity-facts { grid-template-columns:1fr; }
       .join-fields { grid-template-columns:1fr; }
+      .practice-name-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .practice-pin-step { grid-template-columns:1fr; }
       .live-strip { align-items:flex-start; flex-direction:column; }
       .teacher-stage-jump { align-items:stretch; flex-direction:column; }
       .teacher-stage-jump select,.teacher-stage-jump .btn { width:100%; }
@@ -776,12 +786,25 @@
         </div>
         <div class="guest-entry" id="guestEntry" hidden>
           <h2>Join your class arcade</h2>
-          <p>Enter the room code. For a saved class, use your Student ID or full roster name.</p>
+          <p>Enter the room code. If your teacher selected a class, choose your name and enter your PIN.</p>
           <div class="join-fields">
             <div class="join-field code"><label for="roomCodeInput">Room code</label><input id="roomCodeInput" maxlength="6" autocomplete="off" inputmode="text" /></div>
-            <div class="join-field"><label for="nicknameInput">Name or Student ID</label><input id="nicknameInput" maxlength="60" autocomplete="name" /></div>
-            <button class="btn primary" id="joinRoomBtn" type="button">Join session</button>
+            <button class="btn primary" id="findRoomBtn" type="button">Find class</button>
           </div>
+          <div class="practice-name-step" id="practiceNameStep" hidden>
+            <h3 id="practiceNameTitle">Choose your name</h3>
+            <p id="practiceNameHint">Tap your name, then enter your PIN.</p>
+            <div class="practice-name-grid" id="practiceNameGrid"></div>
+          </div>
+          <div class="join-field" id="practiceGuestName" hidden><label for="nicknameInput">Your name</label><input id="nicknameInput" maxlength="60" autocomplete="name" /></div>
+          <div class="practice-pin-step" id="practicePinSetup" hidden>
+            <div class="join-field"><label for="practicePinNew">Create a 4-digit PIN</label><input id="practicePinNew" maxlength="4" inputmode="numeric" autocomplete="new-password" /></div>
+            <div class="join-field"><label for="practicePinConfirm">Confirm PIN</label><input id="practicePinConfirm" maxlength="4" inputmode="numeric" autocomplete="new-password" /></div>
+          </div>
+          <div class="practice-pin-step single" id="practicePinEnter" hidden>
+            <div class="join-field"><label for="practicePinInput">Your 4-digit PIN</label><input id="practicePinInput" maxlength="4" inputmode="numeric" autocomplete="current-password" /></div>
+          </div>
+          <button class="btn primary" id="joinRoomBtn" type="button" hidden>Join session</button>
           <div class="join-error" id="joinRoomError" role="alert"></div>
           <div class="solo-choice" id="soloChoice">No class code? <button id="soloGuestBtn" type="button">Play on my own</button></div>
         </div>
@@ -1142,6 +1165,9 @@
     let liveParticipant = null;
     let liveParticipantToken = '';
     let joiningLiveRoom = false;
+    let liveJoinMeta = null;
+    let liveJoinHandle = '';
+    let liveJoinAuthStep = '';
     let livePollTimer = null;
     let liveCountdownRunning = false;
     let liveDeadlineTimer = null;
@@ -1379,17 +1405,78 @@
       } finally { refreshingLiveRoom=false; }
     }
 
+    function resetLiveJoinChoice() {
+      liveJoinMeta=null; liveJoinHandle=''; liveJoinAuthStep='';
+      $('practiceNameStep').hidden=true;
+      $('practiceGuestName').hidden=true;
+      $('practicePinSetup').hidden=true;
+      $('practicePinEnter').hidden=true;
+      $('joinRoomBtn').hidden=true;
+      $('joinRoomBtn').textContent='Join session';
+      $('practiceNameGrid').innerHTML='';
+    }
+
+    async function findLiveRoom() {
+      const code=String($('roomCodeInput').value||'').replace(/[^a-z0-9]/gi,'').toUpperCase().slice(0,6);
+      $('joinRoomError').textContent='';
+      if(code.length!==6){ $('joinRoomError').textContent='Enter the 6-character room code.'; return; }
+      $('findRoomBtn').disabled=true;
+      resetLiveJoinChoice();
+      try {
+        const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(code)}/join`);
+        const payload=await response.json();
+        if(!response.ok) throw new Error(payload.error||'That class room could not be found.');
+        liveJoinMeta=payload;
+        if(payload.hasRoster){
+          $('practiceNameTitle').textContent=`Choose your name · ${payload.rosterName||'Your class'}`;
+          $('practiceNameHint').textContent='Only learners in this class are shown. Tap your name, then enter your PIN.';
+          $('practiceNameGrid').innerHTML=(payload.students||[]).map(student=>`<button type="button" data-handle="${esc(student.handle)}">${esc(student.label)}</button>`).join('');
+          $('practiceNameStep').hidden=false;
+          const first=$('practiceNameGrid').querySelector('button');
+          if(first) first.focus();
+        }else{
+          $('practiceGuestName').hidden=false;
+          $('joinRoomBtn').hidden=false;
+          $('nicknameInput').focus();
+        }
+      }catch(error){ $('joinRoomError').textContent=error.message; }
+      finally { $('findRoomBtn').disabled=false; }
+    }
+
+    function showPracticePin(step) {
+      liveJoinAuthStep=step;
+      $('practicePinSetup').hidden=step!=='setup';
+      $('practicePinEnter').hidden=step!=='enter';
+      $('joinRoomBtn').hidden=false;
+      $('joinRoomBtn').textContent=step==='setup'?'Set PIN and join':'Enter PIN and join';
+      (step==='setup'?$('practicePinNew'):$('practicePinInput')).focus();
+    }
+
     async function joinLiveRoom() {
       if(joiningLiveRoom) return;
       joiningLiveRoom=true;
       unlockAudio(false);
       const code=String($('roomCodeInput').value||'').replace(/[^a-z0-9]/gi,'').toUpperCase().slice(0,6);
       const name=String($('nicknameInput').value||'').trim();
+      let pin='';
+      if(liveJoinAuthStep==='setup'){
+        const first=String($('practicePinNew').value||'').trim();
+        const second=String($('practicePinConfirm').value||'').trim();
+        if(!/^\d{4}$/.test(first)){ $('joinRoomError').textContent='PIN must be exactly 4 digits.'; joiningLiveRoom=false; return; }
+        if(first!==second){ $('joinRoomError').textContent="PINs don't match."; joiningLiveRoom=false; return; }
+        pin=first;
+      }else if(liveJoinAuthStep==='enter'){
+        pin=String($('practicePinInput').value||'').trim();
+        if(!/^\d{4}$/.test(pin)){ $('joinRoomError').textContent='Enter your 4-digit PIN.'; joiningLiveRoom=false; return; }
+      }
       $('joinRoomError').textContent='';
       $('joinRoomBtn').disabled=true;
       try {
-        const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(code)}/join`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
+        const body=liveJoinMeta&&liveJoinMeta.hasRoster?{handle:liveJoinHandle,pin}:{name};
+        const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(code)}/join`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
         const payload=await response.json();
+        if(response.status===428&&payload.needsPinSetup){ showPracticePin('setup'); $('joinRoomBtn').disabled=false; return; }
+        if(response.status===428&&payload.needsPin){ showPracticePin('enter'); $('joinRoomBtn').disabled=false; return; }
         if(!response.ok) throw new Error(payload.error||'The room could not be joined.');
         const saved={room:payload.room,participant:payload.participant,token:payload.token};
         try { sessionStorage.setItem(liveStorageKey(payload.room.code),JSON.stringify(saved)); } catch {}
@@ -2710,10 +2797,27 @@
     }
 
     $('startBtn').addEventListener('click', () => beginAttempt(false).catch((error) => setSave(error.message,true)));
+    $('findRoomBtn').addEventListener('click',findLiveRoom);
     $('joinRoomBtn').addEventListener('click',joinLiveRoom);
     $('soloGuestBtn').addEventListener('click',chooseSoloGuest);
-    $('roomCodeInput').addEventListener('input',()=>{ $('roomCodeInput').value=String($('roomCodeInput').value||'').replace(/[^a-z0-9]/gi,'').toUpperCase().slice(0,6); });
+    $('practiceNameGrid').addEventListener('click',(event)=>{
+      const button=event.target.closest('button[data-handle]');
+      if(!button) return;
+      [...$('practiceNameGrid').querySelectorAll('button')].forEach(item=>item.classList.remove('is-picked'));
+      button.classList.add('is-picked');
+      liveJoinHandle=button.dataset.handle;
+      liveJoinAuthStep='';
+      $('practicePinSetup').hidden=true;
+      $('practicePinEnter').hidden=true;
+      joinLiveRoom();
+    });
+    $('roomCodeInput').addEventListener('input',()=>{
+      $('roomCodeInput').value=String($('roomCodeInput').value||'').replace(/[^a-z0-9]/gi,'').toUpperCase().slice(0,6);
+      resetLiveJoinChoice();
+    });
+    $('roomCodeInput').addEventListener('keydown',(event)=>{ if(event.key==='Enter') findLiveRoom(); });
     $('nicknameInput').addEventListener('keydown',(event)=>{ if(event.key==='Enter') joinLiveRoom(); });
+    for(const id of ['practicePinInput','practicePinConfirm']) $(id).addEventListener('keydown',(event)=>{ if(event.key==='Enter') joinLiveRoom(); });
 
     syncAudioPolicy(null);
     (async () => {
@@ -2747,7 +2851,7 @@
                 }
               }
             }catch{}
-            $('nicknameInput').focus();
+            await findLiveRoom();
           }else if(requestedContinue){ chooseSoloGuest(); await beginAttempt(false); return; }
           else $('roomCodeInput').focus();
           return;

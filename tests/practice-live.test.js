@@ -447,6 +447,9 @@ test('the server and both screens expose the live-room contract', () => {
   const teacher = fs.readFileSync(path.join(__dirname, '..', 'practice-teacher.html'), 'utf8');
   assert.match(server, /app\.post\('\/api\/practice\/live-sessions', requirePracticeEnabled, requireAuth/);
   assert.match(server, /app\.post\('\/api\/practice\/live-sessions\/:code\/join', requirePracticeEnabled/);
+  assert.match(server, /app\.get\('\/api\/practice\/live-sessions\/:code\/join', requirePracticeEnabled/);
+  assert.match(server, /learnerPickerEntries\(join\.roster\.students, activityId\)/);
+  assert.match(server, /studentAccount\.verifyPin\(studentId, pin\)/);
   assert.match(server, /app\.post\('\/api\/practice\/live-sessions\/:code\/start', requirePracticeEnabled, requireAuth/);
   assert.match(server, /app\.patch\('\/api\/practice\/live-sessions\/:code\/pause', requirePracticeEnabled, requireAuth/);
   assert.match(server, /app\.patch\('\/api\/practice\/live-sessions\/:code\/audio', requirePracticeEnabled, requireAuth/);

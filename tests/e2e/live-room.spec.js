@@ -1,6 +1,57 @@
 const { test, expect } = require('@playwright/test');
 const { signInDisposableTeacher } = require('./helpers');
 
+async function createRoster(page, name, rows) {
+  const response = await page.request.post('/api/roster', { data:{ name, rows, idCol:'ID', nameCol:'Name' } });
+  expect(response.ok(), await response.text()).toBeTruthy();
+  return response.json();
+}
+
+test('a selected practice class joins by private name picker and learner PIN', async ({ page, browser }, testInfo) => {
+  test.skip(!['windows-100','mobile'].includes(testInfo.project.name), 'Desktop and mobile cover the learner join layout.');
+  await signInDisposableTeacher(page, `-practice-roster-${testInfo.project.name}`);
+  const stamp=`${Date.now()}-${testInfo.project.name}`;
+  const selected=await createRoster(page,'Grade 2B Practice',[
+    { ID:`BYTE-A-${stamp}`, Name:'Hoàng Mỹ Chi' },
+    { ID:`BYTE-B-${stamp}`, Name:'Nguyễn Mỹ Chi' },
+  ]);
+  await createRoster(page,'Another Class',[{ ID:`BYTE-X-${stamp}`, Name:'Outside Learner' }]);
+  const pins=await page.request.post(`/api/roster/${selected.id}/pins`,{data:{all:true,sharedPin:'2468'}});
+  expect(pins.ok(),await pins.text()).toBeTruthy();
+  const created=await page.request.post('/api/practice/live-sessions',{data:{mode:'classwork',rosterId:selected.id,activityId:'g2-pointer-control'}});
+  expect(created.ok(),await created.text()).toBeTruthy();
+  const room=(await created.json()).room;
+
+  const metaResponse=await page.request.get(`/api/practice/live-sessions/${room.code}/join`);
+  expect(metaResponse.ok(),await metaResponse.text()).toBeTruthy();
+  const meta=await metaResponse.json();
+  expect(meta.hasRoster).toBeTruthy();
+  expect(meta.students.map(student=>student.label)).toEqual(['Mỹ Chi (Hoàng)','Mỹ Chi (Nguyễn)']);
+  expect(JSON.stringify(meta)).not.toContain(`BYTE-A-${stamp}`);
+  expect(JSON.stringify(meta)).not.toContain('Outside Learner');
+
+  const learnerContext=await browser.newContext();
+  const learner=await learnerContext.newPage();
+  try {
+    await learner.goto(new URL(`/student/practice/guest?session=${room.code}`,page.url()).toString());
+    await expect(learner.getByRole('heading',{name:/Choose your name/})).toBeVisible();
+    await expect(learner.locator('#nicknameInput')).toBeHidden();
+    await expect(learner.locator('#practiceNameGrid button')).toHaveCount(2);
+    await expect(learner.locator('#practiceNameGrid')).not.toContainText('Outside Learner');
+    await learner.getByRole('button',{name:'Mỹ Chi (Hoàng)'}).click();
+    await expect(learner.locator('#practicePinEnter')).toBeVisible();
+    await learner.locator('#practicePinInput').fill('0001');
+    await learner.locator('#joinRoomBtn').click();
+    await expect(learner.locator('#joinRoomError')).toContainText('Incorrect PIN');
+    await learner.locator('#practicePinInput').fill('2468');
+    await learner.locator('#joinRoomBtn').click();
+    await expect(learner.locator('#liveLobby')).toBeVisible();
+    await expect(learner.locator('#studentName')).toContainText('Hoàng Mỹ Chi');
+  } finally {
+    await learnerContext.close();
+  }
+});
+
 test('teacher-controlled classwork keeps learners waiting, starts together, and ends remotely', async ({ page, browser }, testInfo) => {
   test.skip(!['windows-100', 'desktop-safari'].includes(testInfo.project.name), 'One Chromium and one WebKit run cover the coordinated room workflow.');
 
