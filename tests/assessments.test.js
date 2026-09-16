@@ -429,14 +429,16 @@ test('fully marked assessments reach teacher progress before learner release and
   assert.equal(assignments.assessmentReleaseReadiness(record).ready, true);
   const provisionalRow = gradebook.assignmentResultRows('teacher-evidence')[0];
   assert.equal(provisionalRow.score, 17);
-  assert.equal(provisionalRow.provisional, true);
+  assert.equal(provisionalRow.provisional, false);
+  assert.equal(provisionalRow.learnerVisible, false);
   assert.equal(provisionalRow.status, 'marked');
   assert.equal(provisionalRow.finalisedAt, null);
-  assert.equal(gradebook.gatherStudentResults(['teacher-evidence'], 'student-1').rows[0].provisional, true);
+  assert.equal(gradebook.gatherStudentResults(['teacher-evidence'], 'student-1').rows[0].provisional, false);
   assert.equal(assignments.releaseResults(record.id, true).status, 'finalised');
   assert.equal(assignments.isReleased(assignments.getAssignment(record.id)), true);
   const row = gradebook.assignmentResultRows('teacher-evidence')[0];
   assert.equal(row.provisional, false);
+  assert.equal(row.learnerVisible, true);
   assert.equal(row.status, 'released');
   assert.equal(row.objectiveEvidence.length, 3);
   assert.equal(row.objectiveEvidence[0].objective, 'Explain how forces affect motion');
@@ -480,7 +482,8 @@ test('gradebook shows submitted assessments everywhere without counting unfinish
   let book = gradebook.buildGradebook(teacherId, classRoster.id);
   assert.equal(gradebook.listClasses(teacherId)[0].assignments, 1);
   assert.equal(book.assessments.length, 1);
-  assert.equal(book.assessments[0].provisional, true);
+  assert.equal(book.assessments[0].provisional, false);
+  assert.equal(book.assessments[0].learnerVisible, false);
   assert.equal(book.rows[0].done, 0);
   assert.equal(book.rows[0].average, null);
   assert.deepEqual(gradebook.assignmentResultRows(teacherId), []);
@@ -509,10 +512,10 @@ test('gradebook shows submitted assessments everywhere without counting unfinish
     totalMarks: 0,
   });
   assert.equal(gradebook.assignmentResultRows(teacherId)[0].score, 17);
-  assert.equal(gradebook.assignmentResultRows(teacherId)[0].provisional, true);
+  assert.equal(gradebook.assignmentResultRows(teacherId)[0].provisional, false);
   book = gradebook.buildGradebook(teacherId, classRoster.id);
   assert.equal(book.rows[0].cells[record.id].mark, 17);
-  assert.equal(book.assessments[0].provisional, true);
+  assert.equal(book.assessments[0].provisional, false);
   assignments.releaseResults(record.id, true);
 
   book = gradebook.buildGradebook(teacherId, classRoster.id);

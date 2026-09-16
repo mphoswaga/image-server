@@ -5122,7 +5122,7 @@ app.get('/api/roster/:id/progress', requireAuth, (req, res) => {
     if (!rosterMap.has(studentId)) continue;
     if (!byStudent.has(studentId)) byStudent.set(studentId, []);
     byStudent.get(studentId).push({
-      kind: 'assignment', status: result.status, provisional: !!result.provisional,
+      kind: 'assignment', status: result.status, provisional: false, learnerVisible: !!result.learnerVisible,
       assignmentId: result.assignmentId, lessonTitle: result.title, title: result.title,
       topic: result.topic, subject: result.subject,
       score: result.score, total: result.total, pct: result.percentage,
@@ -5547,14 +5547,15 @@ app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:r
     }
   }
   for (const a of assignments.filterAssignmentEvidenceForRoster(gradebook.assignmentResultRows(foundTeacherId), foundRoster.id)) {
-    // Fully marked tests/projects are teacher evidence immediately. The
-    // provisional flag keeps learner release separate from teacher reporting.
+    // Fully marked tests/projects are official teacher evidence immediately.
+    // Learner visibility is a separate flag and never removes the result from
+    // LessonScope or TeacherScope analysis.
     if (!inRoster(a.studentId)) continue;
     push(a.studentId, { kind: 'assignment', type: a.type, assignmentId: a.assignmentId, topic: a.topic, subject: a.subject,
       title: a.title, mode: a.type === 'homework' ? 'homework' : 'classwork', activityId: `assignment:${a.assignmentId}`,
       score: a.score, total: a.total, percentage: a.percentage,
       assessmentType: a.assessmentType, version: a.version, finalisedAt: a.finalisedAt,
-      provisional: !!a.provisional, status: a.status,
+      provisional: false, learnerVisible: !!a.learnerVisible, status: a.status,
       lessonWorkspaceId: a.lessonWorkspaceId || null, unitId: a.unitId || null, unitName: a.unitName || null,
       objectiveEvidence: a.objectiveEvidence || [], questionEvidence: a.questionEvidence || [], at: a.at, updatedAt: a.at });
   }

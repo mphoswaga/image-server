@@ -473,11 +473,11 @@ test('multiple-choice answers are visibly auto-confirmed without per-learner sav
 
     const rosterProgress = await (await page.request.get(`/api/roster/${classRoster.id}/progress`)).json();
     expect(rosterProgress.students[0].results).toEqual(expect.arrayContaining([
-      expect.objectContaining({ assignmentId: assessment.assessmentId, lessonTitle: 'Plant knowledge test', status: 'marked', provisional: true, score: 1, total: 2, pct: 50 }),
+      expect.objectContaining({ assignmentId: assessment.assessmentId, lessonTitle: 'Plant knowledge test', status: 'marked', provisional: false, score: 1, total: 2, pct: 50 }),
     ]));
     const marks = await (await page.request.get(`/api/gradebook/${classRoster.id}`)).json();
     expect(marks.assessments).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: assessment.assessmentId, provisional: true }),
+      expect.objectContaining({ id: assessment.assessmentId, provisional: false, learnerVisible: false }),
     ]));
     expect(marks.rows[0].cells[assessment.assessmentId]).toEqual(expect.objectContaining({ mark: 1, max: 2, pct: 0.5 }));
 
@@ -488,7 +488,7 @@ test('multiple-choice answers are visibly auto-confirmed without per-learner sav
     await expect(page.locator('#progressStats')).toContainText('1');
     await page.locator('#progressStudents .stu-head').filter({ hasText: 'Minh Anh' }).click();
     await expect(page.locator('#progressStudents')).toContainText('Plant knowledge test');
-    await expect(page.locator('#progressStudents')).toContainText('50% · Marked');
+    await expect(page.locator('#progressStudents')).toContainText('50% · Official · Hidden');
 
     await page.locator('#assignmentsBtn').click();
     const card = page.locator('#assignmentsList .game-card').filter({ hasText: 'Plant knowledge test' });

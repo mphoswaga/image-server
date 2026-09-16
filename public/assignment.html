@@ -227,7 +227,7 @@
     // null from the server in that case, so `g` stays undefined and no
     // verdict badge is shown, just the plain answer.
     function renderResults(d, givenAnswers) {
-      clearInterval(livePollTimer);
+      if (assignmentType !== 'assessment') clearInterval(livePollTimer);
       $('liveStatus').style.display = 'none';
       $('form').style.display = 'none';
       $('scoreWrap').style.display = d.released ? 'block' : 'none';
@@ -362,6 +362,10 @@
           const my = await myRes.json();
           if (!myRes.ok) throw new Error(my.error || 'Could not load your submission.');
           renderResults(my, my.answers);
+          if (assignmentType === 'assessment') {
+            clearInterval(livePollTimer);
+            livePollTimer = setInterval(refreshLiveTake, 2500);
+          }
           return;
         }
 

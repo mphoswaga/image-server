@@ -85,3 +85,12 @@ test('every formal test and project publication requires an owned class roster',
   assert.match(server, /!Array\.isArray\(selectedRoster\.students\) \|\| !selectedRoster\.students\.length/);
   assert.match(server, /rosterId: selectedRosterId, rosterSnapshot: selectedRoster\.students/);
 });
+
+test('learner visibility is separate from official assessment analysis', () => {
+  assert.match(html, /Official marks · Hidden from learners/);
+  assert.match(html, /Recall from learners/);
+  assert.match(html, /official analysis stays live/);
+  const learner = fs.readFileSync(path.join(__dirname, '..', 'public', 'assignment.html'), 'utf8');
+  assert.match(learner, /if \(assignmentType !== 'assessment'\) clearInterval\(livePollTimer\)/);
+  assert.match(learner, /livePollTimer = setInterval\(refreshLiveTake, 2500\)/);
+});

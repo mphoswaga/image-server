@@ -12,9 +12,10 @@ const roster = require('./roster');
 const isIndividuallyGradedGame = game => game.mode !== 'colonyquest';
 const FINAL_ASSESSMENT_GRADE_SOURCES = new Set(['auto', 'teacher', 'ai-confirmed']);
 
-// Releasing controls what learners can see. Teacher progress views and
-// TeacherScope may use a fully marked submission before learner release, but
-// it remains explicitly provisional until this finalisation tuple is present.
+// Releasing controls only what learners can see. A complete, valid item-level
+// mark is official teacher evidence as soon as it is saved, so LessonScope and
+// TeacherScope analysis must not downgrade it merely because it is hidden from
+// learners. This helper is retained for record locking and release history.
 function isFinalisedAssessment(record) {
   if (!record) return false;
   if (record.type !== 'assessment') return true;
@@ -243,7 +244,8 @@ function buildGradebook(userId, rosterId) {
       pcts.push(pct);
     });
     assessments.push({ id: a.id, kind: 'assignment', type: a.type, title: a.title,
-      provisional: record.type === 'assessment' && !isFinalisedAssessment(record),
+      provisional: false,
+      learnerVisible: assignments.isReleased(record),
       at: record.type === 'assessment' ? (record.finalisedAt || record.createdAt || a.createdAt) : a.createdAt,
       average: mean(pcts), done: pcts.length });
   }
@@ -324,11 +326,12 @@ function gatherStudentResults(teacherIds, studentId) {
           unitId: record.unitId || a.unitId || null,
           unitName: record.unitName || a.unitName || null,
           finalisedAt: record.finalisedAt || null,
-          provisional: record.type === 'assessment' && !isFinalisedAssessment(record),
+          provisional: false,
+          learnerVisible: assignments.isReleased(record),
           objectiveEvidence: objectiveEvidenceForSubmission(record, sub),
           questionEvidence: questionEvidenceForSubmission(record, sub),
           mark: result.mark, max: result.max, percentage: result.max > 0 ? Math.round((result.mark / result.max) * 100) : 0,
-          at: record.type === 'assessment' ? record.finalisedAt : (sub.submittedAt || a.createdAt) });
+          at: record.type === 'assessment' ? (record.finalisedAt || sub.submittedAt || record.createdAt) : (sub.submittedAt || a.createdAt) });
       }
     }
   }
@@ -400,7 +403,8 @@ function assignmentProgressRows(teacherId, { includePending = false } = {}) {
         unitId: record.unitId || a.unitId || null,
         unitName: record.unitName || a.unitName || null,
         finalisedAt: record.finalisedAt || null,
-        provisional: record.type === 'assessment' && !finalised,
+        provisional: false,
+        learnerVisible: assignments.isReleased(record),
         status: result ? (finalised || assignments.isReleased(record) ? 'released' : 'marked') : 'awaiting-marking',
         objectiveEvidence,
         questionEvidence,

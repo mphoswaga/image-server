@@ -170,6 +170,11 @@ test('formal assessments enforce complete server-owned attempts and immutable re
     const release = await page.request.patch(`/api/assignment/${assessment.assessmentId}/release`, { data: { released: true } });
     expect(release.ok(), await release.text()).toBeTruthy();
 
+    const learner = await learnerContext.newPage();
+    await learner.goto(new URL(`/assignment/${assessment.assessmentId}`, page.url()).toString());
+    await expect(learner.locator('#scoreWrap')).toBeVisible();
+    await expect(learner.locator('#scoreVal')).toHaveText('2');
+
     const lockedGrade = await page.request.patch(`/api/assignment/${assessment.assessmentId}/grade`, {
       data: { studentId: 'LOCK-1', questionId: 'practical-1', marksAwarded: 0 },
     });
@@ -180,10 +185,16 @@ test('formal assessments enforce complete server-owned attempts and immutable re
     expect((await lockedSubmit.json()).code).toBe('assessment_finalised');
 
     expect((await page.request.patch(`/api/assignment/${assessment.assessmentId}/release`, { data: { released: false } })).ok()).toBeTruthy();
+    await expect(learner.locator('#pendingMsg')).toBeVisible({ timeout: 6_000 });
+    await expect(learner.locator('#scoreWrap')).toBeHidden();
     const corrected = await page.request.patch(`/api/assignment/${assessment.assessmentId}/grade`, {
       data: { studentId: 'LOCK-1', questionId: 'practical-1', marksAwarded: 0 },
     });
     expect(corrected.ok(), await corrected.text()).toBeTruthy();
+    const officialWhileHidden = await (await page.request.get(`/api/roster/${classRoster.id}/progress`)).json();
+    expect(officialWhileHidden.students[0].results).toEqual(expect.arrayContaining([
+      expect.objectContaining({ assignmentId: assessment.assessmentId, provisional: false, status: 'marked' }),
+    ]));
     const stillNoResubmit = await learnerContext.request.post(`/api/assignment/${assessment.assessmentId}/submit`, { data: { answers: {} } });
     expect(stillNoResubmit.status()).toBe(409);
     expect((await stillNoResubmit.json()).code).toBe('assessment_already_submitted');

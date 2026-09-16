@@ -5942,7 +5942,7 @@
         releaseBtn.disabled=true;
         try{ const r=await fetch(`/api/assignment/${assignId}/release`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({released})});
           const d=await r.json(); if(!r.ok) throw new Error(d.error);
-          toast(released?'Results released to students':'Results hidden again','ok');
+          toast(released?'Results released to students':'Results recalled from students; official analysis stays live','ok');
           loadAssignmentResults(assignId, wrapId||'assignSubmissions');
         }catch(err){ toast(err.message); releaseBtn.disabled=false; } return; }
 
@@ -6148,9 +6148,9 @@
       wrap.dataset.view=view;
       const liveBar=assessmentLiveControls(d,assignId,wrapId);
       const releaseBar=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:${d.effectivelyReleased?'#eafaf0':'#fdf6ea'}">
-        <span style="font-size:13px;font-weight:600;color:${d.effectivelyReleased?'var(--ok,#1f9d55)':'#b26a00'}">${d.effectivelyReleased?(d.resultsReleased?'Results released to students':'Results released — due date passed'):'Results hidden from students'}</span>
+        <span style="font-size:13px;font-weight:600;color:${d.effectivelyReleased?'var(--ok,#1f9d55)':'#b26a00'}">${d.effectivelyReleased?(d.resultsReleased?'Official marks · Visible to learners':'Official marks · Visible after due date'):(d.assessmentType&&d.releaseReady?'Official marks · Hidden from learners':'Marks saved privately · Hidden from learners')}</span>
         ${!d.resultsReleased?`<button type="button" class="release-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" ${d.assessmentType&&!d.releaseReady?'disabled title="'+esc(d.releaseReason||'Finish marking first')+'"':''} style="font-size:12.5px;font-weight:600;padding:6px 12px;border:1px solid var(--primary);border-radius:8px;background:#fff;color:var(--primary);cursor:pointer">${d.assessmentType&&!d.releaseReady?esc(d.missingStudents?`${d.missingStudents} submissions missing`:d.pendingGrades?`${d.pendingGrades} grades pending`:'No submissions yet'):'Release results'}</button>`
-          :`<button type="button" class="unrelease-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" style="font-size:12.5px;font-weight:600;padding:6px 12px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--muted);cursor:pointer">Hide again</button>`}
+          :`<button type="button" class="unrelease-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" style="font-size:12.5px;font-weight:600;padding:6px 12px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--muted);cursor:pointer">Recall from learners</button>`}
       </div>`;
       const tabBtn=(v,label)=>`<button type="button" class="view-tab-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-view="${v}" style="font-size:12.5px;font-weight:600;padding:6px 14px;border:1px solid ${view===v?'var(--primary)':'var(--border)'};border-radius:8px;background:${view===v?'var(--primary)':'#fff'};color:${view===v?'#fff':'var(--ink)'};cursor:pointer">${label}</button>`;
       const tabs=`<div style="display:flex;gap:8px;margin-bottom:10px">${tabBtn('student','By student')}${tabBtn('question','By question')}</div>`;
@@ -7663,7 +7663,7 @@
         <div class="gb-stat"><div class="v">${g.students.length}</div><div class="l">Students</div></div>
         <div class="gb-stat"><div class="v">${doneCount}/${g.students.length}</div><div class="l">Have taken part</div></div>
       </div>`;
-      const head=`<tr><th class="sticky">Student</th>${g.assessments.map(a=>`<th title="${esc(a.title)}"><span class="gb-th-type">${a.kind==='game'?'🎮 Game':'📝 '+esc(a.type||'Task')}${a.provisional?' · Marked, results hidden':''}</span>${esc(a.title.length>18?a.title.slice(0,17)+'…':a.title)}</th>`).join('')}<th>Average</th></tr>`;
+      const head=`<tr><th class="sticky">Student</th>${g.assessments.map(a=>`<th title="${esc(a.title)}"><span class="gb-th-type">${a.kind==='game'?'🎮 Game':'📝 '+esc(a.type||'Task')}${a.learnerVisible===false?' · Official, hidden from learners':''}</span>${esc(a.title.length>18?a.title.slice(0,17)+'…':a.title)}</th>`).join('')}<th>Average</th></tr>`;
       const body=g.rows.map(r=>`<tr>
         <td class="sticky">${esc(r.name)}</td>
         ${g.assessments.map(a=>{ const c=r.cells[a.id]; return `<td>${c?`<span class="gb-cell ${pctClass(c.pct)}">${c.mark}/${c.max}</span>`:'<span class="gb-none">—</span>'}</td>`; }).join('')}
@@ -8755,7 +8755,7 @@
               ${s.results.map(r => { const pending=r.status==='awaiting-marking'||!Number.isFinite(Number(r.pct)); return `<div class="stu-res-row">
                 <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(r.lessonTitle)}">${esc(r.lessonTitle)}</span>
                 <span class="sc">${pending?'—':`${r.score}/${r.total}`}</span>
-                <span class="pc" style="color:${pending?'#c77700':pctColor(r.pct)}">${pending?'Awaiting marking':`${r.pct}%${r.provisional?' · Marked':''}`}</span>
+                <span class="pc" style="color:${pending?'#c77700':pctColor(r.pct)}">${pending?'Awaiting marking':`${r.pct}%${r.assessmentType?` · Official${r.learnerVisible?'':' · Hidden'}`:''}`}</span>
                 <span class="dt">${relTime(r.at)}</span>
               </div>`; }).join('')}
             </div>`
