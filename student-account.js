@@ -76,6 +76,10 @@ function issuePin(studentId, pin) {
   if (!/^\d{4}$/.test(code)) return null;
   const accounts = loadAccounts();
   const acc = accounts[id] || {};
+  // A deliberate individual reset replaces any classroom-only PIN and its
+  // fallback. The teacher has chosen a new lasting code for this learner.
+  delete acc.temporaryPin;
+  delete acc.retiredTemporaryPinHash;
   acc.pinHash = bcrypt.hashSync(code, 10);
   acc.issuedPin = sealPin(code);      // readable by the teacher who issued it
   acc.pinResetRequested = null;
@@ -84,10 +88,70 @@ function issuePin(studentId, pin) {
   return code;
 }
 
+const TEMPORARY_CLASS_PIN_MS = 12 * 60 * 60 * 1000;
+
+function restoreTemporaryPin(account) {
+  if (!account || !account.temporaryPin) return false;
+  const temporary = account.temporaryPin;
+  const temporaryHash = account.pinHash || null;
+  account.pinHash = temporary.previousPinHash || null;
+  if (temporary.previousIssuedPin) account.issuedPin = temporary.previousIssuedPin;
+  else delete account.issuedPin;
+  if (!temporary.previousPinHash && temporaryHash) account.retiredTemporaryPinHash = temporaryHash;
+  else delete account.retiredTemporaryPinHash;
+  delete account.temporaryPin;
+  return true;
+}
+
+// A shared classroom PIN must never replace a learner's own access forever.
+// Keep the previous hashed/encrypted state inside the account, so a learner
+// with a prior PIN returns to it after the one classroom entry; a learner
+// without one is sent to normal first-time setup next time.
+function issueTemporaryClassPin(studentId, pin, { now = Date.now(), ttlMs = TEMPORARY_CLASS_PIN_MS } = {}) {
+  const id = normalizeStudentId(studentId);
+  const code = String(pin || '');
+  if (!id || !/^\d{4}$/.test(code)) return null;
+  const accounts = loadAccounts();
+  const account = accounts[id] || {};
+  const previous = account.temporaryPin || {};
+  account.temporaryPin = {
+    previousPinHash: Object.prototype.hasOwnProperty.call(previous, 'previousPinHash') ? previous.previousPinHash : (account.pinHash || null),
+    previousIssuedPin: Object.prototype.hasOwnProperty.call(previous, 'previousIssuedPin') ? previous.previousIssuedPin : (account.issuedPin || null),
+    expiresAt: new Date(Number(now) + Math.max(1, Number(ttlMs) || TEMPORARY_CLASS_PIN_MS)).toISOString(),
+  };
+  account.pinHash = bcrypt.hashSync(code, 10);
+  account.issuedPin = sealPin(code);
+  delete account.retiredTemporaryPinHash;
+  account.pinResetRequested = null;
+  accounts[id] = account;
+  saveAccounts(accounts);
+  return { pin: code, expiresAt: account.temporaryPin.expiresAt };
+}
+
+function resolveTemporaryPin(account, now = Date.now()) {
+  if (!account || !account.temporaryPin) return false;
+  const expiresAt = Date.parse(account.temporaryPin.expiresAt || '');
+  if (!Number.isFinite(expiresAt) || expiresAt > Number(now)) return false;
+  return restoreTemporaryPin(account);
+}
+
+function getTemporaryPinInfo(studentId, now = Date.now()) {
+  const id = normalizeStudentId(studentId);
+  const accounts = loadAccounts();
+  const account = accounts[id];
+  if (!account) return null;
+  if (resolveTemporaryPin(account, now)) saveAccounts(accounts);
+  if (!account.temporaryPin) return null;
+  return { expiresAt: account.temporaryPin.expiresAt };
+}
+
 // The PIN a teacher issued, or null when the student chose their own — those
 // are hash-only and stay that way.
 function revealPin(studentId) {
-  const acc = loadAccounts()[normalizeStudentId(studentId)];
+  const id = normalizeStudentId(studentId);
+  const accounts = loadAccounts();
+  const acc = accounts[id];
+  if (resolveTemporaryPin(acc)) saveAccounts(accounts);
   if (!acc || !acc.issuedPin) return null;
   return openPin(acc.issuedPin);
 }
@@ -102,9 +166,11 @@ function loadAccounts() {
 function saveAccounts(accounts) { writeJsonAtomic(ACCOUNTS_PATH, accounts); }
 
 // 'unset' (never set up, or a reset was approved) | 'set' (has an active PIN).
-function getAccountState(studentId) {
+function getAccountState(studentId, now = Date.now()) {
   studentId = normalizeStudentId(studentId);
-  const acc = loadAccounts()[studentId];
+  const accounts = loadAccounts();
+  const acc = accounts[studentId];
+  if (resolveTemporaryPin(acc, now)) saveAccounts(accounts);
   return acc && acc.pinHash ? 'set' : 'unset';
 }
 
@@ -115,21 +181,45 @@ function setPin(studentId, pin) {
   studentId = normalizeStudentId(studentId);
   const accounts = loadAccounts();
   const acc = accounts[studentId] || {};
+  if (resolveTemporaryPin(acc)) saveAccounts(accounts);
   if (acc.pinHash) return false;
+  if (acc.retiredTemporaryPinHash && bcrypt.compareSync(String(pin), acc.retiredTemporaryPinHash)) return false;
   acc.pinHash = bcrypt.hashSync(String(pin), 10);
   // Chosen by the student, so it is theirs and not for the teacher to read.
   delete acc.issuedPin;
+  delete acc.temporaryPin;
+  delete acc.retiredTemporaryPinHash;
   acc.pinResetRequested = null;
   accounts[studentId] = acc;
   saveAccounts(accounts);
   return true;
 }
 
-function verifyPin(studentId, pin) {
+function isRetiredTemporaryPin(studentId, pin) {
+  const account = loadAccounts()[normalizeStudentId(studentId)];
+  return !!(account && account.retiredTemporaryPinHash && bcrypt.compareSync(String(pin || ''), account.retiredTemporaryPinHash));
+}
+
+function verifyPin(studentId, pin, now = Date.now()) {
   studentId = normalizeStudentId(studentId);
-  const acc = loadAccounts()[studentId];
+  const accounts = loadAccounts();
+  const acc = accounts[studentId];
   if (!acc || !acc.pinHash) return false;
-  return bcrypt.compareSync(String(pin || ''), acc.pinHash);
+  if (resolveTemporaryPin(acc, now)) {
+    accounts[studentId] = acc;
+    saveAccounts(accounts);
+    return !!(acc.pinHash && bcrypt.compareSync(String(pin || ''), acc.pinHash));
+  }
+  const verified = bcrypt.compareSync(String(pin || ''), acc.pinHash);
+  // A temporary classroom PIN is consumed by its first successful sign-in.
+  // Restore the learner's prior account before returning, while allowing this
+  // already verified sign-in to proceed normally.
+  if (verified && acc.temporaryPin) {
+    restoreTemporaryPin(acc);
+    accounts[studentId] = acc;
+    saveAccounts(accounts);
+  }
+  return verified;
 }
 
 function identityKey(provider, providerUserId) {
@@ -222,6 +312,9 @@ function approvePinReset(studentId) {
   const accounts = loadAccounts();
   if (!accounts[studentId]) return null;
   accounts[studentId].pinHash = null;
+  delete accounts[studentId].temporaryPin;
+  delete accounts[studentId].issuedPin;
+  delete accounts[studentId].retiredTemporaryPinHash;
   accounts[studentId].pinResetRequested = null;
   saveAccounts(accounts);
   return accounts[studentId];
@@ -233,4 +326,4 @@ function getResetRequest(studentId) {
   return (acc && acc.pinResetRequested) || null;
 }
 
-module.exports = { getAccountState, setPin, verifyPin, requestPinReset, approvePinReset, getResetRequest, issuePin, revealPin, generatePin, findByIdentity, linkIdentity, identitySummary, unlinkProvider };
+module.exports = { getAccountState, setPin, isRetiredTemporaryPin, verifyPin, requestPinReset, approvePinReset, getResetRequest, issuePin, issueTemporaryClassPin, getTemporaryPinInfo, revealPin, generatePin, findByIdentity, linkIdentity, identitySummary, unlinkProvider };

@@ -48,6 +48,33 @@ test('a new PIN retires the old one immediately', () => {
   assert.ok(sa.verifyPin('S4', second));
 });
 
+test('a temporary class PIN works once, then restores the learner chosen PIN', () => {
+  sa.setPin('S4-TEMP', '1122');
+  const temporary = sa.issueTemporaryClassPin('S4-TEMP', '2468');
+  assert.equal(sa.verifyPin('S4-TEMP', '1122'), false);
+  assert.equal(sa.verifyPin('S4-TEMP', temporary.pin), true);
+  assert.equal(sa.verifyPin('S4-TEMP', temporary.pin), false, 'the class PIN is consumed after one successful login');
+  assert.equal(sa.verifyPin('S4-TEMP', '1122'), true, 'the learner returns to their original PIN');
+});
+
+test('a temporary class PIN expires back to setup when no earlier PIN exists', () => {
+  const temporary = sa.issueTemporaryClassPin('S4-NEW', '2468', { now: 1000, ttlMs: 100 });
+  assert.equal(sa.getAccountState('S4-NEW', 1200), 'unset');
+  assert.equal(sa.verifyPin('S4-NEW', temporary.pin, 1200), false);
+  assert.equal(sa.isRetiredTemporaryPin('S4-NEW', temporary.pin), true);
+  assert.equal(sa.setPin('S4-NEW', temporary.pin), false, 'the expired class PIN cannot become the learner’s new PIN');
+  assert.equal(sa.setPin('S4-NEW', '1357'), true);
+  assert.equal(sa.verifyPin('S4-NEW', '1357'), true);
+});
+
+test('a temporary class PIN expires back to an earlier teacher-issued PIN', () => {
+  sa.issuePin('S4-RESTORE', '1357');
+  sa.issueTemporaryClassPin('S4-RESTORE', '2468', { now: 1000, ttlMs: 100 });
+  assert.equal(sa.getAccountState('S4-RESTORE', 1200), 'set');
+  assert.equal(sa.verifyPin('S4-RESTORE', '2468', 1200), false);
+  assert.equal(sa.verifyPin('S4-RESTORE', '1357', 1200), true);
+});
+
 test('generated PINs avoid the ones a child would guess first', () => {
   const weak = new Set(['0000', '1111', '2222', '3333', '4444', '5555', '6666', '7777', '8888', '9999', '1234', '4321', '0123']);
   for (let i = 0; i < 400; i++) assert.ok(!weak.has(sa.generatePin()));

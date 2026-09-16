@@ -2609,7 +2609,7 @@ app.post('/api/student/login', (req, res) => {
   if (pinState === 'unset') {
     if (!pin) return res.status(428).json({ needsPinSetup: true, error: 'Set up a 4-digit PIN to continue.' });
     if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
-    if (!studentAccount.setPin(studentId, pin)) return res.status(409).json({ error: 'A PIN was just set for this ID — enter it instead.' });
+    if (!studentAccount.setPin(studentId, pin)) return res.status(409).json({ error: pinSetupConflict(studentId, pin, 'A PIN was just set for this ID — enter it instead.') });
   } else {
     if (!pin) return res.status(428).json({ needsPin: true, error: 'Enter your PIN to continue.' });
     if (!studentAccount.verifyPin(studentId, pin)) return res.status(403).json({ error: 'Incorrect PIN.' });
@@ -2854,7 +2854,7 @@ app.post('/api/practice/live-sessions/:code/join', requirePracticeEnabled, (req,
       if (pinState === 'unset') {
         if (!pin) return res.status(428).json({ needsPinSetup: true, error: 'Set up a 4-digit PIN to continue.' });
         if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
-        if (!studentAccount.setPin(studentId, pin)) return res.status(409).json({ error: 'A PIN was just set for this learner. Enter it instead.' });
+        if (!studentAccount.setPin(studentId, pin)) return res.status(409).json({ error: pinSetupConflict(studentId, pin, 'A PIN was just set for this learner. Enter it instead.') });
       } else {
         if (!pin) return res.status(428).json({ needsPin: true, error: 'Enter your PIN to continue.' });
         if (!studentAccount.verifyPin(studentId, pin)) return res.status(403).json({ error: 'Incorrect PIN.' });
@@ -2985,6 +2985,12 @@ function studentHandle(activityId, studentId) {
   return crypto.createHmac('sha256', sessionSecret())
     .update(`${activityId}:${roster.normalizeStudentId(studentId)}`)
     .digest('hex').slice(0, 16);
+}
+
+function pinSetupConflict(studentId, pin, fallback) {
+  return studentAccount.isRetiredTemporaryPin(studentId, pin)
+    ? 'That temporary class PIN has expired or was already used. Choose your own new 4-digit PIN.'
+    : fallback;
 }
 
 // Resolve a handle from the join screen back to the student it stands for.
@@ -3194,7 +3200,7 @@ app.post('/api/assignment/:id/enter', async (req, res) => {
     if (pinState === 'unset') {
       if (!pin) return res.status(428).json({ needsPinSetup: true, error: 'Set up a 4-digit PIN to continue.' });
       if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
-      if (!studentAccount.setPin(studentId, pin)) return res.status(409).json({ error: 'A PIN was just set for this ID — enter it instead.' });
+      if (!studentAccount.setPin(studentId, pin)) return res.status(409).json({ error: pinSetupConflict(studentId, pin, 'A PIN was just set for this ID — enter it instead.') });
     } else {
       if (!pin) return res.status(428).json({ needsPin: true, error: 'Enter your PIN to continue.' });
       if (!studentAccount.verifyPin(studentId, pin)) return res.status(403).json({ error: 'Incorrect PIN.' });
@@ -3208,7 +3214,7 @@ app.post('/api/assignment/:id/enter', async (req, res) => {
     if (pinState === 'unset') {
       if (!pin) return res.status(428).json({ needsPinSetup: true, error: 'Choose a 4-digit PIN. You will need it to come back.' });
       if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
-      if (!studentAccount.setPin(key, pin)) return res.status(409).json({ error: 'That name was just taken — pick another, or ask your teacher.' });
+      if (!studentAccount.setPin(key, pin)) return res.status(409).json({ error: pinSetupConflict(key, pin, 'That name was just taken — pick another, or ask your teacher.') });
     } else {
       if (!pin) return res.status(428).json({ needsPin: true, error: 'Enter your PIN to continue.' });
       if (!studentAccount.verifyPin(key, pin)) return res.status(403).json({ error: 'Incorrect PIN. Ask your teacher if you have forgotten it.' });
@@ -4705,7 +4711,7 @@ app.post('/api/game/:id/enter', async (req, res) => {
     if (pinState === 'unset') {
       if (!pin) return res.status(428).json({ needsPinSetup: true, error: 'Set up a 4-digit PIN to continue.' });
       if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
-      if (!studentAccount.setPin(studentId, pin)) return res.status(409).json({ error: 'A PIN was just set for this ID — enter it instead.' });
+      if (!studentAccount.setPin(studentId, pin)) return res.status(409).json({ error: pinSetupConflict(studentId, pin, 'A PIN was just set for this ID — enter it instead.') });
     } else {
       if (!pin) return res.status(428).json({ needsPin: true, error: 'Enter your PIN to continue.' });
       if (!studentAccount.verifyPin(studentId, pin)) return res.status(403).json({ error: 'Incorrect PIN.' });
@@ -4719,7 +4725,7 @@ app.post('/api/game/:id/enter', async (req, res) => {
     if (pinState === 'unset') {
       if (!pin) return res.status(428).json({ needsPinSetup: true, error: 'Choose a 4-digit PIN. You will need it to come back.' });
       if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
-      if (!studentAccount.setPin(key, pin)) return res.status(409).json({ error: 'That name was just taken — pick another, or ask your teacher.' });
+      if (!studentAccount.setPin(key, pin)) return res.status(409).json({ error: pinSetupConflict(key, pin, 'That name was just taken — pick another, or ask your teacher.') });
     } else {
       if (!pin) return res.status(428).json({ needsPin: true, error: 'Enter your PIN to continue.' });
       if (!studentAccount.verifyPin(key, pin)) return res.status(403).json({ error: 'Incorrect PIN. Ask your teacher if you have forgotten it.' });
@@ -4974,6 +4980,7 @@ app.get('/api/roster/:id', requireAuth, (req, res) => {
       id: s.id, name: s.name, gender: s.gender || '',
       pinState: studentAccount.getAccountState(s.id),
       pin: studentAccount.revealPin(s.id),
+      temporaryPin: studentAccount.getTemporaryPinInfo(s.id),
       pinResetRequested: studentAccount.getResetRequest(s.id),
       identities: studentAccount.identitySummary(s.id),
     })),
@@ -5008,10 +5015,15 @@ app.post('/api/roster/:rosterId/pins', requireAuth, (req, res) => {
       issued.push({ id: student.id, name: student.name, pin: readable, changed: false });
       continue;
     }
-    issued.push({ id: student.id, name: student.name, pin: studentAccount.issuePin(student.id, sharedPin || undefined), changed: true });
+    if (sharedPin !== null) {
+      const temporary = studentAccount.issueTemporaryClassPin(student.id, sharedPin);
+      issued.push({ id: student.id, name: student.name, pin: temporary.pin, changed: true, temporary: true, expiresAt: temporary.expiresAt });
+    } else {
+      issued.push({ id: student.id, name: student.name, pin: studentAccount.issuePin(student.id), changed: true });
+    }
   }
-  audit.log('roster.pins_issued', { userId: req.userId, rosterId: r.id, count: issued.filter(i => i.changed).length, all, shared: sharedPin !== null, ip: req.ip });
-  res.json({ students: issued, shared: sharedPin !== null });
+  audit.log('roster.pins_issued', { userId: req.userId, rosterId: r.id, count: issued.filter(i => i.changed).length, all, shared: sharedPin !== null, temporary: sharedPin !== null, ip: req.ip });
+  res.json({ students: issued, shared: sharedPin !== null, temporary: sharedPin !== null, expiresAt: sharedPin !== null ? issued.find(item => item.expiresAt)?.expiresAt || null : null });
 });
 
 // Teacher: give one student a new PIN and show it. This IS the reset — a

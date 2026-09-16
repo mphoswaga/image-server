@@ -43,10 +43,10 @@ test('teacher builds a marked assessment and a learner sees practical criteria s
   await page.locator('#rostersBtn').click();
   const sharedPinRoster=page.locator('#rosterList .roster-row').filter({hasText:'Grade 2 ICT C'});
   await sharedPinRoster.getByRole('button',{name:'Student access'}).click();
-  await sharedPinRoster.getByLabel('One PIN for the whole class').fill('4826');
+  await sharedPinRoster.getByLabel('Temporary PIN for the whole class').fill('4826');
   page.once('dialog',dialog=>dialog.accept());
-  await sharedPinRoster.getByRole('button',{name:'Set for every learner'}).click();
-  await expect(page.locator('#toastWrap')).toContainText('One PIN set for 2 learners');
+  await sharedPinRoster.getByRole('button',{name:'Give temporary access'}).click();
+  await expect(page.locator('#toastWrap')).toContainText('Temporary class PIN ready for 2 learners');
   const classPinResult=await (await page.request.get(`/api/roster/${anotherRoster.id}`)).json();
   expect(classPinResult.students.map(student=>student.pin)).toEqual(['4826','4826']);
 
@@ -117,6 +117,9 @@ test('teacher builds a marked assessment and a learner sees practical criteria s
   try{
     const sharedPinEntry=await sharedPinContext.request.post(`/api/assignment/${classCopy.assessmentId}/enter`,{data:{handle:copyJoin.students[0].handle,pin:'4826'}});
     expect(sharedPinEntry.ok(),await sharedPinEntry.text()).toBeTruthy();
+    const reusedClassPin=await sharedPinContext.request.post(`/api/assignment/${classCopy.assessmentId}/enter`,{data:{handle:copyJoin.students[0].handle,pin:'4826'}});
+    expect(reusedClassPin.status()).toBe(409);
+    expect((await reusedClassPin.json()).error).toMatch(/temporary class PIN has expired or was already used/i);
   }finally{
     await sharedPinContext.close();
   }
