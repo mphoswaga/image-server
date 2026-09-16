@@ -227,6 +227,21 @@ test('FishQuest game feel stays local, optional, and motion-safe', () => {
   assert.match(client, /me\.score > previousMe\.score/);
 });
 
+test('FishQuest teacher computer has optional upbeat music and bubble event sounds', () => {
+  const page = fs.readFileSync(path.join(__dirname, '..', 'public', 'fishquest-teacher.html'), 'utf8');
+  const client = fs.readFileSync(path.join(__dirname, '..', 'public', 'fishquest-teacher.js'), 'utf8');
+  assert.match(page, /id="teacherMusic"/);
+  assert.match(page, /id="teacherBubbles"/);
+  assert.match(page, /fishquest-teacher\.js\?v=2/);
+  assert.match(client, /ls-fishquest-teacher-audio-v1/);
+  assert.match(client, /function scheduleMusic/);
+  assert.match(client, /phase!==['"]running['"]/);
+  assert.match(client, /document\.hidden/);
+  assert.match(client, /function bubbleBurst/);
+  assert.match(client, /answered>audioSnapshot\.answered/);
+  assert.match(client, /connected>audioSnapshot\.connected/);
+});
+
 test('FishQuest ends with a clear winner and the learner own useful facts', () => {
   const page = fs.readFileSync(path.join(__dirname, '..', 'public', 'fishquest.html'), 'utf8');
   const client = fs.readFileSync(path.join(__dirname, '..', 'public', 'fishquest-client.js'), 'utf8');

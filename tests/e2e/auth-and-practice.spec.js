@@ -32,6 +32,24 @@ test('FishQuest keeps each learner audio choice on their device', async ({ page 
   await expect(page.locator('#soundToggle')).toHaveAttribute('aria-pressed', 'false');
 });
 
+test('FishQuest teacher music and bubble controls stay on the teacher computer', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100', 'One Chromium run covers teacher-local audio preferences.');
+  await page.route('**/api/game/fishquest-teacher.html/fishquest', route => route.fulfill({ json: {
+    game: { lessonTitle: 'Ocean review', roomCode: 'OCEAN2', fishquest: { playMode: 'live', durationMinutes: 10, lateJoin: true }, questions: [] },
+    match: null, classes: [], sessionRosterIds: [], attendance: [],
+  } }));
+  await page.goto('/fishquest-teacher.html');
+  await expect(page.locator('#teacherMusic')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#teacherBubbles')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#teacherMusic').evaluate(button => button.click());
+  await page.locator('#teacherBubbles').evaluate(button => button.click());
+  await expect(page.locator('#teacherMusic')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#teacherBubbles')).toHaveAttribute('aria-pressed', 'false');
+  await page.reload();
+  await expect(page.locator('#teacherMusic')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#teacherBubbles')).toHaveAttribute('aria-pressed', 'false');
+});
+
 test('every learner game can enter and leave immersive fallback without resetting', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'windows-100', 'One Chromium run covers the shared immersive behavior.');
   await page.addInitScript(() => {
