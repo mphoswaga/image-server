@@ -46,6 +46,8 @@ test('the classroom loop keeps questions and colony growth without narrative cli
   assert.match(client, /await showGrowth\(event\)/);
   assert.match(client, /function showRaidStory/);
   assert.match(client, /duration: 4200/);
+  assert.match(client, /function playAntSound\(kind\)/);
+  assert.match(client, /playAntSound\('march'\)/);
   const nextTurn = client.slice(client.indexOf('async function nextTurn'), client.indexOf('function showRoundStory'));
   assert.doesNotMatch(nextTurn, /showRoundStory\(event\);/);
 });

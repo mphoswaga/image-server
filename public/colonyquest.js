@@ -862,6 +862,7 @@
     const home = colonyViews.get(attacker.id), away = colonyViews.get(defender.id);
     if (!home || !away) return finish();
     setOverlay(null);
+    playAntSound('march');
     const attackerActorCount = Math.min(8, attackers);
     const defenderActorCount = Math.min(8, defenders);
     const party = home.ants.filter(ant => ant.getData('role') === 'soldier').slice(0, attackerActorCount);
@@ -940,6 +941,7 @@
           $('worldStoryEffect').textContent = phase === 'outbound' ? `${attackers} guards against ${defenders} guards and ${core.fortification(defender).name.toLowerCase()} walls` : phase === 'at-nest' ? `${event.attack} attack power vs ${event.guard} defense power` : raidLossLine(event);
           if (phase === 'at-nest') {
             showBattleBurst(meeting, [core.TEAM_COLORS[attacker.colorIndex].light, core.TEAM_COLORS[defender.colorIndex].light, 0xffd66b], effects);
+            playAntSound('battle');
             playTone('battle');
           }
         }
@@ -2028,6 +2030,7 @@
     const site = view.sites[REWARD_STORIES[kind]?.site || 'center'] || view.center;
 
     if (kind === 'workers') {
+      playAntSound('scuttle');
       const recruit = view.ants.filter(ant => ant.getData('role') === 'worker').at(-1);
       if (recruit) {
         recruit.setDepth(19);
@@ -2039,6 +2042,7 @@
     }
 
     if (kind === 'food') {
+      playAntSound('forage');
       const surface = { x: entrance.x + Math.min(60, view.zone.w * .27), y: entrance.y - 24 };
       const carrier = actionWorker(view, palette, surface);
       carrier.cargo.setVisible(true);
@@ -2055,6 +2059,7 @@
     }
 
     if (kind === 'defense') {
+      playAntSound('build');
       const builder = actionWorker(view, palette, nursery);
       const route = [nursery, ...view.rooms.slice(1, 8)];
       moveActionActor(builder, route, 2300, actor => scene.tweens.add({ targets: actor, alpha: 0, duration: 250, onComplete: () => actor.destroy(true) }));
@@ -2070,12 +2075,14 @@
     }
 
     if (kind === 'queen') {
+      playAntSound('hatch');
       const egg = scene.add.ellipse(site.x + 24, site.y + 13, 14, 10, 0xfff4d2, 1).setStrokeStyle(2, 0xd9b976, 1).setDepth(12).setScale(.2);
       scene.tweens.add({ targets: egg, scaleX: 1.25, scaleY: 1.25, duration: 700, yoyo: true, hold: 900, onComplete: () => egg.destroy() });
       return 2800;
     }
 
     if (kind === 'soldiers') {
+      playAntSound('guard');
       const shield = scene.add.ellipse(site.x, site.y, 44, 44, palette.light, .12).setStrokeStyle(5, palette.light, 1).setDepth(12);
       scene.tweens.add({ targets: shield, scaleX: 1.8, scaleY: 1.8, alpha: 0, duration: 1250, onComplete: () => shield.destroy() });
       const guard = view.ants.filter(ant => ant.getData('role') === 'soldier').at(-1);
@@ -2084,6 +2091,7 @@
     }
 
     if (kind === 'expansion') {
+      playAntSound('dig');
       const builders = [-10, 10].map(offset => actionWorker(view, palette, { x: nursery.x + offset, y: nursery.y }, 29));
       builders.forEach((builder, index) => moveActionActor(builder, [nursery, { x: (nursery.x + site.x) / 2, y: (nursery.y + site.y) / 2 }, { x: site.x + (index ? 13 : -13), y: site.y }], 1450 + index * 140, actor => {
         scene.tweens.add({ targets: actor, x: actor.x + (index ? -9 : 9), angle: index ? -12 : 12, duration: 180, yoyo: true, repeat: 4, onComplete: () => scene.tweens.add({ targets: actor, alpha: 0, duration: 250, onComplete: () => actor.destroy(true) }) });
@@ -2104,6 +2112,7 @@
     if (!view || !team || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return 250;
     const site = view.sites.nursery;
     const palette = core.TEAM_COLORS[team.colorIndex];
+    playAntSound('hatch');
     const egg = scene.add.ellipse(site.x + 20, site.y + 5, 20, 27, 0xfff4d2, 1).setStrokeStyle(3, 0xd9b976, 1).setDepth(20);
     const crack = scene.add.graphics().setDepth(21).setAlpha(0);
     crack.lineStyle(2, 0x765c3c, 1).beginPath().moveTo(site.x + 15, site.y - 4).lineTo(site.x + 21, site.y + 1).lineTo(site.x + 16, site.y + 7).lineTo(site.x + 23, site.y + 12).strokePath();
@@ -2408,6 +2417,37 @@
     gain.gain.exponentialRampToValueAtTime(.0001, audioContext.currentTime + delay + duration);
     oscillator.connect(gain); gain.connect(audioContext.destination);
     oscillator.start(audioContext.currentTime + delay); oscillator.stop(audioContext.currentTime + delay + duration + .04);
+  }
+
+  function antRustle(duration = .12, volume = .014, delay = 0) {
+    if (!soundOn || !audioContext) return;
+    const length = Math.max(1, Math.floor(audioContext.sampleRate * duration));
+    const buffer = audioContext.createBuffer(1, length, audioContext.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let index = 0; index < length; index += 1) data[index] = (Math.random() * 2 - 1) * Math.pow(1 - index / length, 2.8);
+    const source = audioContext.createBufferSource();
+    const filter = audioContext.createBiquadFilter();
+    const gain = audioContext.createGain();
+    filter.type = 'bandpass'; filter.frequency.value = 1150; filter.Q.value = 1.6;
+    gain.gain.setValueAtTime(.0001, audioContext.currentTime + delay);
+    gain.gain.exponentialRampToValueAtTime(volume, audioContext.currentTime + delay + .012);
+    gain.gain.exponentialRampToValueAtTime(.0001, audioContext.currentTime + delay + duration);
+    source.buffer = buffer;
+    source.connect(filter); filter.connect(gain); gain.connect(audioContext.destination);
+    source.start(audioContext.currentTime + delay); source.stop(audioContext.currentTime + delay + duration + .03);
+  }
+
+  function playAntSound(kind) {
+    initAudio();
+    if (!soundOn || !audioContext) return;
+    // Small, warm sounds make the ants feel active without becoming classroom noise.
+    if (kind === 'scuttle') { antRustle(.08, .011); antRustle(.07, .009, .11); tone(185, .1, .012, .03); }
+    if (kind === 'forage') { tone(330, .1, .018); tone(440, .09, .014, .16); antRustle(.1, .009, .27); }
+    if (kind === 'build' || kind === 'dig') { antRustle(.12, .016); antRustle(.1, .014, .18); tone(kind === 'dig' ? 105 : 145, .12, .018, .08); }
+    if (kind === 'hatch') { tone(620, .12, .018); tone(784, .16, .015, .15); }
+    if (kind === 'guard') { tone(118, .16, .02); tone(156, .13, .016, .15); }
+    if (kind === 'march') { antRustle(.07, .01); antRustle(.07, .01, .15); antRustle(.07, .01, .3); }
+    if (kind === 'battle') { antRustle(.13, .018); tone(92, .14, .02, .06); }
   }
 
   function playTone(type) {
