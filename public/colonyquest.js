@@ -275,7 +275,10 @@
       turnIndex: 0,
       questionCursor: 0,
       currentTeamIndex: 0,
-      introSeen: false,
+      // The classroom game starts directly with a question. The original
+      // story is still available in the final results, but it must not slow
+      // down every new match with another click-through screen.
+      introSeen: true,
       warsActive: false,
       teams,
       answers: [],
@@ -578,8 +581,11 @@
     });
     $('feedback').className = `feedback visible${correct ? '' : ' wrong'}`;
     $('feedbackText').textContent = correct ? 'Correct! Your team won one colony upgrade.' : `Good try. The right answer is ${question.options[question.correctIndex]}.`;
-    $('feedbackNext').textContent = correct ? 'Shape the colony' : 'Continue the journey';
+    $('feedbackNext').style.display = 'none';
     playTone(correct ? 'correct' : 'wrong');
+    // Keep the answer feedback long enough to read, then move on without
+    // asking the teacher to dismiss a second message every turn.
+    window.setTimeout(() => commitOutcome().catch(error => toast(error.message)), window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 180 : 1100);
   }
 
   async function commitOutcome() {
@@ -614,7 +620,10 @@
   }
 
   function rewardChoices() {
-    return Object.keys(core.REWARDS);
+    // ColonyQuest is now a quick question-and-growth loop. Raids opened a
+    // second target-selection panel and several battle reports, which slowed
+    // down classroom play without adding to the learning question.
+    return Object.keys(core.REWARDS).filter(key => key !== 'raid');
   }
 
   function rewardChange(key, before, after) {
@@ -653,24 +662,20 @@
     return key === 'expansion' ? `+1 ${core.colonyRooms(preview).at(-1).label}. ${core.roomBenefit(core.colonyRooms(preview).at(-1))}` : effect;
   }
 
-  function showRewardStory(event, onContinue = nextTurn) {
+  async function showGrowth(event) {
     if (session.phase !== 'event') return;
     const key = String(event && event.key || '').replace(/^upgrade-/, '');
     const team = session.teams.find(item => item.id === (event && event.teamId)) || currentTeam();
     const story = REWARD_STORIES[key] || { title: 'The colony grows', text: 'The ants put their new reward to work inside the nest.', site: 'center' };
-    const art = key === 'queen' ? ASSETS.queen : ['defense', 'soldiers'].includes(key) ? ASSETS.guardian : ASSETS.worker;
-    showWorldStory({
-      kicker: `A correct answer changes ${team.name}`,
-      title: story.title,
-      text: story.text,
-      effect: rewardEffectText(key, event, team),
-      art,
-    }, onContinue);
+    setOverlay(null);
     celebrate(team.id, key);
     focusColony(team.id, story.site);
     const actionDuration = playUpgradeAction(team.id, key);
-    showAntSpeech(team.id, story.speaker, story.speech, story.site, actionDuration + 700);
-    holdWorldStory(actionDuration, 'Watch the colony change...');
+    updateHUD();
+    // The ants visibly build, gather, hatch, or strengthen their home. A
+    // short automatic beat preserves that reward without a story popup.
+    await new Promise(resolve => setTimeout(resolve, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 180 : Math.max(700, actionDuration / ACTION_SPEED + 250)));
+    if (session && session.phase === 'event') await nextTurn();
   }
 
   function showRewards() {
@@ -720,7 +725,7 @@
     updateHUD();
     await saveState();
     transitionLocked = false;
-    showRewardStory(event);
+    await showGrowth(event);
   }
 
   async function chooseRaid(targetId) {
@@ -975,12 +980,11 @@
     if (reports) {
       const event = { key: 'round-supplies', chapterBefore: previousChapter, reports, reportIndex: 0, at: new Date().toISOString() };
       session.events.push(event);
-      session.phase = 'event';
-      session.eventAction = 'question';
       updateWorld();
       await saveState();
-      showRoundStory(event);
-      return;
+      // Food collection and hatching remain visible in each colony, but the
+      // game no longer pauses once per colony to narrate them.
+      reports.forEach(report => celebrate(report.teamId, report.hatched ? 'workers' : 'food', report.hatched ? '+1 worker' : `+${report.gathered} seeds`));
     }
     await beginTurn(previousChapter);
   }
@@ -1016,40 +1020,18 @@
     if (session.phase === 'ended' || session.phase === 'paused') return;
     if (shouldStartWars()) {
       session.warsActive = true;
-      session.phase = 'event';
-      session.eventAction = 'question';
       session.events.push({ key: 'colony-wars', at: new Date().toISOString() });
       updateWorld();
       await saveState();
-      showEvent({ title: 'The Moonroot Rally begins', description: 'The moon is rising. Keep building, gathering, or raiding as the colonies compete for the Ancient Acorn. Every colony stays in the adventure.', kicker: 'Chapter 4' }, continueAfterEvent);
       playTone('wars');
-      return;
     }
     const nextChapter = storyChapter();
     if (nextChapter.title !== previousChapter) {
       const chapter = chapterEvent(chapterKey(nextChapter));
-      session.phase = 'event';
-      session.eventAction = 'question';
       session.events.push({ key: chapterKey(nextChapter), at: new Date().toISOString() });
       updateWorld();
       await saveState();
-      showEvent(chapter, continueAfterEvent);
       playTone('upgrade');
-      return;
-    }
-    if (shouldShowEvent()) {
-      const event = eventForTurn();
-      const focusTeam = worldEventFocusTeam(event);
-      const before = worldEventSnapshot();
-      core.applyEvent(session.teams, event.key);
-      const eventRecord = { key: event.key, focusTeamId: focusTeam && focusTeam.id, effects: worldEventEffects(before), at: new Date().toISOString() };
-      session.events.push(eventRecord);
-      session.phase = 'event';
-      session.eventAction = 'question';
-      updateWorld();
-      await saveState();
-      showEvent({ ...event, ...eventRecord }, continueAfterEvent);
-      return;
     }
     session.phase = 'question';
     updateWorld();
@@ -1260,15 +1242,11 @@
     if (session.phase === 'reward') return showRewards();
     if (session.phase === 'event') {
       const last = session.events[session.events.length - 1];
-      if (last?.key === 'round-supplies') return showRoundStory(last);
-      if (last?.key === 'raid-result' && last.attackerId) return showRaidStory(last);
-      if (last && String(last.key).startsWith('upgrade-')) return showRewardStory(last, nextTurn);
-      const eventTemplate = last && last.key === 'colony-wars'
-        ? { title: 'The Moonroot Rally begins', description: 'The moon is rising. Keep building, gathering, or raiding as the colonies compete for the Ancient Acorn. Every colony stays in the adventure.', kicker: 'Chapter 4' }
-        : chapterEvent(last && last.key) || core.EVENTS.find(item => item.key === (last && last.key));
-      const event = eventTemplate ? { ...eventTemplate, ...last } : null;
-      const next = session.eventAction === 'next-turn' ? nextTurn : continueAfterEvent;
-      return showEvent(event || { title: 'Something changed', description: 'The colonies are ready. Continue when the class is ready.' }, next);
+      // Older saved matches can still contain a narrative event. Resume them
+      // into the streamlined loop instead of reopening the old click-through
+      // panels.
+      if (last && String(last.key).startsWith('upgrade-')) return showGrowth(last);
+      return continueAfterEvent();
     }
     if (session.phase === 'paused') return showPaused();
     session.phase = 'question';

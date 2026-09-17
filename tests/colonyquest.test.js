@@ -37,6 +37,17 @@ test('ColonyQuest starts as a balanced, child-readable colony simulation', () =>
   });
 });
 
+test('the classroom loop keeps questions and colony growth without narrative click-through panels', () => {
+  const client = fs.readFileSync(path.join(__dirname, '..', 'public', 'colonyquest.js'), 'utf8');
+  assert.match(client, /introSeen: true/);
+  assert.match(client, /setTimeout\(\(\) => commitOutcome/);
+  assert.match(client, /filter\(key => key !== 'raid'\)/);
+  assert.match(client, /async function showGrowth/);
+  assert.match(client, /await showGrowth\(event\)/);
+  const nextTurn = client.slice(client.indexOf('async function nextTurn'), client.indexOf('function showRoundStory'));
+  assert.doesNotMatch(nextTurn, /showRoundStory\(event\);/);
+});
+
 test('every strategic reward visibly changes the relevant colony state', () => {
   const gains = [];
   for (const reward of ['workers', 'food', 'defense', 'queen', 'expansion', 'soldiers']) {
