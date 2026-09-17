@@ -32,12 +32,36 @@ test('streamlined ColonyQuest moves from question to growth to the next question
   await expect(page.locator('#storyOverlay')).toBeHidden();
   await page.locator('.answer').first().click();
   await expect(page.locator('#rewardOverlay')).toBeVisible({ timeout: 4000 });
-  await expect(page.locator('[data-reward]')).toHaveCount(6);
-  await expect(page.locator('[data-reward="raid"]')).toHaveCount(0);
+  await expect(page.locator('[data-reward]')).toHaveCount(7);
+  await expect(page.locator('[data-reward="raid"]')).toHaveCount(1);
   await page.locator('[data-reward="workers"]').click();
   await expect(page.locator('#questionOverlay')).toBeVisible({ timeout: 5000 });
   await expect(page.locator('#worldStory')).toBeHidden();
   expect(saved.teams[0].workers).toBe(2);
+});
+
+test('a raid stays visible but returns to questions without a report popup', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100', 'One classroom-screen browser covers the raid loop.');
+  const colonies = [colonyCore.createTeam({ name: 'Leaf Colony' }, 0), colonyCore.createTeam({ name: 'River Colony', colorIndex: 1 }, 1)];
+  Object.assign(colonies[0], { soldiers: 5, population: 7, barracksBuilt: true });
+  Object.assign(colonies[1], { soldiers: 2, population: 4, barracksBuilt: true });
+  let saved = colonyCore.normalizeSession({ phase: 'reward', introSeen: true, teams: colonies, currentTeamIndex: 0 });
+  const setup = { teamCount: 2, rounds: 5, matchType: 'rounds', durationMinutes: 15, sound: false, teams: colonies };
+  await page.route(/\/api\/game\/cq-raid-streamlined\/colonyquest(?:\/session)?$/, async route => {
+    if (route.request().method() === 'PUT') {
+      saved = colonyCore.normalizeSession(route.request().postDataJSON().session);
+      return route.fulfill({ json: { ok: true } });
+    }
+    return route.fulfill({ json: { game: { id: 'cq-raid-streamlined', lessonTitle: 'Habitats', questions, colonyquest: setup }, session: saved } });
+  });
+  await page.goto('/colonyquest/cq-raid-streamlined');
+  await page.locator('#resumeBtn').click();
+  await page.locator('[data-reward="raid"]').click();
+  await page.locator('[data-target="team-2"]').click();
+  await expect(page.locator('#worldViewport')).toHaveAttribute('data-raid-phase', 'outbound');
+  await expect(page.locator('#worldStory')).toBeHidden();
+  await expect(page.locator('#questionOverlay')).toBeVisible({ timeout: 7000 });
+  expect(saved.events.at(-1).key).toBe('raid-result');
 });
 
 test('growing colonies draw every soldier, retain every room, and scroll to a new expansion', async ({ page }, testInfo) => {

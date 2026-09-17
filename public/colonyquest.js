@@ -620,10 +620,10 @@
   }
 
   function rewardChoices() {
-    // ColonyQuest is now a quick question-and-growth loop. Raids opened a
-    // second target-selection panel and several battle reports, which slowed
-    // down classroom play without adding to the learning question.
-    return Object.keys(core.REWARDS).filter(key => key !== 'raid');
+    // Raiding remains a strategic growth choice. Its result plays in the
+    // meadow and then advances automatically, rather than opening report
+    // panels that the teacher must clear.
+    return Object.keys(core.REWARDS);
   }
 
   function rewardChange(key, before, after) {
@@ -848,25 +848,20 @@
     event.defenders = defenders;
     event.attack = event.attack || attackers * 5;
     event.guard = event.guard || defenders * 5 + (event.wallBonus || 0);
-    const finish = () => {
+    const finish = async () => {
       stopRaidPresentation();
-      showWorldStory({
-        kicker: event.success ? 'Bramble returns from the rally' : 'Bramble calls the retreat',
-        title: event.success ? `${attacker.name} wins the raid` : `${defender.name} protects its home`,
-        text: event.success
-          ? `${event.reason || 'The attacking guards break through.'} They carry ${event.stolen} seeds home. ${raidLossLine(event)} Both groups must recover before another challenge.`
-          : `${event.reason || 'The home guards stop the attack.'} ${raidLossLine(event)} ${defender.name} receives five food for a strong defense.`,
-        effect: event.success
-          ? `+${event.stolen} food · ${attacker.soldiers} attacking guards remain · ${defender.soldiers} home guards remain`
-          : `+5 food for ${defender.name} · ${attacker.soldiers} attacking guards remain · ${defender.soldiers} home guards remain`,
-        art: ASSETS.guardian,
-      }, nextTurn);
+      setOverlay(null);
       focusColony(event.success ? attacker.id : defender.id, event.success ? 'food' : 'guard');
+      updateHUD();
+      // Keep the battle and its colony change visible, then continue without
+      // asking the class to click through a written raid report.
+      await new Promise(resolve => setTimeout(resolve, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 180 : 700));
+      if (session && session.phase === 'event') await nextTurn();
     };
     if (!animate || !scene || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return finish();
     const home = colonyViews.get(attacker.id), away = colonyViews.get(defender.id);
     if (!home || !away) return finish();
-    showWorldStory({ kicker: `${core.TEAM_COLORS[attacker.colorIndex].name} guards answer Bramble's call`, title: `${attacker.name} begins a raid`, text: `${attackers} guards march toward ${defender.name}. The home has ${defenders} guards and ${core.fortification(defender).name.toLowerCase()} walls.`, effect: `${event.attack} attack power vs ${event.guard} defense power`, art: ASSETS.guardian, continueLabel: 'Skip battle' }, finish);
+    setOverlay(null);
     const attackerActorCount = Math.min(8, attackers);
     const defenderActorCount = Math.min(8, defenders);
     const party = home.ants.filter(ant => ant.getData('role') === 'soldier').slice(0, attackerActorCount);
@@ -901,7 +896,7 @@
     const attackLossVisuals = event.attackerLosses ? Math.max(1, Math.round(event.attackerLosses / attackers * attackerActorCount)) : 0;
     const defenseLossVisuals = event.defenderLosses && defenderActorCount ? Math.max(1, Math.round(event.defenderLosses / defenders * defenderActorCount)) : 0;
     let lastPhase = '';
-    raid.tween = scene.tweens.add({ targets: progress, value: 1, duration: 11200, ease: 'Linear',
+    raid.tween = scene.tweens.add({ targets: progress, value: 1, duration: 4200, ease: 'Linear',
       onUpdate: () => {
         if (raidPresentation !== raid) return;
         const p = progress.value;
@@ -1246,6 +1241,7 @@
       // into the streamlined loop instead of reopening the old click-through
       // panels.
       if (last && String(last.key).startsWith('upgrade-')) return showGrowth(last);
+      if (last?.key === 'raid-result') return showRaidStory(last, true);
       return continueAfterEvent();
     }
     if (session.phase === 'paused') return showPaused();

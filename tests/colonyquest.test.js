@@ -41,9 +41,11 @@ test('the classroom loop keeps questions and colony growth without narrative cli
   const client = fs.readFileSync(path.join(__dirname, '..', 'public', 'colonyquest.js'), 'utf8');
   assert.match(client, /introSeen: true/);
   assert.match(client, /setTimeout\(\(\) => commitOutcome/);
-  assert.match(client, /filter\(key => key !== 'raid'\)/);
+  assert.match(client, /return Object\.keys\(core\.REWARDS\);/);
   assert.match(client, /async function showGrowth/);
   assert.match(client, /await showGrowth\(event\)/);
+  assert.match(client, /function showRaidStory/);
+  assert.match(client, /duration: 4200/);
   const nextTurn = client.slice(client.indexOf('async function nextTurn'), client.indexOf('function showRoundStory'));
   assert.doesNotMatch(nextTurn, /showRoundStory\(event\);/);
 });
