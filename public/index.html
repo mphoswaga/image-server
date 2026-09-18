@@ -934,6 +934,9 @@
 
     /* ── Game cards (My games panel) ── */
     .game-card { border:1.5px solid var(--border); border-radius:16px; margin-bottom:14px; background:#fff; box-shadow:var(--sh-sm); overflow:hidden; transition:.12s; }
+    .game-card.teacher-confirmed-card { border-color:#86efac; background:#f0fdf4; }
+    .game-card.teacher-confirmed-card .gc-head { background:linear-gradient(180deg,#dcfce7,#f0fdf4); border-bottom-color:#bbf7d0; }
+    .game-card.teacher-confirmed-card .gc-body { background:#f0fdf4; }
     .game-card:hover { box-shadow:var(--sh); }
     .gc-head { padding:14px 18px 12px; background:linear-gradient(180deg,var(--primary-soft),#fff); border-bottom:1px solid var(--border); }
     .gc-top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:6px; }
@@ -8027,7 +8030,7 @@
           const markingBadge=marking?`<span class="gc-marking-status ${esc(markingState)}${a.teacherMarked?' teacher-confirmed':''}">${esc(marking.label||'Marking')}</span>`:'';
           const markingDetail=marking&&marking.detail?`<span>${esc(marking.detail)}</span>`:'';
           const teacherMarked=a.type==='assessment'&&!isDraft?`<label class="gc-teacher-marked" title="Save your confirmation that you have reviewed and marked this assessment"><input type="checkbox" class="a-marked-toggle" data-id="${esc(a.id)}" ${a.teacherMarked?'checked':''}> Marked by teacher</label>`:'';
-          return `<div class="game-card" data-assignment-id="${esc(a.id)}">
+          return `<div class="game-card${a.teacherMarked?' teacher-confirmed-card':''}" data-assignment-id="${esc(a.id)}">
             <div class="gc-head">
               <div class="gc-top">
                 <div>
