@@ -222,6 +222,7 @@ function createAssessment({ teacherId, teacherName, data, rosterId, rosterSnapsh
       : { mode: 'self-paced', phase: 'open', activeSectionIndex: null, previousPhase: null, updatedAt: new Date().toISOString() },
     roomCode, rosterId: rosterId || null, cutoffAt: cutoffAt || null,
     rosterSnapshot: Array.isArray(rosterSnapshot) ? normalizeRosterSnapshot(rosterSnapshot) : null,
+    teacherMarked: false,
     resultsReleased: false,
     content: { title: normalized.title, instructions: normalized.instructions, questions: normalized.questions },
     createdAt: new Date().toISOString(),
@@ -537,6 +538,15 @@ function releaseResults(id, released) {
     rec.finalisedAt = targetReleased ? new Date().toISOString() : null;
     if (rec.delivery) rec.delivery = { ...rec.delivery, phase: targetReleased ? 'closed' : 'marking', updatedAt: new Date().toISOString() };
   }
+  writeJsonAtomic(recPath(id), rec);
+  return rec;
+}
+
+function setTeacherMarked(id, marked) {
+  const rec = getAssignment(id);
+  if (!rec || rec.type !== 'assessment') return null;
+  rec.teacherMarked = !!marked;
+  rec.teacherMarkedAt = rec.teacherMarked ? new Date().toISOString() : null;
   writeJsonAtomic(recPath(id), rec);
   return rec;
 }
@@ -919,6 +929,70 @@ function assessmentReleaseReadiness(record, expectedStudentIds = []) {
   };
 }
 
+function assessmentMarkingSummary(record) {
+  if (!record || record.type !== 'assessment') return null;
+  if (record.status === 'draft') {
+    return { state: 'draft', label: 'Draft', detail: 'Not published yet.', submissions: 0, expected: 0, pendingGrades: 0 };
+  }
+  const expectedIds = Array.isArray(record.rosterSnapshot) ? record.rosterSnapshot.map(student => student && student.id).filter(Boolean) : [];
+  const submissions = loadSubmissions(record.id);
+  const readiness = assessmentReleaseReadiness(record, expectedIds);
+  const expected = expectedIds.length || submissions.length;
+  if (isReleased(record)) {
+    return {
+      state: 'released',
+      label: 'Released',
+      detail: `${submissions.length}/${expected || submissions.length} learners marked and visible.`,
+      submissions: submissions.length,
+      expected,
+      pendingGrades: readiness.pendingGrades || 0,
+      missingStudents: readiness.missingStudents || 0,
+    };
+  }
+  if (!submissions.length) {
+    return {
+      state: 'not-started',
+      label: 'Not submitted',
+      detail: expected ? `Waiting for ${expected} learner${expected === 1 ? '' : 's'}.` : 'No learner submissions yet.',
+      submissions: 0,
+      expected,
+      pendingGrades: 0,
+      missingStudents: expected,
+    };
+  }
+  if (readiness.missingStudents) {
+    return {
+      state: 'incomplete',
+      label: 'Still writing',
+      detail: `${submissions.length}/${expected} learners submitted. ${readiness.missingStudents} missing.`,
+      submissions: submissions.length,
+      expected,
+      pendingGrades: readiness.pendingGrades || 0,
+      missingStudents: readiness.missingStudents,
+    };
+  }
+  if (readiness.pendingGrades) {
+    return {
+      state: 'needs-marking',
+      label: 'Needs marking',
+      detail: `${readiness.pendingGrades} grade${readiness.pendingGrades === 1 ? '' : 's'} pending.`,
+      submissions: submissions.length,
+      expected,
+      pendingGrades: readiness.pendingGrades,
+      missingStudents: 0,
+    };
+  }
+  return {
+    state: 'marked',
+    label: 'Marked',
+    detail: `${submissions.length}/${expected || submissions.length} learners marked. Results hidden until released.`,
+    submissions: submissions.length,
+    expected,
+    pendingGrades: 0,
+    missingStudents: 0,
+  };
+}
+
 function filterAssignmentEvidenceForRoster(rows, rosterId) {
   return (rows || []).filter(row => row && row.rosterId === rosterId);
 }
@@ -978,7 +1052,10 @@ function listTeacherAssignments(teacherId) {
       delivery: a.delivery || null,
       createdAt: a.createdAt, roomCode: a.roomCode, rosterId: a.rosterId, cutoffAt: a.cutoffAt,
       resultsReleased: isReleased(a),
+      teacherMarked: !!a.teacherMarked,
+      teacherMarkedAt: a.teacherMarkedAt || null,
       submissions: loadSubmissions(a.id).length,
+      marking: assessmentMarkingSummary(a),
       contentEditable: assessmentContentEditable(a),
     }))
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
@@ -1006,9 +1083,9 @@ function renameAssessmentStudent(teacherId, rosterId, studentId, name) {
 module.exports = {
   createAssignment, createAssessment, copyAssessmentToRoster, normalizeAssessment, getAssignment, updateAssignmentCutoff, updateAssessmentRoster, updateAssessmentContent, assessmentContentEditable, getRoomCode,
   publishedAssessmentGenerationContext,
-  releaseResults, isReleased,
+  releaseResults, setTeacherMarked, isReleased,
   assessmentIsFinalised, saveSubmission, saveNewSubmission, getSubmissions, getSubmission,
-  assessmentReleaseReadiness, loadDrafts, getDraft, saveDraft, saveDraftGrade, deliveryState, learnerSectionProgress, learnerQuestionProgress, questionAnswerProgress, updateDelivery, draftProgress, presentationSlides,
+  assessmentReleaseReadiness, assessmentMarkingSummary, loadDrafts, getDraft, saveDraft, saveDraftGrade, deliveryState, learnerSectionProgress, learnerQuestionProgress, questionAnswerProgress, updateDelivery, draftProgress, presentationSlides,
   sanitizeLearnerAnswers, incompleteAssessmentAnswers, filterAssignmentEvidenceForRoster,
   findConfirmedVerdict, recordVerdict, normalizeAnswer, normalizeStudentId, renameAssessmentStudent,
   listTeacherAssignments,

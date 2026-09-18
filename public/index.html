@@ -940,6 +940,20 @@
     .gc-title { font-size:16px; font-weight:800; color:var(--ink); margin:0; text-transform:capitalize; }
     .gc-meta { font-size:12px; color:var(--muted); display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
     .gc-chip { font-size:11px; font-weight:700; padding:2px 9px; border-radius:999px; background:var(--accent-soft); color:var(--accent); text-transform:capitalize; }
+    .gc-marking-status { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:800; padding:3px 10px; border-radius:999px; text-transform:uppercase; letter-spacing:.35px; }
+    .gc-marking-status::before { content:''; width:7px; height:7px; border-radius:50%; flex:none; }
+    .gc-marking-status.draft, .gc-marking-status.not-started { background:#f1f5f9; color:#64748b; }
+    .gc-marking-status.incomplete { background:#fef3c7; color:#92400e; }
+    .gc-marking-status.needs-marking { background:#fee2e2; color:#991b1b; }
+    .gc-marking-status.marked { background:#dbeafe; color:#1d4ed8; }
+    .gc-marking-status.released { background:#d1fae5; color:#065f46; }
+    .gc-teacher-marked { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:800; color:#065f46; }
+    .gc-teacher-marked input { width:15px; height:15px; accent-color:#059669; margin:0; }
+    .gc-marking-status.draft::before, .gc-marking-status.not-started::before { background:#94a3b8; }
+    .gc-marking-status.incomplete::before { background:#f59e0b; }
+    .gc-marking-status.needs-marking::before { background:#ef4444; }
+    .gc-marking-status.marked::before { background:#3b82f6; }
+    .gc-marking-status.released::before { background:#10b981; }
     .room-code { font-size:28px; font-weight:900; letter-spacing:5px; color:var(--primary); background:#fff; border:2px solid var(--primary-soft); border-radius:11px; padding:7px 16px; display:inline-block; line-height:1.1; }
     .room-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); margin-bottom:5px; }
     .gc-body { padding:14px 18px; }
@@ -8005,13 +8019,18 @@
           const copyClassOptions='<option value="">— Choose another class —</option>'+availableCopyClasses.map(item=>`<option value="${esc(item.id)}">${esc(item.name)} (${item.count} students)</option>`).join('');
           const isDraft=a.type==='assessment'&&a.status==='draft';
           const classChip=a.type==='assessment'?`<span class="gc-chip">${selectedClass?esc(selectedClass.name):'No class assigned'}</span>`:'';
+          const marking=a.marking||null;
+          const markingState=marking?String(marking.state||'').replace(/[^a-z-]/g,''):'';
+          const markingBadge=marking?`<span class="gc-marking-status ${esc(markingState)}">${esc(marking.label||'Marking')}</span>`:'';
+          const markingDetail=marking&&marking.detail?`<span>${esc(marking.detail)}</span>`:'';
+          const teacherMarked=a.type==='assessment'&&!isDraft?`<label class="gc-teacher-marked" title="Save your confirmation that you have reviewed and marked this assessment"><input type="checkbox" class="a-marked-toggle" data-id="${esc(a.id)}" ${a.teacherMarked?'checked':''}> Marked by teacher</label>`:'';
           return `<div class="game-card" data-assignment-id="${esc(a.id)}">
             <div class="gc-head">
               <div class="gc-top">
                 <div>
                   <div class="gc-title">${esc(a.title)}</div>
-                  <div class="gc-meta"><span class="gc-chip">${esc(a.type==='assessment'?(a.assessmentType||'Assessment'):typeLabel[a.type]||a.type)}</span>${a.subject?`<span class="gc-chip">${esc(a.subject)}</span>`:''}${a.grade?`<span class="gc-chip">${esc(a.grade)}</span>`:''}${a.totalMarks?`<span class="gc-chip">${a.totalMarks} marks</span>`:''}${classChip}${isDraft?'<span class="gc-chip">Draft · edit before learners enter</span>':a.delivery&&a.delivery.mode==='live'?`<span class="gc-chip">Live · ${esc(a.delivery.phase)}</span>`:''}<span class="gc-chip">${a.submissions} submitted</span></div>
-                  <div class="gc-dates"><span>Created ${fmtDate(a.createdAt)}</span>${a.cutoffAt?`<span>Due ${fmtDateTime(a.cutoffAt)}</span>`:'<span>No due date</span>'}${a.resultsReleased?'<span class="gc-status-live">Released</span>':'<span class="gc-status-closed">Hidden</span>'}</div>
+                  <div class="gc-meta"><span class="gc-chip">${esc(a.type==='assessment'?(a.assessmentType||'Assessment'):typeLabel[a.type]||a.type)}</span>${a.subject?`<span class="gc-chip">${esc(a.subject)}</span>`:''}${a.grade?`<span class="gc-chip">${esc(a.grade)}</span>`:''}${a.totalMarks?`<span class="gc-chip">${a.totalMarks} marks</span>`:''}${classChip}${isDraft?'<span class="gc-chip">Draft · edit before learners enter</span>':a.delivery&&a.delivery.mode==='live'?`<span class="gc-chip">Live · ${esc(a.delivery.phase)}</span>`:''}<span class="gc-chip">${a.submissions} submitted</span>${markingBadge}${teacherMarked}</div>
+                  <div class="gc-dates"><span>Created ${fmtDate(a.createdAt)}</span>${a.cutoffAt?`<span>Due ${fmtDateTime(a.cutoffAt)}</span>`:'<span>No due date</span>'}${markingDetail}${a.resultsReleased?'<span class="gc-status-live">Visible to learners</span>':'<span class="gc-status-closed">Hidden from learners</span>'}</div>
                 </div>
                 ${a.roomCode&&!isDraft?`<div style="text-align:right"><span class="room-label">Room code</span><div class="room-code">${esc(a.roomCode)}</div></div>`:''}
               </div>
@@ -8040,6 +8059,8 @@
       if(copyBtn){ copyLink(copyBtn.dataset.url); return; }
       const editBtn=e.target.closest('.a-edit-btn');
       if(editBtn){ openExistingAssessmentEditor(editBtn.dataset.id).catch(error=>toast(error.message)); return; }
+      const markedToggle=e.target.closest('.a-marked-toggle');
+      if(markedToggle){ return; }
       const classBtn=e.target.closest('.a-class-btn');
       if(classBtn){ const row=$(classBtn.dataset.row); row.style.display=row.style.display==='block'?'none':'block'; return; }
       const copyClassBtn=e.target.closest('.a-class-copy-btn');
@@ -8062,6 +8083,19 @@
         else stopAssignmentResultsPolling(detailId);
         return; }
       handleAssignmentPanelClick(e);
+    });
+
+    $('assignmentsList').addEventListener('change', async e=>{
+      const toggle=e.target.closest('.a-marked-toggle');
+      if(!toggle) return;
+      toggle.disabled=true;
+      try{
+        const response=await fetch('/api/assignment/'+encodeURIComponent(toggle.dataset.id)+'/marked',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({marked:toggle.checked})});
+        const data=await response.json();
+        if(!response.ok) throw new Error(data.error||'Could not save marking status.');
+        toast(toggle.checked?'Marked status saved.':'Marked status cleared.','ok');
+      }catch(error){ toggle.checked=!toggle.checked; toast(error.message); }
+      finally{ toggle.disabled=false; }
     });
     async function saveAssessmentClass(assessmentId,rowId){
       const row=$(rowId),button=row&&row.querySelector('.a-class-save'),rosterId=row&&row.querySelector('.a-class-picker')?.value;

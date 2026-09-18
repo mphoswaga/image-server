@@ -2295,6 +2295,17 @@ app.patch('/api/assignment/:id/cutoff', requireAuth, (req, res) => {
   res.json({ ok: true, cutoffAt: updated.cutoffAt });
 });
 
+// Teachers can explicitly confirm that they have reviewed and marked a test
+// or project. This is separate from releasing results to learners.
+app.patch('/api/assignment/:id/marked', requireAuth, (req, res) => {
+  const assessment = assignments.getAssignment(req.params.id);
+  if (!assessment) return res.status(404).json({ error: 'Assessment not found.' });
+  if (assessment.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assessment.' });
+  if (assessment.type !== 'assessment') return res.status(400).json({ error: 'Only tests and projects can be marked here.' });
+  const updated = assignments.setTeacherMarked(assessment.id, !!(req.body && req.body.marked));
+  res.json({ ok: true, teacherMarked: !!updated.teacherMarked, teacherMarkedAt: updated.teacherMarkedAt || null });
+});
+
 // Teachers may attach an older open assessment to a saved class, or correct
 // the selected class, until learner work begins. The room code and assessment
 // content stay unchanged; the selected roster is snapshotted at this point.

@@ -458,6 +458,83 @@ test('fully marked assessments reach teacher progress before learner release and
   assert.equal(row.at, row.finalisedAt, 'incremental exports use the release time');
 });
 
+test('teacher assessment list shows at-a-glance marking status', () => {
+  const teacherId = 'teacher-marking-summary';
+  const classRoster = roster.saveRoster(teacherId, {
+    name: 'Grade 6B',
+    students: [
+      { id: 'learner-1', name: 'Learner One' },
+      { id: 'learner-2', name: 'Learner Two' },
+    ],
+  });
+  const record = assignments.createAssessment({
+    teacherId,
+    rosterId: classRoster.id,
+    rosterSnapshot: classRoster.students,
+    data: validAssessment(),
+  });
+  assert.equal(assignments.listTeacherAssignments(teacherId)[0].marking.label, 'Not submitted');
+
+  assignments.saveSubmission(record.id, {
+    studentId: 'learner-1', name: 'Learner One', answers: { q1: 0 },
+    grades: {
+      q1: { marksAwarded: 5, source: 'auto' },
+      'criterion-1': { marksAwarded: 4, source: 'teacher' },
+      'criterion-2': { marksAwarded: 8, source: 'teacher' },
+    },
+    totalMarks: 17, maxMarks: 20, submittedAt: '2026-09-10T10:00:00.000Z',
+  });
+  let summary = assignments.listTeacherAssignments(teacherId)[0].marking;
+  assert.equal(summary.label, 'Still writing');
+  assert.equal(summary.detail, '1/2 learners submitted. 1 missing.');
+
+  assignments.saveSubmission(record.id, {
+    studentId: 'learner-2', name: 'Learner Two', answers: { q1: 0 },
+    grades: {
+      q1: { marksAwarded: 5, source: 'auto' },
+      'criterion-1': { marksAwarded: 4, source: 'teacher' },
+      'criterion-2': { marksAwarded: 0, source: 'teacher-required' },
+    },
+    totalMarks: 9, maxMarks: 20, submittedAt: '2026-09-10T10:05:00.000Z',
+  });
+  summary = assignments.listTeacherAssignments(teacherId)[0].marking;
+  assert.equal(summary.label, 'Needs marking');
+  assert.equal(summary.pendingGrades, 1);
+
+  assignments.saveSubmission(record.id, {
+    ...assignments.getSubmission(record.id, 'learner-2'),
+    grades: {
+      q1: { marksAwarded: 5, source: 'auto' },
+      'criterion-1': { marksAwarded: 4, source: 'teacher' },
+      'criterion-2': { marksAwarded: 8, source: 'teacher' },
+    },
+  });
+  summary = assignments.listTeacherAssignments(teacherId)[0].marking;
+  assert.equal(summary.label, 'Marked');
+  assert.match(summary.detail, /Results hidden until released/);
+
+  assignments.releaseResults(record.id, true);
+  summary = assignments.listTeacherAssignments(teacherId)[0].marking;
+  assert.equal(summary.label, 'Released');
+  assert.equal(summary.detail, '2/2 learners marked and visible.');
+});
+
+test('teacher marking confirmation is saved separately from result release', () => {
+  const teacherId = 'teacher-marked-toggle';
+  const savedRoster = roster.saveRoster(teacherId, { name: 'Grade 3A', students: [{ id: 'learner-1', name: 'Learner One' }] });
+  const record = assignments.createAssessment({ teacherId, rosterId: savedRoster.id, data: validAssessment() });
+  assert.equal(assignments.listTeacherAssignments(teacherId)[0].teacherMarked, false);
+  const marked = assignments.setTeacherMarked(record.id, true);
+  assert.equal(marked.teacherMarked, true);
+  assert.ok(marked.teacherMarkedAt);
+  let row = assignments.listTeacherAssignments(teacherId)[0];
+  assert.equal(row.teacherMarked, true);
+  assert.equal(row.resultsReleased, false);
+  assignments.setTeacherMarked(record.id, false);
+  row = assignments.listTeacherAssignments(teacherId)[0];
+  assert.equal(row.teacherMarked, false);
+});
+
 test('gradebook shows submitted assessments everywhere without counting unfinished marks', () => {
   const teacherId = 'teacher-final-progress';
   const classRoster = roster.saveRoster(teacherId, {
