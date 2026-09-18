@@ -947,7 +947,10 @@
     .gc-marking-status.needs-marking { background:#fee2e2; color:#991b1b; }
     .gc-marking-status.marked { background:#dbeafe; color:#1d4ed8; }
     .gc-marking-status.released { background:#d1fae5; color:#065f46; }
-    .gc-teacher-marked { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:800; color:#065f46; }
+    .gc-marking-status.teacher-confirmed { background:#bbf7d0; color:#166534; }
+    .gc-marking-status.teacher-confirmed::before { background:#16a34a; }
+    .gc-teacher-marked { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:800; color:#166534; background:#dcfce7; border:1px solid #86efac; border-radius:999px; padding:3px 9px; }
+    .gc-teacher-marked:has(input:not(:checked)) { color:var(--muted); background:transparent; border-color:transparent; padding-left:0; }
     .gc-teacher-marked input { width:15px; height:15px; accent-color:#059669; margin:0; }
     .gc-marking-status.draft::before, .gc-marking-status.not-started::before { background:#94a3b8; }
     .gc-marking-status.incomplete::before { background:#f59e0b; }
@@ -8021,7 +8024,7 @@
           const classChip=a.type==='assessment'?`<span class="gc-chip">${selectedClass?esc(selectedClass.name):'No class assigned'}</span>`:'';
           const marking=a.marking||null;
           const markingState=marking?String(marking.state||'').replace(/[^a-z-]/g,''):'';
-          const markingBadge=marking?`<span class="gc-marking-status ${esc(markingState)}">${esc(marking.label||'Marking')}</span>`:'';
+          const markingBadge=marking?`<span class="gc-marking-status ${esc(markingState)}${a.teacherMarked?' teacher-confirmed':''}">${esc(marking.label||'Marking')}</span>`:'';
           const markingDetail=marking&&marking.detail?`<span>${esc(marking.detail)}</span>`:'';
           const teacherMarked=a.type==='assessment'&&!isDraft?`<label class="gc-teacher-marked" title="Save your confirmation that you have reviewed and marked this assessment"><input type="checkbox" class="a-marked-toggle" data-id="${esc(a.id)}" ${a.teacherMarked?'checked':''}> Marked by teacher</label>`:'';
           return `<div class="game-card" data-assignment-id="${esc(a.id)}">
