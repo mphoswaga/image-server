@@ -5488,6 +5488,20 @@ function requireScope(scope) {
   };
 }
 
+// TeacherScope may read a roster after it was first imported. Reconcile
+// email-only learner labels against the organisation's canonical roster before
+// returning that roster, without changing Student IDs or stored evidence.
+function reconcileExternalRosterNames(req) {
+  const teacherId = req.oauthTeacherId;
+  if (!teacherId) return;
+  const user = getUserById(teacherId);
+  const organizationId = user && user.organizationId;
+  if (!organizationId) return;
+  const corrections = roster.reconcileOrganizationStudentNames(organizationId);
+  corrections.forEach(item => assignments.renameAssessmentStudent(
+    item.teacherId, item.rosterId, item.studentId, item.name));
+}
+
 // Teacher identity — OAuth only (admin keys have no single teacher identity).
 app.get('/api/v1/me', requireApiAccess, requireScope('profile:read'), (req, res) => {
   if (!req.oauthTeacherId) return res.status(400).json({ error: 'Admin keys have no /me identity. Use an OAuth token.' });
@@ -5525,6 +5539,7 @@ app.post('/api/v1/credits/consume', requireApiAccess, requireScope('credits:writ
 
 // Rosters: OAuth returns this teacher's only; admin key returns all.
 app.get('/api/v1/rosters', requireApiAccess, requireScope('rosters:read'), (req, res) => {
+  reconcileExternalRosterNames(req);
   const updatedSince = req.query.updated_since || null;
   const teacherIds = req.oauthTeacherId ? [req.oauthTeacherId] : listAllUserIds();
   const all = [];
@@ -5539,6 +5554,7 @@ app.get('/api/v1/rosters', requireApiAccess, requireScope('rosters:read'), (req,
 
 // Students in a specific roster — teacher-isolated.
 app.get('/api/v1/roster/:id/students', requireApiAccess, requireScope('rosters:read'), (req, res) => {
+  reconcileExternalRosterNames(req);
   let found = null, foundTeacherId = null;
   const teacherIds = req.oauthTeacherId ? [req.oauthTeacherId] : listAllUserIds();
   for (const tid of teacherIds) {
@@ -5554,6 +5570,7 @@ app.get('/api/v1/roster/:id/students', requireApiAccess, requireScope('rosters:r
 
 // Student progress for a roster — teacher-isolated.
 app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:read'), (req, res) => {
+  reconcileExternalRosterNames(req);
   let foundRoster = null, foundTeacherId = null;
   const teacherIds = req.oauthTeacherId ? [req.oauthTeacherId] : listAllUserIds();
   for (const tid of teacherIds) {
