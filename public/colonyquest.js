@@ -23,6 +23,7 @@
   let rendererShutdown = Promise.resolve();
   let startingMatch = false;
   let soundOn = true;
+  let winnerCelebrationPlayed = false;
   let audioContext = null;
   let ambientTimer = null;
   let worldStoryAction = null;
@@ -302,6 +303,7 @@
       }
       await saveSetup();
       resetMatchRuntime();
+      winnerCelebrationPlayed = false;
       session = initialSession();
       await saveState();
       await enterGame();
@@ -1183,6 +1185,7 @@
     const tiedWinners = first ? ranking.filter(entry => entry.score === first.score && entry.team.correct === first.team.correct && (entry.team.attempts ? entry.team.correct / entry.team.attempts : 0) === firstAccuracy) : [];
     const isTie = tiedWinners.length > 1;
     const winner = first && first.team;
+    playWinnerCelebration();
     const winnerRooms = winner ? core.colonyRooms(winner).length : 0;
     const winnerAnts = winner ? 1 + winner.workers + winner.soldiers : 0;
     const winnerNames = tiedWinners.map(entry => entry.team.name);
@@ -2458,6 +2461,16 @@
     if (type === 'wars') { tone(196, .45, .06); tone(293, .45, .055, .2); }
     if (type === 'battle') { tone(110, .22, .055); tone(165, .18, .05, .18); tone(98, .3, .055, .36); }
     if (type === 'victory') [523, 659, 784, 1046].forEach((note, index) => tone(note, .4, .055, index * .14));
+  }
+
+  function playWinnerCelebration() {
+    initAudio();
+    if (!soundOn || !audioContext || winnerCelebrationPlayed) return;
+    winnerCelebrationPlayed = true;
+    const melody = [523, 659, 784, 1046, 988, 784, 880, 1046, 1175, 1046];
+    melody.forEach((note, index) => tone(note, .22, .045, index * .16));
+    [262, 330, 392, 523, 392].forEach((note, index) => tone(note, .35, .018, index * .32));
+    ['scuttle', 'hatch', 'guard'].forEach((kind, index) => setTimeout(() => playAntSound(kind), index * 210));
   }
 
   function startAmbient() {

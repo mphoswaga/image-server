@@ -224,6 +224,8 @@ test('FishQuest game feel stays local, optional, and motion-safe', () => {
   assert.match(client, /ls-fishquest-audio-v1/);
   assert.match(client, /function growthRipple/);
   assert.match(client, /function syncMusic/);
+  assert.match(client, /function playWinnerCelebration/);
+  assert.match(client, /playWinnerCelebration\(\)/);
   assert.match(client, /me\.score > previousMe\.score/);
 });
 
@@ -235,11 +237,13 @@ test('FishQuest teacher computer has optional upbeat music and bubble event soun
   assert.match(page, /fishquest-teacher\.js\?v=2/);
   assert.match(client, /ls-fishquest-teacher-audio-v1/);
   assert.match(client, /function scheduleMusic/);
+  assert.match(client, /function playWinnerCelebration/);
   assert.match(client, /phase!==['"]running['"]/);
   assert.match(client, /document\.hidden/);
   assert.match(client, /function bubbleBurst/);
   assert.match(client, /answered>audioSnapshot\.answered/);
   assert.match(client, /connected>audioSnapshot\.connected/);
+  assert.match(client, /phase===['"]ended['"]&&audioSnapshot\.phase!==['"]ended['"]\)playWinnerCelebration\(\)/);
 });
 
 test('FishQuest ends with a clear winner and the learner own useful facts', () => {

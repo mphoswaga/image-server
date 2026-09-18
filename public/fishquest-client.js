@@ -15,7 +15,7 @@
   const AUDIO_PREF_KEY = 'ls-fishquest-audio-v1';
   let audioSettings = { sound: true, music: true };
   try { audioSettings = { ...audioSettings, ...JSON.parse(localStorage.getItem(AUDIO_PREF_KEY) || '{}') }; } catch {}
-  let audioContext = null, audioUnlocked = false, musicTimer = null, musicNodes = new Set(), lastPlanktonCue = 0, finishSoundPlayed = false;
+  let audioContext = null, audioUnlocked = false, musicTimer = null, musicNodes = new Set(), lastPlanktonCue = 0, finishSoundPlayed = false, celebrationPlayed = false;
   const reducedMotion = Boolean(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const fullscreenElement = () => document.fullscreenElement || document.webkitFullscreenElement || null;
   function syncImmersive() {
@@ -105,6 +105,18 @@
       finish: [[392, 0, .2, .035, 'triangle'], [523, .15, .24, .04, 'triangle'], [659, .32, .28, .04, 'triangle'], [784, .5, .38, .045, 'triangle']],
     };
     for (const [frequency, start, duration, volume, type] of cues[kind] || []) tone(frequency, { start, duration, volume, type });
+  }
+  function playWinnerCelebration() {
+    if (!audioUnlocked || !audioSettings.music || celebrationPlayed) return;
+    celebrationPlayed = true;
+    stopMusic();
+    const beat = .17;
+    [523.25, 659.25, 783.99, 1046.5, 987.77, 783.99, 880, 1046.5].forEach((frequency, index) => {
+      tone(frequency, { start: index * beat, duration: beat * .92, volume: .034, type: 'triangle', music: true });
+    });
+    [261.63, 329.63, 392, 523.25].forEach((frequency, index) => {
+      tone(frequency, { start: index * beat * 2, duration: beat * 1.65, volume: .012, type: 'sine', music: true });
+    });
   }
   function stopMusic() {
     clearTimeout(musicTimer); musicTimer = null;
@@ -218,9 +230,10 @@
     $('teacherWait').hidden = state.phase !== 'lobby'; $('teacherPause').hidden = state.phase !== 'paused';
     if (state.phase === 'ended') {
       syncMusic();
-      if (!finishSoundPlayed && previousPhase && previousPhase !== 'ended') { finishSoundPlayed = true; playCue('finish'); }
+      if (!finishSoundPlayed && previousPhase && previousPhase !== 'ended') { finishSoundPlayed = true; playCue('finish'); playWinnerCelebration(); }
       return finish();
     }
+    celebrationPlayed = false;
     renderQuestion(); optionalEffect('scene update', renderState);
     const freshEvent = state.event && state.event.id !== lastEvent ? state.event : null;
     const swallowed = freshEvent && freshEvent.outcome === 'correct' && freshEvent.attacker === state.me;
