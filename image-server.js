@@ -5081,7 +5081,8 @@ app.patch('/api/roster/:rosterId/student/:studentId/pin-reset', requireAuth, (re
 app.patch('/api/roster/:rosterId/student/:studentId', requireAuth, (req, res) => {
   const name = String((req.body && req.body.name) || '').replace(/\s+/g, ' ').trim();
   if (!name) return res.status(400).json({ error: 'Enter the learner’s name.' });
-  const student = roster.renameStudent(req.userId, req.params.rosterId, req.params.studentId, name);
+  const gender = req.body && Object.prototype.hasOwnProperty.call(req.body, 'gender') ? req.body.gender : undefined;
+  const student = roster.renameStudent(req.userId, req.params.rosterId, req.params.studentId, name, gender);
   if (!student) return res.status(404).json({ error: 'Learner not found in this class.' });
   const assessmentSnapshotsUpdated = assignments.renameAssessmentStudent(
     req.userId, req.params.rosterId, student.id, student.name);

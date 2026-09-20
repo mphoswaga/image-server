@@ -204,7 +204,7 @@ function renameRoster(teacherId, id, name) {
 // Correct a learner's display name without changing their stable Student ID.
 // Results, PINs, linked Google identity and cross-app evidence all use the ID,
 // so a spelling correction must update this roster in place.
-function renameStudent(teacherId, rosterId, studentId, name) {
+function renameStudent(teacherId, rosterId, studentId, name, gender) {
   const record = getRoster(teacherId, rosterId);
   if (!record) return null;
   const wanted = normalizeStudentId(studentId);
@@ -213,6 +213,11 @@ function renameStudent(teacherId, rosterId, studentId, name) {
   const next = String(name || '').replace(/\s+/g, ' ').trim().slice(0, 80);
   if (!next) return null;
   student.name = next;
+  if (gender !== undefined) {
+    const normalizedGender = normalizeGender(gender);
+    if (normalizedGender) student.gender = normalizedGender;
+    else delete student.gender;
+  }
   writeJsonAtomic(rosterPath(teacherId, rosterId), record);
   return { ...student };
 }

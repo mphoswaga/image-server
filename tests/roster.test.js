@@ -349,6 +349,24 @@ test('a learner name correction preserves their stable roster identity', () => {
   }
 });
 
+test('a learner gender correction preserves their stable roster identity', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const previous = process.env.DATA_DIR;
+  process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lc-student-gender-'));
+  try {
+    for (const m of ['../roster.js', '../storage.js']) delete require.cache[require.resolve(m)];
+    const r = require('../roster.js');
+    const saved = r.saveRoster('teacher', { name: '2B1', students: [{ id: 'VN-8', name: 'Minh' }] });
+    assert.deepEqual(r.renameStudent('teacher', saved.id, 'VN-8', 'Minh', 'F'), { id: 'VN-8', name: 'Minh', gender: 'female' });
+    assert.deepEqual(r.renameStudent('teacher', saved.id, 'VN-8', 'Minh', ''), { id: 'VN-8', name: 'Minh' });
+  } finally {
+    process.env.DATA_DIR = previous;
+    for (const m of ['../roster.js', '../storage.js']) delete require.cache[require.resolve(m)];
+  }
+});
+
 test('the same EducScope school reuses a human learner name without merging class data', () => {
   const fs = require('node:fs');
   const os = require('node:os');
