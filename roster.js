@@ -201,6 +201,14 @@ function renameRoster(teacherId, id, name) {
   return record;
 }
 
+function setGradebookExcludedIds(teacherId, rosterId, excludedIds) {
+  const record = getRoster(teacherId, rosterId);
+  if (!record) return null;
+  record.gradebookExcludedIds = [...new Set((Array.isArray(excludedIds) ? excludedIds : []).map(value => String(value || '').trim()).filter(Boolean))].slice(0, 200);
+  writeJsonAtomic(rosterPath(teacherId, rosterId), record);
+  return record.gradebookExcludedIds;
+}
+
 // Correct a learner's display name without changing their stable Student ID.
 // Results, PINs, linked Google identity and cross-app evidence all use the ID,
 // so a spelling correction must update this roster in place.
@@ -383,7 +391,7 @@ function buildStudentsFromMapping(rows, idCol, nameCol, genderCol) {
 }
 
 module.exports = {
-  displayNameFrom, normalizeGender, renameRoster, renameStudent, assignOrganization, reconcileOrganizationStudentNames,
+  displayNameFrom, normalizeGender, renameRoster, renameStudent, setGradebookExcludedIds, assignOrganization, reconcileOrganizationStudentNames,
   saveRoster, getRoster, listRosters, deleteRoster,
   findStudent, findStudentInRoster, findStudentAcrossAllTeachers, parseCSV,
   parseRosterFile, buildStudentsFromMapping, normalizeStudentId,

@@ -4911,6 +4911,13 @@ app.get('/api/gradebook/:rosterId', requireAuth, (req, res) => {
   res.json(gb);
 });
 
+app.patch('/api/gradebook/:rosterId/exclusions', requireAuth, (req, res) => {
+  if (req.user.role === 'student') return res.status(403).json({ error: 'Teachers only.' });
+  const excludedIds = roster.setGradebookExcludedIds(req.userId, req.params.rosterId, req.body && req.body.excludedIds);
+  if (!excludedIds) return res.status(404).json({ error: 'Class not found.' });
+  res.json({ ok: true, excludedIds });
+});
+
 app.get('/api/gradebook/:rosterId/export', requireAuth, (req, res) => {
   if (req.user.role === 'student') return res.status(403).json({ error: 'Teachers only.' });
   const gb = gradebook.buildGradebook(req.userId, req.params.rosterId);

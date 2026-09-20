@@ -217,6 +217,7 @@ function buildGradebook(userId, rosterId) {
   const rs = roster.getRoster(userId, rosterId);
   if (!rs) return null;
   const students = rs.students || [];
+  const excludedIds = new Set((rs.gradebookExcludedIds || []).map(String));
 
   const asgs = assignments.listTeacherAssignments(userId)
     .filter(a => a.rosterId === rosterId)
@@ -241,9 +242,9 @@ function buildGradebook(userId, rosterId) {
       const { mark, max } = result;
       const pct = pctOf(mark, max);
       cells[studentId][a.id] = { mark, max, pct };
-      pcts.push(pct);
+      if (!excludedIds.has(String(a.id))) pcts.push(pct);
     });
-    assessments.push({ id: a.id, kind: 'assignment', type: a.type, title: a.title,
+    assessments.push({ id: a.id, kind: 'assignment', type: a.type, title: a.title, excluded: excludedIds.has(String(a.id)),
       provisional: false,
       learnerVisible: assignments.isReleased(record),
       at: record.type === 'assessment' ? (record.finalisedAt || record.createdAt || a.createdAt) : a.createdAt,
@@ -261,9 +262,9 @@ function buildGradebook(userId, rosterId) {
       if (!r) return;
       const max = r.total || 0, pct = pctOf(r.score, max);
       cells[studentId][g.id] = { mark: r.score, max, pct };
-      pcts.push(pct);
+      if (!excludedIds.has(String(g.id))) pcts.push(pct);
     });
-    assessments.push({ id: g.id, kind: 'game', type: 'game', title: g.lessonTitle, at: g.createdAt, average: mean(pcts), done: pcts.length });
+    assessments.push({ id: g.id, kind: 'game', type: 'game', title: g.lessonTitle, excluded: excludedIds.has(String(g.id)), at: g.createdAt, average: mean(pcts), done: pcts.length });
   }
 
   assessments.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
@@ -271,12 +272,12 @@ function buildGradebook(userId, rosterId) {
   const rows = students.map(s => {
     const studentId = sid(s.id);
     const c = cells[studentId];
-    const pcts = Object.values(c).map(x => x.pct);
+    const pcts = Object.entries(c).filter(([id]) => !excludedIds.has(String(id))).map(([, x]) => x.pct);
     return { studentId, name: s.name, cells: c, average: mean(pcts), done: pcts.length };
   });
 
   const classAverage = mean(rows.map(r => r.average).filter(x => x != null));
-  return { rosterId, name: rs.name, students, assessments, rows, classAverage };
+  return { rosterId, name: rs.name, students, assessments, rows, classAverage, excludedIds: [...excludedIds] };
 }
 
 // Export the matrix as an .xlsx workbook (marks as "3/8", plus an average %).
