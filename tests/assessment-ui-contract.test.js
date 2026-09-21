@@ -107,3 +107,11 @@ test('teacher presentation offers a live, class-scoped list of learners still to
   assert.match(presentation, /teacher list/);
   assert.match(presentation, /awaitingLearners/);
 });
+
+test('teachers can submit only complete saved learner attempts', () => {
+  assert.match(server, /app\.post\('\/api\/assignment\/:id\/submit-completed-drafts'/);
+  assert.match(server, /incompleteAssessmentAnswers\(a\.content\.questions \|\| \[\], answers\)/);
+  assert.match(server, /Finish all assessment sections before submitting learner attempts/);
+  assert.match(html, /Submit \$\{completedDrafts\} completed attempt/);
+  assert.match(html, /still incomplete and will remain open/);
+});

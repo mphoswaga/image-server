@@ -203,6 +203,59 @@ test('formal assessments enforce complete server-owned attempts and immutable re
   }
 });
 
+test('a teacher can submit complete saved attempts without forcing incomplete learners', async ({ page, browser }, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100', 'One browser covers teacher submission of saved attempts.');
+  await signInDisposableTeacher(page, '-assessment-teacher-submit');
+  const classRoster = await createRoster(page, 'Grade 2 Saved Attempts', [
+    { ID: 'READY-1', Name: 'Ready Learner' },
+    { ID: 'WAIT-1', Name: 'Waiting Learner' },
+  ]);
+  const assessment = await publishAssessment(page, classRoster.id, assessmentData({
+    totalMarks: 2,
+    sections: [{
+      id: 'knowledge', title: 'Knowledge check', type: 'mcq', objectiveIds: ['document'], instructions: 'Answer privately.',
+      items: [
+        { id: 'copy', prompt: 'Which action copies selected text?', options: ['Copy', 'Delete'], correctIndex: 0, marks: 1 },
+        { id: 'paste', prompt: 'Which action places copied text?', options: ['Undo', 'Paste'], correctIndex: 1, marks: 1 },
+      ],
+    }],
+  }));
+  const join = await (await page.request.get(`/api/assignment/${assessment.assessmentId}/join`)).json();
+  expect((await page.request.patch(`/api/assignment/${assessment.assessmentId}/live-state`, { data: { action: 'start' } })).ok()).toBeTruthy();
+  const readyContext = await browser.newContext();
+  const waitingContext = await browser.newContext();
+  try {
+    for (const [context, student] of [[readyContext, join.students[0]], [waitingContext, join.students[1]]]) {
+      const entered = await context.request.post(`/api/assignment/${assessment.assessmentId}/enter`, { data: { handle: student.handle, pin: '4826' } });
+      expect(entered.ok(), await entered.text()).toBeTruthy();
+    }
+    expect((await readyContext.request.post(`/api/assignment/${assessment.assessmentId}/draft`, { data: { answers: { copy: 0, paste: 1 }, complete: true } })).ok()).toBeTruthy();
+    expect((await waitingContext.request.post(`/api/assignment/${assessment.assessmentId}/draft`, { data: { answers: { copy: 0 }, complete: false } })).ok()).toBeTruthy();
+    expect((await page.request.patch(`/api/assignment/${assessment.assessmentId}/live-state`, { data: { action: 'next' } })).ok()).toBeTruthy();
+
+    const before = await (await page.request.get(`/api/assignment/${assessment.assessmentId}/results`)).json();
+    expect(before).toMatchObject({ submittedCount: 0, completedDraftsCount: 1, incompleteDraftsCount: 1 });
+    await page.locator('#assignmentsBtn').click();
+    const card = page.locator('#assignmentsList .game-card').filter({ hasText: 'Grade 2 ICT project' });
+    await card.locator('.a-toggle-btn').click();
+    const results = card.locator(`#ares-${assessment.assessmentId}`);
+    await expect(results).toContainText('1 complete and ready to submit');
+    await expect(results).toContainText('1 still incomplete and will remain open');
+    await results.getByRole('button', { name: 'Submit 1 completed attempt' }).click();
+    await expect(results.locator('.gb-stat').filter({ hasText: 'Submitted' }).locator('.v')).toHaveText('1');
+
+    const after = await (await page.request.get(`/api/assignment/${assessment.assessmentId}/results`)).json();
+    expect(after).toMatchObject({ submittedCount: 1, completedDraftsCount: 0, incompleteDraftsCount: 1 });
+    const official = after.submissions.find(student => !student.draftOnly);
+    const unfinished = after.submissions.find(student => student.draftOnly && student.studentId === 'WAIT-1');
+    expect(official).toMatchObject({ studentId: 'READY-1', totalMarks: 2, maxMarks: 2 });
+    expect(unfinished).toMatchObject({ readyToSubmit: false, missingAnswerCount: 1 });
+  } finally {
+    await readyContext.close();
+    await waitingContext.close();
+  }
+});
+
 test('a shared device never carries one assessment learner answers into another learner session', async ({ page, browser }, testInfo) => {
   test.skip(testInfo.project.name !== 'windows-100', 'One shared-device browser covers identity and draft isolation.');
   await signInDisposableTeacher(page, '-assessment-shared-device');

@@ -5960,6 +5960,22 @@
       if(liveAction){ const {assignId,wrapId,assessmentLiveAction}=liveAction.dataset; liveAction.disabled=true;
         try{ const r=await fetch(`/api/assignment/${assignId}/live-state`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:assessmentLiveAction})}); const d=await r.json(); if(!r.ok)throw new Error(d.error); loadAssignmentResults(assignId,wrapId); }
         catch(err){ toast(err.message); liveAction.disabled=false; } return; }
+      const submitDrafts=e.target.closest('.submit-completed-drafts');
+      if(submitDrafts){
+        const {assignId,wrapId}=submitDrafts.dataset,count=Number(submitDrafts.dataset.count)||0;
+        if(!count)return;
+        submitDrafts.disabled=true;submitDrafts.textContent='Submitting…';
+        try{
+          const r=await fetch(`/api/assignment/${assignId}/submit-completed-drafts`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+          const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not submit completed attempts.');
+          const details=[];
+          if(d.incomplete?.length)details.push(`${d.incomplete.length} incomplete attempt${d.incomplete.length===1?' was':'s were'} left open`);
+          if(d.failed?.length)details.push(`${d.failed.length} could not be submitted`);
+          toast(`${d.submitted} completed attempt${d.submitted===1?' was':'s were'} submitted${details.length?`. ${details.join('. ')}.`:'.'}`,d.failed?.length?'':'ok');
+          loadAssignmentResults(assignId,wrapId||'assignSubmissions');
+        }catch(err){toast(err.message);submitDrafts.disabled=false;submitDrafts.textContent=`Submit ${count} completed attempt${count===1?'':'s'}`;}
+        return;
+      }
       const override=e.target.closest('.grade-override-btn');
       if(override){ const {assignId,studentId,questionId,wrapId}=override.dataset;
         const row=override.closest('.grade-row'); const input=row.querySelector('.grade-marks-input');
@@ -6185,10 +6201,15 @@
         ${!d.resultsReleased?`<button type="button" class="release-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" ${d.assessmentType&&!d.releaseReady?'disabled title="'+esc(d.releaseReason||'Finish marking first')+'"':''} style="font-size:12.5px;font-weight:600;padding:6px 12px;border:1px solid var(--primary);border-radius:8px;background:#fff;color:var(--primary);cursor:pointer">${d.assessmentType&&!d.releaseReady?esc(d.missingStudents?`${d.missingStudents} submissions missing`:d.pendingGrades?`${d.pendingGrades} grades pending`:'No submissions yet'):'Release results'}</button>`
           :`<button type="button" class="unrelease-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" style="font-size:12.5px;font-weight:600;padding:6px 12px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--muted);cursor:pointer">Recall from learners</button>`}
       </div>`;
+      const completedDrafts=Number(d.completedDraftsCount)||0,incompleteDrafts=Number(d.incompleteDraftsCount)||0;
+      const submitDraftsBar=d.assessmentType&&!d.resultsReleased&&(completedDrafts||incompleteDrafts)?`<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px;padding:11px 12px;border:1px solid #b8d5c7;border-radius:9px;background:#f5fcf8">
+        <div><b style="font-size:13px;color:#145c3c">Saved learner attempts</b><div style="font-size:12px;color:var(--muted);margin-top:2px">${completedDrafts} complete and ready to submit${incompleteDrafts?` · ${incompleteDrafts} still incomplete and will remain open`:''}.</div></div>
+        ${completedDrafts?`<button type="button" class="btn accent submit-completed-drafts" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-count="${completedDrafts}" style="width:auto;padding:8px 12px">Submit ${completedDrafts} completed attempt${completedDrafts===1?'':'s'}</button>`:''}
+      </div>`:'';
       const tabBtn=(v,label)=>`<button type="button" class="view-tab-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-view="${v}" style="font-size:12.5px;font-weight:600;padding:6px 14px;border:1px solid ${view===v?'var(--primary)':'var(--border)'};border-radius:8px;background:${view===v?'var(--primary)':'#fff'};color:${view===v?'#fff':'var(--ink)'};cursor:pointer">${label}</button>`;
       const tabs=`<div style="display:flex;gap:8px;margin-bottom:10px">${tabBtn('student','By student')}${tabBtn('question','By question')}</div>`;
-      if(!d.submissions||!d.submissions.length){ wrap.innerHTML=liveBar+releaseBar+tabs+'<p class="hint" style="margin-top:8px">No students have submitted yet.</p>'; return; }
-      wrap.innerHTML=liveBar+releaseBar+assignmentSummary(d)+tabs+(view==='question'?renderByQuestion(d,assignId,wrapId):renderByStudent(d,assignId,wrapId));
+      if(!d.submissions||!d.submissions.length){ wrap.innerHTML=liveBar+submitDraftsBar+releaseBar+tabs+'<p class="hint" style="margin-top:8px">No students have submitted yet.</p>'; return; }
+      wrap.innerHTML=liveBar+submitDraftsBar+releaseBar+assignmentSummary(d)+tabs+(view==='question'?renderByQuestion(d,assignId,wrapId):renderByStudent(d,assignId,wrapId));
     }
 
     function assessmentLiveControls(d,assignId,wrapId){

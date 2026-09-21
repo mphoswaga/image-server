@@ -3422,6 +3422,51 @@ app.post('/api/assignment/:id/draft', requireAssignmentAccess, (req, res) => {
   res.json({ ok: true, savedAt: saved.updatedAt, sectionCompleted: !!(activeSection && saved.completedSectionIds.includes(activeSection.id)) });
 });
 
+async function buildAssessmentSubmission(a, { studentId, name, answers, storedDraft }) {
+  const grades = {};
+  let totalMarks = 0, maxMarks = 0;
+  for (const q of a.content.questions) {
+    maxMarks += q.marks;
+    const given = answers[q.id];
+    if (q.kind === 'mcq') {
+      const correct = Number.isInteger(given) && given === q.correctIndex;
+      grades[q.id] = { marksAwarded: correct ? q.marks : 0, verdict: correct ? 'correct' : 'incorrect', rationale: correct ? 'Correct option selected.' : 'Not the correct option.', source: 'auto' };
+    } else if (q.kind === 'practical') {
+      const observed = storedDraft && storedDraft.observationGrades && storedDraft.observationGrades[q.id];
+      grades[q.id] = observed
+        ? { ...observed, source: 'teacher' }
+        : { marksAwarded: 0, verdict: 'pending', rationale: '', source: 'teacher-required' };
+    } else {
+      const cached = assignments.findConfirmedVerdict(a.id, q.id, given);
+      if (cached) {
+        grades[q.id] = { marksAwarded: cached.marksAwarded, verdict: cached.verdict, rationale: cached.rationale, source: 'ai-confirmed' };
+      } else {
+        const verdict = await gradeAnswer({ question: q.question, answerKey: q.answerKey, studentAnswer: given, maxMarks: q.marks, grade: a.grade });
+        assignments.recordVerdict(a.id, q.id, { answerText: given, ...verdict, confirmed: false, source: 'ai' });
+        grades[q.id] = { ...verdict, source: 'ai' };
+      }
+    }
+    totalMarks += grades[q.id].marksAwarded;
+  }
+  return { studentId, name: name || studentId, answers, grades, totalMarks, maxMarks, submittedAt: new Date().toISOString() };
+}
+
+function notifyRecordedAssessmentSubmission(a, submission) {
+  if (!a || !a.teacherMarked || !submission) return;
+  setImmediate(() => webhooks.dispatch('result.created', {
+    assessmentId: a.id,
+    assessmentVersion: a.version || 1,
+    rosterId: a.rosterId || null,
+    lessonWorkspaceId: a.lessonWorkspaceId || null,
+    unitId: a.unitId || null,
+    unitName: a.unitName || null,
+    studentId: submission.studentId,
+    teacherMarked: true,
+    learnerVisible: assignments.isReleased(a),
+    at: submission.submittedAt || new Date().toISOString(),
+  }).catch(() => {}));
+}
+
 // Student: submit answers — MCQ grades instantly; free-text checks the
 // teacher-confirmed verdict cache first, only calling AI on a genuine miss.
 app.post('/api/assignment/:id/submit', requireAssignmentAccess, async (req, res) => {
@@ -3458,42 +3503,17 @@ app.post('/api/assignment/:id/submit', requireAssignmentAccess, async (req, res)
   const studentId = session.studentId;
   const name = session.name || studentId;
 
-  const grades = {};
-  let totalMarks = 0, maxMarks = 0;
+  let submission;
   try {
-    for (const q of a.content.questions) {
-      maxMarks += q.marks;
-      const given = answers[q.id];
-      if (q.kind === 'mcq') {
-        const correct = Number.isInteger(given) && given === q.correctIndex;
-        grades[q.id] = { marksAwarded: correct ? q.marks : 0, verdict: correct ? 'correct' : 'incorrect', rationale: correct ? 'Correct option selected.' : 'Not the correct option.', source: 'auto' };
-      } else if (q.kind === 'practical') {
-        // Observation/performance criteria are completed away from the answer
-        // box. A mark recorded while the teacher circulates is carried from
-        // the live draft into the final submission; otherwise it stays pending.
-        const observed = storedDraft && storedDraft.observationGrades && storedDraft.observationGrades[q.id];
-        grades[q.id] = observed
-          ? { ...observed, source: 'teacher' }
-          : { marksAwarded: 0, verdict: 'pending', rationale: '', source: 'teacher-required' };
-      } else {
-        const cached = assignments.findConfirmedVerdict(a.id, q.id, given);
-        if (cached) {
-          grades[q.id] = { marksAwarded: cached.marksAwarded, verdict: cached.verdict, rationale: cached.rationale, source: 'ai-confirmed' };
-        } else {
-          const verdict = await gradeAnswer({ question: q.question, answerKey: q.answerKey, studentAnswer: given, maxMarks: q.marks, grade: a.grade });
-          assignments.recordVerdict(a.id, q.id, { answerText: given, ...verdict, confirmed: false, source: 'ai' });
-          grades[q.id] = { ...verdict, source: 'ai' };
-        }
-      }
-      totalMarks += grades[q.id].marksAwarded;
-    }
+    submission = await buildAssessmentSubmission(a, { studentId, name, answers, storedDraft });
   } catch (err) {
     console.error('Grading failed:', err.message);
     return res.status(400).json({ error: 'Grading failed: ' + err.message });
   }
 
   try {
-    assignments.saveNewSubmission(a.id, { studentId, name, answers, grades, totalMarks, maxMarks, submittedAt: new Date().toISOString() });
+    assignments.saveNewSubmission(a.id, submission);
+    notifyRecordedAssessmentSubmission(a, submission);
   } catch (error) {
     return res.status(error.status || 409).json({ code: error.code || 'assessment_submission_locked', error: error.message });
   }
@@ -3501,7 +3521,57 @@ app.post('/api/assignment/:id/submit', requireAssignmentAccess, async (req, res)
   // student only sees marks/verdicts once released or the due date has
   // passed — their own answers are always visible, just not the scoring yet.
   const released = assignments.isReleased(a);
-  res.json(released ? { released, totalMarks, maxMarks, grades } : { released, totalMarks: null, maxMarks, grades: null });
+  res.json(released ? { released, totalMarks: submission.totalMarks, maxMarks: submission.maxMarks, grades: submission.grades } : { released, totalMarks: null, maxMarks: submission.maxMarks, grades: null });
+});
+
+// Teacher: convert complete, saved learner drafts into final submissions.
+// Incomplete attempts are never forced through and remain available to finish.
+app.post('/api/assignment/:id/submit-completed-drafts', requireAuth, async (req, res) => {
+  declareFree('lessonscope.auto_grade');
+  const a = assignments.getAssignment(req.params.id);
+  if (!a) return res.status(404).json({ error: 'Assessment not found.' });
+  if (a.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assessment.' });
+  if (a.type !== 'assessment') return res.status(400).json({ error: 'Only tests and projects support teacher submission.' });
+  if (assignments.assessmentIsFinalised(a)) return res.status(409).json({ code: 'assessment_finalised', error: 'Recall the learner results before submitting saved attempts.' });
+  const delivery = assignments.deliveryState(a);
+  if (delivery.mode === 'live' && delivery.phase !== 'marking') {
+    return res.status(409).json({ error: 'Finish all assessment sections before submitting learner attempts.' });
+  }
+  const cohort = assignmentCohortStudents(a);
+  const cohortMap = new Map(cohort.map(student => [roster.normalizeStudentId(student.id), student]));
+  const requested = new Set(Array.isArray(req.body && req.body.studentIds)
+    ? req.body.studentIds.map(roster.normalizeStudentId).filter(Boolean)
+    : []);
+  const drafts = assignments.loadDrafts(a.id);
+  const submitted = [], incomplete = [], skipped = [], failed = [];
+  for (const draft of drafts) {
+    const studentId = roster.normalizeStudentId(draft.studentId);
+    if (!studentId || (requested.size && !requested.has(studentId))) continue;
+    if (a.rosterId && !cohortMap.has(studentId)) { skipped.push(studentId); continue; }
+    if (assignments.getSubmission(a.id, studentId)) { skipped.push(studentId); continue; }
+    const answers = assignments.sanitizeLearnerAnswers(a.content.questions || [], draft.answers || {});
+    const missing = assignments.incompleteAssessmentAnswers(a.content.questions || [], answers);
+    if (missing.length) { incomplete.push({ studentId, missing: missing.length }); continue; }
+    try {
+      const learner = cohortMap.get(studentId);
+      const submission = await buildAssessmentSubmission(a, {
+        studentId,
+        name: learner && learner.name || draft.name || studentId,
+        answers,
+        storedDraft: draft,
+      });
+      assignments.saveNewSubmission(a.id, submission);
+      notifyRecordedAssessmentSubmission(a, submission);
+      submitted.push(studentId);
+    } catch (error) {
+      failed.push({ studentId, error: error.message });
+    }
+  }
+  audit.log('assessment.teacher_submitted_drafts', {
+    userId: req.userId, assessmentId: a.id, rosterId: a.rosterId || null,
+    submitted: submitted.length, incomplete: incomplete.length, skipped: skipped.length, failed: failed.length, ip: req.ip,
+  });
+  res.json({ ok: failed.length === 0, submitted: submitted.length, submittedStudentIds: submitted, incomplete, skipped: skipped.length, failed });
 });
 
 // Teacher: release (or un-release) results to students for this assignment.
@@ -3584,11 +3654,14 @@ app.get('/api/assignment/:id/results', requireAuth, (req, res) => {
       if (!studentId || seen.has(studentId)) continue;
       const draft = draftMap.get(studentId) || {};
       const grades = { ...(draft.observationGrades || {}) };
+      const draftAnswers = assignments.sanitizeLearnerAnswers(a.content.questions || [], draft.answers || {});
+      const missingAnswers = assignments.incompleteAssessmentAnswers(a.content.questions || [], draftAnswers);
       submissions.push({
-        studentId, name: candidate.name || draft.name || studentId, answers: draft.answers || {}, grades,
+        studentId, name: candidate.name || draft.name || studentId, answers: draftAnswers, grades,
         totalMarks: Object.values(grades).reduce((sum, grade) => sum + (Number(grade.marksAwarded) || 0), 0),
         maxMarks: a.totalMarks || (a.content.questions || []).reduce((sum, question) => sum + question.marks, 0),
-        draftOnly: true, submittedAt: null,
+        draftOnly: true, readyToSubmit: !!draft.studentId && missingAnswers.length === 0,
+        missingAnswerCount: missingAnswers.length, submittedAt: null,
       });
       seen.add(studentId);
     }
@@ -3597,7 +3670,19 @@ app.get('/api/assignment/:id/results', requireAuth, (req, res) => {
   const delivery = assignments.deliveryState(a);
   const liveProgress = a.type === 'assessment' ? assignments.draftProgress(a) : null;
   const rosterSize = a.rosterId ? cohort.length : null;
-  res.json({ questions: a.content.questions, sections: a.sections || null, objectives: a.objectives || null, assessmentType: a.assessmentType || null, totalMarks: a.totalMarks || null, delivery, liveProgress, rosterSize, submittedCount, submissions, resultsReleased: a.resultsReleased, teacherMarked: !!a.teacherMarked, teacherMarkedAt: a.teacherMarkedAt || null, cutoffAt: a.cutoffAt, effectivelyReleased: assignments.isReleased(a), releaseReady: readiness.ready, pendingGrades: readiness.pendingGrades, missingStudents: readiness.missingStudents || 0, releaseReason: readiness.reason || '' });
+  const submittedIds = new Set(submissions.filter(submission => !submission.draftOnly).map(submission => roster.normalizeStudentId(submission.studentId)));
+  const cohortIds = new Set(cohort.map(student => roster.normalizeStudentId(student.id)));
+  const pendingDrafts = a.type === 'assessment' ? assignments.loadDrafts(a.id).filter(draft => {
+    const studentId = roster.normalizeStudentId(draft.studentId);
+    return studentId && !submittedIds.has(studentId) && (!a.rosterId || cohortIds.has(studentId));
+  }) : [];
+  const pendingDraftStatus = pendingDrafts.map(draft => {
+    const answers = assignments.sanitizeLearnerAnswers(a.content.questions || [], draft.answers || {});
+    return { hasAnswers: Object.keys(answers).length > 0, complete: assignments.incompleteAssessmentAnswers(a.content.questions || [], answers).length === 0 };
+  });
+  const completedDraftsCount = pendingDraftStatus.filter(status => status.complete).length;
+  const incompleteDraftsCount = pendingDraftStatus.filter(status => status.hasAnswers && !status.complete).length;
+  res.json({ questions: a.content.questions, sections: a.sections || null, objectives: a.objectives || null, assessmentType: a.assessmentType || null, totalMarks: a.totalMarks || null, delivery, liveProgress, rosterSize, submittedCount, submissions, completedDraftsCount, incompleteDraftsCount, resultsReleased: a.resultsReleased, teacherMarked: !!a.teacherMarked, teacherMarkedAt: a.teacherMarkedAt || null, cutoffAt: a.cutoffAt, effectivelyReleased: assignments.isReleased(a), releaseReady: readiness.ready, pendingGrades: readiness.pendingGrades, missingStudents: readiness.missingStudents || 0, releaseReason: readiness.reason || '' });
 });
 
 // Teacher: override a student's grade for one question. This both corrects
