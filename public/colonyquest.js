@@ -25,6 +25,7 @@
   let soundOn = true;
   let winnerCelebrationPlayed = false;
   let audioContext = null;
+  let audioOutput = null;
   let ambientTimer = null;
   let worldStoryAction = null;
   let worldStoryTimer = null;
@@ -2429,6 +2430,19 @@
     if (!soundOn) return;
     try {
       audioContext = audioContext || new (window.AudioContext || window.webkitAudioContext)();
+      if (!audioOutput) {
+        const limiter = audioContext.createDynamicsCompressor();
+        limiter.threshold.value = -12;
+        limiter.knee.value = 8;
+        limiter.ratio.value = 8;
+        limiter.attack.value = .004;
+        limiter.release.value = .18;
+        const classroomGain = audioContext.createGain();
+        classroomGain.gain.value = 2.25;
+        classroomGain.connect(limiter);
+        limiter.connect(audioContext.destination);
+        audioOutput = classroomGain;
+      }
       if (audioContext.state === 'suspended') audioContext.resume();
       startAmbient();
     } catch {}
@@ -2451,12 +2465,12 @@
       filter.type = 'lowpass';
       filter.frequency.value = 170;
       gain.gain.setValueAtTime(.0001, audioContext.currentTime);
-      gain.gain.exponentialRampToValueAtTime(.065, audioContext.currentTime + .08);
+      gain.gain.exponentialRampToValueAtTime(.11, audioContext.currentTime + .08);
       gain.gain.exponentialRampToValueAtTime(.0001, audioContext.currentTime + duration);
       source.buffer = buffer;
-      source.connect(filter); filter.connect(gain); gain.connect(audioContext.destination);
+      source.connect(filter); filter.connect(gain); gain.connect(audioOutput);
       source.start(); source.stop(audioContext.currentTime + duration + .05);
-      tone(55, .85, .035, .05);
+      tone(55, .85, .06, .05);
     } catch {}
   }
 
@@ -2468,7 +2482,7 @@
     gain.gain.setValueAtTime(0.0001, audioContext.currentTime + delay);
     gain.gain.exponentialRampToValueAtTime(volume, audioContext.currentTime + delay + .03);
     gain.gain.exponentialRampToValueAtTime(.0001, audioContext.currentTime + delay + duration);
-    oscillator.connect(gain); gain.connect(audioContext.destination);
+    oscillator.connect(gain); gain.connect(audioOutput);
     oscillator.start(audioContext.currentTime + delay); oscillator.stop(audioContext.currentTime + delay + duration + .04);
   }
 
@@ -2486,21 +2500,21 @@
     gain.gain.exponentialRampToValueAtTime(volume, audioContext.currentTime + delay + .012);
     gain.gain.exponentialRampToValueAtTime(.0001, audioContext.currentTime + delay + duration);
     source.buffer = buffer;
-    source.connect(filter); filter.connect(gain); gain.connect(audioContext.destination);
+    source.connect(filter); filter.connect(gain); gain.connect(audioOutput);
     source.start(audioContext.currentTime + delay); source.stop(audioContext.currentTime + delay + duration + .03);
   }
 
   function playAntSound(kind) {
     initAudio();
     if (!soundOn || !audioContext) return;
-    // Small, warm sounds make the ants feel active without becoming classroom noise.
-    if (kind === 'scuttle') { antRustle(.08, .011); antRustle(.07, .009, .11); tone(185, .1, .012, .03); }
-    if (kind === 'forage') { tone(330, .1, .018); tone(440, .09, .014, .16); antRustle(.1, .009, .27); }
-    if (kind === 'build' || kind === 'dig') { antRustle(.12, .016); antRustle(.1, .014, .18); tone(kind === 'dig' ? 105 : 145, .12, .018, .08); }
-    if (kind === 'hatch') { tone(620, .12, .018); tone(784, .16, .015, .15); }
-    if (kind === 'guard') { tone(118, .16, .02); tone(156, .13, .016, .15); }
-    if (kind === 'march') { antRustle(.07, .01); antRustle(.07, .01, .15); antRustle(.07, .01, .3); }
-    if (kind === 'battle') { antRustle(.13, .018); tone(92, .14, .02, .06); }
+    // Ant movement and actions need to remain audible from the back of a classroom.
+    if (kind === 'scuttle') { antRustle(.08, .025); antRustle(.07, .021, .11); tone(185, .1, .027, .03); }
+    if (kind === 'forage') { tone(330, .1, .04); tone(440, .09, .032, .16); antRustle(.1, .022, .27); }
+    if (kind === 'build' || kind === 'dig') { antRustle(.12, .036); antRustle(.1, .032, .18); tone(kind === 'dig' ? 105 : 145, .12, .04, .08); }
+    if (kind === 'hatch') { tone(620, .12, .04); tone(784, .16, .034, .15); }
+    if (kind === 'guard') { tone(118, .16, .045); tone(156, .13, .036, .15); }
+    if (kind === 'march') { antRustle(.07, .024); antRustle(.07, .024, .15); antRustle(.07, .024, .3); }
+    if (kind === 'battle') { antRustle(.13, .04); tone(92, .14, .045, .06); }
   }
 
   function playTone(type) {
@@ -2529,7 +2543,7 @@
       if (!soundOn || !audioContext) return;
       const progress = session ? turnProgress() : 0;
       const notes = session && session.warsActive ? [146, 174, 220] : progress >= .68 ? [130, 174, 196] : [174, 220, 261];
-      notes.forEach((note, index) => tone(note, 2.8, .009, index * .08));
+      notes.forEach((note, index) => tone(note, 2.8, .018, index * .08));
     };
     play(); ambientTimer = setInterval(play, 3600);
   }

@@ -50,6 +50,9 @@ test('the classroom loop keeps questions and colony growth without narrative cli
   assert.match(client, /playAntSound\('march'\)/);
   assert.match(client, /function playWinnerCelebration\(\)/);
   assert.match(client, /playWinnerCelebration\(\);/);
+  assert.match(client, /classroomGain\.gain\.value = 2\.25/);
+  assert.match(client, /createDynamicsCompressor\(\)/);
+  assert.match(client, /tone\(note, 2\.8, \.018/);
   const nextTurn = client.slice(client.indexOf('async function nextTurn'), client.indexOf('function showRoundStory'));
   assert.doesNotMatch(nextTurn, /showRoundStory\(event\);/);
 });
