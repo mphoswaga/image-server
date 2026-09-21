@@ -529,6 +529,7 @@ test('teacher marking confirmation is saved separately from result release', () 
   assert.ok(marked.teacherMarkedAt);
   let row = assignments.listTeacherAssignments(teacherId)[0];
   assert.equal(row.teacherMarked, true);
+  assert.equal(row.teacherMarkedAt, marked.teacherMarkedAt);
   assert.equal(row.resultsReleased, false);
   assignments.setTeacherMarked(record.id, false);
   row = assignments.listTeacherAssignments(teacherId)[0];

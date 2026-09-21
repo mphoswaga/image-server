@@ -6180,8 +6180,8 @@
       const d=assignResultsCache.get(assignId); if(!d) return;
       wrap.dataset.view=view;
       const liveBar=assessmentLiveControls(d,assignId,wrapId);
-      const releaseBar=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:${d.effectivelyReleased?'#eafaf0':'#fdf6ea'}">
-        <span style="font-size:13px;font-weight:600;color:${d.effectivelyReleased?'var(--ok,#1f9d55)':'#b26a00'}">${d.effectivelyReleased?(d.resultsReleased?'Official marks · Visible to learners':'Official marks · Visible after due date'):(d.assessmentType&&d.releaseReady?'Official marks · Hidden from learners':'Marks saved privately · Hidden from learners')}</span>
+      const releaseBar=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:${d.effectivelyReleased||d.teacherMarked?'#eafaf0':'#fdf6ea'}">
+        <span style="font-size:13px;font-weight:600;color:${d.effectivelyReleased||d.teacherMarked?'var(--ok,#1f9d55)':'#b26a00'}">${d.effectivelyReleased?(d.resultsReleased?'Official marks · Visible to learners':'Official marks · Visible after due date'):(d.teacherMarked?'On record · Hidden from learners':d.assessmentType&&d.releaseReady?'Marks ready · Tick “Marked by teacher” to add them to records':'Marks saved privately · Hidden from learners')}</span>
         ${!d.resultsReleased?`<button type="button" class="release-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" ${d.assessmentType&&!d.releaseReady?'disabled title="'+esc(d.releaseReason||'Finish marking first')+'"':''} style="font-size:12.5px;font-weight:600;padding:6px 12px;border:1px solid var(--primary);border-radius:8px;background:#fff;color:var(--primary);cursor:pointer">${d.assessmentType&&!d.releaseReady?esc(d.missingStudents?`${d.missingStudents} submissions missing`:d.pendingGrades?`${d.pendingGrades} grades pending`:'No submissions yet'):'Release results'}</button>`
           :`<button type="button" class="unrelease-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" style="font-size:12.5px;font-weight:600;padding:6px 12px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--muted);cursor:pointer">Recall from learners</button>`}
       </div>`;
@@ -7696,7 +7696,7 @@
         <div class="gb-stat"><div class="v">${g.students.length}</div><div class="l">Students</div></div>
         <div class="gb-stat"><div class="v">${doneCount}/${g.students.length}</div><div class="l">Have taken part</div></div>
       </div>`;
-      const head=`<tr><th class="sticky">Student</th>${g.assessments.map(a=>`<th title="${esc(a.title)}"><label style="display:flex;flex-direction:column;gap:4px;align-items:center"><span class="gb-th-type">${a.kind==='game'?'🎮 Game':'📝 '+esc(a.type||'Task')}${a.learnerVisible===false?' · Official, hidden from learners':''}</span><span>${esc(a.title.length>18?a.title.slice(0,17)+'…':a.title)}</span><span style="font-size:11px;font-weight:700;color:var(--muted)">Weight <input type="number" class="gb-weight-input" data-assessment-id="${esc(a.id)}" value="${Number(a.weight??1)}" min="0" max="10" step="0.25" style="width:58px;padding:3px 5px;border:1px solid var(--border);border-radius:6px;text-align:center;font:inherit"> ${a.excluded?'<em style="color:#b45309;font-style:normal">excluded</em>':''}</span></label></th>`).join('')}<th>Average</th></tr>`;
+      const head=`<tr><th class="sticky">Student</th>${g.assessments.map(a=>`<th title="${esc(a.title)}"><label style="display:flex;flex-direction:column;gap:4px;align-items:center"><span class="gb-th-type">${a.kind==='game'?'🎮 Game':'📝 '+esc(a.type||'Task')}${a.learnerVisible===false?(a.teacherMarked?' · On record, hidden from learners':' · Saved, awaiting teacher confirmation'):''}</span><span>${esc(a.title.length>18?a.title.slice(0,17)+'…':a.title)}</span><span style="font-size:11px;font-weight:700;color:var(--muted)">Weight <input type="number" class="gb-weight-input" data-assessment-id="${esc(a.id)}" value="${Number(a.weight??1)}" min="0" max="10" step="0.25" style="width:58px;padding:3px 5px;border:1px solid var(--border);border-radius:6px;text-align:center;font:inherit"> ${a.excluded?'<em style="color:#b45309;font-style:normal">excluded</em>':''}</span></label></th>`).join('')}<th>Average</th></tr>`;
       const body=g.rows.map(r=>`<tr>
         <td class="sticky">${esc(r.name)}</td>
         ${g.assessments.map(a=>{ const c=r.cells[a.id]; return `<td>${c?`<span class="gb-cell ${pctClass(c.pct)}">${c.mark}/${c.max}</span>`:'<span class="gb-none">—</span>'}</td>`; }).join('')}
@@ -8052,7 +8052,7 @@
           const markingState=marking?String(marking.state||'').replace(/[^a-z-]/g,''):'';
           const markingBadge=marking?`<span class="gc-marking-status ${esc(markingState)}${a.teacherMarked?' teacher-confirmed':''}">${esc(marking.label||'Marking')}</span>`:'';
           const markingDetail=marking&&marking.detail?`<span>${esc(marking.detail)}</span>`:'';
-          const teacherMarked=a.type==='assessment'&&!isDraft?`<label class="gc-teacher-marked" title="Save your confirmation that you have reviewed and marked this assessment"><input type="checkbox" class="a-marked-toggle" data-id="${esc(a.id)}" ${a.teacherMarked?'checked':''}> Marked by teacher</label>`:'';
+          const teacherMarked=a.type==='assessment'&&!isDraft?`<label class="gc-teacher-marked" title="Add completed marks to Marks, Rosters and connected TeacherScope records"><input type="checkbox" class="a-marked-toggle" data-id="${esc(a.id)}" ${a.teacherMarked?'checked':''}> Marked by teacher</label>`:'';
           return `<div class="game-card${a.teacherMarked?' teacher-confirmed-card':''}" data-assignment-id="${esc(a.id)}">
             <div class="gc-head">
               <div class="gc-top">
@@ -8117,12 +8117,20 @@
     $('assignmentsList').addEventListener('change', async e=>{
       const toggle=e.target.closest('.a-marked-toggle');
       if(!toggle) return;
+      const requestedMarked=toggle.checked;
       toggle.disabled=true;
       try{
-        const response=await fetch('/api/assignment/'+encodeURIComponent(toggle.dataset.id)+'/marked',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({marked:toggle.checked})});
+        const response=await fetch('/api/assignment/'+encodeURIComponent(toggle.dataset.id)+'/marked',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({marked:requestedMarked})});
         const data=await response.json();
         if(!response.ok) throw new Error(data.error||'Could not save marking status.');
-        toast(toggle.checked?'Marked status saved.':'Marked status cleared.','ok');
+        const card=toggle.closest('.game-card');
+        if(card)card.classList.toggle('teacher-confirmed-card',requestedMarked);
+        if(requestedMarked){
+          const recorded=Number(data.recordedResults)||0,pending=Number(data.pendingResults)||0;
+          const places=recorded===1?'1 learner result is now on record in Marks, Rosters and TeacherScope.':`${recorded} learner results are now on record in Marks, Rosters and TeacherScope.`;
+          toast(pending?`${places} ${pending} submitted result${pending===1?' still needs':'s still need'} marking.`:places,'ok');
+        }else toast('Marked status cleared. Learner visibility has not changed.','ok');
+        await loadMyAssignments();
       }catch(error){ toggle.checked=!toggle.checked; toast(error.message); }
       finally{ toggle.disabled=false; }
     });

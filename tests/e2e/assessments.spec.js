@@ -479,13 +479,18 @@ test('multiple-choice answers are visibly auto-confirmed without per-learner sav
     });
     expect(submitted.ok(), await submitted.text()).toBeTruthy();
 
+    const recordedResponse = await page.request.patch(`/api/assignment/${assessment.assessmentId}/marked`, { data: { marked: true } });
+    const recorded = await recordedResponse.json();
+    expect(recordedResponse.ok(), JSON.stringify(recorded)).toBeTruthy();
+    expect(recorded).toEqual(expect.objectContaining({ teacherMarked: true, recordedResults: 1, pendingResults: 0, rosterId: classRoster.id }));
+
     const rosterProgress = await (await page.request.get(`/api/roster/${classRoster.id}/progress`)).json();
     expect(rosterProgress.students[0].results).toEqual(expect.arrayContaining([
-      expect.objectContaining({ assignmentId: assessment.assessmentId, lessonTitle: 'Plant knowledge test', status: 'marked', provisional: false, score: 1, total: 2, pct: 50 }),
+      expect.objectContaining({ assignmentId: assessment.assessmentId, lessonTitle: 'Plant knowledge test', status: 'marked', provisional: false, teacherMarked: true, score: 1, total: 2, pct: 50 }),
     ]));
     const marks = await (await page.request.get(`/api/gradebook/${classRoster.id}`)).json();
     expect(marks.assessments).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: assessment.assessmentId, provisional: false, learnerVisible: false }),
+      expect.objectContaining({ id: assessment.assessmentId, provisional: false, teacherMarked: true, learnerVisible: false }),
     ]));
     expect(marks.rows[0].cells[assessment.assessmentId]).toEqual(expect.objectContaining({ mark: 1, max: 2, pct: 0.5 }));
 
@@ -500,6 +505,8 @@ test('multiple-choice answers are visibly auto-confirmed without per-learner sav
 
     await page.locator('#assignmentsBtn').click();
     const card = page.locator('#assignmentsList .game-card').filter({ hasText: 'Plant knowledge test' });
+    await expect(card).toHaveClass(/teacher-confirmed-card/);
+    await expect(card.locator('.a-marked-toggle')).toBeChecked();
     await card.locator('.a-toggle-btn').click();
     const results = card.locator(`#ares-${assessment.assessmentId}`);
     await results.getByRole('button', { name: 'By question' }).click();

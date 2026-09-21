@@ -2302,8 +2302,46 @@ app.patch('/api/assignment/:id/marked', requireAuth, (req, res) => {
   if (!assessment) return res.status(404).json({ error: 'Assessment not found.' });
   if (assessment.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assessment.' });
   if (assessment.type !== 'assessment') return res.status(400).json({ error: 'Only tests and projects can be marked here.' });
-  const updated = assignments.setTeacherMarked(assessment.id, !!(req.body && req.body.marked));
-  res.json({ ok: true, teacherMarked: !!updated.teacherMarked, teacherMarkedAt: updated.teacherMarkedAt || null });
+  const marked = !!(req.body && req.body.marked);
+  const updated = assignments.setTeacherMarked(assessment.id, marked);
+  const submissions = assignments.getSubmissions(updated.id);
+  const recorded = marked
+    ? submissions.filter(submission => gradebook.teacherSubmissionResult(updated, submission))
+    : [];
+  const pendingResults = marked ? submissions.length - recorded.length : 0;
+
+  // This tick is the teacher's instruction to put every complete learner
+  // result on record. Releasing remains separate and only controls whether
+  // learners can see those marks.
+  if (marked) {
+    const at = updated.teacherMarkedAt || new Date().toISOString();
+    for (const submission of recorded) {
+      setImmediate(() => webhooks.dispatch('result.created', {
+        assessmentId: updated.id,
+        assessmentVersion: updated.version || 1,
+        rosterId: updated.rosterId || null,
+        lessonWorkspaceId: updated.lessonWorkspaceId || null,
+        unitId: updated.unitId || null,
+        unitName: updated.unitName || null,
+        studentId: submission.studentId,
+        teacherMarked: true,
+        learnerVisible: assignments.isReleased(updated),
+        at,
+      }).catch(() => {}));
+    }
+  }
+  audit.log('assessment.teacher_marked', {
+    userId: req.userId, assessmentId: updated.id, rosterId: updated.rosterId || null,
+    marked, recordedResults: recorded.length, pendingResults, ip: req.ip,
+  });
+  res.json({
+    ok: true,
+    teacherMarked: !!updated.teacherMarked,
+    teacherMarkedAt: updated.teacherMarkedAt || null,
+    recordedResults: recorded.length,
+    pendingResults,
+    rosterId: updated.rosterId || null,
+  });
 });
 
 // Teachers may attach an older open assessment to a saved class, or correct
@@ -3554,7 +3592,7 @@ app.get('/api/assignment/:id/results', requireAuth, (req, res) => {
   const delivery = assignments.deliveryState(a);
   const liveProgress = a.type === 'assessment' ? assignments.draftProgress(a) : null;
   const rosterSize = a.rosterId ? cohort.length : null;
-  res.json({ questions: a.content.questions, sections: a.sections || null, objectives: a.objectives || null, assessmentType: a.assessmentType || null, totalMarks: a.totalMarks || null, delivery, liveProgress, rosterSize, submittedCount, submissions, resultsReleased: a.resultsReleased, cutoffAt: a.cutoffAt, effectivelyReleased: assignments.isReleased(a), releaseReady: readiness.ready, pendingGrades: readiness.pendingGrades, missingStudents: readiness.missingStudents || 0, releaseReason: readiness.reason || '' });
+  res.json({ questions: a.content.questions, sections: a.sections || null, objectives: a.objectives || null, assessmentType: a.assessmentType || null, totalMarks: a.totalMarks || null, delivery, liveProgress, rosterSize, submittedCount, submissions, resultsReleased: a.resultsReleased, teacherMarked: !!a.teacherMarked, teacherMarkedAt: a.teacherMarkedAt || null, cutoffAt: a.cutoffAt, effectivelyReleased: assignments.isReleased(a), releaseReady: readiness.ready, pendingGrades: readiness.pendingGrades, missingStudents: readiness.missingStudents || 0, releaseReason: readiness.reason || '' });
 });
 
 // Teacher: override a student's grade for one question. This both corrects
@@ -5224,6 +5262,7 @@ app.get('/api/roster/:id/progress', requireAuth, (req, res) => {
       topic: result.topic, subject: result.subject,
       score: result.score, total: result.total, pct: result.percentage,
       at: result.at, attempts: 1, assessmentType: result.assessmentType || null,
+      teacherMarked: !!result.teacherMarked, officialRecordedAt: result.officialRecordedAt || null,
     });
   }
 
@@ -5669,6 +5708,7 @@ app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:r
       title: a.title, mode: a.type === 'homework' ? 'homework' : 'classwork', activityId: `assignment:${a.assignmentId}`,
       score: a.score, total: a.total, percentage: a.percentage,
       assessmentType: a.assessmentType, version: a.version, finalisedAt: a.finalisedAt,
+      teacherMarked: !!a.teacherMarked, officialRecordedAt: a.officialRecordedAt || null,
       provisional: false, learnerVisible: !!a.learnerVisible, status: a.status,
       lessonWorkspaceId: a.lessonWorkspaceId || null, unitId: a.unitId || null, unitName: a.unitName || null,
       objectiveEvidence: a.objectiveEvidence || [], questionEvidence: a.questionEvidence || [], at: a.at, updatedAt: a.at });

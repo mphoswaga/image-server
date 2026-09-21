@@ -262,6 +262,8 @@ function buildGradebook(userId, rosterId) {
     const weight = weightFor(a.id);
     assessments.push({ id: a.id, kind: 'assignment', type: a.type, title: a.title, weight, excluded: weight <= 0,
       provisional: false,
+      teacherMarked: record.type === 'assessment' ? !!record.teacherMarked : true,
+      officialRecordedAt: record.type === 'assessment' ? (record.teacherMarkedAt || null) : (record.createdAt || a.createdAt || null),
       learnerVisible: assignments.isReleased(record),
       at: record.type === 'assessment' ? (record.finalisedAt || record.createdAt || a.createdAt) : a.createdAt,
       average: mean(pcts), done: pcts.length });
@@ -422,6 +424,8 @@ function assignmentProgressRows(teacherId, { includePending = false } = {}) {
         unitId: record.unitId || a.unitId || null,
         unitName: record.unitName || a.unitName || null,
         finalisedAt: record.finalisedAt || null,
+        teacherMarked: record.type === 'assessment' ? !!record.teacherMarked : true,
+        officialRecordedAt: record.type === 'assessment' ? (record.teacherMarkedAt || null) : (sub.submittedAt || record.createdAt || null),
         provisional: false,
         learnerVisible: assignments.isReleased(record),
         status: result ? (finalised || assignments.isReleased(record) ? 'released' : 'marked') : 'awaiting-marking',
