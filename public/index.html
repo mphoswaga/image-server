@@ -8638,7 +8638,13 @@
           +`<label style="display:flex;gap:7px;align-items:center;flex-wrap:wrap"><span style="font-size:12px;font-weight:700;color:#714707">Temporary PIN for the whole class</span><input class="pin-class-input" type="text" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" placeholder="4 digits" aria-label="Temporary PIN for the whole class" style="width:82px;padding:6px 8px;border:1px solid #d39a41;border-radius:7px;font:700 13px ui-monospace,monospace"><button type="button" class="pin-class-set-btn" data-roster-id="${esc(rosterId)}" style="font-size:12px;font-weight:700;padding:6px 12px;border:0;border-radius:8px;background:#8b5808;color:#fff;cursor:pointer">Give temporary access</button></label>`
           +`<span style="font-size:11.5px;color:#714707;line-height:1.4">Works once per learner or for 12 hours. After a learner signs in, their previous PIN returns; learners without an earlier PIN set their own next time.</span>`
           +`</div>`;
-        panel.innerHTML=header+(pending?`<p class="hint" style="color:#b26a00;font-weight:600;margin-bottom:8px">${pending} student${pending!==1?'s':''} requested a PIN reset</p>`:'')
+        const genderControls=`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px;background:#eefaf5;border:1px solid var(--border);border-radius:10px;margin-bottom:10px">
+          <label><input type="checkbox" class="gender-select-all"> Select all learners</label>
+          <span class="gender-selection-count" role="status">0 selected</span>
+          <label>Gender <select class="bulk-gender-value"><option value="" disabled selected>Choose gender</option><option value="male">Male</option><option value="female">Female</option><option value="clear">Not recorded (clear)</option></select></label>
+          <button type="button" class="bulk-gender-save" data-roster-id="${esc(rosterId)}" disabled>Apply to selected</button>
+        </div>`;
+        panel.innerHTML=header+genderControls+(pending?`<p class="hint" style="color:#b26a00;font-weight:600;margin-bottom:8px">${pending} student${pending!==1?'s':''} requested a PIN reset</p>`:'')
           +d.students.map(s=>{
             // A PIN this teacher issued is shown; one the student chose is
             // hash-only, so it reads "student's own" and can only be reset.
@@ -8658,7 +8664,7 @@
               ? `<button type="button" class="pin-clear-btn" data-roster-id="${esc(rosterId)}" data-student-id="${esc(s.id)}" style="font-size:11.5px;font-weight:600;padding:3px 10px;border:1px solid #f0c674;border-radius:7px;background:#fff8ea;color:#b26a00;cursor:pointer">Reset requested — clear PIN</button>`
               : '';
             return `<div class="pin-student-row" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:9px 0;border-top:1px solid var(--border)">
-              <div><span style="font-size:13px;font-weight:600">${esc(s.name)}</span> <span style="font-size:11.5px;color:var(--muted)">${s.gender ? `· ${esc(s.gender)}` : '· Gender not recorded'}</span> <button type="button" class="student-name-edit-btn" data-roster-id="${esc(rosterId)}" data-student-id="${esc(s.id)}" data-student-name="${esc(s.name)}" style="font-size:11px;padding:2px 7px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--muted);cursor:pointer">Edit name</button> <button type="button" class="student-gender-edit-btn" data-roster-id="${esc(rosterId)}" data-student-id="${esc(s.id)}" data-student-name="${esc(s.name)}" data-student-gender="${esc(s.gender||'')}" style="font-size:11px;padding:2px 7px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--muted);cursor:pointer">Edit gender</button> <span style="font-size:12px;color:var(--muted)">${esc(s.id)}</span><div style="display:flex;gap:7px;align-items:center;margin-top:4px">${googleState}</div></div>
+              <div><input type="checkbox" class="gender-student-select" data-student-id="${esc(s.id)}" aria-label="Select ${esc(s.name)} for gender update"> <span style="font-size:13px;font-weight:600">${esc(s.name)}</span> <span style="font-size:11.5px;color:var(--muted)">${s.gender ? `· ${esc(s.gender)}` : '· Gender not recorded'}</span> <button type="button" class="student-name-edit-btn" data-roster-id="${esc(rosterId)}" data-student-id="${esc(s.id)}" data-student-name="${esc(s.name)}" style="font-size:11px;padding:2px 7px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--muted);cursor:pointer">Edit name</button> <select class="student-gender-value" aria-label="Gender for ${esc(s.name)}"><option value="" ${!s.gender?'selected':''}>Not recorded</option><option value="male" ${s.gender==='male'?'selected':''}>Male</option><option value="female" ${s.gender==='female'?'selected':''}>Female</option>${s.gender&&!['male','female'].includes(s.gender)?`<option value="${esc(s.gender)}" selected disabled>${esc(s.gender)} (current)</option>`:''}</select> <button type="button" class="student-gender-edit-btn" data-roster-id="${esc(rosterId)}" data-student-id="${esc(s.id)}" data-student-name="${esc(s.name)}" data-student-gender="${esc(s.gender||'')}" style="font-size:11px;padding:2px 7px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--muted);cursor:pointer">Save gender</button> <span style="font-size:12px;color:var(--muted)">${esc(s.id)}</span><div style="display:flex;gap:7px;align-items:center;margin-top:4px">${googleState}</div></div>
               <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${code}${code?'':setBadge}${setPin}${newBtn}${resetRow}</div>
             </div>`;
           }).join('');
@@ -8688,6 +8694,32 @@
       w.document.close();
     }
 
+    document.addEventListener('change', e=>{
+      const panel=e.target.closest('.roster-pins-panel');
+      if(!panel || !e.target.matches('.gender-select-all,.gender-student-select,.bulk-gender-value'))return;
+      const boxes=[...panel.querySelectorAll('.gender-student-select')];
+      if(e.target.matches('.gender-select-all'))boxes.forEach(box=>box.checked=e.target.checked);
+      const count=boxes.filter(box=>box.checked).length;
+      const all=panel.querySelector('.gender-select-all');
+      all.checked=count===boxes.length && count>0; all.indeterminate=count>0&&count<boxes.length;
+      panel.querySelector('.gender-selection-count').textContent=`${count} selected`;
+      panel.querySelector('.bulk-gender-save').disabled=!count||!panel.querySelector('.bulk-gender-value').value;
+    });
+    document.addEventListener('click',async e=>{
+      const button=e.target.closest('.bulk-gender-save');if(!button)return;
+      const panel=button.closest('.roster-pins-panel');
+      const studentIds=[...panel.querySelectorAll('.gender-student-select:checked')].map(box=>box.dataset.studentId);
+      const selected=panel.querySelector('.bulk-gender-value').value;
+      if(!studentIds.length||!selected)return;
+      button.disabled=true;
+      try{
+        const response=await fetch(`/api/roster/${encodeURIComponent(button.dataset.rosterId)}/gender`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({studentIds,gender:selected==='clear'?'':selected})});
+        const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not save genders.');
+        toast(`Gender saved for ${data.updated} learners.`,'ok');
+        await loadRosterPins(button.dataset.rosterId,panel);
+      }catch(error){toast(error.message);button.disabled=false;}
+    });
+
     document.addEventListener('click', async e=>{
       const editNameBtn=e.target.closest('.student-name-edit-btn');
       if(editNameBtn){
@@ -8708,14 +8740,12 @@
       const editGenderBtn=e.target.closest('.student-gender-edit-btn');
       if(editGenderBtn){
         const {rosterId,studentId,studentName,studentGender}=editGenderBtn.dataset;
-        const next=window.prompt('Edit learner gender (leave blank to clear)',studentGender||'');
-        if(next===null)return;
-        const gender=next.trim().slice(0,40);
+        const gender=editGenderBtn.closest('.pin-student-row').querySelector('.student-gender-value').value;
         editGenderBtn.disabled=true;
         try{
-          const response=await fetch(`/api/roster/${encodeURIComponent(rosterId)}/student/${encodeURIComponent(studentId)}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:studentName,gender})});
+          const response=await fetch(`/api/roster/${encodeURIComponent(rosterId)}/gender`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({studentIds:[studentId],gender})});
           const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not update the learner gender.');
-          toast(`${data.name}'s gender saved.`,'ok');
+          toast(`${studentName}'s gender saved.`,'ok');
           loadRosterPins(rosterId,editGenderBtn.closest('.roster-pins-panel'));
         }catch(err){toast(err.message);editGenderBtn.disabled=false;}
         return;

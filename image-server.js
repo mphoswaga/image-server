@@ -5121,6 +5121,18 @@ app.patch('/api/roster/:rosterId/student/:studentId/pin-reset', requireAuth, (re
   res.json({ ok: true });
 });
 
+app.patch('/api/roster/:rosterId/gender', requireAuth, (req, res) => {
+  try {
+    const updated = roster.setStudentGenders(req.userId, req.params.rosterId, req.body?.studentIds, req.body?.gender);
+    if (updated === null) return res.status(404).json({ error: 'Class not found.' });
+    audit.log('roster.gender_updated', { userId: req.userId, rosterId: req.params.rosterId, updated, ip: req.ip });
+    setImmediate(() => webhooks.dispatch('roster.updated', { rosterId: req.params.rosterId, teacherId: req.userId, action: 'gender_updated' }).catch(() => {}));
+    res.json({ ok: true, updated });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // Correct an imported learner name while preserving the Student ID that owns
 // their PIN, Google link, submissions, marks and TeacherScope evidence.
 app.patch('/api/roster/:rosterId/student/:studentId', requireAuth, (req, res) => {

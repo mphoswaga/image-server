@@ -456,3 +456,26 @@ test('the same EducScope school reuses a human learner name without merging clas
     for (const m of ['../roster.js', '../storage.js']) delete require.cache[require.resolve(m)];
   }
 });
+
+test('bulk gender changes only selected learners and keeps names and IDs', () => {
+  const saved = roster.saveRoster('gender-owner', { name: '2B2', students: [
+    { id: 'A', name: 'Learner A', gender: 'female' },
+    { id: 'B', name: 'Learner B' },
+    { id: 'C', name: 'Learner C', gender: 'female' }
+  ] });
+  assert.equal(roster.setStudentGenders('gender-owner', saved.id, ['a', 'B'], 'male'), 2);
+  assert.deepEqual(roster.getRoster('gender-owner', saved.id).students.map(s => [s.id,s.name,s.gender]), [
+    ['A','Learner A','male'],['B','Learner B','male'],['C','Learner C','female']
+  ]);
+  assert.equal(roster.setStudentGenders('gender-owner', saved.id, ['A'], ''), 1);
+  assert.equal(roster.getRoster('gender-owner', saved.id).students[0].gender, undefined);
+});
+
+test('bulk gender rejects invalid values and mixed-class selections without partial writes', () => {
+  const saved = roster.saveRoster('gender-validation', { name: '2B3', students: [{ id:'A',name:'Learner A',gender:'female' }] });
+  assert.throws(() => roster.setStudentGenders('gender-validation', saved.id, ['A'], 'maale'));
+  assert.throws(() => roster.setStudentGenders('gender-validation', saved.id, ['A','OUTSIDE'], 'male'));
+  assert.throws(() => roster.setStudentGenders('gender-validation', saved.id, [], 'male'));
+  assert.equal(roster.setStudentGenders('other-teacher', saved.id, ['A'], 'male'), null);
+  assert.equal(roster.getRoster('gender-validation', saved.id).students[0].gender, 'female');
+});

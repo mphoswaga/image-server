@@ -249,6 +249,22 @@ function renameStudent(teacherId, rosterId, studentId, name, gender) {
   return { ...student };
 }
 
+function setStudentGenders(teacherId, rosterId, studentIds, gender) {
+  if (!['male', 'female', ''].includes(gender)) throw new Error('Choose Male, Female, or Not recorded.');
+  if (!Array.isArray(studentIds) || !studentIds.length) throw new Error('Select at least one learner.');
+  const record = getRoster(teacherId, rosterId);
+  if (!record) return null;
+  const ids = new Set(studentIds.map(normalizeStudentId));
+  const students = record.students.filter(student => ids.has(normalizeStudentId(student.id)));
+  if (students.length !== ids.size) throw new Error('One or more selected learners are not in this class. Refresh the roster.');
+  for (const student of students) {
+    if (gender) student.gender = gender;
+    else delete student.gender;
+  }
+  writeJsonAtomic(rosterPath(teacherId, rosterId), record);
+  return students.length;
+}
+
 function listRosters(teacherId) {
   const dir = rosterDir(teacherId);
   if (!fs.existsSync(dir)) return [];
@@ -410,7 +426,7 @@ function buildStudentsFromMapping(rows, idCol, nameCol, genderCol) {
 }
 
 module.exports = {
-  displayNameFrom, normalizeGender, renameRoster, renameStudent, setGradebookExcludedIds, setGradebookWeights, assignOrganization, reconcileOrganizationStudentNames,
+  displayNameFrom, normalizeGender, setStudentGenders, renameRoster, renameStudent, setGradebookExcludedIds, setGradebookWeights, assignOrganization, reconcileOrganizationStudentNames,
   saveRoster, getRoster, listRosters, deleteRoster,
   findStudent, findStudentInRoster, findStudentAcrossAllTeachers, parseCSV,
   parseRosterFile, buildStudentsFromMapping, normalizeStudentId,
