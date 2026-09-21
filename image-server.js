@@ -5726,7 +5726,7 @@ app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:r
     const results = (byStudent.get(roster.normalizeStudentId(s.id)) || []).sort((a, b) => (b.at || '').localeCompare(a.at || ''));
     const avgPct = results.length ? Math.round(results.reduce((sum, r) => sum + r.percentage, 0) / results.length) : null;
     const updatedAt = results.length ? results[0].at : foundRoster.createdAt;
-    return { id: s.id, name: s.name,
+    return { id: s.id, name: s.name, gender: s.gender || '',
       assessmentsCompleted: results.length,
       gamesPlayed: results.filter(r => r.kind === 'game').length,
       assignmentsCompleted: results.filter(r => r.kind === 'assignment').length,
