@@ -5772,6 +5772,9 @@ app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:r
   if (!foundRoster) return res.status(404).json({ error: 'Roster not found.' });
 
   const inRoster = id => foundRoster.students.find(s => roster.normalizeStudentId(s.id) === roster.normalizeStudentId(id));
+  const currentGradebook = gradebook.buildGradebook(foundTeacherId, foundRoster.id);
+  const activitySettings = new Map((currentGradebook && currentGradebook.assessments || []).map(activity => [String(activity.id), activity]));
+  const settingFor = id => activitySettings.get(String(id)) || { weight: 1, excluded: false };
   const byStudent = new Map();
   const push = (studentId, row) => {
     const sid = roster.normalizeStudentId(studentId);
@@ -5781,6 +5784,8 @@ app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:r
   for (const summary of games.listTeacherGames(foundTeacherId)) {
     if (!games.hasRoster(summary, foundRoster.id)) continue;
     const g = games.getGame(summary.id) || summary;
+    const activitySetting = settingFor(g.id);
+    if (activitySetting.excluded || Number(activitySetting.weight) <= 0) continue;
     for (const result of games.getResults(g.id)) {
       if (result.rosterId && result.rosterId !== foundRoster.id) continue;
       if (!inRoster(result.studentId)) continue;
@@ -5790,6 +5795,7 @@ app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:r
         attemptCount: Math.max(1, Number(result.attempts) || 1), gameType: result.gameType || g.mode || 'arcade',
         score: result.score, total: result.total,
         percentage: result.total > 0 ? Math.round((result.score / result.total) * 100) : 0,
+        activityWeight: Number(activitySetting.weight) || 1, excludedFromAverage: false,
         questionEvidence: gradebook.gameQuestionEvidence(g, result),
         at: result.at, updatedAt: result.at });
     }
@@ -5799,9 +5805,12 @@ app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:r
     // Learner visibility is a separate flag and never removes the result from
     // LessonScope or TeacherScope analysis.
     if (!inRoster(a.studentId)) continue;
+    const activitySetting = settingFor(a.assignmentId);
+    if (activitySetting.excluded || Number(activitySetting.weight) <= 0) continue;
     push(a.studentId, { kind: 'assignment', type: a.type, assignmentId: a.assignmentId, topic: a.topic, subject: a.subject,
       title: a.title, mode: a.type === 'homework' ? 'homework' : 'classwork', activityId: `assignment:${a.assignmentId}`,
       score: a.score, total: a.total, percentage: a.percentage,
+      activityWeight: Number(activitySetting.weight) || 1, excludedFromAverage: false,
       assessmentType: a.assessmentType, version: a.version, finalisedAt: a.finalisedAt,
       teacherMarked: !!a.teacherMarked, officialRecordedAt: a.officialRecordedAt || null,
       provisional: false, learnerVisible: !!a.learnerVisible, status: a.status,
