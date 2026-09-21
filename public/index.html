@@ -1002,6 +1002,16 @@
     .gc-extend-save,.gc-class-save { font-size:12.5px; font-weight:700; padding:7px 14px; border-radius:7px; background:var(--primary); color:#fff; border:none; cursor:pointer; font-family:inherit; white-space:nowrap; }
     .gc-extend-save:hover,.gc-class-save:hover { background:var(--primary-2); }
     .gc-extend-cancel,.gc-class-cancel { font-size:12.5px; font-weight:600; padding:7px 12px; border-radius:7px; background:#fff; color:var(--muted); border:1px solid var(--border); cursor:pointer; font-family:inherit; }
+    .gc-question-row { margin-top:10px; display:none; padding:12px; background:var(--primary-soft); border-radius:8px; }
+    .game-question-editor { display:grid; gap:10px; margin-bottom:10px; }
+    .game-question-item { display:grid; grid-template-columns:32px minmax(180px,1.25fr) repeat(4,minmax(110px,1fr)) 86px; gap:7px; align-items:center; padding:9px; border:1px solid var(--border); border-radius:8px; background:#fff; }
+    .game-question-number { font-weight:900; color:var(--primary); text-align:center; }
+    .game-question-item input,.game-question-item select { width:100%; border:1.5px solid var(--border); border-radius:7px; padding:7px 8px; font:inherit; font-size:12.5px; background:#fff; }
+    .game-question-item .game-question-prompt { font-weight:700; color:var(--ink); }
+    .gc-question-save { font-size:12.5px; font-weight:700; padding:7px 14px; border-radius:7px; background:var(--primary); color:#fff; border:none; cursor:pointer; font-family:inherit; white-space:nowrap; }
+    .gc-question-save:hover { background:var(--primary-2); }
+    .gc-question-cancel { font-size:12.5px; font-weight:600; padding:7px 12px; border-radius:7px; background:#fff; color:var(--muted); border:1px solid var(--border); cursor:pointer; font-family:inherit; }
+    .gc-question-status { font-size:12.5px; color:var(--muted); font-weight:600; }
     .cutoff-field { margin-top:10px; }
     .cutoff-field label { font-size:13px; font-weight:600; display:block; margin-bottom:4px; }
     .cutoff-field input { font-size:13px; padding:8px 10px; border:1.5px solid var(--border); border-radius:9px; background:#fff; width:100%; box-sizing:border-box; }
@@ -1237,6 +1247,9 @@
       .roster-actions .btn-progress { flex:1 1 170px; justify-content:center; }
       .btn-icon-del { margin-left:auto; }
       .games-filter input, .games-filter select, .gc-extend-row input[type=datetime-local] { width:100%; flex-basis:100%; min-width:0; }
+      .game-question-item { grid-template-columns:28px 1fr; }
+      .game-question-item input,.game-question-item select { grid-column:2; }
+      .game-question-number { grid-column:1; grid-row:1; }
       .lesson-workspace-card { grid-template-columns:1fr; }
       .lesson-workspace-actions { justify-content:flex-start; }
     }
@@ -8178,6 +8191,7 @@
         const modeLabel=colony?'ColonyQuest':fish?'FishQuest':'Individual arcade';
         const extRowId='ext-'+g.id;
         const classRowId='classes-'+g.id;
+        const questionRowId='questions-'+g.id;
         const classNames=gameClassNames(g);
         const classLine=classNames.length?classNames.map(name=>`<span class="gc-chip">${esc(name)}</span>`).join(''):'<span class="gc-chip">Free-form names</span>';
         const classChoices=gameClassRosters.length?gameClassRosters.map(r=>`<label><input type="checkbox" value="${esc(r.id)}" ${gameRosterIds(g).includes(r.id)?'checked':''}> <span>${esc(r.name)} <small>(${r.count})</small></span></label>`).join(''):'<span class="class-picker-empty">Create a class roster first.</span>';
@@ -8201,6 +8215,7 @@
                 ? `<a class="btn accent" href="${esc(launchUrl)}" style="font-size:12px;padding:7px 12px;width:auto;text-decoration:none">Open ColonyQuest</a>`
                 : `<a class="btn accent" href="/fishquest/${esc(g.id)}" style="font-size:12px;padding:7px 12px;width:auto;text-decoration:none">${fish?'Open FishQuest control room':'Start FishQuest live'}</a><a class="btn ghost" href="${esc(studentUrl)}" style="font-size:12px;padding:7px 12px;width:auto;text-decoration:none">Preview learner games</a>`}
               <button type="button" class="btn ghost gc-class-btn" data-id="${esc(g.id)}" data-row="${classRowId}" style="font-size:12px;padding:6px 12px;width:auto">Manage classes</button>
+              <button type="button" class="btn ghost gc-question-btn" data-id="${esc(g.id)}" data-row="${questionRowId}" style="font-size:12px;padding:6px 12px;width:auto">${ICON('i-pencil')} Edit questions</button>
               ${colony?'':`<button type="button" class="btn ghost gc-extend-btn" data-id="${esc(g.id)}" data-row="${extRowId}" style="font-size:12px;padding:6px 12px;width:auto">Extend deadline</button>`}
               <button type="button" class="btn ghost gc-results-btn" data-id="${esc(g.id)}" data-row="res-${esc(g.id)}" style="font-size:12px;padding:6px 12px;width:auto">View results</button>
             </div>
@@ -8213,6 +8228,9 @@
               <button type="button" class="gc-extend-save" data-id="${esc(g.id)}" data-row="${extRowId}">Save</button>
               <button type="button" class="gc-extend-cancel" data-row="${extRowId}">Cancel</button>
             </div>`}
+            <div class="gc-question-row" id="${questionRowId}">
+              <div class="gc-question-status">Loading questions...</div>
+            </div>
             <div id="res-${g.id}" style="display:none;margin-top:10px"></div>
           </div>
         </div>`;
@@ -8232,6 +8250,7 @@
       }));
       wrap.querySelectorAll('.gc-class-save').forEach(b=>b.addEventListener('click',()=>saveGameClasses(b.dataset.id,b.dataset.row)));
       wrap.querySelectorAll('.gc-class-cancel').forEach(b=>b.addEventListener('click',()=>{document.getElementById(b.dataset.row).style.display='none';}));
+      wrap.querySelectorAll('.gc-question-btn').forEach(b=>b.addEventListener('click',()=>toggleGameQuestions(b.dataset.id,b.dataset.row)));
       wrap.querySelectorAll('.gc-extend-btn').forEach(b=>b.addEventListener('click',()=>{
         const row=document.getElementById(b.dataset.row);
         const visible=row.style.display==='flex';
@@ -8244,6 +8263,102 @@
       }));
       wrap.querySelectorAll('.gc-extend-save').forEach(b=>b.addEventListener('click',()=>extendCutoff(b.dataset.id,b.dataset.row)));
       wrap.querySelectorAll('.gc-extend-cancel').forEach(b=>b.addEventListener('click',()=>{document.getElementById(b.dataset.row).style.display='none';}));
+    }
+
+    function gameQuestionEditorHTML(questions){
+      const rows=(questions||[]).map((q,index)=>{
+        const options=Array.from({length:4},(_,optionIndex)=>(q.options||[])[optionIndex]||'');
+        const correct=Number.isInteger(Number(q.correctIndex))?Number(q.correctIndex):0;
+        return `<div class="game-question-item" data-question-index="${index}">
+          <span class="game-question-number">${index+1}</span>
+          <input class="game-question-prompt" value="${esc(q.question)}" aria-label="Question ${index+1}">
+          ${options.map((option,optionIndex)=>`<input class="game-question-option" value="${esc(option)}" aria-label="Question ${index+1} option ${String.fromCharCode(65+optionIndex)}">`).join('')}
+          <select class="game-question-correct" aria-label="Correct answer for question ${index+1}">
+            ${options.map((_,optionIndex)=>`<option value="${optionIndex}" ${correct===optionIndex?'selected':''}>${String.fromCharCode(65+optionIndex)}</option>`).join('')}
+          </select>
+        </div>`;
+      }).join('');
+      return `<div class="game-question-editor">${rows}</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button type="button" class="gc-question-save">Save questions</button>
+          <button type="button" class="gc-question-cancel">Cancel</button>
+          <span class="gc-question-status"></span>
+        </div>`;
+    }
+
+    function collectGameQuestions(row){
+      return [...row.querySelectorAll('.game-question-item')].map((item,index)=>{
+        const options=[...item.querySelectorAll('.game-question-option')].map(input=>input.value.trim());
+        return {
+          question:item.querySelector('.game-question-prompt').value.trim(),
+          options,
+          correctIndex:Number(item.querySelector('.game-question-correct').value),
+          explanation:(row._gameQuestionData?.game?.questions?.[index]||{}).explanation||''
+        };
+      });
+    }
+
+    function gameQuestionValidationError(questions){
+      const bad=questions.findIndex(q=>!q.question||q.options.filter(Boolean).length<2||!q.options[q.correctIndex]);
+      return bad>=0?`Question ${bad+1} needs text, at least two answers, and the correct answer cannot be blank.`:'';
+    }
+
+    async function toggleGameQuestions(gameId,rowId){
+      const row=document.getElementById(rowId);
+      if(!row)return;
+      const opening=row.style.display!=='block';
+      row.style.display=opening?'block':'none';
+      if(!opening)return;
+      if(row.dataset.loaded)return;
+      row.innerHTML='<div class="gc-question-status">Loading questions...</div>';
+      try{
+        const r=await fetch('/api/game/'+gameId+'/questions');
+        const d=await r.json(); if(!r.ok)throw new Error(d.error||'Could not load questions.');
+        row._gameQuestionData=d;
+        row.innerHTML=gameQuestionEditorHTML(d.game.questions||[]);
+        row.dataset.loaded='true';
+        row.querySelector('.gc-question-cancel').addEventListener('click',()=>{row.style.display='none';});
+        row.querySelector('.gc-question-save').addEventListener('click',()=>saveGameQuestions(gameId,row));
+      }catch(err){
+        row.innerHTML=`<div class="gc-question-status" style="color:var(--err)">${esc(err.message||'Could not load questions.')}</div>`;
+      }
+    }
+
+    async function saveGameQuestions(gameId,row){
+      const questions=collectGameQuestions(row);
+      const validation=gameQuestionValidationError(questions);
+      const status=row.querySelector('.gc-question-status');
+      if(validation){status.textContent=validation;status.style.color='var(--err)';return;}
+      const button=row.querySelector('.gc-question-save');
+      const game=row._gameQuestionData&&row._gameQuestionData.game||{};
+      const mode=game.mode||'arcade';
+      button.disabled=true;const original=button.textContent;button.textContent='Saving...';status.textContent='';
+      let endpoint='/api/game/'+gameId+'/questions';
+      let body={questions};
+      if(mode==='fishquest'){
+        endpoint='/api/game/'+gameId+'/fishquest';
+        body={...(game.fishquest||{}),questions};
+      }else if(mode==='colonyquest'){
+        endpoint='/api/game/'+gameId+'/colonyquest';
+        body={questions};
+      }
+      try{
+        const r=await fetch(endpoint,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        const d=await r.json(); if(!r.ok)throw new Error(d.error||'Could not save questions.');
+        const savedQuestions=d.questions||(d.game&&d.game.questions)||questions;
+        row._gameQuestionData={game:{...game,questions:savedQuestions,fishquest:(d.game&&d.game.fishquest)||game.fishquest,colonyquest:d.colonyquest||game.colonyquest}};
+        row.innerHTML=gameQuestionEditorHTML(savedQuestions);
+        row.dataset.loaded='true';
+        row.querySelector('.gc-question-cancel').addEventListener('click',()=>{row.style.display='none';});
+        row.querySelector('.gc-question-save').addEventListener('click',()=>saveGameQuestions(gameId,row));
+        toast('Game questions saved.','ok');
+      }catch(err){
+        status.textContent=err.message||'Could not save questions.';
+        status.style.color='var(--err)';
+      }finally{
+        const nextButton=row.querySelector('.gc-question-save');
+        if(nextButton){nextButton.disabled=false;nextButton.textContent=original;}
+      }
     }
 
     async function extendCutoff(gameId,rowId){

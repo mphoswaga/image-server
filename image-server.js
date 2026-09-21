@@ -4617,6 +4617,37 @@ app.patch('/api/game/:id/classes', requireAuth, (req, res) => {
   res.json({ ok: true, rosterId: updated.rosterId, rosterIds: updated.rosterIds });
 });
 
+app.get('/api/game/:id/questions', requireAuth, (req, res) => {
+  const game = games.getGame(req.params.id);
+  if (!game) return res.status(404).json({ error: 'Game not found.' });
+  if (game.teacherId !== req.userId) return res.status(403).json({ error: 'Not your game.' });
+  res.json({
+    game: {
+      id: game.id,
+      lessonTitle: game.lessonTitle,
+      mode: game.mode || 'arcade',
+      questions: game.questions || [],
+      fishquest: game.fishquest || null,
+      colonyquest: game.colonyquest || null,
+    },
+  });
+});
+
+app.patch('/api/game/:id/questions', requireAuth, (req, res) => {
+  const game = games.getGame(req.params.id);
+  if (!game) return res.status(404).json({ error: 'Game not found.' });
+  if (game.teacherId !== req.userId) return res.status(403).json({ error: 'Not your game.' });
+  if ((game.mode || 'arcade') !== 'arcade') {
+    return res.status(409).json({ error: 'Open the game control room to save questions for this live game format.' });
+  }
+  try {
+    const updated = games.updateGameQuestions(game.id, req.body && req.body.questions);
+    res.json({ ok: true, questions: updated.questions });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Could not save game questions.' });
+  }
+});
+
 function ownedColonyQuest(req, res) {
   const game = games.getGame(req.params.id);
   if (!game) {

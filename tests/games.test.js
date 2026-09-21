@@ -51,3 +51,23 @@ test('every arcade choice keeps an anonymous top score', () => {
   }
   assert.deepEqual(games.getHighScores(game.id), { car: 10, space: 11, runner: 12, target: 13 });
 });
+
+test('teachers can update saved arcade game questions without replacing the game', () => {
+  const game = games.createGame({
+    teacherId: 'teacher-edit',
+    lessonTitle: 'Documents',
+    subject: 'ICT',
+    topic: 'Documents',
+    grade: 'Grade 2',
+    game: { questions: [{ question: 'Old question?', options: ['Old', 'New', 'Both', 'Neither'], correctIndex: 0, explanation: 'Original.' }] },
+  });
+  const updated = games.updateGameQuestions(game.id, [
+    { question: 'Which shortcut copies text?', options: ['Ctrl + C', 'Ctrl + V', 'Ctrl + X', 'Ctrl + Z'], correctIndex: 0, explanation: 'Copy uses Ctrl + C.' },
+  ]);
+
+  assert.equal(updated.id, game.id);
+  assert.equal(updated.questions[0].question, 'Which shortcut copies text?');
+  assert.equal(updated.questions[0].options[0], 'Ctrl + C');
+  assert.equal(updated.questions[0].correctIndex, 0);
+  assert.equal(games.getGame(game.id).questions[0].explanation, 'Copy uses Ctrl + C.');
+});

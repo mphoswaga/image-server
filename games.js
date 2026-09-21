@@ -194,6 +194,26 @@ function updateGameRosters(id, rosterIds) {
   return normalizeGameRecord(g);
 }
 
+function normalizeQuestionsInput(questions, { maxQuestions = 40 } = {}) {
+  const normalized = (Array.isArray(questions) ? questions : []).map(q => ({
+    question: String(q && q.question || '').trim().slice(0, 500),
+    options: Array.isArray(q && q.options) ? q.options.map(value => String(value || '').trim().slice(0, 250)).slice(0, 4) : [],
+    correctIndex: Number(q && q.correctIndex),
+    explanation: String(q && q.explanation || '').trim().slice(0, 1000),
+  })).filter(q => q.question && q.options.filter(Boolean).length >= 2 && Number.isInteger(q.correctIndex) && q.correctIndex >= 0 && q.correctIndex < q.options.length && q.options[q.correctIndex]).slice(0, maxQuestions);
+  return checkedQuestions(normalized).questions;
+}
+
+function updateGameQuestions(id, questions) {
+  const p = gamePath(String(id));
+  if (!fs.existsSync(p)) return null;
+  const g = JSON.parse(fs.readFileSync(p, 'utf8'));
+  g.questions = normalizeQuestionsInput(questions);
+  if (!g.questions.length) throw new Error('Add at least one complete question.');
+  writeJsonAtomic(p, g);
+  return normalizeGameRecord(g);
+}
+
 function updateFishQuest(id, config) {
   const p = gamePath(String(id));
   if (!fs.existsSync(p)) return null;
@@ -201,13 +221,7 @@ function updateFishQuest(id, config) {
   const durationMinutes = Math.min(30, Math.max(3, Number(config.durationMinutes) || 10));
   g.fishquest = { durationMinutes, lateJoin: config.lateJoin !== false, playMode: config.playMode === 'homework' ? 'homework' : 'live' };
   if (Array.isArray(config.questions)) {
-    g.questions = config.questions.map((q, i) => ({
-      question: String(q.question || '').trim(),
-      options: Array.isArray(q.options) ? q.options.map(v => String(v || '').trim()).slice(0, 4) : [],
-      correctIndex: Number(q.correctIndex),
-      explanation: String(q.explanation || '').trim(),
-    })).filter(q => q.question && q.options.length >= 2 && Number.isInteger(q.correctIndex) && q.correctIndex >= 0 && q.correctIndex < q.options.length);
-    g.questions = checkedQuestions(g.questions).questions;
+    g.questions = normalizeQuestionsInput(config.questions);
   }
   if (!g.questions.length) throw new Error('Add at least one complete question.');
   writeJsonAtomic(p, g);
@@ -228,13 +242,7 @@ function updateColonyQuest(id, config = {}) {
   });
   g.colonyquest = { ...normalized, teams };
   if (Array.isArray(config.questions)) {
-    g.questions = config.questions.map(q => ({
-      question: String(q && q.question || '').trim().slice(0, 500),
-      options: Array.isArray(q && q.options) ? q.options.map(value => String(value || '').trim().slice(0, 250)).slice(0, 4) : [],
-      correctIndex: Number(q && q.correctIndex),
-      explanation: String(q && q.explanation || '').trim().slice(0, 1000),
-    })).filter(q => q.question && q.options.filter(Boolean).length >= 2 && Number.isInteger(q.correctIndex) && q.correctIndex >= 0 && q.correctIndex < q.options.length && q.options[q.correctIndex]).slice(0, 40);
-    g.questions = checkedQuestions(g.questions).questions;
+    g.questions = normalizeQuestionsInput(config.questions);
   }
   if (!g.questions.length) throw new Error('Add at least one complete question.');
   writeJsonAtomic(p, g);
@@ -286,7 +294,7 @@ function repairStoredMathAnswers() {
 
 module.exports = {
   createGame, getGame, recordResult, getResults, getHighScores, listTeacherGames, getRoomCode,
-  updateGameCutoff, updateGameRosters, updateFishQuest, updateColonyQuest, getColonyQuestSession,
+  updateGameCutoff, updateGameRosters, updateGameQuestions, updateFishQuest, updateColonyQuest, getColonyQuestSession,
   saveColonyQuestSession, clearColonyQuestSession, normalizeStudentId, normalizeRosterIds,
   getRosterIds, hasRoster, repairStoredMathAnswers,
 };
