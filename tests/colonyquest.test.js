@@ -180,27 +180,49 @@ test('eggs take two rounds, hatch one at a time, and survive a save', () => {
   assert.equal(core.colonyRooms(colony).length, 1);
 });
 
-test('workers and gardens gather predictable food, with visible meal costs', () => {
+test('worker trips earn food continuously, soldiers consume slowly, and pause freezes both', () => {
   const colony = core.createTeam({}, 0);
-  assert.deepEqual(core.roundEconomy(colony), { gathered: 2, eaten: 1, gardens: 0 });
-  core.applyReward(colony, 'workers', [colony]);
+  colony.workers = 2; colony.soldiers = 1;
+  const session = {phase:'question',teams:[colony]};
   const before = colony.food;
-  const budget = core.roundEconomy(colony);
-  core.applyUpkeep([colony]);
-  assert.equal(colony.food, before + budget.gathered - budget.eaten);
-  for (let index = 0; index < 3; index++) core.applyReward(colony, 'expansion', [colony]);
-  assert.equal(core.roundEconomy(colony).gathered, 6);
+  for (let n=0;n<120;n++) core.advanceEconomy(session,100);
+  assert.equal(colony.food,before+2);
+  session.phase='paused';
+  const paused=JSON.stringify(colony);
+  core.advanceEconomy(session,1000);
+  assert.equal(JSON.stringify(colony),paused);
+  session.phase='question';
+  for (let n=0;n<180;n++) core.advanceEconomy(session,100);
+  assert.equal(colony.food,before+4-1);
+  assert.equal(core.normalizeTeam(colony,0).forageProgress.length,2);
+  const food=colony.food; core.applyUpkeep([colony]);
+  assert.equal(colony.food,food,'round boundary must not duplicate food');
+});
+
+test('rain and the final footstep apply once and preserve assessment correctness', () => {
+  const all=teams(2); all.forEach(t=>{t.food=100;t.attempts=2;t.correct=2;});
+  all[1].defense=2;
+  const session={teams:all};
+  assert.equal(core.applyRain(session),true);
+  assert.equal(all[0].food,85);assert.equal(all[1].food,100);
+  assert.equal(core.applyRain(session),false);assert.equal(all[0].food,85);
+  const before=core.colonyStrength(all[0]);
+  assert.equal(core.applyHumanStomp(session),true);
+  assert.equal(core.colonyStrength(all[0]),Math.round(before*.75));
+  assert.equal(all[1].collapsePenalty,0);assert.equal(all[0].correct,2);
+  assert.equal(core.applyHumanStomp(core.normalizeSession(session)),false);
+  assert.equal(core.applyHumanStomp({teams:teams(2)}),false);
 });
 
 test('rain preparations and room protections contribute to the ending without destroying progress', () => {
   const colony = core.createTeam({}, 0);
   const earth = core.rainOutcome(colony);
   for (const reward of ['food', 'expansion', 'expansion', 'soldiers', 'defense']) core.applyReward(colony, reward, [colony]);
-  assert.equal(core.rainPreparation(colony).filter(goal => goal.done).length, 4);
+  assert.equal(core.rainPreparation(colony).filter(goal => goal.done).length, 1);
   const snapshot = JSON.stringify(colony);
   const outcome = core.rainOutcome(colony);
   assert.ok(outcome.protectedFood > earth.protectedFood);
-  assert.equal(outcome.ready, 4);
+  assert.equal(outcome.ready, 1);
   assert.equal(JSON.stringify(colony), snapshot);
   const raider = { ...core.createTeam({}, 1), soldiers: 1 };
   const beforeGuard = core.raidForecast(raider, colony).guard;

@@ -167,11 +167,12 @@ class FishMatch {
       food:shared ? shared.food : this.state.food.filter(f=>f.readyAt<=t).map(f=>[f.id,Math.round(f.x),Math.round(f.y)])};
     if(this.state.phase==='ended')result.resultsSaved=!!this.state.resultsSavedAt;
     if(me){
-      const interaction=this.state.interactions.find(i=>i.id===me.lock&&i.attacker===id&&i.status==='pending');
+      const interaction=this.state.interactions.find(i=>i.id===me.lock&&(i.attacker===id||i.victim===id)&&i.status==='pending');
       result.me=id;
-      if(interaction){const q=this.game.questions[interaction.questionIndex];result.question={id:interaction.id,prompt:q.question,options:q.options,expiresAt:interaction.expiresAt};}
+      if(interaction){const q=this.game.questions[interaction.questionIndex];result.question={id:interaction.id,prompt:q.question,options:q.options,expiresAt:interaction.expiresAt,canAnswer:interaction.attacker===id,attackerName:this.player(interaction.attacker)?.name||'Another learner'};}
       const last=this.state.interactions.filter(i=>i.attacker===id||i.victim===id).at(-1);
       if(last&&last.status!=='pending')result.event={id:last.id,outcome:last.status,attacker:last.attacker,victim:last.victim};
+      result.respawnAt=me.respawnAt;
       result.personal=this.education(me);
     }
     if(teacher)result.education=this.state.players.map(p=>({id:p.id,studentId:p.studentId,name:p.name,...this.education(p)}));

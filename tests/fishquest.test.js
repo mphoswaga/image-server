@@ -24,7 +24,7 @@ test('shared broadcast work preserves private questions and personal results', (
   assert.deepEqual(a,f.match.snapshot(f.a.id));
   assert.deepEqual(b,f.match.snapshot(f.b.id));
   assert.equal(a.players,b.players);assert.equal(a.food,b.food);
-  assert.ok(a.question);assert.equal(b.question,undefined);assert.equal(shared.question,undefined);
+  assert.ok(a.question);assert.equal(b.question.canAnswer,false);assert.equal(shared.question,undefined);
 });
 
 test('server owns movement and clamps impossible input', () => {
@@ -41,7 +41,14 @@ test('one collision creates one private question and locks both fish', () => {
   assert.ok(interaction);assert.equal(f.a.lock,interaction.id);assert.equal(f.b.lock,interaction.id);
   assert.equal(f.match.claim(f.c,f.b),null);
   assert.equal(f.match.snapshot(f.a.id).question.prompt,'Two plus two?');
-  assert.equal(f.match.snapshot(f.b.id).question,undefined);
+  const defender = f.match.snapshot(f.b.id).question;
+  assert.equal(defender.canAnswer, false);
+  assert.equal(defender.id, interaction.id);
+  assert.equal(defender.correctIndex, undefined);
+  assert.equal(defender.expiresAt, f.match.snapshot(f.a.id).question.expiresAt);
+  assert.throws(() => f.match.answer(f.b.id, {interactionId: interaction.id, choice: 1}), /no longer active/);
+  assert.equal(f.b.lock, interaction.id);
+  assert.equal(f.b.attempts.length, 0);
   assert.equal(f.match.snapshot(f.c.id).question,undefined);
 });
 

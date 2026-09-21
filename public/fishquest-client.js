@@ -234,6 +234,8 @@
       return finish();
     }
     celebrationPlayed = false;
+    $('encounterStatus').hidden=!state.respawnAt;
+    if(state.respawnAt)$('encounterStatus').textContent=`Returning in ${Math.max(1,Math.ceil((state.respawnAt-state.now)/1000))} seconds…`;
     renderQuestion(); optionalEffect('scene update', renderState);
     const freshEvent = state.event && state.event.id !== lastEvent ? state.event : null;
     const swallowed = freshEvent && freshEvent.outcome === 'correct' && freshEvent.attacker === state.me;
@@ -249,8 +251,9 @@
         if (freshEvent.outcome === 'correct' && mine) { toast('Correct! You swallowed the fish and grew bigger!', true); playCue('correct'); pulseStat('mass'); pulseStat('score'); growthRipple(true); }
         else if (freshEvent.outcome === 'incorrect' && mine) { toast('Not this time. Keep exploring!', false); playCue('wrong'); }
         else if (freshEvent.outcome === 'timeout' && mine) { toast('Time ran out. Keep going!', false); playCue('wrong'); }
+        else if (['incorrect','timeout','cancelled'].includes(freshEvent.outcome) && freshEvent.victim === state.me) { toast('You escaped! Keep swimming.', true); }
         else if (freshEvent.outcome === 'bumped' && freshEvent.victim === state.me) { toast('That fish is too big! Eat more plankton first.', false); playCue('bump'); }
-        else if (freshEvent.outcome === 'correct' && freshEvent.victim === state.me) { toast('Splash! You are safely back. Grow and try again!', false); playCue('bump'); }
+        else if (freshEvent.outcome === 'correct' && freshEvent.victim === state.me) { toast('Your fish was eaten. Getting ready to return!', false); playCue('bump'); }
       }
     }
     if(previousMe&&me.mass>previousMe.mass) {
@@ -481,13 +484,15 @@
       return;
     }
     $('question').hidden = false;
+    $('qrole').textContent=q.canAnswer===false?`${q.attackerName} is trying to eat your fish! Watch their question.`:'Answer to eat the fish';
     if (renderedQuestionId === q.id) return;
     renderedQuestionId = q.id; clearInterval(qTimer);
     $('prompt').textContent = q.prompt; $('options').innerHTML = '';
-    q.options.forEach((option, choice) => { const b = document.createElement('button'); b.className='option'; b.textContent=option; b.onclick=()=>sendAnswer(q.id,choice); $('options').appendChild(b); });
+    q.options.forEach((option, choice) => { const b = document.createElement('button'); b.className='option'; b.textContent=option; b.disabled=q.canAnswer===false; b.onclick=()=>{if(q.canAnswer!==false)sendAnswer(q.id,choice);}; $('options').appendChild(b); });
     const update=()=>{ $('qtime').textContent=state.phase==='paused'?'Paused':`${Math.max(0,Math.ceil(((state.question || q).expiresAt-serverNow())/1000))} seconds left`; }; update();qTimer=setInterval(update,250);
   }
   function sendAnswer(interactionId,choice) {
+    if(state?.question?.canAnswer===false)return;
     if (!socket || socket.readyState !== WebSocket.OPEN) { toast('Reconnecting. Try that answer again.', false); return; }
     if (socket.bufferedAmount > 16384) { toast('Connection is slow. Please try that answer again.', false); return; }
     document.querySelectorAll('.option').forEach(x=>x.disabled=true);
@@ -500,7 +505,7 @@
       unlockAnswers(); toast(message.error || 'Please choose your answer again.', false);
     }
   }
-  function unlockAnswers(){clearTimeout(answerTimer);answerTimer=null;document.querySelectorAll('.option').forEach(x=>x.disabled=false)}
+  function unlockAnswers(){clearTimeout(answerTimer);answerTimer=null;document.querySelectorAll('.option').forEach(x=>x.disabled=state?.question?.canAnswer===false)}
   function finish() {
     stopMusic();
     clearInterval(qTimer); unlockAnswers();

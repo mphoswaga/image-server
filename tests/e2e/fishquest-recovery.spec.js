@@ -85,3 +85,43 @@ test('FishQuest names the winner while showing only the learner own result', asy
   await expect(page.locator('#ended')).not.toContainText('200 points');
   await page.screenshot({ path: `/tmp/fishquest-ending-${testInfo.project.name}.png` });
 });
+
+test('defender sees the shared question read-only and the respawn countdown', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100');
+  await page.route('**/api/game/defender-test', r=>r.fulfill({json:{lessonTitle:'Ocean',hasRoster:false}}));
+  await page.route('**/api/game/defender-test/fishquest/ticket', r=>r.fulfill({json:{token:'ticket'}}));
+  await page.addInitScript(()=>{
+    window.testSockets=[];
+    window.WebSocket=class {
+      static OPEN=1;static CLOSING=2;
+      constructor(){this.readyState=0;this.bufferedAmount=0;this.messages=[];window.testSockets.push(this);setTimeout(()=>{this.readyState=1;this.onopen?.();},0);}
+      send(v){this.messages.push(JSON.parse(v));} close(){this.readyState=3;}
+      receive(state){this.onmessage?.({data:JSON.stringify({type:'state',state})});}
+    };
+  });
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto('/fishquest-play/defender-test');
+  await expect.poll(()=>page.evaluate(()=>window.testSockets.length)).toBe(1);
+  await page.evaluate(()=>{
+    Phaser.Game=function(){};
+    window.defenderState={matchId:'m',phase:'running',me:'me',now:Date.now(),endsAt:Date.now()+600000,
+      players:[{id:'me',name:'Defender',mass:100,score:0,variant:0}],food:[],world:{width:2400,height:1600},
+      question:{id:'q',prompt:'Two plus two?',options:['3','4'],expiresAt:Date.now()+30000,canAnswer:false,attackerName:'Amina'}};
+    window.testSockets[0].receive(window.defenderState);
+  });
+  await expect(page.locator('#qrole')).toContainText('Amina');
+  await expect(page.locator('#prompt')).toHaveText('Two plus two?');
+  await expect(page.locator('#options button').first()).toBeDisabled();
+  await expect(page.locator('#options button').last()).toBeDisabled();
+  await page.screenshot({path:'/tmp/fishquest-defender.png'});
+  await page.evaluate(()=>{
+    delete window.defenderState.question;
+    window.defenderState.respawnAt=Date.now()+3000;
+    window.defenderState.event={id:'q',outcome:'correct',attacker:'other',victim:'me'};
+    window.testSockets[0].receive(window.defenderState);
+  });
+  await expect(page.locator('#question')).toBeHidden();
+  await expect(page.locator('#encounterStatus')).toContainText('Returning in');
+  expect(await page.evaluate(()=>window.testSockets[0].messages.filter(m=>m.type==='answer'))).toEqual([]);
+  expect(errors).toEqual([]);
+});

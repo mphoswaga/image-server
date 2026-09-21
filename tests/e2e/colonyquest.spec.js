@@ -635,3 +635,35 @@ test.skip('a teacher can run, recover, pause, and finish a one-screen ColonyQues
   expect(session.phase).toBe('question');
   expect(session.answers).toHaveLength(0);
 });
+
+test('continuous food and the final footstep persist without changing learning marks', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100');
+  test.setTimeout(45000);
+  const colonies=[colonyCore.createTeam({name:'Open walls'},0),colonyCore.createTeam({name:'Strong walls'},1)];
+  colonies.forEach(t=>{t.attempts=2;t.correct=2;});colonies[1].defense=2;
+  let saved=colonyCore.normalizeSession({phase:'reward',introSeen:true,turnIndex:3,currentTeamIndex:1,teams:colonies,rainOccurred:true});
+  const setup={teamCount:2,rounds:2,matchType:'rounds',durationMinutes:15,sound:false,teams:colonies};
+  await page.route(/\/api\/game\/cq-footstep\/colonyquest(?:\/session)?$/,async route=>{
+    if(route.request().method()==='PUT'){saved=colonyCore.normalizeSession(route.request().postDataJSON().session);return route.fulfill({json:{ok:true}});}
+    return route.fulfill({json:{game:{id:'cq-footstep',lessonTitle:'Habitats',questions,colonyquest:setup},session:saved}});
+  });
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto('/colonyquest/cq-footstep');await page.locator('#resumeBtn').click();
+  const initial=saved.teams[0].food;
+  await expect.poll(()=>saved.teams[0].food,{timeout:20000}).toBeGreaterThan(initial);
+  await page.locator('#pauseBtn').click();
+  const paused=saved.teams[0].food;
+  await page.waitForTimeout(1200);expect(saved.teams[0].food).toBe(paused);
+  await page.locator('#pauseBtn').click();
+  await page.locator('[data-reward="food"]').click();
+  await expect.poll(()=>saved.phase).toBe('ended');
+  expect(saved.stompOccurred).toBe(true);expect(saved.teams[0].collapsePenalty).toBeGreaterThan(0);
+  expect(saved.teams[1].collapsePenalty).toBe(0);expect(saved.teams[0].correct).toBe(2);
+  await expect(page.locator('#finalOverlay')).toBeVisible({timeout:10000});
+  await page.screenshot({path:'/tmp/colonyquest-footstep-result.png'});
+  const penalty=saved.teams[0].collapsePenalty;
+  await page.reload();
+  if(await page.locator('#resumeBtn').isVisible()) await page.locator('#resumeBtn').click();
+  await expect(page.locator('#finalOverlay')).toBeVisible();
+  expect(saved.teams[0].collapsePenalty).toBe(penalty);expect(errors).toEqual([]);
+});

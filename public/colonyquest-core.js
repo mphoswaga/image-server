@@ -5,7 +5,7 @@
 }(typeof globalThis !== 'undefined' ? globalThis : this, function colonyQuestCoreFactory() {
   'use strict';
 
-  const VERSION = 10;
+  const VERSION = 11;
   const FORTIFICATIONS = Object.freeze([
     { name: 'Earth', wall: 0xb68a57, edge: 0x785437, floor: 0x65513a },
     { name: 'Timber', wall: 0xa7743e, edge: 0xe3b571, floor: 0x65513a },
@@ -40,12 +40,12 @@
   ]);
 
   const REWARDS = Object.freeze({
-    workers: { label: 'Add one worker', description: 'This ant finds two seeds each round.', icon: 'worker' },
+    workers: { label: 'Add one worker', description: 'Every trip brings one food home.', icon: 'worker' },
     food: { label: 'Find food', description: 'Bring five seeds home.', icon: 'leaf' },
-    defense: { label: 'Make walls stronger', description: 'Keep the ant home safe.', icon: 'shield' },
+    defense: { label: 'Make walls stronger', description: 'Level 2 seals out rain. Level 3 survives a human footstep.', icon: 'shield' },
     queen: { label: 'Help the queen', description: 'Add one egg. It hatches in two rounds.', icon: 'crown' },
     expansion: { label: 'Build one room', description: 'Dig one new room.', icon: 'compass' },
-    soldiers: { label: 'Add one guard', description: 'One guard ant protects the home.', icon: 'sword' },
+    soldiers: { label: 'Add one guard', description: 'Protects the home and eats one food every 30 seconds.', icon: 'sword' },
     raid: { label: 'Challenge a colony', description: 'Send guard ants to try to win food.', icon: 'flag' },
   });
 
@@ -104,6 +104,10 @@
       guardsDefeated: 0,
       upgrades: 0,
       eggs: [],
+      forageProgress: [],
+      upkeepCarry: 0,
+      collapsePenalty: 0,
+      rainLoss: 0,
     };
   }
 
@@ -111,6 +115,10 @@
     const base = createTeam(input, index);
     const numeric = ['population', 'workers', 'soldiers', 'food', 'defense', 'territory', 'queenLevel', 'nestLevel', 'correct', 'attempts', 'successfulAttacks', 'successfulDefenses', 'guardsLost', 'guardsDefeated', 'upgrades'];
     for (const key of numeric) base[key] = Math.floor(clamp(input && input[key], 0, key === 'food' ? 9999 : 999));
+    base.forageProgress = Array.isArray(input?.forageProgress) ? input.forageProgress.slice(0,999).map(n=>clamp(n,0,.999999)) : [];
+    base.upkeepCarry = clamp(input?.upkeepCarry,0,.999999);
+    base.rainLoss = Math.floor(clamp(input?.rainLoss, 0, 9999));
+    base.collapsePenalty = Math.floor(clamp(input?.collapsePenalty,0,999999));
     base.correct = Math.min(base.correct, base.attempts);
     base.population = Math.max(1, base.population);
     base.queenLevel = Math.max(1, base.queenLevel);
@@ -132,6 +140,7 @@
     const attempts = Math.max(0, Number(team && team.attempts) || 0);
     const correct = Math.max(0, Number(team && team.correct) || 0);
     return {
+      collapse: -Math.floor(clamp(team?.collapsePenalty,0,999999)),
       knowledge: Math.round(correct * 100 + (attempts ? correct / attempts : 0) * 80),
       population: Math.round(clamp(team && team.population, 0, 999) * 3),
       economy: Math.round(clamp(team && team.workers, 0, 999) * 5),
@@ -146,7 +155,7 @@
   }
 
   function colonyStrength(team) {
-    return Object.values(strengthBreakdown(team)).reduce((sum, value) => sum + value, 0);
+    return Math.max(0,Object.values(strengthBreakdown(team)).reduce((sum, value) => sum + value, 0));
   }
 
   function comebackMultiplier(team, teams) {
@@ -276,8 +285,7 @@
 
   function applyUpkeep(teams) {
     for (const team of teams || []) {
-      const economy = roundEconomy(team);
-      team.food = Math.max(0, team.food + economy.gathered - economy.eaten);
+      // Food is earned by completed worker trips, not again at round end.
       for (const egg of team.eggs || []) egg.roundsLeft = Math.max(0, egg.roundsLeft - 1);
       const ready = (team.eggs || []).findIndex(egg => egg.roundsLeft === 0);
       if (ready !== -1) {
@@ -290,35 +298,66 @@
 
   function roomBenefit(room) {
     if (room.kind === 'nursery') return 'Shelters the queen and growing eggs';
-    if (room.kind === 'food') return 'Keeps ten extra seeds dry in the rain';
+    if (room.kind === 'food') return 'Stores food delivered by workers; reinforce the walls to keep rain out';
     if (room.kind === 'guard') return 'Helps guard the food during a challenge';
     if (room.kind === 'workers') return 'Shelters the growing foraging team';
-    return ['Keeps five extra seeds dry', 'Grows two extra seeds each round', 'Keeps five extra seeds dry', 'Adds two points to rain protection'][room.expansion % 4];
+    return ['Adds colony space', 'Adds a garden chamber', 'Adds colony space', 'Adds a lookout chamber'][room.expansion % 4];
   }
 
   function roundEconomy(team) {
     const gardens = colonyRooms(team).filter(room => room.kind === 'expansion' && room.expansion % 4 === 1).length;
-    const gathered = team.workers > 0 ? team.workers * 2 + gardens * 2 : 0;
-    const eaten = Math.min(team.food + gathered, Math.max(1, Math.ceil((1 + team.workers + team.soldiers) / 3)));
-    return { gathered, eaten, gardens };
+    return { gathered: 0, eaten: 0, gardens };
   }
 
   function rainPreparation(team) {
     return [
-      { label: '10 seeds stored', done: team.food >= 10, value: `${team.food}/10` },
-      { label: 'Food store built', done: !!team.pantryBuilt, value: team.pantryBuilt ? 'Ready' : 'Build one room' },
-      { label: 'One guard ant', done: team.soldiers >= 1, value: `${team.soldiers}/1` },
-      { label: 'Stronger walls', done: team.defense >= 1, value: fortification(team).name },
+      { label: 'Level 2 walls: rain protected', done: team.defense >= 1, value: `Level ${team.defense + 1}` },
+      { label: 'Level 3 walls: human protected', done: team.defense >= 2, value: `Level ${team.defense + 1}` },
     ];
   }
 
   function rainOutcome(team) {
-    const rooms = colonyRooms(team);
-    const storage = rooms.filter(room => room.kind === 'expansion' && [0, 2].includes(room.expansion % 4)).length * 5;
-    const workshops = rooms.filter(room => room.kind === 'expansion' && room.expansion % 4 === 3).length * 2;
-    const protectedFood = Math.min(team.food, 3 + team.defense * 5 + (team.pantryBuilt ? 10 : 0) + storage + workshops);
-    const ready = rainPreparation(team).filter(goal => goal.done).length;
-    return { protectedFood, exposedFood: team.food - protectedFood, ready, text: `${fortification(team).name} walls${team.pantryBuilt ? ' and the food store' : ''} keep ${protectedFood} seeds dry. ${team.soldiers ? `${team.soldiers} guard ants watch the entrance.` : 'A guard ant could help at the entrance next time.'} ${ready === 4 ? 'Your colony is ready for the Great Rain!' : 'Everyone finds shelter. Keep building to protect more of the colony next time.'}` };
+    const exposedFood = team.defense >= 1 ? 0 : Math.ceil(team.food * .15);
+    return { protectedFood: team.food - exposedFood, exposedFood, ready: rainPreparation(team).filter(goal => goal.done).length,
+      text: team.defense >= 1 ? 'The reinforced entrances keep the rain out.' : 'Open entrances let rain in: 15% of stored food is lost.' };
+  }
+
+  function advanceEconomy(session, elapsedMs) {
+    if (!session || !['question','reward'].includes(session.phase)) return [];
+    const elapsed = clamp(elapsedMs, 0, 1000);
+    return session.teams.map(team => {
+      const old = team.forageProgress || [];
+      let gathered = 0;
+      team.forageProgress = Array.from({ length: team.workers }, (_, index) => {
+        const progress = (old[index] || 0) + elapsed / 12000;
+        const completed = Math.floor(progress + 1e-9);
+        gathered += completed;
+        return Math.max(0, progress - completed);
+      });
+      // One food per soldier every 30 active seconds. No starvation deaths.
+      const cost = (team.upkeepCarry || 0) + team.soldiers * elapsed / 30000;
+      const eaten = Math.min(team.food + gathered, Math.floor(cost + 1e-9));
+      team.upkeepCarry = Math.max(0, cost - Math.floor(cost + 1e-9));
+      team.food = Math.min(9999, Math.max(0, team.food + gathered - eaten));
+      return { teamId: team.id, gathered, eaten };
+    });
+  }
+
+  function applyRain(session) {
+    if (session.rainOccurred) return false;
+    session.rainOccurred = true;
+    for (const team of session.teams) team.rainLoss = rainOutcome(team).exposedFood;
+    applyEvent(session.teams, 'heavy-rain');
+    return true;
+  }
+
+  function applyHumanStomp(session) {
+    if (session.stompOccurred || !session.teams.length || session.teams.some(team=>team.attempts < 2)) return false;
+    session.stompOccurred = true;
+    for (const team of session.teams) {
+      if (team.defense < 2) team.collapsePenalty = colonyStrength(team) - Math.round(colonyStrength(team) * .75);
+    }
+    return true;
   }
 
   function learningImprovement(session, teamId) {
@@ -336,7 +375,7 @@
     for (let index = 0; index < (teams || []).length; index += 1) {
       const team = teams[index];
       if (event.key === 'fallen-fruit') team.food += strengths[index] === weakest ? 20 : 12;
-      if (event.key === 'heavy-rain') team.food = Math.max(0, team.food - Math.min(rainOutcome(team).exposedFood, Math.max(0, 9 - team.defense * 2)));
+      if (event.key === 'heavy-rain') team.food = Math.max(0, team.food - rainOutcome(team).exposedFood);
       if (event.key === 'food-trail' && team.workers > 0) team.food += 7 + Math.min(12, team.workers);
       if (event.key === 'predator') team.food = Math.max(0, team.food - Math.max(0, 12 - team.defense * 3 - team.soldiers));
       if (event.key === 'tunnel-collapse') team.food = Math.max(0, team.food - Math.max(0, 4 - team.workers - team.defense));
@@ -390,6 +429,8 @@
       currentTeamIndex: Math.floor(clamp(source.currentTeamIndex, 0, Math.max(0, teams.length - 1))),
       introSeen: !!source.introSeen,
       stormSeen: !!source.stormSeen,
+      rainOccurred: !!source.rainOccurred,
+      stompOccurred: !!source.stompOccurred,
       warsActive: !!source.warsActive,
       eventAction: source.eventAction === 'next-turn' ? 'next-turn' : source.eventAction === 'question' ? 'question' : null,
       teams,
@@ -487,6 +528,7 @@
   }
 
   return {
+    advanceEconomy, applyRain, applyHumanStomp,
     VERSION,
     FORTIFICATIONS,
     fortification,
