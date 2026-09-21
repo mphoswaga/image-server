@@ -1065,6 +1065,24 @@ function listTeacherAssignments(teacherId) {
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
+function reassignRoster(teacherId, fromRosterId, toRosterId, rosterSnapshot) {
+  if (!fs.existsSync(DIR) || !fromRosterId || !toRosterId || fromRosterId === toRosterId) return [];
+  const changed = [];
+  for (const file of fs.readdirSync(DIR).filter(isAssignmentFile)) {
+    const filePath = path.join(DIR, file);
+    let record;
+    try { record = JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { continue; }
+    if (record.teacherId !== teacherId || record.rosterId !== fromRosterId) continue;
+    record.rosterId = toRosterId;
+    if (record.type === 'assessment' && Array.isArray(rosterSnapshot) && rosterSnapshot.length) {
+      record.rosterSnapshot = normalizeRosterSnapshot(rosterSnapshot);
+    }
+    writeJsonAtomic(filePath, record);
+    changed.push(record.id);
+  }
+  return changed;
+}
+
 // Assessment cohorts are snapshots so membership cannot drift after
 // publication. A name correction is safe to carry into those snapshots because
 // it leaves the student identity and cohort membership unchanged.
@@ -1088,7 +1106,7 @@ module.exports = {
   createAssignment, createAssessment, copyAssessmentToRoster, normalizeAssessment, getAssignment, updateAssignmentCutoff, updateAssessmentRoster, updateAssessmentContent, assessmentContentEditable, getRoomCode,
   publishedAssessmentGenerationContext,
   releaseResults, setTeacherMarked, isReleased,
-  assessmentIsFinalised, saveSubmission, saveNewSubmission, getSubmissions, getSubmission,
+  assessmentIsFinalised, saveSubmission, saveNewSubmission, getSubmissions, getSubmission, reassignRoster,
   assessmentReleaseReadiness, assessmentMarkingSummary, loadDrafts, getDraft, saveDraft, saveDraftGrade, deliveryState, learnerSectionProgress, learnerQuestionProgress, questionAnswerProgress, updateDelivery, draftProgress, presentationSlides,
   sanitizeLearnerAnswers, incompleteAssessmentAnswers, filterAssignmentEvidenceForRoster,
   findConfirmedVerdict, recordVerdict, normalizeAnswer, normalizeStudentId, renameAssessmentStudent,

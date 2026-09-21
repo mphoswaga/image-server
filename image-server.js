@@ -32,6 +32,7 @@ const { normalizeLessonPurpose, normalizeAssessmentOptions } = require('./assess
 const gradebook = require('./gradebook');
 const { gradeAnswer } = require('./auto-grade');
 const roster = require('./roster');
+const rosterMerge = require('./roster-merge');
 const studentAccount = require('./student-account');
 const apikeys = require('./apikeys');
 const oauth = require('./oauth');
@@ -77,6 +78,10 @@ const jwt = require('jsonwebtoken');
 
 const { MEDIA_DIR, mediaWriteDir, resolveMedia } = require('./media');
 const PUBLIC_DIR = path.join(__dirname, 'public');
+const mergedDuplicateRosters = rosterMerge.mergeExactDuplicateRosters();
+for (const report of mergedDuplicateRosters) {
+  console.info('Merged duplicate roster:', JSON.stringify(report));
+}
 const GAME_COOKIE = 'lc_game';
 const JWT_SECRET = (() => {
   try { return require('fs').readFileSync(require('path').join(require('./storage').DATA_DIR, '.session-secret'), 'utf8').trim(); } catch { return process.env.JWT_SECRET || 'dev-secret'; }

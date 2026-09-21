@@ -175,6 +175,33 @@ function listTeacherGames(teacherId) {
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
+function reassignRoster(teacherId, fromRosterId, toRosterId) {
+  if (!fs.existsSync(GAMES_DIR) || !fromRosterId || !toRosterId || fromRosterId === toRosterId) return [];
+  const changed = [];
+  for (const file of fs.readdirSync(GAMES_DIR).filter(isGameFile)) {
+    const filePath = path.join(GAMES_DIR, file);
+    let game;
+    try { game = JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { continue; }
+    if (game.teacherId !== teacherId || !hasRoster(game, fromRosterId)) continue;
+    game.rosterIds = normalizeRosterIds(getRosterIds(game).map(id => id === fromRosterId ? toRosterId : id));
+    game.rosterId = game.rosterIds[0] || null;
+    writeJsonAtomic(filePath, game);
+    const resultFile = resultsPath(game.id);
+    if (fs.existsSync(resultFile)) {
+      try {
+        const results = JSON.parse(fs.readFileSync(resultFile, 'utf8'));
+        let resultChanged = false;
+        for (const result of results) {
+          if (result.rosterId === fromRosterId) { result.rosterId = toRosterId; resultChanged = true; }
+        }
+        if (resultChanged) writeJsonAtomic(resultFile, results);
+      } catch {}
+    }
+    changed.push(game.id);
+  }
+  return changed;
+}
+
 function updateGameCutoff(id, cutoffAt) {
   const p = gamePath(String(id));
   if (!fs.existsSync(p)) return null;
@@ -296,5 +323,5 @@ module.exports = {
   createGame, getGame, recordResult, getResults, getHighScores, listTeacherGames, getRoomCode,
   updateGameCutoff, updateGameRosters, updateGameQuestions, updateFishQuest, updateColonyQuest, getColonyQuestSession,
   saveColonyQuestSession, clearColonyQuestSession, normalizeStudentId, normalizeRosterIds,
-  getRosterIds, hasRoster, repairStoredMathAnswers,
+  getRosterIds, hasRoster, repairStoredMathAnswers, reassignRoster,
 };
