@@ -205,8 +205,27 @@ function setGradebookExcludedIds(teacherId, rosterId, excludedIds) {
   const record = getRoster(teacherId, rosterId);
   if (!record) return null;
   record.gradebookExcludedIds = [...new Set((Array.isArray(excludedIds) ? excludedIds : []).map(value => String(value || '').trim()).filter(Boolean))].slice(0, 200);
+  record.gradebookWeights = record.gradebookWeights || {};
+  for (const id of record.gradebookExcludedIds) record.gradebookWeights[id] = 0;
   writeJsonAtomic(rosterPath(teacherId, rosterId), record);
   return record.gradebookExcludedIds;
+}
+
+function setGradebookWeights(teacherId, rosterId, weights) {
+  const record = getRoster(teacherId, rosterId);
+  if (!record) return null;
+  const source = weights && typeof weights === 'object' ? weights : {};
+  const normalized = {};
+  for (const [rawId, rawWeight] of Object.entries(source)) {
+    const id = String(rawId || '').trim();
+    const weight = Math.min(10, Math.max(0, Number(rawWeight)));
+    if (!id || !Number.isFinite(weight)) continue;
+    if (weight !== 1) normalized[id] = Math.round(weight * 100) / 100;
+  }
+  record.gradebookWeights = normalized;
+  record.gradebookExcludedIds = Object.entries(normalized).filter(([, weight]) => weight === 0).map(([id]) => id);
+  writeJsonAtomic(rosterPath(teacherId, rosterId), record);
+  return record.gradebookWeights;
 }
 
 // Correct a learner's display name without changing their stable Student ID.
@@ -391,7 +410,7 @@ function buildStudentsFromMapping(rows, idCol, nameCol, genderCol) {
 }
 
 module.exports = {
-  displayNameFrom, normalizeGender, renameRoster, renameStudent, setGradebookExcludedIds, assignOrganization, reconcileOrganizationStudentNames,
+  displayNameFrom, normalizeGender, renameRoster, renameStudent, setGradebookExcludedIds, setGradebookWeights, assignOrganization, reconcileOrganizationStudentNames,
   saveRoster, getRoster, listRosters, deleteRoster,
   findStudent, findStudentInRoster, findStudentAcrossAllTeachers, parseCSV,
   parseRosterFile, buildStudentsFromMapping, normalizeStudentId,

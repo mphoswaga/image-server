@@ -116,6 +116,61 @@ test('activity results match rosters when student IDs use different casing', () 
   assert.equal(gb.rows[0].average, 1);
 });
 
+test('gradebook weights can reduce a game impact on student averages', () => {
+  const teacherId = `teacher-weights-${Date.now()}`;
+  const saved = roster.saveRoster(teacherId, {
+    name: '2B2',
+    students: [{ id: 'VS068922', name: 'Nguyen A' }],
+  });
+
+  const assignment = assignments.createAssignment({
+    teacherId,
+    type: 'quiz',
+    subject: 'ICT',
+    topic: 'Documents',
+    grade: '2',
+    rosterId: saved.id,
+    data: {
+      title: 'ICT Project',
+      mcq: [{ question: 'Copy shortcut?', options: ['Ctrl + C', 'Ctrl + V'], correctIndex: 0 }],
+    },
+  });
+  assignments.saveSubmission(assignment.id, {
+    studentId: 'VS068922',
+    name: 'Nguyen A',
+    answers: {},
+    grades: [],
+    totalMarks: 50,
+    maxMarks: 50,
+    submittedAt: '2026-09-21T00:00:00.000Z',
+  });
+
+  const game = games.createGame({
+    teacherId,
+    lessonTitle: 'Warm-up game',
+    subject: 'ICT',
+    topic: 'Documents',
+    grade: '2',
+    rosterId: saved.id,
+    game: { questions: [{ question: 'Paste shortcut?', options: ['Ctrl + V', 'Ctrl + C'], correctIndex: 0 }] },
+  });
+  games.recordResult(game.id, {
+    studentId: 'VS068922',
+    name: 'Nguyen A',
+    score: 0,
+    total: 10,
+    answers: [1],
+    arcadeScore: 0,
+    gameType: 'car',
+  });
+
+  assert.equal(gradebook.buildGradebook(teacherId, saved.id).rows[0].average, 0.5);
+  roster.setGradebookWeights(teacherId, saved.id, { [assignment.id]: 1, [game.id]: 0.25 });
+  const weighted = gradebook.buildGradebook(teacherId, saved.id);
+  assert.equal(weighted.assessments.find(item => item.id === game.id).weight, 0.25);
+  assert.equal(weighted.rows[0].average, 0.8);
+});
+
 test('one published game can be assigned to several classes and edited later', () => {
   const teacherId = `teacher-multi-game-${Date.now()}`;
   const classA = roster.saveRoster(teacherId, { name: '3A', students: [{ id: 'A-1', name: 'Ama One' }] });

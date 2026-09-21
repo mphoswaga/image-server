@@ -211,6 +211,11 @@ function listClasses(userId) {
 const pctOf = (mark, max) => (max > 0 ? mark / max : 0);
 const mean = arr => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
 const sid = value => roster.normalizeStudentId(value);
+const weightedMean = entries => {
+  const usable = entries.filter(entry => entry && entry.pct != null && entry.weight > 0);
+  const totalWeight = usable.reduce((sum, entry) => sum + entry.weight, 0);
+  return totalWeight ? usable.reduce((sum, entry) => sum + entry.pct * entry.weight, 0) / totalWeight : null;
+};
 
 // The full students × assessments matrix for one class.
 function buildGradebook(userId, rosterId) {
@@ -218,6 +223,16 @@ function buildGradebook(userId, rosterId) {
   if (!rs) return null;
   const students = rs.students || [];
   const excludedIds = new Set((rs.gradebookExcludedIds || []).map(String));
+  const weights = {};
+  for (const [id, weight] of Object.entries(rs.gradebookWeights || {})) {
+    const normalized = Math.min(10, Math.max(0, Number(weight)));
+    if (id && Number.isFinite(normalized)) weights[String(id)] = normalized;
+  }
+  for (const id of excludedIds) if (!(id in weights)) weights[id] = 0;
+  const weightFor = id => {
+    const key = String(id);
+    return key in weights ? weights[key] : 1;
+  };
 
   const asgs = assignments.listTeacherAssignments(userId)
     .filter(a => a.rosterId === rosterId)
@@ -242,9 +257,10 @@ function buildGradebook(userId, rosterId) {
       const { mark, max } = result;
       const pct = pctOf(mark, max);
       cells[studentId][a.id] = { mark, max, pct };
-      if (!excludedIds.has(String(a.id))) pcts.push(pct);
+      pcts.push(pct);
     });
-    assessments.push({ id: a.id, kind: 'assignment', type: a.type, title: a.title, excluded: excludedIds.has(String(a.id)),
+    const weight = weightFor(a.id);
+    assessments.push({ id: a.id, kind: 'assignment', type: a.type, title: a.title, weight, excluded: weight <= 0,
       provisional: false,
       learnerVisible: assignments.isReleased(record),
       at: record.type === 'assessment' ? (record.finalisedAt || record.createdAt || a.createdAt) : a.createdAt,
@@ -262,9 +278,10 @@ function buildGradebook(userId, rosterId) {
       if (!r) return;
       const max = r.total || 0, pct = pctOf(r.score, max);
       cells[studentId][g.id] = { mark: r.score, max, pct };
-      if (!excludedIds.has(String(g.id))) pcts.push(pct);
+      pcts.push(pct);
     });
-    assessments.push({ id: g.id, kind: 'game', type: 'game', title: g.lessonTitle, excluded: excludedIds.has(String(g.id)), at: g.createdAt, average: mean(pcts), done: pcts.length });
+    const weight = weightFor(g.id);
+    assessments.push({ id: g.id, kind: 'game', type: 'game', title: g.lessonTitle, weight, excluded: weight <= 0, at: g.createdAt, average: mean(pcts), done: pcts.length });
   }
 
   assessments.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
@@ -272,12 +289,13 @@ function buildGradebook(userId, rosterId) {
   const rows = students.map(s => {
     const studentId = sid(s.id);
     const c = cells[studentId];
-    const pcts = Object.entries(c).filter(([id]) => !excludedIds.has(String(id))).map(([, x]) => x.pct);
-    return { studentId, name: s.name, cells: c, average: mean(pcts), done: pcts.length };
+    const weighted = Object.entries(c).map(([id, x]) => ({ pct: x.pct, weight: weightFor(id) }));
+    const done = weighted.filter(entry => entry.pct != null && entry.weight > 0).length;
+    return { studentId, name: s.name, cells: c, average: weightedMean(weighted), done };
   });
 
   const classAverage = mean(rows.map(r => r.average).filter(x => x != null));
-  return { rosterId, name: rs.name, students, assessments, rows, classAverage, excludedIds: [...excludedIds] };
+  return { rosterId, name: rs.name, students, assessments, rows, classAverage, excludedIds: Object.keys(weights).filter(id => weights[id] === 0), weights };
 }
 
 // Export the matrix as an .xlsx workbook (marks as "3/8", plus an average %).
