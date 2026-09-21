@@ -7666,7 +7666,7 @@
       try{
         const d=await (await fetch('/api/gradebook')).json();
         gbClasses=d.classes||[];
-        if(!gbClasses.length){ $('marksBody').innerHTML='<div class="empty-state"><svg class="ic" aria-hidden="true" style="width:36px;height:36px;opacity:.3"><use href="#i-users"/></svg><p>No marks yet</p><p style="font-size:13px;color:var(--muted)">Publish an assignment or create a game for one of your classes, and marks will collect here.</p></div>'; return; }
+        if(!gbClasses.length){ $('marksBody').innerHTML='<div class="empty-state"><svg class="ic" aria-hidden="true" style="width:36px;height:36px;opacity:.3"><use href="#i-users"/></svg><p>No marks yet</p><p style="font-size:13px;color:var(--muted)">Tick “Marked by teacher” on a completed test or project, or create a game for a class. Games appear here automatically.</p></div>'; return; }
         if(!gbSelected || !gbClasses.some(c=>c.rosterId===gbSelected)) gbSelected=gbClasses[0].rosterId;
         renderClassBar();
         loadGradebook(gbSelected);
@@ -7688,7 +7688,7 @@
       }catch{ $('marksBody').innerHTML='<p class="hint">Could not load this class.</p>'; }
     }
     function renderGradebook(g){
-      if(!g.assessments.length){ $('marksBody').innerHTML='<div class="empty-state"><p>No assessments for this class yet</p><p style="font-size:13px;color:var(--muted)">Publish an assignment or create a game for this class to start collecting marks.</p></div>'; return; }
+      if(!g.assessments.length){ $('marksBody').innerHTML='<div class="empty-state"><p>No recorded assessments for this class yet</p><p style="font-size:13px;color:var(--muted)">Tick “Marked by teacher” on a completed test or project. Games appear here automatically.</p></div>'; return; }
       const doneCount=g.rows.filter(r=>r.done>0).length;
       const summary=`<div class="gb-summary">
         <div class="gb-stat"><div class="v">${pctTxt(g.classAverage)}</div><div class="l">Class average</div></div>

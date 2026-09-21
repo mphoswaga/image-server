@@ -427,6 +427,8 @@ test('fully marked assessments reach teacher progress before learner release and
     totalMarks: 17,
   });
   assert.equal(assignments.assessmentReleaseReadiness(record).ready, true);
+  assert.deepEqual(gradebook.assignmentResultRows('teacher-evidence'), [], 'complete marks wait for teacher confirmation');
+  assignments.setTeacherMarked(record.id, true);
   const provisionalRow = gradebook.assignmentResultRows('teacher-evidence')[0];
   assert.equal(provisionalRow.score, 17);
   assert.equal(provisionalRow.provisional, false);
@@ -536,7 +538,7 @@ test('teacher marking confirmation is saved separately from result release', () 
   assert.equal(row.teacherMarked, false);
 });
 
-test('gradebook shows submitted assessments everywhere without counting unfinished marks', () => {
+test('gradebook shows only teacher-confirmed assessments without counting unfinished marks', () => {
   const teacherId = 'teacher-final-progress';
   const classRoster = roster.saveRoster(teacherId, {
     name: 'Grade 6A',
@@ -558,14 +560,12 @@ test('gradebook shows submitted assessments everywhere without counting unfinish
   });
 
   let book = gradebook.buildGradebook(teacherId, classRoster.id);
-  assert.equal(gradebook.listClasses(teacherId)[0].assignments, 1);
-  assert.equal(book.assessments.length, 1);
-  assert.equal(book.assessments[0].provisional, false);
-  assert.equal(book.assessments[0].learnerVisible, false);
+  assert.equal(gradebook.listClasses(teacherId)[0].assignments, 0);
+  assert.equal(book.assessments.length, 0);
   assert.equal(book.rows[0].done, 0);
   assert.equal(book.rows[0].average, null);
   assert.deepEqual(gradebook.assignmentResultRows(teacherId), []);
-  assert.equal(gradebook.assignmentProgressRows(teacherId, { includePending: true })[0].status, 'awaiting-marking');
+  assert.equal(gradebook.assignmentProgressRows(teacherId, { includePending: true })[0].status, 'awaiting-teacher-confirmation');
 
   // Defend the reporting boundary even if a malformed caller finalises a
   // record before all teacher-required grades have been supplied.
@@ -579,6 +579,7 @@ test('gradebook shows submitted assessments everywhere without counting unfinish
   assert.deepEqual(gradebook.gatherStudentResults([teacherId], 'learner-1').rows, []);
 
   assignments.releaseResults(record.id, false);
+  assignments.setTeacherMarked(record.id, false);
   assignments.saveSubmission(record.id, {
     ...assignments.getSubmission(record.id, 'learner-1'),
     grades: {
@@ -589,6 +590,8 @@ test('gradebook shows submitted assessments everywhere without counting unfinish
     // The final projection is rebuilt from item grades, not this stale field.
     totalMarks: 0,
   });
+  assert.deepEqual(gradebook.assignmentResultRows(teacherId), [], 'finished marks remain outside Marks until confirmed');
+  assignments.setTeacherMarked(record.id, true);
   assert.equal(gradebook.assignmentResultRows(teacherId)[0].score, 17);
   assert.equal(gradebook.assignmentResultRows(teacherId)[0].provisional, false);
   book = gradebook.buildGradebook(teacherId, classRoster.id);

@@ -536,6 +536,10 @@ function releaseResults(id, released) {
   if (rec.type === 'assessment') {
     rec.status = targetReleased ? 'finalised' : 'published';
     rec.finalisedAt = targetReleased ? new Date().toISOString() : null;
+    if (targetReleased && !rec.teacherMarked) {
+      rec.teacherMarked = true;
+      rec.teacherMarkedAt = rec.finalisedAt;
+    }
     if (rec.delivery) rec.delivery = { ...rec.delivery, phase: targetReleased ? 'closed' : 'marking', updatedAt: new Date().toISOString() };
   }
   writeJsonAtomic(recPath(id), rec);
@@ -1052,8 +1056,8 @@ function listTeacherAssignments(teacherId) {
       delivery: a.delivery || null,
       createdAt: a.createdAt, roomCode: a.roomCode, rosterId: a.rosterId, cutoffAt: a.cutoffAt,
       resultsReleased: isReleased(a),
-      teacherMarked: !!a.teacherMarked,
-      teacherMarkedAt: a.teacherMarkedAt || null,
+      teacherMarked: !!a.teacherMarked || (a.type === 'assessment' && isReleased(a)),
+      teacherMarkedAt: a.teacherMarkedAt || a.finalisedAt || null,
       submissions: loadSubmissions(a.id).length,
       marking: assessmentMarkingSummary(a),
       contentEditable: assessmentContentEditable(a),

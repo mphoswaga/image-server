@@ -2303,19 +2303,24 @@ app.patch('/api/assignment/:id/marked', requireAuth, (req, res) => {
   if (assessment.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assessment.' });
   if (assessment.type !== 'assessment') return res.status(400).json({ error: 'Only tests and projects can be marked here.' });
   const marked = !!(req.body && req.body.marked);
+  if (!marked && assignments.isReleased(assessment)) {
+    return res.status(409).json({ error: 'Recall the learner results before clearing the marked status.' });
+  }
   const updated = assignments.setTeacherMarked(assessment.id, marked);
   const submissions = assignments.getSubmissions(updated.id);
-  const recorded = marked
-    ? submissions.filter(submission => gradebook.teacherSubmissionResult(updated, submission))
-    : [];
+  const completeSubmissions = submissions.filter(submission => gradebook.teacherSubmissionResult(updated, submission));
+  const recorded = marked ? completeSubmissions : [];
   const pendingResults = marked ? submissions.length - recorded.length : 0;
 
   // This tick is the teacher's instruction to put every complete learner
   // result on record. Releasing remains separate and only controls whether
   // learners can see those marks.
-  if (marked) {
+  // Notify connected reporting systems in both directions. Unticking removes
+  // the assessment from the official feed, so consumers need the same refresh
+  // signal they receive when it is placed on record.
+  if (completeSubmissions.length) {
     const at = updated.teacherMarkedAt || new Date().toISOString();
-    for (const submission of recorded) {
+    for (const submission of completeSubmissions) {
       setImmediate(() => webhooks.dispatch('result.created', {
         assessmentId: updated.id,
         assessmentVersion: updated.version || 1,
@@ -2324,7 +2329,7 @@ app.patch('/api/assignment/:id/marked', requireAuth, (req, res) => {
         unitId: updated.unitId || null,
         unitName: updated.unitName || null,
         studentId: submission.studentId,
-        teacherMarked: true,
+        teacherMarked: marked,
         learnerVisible: assignments.isReleased(updated),
         at,
       }).catch(() => {}));

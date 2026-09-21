@@ -89,6 +89,8 @@ test('every formal test and project publication requires an owned class roster',
 test('learner visibility is separate from official assessment analysis', () => {
   assert.match(html, /On record · Hidden from learners/);
   assert.match(html, /Marks ready · Tick “Marked by teacher” to add them to records/);
+  assert.match(html, /Tick “Marked by teacher” on a completed test or project/);
+  assert.match(html, /Games appear here automatically/);
   assert.match(html, /Recall from learners/);
   assert.match(html, /official analysis stays live/);
   const learner = fs.readFileSync(path.join(__dirname, '..', 'public', 'assignment.html'), 'utf8');

@@ -24,6 +24,11 @@ function isFinalisedAssessment(record) {
     && Boolean(String(record.finalisedAt || '').trim());
 }
 
+function isAssessmentOnRecord(record) {
+  if (!record || record.type !== 'assessment') return true;
+  return record.teacherMarked === true || isFinalisedAssessment(record);
+}
+
 // Return one canonical score for a submission, or null while any assessment
 // item still needs a teacher decision. Assessment totals are rebuilt from the
 // item grades rather than trusting a possibly stale submission total.
@@ -196,7 +201,8 @@ function gameQuestionEvidence(game, result) {
 // The classes a teacher can open a gradebook for, with how much is in each.
 function listClasses(userId) {
   const rosters = roster.listRosters(userId);
-  const asgs = assignments.listTeacherAssignments(userId);
+  const asgs = assignments.listTeacherAssignments(userId)
+    .filter(assignment => assignment.type !== 'assessment' || assignment.teacherMarked || assignment.resultsReleased);
   const gms = games.listTeacherGames(userId).filter(isIndividuallyGradedGame);
   return rosters.map(r => ({
     rosterId: r.id,
@@ -236,7 +242,8 @@ function buildGradebook(userId, rosterId) {
 
   const asgs = assignments.listTeacherAssignments(userId)
     .filter(a => a.rosterId === rosterId)
-    .map(a => ({ summary: a, record: assignmentRecord(a) }));
+    .map(a => ({ summary: a, record: assignmentRecord(a) }))
+    .filter(({ record }) => isAssessmentOnRecord(record));
   // ColonyQuest records team/class evidence. It must not create blank or
   // manufactured individual marks in a learner gradebook.
   const gms = games.listTeacherGames(userId).filter(g => games.hasRoster(g, rosterId) && isIndividuallyGradedGame(g));
@@ -411,7 +418,8 @@ function assignmentProgressRows(teacherId, { includePending = false } = {}) {
   for (const a of assignments.listTeacherAssignments(teacherId)) {
     const record = assignmentRecord(a);
     for (const sub of assignments.getSubmissions(a.id)) {
-      const result = teacherSubmissionResult(record, sub);
+      const onRecord = isAssessmentOnRecord(record);
+      const result = onRecord ? teacherSubmissionResult(record, sub) : null;
       if (!result && !includePending) continue;
       const finalised = isFinalisedAssessment(record);
       const objectiveEvidence = result ? objectiveEvidenceForSubmission(record, sub) : [];
@@ -428,7 +436,8 @@ function assignmentProgressRows(teacherId, { includePending = false } = {}) {
         officialRecordedAt: record.type === 'assessment' ? (record.teacherMarkedAt || null) : (sub.submittedAt || record.createdAt || null),
         provisional: false,
         learnerVisible: assignments.isReleased(record),
-        status: result ? (finalised || assignments.isReleased(record) ? 'released' : 'marked') : 'awaiting-marking',
+        status: result ? (finalised || assignments.isReleased(record) ? 'released' : 'marked')
+          : !onRecord ? 'awaiting-teacher-confirmation' : 'awaiting-marking',
         objectiveEvidence,
         questionEvidence,
         mode: a.type === 'homework' ? 'homework' : 'classwork', activityId: `assignment:${a.id}`,
@@ -445,4 +454,4 @@ function assignmentResultRows(teacherId) {
   return assignmentProgressRows(teacherId);
 }
 
-module.exports = { listClasses, buildGradebook, toWorkbook, gatherStudentResults, summarizeStudent, assignmentResultRows, assignmentProgressRows, teacherSubmissionResult, isFinalisedAssessment, questionEvidenceForSubmission, gameQuestionEvidence };
+module.exports = { listClasses, buildGradebook, toWorkbook, gatherStudentResults, summarizeStudent, assignmentResultRows, assignmentProgressRows, teacherSubmissionResult, isFinalisedAssessment, isAssessmentOnRecord, questionEvidenceForSubmission, gameQuestionEvidence };
