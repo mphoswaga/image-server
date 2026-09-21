@@ -198,19 +198,61 @@ function gameQuestionEvidence(game, result) {
   }).filter(item => item.item);
 }
 
+const classNameKey = value => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+const rosterStudentIds = record => new Set((record && record.students || []).map(student => roster.normalizeStudentId(student.id)).filter(Boolean));
+function equivalentClassRosters(left, right) {
+  if (!left || !right || classNameKey(left.name) !== classNameKey(right.name)) return false;
+  const a = rosterStudentIds(left), b = rosterStudentIds(right);
+  if (!a.size || !b.size) return false;
+  let shared = 0;
+  for (const id of a) if (b.has(id)) shared += 1;
+  const union = new Set([...a, ...b]).size;
+  return shared === a.size && shared === b.size
+    || shared >= 5 && shared / Math.min(a.size, b.size) >= 0.8 && shared / union >= 0.7;
+}
+
+function relatedClassRosters(allRosters, selected) {
+  const related = [selected];
+  const included = new Set([selected.id]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const candidate of allRosters) {
+      if (included.has(candidate.id) || !related.some(item => equivalentClassRosters(item, candidate))) continue;
+      included.add(candidate.id);
+      related.push(candidate);
+      changed = true;
+    }
+  }
+  return related;
+}
+
 // The classes a teacher can open a gradebook for, with how much is in each.
 function listClasses(userId) {
-  const rosters = roster.listRosters(userId);
+  const rosters = roster.listRosters(userId).map(item => roster.getRoster(userId, item.id)).filter(Boolean);
   const asgs = assignments.listTeacherAssignments(userId)
     .filter(assignment => assignment.type !== 'assessment' || assignment.teacherMarked || assignment.resultsReleased);
   const gms = games.listTeacherGames(userId).filter(isIndividuallyGradedGame);
-  return rosters.map(r => ({
-    rosterId: r.id,
-    name: r.name,
-    students: r.count,
-    assignments: asgs.filter(a => a.rosterId === r.id).length,
-    games: gms.filter(g => games.hasRoster(g, r.id)).length,
-  })).filter(c => c.assignments + c.games > 0 || c.students > 0);
+  const consumed = new Set();
+  const classes = [];
+  for (const r of rosters) {
+    if (consumed.has(r.id)) continue;
+    const group = relatedClassRosters(rosters, r);
+    group.forEach(item => consumed.add(item.id));
+    const rosterIds = new Set(group.map(item => item.id));
+    const studentIds = new Set(group.flatMap(item => (item.students || []).map(student => sid(student.id))));
+    const assignmentCount = new Set(asgs.filter(a => rosterIds.has(a.rosterId)).map(a => a.id)).size;
+    const gameCount = new Set(gms.filter(g => [...rosterIds].some(id => games.hasRoster(g, id))).map(g => g.id)).size;
+    classes.push({
+      rosterId: r.id,
+      rosterIds: [...rosterIds],
+      name: r.name,
+      students: studentIds.size,
+      assignments: assignmentCount,
+      games: gameCount,
+    });
+  }
+  return classes.filter(c => c.assignments + c.games > 0 || c.students > 0);
 }
 
 // A percentage in [0,1] from a mark/max, guarding divide-by-zero.
@@ -227,12 +269,26 @@ const weightedMean = entries => {
 function buildGradebook(userId, rosterId) {
   const rs = roster.getRoster(userId, rosterId);
   if (!rs) return null;
-  const students = rs.students || [];
-  const excludedIds = new Set((rs.gradebookExcludedIds || []).map(String));
+  const allRosters = roster.listRosters(userId).map(item => roster.getRoster(userId, item.id)).filter(Boolean);
+  const relatedRosters = relatedClassRosters(allRosters, rs);
+  const rosterIds = new Set(relatedRosters.map(record => record.id));
+  const studentsById = new Map();
+  for (const record of relatedRosters) {
+    for (const student of record.students || []) {
+      const studentId = sid(student.id);
+      if (!studentId) continue;
+      const existing = studentsById.get(studentId);
+      studentsById.set(studentId, existing ? { ...student, ...existing } : student);
+    }
+  }
+  const students = [...studentsById.values()];
+  const excludedIds = new Set(relatedRosters.flatMap(record => (record.gradebookExcludedIds || []).map(String)));
   const weights = {};
-  for (const [id, weight] of Object.entries(rs.gradebookWeights || {})) {
-    const normalized = Math.min(10, Math.max(0, Number(weight)));
-    if (id && Number.isFinite(normalized)) weights[String(id)] = normalized;
+  for (const record of [...relatedRosters].reverse()) {
+    for (const [id, weight] of Object.entries(record.gradebookWeights || {})) {
+      const normalized = Math.min(10, Math.max(0, Number(weight)));
+      if (id && Number.isFinite(normalized)) weights[String(id)] = normalized;
+    }
   }
   for (const id of excludedIds) if (!(id in weights)) weights[id] = 0;
   const weightFor = id => {
@@ -241,12 +297,12 @@ function buildGradebook(userId, rosterId) {
   };
 
   const asgs = assignments.listTeacherAssignments(userId)
-    .filter(a => a.rosterId === rosterId)
+    .filter(a => rosterIds.has(a.rosterId))
     .map(a => ({ summary: a, record: assignmentRecord(a) }))
     .filter(({ record }) => isAssessmentOnRecord(record));
   // ColonyQuest records team/class evidence. It must not create blank or
   // manufactured individual marks in a learner gradebook.
-  const gms = games.listTeacherGames(userId).filter(g => games.hasRoster(g, rosterId) && isIndividuallyGradedGame(g));
+  const gms = games.listTeacherGames(userId).filter(g => [...rosterIds].some(id => games.hasRoster(g, id)) && isIndividuallyGradedGame(g));
 
   const assessments = [];
   const cells = {}; // studentId -> { assessmentId -> { mark, max, pct } }
@@ -278,7 +334,7 @@ function buildGradebook(userId, rosterId) {
 
   for (const g of gms) {
     const byStu = Object.fromEntries(games.getResults(g.id)
-      .filter(result => !result.rosterId || result.rosterId === rosterId)
+      .filter(result => !result.rosterId || rosterIds.has(result.rosterId))
       .map(x => [sid(x.studentId), x]));
     const pcts = [];
     students.forEach(s => {
@@ -304,7 +360,7 @@ function buildGradebook(userId, rosterId) {
   });
 
   const classAverage = mean(rows.map(r => r.average).filter(x => x != null));
-  return { rosterId, name: rs.name, students, assessments, rows, classAverage, excludedIds: Object.keys(weights).filter(id => weights[id] === 0), weights };
+  return { rosterId, rosterIds: [...rosterIds], name: rs.name, students, assessments, rows, classAverage, excludedIds: Object.keys(weights).filter(id => weights[id] === 0), weights };
 }
 
 // Export the matrix as an .xlsx workbook (marks as "3/8", plus an average %).

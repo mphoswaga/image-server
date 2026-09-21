@@ -116,6 +116,42 @@ test('activity results match rosters when student IDs use different casing', () 
   assert.equal(gb.rows[0].average, 1);
 });
 
+test('Marks combines duplicate class records when their names and learner IDs match', () => {
+  const teacherId = `teacher-duplicate-class-${Date.now()}`;
+  const students = [
+    { id: 'G3B7-1', name: 'Learner One' },
+    { id: 'G3B7-2', name: 'Learner Two' },
+  ];
+  const older = roster.saveRoster(teacherId, { name: 'Grade 3B7', students });
+  const newer = roster.saveRoster(teacherId, { name: 'Grade 3B7', students });
+  const assignment = assignments.createAssignment({
+    teacherId, type: 'quiz', subject: 'ICT', topic: 'Documents', grade: '3', rosterId: older.id,
+    data: { title: 'Document project', mcq: [{ question: 'Copy?', options: ['Yes', 'No'], correctIndex: 0 }] },
+  });
+  const game = games.createGame({
+    teacherId, lessonTitle: 'Document game', subject: 'ICT', topic: 'Documents', grade: '3', rosterId: newer.id,
+    game: { questions: [{ question: 'Paste?', options: ['Yes', 'No'], correctIndex: 0 }] },
+  });
+
+  const classes = gradebook.listClasses(teacherId);
+  assert.equal(classes.length, 1);
+  assert.equal(classes[0].name, 'Grade 3B7');
+  assert.deepEqual(new Set(classes[0].rosterIds), new Set([older.id, newer.id]));
+  assert.equal(classes[0].assignments, 1);
+  assert.equal(classes[0].games, 1);
+  const book = gradebook.buildGradebook(teacherId, newer.id);
+  assert.deepEqual(new Set(book.rosterIds), new Set([older.id, newer.id]));
+  assert.deepEqual(new Set(book.assessments.map(item => item.id)), new Set([assignment.id, game.id]));
+  assert.equal(book.students.length, 2);
+});
+
+test('Marks keeps same-name classes separate when the learner lists differ', () => {
+  const teacherId = `teacher-reused-class-name-${Date.now()}`;
+  roster.saveRoster(teacherId, { name: 'Grade 3B7', students: [{ id: 'OLD-1', name: 'Older Learner' }] });
+  roster.saveRoster(teacherId, { name: 'Grade 3B7', students: [{ id: 'NEW-1', name: 'New Learner' }] });
+  assert.equal(gradebook.listClasses(teacherId).length, 2);
+});
+
 test('gradebook weights can reduce a game impact on student averages', () => {
   const teacherId = `teacher-weights-${Date.now()}`;
   const saved = roster.saveRoster(teacherId, {
