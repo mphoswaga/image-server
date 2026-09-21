@@ -659,6 +659,9 @@ test('continuous food and the final footstep persist without changing learning m
   await expect.poll(()=>saved.phase).toBe('ended');
   expect(saved.stompOccurred).toBe(true);expect(saved.teams[0].collapsePenalty).toBeGreaterThan(0);
   expect(saved.teams[1].collapsePenalty).toBe(0);expect(saved.teams[0].correct).toBe(2);
+  await page.waitForTimeout(1050);
+  const humanStep = await page.locator('#gameMount canvas').screenshot({path:'/tmp/colonyquest-human-step.png'});
+  await testInfo.attach('realistic-human-step', {body:humanStep,contentType:'image/png'});
   await expect(page.locator('#finalOverlay')).toBeVisible({timeout:10000});
   await page.screenshot({path:'/tmp/colonyquest-footstep-result.png'});
   const penalty=saved.teams[0].collapsePenalty;

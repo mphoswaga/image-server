@@ -50,6 +50,9 @@ test('the classroom loop keeps questions and colony growth without narrative cli
   assert.match(client, /playAntSound\('march'\)/);
   assert.match(client, /function playWinnerCelebration\(\)/);
   assert.match(client, /playWinnerCelebration\(\);/);
+  assert.match(client, /human-leg-shoe\.png/);
+  assert.match(client, /scene\.add\.image\([^\n]+cq-human-leg/);
+  assert.doesNotMatch(client, /sole\.fillRoundedRect/);
   assert.match(client, /classroomGain\.gain\.value = 2\.25/);
   assert.match(client, /createDynamicsCompressor\(\)/);
   assert.match(client, /tone\(note, 2\.8, \.018/);

@@ -1134,14 +1134,12 @@
     $('worldViewport').scrollTo({ top: 0, behavior: 'auto' });
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const width = scene.scale.width;
-    const shadow = scene.add.ellipse(-150, 100, 360, 90, 0x151510, .4).setDepth(80);
-    const foot = scene.add.container(-150, 45).setDepth(100);
-    const sole = scene.add.graphics();
-    sole.fillStyle(0x30271f, .95);
-    sole.fillRoundedRect(-90, -30, 185, 64, 28);
-    sole.fillStyle(0x645443, 1);
-    for (let i = 0; i < 6; i++) sole.fillRect(-65 + i * 25, -18, 10, 38);
-    foot.add(sole);
+    const height = scene.scale.height;
+    const groundY = Math.min(height * .43, 265);
+    const shadow = scene.add.ellipse(-180, groundY + 4, Math.min(390, width * .35), 58, 0x151510, .46).setDepth(80);
+    const leg = scene.add.image(-240, -80, 'cq-human-leg').setOrigin(.5, 1).setDepth(100);
+    leg.setDisplaySize(Math.min(420, height * .54), Math.min(630, height * .92));
+    leg.setAngle(-9);
     const collapse = () => {
       if (!reduced) scene.cameras.main.shake(350, .012);
       for (const team of session.teams) {
@@ -1160,12 +1158,24 @@
           {fontSize:'16px',color:'#fff',backgroundColor:'#49382b',padding:{x:5,y:5}}).setDepth(90);
       }
     };
-    if (reduced) { shadow.x = width / 2; foot.x = width / 2; collapse(); }
+    if (reduced) {
+      shadow.x = width * .42;
+      leg.setPosition(width * .42, groundY);
+      leg.setAngle(0);
+      collapse();
+    }
     else {
-      scene.tweens.add({ targets: shadow, x: width + 150, duration: 2000 });
-      scene.tweens.add({ targets: foot, x: width * .35, y: 145, duration: 700, onComplete: () => {
+      scene.tweens.add({ targets: shadow, x: width * .42, scaleX: .72, alpha: .62, duration: 820, ease: 'Sine.easeOut' });
+      scene.tweens.add({ targets: leg, x: width * .42, y: groundY, angle: 0, duration: 820, ease: 'Cubic.easeIn', onComplete: () => {
         collapse();
-        scene.tweens.add({targets:foot,x:width*.7,y:75,duration:650,yoyo:true});
+        playThunder();
+        scene.tweens.add({ targets: leg, x: width * .7, y: groundY - 125, angle: 7, duration: 720, delay: 380, ease: 'Sine.easeInOut', onComplete: () => {
+          leg.setFlipX(true);
+          scene.tweens.add({ targets: leg, x: width + 260, y: groundY - 30, angle: -5, duration: 850, ease: 'Sine.easeIn' });
+        }});
+        scene.tweens.add({ targets: shadow, x: width * .72, scaleX: 1.05, alpha: .28, duration: 720, delay: 380, onComplete: () => {
+          scene.tweens.add({ targets: shadow, x: width + 230, alpha: 0, duration: 850 });
+        }});
       }});
     }
     // A renderer resize must not strand the ending by cancelling a scene timer.
@@ -1415,6 +1425,7 @@
           this.load.image('cq-worker', ASSETS.worker);
           this.load.image('cq-queen', ASSETS.queen);
           this.load.image('cq-guardian', ASSETS.guardian);
+          this.load.image('cq-human-leg', '/assets/colonyquest/human-leg-shoe.png');
         },
         update(time, delta) {
           if (!session || document.hidden) return;
