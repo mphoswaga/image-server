@@ -350,6 +350,35 @@ function detectNameCol(headers) {
 }
 
 // Parse a Buffer into { headers, rows, totalRows, detectedIdCol, detectedNameCol }.
+
+function buildRosterTemplateWorkbook() {
+  const rows = [
+    ['Student ID', 'Student Name', 'Gender'],
+    ['VSO12345', 'Nguyễn Văn An', 'Male'],
+    ['VSO12346', 'Lê Thị Bình', 'Female'],
+    ['VSO12347', 'Trần Minh Châu', ''],
+  ];
+  const wb = xlsx.utils.book_new();
+  const ws = xlsx.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{ wch: 18 }, { wch: 30 }, { wch: 14 }];
+  ws['!autofilter'] = { ref: 'A1:C1' };
+  ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
+  xlsx.utils.book_append_sheet(wb, ws, 'Roster template');
+
+  const instructions = xlsx.utils.aoa_to_sheet([
+    ['LessonScope roster template'],
+    ['Use the first sheet named Roster template. Keep the first row exactly as Student ID, Student Name, Gender.'],
+    ['Student ID is required. It should be the stable ID learners already know or the ID your school uses.'],
+    ['Student Name is required for a friendly learner list. If it is blank, LessonScope can still use the Student ID as the display name.'],
+    ['Gender is optional. Use Male, Female, or leave blank. Teachers can edit or bulk update gender later in LessonScope.'],
+    ['Do not merge cells. Put one learner per row. Delete the sample learners before upload.'],
+    ['This template is only the safest option. LessonScope still accepts many other Excel and CSV layouts.'],
+  ]);
+  instructions['!cols'] = [{ wch: 120 }];
+  xlsx.utils.book_append_sheet(wb, instructions, 'How to use');
+  return xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}
+
 // Supports .xlsx, .xls (via SheetJS) and CSV / TSV / plain text.
 function parseRosterFile(buffer, filename) {
   const ext = (filename || '').split('.').pop().toLowerCase();
@@ -429,5 +458,5 @@ module.exports = {
   displayNameFrom, normalizeGender, setStudentGenders, renameRoster, renameStudent, setGradebookExcludedIds, setGradebookWeights, assignOrganization, reconcileOrganizationStudentNames,
   saveRoster, getRoster, listRosters, deleteRoster,
   findStudent, findStudentInRoster, findStudentAcrossAllTeachers, parseCSV,
-  parseRosterFile, buildStudentsFromMapping, normalizeStudentId,
+  parseRosterFile, buildStudentsFromMapping, buildRosterTemplateWorkbook, normalizeStudentId,
 };

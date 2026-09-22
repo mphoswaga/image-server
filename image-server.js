@@ -5150,6 +5150,15 @@ app.get('/api/games', requireAuth, (req, res) => res.json({ games: games.listTea
 
 // ── Class rosters ──────────────────────────────────────────────────────────────
 
+
+app.get('/api/roster/template', requireAuth, (req, res) => {
+  if (req.user.role === 'student') return res.status(403).json({ error: 'Teachers only.' });
+  const buf = roster.buildRosterTemplateWorkbook();
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="lessonscope-roster-template.xlsx"');
+  res.send(buf);
+});
+
 // Parse a file (CSV, Excel) and return headers + preview rows for UI verification.
 // Does NOT save anything — the teacher must confirm the column mapping first.
 app.post('/api/roster/preview', requireAuth, upload.single('file'), requireUploads('roster'), (req, res) => {

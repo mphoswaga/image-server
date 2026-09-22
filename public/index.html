@@ -3516,6 +3516,10 @@
         <summary>Add a new roster</summary>
         <div class="add-body" style="display:flex;flex-direction:column;gap:12px;padding-top:14px">
           <input id="rosterName" type="text" maxlength="60" placeholder="Class name (e.g. Grade 5A)" style="max-width:340px" />
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:#f7fbff;max-width:720px">
+            <a class="btn ghost" href="/api/roster/template" download style="width:auto;padding:9px 13px;text-decoration:none;display:inline-flex;align-items:center;gap:6px"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Download safe roster template</a>
+            <span class="hint" style="margin:0">Optional. Use this when a teacher wants the safest Excel layout. Existing Excel and CSV uploads still work.</span>
+          </div>
 
           <!-- Step 1: file drop zone -->
           <div id="rosterDropZone" style="border:2px dashed var(--border);border-radius:12px;padding:24px 16px;text-align:center;cursor:pointer;transition:.15s;background:#fafbfd;max-width:440px" role="button" tabindex="0" aria-label="Upload roster file">

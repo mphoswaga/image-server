@@ -19,6 +19,24 @@ function workbookBuffer(rows) {
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
 
+
+test('downloadable roster template uses columns the importer detects safely', () => {
+  const buffer = roster.buildRosterTemplateWorkbook();
+  assert.ok(Buffer.isBuffer(buffer));
+  assert.ok(buffer.length > 1000);
+  const parsed = roster.parseRosterFile(buffer, 'lessonscope-roster-template.xlsx');
+  assert.equal(parsed.detectedIdCol, 'Student ID');
+  assert.equal(parsed.detectedNameCol, 'Student Name');
+  assert.equal(parsed.detectedGenderCol, 'Gender');
+  assert.equal(parsed.totalRows, 3);
+  const students = roster.buildStudentsFromMapping(parsed.rows, parsed.detectedIdCol, parsed.detectedNameCol, parsed.detectedGenderCol);
+  assert.deepEqual(students, [
+    { id: 'VSO12345', name: 'Nguyễn Văn An', gender: 'male' },
+    { id: 'VSO12346', name: 'Lê Thị Bình', gender: 'female' },
+    { id: 'VSO12347', name: 'Trần Minh Châu' },
+  ]);
+});
+
 test('roster import prefers Student code over row number and keeps all rows', () => {
   const rows = [
     ['#', 'Student code', 'Fullname', 'DOB', 'Behavior points', 'Comments'],
