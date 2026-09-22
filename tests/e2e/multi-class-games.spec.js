@@ -40,6 +40,11 @@ test('a published game can add and remove several classes from My games', async 
   expect(createdResponse.ok(), await createdResponse.text()).toBeTruthy();
   const created = await createdResponse.json();
   expect(created.rosterIds).toEqual([classA.id, classB.id]);
+  const previewResult = await page.request.post(`/api/game/${created.gameId}/finish`, {data:{answers:[0,0,0,0],arcadeScore:9999,gameType:'car'}});
+  expect((await previewResult.json()).preview).toBe(true);
+  const unchangedResults=await (await page.request.get(`/api/game/${created.gameId}/results`)).json();
+  expect(unchangedResults.results).toHaveLength(0);
+
 
   const initialJoin = await (await page.request.get(`/api/game/${created.gameId}/join`)).json();
   expect(initialJoin.hasRoster).toBe(true);
@@ -76,6 +81,11 @@ test('a published game can add and remove several classes from My games', async 
   const card = page.locator('.game-card').filter({ hasText: 'file skills' });
   await expect(card).toContainText('Grade 3A');
   await expect(card).toContainText('Grade 3B');
+  const previewTabPromise=page.waitForEvent('popup');
+  await card.getByRole('link',{name:'Test game',exact:true}).click();
+  const previewTab=await previewTabPromise;
+  await expect(previewTab.getByText('Teacher test — scores are not saved to learner records.')).toBeVisible();
+  await previewTab.close();
   const results = card.locator(`#res-${created.gameId}`);
   await expect(results).toBeHidden();
   await card.getByRole('button', { name: 'View results' }).click();

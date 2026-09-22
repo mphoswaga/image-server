@@ -210,7 +210,7 @@ test('teacher previews are not blocked by stale learner sessions', () => {
 
   assert.ok(server.indexOf('const teacherTok') < server.indexOf('const gameTok'));
   assert.match(live, /__TEACHER_TEST__:/);
-  assert.match(live, /teacherPreview && \(!match \|\| match\.state\.phase === 'ended'\)/);
+  assert.match(live, /if \(teacherPreview\) \{/);
   assert.match(client, /err\.status === 401 \|\| err\.status === 403/);
 });
 
@@ -228,7 +228,7 @@ test('FishQuest launch never reuses a stale browser client', () => {
 
 test('a teacher can launch a private FishQuest practice match directly', () => {
   const live = fs.readFileSync(path.join(__dirname, '..', 'fishquest-live.js'), 'utf8');
-  assert.match(live, /openMatch\(game, \{ preview: true \}\)/);
+  assert.match(live, /openMatch\(game, \{ matchKey, preview: true, solo: true \}\)/);
   assert.match(live, /match\.addNpcs\(\);match\.start\(1\)/);
   assert.match(live, /!teacherPreview && match\.state\.preview/);
   assert.match(live, /openMatch\(game, \{ replacePreview: true, rosterIds \}\)/);

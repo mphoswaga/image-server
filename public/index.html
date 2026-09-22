@@ -8247,6 +8247,7 @@
               ${colony
                 ? `<a class="btn accent" href="${esc(launchUrl)}" style="font-size:12px;padding:7px 12px;width:auto;text-decoration:none">Open ColonyQuest</a>`
                 : `<a class="btn accent" href="/fishquest/${esc(g.id)}" style="font-size:12px;padding:7px 12px;width:auto;text-decoration:none">${fish?'Open FishQuest control room':'Start FishQuest live'}</a><a class="btn ghost" href="${esc(studentUrl)}" style="font-size:12px;padding:7px 12px;width:auto;text-decoration:none">Preview learner games</a>`}
+              <a class="btn ghost" href="${colony?'/colonyquest/':fish?'/fishquest-play/':'/play/'}${esc(g.id)}?test=1" target="_blank" rel="noopener" style="font-size:12px;padding:7px 12px;width:auto;text-decoration:none">Test game</a>
               <button type="button" class="btn ghost gc-class-btn" data-id="${esc(g.id)}" data-row="${classRowId}" style="font-size:12px;padding:6px 12px;width:auto">Manage classes</button>
               <button type="button" class="btn ghost gc-question-btn" data-id="${esc(g.id)}" data-row="${questionRowId}" style="font-size:12px;padding:6px 12px;width:auto">${ICON('i-pencil')} Edit questions</button>
               ${colony?'':`<button type="button" class="btn ghost gc-extend-btn" data-id="${esc(g.id)}" data-row="${extRowId}" style="font-size:12px;padding:6px 12px;width:auto">Extend deadline</button>`}

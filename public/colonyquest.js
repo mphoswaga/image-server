@@ -4,7 +4,8 @@
   const core = window.ColonyQuestCore;
   const $ = id => document.getElementById(id);
   const gameId = location.pathname.split('/').filter(Boolean).pop();
-  const localKey = `lessonscope:colonyquest:${gameId}`;
+  const testMode = new URLSearchParams(location.search).get('test') === '1';
+  const localKey = `lessonscope:colonyquest:${testMode ? 'test:' : ''}${gameId}`;
   let data = null;
   let config = null;
   let session = null;
@@ -92,10 +93,14 @@
   }
 
   async function request(path = '', options = {}) {
+    if (testMode && options.method && options.method !== 'GET') {
+      const payload = JSON.parse(options.body || '{}');
+      return path === '' ? { colonyquest: payload, questions: payload.questions } : { ok: true };
+    }
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 9000);
     try {
-      const response = await fetch(`/api/game/${encodeURIComponent(gameId)}/colonyquest${path}`, { ...options, signal: controller.signal });
+      const response = await fetch(`/api/game/${encodeURIComponent(gameId)}/colonyquest${path}${testMode ? '?test=1' : ''}`, { ...options, signal: controller.signal });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || 'ColonyQuest could not connect.');
       return body;
@@ -3051,6 +3056,16 @@
   (async function load() {
     try {
       data = await request();
+      if (testMode && data.game) {
+        data.session = null;
+        data.roster = null;
+        data.game.colonyquest = { ...data.game.colonyquest, teams: [] };
+        data.game.lessonTitle = `Teacher test — ${data.game.lessonTitle}`;
+        const banner = document.createElement('div');
+        banner.textContent = 'Teacher test • Practice teams only. No learner marks or live game changes are saved.';
+        banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:10000;text-align:center;background:#173b32;color:white;padding:6px;font-size:13px;pointer-events:none';
+        document.body.appendChild(banner);
+      }
       if (!data.game || !Array.isArray(data.game.questions) || !data.game.questions.length) throw new Error('This game has no questions yet. Return to LessonScope and create the question set again.');
       const savedConfig = data.game.colonyquest || {};
       config = { ...core.normalizeConfig(savedConfig), teams: savedConfig.teams || [] };

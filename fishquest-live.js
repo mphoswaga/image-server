@@ -204,17 +204,18 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
         : null;
     if (!identity) return res.status(403).json({ error: 'Join this lesson game again before opening FishQuest.' });
     let matchKey = game.id, match;
-    const solo = game.fishquest.playMode === 'homework';
-    if (solo) {
+    const solo = teacherPreview || game.fishquest.playMode === 'homework';
+    if (teacherPreview) {
+      matchKey = soloKey(game.id, identity.studentId);
+      match = openMatch(game, { matchKey, preview: true, solo: true });
+    } else if (solo) {
       matchKey = soloKey(game.id, identity.studentId);
       match = getMatch(matchKey, game.id);
       if (!match || match.state.phase === 'ended') match = openMatch(game, { matchKey, solo: true });
     } else match = getMatch(game.id);
-    if (teacherPreview && (!match || match.state.phase === 'ended')) match = openMatch(game, { preview: true });
     if (!match || (!teacherPreview && match.state.preview)) return res.status(409).json({ error: 'The teacher has not opened the FishQuest room yet.' });
     if (!teacherPreview && !solo && !identityCanJoinSession(game, match, identity)) return res.status(403).json({ error: 'Your class is not playing in this FishQuest session.' });
     const preview = teacherPreview && !!match.state.preview;
-    if (preview) matchKey = game.id;
     const token = jwt.sign({ type: 'fishquest', gameId: game.id, matchKey, ...identity, preview, solo }, jwtSecret, { expiresIn: '2h' });
     res.json({ token });
   });

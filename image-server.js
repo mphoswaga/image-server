@@ -4792,6 +4792,7 @@ function ownedColonyQuest(req, res) {
     return null;
   }
   if (game.colonyquest) return game;
+  if (req.method === 'GET' && req.query.test === '1') return { ...game, colonyquest: colonyQuestCore.normalizeConfig({}) };
   try {
     return games.updateColonyQuest(game.id, {});
   } catch (err) {
@@ -4973,6 +4974,11 @@ app.post('/api/game/:id/finish', requireGameAccess, (req, res) => {
   const arcadeScore = Math.max(0, parseInt(req.body.arcadeScore, 10) || 0);
   const gameType = ['car', 'space', 'runner', 'balloon', 'target'].includes(req.body.gameType) ? req.body.gameType : null;
   const prevHigh = gameType ? games.getHighScores(g.id)[gameType] : 0;
+  // Teacher play-throughs never become learner evidence or leaderboard entries.
+  if (req.userId && !req.gameSession) {
+    if (g.teacherId !== req.userId) return res.status(403).json({ error: 'Not your game.' });
+    return res.json({ score, total: g.questions.length, arcadeScore, gameType, highScores: games.getHighScores(g.id), isNewHigh: false, preview: true });
+  }
   const matchedRoster = (req.gameSession && req.gameSession.rosterId) || (studentInGameRosters(g, studentId) || {}).rosterId || null;
   games.recordResult(g.id, { studentId, name, score, total: g.questions.length, answers, arcadeScore, gameType, rosterId: matchedRoster });
   if (matchedRoster) {

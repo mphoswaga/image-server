@@ -160,7 +160,7 @@
   async function load() {
     try {
       meta = await json(`/api/game/${GAME_ID}`); $('nameLabel').textContent = meta.hasRoster ? 'Student ID' : 'Your name';
-      $('roomTitle').textContent = meta.lessonTitle || 'FishQuest'; await getTicket();
+      $('roomTitle').textContent = (meta.canManageColonyQuest ? 'Teacher test — ' : '') + (meta.lessonTitle || 'FishQuest'); await getTicket();
     } catch (err) { if (err.status === 401 || err.status === 403) show('join'); else wait(err.message); }
   }
   function wait(message) { stopMusic(); show('waiting'); $('waitText').textContent = message || 'Waiting for your teacher to open the ocean...'; }
@@ -170,7 +170,7 @@
     try {
       const studentId = $('studentId').value.trim();
       await json(`/api/game/${GAME_ID}/enter`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId, name: studentId, pin: $('pin').value }) });
-      meta = await json(`/api/game/${GAME_ID}`); $('roomTitle').textContent = meta.lessonTitle || 'FishQuest'; await getTicket();
+      meta = await json(`/api/game/${GAME_ID}`); $('roomTitle').textContent = (meta.canManageColonyQuest ? 'Teacher test — ' : '') + (meta.lessonTitle || 'FishQuest'); await getTicket();
     } catch (err) { $('joinError').textContent = err.message; } finally { button.disabled = false; }
   };
   async function getTicket() {

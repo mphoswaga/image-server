@@ -386,6 +386,10 @@
       if(!r.ok){ const d=await r.json().catch(()=>({})); $('loading').innerHTML='<p class="center">'+esc(d.error||'Game not found.')+'</p>'; show('loading'); return; }
       game=await r.json();
       $('colonyQuestPick').hidden=!game.canManageColonyQuest;
+      if(game.canManageColonyQuest){
+        const notice=document.createElement('p');notice.className='center sub';notice.textContent='Teacher test — scores are not saved to learner records.';document.body.prepend(notice);
+        document.querySelector('#resultScreen p.center.sub').textContent='Teacher test complete. No learner results were saved.';
+      }
       setAuthLabels(!!game.hasRoster);
       if (game.hasRoster) renderNameGrid(game.students);
       $('sumMeta').textContent=`${game.subject} · ${game.topic} · ${game.grade||''}`;
@@ -441,8 +445,8 @@
     }
     function loop(t){ if(!active) return; let dt=(t-lastT)/1000; lastT=t; if(dt>0.05) dt=0.05; active.update(dt); active.render(); raf=requestAnimationFrame(loop); }
     async function pickGame(key){
-      if(key==='fishquest'){ location.href='/fishquest-play/'+GAME_ID; return; }
-      if(key==='colonyquest'){ location.href='/colonyquest/'+GAME_ID; return; }
+      if(key==='fishquest'){ location.href='/fishquest-play/'+GAME_ID+(game.canManageColonyQuest?'?test=1':''); return; }
+      if(key==='colonyquest'){ location.href='/colonyquest/'+GAME_ID+'?test=1'; return; }
       show('loading');
       const r=await fetch('/api/game/'+GAME_ID+'/play'); const d=await r.json();
       questions=d.questions||[]; answers=new Array(questions.length); qi=0; score=0; lives=3; arcadeScore=0; activeGameType=key;

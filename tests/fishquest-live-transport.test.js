@@ -92,3 +92,22 @@ test('a live lobby can select one assigned class without unassigning the others'
   assert.equal(included.status,200);
   assert.ok((await included.json()).token);
 });
+
+
+test('teacher testing uses a separate ocean while the classroom is running', async t => {
+  const game={id:'isolated-preview',teacherId:'owner',fishquest:{playMode:'live'},questions:[{question:'Yes?',options:['Yes','No'],correctIndex:0}]};
+  const app=express();
+  const auth=(req,res,next)=>{req.userId='owner';req.user={name:'Teacher'};next()};
+  const live=createFishQuestLive({app,games:{getGame:()=>game,getRosterIds:()=>[],recordResult:()=>assert.fail('Preview recorded marks')},roster:{},requireAuth:auth,requireGameAccess:auth,jwtSecret:'preview-secret'});
+  const classroom=live.openMatch(game);classroom.join({studentId:'learner',name:'Learner'});classroom.start(1);
+  const before=JSON.stringify(classroom.state);
+  const server=http.createServer(app);
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const response=await fetch(`http://127.0.0.1:${server.address().port}/api/game/${game.id}/fishquest/ticket`,{method:'POST'});
+  assert.equal(response.status,200);
+  const claims=jwt.verify((await response.json()).token,'preview-secret');
+  assert.notEqual(claims.matchKey,game.id);
+  assert.equal(claims.preview,true);assert.equal(claims.solo,true);
+  assert.equal(JSON.stringify(classroom.state),before);
+});

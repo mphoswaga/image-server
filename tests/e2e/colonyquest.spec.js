@@ -816,3 +816,23 @@ test('continuous food and the final footsteps persist without changing learning 
   await expect(page.locator('#finalOverlay')).toBeVisible();
   expect(saved.teams[0].collapsePenalty).toBe(penalty);expect(errors).toEqual([]);
 });
+
+
+test('teacher test never changes the saved classroom session', async ({ page }) => {
+  const writes=[];
+  await page.route(/\/api\/game\/cq-preview\/colonyquest(?:\/session)?(?:\?test=1)?$/, async route => {
+    if(route.request().method()!=='GET') writes.push(route.request().method());
+    await route.fulfill({json:{game:{id:'cq-preview',lessonTitle:'Habitats',questions,colonyquest:{teamCount:2,teams:[{name:'Real class'}]}},session:{phase:'question',teams:[]},roster:{students:[{id:'real',name:'Real learner'}]}}});
+  });
+  await page.goto('/colonyquest/cq-preview?test=1');
+  await expect(page.locator('#lessonTitle')).toContainText('Teacher test');
+  await expect(page.locator('#resumeBtn')).toBeHidden();
+  await page.locator('#startBtn').click();
+  await expect(page.locator('#storyOverlay')).toBeVisible();
+  await page.locator('#storyContinue').click();
+  await expect(page.locator('#questionOverlay')).toBeVisible();
+  await page.locator('.answer').first().click();
+  await expect(page.locator('#rewardOverlay')).toBeVisible();
+  expect(writes).toEqual([]);
+  expect(await page.evaluate(()=>localStorage.getItem('lessonscope:colonyquest:cq-preview'))).toBeNull();
+});
