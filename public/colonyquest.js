@@ -2233,6 +2233,9 @@
     const route = new Phaser.Curves.Path(points[0].x, points[0].y);
     for (const point of points.slice(1)) route.lineTo(point.x, point.y);
     const progress = { value: 0 };
+    // A new colony has only its nursery, so wall builders may have a
+    // single-point route. Keep working there for the animation duration;
+    // Phaser returns null for a path with no segments.
     scene.tweens.add({
       targets: progress,
       value: 1,
@@ -2240,7 +2243,7 @@
       ease: 'Sine.easeInOut',
       onUpdate: () => {
         if (!actor.active) return;
-        const point = route.getPoint(progress.value);
+        const point = route.getPoint(Phaser.Math.Clamp(progress.value, 0, 1)) || points[0];
         actor.sprite.setFlipX(point.x < actor.x);
         actor.setPosition(point.x, point.y);
       },

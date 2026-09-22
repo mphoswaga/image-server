@@ -836,3 +836,23 @@ test('teacher test never changes the saved classroom session', async ({ page }) 
   expect(writes).toEqual([]);
   expect(await page.evaluate(()=>localStorage.getItem('lessonscope:colonyquest:cq-preview'))).toBeNull();
 });
+
+test('world keeps animating after the wall upgrade actor disappears', async ({ page }) => {
+  const teams = [colonyCore.createTeam({}, 0), colonyCore.createTeam({}, 1)];
+  const session = colonyCore.normalizeSession({ phase: 'reward', introSeen: true, teams });
+  await page.route(/\/api\/game\/cq-wall-animation\/colonyquest(?:\/session)?$/, route => route.fulfill({ json: route.request().method() === 'PUT' ? { ok: true } : { game: { id: 'cq-wall-animation', lessonTitle: 'Habitats', questions, colonyquest: { teamCount: 2, rounds: 5, sound: false, teams } }, session } }));
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/colonyquest/cq-wall-animation');
+  await page.evaluate(() => {
+    const Original = Phaser.Game;
+    Phaser.Game = function(config) { window.animationGame = new Original(config); return window.animationGame; };
+  });
+  await page.locator('#resumeBtn').click();
+  await page.locator('[data-reward="defense"]').click();
+  await expect(page.locator('#questionOverlay')).toBeVisible();
+  await page.waitForTimeout(4000);
+  const frame = await page.evaluate(() => window.animationGame.loop.frame);
+  await expect.poll(() => page.evaluate(() => window.animationGame.loop.frame)).toBeGreaterThan(frame + 10);
+  expect(errors).toEqual([]);
+});
