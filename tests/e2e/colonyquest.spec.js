@@ -14,6 +14,9 @@ test('meadow music plays and obeys mute, pause and volume controls', async ({ pa
   test.skip(testInfo.project.name !== 'windows-100');
   await page.addInitScript(() => {
     window.musicStarts = 0;
+    window.rustleStarts = 0;
+    const bufferStart = AudioBufferSourceNode.prototype.start;
+    AudioBufferSourceNode.prototype.start = function(...args) { window.rustleStarts++; return bufferStart.apply(this, args); };
     const original = OscillatorNode.prototype.start;
     OscillatorNode.prototype.start = function(...args) { window.musicStarts++; return original.apply(this, args); };
   });
@@ -31,6 +34,7 @@ test('meadow music plays and obeys mute, pause and volume controls', async ({ pa
   await page.goto('/colonyquest/cq-music');
   await page.locator('#resumeBtn').click();
   await expect.poll(() => page.evaluate(() => window.musicStarts)).toBeGreaterThan(6);
+  await expect.poll(() => page.evaluate(() => window.rustleStarts)).toBeGreaterThan(1);
   await page.locator('#muteBtn').click();
   const muted = await page.evaluate(() => window.musicStarts);
   await page.waitForTimeout(700);
@@ -40,6 +44,9 @@ test('meadow music plays and obeys mute, pause and volume controls', async ({ pa
   await page.locator('#teacherHandle').click();
   await page.locator('#musicVolume').fill('25');
   await expect(page.locator('#musicVolumeLabel')).toHaveText('Music 25%');
+  await page.locator('#effectsVolume').fill('0');
+  await expect(page.locator('#effectsVolumeLabel')).toHaveText('Game sounds 0%');
+  await expect(page.locator('#musicVolume')).toHaveValue('25');
   await page.locator('#pauseBtn').click();
   const paused = await page.evaluate(() => window.musicStarts);
   await page.waitForTimeout(700);
@@ -49,10 +56,11 @@ test('meadow music plays and obeys mute, pause and volume controls', async ({ pa
   expect(errors).toEqual([]);
 });
 
-test('bird warning lets teachers shelter a colony without stopping questions', async ({ page }, testInfo) => {
+test('bird warning explains wall protection and steals food without removing workers', async ({ page }, testInfo) => {
   test.skip(!['windows-100', 'mobile'].includes(testInfo.project.name));
   const colonies = [colonyCore.createTeam({ name: 'Leaf Colony' }, 0), colonyCore.createTeam({ name: 'River Colony' }, 1)];
   colonies.forEach(team => { team.workers = 4; team.birdsIncoming = 1; });
+  colonies[0].defense = 2;
   let saved = colonyCore.normalizeSession({ phase: 'question', introSeen: true, teams: colonies, rainOccurred: true, birdStage: 'attack', birdStageMs: 7000 });
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -67,15 +75,16 @@ test('bird warning lets teachers shelter a colony without stopping questions', a
   await page.locator('#resumeBtn').click();
   await expect(page.locator('#birdPanel')).toContainText('Birds are swooping');
   await expect(page.locator('#questionOverlay')).toBeVisible();
-  await page.locator('[data-shelter="team-1"]').click();
-  await expect.poll(() => saved.teams[0].shelterWorkers).toBe(true);
+  await expect(page.locator('#birdPanel')).toContainText('Level 3 walls protect');
+  await expect(page.locator('[data-shelter]')).toHaveCount(0);
   const panel = await page.locator('#birdPanel').boundingBox();
   const question = await page.locator('.question-dialog').boundingBox();
   expect(panel.y + panel.height).toBeLessThanOrEqual(question.y);
   await page.screenshot({ path: testInfo.outputPath('birds.png') });
   await expect(page.locator('#birdPanel')).toContainText('The birds have flown away', { timeout: 15000 });
   await expect.poll(() => saved.birdsOccurred).toBe(true);
-  expect(saved.teams.map(team => team.workers)).toEqual([4, 2]);
+  expect(saved.teams.map(team => team.workers)).toEqual([4, 4]);
+  expect(saved.teams.map(team => team.birdFoodLoss)).toEqual([0, 4]);
   expect(errors).toEqual([]);
 });
 
@@ -158,6 +167,7 @@ test('growing colonies draw every soldier, retain every room, and scroll to a ne
   await expect(world).toHaveAttribute('aria-description', /Stone and steel walls/);
   const beforeRooms = colonyCore.colonyRooms(saved.teams[0]).length;
   await page.locator('[data-reward="expansion"]').click();
+  await expect(world).toHaveAttribute('data-action-focus', /team-1:/);
   expect(colonyCore.colonyRooms(saved.teams[0])).toHaveLength(beforeRooms + 1);
   await expect.poll(() => world.evaluate(element => element.scrollTop)).toBeGreaterThan(100);
   const deep = await page.locator('#gameMount canvas').screenshot();
@@ -739,7 +749,7 @@ test('continuous food and the final footsteps persist without changing learning 
   test.skip(testInfo.project.name !== 'windows-100');
   test.setTimeout(45000);
   const colonies=[colonyCore.createTeam({name:'Open walls'},0),colonyCore.createTeam({name:'Strong walls'},1)];
-  colonies.forEach(t=>{t.attempts=2;t.correct=2;});colonies[1].defense=2;
+  colonies.forEach(t=>{t.attempts=2;t.correct=2;});colonies[1].defense=3;
   let saved=colonyCore.normalizeSession({phase:'reward',introSeen:true,turnIndex:3,currentTeamIndex:1,teams:colonies,rainOccurred:true});
   const setup={teamCount:2,rounds:2,matchType:'rounds',durationMinutes:15,sound:false,teams:colonies};
   await page.route(/\/api\/game\/cq-footstep\/colonyquest(?:\/session)?$/,async route=>{

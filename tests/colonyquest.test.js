@@ -11,35 +11,40 @@ const games = require('../games');
 const roster = require('../roster');
 const gradebook = require('../gradebook');
 
-test('birds require two home guards per bird and never resolve twice', () => {
+test('birds take food only below wall level three and never resolve twice', () => {
   const colonies = Array.from({ length: 4 }, (_, i) => core.createTeam({}, i));
-  colonies.forEach((t, i) => { t.workers = 4; t.soldiers = i; });
+  colonies.forEach((t, i) => { t.workers = 4; t.soldiers = 8; t.defense = i; t.food = 11; });
   colonies[3].raidAway = 2;
   colonies[3].raidReturnMs = 45000;
   const state = { teams: colonies };
   assert.equal(core.resolveBirds(state), true);
-  assert.deepEqual(colonies.map(t => t.workers), [2, 2, 4, 2]);
+  assert.deepEqual(colonies.map(t => t.workers), [4, 4, 4, 4]);
+  assert.deepEqual(colonies.map(t => t.food), [6, 6, 11, 11]);
   assert.equal(core.resolveBirds(state), false);
-  assert.deepEqual(colonies.map(t => t.workers), [2, 2, 4, 2]);
+  assert.deepEqual(colonies.map(t => t.workers), [4, 4, 4, 4]);
+  assert.deepEqual(colonies.map(t => t.food), [6, 6, 11, 11]);
 });
 
-test('shelter, food rush, pause and saved bird countdown preserve the economy', () => {
+test('old shelter flags are retired while food rush and bird countdown survive reload', () => {
   const all = [core.createTeam({}, 0), core.createTeam({}, 1)];
   const state = { phase: 'question', teams: all, birdStage: 'rush', birdStageMs: 16000 };
   all[1].shelterWorkers = true;
+  all[1].defense = 2;
   for (let n = 0; n < 12; n++) core.advanceEconomy(state, 1000);
   assert.equal(all[0].food, 10);
-  assert.equal(all[1].food, 8);
+  assert.equal(all[1].food, 10);
   state.phase = 'paused';
   core.advanceBirdEvent(state, 1000);
   assert.equal(state.birdStageMs, 16000);
   state.phase = 'question';
   state.birdStage = 'attack'; state.birdStageMs = 100;
   const restored = core.normalizeSession(state);
-  assert.equal(restored.teams[1].shelterWorkers, true);
+  assert.equal(restored.teams[1].shelterWorkers, false);
   core.advanceBirdEvent(restored, 100);
   assert.equal(restored.birdStage, 'result');
-  assert.equal(restored.teams[0].workers, 0);
+  assert.equal(restored.teams[0].workers, 1);
+  assert.equal(restored.teams[0].food, 6);
+  assert.equal(restored.teams[1].food, 10);
   assert.equal(restored.teams[1].workers, 1);
   assert.equal(restored.teams[1].shelterWorkers, false);
 });
@@ -72,7 +77,8 @@ test('rain leads into one food rush and bird wave with a fixed announced size', 
   for (let n = 0; n < 8; n++) core.advanceBirdEvent(state, 1000);
   assert.equal(state.birdStage, 'attack');
   for (let n = 0; n < 10; n++) core.advanceBirdEvent(state, 1000);
-  assert.equal(team.workers, 8);
+  assert.equal(team.workers, 12);
+  assert.equal(team.birdFoodLoss, Math.ceil((8 - Math.ceil(8 * .15)) * .4));
   for (let n = 0; n < 8; n++) core.advanceBirdEvent(state, 1000);
   assert.equal(state.birdStage, 'done');
   assert.equal(core.applyRain(state), false);
@@ -107,7 +113,7 @@ test('ColonyQuest starts as a balanced, child-readable colony simulation', () =>
 test('the classroom loop opens with one mission briefing and keeps later growth fast', () => {
   const client = fs.readFileSync(path.join(__dirname, '..', 'public', 'colonyquest.js'), 'utf8');
   assert.match(client, /introSeen: false/);
-  assert.match(client, /Only Level 3 walls can withstand the footsteps/);
+  assert.match(client, /Only Level 4 walls can withstand the footsteps/);
   assert.match(client, /setTimeout\(\(\) => commitOutcome/);
   assert.match(client, /return Object\.keys\(core\.REWARDS\);/);
   assert.match(client, /async function showGrowth/);
@@ -281,7 +287,7 @@ test('worker trips earn food continuously, soldiers consume slowly, and pause fr
 
 test('rain and the final footstep apply once and preserve assessment correctness', () => {
   const all=teams(2); all.forEach(t=>{t.food=100;t.attempts=2;t.correct=2;});
-  all[1].defense=2;
+  all[1].defense=3;
   const session={teams:all};
   assert.equal(core.applyRain(session),true);
   assert.equal(all[0].food,85);assert.equal(all[1].food,100);

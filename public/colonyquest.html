@@ -32,7 +32,7 @@
       <div class="setup-heading"><div><h1>Set up the teams</h1><p id="lessonTitle">Questions and teams will load here.</p></div><span id="lessonMeta" class="lesson-chip"></span></div>
       <div id="resumeBar" class="resume-bar"><div><b>A saved game is ready</b><span id="resumeText">Continue from the last turn.</span></div><div><button id="resumeBtn" class="btn gold" type="button">Continue game</button><button id="discardBtn" class="btn" type="button">Start over</button></div></div>
 
-      <div class="setup-story"><img src="/assets/colonyquest/pip-worker.webp" alt="Pip the scout ant"><div><span class="eyebrow">The Moonroot Meadow story</span><strong>Build a safe ant home before rain and footsteps</strong><p>Answer questions and choose upgrades. Level 2 walls keep rain out. Level 3 walls withstand the final human footstep; weaker walls lose 25% of game points. Workers bring food home; guards slowly eat it.</p></div></div>
+      <div class="setup-story"><img src="/assets/colonyquest/pip-worker.webp" alt="Pip the scout ant"><div><span class="eyebrow">The Moonroot Meadow story</span><strong>Build a safe ant home before rain and footsteps</strong><p>Answer questions and choose upgrades. Level 2 walls keep rain out, Level 3 protects food from birds, and Level 4 withstands the final human footstep. Weaker walls lose 25% of game points. Workers bring food home; guards slowly eat it.</p></div></div>
 
       <h2 class="section-title">Match</h2>
       <div class="setup-grid">
@@ -66,7 +66,7 @@
       <div class="top-controls"><button id="pauseBtn" type="button">Pause</button><button id="muteBtn" type="button">Sound on</button><button id="fullscreenBtn" type="button">Full screen</button></div>
     </header>
     <div id="scoreStrip" class="score-strip"></div>
-    <aside id="birdPanel" class="bird-panel hidden" aria-label="Bird warning and colony shelter controls"></aside>
+    <aside id="birdPanel" class="bird-panel hidden" aria-label="Bird warning and wall protection"></aside>
     <div id="turnBanner" class="turn-banner"><b id="turnTeam">Team 1</b><span id="turnStudent">Choose an answer together</span></div>
     <div id="raidHud" class="raid-hud hidden" aria-live="polite">
       <div class="raid-side attacking"><small>ATTACKING</small><b id="raidAttacker">Colony</b><span id="raidAttackCount">0 guards</span></div>
@@ -87,7 +87,8 @@
             <div class="story-goals" aria-label="How to play">
               <p><b>1.</b> Answer questions to earn upgrades and keep food growing.</p>
               <p><b>2.</b> Reach Wall Level 2 before the Great Rain.</p>
-              <p><b>3.</b> Reach Wall Level 3 before the giant human arrives.</p>
+              <p><b>3.</b> Reach Wall Level 3 to protect food from birds.</p>
+              <p><b>4.</b> Reach Wall Level 4 before the giant human arrives.</p>
             </div>
           </div>
         </div>
@@ -121,6 +122,8 @@
 
     <button id="teacherHandle" class="teacher-handle" type="button">Teacher controls</button>
     <div id="teacherTray" class="teacher-tray">
+      <label for="effectsVolume" id="effectsVolumeLabel">Game sounds 80%</label>
+      <input id="effectsVolume" type="range" min="0" max="100" value="80" aria-label="Game sound effects volume">
       <label for="musicVolume" id="musicVolumeLabel">Music 60%</label>
       <input id="musicVolume" type="range" min="0" max="100" value="60" aria-label="Background music volume">
       <button id="markCorrectBtn" class="good" type="button">Mark correct</button><button id="markWrongBtn" class="warn" type="button">Mark incorrect</button><button id="nextStudentBtn" type="button">Next learner</button><button id="randomStudentBtn" type="button">Random learner</button><select id="studentPick" aria-label="Choose learner"><option value="">Choose learner</option></select><button id="skipQuestionBtn" type="button">Skip question</button><button id="endGameBtn" class="danger" type="button">End game</button><button id="closeTrayBtn" type="button">Close</button><span id="saveIndicator" class="save-indicator">Ready</span>
@@ -129,7 +132,7 @@
   </div>
 
   <script src="/vendor/phaser.min.js"></script>
-  <script src="/colonyquest-core.js?v=15"></script>
-  <script src="/colonyquest.js?v=20"></script>
+  <script src="/colonyquest-core.js?v=16"></script>
+  <script src="/colonyquest.js?v=21"></script>
 </body>
 </html>

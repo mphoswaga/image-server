@@ -5,7 +5,7 @@
 }(typeof globalThis !== 'undefined' ? globalThis : this, function colonyQuestCoreFactory() {
   'use strict';
 
-  const VERSION = 12;
+  const VERSION = 13;
   const FORTIFICATIONS = Object.freeze([
     { name: 'Earth', wall: 0xb68a57, edge: 0x785437, floor: 0x65513a },
     { name: 'Timber', wall: 0xa7743e, edge: 0xe3b571, floor: 0x65513a },
@@ -42,10 +42,10 @@
   const REWARDS = Object.freeze({
     workers: { label: 'Add one worker', description: 'Every trip brings one food home.', icon: 'worker' },
     food: { label: 'Find food', description: 'Bring five seeds home.', icon: 'leaf' },
-    defense: { label: 'Make walls stronger', description: 'Level 2 seals out rain. Level 3 survives a human footstep.', icon: 'shield' },
+    defense: { label: 'Make walls stronger', description: 'Level 2 seals out rain. Level 3 protects food from birds. Level 4 survives a human footstep.', icon: 'shield' },
     queen: { label: 'Help the queen', description: 'Add one egg. It hatches in two rounds.', icon: 'crown' },
     expansion: { label: 'Build one room', description: 'Dig one new room.', icon: 'compass' },
-    soldiers: { label: 'Add one guard', description: 'Two home guards stop one bird. Each guard eats one food every 30 seconds.', icon: 'sword' },
+    soldiers: { label: 'Add one guard', description: 'Protects against raids. Each guard eats one food every 30 seconds.', icon: 'sword' },
     raid: { label: 'Challenge a colony', description: 'Try to win food. Surviving guards are away for 45 active seconds.', icon: 'flag' },
   });
 
@@ -125,7 +125,8 @@
     base.rainLoss = Math.floor(clamp(input?.rainLoss, 0, 9999));
     base.raidReturnMs = clamp(input?.raidReturnMs, 0, 45000);
     base.raidAway = base.raidReturnMs > 0 ? Math.floor(clamp(input?.raidAway, 0, base.soldiers)) : 0;
-    base.shelterWorkers = !!input?.shelterWorkers;
+    base.shelterWorkers = false; // Retire the old shelter choice on resumed matches.
+    base.birdFoodLoss = Math.floor(clamp(input?.birdFoodLoss, 0, 9999));
     base.birdsStopped = Math.floor(clamp(input?.birdsStopped, 0, 999));
     base.birdWorkerLoss = Math.floor(clamp(input?.birdWorkerLoss, 0, 999));
     base.birdsIncoming = Math.floor(clamp(input?.birdsIncoming, 0, 3));
@@ -325,7 +326,8 @@
   function rainPreparation(team) {
     return [
       { label: 'Level 2 walls: rain protected', done: team.defense >= 1, value: `Level ${team.defense + 1}` },
-      { label: 'Level 3 walls: human protected', done: team.defense >= 2, value: `Level ${team.defense + 1}` },
+      { label: 'Level 3 walls: bird food protected', done: team.defense >= 2, value: `Level ${team.defense + 1}` },
+      { label: 'Level 4 walls: human footstep protected', done: team.defense >= 3, value: `Level ${team.defense + 1}` },
     ];
   }
 
@@ -345,7 +347,7 @@
       const old = team.forageProgress || [];
       let gathered = 0;
       team.forageProgress = Array.from({ length: team.workers }, (_, index) => {
-        const progress = (old[index] || 0) + (team.shelterWorkers ? 0 : elapsed / 12000);
+        const progress = (old[index] || 0) + (elapsed / 12000);
         const completed = Math.floor(progress + 1e-9);
         gathered += completed * (['rush', 'warning', 'attack'].includes(session.birdStage) ? 2 : 1);
         return Math.max(0, progress - completed);
@@ -382,13 +384,12 @@
     session.birdsOccurred = true;
     for (const team of session.teams) {
       const incoming = team.birdsIncoming || birdCount(team);
-      const stopped = Math.min(incoming, Math.floor(homeGuards(team) / 2));
-      const lost = team.shelterWorkers ? 0 : Math.min(team.workers, (incoming - stopped) * 2);
-      team.birdsStopped = stopped;
-      team.birdWorkerLoss = lost;
-      team.workers -= lost;
-      team.population = 1 + team.workers + team.soldiers + (team.eggs || []).length;
-      team.forageProgress = (team.forageProgress || []).slice(0, team.workers);
+      const protectedFood = team.defense >= 2; // Displayed wall level is defense + 1.
+      const lost = protectedFood ? 0 : Math.min(team.food, Math.ceil(team.food * .4));
+      team.birdsStopped = protectedFood ? incoming : 0;
+      team.birdFoodLoss = lost;
+      team.birdWorkerLoss = 0;
+      team.food -= lost;
       team.shelterWorkers = false;
     }
     return true;
@@ -412,7 +413,7 @@
     if (session.stompOccurred || !session.teams.length || session.teams.some(team=>team.attempts < 2)) return false;
     session.stompOccurred = true;
     for (const team of session.teams) {
-      if (team.defense < 2) team.collapsePenalty = colonyStrength(team) - Math.round(colonyStrength(team) * .75);
+      if (team.defense < 3) team.collapsePenalty = colonyStrength(team) - Math.round(colonyStrength(team) * .75);
     }
     return true;
   }

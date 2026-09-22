@@ -26,6 +26,7 @@
   let winnerCelebrationPlayed = false;
   let audioContext = null;
   let audioOutput = null;
+  let effectsBus = null;
   let ambientTimer = null;
   let musicBus = null;
   let musicStep = 0;
@@ -48,7 +49,7 @@
     guardian: '/assets/colonyquest/guardian.webp',
   };
   const STORY = {
-    intro: 'Beneath Moonroot Meadow, a tiny colony is waking. Dark clouds are gathering, food is scarce, and each team begins with only a queen, one worker, and a small room. Every correct answer earns one important choice: send workers for food, grow the colony, train guards, dig rooms, or strengthen the walls. Workers keep bringing food home, but every soldier also eats from the store. Build the walls to Level 2 before the Great Rain or water will enter the nest. After rain, food trips earn double food—but hungry birds approach! Two guards at home stop one bird. Each unblocked bird can eat two workers. Shelter your workers to protect them, but food collection stops. Guards sent raiding are away for 45 active seconds. Then the ground will shake as a giant human crosses the meadow. Only Level 3 walls can withstand the footsteps; weaker colonies lose 25% of their game points. Learn together, choose carefully, and survive to carry the Ancient Acorn.',
+    intro: 'Beneath Moonroot Meadow, a tiny colony is waking. Dark clouds are gathering, food is scarce, and each team begins with only a queen, one worker, and a small room. Every correct answer earns one important choice: send workers for food, grow the colony, train guards, dig rooms, or strengthen the walls. Workers keep bringing food home, but every soldier also eats from the store. Build the walls to Level 2 before the Great Rain or water will enter the nest. After rain, food trips earn double food—but hungry birds approach! Reach Level 3 walls before the birds arrive to protect your pantry. Weaker walls let birds steal 40% of stored food. Guards sent raiding are away for 45 active seconds. Then the ground will shake as a giant human crosses the meadow. Only Level 4 walls can withstand the footsteps; weaker colonies lose 25% of their game points. Learn together, choose carefully, and survive to carry the Ancient Acorn.',
     chapters: [
       { at: 0, title: 'First Light', line: 'Help Pip wake a worker and gather the first seeds.' },
       { at: .25, title: 'Deep Roots', line: 'The wind is rising. Dig safe rooms under the old tree.' },
@@ -498,7 +499,7 @@
     $('rainTeam').textContent = `${team.name} · Workers bring 1 food per trip (12 seconds); each guard eats 1 every 30 seconds.`;
     $('rainGoals').innerHTML = goals.map(goal => `<li class="${goal.done ? 'ready' : ''}"><input type="checkbox" disabled${goal.done ? ' checked' : ''} aria-label="${esc(goal.label)}"><span>${esc(goal.label)}</span><b>${esc(goal.value)}</b></li>`).join('');
     $('rainApproach').value = turnProgress();
-    $('stormLabel').textContent = session.rainOccurred ? 'Rain passed · Level 3 walls before the final footstep' : `Rain in ${config.matchType === 'time' ? Math.max(0, Math.ceil((.5 - turnProgress()) * config.durationMinutes * 60)) + ' seconds' : Math.max(1, Math.ceil(totalTurns() / 2) - session.turnIndex) + ' question turns'} · Level 2 walls keep food dry`;
+    $('stormLabel').textContent = session.rainOccurred ? 'Rain passed · Level 4 walls before the final footstep' : `Rain in ${config.matchType === 'time' ? Math.max(0, Math.ceil((.5 - turnProgress()) * config.durationMinutes * 60)) + ' seconds' : Math.max(1, Math.ceil(totalTurns() / 2) - session.turnIndex) + ' question turns'} · Level 2 walls keep food dry`;
     $('gameScreen').dataset.stormStage = weather.stage;
     $('scoreStrip').innerHTML = session.teams.map((item, index) => {
       const palette = core.TEAM_COLORS[item.colorIndex];
@@ -520,8 +521,8 @@
     const round = Math.floor(session.turnIndex / Math.max(1, session.teams.length)) + 1;
     $('roundLabel').textContent = config.matchType === 'rounds' ? `Round ${Math.min(round, config.rounds)} of ${config.rounds}` : timeLabel();
     const chapter = storyChapter();
-    $('phaseLabel').textContent = session.phase === 'ended' ? 'Journey complete' : session.rainOccurred ? 'Final footstep · Level 3 walls' : `${$('stormLabel').textContent.split(' · ')[0]} · Level 2 walls`;
-    if (session.phase !== 'ended' && ['rush', 'warning', 'attack'].includes(session.birdStage)) $('phaseLabel').textContent = session.birdStage === 'rush' ? 'Food rush · Prepare for birds' : 'Birds · Guard or shelter your workers';
+    $('phaseLabel').textContent = session.phase === 'ended' ? 'Journey complete' : session.rainOccurred ? 'Final footstep · Level 4 walls' : `${$('stormLabel').textContent.split(' · ')[0]} · Level 2 walls`;
+    if (session.phase !== 'ended' && ['rush', 'warning', 'attack'].includes(session.birdStage)) $('phaseLabel').textContent = session.birdStage === 'rush' ? 'Food rush · Prepare for birds' : 'Birds · Level 3 walls protect food';
     $('pauseBtn').textContent = session.phase === 'paused' ? 'Resume' : 'Pause';
     $('pauseBtn').disabled = session.phase === 'ended';
     $('pauseBtn').classList.toggle('active', session.phase === 'paused');
@@ -545,23 +546,8 @@
     if (!visible) return;
     const seconds = Math.ceil(session.birdStageMs / 1000);
     const title = { rush: 'Food rush! Each trip brings double food', warning: 'Birds approaching!', attack: 'Birds are swooping!', result: 'The birds have flown away' }[stage];
-    const html = `<strong>${title}${stage === 'result' ? '' : ` · ${seconds}s`}${session.phase === 'paused' ? ' · Paused' : ''}</strong><small>Two guards at home stop one bird. Each unblocked bird can take two workers. Sheltered workers stop collecting food.</small><div class="bird-colonies">${session.teams.map(team => `<div><b>${esc(team.name)}</b><span>${stage === 'result' ? `${team.birdsStopped} birds stopped · ${team.birdWorkerLoss} workers lost` : `${team.birdsIncoming || core.birdCount(team)} birds · ${core.homeGuards(team)} guards at home${team.raidAway ? ` · ${team.raidAway} away (${Math.ceil(team.raidReturnMs / 1000)}s)` : ''}`}</span>${stage === 'result' ? '' : `<button type="button" data-shelter="${esc(team.id)}" aria-pressed="${!!team.shelterWorkers}" ${!['question', 'reward'].includes(session.phase) ? 'disabled' : ''}>${team.shelterWorkers ? 'Sheltered · send workers out' : 'Shelter workers'}</button>`}</div>`).join('')}</div>`;
-    if (panel.innerHTML !== html) {
-      const focused = panel.contains(document.activeElement) ? document.activeElement.dataset.shelter : null;
-      panel.innerHTML = html;
-      if (focused) [...panel.querySelectorAll('[data-shelter]')].find(button => button.dataset.shelter === focused)?.focus({ preventScroll: true });
-    }
+    panel.innerHTML = `<strong>${title}${stage === 'result' ? '' : ` · ${seconds}s`}${session.phase === 'paused' ? ' · Paused' : ''}</strong><small>Level 3 walls protect your food. Birds steal 40% of stored food through weaker walls (rounded up). Workers are safe.</small><div class="bird-colonies">${session.teams.map(team => `<div><b>${esc(team.name)}</b><span>${stage === 'result' ? `${team.birdFoodLoss || 0} food stolen` : `Walls level ${team.defense + 1} · ${team.defense >= 2 ? 'Food protected' : 'Strengthen walls to level 3'}`}</span></div>`).join('')}</div>`;
   }
-
-  $('birdPanel').addEventListener('click', event => {
-    const button = event.target.closest('[data-shelter]');
-    if (!button || !['question', 'reward'].includes(session?.phase) || !['rush', 'warning', 'attack'].includes(session.birdStage)) return;
-    const team = session.teams.find(item => item.id === button.dataset.shelter);
-    if (!team) return;
-    team.shelterWorkers = !team.shelterWorkers;
-    updateBirdPanel();
-    saveState();
-  });
 
   function questionAtCursor() {
     return data.game.questions[session.questionCursor % data.game.questions.length];
@@ -696,12 +682,12 @@
     const story = REWARD_STORIES[key] || { title: 'The colony grows', text: 'The ants put their new reward to work inside the nest.', site: 'center' };
     setOverlay(null);
     celebrate(team.id, key);
-    focusColony(team.id, story.site);
+    focusColony(team.id, story.site, true);
     const actionDuration = playUpgradeAction(team.id, key);
     updateHUD();
     // The ants visibly build, gather, hatch, or strengthen their home. A
     // short automatic beat preserves that reward without a story popup.
-    await new Promise(resolve => setTimeout(resolve, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 180 : Math.max(700, actionDuration / ACTION_SPEED + 250)));
+    await new Promise(resolve => setTimeout(resolve, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 180 : Math.max(1200, actionDuration / ACTION_SPEED + 250)));
     if (session && session.phase === 'event') await nextTurn();
   }
 
@@ -1222,7 +1208,7 @@
           cracks.lineTo(x - 15, y - 8); cracks.lineTo(x - 30, y + 10); cracks.lineTo(x + 40, y + 40); cracks.strokePath();
         }
         scene.add.text(view.center.x - 70, view.center.y - 10,
-          team.defense < 2 ? 'Walls collapsed\n−25% game points' : 'Level 3+ walls held!',
+          team.defense < 3 ? 'Walls collapsed\n−25% game points' : 'Level 4+ walls held!',
           { fontSize: '16px', color: '#fff', backgroundColor: '#49382b', padding: { x: 5, y: 5 } }).setDepth(90);
       }
     };
@@ -1512,6 +1498,11 @@
         },
         update(time, delta) {
           if (!session || document.hidden) return;
+          if (soundOn && ['question', 'reward'].includes(session.phase) && session.teams.some(team => team.workers + core.homeGuards(team) > 0) && time - (this.lastBushSound || 0) > 800) {
+            this.lastBushSound = time;
+            noiseBurst({ duration: .4, volume: .027, filterType: 'bandpass', frequency: 1700, q: .5, decay: 1.7 });
+            noiseBurst({ duration: .18, volume: .018, delay: .22, filterType: 'highpass', frequency: 2400, decay: 2 });
+          }
           const reports = core.advanceEconomy(session, Math.min(delta, 250));
           if (reports.some(report => report.returned)) { updateWorld(); updateHUD(); saveState(); }
           if (core.advanceBirdEvent(session, Math.min(delta, 250))) {
@@ -1619,7 +1610,7 @@
       scene.time.addEvent({ delay: 40, loop: true, callback: () => {
         if (!agent.active || !session) return;
         const team = session.teams.find(t => t.id === agent.getData('teamId'));
-        const progress = team?.shelterWorkers ? 0 : team?.forageProgress?.[agent.getData('workerIndex')] || 0;
+        const progress = team?.forageProgress?.[agent.getData('workerIndex')] || 0;
         const point = route.getPoint(progress);
         agent.sprite.setFlipX(point.x < agent.x); agent.setPosition(point.x, point.y);
         agent.cargo?.setVisible(progress >= .5);
@@ -1935,7 +1926,7 @@
     $('worldViewport').removeAttribute('data-action-focus');
   }
 
-  function focusColony(teamId, siteName = 'nursery') {
+  function focusColony(teamId, siteName = 'nursery', upgrade = false) {
     const view = colonyViews.get(teamId);
     if (!view) return;
     $('colonyViewPick').value = teamId;
@@ -1946,7 +1937,7 @@
     viewport.scrollTo({ top: Math.max(0, target.y - visibleHeight * .48), behavior: 'auto' });
     if (scene) {
       const camera = scene.cameras.main;
-      if (!$('worldStory').classList.contains('hidden')) {
+      if (upgrade || !$('worldStory').classList.contains('hidden')) {
         actionCamera = true;
         const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         scene.tweens.timeScale = reduced ? 1 : ACTION_SPEED;
@@ -1957,8 +1948,8 @@
         $('worldViewport').dataset.actionFocus = `${teamId}:${siteName}`;
         if (reduced) camera.setZoom(zoom).centerOn(target.x, centerY);
         else {
-          camera.zoomTo(zoom, 750, 'Sine.easeInOut', true);
-          camera.pan(target.x, centerY, 750, 'Sine.easeInOut', true);
+          camera.zoomTo(zoom, upgrade ? 250 : 750, 'Sine.easeInOut', true);
+          camera.pan(target.x, centerY, upgrade ? 250 : 750, 'Sine.easeInOut', true);
         }
         return;
       }
@@ -2081,7 +2072,7 @@
         const wing = scene.add.ellipse(-5, -10, 39, 15, 0x342b27).setOrigin(.9, .5);
         bird.add([body, head, beak, eye, wing]);
         scene.tweens.add({ targets: wing, angle: -55, duration: 240, yoyo: true, repeat: -1 });
-        const defended = core.homeGuards(team) >= (index + 1) * 2;
+        const defended = team.defense >= 2;
         scene.tweens.add({ targets: bird, y: attacking ? defended ? 75 : 120 : 48, x: x + 24, duration: attacking ? 1300 : 2000, delay: index * 180, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       }
     });
@@ -2626,6 +2617,9 @@
         classroomGain.connect(limiter);
         limiter.connect(audioContext.destination);
         audioOutput = classroomGain;
+        effectsBus = audioContext.createGain();
+        effectsBus.gain.value = Number($('effectsVolume').value) / 100;
+        effectsBus.connect(audioOutput);
       }
       if (audioContext.state === 'suspended') audioContext.resume();
       startAmbient();
@@ -2652,7 +2646,7 @@
     gain.gain.setValueAtTime(.0001, start);
     gain.gain.exponentialRampToValueAtTime(Math.max(.0002, volume), start + Math.min(.055, duration * .14));
     gain.gain.exponentialRampToValueAtTime(.0001, start + duration);
-    source.connect(filter); filter.connect(gain); gain.connect(audioOutput);
+    source.connect(filter); filter.connect(gain); gain.connect(effectsBus);
     source.start(start); source.stop(start + duration + .04);
     return source;
   }
@@ -2694,7 +2688,7 @@
       gain.gain.exponentialRampToValueAtTime(.04 * intensity, now + .24);
       gain.gain.setValueAtTime(.04 * intensity, now + Math.max(.3, duration - .65));
       gain.gain.exponentialRampToValueAtTime(.0001, now + duration);
-      source.connect(highpass); highpass.connect(presence); presence.connect(gain); gain.connect(audioOutput);
+      source.connect(highpass); highpass.connect(presence); presence.connect(gain); gain.connect(effectsBus);
       source.start(now); source.stop(now + duration + .05);
       let stopped = false;
       return () => {
@@ -2738,7 +2732,7 @@
     gain.gain.setValueAtTime(0.0001, audioContext.currentTime + delay);
     gain.gain.exponentialRampToValueAtTime(volume, audioContext.currentTime + delay + .03);
     gain.gain.exponentialRampToValueAtTime(.0001, audioContext.currentTime + delay + duration);
-    oscillator.connect(gain); gain.connect(audioOutput);
+    oscillator.connect(gain); gain.connect(effectsBus);
     oscillator.start(audioContext.currentTime + delay); oscillator.stop(audioContext.currentTime + delay + duration + .04);
   }
 
@@ -2756,7 +2750,7 @@
     gain.gain.exponentialRampToValueAtTime(volume, audioContext.currentTime + delay + .012);
     gain.gain.exponentialRampToValueAtTime(.0001, audioContext.currentTime + delay + duration);
     source.buffer = buffer;
-    source.connect(filter); filter.connect(gain); gain.connect(audioOutput);
+    source.connect(filter); filter.connect(gain); gain.connect(effectsBus);
     source.start(audioContext.currentTime + delay); source.stop(audioContext.currentTime + delay + duration + .03);
   }
 
@@ -2766,7 +2760,12 @@
     // Ant movement and actions need to remain audible from the back of a classroom.
     if (kind === 'scuttle') { antRustle(.08, .025); antRustle(.07, .021, .11); tone(185, .1, .027, .03); }
     if (kind === 'forage') { tone(330, .1, .04); tone(440, .09, .032, .16); antRustle(.1, .022, .27); }
-    if (kind === 'build' || kind === 'dig') { antRustle(.12, .036); antRustle(.1, .032, .18); tone(kind === 'dig' ? 105 : 145, .12, .04, .08); }
+    if (kind === 'build' || kind === 'dig') {
+      for (let i = 0; i < 5; i++) {
+        noiseBurst({ duration: .22, volume: .055, delay: i * .2, filterType: 'bandpass', frequency: kind === 'dig' ? 750 : 430, decay: 2 });
+        tone(kind === 'dig' ? 105 : 145, .09, .04, i * .2 + .035);
+      }
+    }
     if (kind === 'hatch') { tone(620, .12, .04); tone(784, .16, .034, .15); }
     if (kind === 'guard') { tone(118, .16, .045); tone(156, .13, .036, .15); }
     if (kind === 'march') { antRustle(.07, .024); antRustle(.07, .024, .15); antRustle(.07, .024, .3); }
@@ -2838,6 +2837,12 @@
     musicVoices.clear();
   }
 
+  $('effectsVolume').addEventListener('input', () => {
+    const volume = Number($('effectsVolume').value);
+    $('effectsVolumeLabel').textContent = `Game sounds ${volume}%`;
+    if (effectsBus) effectsBus.gain.setTargetAtTime(soundOn ? volume / 100 : 0, audioContext.currentTime, .03);
+  });
+
   $('musicVolume').addEventListener('input', () => {
     const volume = Number($('musicVolume').value);
     $('musicVolumeLabel').textContent = `Music ${volume}%`;
@@ -2847,6 +2852,7 @@
   function toggleSound() {
     soundOn = !soundOn;
     if (soundOn) initAudio(); else stopAmbient();
+    if (effectsBus) effectsBus.gain.setTargetAtTime(soundOn ? Number($('effectsVolume').value) / 100 : 0, audioContext.currentTime, .03);
     updateHUD();
   }
 
