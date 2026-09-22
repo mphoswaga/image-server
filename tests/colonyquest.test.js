@@ -11,6 +11,73 @@ const games = require('../games');
 const roster = require('../roster');
 const gradebook = require('../gradebook');
 
+test('birds require two home guards per bird and never resolve twice', () => {
+  const colonies = Array.from({ length: 4 }, (_, i) => core.createTeam({}, i));
+  colonies.forEach((t, i) => { t.workers = 4; t.soldiers = i; });
+  colonies[3].raidAway = 2;
+  colonies[3].raidReturnMs = 45000;
+  const state = { teams: colonies };
+  assert.equal(core.resolveBirds(state), true);
+  assert.deepEqual(colonies.map(t => t.workers), [2, 2, 4, 2]);
+  assert.equal(core.resolveBirds(state), false);
+  assert.deepEqual(colonies.map(t => t.workers), [2, 2, 4, 2]);
+});
+
+test('shelter, food rush, pause and saved bird countdown preserve the economy', () => {
+  const all = [core.createTeam({}, 0), core.createTeam({}, 1)];
+  const state = { phase: 'question', teams: all, birdStage: 'rush', birdStageMs: 16000 };
+  all[1].shelterWorkers = true;
+  for (let n = 0; n < 12; n++) core.advanceEconomy(state, 1000);
+  assert.equal(all[0].food, 10);
+  assert.equal(all[1].food, 8);
+  state.phase = 'paused';
+  core.advanceBirdEvent(state, 1000);
+  assert.equal(state.birdStageMs, 16000);
+  state.phase = 'question';
+  state.birdStage = 'attack'; state.birdStageMs = 100;
+  const restored = core.normalizeSession(state);
+  assert.equal(restored.teams[1].shelterWorkers, true);
+  core.advanceBirdEvent(restored, 100);
+  assert.equal(restored.birdStage, 'result');
+  assert.equal(restored.teams[0].workers, 0);
+  assert.equal(restored.teams[1].workers, 1);
+  assert.equal(restored.teams[1].shelterWorkers, false);
+});
+
+test('raiding guards return after 45 active seconds and pause preserves absence', () => {
+  const all = [core.createTeam({}, 0), core.createTeam({}, 1)];
+  all[0].soldiers = 4;
+  core.resolveRaid(all[0], all[1], all);
+  assert.equal(core.homeGuards(all[0]), 0);
+  const state = { phase: 'paused', teams: all };
+  core.advanceEconomy(state, 1000);
+  assert.equal(all[0].raidReturnMs, 45000);
+  state.phase = 'question';
+  for (let n = 0; n < 45; n++) core.advanceEconomy(state, 1000);
+  assert.equal(core.homeGuards(all[0]), all[0].soldiers);
+  assert.equal(all[0].raidAway, 0);
+});
+
+test('rain leads into one food rush and bird wave with a fixed announced size', () => {
+  const team = core.createTeam({}, 0);
+  team.workers = 6;
+  const state = { phase: 'question', teams: [team] };
+  core.applyRain(state);
+  for (let n = 0; n < 6; n++) core.advanceBirdEvent(state, 1000);
+  assert.equal(state.birdStage, 'rush');
+  assert.equal(team.birdsIncoming, 2);
+  team.workers = 12;
+  for (let n = 0; n < 16; n++) core.advanceBirdEvent(state, 1000);
+  assert.equal(state.birdStage, 'warning');
+  for (let n = 0; n < 8; n++) core.advanceBirdEvent(state, 1000);
+  assert.equal(state.birdStage, 'attack');
+  for (let n = 0; n < 10; n++) core.advanceBirdEvent(state, 1000);
+  assert.equal(team.workers, 8);
+  for (let n = 0; n < 8; n++) core.advanceBirdEvent(state, 1000);
+  assert.equal(state.birdStage, 'done');
+  assert.equal(core.applyRain(state), false);
+});
+
 function teams(count = 4) {
   return Array.from({ length: count }, (_, index) => core.createTeam({
     name: `Colony ${index + 1}`,
@@ -301,6 +368,8 @@ test('a raid needs soldiers, a different supplied target, and an expired cooldow
   assert.equal(core.resolveRaid(attacker, defender, colonies).blocked, true);
   assert.equal(unchanged(), before);
   attacker.soldiers = 1;
+  attacker.raidAway = 0;
+  attacker.raidReturnMs = 0;
   before = unchanged();
   assert.equal(core.resolveRaid(attacker, attacker, colonies).blocked, true);
   assert.equal(unchanged(), before);
@@ -353,6 +422,8 @@ test('knowledge raids reward success or defense but never eliminate a colony', (
 
   attacker.soldiers = 1;
   attacker.correct = 0;
+  attacker.raidAway = 0;
+  attacker.raidReturnMs = 0;
   defender.food = 8;
   defender.defense = 20;
   const defended = core.resolveRaid(attacker, defender, all);

@@ -5,7 +5,7 @@
 }(typeof globalThis !== 'undefined' ? globalThis : this, function colonyQuestCoreFactory() {
   'use strict';
 
-  const VERSION = 11;
+  const VERSION = 12;
   const FORTIFICATIONS = Object.freeze([
     { name: 'Earth', wall: 0xb68a57, edge: 0x785437, floor: 0x65513a },
     { name: 'Timber', wall: 0xa7743e, edge: 0xe3b571, floor: 0x65513a },
@@ -45,8 +45,8 @@
     defense: { label: 'Make walls stronger', description: 'Level 2 seals out rain. Level 3 survives a human footstep.', icon: 'shield' },
     queen: { label: 'Help the queen', description: 'Add one egg. It hatches in two rounds.', icon: 'crown' },
     expansion: { label: 'Build one room', description: 'Dig one new room.', icon: 'compass' },
-    soldiers: { label: 'Add one guard', description: 'Protects the home and eats one food every 30 seconds.', icon: 'sword' },
-    raid: { label: 'Challenge a colony', description: 'Send guard ants to try to win food.', icon: 'flag' },
+    soldiers: { label: 'Add one guard', description: 'Two home guards stop one bird. Each guard eats one food every 30 seconds.', icon: 'sword' },
+    raid: { label: 'Challenge a colony', description: 'Try to win food. Surviving guards are away for 45 active seconds.', icon: 'flag' },
   });
 
   const EVENTS = Object.freeze([
@@ -108,6 +108,11 @@
       upkeepCarry: 0,
       collapsePenalty: 0,
       rainLoss: 0,
+      raidAway: 0,
+      raidReturnMs: 0,
+      shelterWorkers: false,
+      birdsStopped: 0,
+      birdWorkerLoss: 0,
     };
   }
 
@@ -118,6 +123,12 @@
     base.forageProgress = Array.isArray(input?.forageProgress) ? input.forageProgress.slice(0,999).map(n=>clamp(n,0,.999999)) : [];
     base.upkeepCarry = clamp(input?.upkeepCarry,0,.999999);
     base.rainLoss = Math.floor(clamp(input?.rainLoss, 0, 9999));
+    base.raidReturnMs = clamp(input?.raidReturnMs, 0, 45000);
+    base.raidAway = base.raidReturnMs > 0 ? Math.floor(clamp(input?.raidAway, 0, base.soldiers)) : 0;
+    base.shelterWorkers = !!input?.shelterWorkers;
+    base.birdsStopped = Math.floor(clamp(input?.birdsStopped, 0, 999));
+    base.birdWorkerLoss = Math.floor(clamp(input?.birdWorkerLoss, 0, 999));
+    base.birdsIncoming = Math.floor(clamp(input?.birdsIncoming, 0, 3));
     base.collapsePenalty = Math.floor(clamp(input?.collapsePenalty,0,999999));
     base.correct = Math.min(base.correct, base.attempts);
     base.population = Math.max(1, base.population);
@@ -172,7 +183,7 @@
     let reason = '';
     if (!team || !REWARDS[reward]) reason = 'Choose a colony upgrade.';
     else if (['expansion', 'defense', 'food'].includes(reward) && team.workers < 1) reason = 'Add a worker first.';
-    else if (reward === 'raid' && team.soldiers < 1) reason = 'Add a guard ant first.';
+    else if (reward === 'raid' && homeGuards(team) < 1) reason = team.raidAway ? 'Your guards are still returning from a raid.' : 'Add a guard ant first.';
     else if (reward === 'soldiers' && !team.barracksBuilt) reason = 'Build two rooms before adding a guard.';
     else if (['soldiers', 'queen'].includes(reward) && team.food < 1) reason = 'Find food first.';
     else if (reward === 'queen' && (team.eggs || []).length >= 3) reason = 'There are three eggs. Wait for one to hatch.';
@@ -224,8 +235,8 @@
   function raidForecast(attacker, defender) {
     const eligibility = raidAvailability(attacker, defender);
     if (!eligibility.allowed) return { success: false, attackers: 0, defenders: 0, attack: 0, guard: 0, attackerLosses: 0, defenderLosses: 0, reason: eligibility.reason };
-    const attackers = Math.max(0, Math.floor(attacker.soldiers));
-    const defenders = Math.max(0, Math.floor(defender.soldiers));
+    const attackers = homeGuards(attacker);
+    const defenders = homeGuards(defender);
     const wallBonus = Math.min(8, Math.max(0, defender.defense) * 2);
     const barracksBonus = colonyRooms(defender).filter(room => room.kind === 'guard').length * 4;
     const supportBonus = wallBonus + barracksBonus;
@@ -271,6 +282,8 @@
     defender.guardsDefeated = Math.max(0, defender.guardsDefeated || 0) + attackerLosses;
     attacker.population = 1 + attacker.workers + attacker.soldiers + (attacker.eggs || []).length;
     defender.population = 1 + defender.workers + defender.soldiers + (defender.eggs || []).length;
+    attacker.raidAway = (attacker.raidAway || 0) + battle.attackers - attackerLosses;
+    attacker.raidReturnMs = attacker.raidAway ? 45000 : 0;
     if (success) {
       const stolen = Math.min(defender.food, Math.max(6, Math.round(12 * comebackMultiplier(attacker, teams))));
       defender.food -= stolen;
@@ -326,12 +339,15 @@
     if (!session || !['question','reward'].includes(session.phase)) return [];
     const elapsed = clamp(elapsedMs, 0, 1000);
     return session.teams.map(team => {
+      const awayBefore = team.raidAway || 0;
+      team.raidReturnMs = Math.max(0, (team.raidReturnMs || 0) - elapsed);
+      if (!team.raidReturnMs) team.raidAway = 0;
       const old = team.forageProgress || [];
       let gathered = 0;
       team.forageProgress = Array.from({ length: team.workers }, (_, index) => {
-        const progress = (old[index] || 0) + elapsed / 12000;
+        const progress = (old[index] || 0) + (team.shelterWorkers ? 0 : elapsed / 12000);
         const completed = Math.floor(progress + 1e-9);
-        gathered += completed;
+        gathered += completed * (['rush', 'warning', 'attack'].includes(session.birdStage) ? 2 : 1);
         return Math.max(0, progress - completed);
       });
       // One food per soldier every 30 active seconds. No starvation deaths.
@@ -339,15 +355,56 @@
       const eaten = Math.min(team.food + gathered, Math.floor(cost + 1e-9));
       team.upkeepCarry = Math.max(0, cost - Math.floor(cost + 1e-9));
       team.food = Math.min(9999, Math.max(0, team.food + gathered - eaten));
-      return { teamId: team.id, gathered, eaten };
+      return { teamId: team.id, gathered, eaten, returned: awayBefore > 0 && !team.raidAway };
     });
   }
 
   function applyRain(session) {
     if (session.rainOccurred) return false;
     session.rainOccurred = true;
+    session.birdStage = 'rain';
+    session.birdStageMs = 6000;
     for (const team of session.teams) team.rainLoss = rainOutcome(team).exposedFood;
     applyEvent(session.teams, 'heavy-rain');
+    return true;
+  }
+
+  function homeGuards(team) {
+    return Math.max(0, Math.floor(team.soldiers || 0) - Math.floor(team.raidAway || 0));
+  }
+
+  function birdCount(team) {
+    return team.workers >= 12 ? 3 : team.workers >= 6 ? 2 : 1;
+  }
+
+  function resolveBirds(session) {
+    if (session.birdsOccurred) return false;
+    session.birdsOccurred = true;
+    for (const team of session.teams) {
+      const incoming = team.birdsIncoming || birdCount(team);
+      const stopped = Math.min(incoming, Math.floor(homeGuards(team) / 2));
+      const lost = team.shelterWorkers ? 0 : Math.min(team.workers, (incoming - stopped) * 2);
+      team.birdsStopped = stopped;
+      team.birdWorkerLoss = lost;
+      team.workers -= lost;
+      team.population = 1 + team.workers + team.soldiers + (team.eggs || []).length;
+      team.forageProgress = (team.forageProgress || []).slice(0, team.workers);
+      team.shelterWorkers = false;
+    }
+    return true;
+  }
+
+  // Active game time only: pause, reload and offline time never skip a warning.
+  function advanceBirdEvent(session, elapsedMs) {
+    if (!session || !['question', 'reward'].includes(session.phase) || !session.birdStage || session.birdStage === 'done') return false;
+    session.birdStageMs = Math.max(0, session.birdStageMs - clamp(elapsedMs, 0, 1000));
+    if (session.birdStageMs > 0) return false;
+    const transitions = { rain: ['rush', 16000], rush: ['warning', 8000], warning: ['attack', 10000], attack: ['result', 8000], result: ['done', 0] };
+    const next = transitions[session.birdStage];
+    if (!next) return false;
+    if (session.birdStage === 'attack') resolveBirds(session);
+    [session.birdStage, session.birdStageMs] = next;
+    if (session.birdStage === 'rush') session.teams.forEach(team => { team.birdsIncoming = birdCount(team); });
     return true;
   }
 
@@ -430,6 +487,9 @@
       introSeen: !!source.introSeen,
       stormSeen: !!source.stormSeen,
       rainOccurred: !!source.rainOccurred,
+      birdsOccurred: !!source.birdsOccurred,
+      birdStage: ['rain', 'rush', 'warning', 'attack', 'result', 'done'].includes(source.birdStage) ? source.birdStage : '',
+      birdStageMs: clamp(source.birdStageMs, 0, 16000),
       stompOccurred: !!source.stompOccurred,
       warsActive: !!source.warsActive,
       eventAction: source.eventAction === 'next-turn' ? 'next-turn' : source.eventAction === 'question' ? 'question' : null,
@@ -528,7 +588,7 @@
   }
 
   return {
-    advanceEconomy, applyRain, applyHumanStomp,
+    advanceEconomy, applyRain, applyHumanStomp, homeGuards, birdCount, resolveBirds, advanceBirdEvent,
     VERSION,
     FORTIFICATIONS,
     fortification,

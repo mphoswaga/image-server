@@ -21,7 +21,7 @@
     @media(max-width:440px){.question-dialog .dialog-kicker{font-size:11px}.question-dialog .guide-line{font-size:11px}.question-dialog h2{font-size:18px}.question-dialog .answer{font-size:13px}.question-dialog .question-foot{font-size:11px}.question-dialog .feedback{font-size:12px}}
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
   </style>
-  <link rel="stylesheet" href="/colonyquest-polish.css?v=12">
+  <link rel="stylesheet" href="/colonyquest-polish.css?v=13">
 </head>
 <body>
   <div id="loading" class="loading"><div><div class="spinner"></div>Preparing ColonyQuest...</div></div>
@@ -66,6 +66,7 @@
       <div class="top-controls"><button id="pauseBtn" type="button">Pause</button><button id="muteBtn" type="button">Sound on</button><button id="fullscreenBtn" type="button">Full screen</button></div>
     </header>
     <div id="scoreStrip" class="score-strip"></div>
+    <aside id="birdPanel" class="bird-panel hidden" aria-label="Bird warning and colony shelter controls"></aside>
     <div id="turnBanner" class="turn-banner"><b id="turnTeam">Team 1</b><span id="turnStudent">Choose an answer together</span></div>
     <div id="raidHud" class="raid-hud hidden" aria-live="polite">
       <div class="raid-side attacking"><small>ATTACKING</small><b id="raidAttacker">Colony</b><span id="raidAttackCount">0 guards</span></div>
@@ -126,7 +127,7 @@
   </div>
 
   <script src="/vendor/phaser.min.js"></script>
-  <script src="/colonyquest-core.js?v=14"></script>
-  <script src="/colonyquest.js?v=18"></script>
+  <script src="/colonyquest-core.js?v=15"></script>
+  <script src="/colonyquest.js?v=19"></script>
 </body>
 </html>

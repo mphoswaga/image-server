@@ -44,7 +44,7 @@
     guardian: '/assets/colonyquest/guardian.webp',
   };
   const STORY = {
-    intro: 'Beneath Moonroot Meadow, a tiny colony is waking. Dark clouds are gathering, food is scarce, and each team begins with only a queen, one worker, and a small room. Every correct answer earns one important choice: send workers for food, grow the colony, train guards, dig rooms, or strengthen the walls. Workers keep bringing food home, but every soldier also eats from the store. Build the walls to Level 2 before the Great Rain or water will enter the nest. Then the ground will shake as a giant human crosses the meadow. Only Level 3 walls can withstand the footsteps; weaker colonies lose 25% of their game points. Learn together, choose carefully, and survive to carry the Ancient Acorn.',
+    intro: 'Beneath Moonroot Meadow, a tiny colony is waking. Dark clouds are gathering, food is scarce, and each team begins with only a queen, one worker, and a small room. Every correct answer earns one important choice: send workers for food, grow the colony, train guards, dig rooms, or strengthen the walls. Workers keep bringing food home, but every soldier also eats from the store. Build the walls to Level 2 before the Great Rain or water will enter the nest. After rain, food trips earn double food—but hungry birds approach! Two guards at home stop one bird. Each unblocked bird can eat two workers. Shelter your workers to protect them, but food collection stops. Guards sent raiding are away for 45 active seconds. Then the ground will shake as a giant human crosses the meadow. Only Level 3 walls can withstand the footsteps; weaker colonies lose 25% of their game points. Learn together, choose carefully, and survive to carry the Ancient Acorn.',
     chapters: [
       { at: 0, title: 'First Light', line: 'Help Pip wake a worker and gather the first seeds.' },
       { at: .25, title: 'Deep Roots', line: 'The wind is rising. Dig safe rooms under the old tree.' },
@@ -485,6 +485,7 @@
 
   function updateHUD() {
     if (!session) return;
+    updateBirdPanel();
     const team = currentTeam();
     const mission = chapterMission(team);
     const goals = mission.goals;
@@ -500,6 +501,12 @@
       return `<div class="score-card${index === session.currentTeamIndex && session.phase !== 'ended' ? ' current' : ''}" style="--team-color:${colorHex(palette.primary)}"><div class="score-name"><span>${esc(item.name)}</span><span>${core.colonyStrength(item)} pts</span></div><div class="score-stats"><span>1 queen</span><span>${item.workers} workers</span><span>${item.soldiers} guards</span><span>${item.food} food</span><span>Walls level ${item.defense + 1}</span></div></div>`;
     }).join('');
     const options = session.teams.map(item => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join('');
+    session.teams.forEach((item, index) => {
+      if (!item.raidAway) return;
+      const note = document.createElement('small');
+      note.textContent = `${core.homeGuards(item)} guards home · ${item.raidAway} returning from raid`;
+      $('scoreStrip').children[index]?.append(note);
+    });
     if ($('colonyViewPick').innerHTML !== options) $('colonyViewPick').innerHTML = options;
     if (team) {
       const palette = core.TEAM_COLORS[team.colorIndex];
@@ -510,6 +517,7 @@
     $('roundLabel').textContent = config.matchType === 'rounds' ? `Round ${Math.min(round, config.rounds)} of ${config.rounds}` : timeLabel();
     const chapter = storyChapter();
     $('phaseLabel').textContent = session.phase === 'ended' ? 'Journey complete' : session.rainOccurred ? 'Final footstep · Level 3 walls' : `${$('stormLabel').textContent.split(' · ')[0]} · Level 2 walls`;
+    if (session.phase !== 'ended' && ['rush', 'warning', 'attack'].includes(session.birdStage)) $('phaseLabel').textContent = session.birdStage === 'rush' ? 'Food rush · Prepare for birds' : 'Birds · Guard or shelter your workers';
     $('pauseBtn').textContent = session.phase === 'paused' ? 'Resume' : 'Pause';
     $('pauseBtn').disabled = session.phase === 'ended';
     $('pauseBtn').classList.toggle('active', session.phase === 'paused');
@@ -523,6 +531,33 @@
     const seconds = Math.max(0, Math.ceil((session.endsAt - now) / 1000));
     return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')} left`;
   }
+
+  function updateBirdPanel() {
+    const panel = $('birdPanel');
+    const stage = session.birdStage;
+    const visible = ['rush', 'warning', 'attack', 'result'].includes(stage) && session.phase !== 'ended';
+    panel.classList.toggle('hidden', !visible);
+    $('gameScreen').classList.toggle('bird-active', visible);
+    if (!visible) return;
+    const seconds = Math.ceil(session.birdStageMs / 1000);
+    const title = { rush: 'Food rush! Each trip brings double food', warning: 'Birds approaching!', attack: 'Birds are swooping!', result: 'The birds have flown away' }[stage];
+    const html = `<strong>${title}${stage === 'result' ? '' : ` · ${seconds}s`}${session.phase === 'paused' ? ' · Paused' : ''}</strong><small>Two guards at home stop one bird. Each unblocked bird can take two workers. Sheltered workers stop collecting food.</small><div class="bird-colonies">${session.teams.map(team => `<div><b>${esc(team.name)}</b><span>${stage === 'result' ? `${team.birdsStopped} birds stopped · ${team.birdWorkerLoss} workers lost` : `${team.birdsIncoming || core.birdCount(team)} birds · ${core.homeGuards(team)} guards at home${team.raidAway ? ` · ${team.raidAway} away (${Math.ceil(team.raidReturnMs / 1000)}s)` : ''}`}</span>${stage === 'result' ? '' : `<button type="button" data-shelter="${esc(team.id)}" aria-pressed="${!!team.shelterWorkers}" ${!['question', 'reward'].includes(session.phase) ? 'disabled' : ''}>${team.shelterWorkers ? 'Sheltered · send workers out' : 'Shelter workers'}</button>`}</div>`).join('')}</div>`;
+    if (panel.innerHTML !== html) {
+      const focused = panel.contains(document.activeElement) ? document.activeElement.dataset.shelter : null;
+      panel.innerHTML = html;
+      if (focused) [...panel.querySelectorAll('[data-shelter]')].find(button => button.dataset.shelter === focused)?.focus({ preventScroll: true });
+    }
+  }
+
+  $('birdPanel').addEventListener('click', event => {
+    const button = event.target.closest('[data-shelter]');
+    if (!button || !['question', 'reward'].includes(session?.phase) || !['rush', 'warning', 'attack'].includes(session.birdStage)) return;
+    const team = session.teams.find(item => item.id === button.dataset.shelter);
+    if (!team) return;
+    team.shelterWorkers = !team.shelterWorkers;
+    updateBirdPanel();
+    saveState();
+  });
 
   function questionAtCursor() {
     return data.game.questions[session.questionCursor % data.game.questions.length];
@@ -1473,6 +1508,13 @@
         update(time, delta) {
           if (!session || document.hidden) return;
           const reports = core.advanceEconomy(session, Math.min(delta, 250));
+          if (reports.some(report => report.returned)) { updateWorld(); updateHUD(); saveState(); }
+          if (core.advanceBirdEvent(session, Math.min(delta, 250))) {
+            updateWorld();
+            updateHUD();
+            saveState();
+          }
+          if (time - (this.lastBirdHUD || 0) > 500) { this.lastBirdHUD = time; updateBirdPanel(); }
           if (reports.some(r => r.gathered || r.eaten)) {
             updateHUD(); saveLocal();
             this.children.list.forEach(child => {
@@ -1572,7 +1614,7 @@
       scene.time.addEvent({ delay: 40, loop: true, callback: () => {
         if (!agent.active || !session) return;
         const team = session.teams.find(t => t.id === agent.getData('teamId'));
-        const progress = team?.forageProgress?.[agent.getData('workerIndex')] || 0;
+        const progress = team?.shelterWorkers ? 0 : team?.forageProgress?.[agent.getData('workerIndex')] || 0;
         const point = route.getPoint(progress);
         agent.sprite.setFlipX(point.x < agent.x); agent.setPosition(point.x, point.y);
         agent.cargo?.setVisible(progress >= .5);
@@ -1833,7 +1875,7 @@
       else animateAnt(ant, path, recruit ? 0 : index, preservePositions && !recruit ? previous.workers[index] : null, recruit ? 1400 : 0);
       if (recruit) revealRecruit(ant);
     }
-    for (let index = 0; index < team.soldiers; index += 1) {
+    for (let index = 0; index < core.homeGuards(team); index += 1) {
       const room = guards[Math.floor(index / 8)] || nursery;
       const slot = guards[Math.floor(index / 8)] ? index % 8 : index - guards.length * 8;
       const x = room.x + ((slot % 4) - 1.5) * roomWidth * .19;
@@ -2006,6 +2048,7 @@
       }, index, previous.get(session.teams[index].id));
     }
     addStormAtmosphere();
+    drawBirdWave();
     $('worldViewport').dataset.layout = 'shared-surface';
     $('worldViewport').dataset.surfaceColonies = String(count);
     $('worldViewport').setAttribute('aria-label', `Colony world. All ${count} colony entrances begin at the meadow surface. The largest colony has ${largestRoomCount} rooms.`);
@@ -2015,6 +2058,28 @@
       const soldiers = view.ants.filter(ant => ant.getData('role') === 'soldier').length;
       return `${team.name}: 1 queen, ${workers} workers, ${soldiers} guard ants. ${view.rooms.length} rooms: ${view.rooms.map(room => room.label).join(', ')}. ${core.fortification(team).name} walls. ${core.TEAM_COLORS[team.colorIndex].name} ants.`;
     }).join(' '));
+  }
+
+  function drawBirdWave() {
+    if (!scene || !['warning', 'attack'].includes(session.birdStage)) return;
+    const attacking = session.birdStage === 'attack';
+    session.teams.forEach(team => {
+      const view = colonyViews.get(team.id);
+      if (!view) return;
+      for (let index = 0; index < (team.birdsIncoming || core.birdCount(team)); index += 1) {
+        const x = view.zone.x + view.zone.w * (index + 1) / ((team.birdsIncoming || core.birdCount(team)) + 1);
+        const bird = scene.add.container(x, 30).setDepth(18);
+        const body = scene.add.ellipse(0, 0, 39, 21, 0x73523b);
+        const head = scene.add.circle(18, -7, 10, 0x493628);
+        const beak = scene.add.triangle(29, -5, 0, 0, 13, 5, 0, 9, 0xe1b54d);
+        const eye = scene.add.circle(21, -10, 2, 0xffffff);
+        const wing = scene.add.ellipse(-5, -10, 39, 15, 0x342b27).setOrigin(.9, .5);
+        bird.add([body, head, beak, eye, wing]);
+        scene.tweens.add({ targets: wing, angle: -55, duration: 240, yoyo: true, repeat: -1 });
+        const defended = core.homeGuards(team) >= (index + 1) * 2;
+        scene.tweens.add({ targets: bird, y: attacking ? defended ? 75 : 120 : 48, x: x + 24, duration: attacking ? 1300 : 2000, delay: index * 180, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      }
+    });
   }
 
   function celebrate(teamId, kind, effectText = '') {

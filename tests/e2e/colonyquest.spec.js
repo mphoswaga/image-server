@@ -10,6 +10,36 @@ const questions = [
   { question: 'Which animal might live in a pond?', options: ['Frog', 'Camel', 'Lion', 'Penguin'], correctIndex: 0, explanation: 'A frog can live in a pond.' },
 ];
 
+test('bird warning lets teachers shelter a colony without stopping questions', async ({ page }, testInfo) => {
+  test.skip(!['windows-100', 'mobile'].includes(testInfo.project.name));
+  const colonies = [colonyCore.createTeam({ name: 'Leaf Colony' }, 0), colonyCore.createTeam({ name: 'River Colony' }, 1)];
+  colonies.forEach(team => { team.workers = 4; team.birdsIncoming = 1; });
+  let saved = colonyCore.normalizeSession({ phase: 'question', introSeen: true, teams: colonies, rainOccurred: true, birdStage: 'attack', birdStageMs: 7000 });
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.route(/\/api\/game\/cq-birds\/colonyquest(?:\/session)?$/, async route => {
+    if (route.request().method() === 'PUT') {
+      saved = colonyCore.normalizeSession(route.request().postDataJSON().session);
+      return route.fulfill({ json: { ok: true } });
+    }
+    return route.fulfill({ json: { game: { id: 'cq-birds', lessonTitle: 'Habitats', questions, colonyquest: { teamCount: 2, rounds: 5, sound: false, teams: colonies } }, session: saved } });
+  });
+  await page.goto('/colonyquest/cq-birds');
+  await page.locator('#resumeBtn').click();
+  await expect(page.locator('#birdPanel')).toContainText('Birds are swooping');
+  await expect(page.locator('#questionOverlay')).toBeVisible();
+  await page.locator('[data-shelter="team-1"]').click();
+  await expect.poll(() => saved.teams[0].shelterWorkers).toBe(true);
+  const panel = await page.locator('#birdPanel').boundingBox();
+  const question = await page.locator('.question-dialog').boundingBox();
+  expect(panel.y + panel.height).toBeLessThanOrEqual(question.y);
+  await page.screenshot({ path: testInfo.outputPath('birds.png') });
+  await expect(page.locator('#birdPanel')).toContainText('The birds have flown away', { timeout: 15000 });
+  await expect.poll(() => saved.birdsOccurred).toBe(true);
+  expect(saved.teams.map(team => team.workers)).toEqual([4, 2]);
+  expect(errors).toEqual([]);
+});
+
 test('ColonyQuest shows one opening mission then moves from growth to the next question without message clicks', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'windows-100', 'One classroom-screen browser covers the streamlined game loop.');
   const colonies = [colonyCore.createTeam({ name: 'Leaf Colony' }, 0), colonyCore.createTeam({ name: 'River Colony', colorIndex: 1 }, 1)];
