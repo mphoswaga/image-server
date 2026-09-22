@@ -130,7 +130,6 @@ test('the classroom loop opens with one mission briefing and keeps later growth 
   assert.match(client, /WATER ENTERING/);
   assert.match(client, /groundImpact\(secondX, \.9\)/);
   assert.match(client, /setTimeout\(showFinal, reduced \? 2400 : 9600\)/);
-  assert.match(client, /tone\(note, 2\.8, \.018/);
   const nextTurn = client.slice(client.indexOf('async function nextTurn'), client.indexOf('function showRoundStory'));
   assert.doesNotMatch(nextTurn, /showRoundStory\(event\);/);
 });

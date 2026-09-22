@@ -121,6 +121,8 @@
 
     <button id="teacherHandle" class="teacher-handle" type="button">Teacher controls</button>
     <div id="teacherTray" class="teacher-tray">
+      <label for="musicVolume" id="musicVolumeLabel">Music 60%</label>
+      <input id="musicVolume" type="range" min="0" max="100" value="60" aria-label="Background music volume">
       <button id="markCorrectBtn" class="good" type="button">Mark correct</button><button id="markWrongBtn" class="warn" type="button">Mark incorrect</button><button id="nextStudentBtn" type="button">Next learner</button><button id="randomStudentBtn" type="button">Random learner</button><select id="studentPick" aria-label="Choose learner"><option value="">Choose learner</option></select><button id="skipQuestionBtn" type="button">Skip question</button><button id="endGameBtn" class="danger" type="button">End game</button><button id="closeTrayBtn" type="button">Close</button><span id="saveIndicator" class="save-indicator">Ready</span>
     </div>
     <div id="toast" class="toast hidden" role="status"></div>
@@ -128,6 +130,6 @@
 
   <script src="/vendor/phaser.min.js"></script>
   <script src="/colonyquest-core.js?v=15"></script>
-  <script src="/colonyquest.js?v=19"></script>
+  <script src="/colonyquest.js?v=20"></script>
 </body>
 </html>

@@ -10,6 +10,45 @@ const questions = [
   { question: 'Which animal might live in a pond?', options: ['Frog', 'Camel', 'Lion', 'Penguin'], correctIndex: 0, explanation: 'A frog can live in a pond.' },
 ];
 
+test('meadow music plays and obeys mute, pause and volume controls', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100');
+  await page.addInitScript(() => {
+    window.musicStarts = 0;
+    const original = OscillatorNode.prototype.start;
+    OscillatorNode.prototype.start = function(...args) { window.musicStarts++; return original.apply(this, args); };
+  });
+  const colonies = [colonyCore.createTeam({}, 0), colonyCore.createTeam({}, 1)];
+  let saved = colonyCore.normalizeSession({ phase: 'question', introSeen: true, teams: colonies });
+  await page.route(/\/api\/game\/cq-music\/colonyquest(?:\/session)?$/, async route => {
+    if (route.request().method() === 'PUT') {
+      saved = colonyCore.normalizeSession(route.request().postDataJSON().session);
+      return route.fulfill({ json: { ok: true } });
+    }
+    return route.fulfill({ json: { game: { id: 'cq-music', lessonTitle: 'Habitats', questions, colonyquest: { teamCount: 2, rounds: 5, sound: true, teams: colonies } }, session: saved } });
+  });
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/colonyquest/cq-music');
+  await page.locator('#resumeBtn').click();
+  await expect.poll(() => page.evaluate(() => window.musicStarts)).toBeGreaterThan(6);
+  await page.locator('#muteBtn').click();
+  const muted = await page.evaluate(() => window.musicStarts);
+  await page.waitForTimeout(700);
+  expect(await page.evaluate(() => window.musicStarts)).toBe(muted);
+  await page.locator('#muteBtn').click();
+  await expect.poll(() => page.evaluate(() => window.musicStarts)).toBeGreaterThan(muted);
+  await page.locator('#teacherHandle').click();
+  await page.locator('#musicVolume').fill('25');
+  await expect(page.locator('#musicVolumeLabel')).toHaveText('Music 25%');
+  await page.locator('#pauseBtn').click();
+  const paused = await page.evaluate(() => window.musicStarts);
+  await page.waitForTimeout(700);
+  expect(await page.evaluate(() => window.musicStarts)).toBe(paused);
+  await page.locator('#pauseBtn').click();
+  await expect.poll(() => page.evaluate(() => window.musicStarts)).toBeGreaterThan(paused);
+  expect(errors).toEqual([]);
+});
+
 test('bird warning lets teachers shelter a colony without stopping questions', async ({ page }, testInfo) => {
   test.skip(!['windows-100', 'mobile'].includes(testInfo.project.name));
   const colonies = [colonyCore.createTeam({ name: 'Leaf Colony' }, 0), colonyCore.createTeam({ name: 'River Colony' }, 1)];

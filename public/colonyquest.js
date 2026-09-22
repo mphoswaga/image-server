@@ -27,6 +27,10 @@
   let audioContext = null;
   let audioOutput = null;
   let ambientTimer = null;
+  let musicBus = null;
+  let musicStep = 0;
+  let musicNextTime = 0;
+  const musicVoices = new Set();
   let worldStoryAction = null;
   let worldStoryTimer = null;
   let worldEventPresentation = [];
@@ -1154,6 +1158,7 @@
     }
     const stomp = core.applyHumanStomp(session);
     session.phase = 'ended';
+    stopAmbient();
     session.endedAt = new Date().toISOString();
     session.stormSeen = true;
     setOverlay(null);
@@ -2789,19 +2794,55 @@
   }
 
   function startAmbient() {
-    if (!soundOn || ambientTimer || (session && session.phase === 'paused')) return;
-    const play = () => {
-      if (!soundOn || !audioContext) return;
-      const progress = session ? turnProgress() : 0;
-      const notes = session && session.warsActive ? [146, 174, 220] : progress >= .68 ? [130, 174, 196] : [174, 220, 261];
-      notes.forEach((note, index) => tone(note, 2.8, .018, index * .08));
+    if (!soundOn || !audioContext || !audioOutput || ambientTimer || document.hidden || !session || ['paused', 'ended'].includes(session.phase)) return;
+    if (!musicBus) { musicBus = audioContext.createGain(); musicBus.connect(audioOutput); }
+    musicBus.gain.setValueAtTime(Number($('musicVolume').value) / 100, audioContext.currentTime);
+    // Original 104 BPM meadow theme: soft plucks, warm chords and a light bass pulse.
+    // Schedule against the audio clock, rather than relying on timer precision.
+    const beat = 60 / 104;
+    const chords = [[60,64,67], [55,59,62], [57,60,64], [53,57,60]];
+    const melody = [72,0,76,79,76,0,74,72, 71,0,74,79,74,0,71,67, 69,0,72,76,79,76,72,0, 69,72,77,76,74,0,72,0];
+    const note = (midi, time, duration, volume, type = 'sine') => {
+      const oscillator = audioContext.createOscillator();
+      const envelope = audioContext.createGain();
+      oscillator.type = type;
+      oscillator.frequency.value = 440 * 2 ** ((midi - 69) / 12);
+      envelope.gain.setValueAtTime(.0001, time);
+      envelope.gain.exponentialRampToValueAtTime(volume, time + .025);
+      envelope.gain.exponentialRampToValueAtTime(.0001, time + duration);
+      oscillator.connect(envelope); envelope.connect(musicBus);
+      musicVoices.add(oscillator);
+      oscillator.onended = () => { musicVoices.delete(oscillator); oscillator.disconnect(); envelope.disconnect(); };
+      oscillator.start(time); oscillator.stop(time + duration + .03);
     };
-    play(); ambientTimer = setInterval(play, 3600);
+    musicNextTime = audioContext.currentTime + .05;
+    const schedule = () => {
+      if (musicNextTime < audioContext.currentTime) musicNextTime = audioContext.currentTime + .05;
+      while (musicNextTime < audioContext.currentTime + .15) {
+        const step = musicStep % 32;
+        const chord = chords[Math.floor(step / 8)];
+        const duck = session.birdStage === 'attack' || session.birdStage === 'rain' || session.phase === 'event' ? .5 : 1;
+        if (melody[step]) note(melody[step], musicNextTime, beat * .7, .033 * duck, 'triangle');
+        if (step % 8 === 0) chord.forEach(midi => note(midi, musicNextTime, beat * 3.6, .012 * duck));
+        if (step % 4 === 0) note(chord[0] - 12, musicNextTime, beat * .8, .035 * duck);
+        musicNextTime += beat / 2;
+        musicStep += 1;
+      }
+    };
+    schedule(); ambientTimer = setInterval(schedule, 50);
   }
 
   function stopAmbient() {
     clearInterval(ambientTimer); ambientTimer = null;
+    for (const oscillator of musicVoices) { try { oscillator.stop(); } catch {} }
+    musicVoices.clear();
   }
+
+  $('musicVolume').addEventListener('input', () => {
+    const volume = Number($('musicVolume').value);
+    $('musicVolumeLabel').textContent = `Music ${volume}%`;
+    if (musicBus) musicBus.gain.setTargetAtTime(volume / 100, audioContext.currentTime, .05);
+  });
 
   function toggleSound() {
     soundOn = !soundOn;
@@ -2910,7 +2951,10 @@
   // A fetch started while the page is being hidden is not guaranteed to finish
   // (notably during WebKit reloads). State transitions already save remotely;
   // keep the synchronous local snapshot as the reliable navigation fallback.
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && session) saveLocal(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { if (session) saveLocal(); stopAmbient(); }
+    else if (!$('gameScreen').classList.contains('hidden')) startAmbient();
+  });
 
   (async function load() {
     try {
