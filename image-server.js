@@ -54,7 +54,7 @@ function safeAnimate(buffer, band) {
   try { return animateBuffer(buffer, band); }
   catch (err) { console.log('animation skipped:', err.message); return buffer; }
 }
-const { sessionSecret, signup, login, findOrCreateSocialUser, issueToken, verifyToken, getUserById, userHasEducScopeIdentity, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME, createPasswordResetToken, resetPasswordWithToken, listPasskeys, deletePasskey } = require('./auth');
+const { sessionSecret, signup, login, findOrCreateSocialUser, issueToken, verifyToken, getUserById, listUsers, deleteUser, userHasEducScopeIdentity, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME, createPasswordResetToken, resetPasswordWithToken, listPasskeys, deletePasskey } = require('./auth');
 const { sendEmail } = require('./email');
 const webauthn = require('./webauthn');
 const socialAuth = require('./social-auth');
@@ -434,6 +434,15 @@ app.post('/api/admin/teacher-invites/:code/upgrade', requireAdmin, (req, res) =>
   if (!invite?.claimedBy) return res.status(400).json({ error: 'The teacher must accept this invitation first.' });
   teacherAccess.upgrade(invite.claimedBy);
   res.json({ ok: true });
+});
+app.get('/api/admin/accounts', requireAdmin, (req, res) => {
+  res.json({ users: listUsers().sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))) });
+});
+app.delete('/api/admin/accounts/:id', requireAdmin, (req, res) => {
+  try {
+    const user = deleteUser(req.params.id, req.userId);
+    res.json({ ok: true, user });
+  } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
 app.post('/api/signup', async (req, res) => {

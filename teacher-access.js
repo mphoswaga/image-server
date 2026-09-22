@@ -47,6 +47,26 @@ function upgrade(id) {
   data.accounts[id] = { mode: 'full', updatedAt: new Date().toISOString() };
   writeJsonAtomic(file, data);
 }
+function removeAccount(id) {
+  const userId = String(id || '');
+  if (!userId) return false;
+  const data = read();
+  let changed = false;
+  if (data.accounts[userId]) {
+    delete data.accounts[userId];
+    changed = true;
+  }
+  for (const invite of Object.values(data.invites)) {
+    if (invite.claimedBy === userId) {
+      invite.claimedBy = null;
+      invite.revoked = true;
+      invite.revokedAt = new Date().toISOString();
+      changed = true;
+    }
+  }
+  if (changed) writeJsonAtomic(file, data);
+  return changed;
+}
 function listInvites() { return Object.values(read().invites); }
 function revoke(code) {
   const data = read();
@@ -58,4 +78,4 @@ function gamesRouteAllowed(url) {
   const p = String(url).split('?')[0];
   return /^\/api\/(?:me$|teacher-access(?:\/|$)|game(?:s)?(?:\/|$)|rosters?(?:\/|$)|student(?:s)?(?:\/|$)|billing(?:\/|$)|credits(?:\/|$)|config\/apps$|webauthn(?:\/|$)|logout$)/.test(p);
 }
-module.exports = { accessFor, createInvite, previewInvite, claimInvite, upgrade, listInvites, revoke, gamesRouteAllowed };
+module.exports = { accessFor, createInvite, previewInvite, claimInvite, upgrade, removeAccount, listInvites, revoke, gamesRouteAllowed };

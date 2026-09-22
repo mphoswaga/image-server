@@ -52,3 +52,19 @@ test('EducScope sign-in keeps games access on the same teacher identity',async()
   access.upgrade(teacher.id);
   assert.equal(auth.getUserById(teacher.id).accessMode,'full');
 });
+test('admin account deletion removes local user and clears claimed invite access',async()=>{
+  const auth=require('../auth');
+  const admin=await auth.signup('delete-admin@example.test','Test-password-123!','Admin');
+  const invite=access.createInvite('games',admin.id);
+  const teacher=await auth.signup('remove-me@example.test','Test-password-123!','Remove Me');
+  access.claimInvite(invite.code,teacher);
+  assert.equal(auth.getUserById(teacher.id).accessMode,'games');
+  assert.throws(()=>auth.deleteUser(admin.id,admin.id),/currently using/);
+  const removed=auth.deleteUser(teacher.id,admin.id);
+  assert.equal(removed.email,'remove-me@example.test');
+  assert.equal(auth.getUserById(teacher.id),null);
+  assert.equal(access.accessFor(teacher.id),'full');
+  const saved=access.listInvites().find(i=>i.code===invite.code);
+  assert.equal(saved.claimedBy,null);
+  assert.equal(saved.revoked,true);
+});

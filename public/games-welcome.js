@@ -72,13 +72,24 @@
   admin.className='games-help';
   admin.innerHTML='<h3>Invite a teacher</h3><p>Give each teacher their own invitation. They create an EducScope account and keep it when you upgrade their access. Invitations expire after 30 days.</p><label for="teacherInviteMode">Workspace</label> <select id="teacherInviteMode"><option value="games">Games only</option><option value="full">Full LessonScope</option></select> <button type="button" id="createTeacherInvite" class="btn accent" style="width:auto">Create invitation</button><p id="teacherInviteStatus" role="status"></p><div id="teacherInviteList"></div>';
   el('adminPanel').insertBefore(admin, el('adminPanel').children[1]);
+  const accounts=document.createElement('section');
+  accounts.className='games-help';
+  accounts.innerHTML='<h3>Teacher accounts</h3><p>Remove an EducScope-linked teacher from LessonScope when an account was created by mistake. This also clears their games/full access setting here.</p><p id="teacherAccountStatus" role="status"></p><div id="teacherAccountList"></div>';
+  el('adminPanel').insertBefore(accounts, admin.nextSibling);
   async function loadInvites(){
     try {
       const data=await json('/api/admin/teacher-invites');
       el('teacherInviteList').innerHTML=data.invites.slice().reverse().map(i=>`<div class="invite-row"><span><strong>${escape(i.teacher?.name || (i.mode==='games'?'Games invitation':'Full access invitation'))}</strong><br>${i.teacher ? escape(i.teacher.email)+' · '+(i.teacher.accessMode==='games'?'Games only':'Full access') : i.revoked?'Withdrawn':Date.parse(i.expiresAt)<=Date.now()?'Expired':i.claimedBy?'Accepted':'Ready to share'}</span>${!i.claimedBy&&!i.revoked&&Date.parse(i.expiresAt)>Date.now()?`<button class="btn ghost" data-copy="${i.code}">Copy link</button><button class="btn ghost" data-revoke="${i.code}">Withdraw</button>`:''}${i.teacher?.accessMode==='games'?`<button class="btn ghost" data-upgrade="${i.code}">Upgrade to full access</button>`:''}</div>`).join('')||'<p>No invitations yet.</p>';
     }catch(e){el('teacherInviteStatus').textContent=e.message;}
   }
-  el('adminBtn').addEventListener('click',loadInvites);
+  async function loadAccounts(){
+    try {
+      const data=await json('/api/admin/accounts');
+      const rows=(data.users||[]).filter(u=>u.role!=='student');
+      el('teacherAccountList').innerHTML=rows.map(u=>`<div class="invite-row"><span><strong>${escape(u.name||u.email)}</strong><br>${escape(u.email)} · ${escape(u.role||'teacher')} · ${u.accessMode==='games'?'Games only':'Full access'}</span>${window.currentUser&&u.id===window.currentUser.id?'<span class="hint">Current account</span>':`<button class="btn ghost" data-delete-account="${escape(u.id)}" data-delete-email="${escape(u.email)}">Delete</button>`}</div>`).join('')||'<p>No teacher accounts yet.</p>';
+    }catch(e){el('teacherAccountStatus').textContent=e.message;}
+  }
+  el('adminBtn').addEventListener('click',()=>{loadInvites();loadAccounts();});
   el('createTeacherInvite').addEventListener('click',async()=>{
     el('createTeacherInvite').disabled=true;
     try{await json('/api/admin/teacher-invites',post({mode:el('teacherInviteMode').value}));el('teacherInviteStatus').textContent='Invitation ready. Copy the link below and share it with the teacher.';await loadInvites();}
@@ -94,5 +105,16 @@
       if(b.dataset.revoke)await json('/api/admin/teacher-invites/'+b.dataset.revoke,{method:'DELETE'});
       await loadInvites();
     }catch(err){el('teacherInviteStatus').textContent=err.message;b.disabled=false;}
+  });
+  el('teacherAccountList').addEventListener('click',async e=>{
+    const b=e.target.closest('button');if(!b||!b.dataset.deleteAccount)return;
+    const email=b.dataset.deleteEmail||'this account';
+    if(!confirm(`Delete ${email} from LessonScope? Their local LessonScope access will be removed.`))return;
+    try{
+      b.disabled=true;
+      await json('/api/admin/accounts/'+encodeURIComponent(b.dataset.deleteAccount),{method:'DELETE'});
+      el('teacherAccountStatus').textContent='Account removed from LessonScope.';
+      await Promise.all([loadAccounts(),loadInvites()]);
+    }catch(err){el('teacherAccountStatus').textContent=err.message;b.disabled=false;}
   });
 })();

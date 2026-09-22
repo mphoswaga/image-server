@@ -110,6 +110,23 @@ function getUserById(id) {
   return u ? publicUser(u) : null;
 }
 
+function listUsers() {
+  return Object.values(loadUsers()).map(publicUser);
+}
+
+function deleteUser(userId, requestedBy) {
+  const id = String(userId || '');
+  if (!id) throw new Error('Choose an account to delete.');
+  if (id === requestedBy) throw new Error('You cannot delete the account you are currently using.');
+  const users = loadUsers();
+  const existing = users[id];
+  if (!existing) throw new Error('Account not found.');
+  delete users[id];
+  saveUsers(users);
+  try { require('./teacher-access').removeAccount(id); } catch {}
+  return publicUser(existing);
+}
+
 // Whether this account was ever signed in via EducScope. Used to propagate a
 // suite-wide sign-out: only EducScope-linked accounts get signed out locally
 // when the shared EducScope session has ended.
@@ -256,4 +273,4 @@ function requireAdmin(req, res, next) {
 // minting key material of their own (see studentHandle in image-server.js).
 function sessionSecret() { return SECRET; }
 
-module.exports = { sessionSecret, signup, login, findOrCreateSocialUser, issueToken, verifyToken, getUserById, userHasEducScopeIdentity, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME, createPasswordResetToken, resetPasswordWithToken, addPasskey, listPasskeys, deletePasskey, findByCredentialId, updatePasskeyCounter };
+module.exports = { sessionSecret, signup, login, findOrCreateSocialUser, issueToken, verifyToken, getUserById, listUsers, deleteUser, userHasEducScopeIdentity, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME, createPasswordResetToken, resetPasswordWithToken, addPasskey, listPasskeys, deletePasskey, findByCredentialId, updatePasskeyCounter };
