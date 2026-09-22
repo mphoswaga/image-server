@@ -20,10 +20,13 @@ test('invites persist access, allow idempotent claims, reject reuse and preserve
   const next=access.createInvite('games','admin');
   assert.equal(access.claimInvite(next.code,teacher),'full');
 });
-test('old accounts and admins are never downgraded; students cannot claim',()=>{
+test('games invitations can scope existing teachers unless they are upgraded or admins',()=>{
   const invite=access.createInvite('games','admin');
-  assert.equal(access.claimInvite(invite.code,{id:'old',role:'teacher',createdAt:'2020-01-01'}),'full');
-  assert.throws(()=>access.claimInvite(invite.code,{id:'student',role:'student'}),/teacher/);
+  assert.equal(access.claimInvite(invite.code,{id:'old',role:'teacher',createdAt:'2020-01-01'}),'games');
+  const upgraded=access.createInvite('games','admin');
+  access.upgrade('explicit-full');
+  assert.equal(access.claimInvite(upgraded.code,{id:'explicit-full',role:'teacher',createdAt:'2020-01-01'}),'full');
+  assert.throws(()=>access.claimInvite(access.createInvite('games','admin').code,{id:'student',role:'student'}),/teacher/);
   assert.equal(access.claimInvite(access.createInvite('games','admin').code,{id:'admin',role:'admin'}),'full');
 });
 test('invalid, withdrawn, and expired invitations fail without assigning access',()=>{

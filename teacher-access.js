@@ -33,10 +33,12 @@ function claimInvite(code, user) {
   const data = read();
   const invite = validInvite(data, code, user.id);
   if (invite.claimedBy === user.id) return accessFor(user.id);
-  // An invite cannot downgrade an existing full account or an administrator.
+  // Admins and explicitly-upgraded teachers keep full access. Otherwise the
+  // invitation decides the workspace. This lets a teacher who signs up through
+  // a games invitation, or recreates an EducScope account with the same email,
+  // land in the simple games workspace instead of the full LessonScope planner.
   const prior = data.accounts[user.id];
-  const establishedFull = !prior && Date.parse(user.createdAt || 0) < Date.parse(invite.createdAt);
-  const mode = user.role === 'admin' || prior?.mode === 'full' || establishedFull ? 'full' : invite.mode;
+  const mode = user.role === 'admin' || prior?.mode === 'full' ? 'full' : invite.mode;
   data.accounts[user.id] = { mode, updatedAt: new Date().toISOString() };
   invite.claimedBy = user.id;
   writeJsonAtomic(file, data);
