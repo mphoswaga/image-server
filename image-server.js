@@ -407,6 +407,35 @@ function educscopeOnlyResponse(res) {
   });
 }
 
+const teacherAccess = require('./teacher-access');
+app.get('/api/teacher-invite/:code', (req, res) => {
+  try { res.json(teacherAccess.previewInvite(req.params.code)); }
+  catch (err) { res.status(400).json({ error: err.message }); }
+});
+app.post('/api/teacher-access/claim', requireAuth, (req, res) => {
+  try {
+    teacherAccess.claimInvite(req.body?.code, req.user);
+    res.json({ user: getUserById(req.userId) });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+app.get('/api/admin/teacher-invites', requireAdmin, (req, res) => {
+  res.json({ invites: teacherAccess.listInvites().map(i => ({ ...i, teacher: i.claimedBy ? getUserById(i.claimedBy) : null })) });
+});
+app.post('/api/admin/teacher-invites', requireAdmin, (req, res) => {
+  try { res.json({ invite: teacherAccess.createInvite(req.body?.mode, req.userId) }); }
+  catch (err) { res.status(400).json({ error: err.message }); }
+});
+app.delete('/api/admin/teacher-invites/:code', requireAdmin, (req, res) => {
+  try { teacherAccess.revoke(req.params.code); res.json({ ok: true }); }
+  catch (err) { res.status(400).json({ error: err.message }); }
+});
+app.post('/api/admin/teacher-invites/:code/upgrade', requireAdmin, (req, res) => {
+  const invite = teacherAccess.listInvites().find(i => i.code === req.params.code);
+  if (!invite?.claimedBy) return res.status(400).json({ error: 'The teacher must accept this invitation first.' });
+  teacherAccess.upgrade(invite.claimedBy);
+  res.json({ ok: true });
+});
+
 app.post('/api/signup', async (req, res) => {
   if (educscopeOnlyAuthEnabled()) return educscopeOnlyResponse(res);
   try {
@@ -4699,7 +4728,7 @@ app.post('/api/game', requireAuth, generationLimiter, async (req, res) => {
 });
 
 // Create a game from the teacher's own uploaded PowerPoint (no deck generation needed).
-app.post('/api/game/from-pptx', requireAuth, generationLimiter, upload.single('file'), requireUploads('slides'), async (req, res) => {
+app.post('/api/game/from-pptx', requireAuth, generationLimiter, upload.single('file'), requireUploads('game'), async (req, res) => {
   if (req.user.role === 'student') return res.status(403).json({ error: 'Teachers only.' });
   if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
   const subject = String(req.body && req.body.subject || '').trim().toLowerCase();
@@ -4715,6 +4744,7 @@ app.post('/api/game/from-pptx', requireAuth, generationLimiter, upload.single('f
   if (block) return res.status(402).json(block);
   try {
     const lessonPlanText = await extractText(req.file.buffer, req.file.originalname);
+    if (!String(lessonPlanText || '').trim()) throw new Error('No readable text was found. Please upload a lesson with selectable text.');
     const game = await generateGame({ subject, topic, grade, objectives: '', lessonPlanText, questionCount });
     const mode = requestedGameMode(req.body);
     const rec = games.createGame({ teacherId: req.userId, teacherName: req.user.name, lessonTitle: topic, subject, topic, grade, game, rosterIds, cutoffAt, mode });

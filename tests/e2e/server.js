@@ -23,6 +23,7 @@ const accountMock = http.createServer((req, res) => {
 accountMock.listen(ACCOUNT_PORT, '127.0.0.1');
 
 process.env.NODE_ENV = 'test';
+process.env.ADMIN_EMAIL = 'games-admin@example.test';
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lessonscope-e2e-'));
 process.env.PRACTICE_ENABLED = 'true';
 process.env.LESSONSCOPE_LOCAL_AUTH_ENABLED = 'true';

@@ -31,6 +31,7 @@ const GROUPS = {
   planning: new Set(['.xls', '.xlsx']),
   source: new Set(['.docx', '.pptx', '.pdf', '.xls', '.xlsx', '.csv', '.txt', '.md', '.png', '.jpg', '.jpeg', '.webp']),
   slides: new Set(['.ppt', '.pptx']),
+  game: new Set(['.ppt', '.pptx', '.docx', '.pdf', '.txt', '.md']),
   roster: new Set(['.csv', '.xls', '.xlsx']),
 };
 

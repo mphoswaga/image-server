@@ -1,0 +1,54 @@
+const { test, after } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'teacher-access-'));
+process.env.DATA_DIR = dir;
+const access = require('../teacher-access');
+after(() => fs.rmSync(dir, { recursive:true, force:true }));
+test('invites persist access, allow idempotent claims, reject reuse and preserve upgrades', () => {
+  const invite=access.createInvite('games','admin');
+  const teacher={id:'new',role:'teacher',createdAt:new Date(Date.now()+10).toISOString()};
+  assert.equal(access.previewInvite(invite.code).mode,'games');
+  assert.equal(access.claimInvite(invite.code,teacher),'games');
+  assert.equal(access.accessFor('new'),'games');
+  assert.equal(access.claimInvite(invite.code,teacher),'games');
+  assert.throws(()=>access.claimInvite(invite.code,{...teacher,id:'other'}),/already/);
+  access.upgrade('new');
+  assert.equal(access.claimInvite(invite.code,teacher),'full');
+  const next=access.createInvite('games','admin');
+  assert.equal(access.claimInvite(next.code,teacher),'full');
+});
+test('old accounts and admins are never downgraded; students cannot claim',()=>{
+  const invite=access.createInvite('games','admin');
+  assert.equal(access.claimInvite(invite.code,{id:'old',role:'teacher',createdAt:'2020-01-01'}),'full');
+  assert.throws(()=>access.claimInvite(invite.code,{id:'student',role:'student'}),/teacher/);
+  assert.equal(access.claimInvite(access.createInvite('games','admin').code,{id:'admin',role:'admin'}),'full');
+});
+test('invalid, withdrawn, and expired invitations fail without assigning access',()=>{
+  assert.throws(()=>access.previewInvite('unknown'),/invalid/);
+  const invite=access.createInvite('games','admin');access.revoke(invite.code);
+  assert.throws(()=>access.previewInvite(invite.code),/withdrawn/);
+  const data=JSON.parse(fs.readFileSync(path.join(dir,'teacher-access.json'),'utf8'));
+  data.invites[invite.code].expiresAt='2020-01-01';
+  fs.writeFileSync(path.join(dir,'teacher-access.json'),JSON.stringify(data));
+  assert.throws(()=>access.claimInvite(invite.code,{id:'new2',role:'teacher'}),/expired/);
+});
+test('games access permits game setup and rosters but blocks full-workspace endpoints',()=>{
+  for(const p of ['/api/games','/api/game/1/fishquest/start','/api/game/1/colonyquest','/api/roster/1/pins','/api/credits','/api/me']) assert.equal(access.gamesRouteAllowed(p),true,p);
+  for(const p of ['/api/lesson-plan','/api/assessment','/api/admin/teacher-invites','/api/assistant/message','/api/templates']) assert.equal(access.gamesRouteAllowed(p),false,p);
+});
+test('EducScope sign-in keeps games access on the same teacher identity',async()=>{
+  const auth=require('../auth');
+  await auth.signup('bootstrap@example.test','Test-password-123!','Admin');
+  const invite=access.createInvite('games','admin');
+  const teacher=await auth.signup('games@example.test','Test-password-123!','Teacher');
+  access.claimInvite(invite.code,teacher);
+  const linked=await auth.findOrCreateSocialUser({provider:'educscope',providerUserId:'educscope-test-id',email:teacher.email,name:'Teacher'});
+  assert.equal(linked.id,teacher.id);assert.equal(linked.accessMode,'games');
+  const again=await auth.findOrCreateSocialUser({provider:'educscope',providerUserId:'educscope-test-id',email:teacher.email,name:'Teacher'});
+  assert.equal(again.accessMode,'games');
+  access.upgrade(teacher.id);
+  assert.equal(auth.getUserById(teacher.id).accessMode,'full');
+});

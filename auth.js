@@ -99,7 +99,7 @@ async function findOrCreateSocialUser({ provider, providerUserId, email, name, o
   return publicUser(users[id]);
 }
 
-function publicUser(u) { return { id: u.id, email: u.email, name: u.name, role: u.role || 'teacher', organizationId: u.organizationId || '' }; }
+function publicUser(u) { return { id: u.id, email: u.email, name: u.name, role: u.role || 'teacher', organizationId: u.organizationId || '', createdAt: u.createdAt, accessMode: require('./teacher-access').accessFor(u.id) }; }
 
 function issueToken(userId) { return jwt.sign({ uid: userId }, SECRET, { expiresIn: TOKEN_TTL }); }
 function verifyToken(token) {
@@ -238,6 +238,9 @@ function requireAuth(req, res, next) {
   if (!user) return res.status(401).json({ error: 'Not signed in.' });
   req.userId = uid;
   req.user = user;
+  if (user.role !== 'admin' && user.accessMode === 'games' && !require('./teacher-access').gamesRouteAllowed(req.originalUrl || req.url)) {
+    return res.status(403).json({ error: 'This feature needs full LessonScope access. Contact your administrator to upgrade your account.', needsFullAccess: true });
+  }
   next();
 }
 
