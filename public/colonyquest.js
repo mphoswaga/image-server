@@ -44,7 +44,7 @@
     guardian: '/assets/colonyquest/guardian.webp',
   };
   const STORY = {
-    intro: 'Dark clouds are moving toward Moonroot Meadow. Queen Aurelia has one worker, one room, and almost no shelter. Pip the scout needs your help. Answer questions to guide the ants. Each right answer lets your team make one important choice. Grow food, wake workers, dig rooms, train guards, and strengthen the walls before the Great Rain arrives. The colony that learns, plans, and survives best will carry the Ancient Acorn.',
+    intro: 'Beneath Moonroot Meadow, a tiny colony is waking. Dark clouds are gathering, food is scarce, and each team begins with only a queen, one worker, and a small room. Every correct answer earns one important choice: send workers for food, grow the colony, train guards, dig rooms, or strengthen the walls. Workers keep bringing food home, but every soldier also eats from the store. Build the walls to Level 2 before the Great Rain or water will enter the nest. Then the ground will shake as a giant human crosses the meadow. Only Level 3 walls can withstand the footsteps; weaker colonies lose 25% of their game points. Learn together, choose carefully, and survive to carry the Ancient Acorn.',
     chapters: [
       { at: 0, title: 'First Light', line: 'Help Pip wake a worker and gather the first seeds.' },
       { at: .25, title: 'Deep Roots', line: 'The wind is rising. Dig safe rooms under the old tree.' },
@@ -278,10 +278,9 @@
       turnIndex: 0,
       questionCursor: 0,
       currentTeamIndex: 0,
-      // The classroom game starts directly with a question. The original
-      // story is still available in the final results, but it must not slow
-      // down every new match with another click-through screen.
-      introSeen: true,
+      // Show the mission briefing once at the start of each new match. Saved
+      // matches remember it, so resuming never repeats the opening.
+      introSeen: false,
       warsActive: false,
       teams,
       answers: [],
@@ -452,8 +451,8 @@
   }
 
   function showStoryIntro() {
-    $('storyKicker').textContent = 'Chapter 1 - The Great Rain';
-    $('storyTitle').textContent = 'Help the tiny ant colony!';
+    $('storyKicker').textContent = 'The Moonroot Meadow Mission';
+    $('storyTitle').textContent = 'Build. Prepare. Survive.';
     $('storyText').textContent = STORY.intro;
     setOverlay('storyOverlay');
     restartStoryCrawl();
@@ -1132,6 +1131,7 @@
   }
 
   function playHumanFootsteps() {
+    $('gameScreen').classList.add('human-crossing');
     $('worldViewport').scrollTo({ top: 0, behavior: 'auto' });
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const width = scene.scale.width;
@@ -1139,6 +1139,15 @@
     const groundY = Math.min(height * .34, 225);
     const firstX = width * .4;
     const secondX = width * .72;
+    const warning = scene.add.text(width / 2, Math.max(74, groundY - 105), 'THE GROUND IS SHAKING...', {
+      fontFamily: 'Georgia, serif', fontSize: `${Math.max(24, Math.min(42, width * .032))}px`, fontStyle: 'bold',
+      color: '#fff1bb', backgroundColor: '#1c1915dd', padding: { x: 18, y: 10 }, align: 'center',
+      stroke: '#4b2e1f', strokeThickness: 4,
+    }).setOrigin(.5).setDepth(112).setAlpha(0);
+    const announce = (message, color = '#fff1bb') => {
+      warning.setText(message).setColor(color).setAlpha(1).setScale(1);
+      if (!reduced) scene.tweens.add({ targets: warning, scaleX: 1.06, scaleY: 1.06, yoyo: true, duration: 260, ease: 'Sine.easeInOut' });
+    };
     const shadow = scene.add.ellipse(-180, groundY + 5, Math.min(390, width * .35), 58, 0x151510, .46).setDepth(80);
     const leg = scene.add.image(-240, -80, 'cq-human-leg').setOrigin(.5, 1).setDepth(100);
     // Keep the trouser leg visible as well as the boot; the ants should see a
@@ -1186,26 +1195,31 @@
       collapse();
       playFootstep(.72, .72);
     } else {
-      scene.tweens.add({ targets: shadow, x: firstX, scaleX: .7, alpha: .66, duration: 760, ease: 'Cubic.easeIn' });
-      scene.tweens.add({ targets: leg, x: firstX, y: groundY, angle: 0, duration: 760, ease: 'Cubic.easeIn', onComplete: () => {
+      announce('THE GROUND IS SHAKING...');
+      playHumanRumble(2.2);
+      scene.cameras.main.shake(1500, .0028);
+      scene.tweens.add({ targets: shadow, x: firstX, scaleX: .7, alpha: .66, duration: 1550, delay: 1150, ease: 'Cubic.easeIn' });
+      scene.tweens.add({ targets: leg, x: firstX, y: groundY, angle: 0, duration: 1550, delay: 1150, ease: 'Cubic.easeIn', onStart: () => announce('A GIANT HUMAN IS CROSSING THE MEADOW!'), onComplete: () => {
+        announce('FIRST FOOTSTEP — CHECK THE WALLS!', '#ffffff');
         groundImpact(firstX, 1);
         collapse();
-        scene.tweens.add({ targets: leg, x: secondX, y: groundY - 155, angle: 9, duration: 570, delay: 500, ease: 'Sine.easeInOut', onComplete: () => {
+        scene.tweens.add({ targets: leg, x: secondX, y: groundY - 155, angle: 9, duration: 1150, delay: 1300, ease: 'Sine.easeInOut', onStart: () => announce('THE NEXT STEP IS COMING...'), onComplete: () => {
           leg.setFlipX(true);
-          scene.tweens.add({ targets: leg, x: secondX, y: groundY, angle: -2, duration: 430, ease: 'Cubic.easeIn', onComplete: () => {
+          scene.tweens.add({ targets: leg, x: secondX, y: groundY, angle: -2, duration: 820, ease: 'Cubic.easeIn', onComplete: () => {
+            announce('SECOND FOOTSTEP!', '#ffffff');
             groundImpact(secondX, .9);
-            scene.tweens.add({ targets: leg, x: width + 280, y: groundY - 115, angle: -8, duration: 720, delay: 650, ease: 'Cubic.easeIn' });
+            scene.tweens.add({ targets: leg, x: width + 280, y: groundY - 115, angle: -8, duration: 1250, delay: 1250, ease: 'Cubic.easeIn', onStart: () => announce('THE HUMAN IS MOVING AWAY...'), onComplete: () => announce('THE COLONIES THAT PREPARED HAVE SURVIVED!', '#b9ffd1') });
           } });
         } });
-        scene.tweens.add({ targets: shadow, x: secondX, scaleX: .52, alpha: .28, duration: 570, delay: 500, ease: 'Sine.easeInOut', onComplete: () => {
-          scene.tweens.add({ targets: shadow, scaleX: .74, alpha: .62, duration: 430, ease: 'Cubic.easeIn', onComplete: () => {
-            scene.tweens.add({ targets: shadow, x: width + 230, alpha: 0, duration: 720, delay: 650 });
+        scene.tweens.add({ targets: shadow, x: secondX, scaleX: .52, alpha: .28, duration: 1150, delay: 1300, ease: 'Sine.easeInOut', onComplete: () => {
+          scene.tweens.add({ targets: shadow, scaleX: .74, alpha: .62, duration: 820, ease: 'Cubic.easeIn', onComplete: () => {
+            scene.tweens.add({ targets: shadow, x: width + 230, alpha: 0, duration: 1250, delay: 1250 });
           } });
         } });
       } });
     }
     // A renderer resize must not strand the ending by cancelling a scene timer.
-    setTimeout(showFinal, reduced ? 1900 : 3900);
+    setTimeout(showFinal, reduced ? 2400 : 9600);
   }
 
   function showRainFinale() { showFinal(); }
@@ -1233,6 +1247,7 @@
   }
 
   function showFinal() {
+    $('gameScreen').classList.remove('human-crossing');
     const ranking = core.rankTeams(session.teams);
     const first = ranking[0];
     const firstAccuracy = first && first.team.attempts ? first.team.correct / first.team.attempts : 0;
@@ -2632,6 +2647,16 @@
       noiseBurst({ duration: .2, volume: .045 * intensity, delay: delay + .015, filterType: 'bandpass', frequency: 720, q: 1.1, decay: 4.6 });
       tone(43, .52, .092 * intensity, delay);
       tone(71, .28, .05 * intensity, delay + .025);
+    } catch {}
+  }
+
+  function playHumanRumble(duration = 2.2) {
+    initAudio();
+    if (!soundOn || !audioContext) return;
+    try {
+      noiseBurst({ duration, volume: .045, filterType: 'lowpass', frequency: 92, q: .9, decay: .35 });
+      tone(31, duration, .038);
+      tone(39, duration * .78, .028, .3);
     } catch {}
   }
 

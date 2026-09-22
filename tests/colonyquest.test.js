@@ -37,9 +37,10 @@ test('ColonyQuest starts as a balanced, child-readable colony simulation', () =>
   });
 });
 
-test('the classroom loop keeps questions and colony growth without narrative click-through panels', () => {
+test('the classroom loop opens with one mission briefing and keeps later growth fast', () => {
   const client = fs.readFileSync(path.join(__dirname, '..', 'public', 'colonyquest.js'), 'utf8');
-  assert.match(client, /introSeen: true/);
+  assert.match(client, /introSeen: false/);
+  assert.match(client, /Only Level 3 walls can withstand the footsteps/);
   assert.match(client, /setTimeout\(\(\) => commitOutcome/);
   assert.match(client, /return Object\.keys\(core\.REWARDS\);/);
   assert.match(client, /async function showGrowth/);
@@ -58,8 +59,10 @@ test('the classroom loop keeps questions and colony growth without narrative cli
   assert.match(client, /function playRainSound\(duration = 4\.5, intensity = 1\)/);
   assert.match(client, /function playThunder\(delay = 0, intensity = 1\)/);
   assert.match(client, /function playFootstep\(delay = 0, intensity = 1\)/);
+  assert.match(client, /function playHumanRumble\(duration = 2\.2\)/);
   assert.match(client, /WATER ENTERING/);
   assert.match(client, /groundImpact\(secondX, \.9\)/);
+  assert.match(client, /setTimeout\(showFinal, reduced \? 2400 : 9600\)/);
   assert.match(client, /tone\(note, 2\.8, \.018/);
   const nextTurn = client.slice(client.indexOf('async function nextTurn'), client.indexOf('function showRoundStory'));
   assert.doesNotMatch(nextTurn, /showRoundStory\(event\);/);

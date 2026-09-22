@@ -10,7 +10,7 @@ const questions = [
   { question: 'Which animal might live in a pond?', options: ['Frog', 'Camel', 'Lion', 'Penguin'], correctIndex: 0, explanation: 'A frog can live in a pond.' },
 ];
 
-test('streamlined ColonyQuest moves from question to growth to the next question without message clicks', async ({ page }, testInfo) => {
+test('ColonyQuest shows one opening mission then moves from growth to the next question without message clicks', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'windows-100', 'One classroom-screen browser covers the streamlined game loop.');
   const colonies = [colonyCore.createTeam({ name: 'Leaf Colony' }, 0), colonyCore.createTeam({ name: 'River Colony', colorIndex: 1 }, 1)];
   let saved = null;
@@ -28,8 +28,10 @@ test('streamlined ColonyQuest moves from question to growth to the next question
   });
   await page.goto('/colonyquest/cq-streamlined');
   await page.locator('#startBtn').click();
+  await expect(page.locator('#storyOverlay')).toBeVisible();
+  await expect(page.locator('#storyText')).toContainText('Level 3 walls');
+  await page.locator('#storyContinue').click();
   await expect(page.locator('#questionOverlay')).toBeVisible();
-  await expect(page.locator('#storyOverlay')).toBeHidden();
   await page.locator('.answer').first().click();
   await expect(page.locator('#rewardOverlay')).toBeVisible({ timeout: 4000 });
   await expect(page.locator('[data-reward]')).toHaveCount(7);
@@ -534,7 +536,7 @@ test.skip('a teacher can run, recover, pause, and finish a one-screen ColonyQues
   await page.locator('#startBtn').click();
   await expect(page.locator('#gameScreen')).toBeVisible();
   await expect(page.locator('#storyOverlay')).toBeVisible();
-  await expect(page.locator('#storyTitle')).toHaveText('Help the tiny ant colony!');
+  await expect(page.locator('#storyTitle')).toHaveText('Build. Prepare. Survive.');
   await expect(page.locator('#storyCrawl')).toHaveClass(/is-moving/);
   await page.locator('#storyPause').click();
   await expect(page.locator('#storyCrawl')).toHaveClass(/is-paused/);
@@ -687,10 +689,10 @@ test('continuous food and the final footsteps persist without changing learning 
   await expect.poll(()=>saved.phase).toBe('ended');
   expect(saved.stompOccurred).toBe(true);expect(saved.teams[0].collapsePenalty).toBeGreaterThan(0);
   expect(saved.teams[1].collapsePenalty).toBe(0);expect(saved.teams[0].correct).toBe(2);
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(2100);
   const firstStep = await page.locator('#gameMount canvas').screenshot({path:'/tmp/colonyquest-human-step-1.png'});
   await testInfo.attach('realistic-human-step-one', {body:firstStep,contentType:'image/png'});
-  await page.waitForTimeout(600);
+  await page.waitForTimeout(3800);
   const secondStep = await page.locator('#gameMount canvas').screenshot({path:'/tmp/colonyquest-human-step-2.png'});
   await testInfo.attach('realistic-human-step-two', {body:secondStep,contentType:'image/png'});
   await expect(page.locator('#finalOverlay')).toBeVisible({timeout:10000});
