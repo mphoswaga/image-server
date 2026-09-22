@@ -129,6 +129,8 @@ test('the classroom loop opens with one mission briefing and keeps later growth 
   assert.doesNotMatch(client, /sole\.fillRoundedRect/);
   assert.match(client, /classroomGain\.gain\.value = 2\.25/);
   assert.match(client, /createDynamicsCompressor\(\)/);
+  assert.match(client, /function updateForagingWorkers\(\)/);
+  assert.doesNotMatch(client, /scene\.time\.addEvent\(\{ delay: 40, loop: true/);
   assert.match(client, /function playRainSound\(duration = 4\.5, intensity = 1\)/);
   assert.match(client, /function playThunder\(delay = 0, intensity = 1\)/);
   assert.match(client, /function playFootstep\(delay = 0, intensity = 1\)/);

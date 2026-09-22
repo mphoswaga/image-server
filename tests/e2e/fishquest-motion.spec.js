@@ -45,6 +45,12 @@ test('a full ocean renders and moves smoothly between packets on desktop and mob
   const after = await canvas.screenshot();
   expect(Buffer.compare(before, after)).not.toBe(0);
   await page.screenshot({ path: `/tmp/fishquest-motion-${testInfo.project.name}.png` });
+  await page.evaluate(() => { clearInterval(motionTick); motionState.world={width:4200,height:2800};motionState.players[0].mass=850;motionState.players[0].biteAt=Date.now();sendMotion(); });
+  await expect(page.locator('#fishForm')).toHaveText('whale');
+  await expect.poll(() => page.evaluate(() => motionGame.scene.scenes[0].cameras.main.getBounds().width)).toBe(4200);
+  await expect.poll(() => page.evaluate(() => motionGame.scene.scenes[0].children.list.find(o=>o.type==='Container').scaleY)).toBeLessThan(1.9);
+  await page.evaluate(() => { motionState.players[0].mass=700;sendMotion(); });
+  await expect(page.locator('#fishForm')).toHaveText('orca');
   await page.evaluate(() => { clearInterval(motionTick); motionState.phase = 'paused'; sendMotion(); });
   await expect(page.locator('#teacherPause')).toBeVisible();
   expect(errors).toEqual([]);

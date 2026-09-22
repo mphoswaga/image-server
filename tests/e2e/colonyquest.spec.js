@@ -61,7 +61,7 @@ test('bird warning explains wall protection and steals food without removing wor
   const colonies = [colonyCore.createTeam({ name: 'Leaf Colony' }, 0), colonyCore.createTeam({ name: 'River Colony' }, 1)];
   colonies.forEach(team => { team.workers = 4; team.birdsIncoming = 1; });
   colonies[0].defense = 2;
-  let saved = colonyCore.normalizeSession({ phase: 'question', introSeen: true, teams: colonies, rainOccurred: true, birdStage: 'attack', birdStageMs: 7000 });
+  let saved = colonyCore.normalizeSession({ phase: 'question', introSeen: true, teams: colonies, rainOccurred: true, birdStage: 'warning', birdStageMs: 1500 });
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.route(/\/api\/game\/cq-birds\/colonyquest(?:\/session)?$/, async route => {
@@ -73,7 +73,10 @@ test('bird warning explains wall protection and steals food without removing wor
   });
   await page.goto('/colonyquest/cq-birds');
   await page.locator('#resumeBtn').click();
+  await expect(page.locator('#birdPanel')).toContainText('Shadows over the meadow');
+  await expect(page.locator('#worldViewport')).toHaveAttribute('data-bird-scene', 'warning');
   await expect(page.locator('#birdPanel')).toContainText('Birds are swooping');
+  await expect(page.locator('#worldViewport')).toHaveAttribute('data-bird-scene', 'attack');
   await expect(page.locator('#questionOverlay')).toBeVisible();
   await expect(page.locator('#birdPanel')).toContainText('Level 3 walls protect');
   await expect(page.locator('[data-shelter]')).toHaveCount(0);
@@ -184,6 +187,37 @@ test('growing colonies draw every soldier, retain every room, and scroll to a ne
   await expect(world).toHaveAttribute('aria-description', new RegExp(`${beforeRooms + 1} rooms`));
   await expect(world).toHaveAttribute('aria-description', /16 workers, 11 guard ants/);
   await expect.poll(() => world.evaluate(element => element.scrollTop)).toBeGreaterThan(100);
+  expect(errors).toEqual([]);
+});
+
+test('ant movement survives repeated redraws in a large colony', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100');
+  const colonies = [colonyCore.createTeam({ name: 'Leaf Colony' }, 0), colonyCore.createTeam({ name: 'River Colony' }, 1)];
+  colonies.forEach(team => {
+    team.workers = 60;
+    team.population = 61;
+    team.forageProgress = Array.from({ length: 60 }, (_, index) => index / 60);
+  });
+  let saved = colonyCore.normalizeSession({ phase: 'question', introSeen: true, teams: colonies });
+  await page.route(/\/api\/game\/cq-animation-stress\/colonyquest(?:\/session)?$/, async route => {
+    if (route.request().method() === 'PUT') {
+      saved = colonyCore.normalizeSession(route.request().postDataJSON().session);
+      return route.fulfill({ json: { ok: true } });
+    }
+    return route.fulfill({ json: { game: { id: 'cq-animation-stress', lessonTitle: 'Habitats', questions, colonyquest: { teamCount: 2, rounds: 5, sound: false, teams: colonies } }, session: saved } });
+  });
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/colonyquest/cq-animation-stress');
+  await page.locator('#resumeBtn').click();
+  const before = await page.locator('#gameMount canvas').screenshot();
+  for (const width of [1320, 1280, 1360, 1300, 1366, 1240, 1366]) await page.setViewportSize({ width, height: 768 });
+  await page.waitForTimeout(900);
+  const after = await page.locator('#gameMount canvas').screenshot();
+  expect(Buffer.compare(before, after)).not.toBe(0);
+  await expect(page.locator('#questionOverlay')).toBeVisible();
+  await page.locator('.answer').first().click();
+  await expect(page.locator('#rewardOverlay')).toBeVisible();
   expect(errors).toEqual([]);
 });
 

@@ -27,6 +27,27 @@ test('shared broadcast work preserves private questions and personal results', (
   assert.ok(a.question);assert.equal(b.question.canAnswer,false);assert.equal(shared.question,undefined);
 });
 
+test('hunger shrinks size after two active minutes, pauses during questions and resets on eating', () => {
+  const f=fixture(); f.match.state.food=[]; f.a.mass=850;f.a.x=100;f.b.x=1000;f.c.x=2000;
+  for(let i=0;i<1199;i++){f.advance(100);f.match.tick();}
+  assert.equal(f.a.mass,850);
+  assert.equal(f.match.snapshot(f.a.id).players.find(p=>p.id===f.a.id).hungry,true);
+  f.a.lock='question';const hunger=f.a.hungryMs;
+  for(let i=0;i<100;i++){f.advance(100);f.match.tick();}
+  assert.equal(f.a.hungryMs,hunger);f.a.lock=null;
+  for(let i=0;i<30;i++){f.advance(100);f.match.tick();}
+  assert.ok(f.a.mass<850);assert.equal(f.a.score,0);
+  f.match.state.food=[{id:0,x:f.a.x,y:f.a.y,readyAt:0}];f.advance(100);f.match.tick();
+  assert.equal(f.a.hungryMs,0);
+  f.a.mass=100;f.a.hungryMs=150000;f.match.state.food=[];f.advance(100);f.match.tick();assert.equal(f.a.mass,100);
+});
+
+test('ocean capacity expands at start and keeps plankton density', () => {
+  const f=fixture();assert.ok(f.match.world.width>CONFIG.width);
+  assert.ok(f.match.state.food.length>CONFIG.foodCount);
+  assert.deepEqual(f.match.snapshot(f.a.id).world,f.match.world);
+});
+
 test('server owns movement and clamps impossible input', () => {
   const f=fixture(),x=f.a.x;
   f.match.input(f.a.id,{seq:1,x:999,y:0}); f.advance(100);f.match.tick();

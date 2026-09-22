@@ -545,7 +545,7 @@
     $('gameScreen').classList.toggle('bird-active', visible);
     if (!visible) return;
     const seconds = Math.ceil(session.birdStageMs / 1000);
-    const title = { rush: 'Food rush! Each trip brings double food', warning: 'Birds approaching!', attack: 'Birds are swooping!', result: 'The birds have flown away' }[stage];
+    const title = { rush: 'Food rush! Each trip brings double food', warning: 'Shadows over the meadow! Birds approaching', attack: 'Birds are swooping! Protect the pantry', result: 'The birds have flown away' }[stage];
     panel.innerHTML = `<strong>${title}${stage === 'result' ? '' : ` · ${seconds}s`}${session.phase === 'paused' ? ' · Paused' : ''}</strong><small>Level 3 walls protect your food. Birds steal 40% of stored food through weaker walls (rounded up). Workers are safe.</small><div class="bird-colonies">${session.teams.map(team => `<div><b>${esc(team.name)}</b><span>${stage === 'result' ? `${team.birdFoodLoss || 0} food stolen` : `Walls level ${team.defense + 1} · ${team.defense >= 2 ? 'Food protected' : 'Strengthen walls to level 3'}`}</span></div>`).join('')}</div>`;
   }
 
@@ -688,6 +688,7 @@
     // The ants visibly build, gather, hatch, or strengthen their home. A
     // short automatic beat preserves that reward without a story popup.
     await new Promise(resolve => setTimeout(resolve, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 180 : Math.max(1200, actionDuration / ACTION_SPEED + 250)));
+    resetActionCamera();
     if (session && session.phase === 'event') await nextTurn();
   }
 
@@ -1498,6 +1499,12 @@
         },
         update(time, delta) {
           if (!session || document.hidden) return;
+          updateForagingWorkers();
+          updateBirdFlight();
+          if (['warning', 'attack'].includes(session.birdStage) && ['question', 'reward'].includes(session.phase) && time - (this.lastBirdCall || 0) > 2800) {
+            this.lastBirdCall = time;
+            playBirdArrivalSound();
+          }
           if (soundOn && ['question', 'reward'].includes(session.phase) && session.teams.some(team => team.workers + core.homeGuards(team) > 0) && time - (this.lastBushSound || 0) > 800) {
             this.lastBushSound = time;
             noiseBurst({ duration: .4, volume: .027, filterType: 'bandpass', frequency: 1700, q: .5, decay: 1.7 });
@@ -1507,6 +1514,7 @@
           if (reports.some(report => report.returned)) { updateWorld(); updateHUD(); saveState(); }
           if (core.advanceBirdEvent(session, Math.min(delta, 250))) {
             updateWorld();
+            if (session.birdStage === 'warning') { resetActionCamera(); $('worldViewport').scrollTo({ top: 0, behavior: 'smooth' }); }
             updateHUD();
             saveState();
           }
@@ -1607,14 +1615,9 @@
       const route = new Phaser.Curves.Path(points[0].x, points[0].y);
       points.slice(1).forEach(point => route.lineTo(point.x, point.y));
       route.lineTo(points[0].x, points[0].y);
-      scene.time.addEvent({ delay: 40, loop: true, callback: () => {
-        if (!agent.active || !session) return;
-        const team = session.teams.find(t => t.id === agent.getData('teamId'));
-        const progress = team?.forageProgress?.[agent.getData('workerIndex')] || 0;
-        const point = route.getPoint(progress);
-        agent.sprite.setFlipX(point.x < agent.x); agent.setPosition(point.x, point.y);
-        agent.cargo?.setVisible(progress >= .5);
-      }});
+      // Permanent workers share the scene update loop. Creating a separate
+      // 25fps timer for every worker eventually overwhelmed long matches.
+      agent.setData('forageRoute', route);
       return;
     }
     let cursor = index % points.length;
@@ -1655,6 +1658,22 @@
       });
     };
     scene.time.delayedCall(Math.max(startDelay, 160 + index * 120), travel);
+  }
+
+  function updateForagingWorkers() {
+    if (!session) return;
+    for (const view of colonyViews.values()) {
+      for (const agent of view.ants) {
+        const route = agent.getData?.('forageRoute');
+        if (!route || !agent.active) continue;
+        const team = session.teams.find(item => item.id === agent.getData('teamId'));
+        const progress = team?.forageProgress?.[agent.getData('workerIndex')] || 0;
+        const point = route.getPoint(progress);
+        agent.sprite?.setFlipX(point.x < agent.x);
+        agent.setPosition(point.x, point.y);
+        agent.cargo?.setVisible(progress >= .5);
+      }
+    }
   }
 
   function tunnelCurve(a, b) {
@@ -2057,25 +2076,92 @@
   }
 
   function drawBirdWave() {
-    if (!scene || !['warning', 'attack'].includes(session.birdStage)) return;
-    const attacking = session.birdStage === 'attack';
+    if (!scene) return;
+    scene.birdActors = [];
+    $('worldViewport').dataset.birdScene = session.birdStage || 'none';
+    if (!['warning', 'attack', 'result'].includes(session.birdStage)) return;
     session.teams.forEach(team => {
       const view = colonyViews.get(team.id);
       if (!view) return;
       for (let index = 0; index < (team.birdsIncoming || core.birdCount(team)); index += 1) {
         const x = view.zone.x + view.zone.w * (index + 1) / ((team.birdsIncoming || core.birdCount(team)) + 1);
         const bird = scene.add.container(x, 30).setDepth(18);
-        const body = scene.add.ellipse(0, 0, 39, 21, 0x73523b);
-        const head = scene.add.circle(18, -7, 10, 0x493628);
-        const beak = scene.add.triangle(29, -5, 0, 0, 13, 5, 0, 9, 0xe1b54d);
-        const eye = scene.add.circle(21, -10, 2, 0xffffff);
-        const wing = scene.add.ellipse(-5, -10, 39, 15, 0x342b27).setOrigin(.9, .5);
-        bird.add([body, head, beak, eye, wing]);
-        scene.tweens.add({ targets: wing, angle: -55, duration: 240, yoyo: true, repeat: -1 });
-        const defended = team.defense >= 2;
-        scene.tweens.add({ targets: bird, y: attacking ? defended ? 75 : 120 : 48, x: x + 24, duration: attacking ? 1300 : 2000, delay: index * 180, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        const shadow = scene.add.ellipse(x, 128, 115, 17, 0x152721, .18).setDepth(5);
+        const wing = (far) => {
+          const feathers = scene.add.graphics();
+          feathers.fillStyle(far ? 0x493d33 : 0x76553a);
+          feathers.fillPoints([{x:5,y:2},{x:-3,y:-18},{x:-28,y:-45},{x:-67,y:-53},{x:-57,y:-40},{x:-50,y:-34},{x:-38,y:-18},{x:-17,y:5}], true);
+          for (let f = 0; f < 6; f++) {
+            feathers.lineStyle(2, far ? 0x2b2928 : 0xb58b60, .85);
+            feathers.lineBetween(-8-f*6, -9-f*4, -30-f*6, -22-f*5);
+          }
+          return feathers;
+        };
+        const farWing = wing(true).setPosition(-2, -3);
+        const tail = scene.add.graphics();
+        tail.fillStyle(0x382e28); tail.fillPoints([{x:-17,y:-4},{x:-60,y:-11},{x:-48,y:2},{x:-59,y:9},{x:-17,y:8}], true);
+        const body = scene.add.ellipse(0, 0, 58, 27, 0x8e6747).setAngle(-8);
+        const breast = scene.add.ellipse(13, 5, 30, 21, 0xd6b181).setAngle(-16);
+        const head = scene.add.ellipse(28, -10, 27, 24, 0x745139);
+        const cheek = scene.add.ellipse(31, -5, 17, 10, 0xe0c69b);
+        const beak = scene.add.triangle(45, -7, 0, 0, 16, 4, 0, 8, 0x302b25);
+        const eye = scene.add.circle(33, -13, 3, 0x151916);
+        const glint = scene.add.circle(34, -14, .9, 0xffffff);
+        const nearWing = wing(false);
+        const feet = scene.add.graphics().lineStyle(2, 0x4a3527);
+        feet.lineBetween(2, 12, -3, 20); feet.lineBetween(-3, 20, 5, 21);
+        feet.lineBetween(12, 12, 9, 20); feet.lineBetween(9, 20, 17, 21);
+        const seed = scene.add.ellipse(48, -2, 10, 6, 0xf2ce64).setVisible(false);
+        bird.add([farWing, tail, feet, body, breast, head, cheek, beak, eye, glint, nearWing, seed]);
+        scene.birdActors.push({ bird, shadow, nearWing, farWing, seed, team, index, x, zone: view.zone });
       }
     });
+    updateBirdFlight();
+  }
+
+  function updateBirdFlight() {
+    if (!scene?.birdActors?.length || !session) return;
+    const stage = session.birdStage;
+    const duration = stage === 'warning' ? 8000 : stage === 'attack' ? 10000 : 8000;
+    const elapsed = duration - session.birdStageMs;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    for (const actor of scene.birdActors) {
+      const { bird, shadow, nearWing, farWing, seed, team, index, x, zone } = actor;
+      if (!bird.active) continue;
+      const t = Math.max(0, elapsed - index * 300) / 1000;
+      const protectedFood = team.defense >= 2;
+      const approach = Math.min(1, t / 7);
+      const swoop = Math.sin(Math.min(1, t / 6) * Math.PI);
+      const departure = Math.min(1, t / 3);
+      bird.setVisible(stage !== 'result' || departure < 1);
+      const scale = stage === 'warning' ? .25 + approach * .55 : 1;
+      bird.setScale(scale);
+      bird.x = reduced ? x : stage === 'warning' ? x - zone.w * .7 * (1 - approach) : stage === 'attack' ? x + Math.sin(t * .8) * 35 : x + departure * zone.w;
+      bird.y = reduced ? 78 : stage === 'warning' ? 15 + approach * 65 : stage === 'attack' ? 65 + swoop * (protectedFood ? 22 : 65) : 80 - departure * 130;
+      bird.angle = reduced ? 0 : stage === 'attack' ? Math.cos(t * .9) * 12 : -8;
+      nearWing.setAngle(reduced ? -15 : Math.sin(t * 10) * 33);
+      farWing.setAngle(reduced ? 15 : -Math.sin(t * 10) * 25);
+      shadow.setPosition(bird.x + 12, 139).setScale(scale * (stage === 'attack' ? 1 + swoop * .4 : 1));
+      shadow.setAlpha(stage === 'result' ? .2 * (1-departure) : .1 + scale * .14);
+      seed.setVisible(!protectedFood && (stage === 'attack' && t > 5 || stage === 'result' && team.birdFoodLoss > 0));
+    }
+  }
+
+  function playBirdArrivalSound() {
+    if (!soundOn || !audioContext || !effectsBus) return;
+    noiseBurst({ duration: .55, volume: .045, filterType: 'bandpass', frequency: 850, q: .6, decay: 1.5 });
+    noiseBurst({ duration: .35, volume: .03, delay: .35, filterType: 'bandpass', frequency: 1400, q: .6, decay: 2 });
+    const call = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    const now = audioContext.currentTime;
+    call.frequency.setValueAtTime(1700, now);
+    call.frequency.exponentialRampToValueAtTime(900, now + .22);
+    gain.gain.setValueAtTime(.0001, now);
+    gain.gain.exponentialRampToValueAtTime(.022, now + .035);
+    gain.gain.exponentialRampToValueAtTime(.0001, now + .25);
+    call.connect(gain); gain.connect(effectsBus);
+    call.onended = () => { call.disconnect(); gain.disconnect(); };
+    call.start(now); call.stop(now + .28);
   }
 
   function celebrate(teamId, kind, effectText = '') {

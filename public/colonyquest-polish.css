@@ -115,6 +115,7 @@
 @media(prefers-reduced-motion:reduce){.story-viewport{overflow:auto}.story-crawl.is-moving{animation:none;transform:none;will-change:auto}.story-crawl{padding:30px 0}}
 .bird-panel{position:absolute;z-index:31;left:12px;top:205px;width:560px;max-height:calc(50vh - 205px);overflow:auto;padding:12px;background:#fff7df;color:#233b32;border:2px solid #d7a944;border-radius:10px;box-shadow:0 4px 15px #0004;font-size:13px}
 .bird-colonies{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+@media(min-width:851px){.bird-active .bird-panel{top:auto;bottom:calc(39vh + 28px);max-height:180px}}
 .bird-panel>strong,.bird-panel>small,.bird-colonies span{display:block;margin-bottom:6px}
 .bird-colonies>div{border-top:1px solid #cfbd94;padding-top:6px;margin-top:6px}
 .bird-colonies button{padding:7px;border:1px solid #476e55;background:#fff;border-radius:5px;color:#173e38;cursor:pointer;font-weight:bold}

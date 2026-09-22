@@ -281,16 +281,21 @@
     reef:{body:.46,tail:.32,fin:.29,tailX:-24,finX:-2,finY:9,label:36},
     hunter:{body:.49,tail:.34,fin:.30,tailX:-26,finX:-1,finY:10,label:39},
     shark:{body:.53,tail:.37,fin:.31,tailX:-29,finX:1,finY:12,label:44},
+    orca:{body:.56,tail:.35,fin:.32,tailX:-30,finX:0,finY:12,label:46},
+    whale:{body:.60,tail:.38,fin:.34,tailX:-32,finX:0,finY:12,label:48},
   };
   function fishEvolution(mass) {
     const size=Number(mass)||100;
-    return size>=450?'shark':size>=280?'hunter':size>=160?'reef':'minnow';
+    return size>=800?'whale':size>=650?'orca':size>=450?'shark':size>=280?'hunter':size>=160?'reef':'minnow';
   }
   function fishEvolutionName(stage) {
-    return ({minnow:'quick minnow',reef:'reef fish',hunter:'ocean hunter',shark:'shark'})[stage]||'fish';
+    return ({minnow:'quick minnow',reef:'reef fish',hunter:'ocean hunter',shark:'shark',orca:'orca',whale:'whale'})[stage]||'fish';
   }
   function fishBodyPath(c,stage,species) {
     c.beginPath();
+    if(stage==='orca'||stage==='whale') {
+      c.moveTo(12,60);c.bezierCurveTo(43,21,128,16,149,42);c.bezierCurveTo(167,78,120,101,58,87);c.quadraticCurveTo(30,77,12,60);c.closePath();return;
+    }
     if(stage==='shark') {
       c.moveTo(14,58);c.bezierCurveTo(39,28,102,23,139,40);c.quadraticCurveTo(157,49,151,61);c.quadraticCurveTo(157,72,138,79);c.bezierCurveTo(95,95,39,87,14,58);c.closePath();
       return;
@@ -307,7 +312,7 @@
     const key=`fish-${variant}-${stage}-${part}`;
     if(scene.textures.exists(key)) return key;
     const species=Number(variant)%3;
-    const [light,base,dark,accent]=FISH_PALETTES[Number(variant)%FISH_PALETTES.length];
+    const [light,base,dark,accent]=stage==='orca'?['#67717e','#202c3c','#101924','#ffffff']:stage==='whale'?['#82b9c8','#46788d','#25495f','#b9dce0']:FISH_PALETTES[Number(variant)%FISH_PALETTES.length];
     const texture=scene.textures.createCanvas(key,160,112),c=texture.context;
     c.lineJoin='round';c.lineCap='round';c.lineWidth=3;c.strokeStyle='#153950';
     const shade=c.createLinearGradient(0,15,0,100);shade.addColorStop(0,light);shade.addColorStop(.5,base);shade.addColorStop(1,dark);c.fillStyle=shade;
@@ -344,7 +349,11 @@
       }
       fishBodyPath(c,stage,species);c.fill();c.stroke();
       c.save();fishBodyPath(c,stage,species);c.clip();
-      if(species===0) {
+      if(stage==='orca'||stage==='whale') {
+        c.fillStyle=accent;c.beginPath();c.ellipse(95,83,53,14,0,0,Math.PI*2);c.fill();
+        if(stage==='orca'){c.beginPath();c.ellipse(114,48,14,7,-.3,0,Math.PI*2);c.fill();}
+        else {c.strokeStyle=accent;c.globalAlpha=.5;for(let y=73;y<90;y+=5){c.beginPath();c.moveTo(78,y);c.lineTo(137,y-7);c.stroke();}}
+      } else if(species===0) {
         c.fillStyle=accent;c.globalAlpha=stage==='shark'?.45:.78;
         for(const x of [48,76]){c.beginPath();c.moveTo(x,10);c.bezierCurveTo(x-13,42,x+16,72,x+1,106);c.lineTo(x+16,106);c.bezierCurveTo(x+28,71,x+2,39,x+16,10);c.fill();}
       } else if(species===1) {
@@ -380,10 +389,13 @@
     const tail=scene.add.image(style.tailX,0,fishTexture(p.variant,'tail',stage)).setOrigin(.9,.5).setScale(style.tail);
     const body=scene.add.image(0,0,fishTexture(p.variant,'body',stage)).setScale(style.body);
     const fin=scene.add.image(style.finX,style.finY,fishTexture(p.variant,'fin',stage)).setOrigin(.68,.28).setScale(style.fin);
-    const sprite=scene.add.container(p.x,p.y,[tail,body,fin]);
+    const halo=scene.add.ellipse(0,0,105,67,0x93fff1,.06).setStrokeStyle(3,0xb9fff7,.85).setVisible(p.id===state.me);
+    const mouth=scene.add.ellipse(34,3,10,15,0x231b2d).setStrokeStyle(1,0xf5e9d1).setVisible(false);
+    const sprite=scene.add.container(p.x,p.y,[halo,tail,body,fin,mouth]);
     const label=scene.add.text(p.x,p.y-style.label,p.name,{font:'bold 15px Arial',color:'#ffffff',stroke:'#052c48',strokeThickness:4}).setOrigin(.5);
-    return {sprite,label,tail,body,fin,stage,tailBase:style.tail,finBase:style.fin,labelOffset:style.label,id:p.id,name:p.name,npc:!!p.npc,mass:p.mass,connected:p.connected!==false,respawning:!!p.respawning,tx:p.x,ty:p.y,samples:[],scale:Math.pow(p.mass/100,.65),facing:1,phase:p.variant*1.7,swimSpeed:0};
+    return {sprite,label,tail,body,fin,halo,mouth,stage,tailBase:style.tail,finBase:style.fin,labelOffset:style.label,id:p.id,name:p.name,npc:!!p.npc,mass:p.mass,connected:p.connected!==false,respawning:!!p.respawning,tx:p.x,ty:p.y,samples:[],scale:fishScale(p.mass),facing:1,phase:p.variant*1.7,swimSpeed:0};
   }
+  function fishScale(mass){return Math.min(1.85,Math.pow(Math.max(100,Number(mass)||100)/100,.28));}
   const bubbles = [];
   let oceanTime=0;
   function planktonTexture(variant) {
@@ -422,6 +434,10 @@
   }
   function renderState() {
     if (!scene) return;
+    const world=state.world||{width:2400,height:1600};
+    scene.cameras.main.setBounds(0,0,world.width,world.height);
+    const backdrop=scene.children.list.find(child=>child.texture?.key==='lagoon');
+    if(backdrop)backdrop.setPosition(world.width/2,world.height/2).setDisplaySize(world.width,world.height);
     const seen = new Set();
     for (const p of state.players) {
       seen.add(p.id); let e = entities.get(p.id);
@@ -430,8 +446,11 @@
       const reset = p.respawning || p.locked || state.phase !== 'running' || Math.hypot(p.x-e.tx,p.y-e.ty)>200;
       FishQuestMotion.push(e.samples,p,performance.now(),reset);
       if(reset) e.sprite.setPosition(p.x,p.y);
-      e.tx=p.x; e.ty=p.y; e.scale=Math.pow(p.mass/100,.65); e.locked=p.locked;e.mass=p.mass;e.connected=p.connected!==false;e.respawning=!!p.respawning;
+      if(p.biteAt&&p.biteAt!==e.biteAt){e.biteAt=p.biteAt;e.biteUntil=performance.now()+650;}
+      e.hungry=p.hungry;
+      e.tx=p.x; e.ty=p.y; e.scale=fishScale(p.mass); e.locked=p.locked;e.mass=p.mass;e.connected=p.connected!==false;e.respawning=!!p.respawning;
       e.sprite.setAlpha(p.respawning ? .2 : p.protected ? .72 : 1); e.label.setText(p.id === state.me ? 'You' : p.npc ? `${FishQuestMotion.shortName(p.name)} · ${p.mass}` : FishQuestMotion.shortName(p.name));
+      if(p.id===state.me&&p.hungry)e.label.setText('You · Eat to keep your size');
     }
     for (const [id, e] of entities) if (!seen.has(id)) { e.sprite.destroy(); e.label.destroy(); entities.delete(id); }
     const foodSeen = new Set();
@@ -452,6 +471,9 @@
     const t=oceanTime;
     animateOcean(dt,t);
     for (const e of entities.values()) {
+      e.halo.setAlpha(reducedMotion?.8:.65+Math.sin(t*2.5)*.2);
+      const bite=Math.max(0,(e.biteUntil-performance.now())/650);
+      e.mouth.setVisible(bite>0).setScale(1,Math.max(.1,Math.sin(bite*Math.PI))).setX(65*FISH_STAGE_STYLE[e.stage].body);
       const target=FishQuestMotion.sample(e.samples,performance.now()-80) || {x:e.tx,y:e.ty};
       const dx=target.x-e.sprite.x,dy=target.y-e.sprite.y,speed=Math.min(1,Math.hypot(dx,dy)/16);
       if(Math.abs(dx)>.8) e.facing=dx>0?1:-1;
@@ -471,7 +493,7 @@
     }
     if (me) {
       const camera=scene.cameras.main, fish=entities.get(me.id);
-      const zoom=Math.max(.58,Math.min(1.05,1.02-(me.mass-100)/1600));
+      const zoom=Math.max(.9,Math.min(1.18,1.18-(me.mass-100)/2850));
       camera.setZoom(camera.zoom+(zoom-camera.zoom)*(1-Math.exp(-3*dt)));
       if(fish) camera.centerOn(fish.sprite.x,fish.sprite.y);
     }
