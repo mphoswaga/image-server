@@ -55,6 +55,11 @@ test('the classroom loop keeps questions and colony growth without narrative cli
   assert.doesNotMatch(client, /sole\.fillRoundedRect/);
   assert.match(client, /classroomGain\.gain\.value = 2\.25/);
   assert.match(client, /createDynamicsCompressor\(\)/);
+  assert.match(client, /function playRainSound\(duration = 4\.5, intensity = 1\)/);
+  assert.match(client, /function playThunder\(delay = 0, intensity = 1\)/);
+  assert.match(client, /function playFootstep\(delay = 0, intensity = 1\)/);
+  assert.match(client, /WATER ENTERING/);
+  assert.match(client, /groundImpact\(secondX, \.9\)/);
   assert.match(client, /tone\(note, 2\.8, \.018/);
   const nextTurn = client.slice(client.indexOf('async function nextTurn'), client.indexOf('function showRoundStory'));
   assert.doesNotMatch(nextTurn, /showRoundStory\(event\);/);

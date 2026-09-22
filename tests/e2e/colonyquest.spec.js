@@ -636,7 +636,35 @@ test.skip('a teacher can run, recover, pause, and finish a one-screen ColonyQues
   expect(session.answers).toHaveLength(0);
 });
 
-test('continuous food and the final footstep persist without changing learning marks', async ({ page }, testInfo) => {
+test('heavy rain visibly distinguishes flooded and protected colonies', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100');
+  const colonies = [colonyCore.createTeam({ name: 'Open walls' }, 0), colonyCore.createTeam({ name: 'Protected walls' }, 1)];
+  colonies.forEach(team => { team.attempts = 2; team.correct = 2; });
+  colonies[1].defense = 1;
+  let saved = colonyCore.normalizeSession({ phase: 'reward', introSeen: true, turnIndex: 4, currentTeamIndex: 0, teams: colonies });
+  const setup = { teamCount: 2, rounds: 5, matchType: 'rounds', durationMinutes: 15, sound: false, teams: colonies };
+  await page.route(/\/api\/game\/cq-rain-polish\/colonyquest(?:\/session)?$/, async route => {
+    if (route.request().method() === 'PUT') {
+      saved = colonyCore.normalizeSession(route.request().postDataJSON().session);
+      return route.fulfill({ json: { ok: true } });
+    }
+    return route.fulfill({ json: { game: { id: 'cq-rain-polish', lessonTitle: 'Habitats', questions, colonyquest: setup }, session: saved } });
+  });
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/colonyquest/cq-rain-polish');
+  await page.locator('#resumeBtn').click();
+  await page.locator('[data-reward="food"]').click();
+  await expect.poll(() => saved.rainOccurred).toBe(true);
+  await page.waitForTimeout(700);
+  const storm = await page.locator('#gameMount canvas').screenshot({ path: '/tmp/colonyquest-heavy-rain.png' });
+  await testInfo.attach('heavy-rain-flooding', { body: storm, contentType: 'image/png' });
+  expect(saved.teams[0].rainLoss).toBeGreaterThan(0);
+  expect(saved.teams[1].rainLoss).toBe(0);
+  expect(errors).toEqual([]);
+});
+
+test('continuous food and the final footsteps persist without changing learning marks', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'windows-100');
   test.setTimeout(45000);
   const colonies=[colonyCore.createTeam({name:'Open walls'},0),colonyCore.createTeam({name:'Strong walls'},1)];
@@ -659,9 +687,12 @@ test('continuous food and the final footstep persist without changing learning m
   await expect.poll(()=>saved.phase).toBe('ended');
   expect(saved.stompOccurred).toBe(true);expect(saved.teams[0].collapsePenalty).toBeGreaterThan(0);
   expect(saved.teams[1].collapsePenalty).toBe(0);expect(saved.teams[0].correct).toBe(2);
-  await page.waitForTimeout(1050);
-  const humanStep = await page.locator('#gameMount canvas').screenshot({path:'/tmp/colonyquest-human-step.png'});
-  await testInfo.attach('realistic-human-step', {body:humanStep,contentType:'image/png'});
+  await page.waitForTimeout(1000);
+  const firstStep = await page.locator('#gameMount canvas').screenshot({path:'/tmp/colonyquest-human-step-1.png'});
+  await testInfo.attach('realistic-human-step-one', {body:firstStep,contentType:'image/png'});
+  await page.waitForTimeout(600);
+  const secondStep = await page.locator('#gameMount canvas').screenshot({path:'/tmp/colonyquest-human-step-2.png'});
+  await testInfo.attach('realistic-human-step-two', {body:secondStep,contentType:'image/png'});
   await expect(page.locator('#finalOverlay')).toBeVisible({timeout:10000});
   await page.screenshot({path:'/tmp/colonyquest-footstep-result.png'});
   const penalty=saved.teams[0].collapsePenalty;

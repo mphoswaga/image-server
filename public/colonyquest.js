@@ -36,6 +36,7 @@
   const ACTION_SPEED = .6;
   let weatherEffects = [];
   let weatherTimers = [];
+  let weatherAudioStops = [];
   const ASSETS = {
     world: '/assets/colonyquest/moonroot-meadow.webp',
     worker: '/assets/colonyquest/pip-worker.webp',
@@ -1135,13 +1136,31 @@
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const width = scene.scale.width;
     const height = scene.scale.height;
-    const groundY = Math.min(height * .43, 265);
-    const shadow = scene.add.ellipse(-180, groundY + 4, Math.min(390, width * .35), 58, 0x151510, .46).setDepth(80);
+    const groundY = Math.min(height * .34, 225);
+    const firstX = width * .4;
+    const secondX = width * .72;
+    const shadow = scene.add.ellipse(-180, groundY + 5, Math.min(390, width * .35), 58, 0x151510, .46).setDepth(80);
     const leg = scene.add.image(-240, -80, 'cq-human-leg').setOrigin(.5, 1).setDepth(100);
-    leg.setDisplaySize(Math.min(420, height * .54), Math.min(630, height * .92));
+    // Keep the trouser leg visible as well as the boot; the ants should see a
+    // giant human step, not a detached shoe crossing the top of the screen.
+    leg.setDisplaySize(Math.min(220, height * .32), Math.min(330, height * .47));
     leg.setAngle(-9);
+
+    const groundImpact = (x, intensity = 1) => {
+      playFootstep(0, intensity);
+      if (!reduced) scene.cameras.main.shake(390, .014 * intensity);
+      const print = scene.add.ellipse(x, groundY + 3, Math.min(118, width * .1), 28, 0x171711, .38).setDepth(79).setAngle(-8);
+      const ring = scene.add.ellipse(x, groundY + 5, 90, 20, 0xf2ddae, .15).setStrokeStyle(4, 0xffefc8, .72).setDepth(87);
+      scene.tweens.add({ targets: ring, scaleX: 2.55, scaleY: 2.2, alpha: 0, duration: 520, ease: 'Cubic.easeOut', onComplete: () => ring.destroy() });
+      scene.tweens.add({ targets: print, alpha: .16, duration: 2200, delay: 700 });
+      for (let index = 0; index < 16; index += 1) {
+        const side = index % 2 ? 1 : -1;
+        const dust = scene.add.circle(x + side * (18 + index % 4 * 8), groundY - 1, 3 + index % 3, index % 3 ? 0xc8a66d : 0xe5c991, .76).setDepth(88);
+        scene.tweens.add({ targets: dust, x: dust.x + side * (36 + index * 3), y: dust.y - 18 - (index % 5) * 7, scaleX: 1.7, scaleY: 1.7, alpha: 0, duration: 430 + index * 24, ease: 'Cubic.easeOut', onComplete: () => dust.destroy() });
+      }
+    };
+
     const collapse = () => {
-      if (!reduced) scene.cameras.main.shake(350, .012);
       for (const team of session.teams) {
         const view = colonyViews.get(team.id);
         if (!view) continue;
@@ -1155,31 +1174,38 @@
         }
         scene.add.text(view.center.x - 70, view.center.y - 10,
           team.defense < 2 ? 'Walls collapsed\n−25% game points' : 'Level 3+ walls held!',
-          {fontSize:'16px',color:'#fff',backgroundColor:'#49382b',padding:{x:5,y:5}}).setDepth(90);
+          { fontSize: '16px', color: '#fff', backgroundColor: '#49382b', padding: { x: 5, y: 5 } }).setDepth(90);
       }
     };
+
     if (reduced) {
-      shadow.x = width * .42;
-      leg.setPosition(width * .42, groundY);
+      shadow.x = firstX;
+      leg.setPosition(firstX, groundY);
       leg.setAngle(0);
+      groundImpact(firstX, .82);
       collapse();
-    }
-    else {
-      scene.tweens.add({ targets: shadow, x: width * .42, scaleX: .72, alpha: .62, duration: 820, ease: 'Sine.easeOut' });
-      scene.tweens.add({ targets: leg, x: width * .42, y: groundY, angle: 0, duration: 820, ease: 'Cubic.easeIn', onComplete: () => {
+      playFootstep(.72, .72);
+    } else {
+      scene.tweens.add({ targets: shadow, x: firstX, scaleX: .7, alpha: .66, duration: 760, ease: 'Cubic.easeIn' });
+      scene.tweens.add({ targets: leg, x: firstX, y: groundY, angle: 0, duration: 760, ease: 'Cubic.easeIn', onComplete: () => {
+        groundImpact(firstX, 1);
         collapse();
-        playThunder();
-        scene.tweens.add({ targets: leg, x: width * .7, y: groundY - 125, angle: 7, duration: 720, delay: 380, ease: 'Sine.easeInOut', onComplete: () => {
+        scene.tweens.add({ targets: leg, x: secondX, y: groundY - 155, angle: 9, duration: 570, delay: 500, ease: 'Sine.easeInOut', onComplete: () => {
           leg.setFlipX(true);
-          scene.tweens.add({ targets: leg, x: width + 260, y: groundY - 30, angle: -5, duration: 850, ease: 'Sine.easeIn' });
-        }});
-        scene.tweens.add({ targets: shadow, x: width * .72, scaleX: 1.05, alpha: .28, duration: 720, delay: 380, onComplete: () => {
-          scene.tweens.add({ targets: shadow, x: width + 230, alpha: 0, duration: 850 });
-        }});
-      }});
+          scene.tweens.add({ targets: leg, x: secondX, y: groundY, angle: -2, duration: 430, ease: 'Cubic.easeIn', onComplete: () => {
+            groundImpact(secondX, .9);
+            scene.tweens.add({ targets: leg, x: width + 280, y: groundY - 115, angle: -8, duration: 720, delay: 650, ease: 'Cubic.easeIn' });
+          } });
+        } });
+        scene.tweens.add({ targets: shadow, x: secondX, scaleX: .52, alpha: .28, duration: 570, delay: 500, ease: 'Sine.easeInOut', onComplete: () => {
+          scene.tweens.add({ targets: shadow, scaleX: .74, alpha: .62, duration: 430, ease: 'Cubic.easeIn', onComplete: () => {
+            scene.tweens.add({ targets: shadow, x: width + 230, alpha: 0, duration: 720, delay: 650 });
+          } });
+        } });
+      } });
     }
     // A renderer resize must not strand the ending by cancelling a scene timer.
-    setTimeout(showFinal, reduced ? 1800 : 3400);
+    setTimeout(showFinal, reduced ? 1900 : 3900);
   }
 
   function showRainFinale() { showFinal(); }
@@ -1338,6 +1364,8 @@
     raidPresentation = null;
     weatherEffects = [];
     weatherTimers = [];
+    for (const stop of weatherAudioStops) stop?.();
+    weatherAudioStops = [];
   }
 
   async function enterGame() {
@@ -2188,9 +2216,11 @@
   }
 
   function stopWeather() {
-    if (!scene) return;
     for (const timer of weatherTimers) timer?.remove?.(false);
     weatherTimers = [];
+    for (const stop of weatherAudioStops) stop?.();
+    weatherAudioStops = [];
+    if (!scene) return;
     for (const effect of weatherEffects) {
       if (!effect.active) continue;
       scene.tweens.killTweensOf(effect);
@@ -2199,25 +2229,100 @@
     weatherEffects = [];
   }
 
-  function lightningStrike(withThunder = true) {
+  function lightningStrike(withThunder = true, intensity = 1) {
     if (!scene) return;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const width = scene.scale.width;
     const height = scene.scale.height;
     const strikeX = width * (.2 + Math.random() * .6);
-    const flash = scene.add.rectangle(width / 2, height / 2, width, height, 0xe8f8ff, reducedMotion ? .2 : .66).setScrollFactor(0).setDepth(40);
+    const flash = scene.add.rectangle(width / 2, height / 2, width, height, 0xe8f8ff, reducedMotion ? .18 : .7 * intensity).setScrollFactor(0).setDepth(40);
+    const afterFlash = scene.add.rectangle(width / 2, height / 2, width, height, 0xcbe8ff, 0).setScrollFactor(0).setDepth(40);
     const bolt = scene.add.graphics().setScrollFactor(0).setDepth(41);
-    bolt.lineStyle(5, 0xf6fbff, .95).beginPath().moveTo(strikeX, -10).lineTo(strikeX - 24, 58).lineTo(strikeX + 7, 58).lineTo(strikeX - 38, 152).lineTo(strikeX - 13, 82).lineTo(strikeX - 43, 82).lineTo(strikeX, -10).strokePath();
-    weatherEffects.push(flash, bolt);
+    const points = [
+      { x: strikeX, y: -10 }, { x: strikeX - 18, y: 43 }, { x: strikeX + 4, y: 72 },
+      { x: strikeX - 26, y: 112 }, { x: strikeX - 8, y: 148 }, { x: strikeX - 43, y: Math.min(225, height * .34) },
+    ];
+    bolt.lineStyle(7, 0xe9f7ff, .35).beginPath().moveTo(points[0].x, points[0].y);
+    points.slice(1).forEach(point => bolt.lineTo(point.x, point.y));
+    bolt.strokePath();
+    bolt.lineStyle(3, 0xffffff, 1).beginPath().moveTo(points[0].x, points[0].y);
+    points.slice(1).forEach(point => bolt.lineTo(point.x, point.y));
+    bolt.strokePath();
+    bolt.lineStyle(2, 0xeefaff, .9).beginPath().moveTo(points[2].x, points[2].y).lineTo(points[2].x + 36, points[2].y + 24).lineTo(points[2].x + 23, points[2].y + 48).strokePath();
+    bolt.beginPath().moveTo(points[3].x, points[3].y).lineTo(points[3].x - 31, points[3].y + 20).lineTo(points[3].x - 19, points[3].y + 43).strokePath();
+    weatherEffects.push(flash, afterFlash, bolt);
     if (!reducedMotion) {
-      scene.cameras.main.shake(300, .0035);
-      scene.tweens.add({ targets: [flash, bolt], alpha: 0, duration: 360, ease: 'Cubic.easeOut' });
+      scene.tweens.add({ targets: [flash, bolt], alpha: 0, duration: 150, ease: 'Cubic.easeOut' });
+      scene.tweens.add({ targets: afterFlash, alpha: .32 * intensity, duration: 35, delay: 125, yoyo: true, hold: 30 });
+      const shake = scene.time.delayedCall(190, () => scene?.cameras?.main?.shake(360, .0045 * intensity));
+      weatherTimers.push(shake);
     }
-    const cleanup = scene.time.delayedCall(450, () => {
-      for (const effect of [flash, bolt]) if (effect.active) effect.destroy();
+    const cleanup = scene.time.delayedCall(620, () => {
+      for (const effect of [flash, afterFlash, bolt]) if (effect.active) effect.destroy();
     });
     weatherTimers.push(cleanup);
-    if (withThunder) playThunder();
+    if (withThunder) playThunder(.18, intensity);
+  }
+
+  function addRainField(count, intensity = 1) {
+    if (!scene) return;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const width = scene.scale.width;
+    const height = scene.scale.height;
+    const floor = Math.min(225, height * .34);
+    for (let index = 0; index < count; index += 1) {
+      const foreground = index % 5 === 0;
+      const startX = (index * 67 + (index % 7) * 19) % width;
+      const drop = scene.add.rectangle(startX, -18 - (index % 11) * 17, foreground ? 3 : 2, (foreground ? 24 : 14) + index % 5 * 2, foreground ? 0xdaf4ff : 0xaadcf4, (foreground ? .9 : .55) * intensity).setDepth(foreground ? 16 : 12).setAngle(13);
+      weatherEffects.push(drop);
+      if (reducedMotion) {
+        drop.y = index * 17 % floor;
+        continue;
+      }
+      scene.tweens.add({ targets: drop, y: floor + 4, x: startX + 48, duration: 610 + (index % 7) * 65, delay: (index % 13) * 42, repeat: -1, ease: 'Linear' });
+      if (index % 4 === 0) {
+        const splash = scene.add.ellipse(startX + 48, floor + 3, 8, 3, 0xcceeff, 0).setStrokeStyle(1, 0xdaf5ff, .75).setDepth(15);
+        weatherEffects.push(splash);
+        scene.tweens.add({ targets: splash, alpha: { from: 0, to: .72 }, scaleX: { from: .35, to: 2.1 }, scaleY: { from: .35, to: 1.35 }, duration: 260, delay: 610 + (index % 13) * 42, repeat: -1, repeatDelay: 410 + (index % 7) * 65 });
+      }
+    }
+  }
+
+  function addFloodWater(view, colony) {
+    if (!scene || !view || !colony) return;
+    const entrance = view.sites.entrance;
+    const nursery = view.sites.nursery;
+    const protectedWalls = colony.defense >= 1;
+    const puddle = scene.add.ellipse(entrance.x + 10, entrance.y + 10, Math.min(100, view.zone.w * .55), 16, 0x5eb9dc, .55).setStrokeStyle(2, 0xbcecff, .8).setDepth(14);
+    weatherEffects.push(puddle);
+    scene.tweens.add({ targets: puddle, scaleX: 1.2, alpha: .3, duration: 620, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    if (protectedWalls) {
+      const barrier = scene.add.graphics().setDepth(17);
+      barrier.lineStyle(5, 0xd7f6ff, .9).beginPath().arc(entrance.x, entrance.y + 4, 35, Math.PI, Math.PI * 2).strokePath();
+      weatherEffects.push(barrier);
+      for (let index = 0; index < 5; index += 1) {
+        const deflection = scene.add.circle(entrance.x - 24 + index * 12, entrance.y - 3, 2 + index % 2, 0xcaf2ff, .9).setDepth(18);
+        weatherEffects.push(deflection);
+        scene.tweens.add({ targets: deflection, x: deflection.x + (index < 3 ? -26 : 26), y: deflection.y - 18 - index * 3, alpha: 0, duration: 520 + index * 55, repeat: -1, repeatDelay: 260 });
+      }
+      return;
+    }
+    const dx = nursery.x - entrance.x;
+    const dy = nursery.y - entrance.y;
+    const stream = scene.add.graphics().setDepth(18);
+    stream.lineStyle(13, 0x4aaad3, .72).beginPath().moveTo(entrance.x, entrance.y + 5).lineTo(entrance.x + dx * .45, entrance.y + dy * .45).lineTo(nursery.x, nursery.y).strokePath();
+    stream.lineStyle(4, 0xbceeff, .8).beginPath().moveTo(entrance.x, entrance.y + 3).lineTo(entrance.x + dx * .45, entrance.y + dy * .45).lineTo(nursery.x, nursery.y).strokePath();
+    weatherEffects.push(stream);
+    scene.tweens.add({ targets: stream, alpha: { from: .45, to: 1 }, duration: 330, yoyo: true, repeat: -1 });
+    for (let index = 0; index < 3; index += 1) {
+      const progress = .48 + index * .23;
+      const pool = scene.add.ellipse(entrance.x + dx * progress, entrance.y + dy * progress + 8, 42 + index * 19, 12 + index * 5, 0x4aaad3, .55).setStrokeStyle(2, 0x9ee4f9, .65).setDepth(17);
+      weatherEffects.push(pool);
+      scene.tweens.add({ targets: pool, scaleX: 1.23, scaleY: 1.12, alpha: .32, duration: 560 + index * 120, yoyo: true, repeat: -1 });
+    }
+    const warning = scene.add.text(nursery.x, nursery.y - 32, 'WATER ENTERING', { fontFamily: 'Arial', fontSize: '11px', fontStyle: 'bold', color: '#e8fbff', backgroundColor: '#126889', padding: { x: 6, y: 4 } }).setOrigin(.5).setDepth(24);
+    weatherEffects.push(warning);
+    scene.tweens.add({ targets: warning, alpha: .58, duration: 410, yoyo: true, repeat: -1 });
   }
 
   function addStormAtmosphere() {
@@ -2234,14 +2339,7 @@
     cloud.fillRect(0, 0, width, Math.min(190, height * .3));
     weatherEffects.push(cloud);
     if (progress >= .68) {
-      const rainCount = reducedMotion ? 14 : 28;
-      const floor = Math.min(225, height * .34);
-      for (let index = 0; index < rainCount; index += 1) {
-        const drop = scene.add.rectangle((index * 83) % width, -15 - (index % 7) * 21, 2, 11, 0xc9edff, .38).setDepth(12).setAngle(14);
-        weatherEffects.push(drop);
-        if (reducedMotion) drop.y = index * 13 % floor;
-        else scene.tweens.add({ targets: drop, y: floor, x: drop.x + 45, duration: 1050 + index % 5 * 90, delay: index % 8 * 70, repeat: -1 });
-      }
+      addRainField(reducedMotion ? 14 : 32, .62);
     }
     if (progress >= .88 && !reducedMotion) {
       const timer = scene.time.addEvent({ delay: 5200, loop: true, callback: () => lightningStrike(true) });
@@ -2323,32 +2421,22 @@
       cloud.fillStyle(0x20384d, .72);
       cloud.fillRect(0, 0, scene.scale.width, Math.min(185, scene.scale.height * .27));
       weatherEffects.push(cloud);
-      const floor = Math.min(215, scene.scale.height * .32);
-      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      for (let index = 0; index < 54; index += 1) {
-        const drop = scene.add.rectangle((index * 71) % scene.scale.width, -20 - (index % 8) * 18, index % 4 ? 2 : 3, 16 + index % 4 * 2, 0xbde8ff, .86).setDepth(12).setAngle(12);
-        weatherEffects.push(drop);
-        if (reducedMotion) drop.y = index * 17 % floor;
-        else scene.tweens.add({ targets: drop, y: floor, x: drop.x + 55, duration: 750 + (index % 5) * 80, delay: (index % 10) * 50, repeat: -1 });
-      }
-      for (const [id, view] of colonyViews) {
-        if (session.teams.find(t => t.id === id)?.defense < 1) {
-          const leak = scene.add.rectangle(view.sites.entrance.x, view.sites.entrance.y + 40, 5, 65, 0x7dc3d9, .7).setDepth(12);
-          weatherEffects.push(leak);
-        }
-        const water = scene.add.ellipse(view.sites.entrance.x, view.sites.entrance.y + 11, 67, 8, 0x7dc3d9, .55).setDepth(2);
-        weatherEffects.push(water);
-        if (!reducedMotion) scene.tweens.add({ targets: water, scaleX: 1.12, alpha: .25, duration: 900, yoyo: true, repeat: -1 });
-      }
-      lightningStrike(true);
-      if (!reducedMotion) weatherTimers.push(scene.time.addEvent({ delay: 4300, loop: true, callback: () => lightningStrike(true) }));
+      const mist = scene.add.rectangle(scene.scale.width / 2, Math.min(225, scene.scale.height * .34), scene.scale.width, 48, 0x8ed8ed, .13).setDepth(11);
+      weatherEffects.push(mist);
+      scene.tweens.add({ targets: mist, alpha: .25, scaleY: 1.35, duration: 700, yoyo: true, repeat: -1 });
+      addRainField(68, 1);
+      for (const [id, colonyView] of colonyViews) addFloodWater(colonyView, session.teams.find(item => item.id === id));
+      const stopRain = playRainSound(4.8, 1);
+      if (stopRain) weatherAudioStops.push(stopRain);
+      lightningStrike(true, 1.08);
+      weatherTimers.push(scene.time.addEvent({ delay: 4050, loop: true, callback: () => lightningStrike(true, .92) }));
       if (view) {
         for (let index = 0; index < Math.min(2, team.workers); index += 1) {
           const runner = actionWorker(view, palette, { x: view.sites.entrance.x + (index ? 12 : -12), y: view.sites.entrance.y - 22 }, 28);
           moveActionActor(runner, [{ x: runner.x, y: runner.y }, view.sites.entrance, view.sites.nursery], 1650 + index * 160, actor => scene.tweens.add({ targets: actor, alpha: 0, duration: 220, onComplete: () => actor.destroy(true) }));
         }
       }
-      return 2500;
+      return 3400;
     }
     if (key === 'fallen-fruit') {
       const fruitX = view ? view.sites.entrance.x + 30 : scene.scale.width * .52;
@@ -2459,29 +2547,91 @@
     } catch {}
   }
 
-  function playThunder() {
+  function noiseBurst({ duration, volume, delay = 0, filterType = 'lowpass', frequency = 180, q = .8, decay = 2.2 }) {
+    if (!soundOn || !audioContext || !audioOutput) return null;
+    const length = Math.max(1, Math.floor(audioContext.sampleRate * duration));
+    const buffer = audioContext.createBuffer(1, length, audioContext.sampleRate);
+    const channel = buffer.getChannelData(0);
+    for (let index = 0; index < channel.length; index += 1) {
+      const envelope = decay > 0 ? Math.pow(1 - index / channel.length, decay) : 1;
+      channel[index] = (Math.random() * 2 - 1) * envelope;
+    }
+    const source = audioContext.createBufferSource();
+    const filter = audioContext.createBiquadFilter();
+    const gain = audioContext.createGain();
+    const start = audioContext.currentTime + delay;
+    source.buffer = buffer;
+    filter.type = filterType;
+    filter.frequency.value = frequency;
+    filter.Q.value = q;
+    gain.gain.setValueAtTime(.0001, start);
+    gain.gain.exponentialRampToValueAtTime(Math.max(.0002, volume), start + Math.min(.055, duration * .14));
+    gain.gain.exponentialRampToValueAtTime(.0001, start + duration);
+    source.connect(filter); filter.connect(gain); gain.connect(audioOutput);
+    source.start(start); source.stop(start + duration + .04);
+    return source;
+  }
+
+  function playThunder(delay = 0, intensity = 1) {
     initAudio();
     if (!soundOn || !audioContext) return;
     try {
-      const duration = 1.25;
-      const buffer = audioContext.createBuffer(1, Math.floor(audioContext.sampleRate * duration), audioContext.sampleRate);
+      noiseBurst({ duration: .28, volume: .052 * intensity, delay, filterType: 'highpass', frequency: 1050, q: .7, decay: 4.2 });
+      noiseBurst({ duration: 2.25, volume: .105 * intensity, delay: delay + .025, filterType: 'lowpass', frequency: 175, q: .75, decay: 1.8 });
+      noiseBurst({ duration: 1.65, volume: .055 * intensity, delay: delay + .34, filterType: 'bandpass', frequency: 285, q: 1.15, decay: 1.6 });
+      tone(47, 1.45, .07 * intensity, delay + .04);
+      tone(66, .82, .045 * intensity, delay + .36);
+    } catch {}
+  }
+
+  function playRainSound(duration = 4.5, intensity = 1) {
+    initAudio();
+    if (!soundOn || !audioContext || !audioOutput) return null;
+    try {
+      const length = Math.max(1, Math.floor(audioContext.sampleRate * duration));
+      const buffer = audioContext.createBuffer(1, length, audioContext.sampleRate);
       const channel = buffer.getChannelData(0);
+      let brown = 0;
       for (let index = 0; index < channel.length; index += 1) {
-        const decay = Math.pow(1 - index / channel.length, 2.4);
-        channel[index] = (Math.random() * 2 - 1) * decay;
+        const white = Math.random() * 2 - 1;
+        brown = (brown + .025 * white) / 1.025;
+        channel[index] = white * .72 + brown * 3.2;
       }
       const source = audioContext.createBufferSource();
-      const filter = audioContext.createBiquadFilter();
+      const highpass = audioContext.createBiquadFilter();
+      const presence = audioContext.createBiquadFilter();
       const gain = audioContext.createGain();
-      filter.type = 'lowpass';
-      filter.frequency.value = 170;
-      gain.gain.setValueAtTime(.0001, audioContext.currentTime);
-      gain.gain.exponentialRampToValueAtTime(.11, audioContext.currentTime + .08);
-      gain.gain.exponentialRampToValueAtTime(.0001, audioContext.currentTime + duration);
+      const now = audioContext.currentTime;
       source.buffer = buffer;
-      source.connect(filter); filter.connect(gain); gain.connect(audioOutput);
-      source.start(); source.stop(audioContext.currentTime + duration + .05);
-      tone(55, .85, .06, .05);
+      highpass.type = 'highpass'; highpass.frequency.value = 480;
+      presence.type = 'peaking'; presence.frequency.value = 2450; presence.Q.value = .7; presence.gain.value = 5;
+      gain.gain.setValueAtTime(.0001, now);
+      gain.gain.exponentialRampToValueAtTime(.04 * intensity, now + .24);
+      gain.gain.setValueAtTime(.04 * intensity, now + Math.max(.3, duration - .65));
+      gain.gain.exponentialRampToValueAtTime(.0001, now + duration);
+      source.connect(highpass); highpass.connect(presence); presence.connect(gain); gain.connect(audioOutput);
+      source.start(now); source.stop(now + duration + .05);
+      let stopped = false;
+      return () => {
+        if (stopped) return;
+        stopped = true;
+        const stopAt = audioContext.currentTime + .12;
+        gain.gain.cancelScheduledValues(audioContext.currentTime);
+        gain.gain.setValueAtTime(Math.max(.0001, gain.gain.value), audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(.0001, stopAt);
+        try { source.stop(stopAt + .02); } catch {}
+      };
+    } catch { return null; }
+  }
+
+  function playFootstep(delay = 0, intensity = 1) {
+    initAudio();
+    if (!soundOn || !audioContext) return;
+    try {
+      noiseBurst({ duration: .62, volume: .095 * intensity, delay, filterType: 'lowpass', frequency: 235, q: .85, decay: 3.4 });
+      noiseBurst({ duration: .2, volume: .045 * intensity, delay: delay + .015, filterType: 'bandpass', frequency: 720, q: 1.1, decay: 4.6 });
+      tone(43, .52, .092 * intensity, delay);
+      tone(71, .28, .05 * intensity, delay + .025);
     } catch {}
   }
 
