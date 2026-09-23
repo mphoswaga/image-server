@@ -244,6 +244,7 @@
     const $=id=>document.getElementById(id);
     const esc=s=>String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
     const GAME_ID=location.pathname.split('/').filter(Boolean).pop();
+    const teacherTest=new URLSearchParams(location.search).get('test')==='1';
     const LCOL=['#1971c2','#e8833a','#2f9e44','#9c36b5'];
     let game=null, questions=[], answers=[], qi=0, score=0, lives=3, active=null, raf=0, lastT=0;
     let arcadeScore=0, activeGameType=null;
@@ -387,7 +388,7 @@
       game=await r.json();
       $('colonyQuestPick').hidden=!game.canManageColonyQuest;
       if(game.canManageColonyQuest){
-        const notice=document.createElement('p');notice.className='center sub';notice.textContent='Teacher test — scores are not saved to learner records.';document.body.prepend(notice);
+        const notice=document.createElement('p');notice.className='center sub';notice.textContent=teacherTest?'Teacher test — scores are not saved to learner records.':'Teacher preview — individual arcade scores are not saved. Choose ColonyQuest or FishQuest to open classroom setup.';document.body.prepend(notice);
         document.querySelector('#resultScreen p.center.sub').textContent='Teacher test complete. No learner results were saved.';
       }
       setAuthLabels(!!game.hasRoster);
@@ -445,8 +446,8 @@
     }
     function loop(t){ if(!active) return; let dt=(t-lastT)/1000; lastT=t; if(dt>0.05) dt=0.05; active.update(dt); active.render(); raf=requestAnimationFrame(loop); }
     async function pickGame(key){
-      if(key==='fishquest'){ location.href='/fishquest-play/'+GAME_ID+(game.canManageColonyQuest?'?test=1':''); return; }
-      if(key==='colonyquest'){ location.href='/colonyquest/'+GAME_ID+'?test=1'; return; }
+      if(key==='fishquest'){ location.href=game.canManageColonyQuest&&!teacherTest?'/fishquest/'+GAME_ID:'/fishquest-play/'+GAME_ID+(game.canManageColonyQuest&&teacherTest?'?test=1':''); return; }
+      if(key==='colonyquest'){ location.href='/colonyquest/'+GAME_ID+(teacherTest?'?test=1':''); return; }
       show('loading');
       const r=await fetch('/api/game/'+GAME_ID+'/play'); const d=await r.json();
       questions=d.questions||[]; answers=new Array(questions.length); qi=0; score=0; lives=3; arcadeScore=0; activeGameType=key;

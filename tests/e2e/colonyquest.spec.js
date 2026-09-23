@@ -587,12 +587,41 @@ test('LessonScope creates ColonyQuest as a teacher-owned whole-class game', asyn
   await expect(page.locator('#setup')).toBeVisible();
   await expect(page.locator('#lessonTitle')).toHaveText('habitats');
 
+  const rosterResponse = await page.request.post('/api/roster', {
+    data: { name: 'Colony class', rows: [{ ID: 'ANT-1', Name: 'Amina Test' }, { ID: 'ANT-2', Name: 'Bao Test' }], idCol: 'ID', nameCol: 'Name' },
+  });
+  expect(rosterResponse.ok()).toBeTruthy();
+  const classRoster = await rosterResponse.json();
+  const assigned = await page.request.patch(`/api/game/${created.gameId}/classes`, { data: { rosterIds: [classRoster.id] } });
+  expect(assigned.ok()).toBeTruthy();
+
   await page.goto(`/play/${created.gameId}`);
   await page.locator('#startBtn').click();
   await expect(page.locator('#colonyQuestPick')).toBeVisible();
   await page.locator('#colonyQuestPick').click();
   await expect(page).toHaveURL(new RegExp(`/colonyquest/${created.gameId}$`));
   await expect(page.locator('#setup')).toBeVisible();
+  await expect(page.locator('#rosterAssign .student-row')).toHaveCount(2);
+  await expect(page.locator('#rosterAssign')).toContainText('Amina Test');
+  await expect(page.locator('#rosterAssign')).toContainText('Bao Test');
+
+  await page.goto(`/play/${created.gameId}?test=1`);
+  await page.locator('#startBtn').click();
+  await page.locator('#colonyQuestPick').click();
+  await expect(page).toHaveURL(new RegExp(`/colonyquest/${created.gameId}\\?test=1$`));
+  await expect(page.locator('#setup')).toBeVisible();
+  await expect(page.locator('#rosterBlock')).toBeHidden();
+
+  await page.goto(`/play/${created.gameId}`);
+  await page.locator('#startBtn').click();
+  await page.locator('[data-game="fishquest"]').click();
+  await expect(page).toHaveURL(new RegExp(`/fishquest/${created.gameId}$`));
+
+  await page.goto(`/play/${created.gameId}?test=1`);
+  await page.locator('#startBtn').click();
+  await page.locator('[data-game="fishquest"]').click();
+  await expect(page).toHaveURL(new RegExp(`/fishquest-play/${created.gameId}\\?test=1$`));
+
 });
 
 test.skip('a teacher can run, recover, pause, and finish a one-screen ColonyQuest match', async ({ page }, testInfo) => {
