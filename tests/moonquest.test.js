@@ -67,3 +67,18 @@ test('AI validates fixed answer key and sends only anonymous evidence',async()=>
   const bad={chat:{completions:{create:async()=>({choices:[{message:{content:JSON.stringify({questions:[{...g.questions[0],accepted:['b']}]})}}]})}}};
   await assert.rejects(generateQuestions({...g,original:g.questions[0]},bad),/changed the answer key/);
 });
+test('QR test entry claims independent practice seats, resumes and never joins a live class',t=>{
+  const {store,game,id}=setup(t);
+  const testRoom=store.createSession('teacher',game.id,null,true);
+  const key='00000000-0000-0000-0000-000000000001';
+  assert.throws(()=>store.joinPractice(id,key),/not an active/);
+  const a=store.joinPractice(testRoom.id,key);
+  assert.deepEqual(store.joinPractice(testRoom.id,key),a);
+  const b=store.joinPractice(testRoom.id,'00000000-0000-0000-0000-000000000002');
+  assert.notEqual(a.studentId,b.studentId);
+  assert.equal(store.session(testRoom.id).rosterId,null);
+  for(let i=3;i<=6;i++)store.joinPractice(testRoom.id,'00000000-0000-0000-0000-00000000000'+i);
+  assert.throws(()=>store.joinPractice(testRoom.id,'00000000-0000-0000-0000-000000000007'),/six practice/);
+  store.command(testRoom.id,'teacher','end',{seq:store.session(testRoom.id).seq});
+  assert.throws(()=>store.joinPractice(testRoom.id,key),/not an active/);
+});

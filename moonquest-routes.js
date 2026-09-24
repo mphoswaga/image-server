@@ -98,7 +98,11 @@ function installMoonQuest(app, deps) {
     const s = ownSession(req); if (!s.test) throw new Error('Practice learners are only available in Test game.');
     const q = s.rounds[s.round]?.question; if (!q) throw new Error('Open a question first.');
     const regions = s.game.diagrams.find(d => d.id === q.diagramId).regions;
-    for (const [i, st] of s.students.entries()) store.answer(s.id, st.id, { phase: s.phase, round: s.round, regionId: req.body.pattern === 'misconception' ? (regions.find(r => !q.accepted.includes(r.id)) || regions[0]).id : regions[i % regions.length].id, eventId: crypto.randomUUID() });
+    const connected = new Set(Object.values(s.testDevices || {}));
+    for (const [i, st] of s.students.entries()) {
+      if (connected.has(st.id)) continue;
+      store.answer(s.id, st.id, { phase: s.phase, round: s.round, regionId: req.body.pattern === 'misconception' ? (regions.find(r => !q.accepted.includes(r.id)) || regions[0]).id : regions[i % regions.length].id, eventId: crypto.randomUUID() });
+    }
     res.json(store.snapshot(s.id, 'teacher'));
   }));
   app.get(base + '/sessions/:id/report', teacher, wrap((req, res) => res.json(store.report(req.params.id, req.userId))));
@@ -126,8 +130,14 @@ function installMoonQuest(app, deps) {
   }));
   app.get(base + '/rooms/:code', joinLimiter, wrap((req, res) => {
     const s = store.findCode(String(req.params.code).toUpperCase());
-    if (!s || s.test || s.phase === 'ended') throw new Error('This room is unavailable. Check the code with your teacher.');
-    res.json({ id: s.id, title: s.game.title, students: learnerPickerEntries(s.students, s.id) });
+    if (!s || s.phase === 'ended') throw new Error('This room is unavailable. Check the code with your teacher.');
+    res.json({ id: s.id, title: s.game.title, test: !!s.test, students: s.test ? [] : learnerPickerEntries(s.students, s.id) });
+  }));
+  app.post(base + '/rooms/:code/test-enter', joinLimiter, wrap((req, res) => {
+    const s = store.findCode(String(req.params.code).toUpperCase());
+    if (!s || !s.test || s.phase === 'ended') throw new Error('This is not an active teacher test room.');
+    const participant = store.joinPractice(s.id, req.body.deviceKey);
+    res.json({ id: s.id, name: participant.name, token: jwt.sign({ type: 'moonquest', sessionId: s.id, studentId: participant.studentId }, sessionSecret(), { expiresIn: '12h' }) });
   }));
   app.post(base + '/sessions/:id/join', joinLimiter, wrap((req, res) => {
     const s = store.session(req.params.id);

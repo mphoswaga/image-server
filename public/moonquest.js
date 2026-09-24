@@ -150,6 +150,7 @@
       ${s.recovered?'<p class="error">Session recovered safely and paused. Resume when the class is ready.</p>':''}
       <div class="row"><a class="button small" target="_blank" rel="noopener noreferrer" href="/moonquest?session=${s.id}&board=${s.boardToken}">Open Smartboard</a>${button('Replace board link','rotate-board','small')}</div>
       <p class="muted">Keep this teacher view off the projector. The Smartboard view hides learner names and queued answers.</p>
+      ${s.test?`<p class="muted">Scan the QR to join as a practice learner—no name or PIN. Simulation fills only the remaining practice learners.</p><a class="button small" target="_blank" rel="noopener" href="/moonquest/join?code=${s.code}">Open practice learner</a>`:''}
       ${s.test&&['choose','reconsider'].includes(s.phase)?`<div class="stack">${button('Simulate learner answers','simulate')}${button('Simulate a misconception','simulate-misconception')}</div>`:''}
       <div class="row" style="margin-top:12px">${button('View report','report','small')}${s.phase!=='ended'?button('Finish mission','end','small'):''}${button('Adventures','home','small')}</div></div>
       <div class="panel"><h3>Crew check-in · ${s.joined}/${s.learners.length}</h3><p class="muted">${s.phase==='reconsider'?'✓ means confirmed during reconsideration. The first choice is kept otherwise.':'✓ means a first choice has been saved.'}</p><div class="learners">${s.learners.map(l=>`<div class="learner"><span>${s.phase==='reconsider'?l.confirmed?'✓':'○':l.answered?'✓':l.joined?'●':'○'} ${esc(l.name)} ${l.absent?'· away':''}</span>${l.joined&&['lobby','reveal'].includes(s.phase)?`<button data-attendance="${esc(l.id)}" data-absent="${!l.absent}">${l.absent?'Include':'Away'}</button>`:''}</div>`).join('')}</div></div>
@@ -212,7 +213,15 @@
     if(code)await findRoom();
   }
   async function findRoom() {
-    room=await api('/rooms/'+encodeURIComponent(document.getElementById('room-code').value.trim().toUpperCase()));
+    const code=document.getElementById('room-code').value.trim().toUpperCase();
+    room=await api('/rooms/'+encodeURIComponent(code));
+    if(room.test){
+      const key='moonquest-test-device:'+room.id;
+      let deviceKey=sessionStorage.getItem(key);if(!deviceKey){deviceKey=uid();sessionStorage.setItem(key,deviceKey);}
+      const result=await api('/rooms/'+encodeURIComponent(code)+'/test-enter',{deviceKey});
+      learnerToken=result.token;sessionStorage.setItem('moonquest:'+room.id,learnerToken);
+      return openSession(room.id,'student');
+    }
     document.getElementById('join-class').innerHTML=`<h2>${esc(room.title)}</h2><div class="stack"><label>Your name<select id="join-name"><option value="">Choose your name</option>${room.students.map(st=>`<option value="${st.handle}">${esc(st.label)}</option>`).join('')}</select></label><label>Your PIN<input id="join-pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off"></label><p class="muted">Use your usual four-digit PIN. If you have never set one, choose one now.</p>${button('Join the mission','join','primary')}</div>`;
   }
   root.addEventListener('input',e=>{

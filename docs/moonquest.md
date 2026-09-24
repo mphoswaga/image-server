@@ -17,9 +17,13 @@ reduced-motion support.
 3. Write questions or request AI drafts. Each needs an objective, accepted
    region(s) and explanation. Confirm review before saving. AI authoring uses
    the existing classroom-game credit action and shows its effective price.
-4. Select one class per session, or choose Test game. Test sessions contain
-   practice learners only and cannot be joined by real learners. Simulate
-   mixed answers or a misconception to test the full feedback loop.
+4. Select one class per session, or choose Test game. Scanning a test room's QR
+   automatically assigns a practice learner without a name, PIN or account.
+   Up to six devices can join independently; rescanning in the same browser tab
+   restores its practice seat. The private Open practice learner link does the
+   same thing. Simulation fills only seats not controlled by a device, preserving
+   the tester's own answers. No roster identities or student accounts are changed.
+   Real class rooms still require the normal name/PIN flow and reject test entry.
 5. Open the separate Smartboard link. Learners scan the QR or open
    `/moonquest/join`, enter its ten-character code, select their name and use
    their existing PIN. First-time learners establish a PIN using the existing

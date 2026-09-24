@@ -174,6 +174,22 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     if (!s.members[studentId]) { s.members[studentId] = { joinedAt: clock(), absent: false }; saveSession(s); }
     return s;
   }
+  function joinPractice(id, deviceKey) {
+    const s = tick(session(id));
+    if (!s.test || s.phase === 'ended') fail('This is not an active teacher test room.');
+    if (!/^[a-f0-9-]{36}$/.test(deviceKey || '')) fail('Reopen the test link to join.');
+    s.testDevices ||= {};
+    let studentId = s.testDevices[deviceKey];
+    if (!studentId) {
+      const taken = new Set(Object.values(s.testDevices));
+      studentId = s.students.find(st => !taken.has(st.id))?.id;
+      if (!studentId) fail('All six practice learners are in use. Start a new test room for more devices.');
+      s.testDevices[deviceKey] = studentId;
+      s.members[studentId] ||= { joinedAt: clock(), absent: false };
+      saveSession(s);
+    }
+    return { studentId, name: s.students.find(st => st.id === studentId).name };
+  }
   function answer(id, studentId, body) {
     const s = tick(session(id)); const r = current(s);
     if (!r || !r.expected.includes(studentId)) fail('Join the next round when your teacher starts it.');
@@ -245,7 +261,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
           revisedCorrect: (a.final ?? a.first) ? r.question.accepted.includes(a.final ?? a.first) : null, confirmed: !!a.confirmed, expected: r.expected.includes(st.id) };
       }) })) };
   }
-  return { dir, read, list, saveGame, createSession, session, saveSession, stats, command, join, answer, snapshot, review, saveSuggestion, report,
+  return { dir, read, list, saveGame, createSession, session, saveSession, stats, command, join, joinPractice, answer, snapshot, review, saveSuggestion, report,
     findCode(code) { if (!/^[A-F0-9]{10}$/.test(code || '')) fail('Enter the ten-character MoonQuest code.'); return list('session').find(s => s.code === code); },
     sessions() { return fs.readdirSync(dir).filter(f => f.startsWith('session-')).map(f => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'))); } };
 }
