@@ -97,30 +97,66 @@ test('school mark template is filled by username without moving comments', async
     [3, 'VS003', 'Chidi', '', ''],
     [4, 'VS999', 'Missing Student', '', ''],
   ]);
-  const result = await fillSchoolTemplate(GRADEBOOK, template);
+  const result = await fillSchoolTemplate(GRADEBOOK, template, { maximum: 50 });
   const { rows } = gridOf(result.buffer);
 
   assert.equal(result.filled, 2);
   assert.equal(result.skippedNoMark, 1);
   assert.equal(result.unmatched.length, 1);
-  assert.equal(rows[2][3], 83);
-  assert.equal(rows[3][3], 90);
+  assert.equal(rows[2][3], 41.65);
+  assert.equal(rows[3][3], 45);
   assert.equal(rows[3][4], 'Keep this note');
   assert.equal(rows[4][3], '');
   assert.equal(rows[5][3], '');
 });
 
-test('school mark template can match by full name when the id is absent', async () => {
+test('school mark template does not guess identity from a name', async () => {
   const template = workbookBuffer([
     ['no', 'username', 'fullname', 'final_grade', 'comment'],
     [1, '', 'Ama', '', ''],
-    [2, '', 'Bongi', '', ''],
+    [2, 'UNKNOWN', 'Bongi', '', ''],
   ]);
-  const result = await fillSchoolTemplate(GRADEBOOK, template);
-  const { rows } = gridOf(result.buffer);
+  await assert.rejects(fillSchoolTemplate(GRADEBOOK, template, { maximum: 50 }), /No marks could be filled/);
+});
 
-  assert.equal(result.filled, 2);
-  assert.deepEqual(result.matchedBy, { studentId: 0, name: 2 });
-  assert.equal(rows[1][3], 83);
-  assert.equal(rows[2][3], 90);
+test('exports original assessment marks rather than percentages or a mixed average', async () => {
+  const template = workbookBuffer([['username', 'fullname', 'final_grade'], ['VS001', 'Ama', ''], ['VS002', 'Bongi', '']]);
+  const result = await fillSchoolTemplate(GRADEBOOK, template, { assessmentId: 'a1' });
+  assert.deepEqual(gridOf(result.buffer).rows.slice(1).map(r => r[2]), [8, 9]);
+  await assert.rejects(fillSchoolTemplate(GRADEBOOK, template), /maximum score/);
+  await assert.rejects(fillSchoolTemplate(GRADEBOOK, template, { assessmentId: 'other-class' }), /this class/);
+});
+
+test('preserves every workbook part and all non-mark cells exactly', async () => {
+  const PizZip = require('pizzip');
+  const template = workbookBuffer([['username', 'fullname', 'final_grade', 'comment'], ['VS001', 'Nguyễn Đức Trí', '', 'Keep this note']]);
+  const before = new PizZip(template);
+  before.file('customXml/item1.xml', '<school>Keep metadata exactly</school>');
+  const original = before.generate({ type: 'nodebuffer' });
+  const result = await fillSchoolTemplate(GRADEBOOK, original, { assessmentId: 'a1' });
+  const after = new PizZip(result.buffer);
+  assert.deepEqual(Object.keys(after.files).sort(), Object.keys(before.files).sort());
+  for (const name of Object.keys(before.files)) {
+    if (before.files[name].dir) continue;
+    if (name === 'xl/worksheets/sheet1.xml') {
+      const stripMark = xml => xml.replace(/<c\b[^>]*r="C2"[^>]*(?:\/>|>[\s\S]*?<\/c>)/, 'MARK');
+      assert.equal(stripMark(after.file(name).asText()), stripMark(before.file(name).asText()));
+    } else assert.deepEqual(after.file(name).asNodeBuffer(), before.file(name).asNodeBuffer(), name);
+  }
+  assert.deepEqual(gridOf(result.buffer).rows[1], ['VS001', 'Nguyễn Đức Trí', 8, 'Keep this note']);
+});
+
+test('zero marks export, missing marks and duplicate IDs never become invented grades', async () => {
+  const template = workbookBuffer([['username', 'final_grade'], ['VS001', ''], ['VS002', ''], ['VS003', '']]);
+  const gb = { ...GRADEBOOK, rows: [
+    { studentId: 'VS001', cells: { a1: { mark: 0, max: 50 } } },
+    { studentId: 'VS002', cells: { a1: { mark: 40, max: 50 } } },
+    { studentId: 'VS002', cells: { a1: { mark: 45, max: 50 } } },
+    { studentId: 'VS003', cells: {} },
+  ] };
+  const result = await fillSchoolTemplate(gb, template, { assessmentId: 'a1' });
+  assert.equal(result.filled, 1);
+  assert.equal(result.unmatched.length, 1);
+  assert.equal(result.skippedNoMark, 1);
+  assert.deepEqual(gridOf(result.buffer).rows.slice(1).map(r => r[1]), [0, '', '']);
 });

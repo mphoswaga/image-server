@@ -7,6 +7,7 @@
 // have no fixed student list, so they're excluded — they can't be gradebooked.
 const XLSX = require('xlsx');
 const ExcelJS = require('exceljs');
+const { patchWorkbookMarks } = require('./school-template');
 const games = require('./games');
 const assignments = require('./assignments');
 const roster = require('./roster');
@@ -384,15 +385,20 @@ function schoolTemplateMaps(gb) {
   const byStudentId = new Map();
   const byName = new Map();
   const duplicateNames = new Set();
+  const duplicateIds = new Set();
   for (const row of gb.rows || []) {
     const studentId = sid(row.studentId);
-    if (studentId) byStudentId.set(studentId, row);
+    if (studentId) {
+      if (byStudentId.has(studentId)) duplicateIds.add(studentId);
+      byStudentId.set(studentId, row);
+    }
     const nameKey = keyText(row.name);
     if (!nameKey) continue;
     if (byName.has(nameKey)) duplicateNames.add(nameKey);
     byName.set(nameKey, row);
   }
   for (const key of duplicateNames) byName.delete(key);
+  for (const key of duplicateIds) byStudentId.delete(key);
   return { byStudentId, byName };
 }
 
@@ -439,8 +445,6 @@ function findSchoolTemplateColumns(sheet) {
 function gradebookRowForTemplate(row, columns, maps) {
   const username = columns.username ? sid(cellText(row.getCell(columns.username))) : '';
   if (username && maps.byStudentId.has(username)) return { row: maps.byStudentId.get(username), match: 'student-id' };
-  const name = columns.fullname ? keyText(cellText(row.getCell(columns.fullname))) : '';
-  if (name && maps.byName.has(name)) return { row: maps.byName.get(name), match: 'name' };
   return null;
 }
 
@@ -451,7 +455,15 @@ function isTemplateLabelRow(row, columns) {
     || values.includes('ten_dang_nhap') || values.includes('ho_va_ten_hoc_sinh') || values.includes('diem_dat_duoc');
 }
 
-async function fillSchoolTemplate(gb, templateBuffer) {
+async function fillSchoolTemplate(gb, templateBuffer, options = {}) {
+  const assessmentId = String(options.assessmentId || '');
+  if (assessmentId && !(gb.assessments || []).some(a => a.id === assessmentId)) {
+    throw new Error('Select an assessment from this class.');
+  }
+  const maximum = Number(options.maximum);
+  if (!assessmentId && (!Number.isFinite(maximum) || maximum <= 0)) {
+    throw new Error('Enter the school assignment maximum score before exporting an average.');
+  }
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(templateBuffer);
   const maps = schoolTemplateMaps(gb);
@@ -460,6 +472,7 @@ async function fillSchoolTemplate(gb, templateBuffer) {
   const unmatched = [];
   const matchedBy = { studentId: 0, name: 0 };
   const touchedSheets = [];
+  const edits = new Map();
 
   for (const sheet of workbook.worksheets) {
     const columns = findSchoolTemplateColumns(sheet);
@@ -475,11 +488,18 @@ async function fillSchoolTemplate(gb, templateBuffer) {
         unmatched.push(identityText);
         return;
       }
-      if (match.row.average == null) {
+      const cell = assessmentId ? match.row.cells?.[assessmentId] : null;
+      const mark = assessmentId ? cell?.mark : (match.row.average == null ? null : Math.round(match.row.average * maximum * 100) / 100);
+      if (mark == null) {
         skippedNoMark++;
         return;
       }
-      row.getCell(columns.final_grade).value = Math.round(match.row.average * 100);
+      const limit = assessmentId ? cell.max : maximum;
+      if (!Number.isFinite(mark) || !Number.isFinite(limit) || limit <= 0 || mark < 0 || mark > limit) {
+        throw new Error('A mark is outside its maximum score. Check the assessment before exporting.');
+      }
+      if (!edits.has(sheet.name)) edits.set(sheet.name, new Map());
+      edits.get(sheet.name).set(row.getCell(columns.final_grade).address, mark);
       filled++;
       sheetFilled++;
       matchedBy[match.match === 'student-id' ? 'studentId' : 'name']++;
@@ -488,10 +508,10 @@ async function fillSchoolTemplate(gb, templateBuffer) {
   }
 
   if (!touchedSheets.length) {
-    throw new Error('This workbook does not have a recognizable final_grade column with username or fullname.');
+    throw new Error('No marks could be filled. Check that the template has username / Student ID and final_grade columns, and that the selected assessment has marks for those IDs.');
   }
 
-  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  const buffer = patchWorkbookMarks(templateBuffer, edits);
   return { buffer, filled, skippedNoMark, unmatched, matchedBy, sheets: touchedSheets };
 }
 

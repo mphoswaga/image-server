@@ -5149,10 +5149,10 @@ app.post('/api/gradebook/:rosterId/export-template', requireAuth, upload.single(
   try {
     if (req.user.role === 'student') return res.status(403).json({ error: 'Teachers only.' });
     if (!req.file) return res.status(400).json({ error: 'Upload the school Excel template first.' });
-    if (!/\.(xlsx|xlsm|xls)$/i.test(req.file.originalname || '')) return res.status(400).json({ error: 'Upload an Excel workbook template.' });
+    if (!/\.xlsx$/i.test(req.file.originalname || '')) return res.status(400).json({ error: 'Upload the original school .xlsx template.' });
     const gb = gradebook.buildGradebook(req.userId, req.params.rosterId);
     if (!gb) return res.status(404).json({ error: 'Class not found.' });
-    const result = await gradebook.fillSchoolTemplate(gb, req.file.buffer);
+    const result = await gradebook.fillSchoolTemplate(gb, req.file.buffer, { assessmentId: req.body.assessmentId, maximum: req.body.maximum });
     const base = String(req.file.originalname || gb.name || 'school-marks').replace(/\.[^.]+$/, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'school-marks';
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${base}-filled.xlsx"`);

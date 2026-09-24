@@ -7745,7 +7745,32 @@
       const exportBtn=sel?`<div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><a href="/api/gradebook/${esc(gbSelected)}/export" class="btn accent" style="font-size:13px;padding:8px 16px;text-decoration:none"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Export to Excel</a><button type="button" class="btn ghost" id="schoolMarksTemplateBtn" style="font-size:13px;padding:8px 16px;width:auto"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg> Fill school template</button><input type="file" id="schoolMarksTemplateFile" accept=".xlsx,.xlsm,.xls" style="display:none"></div>`:'';
       bar.innerHTML=chips+exportBtn;
       bar.querySelectorAll('.gb-class-btn').forEach(b=>b.onclick=()=>{ gbSelected=b.dataset.rid; renderClassBar(); loadGradebook(gbSelected); });
-      $('schoolMarksTemplateBtn')?.addEventListener('click',()=>$('schoolMarksTemplateFile')?.click());
+      $('schoolMarksTemplateFile')?.setAttribute('accept','.xlsx');
+      $('schoolMarksTemplateBtn')?.addEventListener('click',async()=>{
+        if($('schoolTemplateOptions')){$('schoolTemplateOptions').remove();return;}
+        const rosterId=gbSelected;
+        try{
+          const response=await fetch('/api/gradebook/'+encodeURIComponent(rosterId));
+          if(!response.ok) throw new Error('Could not load assessment choices.');
+          const g=await response.json();
+          if(rosterId!==gbSelected) return;
+          const panel=document.createElement('div');panel.id='schoolTemplateOptions';
+          panel.style.cssText='width:100%;padding:16px;border:1px solid var(--border);border-radius:10px;display:grid;gap:10px';
+          panel.innerHTML=`<strong>Fill the school’s original template</strong><label>Marks to export <select id="schoolTemplateSource"><option value="">Choose a test or project</option>${g.assessments.map(a=>`<option value="${esc(a.id)}">${esc(a.title)}${a.kind==='game'?' (game)':''}</option>`).join('')}<option value="__average__">Current weighted average</option></select></label><label id="schoolTemplateMaximumLabel" hidden>Maximum score in the school system <input id="schoolTemplateMaximum" type="number" min="0.01" step="any" placeholder="For example, 50"></label><p class="hint" id="schoolTemplateHelp">Choose the matching assessment. Its original marks will be copied by Student ID. Names, comments and formatting are preserved.</p><button type="button" class="btn accent" id="schoolTemplateChoose">Choose school .xlsx template</button>`;
+          bar.appendChild(panel);
+          $('schoolTemplateSource').onchange=()=>{
+            const id=$('schoolTemplateSource').value;
+            $('schoolTemplateMaximumLabel').hidden=id!=='__average__';
+            const maxima=[...new Set(g.rows.map(r=>r.cells?.[id]?.max).filter(v=>v!=null))];
+            $('schoolTemplateHelp').textContent=id==='__average__'?'The current weighted average will be converted to the maximum you enter.':`Copies original assessment marks${maxima.length===1?' out of '+maxima[0]:''} by Student ID. Check that the school assignment has the same maximum.`;
+          };
+          $('schoolTemplateChoose').onclick=()=>{
+            if(!$('schoolTemplateSource').value){toast('Choose the assessment to export.');return;}
+            if($('schoolTemplateSource').value==='__average__'&&!(Number($('schoolTemplateMaximum').value)>0)){toast('Enter the maximum score shown in the school system.');return;}
+            $('schoolMarksTemplateFile').click();
+          };
+        }catch(error){toast(error.message);}
+      });
       $('schoolMarksTemplateFile')?.addEventListener('change',event=>fillSchoolMarksTemplate(event.target.files&&event.target.files[0],event.target));
     }
     async function fillSchoolMarksTemplate(file,input){
@@ -7755,6 +7780,10 @@
       if(button){button.disabled=true;button.textContent='Filling…';}
       try{
         const fd=new FormData(); fd.append('file',file);
+        const source=$('schoolTemplateSource')?.value;
+        if(!source) throw new Error('Choose the assessment to export.');
+        if(source==='__average__') fd.append('maximum',$('schoolTemplateMaximum').value);
+        else fd.append('assessmentId',source);
         const response=await fetch(`/api/gradebook/${encodeURIComponent(gbSelected)}/export-template`,{method:'POST',body:fd});
         if(!response.ok){
           const data=await response.json().catch(()=>({}));
