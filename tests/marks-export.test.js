@@ -160,3 +160,25 @@ test('zero marks export, missing marks and duplicate IDs never become invented g
   assert.equal(result.skippedNoMark, 1);
   assert.deepEqual(gridOf(result.buffer).rows.slice(1).map(r => r[1]), [0, '', '']);
 });
+
+test('school self-closing blank cells stay valid and do not consume adjacent cells or rows', async () => {
+  const Zip = require('pizzip');
+  const { DOMParser } = require('@xmldom/xmldom');
+  const { patchWorkbookMarks } = require('../school-template');
+  const zip = new Zip(workbookBuffer([['username', 'final_grade', 'comment'], ['VS001', '', ''], ['VS002', '', '']]));
+  const entry = 'xl/worksheets/sheet1.xml';
+  const original = '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'
+    + '<row r="1"><c r="A1" t="inlineStr"><is><t>username</t></is></c><c r="B1" t="inlineStr"><is><t>final_grade</t></is></c></row>'
+    + '<row r="2"><c r="A2" t="inlineStr"><is><t>VS001</t></is></c><c r="B2" s="0"/><c r="C2" s="0"/></row>'
+    + '<row r="3"><c r="A3" t="inlineStr"><is><t>VS002</t></is></c><c r="B3" s="0" /><c r="C3" s="0"/></row>'
+    + '</sheetData></worksheet>';
+  zip.file(entry, original);
+  const input = zip.generate({ type: 'nodebuffer' });
+  const result = patchWorkbookMarks(input, new Map([['Worksheet', new Map([['B2', 41], ['B3', 48]])]]));
+  const actual = new Zip(result).file(entry).asText();
+  new DOMParser({ onError(level, message) { throw new Error(message); } }).parseFromString(actual, 'application/xml');
+  assert.equal(actual, original.replace('<c r="B2" s="0"/>', '<c r="B2" s="0"><v>41</v></c>').replace('<c r="B3" s="0" />', '<c r="B3" s="0" ><v>48</v></c>'));
+  assert.deepEqual(gridOf(result).rows.slice(1), [['VS001', 41], ['VS002', 48]]);
+  zip.file(entry, original.replace('<c r="B2" s="0"/>', '<c r="B2" s="0"><v>41</v>'));
+  assert.throws(() => patchWorkbookMarks(zip.generate({ type: 'nodebuffer' }), new Map([['Worksheet', new Map([['B2', 41]])]])), /XML|parse|closing/i);
+});
