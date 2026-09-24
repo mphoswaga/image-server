@@ -33,14 +33,17 @@ reduced-motion support.
    labels and scoped handles, not school IDs.
 
 New sessions use automatic play by default, including games saved before this update.
-Start once: Choose (12 seconds for new games, capped at 14 for older timings) →
+Start once: a synchronized 24-second opening story leads into Choose (12 seconds for new games, capped at 14 for older timings) →
 Discuss (15 seconds) → reconsider within discussion (5 seconds) → Reveal (10
 seconds) → next question. First choice closes early when all expected learners
 answer; discussion always receives its full time. Initial choices are locked
 until reconsideration. Choosing again during reconsideration explicitly confirms
 or revises the answer; doing nothing retains it without inventing confirmation.
 
-The teacher has a sticky Pause/Resume and +10 seconds toolbar. More than 70%
+The teacher has a sticky Pause/Resume and +10 seconds toolbar, also available
+on the Smartboard when signed in as the room owner. The board token alone
+never authorizes commands. A signed-out board offers a link to teacher controls.
+The opening can be paused or skipped; reduced-motion mode shows static text. More than 70%
 incorrect among submitted answers, or less than 80% participation, pauses the
 reveal for teaching or device support. Resume continues the reveal countdown.
 Approved follow-ups enter automatically after two intervening rounds. The final
@@ -48,10 +51,10 @@ round ends automatically. Teacher-paced mode remains an editor option. Existing
 running sessions retain their original flow rather than changing mid-lesson.
 
 The question is the largest element on a high-contrast card. Learner screens hide
-navigation, music controls and moving scenery. The Smartboard displays anonymous
-response progress; the private teacher dashboard also shows live distributions
-and learner choices. Public correctness and distributions remain hidden until
-reveal. Results preserve first answers, revisions and missing responses.
+navigation, music controls and moving scenery. The Smartboard and teacher dashboard show a live answered/expected count and
+named answered/waiting chips. Those chips never include individual choices or
+correctness. Aggregate correctness and distributions appear only after reveal.
+Learner tokens do not receive the class roll call. Results preserve first answers, revisions and missing responses.
 
 On the Smartboard, tap **Enable countdown sounds** once to unlock browser audio.
 Each timed stage ticks gently with stronger final-five-second beeps and a stage
@@ -91,7 +94,8 @@ rounds to revisit it; the teacher can finish with it recorded for future teachin
 - Session snapshots preserve the reviewed game version. Later game edits do not
   change a class already playing. Optimistic editing protects saved games.
 - Read-only snapshots expose no correctness before reveal. Smartboard tokens
-  expose anonymous progress only, are session-scoped and can be replaced.
+  expose response-status names and revealed class totals, never individual
+  answers, school IDs or private queues; they are session-scoped and replaceable.
 - Learner tokens are signed, session-scoped and expire in 12 hours. Teacher
   ownership is checked on editing, sessions, AI and reports. Mutations check
   browser origin; join, upload and generation use the app's rate limiters.

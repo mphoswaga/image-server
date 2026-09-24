@@ -152,3 +152,18 @@ test('starting automatic play before anyone joins does not trap the lobby in pau
   assert.throws(()=>f.store.command(s.id,'teacher','next',{seq:s.seq}),/Wait for learners/);
   assert.equal(f.store.snapshot(s.id,'teacher').paused,false);
 });
+test('cinematic introduction is synchronized, pausable, and starts the first round automatically',t=>{
+  const f=automatic(t);f.cmd('launch');assert.equal(f.store.snapshot(f.id,'board').phase,'intro');
+  assert.equal(f.store.snapshot(f.id,'student','s0').question,null);
+  f.step(8000);f.cmd('pause');assert.equal(f.store.snapshot(f.id,'board').introElapsedMs,8000);
+  f.step(60000);assert.equal(f.store.snapshot(f.id,'board').introElapsedMs,8000);
+  f.cmd('pause');f.step(16000);assert.equal(f.store.snapshot(f.id,'board').phase,'choose');
+  assert.equal(f.store.snapshot(f.id,'board').round,0);
+});
+test('intro skip is teacher-owned and roll call contains status without individual answers',t=>{
+  const f=automatic(t);f.cmd('launch');assert.throws(()=>f.store.command(f.id,'other','skip-intro',{seq:f.store.session(f.id).seq}),/another teacher/);
+  f.cmd('skip-intro');f.answer(0,'b');const view=f.store.snapshot(f.id,'board');
+  assert.deepEqual(view.crew,[{name:'Student 0',answered:true,confirmed:false},{name:'Student 1',answered:false,confirmed:false}]);
+  assert.equal(view.stats,null);assert.equal(view.learners,undefined);assert.equal(f.store.snapshot(f.id,'student','s0').crew,undefined);
+  assert.equal(f.store.snapshot(f.id,'teacher').learners[0].choice,undefined);
+});

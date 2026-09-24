@@ -129,7 +129,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
   }
   function tick(s) {
     if (!s.paused && s.deadline && clock() >= s.deadline) {
-      if (s.phase === 'reveal' && s.game.timing.automatic) nextRound(s);
+      if (s.phase === 'intro' || (s.phase === 'reveal' && s.game.timing.automatic)) nextRound(s);
       else advance(s);
       saveSession(s);
     }
@@ -167,7 +167,14 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     } else if (action === 'end') { s.phase = 'ended'; s.deadline = null; s.paused = false;
     } else {
       if (s.paused) fail('Resume the game first.');
-      if (action === 'next') {
+      if (action === 'launch') {
+        if (s.phase !== 'lobby') fail('This mission has already started.');
+        if (!Object.keys(s.members).length) fail('Wait for learners to join first.');
+        s.phase = 'intro'; s.deadline = clock() + 24000;
+      } else if (action === 'skip-intro') {
+        if (s.phase !== 'intro') fail('The introduction has already finished.');
+        nextRound(s);
+      } else if (action === 'next') {
         if (!['lobby', 'reveal'].includes(s.phase)) fail('Finish this round first.');
         if (s.game.timing.automatic) nextRound(s);
         else {
@@ -266,6 +273,8 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
       stats: revealed ? stats(s) : null,
       lanterns: s.rounds.filter(r => r.revealedAt).reduce((n, r) => n + stats(s, r).correct, 0) };
     if (role === 'board' && s.phase === 'lobby') view.code = s.code;
+    if (s.phase === 'intro') view.introElapsedMs = Math.max(0, 24000 - (s.paused ? s.remaining : s.deadline - clock()));
+    if (role !== 'student') view.crew = s.students.filter(st => r ? r.expected.includes(st.id) : !!s.members[st.id]).map(st => ({ name: st.name, answered: !!(r?.answers[st.id]?.first || r?.answers[st.id]?.final), confirmed: !!r?.answers[st.id]?.confirmed }));
     if (role === 'student') { view.mine = r?.answers[studentId] || {}; view.canAnswer = !!r?.expected.includes(studentId); }
     if (role === 'teacher') {
       Object.assign(view, { liveStats: stats(s), code: s.code, boardToken: s.boardToken, queue: s.queue.map(item => {
@@ -274,7 +283,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
         return { ...item, originalPrompt: original.prompt, acceptedLabels: diagram.regions.filter(r => original.accepted.includes(r.id)).map(r => r.label) };
       }),
         learners: s.students.map(x => ({ ...x, joined: !!s.members[x.id], absent: !!s.members[x.id]?.absent,
-          choice: r?.answers[x.id]?.final ?? r?.answers[x.id]?.first ?? null, answered: !!r?.answers[x.id]?.first, confirmed: !!r?.answers[x.id]?.confirmed })) });
+          answered: !!r?.answers[x.id]?.first, confirmed: !!r?.answers[x.id]?.confirmed })) });
     }
     return view;
   }

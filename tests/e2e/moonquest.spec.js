@@ -33,7 +33,7 @@ test('MoonQuest editor, isolated practice and durable results work together', as
   await expectNoPageOverflow(page);
   await page.getByRole('button',{name:'Test game',exact:true}).click();
   await expect(page.getByText('Teacher test · Practice learners only')).toBeVisible();
-  await page.getByRole('button',{name:'Begin mission',exact:true}).click();
+  await page.getByRole('button',{name:'Begin mission',exact:true}).click();await page.getByRole('button',{name:'Skip intro',exact:true}).click();
   await expect(page.getByRole('heading',{name:'A watch vibrates on your wrist.' , exact:false})).toBeVisible();
   await page.getByRole('button',{name:'Open answers',exact:true}).click();
   await page.getByRole('button',{name:'Simulate learner answers'}).click();
@@ -63,7 +63,7 @@ test('teacher, board and learner are separated; real PIN join keeps answers priv
   await learner.locator('#join-name').selectOption({label:'Moon L.'});await learner.locator('#join-pin').fill('4829');await learner.getByRole('button',{name:'Join the mission'}).click();await expect(learner.getByText('You’re in the crew!')).toBeVisible();
   const boardContext=await browser.newContext();const board=await boardContext.newPage();await board.goto(`/moonquest?session=${created.id}&board=${teacher.boardToken}`);
   await expect(board.locator('.code')).toHaveText(teacher.code);await expect(board.getByText('Teacher controls · private')).toHaveCount(0);
-  await page.getByRole('button',{name:'Begin mission',exact:true}).click();await page.getByRole('button',{name:'Open answers',exact:true}).click();
+  await page.getByRole('button',{name:'Begin mission',exact:true}).click();await page.getByRole('button',{name:'Skip intro',exact:true}).click();await page.getByRole('button',{name:'Open answers',exact:true}).click();
   await learner.getByRole('button',{name:'Left hand / skin',exact:true}).last().click();await expect(learner.locator('#answer-status')).toContainText('saved');
   await expect(board.locator('#answer-status')).toContainText('1 of 1');
   await expectNoPageOverflow(learner);
@@ -82,7 +82,7 @@ test('scanning the test QR opens a practice learner without a name or PIN and si
     await expect(learner.getByText('You’re in the crew!')).toBeVisible();
     await expect(learner.locator('#join-name')).toHaveCount(0);await expect(learner.locator('#join-pin')).toHaveCount(0);
     await expect(learner.locator('.preview-note')).toContainText('Practice learners only');
-    await page.getByRole('button',{name:'Begin mission',exact:true}).click();await page.getByRole('button',{name:'Open answers',exact:true}).click();
+    await page.getByRole('button',{name:'Begin mission',exact:true}).click();await page.getByRole('button',{name:'Skip intro',exact:true}).click();await page.getByRole('button',{name:'Open answers',exact:true}).click();
     await learner.getByRole('button',{name:'Left hand / skin',exact:true}).last().click();await expect(learner.locator('#answer-status')).toContainText('saved');
     await page.getByRole('button',{name:'Simulate a misconception',exact:true}).click();await page.getByRole('button',{name:'Reconsider',exact:true}).click();await page.getByRole('button',{name:'Reveal answer',exact:true}).click();
     await expect(learner.getByText('1 correct',{exact:true})).toBeVisible();
@@ -94,7 +94,7 @@ test('scanning the test QR opens a practice learner without a name or PIN and si
 
 test('later challenges preserve teacher edits and stay hidden until two intervening rounds',async({page})=>{
   await signInDisposableTeacher(page,'-moonquest-queue');await page.goto('/moonquest');await page.getByRole('button',{name:'Try the senses example'}).click();await page.locator('#automatic').uncheck();await page.locator('#reviewed').check();await page.getByRole('button',{name:'Save adventure',exact:true}).click();await page.getByRole('button',{name:'Test game',exact:true}).click();
-  await page.getByRole('button',{name:'Begin mission',exact:true}).click();await page.getByRole('button',{name:'Open answers',exact:true}).click();await page.getByRole('button',{name:'Simulate a misconception'}).click();await page.getByRole('button',{name:'Reconsider',exact:true}).click();await page.getByRole('button',{name:'Reveal answer',exact:true}).click();
+  await page.getByRole('button',{name:'Begin mission',exact:true}).click();await page.getByRole('button',{name:'Skip intro',exact:true}).click();await page.getByRole('button',{name:'Open answers',exact:true}).click();await page.getByRole('button',{name:'Simulate a misconception'}).click();await page.getByRole('button',{name:'Reconsider',exact:true}).click();await page.getByRole('button',{name:'Reveal answer',exact:true}).click();
   await expect(page.getByRole('heading',{name:'A concept to revisit'})).toBeVisible();
   const prompt='A silent controller shakes in your hand. Which part notices this?';
   await page.locator('[data-prompt]').fill(prompt);await page.locator('[data-explanation]').fill('The skin detects the shaking.');
@@ -153,7 +153,7 @@ test('automatic mission runs choose, discussion, reveal and next question with a
     await board.addInitScript(()=>{window.countdownTones=0;const Audio=window.AudioContext||window.webkitAudioContext;if(Audio){const create=Audio.prototype.createOscillator;Audio.prototype.createOscillator=function(...args){window.countdownTones++;return create.apply(this,args);};}});
     await board.goto('http://127.0.0.1:4341'+boardUrl);await board.getByRole('button',{name:'Enable countdown sounds'}).click();
     await expect(board.locator('#sound')).toHaveText('Sound on');
-    await page.getByRole('button',{name:'Begin mission',exact:true}).click();
+    await page.getByRole('button',{name:'Begin mission',exact:true}).click();await page.getByRole('button',{name:'Skip intro',exact:true}).click();
     await expect(page.getByRole('button',{name:'Open answers',exact:true})).toHaveCount(0);
     await expect(learner.locator('.question-focus h1')).toContainText('Which part senses the vibration?');
     await expect(learner.locator('header')).toBeHidden();await expect(learner.locator('.audio-settings')).toBeHidden();
@@ -175,4 +175,26 @@ test('automatic mission runs choose, discussion, reveal and next question with a
     await expect(learner.locator('.question-focus h1')).toContainText('A lantern changes colour.',{timeout:15000});
     expect(errors).toEqual([]);
   }finally{await context.close();}
+});
+
+test('signed-in Smartboard can resume and displays names without exposing choices',async({page,browser},info)=>{
+  test.setTimeout(90000);
+  await signInDisposableTeacher(page,'-moonquest-presenter');await page.goto('/moonquest');await page.getByRole('button',{name:'Try the senses example'}).click();await page.locator('#reviewed').check();await page.getByRole('button',{name:'Save adventure',exact:true}).click();await page.getByRole('button',{name:'Test game',exact:true}).click();
+  const url=await page.getByRole('link',{name:'Open Smartboard'}).getAttribute('href');
+  const board=await page.context().newPage();await board.goto('http://127.0.0.1:4341'+url);
+  await board.getByRole('button',{name:'Begin mission',exact:true}).click();
+  await expect(board.locator('.story-crawl')).toContainText('THE VANISHING LIGHT');
+  await board.waitForTimeout(7000); // Inspect the actual crawl mid-flight, not a mocked frame.
+  await board.getByRole('button',{name:'Pause',exact:true}).click();await expect(board.locator('#timer')).toHaveText('Paused');
+  await board.screenshot({path:'/tmp/moon-story-'+info.project.name+'.png',fullPage:true});
+  await board.getByRole('button',{name:'Resume',exact:true}).click();await expect(board.locator('#timer')).not.toHaveText('Paused');
+  await board.getByRole('button',{name:'Skip intro',exact:true}).click();await expect(board.locator('.question-focus')).toBeVisible();
+  await expect(page.getByRole('button',{name:'Simulate learner answers',exact:true})).toBeVisible();await page.getByRole('button',{name:'Simulate learner answers',exact:true}).click();
+  await expect(board.getByRole('heading',{name:'6/6 learners answered',exact:true})).toBeVisible();
+  await expect(board.locator('.crew-chip.answered')).toHaveCount(6);await expect(board.locator('.crew-chip').first()).toContainText('Practice learner 1');
+  await expect(board.locator('.crew-status')).not.toContainText('Eyes');await expect(board.locator('.evidence')).toHaveCount(0);
+  await board.getByRole('button',{name:'Pause',exact:true}).click();await board.getByRole('button',{name:'Resume',exact:true}).click();
+  await expect(board.locator('#timer')).not.toHaveText('Paused');await expectNoPageOverflow(board);
+  await board.screenshot({path:'/tmp/moon-dashboard-'+info.project.name+'.png',fullPage:true});
+  const anon=await browser.newContext();try{const viewer=await anon.newPage();await viewer.goto('http://127.0.0.1:4341'+url);await expect(viewer.locator('.crew-chip')).toHaveCount(6);await expect(viewer.getByRole('button',{name:'Pause',exact:true})).toHaveCount(0);const id=new URL(url,'http://local').searchParams.get('session');expect((await viewer.request.get('/api/games/moonquest/sessions/'+id+'/presenter')).ok()).toBe(false);expect((await viewer.request.post('/api/games/moonquest/sessions/'+id+'/command',{data:{action:'pause',presentation:true}})).ok()).toBe(false);}finally{await anon.close();await board.close();}
 });

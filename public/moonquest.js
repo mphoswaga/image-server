@@ -9,6 +9,7 @@
   const button = (label, action, cls = '') => `<button class="${cls}" data-action="${action}">${label}</button>`;
   let library, draft, activeDiagram = 0, drawn = [], drawing = false, regionEditing = null, view = 'library', sessionId, role = 'teacher', state, lastRender = '', pollTimer, clockOffset = 0;
   let learnerToken = '', room, busyAnswer = false, polling = false, dirty = false, noticeTimer, soundEnabled = false, audio;
+  let presenterAvailable=false;
   const autoSuggestions = new Set();
   const queueEdits = {};
   let musicTimer, musicEnabled=false, musicStep=0;
@@ -125,14 +126,16 @@
     const response=await api('/games/'+id+'/sessions',{test,rosterId:document.getElementById('host-class')?.value});await openSession(response.id,'teacher');
   }
   async function openSession(id,audience) {
-    stopPoll();view='live';sessionId=id;role=audience;state=null;lastRender='';nav('/moonquest?session='+id+(role==='board'?'&board='+encodeURIComponent(new URLSearchParams(location.search).get('board')||''):''));await poll();
+    stopPoll();view='live';sessionId=id;role=audience;state=null;lastRender='';presenterAvailable=false;
+    if(role==='board'){try{const access=await api('/sessions/'+id+'/presenter');presenterAvailable=access.canControl===true;}catch{}}
+    nav('/moonquest?session='+id+(role==='board'?'&board='+encodeURIComponent(new URLSearchParams(location.search).get('board')||''):''));await poll();
   }
   async function poll() {
     if(view!=='live'||polling)return;
     polling=true;
     const requestedSession=sessionId,requestedRole=role;
     try{
-      const url='/sessions/'+sessionId+(role==='teacher'?'/teacher':'/state'+(role==='board'?'?board='+encodeURIComponent(new URLSearchParams(location.search).get('board')):''));
+      const url='/sessions/'+sessionId+(role==='teacher'?'/teacher':presenterAvailable?'/presenter':'/state'+(role==='board'?'?board='+encodeURIComponent(new URLSearchParams(location.search).get('board')):''));
       const next=await api(url);if(view!=='live'||sessionId!==requestedSession||role!==requestedRole)return;clockOffset=next.serverNow-Date.now();
       if(state&&next.seq<state.seq)return;
       state=next;
@@ -145,16 +148,25 @@
     }catch(e){lastRender='';const c=document.getElementById('connection');if(c){c.textContent='Reconnecting… Your saved answer is safe.';c.classList.add('interrupted');}else {root.innerHTML=`<section class="intro"><h1>Let’s reconnect.</h1><p>${esc(e.message)}</p><div class="row"><a class="button" href="/moonquest/join">Rejoin as a learner</a><a class="button" href="/">Teacher sign-in</a></div></section>`;}document.querySelectorAll('[data-region-answer]').forEach(b=>b.disabled=true);}
     finally{polling=false;if(view==='live')pollTimer=setTimeout(poll,1100);}
   }
+  function presenterControls(s) {
+    const owner=role==='teacher'||s.canControl;
+    if(!owner)return s.paused?`<p class="board-signin">Paused for teaching. <a class="button" href="/moonquest?session=${s.id}">Open signed-in teacher controls</a></p>`:'';
+    return `<div class="teacher-transport control presenter-controls" aria-label="Presentation controls">${s.phase==='lobby'?button('Begin mission','launch','primary'):''}${s.phase==='intro'&&!s.paused?button('Skip intro','skip-intro'):''}${!['lobby','ended'].includes(s.phase)?button(s.paused?'Resume':'Pause','pause'):''}${s.deadline&&s.phase!=='intro'?button('+10 seconds','extend'):''}</div>`;
+  }
+  function storyScene(s) {
+    const elapsed=Math.min(24,Math.max(0,(s.introElapsedMs||0)/1000));
+    return `${presenterControls(s)}<section class="opening-scene" aria-label="MoonQuest opening story"><div class="opening-brand">MOONQUEST<span>SAVE THE FESTIVAL</span></div><div class="crawl-window"><div class="story-crawl" style="--elapsed:-${elapsed}s;animation-play-state:${s.paused?'paused':'running'}"><p class="episode">MISSION ONE</p><h1>THE VANISHING LIGHT</h1><p>Above our world, the Moon Festival is growing dark.</p><p>Pip has mixed up the signals that guide the lanterns home.</p><p>One brave crew can restore them.<br>That crew is YOU.</p><p>Look carefully. Choose wisely.<br>Share your reasons.</p><p>Together, bring the light back.</p></div></div><div class="launch-status"><span>${s.paused?'Story paused':'Your mission begins soon'}</span><div id="timer" class="timer" role="timer"></div></div></section>`;
+  }
   function liveControls() {
     const s=state;
-    return `<aside class="teacher-private"><div class="panel"><span class="eyebrow">Teacher controls · private</span><div class="control" style="margin-top:12px">${!s.paused&&(s.phase==='lobby'||s.phase==='reveal')?button(s.phase==='lobby'?'Begin mission':'Next question','next','primary'):''}${s.phase==='read'?button('Open answers','open','primary'):''}${!s.automatic&&['choose','discuss','reconsider'].includes(s.phase)?button({choose:'Begin discussion',discuss:'Reconsider',reconsider:'Reveal answer'}[s.phase],'advance','primary'):''}${!['lobby','ended'].includes(s.phase)?button(s.paused?'Resume':'Pause','pause'):''}${s.deadline?button('+10 seconds','extend'):''}</div>
+    return `<aside class="teacher-private"><div class="panel"><span class="eyebrow">Teacher controls · private</span><div class="control" style="margin-top:12px">${!s.paused&&(s.phase==='lobby'||s.phase==='reveal')?button(s.phase==='lobby'?'Begin mission':'Next question',s.phase==='lobby'?'launch':'next','primary'):''}${s.phase==='read'?button('Open answers','open','primary'):''}${!s.automatic&&['choose','discuss','reconsider'].includes(s.phase)?button({choose:'Begin discussion',discuss:'Reconsider',reconsider:'Reveal answer'}[s.phase],'advance','primary'):''}${!['lobby','ended'].includes(s.phase)?button(s.paused?'Resume':'Pause','pause'):''}${s.deadline?button('+10 seconds','extend'):''}</div>
       ${s.teachingPause?`<p class="teaching-alert">${s.teachingPause==='misconception'?'Let’s unpack this idea. More than 70% of answers were incorrect. Ask learners to explain the correct area and why another area does not fit.':s.teachingPause==='attendance'?'No learners are currently included. Include learners below before resuming.':'Some answers are missing. Check devices and understanding before continuing.'}</p>`:''}${s.automatic?'<p class="muted">Automatic play · choose → discuss → reveal. Use Pause when you need a teaching moment.</p>':''}${s.recovered?'<p class="error">Session recovered safely and paused. Resume when the class is ready.</p>':''}
       <div class="row"><a class="button small" target="_blank" rel="noopener noreferrer" href="/moonquest?session=${s.id}&board=${s.boardToken}">Open Smartboard</a>${button('Replace board link','rotate-board','small')}</div>
-      <p class="muted">Keep this teacher view off the projector. The Smartboard view hides learner names and queued answers.</p>
+      <p class="muted">Keep this teacher view off the projector. The Smartboard shows names and response status, but keeps individual answers and private suggestions hidden.</p>
       ${s.test?`<p class="muted">Scan the QR to join as a practice learner—no name or PIN. Simulation fills only the remaining practice learners.</p><a class="button small" target="_blank" rel="noopener" href="/moonquest/join?code=${s.code}">Open practice learner</a>`:''}
       ${s.test&&['choose','reconsider'].includes(s.phase)?`<div class="stack">${button('Simulate learner answers','simulate')}${button('Simulate a misconception','simulate-misconception')}</div>`:''}
       <div class="row" style="margin-top:12px">${button('View report','report','small')}${s.phase!=='ended'?button('Finish mission','end','small'):''}${button('Adventures','home','small')}</div></div>
-      <div class="panel"><h3>Crew check-in · ${s.joined}/${s.learners.length}</h3><p class="muted">${s.phase==='reconsider'?'✓ means confirmed during reconsideration. The first choice is kept otherwise.':'✓ means a first choice has been saved.'}</p><div class="learners">${s.learners.map(l=>`<div class="learner ${l.answered?'has-answered':''}"><span>${s.phase==='reconsider'?l.confirmed?'✓':'○':l.answered?'✓':l.joined?'●':'○'} ${esc(l.name)} ${l.absent?'· away':''}${l.choice?`<small class="learner-choice">${esc(s.diagram?.regions.find(r=>r.id===l.choice)?.label||'')}</small>`:''}</span>${l.joined&&['lobby','reveal'].includes(s.phase)?`<button data-attendance="${esc(l.id)}" data-absent="${!l.absent}">${l.absent?'Include':'Away'}</button>`:''}</div>`).join('')}</div></div>
+      <div class="panel"><h3>Crew check-in · ${s.joined}/${s.learners.length}</h3><p class="muted">${s.phase==='reconsider'?'✓ means confirmed during reconsideration. The first choice is kept otherwise.':'✓ means a first choice has been saved.'}</p><div class="learners">${s.learners.map(l=>`<div class="learner ${l.answered?'has-answered':''}"><span>${s.phase==='reconsider'?l.confirmed?'✓':'○':l.answered?'✓':l.joined?'●':'○'} ${esc(l.name)} ${l.absent?'· away':''}</span>${l.joined&&['lobby','reveal'].includes(s.phase)?`<button data-attendance="${esc(l.id)}" data-absent="${!l.absent}">${l.absent?'Include':'Away'}</button>`:''}</div>`).join('')}</div></div>
       <div id="queue-panel"></div></aside>`;
   }
   function renderLive() {
@@ -166,7 +178,8 @@
     const queued=queueEdits;
     const titles={lobby:'The moon needs your crew.',read:'A new challenge has arrived.',choose:'Choose your answer.',discuss:'Discuss your choice with your partner.',reconsider:'Are you sure about your answer?',reveal:'Let’s discover why.',ended:'You brought light to the festival!'};
     document.body.classList.toggle('celebrate',s.phase==='ended');
-    root.innerHTML=`${s.test?'<div class="preview-note">Teacher test · Practice learners only · No class marks are saved</div>':''}<div class="row spread mission-meta"><span class="pill">${esc(s.title)}</span><span class="connection" id="connection">Connected</span><span class="pill">${s.lanterns} lantern sparks</span></div>
+    if(s.phase==='intro'){root.innerHTML=storyScene(s);updateTimer();return;}
+    root.innerHTML=`${role==='board'?presenterControls(s):''}${s.test?'<div class="preview-note">Teacher test · Practice learners only · No class marks are saved</div>':''}<div class="row spread mission-meta"><span class="pill">${esc(s.title)}</span><span class="connection" id="connection">Connected</span><span class="pill">${s.lanterns} lantern sparks</span></div>
       <section class="stage" style="margin-top:24px"><p class="eyebrow">${s.phase==='lobby'?'MOON FESTIVAL RESCUE':s.phase==='ended'?'MISSION COMPLETE':'Challenge '+(s.round+1)}</p>${s.question&&s.phase!=='ended'?`<div class="question-focus"><span class="question-label">QUESTION ${s.round+1}</span><h1>${esc(s.question.prompt)}</h1></div><h2 class="stage-instruction">${s.paused?'Pause and talk together':titles[s.phase]}</h2>`:`<h1>${titles[s.phase]}</h1>`}<div class="timer" id="timer" role="timer" aria-label="Seconds remaining"></div></section>
       ${role==='board'&&!soundEnabled?button('Enable countdown sounds','enable-audio','small'):''}${role!=='student'?dashboard(s):''}<div class="live-layout ${teacher?'':'solo'}"><div>${s.phase==='lobby'?`<section class="intro">${mascot()}<h2>Outsmart Pip. Restore the lanterns.</h2><p>Pip has scrambled the festival signals! Choose carefully, explain your thinking to a partner, then lock in your rescue plan. Every discovery adds light to our sky.</p>${role==='student'?'<p class="stat">You’re in the crew!</p><p>Wait for your teacher to begin.</p>':`<p>On learner devices, open <strong>${esc(location.host)}/moonquest/join</strong></p>${s.code?`<p class="code">${s.code}</p><img class="qr" alt="Scan to join this MoonQuest room" src="${base}/sessions/${s.id}/${teacher?'qr':'board-qr?board='+encodeURIComponent(new URLSearchParams(location.search).get('board'))}">`:''}`}<p class="muted">${s.joined} learners ready</p></section>`:
       s.phase==='ended'?`<section class="intro">${mascot()}<p class="stat">${s.lanterns} sparks of understanding</p><p>The lanterns shine again, and the moon rabbit can find the way home. Your careful choices and conversations made the difference.</p>${teacher?button('Explore the learning report','report','primary'):''}</section>`:
@@ -226,9 +239,9 @@
   }
   function dashboard(s) {
     if(!s.question||s.phase==='ended')return '';
-    const score=role==='teacher'?s.liveStats:s.stats;
+    const score=s.stats;
     const percent=Math.round(100*s.answered/Math.max(1,s.expected));
-    return `<section class="live-dashboard" aria-label="Live class progress"><div class="response-ring" style="--progress:${percent}%"><strong>${s.answered}/${s.expected}</strong><span>answered</span></div><div class="dashboard-detail"><p class="eyebrow">Our festival crew</p><h2>${s.answered===s.expected?'Every voice is in!':'Our ideas are arriving…'}</h2><div class="lantern-trail" aria-hidden="true">${Array.from({length:10},(_,i)=>`<i class="${i<Math.round(percent/10)?'lit':''}">✦</i>`).join('')}</div><p class="muted">${esc(s.question.concept)}</p></div>${score?`<div class="evidence"><strong>${score.initialCorrect}/${s.expected} first choice → ${score.correct}/${s.expected} latest choice</strong><p>${score.wrong} incorrect · ${score.unanswered} unanswered</p>${s.diagram.regions.map(r=>`<div class="distribution"><span>${esc(r.label)}</span><meter min="0" max="${Math.max(1,s.expected)}" value="${score.distribution[r.id]||0}"></meter><b>${score.distribution[r.id]||0}</b></div>`).join('')}</div>`:''}</section>`;
+    return `<section class="live-dashboard" aria-label="Live class progress"><div class="response-ring" style="--progress:${percent}%"><strong>${s.answered}/${s.expected}</strong><span>answered</span></div><div class="dashboard-detail"><p class="eyebrow">Our festival crew</p><h2>${s.answered}/${s.expected} learners answered</h2><p>${s.answered===s.expected?'Every voice is in!':'Waiting for our crew…'}</p><div class="lantern-trail" aria-hidden="true">${Array.from({length:10},(_,i)=>`<i class="${i<Math.round(percent/10)?'lit':''}">✦</i>`).join('')}</div><p class="muted">${esc(s.question.concept)}</p></div>${score?`<div class="evidence"><strong>${score.initialCorrect}/${s.expected} first choice → ${score.correct}/${s.expected} latest choice</strong><p>${score.wrong} incorrect · ${score.unanswered} unanswered</p>${s.diagram.regions.map(r=>`<div class="distribution"><span>${esc(r.label)}</span><meter min="0" max="${Math.max(1,s.expected)}" value="${score.distribution[r.id]||0}"></meter><b>${score.distribution[r.id]||0}</b></div>`).join('')}</div>`:''}${s.crew?.length?`<div class="crew-status" aria-label="Learner response status">${s.crew.map(l=>`<span class="crew-chip ${l.answered?'answered':'waiting'}"><b>${l.answered?'✓':'○'}</b> ${esc(l.name)} <small>${l.answered?'Answered':'Waiting'}</small></span>`).join('')}</div>`:''}</section>`;
   }
   setInterval(updateTimer,250);
   async function submitAnswer(regionId) {
@@ -236,7 +249,7 @@
     busyAnswer=true;const el=document.getElementById('answer-status');if(el)el.textContent='Saving your choice…';
     try{state=await api('/sessions/'+sessionId+'/answer',{regionId,round:state.round,phase:state.phase,eventId:uid()});lastRender='';renderLive();}catch(e){tell(e.message,true);if(el)el.textContent='Not confirmed. Check your connection and select again.';}finally{busyAnswer=false;}
   }
-  async function command(action,extra={}){const s=await api('/sessions/'+sessionId+'/command',{action,seq:state.seq,round:state.round,phase:state.phase,paused:state.paused,...extra});state=s;lastRender='';renderLive();}
+  async function command(action,extra={}){const s=await api('/sessions/'+sessionId+'/command',{action,presentation:role==='board',seq:state.seq,round:state.round,phase:state.phase,paused:state.paused,...extra});state=s;lastRender='';renderLive();}
   async function report(id) {
     stopPoll();view='report';const r=await api('/sessions/'+id+'/report');
     root.innerHTML=`<div class="row spread"><div><p class="eyebrow">Learning, made visible</p><h1 style="font-size:38px">${esc(r.title)}</h1><p>${esc(r.className)}${r.test?' · Practice only':''}</p></div><div class="row"><button data-session="${id}">Back to room</button>${button('Adventures','home')}</div></div><div class="panel"><h3>First thinking → discussion → later application</h3><p class="muted">These are formative results and do not change class averages. Later checks follow feedback, so they are shown separately from independent first attempts.</p>${button('Download CSV','csv')}</div><div class="report-wrap"><table><thead><tr><th>Learner</th>${r.rounds.map(q=>`<th>${q.followUp?'Later check':'First encounter'} · ${q.number}<p>${esc(q.prompt)}</p>${q.completed?'':'(not completed)'}</th>`).join('')}</tr></thead><tbody>${r.students.map(st=>`<tr><th>${esc(st.name)}</th>${st.rounds.map(a=>`<td>${!a.expected?'Not in this round':`${esc(a.initial||'Unanswered')} ${a.initialCorrect===true?'✓':a.initialCorrect===false?'✗':''}<br>→ ${esc(a.revised||'Unanswered')} ${a.revisedCorrect===true?'✓':a.revisedCorrect===false?'✗':''}<br><small>${a.confirmed?'Confirmed':'First choice retained if present'}</small>`}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
@@ -290,7 +303,7 @@
       else if(b.dataset.report)await report(b.dataset.report);
       else if(b.dataset.deleteRegion){captureEditor();const id=b.dataset.deleteRegion;draft.diagrams[activeDiagram].regions=draft.diagrams[activeDiagram].regions.filter(r=>r.id!==id);draft.questions.forEach(q=>q.accepted=q.accepted.filter(a=>a!==id));draft.reviewed=false;dirty=true;editor();}
       else if(b.dataset.deleteQuestion){captureEditor();draft.questions=draft.questions.filter(q=>q.id!==b.dataset.deleteQuestion);draft.reviewed=false;dirty=true;editor();}
-      else if(['next','open','advance','pause','extend','rotate-board'].includes(action))await command(action);
+      else if(['launch','skip-intro','next','open','advance','pause','extend','rotate-board'].includes(action))await command(action);
       else if(action==='end'){if(confirm('Finish this mission? Learners will no longer be able to answer.'))await command('end');}
       else if(action==='simulate'||action==='simulate-misconception'){state=await api('/sessions/'+sessionId+'/simulate',{pattern:action==='simulate-misconception'?'misconception':'mixed'});renderLive();}
       else if(action==='report')await report(sessionId);

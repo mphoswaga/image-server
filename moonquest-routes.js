@@ -100,9 +100,12 @@ function installMoonQuest(app, deps) {
     res.json({ id: s.id });
   }));
   app.get(base + '/sessions/:id/teacher', teacher, wrap((req, res) => { ownSession(req); res.json(store.snapshot(req.params.id, 'teacher')); }));
+  app.get(base + '/sessions/:id/presenter', teacher, wrap((req, res) => {
+    ownSession(req); res.json({ ...store.snapshot(req.params.id, 'board'), canControl: true });
+  }));
   app.post(base + '/sessions/:id/command', teacher, wrap((req, res) => {
     ownSession(req); store.command(req.params.id, req.userId, req.body.action, req.body);
-    res.json(store.snapshot(req.params.id, 'teacher'));
+    res.json(req.body.presentation === true ? { ...store.snapshot(req.params.id, 'board'), canControl: true } : store.snapshot(req.params.id, 'teacher'));
   }));
   app.post(base + '/sessions/:id/simulate', teacher, wrap((req, res) => {
     const s = ownSession(req); if (!s.test) throw new Error('Practice learners are only available in Test game.');
