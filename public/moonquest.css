@@ -88,3 +88,4 @@ body[data-phase=reveal] .school-mission{display:none}
  body[data-audience=board][data-phase=choose] .live-layout{display:none}
 }
 @media(min-width:1000px){body[data-audience=board][data-phase=choose] .hero-sky{gap:6px;padding-block:12px 20px}body[data-audience=board][data-phase=choose] .hero-badge{font-size:13px;padding:5px 8px;min-height:28px}body[data-audience=board][data-phase=choose] .hero-badge>span{font-size:16px;line-height:1}}
+.learner-invite{margin:18px 0;padding:14px;border:1px solid #91e6d455;border-radius:12px;background:#142939}.learner-invite input{font-size:12px;margin-bottom:10px}.learner-invite button{width:100%}.learner-invite p{font-size:13px;margin-bottom:0}.join-names{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:20px 0}.join-names button{padding:16px 12px;min-height:56px}.join-names button[aria-pressed=true]{background:var(--mint);color:#112e2e;border:2px solid #e2fff4}[hidden]{display:none!important}

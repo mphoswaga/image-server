@@ -163,6 +163,7 @@
     const s=state;
     return `<aside class="teacher-private"><div class="panel"><span class="eyebrow">Teacher controls · private</span><div class="control" style="margin-top:12px">${!s.paused&&(s.phase==='lobby'||s.phase==='reveal')?button(s.phase==='lobby'?'Begin mission':'Next question',s.phase==='lobby'?'launch':'next','primary'):''}${s.phase==='read'?button('Open answers','open','primary'):''}${!s.automatic&&['choose','discuss','reconsider'].includes(s.phase)?button({choose:'Begin discussion',discuss:'Reconsider',reconsider:'Reveal answer'}[s.phase],'advance','primary'):''}${!['lobby','ended'].includes(s.phase)?button(s.paused&&s.teachingPause==='misconception'&&s.singleTimer?'Continue after discussion':s.paused?'Resume':'Pause',s.paused&&s.teachingPause==='misconception'&&s.singleTimer?'continue-meeting':'pause'):''}${s.deadline?button('+10 seconds','extend'):''}</div>
       ${s.teachingPause?`<p class="teaching-alert">${s.teachingPause==='misconception'?'Class meeting discussion. Ask learners to explain their reasoning, then continue when the class is ready.':s.teachingPause==='attendance'?'No learners are currently included. Include learners below before resuming.':'Some answers are missing. Check devices and understanding before continuing.'}</p>`:''}${s.automatic?'<p class="muted">One round timer. Invite partner discussion before it runs out. Continue after a class meeting when you are ready.</p>':''}${s.recovered?'<p class="error">Session recovered safely and paused. Resume when the class is ready.</p>':''}
+      ${s.phase!=='ended'?`<div class="learner-invite"><label>${s.test?'Practice link':'Learner game link'}<input id="learner-link" readonly value="${esc(location.origin+'/moonquest/join?code='+s.code)}"></label>${button(s.test?'Copy practice link':'Copy learner link','copy-learner-link','primary')}<p class="muted">${s.test?'Practice only: opens without a name or PIN.':'Send this link to your class. Learners select their name and enter their usual PIN. No room code to type.'}</p></div>`:''}
       <div class="row"><a class="button small" target="_blank" rel="noopener noreferrer" href="/moonquest?session=${s.id}&board=${s.boardToken}">Open Smartboard</a>${button('Replace board link','rotate-board','small')}</div>
       <p class="muted">Keep this teacher view off the projector. The Smartboard shows names and response status, but keeps individual answers and private suggestions hidden.</p>
       ${s.test?`<p class="muted">Scan the QR to join as a practice learner—no name or PIN. Simulation fills only the remaining practice learners.</p><a class="button small" target="_blank" rel="noopener" href="/moonquest/join?code=${s.code}">Open practice learner</a>`:''}
@@ -283,7 +284,7 @@
   }
   async function joinPage(code='') {
     view='join';root.innerHTML=`<section class="intro">${mascot()}<p class="eyebrow">Join the rescue crew</p><h1>Your moon mission awaits.</h1><div class="panel stack"><label>Room code<input id="room-code" autocomplete="off" maxlength="10" value="${esc(code)}" placeholder="Teacher’s 10-character code"></label>${button('Find my crew','find-room','primary')}<div id="join-class"></div></div></section>`;
-    if(code)await findRoom();
+    if(code){await findRoom();const input=document.getElementById('room-code');if(input){input.closest('label').hidden=true;root.querySelector('[data-action=find-room]').hidden=true;}}
   }
   async function findRoom() {
     const code=document.getElementById('room-code').value.trim().toUpperCase();
@@ -295,7 +296,8 @@
       learnerToken=result.token;sessionStorage.setItem('moonquest:'+room.id,learnerToken);
       return openSession(room.id,'student');
     }
-    document.getElementById('join-class').innerHTML=`<h2>${esc(room.title)}</h2><div class="stack"><label>Your name<select id="join-name"><option value="">Choose your name</option>${room.students.map(st=>`<option value="${st.handle}">${esc(st.label)}</option>`).join('')}</select></label><label>Your PIN<input id="join-pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off"></label><p class="muted">Use your usual four-digit PIN. If you have never set one, choose one now.</p>${button('Join the mission','join','primary')}</div>`;
+    document.getElementById('join-class').innerHTML=`<h2>${esc(room.title)}</h2><p>Choose your name, then enter your PIN.</p><input id="join-name" type="hidden"><div class="join-names" role="group" aria-label="Choose your name">${room.students.map(st=>`<button data-learner-handle="${esc(st.handle)}" aria-pressed="false">${esc(st.label)}</button>`).join('')}</div><div class="stack"><label>Your PIN<input id="join-pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off"></label><p class="muted">Use your usual four-digit PIN. If you have never set one, choose one now.</p>${button('Join the mission','join','primary')}</div>`;
+
   }
   root.addEventListener('input',e=>{
     const q=e.target.closest('[data-queue]');if(q)queueEdits[q.dataset.queue]={prompt:q.querySelector('[data-prompt]')?.value,explanation:q.querySelector('[data-explanation]')?.value};
@@ -305,7 +307,9 @@
     const b=e.target.closest('button');if(!b||b.disabled)return;
     const action=b.dataset.action; b.disabled=true;
     try{
-      if(action==='enable-audio'){document.getElementById('sound').click();renderLive();}
+      if(action==='copy-learner-link'){const input=document.getElementById('learner-link');try{await navigator.clipboard.writeText(input.value);tell('Link copied. You can send it to your learners.');}catch{input.focus();input.select();tell('Select Copy to copy the highlighted link.');}}
+      else if(b.dataset.learnerHandle){document.getElementById('join-name').value=b.dataset.learnerHandle;root.querySelectorAll('[data-learner-handle]').forEach(el=>el.setAttribute('aria-pressed',String(el===b)));document.getElementById('join-pin').focus();}
+      else if(action==='enable-audio'){document.getElementById('sound').click();renderLive();}
       else if(action==='change-answer'){if(confirm('Are you sure you want to change your locked answer?')){changingAnswer=true;pendingChoices=[];renderLive();}}
       else if(action==='cancel-change'){changingAnswer=false;pendingChoices=[];renderLive();}
       else if(action==='lock-answer')await submitAnswer(null,true);

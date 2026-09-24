@@ -26,7 +26,11 @@ reduced-motion support.
    same thing. Simulation fills only seats not controlled by a device, preserving
    the tester's own answers. No roster identities or student accounts are changed.
    Real class rooms still require the normal name/PIN flow and reject test entry.
-5. Open the separate Smartboard link. Learners scan the QR or open
+5. Use **Copy learner link** in the classroom controls (also available for each
+   active class in My games) and send it to learners. The link opens the class
+   name buttons directly, followed by their usual PIN; no room code entry is
+   needed. Test rooms label their link as practice and bypass name/PIN.
+   Open the separate Smartboard link for presentation. Learners can also scan the QR or open
    `/join`, enter its ten-character code, select their name and use
    their existing PIN. First-time learners establish a PIN using the existing
    student account mechanism. Public pickers use the existing abbreviated

@@ -59,8 +59,9 @@ test('teacher, board and learner are separated; real PIN join keeps answers priv
   const teacher=await(await page.request.get(`/api/games/moonquest/sessions/${created.id}/teacher`)).json();
   const bypass=await page.request.post('/api/games/moonquest/rooms/'+teacher.code+'/test-enter',{data:{deviceKey:'00000000-0000-0000-0000-000000000001'}});
   expect(bypass.ok()).toBe(false);
-  const learnerContext=await browser.newContext();const learner=await learnerContext.newPage();await learner.goto('/join');await learner.locator('#roomCode').fill(teacher.code);await learner.locator('#codeBtn').click();
-  await learner.locator('#join-name').selectOption({label:'Moon L.'});await learner.locator('#join-pin').fill('4829');await learner.getByRole('button',{name:'Join the mission'}).click();await expect(learner.getByText('You’re in the crew!')).toBeVisible();
+  await page.evaluate(()=>{Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.copiedLearnerLink=text;}}});});await page.getByRole('button',{name:'Copy learner link',exact:true}).click();const invite=await page.evaluate(()=>window.copiedLearnerLink);expect(invite).toContain('/moonquest/join?code='+teacher.code);
+  const learnerContext=await browser.newContext();const learner=await learnerContext.newPage();await learner.goto(invite);await expect(learner.locator('#room-code')).toBeHidden();await expect(learner.getByRole('button',{name:'Find my crew'})).toBeHidden();
+  await learner.getByRole('button',{name:'Moon L.',exact:true}).click();await learner.locator('#join-pin').fill('4829');await learner.getByRole('button',{name:'Join the mission'}).click();await expect(learner.getByText('You’re in the crew!')).toBeVisible();
   const boardContext=await browser.newContext();const board=await boardContext.newPage();await board.goto(`/moonquest?session=${created.id}&board=${teacher.boardToken}`);
   await expect(board.locator('.code')).toHaveText(teacher.code);await expect(board.getByText('Teacher controls · private')).toHaveCount(0);
   await page.getByRole('button',{name:'Begin mission',exact:true}).click();await page.getByRole('button',{name:'Skip intro',exact:true}).click();await page.getByRole('button',{name:'Open answers',exact:true}).click();
@@ -68,6 +69,7 @@ test('teacher, board and learner are separated; real PIN join keeps answers priv
   await expect(board.locator('#answer-status')).toContainText('1 of 1');
   await expectNoPageOverflow(learner);
   const raw=await(await board.request.get(`/api/games/moonquest/sessions/${created.id}/state?board=${teacher.boardToken}`)).json();expect(raw.question.accepted).toBeUndefined();expect(raw.learners).toBeUndefined();expect(raw.queue).toBeUndefined();
+  await learner.goto(invite);await learner.getByRole('button',{name:'Moon L.',exact:true}).click();await learner.locator('#join-pin').fill('1111');await learner.getByRole('button',{name:'Join the mission'}).click();await expect(learner.locator('#notice')).toContainText('Incorrect PIN');await learner.locator('#join-pin').fill('4829');await learner.getByRole('button',{name:'Join the mission'}).click();
   await page.getByRole('button',{name:'Reconsider',exact:true}).click();await page.getByRole('button',{name:'Reveal answer',exact:true}).click();
   await expect(learner.getByText('1 correct',{exact:true})).toBeVisible();await learner.reload();await expect(learner.getByText('1 correct',{exact:true})).toBeVisible();
   await learnerContext.close();await boardContext.close();
