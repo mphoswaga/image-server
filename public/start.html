@@ -127,7 +127,7 @@
       <div class="join-card">
         <label for="roomCode" style="margin-bottom:8px">Join something new</label>
         <div class="join-row">
-          <input id="roomCode" type="text" maxlength="6" placeholder="Room Code" autocomplete="off" autocorrect="off" spellcheck="false" />
+          <input id="roomCode" type="text" maxlength="10" placeholder="Room Code" autocomplete="off" autocorrect="off" spellcheck="false" />
           <button class="btn" id="joinBtn" type="button" style="width:auto">Join →</button>
         </div>
         <div class="err" id="joinErr"></div>
@@ -245,6 +245,7 @@
         const r = await fetch('/api/student/join-room', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error);
+        if (d.type === 'moonquest' && d.token) sessionStorage.setItem('moonquest:'+d.id,d.token);
         location.href = d.path;
       } catch (err) { $('joinErr').textContent = err.message; btn.disabled = false; }
     });

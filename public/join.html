@@ -53,7 +53,7 @@
       <p class="sub">Enter the Room Code your teacher is showing.</p>
       <form id="codeForm">
         <label for="roomCode">Room Code</label>
-        <input id="roomCode" class="code-input" type="text" maxlength="6" placeholder="ABC123" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" required />
+        <input id="roomCode" class="code-input" type="text" maxlength="10" placeholder="Room code" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" required />
         <button class="btn" type="submit" id="codeBtn">Next →</button>
         <div class="err" id="codeErr"></div>
       </form>
@@ -136,6 +136,7 @@
         const r = await fetch('/api/join?code=' + encodeURIComponent(code));
         const d = await r.json();
         if (!r.ok) throw new Error(d.error);
+        if (d.type === 'moonquest') { location.assign('/moonquest/join?code='+encodeURIComponent(code)); return; }
         resolvedId = d.id; resolvedType = d.type;
         const metaUrl = resolvedType === 'assignment' ? '/api/assignment/' + resolvedId + '/join' : '/api/game/' + resolvedId + '/join';
         const metaResponse = await fetch(metaUrl);

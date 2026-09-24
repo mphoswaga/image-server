@@ -54,8 +54,8 @@ function installMoonQuest(app, deps) {
     res.type('html').send(pageHtml);
   });
   app.get(base + '/library', teacher, wrap((req, res) => res.json({
-    games: store.list('game', req.userId).map(g => ({ id: g.id, title: g.title, subject: g.subject, grade: g.grade, questions: g.questions.length, version: g.version })),
-    sessions: store.list('session', req.userId).sort((a,b) => b.createdAt-a.createdAt).slice(0, 50).map(s => ({ id: s.id, title: s.game.title, className: s.className, test: s.test, phase: s.phase })),
+    games: store.list('game', req.userId).map(g => ({ id: g.id, title: g.title, subject: g.subject, grade: g.grade, questions: g.questions.length, version: g.version, createdAt: new Date(g.createdAt).toISOString() })),
+    sessions: store.list('session', req.userId).sort((a,b) => b.createdAt-a.createdAt).slice(0, 50).map(s => ({ id: s.id, gameId: s.game.id, rosterId: s.rosterId, code: s.code, title: s.game.title, className: s.className, test: s.test, phase: s.phase })),
     rosters: roster.listRosters(req.userId), generationCost: costOf(req, 'lessonscope.generate_game'),
   })));
   app.post(base + '/assets', teacher, uploadLimiter, upload.single('file'), wrap(async (req, res) => {
@@ -114,7 +114,7 @@ function installMoonQuest(app, deps) {
     const connected = new Set(Object.values(s.testDevices || {}));
     for (const [i, st] of s.students.entries()) {
       if (connected.has(st.id) || !s.rounds[s.round].expected.includes(st.id)) continue;
-      store.answer(s.id, st.id, { phase: s.phase, round: s.round, regionId: req.body.pattern === 'misconception' ? (regions.find(r => !q.accepted.includes(r.id)) || regions[0]).id : regions[i % regions.length].id, eventId: crypto.randomUUID() });
+      store.answer(s.id, st.id, { phase: s.phase, round: s.round, changeConfirmed: true, ...(q.answerMode === 'all' ? {regionIds: req.body.pattern === 'misconception' ? [...regions.filter(r => !q.accepted.includes(r.id)), ...regions.filter(r => q.accepted.includes(r.id))].slice(0, q.accepted.length).map(r => r.id) : q.accepted} : {}), regionId: req.body.pattern === 'misconception' ? (regions.find(r => !q.accepted.includes(r.id)) || regions[0]).id : regions[i % regions.length].id, eventId: crypto.randomUUID() });
     }
     res.json(store.snapshot(s.id, 'teacher'));
   }));

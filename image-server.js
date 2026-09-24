@@ -2581,6 +2581,10 @@ app.get('/api/assignment/:id/presentation', requireAuth, (req, res) => {
 app.get('/api/join', (req, res) => {
   const code = String(req.query.code || '').trim().toUpperCase();
   if (!code) return res.status(400).json({ error: 'Enter a Room Code.' });
+  if (/^[A-F0-9]{10}$/.test(code)) {
+    const mission = moonquestStore.findCode(code);
+    if (mission && mission.phase !== 'ended' && process.env.MOONQUEST_ENABLED !== 'false') return res.json({type:'moonquest',id:mission.id,url:'/moonquest/join?code='+code});
+  }
   const gameId = games.getRoomCode(code);
   if (gameId) return res.json({ type: 'game', id: gameId });
   const assignmentId = assignments.getRoomCode(code);
@@ -2793,6 +2797,16 @@ app.post('/api/student/join-room', requireStudentAccess, (req, res) => {
   const { studentId, name } = req.studentSession || {};
   if (!studentId) return res.status(401).json({ error: 'Not signed in.' });
 
+  if (/^[A-F0-9]{10}$/.test(code)) {
+    const mission = moonquestStore.findCode(code);
+    if (!mission || mission.phase === 'ended' || process.env.MOONQUEST_ENABLED === 'false') return res.status(404).json({error:'This mission is unavailable. Check the room code.'});
+    if (mission.test) return res.json({type:'moonquest',id:mission.id,path:'/moonquest/join?code='+code});
+    const learner = mission.students.find(st => roster.normalizeStudentId(st.id) === roster.normalizeStudentId(studentId));
+    if (!learner) return res.status(403).json({error:"You're not on the class list for this mission."});
+    moonquestStore.join(mission.id, learner.id);
+    const token = jwt.sign({type:'moonquest',sessionId:mission.id,studentId:learner.id}, sessionSecret(), {expiresIn:'12h'});
+    return res.json({type:'moonquest',id:mission.id,token,path:'/moonquest?session='+mission.id});
+  }
   const gameId = games.getRoomCode(code);
   const assignmentId = !gameId && assignments.getRoomCode(code);
   if (!gameId && !assignmentId) return res.status(404).json({ error: 'Room not found. Check the code and try again.' });
@@ -5561,7 +5575,7 @@ app.get('/practice', requirePracticeEnabled, (req, res) => res.sendFile(path.joi
 app.get('/play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'play.html')));
 app.get('/fishquest-play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'fishquest.html')));
 app.get('/fishquest/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'fishquest-teacher.html')));
-require('./moonquest-routes').installMoonQuest(app, {
+const moonquestStore = require('./moonquest-routes').installMoonQuest(app, {
   requireAuth, sessionSecret, roster, studentAccount, learnerPickerEntries, studentHandle,
   joinLimiter, generationLimiter, uploadLimiter, reserve, capture, release, declareFree, costOf,
 });

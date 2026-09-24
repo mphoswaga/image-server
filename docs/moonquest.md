@@ -1,6 +1,6 @@
 # MoonQuest: Save the Festival
 
-MoonQuest is a standalone diagram game with automatic classroom pacing, linked from My games.
+MoonQuest is a standalone diagram game with automatic classroom pacing, listed alongside the other games in My games.
 Games-only accounts can use every MoonQuest route. The first theme is a
 cooperative Moon Festival rescue, with Pip the mischievous alien, lantern
 sparks, quiet-by-default audio, independently controlled music/effects, and
@@ -27,28 +27,41 @@ reduced-motion support.
    the tester's own answers. No roster identities or student accounts are changed.
    Real class rooms still require the normal name/PIN flow and reject test entry.
 5. Open the separate Smartboard link. Learners scan the QR or open
-   `/moonquest/join`, enter its ten-character code, select their name and use
+   `/join`, enter its ten-character code, select their name and use
    their existing PIN. First-time learners establish a PIN using the existing
    student account mechanism. Public pickers use the existing abbreviated
    labels and scoped handles, not school IDs.
 
-New sessions use automatic play by default, including games saved before this update.
-Start once: a synchronized 24-second opening story leads into Choose (12 seconds for new games, capped at 14 for older timings) →
-Discuss (15 seconds) → reconsider within discussion (5 seconds) → Reveal (10
-seconds) → next question. First choice closes early when all expected learners
-answer; discussion always receives its full time. Initial choices are locked
-until reconsideration. Choosing again during reconsideration explicitly confirms
-or revises the answer; doing nothing retains it without inventing confirmation.
+New automatic sessions use a single 35-second answer window. The opening story
+runs once before it. Learners choose, lock an answer and discuss when the teacher
+invites them. All answers arriving early does not shorten discussion time.
+Learners can choose **Change my answer**, confirm, and lock a replacement before
+the same timer expires. Their original answer is retained for reporting. A multi-area
+question explicitly says how many areas to choose; incomplete or duplicate sets
+cannot be submitted. By default, multiple correct regions are alternatives and
+learners choose ONE. The teacher can explicitly select ALL in the editor.
 
-The teacher has a sticky Pause/Resume and +10 seconds toolbar, also available
-on the Smartboard when signed in as the room owner. The board token alone
-never authorizes commands. A signed-out board offers a link to teacher controls.
-The opening can be paused or skipped; reduced-motion mode shows static text. More than 70%
-incorrect among submitted answers, or less than 80% participation, pauses the
-reveal for teaching or device support. Resume continues the reveal countdown.
-Approved follow-ups enter automatically after two intervening rounds. The final
-round ends automatically. Teacher-paced mode remains an editor option. Existing
-running sessions retain their original flow rather than changing mid-lesson.
+Reveal lasts eight seconds with no visible countdown or ticking. The next question
+opens automatically. If `wrong / expected > 0.30`, all screens instead say **Class
+meeting discussion** and wait without a timer. Exactly 30% does not trigger it;
+unanswered learners are shown separately, not counted wrong. **Continue after
+discussion** starts the next question. Approved follow-ups wait two intervening rounds.
+
+The teacher has Pause/Resume and +10 seconds controls, also on the Smartboard
+when signed in as the room owner. Board tokens alone remain read-only. The opening
+can be paused/skipped; reduced motion shows static text. Older active sessions
+retain their previous timing, and explicitly teacher-paced saved games retain
+legacy controls. Start a new automatic room for the single-timer experience.
+
+The Vinschool scene shows moving named hero badges above a school. Answered badges
+light up without revealing individual choices or correctness. Shared lantern sparks
+power the school's shield. The scene stays on teacher/Smartboard views; learner
+screens stay focused. Reduced motion disables badge drift.
+
+My games includes saved MoonQuest games with setup, test, edit and recent class
+room/report links. `/join` accepts MoonQuest codes alongside other game codes.
+Already signed-in learners can join from `/start` without repeating their PIN;
+server-side roster membership is checked before issuing a mission token.
 
 The question is the largest element on a high-contrast card. Learner screens hide
 navigation, music controls and moving scenery. The Smartboard and teacher dashboard show a live answered/expected count and
@@ -57,7 +70,7 @@ correctness. Aggregate correctness and distributions appear only after reveal.
 Learner tokens do not receive the class roll call. Results preserve first answers, revisions and missing responses.
 
 On the Smartboard, tap **Enable countdown sounds** once to unlock browser audio.
-Each timed stage ticks gently with stronger final-five-second beeps and a stage
+The answer timer ticks gently with stronger final-five-second beeps and a stage
 chime. Learner devices stay silent. Music and effects remain separately adjustable.
 The teacher dashboard can also be opened on a signed-in phone using the same
 session URL; only its owner can control it. Do not project that private view.
@@ -68,7 +81,7 @@ After a server restart the room recovers paused with saved answers intact.
 
 ## Delayed adaptation
 
-After reveal, `wrong / (correct + wrong) > 0.70` queues a concept to revisit.
+In new automatic rooms, `wrong / expected > 0.30` queues a concept to revisit after reveal. Older sessions retain their original threshold.
 Unanswered is separate; less than 80% participation is flagged for review.
 The teacher's live controller starts a nonblocking suggestion request (practice
 rooms require a deliberate click). AI receives grade, concepts, reviewed region
@@ -118,7 +131,7 @@ must preserve stages and never substitute supported retries for first attempts.
 ## Verification
 
 - Core tests cover geometry validation, hidden keys, retained first/final answers,
-  strict 70% threshold, unanswered denominator, pause/deadline handling, duplicate
+  strict 30% boundary for new rooms, legacy thresholds, unanswered denominator, pause/deadline handling, duplicate
   submissions, late joiners, delayed follow-ups and recovery across a store restart.
 - Browser tests use real local APIs for authoring, saved games, editable areas,
   isolated testing, PIN joins, Smartboard privacy, reports and delayed review.

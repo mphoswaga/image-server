@@ -8,6 +8,8 @@ const uid = () => crypto.randomUUID();
 const copy = value => structuredClone(value);
 const fail = message => { throw new Error(message); };
 const text = (value, max = 300) => String(value || '').trim().slice(0, max);
+const choices = value => value == null ? [] : Array.isArray(value) ? value : [value];
+const isCorrect = (q, value) => q.answerMode === 'all' ? choices(value).length === q.accepted.length && q.accepted.every(id => choices(value).includes(id)) : choices(value).length === 1 && q.accepted.includes(choices(value)[0]);
 const array = (value, max) => Array.isArray(value) && value.length <= max ? value : fail('Too many items or invalid list.');
 
 function validateGame(input) {
@@ -32,7 +34,8 @@ function validateGame(input) {
     const accepted = [...new Set(array(q.accepted, 30))];
     if (!d || !accepted.length || accepted.some(id => !d.regions.some(r => r.id === id))) fail('Choose the correct region for every question.');
     if (!text(q.prompt) || !text(q.concept) || !text(q.explanation)) fail('Add a question, learning objective and explanation.');
-    return { id: text(q.id, 80), diagramId: d.id, prompt: text(q.prompt, 600), concept: text(q.concept), explanation: text(q.explanation, 800), accepted };
+    if (q.answerMode && !['one', 'all'].includes(q.answerMode)) fail('Choose a valid answer mode.');
+    return { answerMode: q.answerMode || 'one', id: text(q.id, 80), diagramId: d.id, prompt: text(q.prompt, 600), concept: text(q.concept), explanation: text(q.explanation, 800), accepted };
   });
   if (!questions.length || questions.some(q => !q.id) || new Set(questions.map(q => q.id)).size !== questions.length) fail('Add uniquely identified questions.');
   if (input.reviewed !== true) fail('Review and confirm the answer keys before saving.');
@@ -85,7 +88,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
   }
   function createSession(teacherId, gameId, roster, test = false) {
     const game = read('game', gameId);
-    if (game.timing.automatic !== false) game.timing = { ...game.timing, automatic: true, choose: Math.min(14, game.timing.choose || 12), discuss: 15, reconsider: 5, reveal: 10 };
+    if (game.timing.automatic !== false) game.timing = { ...game.timing, automatic: true, flow: 'single', choose: 35, reveal: 8 };
     if (game.teacherId !== teacherId) fail('This game belongs to another teacher.');
     if (!test && (!roster?.id || !roster.students?.length)) fail('Select a class with learners first.');
     const students = test ? Array.from({ length: 6 }, (_, i) => ({ id: 'practice-' + i, name: 'Practice learner ' + (i + 1) })) : roster.students.map(s => ({ id: String(s.id), name: s.name }));
@@ -100,28 +103,30 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     if (!r) return out;
     for (const id of r.expected) {
       const a = r.answers[id]; const first = a?.first; const final = a?.final ?? first;
-      if (first && r.question.accepted.includes(first)) out.initialCorrect++;
+      if (first && isCorrect(r.question, first)) out.initialCorrect++;
       if (!final) { out.unanswered++; continue; }
-      out.distribution[final] = (out.distribution[final] || 0) + 1;
-      const right = r.question.accepted.includes(final);
+      for (const area of choices(final)) out.distribution[area] = (out.distribution[area] || 0) + 1;
+      const right = isCorrect(r.question, final);
       out[right ? 'correct' : 'wrong']++;
-      if (first && !r.question.accepted.includes(first) && right) out.improved++;
-      if (first && r.question.accepted.includes(first) && !right) out.changedToWrong++;
+      if (first && !isCorrect(r.question, first) && right) out.improved++;
+      if (first && isCorrect(r.question, first) && !right) out.changedToWrong++;
     }
     return out;
   }
   function advance(s) {
-    const next = { choose: 'discuss', discuss: 'reconsider', reconsider: 'reveal' }[s.phase];
+    const next = s.game.timing.flow === 'single' && s.phase === 'choose' ? 'reveal' : { choose: 'discuss', discuss: 'reconsider', reconsider: 'reveal' }[s.phase];
     if (!next) fail('This stage needs the teacher to continue.');
     s.phase = next; s.deadline = next === 'reveal' && !s.game.timing.automatic ? null : clock() + s.game.timing[next] * 1000;
     if (next === 'reveal') {
       const r = current(s); r.revealedAt = clock();
       const score = stats(s); const n = score.correct + score.wrong;
-      if (s.game.timing.automatic && ((n > 0 && score.wrong / n > .7) || n / Math.max(1, r.expected.length) < .8)) {
-        s.teachingPause = n > 0 && score.wrong / n > .7 ? 'misconception' : 'participation';
+      const single = s.game.timing.flow === 'single';
+      const misconception = single ? score.wrong / Math.max(1, r.expected.length) > .3 : n > 0 && score.wrong / n > .7;
+      if (s.game.timing.automatic && (misconception || (!single && n / Math.max(1, r.expected.length) < .8))) {
+        s.teachingPause = misconception ? 'misconception' : 'participation';
         s.paused = true; s.remaining = 10000; s.deadline = null;
       }
-      if (!r.question.parentId && n > 0 && score.wrong / n > .7) {
+      if (!r.question.parentId && misconception) {
         s.queue.push({ id: uid(), parentId: r.question.id, sourceRound: s.round, status: 'needs-review', eligibleAfter: s.round + 2,
           lowParticipation: n / Math.max(1, r.expected.length) < .8 });
       }
@@ -156,7 +161,10 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     const s = tick(session(id));
     if (s.teacherId !== teacherId) fail('This session belongs to another teacher.');
     if (body.seq !== s.seq && !(body.round === s.round && body.phase === s.phase && body.paused === s.paused)) fail('The room has updated. Check the current stage and try again.');
-    if (action === 'pause') {
+    if (action === 'continue-meeting') {
+      if (!s.paused || s.teachingPause !== 'misconception') fail('There is no class meeting to finish.');
+      s.paused = false; s.recovered = false; s.teachingPause = null; s.remaining = null; nextRound(s);
+    } else if (action === 'pause') {
       if (['lobby', 'ended'].includes(s.phase)) fail('There is no running round to pause.');
       if (s.paused) { s.paused = false; s.deadline = s.remaining == null ? null : clock() + s.remaining; s.recovered = false; s.teachingPause = null; }
       else { s.remaining = s.deadline ? Math.max(0, s.deadline - clock()) : null; s.deadline = null; s.paused = true; }
@@ -232,13 +240,17 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     if (r.events.some(e => e.studentId === studentId && e.eventId === body.eventId)) return s;
     if (s.paused || !['choose', 'reconsider'].includes(s.phase) || body.phase !== s.phase || body.round !== s.round) fail('This answer stage has closed. Your previous saved choice is kept.');
     const diagram = s.game.diagrams.find(d => d.id === r.question.diagramId);
-    if (!diagram.regions.some(r => r.id === body.regionId)) fail('Choose an area on this diagram.');
+    const submitted = choices(body.regionIds ?? body.regionId);
+    const required = r.question.answerMode === 'all' ? r.question.accepted.length : 1;
+    if (submitted.length !== required || new Set(submitted).size !== required || submitted.some(id => !diagram.regions.some(r => r.id === id))) fail(`Choose ${required} different area${required === 1 ? '' : 's'} on this diagram.`);
+    const selection = r.question.answerMode === 'all' ? submitted : submitted[0];
     const prev = r.answers[studentId] || {};
-    if (s.game.timing.automatic && s.phase === 'choose' && prev.first) fail('Your first choice is saved. Discuss it before reconsidering.');
+    if (s.game.timing.flow === 'single' && prev.first && body.changeConfirmed !== true) fail('Your answer is locked. Confirm that you want to change it first.');
+    if (s.game.timing.flow !== 'single' && s.game.timing.automatic && s.phase === 'choose' && prev.first) fail('Your first choice is saved. Discuss it before reconsidering.');
     if (r.events.filter(e => e.studentId === studentId).length >= 100) fail('Too many answer changes in this round.');
-    r.answers[studentId] = { ...prev, [s.phase === 'choose' ? 'first' : 'final']: body.regionId, confirmed: s.phase === 'reconsider' || prev.confirmed || false };
-    r.events.push({ studentId, eventId: body.eventId, phase: s.phase, regionId: body.regionId, at: clock() });
-    if (s.phase === 'choose' && r.expected.every(id => r.answers[id]?.first)) advance(s);
+    r.answers[studentId] = s.game.timing.flow === 'single' ? { first: prev.first ?? selection, final: selection, confirmed: true } : { ...prev, [s.phase === 'choose' ? 'first' : 'final']: selection, confirmed: s.phase === 'reconsider' || prev.confirmed || false };
+    r.events.push({ studentId, eventId: body.eventId, phase: s.phase, regionId: selection, at: clock() });
+    if (s.game.timing.flow !== 'single' && s.phase === 'choose' && r.expected.every(id => r.answers[id]?.first)) advance(s);
     return saveSession(s);
   }
   function review(id, teacherId, queueId, input) {
@@ -266,16 +278,16 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     const s = tick(session(id)); const r = current(s); const revealed = s.phase === 'reveal' || s.phase === 'ended';
     const q = r?.question;
     const view = { id: s.id, title: s.game.title, className: s.className, test: s.test, seq: s.seq, phase: s.phase, paused: s.paused, recovered: s.recovered,
-      automatic: !!s.game.timing.automatic, teachingPause: s.teachingPause || null, serverNow: clock(), deadline: s.deadline, round: s.round, total: s.game.questions.length, remainingQuestions: s.game.questions.length - s.nextQuestion,
+      automatic: !!s.game.timing.automatic, singleTimer: s.game.timing.flow === 'single', teachingPause: s.teachingPause || null, serverNow: clock(), deadline: s.deadline, round: s.round, total: s.game.questions.length, remainingQuestions: s.game.questions.length - s.nextQuestion,
       joined: Object.keys(s.members).length, expected: r?.expected.length || 0, answered: r ? Object.values(r.answers).filter(a => a.final || a.first).length : 0,
-      question: q ? { id: q.id, prompt: q.prompt, concept: q.concept, ...(revealed ? { accepted: q.accepted, explanation: q.explanation } : {}) } : null,
+      question: q ? { id: q.id, prompt: q.prompt, concept: q.concept, answerMode: q.answerMode || 'one', selectionCount: q.answerMode === 'all' ? q.accepted.length : 1, ...(revealed ? { accepted: q.accepted, explanation: q.explanation } : {}) } : null,
       diagram: q ? s.game.diagrams.find(d => d.id === q.diagramId) : null,
       stats: revealed ? stats(s) : null,
       lanterns: s.rounds.filter(r => r.revealedAt).reduce((n, r) => n + stats(s, r).correct, 0) };
     if (role === 'board' && s.phase === 'lobby') view.code = s.code;
     if (s.phase === 'intro') view.introElapsedMs = Math.max(0, 24000 - (s.paused ? s.remaining : s.deadline - clock()));
     if (role !== 'student') view.crew = s.students.filter(st => r ? r.expected.includes(st.id) : !!s.members[st.id]).map(st => ({ name: st.name, answered: !!(r?.answers[st.id]?.first || r?.answers[st.id]?.final), confirmed: !!r?.answers[st.id]?.confirmed }));
-    if (role === 'student') { view.mine = r?.answers[studentId] || {}; view.canAnswer = !!r?.expected.includes(studentId); }
+    if (role === 'student') { view.mine = r?.answers[studentId] || {}; view.heroName = s.students.find(st => st.id === studentId)?.name || ''; if (revealed) view.myCorrect = choices(view.mine.final ?? view.mine.first).length ? isCorrect(q, view.mine.final ?? view.mine.first) : null; view.canAnswer = !!r?.expected.includes(studentId); }
     if (role === 'teacher') {
       Object.assign(view, { liveStats: stats(s), code: s.code, boardToken: s.boardToken, queue: s.queue.map(item => {
         const original = s.game.questions.find(q => q.id === item.parentId);
@@ -294,9 +306,9 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
       rounds: s.rounds.map((r, i) => ({ number: i + 1, prompt: r.question.prompt, concept: r.question.concept, followUp: !!r.question.parentId, completed: !!r.revealedAt, stats: stats(s, r) })),
       students: s.students.map(st => ({ ...st, rounds: s.rounds.map(r => {
         const a = r.answers[st.id] || {}; const d = s.game.diagrams.find(d => d.id === r.question.diagramId);
-        const label = id => d.regions.find(x => x.id === id)?.label || '';
-        return { initial: label(a.first), revised: label(a.final ?? a.first), initialCorrect: a.first ? r.question.accepted.includes(a.first) : null,
-          revisedCorrect: (a.final ?? a.first) ? r.question.accepted.includes(a.final ?? a.first) : null, confirmed: !!a.confirmed, expected: r.expected.includes(st.id) };
+        const label = value => choices(value).map(id => d.regions.find(x => x.id === id)?.label || '').join(' + ');
+        return { initial: label(a.first), revised: label(a.final ?? a.first), initialCorrect: a.first ? isCorrect(r.question, a.first) : null,
+          revisedCorrect: (a.final ?? a.first) ? isCorrect(r.question, a.final ?? a.first) : null, confirmed: !!a.confirmed, expected: r.expected.includes(st.id) };
       }) })) };
   }
   return { dir, read, list, saveGame, createSession, session, saveSession, stats, command, join, joinPractice, answer, snapshot, review, saveSuggestion, report,

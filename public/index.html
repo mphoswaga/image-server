@@ -3362,7 +3362,7 @@
         </div>
       </div>
 
-      <a href="/moonquest" class="btn accent" style="margin-bottom:20px;text-decoration:none;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><strong>☾ MoonQuest · Save the Festival</strong><span>Diagram challenges · Think, discuss and discover →</span></a>
+      <a href="/moonquest" class="btn accent" style="margin-bottom:20px;text-decoration:none;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><strong>☾ MoonQuest · Save the Festival</strong><span>Create a diagram mission · Your saved missions appear below →</span></a>
       <details id="fromPptxDetails" class="panel-add" style="margin-bottom:20px">
         <summary>Create a game from your lesson</summary>
         <div class="add-body">
@@ -8379,6 +8379,7 @@
       }
       const joinUrl=location.origin+'/join';
       const html=games.map(g=>{
+        if(g.mode==='moonquest')return `<div class="game-card"><div class="gc-head"><div class="gc-title">${esc(g.lessonTitle)}</div><div class="gc-meta"><span class="gc-chip">MoonQuest</span><span class="gc-chip">${g.questionCount} questions</span><span class="gc-chip">${esc(g.subject)}</span>${gameClassNames(g).map(n=>`<span class="gc-chip">${esc(n)}</span>`).join('')}</div></div><div class="gc-body"><p>Vinschool heroes · Diagram choices and classroom discussion</p><div class="gc-actions"><a class="btn accent" href="/moonquest?game=${esc(g.id)}">Set up class</a><a class="btn ghost" href="/moonquest?game=${esc(g.id)}&action=test">Test game</a><a class="btn ghost" href="/moonquest?game=${esc(g.id)}&action=edit">Edit questions</a>${g.missions.map(m=>`<a class="btn ghost" href="/moonquest?session=${esc(m.id)}">${m.phase==='ended'?'Open':'Resume'} ${esc(m.className)}</a><a class="btn ghost" href="/moonquest?report=${esc(m.id)}">${esc(m.className)} results</a>`).join('')}</div></div></div>`;
         const mode=g.mode||'arcade', colony=mode==='colonyquest', fish=mode==='fishquest';
         const studentUrl=location.origin+'/play/'+g.id;
         const launchUrl=colony?location.origin+'/colonyquest/'+g.id:fish?location.origin+'/fishquest/'+g.id:studentUrl;
@@ -8594,7 +8595,8 @@
     async function loadMyGames(){
       const wrap=$('gamesList'); wrap.innerHTML='<span class="status">Loading…</span>';
       try{
-        const [gd, rd] = await Promise.all([fetch('/api/games').then(r=>r.json()), fetch('/api/rosters').then(r=>r.json())]);
+        const [gd, rd, md] = await Promise.all([fetch('/api/games').then(r=>r.json()), fetch('/api/rosters').then(r=>r.json()), fetch('/api/games/moonquest/library').then(r=>r.ok?r.json():{games:[]}).catch(()=>({games:[]}))]);
+        gd.games=[...(gd.games||[]),...(md.games||[]).map(g=>{const missions=(md.sessions||[]).filter(s=>s.gameId===g.id&&!s.test);return {...g,mode:'moonquest',lessonTitle:g.title,topic:g.title,questionCount:g.questions,rosterIds:[...new Set(missions.map(m=>m.rosterId).filter(Boolean))],missions};})];
         const rosters = rd.rosters || [];
         gameClassRosters=rosters;
         if(!gd.games||!gd.games.length){ allGames=[]; wrap.innerHTML='<div class="empty-state"><p>Your games will live here</p><p style="font-size:13px;color:var(--muted)">Upload a lesson above to create your first game. Return here to play again or view results.</p></div>'; return; }

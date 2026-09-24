@@ -120,7 +120,7 @@ test('automatic rounds insert only reviewed follow-ups after two intervening rou
 });
 test('new sessions upgrade older saved games to bounded automatic timing, explicit manual is preserved',t=>{
   const f=setup(t);const game={...f.game,timing:{choose:30,discuss:20,reconsider:8}};f.store.saveGame('teacher',game);
-  const s=f.store.createSession('teacher',game.id,null,true);assert.deepEqual(s.game.timing,{automatic:true,choose:14,discuss:15,reconsider:5,reveal:10});
+  const s=f.store.createSession('teacher',game.id,null,true);assert.deepEqual(s.game.timing,{automatic:true,choose:35,discuss:20,reconsider:8,flow:'single',reveal:8});
   const saved=f.store.read('game',game.id);f.store.saveGame('teacher',{...saved,timing:{automatic:false,choose:30,discuss:20,reconsider:8}});
   assert.equal(f.store.createSession('teacher',game.id,null,true).game.timing.automatic,false);
 });
@@ -145,7 +145,7 @@ test('automatic QR rehearsal counts actual devices rather than unclaimed simulat
   const s=f.store.session(room.id);assert.equal(Object.keys(s.members).length,2);
   f.store.command(room.id,'teacher','next',{seq:s.seq});
   for(const id of [first.studentId,second.studentId])f.store.answer(room.id,id,{round:0,phase:'choose',regionId:'a',eventId:id});
-  assert.equal(f.store.snapshot(room.id,'board').phase,'discuss');assert.equal(f.store.snapshot(room.id,'board').expected,2);
+  assert.equal(f.store.snapshot(room.id,'board').phase,'choose');assert.equal(f.store.snapshot(room.id,'board').expected,2);
 });
 test('starting automatic play before anyone joins does not trap the lobby in pause',t=>{
   const f=setup(t);const g=f.store.saveGame('teacher',{...f.game,timing:{automatic:true}});const s=f.store.createSession('teacher',g.id,{id:'new',name:'New class',students:[{id:'new',name:'New'}]});
@@ -166,4 +166,34 @@ test('intro skip is teacher-owned and roll call contains status without individu
   assert.deepEqual(view.crew,[{name:'Student 0',answered:true,confirmed:false},{name:'Student 1',answered:false,confirmed:false}]);
   assert.equal(view.stats,null);assert.equal(view.learners,undefined);assert.equal(f.store.snapshot(f.id,'student','s0').crew,undefined);
   assert.equal(f.store.snapshot(f.id,'teacher').learners[0].choice,undefined);
+});
+
+function single(t,count=10) { const f=setup(t,count);const s=f.store.session(f.id);s.game.timing={automatic:true,flow:'single',choose:35,reveal:8};f.store.saveSession(s);return f; }
+test('single timer keeps 35 seconds even with all answers, locks changes, and preserves both attempts',t=>{
+  const f=single(t,2);f.cmd('next');f.answer(0,'b');f.answer(1,'a');
+  assert.equal(f.store.snapshot(f.id,'board').phase,'choose');assert.throws(()=>f.answer(0,'a'),/locked/);
+  f.step(34000);assert.equal(f.store.snapshot(f.id,'board').phase,'choose');
+  f.store.answer(f.id,'s0',{round:0,phase:'choose',regionId:'a',changeConfirmed:true,eventId:'revision'});
+  assert.equal(f.store.snapshot(f.id,'student','s0').mine.first,'b');
+  f.step(1000);const v=f.store.snapshot(f.id,'board');assert.equal(v.phase,'reveal');assert.equal(v.paused,false);assert.equal(v.stats.improved,1);
+  assert.throws(()=>f.answer(0,'b'),/closed/);f.step(8000);assert.equal(f.store.snapshot(f.id,'board').round,1);
+});
+test('class meeting is strictly above 30 percent of included learners and waits for teacher',t=>{
+  for(const wrong of [3,4]){
+    const f=single(t);f.cmd('next');for(let i=0;i<10;i++)f.answer(i,i<wrong?'b':'a');f.step(35000);
+    const v=f.store.snapshot(f.id,'board');assert.equal(v.paused,wrong>3);assert.equal(v.stats.wrong,wrong);
+    if(wrong>3){assert.equal(v.teachingPause,'misconception');f.step(300000);assert.equal(f.store.snapshot(f.id,'student','s0').teachingPause,'misconception');assert.throws(()=>f.store.command(f.id,'other','continue-meeting',{seq:v.seq}),/another/);f.cmd('continue-meeting');assert.equal(f.store.snapshot(f.id,'board').round,1);assert.equal(f.store.snapshot(f.id,'board').paused,false);}
+  }
+  const f=single(t);f.cmd('next');f.answer(0,'b');f.step(35000);const v=f.store.snapshot(f.id,'board');assert.equal(v.stats.unanswered,9);assert.equal(v.paused,false); // Missing responses are not wrong answers.
+});
+test('alternative correct areas require one answer, all mode requires an exact complete set',t=>{
+  const f=single(t,2);const s=f.store.session(f.id);s.game.questions[0].accepted=['a','b'];s.game.questions[1].accepted=['a','b'];s.game.questions[1].answerMode='all';f.store.saveSession(s);f.cmd('next');
+  let v=f.store.snapshot(f.id,'student','s0');assert.equal(v.question.selectionCount,1);assert.equal(v.question.accepted,undefined);
+  f.answer(0,'b');f.answer(1,'a');f.step(35000);assert.equal(f.store.snapshot(f.id,'board').stats.correct,2);f.step(8000);
+  v=f.store.snapshot(f.id,'student','s0');assert.equal(v.question.selectionCount,2);assert.equal(v.question.accepted,undefined);
+  assert.throws(()=>f.answer(0,'a'),/Choose 2/);
+  const send=(id,ids,event)=>f.store.answer(f.id,id,{round:1,phase:'choose',regionIds:ids,eventId:event});
+  assert.throws(()=>send('s0',['a','a'],'dup'),/different/);send('s0',['b','a'],'correct');send('s1',['a','c'],'wrong');f.step(35000);
+  v=f.store.snapshot(f.id,'board');assert.equal(v.stats.correct,1);assert.equal(v.stats.wrong,1);assert.equal(f.store.snapshot(f.id,'student','s0').myCorrect,true);assert.equal(f.store.snapshot(f.id,'student','s1').myCorrect,false);
+  assert.equal(f.store.report(f.id,'teacher').students[0].rounds[1].revised,'Region b + Region a');
 });
