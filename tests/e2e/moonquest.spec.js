@@ -2,6 +2,22 @@ const { test, expect } = require('@playwright/test');
 const { signInDisposableTeacher, expectNoPageOverflow } = require('./helpers');
 const sharp = require('sharp');
 
+test('QR entry bypasses previously cached MoonQuest assets', async ({ page }) => {
+  // An old unversioned script must never be requested by a fresh QR scan.
+  await page.route('**/moonquest.js', route => route.fulfill({ contentType: 'application/javascript', body: 'throw new Error("Old cached join screen");' }));
+  const response = await page.goto('/moonquest/join');
+  expect(response.headers()['cache-control']).toContain('no-store');
+  await expect(page.getByRole('button', { name: 'Find my crew' })).toBeVisible();
+  for (const selector of ['script[src*="moonquest.js"]', 'link[href*="moonquest.css"]']) {
+    const asset = await page.locator(selector).getAttribute(selector.startsWith('script') ? 'src' : 'href');
+    expect(asset).toMatch(/\?v=[a-f0-9]{16}$/);
+    const loaded = await page.request.get(asset);
+    expect(loaded.status()).toBe(200);
+    expect(loaded.headers()['cache-control']).toContain('no-store');
+    expect(loaded.headers()['cloudflare-cdn-cache-control']).toBe('no-store');
+  }
+});
+
 test('MoonQuest editor, isolated practice and durable results work together', async ({ page }) => {
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await signInDisposableTeacher(page,'-moonquest');await page.goto('/moonquest');

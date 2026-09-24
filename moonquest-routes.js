@@ -41,8 +41,18 @@ function installMoonQuest(app, deps) {
     if (t.type !== 'moonquest' || t.sessionId !== s.id || !s.members[t.studentId]) throw new Error('Rejoin this MoonQuest room.');
     return { s, role: 'student', studentId: t.studentId };
   }
-  app.get('/moonquest', (_req, res) => res.sendFile(path.join(__dirname, 'public/moonquest.html')));
-  app.get('/moonquest/join', (_req, res) => res.sendFile(path.join(__dirname, 'public/moonquest.html')));
+  // Content-addressed URLs also bypass copies cached before no-store was added.
+  const pageHtml = ['js', 'css'].reduce((html, ext) => {
+    const filename = `moonquest.${ext}`;
+    const version = crypto.createHash('sha256').update(fs.readFileSync(path.join(__dirname, 'public', filename))).digest('hex').slice(0, 16);
+    return html.replace(`/${filename}"`, `/${filename}?v=${version}"`);
+  }, fs.readFileSync(path.join(__dirname, 'public/moonquest.html'), 'utf8'));
+  app.get(['/moonquest', '/moonquest/join'], (_req, res) => {
+    res.set('Cache-Control', 'no-store, max-age=0');
+    res.set('CDN-Cache-Control', 'no-store');
+    res.set('Cloudflare-CDN-Cache-Control', 'no-store');
+    res.type('html').send(pageHtml);
+  });
   app.get(base + '/library', teacher, wrap((req, res) => res.json({
     games: store.list('game', req.userId).map(g => ({ id: g.id, title: g.title, subject: g.subject, grade: g.grade, questions: g.questions.length, version: g.version })),
     sessions: store.list('session', req.userId).sort((a,b) => b.createdAt-a.createdAt).slice(0, 50).map(s => ({ id: s.id, title: s.game.title, className: s.className, test: s.test, phase: s.phase })),
