@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>MoonQuest · LessonScope</title>
+  <link rel="stylesheet" href="/moonquest.css">
+</head>
+<body>
+  <div class="sky" aria-hidden="true"><div class="moon"></div><div class="lantern l1"></div><div class="lantern l2"></div><div class="lantern l3"></div></div>
+  <header><a href="/" class="brand">Lesson<span>Scope</span></a><span class="wordmark">☾ MOONQUEST <small id="version"></small></span><div class="tools"><button id="sound" aria-pressed="false">Sound off</button><button id="music" aria-pressed="false">Music off</button><button id="full">Full screen</button></div></header>
+  <details class="audio-settings"><summary>Audio levels</summary><label>Effects<input id="effects-level" type="range" min="0" max="100" value="60"></label><label>Music<input id="music-level" type="range" min="0" max="100" value="35"></label></details>
+  <main id="app"><p>Preparing your Moon Festival adventure…</p></main>
+  <p id="notice" role="status" aria-live="polite"></p>
+  <template id="mascot"><svg viewBox="0 0 180 180" role="img" aria-label="Pip, the friendly moon alien"><ellipse cx="90" cy="150" rx="65" ry="12" fill="#191e46"/><path d="M42 100Q18 130 28 142M138 100Q162 119 151 140" stroke="#8ce4cb" stroke-width="12" fill="none" stroke-linecap="round"/><path d="M62 125L58 149M118 125L124 149" stroke="#8ce4cb" stroke-width="16" stroke-linecap="round"/><path d="M90 36L96 20" stroke="#8ce4cb" stroke-width="6"/><circle cx="98" cy="17" r="8" fill="#ffd985"/><path d="M32 76Q26 32 90 35Q154 32 148 76L139 116Q90 156 41 116Z" fill="#8ce4cb"/><ellipse cx="65" cy="82" rx="17" ry="24" fill="#24294e"/><ellipse cx="115" cy="82" rx="17" ry="24" fill="#24294e"/><circle cx="70" cy="76" r="6" fill="white"/><circle cx="120" cy="76" r="6" fill="white"/><path d="M77 113Q90 123 104 112" fill="none" stroke="#24294e" stroke-width="5" stroke-linecap="round"/></svg></template>
+  <script src="/moonquest.js" defer></script>
+</body></html>

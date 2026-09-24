@@ -81,9 +81,9 @@ function accrue(model, cost, pt, ct, img) {
 // could run, which masked a billing mistake behind a credentials error.
 function client() {
   return {
-    chat: { completions: { create: async (args) => {
+    chat: { completions: { create: async (args, options) => {
       assertDeclared('chat');
-      const res = await raw().chat.completions.create(args);
+      const res = await raw().chat.completions.create(args, options);
       try {
         const u = res && res.usage;
         if (u) {

@@ -56,6 +56,7 @@ const LABELS = {
 // an oversight — an AI action that is missing from BOTH maps is a bug, and
 // priceFor() throws rather than silently treating it as free.
 const FREE = {
+  'lessonscope.moonquest_followup': 'Included classroom follow-up; at most two attempts per flagged question per session',
   'lessonscope.generate_newsletter': 'Parent newsletter included with the lesson',
   'lessonscope.regenerate_slide': 'Free within fair-use (3 regenerations per lesson)',
   // Getting the plan to match a school's format usually takes a pass or two,

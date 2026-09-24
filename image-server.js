@@ -5555,6 +5555,10 @@ app.get('/practice', requirePracticeEnabled, (req, res) => res.sendFile(path.joi
 app.get('/play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'play.html')));
 app.get('/fishquest-play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'fishquest.html')));
 app.get('/fishquest/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'fishquest-teacher.html')));
+require('./moonquest-routes').installMoonQuest(app, {
+  requireAuth, sessionSecret, roster, studentAccount, learnerPickerEntries, studentHandle,
+  joinLimiter, generationLimiter, uploadLimiter, reserve, capture, release, declareFree, costOf,
+});
 app.get('/colonyquest/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'colonyquest.html')));
 
 // Student assignment page (worksheet/exit-ticket/quiz online submission).
