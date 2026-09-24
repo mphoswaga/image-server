@@ -1,6 +1,6 @@
 # MoonQuest: Save the Festival
 
-MoonQuest is a standalone, teacher-paced diagram game, linked from My games.
+MoonQuest is a standalone diagram game with automatic classroom pacing, linked from My games.
 Games-only accounts can use every MoonQuest route. The first theme is a
 cooperative Moon Festival rescue, with Pip the mischievous alien, lantern
 sparks, quiet-by-default audio, independently controlled music/effects, and
@@ -19,7 +19,9 @@ reduced-motion support.
    the existing classroom-game credit action and shows its effective price.
 4. Select one class per session, or choose Test game. Scanning a test room's QR
    automatically assigns a practice learner without a name, PIN or account.
-   Up to six devices can join independently; rescanning in the same browser tab
+   Up to six devices can join independently. In automatic practice, devices joining
+   in the lobby replace unclaimed simulation seats, so one phone can rehearse the
+   full flow without waiting for five bots. Rescanning in the same browser tab
    restores its practice seat. The private Open practice learner link does the
    same thing. Simulation fills only seats not controlled by a device, preserving
    the tester's own answers. No roster identities or student accounts are changed.
@@ -30,13 +32,36 @@ reduced-motion support.
    student account mechanism. Public pickers use the existing abbreviated
    labels and scoped handles, not school IDs.
 
-The round is Read → Choose → Discuss → Reconsider → Reveal. The teacher opens
-answers after reading the question. Choice closes after everyone expected has
-answered, its timer expires, or the teacher closes it. Default timings are
-30/20/8 seconds. Discussion locks choices. Reconsideration allows a change or
-explicit confirmation; no action retains the first answer without fabricating
-a confirmation. Teachers can pause, extend or advance, and mark joined learners
-away between rounds. Late joiners watch until the next round.
+New sessions use automatic play by default, including games saved before this update.
+Start once: Choose (12 seconds for new games, capped at 14 for older timings) →
+Discuss (15 seconds) → reconsider within discussion (5 seconds) → Reveal (10
+seconds) → next question. First choice closes early when all expected learners
+answer; discussion always receives its full time. Initial choices are locked
+until reconsideration. Choosing again during reconsideration explicitly confirms
+or revises the answer; doing nothing retains it without inventing confirmation.
+
+The teacher has a sticky Pause/Resume and +10 seconds toolbar. More than 70%
+incorrect among submitted answers, or less than 80% participation, pauses the
+reveal for teaching or device support. Resume continues the reveal countdown.
+Approved follow-ups enter automatically after two intervening rounds. The final
+round ends automatically. Teacher-paced mode remains an editor option. Existing
+running sessions retain their original flow rather than changing mid-lesson.
+
+The question is the largest element on a high-contrast card. Learner screens hide
+navigation, music controls and moving scenery. The Smartboard displays anonymous
+response progress; the private teacher dashboard also shows live distributions
+and learner choices. Public correctness and distributions remain hidden until
+reveal. Results preserve first answers, revisions and missing responses.
+
+On the Smartboard, tap **Enable countdown sounds** once to unlock browser audio.
+Each timed stage ticks gently with stronger final-five-second beeps and a stage
+chime. Learner devices stay silent. Music and effects remain separately adjustable.
+The teacher dashboard can also be opened on a signed-in phone using the same
+session URL; only its owner can control it. Do not project that private view.
+
+Timers are server-authoritative and checked on requests. Late joiners watch until
+the next round; missing answers remain missing and cannot stall the countdown.
+After a server restart the room recovers paused with saved answers intact.
 
 ## Delayed adaptation
 

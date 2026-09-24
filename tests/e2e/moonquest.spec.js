@@ -28,7 +28,7 @@ test('MoonQuest editor, isolated practice and durable results work together', as
   await page.locator('#region-label').fill('Eyes / vision');
   await page.getByRole('button',{name:'Apply area changes'}).click();
   await expect(page.locator('[data-question]').nth(1)).toContainText('Eyes / vision');
-  await page.locator('#reviewed').check();await page.getByRole('button',{name:'Save adventure',exact:true}).click();
+  await page.locator('#automatic').uncheck();await page.locator('#reviewed').check();await page.getByRole('button',{name:'Save adventure',exact:true}).click();
   await expect(page.getByRole('button',{name:'Test game',exact:true})).toBeVisible();
   await expectNoPageOverflow(page);
   await page.getByRole('button',{name:'Test game',exact:true}).click();
@@ -49,7 +49,7 @@ test('MoonQuest editor, isolated practice and durable results work together', as
 });
 
 test('teacher, board and learner are separated; real PIN join keeps answers private until reveal',async({page,browser})=>{
-  await signInDisposableTeacher(page,'-moonquest-live');await page.goto('/moonquest');await page.getByRole('button',{name:'Try the senses example'}).click();await page.locator('#reviewed').check();await page.getByRole('button',{name:'Save adventure',exact:true}).click();
+  await signInDisposableTeacher(page,'-moonquest-live');await page.goto('/moonquest');await page.getByRole('button',{name:'Try the senses example'}).click();await page.locator('#automatic').uncheck();await page.locator('#reviewed').check();await page.getByRole('button',{name:'Save adventure',exact:true}).click();
   const lib=await(await page.request.get('/api/games/moonquest/library')).json();
   // Use the normal roster API rather than a MoonQuest-only fixture.
   const rosterResponse=await page.request.post('/api/roster',{data:{name:'Moon crew',idCol:'id',nameCol:'name',rows:[{id:'MQ'+Date.now(),name:'Moon Learner'}]}});
@@ -74,7 +74,7 @@ test('teacher, board and learner are separated; real PIN join keeps answers priv
 });
 
 test('scanning the test QR opens a practice learner without a name or PIN and simulation preserves their answer',async({page,browser})=>{
-  await signInDisposableTeacher(page,'-moonquest-qr');await page.goto('/moonquest');await page.getByRole('button',{name:'Try the senses example'}).click();await page.locator('#reviewed').check();await page.getByRole('button',{name:'Save adventure',exact:true}).click();await page.getByRole('button',{name:'Test game',exact:true}).click();
+  await signInDisposableTeacher(page,'-moonquest-qr');await page.goto('/moonquest');await page.getByRole('button',{name:'Try the senses example'}).click();await page.locator('#automatic').uncheck();await page.locator('#reviewed').check();await page.getByRole('button',{name:'Save adventure',exact:true}).click();await page.getByRole('button',{name:'Test game',exact:true}).click();
   const url=await page.getByRole('link',{name:'Open practice learner',exact:true}).getAttribute('href');
   const context=await browser.newContext();const learner=await context.newPage();
   try {
@@ -93,7 +93,7 @@ test('scanning the test QR opens a practice learner without a name or PIN and si
 });
 
 test('later challenges preserve teacher edits and stay hidden until two intervening rounds',async({page})=>{
-  await signInDisposableTeacher(page,'-moonquest-queue');await page.goto('/moonquest');await page.getByRole('button',{name:'Try the senses example'}).click();await page.locator('#reviewed').check();await page.getByRole('button',{name:'Save adventure',exact:true}).click();await page.getByRole('button',{name:'Test game',exact:true}).click();
+  await signInDisposableTeacher(page,'-moonquest-queue');await page.goto('/moonquest');await page.getByRole('button',{name:'Try the senses example'}).click();await page.locator('#automatic').uncheck();await page.locator('#reviewed').check();await page.getByRole('button',{name:'Save adventure',exact:true}).click();await page.getByRole('button',{name:'Test game',exact:true}).click();
   await page.getByRole('button',{name:'Begin mission',exact:true}).click();await page.getByRole('button',{name:'Open answers',exact:true}).click();await page.getByRole('button',{name:'Simulate a misconception'}).click();await page.getByRole('button',{name:'Reconsider',exact:true}).click();await page.getByRole('button',{name:'Reveal answer',exact:true}).click();
   await expect(page.getByRole('heading',{name:'A concept to revisit'})).toBeVisible();
   const prompt='A silent controller shakes in your hand. Which part notices this?';
@@ -124,7 +124,7 @@ test('30 simultaneous learner requests retain every receipt and isolate board an
     let room=await state();const handles=await(await clients[0].get('/api/games/moonquest/rooms/'+room.code)).json();
     const tokens=await Promise.all(clients.map(async(c,i)=>{const result=await c.post(endpoint+'/join',{data:{handle:handles.students[i].handle,pin:'4829'}});expect(result.ok()).toBeTruthy();return(await result.json()).token;}));
     const command=async action=>{const s=await state();expect((await page.request.post(endpoint+'/command',{data:{action,seq:s.seq}})).ok()).toBeTruthy();};
-    await command('next');await command('open');const times=[];
+    await command('next');expect((await state()).phase).toBe('choose');const times=[];
     await Promise.all(clients.map(async(c,i)=>{const start=Date.now();const r=await c.post(endpoint+'/answer',{headers:{Authorization:'Bearer '+tokens[i]},data:{round:0,phase:'choose',regionId:i<5?'b':'a',eventId:'first-'+i}});times.push(Date.now()-start);expect(r.ok()).toBeTruthy();}));
     expect((await state()).answered).toBe(30);
     await command('advance');
@@ -134,4 +134,45 @@ test('30 simultaneous learner requests retain every receipt and isolate board an
     const report=await(await page.request.get(endpoint+'/report')).json();expect(report.students).toHaveLength(30);expect(report.students.every(s=>s.rounds[0].confirmed)).toBe(true);
     times.sort((a,b)=>a-b);console.log('MoonQuest local 30-client answer acknowledgement p95:',times[Math.floor(times.length*.95)],'ms');
   } finally { await Promise.all(clients.map(c=>c.dispose())); }
+});
+
+test('automatic mission runs choose, discussion, reveal and next question with a focused learner screen',async({page,browser},testInfo)=>{
+  test.setTimeout(90000);
+  await signInDisposableTeacher(page,'-moonquest-auto');await page.goto('/moonquest');
+  await page.getByRole('button',{name:'Try the senses example'}).click();
+  await expect(page.locator('#automatic')).toBeChecked();
+  await page.locator('#reviewed').check();await page.getByRole('button',{name:'Save adventure',exact:true}).click();
+  await page.getByRole('button',{name:'Test game',exact:true}).click();
+  const learnerUrl=await page.getByRole('link',{name:'Open practice learner',exact:true}).getAttribute('href');
+  const boardUrl=await page.getByRole('link',{name:'Open Smartboard',exact:true}).getAttribute('href');
+  const context=await browser.newContext({viewport:{width:390,height:844}}),learner=await context.newPage();
+  const board=await context.newPage();
+  const errors=[];learner.on('pageerror',e=>errors.push(e.message));page.on('pageerror',e=>errors.push(e.message));
+  try {
+    await learner.goto('http://127.0.0.1:4341'+learnerUrl);await expect(learner.getByText('You’re in the crew!')).toBeVisible();
+    await board.addInitScript(()=>{window.countdownTones=0;const Audio=window.AudioContext||window.webkitAudioContext;if(Audio){const create=Audio.prototype.createOscillator;Audio.prototype.createOscillator=function(...args){window.countdownTones++;return create.apply(this,args);};}});
+    await board.goto('http://127.0.0.1:4341'+boardUrl);await board.getByRole('button',{name:'Enable countdown sounds'}).click();
+    await expect(board.locator('#sound')).toHaveText('Sound on');
+    await page.getByRole('button',{name:'Begin mission',exact:true}).click();
+    await expect(page.getByRole('button',{name:'Open answers',exact:true})).toHaveCount(0);
+    await expect(learner.locator('.question-focus h1')).toContainText('Which part senses the vibration?');
+    await expect(learner.locator('header')).toBeHidden();await expect(learner.locator('.audio-settings')).toBeHidden();
+    await learner.getByRole('button',{name:'Left hand / skin',exact:true}).last().click();
+    await expect(learner.locator('#answer-status')).toContainText('saved');
+    await expect(page.locator('.response-ring')).toContainText('1/1');
+    await expect(board.locator('.evidence')).toHaveCount(0);
+    await expect.poll(()=>board.evaluate(()=>window.countdownTones)).toBeGreaterThan(3);
+    await expect(learner.locator('.stage-instruction')).toHaveText('Discuss your choice with your partner.');
+    await expect(learner.locator('#timer')).toHaveText(/(1[6-9]|20)s/);
+    await expectNoPageOverflow(learner);await expectNoPageOverflow(page);
+    await learner.screenshot({path:'/tmp/moonquest-learner-'+testInfo.project.name+'.png',fullPage:true});
+    await page.screenshot({path:'/tmp/moonquest-teacher-'+testInfo.project.name+'.png',fullPage:true});
+    await board.screenshot({path:'/tmp/moonquest-board-'+testInfo.project.name+'.png',fullPage:true});
+    await expect(learner.locator('.stage-instruction')).toHaveText('Are you sure about your answer?',{timeout:20000});
+    await learner.getByRole('button',{name:'Left hand / skin',exact:true}).last().click();
+    await expect(learner.locator('.learner-result')).toContainText('You found it!',{timeout:10000});
+    await expect(board.locator('.evidence')).toBeVisible();
+    await expect(learner.locator('.question-focus h1')).toContainText('A lantern changes colour.',{timeout:15000});
+    expect(errors).toEqual([]);
+  }finally{await context.close();}
 });

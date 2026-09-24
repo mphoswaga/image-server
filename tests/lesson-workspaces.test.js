@@ -21,12 +21,15 @@ test('newsletter is saved separately, survives reopening and partial updates, an
   assert.equal(workspaces.get('newsletter-teacher', saved.id).newsletter.text, 'Teacher edited message.');
 });
 
-test('lesson workspaces are private, persistent, and listed by recent activity', () => {
+test('lesson workspaces are private, persistent, and listed by recent activity', t => {
+  // Distinct activity times: filesystem speed must not decide this ordering test.
+  t.mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 0, 1) });
   const first = workspaces.create('teacher-a', {
     context: { subject: 'ICT', topic: 'Folders', grade: 'Grade 3' },
     stage: 'plan',
     plan: { sections: [{ heading: 'Objective', content: 'Create a folder.' }] },
   });
+  t.mock.timers.tick(1000);
   const second = workspaces.create('teacher-a', {
     context: { subject: 'Maths', topic: 'Fractions', grade: 'Grade 4' },
   });

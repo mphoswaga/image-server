@@ -110,7 +110,7 @@ function installMoonQuest(app, deps) {
     const regions = s.game.diagrams.find(d => d.id === q.diagramId).regions;
     const connected = new Set(Object.values(s.testDevices || {}));
     for (const [i, st] of s.students.entries()) {
-      if (connected.has(st.id)) continue;
+      if (connected.has(st.id) || !s.rounds[s.round].expected.includes(st.id)) continue;
       store.answer(s.id, st.id, { phase: s.phase, round: s.round, regionId: req.body.pattern === 'misconception' ? (regions.find(r => !q.accepted.includes(r.id)) || regions[0]).id : regions[i % regions.length].id, eventId: crypto.randomUUID() });
     }
     res.json(store.snapshot(s.id, 'teacher'));

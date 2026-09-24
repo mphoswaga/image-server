@@ -38,7 +38,7 @@ function validateGame(input) {
   if (input.reviewed !== true) fail('Review and confirm the answer keys before saving.');
   const seconds = (n, fallback, max) => Number.isInteger(n) && n >= 5 && n <= max ? n : fallback;
   return { title: text(input.title, 120) || 'Save the Moon Festival', subject: text(input.subject, 100), grade: text(input.grade, 80), diagrams, questions, reviewed: true,
-    timing: { choose: seconds(input.timing?.choose, 30, 180), discuss: seconds(input.timing?.discuss, 20, 120), reconsider: seconds(input.timing?.reconsider, 8, 60) } };
+    timing: { automatic: input.timing?.automatic !== false, choose: seconds(input.timing?.choose, 12, 180), discuss: seconds(input.timing?.discuss, 20, 120), reconsider: seconds(input.timing?.reconsider, 8, 60) } };
 }
 
 function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
@@ -85,6 +85,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
   }
   function createSession(teacherId, gameId, roster, test = false) {
     const game = read('game', gameId);
+    if (game.timing.automatic !== false) game.timing = { ...game.timing, automatic: true, choose: Math.min(14, game.timing.choose || 12), discuss: 15, reconsider: 5, reveal: 10 };
     if (game.teacherId !== teacherId) fail('This game belongs to another teacher.');
     if (!test && (!roster?.id || !roster.students?.length)) fail('Select a class with learners first.');
     const students = test ? Array.from({ length: 6 }, (_, i) => ({ id: 'practice-' + i, name: 'Practice learner ' + (i + 1) })) : roster.students.map(s => ({ id: String(s.id), name: s.name }));
@@ -112,10 +113,14 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
   function advance(s) {
     const next = { choose: 'discuss', discuss: 'reconsider', reconsider: 'reveal' }[s.phase];
     if (!next) fail('This stage needs the teacher to continue.');
-    s.phase = next; s.deadline = next === 'reveal' ? null : clock() + s.game.timing[next] * 1000;
+    s.phase = next; s.deadline = next === 'reveal' && !s.game.timing.automatic ? null : clock() + s.game.timing[next] * 1000;
     if (next === 'reveal') {
       const r = current(s); r.revealedAt = clock();
       const score = stats(s); const n = score.correct + score.wrong;
+      if (s.game.timing.automatic && ((n > 0 && score.wrong / n > .7) || n / Math.max(1, r.expected.length) < .8)) {
+        s.teachingPause = n > 0 && score.wrong / n > .7 ? 'misconception' : 'participation';
+        s.paused = true; s.remaining = 10000; s.deadline = null;
+      }
       if (!r.question.parentId && n > 0 && score.wrong / n > .7) {
         s.queue.push({ id: uid(), parentId: r.question.id, sourceRound: s.round, status: 'needs-review', eligibleAfter: s.round + 2,
           lowParticipation: n / Math.max(1, r.expected.length) < .8 });
@@ -123,14 +128,29 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     }
   }
   function tick(s) {
-    if (!s.paused && s.deadline && clock() >= s.deadline) { advance(s); saveSession(s); }
+    if (!s.paused && s.deadline && clock() >= s.deadline) {
+      if (s.phase === 'reveal' && s.game.timing.automatic) nextRound(s);
+      else advance(s);
+      saveSession(s);
+    }
     return s;
   }
   function begin(s, question) {
     const expected = Object.entries(s.members).filter(([, m]) => !m.absent).map(([id]) => id);
     if (!expected.length) fail('Wait for learners to join, or run Test game.');
     s.rounds.push({ question: copy(question), expected, answers: {}, events: [], startedAt: clock() });
-    s.round++; s.phase = 'read'; s.deadline = null;
+    s.round++; s.phase = s.game.timing.automatic ? 'choose' : 'read';
+    s.deadline = s.game.timing.automatic ? clock() + s.game.timing.choose * 1000 : null;
+    s.teachingPause = null;
+  }
+  function nextRound(s) {
+    const follow = s.queue.find(q => q.status === 'approved' && s.round >= q.eligibleAfter);
+    if (!Object.values(s.members).some(m => !m.absent)) {
+      if (s.phase === 'lobby') fail('Wait for learners to join, or scan the test QR.');
+      s.paused = true; s.remaining = 10000; s.deadline = null; s.teachingPause = 'attendance';
+    } else if (follow) { begin(s, follow.question); follow.status = 'asked'; }
+    else if (s.nextQuestion < s.game.questions.length) begin(s, s.game.questions[s.nextQuestion++]);
+    else { s.phase = 'ended'; s.deadline = null; }
   }
   function command(id, teacherId, action, body = {}) {
     const s = tick(session(id));
@@ -138,7 +158,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     if (body.seq !== s.seq && !(body.round === s.round && body.phase === s.phase && body.paused === s.paused)) fail('The room has updated. Check the current stage and try again.');
     if (action === 'pause') {
       if (['lobby', 'ended'].includes(s.phase)) fail('There is no running round to pause.');
-      if (s.paused) { s.paused = false; s.deadline = s.remaining == null ? null : clock() + s.remaining; s.recovered = false; }
+      if (s.paused) { s.paused = false; s.deadline = s.remaining == null ? null : clock() + s.remaining; s.recovered = false; s.teachingPause = null; }
       else { s.remaining = s.deadline ? Math.max(0, s.deadline - clock()) : null; s.deadline = null; s.paused = true; }
     } else if (action === 'absent') {
       if (!['lobby', 'reveal'].includes(s.phase)) fail('Change attendance between rounds.');
@@ -149,8 +169,11 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
       if (s.paused) fail('Resume the game first.');
       if (action === 'next') {
         if (!['lobby', 'reveal'].includes(s.phase)) fail('Finish this round first.');
-        if (s.nextQuestion >= s.game.questions.length) fail('All prepared questions are complete. Choose a queued challenge or finish.');
-        begin(s, s.game.questions[s.nextQuestion++]);
+        if (s.game.timing.automatic) nextRound(s);
+        else {
+          if (s.nextQuestion >= s.game.questions.length) fail('All prepared questions are complete. Choose a queued challenge or finish.');
+          begin(s, s.game.questions[s.nextQuestion++]);
+        }
       } else if (action === 'open') {
         if (s.phase !== 'read') fail('Answers are already open or this round is over.');
         s.phase = 'choose'; s.deadline = clock() + s.game.timing.choose * 1000;
@@ -185,6 +208,11 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
       studentId = s.students.find(st => !taken.has(st.id))?.id;
       if (!studentId) fail('All six practice learners are in use. Start a new test room for more devices.');
       s.testDevices[deviceKey] = studentId;
+      // A physical-device rehearsal should count only those devices, not idle bots.
+      if (s.game.timing.automatic && s.phase === 'lobby') {
+        const devices = new Set(Object.values(s.testDevices));
+        s.members = Object.fromEntries(Object.entries(s.members).filter(([id]) => devices.has(id)));
+      }
       s.members[studentId] ||= { joinedAt: clock(), absent: false };
       saveSession(s);
     }
@@ -199,6 +227,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     const diagram = s.game.diagrams.find(d => d.id === r.question.diagramId);
     if (!diagram.regions.some(r => r.id === body.regionId)) fail('Choose an area on this diagram.');
     const prev = r.answers[studentId] || {};
+    if (s.game.timing.automatic && s.phase === 'choose' && prev.first) fail('Your first choice is saved. Discuss it before reconsidering.');
     if (r.events.filter(e => e.studentId === studentId).length >= 100) fail('Too many answer changes in this round.');
     r.answers[studentId] = { ...prev, [s.phase === 'choose' ? 'first' : 'final']: body.regionId, confirmed: s.phase === 'reconsider' || prev.confirmed || false };
     r.events.push({ studentId, eventId: body.eventId, phase: s.phase, regionId: body.regionId, at: clock() });
@@ -230,22 +259,22 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     const s = tick(session(id)); const r = current(s); const revealed = s.phase === 'reveal' || s.phase === 'ended';
     const q = r?.question;
     const view = { id: s.id, title: s.game.title, className: s.className, test: s.test, seq: s.seq, phase: s.phase, paused: s.paused, recovered: s.recovered,
-      serverNow: clock(), deadline: s.deadline, round: s.round, total: s.game.questions.length, remainingQuestions: s.game.questions.length - s.nextQuestion,
+      automatic: !!s.game.timing.automatic, teachingPause: s.teachingPause || null, serverNow: clock(), deadline: s.deadline, round: s.round, total: s.game.questions.length, remainingQuestions: s.game.questions.length - s.nextQuestion,
       joined: Object.keys(s.members).length, expected: r?.expected.length || 0, answered: r ? Object.values(r.answers).filter(a => a.final || a.first).length : 0,
-      question: q ? { id: q.id, prompt: q.prompt, ...(revealed ? { accepted: q.accepted, explanation: q.explanation } : {}) } : null,
+      question: q ? { id: q.id, prompt: q.prompt, concept: q.concept, ...(revealed ? { accepted: q.accepted, explanation: q.explanation } : {}) } : null,
       diagram: q ? s.game.diagrams.find(d => d.id === q.diagramId) : null,
       stats: revealed ? stats(s) : null,
       lanterns: s.rounds.filter(r => r.revealedAt).reduce((n, r) => n + stats(s, r).correct, 0) };
     if (role === 'board' && s.phase === 'lobby') view.code = s.code;
     if (role === 'student') { view.mine = r?.answers[studentId] || {}; view.canAnswer = !!r?.expected.includes(studentId); }
     if (role === 'teacher') {
-      Object.assign(view, { code: s.code, boardToken: s.boardToken, queue: s.queue.map(item => {
+      Object.assign(view, { liveStats: stats(s), code: s.code, boardToken: s.boardToken, queue: s.queue.map(item => {
         const original = s.game.questions.find(q => q.id === item.parentId);
         const diagram = s.game.diagrams.find(d => d.id === original.diagramId);
         return { ...item, originalPrompt: original.prompt, acceptedLabels: diagram.regions.filter(r => original.accepted.includes(r.id)).map(r => r.label) };
       }),
         learners: s.students.map(x => ({ ...x, joined: !!s.members[x.id], absent: !!s.members[x.id]?.absent,
-          answered: !!r?.answers[x.id]?.first, confirmed: !!r?.answers[x.id]?.confirmed })) });
+          choice: r?.answers[x.id]?.final ?? r?.answers[x.id]?.first ?? null, answered: !!r?.answers[x.id]?.first, confirmed: !!r?.answers[x.id]?.confirmed })) });
     }
     return view;
   }

@@ -7,7 +7,7 @@ const { createStore, validateGame } = require('../moonquest');
 const { generateQuestions } = require('../moonquest-ai');
 function fixture() {
   const regions = ['a','b','c'].map((id,i) => ({ id, label:'Region '+id, points:[[i*.3,0],[i*.3+.2,0],[i*.3+.2,.2],[i*.3,.2]] }));
-  return { title:'Test mission',grade:'Grade 2',reviewed:true,diagrams:[{id:'body',asset:'00000000-0000-0000-0000-000000000000',regions}],questions:Array.from({length:5},(_,i)=>({id:'q'+i,diagramId:'body',prompt:'Question '+i,concept:'Identify a sense',accepted:['a'],explanation:'A is correct.'})),timing:{choose:30,discuss:20,reconsider:8} };
+  return { title:'Test mission',grade:'Grade 2',reviewed:true,diagrams:[{id:'body',asset:'00000000-0000-0000-0000-000000000000',regions}],questions:Array.from({length:5},(_,i)=>({id:'q'+i,diagramId:'body',prompt:'Question '+i,concept:'Identify a sense',accepted:['a'],explanation:'A is correct.'})),timing:{automatic:false,choose:30,discuss:20,reconsider:8} };
 }
 function setup(t, count=10) {
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'moonquest-test-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));let now=100000;
@@ -81,4 +81,74 @@ test('QR test entry claims independent practice seats, resumes and never joins a
   assert.throws(()=>store.joinPractice(testRoom.id,'00000000-0000-0000-0000-000000000007'),/six practice/);
   store.command(testRoom.id,'teacher','end',{seq:store.session(testRoom.id).seq});
   assert.throws(()=>store.joinPractice(testRoom.id,key),/not an active/);
+});
+function automatic(t,count=2) {
+  const f=setup(t,count);let s=f.store.session(f.id);
+  s.game.timing={automatic:true,choose:12,discuss:15,reconsider:5,reveal:10};f.store.saveSession(s);return f;
+}
+test('automatic round opens immediately, keeps discussion time and finishes without teacher clicks',t=>{
+  const f=automatic(t);f.cmd('next');assert.equal(f.store.snapshot(f.id,'board').phase,'choose');
+  f.answer(0);assert.throws(()=>f.answer(0,'b'),/first choice/);f.answer(1);
+  assert.equal(f.store.snapshot(f.id,'board').phase,'discuss');
+  assert.throws(()=>f.answer(0),/closed/);f.step(14999);assert.equal(f.store.snapshot(f.id,'board').phase,'discuss');
+  f.step(1);assert.equal(f.store.snapshot(f.id,'board').phase,'reconsider');
+  f.answer(0);f.answer(1);assert.equal(f.store.snapshot(f.id,'board').phase,'reconsider');
+  f.step(5000);assert.equal(f.store.snapshot(f.id,'board').phase,'reveal');
+  f.step(10000);assert.equal(f.store.snapshot(f.id,'board').round,1);
+  for(let round=1;round<5;round++){
+    f.answer(0);f.answer(1);f.step(15000);f.store.snapshot(f.id,'board');f.step(5000);f.store.snapshot(f.id,'board');f.step(10000);f.store.snapshot(f.id,'board');
+  }
+  assert.equal(f.store.snapshot(f.id,'board').phase,'ended');assert.equal(f.store.report(f.id,'teacher').rounds.length,5);
+});
+test('automatic teaching pause retains evidence and resumes reveal before next question',t=>{
+  const f=automatic(t);f.cmd('next');f.answer(0,'b');f.answer(1,'b');f.step(15000);f.store.snapshot(f.id,'board');f.step(5000);
+  const v=f.store.snapshot(f.id,'teacher');assert.equal(v.teachingPause,'misconception');assert.equal(v.paused,true);assert.equal(v.stats.wrong,2);
+  f.step(60000);assert.equal(f.store.snapshot(f.id,'board').phase,'reveal');f.cmd('pause');f.step(9999);assert.equal(f.store.snapshot(f.id,'board').phase,'reveal');f.step(1);assert.equal(f.store.snapshot(f.id,'board').round,1);
+});
+test('live dashboard distribution is teacher-only until reveal and missing responses trigger support',t=>{
+  const f=automatic(t);f.cmd('next');f.answer(0,'b');
+  assert.equal(f.store.snapshot(f.id,'teacher').liveStats.distribution.b,1);
+  for(const role of ['board','student']){const v=f.store.snapshot(f.id,role,'s0');assert.equal(v.liveStats,undefined);assert.equal(v.stats,null);assert.equal(v.learners,undefined);}
+  f.step(12000);f.store.snapshot(f.id,'board');f.step(15000);f.store.snapshot(f.id,'board');f.answer(0,'a');f.step(5000);
+  const v=f.store.snapshot(f.id,'board');assert.equal(v.teachingPause,'participation');assert.equal(v.stats.unanswered,1);assert.equal(v.stats.improved,1);
+});
+test('automatic rounds insert only reviewed follow-ups after two intervening rounds',t=>{
+  const f=automatic(t);f.cmd('next');f.answer(0,'b');f.answer(1,'b');f.step(15000);f.store.snapshot(f.id,'board');f.step(5000);f.store.snapshot(f.id,'board');
+  const q=f.store.session(f.id).queue[0];f.store.review(f.id,'teacher',q.id,{prompt:'Reviewed new context',explanation:'Reason'});f.cmd('pause');f.step(10000);f.store.snapshot(f.id,'board');
+  for(let i=0;i<2;i++){f.answer(0);f.answer(1);f.step(15000);f.store.snapshot(f.id,'board');f.step(5000);f.store.snapshot(f.id,'board');f.step(10000);f.store.snapshot(f.id,'board');}
+  assert.equal(f.store.snapshot(f.id,'board').question.prompt,'Reviewed new context');assert.equal(f.store.session(f.id).queue[0].status,'asked');
+});
+test('new sessions upgrade older saved games to bounded automatic timing, explicit manual is preserved',t=>{
+  const f=setup(t);const game={...f.game,timing:{choose:30,discuss:20,reconsider:8}};f.store.saveGame('teacher',game);
+  const s=f.store.createSession('teacher',game.id,null,true);assert.deepEqual(s.game.timing,{automatic:true,choose:14,discuss:15,reconsider:5,reveal:10});
+  const saved=f.store.read('game',game.id);f.store.saveGame('teacher',{...saved,timing:{automatic:false,choose:30,discuss:20,reconsider:8}});
+  assert.equal(f.store.createSession('teacher',game.id,null,true).game.timing.automatic,false);
+});
+test('automatic restart and pause preserve stage time and saved first choices',t=>{
+  const f=automatic(t);f.cmd('next');f.answer(0,'b');f.step(3000);f.cmd('pause');f.step(60000);f.cmd('pause');
+  assert.equal(f.store.snapshot(f.id,'board').deadline-f.clock(),9000);
+  const restart=createStore(f.dir,f.clock);const v=restart.snapshot(f.id,'student','s0');assert.equal(v.paused,true);assert.equal(v.mine.first,'b');
+  restart.command(f.id,'teacher','pause',{seq:v.seq});assert.equal(restart.snapshot(f.id,'board').deadline-f.clock(),9000);
+});
+test('automatic rooms with nobody included pause instead of looping or losing results',t=>{
+  const f=automatic(t);f.cmd('next');f.answer(0);f.answer(1);f.step(15000);f.store.snapshot(f.id,'board');f.step(5000);f.store.snapshot(f.id,'board');
+  f.cmd('absent',{studentId:'s0',absent:true});f.cmd('absent',{studentId:'s1',absent:true});f.step(10000);
+  assert.equal(f.store.snapshot(f.id,'teacher').teachingPause,'attendance');
+  assert.equal(f.store.report(f.id,'teacher').rounds[0].stats.correct,2);
+  f.cmd('absent',{studentId:'s0',absent:false});f.cmd('pause');f.step(10000);assert.equal(f.store.snapshot(f.id,'board').expected,1);
+});
+test('automatic QR rehearsal counts actual devices rather than unclaimed simulation seats',t=>{
+  const f=setup(t);const g=f.store.saveGame('teacher',{...f.game,timing:{automatic:true}});const room=f.store.createSession('teacher',g.id,null,true);
+  for(const st of room.students)f.store.join(room.id,st.id);
+  const first=f.store.joinPractice(room.id,'00000000-0000-0000-0000-000000000001');
+  const second=f.store.joinPractice(room.id,'00000000-0000-0000-0000-000000000002');
+  const s=f.store.session(room.id);assert.equal(Object.keys(s.members).length,2);
+  f.store.command(room.id,'teacher','next',{seq:s.seq});
+  for(const id of [first.studentId,second.studentId])f.store.answer(room.id,id,{round:0,phase:'choose',regionId:'a',eventId:id});
+  assert.equal(f.store.snapshot(room.id,'board').phase,'discuss');assert.equal(f.store.snapshot(room.id,'board').expected,2);
+});
+test('starting automatic play before anyone joins does not trap the lobby in pause',t=>{
+  const f=setup(t);const g=f.store.saveGame('teacher',{...f.game,timing:{automatic:true}});const s=f.store.createSession('teacher',g.id,{id:'new',name:'New class',students:[{id:'new',name:'New'}]});
+  assert.throws(()=>f.store.command(s.id,'teacher','next',{seq:s.seq}),/Wait for learners/);
+  assert.equal(f.store.snapshot(s.id,'teacher').paused,false);
 });

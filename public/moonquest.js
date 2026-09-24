@@ -27,7 +27,7 @@
   }
   function stopPoll() { clearTimeout(pollTimer); }
   function chime() {
-    if (!soundEnabled) return;
+    if (!soundEnabled || role==='student') return;
     try { audio ||= new (window.AudioContext || window.webkitAudioContext)(); audio.resume(); [523.25,659.25,783.99].forEach((f,i) => { const o=audio.createOscillator(),g=audio.createGain(), t=audio.currentTime+i*.1; o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(Number(document.getElementById('effects-level').value)/100*.13,t+.02);g.gain.exponentialRampToValueAtTime(.001,t+.45);o.connect(g);g.connect(audio.destination);o.start(t);o.stop(t+.5); }); } catch {}
   }
   document.getElementById('sound').onclick = () => { soundEnabled = !soundEnabled; document.getElementById('sound').textContent = soundEnabled ? 'Sound on' : 'Sound off'; document.getElementById('sound').setAttribute('aria-pressed', String(soundEnabled)); chime(); };
@@ -45,7 +45,7 @@
       <div class="cards">${library.games.map(g => `<article class="card"><span class="pill">MOON FESTIVAL · ${g.questions} questions</span><h3 style="margin-top:18px">${esc(g.title)}</h3><p>${esc(g.subject)} · ${esc(g.grade)}</p><div class="row"><button data-edit="${g.id}">Edit</button><button class="primary" data-host="${g.id}">Set up class</button><button data-test="${g.id}">Test game</button></div></article>`).join('') || '<div class="panel"><h3>Your first mission starts with a diagram</h3><p class="muted">Upload a picture, mark answer areas and prepare your questions. No lesson plan is required.</p></div>'}</div>
       <h2 style="margin-top:25px">Recent missions</h2><div class="stack">${library.sessions.map(s => `<article class="panel row spread"><div><strong>${esc(s.title)}</strong><p class="muted">${esc(s.className)} · ${s.test?'Practice · ':''}${esc(s.phase)}</p></div><div class="row"><button data-session="${s.id}">Open room</button><button data-report="${s.id}">View learning</button></div></article>`).join('') || '<p class="muted">Your class reports will appear here. MoonQuest does not change class averages.</p>'}</div>`;
   }
-  function emptyDraft() { return { title: 'Save the Moon Festival', subject:'', grade:'Grade 3', diagrams:[], questions:[], timing:{choose:30,discuss:20,reconsider:8}, reviewed:false }; }
+  function emptyDraft() { return { title: 'Save the Moon Festival', subject:'', grade:'Grade 3', diagrams:[], questions:[], timing:{automatic:true,choose:12,discuss:15,reconsider:5}, reviewed:false }; }
   function imageUrl(asset) { return base + '/assets/' + asset; }
   function diagramHtml(d, selection, accepted = [], edit = false) {
     if (!d) return '<div class="panel"><p>Upload a diagram to begin.</p></div>';
@@ -54,6 +54,7 @@
   function captureEditor() {
     if (view !== 'editor') return;
     for (const key of ['title','subject','grade']) draft[key] = document.getElementById('mq-'+key)?.value || '';
+    draft.timing.automatic = document.getElementById('automatic').checked;
     ['choose','discuss','reconsider'].forEach(k => { draft.timing[k] = Number(document.getElementById('time-'+k)?.value || draft.timing[k]); });
     draft.reviewed = !!document.getElementById('reviewed')?.checked;
     document.querySelectorAll('[data-question]').forEach(el => {
@@ -75,7 +76,7 @@
       ${d?`<div class="editor" style="margin-top:20px"><div>${diagramHtml(d,null,[],true)}<p class="muted">Rectangles and ellipses: tap two opposite corners. Polygon: tap each corner, then Finish area.</p></div><div class="stack"><label>Area label<input id="region-label" placeholder="e.g. Eyes" maxlength="100" value="${esc(selectedRegion?.label||'')}"></label>${bounds?`<div class="grid">${['x','y','w','h'].map(k=>`<label>${{x:'Left',y:'Top',w:'Width',h:'Height'}[k]} %<input id="region-${k}" type="number" min="0" max="100" step="0.1" value="${(bounds[k]*100).toFixed(1)}"></label>`).join('')}</div><div class="row">${button('Apply area changes','update-region','primary')}${button('New area','new-area')}</div><p class="muted">Or redraw this area below. Its linked answers will be preserved.</p>`:''}<label>Shape<select id="shape"><option value="rectangle">Rectangle</option><option value="ellipse">Ellipse</option><option value="polygon">Custom outline</option></select></label><div class="row">${button('Finish area','finish-area','primary')}${button('Undo corner','undo-corner')}</div><div>${d.regions.map(r=>`<div class="row spread" style="margin-bottom:8px"><span>${esc(r.label)}</span><div class="row"><button class="small" data-edit-region="${esc(r.id)}">Edit</button><button class="small danger" data-delete-region="${esc(r.id)}">Remove</button></div></div>`).join('')}</div><p class="muted">Avoid overlapping areas. Learners can also use the labelled answer buttons below the diagram.</p></div></div>`:''}</section>
       <section class="panel"><h2>2. Prepare the challenges</h2><p class="muted">Give each question a clear objective and explanation. Select all acceptable regions; learners choose one.</p><label>Objective for AI suggestions<textarea id="objective" placeholder="e.g. Identify the sense used to receive information from a device."></textarea></label><div class="row" style="margin:15px 0">${button('＋ Write a question','add-question')}${button('AI draft 5 questions · '+(library?.generationCost||0)+' credits','draft-ai')}</div><p class="muted">AI drafts need your review. During play, up to two AI attempts per flagged question are included.</p>
       <div id="questions">${draft.questions.map((q,i)=>`<article class="question-card" data-question="${q.id}"><div class="row spread"><h3>Challenge ${i+1} · ${esc(draft.diagrams.find(d=>d.id===q.diagramId)?.title)}</h3><button data-delete-question="${q.id}" class="small danger">Remove</button></div><div class="stack"><label>Question<textarea data-field="prompt" maxlength="600">${esc(q.prompt)}</textarea></label><label>Learning objective<input data-field="concept" maxlength="300" value="${esc(q.concept)}"></label><div><span class="muted">Acceptable answers</span><div class="row">${(draft.diagrams.find(d=>d.id===q.diagramId)?.regions||[]).map(r=>`<label><input type="checkbox" data-accepted value="${esc(r.id)}" ${q.accepted.includes(r.id)?'checked':''}> ${esc(r.label)}</label>`).join('')}</div></div><label>Explanation after reveal<textarea data-field="explanation" maxlength="800">${esc(q.explanation)}</textarea></label></div></article>`).join('')}</div></section>
-      <section class="panel"><h2>3. Set the pace</h2><div class="grid">${['choose','discuss','reconsider'].map(k=>`<label>${{choose:'First choice',discuss:'Partner discussion',reconsider:'Reconsider'}[k]} · seconds<input id="time-${k}" type="number" min="5" max="${k==='choose'?180:k==='discuss'?120:60}" value="${draft.timing[k]}"></label>`).join('')}</div><p class="muted">You open each question, control the reveal and can pause or add time. First choices, revised choices and later checks remain separate.</p><label><input id="reviewed" type="checkbox" ${draft.reviewed?'checked':''}> I have checked the diagrams, questions, accepted answers and explanations.</label><div class="row" style="margin-top:18px">${button('Save adventure','save','primary')}</div></section>`;
+      <section class="panel"><h2>3. Set the pace</h2><label><input id="automatic" type="checkbox" ${draft.timing.automatic!==false?'checked':''}> Automatic classroom flow (recommended)</label><p>Automatic play: up to 14 seconds to choose, 20 seconds to discuss and reconsider, then a 10-second reveal. Pause or add time whenever your class needs it.</p><details><summary>Timing preferences for teacher-paced play</summary><div class="grid">${['choose','discuss','reconsider'].map(k=>`<label>${{choose:'First choice',discuss:'Partner discussion',reconsider:'Reconsider'}[k]} · seconds<input id="time-${k}" type="number" min="5" max="${k==='choose'?180:k==='discuss'?120:60}" value="${draft.timing[k]}"></label>`).join('')}</div></details><p class="muted">Automatic play opens answers and moves between questions for you. First choices, revised choices and later checks remain separate.</p><label><input id="reviewed" type="checkbox" ${draft.reviewed?'checked':''}> I have checked the diagrams, questions, accepted answers and explanations.</label><div class="row" style="margin-top:18px">${button('Save adventure','save','primary')}</div></section>`;
     document.getElementById('upload').onchange = async e => { const file=e.target.files[0];if(!file)return;captureEditor();try{ const form=new FormData();form.append('file',file);const a=await api('/assets',form);draft.diagrams.push({id:uid(),title:file.name.replace(/\.[^.]+$/,''),asset:a.asset,regions:[]});activeDiagram=draft.diagrams.length-1;dirty=true;draft.reviewed=false;editor(); }catch(err){tell(err.message,true);} };
     if(d){document.getElementById('diagram-select').onchange=e=>{captureEditor();activeDiagram=Number(e.target.value);regionEditing=null;editor();};document.querySelector('#diagram svg').addEventListener('pointerdown',drawPoint);}
   }
@@ -134,49 +135,57 @@
       const url='/sessions/'+sessionId+(role==='teacher'?'/teacher':'/state'+(role==='board'?'?board='+encodeURIComponent(new URLSearchParams(location.search).get('board')):''));
       const next=await api(url);if(view!=='live'||sessionId!==requestedSession||role!==requestedRole)return;clockOffset=next.serverNow-Date.now();
       if(state&&next.seq<state.seq)return;
-      if(state&&next.phase!==state.phase)chime();state=next;
+      state=next;
       const key=role==='student'?JSON.stringify([state.round,state.phase,state.paused,state.deadline,state.mine,state.canAnswer,state.stats]):[state.seq,role].join(':');
-      if(key!==lastRender){renderLive();lastRender=key;}const c=document.getElementById('connection');if(c)c.textContent='Connected · answers saved to LessonScope';
+      if(key!==lastRender){renderLive();lastRender=key;}const c=document.getElementById('connection');if(c){c.textContent='Connected';c.classList.remove('interrupted');}
       if(role==='teacher'&&!state.test){
         const queued=state.queue.find(q=>q.status==='needs-review'&&!q.suggestion&&!q.attempts&&!autoSuggestions.has(q.id));
         if(queued){autoSuggestions.add(queued.id);api('/sessions/'+sessionId+'/suggest',{queueId:queued.id},{timeout:25000}).then(()=>{lastRender='';}).catch(()=>tell('A later challenge needs your input. You can write it or retry AI while the class continues.'));}
       }
-    }catch(e){lastRender='';const c=document.getElementById('connection');if(c)c.textContent='Connection interrupted · reconnecting. Wait for confirmation before leaving.';else {root.innerHTML=`<section class="intro"><h1>Let’s reconnect.</h1><p>${esc(e.message)}</p><div class="row"><a class="button" href="/moonquest/join">Rejoin as a learner</a><a class="button" href="/">Teacher sign-in</a></div></section>`;}document.querySelectorAll('[data-region-answer]').forEach(b=>b.disabled=true);}
+    }catch(e){lastRender='';const c=document.getElementById('connection');if(c){c.textContent='Reconnecting… Your saved answer is safe.';c.classList.add('interrupted');}else {root.innerHTML=`<section class="intro"><h1>Let’s reconnect.</h1><p>${esc(e.message)}</p><div class="row"><a class="button" href="/moonquest/join">Rejoin as a learner</a><a class="button" href="/">Teacher sign-in</a></div></section>`;}document.querySelectorAll('[data-region-answer]').forEach(b=>b.disabled=true);}
     finally{polling=false;if(view==='live')pollTimer=setTimeout(poll,1100);}
   }
   function liveControls() {
     const s=state;
-    return `<aside class="teacher-private"><div class="panel"><span class="eyebrow">Teacher controls · private</span><div class="control" style="margin-top:12px">${s.phase==='lobby'||s.phase==='reveal'?button(s.phase==='lobby'?'Begin mission':'Next question','next','primary'):''}${s.phase==='read'?button('Open answers','open','primary'):''}${['choose','discuss','reconsider'].includes(s.phase)?button({choose:'Begin discussion',discuss:'Reconsider',reconsider:'Reveal answer'}[s.phase],'advance','primary'):''}${!['lobby','ended'].includes(s.phase)?button(s.paused?'Resume':'Pause','pause'):''}${s.deadline?button('+10 seconds','extend'):''}</div>
-      ${s.recovered?'<p class="error">Session recovered safely and paused. Resume when the class is ready.</p>':''}
+    return `<aside class="teacher-private"><div class="panel"><span class="eyebrow">Teacher controls · private</span><div class="control" style="margin-top:12px">${!s.paused&&(s.phase==='lobby'||s.phase==='reveal')?button(s.phase==='lobby'?'Begin mission':'Next question','next','primary'):''}${s.phase==='read'?button('Open answers','open','primary'):''}${!s.automatic&&['choose','discuss','reconsider'].includes(s.phase)?button({choose:'Begin discussion',discuss:'Reconsider',reconsider:'Reveal answer'}[s.phase],'advance','primary'):''}${!['lobby','ended'].includes(s.phase)?button(s.paused?'Resume':'Pause','pause'):''}${s.deadline?button('+10 seconds','extend'):''}</div>
+      ${s.teachingPause?`<p class="teaching-alert">${s.teachingPause==='misconception'?'Let’s unpack this idea. More than 70% of answers were incorrect. Ask learners to explain the correct area and why another area does not fit.':s.teachingPause==='attendance'?'No learners are currently included. Include learners below before resuming.':'Some answers are missing. Check devices and understanding before continuing.'}</p>`:''}${s.automatic?'<p class="muted">Automatic play · choose → discuss → reveal. Use Pause when you need a teaching moment.</p>':''}${s.recovered?'<p class="error">Session recovered safely and paused. Resume when the class is ready.</p>':''}
       <div class="row"><a class="button small" target="_blank" rel="noopener noreferrer" href="/moonquest?session=${s.id}&board=${s.boardToken}">Open Smartboard</a>${button('Replace board link','rotate-board','small')}</div>
       <p class="muted">Keep this teacher view off the projector. The Smartboard view hides learner names and queued answers.</p>
       ${s.test?`<p class="muted">Scan the QR to join as a practice learner—no name or PIN. Simulation fills only the remaining practice learners.</p><a class="button small" target="_blank" rel="noopener" href="/moonquest/join?code=${s.code}">Open practice learner</a>`:''}
       ${s.test&&['choose','reconsider'].includes(s.phase)?`<div class="stack">${button('Simulate learner answers','simulate')}${button('Simulate a misconception','simulate-misconception')}</div>`:''}
       <div class="row" style="margin-top:12px">${button('View report','report','small')}${s.phase!=='ended'?button('Finish mission','end','small'):''}${button('Adventures','home','small')}</div></div>
-      <div class="panel"><h3>Crew check-in · ${s.joined}/${s.learners.length}</h3><p class="muted">${s.phase==='reconsider'?'✓ means confirmed during reconsideration. The first choice is kept otherwise.':'✓ means a first choice has been saved.'}</p><div class="learners">${s.learners.map(l=>`<div class="learner"><span>${s.phase==='reconsider'?l.confirmed?'✓':'○':l.answered?'✓':l.joined?'●':'○'} ${esc(l.name)} ${l.absent?'· away':''}</span>${l.joined&&['lobby','reveal'].includes(s.phase)?`<button data-attendance="${esc(l.id)}" data-absent="${!l.absent}">${l.absent?'Include':'Away'}</button>`:''}</div>`).join('')}</div></div>
+      <div class="panel"><h3>Crew check-in · ${s.joined}/${s.learners.length}</h3><p class="muted">${s.phase==='reconsider'?'✓ means confirmed during reconsideration. The first choice is kept otherwise.':'✓ means a first choice has been saved.'}</p><div class="learners">${s.learners.map(l=>`<div class="learner ${l.answered?'has-answered':''}"><span>${s.phase==='reconsider'?l.confirmed?'✓':'○':l.answered?'✓':l.joined?'●':'○'} ${esc(l.name)} ${l.absent?'· away':''}${l.choice?`<small class="learner-choice">${esc(s.diagram?.regions.find(r=>r.id===l.choice)?.label||'')}</small>`:''}</span>${l.joined&&['lobby','reveal'].includes(s.phase)?`<button data-attendance="${esc(l.id)}" data-absent="${!l.absent}">${l.absent?'Include':'Away'}</button>`:''}</div>`).join('')}</div></div>
       <div id="queue-panel"></div></aside>`;
   }
   function renderLive() {
-    document.body.dataset.view='live';
+    document.body.dataset.view='live'; document.body.dataset.audience=role; document.body.dataset.phase=state.phase;
     const s=state,teacher=role==='teacher',selected=s.mine?.final||s.mine?.first;
+    const answerOpen=role==='student'&&s.canAnswer&&!s.paused&&['choose','reconsider'].includes(s.phase)&&!(s.automatic&&s.phase==='choose'&&s.mine?.first);
     // Preserve edits in queued questions while answer counts update.
     const focus=document.activeElement, focusQueue=focus?.closest('[data-queue]')?.dataset.queue, focusField=focus?.hasAttribute('data-prompt')?'data-prompt':'data-explanation', focusStart=focus?.selectionStart, focusEnd=focus?.selectionEnd;
     const queued=queueEdits;
     const titles={lobby:'The moon needs your crew.',read:'A new challenge has arrived.',choose:'Choose your answer.',discuss:'Discuss your choice with your partner.',reconsider:'Are you sure about your answer?',reveal:'Let’s discover why.',ended:'You brought light to the festival!'};
     document.body.classList.toggle('celebrate',s.phase==='ended');
-    root.innerHTML=`${s.test?'<div class="preview-note">Teacher test · Practice learners only · No class marks are saved</div>':''}<div class="row spread"><span class="pill">${esc(s.title)}</span><span class="connection" id="connection">Connected</span><span class="pill">${s.lanterns} lantern sparks</span></div>
-      <section class="stage" style="margin-top:24px"><p class="eyebrow">${s.phase==='lobby'?'MOON FESTIVAL RESCUE':s.phase==='ended'?'MISSION COMPLETE':'Challenge '+(s.round+1)}</p><h1>${s.paused?'Mission paused':titles[s.phase]}</h1><div class="timer" id="timer"></div>${s.question?`<h2>${esc(s.question.prompt)}</h2>`:''}</section>
-      <div class="live-layout ${teacher?'':'solo'}"><div>${s.phase==='lobby'?`<section class="intro">${mascot()}<h2>Outsmart Pip. Restore the lanterns.</h2><p>Pip has scrambled the festival signals! Choose carefully, explain your thinking to a partner, then lock in your rescue plan. Every discovery adds light to our sky.</p>${role==='student'?'<p class="stat">You’re in the crew!</p><p>Wait for your teacher to begin.</p>':`<p>On learner devices, open <strong>${esc(location.host)}/moonquest/join</strong></p>${s.code?`<p class="code">${s.code}</p><img class="qr" alt="Scan to join this MoonQuest room" src="${base}/sessions/${s.id}/${teacher?'qr':'board-qr?board='+encodeURIComponent(new URLSearchParams(location.search).get('board'))}">`:''}`}<p class="muted">${s.joined} learners ready</p></section>`:
+    root.innerHTML=`${s.test?'<div class="preview-note">Teacher test · Practice learners only · No class marks are saved</div>':''}<div class="row spread mission-meta"><span class="pill">${esc(s.title)}</span><span class="connection" id="connection">Connected</span><span class="pill">${s.lanterns} lantern sparks</span></div>
+      <section class="stage" style="margin-top:24px"><p class="eyebrow">${s.phase==='lobby'?'MOON FESTIVAL RESCUE':s.phase==='ended'?'MISSION COMPLETE':'Challenge '+(s.round+1)}</p>${s.question&&s.phase!=='ended'?`<div class="question-focus"><span class="question-label">QUESTION ${s.round+1}</span><h1>${esc(s.question.prompt)}</h1></div><h2 class="stage-instruction">${s.paused?'Pause and talk together':titles[s.phase]}</h2>`:`<h1>${titles[s.phase]}</h1>`}<div class="timer" id="timer" role="timer" aria-label="Seconds remaining"></div></section>
+      ${role==='board'&&!soundEnabled?button('Enable countdown sounds','enable-audio','small'):''}${role!=='student'?dashboard(s):''}<div class="live-layout ${teacher?'':'solo'}"><div>${s.phase==='lobby'?`<section class="intro">${mascot()}<h2>Outsmart Pip. Restore the lanterns.</h2><p>Pip has scrambled the festival signals! Choose carefully, explain your thinking to a partner, then lock in your rescue plan. Every discovery adds light to our sky.</p>${role==='student'?'<p class="stat">You’re in the crew!</p><p>Wait for your teacher to begin.</p>':`<p>On learner devices, open <strong>${esc(location.host)}/moonquest/join</strong></p>${s.code?`<p class="code">${s.code}</p><img class="qr" alt="Scan to join this MoonQuest room" src="${base}/sessions/${s.id}/${teacher?'qr':'board-qr?board='+encodeURIComponent(new URLSearchParams(location.search).get('board'))}">`:''}`}<p class="muted">${s.joined} learners ready</p></section>`:
       s.phase==='ended'?`<section class="intro">${mascot()}<p class="stat">${s.lanterns} sparks of understanding</p><p>The lanterns shine again, and the moon rabbit can find the way home. Your careful choices and conversations made the difference.</p>${teacher?button('Explore the learning report','report','primary'):''}</section>`:
-      `<div class="diagram-wrap">${diagramHtml(s.diagram,selected,s.question?.accepted||[])}<div class="region-list">${s.diagram.regions.map(r=>`<button data-region-answer="${esc(r.id)}" class="${r.id===selected?'selected ':''}${s.question?.accepted?.includes(r.id)?'correct':''}" ${role!=='student'||!s.canAnswer||s.paused||!['choose','reconsider'].includes(s.phase)?'disabled':''}>${esc(r.label)}</button>`).join('')}</div>
+      `<div class="diagram-wrap">${diagramHtml(s.diagram,selected,s.question?.accepted||[])}<div class="region-list">${s.diagram.regions.map(r=>`<button data-region-answer="${esc(r.id)}" class="${r.id===selected?'selected ':''}${s.question?.accepted?.includes(r.id)?'correct':''}" ${!answerOpen?'disabled':''}>${esc(r.label)}</button>`).join('')}</div>
       <div class="answer-status" id="answer-status">${role==='student'?(!s.canAnswer?'Watch this round. You can answer from the next question.':s.mine?.confirmed?'Final choice saved ✓':selected?'Your choice is saved ✓':s.phase==='read'?'Listen to the question. Your teacher will open the answers.':s.phase==='discuss'?'Tell your partner why you chose that area.':'Select an area when answers are open.'):`${s.answered} of ${s.expected} learners have chosen`}</div>
-      ${s.phase==='discuss'?'<div class="panel"><h3>“I chose this because…”</h3><p>Take turns. Listen to your partner’s reason before deciding whether to change your mind.</p></div>':''}
-      ${s.phase==='reveal'?`<div class="panel"><div class="row spread"><span class="stat">${s.stats.correct} correct</span><span>${s.stats.wrong} incorrect</span><span>${s.stats.unanswered} unanswered</span></div><p>${esc(s.question.explanation)}</p><p class="muted">${s.stats.improved} learners moved from an incorrect first choice to a correct answer after discussion.</p></div>`:''}</div>`}</div>${teacher?liveControls():''}</div>`;
-    if(teacher)renderQueue(queued);
+      ${['discuss','reconsider'].includes(s.phase)?`<div class="discussion-cue"><strong>${s.phase==='discuss'?'I chose this because…':'Keep your choice or tap a new answer.'}</strong><p>${s.phase==='discuss'?'Take turns explaining. Ask your partner: Why?':'Your first choice stays saved if you keep it.'}</p></div>`:''}
+      ${s.phase==='reveal'?`<div class="panel">${role==='student'&&s.automatic?`<p class="learner-result">${!selected?'Let’s discover the answer together.':s.question.accepted.includes(selected)?'You found it! Explain why it fits.':'A new discovery! Look at the highlighted answer.'}</p>`:''}<div class="row spread"><span class="stat">${s.stats.correct} correct</span><span>${s.stats.wrong} incorrect</span><span>${s.stats.unanswered} unanswered</span></div><p class="reveal-explanation">${esc(s.question.explanation)}</p><p class="muted">${s.stats.improved} learners moved from an incorrect first choice to a correct answer after discussion.</p></div>`:''}</div>`}</div>${teacher?liveControls():''}</div>`;
+    if(teacher){
+      const controls=root.querySelector('.control');
+      if(controls){controls.classList.add('teacher-transport');root.prepend(controls);}
+      renderQueue(queued);
+    }
+    if(role==='student'&&['discuss','reconsider'].includes(s.phase)){
+      const cue=root.querySelector('.discussion-cue'),wrap=root.querySelector('.diagram-wrap');if(cue&&wrap)wrap.prepend(cue);
+    }
     if(focusQueue){const input=document.querySelector(`[data-queue="${focusQueue}"] [${focusField}]`);if(input){input.focus({preventScroll:true});input.setSelectionRange(focusStart,focusEnd);}}
     if(role==='student')document.querySelectorAll('#diagram polygon[data-region]').forEach(el=>{
       const send=()=>submitAnswer(el.dataset.region);el.onclick=send;el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();send();}};
-      el.setAttribute('aria-disabled',String(!s.canAnswer||s.paused||!['choose','reconsider'].includes(s.phase)));
+      el.setAttribute('aria-disabled',String(!answerOpen));
     });
     const img=document.querySelector('#diagram img');if(img){img.onload=fitDiagram;if(img.complete)fitDiagram();}
     updateTimer();
@@ -184,17 +193,46 @@
   function fitDiagram(){
     if(view!=='live')return;const box=document.getElementById('diagram'),img=box?.querySelector('img');if(!img?.naturalWidth)return;
     const available=box.parentElement.clientWidth;
-    box.style.width=Math.min(available,Math.max(230,window.innerHeight*.45)*img.naturalWidth/img.naturalHeight)+'px';
+    box.style.width=Math.min(available,Math.max(180,window.innerHeight*(role==='student'&&['discuss','reconsider'].includes(state.phase)?.27:.40))*img.naturalWidth/img.naturalHeight)+'px';
   }
   window.addEventListener('resize',fitDiagram);
   function renderQueue(edits={}) {
     const el=document.getElementById('queue-panel');if(!el)return;
-    el.innerHTML=state.queue.filter(q=>q.status!=='skipped'&&q.status!=='asked').map(q=>`<section class="queue" data-queue="${q.id}"><h3>A concept to revisit</h3><p>${esc(q.originalPrompt)}</p><p class="muted">Keep this answer: ${esc((q.acceptedLabels||[]).join(" / "))}</p><p class="muted">More than 70% of responses were incorrect.${q.lowParticipation?' Participation was below 80%; check the class before using this suggestion.':''} ${state.round<q.eligibleAfter?'Available after '+(q.eligibleAfter-state.round)+' more rounds.':'Ready when you choose.'}</p>${q.status==='approved'?`<p>${esc(q.question.prompt)}</p><button data-challenge="${q.id}" ${state.round<q.eligibleAfter||state.phase!=='reveal'?'disabled':''}>Ask later challenge now</button>`:`<button data-suggest="${q.id}">AI suggest a different scenario</button><label>Rephrased question<textarea data-prompt>${esc(edits[q.id]?.prompt??q.suggestion?.prompt??'')}</textarea></label><label>Explanation<textarea data-explanation>${esc(edits[q.id]?.explanation??q.suggestion?.explanation??'')}</textarea></label><p class="muted">The original diagram and accepted answer stay fixed. Review that this new question still fits them.</p><button data-approve="${q.id}" class="primary">Approve for later</button>`}<button data-skip="${q.id}" class="small">Skip</button></section>`).join('');
+    el.innerHTML=state.queue.filter(q=>q.status!=='skipped'&&q.status!=='asked').map(q=>`<section class="queue" data-queue="${q.id}"><h3>A concept to revisit</h3><p>${esc(q.originalPrompt)}</p><p class="muted">Keep this answer: ${esc((q.acceptedLabels||[]).join(" / "))}</p><p class="muted">More than 70% of responses were incorrect. Approved questions join automatic play after two intervening rounds.${q.lowParticipation?' Participation was below 80%; check the class before using this suggestion.':''} ${state.round<q.eligibleAfter?'Available after '+(q.eligibleAfter-state.round)+' more rounds.':'Ready when you choose.'}</p>${q.status==='approved'?`<p>${esc(q.question.prompt)}</p><button data-challenge="${q.id}" ${state.round<q.eligibleAfter||state.phase!=='reveal'?'disabled':''}>Ask later challenge now</button>`:`<button data-suggest="${q.id}">AI suggest a different scenario</button><label>Rephrased question<textarea data-prompt>${esc(edits[q.id]?.prompt??q.suggestion?.prompt??'')}</textarea></label><label>Explanation<textarea data-explanation>${esc(edits[q.id]?.explanation??q.suggestion?.explanation??'')}</textarea></label><p class="muted">The original diagram and accepted answer stay fixed. Review that this new question still fits them.</p><button data-approve="${q.id}" class="primary">Approve for later</button>`}<button data-skip="${q.id}" class="small">Skip</button></section>`).join('');
   }
-  function updateTimer(){const el=document.getElementById('timer');if(!el||!state)return;el.textContent=state.paused?'Ⅱ':state.deadline?Math.max(0,Math.ceil((state.deadline-Date.now()-clockOffset)/1000))+'s':'';}
+  let lastTick='', lastStageSound='';
+  function countdownBeep(seconds) {
+    if(!soundEnabled||role==='student'||document.hidden)return;
+    try { audio ||= new (window.AudioContext||window.webkitAudioContext)();
+      if(audio.state!=='running')return;
+      const o=audio.createOscillator(),g=audio.createGain(),t=audio.currentTime;
+      o.frequency.value=seconds<=5?740:440;
+      const volume=Number(document.getElementById('effects-level').value)/100;
+      g.gain.setValueAtTime(volume*(seconds<=5?.13:.045),t);g.gain.exponentialRampToValueAtTime(.001,t+.09);
+      o.connect(g);g.connect(audio.destination);o.start(t);o.stop(t+.1);
+    }catch{}
+  }
+  function updateTimer(){
+    const el=document.getElementById('timer');if(view!=='live'||!el||!state)return;
+    const seconds=state.deadline?Math.max(0,Math.ceil((state.deadline-Date.now()-clockOffset)/1000)):null;
+    const shown=state.automatic&&state.phase==='discuss'&&seconds!==null?seconds+5:seconds;
+    el.textContent=state.paused?'Paused':shown!==null?shown+'s':'';
+    el.classList.toggle('urgent',shown!==null&&shown<=5&&!state.paused);
+    const stage=[sessionId,state.round,state.phase].join(':');
+    if(lastStageSound&&lastStageSound!==stage&&!state.paused&&role!=='student')chime();
+    lastStageSound=stage;
+    const key=stage+':'+seconds;
+    if(!state.paused&&seconds>0&&lastTick!==key){lastTick=key;countdownBeep(shown);}
+  }
+  function dashboard(s) {
+    if(!s.question||s.phase==='ended')return '';
+    const score=role==='teacher'?s.liveStats:s.stats;
+    const percent=Math.round(100*s.answered/Math.max(1,s.expected));
+    return `<section class="live-dashboard" aria-label="Live class progress"><div class="response-ring" style="--progress:${percent}%"><strong>${s.answered}/${s.expected}</strong><span>answered</span></div><div class="dashboard-detail"><p class="eyebrow">Our festival crew</p><h2>${s.answered===s.expected?'Every voice is in!':'Our ideas are arriving…'}</h2><div class="lantern-trail" aria-hidden="true">${Array.from({length:10},(_,i)=>`<i class="${i<Math.round(percent/10)?'lit':''}">✦</i>`).join('')}</div><p class="muted">${esc(s.question.concept)}</p></div>${score?`<div class="evidence"><strong>${score.initialCorrect}/${s.expected} first choice → ${score.correct}/${s.expected} latest choice</strong><p>${score.wrong} incorrect · ${score.unanswered} unanswered</p>${s.diagram.regions.map(r=>`<div class="distribution"><span>${esc(r.label)}</span><meter min="0" max="${Math.max(1,s.expected)}" value="${score.distribution[r.id]||0}"></meter><b>${score.distribution[r.id]||0}</b></div>`).join('')}</div>`:''}</section>`;
+  }
   setInterval(updateTimer,250);
   async function submitAnswer(regionId) {
-    if(busyAnswer||role!=='student'||!state?.canAnswer||state.paused||!['choose','reconsider'].includes(state.phase))return;
+    if((state?.automatic&&state.phase==='choose'&&state.mine?.first)||busyAnswer||role!=='student'||!state?.canAnswer||state.paused||!['choose','reconsider'].includes(state.phase))return;
     busyAnswer=true;const el=document.getElementById('answer-status');if(el)el.textContent='Saving your choice…';
     try{state=await api('/sessions/'+sessionId+'/answer',{regionId,round:state.round,phase:state.phase,eventId:uid()});lastRender='';renderLive();}catch(e){tell(e.message,true);if(el)el.textContent='Not confirmed. Check your connection and select again.';}finally{busyAnswer=false;}
   }
@@ -232,7 +270,8 @@
     const b=e.target.closest('button');if(!b||b.disabled)return;
     const action=b.dataset.action; b.disabled=true;
     try{
-      if(action==='home'){if(dirty&&!confirm('Leave without saving your changes?'))return;await home();}
+      if(action==='enable-audio'){document.getElementById('sound').click();renderLive();}
+      else if(action==='home'){if(dirty&&!confirm('Leave without saving your changes?'))return;await home();}
       else if(action==='new'){draft=emptyDraft();activeDiagram=0;dirty=false;editor();}
       else if(action==='sample')await sample();
       else if(action==='finish-area')finishArea();
