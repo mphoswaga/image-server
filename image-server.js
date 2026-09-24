@@ -68,6 +68,7 @@ const lessonAssistant = require('./lesson-assistant');
 const releaseManager = require('./release-manager');
 const planningFramework = require('./planning-framework');
 const lessonWorkspaces = require('./lesson-workspaces');
+const { newsletterSource, generateNewsletter } = require('./newsletter');
 const practice = require('./practice');
 const practiceLive = require('./practice-live');
 const { createFishQuestLive } = require('./fishquest-live');
@@ -4565,6 +4566,7 @@ function workspaceUpdateFrom(req, existing) {
     stage: body.stage,
     context: body.context,
     plan: body.plan,
+    newsletter: body.newsletter,
     sequencePlans: body.sequencePlans,
     activeSequencePlanIndex: body.activeSequencePlanIndex,
     activeDeckId: body.activeDeckId,
@@ -4581,6 +4583,25 @@ function workspaceUpdateFrom(req, existing) {
 
 app.get('/api/lesson-workspaces', requireAuth, (req, res) => {
   res.json({ lessons: lessonWorkspaces.list(req.userId) });
+});
+
+app.post('/api/lesson-workspaces/:id/newsletter', requireAuth, generationLimiter, async (req, res) => {
+  if (req.user.role === 'student') return res.status(403).json({ error: 'Teacher account required.' });
+  const saved = lessonWorkspaces.get(req.userId, req.params.id);
+  if (!saved) return res.status(404).json({ error: 'Lesson workspace not found.' });
+  try {
+    const source = newsletterSource(saved);
+    declareFree('lessonscope.generate_newsletter');
+    const newsletter = await generateNewsletter(source, req.body.timing);
+    const latest = lessonWorkspaces.get(req.userId, req.params.id);
+    if (!latest || JSON.stringify(newsletterSource(latest)) !== JSON.stringify(source) || JSON.stringify(latest.newsletter) !== JSON.stringify(saved.newsletter)) {
+      return res.status(409).json({ error: 'The lesson or newsletter changed while generating. Your edits were kept. Try again when ready.' });
+    }
+    lessonWorkspaces.update(req.userId, req.params.id, { newsletter });
+    res.json({ newsletter });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Could not create the newsletter. Your lesson is saved.' });
+  }
 });
 
 app.post('/api/lesson-workspaces', requireAuth, (req, res) => {

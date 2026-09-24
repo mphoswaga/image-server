@@ -63,6 +63,7 @@ function normalizeInput(input = {}, previous = null) {
     stage: normalizeStage(input.stage, previous ? previous.stage : 'draft'),
     context,
     plan: clone(input.plan, previous ? previous.plan : null),
+    newsletter: clone(input.newsletter, previous ? previous.newsletter : null),
     sequencePlans: clone(input.sequencePlans, previous ? previous.sequencePlans : []),
     activeSequencePlanIndex: Number.isInteger(input.activeSequencePlanIndex)
       ? Math.max(0, input.activeSequencePlanIndex)

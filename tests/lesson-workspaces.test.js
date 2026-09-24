@@ -8,6 +8,19 @@ process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ls-lesson-workspac
 
 const workspaces = require('../lesson-workspaces');
 
+test('newsletter is saved separately, survives reopening and partial updates, and stays private', () => {
+  const newsletter = { text: 'Next week in Science.\nHomework on LMS.', timing: 'next' };
+  const plan = { sections: [{ heading: 'Learning', content: 'Explore habitats.' }] };
+  const saved = workspaces.create('newsletter-teacher', { subject: 'Science', plan, newsletter });
+  workspaces.update('newsletter-teacher', saved.id, { stage: 'slides' });
+  const reopened = workspaces.get('newsletter-teacher', saved.id);
+  assert.deepEqual(reopened.newsletter, newsletter);
+  assert.deepEqual(reopened.plan, plan);
+  assert.equal(workspaces.get('another-teacher', saved.id), null);
+  workspaces.update('newsletter-teacher', saved.id, { newsletter: { ...newsletter, text: 'Teacher edited message.' } });
+  assert.equal(workspaces.get('newsletter-teacher', saved.id).newsletter.text, 'Teacher edited message.');
+});
+
 test('lesson workspaces are private, persistent, and listed by recent activity', () => {
   const first = workspaces.create('teacher-a', {
     context: { subject: 'ICT', topic: 'Folders', grade: 'Grade 3' },

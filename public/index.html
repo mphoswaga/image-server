@@ -3145,6 +3145,11 @@
         </div>
       </div>
 
+        <div style="margin-top:16px;padding:16px;background:var(--accent-soft);border-radius:12px">
+          <label style="display:flex;gap:10px;align-items:center"><input type="checkbox" id="newsletterEnabled" style="width:auto"> Create a parent newsletter with this lesson</label>
+          <label for="newsletterTiming">Newsletter for <select id="newsletterTiming" style="width:auto"><option value="next">Next week</option><option value="this">This week</option></select></label>
+          <p class="hint">An editable message about the learning, support at home and subject homework on LMS. Saved separately from your lesson-plan download.</p>
+        </div>
         <div class="lesson-flow-actions">
           <button type="button" class="btn ghost flow-back" id="flowSetupBackBtn">← Learning content</button>
           <button id="planBtn" class="btn primary" type="submit"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Generate lesson plan</button>
@@ -3164,6 +3169,7 @@
         <button id="nextSequencePlanBtn" type="button" class="btn primary sequence-next"></button>
       </div>
       <div id="planSections"></div>
+      <div id="newsletterPlanMount"></div>
       <div id="autoAssessmentSummary" class="auto-assessment-summary" style="display:none"></div>
       <div class="wp-slot-mount" data-wp-mount="stage:plan" style="margin-top:16px"></div>
       <div class="plan-actions" style="margin-top:16px">
@@ -3197,6 +3203,7 @@
       <div id="quotaPill" class="quota-pill" style="display:none"></div>
       <div id="deckCostNote" class="cost-note" style="display:none"></div>
       <div id="deck" class="deck"></div>
+      <div id="newsletterSlidesMount"></div>
 
       <section id="automaticAssessmentResult" class="card wide" style="display:none;margin-top:24px">
         <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg> <span id="automaticAssessmentResultTitle">Assessment ready</span></h2>
@@ -3698,6 +3705,48 @@
     const composer=$('composer'), planStage=$('planStage'), results=$('results'), statusEl=$('status');
     let library={subjects:[],topicsBySubject:{}}, ctx=null, currentDeckId=null;
     let currentWorkspaceId=null, workspaceSaveTimer=null, workspaceSaveChain=Promise.resolve(), restoringWorkspace=false;
+    let newsletter=null, newsletterBusy=false, newsletterEpoch=0;
+    const newsletterCard=document.createElement('section');
+    newsletterCard.className='card wide';newsletterCard.style.marginTop='20px';
+    newsletterCard.innerHTML='<h2 class="card-title">Parent newsletter</h2><p class="hint">Saved with this lesson in My lessons. Separate from the downloaded lesson-plan template.</p><textarea id="newsletterText" rows="12" maxlength="15000" aria-label="Parent newsletter" placeholder="Your parent newsletter will appear here."></textarea><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px"><button type="button" class="btn accent" id="newsletterGenerate">Create newsletter</button><button type="button" class="btn ghost" id="newsletterCopy">Copy newsletter</button><button type="button" class="btn ghost" id="newsletterSave">Save newsletter</button><label>For <select id="newsletterCardTiming" style="width:auto"><option value="next">Next week</option><option value="this">This week</option></select></label></div><p id="newsletterStatus" class="hint" role="status"></p>';
+    $('newsletterPlanMount').appendChild(newsletterCard);
+    try{$('newsletterEnabled').checked=localStorage.getItem('newsletterEnabled')==='true';}catch{}
+    $('newsletterEnabled').onchange=()=>{try{localStorage.setItem('newsletterEnabled',String($('newsletterEnabled').checked));}catch{}};
+    $('newsletterText').oninput=()=>{newsletter={...(newsletter||{}),text:$('newsletterText').value,timing:$('newsletterCardTiming').value};$('newsletterCopy').disabled=!newsletter.text;$('newsletterSave').disabled=false;scheduleWorkspaceSave();};
+    $('newsletterCardTiming').onchange=()=>{if(ctx)ctx.newsletterTiming=$('newsletterCardTiming').value;scheduleWorkspaceSave();};
+    $('newsletterCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('newsletterText').value);$('newsletterStatus').textContent='Newsletter copied.';}catch{$('newsletterStatus').textContent='Select the newsletter text and copy it.';}};
+    $('newsletterSave').onclick=async()=>{$('newsletterStatus').textContent=await saveWorkspaceNow()?'Newsletter saved.':'Could not save. Please retry.';};
+    $('newsletterGenerate').onclick=()=>createParentNewsletter();
+    function renderNewsletter(){
+      const mount=currentStage==='slides'?$('newsletterSlidesMount'):$('newsletterPlanMount');
+      mount.appendChild(newsletterCard);
+      $('newsletterText').value=newsletter?.text||'';
+      $('newsletterText').disabled=newsletterBusy;
+      $('newsletterCardTiming').value=ctx?.newsletterTiming||newsletter?.timing||'next';
+      const incomplete=sequenceMode()&&sequencePlans.filter(Boolean).length<Number(ctx.sequenceLessonCount);
+      $('newsletterGenerate').disabled=newsletterBusy||incomplete;
+      $('newsletterGenerate').textContent=newsletterBusy?'Writing newsletter…':newsletter?.text?'Update from revised plan':'Create newsletter';
+      $('newsletterCopy').disabled=!newsletter?.text;
+      $('newsletterSave').disabled=newsletterBusy||!newsletter;
+      $('newsletterCardTiming').disabled=newsletterBusy;
+      if(incomplete)$('newsletterStatus').textContent='Finish all lesson plans to create one newsletter for the week.';
+    }
+    async function createParentNewsletter(){
+      if(newsletterBusy||!ctx)return;
+      if(newsletter?.text&&!confirm('Replace the current newsletter, including your edits, using the current lesson plan?'))return;
+      const context=ctx, epoch=++newsletterEpoch;
+      newsletterBusy=true;renderNewsletter();$('newsletterStatus').textContent='Saving the lesson and preparing your newsletter…';
+      try{
+        if(!await saveWorkspaceNow())throw new Error('Save the lesson successfully before creating its newsletter.');
+        if(epoch!==newsletterEpoch||ctx!==context)return;
+        const r=await fetch(`/api/lesson-workspaces/${encodeURIComponent(currentWorkspaceId)}/newsletter`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({timing:ctx.newsletterTiming||'next'})});
+        const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not generate the newsletter.');
+        if(epoch!==newsletterEpoch||ctx!==context)return;
+        newsletter=d.newsletter;
+        $('newsletterStatus').textContent=await saveWorkspaceNow()?'Newsletter saved. Review and edit it before sharing.':'Newsletter generated. Save again to confirm your latest changes.';
+      }catch(error){if(epoch===newsletterEpoch)$('newsletterStatus').textContent=error.message;}
+      finally{if(epoch===newsletterEpoch){newsletterBusy=false;renderNewsletter();}}
+    }
     let workspacePacks={}, workspaceAssignmentIds=[], workspaceGameIds=[], lastDeckPreview=null, pendingAssessmentDraft=null;
     let sequencePlans=[], activeSequencePlanIndex=0, sequencePlanDownloaded=false;
     let sequenceDecks=[], activeSequenceDeckIndex=0, sequenceStartLessonNumber=null;
@@ -4170,6 +4219,7 @@
     }
     function show(stage){
       currentStage=stage;
+      renderNewsletter();
       const atComposer=stage==='composer';
       const choseStart=atComposer && composerPage>0;
       composer.style.display=(choseStart && startMode==='plan')?'block':'none';
@@ -4847,6 +4897,7 @@
       if(lessonPurpose!=='lesson'&&assessmentTotal<assessmentTypes.length){ setComposerPage(3,{push:false}); toast('The total must leave at least one mark for every selected item type.'); return; }
       if(lessonPurpose!=='lesson'&&assessmentTypes.includes('mcq')&&(assessmentMcqCount<1||assessmentMcqCount>assessmentTotal-(assessmentTypes.length-1))){ setComposerPage(3,{push:false}); toast('Reduce the multiple-choice item count so the other selected sections still have marks.'); return; }
       ctx={ subject, topic, grade:$('grade').value||'middle school',
+        newsletterEnabled:$('newsletterEnabled').checked,newsletterTiming:$('newsletterTiming').value,
         slideCount:Number($('slideCount').value)||5, tone:$('tone').value, focus:$('focus').value.trim(), objectives,
         teachingModelId:$('teachingModel').value||'standard',
         lessonPurpose,
@@ -5095,6 +5146,10 @@
       renderAutoAssessmentSummary();
       renderSequencePlanFlow();
       scheduleWorkspaceSave();
+      renderNewsletter();
+      if(!restoringWorkspace&&ctx?.newsletterEnabled&&!newsletter&&!newsletterBusy&&(!sequenceMode()||sequencePlans.filter(Boolean).length===Number(ctx.sequenceLessonCount))){
+        const context=ctx;setTimeout(()=>{if(ctx===context&&!newsletter&&!newsletterBusy)createParentNewsletter();},0);
+      }
     }
     $('sequencePlanTabs').addEventListener('click',e=>{
       const tab=e.target.closest('[data-plan-index]'); if(!tab||tab.disabled) return;
@@ -7174,6 +7229,7 @@
     }
 
     function clearWorkspaceState(){
+      newsletter=null;newsletterBusy=false;newsletterEpoch++;$('newsletterStatus').textContent='';
       clearTimeout(workspaceSaveTimer);
       currentWorkspaceId=null;
       ctx=null;
@@ -7271,6 +7327,7 @@
         stage:workspaceStageFor(deckRefs),
         context:{...ctx,startMode,deckImported,planTemplateId,presetId:selectedPresetId,workspaceView:currentStage,composerPage},
         plan:workspacePlan(),
+        newsletter,
         sequencePlans:sequencePlans.filter(Boolean).length?sequencePlans:[],
         activeSequencePlanIndex,
         deckRefs,
@@ -7316,6 +7373,8 @@
     }
 
     function restoreContextFields(saved){
+      $('newsletterEnabled').checked=!!saved.newsletterEnabled;
+      $('newsletterTiming').value=saved.newsletterTiming==='this'?'this':'next';
       const fields={subject:'subject',topic:'topic',objectives:'objectives',grade:'grade',slideCount:'slideCount',tone:'tone',focus:'focus',teachingModelId:'teachingModel'};
       Object.entries(fields).forEach(([key,id])=>{ const el=$(id); if(el&&saved[key]!==undefined&&saved[key]!==null) el.value=String(saved[key]); });
       const purpose=document.querySelector(`input[name="lessonPurpose"][value="${['lesson','project','test'].includes(saved.lessonPurpose)?saved.lessonPurpose:'lesson'}"]`);
@@ -7362,6 +7421,7 @@
         if(!r.ok) throw new Error(d.error||'Could not reopen that lesson.');
         const saved=d.workspace;
         restoringWorkspace=true;
+        newsletterEpoch++;newsletterBusy=false;newsletter=saved.newsletter||null;$('newsletterStatus').textContent='';
         currentWorkspaceId=saved.id;
         ctx=saved.context||{subject:saved.subject,topic:saved.topic,grade:saved.grade};
         startMode=ctx.startMode||'plan';
