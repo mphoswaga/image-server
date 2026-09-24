@@ -5145,6 +5145,26 @@ app.get('/api/gradebook/:rosterId/export', requireAuth, (req, res) => {
   res.send(buf);
 });
 
+app.post('/api/gradebook/:rosterId/export-template', requireAuth, upload.single('file'), requireUploads('template'), async (req, res) => {
+  try {
+    if (req.user.role === 'student') return res.status(403).json({ error: 'Teachers only.' });
+    if (!req.file) return res.status(400).json({ error: 'Upload the school Excel template first.' });
+    if (!/\.(xlsx|xlsm|xls)$/i.test(req.file.originalname || '')) return res.status(400).json({ error: 'Upload an Excel workbook template.' });
+    const gb = gradebook.buildGradebook(req.userId, req.params.rosterId);
+    if (!gb) return res.status(404).json({ error: 'Class not found.' });
+    const result = await gradebook.fillSchoolTemplate(gb, req.file.buffer);
+    const base = String(req.file.originalname || gb.name || 'school-marks').replace(/\.[^.]+$/, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'school-marks';
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${base}-filled.xlsx"`);
+    res.setHeader('X-LessonScope-Filled', String(result.filled));
+    res.setHeader('X-LessonScope-Unmatched', String(result.unmatched.length));
+    res.setHeader('X-LessonScope-Skipped-No-Mark', String(result.skippedNoMark));
+    res.send(result.buffer);
+  } catch (error) {
+    res.status(400).json({ error: error.message || 'Could not fill this school template.' });
+  }
+});
+
 // Teacher: list my games.
 app.get('/api/games', requireAuth, (req, res) => res.json({ games: games.listTeacherGames(req.userId) }));
 

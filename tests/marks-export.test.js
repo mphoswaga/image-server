@@ -9,7 +9,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const XLSX = require('xlsx');
-const { toWorkbook } = require('../gradebook.js');
+const { toWorkbook, fillSchoolTemplate } = require('../gradebook.js');
 
 // Read the exported file back as a grid, the way a teacher's eye reads it.
 function gridOf(buffer) {
@@ -25,12 +25,19 @@ const GRADEBOOK = {
     { id: 'a2', title: 'Exit ticket', average: 0.5 },
   ],
   rows: [
-    { name: 'Ama',   cells: { a1: { mark: 8, max: 10 }, a2: { mark: 1, max: 2 } }, average: 0.833 },
-    { name: 'Bongi', cells: { a1: { mark: 9, max: 10 } },                          average: 0.9 },
-    { name: 'Chidi', cells: {},                                                    average: null },
+    { studentId: 'VS001', name: 'Ama',   cells: { a1: { mark: 8, max: 10 }, a2: { mark: 1, max: 2 } }, average: 0.833 },
+    { studentId: 'VS002', name: 'Bongi', cells: { a1: { mark: 9, max: 10 } },                          average: 0.9 },
+    { studentId: 'VS003', name: 'Chidi', cells: {},                                                    average: null },
   ],
   classAverage: 0.78,
 };
+
+function workbookBuffer(rows) {
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Worksheet');
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}
 
 test('every student and every assessment reaches the file', async () => {
   const { sheetName, rows } = gridOf(toWorkbook(GRADEBOOK));
@@ -79,4 +86,41 @@ test('the class average row is present and labelled', async () => {
 test('an empty class exports a usable file rather than failing', async () => {
   const { rows } = gridOf(toWorkbook({ name: 'Empty', assessments: [], rows: [], classAverage: null }));
   assert.deepEqual(rows[0], ['Student', 'Average %']);
+});
+
+test('school mark template is filled by username without moving comments', async () => {
+  const template = workbookBuffer([
+    ['no', 'username', 'fullname', 'final_grade', 'comment'],
+    ['Stt', 'Tên đăng nhập', 'Họ và tên học sinh', 'Điểm đạt được', 'Nhận xét'],
+    [1, 'VS001', 'Different visible name', '', ''],
+    [2, 'VS002', 'Bongi', '', 'Keep this note'],
+    [3, 'VS003', 'Chidi', '', ''],
+    [4, 'VS999', 'Missing Student', '', ''],
+  ]);
+  const result = await fillSchoolTemplate(GRADEBOOK, template);
+  const { rows } = gridOf(result.buffer);
+
+  assert.equal(result.filled, 2);
+  assert.equal(result.skippedNoMark, 1);
+  assert.equal(result.unmatched.length, 1);
+  assert.equal(rows[2][3], 83);
+  assert.equal(rows[3][3], 90);
+  assert.equal(rows[3][4], 'Keep this note');
+  assert.equal(rows[4][3], '');
+  assert.equal(rows[5][3], '');
+});
+
+test('school mark template can match by full name when the id is absent', async () => {
+  const template = workbookBuffer([
+    ['no', 'username', 'fullname', 'final_grade', 'comment'],
+    [1, '', 'Ama', '', ''],
+    [2, '', 'Bongi', '', ''],
+  ]);
+  const result = await fillSchoolTemplate(GRADEBOOK, template);
+  const { rows } = gridOf(result.buffer);
+
+  assert.equal(result.filled, 2);
+  assert.deepEqual(result.matchedBy, { studentId: 0, name: 2 });
+  assert.equal(rows[1][3], 83);
+  assert.equal(rows[2][3], 90);
 });

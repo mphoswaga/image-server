@@ -6,6 +6,7 @@
 // A gradebook is per class (roster). Free-form assignments/games (no rosterId)
 // have no fixed student list, so they're excluded — they can't be gradebooked.
 const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const games = require('./games');
 const assignments = require('./assignments');
 const roster = require('./roster');
@@ -259,6 +260,7 @@ function listClasses(userId) {
 const pctOf = (mark, max) => (max > 0 ? mark / max : 0);
 const mean = arr => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
 const sid = value => roster.normalizeStudentId(value);
+const keyText = value => String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 const weightedMean = entries => {
   const usable = entries.filter(entry => entry && entry.pct != null && entry.weight > 0);
   const totalWeight = usable.reduce((sum, entry) => sum + entry.weight, 0);
@@ -376,6 +378,121 @@ function toWorkbook(gb) {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Marks');
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}
+
+function schoolTemplateMaps(gb) {
+  const byStudentId = new Map();
+  const byName = new Map();
+  const duplicateNames = new Set();
+  for (const row of gb.rows || []) {
+    const studentId = sid(row.studentId);
+    if (studentId) byStudentId.set(studentId, row);
+    const nameKey = keyText(row.name);
+    if (!nameKey) continue;
+    if (byName.has(nameKey)) duplicateNames.add(nameKey);
+    byName.set(nameKey, row);
+  }
+  for (const key of duplicateNames) byName.delete(key);
+  return { byStudentId, byName };
+}
+
+function headerKey(value) {
+  return String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+}
+
+function cellText(cell) {
+  const value = cell && cell.value;
+  if (value == null) return '';
+  if (typeof value === 'object') {
+    if (value.text != null) return String(value.text);
+    if (value.result != null) return String(value.result);
+    if (Array.isArray(value.richText)) return value.richText.map(part => part.text || '').join('');
+  }
+  return String(value);
+}
+
+function findSchoolTemplateColumns(sheet) {
+  const aliases = {
+    username: new Set(['username', 'student_id', 'studentid', 'learner_id', 'learnerid', 'student_code', 'studentcode', 'ma_hoc_sinh']),
+    fullname: new Set(['fullname', 'full_name', 'student_name', 'studentname', 'learner_name', 'learnername', 'ho_va_ten_hoc_sinh', 'ho_ten']),
+    final_grade: new Set(['final_grade', 'finalgrade', 'grade', 'mark', 'marks', 'score', 'diem_dat_duoc']),
+    comment: new Set(['comment', 'comments', 'nhan_xet']),
+  };
+  const required = ['final_grade'];
+  let best = null;
+  sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    if (best || rowNumber > 20) return;
+    const found = {};
+    row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+      const key = headerKey(cellText(cell));
+      for (const [name, names] of Object.entries(aliases)) {
+        if (names.has(key)) found[name] = colNumber;
+      }
+    });
+    if (required.every(name => found[name]) && (found.username || found.fullname)) {
+      best = { headerRow: rowNumber, ...found };
+    }
+  });
+  return best;
+}
+
+function gradebookRowForTemplate(row, columns, maps) {
+  const username = columns.username ? sid(cellText(row.getCell(columns.username))) : '';
+  if (username && maps.byStudentId.has(username)) return { row: maps.byStudentId.get(username), match: 'student-id' };
+  const name = columns.fullname ? keyText(cellText(row.getCell(columns.fullname))) : '';
+  if (name && maps.byName.has(name)) return { row: maps.byName.get(name), match: 'name' };
+  return null;
+}
+
+function isTemplateLabelRow(row, columns) {
+  const values = [columns.username, columns.fullname, columns.final_grade, columns.comment]
+    .map(col => col ? headerKey(cellText(row.getCell(col))) : '');
+  return values.includes('username') || values.includes('fullname') || values.includes('final_grade')
+    || values.includes('ten_dang_nhap') || values.includes('ho_va_ten_hoc_sinh') || values.includes('diem_dat_duoc');
+}
+
+async function fillSchoolTemplate(gb, templateBuffer) {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(templateBuffer);
+  const maps = schoolTemplateMaps(gb);
+  let filled = 0;
+  let skippedNoMark = 0;
+  const unmatched = [];
+  const matchedBy = { studentId: 0, name: 0 };
+  const touchedSheets = [];
+
+  for (const sheet of workbook.worksheets) {
+    const columns = findSchoolTemplateColumns(sheet);
+    if (!columns) continue;
+    let sheetFilled = 0;
+    sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber <= columns.headerRow) return;
+      if (isTemplateLabelRow(row, columns)) return;
+      const identityText = [columns.username, columns.fullname].map(col => col ? cellText(row.getCell(col)).trim() : '').filter(Boolean).join(' / ');
+      if (!identityText) return;
+      const match = gradebookRowForTemplate(row, columns, maps);
+      if (!match) {
+        unmatched.push(identityText);
+        return;
+      }
+      if (match.row.average == null) {
+        skippedNoMark++;
+        return;
+      }
+      row.getCell(columns.final_grade).value = Math.round(match.row.average * 100);
+      filled++;
+      sheetFilled++;
+      matchedBy[match.match === 'student-id' ? 'studentId' : 'name']++;
+    });
+    if (sheetFilled) touchedSheets.push(sheet.name);
+  }
+
+  if (!touchedSheets.length) {
+    throw new Error('This workbook does not have a recognizable final_grade column with username or fullname.');
+  }
+
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  return { buffer, filled, skippedNoMark, unmatched, matchedBy, sheets: touchedSheets };
 }
 
 // ── Shared helpers for the external (/api/v1) API ──────────────────────────
@@ -510,4 +627,4 @@ function assignmentResultRows(teacherId) {
   return assignmentProgressRows(teacherId);
 }
 
-module.exports = { listClasses, buildGradebook, toWorkbook, gatherStudentResults, summarizeStudent, assignmentResultRows, assignmentProgressRows, teacherSubmissionResult, isFinalisedAssessment, isAssessmentOnRecord, questionEvidenceForSubmission, gameQuestionEvidence };
+module.exports = { listClasses, buildGradebook, toWorkbook, fillSchoolTemplate, gatherStudentResults, summarizeStudent, assignmentResultRows, assignmentProgressRows, teacherSubmissionResult, isFinalisedAssessment, isAssessmentOnRecord, questionEvidenceForSubmission, gameQuestionEvidence };

@@ -7742,9 +7742,40 @@
       const bar=$('marksClassBar');
       const chips=gbClasses.map(c=>`<button type="button" class="btn ghost gb-class-btn" data-rid="${esc(c.rosterId)}" style="font-size:13px;padding:8px 14px;${c.rosterId===gbSelected?'border-color:var(--primary);color:var(--primary);font-weight:700':''}">${esc(c.name)} <span style="color:var(--muted);font-weight:400">· ${c.assignments+c.games} assessment${c.assignments+c.games===1?'':'s'}</span></button>`).join('');
       const sel=gbClasses.find(c=>c.rosterId===gbSelected);
-      const exportBtn=sel?`<a href="/api/gradebook/${esc(gbSelected)}/export" class="btn accent" style="margin-left:auto;font-size:13px;padding:8px 16px;text-decoration:none"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Export to Excel</a>`:'';
+      const exportBtn=sel?`<div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><a href="/api/gradebook/${esc(gbSelected)}/export" class="btn accent" style="font-size:13px;padding:8px 16px;text-decoration:none"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Export to Excel</a><button type="button" class="btn ghost" id="schoolMarksTemplateBtn" style="font-size:13px;padding:8px 16px;width:auto"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg> Fill school template</button><input type="file" id="schoolMarksTemplateFile" accept=".xlsx,.xlsm,.xls" style="display:none"></div>`:'';
       bar.innerHTML=chips+exportBtn;
       bar.querySelectorAll('.gb-class-btn').forEach(b=>b.onclick=()=>{ gbSelected=b.dataset.rid; renderClassBar(); loadGradebook(gbSelected); });
+      $('schoolMarksTemplateBtn')?.addEventListener('click',()=>$('schoolMarksTemplateFile')?.click());
+      $('schoolMarksTemplateFile')?.addEventListener('change',event=>fillSchoolMarksTemplate(event.target.files&&event.target.files[0],event.target));
+    }
+    async function fillSchoolMarksTemplate(file,input){
+      if(!file||!gbSelected) return;
+      const button=$('schoolMarksTemplateBtn');
+      const original=button?button.innerHTML:'';
+      if(button){button.disabled=true;button.textContent='Filling…';}
+      try{
+        const fd=new FormData(); fd.append('file',file);
+        const response=await fetch(`/api/gradebook/${encodeURIComponent(gbSelected)}/export-template`,{method:'POST',body:fd});
+        if(!response.ok){
+          const data=await response.json().catch(()=>({}));
+          throw new Error(data.error||'Could not fill this template.');
+        }
+        const blob=await response.blob();
+        const disposition=response.headers.get('Content-Disposition')||'';
+        const match=disposition.match(/filename="?([^";]+)"?/i);
+        const filename=match?match[1]:(file.name||'school-marks.xlsx').replace(/\.[^.]+$/,'')+'-filled.xlsx';
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a');
+        a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();
+        setTimeout(()=>URL.revokeObjectURL(url),1000);
+        const filled=Number(response.headers.get('X-LessonScope-Filled')||0);
+        const unmatched=Number(response.headers.get('X-LessonScope-Unmatched')||0);
+        toast(unmatched?`Filled ${filled} marks. ${unmatched} row${unmatched===1?'':'s'} could not be matched.`:`Filled ${filled} marks into the school template.`,'ok');
+      }catch(error){ toast(error.message||'Could not fill the school template.'); }
+      finally{
+        if(input) input.value='';
+        if(button){button.disabled=false;button.innerHTML=original;}
+      }
     }
     async function loadGradebook(rosterId){
       $('marksBody').innerHTML='<span class="status"><span class="spinner"></span>Loading marks…</span>';
