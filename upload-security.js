@@ -87,6 +87,15 @@ function validateUpload(file, group, options = {}) {
   return { filename, ext, size: file.buffer.length };
 }
 
+const PRESENTATION_LIMITS = Object.freeze({ maxBytes: 50 * 1024 * 1024, maxTotalBytes: 50 * 1024 * 1024, maxExpandedBytes: 150 * 1024 * 1024 });
+
+function requirePresentationUpload(group) {
+  return (req, res, next) => {
+    const isPptx = path.extname(req.file?.originalname || '').toLowerCase() === '.pptx';
+    return requireUploads(group, isPptx ? PRESENTATION_LIMITS : undefined)(req, res, next);
+  };
+}
+
 function requireUploads(group, options) {
   return (req, res, next) => {
     try {
@@ -104,4 +113,4 @@ function requireUploads(group, options) {
   };
 }
 
-module.exports = { GROUPS, requireUploads, validateUpload, zipExpansion };
+module.exports = { PRESENTATION_LIMITS, requirePresentationUpload, GROUPS, requireUploads, validateUpload, zipExpansion };

@@ -146,6 +146,10 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
   }
 
   app.get('/vendor/phaser.min.js', (req, res) => res.sendFile(require.resolve('phaser/dist/phaser.min.js')));
+  app.get('/api/game/:id/fishquest/smartboard', requireAuth, (req, res) => {
+    const game = owner(req, res); if (!game) return;
+    res.json({ ...teacherPayload(game, null), storageKey: game.teacherId + ':' + game.id });
+  });
   app.get('/api/game/:id/fishquest', requireAuth, (req, res) => {
     const game = owner(req, res); if (!game) return;
     res.json(teacherPayload(game, getMatch(game.id)));

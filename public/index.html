@@ -2856,7 +2856,7 @@
         <input id="isFile" aria-label="Choose a slides file to import" type="file" accept=".pptx" style="display:none" />
         <div class="drop-inner">
           <svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg>
-          <span id="isFileName">Choose your slides — PowerPoint (.pptx)</span>
+          <span id="isFileName">Choose your slides — PowerPoint (.pptx, up to 50 MB)</span>
         </div>
       </div>
       <div class="wp-slot-mount" data-wp-mount="mode:haveSlides" style="margin-top:18px"></div>
@@ -3415,6 +3415,7 @@
         <div id="pptxDrop" role="button" tabindex="0" aria-label="Upload a lesson file" style="border:2px dashed var(--border);border-radius:12px;padding:22px;text-align:center;cursor:pointer;color:var(--muted);font-size:13px;margin-bottom:10px;transition:border-color .15s">
           <svg class="ic" aria-hidden="true" style="font-size:22px;display:block;margin:0 auto 6px"><use href="#i-image"/></svg>
           Drop your <b>lesson file</b> here or <span style="color:var(--primary);font-weight:600">click to browse</span>
+          <p class="hint">PowerPoint (.pptx): up to 50 MB. Other lesson files: up to 15 MB.</p>
           <input id="pptxFileInput" aria-label="Choose a lesson file" type="file" accept=".pptx,.ppt,.docx,.pdf,.txt,.md" style="display:none" />
         </div>
         <div id="pptxFileName" style="font-size:12.5px;color:var(--primary);font-weight:600;margin-bottom:10px;display:none"></div>
@@ -5030,7 +5031,7 @@
       drop.addEventListener('drop',e=>{ e.preventDefault(); drop.classList.remove('drag'); if(e.dataTransfer.files[0]){ file.files=e.dataTransfer.files; setName(); } });
     }
     wireDrop('ipDrop','ipFile','ipFileName','Choose your lesson plan — Word, PDF, or text');
-    wireDrop('isDrop','isFile','isFileName','Choose your slides — PowerPoint (.pptx)');
+    wireDrop('isDrop','isFile','isFileName','Choose your slides — PowerPoint (.pptx, up to 50 MB)');
 
     // Path A — upload a lesson plan, skip objectives, go straight to slides.
     $('importPlanBtn').addEventListener('click', async ()=>{

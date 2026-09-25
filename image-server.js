@@ -41,7 +41,7 @@ const audit = require('./audit');
 const webhooks = require('./webhooks');
 const { DATA_DIR, writeJsonAtomic } = require('./storage');
 const { cookieOptions, createRateLimiter, securityHeaders } = require('./security');
-const { requireUploads } = require('./upload-security');
+const { requireUploads, requirePresentationUpload, PRESENTATION_LIMITS } = require('./upload-security');
 const observability = require('./observability');
 
 const storedMathRepairs = games.repairStoredMathAnswers();
@@ -266,6 +266,7 @@ app.disable('x-powered-by');
 // URIs) and req.ip is the real client address for audit logs.
 app.set('trust proxy', true);
 const PORT = process.env.PORT || 4000;
+const presentationUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: PRESENTATION_LIMITS.maxBytes, files: 1 } });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
 // Stripe webhook needs the raw body for signature verification, so its parser
@@ -2150,7 +2151,7 @@ app.post('/api/import/lesson-plan', requireAuth, upload.single('file'), requireU
 // what they uploaded. They can then optionally generate a lesson plan from it,
 // or go straight to the pack. No AI visuals are fetched (fast + no library
 // pollution); the teacher swaps in images per-slide if they want.
-app.post('/api/import/slides', requireAuth, upload.single('file'), requireUploads('slides'), async (req, res) => {
+app.post('/api/import/slides', requireAuth, presentationUpload.single('file'), requirePresentationUpload('slides'), async (req, res) => {
   if (req.user.role === 'student') return res.status(403).json({ error: 'Teacher account required.' });
   if (!req.file) return res.status(400).json({ error: 'Please choose your slides (.pptx) file.' });
   const ext = (req.file.originalname || '').toLowerCase();
@@ -4800,7 +4801,7 @@ app.post('/api/game', requireAuth, generationLimiter, async (req, res) => {
 });
 
 // Create a game from the teacher's own uploaded PowerPoint (no deck generation needed).
-app.post('/api/game/from-pptx', requireAuth, generationLimiter, upload.single('file'), requireUploads('game'), async (req, res) => {
+app.post('/api/game/from-pptx', requireAuth, generationLimiter, presentationUpload.single('file'), requirePresentationUpload('game'), async (req, res) => {
   if (req.user.role === 'student') return res.status(403).json({ error: 'Teachers only.' });
   if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
   const subject = String(req.body && req.body.subject || '').trim().toLowerCase();
@@ -6171,7 +6172,7 @@ app.use((err, req, res, next) => {
   const tooLarge = err.code === 'LIMIT_FILE_SIZE' || err.code === 'LIMIT_FILE_COUNT';
   observability.recordFailure('upload', { requestId: req.requestId, operation: 'multer', error: err.code });
   res.status(tooLarge ? 413 : 400).json({
-    error: tooLarge ? 'The upload is too large. Use fewer or smaller files.' : 'The upload could not be accepted.',
+    error: tooLarge ? (['/api/import/slides', '/api/game/from-pptx'].includes(req.path) ? 'Upload one PowerPoint (.pptx) file up to 50 MB. For larger presentations, compress pictures or remove embedded videos in a copy before uploading. Other lesson files must be under 15 MB.' : 'The upload is too large. Use fewer or smaller files.') : 'The upload could not be accepted.',
     uploadError: err.code,
   });
 });
