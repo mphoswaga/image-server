@@ -33,3 +33,32 @@ test('smartboard endpoint returns all assigned rosters only to owner, without wr
  const response=await fetch(url,{headers:{'x-user':'owner'}});assert.equal(response.status,200);
  const body=await response.json();assert.equal(body.attendance.length,2);assert.equal(body.classes.length,2);assert.equal(writes,0);
 });
+test('unique fish grow from personal and shared food without growing the opposing team',()=>{
+ const s=create(students,questions,2);
+ assert.equal(new Set(s.players.map(p=>p.variant)).size,25);
+ assert.ok(s.players.every(p=>p.mass===100));
+ answer(s,0);
+ assert.equal(s.players[0].mass,190);
+ assert.equal(s.players[1].mass,100);
+ assert.ok(s.players[2].mass>100);
+ assert.equal(Math.round(s.players.reduce((sum,p)=>sum+p.mass-100,0)),225);
+ const masses=s.players.map(p=>p.mass);answer(s,0);assert.deepEqual(s.players.map(p=>p.mass),masses);
+});
+test('all growth stages use the live FishQuest thresholds and keep a safe visual size',()=>{
+ const growth=require('../public/fishquest-growth');
+ assert.deepEqual([100,160,280,450,650,800].map(growth.evolution),['minnow','reef','hunter','shark','orca','whale']);
+ assert.equal(growth.evolution(649),'shark');assert.equal(growth.scale(100),1);
+ assert.ok(growth.scale(10000)<=1.85);
+ assert.equal(growth.progress(800).fraction,1);
+ const s=create(students.slice(0,4),questions,2,4);
+ while(s.phase!=='ended'){answer(s,0);next(s);}
+ assert.ok(s.players.every(p=>growth.evolution(p.mass)==='whale'));
+});
+test('old board sessions recover growth once and preserve their existing rewards',()=>{
+ const {upgrade}=require('../public/fishquest-board-state');
+ const s=create(students,questions,2);answer(s,0);
+ delete s.growthVersion;s.players.forEach(p=>{delete p.variant;delete p.mass});
+ const food=s.food.slice();upgrade(s);
+ assert.equal(s.players[0].mass,190);assert.deepEqual(s.food,food);
+ const masses=s.players.map(p=>p.mass);upgrade(s);assert.deepEqual(s.players.map(p=>p.mass),masses);
+});
