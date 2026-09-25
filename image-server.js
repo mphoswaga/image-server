@@ -27,6 +27,7 @@ const weekPlanner = require('./week-planner');
 const { objectivesFromDeck, criteriaFromDeck } = require('./deck-fields');
 const planningSource = require('./planning-source');
 const games = require('./games');
+const lessonDesign = require('./lesson-design');
 const assignments = require('./assignments');
 const { normalizeLessonPurpose, normalizeAssessmentOptions } = require('./assessment-draft');
 const gradebook = require('./gradebook');
@@ -1238,6 +1239,7 @@ function deckContextPayload(deck) {
     subject: deck.subject || '',
     topic: deck.topic || '',
     grade: deck.grade || 'middle school',
+    lessonSettings: deck.lessonSettings || null,
     slideCount: Number(deck.requestedSlideCount) || 5,
     tone: deck.tone || 'clear and engaging',
     focus: deck.focus || '',
@@ -1676,6 +1678,7 @@ app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
         successCriteria: criteriaFromDeck(deck).split('\n').filter(Boolean),
         templateText: tpl ? templatePromptText(req.userId, tpl) : plannerText,
         sourceMaterialText: source,
+        lessonSettings: deck.lessonSettings || null,
         teachingModel: deck.teachingModelId,
         lessonPurpose: deck.lessonPurpose,
         assessmentTotalMarks: storedAssessmentOptions.totalMarks,
@@ -1880,6 +1883,17 @@ app.delete('/api/planning-sources/:id', requireAuth, (req, res) => {
 // or oversized requests can't inflate token budgets even if the UI is bypassed.
 const LIMITS = { subject: 60, topic: 80, objectives: 1500, focus: 400, source: 24000 };
 function clip(val, max) { return String(val || '').slice(0, max); }
+function validatedLessonSettings(req) {
+  if (!req.body.lessonSettings) return null;
+  const sequence = lessonSequenceFromBody(req.body);
+  const settings = lessonDesign.normalize(req.body.lessonSettings, { lessonPurpose: normalizeLessonPurpose(req.body.lessonPurpose), lessonCount: sequence?.lessonCount || 1 });
+  if (sequence && settings.durationMinutes !== sequence.periodMinutes) throw new Error('Lesson duration and minutes per period must match.');
+  if (settings.game?.existingId) {
+    const g = settings.game.mode === 'moonquest' ? moonquestStore.read('game', settings.game.existingId) : games.getGame(settings.game.existingId);
+    if (!g || g.teacherId !== req.userId || (settings.game.mode !== 'moonquest' && (g.mode || 'arcade') !== settings.game.mode)) throw new Error('Choose an existing game belonging to your account and matching the selected game type.');
+  }
+  return settings;
+}
 function lessonSequenceFromBody(body) {
   const enabled = body && (body.sequenceEnabled === true || body.sequenceEnabled === 'true' || body.sequenceEnabled === 'on');
   if (!enabled) return null;
@@ -1973,6 +1987,8 @@ app.post('/api/source-materials/preview', requireAuth, upload.array('files', 8),
 
 // ── Lesson plan generation (objectives + stored template → plan) ──────────
 app.post('/api/lesson-plan', requireAuth, async (req, res) => {
+  let lessonSettings;
+  try { lessonSettings = validatedLessonSettings(req); } catch (err) { return res.status(400).json({ error: err.message }); }
   const { grade, tone, templateId, unitId, lessonIndex, regenerate } = req.body || {};
   const teachingModelId = normalizeTeachingModelId(req.body && req.body.teachingModelId);
   const lessonPurpose = normalizeLessonPurpose(req.body && req.body.lessonPurpose);
@@ -2034,6 +2050,7 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
       successCriteria: Array.isArray(req.body.successCriteria) ? req.body.successCriteria : [],
       templateText: tpl ? templatePromptText(req.userId, tpl) : plannerTemplateText, unitBlock,
       sourceMaterialText: sourceMaterialText(req.body), planningFrameworkText: planningFramework.promptText(framework),
+      lessonSettings,
       teachingModel: teachingModelId, sequence: lessonSequence, structuredSequence: false,
       sequenceLessonNumber, previousLessonPlanText: clip(req.body.previousLessonPlanText, 8000), regenerate: !!regenerate,
       lessonPurpose,
@@ -2055,7 +2072,7 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
           successCriteria: plan.successCriteria,
           subject, topic,
           unit: clip(req.body.unitName || req.body.unit, 200) || topic,
-          period: clip(req.body.period, 120) || (lessonSequence
+          period: clip(req.body.period, 120) || (lessonSettings ? `${lessonSettings.durationMinutes} minutes` : null) || (lessonSequence
             ? `${lessonSequence.periodMinutes} minutes`
             : lessonPurpose === 'project' ? 'Project assessment session'
               : lessonPurpose === 'test' ? 'Test assessment session' : 'Lesson session'),
@@ -2093,6 +2110,7 @@ app.post('/api/import/lesson-plan', requireAuth, upload.single('file'), requireU
   const subject = clip(req.body.subject, LIMITS.subject);
   const topic = clip(req.body.topic, LIMITS.topic);
   if (!subject || !topic) return res.status(400).json({ error: 'Enter the subject and topic for this lesson.' });
+  let lessonSettings;try { lessonSettings = req.body.durationMinutes ? lessonDesign.normalize({durationMinutes:req.body.durationMinutes}) : null; } catch (err) { return res.status(400).json({error:err.message}); }
   const { reservation, block } = await reserve(req, 'lessonscope.import_plan_to_slides');
   if (block) return res.status(402).json(block);
   try {
@@ -2104,14 +2122,14 @@ app.post('/api/import/lesson-plan', requireAuth, upload.single('file'), requireU
     const materialText = sourceMaterialText(req.body);
     const materialImages = sourceMaterialImages(req.body);
     const groundedPlanText = mergeSourceIntoPlanText(planText, materialText);
-    const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives: '', lessonPlanText: groundedPlanText, sourceMaterialText: materialText, sourceImages: materialImages, teachingModelId, skipAssemble: true, presetId: presetId || null });
+    const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives: '', lessonPlanText: groundedPlanText, sourceMaterialText: materialText, sourceImages: materialImages, teachingModelId, extras: {lessonSettings}, skipAssemble: true, presetId: presetId || null });
     const id = crypto.randomUUID();
     decks.set(id, {
       ownerId: req.userId,
       subject: String(subject).toLowerCase(), topic: String(topic).toLowerCase(),
       grade: grade || 'middle school', tone, focus, band: built.band,
       slides: built.slides, images: built.images, createdAt: Date.now(), touchedAt: Date.now(),
-      objectives: '', lessonPlanText: groundedPlanText, sourceMaterialText: materialText, sourceMaterialImages: materialImages, teachingModelId, presetId: presetId || null,
+      lessonSettings, requestedSlideCount:Number(slideCount)||5, objectives: '', lessonPlanText: groundedPlanText, sourceMaterialText: materialText, sourceMaterialImages: materialImages, teachingModelId, presetId: presetId || null,
     });
     await capture(req, reservation, 'lessonscope.import_plan_to_slides', id);
     const filename = `${subject}-${topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
@@ -2140,6 +2158,7 @@ app.post('/api/import/slides', requireAuth, upload.single('file'), requireUpload
   const subject = clip(req.body.subject, LIMITS.subject);
   const topic = clip(req.body.topic, LIMITS.topic);
   if (!subject || !topic) return res.status(400).json({ error: 'Enter the subject and topic for these slides.' });
+  let lessonSettings;try {lessonSettings=req.body.durationMinutes?lessonDesign.normalize({durationMinutes:req.body.durationMinutes}):null;}catch(err){return res.status(400).json({error:err.message});}
   try {
     const parsed = await extractPptxSlides(req.file.buffer);
     if (!parsed.length) return res.status(400).json({ error: "Couldn't read any slides from that file." });
@@ -2165,7 +2184,7 @@ app.post('/api/import/slides', requireAuth, upload.single('file'), requireUpload
       grade: req.body.grade || 'middle school', tone: req.body.tone || 'clear and engaging',
       focus: '', band: null, slides, images, createdAt: Date.now(),
       touchedAt: Date.now(),
-      objectives: liftedObjectives, lessonPlanText: sourceText, imported: true, presetId: null,
+      lessonSettings, objectives: liftedObjectives, lessonPlanText: sourceText, imported: true, presetId: null,
     });
     const filename = `${subject}-${topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
     res.json({
@@ -3993,7 +4012,7 @@ async function addLessonToWeekPlanner(req, { subject, topic, objectives, lessonP
       subject,
       topic,
       unit: clip(body.unitName || body.unit, 200),
-      period: clip(body.period, 120),
+      period: clip(body.period, 120) || (body.lessonSettings ? `${lessonDesign.normalize(body.lessonSettings).durationMinutes} minutes` : ''),
       objectives,                                   // verbatim
       successCriteria: Array.isArray(successCriteria) && successCriteria.length
         ? successCriteria
@@ -4054,6 +4073,8 @@ async function addLessonToWeekPlanner(req, { subject, topic, objectives, lessonP
 
 // Generate a deck; store state; return preview metadata + download id.
 app.post('/api/generate', requireAuth, async (req, res) => {
+  let lessonSettings;
+  try { lessonSettings = validatedLessonSettings(req); } catch (err) { return res.status(400).json({ error: err.message }); }
   const { slideCount, grade, tone, lessonPlan, unitId, lessonIndex, regenerate, presetId } = req.body || {};
   const teachingModelId = normalizeTeachingModelId(req.body && req.body.teachingModelId);
   const lessonPurpose = normalizeLessonPurpose(req.body && req.body.lessonPurpose);
@@ -4110,7 +4131,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
     const materialImages = sourceMaterialImages(req.body);
     const lessonPlanText = mergeSourceIntoPlanText(resolvePlanText(req.body) || (unitBlock || ''), materialText);
     const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives, lessonPlanText, sourceMaterialText: materialText, sourceImages: materialImages, teachingModelId, extras: {
-      regenerate: !!regenerate, lessonSequence, lessonPurpose,
+      regenerate: !!regenerate, lessonSequence, lessonPurpose, lessonSettings,
       ...generationAssessment,
     }, skipAssemble: true, presetId: presetId || null });
     const id = crypto.randomUUID();
@@ -4118,6 +4139,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
       ownerId: req.userId,
       subject: String(subject).toLowerCase(), topic: String(topic).toLowerCase(),
       grade: grade || 'middle school', tone, focus, band: built.band,
+      lessonSettings,
       requestedSlideCount: Number(slideCount) || 5,
       slides: built.slides, images: built.images, createdAt: Date.now(), touchedAt: Date.now(),
       objectives: objectives || '', lessonPlanText, sourceMaterialText: materialText, sourceMaterialImages: materialImages, // kept so follow-up resources are grounded in this lesson

@@ -19,6 +19,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
+    #plannedGameFields[hidden],#observationFields[hidden],#plannedGameLessonWrap[hidden]{display:none!important}
     :root {
       --ink:#16223a; --muted:#697586; --primary:#0f2b5c; --primary-2:#1d4ed8; --accent:#16a34a; --accent-2:#41e894;
       --spark:#ff6a4d; --accent-soft:#eafaf1; --primary-soft:#eef7ff; --bg:#f6f9fc; --card:#ffffff; --border:#e7ddcd; --border-soft:#efe7d9;
@@ -2804,7 +2805,7 @@
             <option>Grade 8</option><option>Grade 9</option><option>Grade 10</option><option>Grade 11</option><option>Grade 12</option>
           </select>
         </div>
-        <div><label for="ipSlideCount">Content slides</label><input id="ipSlideCount" type="number" min="1" max="20" value="5" /></div>
+        <div><label for="ipLessonMinutes">Lesson duration (minutes)</label><input id="ipLessonMinutes" type="number" min="5" max="180" value="35"><span id="ipSlideHint" class="hint">Recommended: 7 content slides. You can change this.</span></div><div><label for="ipSlideCount">Content slides</label><input id="ipSlideCount" type="number" min="1" max="20" value="7" /></div>
         <div><label for="ipTone">Tone</label>
           <select id="ipTone">
             <option value="clear and engaging">Clear &amp; engaging</option>
@@ -2846,6 +2847,7 @@
           <option>Grade 8</option><option>Grade 9</option><option>Grade 10</option><option>Grade 11</option><option>Grade 12</option>
         </select>
       </div>
+      <label for="isLessonMinutes">Lesson duration (minutes)</label><input id="isLessonMinutes" type="number" min="5" max="180" value="35" style="max-width:220px">
       <label for="isModel">Lesson structure</label>
       <select id="isModel">
         <option value="standard">Standard lesson</option><option value="gradual_release">Gradual Release</option><option value="explicit_instruction">Explicit Instruction</option><option value="five_e">5E Inquiry</option><option value="inquiry">Inquiry-Based</option><option value="project_based">Project-Based Lesson</option>
@@ -3050,6 +3052,26 @@
         <div class="ps-num" id="settingsStepNum">3</div>
         <div class="ps-body">
           <div class="ps-heading"><svg class="ic" aria-hidden="true" style="color:var(--accent)"><use href="#i-sliders"/></svg> Lesson settings</div>
+          <div class="materials-box" style="padding:16px;margin-bottom:16px">
+            <div class="grid3">
+              <div><label for="lessonMinutes">Lesson duration (minutes)</label><input id="lessonMinutes" type="number" min="5" max="180" value="35" required></div>
+              <div><label for="plannedGame">Include a game task</label><select id="plannedGame"><option value="">No game selected</option><option value="moonquest">MoonQuest · Diagrams</option><option value="colonyquest">ColonyQuest</option><option value="fishquest">FishQuest</option><option value="arcade">Arcade quiz</option></select></div>
+            </div>
+            <div id="plannedGameFields" hidden>
+              <div class="grid3">
+                <div><label for="plannedGamePurpose">Learning purpose</label><select id="plannedGamePurpose"><option value="check">Check understanding</option><option value="practise">Practise</option><option value="introduce">Introduce a concept</option><option value="review">Review</option></select></div>
+                <div><label for="plannedGameStart">Start at minute (blank = automatic)</label><input id="plannedGameStart" type="number" min="0" max="179" placeholder="Let LessonScope decide"></div>
+                <div><label for="plannedGameMinutes">Game time, including setup and discussion</label><input id="plannedGameMinutes" type="number" min="3" max="180" value="15"></div>
+                <div id="plannedGameLessonWrap" hidden><label for="plannedGameLesson">Include in lesson number</label><input id="plannedGameLesson" type="number" min="1" max="5" value="1"></div>
+              </div>
+              <label for="plannedExistingGame">Use an existing game (optional)</label><select id="plannedExistingGame"><option value="">Prepare a new game later</option></select>
+              <p class="hint">Check that the selected game's questions match this lesson. MoonQuest needs your diagram and reviewed answer areas. Selecting a task does not generate or charge for a game.</p>
+            </div>
+            <label><input id="observationEnabled" type="checkbox"> Plan for an observation window (optional)</label>
+            <div id="observationFields" class="grid3" hidden><div><label for="observationStart">Observer arrives at minute</label><input id="observationStart" type="number" min="0" max="179" value="0"></div><div><label for="observationMinutes">Observation lasts (minutes)</label><input id="observationMinutes" type="number" min="1" max="180" value="35"></div></div>
+            <p id="designFeedback" class="hint" aria-live="polite"></p><button id="useDesignRecommendation" type="button" class="btn ghost">Use recommended slide count</button>
+          </div>
+
           <div class="grid3">
             <div id="gradeRow"><label for="grade">Grade level <span class="hint-i" tabindex="0" role="img" aria-label="The class you are teaching. Vocabulary and difficulty are pitched to this exact grade." data-tip="The class you are teaching.">i</span></label>
               <select id="grade">
@@ -3058,7 +3080,7 @@
                 <option>Grade 8</option><option>Grade 9</option><option>Grade 10</option><option>Grade 11</option><option>Grade 12</option>
               </select>
             </div>
-            <div><label for="slideCount">Content slides <span class="hint-i" tabindex="0" role="img" aria-label="How many teaching slides between title and activity. 4–6 suits most lessons." data-tip="4–6 suits most lessons.">i</span></label><input id="slideCount" type="number" min="1" max="20" value="5" /></div>
+            <div><label for="slideCount">Content slides <span class="hint-i" tabindex="0" role="img" aria-label="How many teaching slides between title and activity. Suggested from lesson duration and activities. You can change it." data-tip="Suggested from lesson duration and activities. You can change it.">i</span></label><input id="slideCount" type="number" min="1" max="20" value="5" /></div>
             <div><label for="tone">Tone <span class="hint-i" tabindex="0" role="img" aria-label="The voice of the lesson." data-tip="Playful for younger; Formal for seniors.">i</span></label>
               <select id="tone">
                 <option value="clear and engaging">Clear &amp; engaging</option>
@@ -3168,6 +3190,7 @@
         <div id="sequencePlanTabs" class="sequence-tabs"></div>
         <button id="nextSequencePlanBtn" type="button" class="btn primary sequence-next"></button>
       </div>
+      <div id="lessonDesignReview"></div>
       <div id="planSections"></div>
       <div id="newsletterPlanMount"></div>
       <div id="autoAssessmentSummary" class="auto-assessment-summary" style="display:none"></div>
@@ -3664,6 +3687,7 @@
 
   <link rel="stylesheet" href="/games-welcome.css?v=1">
   <script src="/games-welcome.js?v=1"></script>
+  <script src="/lesson-design.js"></script>
   <script>
     const $=id=>document.getElementById(id);
     const cap=s=>s.replace(/\b\w/g,c=>c.toUpperCase());
@@ -4040,6 +4064,66 @@
     $('materialsAddBtn').addEventListener('click',()=>$('materialsFile').click());
     $('materialsFile').addEventListener('change',e=>uploadSourceMaterials(e.target.files));
     $('materialsClearBtn').addEventListener('click',()=>{ sourceMaterialText=''; sourceMaterialImages=[]; renderSourceMaterials(); });
+
+    let designManualSlides=false, plannedGameOptions=[];
+    function lessonSettingsFromForm(){
+      return LessonDesign.normalize({durationMinutes:Number($('lessonMinutes').value),slideCountMode:designManualSlides?'manual':'auto',
+        observation:$('observationEnabled').checked?{startMinute:Number($('observationStart').value),durationMinutes:Number($('observationMinutes').value)}:null,
+        game:$('plannedGame').value?{mode:$('plannedGame').value,purpose:$('plannedGamePurpose').value,startMinute:$('plannedGameStart').value===''?null:Number($('plannedGameStart').value),durationMinutes:Number($('plannedGameMinutes').value),lesson:$('sequenceEnabled').checked?Number($('plannedGameLesson').value):1,existingId:$('plannedExistingGame').value||null}:null
+      },{lessonPurpose:currentLessonPurpose(),lessonCount:$('sequenceEnabled').checked?Number($('sequenceLessonCount').value):1});
+    }
+    function updateDesignRecommendation(sections=[]){
+      $('plannedGameFields').hidden=!$('plannedGame').value;
+      $('observationFields').hidden=!$('observationEnabled').checked;
+      $('plannedGameLessonWrap').hidden=!$('sequenceEnabled').checked;
+      try{const settings=lessonSettingsFromForm(),n=LessonDesign.recommendation(settings,sections,activeSequencePlanIndex+1);
+        $('designFeedback').textContent=`Recommended: ${n} content slides for ${settings.durationMinutes} minutes${settings.game?' with a timed game task':''}. Title and activity slides are additional.`;
+        if(!designManualSlides)$('slideCount').value=n;
+        $('designFeedback').dataset.recommendation=n;
+      }catch(e){$('designFeedback').textContent=e.message;}
+    }
+    async function loadPlannedGames(selected=''){
+      const mode=$('plannedGame').value,el=$('plannedExistingGame');el.innerHTML='<option value="">Prepare a new game later</option>';
+      if(!mode)return;
+      try{const r=await fetch(mode==='moonquest'?'/api/games/moonquest/library':'/api/games');if(!r.ok)throw new Error('Could not load saved games.');const d=await r.json();
+        if($('plannedGame').value!==mode)return;
+        plannedGameOptions=(d.games||[]).filter(g=>mode==='moonquest'||(g.mode||'arcade')===mode);
+        el.innerHTML='<option value="">Prepare a new game later</option>'+plannedGameOptions.map(g=>`<option value="${esc(g.id)}">${esc(g.title||g.lessonTitle||g.topic)} · ${esc(g.subject||'')}</option>`).join('');
+        el.value=selected;if(selected&&!el.value){const o=new Option('Previously linked game — check availability',selected);el.add(o);el.value=selected;}
+      }catch(e){$('designFeedback').textContent=e.message+' You can still plan a new game.';}
+    }
+    function restoreLessonSettings(settings){
+      designManualSlides=settings?.slideCountMode==='manual'||!settings;
+      $('lessonMinutes').value=settings?.durationMinutes||35;
+      $('observationEnabled').checked=!!settings?.observation;
+      $('observationStart').value=settings?.observation?.startMinute||0;$('observationMinutes').value=settings?.observation?.durationMinutes||35;
+      $('plannedGame').value=settings?.game?.mode||'';$('plannedGamePurpose').value=settings?.game?.purpose||'check';
+      $('plannedGameStart').value=settings?.game?.startMinute??'';$('plannedGameMinutes').value=settings?.game?.durationMinutes||15;$('plannedGameLesson').value=settings?.game?.lesson||1;
+      loadPlannedGames(settings?.game?.existingId||'');updateDesignRecommendation();
+    }
+    function renderDesignReview(d){
+      const settings=ctx?.lessonSettings,el=$('lessonDesignReview');if(!settings){el.innerHTML='';return;}
+      const n=LessonDesign.recommendation(settings,d.sections||[],activeSequencePlanIndex+1);
+      if(!designManualSlides){ctx.slideCount=n;$('slideCount').value=n;}
+      const g=settings.game;
+      el.innerHTML=`<div class="info">${settings.durationMinutes}-minute lesson${g?` · ${esc(LessonDesign.games[g.mode])}: minute ${g.startMinute}–${g.startMinute+g.durationMinutes}${ctx.sequenceEnabled?' in lesson '+g.lesson:''}`:''}<p>Recommended: ${n} content slides. You can choose a different number.</p><label for="reviewSlideCount">Content slides</label><input id="reviewSlideCount" type="number" min="1" max="20" value="${ctx.slideCount}" style="max-width:110px"><button type="button" id="reviewUseRecommendation" class="btn ghost">Use recommendation</button>${g?`<p>${g.existingId?'Review the linked game for this lesson before teaching.':'The task is planned. Prepare and review a playable game before teaching; game generation is a separate action with its normal credit cost.'}</p><button type="button" class="btn ghost" id="preparePlannedGame">${g.existingId?'Open selected game':g.mode==='moonquest'?'Prepare MoonQuest diagram and questions':'Prepare game after creating slides'}</button><button type="button" class="btn ghost" id="linkPlannedGame">Link a saved game</button><span id="plannedGameLinkPicker"></span>`:''}</div>`;
+      $('reviewSlideCount').onchange=()=>{const value=Number($('reviewSlideCount').value);if(!Number.isInteger(value)||value<1||value>20){toast('Choose 1–20 content slides.');return;}designManualSlides=true;ctx.lessonSettings.slideCountMode='manual';ctx.slideCount=value;$('slideCount').value=value;scheduleWorkspaceSave();};
+      $('reviewUseRecommendation').onclick=()=>{designManualSlides=false;ctx.lessonSettings.slideCountMode='auto';ctx.slideCount=n;$('slideCount').value=n;renderDesignReview(d);scheduleWorkspaceSave();};
+      if(g)$('linkPlannedGame').onclick=async()=>{const target=$('plannedGameLinkPicker');target.textContent='Loading your games…';try{const r=await fetch(g.mode==='moonquest'?'/api/games/moonquest/library':'/api/games');if(!r.ok)throw new Error('Could not load games.');const data=await r.json();const options=(data.games||[]).filter(item=>g.mode==='moonquest'||(item.mode||'arcade')===g.mode);target.innerHTML='<label for="reviewLinkedGame">Choose a game with questions for this lesson</label><select id="reviewLinkedGame"><option value="">No saved game linked</option>'+options.map(item=>`<option value="${esc(item.id)}">${esc(item.title||item.lessonTitle||item.topic)} · ${esc(item.subject||'')}</option>`).join('')+'</select>';const select=$('reviewLinkedGame');select.value=g.existingId||'';select.onchange=()=>{g.existingId=select.value||null;if(g.existingId&&!workspaceGameIds.includes(g.existingId))workspaceGameIds.push(g.existingId);scheduleWorkspaceSave();renderDesignReview(d);};}catch(e){target.textContent=e.message;}};
+      if(g)$('preparePlannedGame').onclick=()=>{if(g.mode==='moonquest'){const query=g.existingId?'game='+encodeURIComponent(g.existingId):'new=1&title='+encodeURIComponent(ctx.topic)+'&subject='+encodeURIComponent(ctx.subject)+'&grade='+encodeURIComponent(ctx.grade);window.open('/moonquest?'+query,'_blank','noopener');}else if(g.existingId){window.open('/'+(g.mode==='arcade'?'play':g.mode)+'/'+encodeURIComponent(g.existingId),'_blank','noopener');}else{if(!currentDeckId){toast('Create the slides, then use the lesson game controls below them.');return;}setGameMode(g.mode);show('slides');$('gameSection').scrollIntoView({behavior:'smooth'});}};
+    }
+    setTimeout(()=>{
+      let importManual=false;
+      $('ipSlideCount').addEventListener('input',()=>{importManual=true;});
+      $('ipLessonMinutes').addEventListener('input',()=>{try{const n=LessonDesign.recommendation({durationMinutes:Number($('ipLessonMinutes').value)});$('ipSlideHint').textContent='Recommended: '+n+' content slides. You can change this.';if(!importManual)$('ipSlideCount').value=n;}catch(e){$('ipSlideHint').textContent=e.message;}});
+      $('slideCount').addEventListener('input',()=>{designManualSlides=true;});
+      $('useDesignRecommendation').onclick=()=>{designManualSlides=false;updateDesignRecommendation();};
+      for(const id of ['lessonMinutes','observationEnabled','observationStart','observationMinutes','plannedGame','plannedGamePurpose','plannedGameStart','plannedGameMinutes','plannedGameLesson','sequenceEnabled','sequenceLessonCount','periodMinutes'])$(id).addEventListener('change',()=>{
+        if(id==='periodMinutes')$('lessonMinutes').value=$('periodMinutes').value;
+        if(id==='lessonMinutes')$('periodMinutes').value=$('lessonMinutes').value;
+        if(id==='plannedGame')loadPlannedGames();updateDesignRecommendation();
+      });updateDesignRecommendation();
+    },0);
 
     function lessonSequenceFromForm(){
       const enabled=!!$('sequenceEnabled')?.checked;
@@ -4897,7 +4981,8 @@
       if(lessonPurpose!=='lesson'&&!assessmentTypes.length){ setComposerPage(3,{push:false}); toast('Choose at least one item type for the automatic assessment.'); return; }
       if(lessonPurpose!=='lesson'&&assessmentTotal<assessmentTypes.length){ setComposerPage(3,{push:false}); toast('The total must leave at least one mark for every selected item type.'); return; }
       if(lessonPurpose!=='lesson'&&assessmentTypes.includes('mcq')&&(assessmentMcqCount<1||assessmentMcqCount>assessmentTotal-(assessmentTypes.length-1))){ setComposerPage(3,{push:false}); toast('Reduce the multiple-choice item count so the other selected sections still have marks.'); return; }
-      ctx={ subject, topic, grade:$('grade').value||'middle school',
+      let lessonSettings;try{lessonSettings=lessonSettingsFromForm();const count=Number($('slideCount').value);if(!Number.isInteger(count)||count<1||count>20)throw new Error('Choose 1–20 content slides.');}catch(e){setComposerPage(3,{push:false});toast(e.message);return;}
+      ctx={ lessonSettings, period:lessonSettings.durationMinutes+' minutes', subject, topic, grade:$('grade').value||'middle school',
         newsletterEnabled:$('newsletterEnabled').checked,newsletterTiming:$('newsletterTiming').value,
         slideCount:Number($('slideCount').value)||5, tone:$('tone').value, focus:$('focus').value.trim(), objectives,
         teachingModelId:$('teachingModel').value||'standard',
@@ -4957,7 +5042,7 @@
       statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>Reading your plan and building slides…';
       const fd=new FormData();
       fd.append('file',file); fd.append('subject',subject); fd.append('topic',topic);
-      fd.append('grade',$('ipGrade').value); fd.append('slideCount',$('ipSlideCount').value||'5');
+      fd.append('durationMinutes',$('ipLessonMinutes').value);fd.append('grade',$('ipGrade').value); fd.append('slideCount',$('ipSlideCount').value||'5');
       const teachingModelId=$('ipModel').value||'standard';
       fd.append('tone',$('ipTone').value); fd.append('teachingModelId',teachingModelId); fd.append('presetId',selectedPresetId);
       try{
@@ -4966,7 +5051,7 @@
         if(creditBlocked(r,d)){ statusEl.innerHTML=''; b.disabled=false; b.innerHTML=orig; return; }
         if(!r.ok) throw new Error(d.error);
         // Ground the lesson pack + games in the uploaded plan (no in-app plan to collect).
-        ctx={ subject, topic, grade:$('ipGrade').value||'middle school', slideCount:Number($('ipSlideCount').value)||5,
+        ctx={ lessonSettings:{durationMinutes:Number($('ipLessonMinutes').value),slideCountMode:'manual',game:null,observation:null}, subject, topic, grade:$('ipGrade').value||'middle school', slideCount:Number($('ipSlideCount').value)||5,
           tone:$('ipTone').value, focus:'', objectives:'', teachingModelId, lessonPlanText:d.sourceText||'' };
         importedPlanText=d.sourceText||''; planTemplateId=null; planStage.querySelector('#planSections')&&($('planSections').innerHTML='');
         currentDeckId=d.deckId; statusEl.innerHTML=''; renderDeck(d); show('slides'); setStep(3); results.scrollIntoView({behavior:'smooth'}); refreshCredits();
@@ -4989,12 +5074,12 @@
       btn.disabled=true; const orig=btn.innerHTML;
       statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>Reading your slides…';
       const fd=new FormData();
-      fd.append('file',file); fd.append('subject',subject); fd.append('topic',topic); fd.append('grade',$('isGrade').value);
+      fd.append('file',file); fd.append('subject',subject); fd.append('topic',topic); fd.append('grade',$('isGrade').value);fd.append('durationMinutes',$('isLessonMinutes').value);
       const teachingModelId=$('isModel').value||'standard'; fd.append('teachingModelId',teachingModelId);
       try{
         const r=await fetch('/api/import/slides',{method:'POST',body:fd});
         const d=await r.json(); if(!r.ok) throw new Error(d.error);
-        ctx={ subject, topic, grade:$('isGrade').value||'middle school', slideCount:d.slideCount||5,
+        ctx={ lessonSettings:{durationMinutes:Number($('isLessonMinutes').value),slideCountMode:'manual',game:null,observation:null}, subject, topic, grade:$('isGrade').value||'middle school', slideCount:d.slideCount||5,
           tone:'clear and engaging', focus:'', objectives:(d.objectives||'').trim(), successCriteria:d.successCriteria||[],
           teachingModelId, lessonPlanText:d.sourceText||'' };
         importedPlanText=d.sourceText||''; currentDeckId=d.deckId;
@@ -5005,7 +5090,7 @@
         if(withPlan){
           statusEl.innerHTML='<span class="spinner"></span>Writing a lesson plan from your slides…';
           const pr=await fetch('/api/lesson-plan',{method:'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({subject,topic,grade:$('isGrade').value,teachingModelId,
+            body:JSON.stringify({subject,topic,lessonSettings:ctx.lessonSettings,grade:$('isGrade').value,teachingModelId,
               objectives:(d.objectives||'').trim()||d.sourceText, successCriteria:d.successCriteria||[]})});
           const pd=await pr.json();
           if(pr.ok){ renderPlan(pd); }
@@ -5144,6 +5229,7 @@
         activeSequencePlanIndex=index;
       }
       paintPlan(d);
+      renderDesignReview(d);
       renderAutoAssessmentSummary();
       renderSequencePlanFlow();
       scheduleWorkspaceSave();
@@ -5155,7 +5241,7 @@
     $('sequencePlanTabs').addEventListener('click',e=>{
       const tab=e.target.closest('[data-plan-index]'); if(!tab||tab.disabled) return;
       saveActiveSequencePlan(); activeSequencePlanIndex=Number(tab.dataset.planIndex);
-      paintPlan(sequencePlans[activeSequencePlanIndex]); renderSequencePlanFlow();
+      paintPlan(sequencePlans[activeSequencePlanIndex]); renderDesignReview(sequencePlans[activeSequencePlanIndex]); renderSequencePlanFlow();
     });
     function collectPlan(){
       return { sections:[...planStage.querySelectorAll('.plan-section')].map(el=>({
@@ -5360,7 +5446,8 @@
       let i=0; statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>'+STEPS[0];
       const tmr=setInterval(()=>{ i=Math.min(i+1,STEPS.length-1); statusEl.innerHTML='<span class="spinner"></span>'+STEPS[i]; },1900);
       try{
-        const body={...ctx,lessonWorkspaceId:currentWorkspaceId||undefined,sequenceEnabled:false,lessonPlan:{sections:plan.sections},presetId:selectedPresetId,
+        const periodSettings=ctx.lessonSettings?{...ctx.lessonSettings,game:ctx.lessonSettings.game?.lesson===index+1?{...ctx.lessonSettings.game,lesson:1}:null}:null;
+        const body={...ctx,lessonWorkspaceId:currentWorkspaceId||undefined,sequenceEnabled:false,lessonSettings:periodSettings,slideCount:periodSettings&&periodSettings.slideCountMode!=='manual'?LessonDesign.recommendation(periodSettings,plan.sections):ctx.slideCount,lessonPlan:{sections:plan.sections},presetId:selectedPresetId,
           lessonNumber:Number.isFinite(sequenceStartLessonNumber)?sequenceStartLessonNumber+index:undefined,
           focus:[ctx.focus,`This is lesson ${index+1} of ${total}. Build slides only for this lesson plan.`].filter(Boolean).join(' ')};
         const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -7392,6 +7479,7 @@
       if($('sequenceEnabled')) $('sequenceEnabled').checked=!!saved.sequenceEnabled;
       if($('sequenceLessonCount')&&saved.sequenceLessonCount) $('sequenceLessonCount').value=String(saved.sequenceLessonCount);
       if($('periodMinutes')&&saved.periodMinutes) $('periodMinutes').value=String(saved.periodMinutes);
+      restoreLessonSettings(saved.lessonSettings || (saved.periodMinutes ? {durationMinutes:saved.periodMinutes,slideCountMode:'manual'} : null));
     }
 
     async function validateRestoredAssessmentPublication(){

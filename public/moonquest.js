@@ -352,6 +352,7 @@
     if(id){learnerToken=sessionStorage.getItem('moonquest:'+id)||'';return openSession(id,params.get('board')?'board':learnerToken?'student':'teacher');}
     await home();
     if(params.get('game')){const id=params.get('game');if(params.get('action')==='test')await launch(id,true);else if(params.get('action')==='edit'){draft=(await api('/games/'+id)).game;editor();}else await setup(id);}
+    else if(params.get('new')==='1'){draft=emptyDraft();draft.title=(params.get('title')||draft.title).slice(0,120);draft.subject=(params.get('subject')||'').slice(0,100);draft.grade=(params.get('grade')||draft.grade).slice(0,80);activeDiagram=0;editor();}
     else if(params.get('report'))await report(params.get('report'));
   }
   init().catch(e=>{root.innerHTML=`<section class="intro"><h1>Open your next adventure.</h1><p>${esc(e.message)}</p><a class="button primary" href="/">Sign in to LessonScope</a><a class="button" href="/moonquest/join">Join as a learner</a></section>`;});

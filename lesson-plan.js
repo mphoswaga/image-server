@@ -14,6 +14,8 @@ const {
 // endpoint can warn when a template exceeds it instead of silently dropping the end.
 const TEMPLATE_PROMPT_LIMIT = 6000;
 
+const lessonDesign = require('./lesson-design');
+
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
 function planSchema(model, sequence = null, structuredSequence = false, includeAssessment = false, includeTeachingEvidence = false) {
@@ -798,9 +800,12 @@ async function repairAssessmentDraft(client, initialDraft, context, options) {
   throw error;
 }
 
-async function generateLessonPlan({ subject, topic, grade = 'middle school', tone = 'clear and engaging', objectives, successCriteria = [], templateText, unitBlock = '', sourceMaterialText = '', planningFrameworkText = '', teachingModel = 'standard', sequence = null, structuredSequence = false, sequenceLessonNumber = null, previousLessonPlanText = '', lessonPurpose = 'lesson', assessmentTotalMarks = 50, assessmentStructure = 'balanced', assessmentDeliveryMode = 'live', assessmentBrief = '', assessmentQuestionTypes = [], assessmentMcqCount = 15, assessmentPhases = [], regenerate = false }) {
+async function generateLessonPlan({ subject, topic, grade = 'middle school', tone = 'clear and engaging', objectives, successCriteria = [], templateText, unitBlock = '', sourceMaterialText = '', planningFrameworkText = '', teachingModel = 'standard', sequence = null, structuredSequence = false, sequenceLessonNumber = null, previousLessonPlanText = '', lessonPurpose = 'lesson', assessmentTotalMarks = 50, assessmentStructure = 'balanced', assessmentDeliveryMode = 'live', assessmentBrief = '', assessmentQuestionTypes = [], assessmentMcqCount = 15, assessmentPhases = [], regenerate = false, lessonSettings = null }) {
   const teachingModelId = normalizeTeachingModelId(teachingModel);
   const model = getTeachingModel(teachingModelId);
+  const settings = lessonSettings ? lessonDesign.normalize(lessonSettings, { lessonPurpose, lessonCount: sequence?.lessonCount || 1 }) : null;
+  const designLesson = Number(sequenceLessonNumber) || 1;
+  const hasPlannedGame = !!(settings?.game && (structuredSequence || settings.game.lesson === designLesson));
   const purpose = normalizeLessonPurpose(lessonPurpose);
   const assessmentOptions = normalizeAssessmentOptions({ assessmentTotalMarks, assessmentStructure, assessmentDeliveryMode, assessmentBrief, assessmentQuestionTypes, assessmentMcqCount, assessmentPhases });
   const cleanSequence = sequence && sequence.enabled ? {
@@ -841,6 +846,7 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     assessmentOptions,
     lessonPlanQualityVersion: 8,
     observationGuidanceVersion: OBSERVATION_GUIDANCE_VERSION,
+    lessonSettings: settings,
     sequence: cleanSequence,
     structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber),
     sequenceLessonNumber: cleanLessonNumber,
@@ -850,6 +856,21 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     const client = aiClient();
     const basePrompt = buildPrompt({ subject, topic, grade, tone, objectives, successCriteria, templateText, unitBlock, sourceMaterialText, planningFrameworkText, teachingModel: teachingModelId, sequence: cleanSequence, structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber), sequenceLessonNumber: cleanLessonNumber, previousLessonPlanText, lessonPurpose: purpose, assessmentOptions });
     const draftContext = assessmentContext({ subject, topic, grade, objectives, sourceMaterialText, lessonPurpose: purpose }, assessmentOptions);
+    const schema = planSchema(model, cleanSequence, !!(cleanSequence && structuredSequence && !cleanLessonNumber), purpose !== 'lesson', purpose === 'lesson');
+    if (hasPlannedGame) { schema.properties.gamePlacement = lessonDesign.placementSchema(); schema.required.push('gamePlacement'); }
+    const exactHeadings = strictTemplateHeadings(templateText);
+    if (exactHeadings.length) {
+      schema.properties.sections.items.properties.heading.enum = exactHeadings;
+      const count = exactHeadings.length * (cleanSequence && structuredSequence && !cleanLessonNumber ? cleanSequence.lessonCount : 1);
+      schema.properties.sections.minItems = count;
+      schema.properties.sections.maxItems = count;
+      const activityHeadings = exactHeadings.filter(h => !/reflection|resources|objectives|overview|phonics/i.test(h));
+      if (schema.properties.teachingEvidence && activityHeadings.length) {
+        schema.properties.teachingEvidence.items.properties.sectionHeading.enum = activityHeadings;
+        schema.properties.teachingEvidence.items.properties.timings.items.properties.sectionHeading.enum = activityHeadings;
+      }
+      if (hasPlannedGame && activityHeadings.length) schema.properties.gamePlacement.properties.sectionHeading.enum = activityHeadings;
+    }
     let lastIssues = [];
     for (let attempt = 1; attempt <= 3; attempt++) {
       const correction = lastIssues.length ? `\n\nYour previous draft failed these required checks: ${lastIssues.join('; ')}. Correct every issue in the new response.` : '';
@@ -858,9 +879,9 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
         max_tokens: cleanSequence && structuredSequence && !cleanLessonNumber ? 12000 : (purpose === 'lesson' ? 6000 : 12000),
         messages: [
           { role: 'system', content: observationPromptBlock(purpose) + (purpose === 'lesson' ? '\nReturn teachingEvidence with exactly one checkpoint per lesson. Use lesson=1 for a single or staged lesson; for a structured sequence use the matching section.lesson. sectionHeading must exactly match an existing teaching/practice section. Provide a concrete question, expectedReasoning, an allLearnerCheck response method, a specific ifThenResponse to a likely misconception (and extension when ready), a new recheck task, and studentReview describing a criterion-based self-check and actual revision. These will be inserted into the chosen section, so allocate time within its activity and do not duplicate them in section content. Do not put these in Reflection, Resources, Objectives or Overview. Each field must be substantive, topic-specific and classroom-ready, not generic advice.' : '') + correction },
-          { role: 'user', content: basePrompt },
+          { role: 'user', content: basePrompt + lessonDesign.prompt(settings, structuredSequence && settings?.game ? settings.game.lesson : designLesson) },
         ],
-        response_format: { type: 'json_schema', json_schema: { name: 'lesson_plan', strict: true, schema: planSchema(model, cleanSequence, !!(cleanSequence && structuredSequence && !cleanLessonNumber), purpose !== 'lesson', purpose === 'lesson') } },
+        response_format: { type: 'json_schema', json_schema: { name: 'lesson_plan', strict: true, schema } },
       });
       const text = response.choices[0]?.message?.content;
       if (!text) throw new Error('No lesson plan returned from the model');
@@ -871,9 +892,10 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
       });
       const planIssues = lessonPlanIssues(parsed, { lessonPurpose: purpose, templateText, structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber) });
       if (purpose === 'lesson') {
-        const integrated = integrateTeachingEvidence(parsed, { periodMinutes: cleanSequence && cleanSequence.periodMinutes });
-        lastIssues = [...planIssues, ...integrated.issues];
-        if (!lastIssues.length) return { ...integrated.plan, teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
+        const integrated = integrateTeachingEvidence(lessonDesign.alignGameTimings(parsed, settings, designLesson, !!(structuredSequence && !cleanLessonNumber)), { periodMinutes: settings?.durationMinutes || (cleanSequence && cleanSequence.periodMinutes) });
+        const gameResult = lessonDesign.integrateGame(integrated.plan, settings, designLesson, !!(structuredSequence && !cleanLessonNumber));
+        lastIssues = [...planIssues, ...integrated.issues, ...gameResult.issues];
+        if (!lastIssues.length) return { ...gameResult.plan, teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
         continue;
       }
       if (planIssues.length) {

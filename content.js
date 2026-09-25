@@ -1,3 +1,4 @@
+const lessonDesign = require('./lesson-design');
 // The "brain" — turns a topic into a structured, grade-appropriate lesson.
 //
 // generateContent() returns a flat ordered array of slides, each tagged with a
@@ -200,7 +201,7 @@ function buildPrompt(subject, topic, grade, slideCount, tone, focus, extras = {}
     ? `\nThe objectives slide MUST use these teacher-provided objectives:\n${extras.objectives}`
     : '';
   const planBlock = extras.lessonPlanText
-    ? `\nIMPORTANT: Base this slide deck on the APPROVED LESSON PLAN below. Turn its flow and steps into slides, in order, so the slides match the plan the teacher accepted:\n--- LESSON PLAN ---\n${compactPlanForDeck(extras.lessonPlanText)}\n--- END ---\n`
+    ? `\nIMPORTANT: Base this slide deck on the APPROVED LESSON PLAN below. Turn its flow and steps into slides, in order, so the slides match the plan the teacher accepted:\n--- LESSON PLAN ---\n${compactPlanForDeck(extras.lessonPlanText)}\n${lessonDesign.prompt(extras.lessonSettings, extras.sequenceLessonNumber || 1, true)}\n--- END ---\n`
     : '';
   const sourceBlock = extras.sourceMaterialText
     ? `\nThe teacher also uploaded OPTIONAL SOURCE MATERIALS (for example textbook pages, notes, PDFs, spreadsheets, or reference extracts). Use these to make the explanations, vocabulary, examples and scope more accurate. Do not mention "the uploaded material" to students; just teach the content correctly. If the material conflicts with generic knowledge, prefer the teacher's material.\n--- SOURCE MATERIALS ---\n${String(extras.sourceMaterialText).slice(0, 5000)}\n--- END SOURCE MATERIALS ---\n`
@@ -979,6 +980,7 @@ async function generateContent(subject, topic, slideCount, grade = 'middle schoo
     grade: String(grade || 'middle school').trim(),
     tone: String(tone || 'clear and engaging').trim(),
     focus: String(focus || '').trim(),
+    lessonSettings: extras.lessonSettings || null,
     lessonPlanText: String((extras && extras.lessonPlanText) || '').trim(),
     sourceMaterialText: String((extras && extras.sourceMaterialText) || '').trim(),
     lessonSequence: extras && extras.lessonSequence ? {
@@ -1013,6 +1015,7 @@ async function generateContent(subject, topic, slideCount, grade = 'middle schoo
     const requiredCount = lessonPurpose === 'lesson' ? slideCount : Math.max(slideCount, assessmentManifest.length);
     best.slides = best.slides.slice(0, requiredCount);
     best = ensureAssessmentDeckCoverage(best, lessonPurpose, extras, topic);
+    if (lessonPurpose === 'lesson') best.slides = lessonDesign.applyGameSlide(best.slides, extras.lessonSettings);
     return flattenDeck(best, teachingModelId, lessonPurpose);
   });
 }
