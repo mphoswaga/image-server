@@ -3,6 +3,7 @@
 // sections so it can be rendered, edited, and then drive slide creation.
 const { client: aiClient } = require('./ai-client');
 const { gradeProfile } = require('./grade');
+const { observationPromptBlock, teachingEvidenceSchema, integrateTeachingEvidence, OBSERVATION_GUIDANCE_VERSION } = require('./lesson-observation');
 const { getTeachingModel, normalizeTeachingModelId, modelPromptBlock } = require('./teaching-models');
 const {
   ASSESSMENT_DRAFT_SCHEMA, normalizeLessonPurpose, normalizeAssessmentOptions,
@@ -15,7 +16,7 @@ const TEMPLATE_PROMPT_LIMIT = 6000;
 
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
-function planSchema(model, sequence = null, structuredSequence = false, includeAssessment = false) {
+function planSchema(model, sequence = null, structuredSequence = false, includeAssessment = false, includeTeachingEvidence = false) {
   const lessonCount = Math.min(5, Math.max(2, parseInt(sequence && sequence.lessonCount, 10) || 3));
   const sectionProperties = {
     heading: { type: 'string' },
@@ -43,6 +44,10 @@ function planSchema(model, sequence = null, structuredSequence = false, includeA
     },
   };
   const required = ['successCriteria', 'sections'];
+  if (includeTeachingEvidence && !includeAssessment) {
+    properties.teachingEvidence = teachingEvidenceSchema();
+    required.push('teachingEvidence');
+  }
   if (includeAssessment) {
     properties.assessmentDraft = ASSESSMENT_DRAFT_SCHEMA;
     required.push('assessmentDraft');
@@ -186,6 +191,8 @@ Learning objectives provided by the teacher (the plan MUST address these):
 ${objectives}
 
 ${criteriaBlock}
+
+${observationPromptBlock(purpose)}
 
 ${templateBlock}
 ${assessmentPromptBlock(purpose, assessmentOptions)}
@@ -833,6 +840,7 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     lessonPurpose: purpose,
     assessmentOptions,
     lessonPlanQualityVersion: 8,
+    observationGuidanceVersion: OBSERVATION_GUIDANCE_VERSION,
     sequence: cleanSequence,
     structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber),
     sequenceLessonNumber: cleanLessonNumber,
@@ -848,8 +856,11 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
       const response = await client.chat.completions.create({
         model: MODEL,
         max_tokens: cleanSequence && structuredSequence && !cleanLessonNumber ? 12000 : (purpose === 'lesson' ? 6000 : 12000),
-        messages: [{ role: 'user', content: basePrompt + correction }],
-        response_format: { type: 'json_schema', json_schema: { name: 'lesson_plan', strict: true, schema: planSchema(model, cleanSequence, !!(cleanSequence && structuredSequence && !cleanLessonNumber), purpose !== 'lesson') } },
+        messages: [
+          { role: 'system', content: observationPromptBlock(purpose) + (purpose === 'lesson' ? '\nReturn teachingEvidence with exactly one checkpoint per lesson. Use lesson=1 for a single or staged lesson; for a structured sequence use the matching section.lesson. sectionHeading must exactly match an existing teaching/practice section. Provide a concrete question, expectedReasoning, an allLearnerCheck response method, a specific ifThenResponse to a likely misconception (and extension when ready), a new recheck task, and studentReview describing a criterion-based self-check and actual revision. These will be inserted into the chosen section, so allocate time within its activity and do not duplicate them in section content. Do not put these in Reflection, Resources, Objectives or Overview. Each field must be substantive, topic-specific and classroom-ready, not generic advice.' : '') + correction },
+          { role: 'user', content: basePrompt },
+        ],
+        response_format: { type: 'json_schema', json_schema: { name: 'lesson_plan', strict: true, schema: planSchema(model, cleanSequence, !!(cleanSequence && structuredSequence && !cleanLessonNumber), purpose !== 'lesson', purpose === 'lesson') } },
       });
       const text = response.choices[0]?.message?.content;
       if (!text) throw new Error('No lesson plan returned from the model');
@@ -860,8 +871,9 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
       });
       const planIssues = lessonPlanIssues(parsed, { lessonPurpose: purpose, templateText, structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber) });
       if (purpose === 'lesson') {
-        lastIssues = planIssues;
-        if (!lastIssues.length) return { ...parsed, teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
+        const integrated = integrateTeachingEvidence(parsed, { periodMinutes: cleanSequence && cleanSequence.periodMinutes });
+        lastIssues = [...planIssues, ...integrated.issues];
+        if (!lastIssues.length) return { ...integrated.plan, teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
         continue;
       }
       if (planIssues.length) {
