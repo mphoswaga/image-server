@@ -77,7 +77,7 @@ test('story waits for equal learner turns, handles both threats, and ends at the
  assert.equal(s.players.length,4);assert.equal(s.answers.length,4);
  const restored=JSON.parse(JSON.stringify(s));advance(restored);choose(restored,'hide');advance(restored);
  assert.equal(restored.phase,'question');assert.deepEqual(restored.story.completed,['shark']);
- for(let i=0;i<4;i++){answer(restored,0);next(restored)}
+ for(let i=0;i<4;i++){answer(restored,0);next(restored);if(restored.phase==='swim_break')advance(restored)}
  assert.equal(restored.phase,'event_warning');assert.equal(restored.story.event.kind,'net');
  advance(restored);choose(restored,'shelter');advance(restored);choose(restored,'sprint');advance(restored);
  assert.equal(restored.phase,'ended');assert.equal(restored.story.history.length,4);
@@ -90,4 +90,28 @@ test('threat choices reject unaffordable spending and protect a fully grown scho
  advance(s);assert.equal(choose(s,'distract'),false);assert.equal(s.phase,'event_choice');
  s.players.forEach(p=>p.mass=450);s.food[0]=20;assert.equal(choose(s,'stand'),true);
  assert.equal(s.food[0],20);assert.equal(s.story.event.result.safe,true);
+});
+test('question clock expires once without awarding food and starts fresh for the next learner',()=>{
+ const Board=require('../public/fishquest-board-state'),s=create(students,questions,2,1,false,20);
+ assert.equal(Board.tick(s,19999),false);assert.equal(s.remainingMs,1);
+ assert.equal(Board.tick(s,1),true);assert.equal(s.phase,'reveal');
+ assert.equal(s.answers[0].choice,null);assert.equal(s.answers[0].timedOut,true);
+ assert.deepEqual(s.food,[0,0]);assert.ok(s.players.every(p=>p.mass===100));
+ assert.equal(Board.tick(s,50000),false);assert.equal(answer(s,0),false);assert.equal(s.answers.length,1);
+ next(s);assert.equal(s.remainingMs,20000);assert.equal(s.turn,1);assert.equal(answer(s,0),true);
+});
+test('pause and saved question retain remaining time; old sessions default to thirty seconds',()=>{
+ const {tick}=require('../public/fishquest-board-state'),s=create(students,questions,2,1,false,45);
+ tick(s,12000);s.paused=true;tick(s,90000);assert.equal(s.remainingMs,33000);
+ const restored=JSON.parse(JSON.stringify(s));restored.paused=false;tick(restored,32999);assert.equal(restored.phase,'question');tick(restored,1);assert.equal(restored.phase,'reveal');
+ delete s.remainingMs;delete s.questionSeconds;s.paused=false;tick(s,1000);assert.equal(s.remainingMs,29000);
+ tick(s,-10);tick(s,NaN);assert.equal(s.remainingMs,29000);
+ assert.throws(()=>create(students,questions,2,1,false,0));
+});
+
+test('exploration breaks pause safely and never interrupt shark or net milestones',()=>{
+ const {advance}=require('../public/fishquest-board-state'),s=create(students,questions,2,1,true);advance(s);
+ for(let i=0;i<6;i++){answer(s,0);next(s)}
+ assert.equal(s.phase,'swim_break');assert.equal(answer(s,0),false);s.paused=true;assert.equal(advance(s),false);
+ const restored=JSON.parse(JSON.stringify(s));restored.paused=false;assert.equal(advance(restored),true);assert.equal(restored.phase,'question');assert.equal(restored.turn,6);assert.equal(restored.remainingMs,30000);
 });

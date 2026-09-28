@@ -17,3 +17,23 @@
 @media(prefers-reduced-motion:reduce){#danger *,#ocean .reef,#ocean .swimmer{animation:none!important}#danger.event_warning .shark-art{opacity:.5;filter:brightness(0)}.fishing-net{opacity:.75}}
 .reef .fish-growth{width:min(calc(50px * var(--fish-size,1)),var(--school-fish-max,90px))}.roster-name{display:block;min-width:0;flex:1}.fish-display-name{display:block;width:100%;max-width:200px;margin-top:4px;padding:5px;border:1px solid #b6d6cd;border-radius:4px;color:#164a54;background:white;font-size:13px}#danger.event_choice .fishing-net{animation:none;opacity:.8}.swimmer>span:last-child{width:fit-content;max-width:100%;min-width:0;margin:0 auto}
 #ocean[data-phase="event_choice"] #hero,#ocean[data-phase="event_result"] #hero{animation:none}
+/* Living reef: travel is driven by one paused-aware animation loop. */
+#fish .reef{display:block;overflow:visible}.reef-flag{display:block;position:absolute;top:0;left:0;right:0}
+#fish .swimmer{position:absolute;width:clamp(48px,6.8vw,98px);animation:none;will-change:left,top}
+#fish .swimmer .fish-sprite{transform:scaleX(var(--heading,1));transition:transform .35s ease}
+#fish .swimmer>span:last-child{font-size:11px;background:#043651ad;white-space:nowrap}
+#fish .swimmer.feeding .fish-sprite{filter:drop-shadow(0 0 8px #ffe39a);animation:feeding-bite .45s 1.4s 5 alternate}
+#hero.celebrating:before{background:radial-gradient(ellipse,#ffd96c77,transparent 70%)}
+.pellet.meal{left:var(--start);top:0;animation:food-to-fish 2.7s var(--delay) both}
+.turn-bar{grid-column:1;display:flex;align-items:center;justify-content:space-between;gap:12px}.turn-bar #turn{font-size:12px;margin:0}
+#countdown{flex-shrink:0;display:flex;align-items:baseline;gap:4px;background:#d2eee7;border:2px solid #309b88;border-radius:30px;padding:5px 11px;font-variant-numeric:tabular-nums;color:#114e49}
+#countdown b{font-size:25px}#countdown small{font-size:11px}#countdown.urgent{border-color:#b05c12;background:#fff0ca;color:#854108}
+.question.story-mode>.turn-bar{display:none}
+.question.card{padding:12px 18px;gap:4px 20px}.question #options button{min-height:55px;font-size:clamp(17px,1.55vw,23px)}.question h1{font-size:clamp(22px,2vw,30px)}
+#ocean{transition:box-shadow 3s,background-color 3s}#ocean[data-region="deep"]{box-shadow:inset 0 0 180px #002856bb}#ocean[data-region="sanctuary"]{box-shadow:inset 0 0 150px #ffdf8a88}
+@keyframes food-to-fish{0%{opacity:0;transform:translate(0,-10px)}12%{opacity:1}85%{opacity:1;transform:translate(var(--dx),var(--dy)) scale(1)}100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.1)}}
+@keyframes feeding-bite{to{transform:scaleX(var(--heading,1)) rotate(-6deg) translateY(-4px)}}
+@media(max-width:850px){.turn-bar{grid-column:1}.question #options{grid-row:auto}#fish .swimmer{width:60px}#fish .swimmer>span:last-child{font-size:9px}#countdown b{font-size:22px}}
+@media(max-height:650px) and (min-width:850px){#fish{top:100px}#hero{top:100px}#hero>.fish-growth{width:calc(90px * var(--fish-size,1))}#hero p{display:none}.hero-banner{font-size:11px;padding:4px 8px}#hero strong{font-size:18px}.growth-label{font-size:10px;padding:4px}.question h1{font-size:22px}.question #options button{min-height:46px}.question.card{padding:8px 14px}#feedback{font-size:13px}}
+@media(prefers-reduced-motion:reduce){#fish .swimmer .fish-sprite{transition:none}.pellet.meal{top:30%;animation:none;opacity:.8}}
+.fish-growth.fed{animation-delay:1.4s}
