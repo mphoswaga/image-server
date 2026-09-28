@@ -23,6 +23,8 @@ test('fish travel while names stay upright, pause holds position, and food reach
 });
 test('countdown survives pause and refresh, then timeout reveals and advances automatically',async({page})=>{
  await page.clock.install();await open(page,2);await page.locator('#questionSeconds').selectOption('20');await page.locator('#start').click();
+ await expect(page.locator('#boardBuild')).toHaveAttribute('data-build',/^[a-f0-9]{12}$/);
+ await expect(page.locator('#countdown')).toHaveCSS('border-top-width','2px');
  await expect(page.locator('#seconds')).toHaveText('20');await page.clock.fastForward(7000);
  await page.locator('#pause').click();await expect(page.locator('#seconds')).toHaveText('13');
  await page.clock.fastForward(40000);await expect(page.locator('#seconds')).toHaveText('13');

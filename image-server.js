@@ -300,6 +300,7 @@ app.use((req, res, next) => {
 // Runtime images (Unsplash/AI/materials) live on the persistent volume and are
 // served first; committed starter images fall through to public/. Both map the
 // same root-relative relpaths, so an image URL resolves from whichever has it.
+require('./fishquest-board-assets').registerFishBoardAssets(app);
 app.use(express.static(MEDIA_DIR));
 app.get('/fishquest-client.js', (req, res) => {
   res.set('Cache-Control', 'no-store, max-age=0');
