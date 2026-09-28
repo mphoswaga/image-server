@@ -45,7 +45,7 @@
     state.remainingMs=Math.max(0,(state.remainingMs??state.questionSeconds*1000)-elapsed);
     return state.remainingMs===0?answer(state,null,true):false;
   }
-  function next(state){if(state.paused||state.phase!=='reveal')return false;state.turn++;state.remainingMs=(state.questionSeconds||30)*1000;if(state.story)Story.afterTurn(state);else state.phase=state.turn>=state.rounds?'ended':'question';if(state.story&&state.phase==='question'&&state.turn%6===0)state.phase='swim_break';return true;}
+  function next(state){if(state.paused||state.phase!=='reveal')return false;if(Story.beforeNext(state))return true;state.turn++;state.remainingMs=(state.questionSeconds||30)*1000;if(state.story)Story.afterTurn(state);else state.phase=state.turn>=state.rounds?'ended':'question';if(state.story&&state.phase==='question'&&state.turn%6===0)state.phase='swim_break';return true;}
   function advance(state){if(state.paused)return false;if(state.phase==='swim_break'){state.phase='question';return true;}return Story.advance(state);}
-  return {create,answer:(state,choice)=>answer(state,choice),tick,next,upgrade,advance,choose:Story.choose};
+  return {create,answer:(state,choice)=>answer(state,choice),tick,next,upgrade,advance,choose:Story.choose,supply:Story.supply};
 });

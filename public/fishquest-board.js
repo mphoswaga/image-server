@@ -36,6 +36,8 @@ function shortNames(players){
  return labels.map((label,i)=>labels.filter(x=>x===label).length>1?label+' · '+(i+1):label);
 }
 function dangerArt(kind){
+ if(kind==='current')return FishBoardScenes.current();
+ if(kind==='rescue')return FishBoardScenes.rescue();
  if(kind==='shark')return '<svg class="shark-art" viewBox="0 0 700 280"><defs><linearGradient id="sharkPaint" x2="0" y2="1"><stop stop-color="#8faeba"/><stop offset="1" stop-color="#284c66"/></linearGradient></defs><path d="M180 146L40 47 72 146 36 244 188 170Q365 257 627 161L677 143 627 119Q559 81 465 83L372 16 354 91Q264 88 180 146Z" fill="url(#sharkPaint)" stroke="#153b50" stroke-width="5"/><path d="M227 175Q431 228 631 156Q433 192 227 175Z" fill="#d7e7df"/><path d="M400 170L338 253 477 186" fill="#3e6880"/><circle cx="596" cy="126" r="7" fill="#163041"/><path d="M584 158Q609 167 634 155M525 117L516 150M510 114L500 149M494 112L484 147" fill="none" stroke="#24475b" stroke-width="5"/></svg>';
  return '<svg class="boat-art" viewBox="0 0 650 200"><ellipse cx="325" cy="100" rx="295" ry="67" fill="#021929" opacity=".4"/><path d="M57 68Q316 4 595 74L546 150Q297 188 103 144Z" fill="#674b34" stroke="#302c29" stroke-width="7"/><path d="M118 72L135 139M211 47L225 157M319 38L322 162M425 47L420 158M524 64L501 146" stroke="#ba9970" stroke-width="6"/><path d="M278 36L279 149 386 149 388 40" fill="#344b50" stroke="#b7afa0" stroke-width="6"/></svg><div class="fishing-net"><span></span></div>';
 }
@@ -45,7 +47,55 @@ function warningSound(kind){
  [0,.45,.9].forEach((delay,i)=>{const o=context.createOscillator(),g=context.createGain(),at=context.currentTime+delay;o.type='sine';o.frequency.setValueAtTime(kind==='shark'?100+i*15:180-i*20,at);g.gain.setValueAtTime(.001,at);g.gain.linearRampToValueAtTime(.065,at+.08);g.gain.exponentialRampToValueAtTime(.001,at+.4);o.connect(g).connect(context.destination);o.start(at);o.stop(at+.42)});
  }catch{}
 }
+function renderAdventure(){
+ const phase=state.phase,e=FishBoardStory.current(state),isEvent=phase.startsWith('event_'),special=['intro','supply_choice','swim_break','ended'].includes(phase)||isEvent;
+ $('storyPanel').hidden=!special;$('storyPanel').dataset.chapter=phase==='ended'?'finale':phase;
+ document.querySelector('.question').classList.toggle('story-mode',special);
+ $('ocean').dataset.adventure='true';$('ocean').dataset.phase=phase;$('ocean').dataset.motion=e?.result?.motion||'';
+ $('ambient').innerHTML=FishBoardScenes.ambient(state);
+ $('danger').className=isEvent?e.kind+' '+phase:'';$('danger').innerHTML=isEvent?dangerArt(e.kind):'';
+ const route=['Nursery','Current','Shark','Rescue','Net','Living reef'],kinds=['current','shark','rescue','net'];
+ const active=phase==='ended'?5:e?kinds.indexOf(e.kind)+1:state.story.completed.length;
+ $('journey').hidden=false;$('journey').innerHTML=route.map((name,i)=>'<span class="journey-step '+(i===active?'here':i<active?'passed':'')+'">'+(i<active?'✓ ':i+1+' · ')+name+'</span>').join('<i>›</i>');
+ if(!special)return;
+ $('hero').hidden=['intro','swim_break','event_warning','ended'].includes(phase);
+ $('next').hidden=true;$('storyChoices').innerHTML='';$('storyContinue').hidden=phase!=='intro';$('storyContinue').disabled=state.paused;
+ $('food').innerHTML='';
+ if(phase==='intro'){
+  $('storyChapter').textContent='A FISHQUEST MARINE ADVENTURE';$('storyTitle').textContent='The reef is fading…';
+  $('storyText').innerHTML='<span class="intro-line first">Our nursery reef is running out of food and shelter. An old sea turtle has come to guide us.</span><span class="intro-line second">“Beyond the deep blue lies a living reef. Stay together, find food, and help one another.”</span><span class="intro-line third">Brave the current. Watch for shadows. Protect marine life. Every fish has a part to play.</span>';
+  $('storyContinue').textContent='Start swimming · Skip story';
+  $('storyPanel').style.setProperty('--intro-offset','-'+(20-(state.stageClock?.remainingMs??20000)/1000)+'s');
+ }else if(phase==='swim_break'){
+  $('storyChapter').textContent='THE EXPEDITION CONTINUES';$('storyTitle').textContent='Explore the blue together';
+  $('storyText').textContent='Watch your school swim. '+state.answers.filter(a=>a.correct).length+' challenges solved! Your next learner’s turn begins shortly.';
+ }else if(phase==='supply_choice'){
+  const p=state.players[state.turn%state.players.length];$('storyChapter').textContent='THREE CORRECT ANSWERS · A TEAM BONUS';$('storyTitle').textContent=p.name+', prepare your school';
+  $('storyText').textContent='Choose together: extra food and growth, energy for swimming, or a scout to discover the next safe passage.';
+  const supplies=[['feed','Feed the school','Gain 3 food and a little extra growth for every teammate.'],['energy','Build swimming energy','Gain 3 energy (maximum 12) for currents and escapes.'],['scout','Scout ahead',state.story.scouts[p.team]?'A scout is already ready. Another scout will replace that same clue.':'Discover a free safe passage through your next encounter.']];
+  $('storyChoices').innerHTML=supplies.map(([id,title,detail])=>'<button data-supply="'+id+'" '+(state.paused?'disabled':'')+'><b>'+title+'</b><span>'+detail+'</span></button>').join('');
+  $('storyChoices').querySelectorAll('button').forEach(b=>b.onclick=()=>{if(FishBoard.supply(state,b.dataset.supply)){persist();render()}});
+ }else if(phase==='ended'){
+  $('storyChapter').textContent='MISSION COMPLETE · EVERY FISH BELONGS';$('storyTitle').textContent='Welcome to the living reef!';
+  $('storyText').textContent='Every learner’s fish arrived safely. Together you solved '+state.answers.filter(a=>a.correct).length+' of '+state.answers.length+' challenges and travelled through all four encounters.';
+  $('storyChoices').innerHTML=FishBoardStory.awards(state).map(a=>'<div class="reef-award" style="--team:'+colors[a.team]+'"><b>'+esc(teamName(a.team))+'</b><span>'+[a.food?'Food champions':'',a.prepared?'Best-prepared school':'',a.guardian?'Reef Guardians':'', 'Expedition complete'].filter(Boolean).join(' · ')+'</span></div>').join('');
+ }else{
+  const copy={current:['THE CHANGING CURRENT','The ocean is pulling us sideways!','Seaweed bends and bubbles race past. Find a sheltered route or use your swimming energy.'],shark:['THE SHADOW BELOW','Something big is circling…','Smaller fish scatter. A shark is approaching. Your school needs a safe escape.'],rescue:['THE DRIFTING RUBBISH','A turtle needs a clear passage!','Loose litter is blocking the turtle’s route. Help marine life while keeping your school safe.'],net:['THE BOAT ABOVE','A fishing net is coming down!','Watch the boat’s shadow. Even the biggest fish need a safe route beneath the net.']}[e.kind];
+  $('storyChapter').textContent=copy[0]+(phase==='event_warning'?'':' · '+teamName(e.team));
+  $('storyTitle').textContent=phase==='event_warning'?copy[1]:phase==='event_result'?e.result.text:e.captain.name+', lead your school';
+  $('storyText').textContent=phase==='event_warning'?copy[2]:phase==='event_result'?(e.result.lost?e.result.lost+' food used. ':'All food protected. ')+(e.result.energy?e.result.energy+' energy used. ':'')+(e.result.gain?'Gained '+e.result.gain+' energy. ':'')+'Every fish continues the journey.':'Discuss together, then '+e.captain.name+' chooses for the team. '+state.food[e.team]+' food · '+state.story.energy[e.team]+' energy.'+(state.story.scouts[e.team]?' Your scout has found a free safe passage!':'');
+  if(phase==='event_choice'){
+   $('storyChoices').innerHTML=FishBoardStory.choices(state).map(o=>'<button data-choice="'+o.id+'" '+(!o.enabled||state.paused?'disabled':'')+'><b>'+esc(o.title)+'</b><span>'+esc(o.detail)+'</span></button>').join('');
+   $('storyChoices').querySelectorAll('button').forEach(b=>b.onclick=()=>{if(FishBoard.choose(state,b.dataset.choice)){persist();render()}});
+  }
+  if(e.result?.motion==='distract')$('food').innerHTML=Array.from({length:12},(_,i)=>'<i class="pellet" style="--x:'+(32+i*3)+'%;--delay:'+i*.1+'s"></i>').join('');
+  const cue=state.turn+':'+phase+':'+e.kind;if(!state.paused&&phase==='event_warning'&&lastCue!==cue){warningSound(e.kind);lastCue=cue}
+ }
+ if(state.paused)$('storyText').textContent='Paused — take your time to discuss. Press Resume when the class is ready.';
+}
 function renderStory(){
+ if(state.story?.version===2)return renderAdventure();
+ $('ocean').dataset.adventure='false';$('ambient').innerHTML='';$('storyPanel').dataset.chapter=state.phase;
  const e=FishBoardStory.current(state),phase=state.phase,isEvent=phase.startsWith('event_'),special=phase==='intro'||phase==='swim_break'||isEvent;
  $('storyPanel').hidden=!special;
  document.querySelector('.question').classList.toggle('story-mode',special);
@@ -128,24 +178,34 @@ function countdownBeep(){
 function updateClock(){
  const now=Date.now(),elapsed=Math.max(0,now-clockLast);clockLast=now;
  if(!state)return;
- if(FishBoard.tick(state,elapsed)){persist();render()}else showClock();
+ if(FishBoard.tick(state,elapsed)){persist();render()}else{
+  showClock();
+  if(!state.paused&&state.stageClock){
+   const clock=state.stageClock,before=Math.ceil(clock.remainingMs/1000);clock.remainingMs=Math.max(0,clock.remainingMs-elapsed);
+   if(clock.remainingMs===0){if(state.phase==='reveal')FishBoard.next(state);else FishBoard.advance(state);persist();render()}
+   else if(Math.ceil(clock.remainingMs/1000)!==before)persist();
+  }
+ }
 }
 setInterval(updateClock,100);
 function schedule(){
- clearTimeout(timer);if(!state||state.paused)return;
- const delay={reveal:6500,swim_break:7000,event_warning:7000,event_result:5500}[state.phase];
- if(delay)timer=setTimeout(()=>{if(state.phase==='reveal')FishBoard.next(state);else FishBoard.advance(state);persist();render()},delay);
+ clearTimeout(timer);
+ const delay={intro:state.story?.version===2?20000:0,reveal:6500,swim_break:7000,event_warning:state.story?.version===2?8500:7000,event_result:5500}[state.phase];
+ const event=FishBoardStory.current(state),key=[state.phase,state.turn,event?.kind,event?.team].join(':');
+ if(delay){if(state.stageClock?.key!==key)state.stageClock={key,remainingMs:delay}}else state.stageClock=null;
+ persist();
 }
+
 function render(){
  clearTimeout(timer);clockLast=Date.now();$('setup').hidden=true;$('play').hidden=false;document.body.classList.add('game-active');document.body.classList.toggle('paused',state.paused);
  const event=FishBoardStory.current(state),p=event?.captain||state.players[state.turn%state.players.length],q=state.questions[state.turn%state.questions.length],a=state.answers.at(-1);
- $('scores').innerHTML=state.food.map((f,t)=>'<div style="--team:'+colors[t]+'"><span>'+esc(teamName(t))+'</span><b>'+f+' <small>food</small></b><i style="width:'+Math.min(100,20+f*2)+'%"></i></div>').join('');
+ $('scores').innerHTML=state.food.map((f,t)=>'<div style="--team:'+colors[t]+'"><span>'+esc(teamName(t))+'</span><b>'+f+' <small>food</small></b>'+(state.story?.version===2?'<small class="team-energy">'+state.story.energy[t]+' / 12 energy'+(state.story.scouts[t]?' · Scout ready':'')+(state.story.guardians[t]?' · Guardian':'')+'</small>':'')+'<i style="width:'+Math.min(100,20+f*2)+'%"></i></div>').join('');
  $('fish').style.setProperty('--teams',state.teamCount);
  const displayNames=shortNames(state.players);
  $('ocean').dataset.region=state.phase==='ended'?'sanctuary':state.story?.completed.includes('shark')?'deep':'reef';
  $('fish').innerHTML=state.food.map((_,t)=>{
   const members=state.players.filter(s=>s.team===t),cols=Math.max(1,members.length>8?4:Math.min(3,members.length)),rows=Math.max(1,Math.ceil(members.length/cols));
-  return '<div class="reef '+(event?.team===t?'event-team':'')+'" data-team="'+t+'" style="--rows:'+rows+';--cols:'+cols+'"><span class="reef-flag" style="--team:'+colors[t]+'">'+esc(teamName(t))+'</span>'+members.map((s,i)=>'<div class="swimmer '+(s===p&&['question','reveal','event_choice','event_result'].includes(state.phase)?'active':'')+'" data-player-index="'+state.players.indexOf(s)+'" data-fed="'+(state.phase==='reveal'&&a?.correct&&s.team===p.team)+'" title="'+esc(s.name)+'" style="--team:'+colors[t]+';--delay:-'+(i%7)+'s;--speed:'+(5+i%5)+'s">'+fish(s,false)+'<span>'+esc(displayNames[state.players.indexOf(s)])+'</span></div>').join('')+'</div>';
+  return '<div class="reef '+(event?.team===t?'event-team':'')+'" data-team="'+t+'" style="--rows:'+rows+';--cols:'+cols+'"><span class="reef-flag" style="--team:'+colors[t]+'">'+esc(teamName(t))+'</span>'+members.map((s,i)=>'<div class="swimmer '+(s===p&&['question','reveal','supply_choice','event_choice','event_result'].includes(state.phase)?'active':'')+'" data-player-index="'+state.players.indexOf(s)+'" data-fed="'+(state.phase==='reveal'&&a?.correct&&s.team===p.team)+'" title="'+esc(s.name)+'" style="--team:'+colors[t]+';--delay:-'+(i%7)+'s;--speed:'+(5+i%5)+'s">'+fish(s,false)+'<span>'+esc(displayNames[state.players.indexOf(s)])+'</span></div>').join('')+'</div>';
  }).join('');
  $('hero').hidden=state.phase==='ended';
  $('hero').classList.toggle('celebrating',state.phase==='reveal'&&a?.correct);
@@ -187,7 +247,7 @@ async function load(){
   $('review').innerHTML=data.game.questions.map((q,i)=>'<p><b>'+esc(i+1)+'. '+esc(q.question)+'</b><br>'+esc(q.options[q.correctIndex])+'</p>').join('');
   $('bubbles').innerHTML=Array.from({length:22},(_,i)=>'<i style="left:'+((i*37)%100)+'%;--delay:-'+(i%11)+'s;--speed:'+(9+i%8)+'s"></i>').join('');
   setupRoster();
-  try{saved=JSON.parse(sessionStorage.getItem(storageKey));if(saved&&Array.isArray(saved.players)&&saved.players.length&&Array.isArray(saved.questions)&&saved.questions.length&&['intro','swim_break','question','reveal','event_warning','event_choice','event_result'].includes(saved.phase))$('restore').hidden=false;else saved=null}catch{}
+  try{saved=JSON.parse(sessionStorage.getItem(storageKey));if(saved&&Array.isArray(saved.players)&&saved.players.length&&Array.isArray(saved.questions)&&saved.questions.length&&['intro','supply_choice','swim_break','question','reveal','event_warning','event_choice','event_result'].includes(saved.phase))$('restore').hidden=false;else saved=null}catch{}
  }catch(e){$('error').textContent=e.message;$('start').disabled=true}
 }
 load();

@@ -2,7 +2,7 @@ const {test,expect}=require('@playwright/test');
 test('reef story, recoverable shark encounter and net reach sanctuary without duplicate costs',async({page},info)=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.clock.install();
  await page.route('**/api/game/story/fishquest/smartboard',r=>r.fulfill({json:{storageKey:'owner:story',classes:[{id:'r',name:'Grade 3'}],attendance:['Nguyễn Phương Anh','Lưu Hà Anh','Nguyễn Lương Hoàng Bách','Đỗ Minh Bảo'].map((name,i)=>({name,studentId:String(i),rosterId:'r'})),game:{questions:[{question:'What do output devices do?',options:['Store data','Send information to the user'],correctIndex:1}]}}}));
- await page.goto('/fishquest-board.html?game=story');await page.locator('#start').click();
+ await page.goto('/fishquest-board.html?game=story');await page.evaluate(()=>{FishBoardStory.start=FishBoardStory.startLegacy});await page.locator('#start').click();
  await expect(page.locator('#storyTitle')).toHaveText('A shadow is coming…');await page.locator('#storyContinue').click();
  for(let i=0;i<4;i++){await page.locator('[data-answer="1"]').click();await page.locator('#next').click();if(await page.locator('#storyChapter').textContent()==='EXPLORE TOGETHER')await page.clock.fastForward(7100)}
  await expect(page.locator('#danger')).toHaveClass(/event_warning/);

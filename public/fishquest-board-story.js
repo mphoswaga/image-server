@@ -1,4 +1,4 @@
-(function(root,factory){if(typeof module==='object'&&module.exports)module.exports=factory();else root.FishBoardStory=factory()})(this,()=>{
+(function(root,factory){if(typeof module==='object'&&module.exports)module.exports=factory(require('./fishquest-board-adventure'));else root.FishBoardStory=factory(root.FishBoardAdventure)})(this,(Adventure)=>{
   function start(state){
     state.rounds=Math.max(state.rounds,2*state.players.length);
     const rounds=state.rounds/state.players.length;
@@ -55,5 +55,5 @@
     state.story.completed.push(event.kind);state.story.event=null;
     state.phase=state.turn>=state.rounds?'ended':'question';return true;
   }
-  return {start,afterTurn,current,choices,choose,advance};
+  return {start:Adventure.start,startLegacy:start,afterTurn:s=>s.story?.version===2?Adventure.afterTurn(s):afterTurn(s),current:s=>s.story?.version===2?Adventure.current(s):current(s),choices:s=>s.story?.version===2?Adventure.choices(s):choices(s),choose:(s,id)=>s.story?.version===2?Adventure.choose(s,id):choose(s,id),advance:s=>s.story?.version===2?Adventure.advance(s):advance(s),beforeNext:s=>s.story?.version===2&&Adventure.beforeNext(s),supply:Adventure.supply,awards:Adventure.awards};
 });

@@ -64,7 +64,7 @@ test('old board sessions recover growth once and preserve their existing rewards
 });
 test('story waits for equal learner turns, handles both threats, and ends at the sanctuary',()=>{
  const Story=require('../public/fishquest-board-story');
- const s=create(students.slice(0,4),questions,2,1,true);
+ const s=require('../public/fishquest-board-story').startLegacy(create(students.slice(0,4),questions,2,1));
  assert.equal(s.rounds,8);assert.equal(s.phase,'intro');assert.equal(answer(s,0),false);
  const {advance,choose}=require('../public/fishquest-board-state');
  advance(s);
@@ -85,7 +85,7 @@ test('story waits for equal learner turns, handles both threats, and ends at the
 });
 test('threat choices reject unaffordable spending and protect a fully grown school',()=>{
  const {advance,choose}=require('../public/fishquest-board-state');
- const s=create(students.slice(0,2),questions,2,1,true);advance(s);
+ const s=require('../public/fishquest-board-story').startLegacy(create(students.slice(0,2),questions,2,1));advance(s);
  for(let i=0;i<2;i++){answer(s,1);next(s)}
  advance(s);assert.equal(choose(s,'distract'),false);assert.equal(s.phase,'event_choice');
  s.players.forEach(p=>p.mass=450);s.food[0]=20;assert.equal(choose(s,'stand'),true);
@@ -110,7 +110,7 @@ test('pause and saved question retain remaining time; old sessions default to th
 });
 
 test('exploration breaks pause safely and never interrupt shark or net milestones',()=>{
- const {advance}=require('../public/fishquest-board-state'),s=create(students,questions,2,1,true);advance(s);
+ const {advance}=require('../public/fishquest-board-state'),s=require('../public/fishquest-board-story').startLegacy(create(students,questions,2,1));advance(s);
  for(let i=0;i<6;i++){answer(s,0);next(s)}
  assert.equal(s.phase,'swim_break');assert.equal(answer(s,0),false);s.paused=true;assert.equal(advance(s),false);
  const restored=JSON.parse(JSON.stringify(s));restored.paused=false;assert.equal(advance(restored),true);assert.equal(restored.phase,'question');assert.equal(restored.turn,6);assert.equal(restored.remainingMs,30000);
