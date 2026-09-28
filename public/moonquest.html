@@ -9,9 +9,23 @@
 <body>
   <div class="sky" aria-hidden="true"><div class="moon"></div><div class="lantern l1"></div><div class="lantern l2"></div><div class="lantern l3"></div></div>
   <header><a href="/" class="brand">Lesson<span>Scope</span></a><span class="wordmark">☾ MOONQUEST <small id="version"></small></span><div class="tools"><button id="sound" aria-pressed="false">Sound off</button><button id="music" aria-pressed="false">Music off</button><button id="full">Full screen</button></div></header>
-  <details class="audio-settings"><summary>Audio levels</summary><label>Effects<input id="effects-level" type="range" min="0" max="100" value="60"></label><label>Music<input id="music-level" type="range" min="0" max="100" value="35"></label></details>
+  <details class="audio-settings"><summary>Audio levels</summary><label>Effects<input id="effects-level" type="range" min="0" max="100" value="60"></label><p class="music-caption">Moonlit garden · soft flute &amp; plucked strings</p><label>Music<input id="music-level" type="range" min="0" max="100" value="35"></label></details>
   <main id="app"><p>Preparing your Moon Festival adventure…</p></main>
   <p id="notice" role="status" aria-live="polite"></p>
-  <template id="mascot"><svg viewBox="0 0 180 180" role="img" aria-label="Pip, the friendly moon alien"><ellipse cx="90" cy="150" rx="65" ry="12" fill="#191e46"/><path d="M42 100Q18 130 28 142M138 100Q162 119 151 140" stroke="#8ce4cb" stroke-width="12" fill="none" stroke-linecap="round"/><path d="M62 125L58 149M118 125L124 149" stroke="#8ce4cb" stroke-width="16" stroke-linecap="round"/><path d="M90 36L96 20" stroke="#8ce4cb" stroke-width="6"/><circle cx="98" cy="17" r="8" fill="#ffd985"/><path d="M32 76Q26 32 90 35Q154 32 148 76L139 116Q90 156 41 116Z" fill="#8ce4cb"/><ellipse cx="65" cy="82" rx="17" ry="24" fill="#24294e"/><ellipse cx="115" cy="82" rx="17" ry="24" fill="#24294e"/><circle cx="70" cy="76" r="6" fill="white"/><circle cx="120" cy="76" r="6" fill="white"/><path d="M77 113Q90 123 104 112" fill="none" stroke="#24294e" stroke-width="5" stroke-linecap="round"/></svg></template>
+  <template id="mascot"><svg viewBox="0 0 240 260" role="img" aria-label="Jade rabbit carrying a glowing festival lantern">
+    <defs><radialGradient id="rabbit-moon"><stop stop-color="#fff5cf"/><stop offset="1" stop-color="#e8b957"/></radialGradient><linearGradient id="rabbit-coat" x2="1" y2="1"><stop stop-color="#fffdf0"/><stop offset="1" stop-color="#cde6d8"/></linearGradient></defs>
+    <circle cx="120" cy="113" r="100" fill="url(#rabbit-moon)"/><circle cx="120" cy="113" r="90" fill="none" stroke="#fff5ce" stroke-opacity=".7"/>
+    <path d="M20 157Q42 139 65 158T120 158M153 63Q176 46 199 64T233 65" fill="none" stroke="#fff6d9" stroke-width="8" stroke-linecap="round" opacity=".65"/>
+    <ellipse cx="123" cy="237" rx="69" ry="12" fill="#0f172b" opacity=".3"/>
+    <ellipse cx="126" cy="184" rx="48" ry="53" fill="url(#rabbit-coat)"/>
+    <ellipse cx="95" cy="66" rx="16" ry="51" transform="rotate(-15 95 66)" fill="#fffbed"/><ellipse cx="137" cy="61" rx="16" ry="50" transform="rotate(12 137 61)" fill="#fffbed"/>
+    <ellipse cx="95" cy="64" rx="7" ry="35" transform="rotate(-15 95 64)" fill="#eeb5ac"/><ellipse cx="137" cy="59" rx="7" ry="34" transform="rotate(12 137 59)" fill="#eeb5ac"/>
+    <ellipse cx="117" cy="123" rx="48" ry="43" fill="url(#rabbit-coat)"/><ellipse cx="99" cy="121" rx="5" ry="7" fill="#303047"/><ellipse cx="134" cy="121" rx="5" ry="7" fill="#303047"/>
+    <circle cx="85" cy="136" r="9" fill="#efb3a2" opacity=".6"/><circle cx="148" cy="136" r="9" fill="#efb3a2" opacity=".6"/><path d="M111 134L118 140L125 134M118 140Q110 151 104 142M118 140Q126 151 132 142" fill="none" stroke="#95666c" stroke-width="3" stroke-linecap="round"/>
+    <path d="M84 161Q118 175 151 159L146 177Q116 187 88 176Z" fill="#be3d52"/><circle cx="119" cy="174" r="7" fill="#f6d17c"/>
+    <ellipse cx="99" cy="229" rx="24" ry="12" fill="#fffbed"/><ellipse cx="151" cy="229" rx="24" ry="12" fill="#fffbed"/>
+    <path d="M151 179Q183 164 193 171" fill="none" stroke="#f9f8e8" stroke-width="15" stroke-linecap="round"/><path d="M194 165V187" stroke="#ffdd8c" stroke-width="3"/>
+    <rect x="173" y="184" width="43" height="46" rx="17" fill="#cf4856" stroke="#ffdb8a" stroke-width="3"/><path d="M185 186Q174 207 185 227M203 186Q214 207 203 227M194 184V229M181 183H207M181 231H207M194 232V249" fill="none" stroke="#ffd580" stroke-width="2"/>
+  </svg></template>
   <script src="/moonquest.js" defer></script>
 </body></html>

@@ -15,12 +15,36 @@
   const autoSuggestions = new Set();
   const queueEdits = {};
   let musicTimer, musicEnabled=false, musicStep=0;
-  const tones=[261.63,329.63,392,440,392,329.63,293.66,329.63,220,293.66,329.63,392,329.63,293.66,261.63,196];
+  // Original pentatonic instrumental: soft zither-like plucks and a breathy flute.
+  // No recordings, external streams, vocals or autoplay.
+  const melody=[74,0,77,79,81,0,79,77,74,0,72,69,72,0,74,0,77,79,84,0,81,79,77,0,74,72,69,0,72,74,0,0];
+  let musicBus;
+  const musicVoices=new Set();
+  function stopMusic(){clearInterval(musicTimer);for(const voice of musicVoices){try{voice.stop();}catch{}}musicVoices.clear();}
+  function instrument(note,flute=false){
+    const now=audio.currentTime, frequency=440*Math.pow(2,(note-69)/12), duration=flute?1.8:2.6;
+    const envelope=audio.createGain();envelope.connect(musicBus);
+    envelope.gain.setValueAtTime(0,now);envelope.gain.linearRampToValueAtTime(flute?.11:.15,now+(flute?.2:.012));envelope.gain.exponentialRampToValueAtTime(.0001,now+duration);
+    let remaining=3;
+    [1,2,3].forEach((harmonic,i)=>{const oscillator=audio.createOscillator(),gain=audio.createGain();
+      oscillator.type='sine';oscillator.frequency.setValueAtTime(frequency*harmonic,now);
+      gain.gain.value=(flute?[1,.12,.035]:[1,.32,.12])[i];oscillator.connect(gain);gain.connect(envelope);
+      musicVoices.add(oscillator);oscillator.onended=()=>{musicVoices.delete(oscillator);oscillator.disconnect();gain.disconnect();if(!--remaining)envelope.disconnect();};oscillator.start(now);oscillator.stop(now+duration);
+    });
+  }
   function musicNote(){
     if(!musicEnabled||document.hidden)return;
-    try{audio ||= new (window.AudioContext||window.webkitAudioContext)();audio.resume();const o=audio.createOscillator(),g=audio.createGain(),now=audio.currentTime,volume=Number(document.getElementById('music-level').value)/100;o.type='sine';o.frequency.value=tones[musicStep++%tones.length];g.gain.setValueAtTime(0,now);g.gain.linearRampToValueAtTime(volume*.09,now+.06);g.gain.exponentialRampToValueAtTime(.001,now+1.1);o.connect(g);g.connect(audio.destination);o.start();o.stop(now+1.2);}catch{}
+    try{audio ||= new (window.AudioContext||window.webkitAudioContext)();audio.resume();
+      if(!musicBus){musicBus=audio.createGain();musicBus.connect(audio.destination);}
+      musicBus.gain.setTargetAtTime(Number(document.getElementById('music-level').value)/100*.5,audio.currentTime,.05);
+      const step=musicStep++%melody.length;if(melody[step])instrument(melody[step],true);
+      if(step%2===0)instrument([50,57,62,57,53,60,65,60][Math.floor(step/2)%8]);
+    }catch{}
   }
-  document.getElementById('music').onclick=()=>{musicEnabled=!musicEnabled;const b=document.getElementById('music');b.textContent=musicEnabled?'Music on':'Music off';b.setAttribute('aria-pressed',String(musicEnabled));clearInterval(musicTimer);if(musicEnabled){musicNote();musicTimer=setInterval(musicNote,560);}};
+  document.getElementById('music-level').oninput=()=>{if(musicBus)musicBus.gain.setTargetAtTime(Number(document.getElementById('music-level').value)/100*.5,audio.currentTime,.05);};
+  document.getElementById('music').onclick=()=>{musicEnabled=!musicEnabled;const b=document.getElementById('music');b.textContent=musicEnabled?'Music on':'Music off';b.setAttribute('aria-pressed',String(musicEnabled));stopMusic();if(musicEnabled){musicNote();musicTimer=setInterval(musicNote,850);}};
+  document.addEventListener('visibilitychange',()=>{stopMusic();if(musicEnabled&&!document.hidden){musicNote();musicTimer=setInterval(musicNote,850);}});
+  window.addEventListener('pagehide',stopMusic);
   function tell(message, error = false) { clearTimeout(noticeTimer); notice.textContent = message; notice.classList.toggle('error', error); noticeTimer = setTimeout(() => { notice.textContent = ''; }, error ? 15000 : 6500); }
   async function api(url, data, opts = {}) {
     const response = await fetch(base + url, { method: data === undefined ? 'GET' : 'POST', credentials: 'same-origin', headers: { ...(data instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...(learnerToken ? { Authorization: 'Bearer ' + learnerToken } : {}) }, ...(data === undefined ? {} : { body: data instanceof FormData ? data : JSON.stringify(data) }), signal: AbortSignal.timeout(opts.timeout || 12000) });
