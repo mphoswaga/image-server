@@ -78,12 +78,12 @@
       <section class="panel"><h2>1. Make your diagram clickable</h2><p class="muted">Upload a clear PNG, JPEG or WebP (up to 8 MB). Give each area a label, then draw it. Areas and labels should identify locations, without giving away the answer.</p>
       <div class="row"><label class="button">＋ Add diagram<input id="upload" type="file" accept="image/png,image/jpeg,image/webp" hidden></label>${draft.diagrams.length?`<label>Current diagram<select id="diagram-select">${draft.diagrams.map((x,i)=>`<option value="${i}" ${i===activeDiagram?'selected':''}>${esc(x.title)}</option>`).join('')}</select></label>`:''}</div>
       <p id="upload-status" role="status" aria-live="polite"></p><img id="upload-preview" alt="Selected diagram preview — uploading" hidden style="max-width:280px;max-height:280px;border-radius:12px">
-      ${d?`<div class="editor" style="margin-top:20px"><div>${diagramHtml(d,null,[],true)}<p class="muted">Rectangles and ellipses: tap two opposite corners. Polygon: tap each corner, then Finish area.</p></div><div class="stack"><label>Area label<input id="region-label" placeholder="e.g. Eyes" maxlength="100" value="${esc(selectedRegion?.label||'')}"></label>${bounds?`<div class="grid">${['x','y','w','h'].map(k=>`<label>${{x:'Left',y:'Top',w:'Width',h:'Height'}[k]} %<input id="region-${k}" type="number" min="0" max="100" step="0.1" value="${(bounds[k]*100).toFixed(1)}"></label>`).join('')}</div><div class="row">${button('Apply area changes','update-region','primary')}${button('New area','new-area')}</div><p class="muted">Or redraw this area below. Its linked answers will be preserved.</p>`:''}<label>Shape<select id="shape"><option value="rectangle">Rectangle</option><option value="ellipse">Ellipse</option><option value="polygon">Custom outline</option></select></label><div class="row">${button('Finish area','finish-area','primary')}${button('Undo corner','undo-corner')}</div><div>${d.regions.map(r=>`<div class="row spread" style="margin-bottom:8px"><span>${esc(r.label)}</span><div class="row"><button class="small" data-edit-region="${esc(r.id)}">Edit</button><button class="small danger" data-delete-region="${esc(r.id)}">Remove</button></div></div>`).join('')}</div><p class="muted">Avoid overlapping areas. Learners can also use the labelled answer buttons below the diagram.</p></div></div>`:''}</section>
+      ${d?`<div class="editor" style="margin-top:20px"><div>${diagramHtml(d,regionEditing,[],true)}<p class="muted">Drag to draw a rectangle. Drag an existing area to move it; drag its corner handles to resize. Ellipses use two taps; custom outlines use corners.</p></div><div class="stack"><label>Area label<input id="region-label" placeholder="e.g. Eyes" maxlength="100" value="${esc(selectedRegion?.label||'')}"></label>${bounds?`<div class="grid">${['x','y','w','h'].map(k=>`<label>${{x:'Left',y:'Top',w:'Width',h:'Height'}[k]} %<input id="region-${k}" type="number" min="0" max="100" step="0.1" value="${(bounds[k]*100).toFixed(1)}"></label>`).join('')}</div><div class="row">${button('Apply area changes','update-region','primary')}${button('New area','new-area')}</div><p class="muted">Drag this area or its corner handles on the picture. Its linked answers are preserved.</p>`:''}<label>Shape<select id="shape"><option value="rectangle">Rectangle</option><option value="ellipse">Ellipse</option><option value="polygon">Custom outline</option></select></label><div class="row">${button('Finish area','finish-area','primary')}${button('Undo corner','undo-corner')}</div><div>${d.regions.map(r=>`<div class="row spread" style="margin-bottom:8px"><span>${esc(r.label)}</span><div class="row"><button class="small" data-edit-region="${esc(r.id)}">Edit</button><button class="small danger" data-delete-region="${esc(r.id)}">Remove</button></div></div>`).join('')}</div><p class="muted">Avoid overlapping areas. Learners can also use the labelled answer buttons below the diagram.</p></div></div>`:''}</section>
       <section class="panel"><h2>2. Prepare the challenges</h2><p class="muted">Give each question a clear objective and explanation. Choose whether one of the ticked areas is enough, or learners must select all of them. The instruction is shown on every learner screen.</p><label>Objective for AI suggestions<textarea id="objective" placeholder="e.g. Identify the sense used to receive information from a device."></textarea></label><div class="row" style="margin:15px 0">${button('＋ Write a question','add-question')}${button('AI draft 5 questions · '+(library?.generationCost||0)+' credits','draft-ai')}</div><p class="muted">AI drafts need your review. During play, up to two AI attempts per flagged question are included.</p>
       <div id="questions">${draft.questions.map((q,i)=>`<article class="question-card" data-question="${q.id}"><div class="row spread"><h3>Challenge ${i+1} · ${esc(draft.diagrams.find(d=>d.id===q.diagramId)?.title)}</h3><button data-delete-question="${q.id}" class="small danger">Remove</button></div><div class="stack"><label>Question<textarea data-field="prompt" maxlength="600">${esc(q.prompt)}</textarea></label><label>Learning objective<input data-field="concept" maxlength="300" value="${esc(q.concept)}"></label><label>How many areas should learners select?<select data-field="answerMode"><option value="one" ${q.answerMode!=='all'?'selected':''}>ONE area — any ticked answer is acceptable</option><option value="all" ${q.answerMode==='all'?'selected':''}>ALL ticked areas — the complete set is required</option></select></label><div><span class="muted">Correct areas</span><div class="row">${(draft.diagrams.find(d=>d.id===q.diagramId)?.regions||[]).map(r=>`<label><input type="checkbox" data-accepted value="${esc(r.id)}" ${q.accepted.includes(r.id)?'checked':''}> ${esc(r.label)}</label>`).join('')}</div></div><label>Explanation after reveal<textarea data-field="explanation" maxlength="800">${esc(q.explanation)}</textarea></label></div></article>`).join('')}</div></section>
       <section class="panel"><h2>3. Set the pace</h2><label><input id="automatic" type="checkbox" ${draft.timing.automatic!==false?'checked':''}> Automatic classroom flow (recommended)</label><p>One 35-second timer to choose, discuss and, if needed, change an answer. You decide when partner talk begins. A short answer reveal follows without another countdown. More than 30% incorrect triggers a class meeting; continue when the discussion is finished.</p><details><summary>Timing preferences for teacher-paced play</summary><div class="grid">${['choose','discuss','reconsider'].map(k=>`<label>${{choose:'First choice',discuss:'Partner discussion',reconsider:'Reconsider'}[k]} · seconds<input id="time-${k}" type="number" min="5" max="${k==='choose'?180:k==='discuss'?120:60}" value="${draft.timing[k]}"></label>`).join('')}</div></details><p class="muted">Answers lock when saved. Learners confirm before changing them. Initial choices and final answers remain separate in the report.</p><label><input id="reviewed" type="checkbox" ${draft.reviewed?'checked':''}> I have checked the diagrams, questions, accepted answers and explanations.</label><div class="row" style="margin-top:18px">${button('Save adventure','save','primary')}</div></section>`;
     document.getElementById('upload').onchange = uploadDiagram;
-    if(d){document.getElementById('diagram-select').onchange=e=>{captureEditor();activeDiagram=Number(e.target.value);regionEditing=null;editor();};document.querySelector('#diagram svg').addEventListener('pointerdown',drawPoint);}
+    if(d){document.getElementById('diagram-select').onchange=e=>{captureEditor();activeDiagram=Number(e.target.value);regionEditing=null;editor();};wireDiagramEditor();}
   }
   async function uploadDiagram(e) {
     const input=e.target,file=input.files?.[0];
@@ -115,6 +115,47 @@
       uploadingDiagram=false;input.disabled=false;input.value='';if(previewUrl)URL.revokeObjectURL(previewUrl);
     }
   }
+  function wireDiagramEditor() {
+    const svg=document.querySelector('#diagram svg'),regions=draft.diagrams[activeDiagram].regions;
+    const clamp=n=>Math.max(0,Math.min(1,n));
+    const point=e=>{const b=svg.getBoundingClientRect();return [clamp((e.clientX-b.left)/b.width),clamp((e.clientY-b.top)/b.height)];};
+    const polygon=r=>Array.from(svg.querySelectorAll('[data-region]')).find(el=>el.dataset.region===r.id);
+    function handles(){
+      svg.querySelector('[data-handles]')?.remove();const r=regions.find(r=>r.id===regionEditing);if(!r)return;
+      const b=regionBounds(r),ns='http://www.w3.org/2000/svg',g=document.createElementNS(ns,'g');g.setAttribute('data-handles','');
+      const box=svg.getBoundingClientRect(),w=18/Math.max(1,box.width),h=18/Math.max(1,box.height);
+      for(const [key,x,y] of [['nw',b.x,b.y],['ne',b.x+b.w,b.y],['sw',b.x,b.y+b.h],['se',b.x+b.w,b.y+b.h]]){const el=document.createElementNS(ns,'rect');for(const [k,v] of Object.entries({x:x-w/2,y:y-h/2,width:w,height:h,'data-resize':key,fill:'#fff',stroke:'#147d69','stroke-width':.003}))el.setAttribute(k,v);el.style.cursor=key==='nw'||key==='se'?'nwse-resize':'nesw-resize';g.append(el);}svg.append(g);
+    }
+    handles();svg.style.touchAction='none';
+    svg.addEventListener('pointerdown',e=>{
+      if(e.button!==0)return;
+      const handle=e.target.closest('[data-resize]'),hit=e.target.closest('[data-region]');
+      let r=regions.find(r=>r.id===(hit?.dataset.region||regionEditing));
+      if(!hit&&!handle&&document.getElementById('shape').value!=='rectangle'){drawPoint(e);return;}
+      captureEditor();e.preventDefault();const start=point(e),original=r?.points.map(p=>p.slice()),old=r&&regionBounds(r),creating=!hit&&!handle;
+      if(creating){r=null;drawn=[];regionEditing=null;}else{regionEditing=r.id;document.getElementById('region-label').value=r.label;handles();}
+      svg.setPointerCapture(e.pointerId);let moved=false;
+      const move=event=>{
+        const [x,y]=point(event),dx=x-start[0],dy=y-start[1];if(Math.abs(dx)+Math.abs(dy)>.005)moved=true;
+        if(creating){drawn=[[start[0],start[1]],[x,start[1]],[x,y],[start[0],y]];svg.querySelector('#drawing').setAttribute('points',drawn.map(p=>p.join(',')).join(' '));return;}
+        let b={...old};
+        if(handle){const key=handle.dataset.resize,right=old.x+old.w,bottom=old.y+old.h;
+          if(key.includes('w')){b.x=Math.min(x,right-.01);b.w=right-b.x;}else b.w=Math.max(.01,x-old.x);
+          if(key.includes('n')){b.y=Math.min(y,bottom-.01);b.h=bottom-b.y;}else b.h=Math.max(.01,y-old.y);
+        }else{b.x=Math.max(0,Math.min(1-old.w,old.x+dx));b.y=Math.max(0,Math.min(1-old.h,old.y+dy));}
+        r.points=original.map(([px,py])=>[clamp(b.x+(px-old.x)/Math.max(.00001,old.w)*b.w),clamp(b.y+(py-old.y)/Math.max(.00001,old.h)*b.h)]);
+        polygon(r).setAttribute('points',r.points.map(p=>p.join(',')).join(' '));handles();
+      };
+      const end=event=>{
+        svg.removeEventListener('pointermove',move);svg.removeEventListener('pointerup',end);svg.removeEventListener('pointercancel',end);
+        if(svg.hasPointerCapture(e.pointerId))svg.releasePointerCapture(e.pointerId);
+        if(event.type==='pointercancel'){if(r)r.points=original;editor();return;}
+        if(creating){if(!moved){drawn=[];return;}const b=regionBounds({points:drawn});if(b.w<.01||b.h<.01){drawn=[];svg.querySelector('#drawing').setAttribute('points','');tell('Draw a slightly larger rectangle.',true);return;}finishArea();}
+        else{if(moved){draft.reviewed=false;dirty=true;}editor();}
+      };
+      svg.addEventListener('pointermove',move);svg.addEventListener('pointerup',end);svg.addEventListener('pointercancel',end);
+    });
+  }
   function drawPoint(e) {
     if(view!=='editor')return;
     const svg=e.currentTarget, rect=svg.getBoundingClientRect();
@@ -131,7 +172,7 @@
     if(drawn.length<3){tell('Place the corners of an area first.',true);return;}
     captureEditor();const regions=draft.diagrams[activeDiagram].regions,existing=regions.find(r=>r.id===regionEditing);
     if(existing){existing.label=label;existing.points=drawn;}else regions.push({id:uid(),label,points:drawn});
-    regionEditing=null;draft.reviewed=false;dirty=true;editor();
+    regionEditing=existing?.id||regions[regions.length-1].id;draft.reviewed=false;dirty=true;editor();
   }
   function regionBounds(r){const xs=r.points.map(p=>p[0]),ys=r.points.map(p=>p[1]);const x=Math.min(...xs),y=Math.min(...ys);return{x,y,w:Math.max(...xs)-x,h:Math.max(...ys)-y};}
   function updateRegion(){
