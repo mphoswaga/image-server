@@ -58,7 +58,12 @@ function installMoonQuest(app, deps) {
     sessions: store.list('session', req.userId).sort((a,b) => b.createdAt-a.createdAt).slice(0, 50).map(s => ({ id: s.id, gameId: s.game.id, rosterId: s.rosterId, code: s.code, title: s.game.title, className: s.className, test: s.test, phase: s.phase })),
     rosters: roster.listRosters(req.userId), generationCost: costOf(req, 'lessonscope.generate_game'),
   })));
-  app.post(base + '/assets', teacher, uploadLimiter, upload.single('file'), wrap(async (req, res) => {
+  app.post(base + '/assets', teacher, uploadLimiter, (req, res, next) => {
+    upload.single('file')(req, res, err => {
+      if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'This image is larger than 8 MB. Choose a smaller PNG, JPEG or WebP image.' : 'The image upload was interrupted. Choose the image again.' });
+      next();
+    });
+  }, wrap(async (req, res) => {
     if (!req.file) throw new Error('Choose a PNG, JPEG or WebP diagram.');
     const decoder = sharp(req.file.buffer, { limitInputPixels: 20000000, animated: false });
     const meta = await decoder.metadata();

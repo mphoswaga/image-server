@@ -54,6 +54,7 @@
     /* picker */
     .game-cards { display:grid; gap:12px; }
     .game-pick { text-align:left; display:flex; align-items:center; gap:14px; padding:16px; border:1.5px solid var(--border); border-radius:16px; background:#fff; cursor:pointer; font-family:inherit; transition:.12s; }
+    .game-pick[hidden] { display:none; }
     .game-pick:hover { border-color:var(--primary-2); background:#fbfcfe; transform:translateY(-1px); box-shadow:var(--sh); }
     .game-pick .gi { font-size:30px; flex:none; }
     .game-pick b { display:block; font-size:16px; color:var(--primary); }
@@ -190,6 +191,7 @@
         <button class="game-pick" data-game="target"><span class="gi">🎯</span><span><b>Target Shot</b><span>Read the question. Fire when the target reaches your answer.</span></span></button>
         <button class="game-pick" data-game="fishquest"><span class="gi">🐠</span><span><b>FishQuest</b><span>Eat plankton, answer questions, and grow into a big fish.</span></span></button>
         <button class="game-pick" id="colonyQuestPick" data-game="colonyquest" hidden><span class="gi">🐜</span><span><b>ColonyQuest</b><span>Answer as a team and grow the strongest ant colony.</span></span></button>
+        <button class="game-pick" id="moonQuestPick" data-game="moonquest" hidden><span class="gi">🌙</span><span><b>MoonQuest</b><span>Choose or create a diagram mission. Learners select answer areas and discuss their choices.</span></span></button>
       </div>
     </div>
 
@@ -387,8 +389,10 @@
       if(!r.ok){ const d=await r.json().catch(()=>({})); $('loading').innerHTML='<p class="center">'+esc(d.error||'Game not found.')+'</p>'; show('loading'); return; }
       game=await r.json();
       $('colonyQuestPick').hidden=!game.canManageColonyQuest;
+      $('moonQuestPick').hidden=!game.canManageColonyQuest;
       if(game.canManageColonyQuest){
-        const notice=document.createElement('p');notice.className='center sub';notice.textContent=teacherTest?'Teacher test — scores are not saved to learner records.':'Teacher preview — individual arcade scores are not saved. Choose ColonyQuest or FishQuest to open classroom setup.';document.body.prepend(notice);
+        document.querySelector('#pickerScreen > .sub').textContent='Choose a game for your lesson. MoonQuest uses your own diagram and labelled answer areas.';
+        const notice=document.createElement('p');notice.className='center sub';notice.textContent=teacherTest?'Teacher test — scores are not saved to learner records.':'Teacher preview — individual arcade scores are not saved. Choose FishQuest, ColonyQuest or MoonQuest to open classroom setup.';document.body.prepend(notice);
         document.querySelector('#resultScreen p.center.sub').textContent='Teacher test complete. No learner results were saved.';
       }
       setAuthLabels(!!game.hasRoster);
@@ -447,6 +451,7 @@
     function loop(t){ if(!active) return; let dt=(t-lastT)/1000; lastT=t; if(dt>0.05) dt=0.05; active.update(dt); active.render(); raf=requestAnimationFrame(loop); }
     async function pickGame(key){
       if(key==='fishquest'){ location.href=game.canManageColonyQuest&&!teacherTest?'/fishquest/'+GAME_ID:'/fishquest-play/'+GAME_ID+(game.canManageColonyQuest&&teacherTest?'?test=1':''); return; }
+      if(key==='moonquest'){ if(game.canManageColonyQuest)location.href='/moonquest';return; }
       if(key==='colonyquest'){ location.href='/colonyquest/'+GAME_ID+(teacherTest?'?test=1':''); return; }
       show('loading');
       const r=await fetch('/api/game/'+GAME_ID+'/play'); const d=await r.json();

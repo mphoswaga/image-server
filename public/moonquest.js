@@ -9,6 +9,7 @@
   const button = (label, action, cls = '') => `<button class="${cls}" data-action="${action}">${label}</button>`;
   let library, draft, activeDiagram = 0, drawn = [], drawing = false, regionEditing = null, view = 'library', sessionId, role = 'teacher', state, lastRender = '', pollTimer, clockOffset = 0;
   let learnerToken = '', room, busyAnswer = false, polling = false, dirty = false, noticeTimer, soundEnabled = false, audio;
+  let uploadingDiagram=false;
   let presenterAvailable=false, changingAnswer=false, pendingChoices=[], answerRound=-1;
   const selectedIds = value => value == null ? [] : Array.isArray(value) ? value : [value];
   const autoSuggestions = new Set();
@@ -76,12 +77,43 @@
       <section class="panel grid"><label>Game title<input id="mq-title" maxlength="120" value="${esc(draft.title)}"></label><div class="grid"><label>Subject<input id="mq-subject" value="${esc(draft.subject)}"></label><label>Learner level<input id="mq-grade" value="${esc(draft.grade)}"></label></div></section>
       <section class="panel"><h2>1. Make your diagram clickable</h2><p class="muted">Upload a clear PNG, JPEG or WebP (up to 8 MB). Give each area a label, then draw it. Areas and labels should identify locations, without giving away the answer.</p>
       <div class="row"><label class="button">＋ Add diagram<input id="upload" type="file" accept="image/png,image/jpeg,image/webp" hidden></label>${draft.diagrams.length?`<label>Current diagram<select id="diagram-select">${draft.diagrams.map((x,i)=>`<option value="${i}" ${i===activeDiagram?'selected':''}>${esc(x.title)}</option>`).join('')}</select></label>`:''}</div>
+      <p id="upload-status" role="status" aria-live="polite"></p><img id="upload-preview" alt="Selected diagram preview — uploading" hidden style="max-width:280px;max-height:280px;border-radius:12px">
       ${d?`<div class="editor" style="margin-top:20px"><div>${diagramHtml(d,null,[],true)}<p class="muted">Rectangles and ellipses: tap two opposite corners. Polygon: tap each corner, then Finish area.</p></div><div class="stack"><label>Area label<input id="region-label" placeholder="e.g. Eyes" maxlength="100" value="${esc(selectedRegion?.label||'')}"></label>${bounds?`<div class="grid">${['x','y','w','h'].map(k=>`<label>${{x:'Left',y:'Top',w:'Width',h:'Height'}[k]} %<input id="region-${k}" type="number" min="0" max="100" step="0.1" value="${(bounds[k]*100).toFixed(1)}"></label>`).join('')}</div><div class="row">${button('Apply area changes','update-region','primary')}${button('New area','new-area')}</div><p class="muted">Or redraw this area below. Its linked answers will be preserved.</p>`:''}<label>Shape<select id="shape"><option value="rectangle">Rectangle</option><option value="ellipse">Ellipse</option><option value="polygon">Custom outline</option></select></label><div class="row">${button('Finish area','finish-area','primary')}${button('Undo corner','undo-corner')}</div><div>${d.regions.map(r=>`<div class="row spread" style="margin-bottom:8px"><span>${esc(r.label)}</span><div class="row"><button class="small" data-edit-region="${esc(r.id)}">Edit</button><button class="small danger" data-delete-region="${esc(r.id)}">Remove</button></div></div>`).join('')}</div><p class="muted">Avoid overlapping areas. Learners can also use the labelled answer buttons below the diagram.</p></div></div>`:''}</section>
       <section class="panel"><h2>2. Prepare the challenges</h2><p class="muted">Give each question a clear objective and explanation. Choose whether one of the ticked areas is enough, or learners must select all of them. The instruction is shown on every learner screen.</p><label>Objective for AI suggestions<textarea id="objective" placeholder="e.g. Identify the sense used to receive information from a device."></textarea></label><div class="row" style="margin:15px 0">${button('＋ Write a question','add-question')}${button('AI draft 5 questions · '+(library?.generationCost||0)+' credits','draft-ai')}</div><p class="muted">AI drafts need your review. During play, up to two AI attempts per flagged question are included.</p>
       <div id="questions">${draft.questions.map((q,i)=>`<article class="question-card" data-question="${q.id}"><div class="row spread"><h3>Challenge ${i+1} · ${esc(draft.diagrams.find(d=>d.id===q.diagramId)?.title)}</h3><button data-delete-question="${q.id}" class="small danger">Remove</button></div><div class="stack"><label>Question<textarea data-field="prompt" maxlength="600">${esc(q.prompt)}</textarea></label><label>Learning objective<input data-field="concept" maxlength="300" value="${esc(q.concept)}"></label><label>How many areas should learners select?<select data-field="answerMode"><option value="one" ${q.answerMode!=='all'?'selected':''}>ONE area — any ticked answer is acceptable</option><option value="all" ${q.answerMode==='all'?'selected':''}>ALL ticked areas — the complete set is required</option></select></label><div><span class="muted">Correct areas</span><div class="row">${(draft.diagrams.find(d=>d.id===q.diagramId)?.regions||[]).map(r=>`<label><input type="checkbox" data-accepted value="${esc(r.id)}" ${q.accepted.includes(r.id)?'checked':''}> ${esc(r.label)}</label>`).join('')}</div></div><label>Explanation after reveal<textarea data-field="explanation" maxlength="800">${esc(q.explanation)}</textarea></label></div></article>`).join('')}</div></section>
       <section class="panel"><h2>3. Set the pace</h2><label><input id="automatic" type="checkbox" ${draft.timing.automatic!==false?'checked':''}> Automatic classroom flow (recommended)</label><p>One 35-second timer to choose, discuss and, if needed, change an answer. You decide when partner talk begins. A short answer reveal follows without another countdown. More than 30% incorrect triggers a class meeting; continue when the discussion is finished.</p><details><summary>Timing preferences for teacher-paced play</summary><div class="grid">${['choose','discuss','reconsider'].map(k=>`<label>${{choose:'First choice',discuss:'Partner discussion',reconsider:'Reconsider'}[k]} · seconds<input id="time-${k}" type="number" min="5" max="${k==='choose'?180:k==='discuss'?120:60}" value="${draft.timing[k]}"></label>`).join('')}</div></details><p class="muted">Answers lock when saved. Learners confirm before changing them. Initial choices and final answers remain separate in the report.</p><label><input id="reviewed" type="checkbox" ${draft.reviewed?'checked':''}> I have checked the diagrams, questions, accepted answers and explanations.</label><div class="row" style="margin-top:18px">${button('Save adventure','save','primary')}</div></section>`;
-    document.getElementById('upload').onchange = async e => { const file=e.target.files[0];if(!file)return;captureEditor();try{ const form=new FormData();form.append('file',file);const a=await api('/assets',form);draft.diagrams.push({id:uid(),title:file.name.replace(/\.[^.]+$/,''),asset:a.asset,regions:[]});activeDiagram=draft.diagrams.length-1;dirty=true;draft.reviewed=false;editor(); }catch(err){tell(err.message,true);} };
+    document.getElementById('upload').onchange = uploadDiagram;
     if(d){document.getElementById('diagram-select').onchange=e=>{captureEditor();activeDiagram=Number(e.target.value);regionEditing=null;editor();};document.querySelector('#diagram svg').addEventListener('pointerdown',drawPoint);}
+  }
+  async function uploadDiagram(e) {
+    const input=e.target,file=input.files?.[0];
+    if(!file||uploadingDiagram)return;
+    const status=document.getElementById('upload-status'),preview=document.getElementById('upload-preview');
+    const targetDraft=draft;let previewUrl;
+    const show=(message,error=false)=>{status.textContent=message;status.classList.toggle('error',error);};
+    try {
+      if(file.size>8*1024*1024)throw Error('This image is larger than 8 MB. Choose a smaller PNG, JPEG or WebP image.');
+      if(!/\.(png|jpe?g|webp)$/i.test(file.name)&&!['image/png','image/jpeg','image/webp'].includes(file.type))throw Error('Choose a PNG, JPEG or WebP image.');
+      captureEditor();uploadingDiagram=true;input.disabled=true;
+      show('Uploading '+file.name+'… Please wait. Your lesson details are kept.');
+      previewUrl=URL.createObjectURL(file);preview.src=previewUrl;preview.hidden=false;
+      const form=new FormData();form.append('file',file);
+      const a=await api('/assets',form,{timeout:60000});
+      if(!a.asset)throw Error('The image was not saved. Please choose it again.');
+      show('Upload received. Loading your diagram…');
+      const image=new Image();image.src=imageUrl(a.asset);
+      let imageTimer;
+      try{await Promise.race([image.decode(),new Promise((_,reject)=>{imageTimer=setTimeout(()=>reject(Error('The diagram could not load. Please try again.')),15000);})]);}finally{clearTimeout(imageTimer);}
+      if(view!=='editor'||draft!==targetDraft)return;
+      captureEditor();draft.diagrams.push({id:uid(),title:file.name.replace(/\.[^.]+$/,''),asset:a.asset,regions:[]});activeDiagram=draft.diagrams.length-1;dirty=true;draft.reviewed=false;editor();
+      document.getElementById('upload-status').textContent='Diagram added. Enter an area label, then mark that area on the picture.';
+      document.getElementById('diagram').scrollIntoView({block:'center',behavior:'smooth'});
+    } catch(err) {
+      const message=['TimeoutError','AbortError'].includes(err.name)?'The upload took too long. Check your connection and choose the image again. Your lesson details are still here.':err.message||'The diagram could not upload. Please try again.';
+      show(message,true);preview.hidden=true;tell(message,true);
+    } finally {
+      uploadingDiagram=false;input.disabled=false;input.value='';if(previewUrl)URL.revokeObjectURL(previewUrl);
+    }
   }
   function drawPoint(e) {
     if(view!=='editor')return;
@@ -305,6 +337,7 @@
   });
   root.addEventListener('click',async e=>{
     const b=e.target.closest('button');if(!b||b.disabled)return;
+    if(uploadingDiagram){tell('Please wait for your diagram to finish uploading.');return;}
     const action=b.dataset.action; b.disabled=true;
     try{
       if(action==='copy-learner-link'){const input=document.getElementById('learner-link');try{await navigator.clipboard.writeText(input.value);tell('Link copied. You can send it to your learners.');}catch{input.focus();input.select();tell('Select Copy to copy the highlighted link.');}}
