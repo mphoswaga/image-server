@@ -30,7 +30,7 @@ class FishMatch {
         cooldownUntil:0,respawnAt:0,lock:null,attempts:[],presented:[],collections:0,swallows:0};
       this.state.players.push(p); this.spawn(p);
     }
-    p.connected=true;p.rosterId=identity.rosterId||p.rosterId||null;p.dx=0;p.dy=0;p.seq=-1;this.save();this.log('join',{playerId:p.id});return p;
+    p.removed=false;p.connected=true;p.rosterId=identity.rosterId||p.rosterId||null;p.dx=0;p.dy=0;p.seq=-1;this.save();this.log('join',{playerId:p.id});return p;
   }
   addNpcs(){
     if(this.state.players.some(p=>p.npc))return;
@@ -171,7 +171,7 @@ class FishMatch {
   }
   snapshot(id,teacher=false,shared=null){
     const t=this.now(),me=this.player(id);
-    const players=shared ? shared.players : this.state.players.map(p=>({id:p.id,name:p.name,variant:p.variant,npc:!!p.npc,x:Math.round(p.x),y:Math.round(p.y),mass:Math.round(p.mass),score:p.score,connected:p.connected,
+    const players=shared ? shared.players : this.state.players.filter(p=>!p.removed).map(p=>({id:p.id,name:p.name,variant:p.variant,npc:!!p.npc,x:Math.round(p.x),y:Math.round(p.y),mass:Math.round(p.mass),score:p.score,connected:p.connected,
       protected:p.protectedUntil>t,respawning:!!p.respawnAt,locked:!!p.lock,biteAt:p.biteAt||0,hungry:(p.hungryMs||0)>=CONFIG.hungerWarningMs}));
     const result={matchId:this.state.id,phase:this.state.phase,solo:!!this.state.solo,endsAt:this.state.endsAt,pausedAt:this.state.pausedAt,now:t,players,world:this.world,eatRatio:CONFIG.eatRatio,
       food:shared ? shared.food : this.state.food.filter(f=>f.readyAt<=t).map(f=>[f.id,Math.round(f.x),Math.round(f.y)])};

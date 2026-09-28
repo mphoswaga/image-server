@@ -2834,6 +2834,7 @@ app.post('/api/student/join-room', requireStudentAccess, (req, res) => {
 
   if (gameId) {
     const g = games.getGame(gameId);
+    if (games.isStudentRemoved(g, studentId)) return res.status(403).json({ error: 'Your teacher has removed you from this game.' });
     let displayName = name;
     let matchedRosterId = null;
     if (games.getRosterIds(g).length) {
@@ -2842,6 +2843,7 @@ app.post('/api/student/join-room', requireStudentAccess, (req, res) => {
       displayName = match.student.name;
       matchedRosterId = match.rosterId;
     }
+    games.recordParticipant(gameId, studentId, displayName);
     const token = issueGameToken({ gameId, studentId, name: displayName, rosterId: matchedRosterId });
     res.cookie(GAME_COOKIE, token, cookieOptions(30 * 24 * 60 * 60 * 1000));
     return res.json({ type: 'game', id: gameId, path: '/play/' + gameId });
@@ -3222,17 +3224,17 @@ function classListForAssignment(assignment) {
   return learnerPickerEntries(assignmentCohortStudents(assignment), assignment.id);
 }
 
-function gameRosterRecords(game) {
+function gameRosterRecords(game, includeRemoved = false) {
   return games.getRosterIds(game)
     .map(rosterId => roster.getRoster(game.teacherId, rosterId))
-    .filter(Boolean);
+    .filter(Boolean).map(r => ({ ...r, students: includeRemoved ? r.students : (r.students || []).filter(st => !games.isStudentRemoved(game, st.id)) }));
 }
 
 function studentInGameRosters(game, studentId) {
   for (const classRoster of gameRosterRecords(game)) {
     const student = (classRoster.students || []).find(item =>
       roster.normalizeStudentId(item.id) === roster.normalizeStudentId(studentId));
-    if (student) return { student, rosterId: classRoster.id, rosterName: classRoster.name };
+    if (student && !games.isStudentRemoved(game, student.id)) return { student, rosterId: classRoster.id, rosterName: classRoster.name };
   }
   return null;
 }
@@ -3240,7 +3242,7 @@ function studentInGameRosters(game, studentId) {
 function studentFromGameHandle(game, handle) {
   for (const classRoster of gameRosterRecords(game)) {
     const student = studentFromHandle(game.teacherId, classRoster.id, game.id, handle);
-    if (student) return { student, rosterId: classRoster.id, rosterName: classRoster.name };
+    if (student && !games.isStudentRemoved(game, student.id)) return { student, rosterId: classRoster.id, rosterName: classRoster.name };
   }
   return null;
 }
@@ -3249,7 +3251,7 @@ function classListForGame(game) {
   const seen = new Set();
   const students = [];
   for (const classRoster of gameRosterRecords(game)) {
-    for (const item of classListFor(game.teacherId, classRoster.id, game.id)) {
+    for (const item of learnerPickerEntries(classRoster.students, game.id)) {
       if (seen.has(item.handle)) continue;
       seen.add(item.handle);
       students.push(item);
@@ -3276,6 +3278,7 @@ function combinedGameRoster(game) {
 
 function gameSessionCanAccess(game, session) {
   if (!session) return true;
+  if (games.isStudentRemoved(game, session.studentId)) return false;
   const rosterIds = games.getRosterIds(game);
   if (!rosterIds.length) return !session.rosterId;
   if (session.rosterId) return rosterIds.includes(session.rosterId);
@@ -4854,6 +4857,32 @@ app.patch('/api/game/:id/classes', requireAuth, (req, res) => {
   res.json({ ok: true, rosterId: updated.rosterId, rosterIds: updated.rosterIds });
 });
 
+function gameParticipants(game) {
+  const rows = new Map();
+  for (const r of gameRosterRecords(game, true)) for (const st of r.students || [])
+    rows.set(games.normalizeStudentId(st.id), { studentId: st.id, name: st.name, className: r.name });
+  const match = fishQuestLive.getMatch(game.id);
+  for (const st of [...games.getResults(game.id), ...(match?.state.players || []), ...(game.removedStudents || []), ...(game.participants || [])]) {
+    const key = games.normalizeStudentId(st.studentId);
+    if (key && !st.npc && !key.startsWith('__TEACHER_') && !rows.has(key)) rows.set(key, { studentId: key, name: st.name || key });
+  }
+  return [...rows.values()].map(st => ({ ...st, removed: games.isStudentRemoved(game, st.studentId) }));
+}
+app.get('/api/game/:id/participants', requireAuth, (req, res) => {
+  const g = games.getGame(req.params.id);
+  if (!g || g.teacherId !== req.userId) return res.status(404).json({ error: 'Game not found.' });
+  res.set('Cache-Control', 'no-store').json({ title: g.lessonTitle, students: gameParticipants(g) });
+});
+app.patch('/api/game/:id/participants', requireAuth, (req, res) => {
+  const g = games.getGame(req.params.id);
+  if (!g || g.teacherId !== req.userId) return res.status(404).json({ error: 'Game not found.' });
+  const st = gameParticipants(g).find(st => games.normalizeStudentId(st.studentId) === games.normalizeStudentId(req.body.studentId));
+  if (!st || typeof req.body.removed !== 'boolean') return res.status(400).json({ error: 'Choose a learner in this game.' });
+  const updated = games.setStudentRemoved(g.id, st.studentId, st.name, req.body.removed);
+  if (req.body.removed) fishQuestLive.removeStudent(g.id, st.studentId);
+  res.json({ title: updated.lessonTitle, students: gameParticipants(updated) });
+});
+
 app.get('/api/game/:id/questions', requireAuth, (req, res) => {
   const game = games.getGame(req.params.id);
   if (!game) return res.status(404).json({ error: 'Game not found.' });
@@ -4978,6 +5007,7 @@ app.post('/api/game/:id/enter', async (req, res) => {
     ? roster.normalizeStudentId(fromList.student.id)
     : roster.normalizeStudentId(req.body && req.body.studentId);
   if (!studentId) return res.status(400).json({ error: 'Enter your Student ID.' });
+  if (games.isStudentRemoved(g, studentId)) return res.status(403).json({ error: 'Your teacher has removed you from this game.' });
   const pin = req.body && req.body.pin ? String(req.body.pin).trim() : '';
   let displayName = roster.displayNameFrom(req.body && req.body.name, studentId);
   let matchedRosterId = null;
@@ -5011,6 +5041,7 @@ app.post('/api/game/:id/enter', async (req, res) => {
       if (!studentAccount.verifyPin(key, pin)) return res.status(403).json({ error: 'Incorrect PIN. Ask your teacher if you have forgotten it.' });
     }
   }
+  games.recordParticipant(g.id, studentId, displayName);
   const token = issueGameToken({ gameId: g.id, studentId, name: displayName, rosterId: matchedRosterId });
   res.cookie(GAME_COOKIE, token, cookieOptions(30 * 24 * 60 * 60 * 1000));
   res.cookie(STUDENT_COOKIE, issueStudentToken(studentId, displayName), cookieOptions(30 * 24 * 60 * 60 * 1000));

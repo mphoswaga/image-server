@@ -263,7 +263,7 @@ test('FishQuest teacher computer has optional upbeat music and bubble event soun
   const client = fs.readFileSync(path.join(__dirname, '..', 'public', 'fishquest-teacher.js'), 'utf8');
   assert.match(page, /id="teacherMusic"/);
   assert.match(page, /id="teacherBubbles"/);
-  assert.match(page, /fishquest-teacher\.js\?v=2/);
+  assert.match(page, /fishquest-teacher\.js\?v=3/);
   assert.match(client, /ls-fishquest-teacher-audio-v1/);
   assert.match(client, /function scheduleMusic/);
   assert.match(client, /function playWinnerCelebration/);

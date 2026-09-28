@@ -38,7 +38,7 @@ function installMoonQuest(app, deps) {
     const s = store.session(req.params.id);
     if (req.query.board && req.query.board === s.boardToken) return { s, role: 'board' };
     const t = jwt.verify(token, sessionSecret(), { algorithms: ['HS256'] });
-    if (t.type !== 'moonquest' || t.sessionId !== s.id || !s.members[t.studentId]) throw new Error('Rejoin this MoonQuest room.');
+    if (t.type !== 'moonquest' || t.sessionId !== s.id || !s.members[t.studentId] || (s.removedStudents || []).includes(t.studentId)) throw new Error('Rejoin this MoonQuest room.');
     return { s, role: 'student', studentId: t.studentId };
   }
   // Content-addressed URLs also bypass copies cached before no-store was added.
@@ -144,7 +144,7 @@ function installMoonQuest(app, deps) {
   app.get(base + '/rooms/:code', joinLimiter, wrap((req, res) => {
     const s = store.findCode(String(req.params.code).toUpperCase());
     if (!s || s.phase === 'ended') throw new Error('This room is unavailable. Check the code with your teacher.');
-    res.json({ id: s.id, title: s.game.title, test: !!s.test, students: s.test ? [] : learnerPickerEntries(s.students, s.id) });
+    res.json({ id: s.id, title: s.game.title, test: !!s.test, students: s.test ? [] : learnerPickerEntries(s.students.filter(st => !(s.removedStudents || []).includes(st.id)), s.id) });
   }));
   app.post(base + '/rooms/:code/test-enter', joinLimiter, wrap((req, res) => {
     const s = store.findCode(String(req.params.code).toUpperCase());

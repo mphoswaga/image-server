@@ -76,3 +76,5 @@
 #ambient{z-index:1}#fish{z-index:2}
 #ocean[data-adventure="true"] #danger.net .boat-art{top:13%}#ocean[data-adventure="true"] #danger.net .fishing-net{top:28%}
 @media(max-width:850px){#journey:has(.journey-step){top:128px}#ocean[data-adventure="true"] #fish{top:180px}#ocean[data-adventure="true"] #hero{top:220px}}
+
+#roster label{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}#roster .roster-name{grid-column:1/-1;min-width:0}#roster button{padding:8px;font-size:14px}#roster select{min-width:0}

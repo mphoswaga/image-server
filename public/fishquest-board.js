@@ -154,9 +154,17 @@ function setupRoster(){
  const n=Number($('teams').value);students=data.attendance.filter(p=>String(p.rosterId)===$('class').value).map((p,i)=>({...p,team:i%n,displayName:p.name.trim().split(/\s+/).slice(-2).join(' ')}));
  $('teamEditor').innerHTML=colors.slice(0,n).map((c,t)=>'<label style="--team:'+c+'"><span></span><input maxlength="35" aria-label="Team '+(t+1)+' name" value="'+esc(teamNames[t])+'" data-team="'+t+'"></label>').join('');
  $('teamEditor').querySelectorAll('input').forEach(el=>el.oninput=()=>{teamNames[Number(el.dataset.team)]=el.value.trim()||('Team '+(Number(el.dataset.team)+1))});
- $('roster').innerHTML=students.map((p,i)=>'<label><span class="roster-name">'+esc(p.name)+'<input class="fish-display-name" maxlength="30" aria-label="Fish name for '+esc(p.name)+'" data-name="'+i+'" value="'+esc(p.displayName)+'"></span><select aria-label="Team for '+esc(p.name)+'" data-player="'+i+'">'+colors.slice(0,n).map((_,t)=>'<option value="'+t+'" '+(t===p.team?'selected':'')+'>Team '+(t+1)+'</option>').join('')+'</select></label>').join('');
+ renderRoster();
+}
+function renderRoster(){
+ const n=Number($('teams').value);
+ $('roster').innerHTML=students.map((p,i)=>'<label><span class="roster-name">'+esc(p.name)+'<input class="fish-display-name" maxlength="30" aria-label="Fish name for '+esc(p.name)+'" data-name="'+i+'" value="'+esc(p.displayName)+'"></span><select aria-label="Team for '+esc(p.name)+'" data-player="'+i+'">'+colors.slice(0,n).map((_,t)=>'<option value="'+t+'" '+(t===p.team?'selected':'')+'>Team '+(t+1)+'</option>').join('')+'</select><button type="button" data-remove="'+i+'" aria-label="Remove '+esc(p.name)+' from this game">Remove</button></label>').join('');
  $('roster').querySelectorAll('select').forEach(el=>el.onchange=()=>students[Number(el.dataset.player)].team=Number(el.value));
  $('roster').querySelectorAll('[data-name]').forEach(el=>el.oninput=()=>students[Number(el.dataset.name)].displayName=el.value.trim()||students[Number(el.dataset.name)].name);
+ $('roster').querySelectorAll('[data-remove]').forEach(el=>el.onclick=async()=>{
+  const p=students[Number(el.dataset.remove)];el.disabled=true;
+  try{const r=await fetch('/api/game/'+encodeURIComponent(game)+'/participants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({studentId:p.studentId,removed:true})});const d=await r.json();if(!r.ok)throw Error(d.error);data.attendance=data.attendance.filter(st=>String(st.studentId)!==String(p.studentId));students=students.filter(st=>st!==p);renderRoster();}catch(e){$('error').textContent=e.message;el.disabled=false}
+ });
  $('plan').textContent=students.length?students.length+' learners · '+data.game.questions.length+' questions · Everyone gets a turn.':'No learners in this class. Assign a roster in My games first.';
  $('start').disabled=!students.length||!data.game.questions.length;
 }
@@ -240,6 +248,7 @@ async function load(){
  try{
   if(!game)throw Error('Open this game from the FishQuest teacher controls.');
   $('back').href='/fishquest/'+encodeURIComponent(game);
+  $('manageLearners').href='/game-participants.html?game='+encodeURIComponent(game);
   const r=await fetch('/api/game/'+encodeURIComponent(game)+'/fishquest/smartboard');
   if(!r.ok)throw Error(r.status===401?'Sign in to LessonScope, then open this game again.':'This game could not be loaded. Check that it belongs to your account.');
   data=await r.json();storageKey='fishboard:'+data.storageKey;

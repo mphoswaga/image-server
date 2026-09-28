@@ -17,6 +17,29 @@ const colonySessionPath = id => path.join(GAMES_DIR, `${id}.colonyquest.json`);
 const isGameFile = f => f.endsWith('.json') && !f.endsWith('.results.json') && !f.endsWith('.colonyquest.json') && f !== '_rooms.json';
 const normalizeStudentId = value => String(value || '').trim().replace(/\s+/g, '').toUpperCase();
 
+// Game attendance is independent of the school roster and saved results.
+function isStudentRemoved(game, studentId) {
+  return (game && game.removedStudents || []).some(s => normalizeStudentId(s.studentId) === normalizeStudentId(studentId));
+}
+function recordParticipant(id, studentId, name) {
+  const g = getGame(id), key = normalizeStudentId(studentId);
+  if (!g || !key || isStudentRemoved(g, key)) return;
+  g.participants ||= [];
+  if (g.participants.some(p => normalizeStudentId(p.studentId) === key)) return;
+  g.participants.push({ studentId: key, name: String(name || key) });
+  writeJsonAtomic(gamePath(String(id)), g);
+}
+function setStudentRemoved(id, studentId, name, removed) {
+  const g = getGame(id);
+  if (!g) return null;
+  const key = normalizeStudentId(studentId);
+  if (!key) throw Error('Choose a learner.');
+  g.removedStudents = (g.removedStudents || []).filter(s => normalizeStudentId(s.studentId) !== key);
+  if (removed) g.removedStudents.push({ studentId: key, name: String(name || key) });
+  writeJsonAtomic(gamePath(String(id)), g);
+  return g;
+}
+
 function normalizeRosterIds(rosterIds, rosterId) {
   const source = Array.isArray(rosterIds) ? rosterIds : rosterIds ? [rosterIds] : rosterId ? [rosterId] : [];
   return [...new Set(source.map(value => String(value || '').trim()).filter(Boolean))].slice(0, 30);
@@ -320,7 +343,7 @@ function repairStoredMathAnswers() {
 }
 
 module.exports = {
-  createGame, getGame, recordResult, getResults, getHighScores, listTeacherGames, getRoomCode,
+  recordParticipant, isStudentRemoved, setStudentRemoved, createGame, getGame, recordResult, getResults, getHighScores, listTeacherGames, getRoomCode,
   updateGameCutoff, updateGameRosters, updateGameQuestions, updateFishQuest, updateColonyQuest, getColonyQuestSession,
   saveColonyQuestSession, clearColonyQuestSession, normalizeStudentId, normalizeRosterIds,
   getRosterIds, hasRoster, repairStoredMathAnswers, reassignRoster,

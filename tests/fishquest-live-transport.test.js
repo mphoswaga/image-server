@@ -15,8 +15,8 @@ const { createFishQuestLive } = require('../fishquest-live');
 test('30 real connections survive invalid messages, replacement, pause and resume', { timeout:40000 }, async t => {
   const game={id:'live-test',teacherId:'owner',fishquest:{durationMinutes:10,lateJoin:true},questions:[{question:'Yes?',options:['Yes','No'],correctIndex:0}]};
   const app=express(),server=http.createServer(app),sockets=[];
-  let resultWrites=0;
-  const live=createFishQuestLive({app,games:{getGame:()=>game,getRosterIds:()=>[],normalizeStudentId:s=>s,recordResult:()=>{ if (++resultWrites===1) throw Error('temporary storage failure'); }},roster:{},requireAuth:(_,__,next)=>next(),requireGameAccess:(_,__,next)=>next(),jwtSecret:'test-secret'});
+  let resultWrites=0;const removed=new Set();
+  const live=createFishQuestLive({app,games:{isStudentRemoved:(_g,id)=>removed.has(id),getGame:()=>game,getRosterIds:()=>[],normalizeStudentId:s=>s,recordResult:()=>{ if (++resultWrites===1) throw Error('temporary storage failure'); }},roster:{},requireAuth:(_,__,next)=>next(),requireGameAccess:(_,__,next)=>next(),jwtSecret:'test-secret'});
   const wss=live.attach(server);
   t.after(async()=>{
     for(const ws of wss.clients)ws.terminate();
@@ -56,6 +56,14 @@ test('30 real connections survive invalid messages, replacement, pause and resum
   const oversizedClosed=once(learners[1],'close');learners[1].send('x'.repeat(5000));
   await oversizedClosed;
   assert.equal(replacement.readyState,WebSocket.OPEN);
+  const removedClosed=once(learners[2],'close');removed.add('S2');live.removeStudent(game.id,'S2');
+  assert.equal((await removedClosed)[0],4003);
+  assert.equal(match.state.players.find(p=>p.studentId==='S2').removed,true);
+  assert.equal(match.snapshot(null).players.some(p=>p.name==='S2'),false);
+  const stale=new WebSocket(url);sockets.push(stale);await once(stale,'open');const blocked=once(stale,'close');
+  stale.send(JSON.stringify({type:'auth',token:jwt.sign({type:'fishquest',gameId:game.id,studentId:'S2',name:'S2'},'test-secret')}));
+  assert.equal((await blocked)[0],4003);
+  removed.delete('S2');await join('S2');assert.equal(match.state.players.find(p=>p.studentId==='S2').removed,false);
   match.state.players[0].attempts.push({questionIndex:0,choice:0,correct:true,outcome:'correct'});
   match.end('time');
   await new Promise(resolve=>setTimeout(resolve,1100));
@@ -74,7 +82,7 @@ test('a live lobby can select one assigned class without unassigning the others'
   const app=express();app.use(express.json());
   const requireAuth=(req,_res,next)=>{req.userId='owner';req.user={name:'Teacher'};next()};
   const requireGameAccess=(req,_res,next)=>{req.gameSession={gameId:game.id,studentId:req.headers['x-student'],name:req.headers['x-student'],rosterId:req.headers['x-roster']};next()};
-  createFishQuestLive({app,games:{getGame:()=>game,getRosterIds:g=>g.rosterIds,normalizeStudentId:s=>String(s).toUpperCase(),recordResult:()=>{}},roster:{getRoster:(_teacher,id)=>records[id]||null},requireAuth,requireGameAccess,gameSessionCanAccess:()=>true,jwtSecret:'test-secret'});
+  createFishQuestLive({app,games:{isStudentRemoved:()=>false,getGame:()=>game,getRosterIds:g=>g.rosterIds,normalizeStudentId:s=>String(s).toUpperCase(),recordResult:()=>{}},roster:{getRoster:(_teacher,id)=>records[id]||null},requireAuth,requireGameAccess,gameSessionCanAccess:()=>true,jwtSecret:'test-secret'});
   const server=http.createServer(app);
   t.after(async()=>{await new Promise(resolve=>server.close(resolve))});
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -98,7 +106,7 @@ test('teacher testing uses a separate ocean while the classroom is running', asy
   const game={id:'isolated-preview',teacherId:'owner',fishquest:{playMode:'live'},questions:[{question:'Yes?',options:['Yes','No'],correctIndex:0}]};
   const app=express();
   const auth=(req,res,next)=>{req.userId='owner';req.user={name:'Teacher'};next()};
-  const live=createFishQuestLive({app,games:{getGame:()=>game,getRosterIds:()=>[],recordResult:()=>assert.fail('Preview recorded marks')},roster:{},requireAuth:auth,requireGameAccess:auth,jwtSecret:'preview-secret'});
+  const live=createFishQuestLive({app,games:{isStudentRemoved:()=>false,getGame:()=>game,getRosterIds:()=>[],recordResult:()=>assert.fail('Preview recorded marks')},roster:{},requireAuth:auth,requireGameAccess:auth,jwtSecret:'preview-secret'});
   const classroom=live.openMatch(game);classroom.join({studentId:'learner',name:'Learner'});classroom.start(1);
   const before=JSON.stringify(classroom.state);
   const server=http.createServer(app);

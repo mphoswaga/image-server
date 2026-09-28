@@ -166,8 +166,13 @@
     const prior = memberTeamMap();
     $('rosterAssign').innerHTML = roster.students.map((student, index) => {
       const assigned = prior.get(String(student.id)) || teams[index % teams.length].id;
-      return `<label class="student-row"><b>${esc(student.name)}</b><select data-student-id="${esc(student.id)}" data-student-name="${esc(student.name)}" aria-label="Team for ${esc(student.name)}">${teams.map(team => `<option value="${esc(team.id)}"${team.id === assigned ? ' selected' : ''}>${esc(team.name)}</option>`).join('')}</select></label>`;
+      return `<label class="student-row"><b>${esc(student.name)}</b><select data-student-id="${esc(student.id)}" data-student-name="${esc(student.name)}" aria-label="Team for ${esc(student.name)}"><option value="__remove__">Remove from this game</option>${teams.map(team => `<option value="${esc(team.id)}"${team.id === assigned ? ' selected' : ''}>${esc(team.name)}</option>`).join('')}</select></label>`;
     }).join('');
+    $('rosterAssign').querySelectorAll('select').forEach(el=>el.addEventListener('change',async()=>{
+      if(el.value!=='__remove__')return;
+      el.disabled=true;
+      try{const r=await fetch('/api/game/'+encodeURIComponent(gameId)+'/participants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({studentId:el.dataset.studentId,removed:true})});const d=await r.json();if(!r.ok)throw Error(d.error);data.roster.students=data.roster.students.filter(st=>String(st.id)!==el.dataset.studentId);config.teams.forEach(t=>t.members=(t.members||[]).filter(st=>String(st.id)!==el.dataset.studentId));el.closest('label').remove();showNotice('Learner removed from this game. Class roster and marks are unchanged.');}catch(e){el.value=teams[0].id;showNotice(e.message);el.disabled=false;}
+    }));
   }
 
   function renderQuestions() {
@@ -3059,6 +3064,7 @@
   (async function load() {
     try {
       data = await request();
+      $('manageLearners').href='/game-participants.html?game='+encodeURIComponent(gameId);
       if (testMode && data.game) {
         data.session = null;
         data.roster = null;

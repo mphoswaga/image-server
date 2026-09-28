@@ -71,3 +71,19 @@ test('teachers can update saved arcade game questions without replacing the game
   assert.equal(updated.questions[0].correctIndex, 0);
   assert.equal(games.getGame(game.id).questions[0].explanation, 'Copy uses Ctrl + C.');
 });
+
+test('removing a game learner is reversible and preserves other games and saved marks', () => {
+  const args={teacherId:'attendance-teacher',lessonTitle:'Reef',game:{questions:[{question:'Water?',options:['Ocean','Sky'],correctIndex:0}]}};
+  const a=games.createGame(args),b=games.createGame(args);
+  games.recordResult(a.id,{studentId:'s1',name:'Learner One',score:1,total:1,answers:[0],gameType:'car'});
+  const before=games.getResults(a.id);
+  games.setStudentRemoved(a.id,' s1 ','Learner One',true);
+  assert.equal(games.isStudentRemoved(games.getGame(a.id),'S1'),true);
+  assert.equal(games.isStudentRemoved(games.getGame(b.id),'S1'),false);
+  assert.deepEqual(games.getResults(a.id),before);
+  games.setStudentRemoved(a.id,'S1','Learner One',true);
+  assert.equal(games.getGame(a.id).removedStudents.length,1);
+  games.setStudentRemoved(a.id,'S1','Learner One',false);
+  assert.equal(games.isStudentRemoved(games.getGame(a.id),'S1'),false);
+  assert.deepEqual(games.getResults(a.id),before);
+});

@@ -91,6 +91,7 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
       const classRoster = roster.getRoster(game.teacherId, rosterId);
       if (!classRoster) continue;
       for (const student of classRoster.students || []) {
+        if (games.isStudentRemoved(game, student.id)) continue;
         const studentId = games.normalizeStudentId(student.id);
         const key = `${rosterId}:${studentId}`;
         if (seen.has(key)) continue;
@@ -249,7 +250,7 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
             const claim = jwt.verify(message.token, jwtSecret);
             if (claim.type !== 'fishquest') throw Error('Bad ticket');
             const game = games.getGame(claim.gameId), matchKey = claim.matchKey || claim.gameId, match = getMatch(matchKey, claim.gameId);
-            if (!isFish(game) || !match) throw Error('Room closed');
+            if (!isFish(game) || !match || games.isStudentRemoved(game, claim.studentId)) throw Error('Room closed');
             if (!claim.preview && !claim.solo && !identityCanJoinSession(game, match, claim)) throw Error('Class not selected for this room');
             const p = match.join({ studentId: claim.studentId, name: claim.name, rosterId: claim.rosterId || null });
             if ((claim.preview || claim.solo) && match.state.phase === 'lobby') {
@@ -319,7 +320,18 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
     wss.on('close', () => clearInterval(timer));
     return wss;
   }
-  return { attach, getMatch, openMatch, finalize };
+  function removeStudent(gameId, studentId) {
+    for (const [key, match] of matches) {
+      if (key !== gameId && !key.startsWith(gameId + '.solo.')) continue;
+      const p = match.state.players.find(p => games.normalizeStudentId(p.studentId) === games.normalizeStudentId(studentId));
+      if (!p) continue;
+      match.disconnect(p.id);
+      p.removed = true; match.save();
+      for (const ws of clients.get(key) || []) if (ws.playerId === p.id) { ws.replaced = true; ws.close(4003, 'Removed from this game by your teacher'); }
+      broadcast(key);
+    }
+  }
+  return { attach, getMatch, openMatch, finalize, removeStudent };
 }
 
 module.exports = { createFishQuestLive };

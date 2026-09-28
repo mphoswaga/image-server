@@ -197,3 +197,16 @@ test('alternative correct areas require one answer, all mode requires an exact c
   v=f.store.snapshot(f.id,'board');assert.equal(v.stats.correct,1);assert.equal(v.stats.wrong,1);assert.equal(f.store.snapshot(f.id,'student','s0').myCorrect,true);assert.equal(f.store.snapshot(f.id,'student','s1').myCorrect,false);
   assert.equal(f.store.report(f.id,'teacher').students[0].rounds[1].revised,'Region b + Region a');
 });
+
+test('teacher can remove joined and unjoined learners, preserve answers and add back for the next round',t=>{
+ const {store,id,cmd,answer}=setup(t,3);cmd('next');cmd('open');answer(0,'a');
+ cmd('remove-learner',{studentId:'s0',removed:true});
+ assert.throws(()=>store.join(id,'s0'),/removed/);assert.throws(()=>answer(0),/removed/);
+ const snap=store.snapshot(id,'teacher');assert.equal(snap.expected,2);assert.equal(snap.answered,0);assert.equal(snap.learners[0].removed,true);
+ assert.equal(store.report(id,'teacher').students[0].rounds[0].initial,'Region a');
+ cmd('remove-learner',{studentId:'s0',removed:false});store.join(id,'s0');
+ assert.equal(store.snapshot(id,'student','s0').canAnswer,false);
+ cmd('advance');cmd('advance');cmd('advance');cmd('next');
+ assert.equal(store.snapshot(id,'student','s0').canAnswer,true);
+ assert.throws(()=>store.command(id,'other','remove-learner',{seq:store.session(id).seq,studentId:'s1',removed:true}),/another teacher/);
+});

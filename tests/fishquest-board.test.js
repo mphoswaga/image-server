@@ -26,7 +26,7 @@ test('smartboard endpoint returns all assigned rosters only to owner, without wr
  const express=require('express'),{createFishQuestLive}=require('../fishquest-live');
  const game={id:'board',teacherId:'owner',questions,fishquest:{}},app=express();
  let writes=0;
- createFishQuestLive({app,games:{getGame:()=>game,getRosterIds:()=>['r1','r2'],normalizeStudentId:String,recordResult:()=>writes++},roster:{getRoster:(owner,id)=>({name:id,students:[{id:id+'s',name:'Learner '+id}]})},requireAuth:(req,res,next)=>{req.userId=req.headers['x-user'];next()},requireGameAccess:(_,__,next)=>next(),jwtSecret:'test'});
+ createFishQuestLive({app,games:{isStudentRemoved:()=>false,getGame:()=>game,getRosterIds:()=>['r1','r2'],normalizeStudentId:String,recordResult:()=>writes++},roster:{getRoster:(owner,id)=>({name:id,students:[{id:id+'s',name:'Learner '+id}]})},requireAuth:(req,res,next)=>{req.userId=req.headers['x-user'];next()},requireGameAccess:(_,__,next)=>next(),jwtSecret:'test'});
  const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));t.after(()=>server.close());
  const url='http://127.0.0.1:'+server.address().port+'/api/game/board/fishquest/smartboard';
  assert.equal((await fetch(url,{headers:{'x-user':'other'}})).status,403);

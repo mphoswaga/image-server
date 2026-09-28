@@ -169,7 +169,7 @@
       ${s.test?`<p class="muted">Scan the QR to join as a practice learner—no name or PIN. Simulation fills only the remaining practice learners.</p><a class="button small" target="_blank" rel="noopener" href="/moonquest/join?code=${s.code}">Open practice learner</a>`:''}
       ${s.test&&['choose','reconsider'].includes(s.phase)?`<div class="stack">${button('Simulate learner answers','simulate')}${button('Simulate a misconception','simulate-misconception')}</div>`:''}
       <div class="row" style="margin-top:12px">${button('View report','report','small')}${s.phase!=='ended'?button('Finish mission','end','small'):''}${button('Adventures','home','small')}</div></div>
-      <div class="panel"><h3>Crew check-in · ${s.joined}/${s.learners.length}</h3><p class="muted">${s.phase==='reconsider'?'✓ means confirmed during reconsideration. The first choice is kept otherwise.':'✓ means a first choice has been saved.'}</p><div class="learners">${s.learners.map(l=>`<div class="learner ${l.answered?'has-answered':''}"><span>${s.phase==='reconsider'?l.confirmed?'✓':'○':l.answered?'✓':l.joined?'●':'○'} ${esc(l.name)} ${l.absent?'· away':''}</span>${l.joined&&['lobby','reveal'].includes(s.phase)?`<button data-attendance="${esc(l.id)}" data-absent="${!l.absent}">${l.absent?'Include':'Away'}</button>`:''}</div>`).join('')}</div></div>
+      <div class="panel"><h3>Crew check-in · ${s.joined}/${s.learners.filter(l=>!l.removed).length}</h3><p class="muted">${s.phase==='reconsider'?'✓ means confirmed during reconsideration. The first choice is kept otherwise.':'✓ means a first choice has been saved.'}</p><p class="muted">Remove learners from this mission only. Saved answers and class rosters are kept. Add them back for a later round.</p><div class="learners">${s.learners.map(l=>`<div class="learner ${l.answered?'has-answered':''}"><span>${s.phase==='reconsider'?l.confirmed?'✓':'○':l.answered?'✓':l.joined?'●':'○'} ${esc(l.name)} ${l.removed?'· removed':l.absent?'· away':''}</span><button data-remove-learner="${esc(l.id)}" data-removed="${!l.removed}">${l.removed?'Add back':'Remove'}</button>${!l.removed&&l.joined&&['lobby','reveal'].includes(s.phase)?`<button data-attendance="${esc(l.id)}" data-absent="${!l.absent}">${l.absent?'Include':'Away'}</button>`:''}</div>`).join('')}</div></div>
       <div id="queue-panel"></div></aside>`;
   }
   function renderLive() {
@@ -336,6 +336,7 @@
       else if(action==='end'){if(confirm('Finish this mission? Learners will no longer be able to answer.'))await command('end');}
       else if(action==='simulate'||action==='simulate-misconception'){state=await api('/sessions/'+sessionId+'/simulate',{pattern:action==='simulate-misconception'?'misconception':'mixed'});renderLive();}
       else if(action==='report')await report(sessionId);
+      else if(b.dataset.removeLearner)await command('remove-learner',{studentId:b.dataset.removeLearner,removed:b.dataset.removed==='true'});
       else if(b.dataset.attendance)await command('absent',{studentId:b.dataset.attendance,absent:b.dataset.absent==='true'});
       else if(b.dataset.regionAnswer)await submitAnswer(b.dataset.regionAnswer);
       else if(b.dataset.challenge)await command('challenge',{queueId:b.dataset.challenge});

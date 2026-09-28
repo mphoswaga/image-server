@@ -168,8 +168,21 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
       if (['lobby', 'ended'].includes(s.phase)) fail('There is no running round to pause.');
       if (s.paused) { s.paused = false; s.deadline = s.remaining == null ? null : clock() + s.remaining; s.recovered = false; s.teachingPause = null; }
       else { s.remaining = s.deadline ? Math.max(0, s.deadline - clock()) : null; s.deadline = null; s.paused = true; }
+    } else if (action === 'remove-learner') {
+      if (!s.students.some(st => st.id === body.studentId) || typeof body.removed !== 'boolean') fail('Choose a learner in this room.');
+      s.removedStudents ||= [];
+      s.removedStudents = s.removedStudents.filter(id => id !== body.studentId);
+      if (body.removed) {
+        s.removedStudents.push(body.studentId);
+        if (s.members[body.studentId]) s.members[body.studentId].absent = true;
+        const r = current(s);
+        // Preserve every saved answer. Only change the current participation
+        // denominator before reveal; historical rounds remain untouched.
+        if (r && !r.revealedAt) r.expected = r.expected.filter(id => id !== body.studentId);
+      } else if (s.members[body.studentId]) s.members[body.studentId].absent = false;
     } else if (action === 'absent') {
       if (!['lobby', 'reveal'].includes(s.phase)) fail('Change attendance between rounds.');
+      if ((s.removedStudents || []).includes(body.studentId)) fail('Add this learner back first.');
       if (s.members[body.studentId]) s.members[body.studentId].absent = !!body.absent;
     } else if (action === 'rotate-board') { s.boardToken = crypto.randomBytes(24).toString('hex');
     } else if (action === 'end') { s.phase = 'ended'; s.deadline = null; s.paused = false;
@@ -208,6 +221,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
   function join(id, studentId) {
     const s = tick(session(id));
     if (s.phase === 'ended') fail('This game has finished.');
+    if ((s.removedStudents || []).includes(studentId)) fail('Your teacher has removed you from this game.');
     if (!s.students.some(x => x.id === studentId)) fail('Learner not in this session.');
     if (!s.members[studentId]) { s.members[studentId] = { joinedAt: clock(), absent: false }; saveSession(s); }
     return s;
@@ -220,7 +234,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     let studentId = s.testDevices[deviceKey];
     if (!studentId) {
       const taken = new Set(Object.values(s.testDevices));
-      studentId = s.students.find(st => !taken.has(st.id))?.id;
+      studentId = s.students.find(st => !taken.has(st.id) && !(s.removedStudents || []).includes(st.id))?.id;
       if (!studentId) fail('All six practice learners are in use. Start a new test room for more devices.');
       s.testDevices[deviceKey] = studentId;
       // A physical-device rehearsal should count only those devices, not idle bots.
@@ -231,10 +245,12 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
       s.members[studentId] ||= { joinedAt: clock(), absent: false };
       saveSession(s);
     }
+    if ((s.removedStudents || []).includes(studentId)) fail('Your teacher has removed you from this game.');
     return { studentId, name: s.students.find(st => st.id === studentId).name };
   }
   function answer(id, studentId, body) {
     const s = tick(session(id)); const r = current(s);
+    if ((s.removedStudents || []).includes(studentId)) fail('Your teacher has removed you from this game.');
     if (!r || !r.expected.includes(studentId)) fail('Join the next round when your teacher starts it.');
     if (typeof body.eventId !== 'string' || body.eventId.length > 80 || !body.eventId) fail('Missing answer receipt ID.');
     if (r.events.some(e => e.studentId === studentId && e.eventId === body.eventId)) return s;
@@ -279,14 +295,14 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     const q = r?.question;
     const view = { id: s.id, title: s.game.title, className: s.className, test: s.test, seq: s.seq, phase: s.phase, paused: s.paused, recovered: s.recovered,
       automatic: !!s.game.timing.automatic, singleTimer: s.game.timing.flow === 'single', teachingPause: s.teachingPause || null, serverNow: clock(), deadline: s.deadline, round: s.round, total: s.game.questions.length, remainingQuestions: s.game.questions.length - s.nextQuestion,
-      joined: Object.keys(s.members).length, expected: r?.expected.length || 0, answered: r ? Object.values(r.answers).filter(a => a.final || a.first).length : 0,
+      joined: Object.keys(s.members).filter(id => !(s.removedStudents || []).includes(id)).length, expected: r?.expected.length || 0, answered: r ? r.expected.filter(id => r.answers[id]?.final || r.answers[id]?.first).length : 0,
       question: q ? { id: q.id, prompt: q.prompt, concept: q.concept, answerMode: q.answerMode || 'one', selectionCount: q.answerMode === 'all' ? q.accepted.length : 1, ...(revealed ? { accepted: q.accepted, explanation: q.explanation } : {}) } : null,
       diagram: q ? s.game.diagrams.find(d => d.id === q.diagramId) : null,
       stats: revealed ? stats(s) : null,
       lanterns: s.rounds.filter(r => r.revealedAt).reduce((n, r) => n + stats(s, r).correct, 0) };
     if (role === 'board' && s.phase === 'lobby') view.code = s.code;
     if (s.phase === 'intro') view.introElapsedMs = Math.max(0, 24000 - (s.paused ? s.remaining : s.deadline - clock()));
-    if (role !== 'student') view.crew = s.students.filter(st => r ? r.expected.includes(st.id) : !!s.members[st.id]).map(st => ({ name: st.name, answered: !!(r?.answers[st.id]?.first || r?.answers[st.id]?.final), confirmed: !!r?.answers[st.id]?.confirmed }));
+    if (role !== 'student') view.crew = s.students.filter(st => !(s.removedStudents || []).includes(st.id) && (r ? r.expected.includes(st.id) : !!s.members[st.id])).map(st => ({ name: st.name, answered: !!(r?.answers[st.id]?.first || r?.answers[st.id]?.final), confirmed: !!r?.answers[st.id]?.confirmed }));
     if (role === 'student') { view.mine = r?.answers[studentId] || {}; view.heroName = s.students.find(st => st.id === studentId)?.name || ''; if (revealed) view.myCorrect = choices(view.mine.final ?? view.mine.first).length ? isCorrect(q, view.mine.final ?? view.mine.first) : null; view.canAnswer = !!r?.expected.includes(studentId); }
     if (role === 'teacher') {
       Object.assign(view, { liveStats: stats(s), code: s.code, boardToken: s.boardToken, queue: s.queue.map(item => {
@@ -294,7 +310,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
         const diagram = s.game.diagrams.find(d => d.id === original.diagramId);
         return { ...item, originalPrompt: original.prompt, acceptedLabels: diagram.regions.filter(r => original.accepted.includes(r.id)).map(r => r.label) };
       }),
-        learners: s.students.map(x => ({ ...x, joined: !!s.members[x.id], absent: !!s.members[x.id]?.absent,
+        learners: s.students.map(x => ({ ...x, removed: (s.removedStudents || []).includes(x.id), joined: !!s.members[x.id], absent: !!s.members[x.id]?.absent,
           answered: !!r?.answers[x.id]?.first, confirmed: !!r?.answers[x.id]?.confirmed })) });
     }
     return view;
