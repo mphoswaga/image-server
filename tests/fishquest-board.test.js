@@ -62,3 +62,32 @@ test('old board sessions recover growth once and preserve their existing rewards
  assert.equal(s.players[0].mass,190);assert.deepEqual(s.food,food);
  const masses=s.players.map(p=>p.mass);upgrade(s);assert.deepEqual(s.players.map(p=>p.mass),masses);
 });
+test('story waits for equal learner turns, handles both threats, and ends at the sanctuary',()=>{
+ const Story=require('../public/fishquest-board-story');
+ const s=create(students.slice(0,4),questions,2,1,true);
+ assert.equal(s.rounds,8);assert.equal(s.phase,'intro');assert.equal(answer(s,0),false);
+ const {advance,choose}=require('../public/fishquest-board-state');
+ advance(s);
+ for(let i=0;i<4;i++){answer(s,0);next(s)}
+ assert.equal(s.phase,'event_warning');assert.equal(s.story.event.kind,'shark');
+ assert.equal(s.answers.length,4);s.paused=true;assert.equal(advance(s),false);s.paused=false;advance(s);
+ const captain=Story.current(s).captain;assert.equal(captain.studentId,'2');
+ const food=s.food[0];assert.equal(choose(s,'stand'),true);
+ assert.equal(s.food[0],food-Math.ceil(food*.4));assert.equal(choose(s,'stand'),false);
+ assert.equal(s.players.length,4);assert.equal(s.answers.length,4);
+ const restored=JSON.parse(JSON.stringify(s));advance(restored);choose(restored,'hide');advance(restored);
+ assert.equal(restored.phase,'question');assert.deepEqual(restored.story.completed,['shark']);
+ for(let i=0;i<4;i++){answer(restored,0);next(restored)}
+ assert.equal(restored.phase,'event_warning');assert.equal(restored.story.event.kind,'net');
+ advance(restored);choose(restored,'shelter');advance(restored);choose(restored,'sprint');advance(restored);
+ assert.equal(restored.phase,'ended');assert.equal(restored.story.history.length,4);
+ assert.equal(restored.players.length,4);assert.equal(restored.answers.length,8);
+});
+test('threat choices reject unaffordable spending and protect a fully grown school',()=>{
+ const {advance,choose}=require('../public/fishquest-board-state');
+ const s=create(students.slice(0,2),questions,2,1,true);advance(s);
+ for(let i=0;i<2;i++){answer(s,1);next(s)}
+ advance(s);assert.equal(choose(s,'distract'),false);assert.equal(s.phase,'event_choice');
+ s.players.forEach(p=>p.mass=450);s.food[0]=20;assert.equal(choose(s,'stand'),true);
+ assert.equal(s.food[0],20);assert.equal(s.story.event.result.safe,true);
+});

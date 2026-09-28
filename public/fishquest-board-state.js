@@ -1,4 +1,4 @@
-(function(root,factory){if(typeof module==='object'&&module.exports)module.exports=factory(require('./fishquest-growth'));else root.FishBoard=factory(root.FishQuestGrowth)})(this,Growth=>{
+(function(root,factory){if(typeof module==='object'&&module.exports)module.exports=factory(require('./fishquest-growth'),require('./fishquest-board-story'));else root.FishBoard=factory(root.FishQuestGrowth,root.FishBoardStory)})(this,(Growth,Story)=>{
   const MAX_MASS=1000, PERSONAL_GROWTH=90, SHARED_GROWTH=135;
   function feed(players,index){
     const player=players[index];if(!player)return;
@@ -15,12 +15,13 @@
     state.growthVersion=1;
     return state;
   }
-  function create(students,questions,teamCount,turns=1){
+  function create(students,questions,teamCount,turns=1,adventure=false){
     if(!students.length||!questions.length)throw Error('Choose a class with learners and at least one question.');
     if(!Number.isInteger(teamCount)||teamCount<2||teamCount>4)throw Error('Choose 2–4 teams.');
     if(!Number.isInteger(turns)||turns<1||turns>4)throw Error('Choose 1–4 turns per learner.');
     if(students.some(s=>!Number.isInteger(s.team)||s.team<0||s.team>=teamCount))throw Error('Assign each learner to a team.');
-    return {growthVersion:1,players:students.map((s,i)=>({...s,food:0,mass:100,variant:i%30})),questions,teamCount,turn:0,phase:'question',paused:false,food:Array(teamCount).fill(0),answers:[],rounds:Math.max(turns,Math.ceil(questions.length/students.length))*students.length};
+    const state={growthVersion:1,players:students.map((s,i)=>({...s,food:0,mass:100,variant:i%30})),questions,teamCount,turn:0,phase:'question',paused:false,food:Array(teamCount).fill(0),answers:[],rounds:Math.max(turns,Math.ceil(questions.length/students.length))*students.length};
+    return adventure?Story.start(state):state;
   }
   function answer(state,choice){
     if(state.paused||state.phase!=='question')return false;
@@ -37,6 +38,6 @@
     }
     state.phase='reveal';return true;
   }
-  function next(state){if(state.paused||state.phase!=='reveal')return false;state.turn++;state.phase=state.turn>=state.rounds?'ended':'question';return true;}
-  return {create,answer,next,upgrade};
+  function next(state){if(state.paused||state.phase!=='reveal')return false;state.turn++;if(state.story)Story.afterTurn(state);else state.phase=state.turn>=state.rounds?'ended':'question';return true;}
+  return {create,answer,next,upgrade,advance:Story.advance,choose:Story.choose};
 });
