@@ -85,6 +85,39 @@
     document.getElementById('upload').onchange = uploadDiagram;
     if(d){document.getElementById('diagram-select').onchange=e=>{captureEditor();activeDiagram=Number(e.target.value);regionEditing=null;editor();};wireDiagramEditor();}
   }
+  async function prepareDiagram(file) {
+    // Reduce transfer size without changing the teacher's original file.
+    const image = new Image(), url = URL.createObjectURL(file);
+    try {
+      image.src = url; await image.decode();
+      if (image.naturalWidth * image.naturalHeight > 20000000) throw Error('Choose a diagram smaller than 20 megapixels.');
+      const scale = Math.min(1, 1800 / Math.max(image.naturalWidth, image.naturalHeight));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(image.naturalWidth * scale); canvas.height = Math.round(image.naturalHeight * scale);
+      canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', 0.92));
+      return blob && blob.size < file.size ? new File([blob], 'diagram.webp', {type: blob.type}) : file;
+    } finally { URL.revokeObjectURL(url); }
+  }
+  function sendDiagram(file, show) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest(), form = new FormData(); form.append('file', file);
+      xhr.open('POST', base + '/assets'); xhr.timeout = 60000;
+      let sent = false;
+      xhr.upload.onprogress = e => {
+        if (e.lengthComputable) show('Uploading diagram… ' + Math.round(e.loaded / e.total * 100) + '%');
+      };
+      xhr.upload.onload = () => { sent = true; show('Image sent. LessonScope is processing your diagram…'); };
+      xhr.onload = () => {
+        let data; try { data = JSON.parse(xhr.responseText); } catch { return reject(Error('The upload server returned an unexpected response. Your lesson details are kept. Please try again.')); }
+        if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+        else reject(Error(data.error || 'The diagram could not be saved. Please try again.'));
+      };
+      xhr.onerror = () => reject(Error('The upload connection was interrupted. Your lesson details are kept. Please try again.'));
+      xhr.ontimeout = () => reject(Error(sent ? 'The image was sent, but LessonScope did not finish processing it in time. Your lesson details are kept. Please try again.' : 'The image transfer did not finish in time. Your lesson details are kept. Please try again.'));
+      xhr.send(form);
+    });
+  }
   async function uploadDiagram(e) {
     const input=e.target,file=input.files?.[0];
     if(!file||uploadingDiagram)return;
@@ -97,8 +130,8 @@
       captureEditor();uploadingDiagram=true;input.disabled=true;
       show('Uploading '+file.name+'… Please wait. Your lesson details are kept.');
       previewUrl=URL.createObjectURL(file);preview.src=previewUrl;preview.hidden=false;
-      const form=new FormData();form.append('file',file);
-      const a=await api('/assets',form,{timeout:60000});
+      const prepared=await prepareDiagram(file);
+      const a=await sendDiagram(prepared,show);
       if(!a.asset)throw Error('The image was not saved. Please choose it again.');
       show('Upload received. Loading your diagram…');
       const image=new Image();image.src=imageUrl(a.asset);

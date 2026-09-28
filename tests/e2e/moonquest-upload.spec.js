@@ -23,3 +23,13 @@ test('a slow upload stays visible and succeeds beyond the former twelve-second l
  const buffer=await sharp({create:{width:100,height:100,channels:3,background:'#aabbcc'}}).png().toBuffer();await page.locator('#upload').setInputFiles({name:'slow.png',mimeType:'image/png',buffer});
  await expect(page.locator('#upload-status')).toContainText('Uploading slow.png');await expect(page.locator('#upload-preview')).toBeVisible();await expect(page.locator('#diagram img')).toBeVisible({timeout:20000});await expect(page.locator('#upload-status')).toContainText('Diagram added');
 });
+
+test('large diagram is reduced before transfer and retains its proportions',async({page})=>{
+ await signInDisposableTeacher(page,'-compressed-diagram');await page.goto('/moonquest');await page.getByRole('button',{name:'Create a diagram game',exact:false}).click();
+ const buffer=await sharp({create:{width:3000,height:2000,channels:3,background:'#123456'}}).png().toBuffer();
+ await page.evaluate(()=>{const original=XMLHttpRequest.prototype.send;XMLHttpRequest.prototype.send=function(body){if(body instanceof FormData)window.sentDiagramBytes=body.get('file').size;return original.call(this,body)}});
+ await page.locator('#upload').setInputFiles({name:'large.png',mimeType:'image/png',buffer});
+ await expect.poll(()=>page.evaluate(()=>window.sentDiagramBytes||Infinity)).toBeLessThan(buffer.length);
+ await expect(page.locator('#diagram img')).toBeVisible();
+ const dimensions=await page.locator('#diagram img').evaluate(async image=>{await image.decode();return [image.naturalWidth,image.naturalHeight]});expect(dimensions).toEqual([1800,1200]);
+});

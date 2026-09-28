@@ -59,19 +59,25 @@ function installMoonQuest(app, deps) {
     rosters: roster.listRosters(req.userId), generationCost: costOf(req, 'lessonscope.generate_game'),
   })));
   app.post(base + '/assets', teacher, uploadLimiter, (req, res, next) => {
+    const started = Date.now(), requestId = crypto.randomUUID();
+    req.diagramStage = 'receiving';
+    res.on('close', () => console.info(JSON.stringify({event:'moonquest_diagram_upload', requestId, stage:req.diagramStage, completed:res.writableFinished, status:res.statusCode, elapsedMs:Date.now()-started})));
     upload.single('file')(req, res, err => {
       if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'This image is larger than 8 MB. Choose a smaller PNG, JPEG or WebP image.' : 'The image upload was interrupted. Choose the image again.' });
       next();
     });
   }, wrap(async (req, res) => {
+    req.diagramStage = 'processing';
     if (!req.file) throw new Error('Choose a PNG, JPEG or WebP diagram.');
     const decoder = sharp(req.file.buffer, { limitInputPixels: 20000000, animated: false });
     const meta = await decoder.metadata();
     if (!['png', 'jpeg', 'webp'].includes(meta.format) || (meta.pages || 1) > 1) throw new Error('Use a single PNG, JPEG or WebP image.');
     const output = await decoder.rotate().resize({ width: 1800, height: 1800, fit: 'inside', withoutEnlargement: true }).webp({ quality: 88 }).toBuffer();
     const id = crypto.randomUUID(); const dims = await sharp(output).metadata();
+    req.diagramStage = 'saving';
     writeFileAtomic(assetPath(id) + '.webp', output);
     writeJsonAtomic(assetPath(id) + '.json', { teacherId: req.userId, width: dims.width, height: dims.height });
+    req.diagramStage = 'complete';
     res.json({ asset: id, width: dims.width, height: dims.height });
   }));
   app.get(base + '/assets/:asset', wrap((req, res) => {
