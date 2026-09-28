@@ -129,7 +129,7 @@ test('30 simultaneous learner requests retain every receipt and isolate board an
     await command('next');expect((await state()).phase).toBe('choose');const times=[];
     await Promise.all(clients.map(async(c,i)=>{const start=Date.now();const r=await c.post(endpoint+'/answer',{headers:{Authorization:'Bearer '+tokens[i]},data:{round:0,phase:'choose',regionId:i<5?'b':'a',eventId:'first-'+i}});times.push(Date.now()-start);expect(r.ok()).toBeTruthy();}));
     expect((await state()).answered).toBe(30);
-    const display=await page.context().newPage();await display.goto('/moonquest?session='+session.id+'&board='+room.boardToken);await expect(display.locator('.hero-badge')).toHaveCount(30);await expectNoPageOverflow(display);await display.screenshot({path:'/tmp/moon-thirty-heroes.png',fullPage:true});
+    const display=await page.context().newPage();await display.goto('/moonquest?session='+session.id+'&board='+room.boardToken);await expect(display.locator('.hero-lantern')).toHaveCount(30);await expectNoPageOverflow(display);await display.screenshot({path:'/tmp/moon-thirty-heroes.png',fullPage:true});
     await Promise.all(clients.map(async(c,i)=>{expect((await c.post(endpoint+'/answer',{headers:{Authorization:'Bearer '+tokens[i]},data:{round:0,phase:'choose',regionId:'a',changeConfirmed:true,eventId:'final-'+i}})).ok()).toBeTruthy();}));
     await command('advance');room=await state();await expect(display.locator('.evidence')).toBeVisible();await display.screenshot({path:'/tmp/moon-thirty-reveal.png',fullPage:true});await display.close();expect(room.stats.correct).toBe(30);expect(room.stats.improved).toBe(5);
     expect((await clients[0].get(endpoint+'/teacher')).ok()).toBe(false);expect((await clients[0].get(endpoint+'/report')).ok()).toBe(false);
@@ -198,12 +198,12 @@ test('signed-in Smartboard can resume and displays names without exposing choice
   await board.getByRole('button',{name:'Skip intro',exact:true}).click();await expect(board.locator('.question-focus')).toBeVisible();
   await expect(page.getByRole('button',{name:'Simulate learner answers',exact:true})).toBeVisible();await page.getByRole('button',{name:'Simulate learner answers',exact:true}).click();
   await expect(board.getByRole('heading',{name:'6/6 learners answered',exact:true})).toBeVisible();
-  await expect(board.locator('.crew-chip.answered')).toHaveCount(6);await expect(board.locator('.crew-chip').first()).toContainText('Practice learner 1');
-  await expect(board.locator('.crew-status')).not.toContainText('Eyes');await expect(board.locator('.evidence')).toHaveCount(0);
+  await expect(board.locator('.hero-lantern.lit')).toHaveCount(6);await expect(board.locator('.hero-lantern').first()).toContainText('Practice learner 1');
+  await expect(board.locator('.festival-heroes')).not.toContainText('Eyes');await expect(board.locator('.evidence')).toHaveCount(0);
   await board.getByRole('button',{name:'Pause',exact:true}).click();await board.getByRole('button',{name:'Resume',exact:true}).click();
   await expect(board.locator('#timer')).not.toHaveText('Paused');await expectNoPageOverflow(board);
   await board.screenshot({path:'/tmp/moon-dashboard-'+info.project.name+'.png',fullPage:true});
-  const anon=await browser.newContext();try{const viewer=await anon.newPage();await viewer.goto('http://127.0.0.1:4341'+url);await expect(viewer.locator('.crew-chip')).toHaveCount(6);await expect(viewer.getByRole('button',{name:'Pause',exact:true})).toHaveCount(0);const id=new URL(url,'http://local').searchParams.get('session');expect((await viewer.request.get('/api/games/moonquest/sessions/'+id+'/presenter')).ok()).toBe(false);expect((await viewer.request.post('/api/games/moonquest/sessions/'+id+'/command',{data:{action:'pause',presentation:true}})).ok()).toBe(false);}finally{await anon.close();await board.close();}
+  const anon=await browser.newContext();try{const viewer=await anon.newPage();await viewer.goto('http://127.0.0.1:4341'+url);await expect(viewer.locator('.hero-lantern')).toHaveCount(6);await expect(viewer.getByRole('button',{name:'Pause',exact:true})).toHaveCount(0);const id=new URL(url,'http://local').searchParams.get('session');expect((await viewer.request.get('/api/games/moonquest/sessions/'+id+'/presenter')).ok()).toBe(false);expect((await viewer.request.post('/api/games/moonquest/sessions/'+id+'/command',{data:{action:'pause',presentation:true}})).ok()).toBe(false);}finally{await anon.close();await board.close();}
 });
 
 

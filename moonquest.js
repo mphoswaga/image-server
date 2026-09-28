@@ -112,7 +112,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     const students = test ? Array.from({ length: 6 }, (_, i) => ({ id: 'practice-' + i, name: 'Practice learner ' + (i + 1) })) : roster.students.map(s => ({ id: String(s.id), name: s.name }));
     const s = { id: uid(), teacherId, game, rosterId: test ? null : roster.id, className: test ? 'Practice crew' : roster.name, students,
       test, code: crypto.randomBytes(5).toString('hex').toUpperCase(), boardToken: crypto.randomBytes(24).toString('hex'), phase: 'lobby', paused: false, deadline: null,
-      seq: 0, round: -1, rounds: [], nextQuestion: 0, members: {}, queue: [], createdAt: clock(), boot };
+      story: {enabled: !!game.timing.automatic, history: [], spent: {}}, seq: 0, round: -1, rounds: [], nextQuestion: 0, members: {}, queue: [], createdAt: clock(), boot };
     return saveSession(s);
   }
   const current = s => s.rounds[s.round];
@@ -150,9 +150,43 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
       }
     }
   }
+  const storyChapters = [
+    {title:'Light the entrance',options:[{id:'bridge',title:'Build a lantern bridge',icon:'🏮',result:'The rabbit carries your lanterns across the bridge. The entrance glows again.'},{id:'stars',title:'Follow the guiding stars',icon:'⭐',result:'The rabbit follows your star trail and finds the entrance lights.'}]},
+    {title:'Bring back the festival',options:[{id:'mooncakes',title:'Find the missing mooncakes',icon:'🥮',result:'The rabbit follows the glowing footprints and brings mooncakes to the courtyard.'},{id:'garden',title:'Wake the lantern garden',icon:'🌸',result:'The rabbit waters the moon garden. A canopy of glowing lantern flowers opens.'}]},
+    {title:'Reach the moon lantern',options:[{id:'kite',title:'Fly the star kite',icon:'🪁',result:'Your star kite lifts the rabbit’s light high above Vinschool.'},{id:'drums',title:'Lead the lantern parade',icon:'🏮',result:'The rabbit leads your lantern parade. The whole school shines.'}]}
+  ];
+  function sparks(s,id){return s.rounds.filter(r=>r.revealedAt&&r.expected.includes(id)&&isCorrect(r.question,r.answers[id]?.final??r.answers[id]?.first)).length;}
+  function maybeStory(s){
+    const r=current(s);if(!s.story?.enabled||!r?.revealedAt||r.storyHandled)return false;
+    r.storyHandled=true;
+    const interval=Math.max(2,Math.ceil(s.game.questions.length/4));
+    if(s.nextQuestion>=s.game.questions.length||(s.round+1)%interval!==0||s.story.history.length>=3)return false;
+    const chapter=storyChapters[s.story.history.length];
+    const eligible=Object.keys(s.members).filter(id=>!s.members[id].absent&&!(s.removedStudents||[]).includes(id)&&sparks(s,id)-2*(s.story.spent[id]||0)>=2);
+    s.story.current={...copy(chapter),id:uid(),eligible,votes:{}};
+    s.phase='story-vote';s.deadline=clock()+8000;s.teachingPause=null;return true;
+  }
+  function finishStoryVote(s){
+    const c=s.story.current,counts=c.options.map(o=>Object.values(c.votes).filter(v=>v===o.id).length);
+    const tied=counts[0]===counts[1]&&counts[0]>0;
+    c.winner=counts[0]===counts[1]?(tied?crypto.randomInt(2):0):counts[0]>counts[1]?0:1;
+    c.tied=tied;c.noVotes=counts.every(n=>!n);s.story.history.push(copy(c));
+    s.phase='story-action';s.deadline=clock()+5000;
+  }
+  function vote(id,studentId,body){
+    const s=tick(session(id)),c=s.story?.current;
+    if(s.phase!=='story-vote'||s.paused||!c||body.checkpoint!==c.id)fail('This story vote is closed.');
+    if(!c.eligible.includes(studentId)||s.members[studentId]?.absent||(s.removedStudents||[]).includes(studentId))fail('Earn two correct answers to vote at a story checkpoint.');
+    if(!c.options.some(o=>o.id===body.choice))fail('Choose one of the two story actions.');
+    if(c.votes[studentId]){if(c.votes[studentId]===body.choice)return s;fail('Your story vote is already locked.');}
+    c.votes[studentId]=body.choice;s.story.spent[studentId]=(s.story.spent[studentId]||0)+1;
+    return saveSession(s);
+  }
   function tick(s) {
     if (!s.paused && s.deadline && clock() >= s.deadline) {
-      if (s.phase === 'intro' || (s.phase === 'reveal' && s.game.timing.automatic)) nextRound(s);
+      if(s.phase==='story-vote')finishStoryVote(s);
+      else if(s.phase==='story-action')nextRound(s);
+      else if (s.phase === 'intro' || (s.phase === 'reveal' && s.game.timing.automatic)) nextRound(s);
       else advance(s);
       saveSession(s);
     }
@@ -167,6 +201,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     s.teachingPause = null;
   }
   function nextRound(s) {
+    if(maybeStory(s))return;
     const follow = s.queue.find(q => q.status === 'approved' && s.round >= q.eligibleAfter);
     if (!Object.values(s.members).some(m => !m.absent)) {
       if (s.phase === 'lobby') fail('Wait for learners to join, or scan the test QR.');
@@ -318,11 +353,23 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
       diagram: q ? s.game.diagrams.find(d => d.id === q.diagramId) : null,
       stats: revealed ? stats(s) : null,
       lanterns: s.rounds.filter(r => r.revealedAt).reduce((n, r) => n + stats(s, r).correct, 0) };
+    view.revealedAt=r?.revealedAt||null;
+    if(s.story?.enabled){
+      view.storyProgress=s.story.history.length;
+      if(role==='student')view.reward={sparks:sparks(s,studentId),available:Math.max(0,sparks(s,studentId)-2*(s.story.spent[studentId]||0))};
+      if(['story-vote','story-action'].includes(s.phase)){
+        const c=s.story.current;view.story={id:c.id,title:c.title,options:c.options,winner:c.winner,tied:c.tied,noVotes:c.noVotes,eligibleCount:c.eligible.length,voted:Object.keys(c.votes).length};
+        if(role==='student'){view.story.canVote=c.eligible.includes(studentId)&&!c.votes[studentId]&&!s.members[studentId]?.absent;view.story.myVote=c.votes[studentId]||null;}
+      }
+    }
     if (role === 'board' && s.phase === 'lobby') view.code = s.code;
     if (s.phase === 'intro') view.introElapsedMs = Math.max(0, 24000 - (s.paused ? s.remaining : s.deadline - clock()));
     if (role !== 'student') view.crew = s.students.filter(st => !(s.removedStudents || []).includes(st.id) && (r ? r.expected.includes(st.id) : !!s.members[st.id])).map(st => ({ name: st.name, answered: !!(r?.answers[st.id]?.first || r?.answers[st.id]?.final), confirmed: !!r?.answers[st.id]?.confirmed }));
     if (role === 'student') { view.mine = r?.answers[studentId] || {}; view.heroName = s.students.find(st => st.id === studentId)?.name || ''; if (revealed) view.myCorrect = choices(view.mine.final ?? view.mine.first).length ? isCorrect(q, view.mine.final ?? view.mine.first) : null; view.canAnswer = !!r?.expected.includes(studentId); }
     if (role === 'teacher') {
+      const lastRevealed=s.rounds.findLast(r=>r.revealedAt);
+      view.unansweredRound=lastRevealed?s.rounds.indexOf(lastRevealed):-1;
+      view.unansweredLearners = lastRevealed ? s.students.filter(st=>lastRevealed.expected.includes(st.id)&&!lastRevealed.answers[st.id]?.first&&!lastRevealed.answers[st.id]?.final).map(st=>({id:st.id,name:st.name})) : [];
       Object.assign(view, { liveStats: stats(s), code: s.code, boardToken: s.boardToken, queue: s.queue.map(item => {
         const original = s.game.questions.find(q => q.id === item.parentId);
         const diagram = s.game.diagrams.find(d => d.id === original.diagramId);
@@ -345,7 +392,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
           revisedCorrect: (a.final ?? a.first) ? isCorrect(r.question, a.final ?? a.first) : null, confirmed: !!a.confirmed, expected: r.expected.includes(st.id) };
       }) })) };
   }
-  return { dir, read, list, saveDraft, deleteDraft, saveGame, createSession, session, saveSession, stats, command, join, joinPractice, answer, snapshot, review, saveSuggestion, report,
+  return { dir, read, list, saveDraft, deleteDraft, saveGame, createSession, session, saveSession, stats, command, join, joinPractice, answer, vote, snapshot, review, saveSuggestion, report,
     findCode(code) { if (!/^[A-F0-9]{10}$/.test(code || '')) fail('Enter the ten-character MoonQuest code.'); return list('session').find(s => s.code === code); },
     sessions() { return fs.readdirSync(dir).filter(f => f.startsWith('session-')).map(f => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'))); } };
 }

@@ -199,6 +199,10 @@ function installMoonQuest(app, deps) {
     if (role !== 'board') throw new Error('Smartboard link required.');
     res.type('svg').send(await QRCode.toString(`${req.protocol}://${req.get('host')}/moonquest/join?code=${s.code}`, { type: 'svg', margin: 1 }));
   }));
+  app.post(base + '/sessions/:id/story-vote', wrap((req,res)=>{
+    const {role,studentId}=audience(req);if(role!=='student')throw Error('Only learners can vote.');
+    store.vote(req.params.id,studentId,req.body);res.json(store.snapshot(req.params.id,role,studentId));
+  }));
   app.post(base + '/sessions/:id/answer', wrap((req, res) => {
     const { role, studentId } = audience(req); if (role !== 'student') throw new Error('Only learners can answer.');
     store.answer(req.params.id, studentId, req.body); res.json(store.snapshot(req.params.id, role, studentId));

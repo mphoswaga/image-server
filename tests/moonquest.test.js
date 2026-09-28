@@ -228,3 +228,29 @@ test('unfinished drafts persist separately with ownership and version checks',t=
  assert.throws(()=>store.deleteDraft('other',draft.id),/another teacher/);
  store.deleteDraft('teacher',draft.id);assert.equal(store.list('draft','teacher').length,0);
 });
+
+function storySetup(t){const x=setup(t,3),s=x.store.session(x.id);s.game.timing={automatic:true,flow:'single',choose:35,reveal:8};s.story={enabled:true,history:[],spent:{}};x.store.saveSession(s);return x;}
+test('story votes spend earned sparks once, survive reload and keep choices private',t=>{
+ const x=storySetup(t);x.cmd('next');for(let round=0;round<2;round++){x.answer(0);x.answer(1);x.cmd('advance');if(round===0)x.cmd('next');}
+ assert.deepEqual(x.store.snapshot(x.id,'teacher').unansweredLearners.map(s=>s.id),['s2']);assert.equal(x.store.snapshot(x.id,'board').unansweredLearners,undefined);
+ x.cmd('next');let s=x.store.snapshot(x.id,'student','s0');assert.equal(s.phase,'story-vote');assert.equal(s.story.canVote,true);assert.equal(x.store.snapshot(x.id,'student','s2').story.canVote,false);
+ const body={checkpoint:s.story.id,choice:s.story.options[0].id};x.store.vote(x.id,'s0',body);x.store.vote(x.id,'s0',body);assert.equal(x.store.session(x.id).story.spent.s0,1);
+ assert.throws(()=>x.store.vote(x.id,'s0',{...body,choice:s.story.options[1].id}),/locked/);assert.throws(()=>x.store.vote(x.id,'s2',body),/Earn/);
+ const board=x.store.snapshot(x.id,'board');assert.equal(board.story.votes,undefined);assert.equal(board.story.eligible,undefined);
+ x.step(8001);s=x.store.snapshot(x.id,'student','s0');assert.equal(s.phase,'story-action');assert.equal(s.story.winner,0);assert.throws(()=>x.store.vote(x.id,'s1',body),/closed/);
+ x.step(5001);assert.equal(x.store.snapshot(x.id,'board').phase,'choose');assert.equal(x.store.session(x.id).round,2);assert.equal(x.store.snapshot(x.id,'student','s0').reward.available,0);
+});
+test('story vote defaults without votes, pause freezes it, and ties are resolved only once',t=>{
+ const x=storySetup(t);x.cmd('next');for(let round=0;round<2;round++){x.answer(0);x.answer(1);x.answer(2);x.cmd('advance');x.cmd('next');}
+ x.cmd('pause');x.step(20000);assert.equal(x.store.snapshot(x.id,'board').phase,'story-vote');x.cmd('pause');x.step(8001);let s=x.store.snapshot(x.id,'board');assert.equal(s.story.noVotes,true);assert.equal(s.story.winner,0);
+ x.step(5001);x.store.snapshot(x.id,'board');for(let round=0;round<2;round++){x.answer(0);x.answer(1);x.cmd('advance');x.cmd('next');}
+ s=x.store.snapshot(x.id,'student','s0');for(let i=0;i<2;i++)x.store.vote(x.id,'s'+i,{checkpoint:s.story.id,choice:s.story.options[i].id});x.step(8001);s=x.store.snapshot(x.id,'board');assert.equal(s.story.tied,true);const winner=s.story.winner;assert.equal(x.store.snapshot(x.id,'board').story.winner,winner);
+});
+test('full 24-learner story finishes without altering assessment totals',t=>{
+ const x=setup(t,24),initial=x.store.session(x.id);initial.game.timing={automatic:true,flow:'single',choose:35,reveal:8};initial.story={enabled:true,history:[],spent:{}};x.store.saveSession(initial);x.cmd('next');
+ for(let round=0;round<5;round++){
+  for(let i=0;i<20;i++)x.answer(i);x.step(35001);let view=x.store.snapshot(x.id,'teacher');assert.equal(view.phase,'reveal');assert.equal(view.stats.correct,20);assert.equal(view.stats.unanswered,4);assert.equal(view.unansweredLearners.length,4);
+  x.step(8001);view=x.store.snapshot(x.id,'board');if(view.phase==='story-vote'){for(let i=0;i<20;i++)x.store.vote(x.id,'s'+i,{checkpoint:view.story.id,choice:view.story.options[round%2].id});x.step(8001);assert.equal(x.store.snapshot(x.id,'board').phase,'story-action');x.step(5001);view=x.store.snapshot(x.id,'board');}
+ }
+ assert.equal(x.store.snapshot(x.id,'board').phase,'ended');assert.equal(x.store.session(x.id).story.history.length,2);assert.equal(x.store.report(x.id,'teacher').rounds.length,5);assert.equal(x.store.snapshot(x.id,'student','s0').reward.sparks,5);
+});

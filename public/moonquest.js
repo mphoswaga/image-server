@@ -142,7 +142,7 @@
     root.innerHTML=`<div class="row spread"><div><p class="eyebrow">Mission workshop</p><h1 style="font-size:38px">Build a discovery.</h1></div><div>${button('Save draft','save-draft')}${button('Back to adventures','home')}<p id="draft-status" role="status" class="muted">Draft recovery enabled</p></div></div>
       <section class="panel grid"><label>Game title<input id="mq-title" maxlength="120" value="${esc(draft.title)}"></label><div class="grid"><label>Subject<input id="mq-subject" value="${esc(draft.subject)}"></label><label>Learner level<input id="mq-grade" value="${esc(draft.grade)}"></label></div></section>
       <section class="panel"><h2>1. Make your diagram clickable</h2><p class="muted">Upload a clear PNG, JPEG or WebP (up to 8 MB). Give each area a label, then draw it. Areas and labels should identify locations, without giving away the answer.</p>
-      <div class="row"><label class="button">＋ Add diagram<input id="upload" type="file" accept="image/png,image/jpeg,image/webp" hidden></label>${draft.diagrams.length?`<label>Current diagram<select id="diagram-select">${draft.diagrams.map((x,i)=>`<option value="${i}" ${i===activeDiagram?'selected':''}>${esc(x.title)} · ${x.regions.length} saved areas</option>`).join('')}</select></label>`:''}</div>
+      <div class="row"><label class="button">＋ Add diagram<input id="upload" type="file" accept="image/png,image/jpeg,image/webp" hidden></label>${draft.diagrams.length?`<label>Current diagram<select id="diagram-select">${draft.diagrams.map((x,i)=>`<option value="${i}" ${i===activeDiagram?'selected':''}>${esc(x.title)} · ${x.regions.length} saved areas</option>`).join('')}</select></label>${button('Remove diagram','remove-diagram','danger')}`:''}</div>
       <p id="upload-status" role="status" aria-live="polite"></p><img id="upload-preview" alt="Selected diagram preview — uploading" hidden style="max-width:280px;max-height:280px;border-radius:12px">
       ${d?`<div class="editor" style="margin-top:20px"><div>${diagramHtml(d,regionEditing,[],true)}<p class="muted">Drag to draw a rectangle. Drag an existing area to move it; drag its corner handles to resize. Ellipses use two taps; custom outlines use corners.</p></div><div class="stack"><label>Area label<input id="region-label" placeholder="e.g. Eyes" maxlength="100" value="${esc(selectedRegion?.label||'')}"></label>${bounds?`<div class="grid">${['x','y','w','h'].map(k=>`<label>${{x:'Left',y:'Top',w:'Width',h:'Height'}[k]} %<input id="region-${k}" type="number" min="0" max="100" step="0.1" value="${(bounds[k]*100).toFixed(1)}"></label>`).join('')}</div><div class="row">${button('Apply area changes','update-region','primary')}${button('New area','new-area')}</div><p class="muted">Drag this area or its corner handles on the picture. Its linked answers are preserved.</p>`:''}<label>Shape<select id="shape"><option value="rectangle">Rectangle</option><option value="ellipse">Ellipse</option><option value="polygon">Custom outline</option></select></label><div class="row">${button('Finish area','finish-area','primary')}${button('Undo corner','undo-corner')}</div><div>${d.regions.map(r=>`<div class="row spread" style="margin-bottom:8px"><span>${esc(r.label)}</span><div class="row"><button class="small" data-edit-region="${esc(r.id)}">Edit</button><button class="small danger" data-delete-region="${esc(r.id)}">Remove</button></div></div>`).join('')}</div><p class="muted">Avoid overlapping areas. Learners can also use the labelled answer buttons below the diagram.</p></div></div>`:''}</section>
       <section class="panel"><h2>2. Prepare the challenges</h2><p class="muted">Give each question a clear objective and explanation. Choose whether one of the ticked areas is enough, or learners must select all of them. The instruction is shown on every learner screen.</p><label>Objective for AI suggestions<textarea id="objective" placeholder="e.g. Identify the sense used to receive information from a device.">${esc(draft.objective||'')}</textarea></label><div class="row" style="margin:15px 0">${button('＋ Write a question','add-question')}${button('AI draft 5 questions · '+(library?.generationCost||0)+' credits','draft-ai')}</div><p class="muted">AI drafts need your review. During play, up to two AI attempts per flagged question are included.</p>
@@ -315,7 +315,7 @@
       const next=await api(url);if(view!=='live'||sessionId!==requestedSession||role!==requestedRole)return;clockOffset=next.serverNow-Date.now();
       if(state&&next.seq<state.seq)return;
       state=next;
-      const key=role==='student'?JSON.stringify([state.round,state.phase,state.paused,state.deadline,state.mine,state.canAnswer,state.stats]):[state.seq,role].join(':');
+      const key=role==='student'?JSON.stringify([state.round,state.phase,state.paused,state.deadline,state.mine,state.canAnswer,state.stats,state.story,state.reward]):[state.seq,role].join(':');
       if(key!==lastRender){renderLive();lastRender=key;}const c=document.getElementById('connection');if(c){c.textContent='Connected';c.classList.remove('interrupted');}
       if(role==='teacher'&&!state.test){
         const queued=state.queue.find(q=>q.status==='needs-review'&&!q.suggestion&&!q.attempts&&!autoSuggestions.has(q.id));
@@ -331,7 +331,7 @@
   }
   function storyScene(s) {
     const elapsed=Math.min(24,Math.max(0,(s.introElapsedMs||0)/1000));
-    return `${presenterControls(s)}<section class="opening-scene" aria-label="MoonQuest opening story"><div class="opening-brand">MOONQUEST<span>SAVE THE FESTIVAL</span></div><div class="crawl-window"><div class="story-crawl" style="--elapsed:-${elapsed}s;animation-play-state:${s.paused?'paused':'running'}"><p class="episode">MISSION ONE</p><h1>THE VANISHING LIGHT</h1><p>Above our world, the Moon Festival is growing dark.</p><p>Pip has mixed up the signals that guide the lanterns home.</p><p>The heroes of Vinschool are ready.<br>That means YOU.</p><p>Look carefully. Choose wisely.<br>Share your reasons.</p><p>Protect your school.<br>Together, bring the light back.</p></div></div><div class="launch-status"><span>${s.paused?'Story paused':'Your mission begins soon'}</span><div id="timer" class="timer" role="timer"></div></div></section>`;
+    return `${presenterControls(s)}<section class="opening-scene" aria-label="MoonQuest opening story"><div class="opening-brand">MOONQUEST<span>SAVE THE FESTIVAL</span></div><div class="crawl-window"><div class="story-crawl" style="--elapsed:-${elapsed}s;animation-play-state:${s.paused?'paused':'running'}"><p class="episode">MISSION ONE</p><h1>THE VANISHING LIGHT</h1><p>Above our world, the Moon Festival is growing dark.</p><p>Pip has mixed up the signals that guide the lanterns home.</p><p>The moon rabbit needs your help.</p><p>The heroes of Vinschool are ready.<br>That means YOU.</p><p>Look carefully. Choose wisely.<br>Share your reasons.</p><p>Protect your school.<br>Together, bring the light back.</p></div></div><div class="launch-status"><span>${s.paused?'Story paused':'Your mission begins soon'}</span><div id="timer" class="timer" role="timer"></div></div></section>`;
   }
   function liveControls() {
     const s=state;
@@ -343,12 +343,13 @@
       ${s.test?`<p class="muted">Scan the QR to join as a practice learner—no name or PIN. Simulation fills only the remaining practice learners.</p><a class="button small" target="_blank" rel="noopener" href="/moonquest/join?code=${s.code}">Open practice learner</a>`:''}
       ${s.test&&['choose','reconsider'].includes(s.phase)?`<div class="stack">${button('Simulate learner answers','simulate')}${button('Simulate a misconception','simulate-misconception')}</div>`:''}
       <div class="row" style="margin-top:12px">${button('View report','report','small')}${s.phase!=='ended'?button('Finish mission','end','small'):''}${button('Adventures','home','small')}</div></div>
+      ${s.unansweredLearners?.length?`<section class="panel unanswered-private"><h3>No answer received · ${s.unansweredLearners.length}</h3><p class="muted">Private teacher list · question ${s.unansweredRound+1}</p><ul>${s.unansweredLearners.map(l=>`<li>${esc(l.name)}</li>`).join('')}</ul></section>`:''}
       <div class="panel"><h3>Crew check-in · ${s.joined}/${s.learners.filter(l=>!l.removed).length}</h3><p class="muted">${s.phase==='reconsider'?'✓ means confirmed during reconsideration. The first choice is kept otherwise.':'✓ means a first choice has been saved.'}</p><p class="muted">Remove learners from this mission only. Saved answers and class rosters are kept. Add them back for a later round.</p><div class="learners">${s.learners.map(l=>`<div class="learner ${l.answered?'has-answered':''}"><span>${s.phase==='reconsider'?l.confirmed?'✓':'○':l.answered?'✓':l.joined?'●':'○'} ${esc(l.name)} ${l.removed?'· removed':l.absent?'· away':''}</span><button data-remove-learner="${esc(l.id)}" data-removed="${!l.removed}">${l.removed?'Add back':'Remove'}</button>${!l.removed&&l.joined&&['lobby','reveal'].includes(s.phase)?`<button data-attendance="${esc(l.id)}" data-absent="${!l.absent}">${l.absent?'Include':'Away'}</button>`:''}</div>`).join('')}</div></div>
       <div id="queue-panel"></div></aside>`;
   }
   function renderLive() {
     document.body.dataset.view='live'; document.body.dataset.audience=role; document.body.dataset.phase=state.phase;
-    const s=state,teacher=role==='teacher';
+    const s=state,teacher=role==='teacher';document.body.classList.toggle('mission-paused',!!s.paused);document.body.dataset.answerLocked=String(!!s.mine?.first);
     if(answerRound!==s.round){answerRound=s.round;changingAnswer=false;pendingChoices=[];}
     const selected=changingAnswer||pendingChoices.length?pendingChoices:s.mine?.final||s.mine?.first;
     const answerOpen=role==='student'&&s.canAnswer&&!s.paused&&['choose','reconsider'].includes(s.phase)&&!(s.automatic&&s.phase==='choose'&&s.mine?.first&&!changingAnswer);
@@ -358,8 +359,9 @@
     const titles={lobby:'The moon needs your crew.',read:'A new challenge has arrived.',choose:'Choose your answer.',discuss:'Discuss your choice with your partner.',reconsider:'Are you sure about your answer?',reveal:'Let’s discover why.',ended:'You brought light to the festival!'};
     document.body.classList.toggle('celebrate',s.phase==='ended');
     if(s.phase==='intro'){root.innerHTML=storyScene(s);updateTimer();return;}
-    root.innerHTML=`${role==='board'?presenterControls(s):''}${s.test?'<div class="preview-note">Teacher test · Practice learners only · No class marks are saved</div>':''}<div class="row spread mission-meta"><span class="pill">${esc(s.title)}</span><span class="connection" id="connection">Connected</span><span class="pill">${s.lanterns} lantern sparks</span></div>
-      <section class="stage" style="margin-top:24px"><p class="eyebrow">${s.phase==='lobby'?'MOON FESTIVAL RESCUE':s.phase==='ended'?'MISSION COMPLETE':'Challenge '+(s.round+1)}</p>${s.question&&s.phase!=='ended'?`<div class="question-focus"><span class="question-label">QUESTION ${s.round+1}</span><h1>${esc(s.question.prompt)}</h1></div><h2 class="stage-instruction">${s.paused&&s.teachingPause==='misconception'&&s.singleTimer?'Class meeting discussion':s.paused?'Pause and talk together':s.singleTimer&&s.phase==='choose'?'Think, choose and share your reasons.':titles[s.phase]}</h2>`:`<h1>${titles[s.phase]}</h1>`}<div class="timer" id="timer" role="timer" aria-label="Seconds remaining"></div></section>
+    if(s.story&&['story-vote','story-action'].includes(s.phase)){root.innerHTML=storyChoiceScene(s);const missing=root.querySelector('.unanswered-private');if(missing)root.querySelector('.teacher-private').prepend(missing);updateTimer();return;}
+    root.innerHTML=`${role==='board'?presenterControls(s):''}${s.test?'<div class="preview-note">Teacher test · Practice learners only · No class marks are saved</div>':''}<div class="row spread mission-meta"><span class="pill">${esc(s.title)}</span><span class="connection" id="connection">Connected</span><span class="pill">${s.lanterns} lantern sparks</span>${s.reward?`<span class="pill reward-progress">Your moon sparks: ${s.reward.sparks} · ${s.reward.available>=2?'Story vote ready':(2-s.reward.available)+' more to earn a vote'}</span>`:''}</div>
+      <section class="stage" style="margin-top:24px"><p class="eyebrow">${s.phase==='lobby'?'MOON FESTIVAL RESCUE':s.phase==='ended'?'MISSION COMPLETE':'Challenge '+(s.round+1)}</p>${s.question&&s.phase!=='ended'?`<div class="question-focus"><span class="question-label">QUESTION ${s.round+1}</span><h1>${esc(s.question.prompt)}</h1></div><h2 class="stage-instruction">${s.paused&&s.teachingPause==='misconception'&&s.singleTimer?'Class meeting discussion':s.paused?'Pause and talk together':s.singleTimer&&s.phase==='choose'?'Think, choose and share your reasons.':titles[s.phase]}</h2>`:`<h1>${titles[s.phase]}</h1>`}${rabbitTimer()}</section>
       ${role==='student'&&s.heroName&&['lobby','ended'].includes(s.phase)?`<p class="hero-welcome">${esc(s.heroName)}, you are a Vinschool hero.</p>`:''}${role==='board'&&!soundEnabled?button('Enable countdown sounds','enable-audio','small'):''}${role!=='student'?dashboard(s)+schoolScene(s):''}<div class="live-layout ${teacher?'':'solo'}"><div>${s.phase==='lobby'?`<section class="intro">${mascot()}<h2>Outsmart Pip. Restore the lanterns.</h2><p>Pip has scrambled the festival signals! Choose carefully, explain your thinking to a partner, then lock in your rescue plan. Every discovery adds light to our sky.</p>${role==='student'?'<p class="stat">You’re in the crew!</p><p>Wait for your teacher to begin.</p>':`<p>On learner devices, open <strong>${esc(location.host)}/moonquest/join</strong></p>${s.code?`<p class="code">${s.code}</p><img class="qr" alt="Scan to join this MoonQuest room" src="${base}/sessions/${s.id}/${teacher?'qr':'board-qr?board='+encodeURIComponent(new URLSearchParams(location.search).get('board'))}">`:''}`}<p class="muted">${s.joined} learners ready</p></section>`:
       s.phase==='ended'?`<section class="intro">${mascot()}<p class="stat">${s.lanterns} sparks of understanding</p><p>The lanterns shine again, and the moon rabbit can find the way home. Your careful choices and conversations made the difference.</p>${teacher?button('Explore the learning report','report','primary'):''}</section>`:
       `<div class="diagram-wrap">${role==='student'&&s.phase==='choose'?`<div class="selection-rule">${s.question.selectionCount>1?`Choose ${s.question.selectionCount} answers`:"Choose ONE answer"}${s.question.answerMode==='one'?' · One area is enough':' · Select the complete set'}</div>`:''}${diagramHtml(s.diagram,selected,s.question?.accepted||[])}<div class="region-list">${s.diagram.regions.map(r=>`<button data-region-answer="${esc(r.id)}" class="${selectedIds(selected).includes(r.id)?'selected ':''}${s.question?.accepted?.includes(r.id)?'correct':''}" ${!answerOpen?'disabled':''}>${esc(r.label)}</button>`).join('')}</div>
@@ -368,6 +370,7 @@
       ${['discuss','reconsider'].includes(s.phase)?`<div class="discussion-cue"><strong>${s.phase==='discuss'?'I chose this because…':'Keep your choice or tap a new answer.'}</strong><p>${s.phase==='discuss'?'Take turns explaining. Ask your partner: Why?':'Your first choice stays saved if you keep it.'}</p></div>`:''}
       ${s.phase==='reveal'?`<div class="panel">${role==='student'&&s.automatic?`<p class="learner-result">${!selected?'Let’s discover the answer together.':s.myCorrect===true?'You found it! Explain why it fits.':'A new discovery! Look at the highlighted answer.'}</p>`:''}<div class="row spread"><span class="stat">${s.stats.correct} correct</span><span>${s.stats.wrong} incorrect</span><span>${s.stats.unanswered} unanswered</span></div><p class="reveal-explanation">${esc(s.question.explanation)}</p>${s.question.accepted.length>1?`<p class="answer-rule-reveal">${s.question.answerMode==='all'?`All ${s.question.selectionCount} highlighted areas were needed.`:'Any ONE of the highlighted areas is correct.'}</p>`:''}<p class="muted">${s.stats.improved} learners moved from an incorrect first choice to a correct answer after revising their answer.</p></div>`:''}</div>`}</div>${teacher?liveControls():''}</div>`;
     if(teacher){
+      const missing=root.querySelector('.unanswered-private');if(missing)root.querySelector('.teacher-private').prepend(missing);
       const controls=root.querySelector('.control');
       if(controls){controls.classList.add('teacher-transport');root.prepend(controls);}
       renderQueue(queued);
@@ -385,7 +388,7 @@
       el.setAttribute('aria-disabled',String(!answerOpen));
     });
     const img=document.querySelector('#diagram img');if(img){img.onload=fitDiagram;if(img.complete)fitDiagram();}
-    updateTimer();
+    updateTimer();revealFireworks(s);
   }
   function fitDiagram(){
     if(view!=='live')return;const box=document.getElementById('diagram'),img=box?.querySelector('img');if(!img?.naturalWidth)return;
@@ -413,17 +416,47 @@
     const el=document.getElementById('timer');if(view!=='live'||!el||!state)return;
     const seconds=state.deadline?Math.max(0,Math.ceil((state.deadline-Date.now()-clockOffset)/1000)):null;
     const shown=state.automatic&&state.phase==='discuss'&&seconds!==null?seconds+5:seconds;
-    el.textContent=state.paused?(state.singleTimer&&state.teachingPause==='misconception'?'Listen · explain · learn':'Paused'):state.phase==='intro'||(state.singleTimer&&state.phase==='reveal')?'':shown!==null?shown+'s':'';
+    el.textContent=state.paused?(state.singleTimer&&state.teachingPause==='misconception'?'Listen · explain · learn':'Paused'):state.phase==='intro'||state.phase==='story-action'||(state.singleTimer&&state.phase==='reveal')?'':shown!==null?shown+'s':'';
     el.classList.toggle('urgent',shown!==null&&shown<=5&&!state.paused);
+    el.closest('.rabbit-timer')?.classList.toggle('rabbit-urgent',shown!==null&&shown<=5&&!state.paused);
     const stage=[sessionId,state.round,state.phase].join(':');
     if(lastStageSound&&lastStageSound!==stage&&!state.paused&&role!=='student')chime();
     lastStageSound=stage;
     const key=stage+':'+seconds;
-    if(!state.paused&&seconds>0&&state.phase!=='intro'&&!(state.singleTimer&&state.phase==='reveal')&&lastTick!==key){lastTick=key;countdownBeep(shown);}
+    if(!state.paused&&seconds>0&&state.phase!=='intro'&&state.phase!=='story-action'&&!(state.singleTimer&&state.phase==='reveal')&&lastTick!==key){lastTick=key;countdownBeep(shown);}
   }
   function schoolScene(s) {
-    const crew=s.crew||[],lit=s.lanterns>0;
-    return `<section class="school-mission ${lit?'shield-lit':''}" aria-label="Vinschool hero mission"><div class="mission-caption"><span class="eyebrow">${s.phase==='ended'?'MISSION COMPLETE':'VINSCHOOL HEROES'}</span><strong>${s.phase==='ended'?'Together, you restored the light.':'Our ideas power the festival.'}</strong><span>${s.lanterns} sparks collected together</span></div><div class="hero-sky crew-status" aria-label="Learner response status">${crew.map((l,i)=>`<span class="hero-badge crew-chip ${l.answered?'powered answered':'waiting'}" style="--hero-delay:-${i*.71}s;--hero-hue:${(i*47)%360}"><span aria-hidden="true">${l.answered?'✓':'✦'}</span>${esc(l.name)}<small>${s.phase==='lobby'?'Ready':l.answered?'Answered':'Thinking'}</small></span>`).join('')}</div><div class="school-building" aria-hidden="true"><div class="school-wing">${'<i></i>'.repeat(8)}</div><div class="school-centre"><div class="school-roof"></div><strong>VINSCHOOL</strong><span>HERO HEADQUARTERS</span><div class="school-door"></div></div><div class="school-wing">${'<i></i>'.repeat(8)}</div></div><div class="shield-arc" aria-hidden="true"></div></section>`;
+    const progress=s.phase==='ended'?3:Math.min(3,s.storyProgress||0);
+    return `<section class="festival-school chapter-${progress}" aria-label="Vinschool Moon Festival courtyard"><img src="/moonquest-art/vinschool-festival.webp" alt="Cartoon Vinschool courtyard decorated for the Moon Festival"><div class="festival-caption"><span class="eyebrow">${['THE LIGHT IS WAITING','ENTRANCE RESTORED','COURTYARD GLOWING','FESTIVAL OF DISCOVERY'][progress]}</span><strong>${s.phase==='ended'?'Together, you brought the light back.':'Every discovery brings us closer.'}</strong></div><div class="festival-rabbit">${mascot()}</div><div class="restored-lights" aria-hidden="true">${'🏮 '.repeat(progress+1)}</div><div class="festival-heroes">${(s.crew||[]).map(l=>`<span class="hero-lantern ${l.answered&&s.phase==='choose'?'lit':''}">${l.answered&&s.phase==='choose'?'✦ ':''}${esc(l.name)}</span>`).join('')}</div></section>`;
+  }
+  function rabbitTimer(){return `<div class="rabbit-timer"><div class="rabbit-guide" aria-hidden="true">${mascot()}</div><div class="countdown-lantern"><span class="timer" id="timer" role="timer" aria-label="Seconds remaining"></span></div></div>`;}
+  function storyIcon(id){
+    const shapes={
+      bridge:'<path d="M15 91Q60 62 105 91" fill="none" stroke="#e7c782" stroke-width="7"/><path d="M60 14V30M60 83V106" stroke="#f6d384" stroke-width="4"/><rect x="32" y="28" width="56" height="57" rx="23" fill="#ce5960" stroke="#ffdda0" stroke-width="3"/><path d="M48 30Q36 56 48 83M72 30Q84 56 72 83M60 29V84" fill="none" stroke="#ffdb96" stroke-width="2"/>',
+      stars:'<path d="M60 12L72 43L105 45L79 67L87 100L60 83L32 100L40 67L15 45L48 43Z" fill="#ffe09b" stroke="#d8a853" stroke-width="3"/><path d="M22 106Q56 93 62 70" fill="none" stroke="#b5e8cf" stroke-width="4" stroke-dasharray="3 7"/>',
+      mooncakes:'<circle cx="60" cy="61" r="40" fill="#d59049" stroke="#ffdc8b" stroke-width="9" stroke-dasharray="6 5"/><circle cx="60" cy="61" r="30" fill="#eab66a" stroke="#ad6b39" stroke-width="2"/><path d="M60 35Q82 41 69 61Q82 82 60 88Q38 82 51 61Q38 41 60 35Z" fill="none" stroke="#ad6b39" stroke-width="3"/>',
+      garden:'<path d="M60 108V65M60 95Q25 99 21 74Q48 68 60 95M60 83Q93 85 101 58Q75 55 60 83" fill="#8ed3b4" stroke="#589b88" stroke-width="2"/><path d="M60 70Q21 61 26 33Q52 32 60 52Q68 30 94 33Q99 63 60 70M60 68Q37 35 60 12Q83 35 60 68" fill="#ed9299" stroke="#ffdbad" stroke-width="3"/>',
+      kite:'<path d="M60 12L98 49L60 83L22 49Z" fill="#91d8cc" stroke="#f9d88d" stroke-width="3"/><path d="M60 12V83M22 49H98M60 83Q91 97 50 110" fill="none" stroke="#fff0bc" stroke-width="3"/>'
+    };
+    return `<svg viewBox="0 0 120 120" aria-hidden="true" class="story-illustration">${shapes[id]||shapes.bridge}</svg>`;
+  }
+  function storyChoiceScene(s){
+    const c=s.story,choice=c.options[c.winner||0],action=s.phase==='story-action';
+    return `${role==='board'?presenterControls(s):''}<div class="story-workspace"><section class="story-chapter ${action?'playing-'+esc(choice.id):''}"><p class="eyebrow">YOUR CREW CHOOSES THE ADVENTURE</p><h1>${esc(c.title)}</h1>${schoolScene(s)}${action?`<div class="story-result action-${esc(choice.id)}"><span class="story-object" aria-hidden="true">${storyIcon(choice.id)}</span><h2>${esc(choice.title)}</h2><p>${esc(choice.result)}</p>${c.tied?'<p class="coin-flip">✦ Rabbit coin flip · a tie decided our route!</p>':c.noVotes?'<p>The rabbit picked a path to keep our adventure moving.</p>':''}</div>`:`<p>${role==='student'?(c.myVote?'Your story vote is locked. Watch what happens next!':c.canVote?'You earned a choice! What should the rabbit do?':'Cheer on the crew! Two correct answers earn your next story vote.'):'Learners with two moon sparks choose the next action.'}</p><div class="story-options">${c.options.map(o=>`<button data-story-choice="${o.id}" ${role!=='student'||!c.canVote||s.paused?'disabled':''} class="${c.myVote===o.id?'chosen':''}"><span aria-hidden="true">${storyIcon(o.id)}</span>${esc(o.title)}</button>`).join('')}</div><p>${c.voted}/${c.eligibleCount} story votes received</p>`}${rabbitTimer()}</section>${role==='teacher'?liveControls():''}</div>`;
+  }
+  function revealFireworks(s){
+    if(!['reveal','ended'].includes(s.phase)||!s.revealedAt)return;
+    const key='moonquest-fireworks:'+s.id+':'+s.round+':'+s.phase;
+    if(Date.now()+clockOffset-s.revealedAt>4000&&s.phase!=='ended')return;
+    try{if(sessionStorage.getItem(key))return;sessionStorage.setItem(key,'1');}catch{}
+    const layer=document.createElement('div');layer.className='festival-fireworks';layer.setAttribute('aria-hidden','true');
+    for(let burst=0;burst<3;burst++){const cloud=document.createElement('div');cloud.className='firework';cloud.style.cssText=`left:${18+burst*32}%;top:${12+burst%2*10}%;--delay:${burst*.4}s;--colour:${['#ffd778','#a7ead0','#ff8c9d'][burst]}`;for(let n=0;n<16;n++){const spark=document.createElement('i');spark.style.setProperty('--angle',n*22.5+'deg');cloud.append(spark);}layer.append(cloud);}
+    const scene=root.querySelector('.festival-school');if(scene?.offsetParent){layer.style.position='absolute';scene.append(layer);}else document.body.append(layer);setTimeout(()=>layer.remove(),3200);
+    if(!soundEnabled||role==='student'||document.hidden)return;
+    try{audio ||= new (window.AudioContext||window.webkitAudioContext)();audio.resume();
+      const buffer=audio.createBuffer(1,audio.sampleRate*.5,audio.sampleRate),data=buffer.getChannelData(0);for(let i=0;i<data.length;i++)data[i]=(Math.random()*2-1)*(1-i/data.length);
+      for(let i=0;i<3;i++){const source=audio.createBufferSource(),filter=audio.createBiquadFilter(),gain=audio.createGain(),t=audio.currentTime+i*.4;source.buffer=buffer;filter.type='lowpass';filter.frequency.value=900;gain.gain.setValueAtTime(Number(document.getElementById('effects-level').value)/100*.16,t);gain.gain.exponentialRampToValueAtTime(.001,t+.5);source.connect(filter);filter.connect(gain);gain.connect(audio.destination);source.onended=()=>{source.disconnect();filter.disconnect();gain.disconnect();};source.start(t);}
+    }catch{}
   }
   function dashboard(s) {
     if(!s.question||s.phase==='ended')return '';
@@ -484,6 +517,7 @@
     try{
       if(action==='copy-learner-link'){const input=document.getElementById('learner-link');try{await navigator.clipboard.writeText(input.value);tell('Link copied. You can send it to your learners.');}catch{input.focus();input.select();tell('Select Copy to copy the highlighted link.');}}
       else if(b.dataset.learnerHandle){document.getElementById('join-name').value=b.dataset.learnerHandle;root.querySelectorAll('[data-learner-handle]').forEach(el=>el.setAttribute('aria-pressed',String(el===b)));document.getElementById('join-pin').focus();}
+      else if(b.dataset.storyChoice){state=await api('/sessions/'+sessionId+'/story-vote',{checkpoint:state.story.id,choice:b.dataset.storyChoice});lastRender='';renderLive();}
       else if(action==='enable-audio'){document.getElementById('sound').click();renderLive();}
       else if(action==='change-answer'){if(confirm('Are you sure you want to change your locked answer?')){changingAnswer=true;pendingChoices=[];renderLive();}}
       else if(action==='cancel-change'){changingAnswer=false;pendingChoices=[];renderLive();}
@@ -512,6 +546,16 @@
       else if(b.dataset.start)await launch(b.dataset.start);
       else if(b.dataset.session)await openSession(b.dataset.session,'teacher');
       else if(b.dataset.report)await report(b.dataset.report);
+      else if(action==='remove-diagram'){
+        captureEditor();const diagram=draft.diagrams[activeDiagram];if(!diagram)return;
+        const count=draft.questions.filter(q=>q.diagramId===diagram.id).length;
+        const message='Remove “'+diagram.title+'” from this adventure? Its answer areas'+(count?' and '+count+' linked question'+(count===1?'':'s'):'')+' will also be removed.';
+        if(!confirm(message))return;
+        draft.diagrams=draft.diagrams.filter(d=>d.id!==diagram.id);
+        draft.questions=draft.questions.filter(q=>q.diagramId!==diagram.id);
+        activeDiagram=Math.max(0,Math.min(activeDiagram,draft.diagrams.length-1));regionEditing=null;drawn=[];drawing=false;draft.reviewed=false;dirty=true;
+        editor();tell('Diagram removed from this draft. Save the adventure when your changes are ready.');
+      }
       else if(b.dataset.deleteRegion){captureEditor();const id=b.dataset.deleteRegion;draft.diagrams[activeDiagram].regions=draft.diagrams[activeDiagram].regions.filter(r=>r.id!==id);draft.questions.forEach(q=>q.accepted=q.accepted.filter(a=>a!==id));draft.reviewed=false;dirty=true;editor();}
       else if(b.dataset.deleteQuestion){captureEditor();draft.questions=draft.questions.filter(q=>q.id!==b.dataset.deleteQuestion);draft.reviewed=false;dirty=true;editor();}
       else if(['continue-meeting','launch','skip-intro','next','open','advance','pause','extend','rotate-board'].includes(action))await command(action);
