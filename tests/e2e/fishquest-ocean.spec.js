@@ -35,3 +35,18 @@ test('countdown survives pause and refresh, then timeout reveals and advances au
  await page.clock.fastForward(6600);await expect(page.locator('#turn')).toContainText('Turn 2 of 2');await expect(page.locator('#seconds')).toHaveText('20');
  const answers=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('fishboard:owner:ocean')).answers);expect(answers).toHaveLength(1);expect(answers[0].timedOut).toBe(true);
 });
+test('swimmers glide frame by frame and retain positions when an answer redraws the board',async({page})=>{
+ await open(page);await page.locator('#start').click();await page.waitForTimeout(800);
+ const movement=await page.evaluate(()=>new Promise(resolve=>{
+  const nodes=[...document.querySelectorAll('.swimmer:not(.active)')];let previous,largest=0,frames=0;
+  function sample(){
+   const points=nodes.map(n=>{const r=n.getBoundingClientRect();return {x:r.x,y:r.y}});
+   if(previous)points.forEach((p,i)=>{largest=Math.max(largest,Math.hypot(p.x-previous[i].x,p.y-previous[i].y))});
+   previous=points;if(++frames===90)resolve({largest,frames});else requestAnimationFrame(sample);
+  }requestAnimationFrame(sample);
+ }));
+ expect(movement.largest).toBeLessThan(2);expect(movement.largest).toBeGreaterThan(.01);
+ const location=()=>page.locator('.swimmer').nth(3).evaluate(n=>{const m=new DOMMatrixReadOnly(n.style.transform);return {x:m.m41,y:m.m42}});
+ const before=await location();await page.locator('[data-answer="1"]').click();const after=await location();
+ expect(Math.hypot(after.x-before.x,after.y-before.y)).toBeLessThan(8);
+});

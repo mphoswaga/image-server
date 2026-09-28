@@ -20,7 +20,7 @@ test('board serves a complete matching asset set and never caches its entry page
   const html = await res.text();
   assert.ok(html.includes('data-build="' + version + '"'));
   const paths = [...html.matchAll(/(?:src|href)="(\/fishquest-board-assets\/[^\"]+)"/g)].map(m => m[1]);
-  assert.equal(paths.length, 7);
+  assert.equal(paths.length, 8);
   for (const assetPath of paths) {
     assert.ok(assetPath.includes('/' + version + '/'));
     const asset = await fetch(base + assetPath);
@@ -33,7 +33,7 @@ test('board serves a complete matching asset set and never caches its entry page
 test('changing a script or stylesheet changes every asset URL, including across cached deployments', async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-assets-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  for (const name of ['fishquest-board.html', 'fishquest-board.css', 'fishquest-growth.js', 'fishquest-art.js', 'fishquest-board-story.js', 'fishquest-board-state.js', 'fishquest-board-swim.js', 'fishquest-board.js']) {
+  for (const name of ['fishquest-board.html', 'fishquest-board.css', 'fishquest-growth.js', 'fishquest-art.js', 'fishquest-board-story.js', 'fishquest-board-state.js', 'fishquest-board-motion.js', 'fishquest-board-swim.js', 'fishquest-board.js']) {
     fs.copyFileSync(path.join(__dirname, '../public', name), path.join(dir, name));
   }
   const old = await start(t, dir);

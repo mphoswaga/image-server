@@ -7,7 +7,7 @@ const crypto = require('crypto');
 // bypass browser/CDN copies of the old unversioned files after a deployment.
 function registerFishBoardAssets(app, publicDir = path.join(__dirname, 'public')) {
   const files = ['fishquest-board.css', 'fishquest-growth.js', 'fishquest-art.js',
-    'fishquest-board-story.js', 'fishquest-board-state.js', 'fishquest-board-swim.js', 'fishquest-board.js'];
+    'fishquest-board-story.js', 'fishquest-board-state.js', 'fishquest-board-motion.js', 'fishquest-board-swim.js', 'fishquest-board.js'];
   const assets = new Map(files.map(name => [name, fs.readFileSync(path.join(publicDir, name))]));
   const template = fs.readFileSync(path.join(publicDir, 'fishquest-board.html'), 'utf8');
   const hash = crypto.createHash('sha256').update(template);
