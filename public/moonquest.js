@@ -59,7 +59,7 @@
   }
   document.getElementById('sound').onclick = () => { soundEnabled = !soundEnabled; document.getElementById('sound').textContent = soundEnabled ? 'Sound on' : 'Sound off'; document.getElementById('sound').setAttribute('aria-pressed', String(soundEnabled)); chime(); };
   document.getElementById('full').onclick = async () => { try { if(document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen(); } catch { tell('Use your browser’s full-screen option.'); } };
-  window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+  window.addEventListener('beforeunload', e => { if(view==='editor')checkpoint(); if (dirty) { e.preventDefault(); e.returnValue = ''; } });
   function nav(url) { history.pushState({}, '', url); }
   window.addEventListener('popstate', () => location.reload());
 
@@ -67,10 +67,51 @@
     document.body.dataset.view='library';
     stopPoll(); view = 'library'; state = null; sessionId = null; learnerToken = ''; dirty = false;
     library = await api('/library'); nav('/moonquest');
+    const works=new Map((library.drafts||[]).map(d=>[d.id,d]));for(const d of localDrafts())works.set(d.id,{id:d.id,title:d.payload.title||'Untitled adventure'});
     root.innerHTML = `<section class="hero"><div><p class="eyebrow">An adventure in understanding</p><h1>Small thinkers.<br>One giant moon mission.</h1><p>A mischievous alien has scrambled the festival lanterns. Your class can restore them—one discovery, discussion and clever choice at a time.</p><div class="row">${button('＋ Create a diagram game','new','primary')}${button('Try the senses example','sample')}</div></div>${mascot()}</section>
+      ${works.size?`<h2>Your drafts</h2><div class="cards">${[...works.values()].map(d=>`<article class="card"><span class="pill">DRAFT · not ready for learners</span><h3>${esc(d.title)}</h3><button data-resume-draft="${esc(d.id)}">Continue draft</button></article>`).join('')}</div>`:''}
       <div class="row spread"><h2>Your adventures</h2><a class="button" href="/">Back to LessonScope</a></div>
       <div class="cards">${library.games.map(g => `<article class="card"><span class="pill">MOON FESTIVAL · ${g.questions} questions</span><h3 style="margin-top:18px">${esc(g.title)}</h3><p>${esc(g.subject)} · ${esc(g.grade)}</p><div class="row"><button data-edit="${g.id}">Edit</button><button class="primary" data-host="${g.id}">Set up class</button><button data-test="${g.id}">Test game</button></div></article>`).join('') || '<div class="panel"><h3>Your first mission starts with a diagram</h3><p class="muted">Upload a picture, mark answer areas and prepare your questions. No lesson plan is required.</p></div>'}</div>
       <h2 style="margin-top:25px">Recent missions</h2><div class="stack">${library.sessions.map(s => `<article class="panel row spread"><div><strong>${esc(s.title)}</strong><p class="muted">${esc(s.className)} · ${s.test?'Practice · ':''}${esc(s.phase)}</p></div><div class="row"><button data-session="${s.id}">Open room</button><button data-report="${s.id}">View learning</button></div></article>`).join('') || '<p class="muted">Your class reports will appear here. MoonQuest does not change class averages.</p>'}</div>`;
+  }
+  let draftTimer, draftQueue=Promise.resolve();
+  const draftVersions=new Map();
+  function draftKey(id){return 'moonquest-work:'+library.teacherId+':'+id;}
+  function localDrafts(){try{return Object.keys(localStorage).filter(k=>k.startsWith('moonquest-work:'+library.teacherId+':')).map(k=>JSON.parse(localStorage.getItem(k))).filter(Boolean);}catch{return [];}}
+  function draftStatus(message){const el=document.getElementById('draft-status');if(el)el.textContent=message;}
+  function checkpoint(){
+    if(view!=='editor'||!library?.teacherId)return null;
+    captureEditor();draft.workId ||= uid();
+    const record={id:draft.workId,version:draftVersions.get(draft.workId)||0,payload:structuredClone(draft),updatedAt:Date.now(),editor:{activeDiagram,regionEditing,drawn:structuredClone(drawn),label:document.getElementById('region-label')?.value||'',shape:document.getElementById('shape')?.value||'rectangle',objective:document.getElementById('objective')?.value||'',bounds:['x','y','w','h'].map(k=>document.getElementById('region-'+k)?.value)}};
+    try{localStorage.setItem(draftKey(record.id),JSON.stringify(record));draftStatus('Draft kept on this device · saving to your account…');}catch{draftStatus('Browser recovery unavailable · use Save draft before leaving.');}
+    history.replaceState({},'', '/moonquest?draft='+record.id);
+    clearTimeout(draftTimer);draftTimer=setTimeout(()=>saveWork(record).catch(()=>{}),900);return record;
+  }
+  function saveWork(record){
+    if(!record)return Promise.resolve();clearTimeout(draftTimer);
+    const task=draftQueue.catch(()=>{}).then(async()=>{
+      try{
+        const result=await api('/drafts',{...record,version:draftVersions.get(record.id)||record.version||0});
+        draftVersions.set(record.id,result.draft.version);
+        let newerChanges=false;
+        try{const latest=JSON.parse(localStorage.getItem(draftKey(record.id)));if(latest){newerChanges=latest.updatedAt>record.updatedAt;latest.version=result.draft.version;localStorage.setItem(draftKey(record.id),JSON.stringify(latest));}}catch{}
+        if(draft?.workId===record.id&&!newerChanges)draftStatus('Draft saved to your account');
+      }catch(err){if(draft?.workId===record.id)draftStatus('Not saved to account: '+err.message+' Use Save draft to retry.');throw err;}
+    });draftQueue=task;return task;
+  }
+  async function openDraft(id){
+    let local;try{local=JSON.parse(localStorage.getItem(draftKey(id)));}catch{}
+    let saved;try{saved=(await api('/drafts/'+id)).draft;}catch(err){if(!local)throw err;}
+    const record=local && (!saved || local.updatedAt>saved.updatedAt)?local:saved;
+    draftVersions.set(id,record.version||0);draft=record.payload;draft.workId=id;
+    activeDiagram=record.editor?.activeDiagram||0;regionEditing=record.editor?.regionEditing||null;editor();
+    const e=record.editor||{};drawn=e.drawn||[];
+    if(document.getElementById('drawing'))document.getElementById('drawing').setAttribute('points',drawn.map(p=>p.join(',')).join(' '));
+    if(document.getElementById('region-label'))document.getElementById('region-label').value=e.label||'';
+    if(document.getElementById('shape'))document.getElementById('shape').value=e.shape||'rectangle';
+    document.getElementById('objective').value=e.objective||'';
+    ['x','y','w','h'].forEach((k,i)=>{const el=document.getElementById('region-'+k);if(el&&e.bounds?.[i]!=null)el.value=e.bounds[i];});
+    checkpoint();tell('Draft restored. You can continue where you left off.');
   }
   function emptyDraft() { return { title: 'Save the Moon Festival', subject:'', grade:'Grade 3', diagrams:[], questions:[], timing:{automatic:true,choose:35,discuss:15,reconsider:5}, reviewed:false }; }
   function imageUrl(asset) { return base + '/assets/' + asset; }
@@ -81,6 +122,7 @@
   function captureEditor() {
     if (view !== 'editor') return;
     for (const key of ['title','subject','grade']) draft[key] = document.getElementById('mq-'+key)?.value || '';
+    draft.objective = document.getElementById('objective')?.value || '';
     draft.timing.automatic = document.getElementById('automatic').checked;
     ['choose','discuss','reconsider'].forEach(k => { draft.timing[k] = Number(document.getElementById('time-'+k)?.value || draft.timing[k]); });
     draft.reviewed = !!document.getElementById('reviewed')?.checked;
@@ -97,17 +139,18 @@
     const d=draft.diagrams[activeDiagram];
     const selectedRegion=d?.regions.find(r=>r.id===regionEditing);
     const bounds=selectedRegion?regionBounds(selectedRegion):null;
-    root.innerHTML=`<div class="row spread"><div><p class="eyebrow">Mission workshop</p><h1 style="font-size:38px">Build a discovery.</h1></div>${button('Back to adventures','home')}</div>
+    root.innerHTML=`<div class="row spread"><div><p class="eyebrow">Mission workshop</p><h1 style="font-size:38px">Build a discovery.</h1></div><div>${button('Save draft','save-draft')}${button('Back to adventures','home')}<p id="draft-status" role="status" class="muted">Draft recovery enabled</p></div></div>
       <section class="panel grid"><label>Game title<input id="mq-title" maxlength="120" value="${esc(draft.title)}"></label><div class="grid"><label>Subject<input id="mq-subject" value="${esc(draft.subject)}"></label><label>Learner level<input id="mq-grade" value="${esc(draft.grade)}"></label></div></section>
       <section class="panel"><h2>1. Make your diagram clickable</h2><p class="muted">Upload a clear PNG, JPEG or WebP (up to 8 MB). Give each area a label, then draw it. Areas and labels should identify locations, without giving away the answer.</p>
-      <div class="row"><label class="button">＋ Add diagram<input id="upload" type="file" accept="image/png,image/jpeg,image/webp" hidden></label>${draft.diagrams.length?`<label>Current diagram<select id="diagram-select">${draft.diagrams.map((x,i)=>`<option value="${i}" ${i===activeDiagram?'selected':''}>${esc(x.title)}</option>`).join('')}</select></label>`:''}</div>
+      <div class="row"><label class="button">＋ Add diagram<input id="upload" type="file" accept="image/png,image/jpeg,image/webp" hidden></label>${draft.diagrams.length?`<label>Current diagram<select id="diagram-select">${draft.diagrams.map((x,i)=>`<option value="${i}" ${i===activeDiagram?'selected':''}>${esc(x.title)} · ${x.regions.length} saved areas</option>`).join('')}</select></label>`:''}</div>
       <p id="upload-status" role="status" aria-live="polite"></p><img id="upload-preview" alt="Selected diagram preview — uploading" hidden style="max-width:280px;max-height:280px;border-radius:12px">
       ${d?`<div class="editor" style="margin-top:20px"><div>${diagramHtml(d,regionEditing,[],true)}<p class="muted">Drag to draw a rectangle. Drag an existing area to move it; drag its corner handles to resize. Ellipses use two taps; custom outlines use corners.</p></div><div class="stack"><label>Area label<input id="region-label" placeholder="e.g. Eyes" maxlength="100" value="${esc(selectedRegion?.label||'')}"></label>${bounds?`<div class="grid">${['x','y','w','h'].map(k=>`<label>${{x:'Left',y:'Top',w:'Width',h:'Height'}[k]} %<input id="region-${k}" type="number" min="0" max="100" step="0.1" value="${(bounds[k]*100).toFixed(1)}"></label>`).join('')}</div><div class="row">${button('Apply area changes','update-region','primary')}${button('New area','new-area')}</div><p class="muted">Drag this area or its corner handles on the picture. Its linked answers are preserved.</p>`:''}<label>Shape<select id="shape"><option value="rectangle">Rectangle</option><option value="ellipse">Ellipse</option><option value="polygon">Custom outline</option></select></label><div class="row">${button('Finish area','finish-area','primary')}${button('Undo corner','undo-corner')}</div><div>${d.regions.map(r=>`<div class="row spread" style="margin-bottom:8px"><span>${esc(r.label)}</span><div class="row"><button class="small" data-edit-region="${esc(r.id)}">Edit</button><button class="small danger" data-delete-region="${esc(r.id)}">Remove</button></div></div>`).join('')}</div><p class="muted">Avoid overlapping areas. Learners can also use the labelled answer buttons below the diagram.</p></div></div>`:''}</section>
-      <section class="panel"><h2>2. Prepare the challenges</h2><p class="muted">Give each question a clear objective and explanation. Choose whether one of the ticked areas is enough, or learners must select all of them. The instruction is shown on every learner screen.</p><label>Objective for AI suggestions<textarea id="objective" placeholder="e.g. Identify the sense used to receive information from a device."></textarea></label><div class="row" style="margin:15px 0">${button('＋ Write a question','add-question')}${button('AI draft 5 questions · '+(library?.generationCost||0)+' credits','draft-ai')}</div><p class="muted">AI drafts need your review. During play, up to two AI attempts per flagged question are included.</p>
+      <section class="panel"><h2>2. Prepare the challenges</h2><p class="muted">Give each question a clear objective and explanation. Choose whether one of the ticked areas is enough, or learners must select all of them. The instruction is shown on every learner screen.</p><label>Objective for AI suggestions<textarea id="objective" placeholder="e.g. Identify the sense used to receive information from a device.">${esc(draft.objective||'')}</textarea></label><div class="row" style="margin:15px 0">${button('＋ Write a question','add-question')}${button('AI draft 5 questions · '+(library?.generationCost||0)+' credits','draft-ai')}</div><p class="muted">AI drafts need your review. During play, up to two AI attempts per flagged question are included.</p>
       <div id="questions">${draft.questions.map((q,i)=>`<article class="question-card" data-question="${q.id}"><div class="row spread"><h3>Challenge ${i+1} · ${esc(draft.diagrams.find(d=>d.id===q.diagramId)?.title)}</h3><button data-delete-question="${q.id}" class="small danger">Remove</button></div><div class="stack"><label>Question<textarea data-field="prompt" maxlength="600">${esc(q.prompt)}</textarea></label><label>Learning objective<input data-field="concept" maxlength="300" value="${esc(q.concept)}"></label><label>How many areas should learners select?<select data-field="answerMode"><option value="one" ${q.answerMode!=='all'?'selected':''}>ONE area — any ticked answer is acceptable</option><option value="all" ${q.answerMode==='all'?'selected':''}>ALL ticked areas — the complete set is required</option></select></label><div><span class="muted">Correct areas</span><div class="row">${(draft.diagrams.find(d=>d.id===q.diagramId)?.regions||[]).map(r=>`<label><input type="checkbox" data-accepted value="${esc(r.id)}" ${q.accepted.includes(r.id)?'checked':''}> ${esc(r.label)}</label>`).join('')}</div></div><label>Explanation after reveal<textarea data-field="explanation" maxlength="800">${esc(q.explanation)}</textarea></label></div></article>`).join('')}</div></section>
       <section class="panel"><h2>3. Set the pace</h2><label><input id="automatic" type="checkbox" ${draft.timing.automatic!==false?'checked':''}> Automatic classroom flow (recommended)</label><p>One 35-second timer to choose, discuss and, if needed, change an answer. You decide when partner talk begins. A short answer reveal follows without another countdown. More than 30% incorrect triggers a class meeting; continue when the discussion is finished.</p><details><summary>Timing preferences for teacher-paced play</summary><div class="grid">${['choose','discuss','reconsider'].map(k=>`<label>${{choose:'First choice',discuss:'Partner discussion',reconsider:'Reconsider'}[k]} · seconds<input id="time-${k}" type="number" min="5" max="${k==='choose'?180:k==='discuss'?120:60}" value="${draft.timing[k]}"></label>`).join('')}</div></details><p class="muted">Answers lock when saved. Learners confirm before changing them. Initial choices and final answers remain separate in the report.</p><label><input id="reviewed" type="checkbox" ${draft.reviewed?'checked':''}> I have checked the diagrams, questions, accepted answers and explanations.</label><div class="row" style="margin-top:18px">${button('Save adventure','save','primary')}</div></section>`;
     document.getElementById('upload').onchange = uploadDiagram;
     if(d){document.getElementById('diagram-select').onchange=e=>{captureEditor();activeDiagram=Number(e.target.value);regionEditing=null;editor();};wireDiagramEditor();}
+    checkpoint();
   }
   async function prepareDiagram(file) {
     // Reduce transfer size without changing the teacher's original file.
@@ -207,7 +250,7 @@
         svg.removeEventListener('pointermove',move);svg.removeEventListener('pointerup',end);svg.removeEventListener('pointercancel',end);
         if(svg.hasPointerCapture(e.pointerId))svg.releasePointerCapture(e.pointerId);
         if(event.type==='pointercancel'){if(r)r.points=original;editor();return;}
-        if(creating){if(!moved){drawn=[];return;}const b=regionBounds({points:drawn});if(b.w<.01||b.h<.01){drawn=[];svg.querySelector('#drawing').setAttribute('points','');tell('Draw a slightly larger rectangle.',true);return;}finishArea();}
+        if(creating){if(!moved){drawn=[];return;}const b=regionBounds({points:drawn});if(b.w<.01||b.h<.01){drawn=[];svg.querySelector('#drawing').setAttribute('points','');tell('Draw a slightly larger rectangle.',true);return;}finishArea();checkpoint();}
         else{if(moved){draft.reviewed=false;dirty=true;}editor();}
       };
       svg.addEventListener('pointermove',move);svg.addEventListener('pointerup',end);svg.addEventListener('pointercancel',end);
@@ -221,11 +264,12 @@
     const shape=document.getElementById('shape').value;
     if(shape!=='polygon'&&drawn.length===2){const [[x1,y1],[x2,y2]]=drawn;drawn=shape==='rectangle'?[[x1,y1],[x2,y1],[x2,y2],[x1,y2]]:Array.from({length:32},(_,i)=>[(x1+x2)/2+Math.abs(x2-x1)/2*Math.cos(i*Math.PI/16),(y1+y2)/2+Math.abs(y2-y1)/2*Math.sin(i*Math.PI/16)]);finishArea();return;}
     document.getElementById('drawing').setAttribute('points',drawn.map(p=>p.join(',')).join(' '));
+    checkpoint();
     tell(`${drawn.length} corner${drawn.length===1?'':'s'} placed${shape==='polygon'?'. Finish when the outline is complete.':'. Tap the opposite corner.'}`);
   }
   function finishArea() {
     const label=document.getElementById('region-label').value.trim();
-    if(!label){tell('Name this area first.',true);return;}
+    if(!label){checkpoint();tell('Name this area first.',true);return;}
     if(drawn.length<3){tell('Place the corners of an area first.',true);return;}
     captureEditor();const regions=draft.diagrams[activeDiagram].regions,existing=regions.find(r=>r.id===regionEditing);
     if(existing){existing.label=label;existing.points=drawn;}else regions.push({id:uid(),label,points:drawn});
@@ -431,7 +475,7 @@
   }
   root.addEventListener('input',e=>{
     const q=e.target.closest('[data-queue]');if(q)queueEdits[q.dataset.queue]={prompt:q.querySelector('[data-prompt]')?.value,explanation:q.querySelector('[data-explanation]')?.value};
-    if(view==='editor'){dirty=true;if(e.target.id!=='reviewed'){const r=document.getElementById('reviewed');if(r)r.checked=false;}}
+    if(view==='editor'){dirty=true;if(e.target.id!=='reviewed'){const r=document.getElementById('reviewed');if(r)r.checked=false;}checkpoint();}
   });
   root.addEventListener('click',async e=>{
     const b=e.target.closest('button');if(!b||b.disabled)return;
@@ -444,7 +488,9 @@
       else if(action==='change-answer'){if(confirm('Are you sure you want to change your locked answer?')){changingAnswer=true;pendingChoices=[];renderLive();}}
       else if(action==='cancel-change'){changingAnswer=false;pendingChoices=[];renderLive();}
       else if(action==='lock-answer')await submitAnswer(null,true);
-      else if(action==='home'){if(dirty&&!confirm('Leave without saving your changes?'))return;await home();}
+      else if(action==='home'){if(view==='editor')await saveWork(checkpoint());await home();}
+      else if(action==='save-draft'){await saveWork(checkpoint());tell('Draft saved. You can return to it from Your drafts.');}
+      else if(b.dataset.resumeDraft){await openDraft(b.dataset.resumeDraft);}
       else if(action==='new'){draft=emptyDraft();activeDiagram=0;dirty=false;editor();}
       else if(action==='sample')await sample();
       else if(action==='finish-area')finishArea();
@@ -452,7 +498,12 @@
       else if(action==='new-area'){captureEditor();regionEditing=null;editor();}
       else if(action==='undo-corner'){drawn.pop();document.getElementById('drawing').setAttribute('points',drawn.map(p=>p.join(',')).join(' '));}
       else if(action==='add-question'){captureEditor();const d=draft.diagrams[activeDiagram];if(!d?.regions.length)throw new Error('Add answer areas first.');draft.questions.push({id:uid(),diagramId:d.id,prompt:'',concept:'',accepted:[],explanation:''});draft.reviewed=false;dirty=true;editor();}
-      else if(action==='save'){captureEditor();const result=await api('/games',draft);draft=result.game;dirty=false;tell('Adventure saved. You can now set up a class or test it.');await home();}
+      else if(action==='save'){captureEditor();
+        if(drawn.length)throw new Error('An answer area is unfinished. Enter its label and click Finish area before saving.');
+        const emptyIndex=draft.diagrams.findIndex(d=>!d.regions.length);
+        if(emptyIndex!==-1){activeDiagram=emptyIndex;regionEditing=null;editor();document.getElementById('region-label').focus();throw new Error('“'+draft.diagrams[emptyIndex].title+'” has no saved answer areas. Enter a label, then drag a rectangle over that part of the picture.');}
+        if(!draft.questions.length)throw new Error('Your diagram areas are ready. Add questions using Write a question or AI draft 5 questions before saving.');
+        const result=await api('/games',draft);clearTimeout(draftTimer);await draftQueue.catch(()=>{});if(draft.workId){await api('/drafts/'+draft.workId+'/discard',{});try{localStorage.removeItem(draftKey(draft.workId));}catch{}}draft=result.game;dirty=false;tell('Adventure saved. You can now set up a class or test it.');await home();}
       else if(action==='draft-ai'){captureEditor();const objective=document.getElementById('objective').value;const d=await api('/draft',{...draft,objective},{timeout:25000});draft.questions.push(...d.questions);draft.reviewed=false;dirty=true;editor();tell('Questions added. Review the answer areas and explanations before saving.');}
       else if(b.dataset.edit){draft=(await api('/games/'+b.dataset.edit)).game;activeDiagram=0;editor();}
       else if(b.dataset.editRegion){captureEditor();regionEditing=b.dataset.editRegion;editor();}
@@ -483,7 +534,8 @@
     if(location.pathname.endsWith('/join'))return joinPage(params.get('code')||'');
     if(id){learnerToken=sessionStorage.getItem('moonquest:'+id)||'';return openSession(id,params.get('board')?'board':learnerToken?'student':'teacher');}
     await home();
-    if(params.get('game')){const id=params.get('game');if(params.get('action')==='test')await launch(id,true);else if(params.get('action')==='edit'){draft=(await api('/games/'+id)).game;editor();}else await setup(id);}
+    if(params.get('draft'))await openDraft(params.get('draft'));
+    else if(params.get('game')){const id=params.get('game');if(params.get('action')==='test')await launch(id,true);else if(params.get('action')==='edit'){draft=(await api('/games/'+id)).game;editor();}else await setup(id);}
     else if(params.get('new')==='1'){draft=emptyDraft();draft.title=(params.get('title')||draft.title).slice(0,120);draft.subject=(params.get('subject')||'').slice(0,100);draft.grade=(params.get('grade')||draft.grade).slice(0,80);activeDiagram=0;editor();}
     else if(params.get('report'))await report(params.get('report'));
   }

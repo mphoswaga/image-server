@@ -54,6 +54,8 @@ function installMoonQuest(app, deps) {
     res.type('html').send(pageHtml);
   });
   app.get(base + '/library', teacher, wrap((req, res) => res.json({
+    teacherId: req.userId,
+    drafts: store.list('draft', req.userId).map(d=>({id:d.id,title:d.payload.title || 'Untitled adventure',updatedAt:d.updatedAt})),
     games: store.list('game', req.userId).map(g => ({ id: g.id, title: g.title, subject: g.subject, grade: g.grade, questions: g.questions.length, version: g.version, createdAt: new Date(g.createdAt).toISOString() })),
     sessions: store.list('session', req.userId).sort((a,b) => b.createdAt-a.createdAt).slice(0, 50).map(s => ({ id: s.id, gameId: s.game.id, rosterId: s.rosterId, code: s.code, title: s.game.title, className: s.className, test: s.test, phase: s.phase })),
     rosters: roster.listRosters(req.userId), generationCost: costOf(req, 'lessonscope.generate_game'),
@@ -83,6 +85,19 @@ function installMoonQuest(app, deps) {
   app.get(base + '/assets/:asset', wrap((req, res) => {
     // Images are opaque capability URLs; contain no answer keys or roster data.
     res.type('webp').sendFile(assetPath(req.params.asset) + '.webp');
+  }));
+  app.post(base + '/drafts', teacher, wrap((req,res)=>{
+    if (!Array.isArray(req.body.payload?.diagrams)) throw Error('Invalid draft.');
+    checkAssets(req.body.payload, req.userId);
+    res.json({draft:store.saveDraft(req.userId,req.body)});
+  }));
+  app.get(base + '/drafts/:id', teacher, wrap((req,res)=>{
+    const draft=store.read('draft',req.params.id);
+    if(draft.teacherId!==req.userId) throw Error('Draft not found for this teacher.');
+    res.json({draft});
+  }));
+  app.post(base + '/drafts/:id/discard', teacher, wrap((req,res)=>{
+    store.deleteDraft(req.userId,req.params.id);res.json({ok:true});
   }));
   app.post(base + '/games', teacher, wrap((req, res) => {
     const validated = validateGame(req.body); checkAssets(validated, req.userId);

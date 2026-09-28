@@ -13,7 +13,8 @@ const isCorrect = (q, value) => q.answerMode === 'all' ? choices(value).length =
 const array = (value, max) => Array.isArray(value) && value.length <= max ? value : fail('Too many items or invalid list.');
 
 function validateGame(input) {
-  const diagrams = array(input.diagrams, 10).map(d => {
+  const diagrams = array(input.diagrams, 10).map((d, index) => {
+    const diagramName = text(d.title, 120) || `Diagram ${index + 1}`;
     if (!/^[a-f0-9-]{36}$/.test(d.asset || '')) fail('Upload a diagram first.');
     const regions = array(d.regions, 30).map(r => {
       const points = array(r.points, 80).map(p => {
@@ -25,7 +26,8 @@ function validateGame(input) {
       if (area < 0.0001) fail('A region is too small. Draw a larger area.');
       return { id: text(r.id, 80), label: text(r.label, 100), points };
     });
-    if (!regions.length || new Set(regions.map(r => r.id)).size !== regions.length || regions.some(r => !r.id)) fail('Each diagram needs uniquely named regions.');
+    if (!regions.length) fail(`“${diagramName}” has no saved answer areas. Enter an area label, then draw a rectangle on that diagram. A label alone does not create an area.`);
+    if (new Set(regions.map(r => r.id)).size !== regions.length || regions.some(r => !r.id)) fail(`“${diagramName}” has an invalid answer area. Remove and redraw that area, then check its linked questions.`);
     return { id: text(d.id, 80), title: text(d.title, 120), asset: d.asset, regions };
   });
   if (!diagrams.length || diagrams.some(d => !d.id) || new Set(diagrams.map(d => d.id)).size !== diagrams.length) fail('Add a diagram with a unique ID.');
@@ -77,6 +79,22 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
   }
   function list(kind, teacherId) {
     return fs.readdirSync(dir).filter(f => f.startsWith(kind + '-') && f.endsWith('.json')).map(f => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'))).filter(r => teacherId == null || r.teacherId === teacherId);
+  }
+  function saveDraft(teacherId, input) {
+    const id = input.id || uid(), f = file('draft', id);
+    const prior = fs.existsSync(f) ? read('draft', id) : null;
+    if (prior && prior.teacherId !== teacherId) fail('This draft belongs to another teacher.');
+    if (prior && input.version !== prior.version) fail('This draft changed in another tab. Your browser copy is kept; reopen the draft before saving again.');
+    const payload = input.payload;
+    if (!payload || typeof payload !== 'object' || !Array.isArray(payload.diagrams) || !Array.isArray(payload.questions) || payload.diagrams.length > 10 || payload.questions.length > 50 || JSON.stringify(payload).length > 500000) fail('The draft is too large or invalid.');
+    const record = {id, teacherId, version:(prior?.version || 0)+1, updatedAt:clock(), payload:copy(payload), editor:copy(input.editor || {})};
+    if (JSON.stringify(record.editor).length > 50000) fail('The unfinished area is too large.');
+    save('draft', record); return record;
+  }
+  function deleteDraft(teacherId, id) {
+    const f=file('draft',id); if (!fs.existsSync(f)) return;
+    if(read('draft',id).teacherId !== teacherId) fail('This draft belongs to another teacher.');
+    fs.unlinkSync(f);
   }
   function saveGame(teacherId, input) {
     const normalized = validateGame(input);
@@ -327,7 +345,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
           revisedCorrect: (a.final ?? a.first) ? isCorrect(r.question, a.final ?? a.first) : null, confirmed: !!a.confirmed, expected: r.expected.includes(st.id) };
       }) })) };
   }
-  return { dir, read, list, saveGame, createSession, session, saveSession, stats, command, join, joinPractice, answer, snapshot, review, saveSuggestion, report,
+  return { dir, read, list, saveDraft, deleteDraft, saveGame, createSession, session, saveSession, stats, command, join, joinPractice, answer, snapshot, review, saveSuggestion, report,
     findCode(code) { if (!/^[A-F0-9]{10}$/.test(code || '')) fail('Enter the ten-character MoonQuest code.'); return list('session').find(s => s.code === code); },
     sessions() { return fs.readdirSync(dir).filter(f => f.startsWith('session-')).map(f => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'))); } };
 }

@@ -210,3 +210,21 @@ test('teacher can remove joined and unjoined learners, preserve answers and add 
  assert.equal(store.snapshot(id,'student','s0').canAnswer,true);
  assert.throws(()=>store.command(id,'other','remove-learner',{seq:store.session(id).seq,studentId:'s1',removed:true}),/another teacher/);
 });
+
+test('empty diagram error names the affected diagram rather than blaming part labels',()=>{
+ const g=fixture();g.diagrams.push({id:'second',title:'Second picture',asset:g.diagrams[0].asset,regions:[]});
+ assert.throws(()=>validateGame(g),/Second picture.*no saved answer areas/);
+ g.diagrams.pop();g.diagrams[0].regions[1].label=g.diagrams[0].regions[0].label;
+ assert.equal(validateGame(g).diagrams[0].regions.length,3);
+});
+
+test('unfinished drafts persist separately with ownership and version checks',t=>{
+ const {store}=setup(t);const payload={title:'Work in progress',diagrams:[],questions:[],reviewed:false};
+ const draft=store.saveDraft('teacher',{payload,editor:{label:'Ear',drawn:[[.1,.1]]}});
+ assert.equal(store.read('draft',draft.id).editor.label,'Ear');assert.equal(store.list('draft','teacher').length,1);
+ assert.throws(()=>store.saveDraft('other',{id:draft.id,version:1,payload}),/another teacher/);
+ assert.throws(()=>store.saveDraft('teacher',{id:draft.id,version:0,payload}),/another tab/);
+ assert.throws(()=>store.createSession('teacher',draft.id,{students:[]}),/not found/);
+ assert.throws(()=>store.deleteDraft('other',draft.id),/another teacher/);
+ store.deleteDraft('teacher',draft.id);assert.equal(store.list('draft','teacher').length,0);
+});
