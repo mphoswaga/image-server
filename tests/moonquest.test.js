@@ -306,3 +306,11 @@ test('a complete 24 learner duel mission preserves scores on reload and assessme
  const recovered=createStore(f.dir,f.clock);assert.equal(recovered.snapshot(s.id,'student','p0').duels.personal.points,600);
  assert.equal(f.store.report(s.id,'teacher').students.length,24);
 });
+test('teacher reflections persist with ownership and stale-edit protection',t=>{
+ const f=setup(t);f.cmd('next');f.cmd('open');f.answer(0);f.cmd('advance');f.cmd('advance');f.cmd('advance');
+ const before=f.store.report(f.id,'teacher').students;
+ const saved=f.store.saveReflection(f.id,'teacher',{version:0,noticed:'Some confused sound with touch.',action:'Modelled vibration.',impact:'Checked a new example.',next:'Revisit next lesson.'});assert.equal(saved.version,1);
+ assert.throws(()=>f.store.saveReflection(f.id,'other',{version:1}),/another teacher/);
+ assert.throws(()=>f.store.saveReflection(f.id,'teacher',{version:0}),/another tab/);
+ const reopened=createStore(f.dir,f.clock).report(f.id,'teacher');assert.equal(reopened.reflection.action,'Modelled vibration.');assert.deepEqual(reopened.students,before);
+});

@@ -8,7 +8,7 @@ test('QR entry bypasses previously cached MoonQuest assets', async ({ page }) =>
   const response = await page.goto('/moonquest/join');
   expect(response.headers()['cache-control']).toContain('no-store');
   await expect(page.getByRole('button', { name: 'Find my crew' })).toBeVisible();
-  for (const selector of ['script[src*="moonquest.js"]', 'link[href*="moonquest.css"]']) {
+  for (const selector of ['script[src*="moonquest.js"]', 'link[href*="moonquest.css"]', 'script[src*="moonquest-report.js"]']) {
     const asset = await page.locator(selector).getAttribute(selector.startsWith('script') ? 'src' : 'href');
     expect(asset).toMatch(/\?v=[a-f0-9]{16}$/);
     const loaded = await page.request.get(asset);
@@ -44,7 +44,7 @@ test('MoonQuest editor, isolated practice and durable results work together', as
   await expect(page.getByText('Touch detects vibration through the skin.',{exact:true})).toBeVisible();
   await page.reload();await expect(page.getByText('Touch detects vibration through the skin.',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'View report',exact:true}).click();
-  await expect(page.locator('tbody tr')).toHaveCount(6);await expect(page.getByText('First choice → final choice → later application')).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Understanding by question'})).toBeVisible();await page.getByRole('tab',{name:'Learners',exact:true}).click();await expect(page.locator('#review-learners tr')).toHaveCount(6);
   expect(errors).toEqual([]);
 });
 

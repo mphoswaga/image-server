@@ -42,8 +42,7 @@ function installMoonQuest(app, deps) {
     return { s, role: 'student', studentId: t.studentId };
   }
   // Content-addressed URLs also bypass copies cached before no-store was added.
-  const pageHtml = ['js', 'css'].reduce((html, ext) => {
-    const filename = `moonquest.${ext}`;
+  const pageHtml = ['moonquest.js', 'moonquest.css', 'moonquest-report.js'].reduce((html, filename) => {
     const version = crypto.createHash('sha256').update(fs.readFileSync(path.join(__dirname, 'public', filename))).digest('hex').slice(0, 16);
     return html.replace(`/${filename}"`, `/${filename}?v=${version}"`);
   }, fs.readFileSync(path.join(__dirname, 'public/moonquest.html'), 'utf8'));
@@ -57,7 +56,7 @@ function installMoonQuest(app, deps) {
     teacherId: req.userId,
     drafts: store.list('draft', req.userId).map(d=>({id:d.id,title:d.payload.title || 'Untitled adventure',updatedAt:d.updatedAt})),
     games: store.list('game', req.userId).map(g => ({ id: g.id, title: g.title, subject: g.subject, grade: g.grade, questions: g.questions.length, version: g.version, createdAt: new Date(g.createdAt).toISOString() })),
-    sessions: store.list('session', req.userId).sort((a,b) => b.createdAt-a.createdAt).slice(0, 50).map(s => ({ id: s.id, gameId: s.game.id, rosterId: s.rosterId, code: s.code, title: s.game.title, className: s.className, test: s.test, phase: s.phase })),
+    sessions: store.list('session', req.userId).sort((a,b) => b.createdAt-a.createdAt).map(s => ({ id: s.id, gameId: s.game.id, rosterId: s.rosterId, code: s.code, title: s.game.title, className: s.className, test: s.test, phase: s.phase, createdAt: new Date(s.createdAt).toISOString(), savedAnswers: s.rounds.reduce((n,r)=>n+Object.keys(r.answers).length,0), completedRounds: s.rounds.filter(r=>r.revealedAt).length })),
     rosters: roster.listRosters(req.userId), generationCost: costOf(req, 'lessonscope.generate_game'),
   })));
   app.post(base + '/assets', teacher, uploadLimiter, (req, res, next) => {
@@ -144,6 +143,7 @@ function installMoonQuest(app, deps) {
     }
     res.json(store.snapshot(s.id, 'teacher'));
   }));
+  app.post(base + '/sessions/:id/reflection', teacher, wrap((req,res)=>res.json(store.saveReflection(req.params.id,req.userId,req.body))));
   app.get(base + '/sessions/:id/report', teacher, wrap((req, res) => res.json(store.report(req.params.id, req.userId))));
   app.get(base + '/sessions/:id/qr', teacher, wrap(async (req, res) => {
     const s = ownSession(req);

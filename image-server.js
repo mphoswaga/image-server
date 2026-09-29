@@ -318,7 +318,7 @@ app.get('/colonyquest.js', (req, res) => {
   res.set('Cloudflare-CDN-Cache-Control', 'no-store');
   res.sendFile(path.join(__dirname, 'public', 'colonyquest.js'));
 });
-app.get(['/moonquest.js', '/moonquest.css'], (req, res) => {
+app.get(['/moonquest.js', '/moonquest.css', '/moonquest-report.js'], (req, res) => {
   res.set('Cache-Control', 'no-store, max-age=0');
   res.set('CDN-Cache-Control', 'no-store');
   res.set('Cloudflare-CDN-Cache-Control', 'no-store');
