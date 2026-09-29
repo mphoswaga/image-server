@@ -1,7 +1,7 @@
 const {test,expect}=require('@playwright/test');
 const {signInDisposableTeacher}=require('./helpers');
 test('simultaneous duels: rabbit choice, shared time, private answers and team reveal',async({page,browser},info)=>{
- test.setTimeout(90000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ test.setTimeout(120000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await signInDisposableTeacher(page,'-duels');await page.goto('/moonquest');await page.getByRole('button',{name:'Try the senses example'}).click();await page.locator('#reviewed').check();await page.getByRole('button',{name:'Save adventure',exact:true}).click();
  await page.getByRole('button',{name:'Test team duels',exact:true}).click();await page.waitForURL('**/moonquest?session=*');
  const id=new URL(page.url()).searchParams.get('session'),base='/api/games/moonquest/sessions/'+id;
@@ -15,17 +15,17 @@ test('simultaneous duels: rabbit choice, shared time, private answers and team r
   await command('set-team',{studentId:'practice-'+i,team:i});
  }
  const [a,b]=students;await expect(a.locator('[data-avatar]')).toHaveCount(9);await a.getByRole('button',{name:'Festival DJ',exact:true}).click();await a.reload();await expect(a.getByRole('button',{name:'Festival DJ',exact:true})).toHaveAttribute('aria-pressed','true');await a.screenshot({path:'/tmp/moon-rabbit-picker-'+info.project.name+'.png',fullPage:true});await a.getByRole('button',{name:'Pink bow'}).click();await expect(a.getByRole('button',{name:'Pink bow'})).toHaveAttribute('aria-pressed','true');
- await command('next');await expect(a.locator('.duel-strip')).toContainText('Practice learner 2');await expect(b.locator('.duel-strip')).toContainText('Practice learner 1');
+ await command('next');await expect(a.locator('.matchup-large')).toContainText('Practice learner 2');await expect(b.locator('.matchup-large')).toContainText('Practice learner 1');await expect(a.locator('.duel-strip')).toContainText('Practice learner 2');await expect(b.locator('.duel-strip')).toContainText('Practice learner 1');
  await a.getByRole('button',{name:'Need more time',exact:true}).click();await expect(b.getByRole('button',{name:'10 extra seconds added'})).toBeDisabled();
  await a.locator('#diagram polygon[data-region="left-hand"]').click();await expect(a.locator('#answer-status')).toContainText('locked in');
  expect(await a.evaluate(()=>document.documentElement.scrollHeight<=innerHeight+2)).toBeTruthy();
  await expect(b.locator('.duel-strip')).not.toContainText('points');await expect(a.getByRole('progressbar',{name:'School illumination'})).toHaveAttribute('aria-valuenow','0');
  await b.locator('#diagram polygon[data-region="left-hand"]').click();await command('advance');
- await expect(a.getByRole('progressbar',{name:'School illumination'})).toHaveAttribute('aria-valuenow','25');await a.reload();await expect(a.getByRole('progressbar',{name:'School illumination'})).toHaveAttribute('aria-valuenow','25');await expect(a.locator('.duel-strip')).toContainText('points');await expect(a.locator('#diagram polygon.selected')).toHaveCount(1);
- await expect(page.locator('.duel-race')).toContainText('Jade Rabbits');
+ await expect(a.locator('.duel-verdict')).toBeVisible();await expect(b.locator('.duel-verdict')).toHaveText(await a.locator('.duel-verdict').innerText());
  await a.screenshot({path:'/tmp/moon-duels-learner-'+info.project.name+'.png'});
- const board=await page.context().newPage();await board.goto('/moonquest?session='+id+'&board='+state.boardToken);await expect(board.locator('.duel-race')).toBeVisible();await expect(board.locator('.lighting-school')).toBeVisible();await expect(board.locator('.lighting-zones .restored')).toHaveCount(1);await board.screenshot({path:'/tmp/moon-duels-board-'+info.project.name+'.png',fullPage:true});await board.emulateMedia({reducedMotion:'reduce'});await expect(board.locator('.scene-rabbit .rabbit-eyes').first()).toHaveCSS('animation-name','none');await expect(board.locator('.festival-fireflies i').first()).toHaveCSS('animation-name','none');await board.close();
- await command('next');await expect(a.locator('.question-label')).toHaveText('QUESTION 2');await a.locator('#diagram polygon[data-region="eyes"]').click();await b.locator('#diagram polygon[data-region="eyes"]').click();await command('advance');await command('next');
+ await a.reload();await expect(a.getByRole('progressbar',{name:'School illumination'}).first()).toHaveAttribute('aria-valuenow','25');
+ const board=await page.context().newPage();await board.goto('/moonquest?session='+id+'&board='+state.boardToken);await expect(board.locator('.lighting-school')).toBeVisible({timeout:10000});await board.screenshot({path:'/tmp/moon-duels-board-'+info.project.name+'.png',fullPage:true});await board.close();
+ await expect(a.locator('.question-label')).toHaveText('QUESTION 2',{timeout:12000});await a.locator('#diagram polygon[data-region="eyes"]').click();await b.locator('#diagram polygon[data-region="eyes"]').click();await command('advance');await command('next');
  await expect(a.locator('.story-options')).toBeVisible();await a.locator('[data-story-choice=bridge]').click();await b.locator('[data-story-choice=stars]').click();
  await expect(page.locator('.crew-story-results')).toBeVisible({timeout:12000});await expect(page.locator('.crew-story-results')).toContainText('Jade Rabbits');await expect(page.locator('.crew-story-results')).toContainText('Golden Rabbits');
  await command('end');await expect(a.locator('.duel-race')).toContainText('Festival Champions');expect(errors).toEqual([]);

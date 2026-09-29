@@ -194,9 +194,24 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     c.votes[studentId]=body.choice;s.story.spent[studentId]=(s.story.spent[studentId]||0)+1;
     return saveSession(s);
   }
+  function computerAnswer(s) {
+    const r=current(s),id='practice-computer';
+    if(!s.test||!s.duels||s.paused||s.phase!=='choose'||!r?.expected.includes(id)||r.answers[id]||s.members[id]?.absent||(s.removedStudents||[]).includes(id))return;
+    const elapsed=s.game.timing.choose*1000+(r.extraTimeUsed?10000:0)-(s.deadline-clock());
+    if(elapsed<6000+(s.round%3)*4000)return;
+    const q=r.question,diagram=s.game.diagrams.find(d=>d.id===q.diagramId);
+    let selected=q.answerMode==='all'?[...q.accepted]:q.accepted[0];
+    const alternative=diagram.regions.find(area=>!q.accepted.includes(area.id));
+    if(s.round%4===3&&alternative)selected=q.answerMode==='all'?[alternative.id,...q.accepted.slice(1)]:alternative.id;
+    r.answers[id]={first:selected,final:selected,confirmed:true};
+    r.events.push({studentId:id,eventId:'computer-'+s.round,phase:'choose',regionId:selected,at:clock()});
+    saveSession(s);
+  }
   function tick(s) {
+    computerAnswer(s);
     if (!s.paused && s.deadline && clock() >= s.deadline) {
-      if(s.phase==='story-vote')finishStoryVote(s);
+      if(s.phase==='matchup'){s.phase='choose';current(s).startedAt=clock();s.deadline=clock()+s.game.timing.choose*1000;}
+      else if(s.phase==='story-vote')finishStoryVote(s);
       else if(s.phase==='story-action')nextRound(s);
       else if (s.phase === 'intro' || (s.phase === 'reveal' && s.game.timing.automatic)) nextRound(s);
       else advance(s);
@@ -205,11 +220,19 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     return s;
   }
   function begin(s, question) {
+    if(s.test&&s.duels){
+      const id='practice-computer',humans=Object.entries(s.members).filter(([key,m])=>key!==id&&!m.absent&&!(s.removedStudents||[]).includes(key));
+      if(humans.length===1&&!(s.removedStudents||[]).includes(id)){
+        if(!s.students.some(st=>st.id===id))s.students.push({id,name:'Pip · Computer'});
+        s.members[id]={joinedAt:clock(),absent:false};s.duels.teams[id]=1-s.duels.teams[humans[0][0]];s.duels.avatars[id]='astronomer';
+      }else if(s.members[id])s.members[id].absent=true;
+    }
     const expected = Object.entries(s.members).filter(([, m]) => !m.absent).map(([id]) => id);
     if (!expected.length) fail('Wait for learners to join, or run Test game.');
     s.rounds.push({ question: copy(question), expected, answers: {}, events: [], startedAt: clock() });
     s.round++; if(s.duels)current(s).duelGroups=duels.pair(s,expected); s.phase = s.game.timing.automatic ? 'choose' : 'read';
     s.deadline = s.game.timing.automatic ? clock() + s.game.timing.choose * 1000 : null;
+    if(s.duels){s.phase='matchup';s.deadline=clock()+4000;}
     s.teachingPause = null;
   }
   function nextRound(s) {
@@ -305,7 +328,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     let studentId = s.testDevices[deviceKey];
     if (!studentId) {
       const taken = new Set(Object.values(s.testDevices));
-      studentId = s.students.find(st => !taken.has(st.id) && !(s.removedStudents || []).includes(st.id))?.id;
+      studentId = s.students.find(st => st.id!=='practice-computer' && !taken.has(st.id) && !(s.removedStudents || []).includes(st.id))?.id;
       if (!studentId) fail('All six practice learners are in use. Start a new test room for more devices.');
       s.testDevices[deviceKey] = studentId;
       // A physical-device rehearsal should count only those devices, not idle bots.
@@ -387,6 +410,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
       stats: revealed ? stats(s) : null,
       lanterns: s.rounds.filter(r => r.revealedAt).reduce((n, r) => n + stats(s, r).correct, 0) };
     view.duels=duels.snapshot(s,studentId,role,isCorrect);
+    if(view.duels)view.duels.presentation=s.phase==='matchup'?'matchup':s.phase==='reveal'&&!s.paused?(s.deadline&&s.deadline-clock()<=3000?'sparks':'result'):null;
     view.lighting=lighting.snapshot(s,isCorrect);
     view.revealedAt=r?.revealedAt||null;
     if(s.story?.enabled){

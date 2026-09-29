@@ -276,9 +276,11 @@ test('duel rooms preserve timing, membership, per-team votes and report evidence
  assert.throws(()=>f.store.avatar(s.id,'d0',{avatar:'unknown-rabbit'}));
  f.store.avatar(s.id,'d0',{avatar:'bow'});assert.equal(f.store.snapshot(s.id,'student','d0').duels.me.avatar,'bow');
  assert.throws(()=>f.store.avatar(s.id,'outsider',{avatar:'bow'}));cmd('next');
- assert.equal(f.store.snapshot(s.id,'student','d0').deadline-f.clock(),25000);
+ assert.equal(f.store.snapshot(s.id,'student','d0').phase,'matchup');
+ f.step(4000);assert.equal(f.store.snapshot(s.id,'student','d0').deadline-f.clock(),25000);
  assert.throws(()=>cmd('set-team',{studentId:'d0',team:1}));
  for(let n=0;n<2;n++){
+  if(f.store.session(s.id).phase==='matchup'){f.step(4000);f.store.snapshot(s.id,'teacher');}
   const r=f.store.session(s.id).round;for(let i=0;i<4;i++)f.store.answer(s.id,'d'+i,{round:r,phase:'choose',regionId:'a',eventId:'r'+r+'d'+i});
   assert.equal(f.store.snapshot(s.id,'student','d0').duels.result,undefined);cmd('advance');
   assert.equal(f.store.snapshot(s.id,'student','d0').duels.result.points,120);cmd('next');
@@ -296,7 +298,7 @@ test('a complete 24 learner duel mission preserves scores on reload and assessme
  const cmd=(action)=>f.store.command(s.id,'teacher',action,{seq:f.store.session(s.id).seq});
  for(const st of students)f.store.join(s.id,st.id);cmd('next');
  for(let round=0;round<5;round++){
-  let v=f.store.snapshot(s.id,'teacher');assert.equal(v.phase,'choose');
+  f.step(4000);let v=f.store.snapshot(s.id,'teacher');assert.equal(v.phase,'choose');
   const groups=f.store.session(s.id).rounds[round].duelGroups;assert.equal(new Set(groups.flat()).size,24);
   for(const st of students)f.store.answer(s.id,st.id,{round,phase:'choose',regionId:'a',eventId:'r'+round+st.id});
   cmd('advance');v=f.store.snapshot(s.id,'teacher');assert.equal(v.duels.teams[0].points,(round+1)*120);assert.equal(v.duels.teams[1].points,(round+1)*120);
@@ -315,4 +317,34 @@ test('teacher reflections persist with ownership and stale-edit protection',t=>{
  assert.throws(()=>f.store.saveReflection(f.id,'other',{version:1}),/another teacher/);
  assert.throws(()=>f.store.saveReflection(f.id,'teacher',{version:0}),/another tab/);
  const reopened=createStore(f.dir,f.clock).report(f.id,'teacher');assert.equal(reopened.reflection.action,'Modelled vibration.');assert.deepEqual(reopened.students,before);
+});
+
+test('duel ceremony is timed, private, pauseable and shares the same verdict',t=>{
+ const f=setup(t,2),s=f.store.createSession('teacher',f.game.id,{id:'c',name:'C',students:[{id:'a',name:'A'},{id:'b',name:'B'}]},false,'duels');
+ const cmd=(action,body={})=>f.store.command(s.id,'teacher',action,{seq:f.store.session(s.id).seq,...body});
+ for(const [i,id] of ['a','b'].entries()){f.store.join(s.id,id);cmd('set-team',{studentId:id,team:i});}cmd('next');
+ assert.equal(f.store.snapshot(s.id,'student','a').duels.presentation,'matchup');
+ assert.throws(()=>f.store.answer(s.id,'a',{round:0,phase:'choose',regionId:'a',eventId:'early'}));
+ cmd('pause');f.step(10000);assert.equal(f.store.snapshot(s.id,'teacher').phase,'matchup');cmd('pause');f.step(4000);
+ let v=f.store.snapshot(s.id,'student','a');assert.equal(v.phase,'choose');assert.equal(v.deadline-f.clock(),25000);
+ f.store.answer(s.id,'a',{round:0,phase:'choose',regionId:'a',eventId:'one'});f.step(2000);f.store.answer(s.id,'b',{round:0,phase:'choose',regionId:'a',eventId:'two'});
+ v=f.store.snapshot(s.id,'student','b');assert.equal(v.duels.matchups[0].players[0].answered,true);assert.equal(v.duels.matchups[0].winners,undefined);assert.equal(v.duels.matchups[0].players[0].correct,undefined);
+ cmd('advance');const a=f.store.snapshot(s.id,'student','a'),b=f.store.snapshot(s.id,'student','b');assert.deepEqual(a.duels.matchups,b.duels.matchups);assert.deepEqual(a.duels.matchups[0].winners,['a']);assert.equal(a.duels.presentation,'result');
+ f.step(5000);assert.equal(f.store.snapshot(s.id,'student','a').duels.presentation,'sparks');f.step(3000);assert.equal(f.store.snapshot(s.id,'student','a').phase,'matchup');
+});
+
+test('solo test duels add a labelled computer, answer once, and retire it for two people',t=>{
+ const f=setup(t,2),s=f.store.createSession('teacher',f.game.id,null,true,'duels');
+ const cmd=(action)=>f.store.command(s.id,'teacher',action,{seq:f.store.session(s.id).seq});
+ f.store.joinPractice(s.id,'00000000-0000-0000-0000-000000000001');cmd('next');
+ let v=f.store.snapshot(s.id,'student','practice-0');assert.equal(v.duels.opponents[0].name,'Pip · Computer');assert.equal(v.expected,2);
+ f.step(4000);f.store.snapshot(s.id,'teacher');f.step(5000);v=f.store.snapshot(s.id,'student','practice-0');assert.equal(v.answered,0);
+ cmd('pause');f.step(20000);assert.equal(f.store.snapshot(s.id,'teacher').answered,0);cmd('pause');f.step(1000);
+ v=f.store.snapshot(s.id,'student','practice-0');assert.equal(v.answered,1);assert.equal(v.duels.matchups[0].winners,undefined);
+ f.store.snapshot(s.id,'teacher');assert.equal(f.store.session(s.id).rounds[0].events.length,1);
+ f.step(2000);f.store.answer(s.id,'practice-0',{round:0,phase:'choose',regionId:'a',eventId:'human'});cmd('advance');
+ assert.equal(f.store.snapshot(s.id,'student','practice-0').duels.result.points,100);
+ f.store.joinPractice(s.id,'00000000-0000-0000-0000-000000000002');cmd('next');
+ assert.equal(f.store.session(s.id).rounds[1].expected.includes('practice-computer'),false);
+ assert.equal(f.store.session(s.id).rounds[0].expected.includes('practice-computer'),true);
 });

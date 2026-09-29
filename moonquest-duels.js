@@ -38,6 +38,16 @@ function snapshot(s,studentId,role,right) {
     for(let t=0;t<2;t++){const ids=r.expected.filter(id=>s.duels.teams[id]===t);const sum=ids.reduce((n,id)=>n+scores[id].points,0);raw[t]+=sum;totals[t]+=ids.length?sum/ids.length:0;}
   }
   const view={styles,teams:names.map((name,i)=>({name,points:Math.round(totals[i]*10)/10,rawPoints:raw[i],progress:Math.min(100,totals[i]/(120*s.game.questions.length)*100)})),rounds,winner:totals[0]===totals[1]?null:totals[0]>totals[1]?0:1};
+  const round=s.rounds[s.round];
+  if(round){
+    const scores=round.revealedAt?score(s,round,right):null;
+    view.matchups=(round.duelGroups||[]).filter(g=>role!=='student'||g.includes(studentId)).map((g,index)=>{
+      const players=g.filter(id=>round.expected.includes(id)).map(id=>({id,name:s.students.find(st=>st.id===id)?.name||'Festival hero',team:s.duels.teams[id],avatar:s.duels.avatars[id]||'scarf',answered:!!round.answers[id],...(scores?{points:scores[id].points,correct:scores[id].correct}:{})}));
+      const best=scores?Math.max(0,...players.map(p=>p.points)):0;
+      const winners=scores?players.filter(p=>p.correct&&p.points===best).map(p=>p.id):[];
+      return {index,players,...(scores?{winners,reason:!winners.length?'A discovery for our next try':winners.length>1?'Shared victory · equally earned':players.filter(p=>p.correct).length>1?'Correct answer + speed bonus':'Correct answer wins'}:{})};
+    });
+  }
   if(role==='teacher'&&s.phase==='lobby')view.assignments=s.students.filter(st=>!(s.removedStudents||[]).includes(st.id)).map(st=>({...st,team:s.duels.teams[st.id]}));
   if(role==='student'){
     const r=s.rounds[s.round],group=r?.duelGroups?.find(g=>g.includes(studentId))||[];
