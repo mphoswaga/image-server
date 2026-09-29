@@ -120,7 +120,7 @@ test('automatic rounds insert only reviewed follow-ups after two intervening rou
 });
 test('new sessions upgrade older saved games to bounded automatic timing, explicit manual is preserved',t=>{
   const f=setup(t);const game={...f.game,timing:{choose:30,discuss:20,reconsider:8}};f.store.saveGame('teacher',game);
-  const s=f.store.createSession('teacher',game.id,null,true);assert.deepEqual(s.game.timing,{automatic:true,choose:35,discuss:20,reconsider:8,flow:'single',reveal:8});
+  const s=f.store.createSession('teacher',game.id,null,true);assert.deepEqual(s.game.timing,{automatic:true,choose:25,discuss:20,reconsider:8,flow:'single',reveal:8});
   const saved=f.store.read('game',game.id);f.store.saveGame('teacher',{...saved,timing:{automatic:false,choose:30,discuss:20,reconsider:8}});
   assert.equal(f.store.createSession('teacher',game.id,null,true).game.timing.automatic,false);
 });
@@ -253,4 +253,18 @@ test('full 24-learner story finishes without altering assessment totals',t=>{
   x.step(8001);view=x.store.snapshot(x.id,'board');if(view.phase==='story-vote'){for(let i=0;i<20;i++)x.store.vote(x.id,'s'+i,{checkpoint:view.story.id,choice:view.story.options[round%2].id});x.step(8001);assert.equal(x.store.snapshot(x.id,'board').phase,'story-action');x.step(5001);view=x.store.snapshot(x.id,'board');}
  }
  assert.equal(x.store.snapshot(x.id,'board').phase,'ended');assert.equal(x.store.session(x.id).story.history.length,2);assert.equal(x.store.report(x.id,'teacher').rounds.length,5);assert.equal(x.store.snapshot(x.id,'student','s0').reward.sparks,5);
+});
+
+test('learners share exactly one durable ten-second extension per question',t=>{
+ const f=single(t);const room=f.store.session(f.id);room.game.timing.choose=25;f.store.saveSession(room);f.cmd('next');
+ const start=f.store.snapshot(f.id,'student','s0');assert.equal(start.deadline-start.serverNow,25000);
+ assert.throws(()=>f.store.requestTime(f.id,'outsider',{round:0}));
+ f.store.requestTime(f.id,'s0',{round:start.round});
+ for(let i=0;i<10;i++)f.store.requestTime(f.id,'s'+i,{round:start.round});
+ assert.equal(f.store.snapshot(f.id,'board').deadline,start.deadline+10000);
+ assert.equal(f.store.snapshot(f.id,'student','s1').extraTimeUsed,true);
+ assert.throws(()=>f.cmd('extend'),/Learners/);
+ f.step(35000);assert.throws(()=>f.store.requestTime(f.id,'s0',{round:start.round}),/not open/);
+ f.cmd('next');assert.equal(f.store.snapshot(f.id,'board').extraTimeUsed,false);
+ assert.throws(()=>f.store.requestTime(f.id,'s0',{round:start.round}),/not open/);
 });

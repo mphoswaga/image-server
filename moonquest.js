@@ -106,7 +106,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
   }
   function createSession(teacherId, gameId, roster, test = false) {
     const game = read('game', gameId);
-    if (game.timing.automatic !== false) game.timing = { ...game.timing, automatic: true, flow: 'single', choose: 35, reveal: 8 };
+    if (game.timing.automatic !== false) game.timing = { ...game.timing, automatic: true, flow: 'single', choose: 25, reveal: 8 };
     if (game.teacherId !== teacherId) fail('This game belongs to another teacher.');
     if (!test && (!roster?.id || !roster.students?.length)) fail('Select a class with learners first.');
     const students = test ? Array.from({ length: 6 }, (_, i) => ({ id: 'practice-' + i, name: 'Practice learner ' + (i + 1) })) : roster.students.map(s => ({ id: String(s.id), name: s.name }));
@@ -260,6 +260,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
         s.phase = 'choose'; s.deadline = clock() + s.game.timing.choose * 1000;
       } else if (action === 'advance') { advance(s);
       } else if (action === 'extend') {
+        if (s.game.timing.flow === 'single') fail('Learners can request one shared ten-second extension.');
         if (!s.deadline) fail('This stage has no timer.');
         s.deadline += 10000;
       } else if (action === 'challenge') {
@@ -300,6 +301,15 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     }
     if ((s.removedStudents || []).includes(studentId)) fail('Your teacher has removed you from this game.');
     return { studentId, name: s.students.find(st => st.id === studentId).name };
+  }
+  function requestTime(id, studentId, body) {
+    const s = tick(session(id)), r = current(s);
+    if (!r || body.round !== s.round || s.phase !== 'choose' || s.paused || !s.deadline || s.game.timing.flow !== 'single') fail('The answer timer is not open.');
+    if (!r.expected.includes(studentId) || !s.members[studentId] || s.members[studentId].absent || (s.removedStudents || []).includes(studentId)) fail('Only active learners in this round can request time.');
+    if (r.extraTimeUsed) return s;
+    r.extraTimeUsed = true;
+    s.deadline += 10000;
+    return saveSession(s);
   }
   function answer(id, studentId, body) {
     const s = tick(session(id)); const r = current(s);
@@ -347,7 +357,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     const s = tick(session(id)); const r = current(s); const revealed = s.phase === 'reveal' || s.phase === 'ended';
     const q = r?.question;
     const view = { id: s.id, title: s.game.title, className: s.className, test: s.test, seq: s.seq, phase: s.phase, paused: s.paused, recovered: s.recovered,
-      automatic: !!s.game.timing.automatic, singleTimer: s.game.timing.flow === 'single', teachingPause: s.teachingPause || null, serverNow: clock(), deadline: s.deadline, round: s.round, total: s.game.questions.length, remainingQuestions: s.game.questions.length - s.nextQuestion,
+      extraTimeUsed: !!r?.extraTimeUsed, automatic: !!s.game.timing.automatic, singleTimer: s.game.timing.flow === 'single', teachingPause: s.teachingPause || null, serverNow: clock(), deadline: s.deadline, round: s.round, total: s.game.questions.length, remainingQuestions: s.game.questions.length - s.nextQuestion,
       joined: Object.keys(s.members).filter(id => !(s.removedStudents || []).includes(id)).length, expected: r?.expected.length || 0, answered: r ? r.expected.filter(id => r.answers[id]?.final || r.answers[id]?.first).length : 0,
       question: q ? { id: q.id, prompt: q.prompt, concept: q.concept, answerMode: q.answerMode || 'one', selectionCount: q.answerMode === 'all' ? q.accepted.length : 1, ...(revealed ? { accepted: q.accepted, explanation: q.explanation } : {}) } : null,
       diagram: q ? s.game.diagrams.find(d => d.id === q.diagramId) : null,
@@ -392,7 +402,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
           revisedCorrect: (a.final ?? a.first) ? isCorrect(r.question, a.final ?? a.first) : null, confirmed: !!a.confirmed, expected: r.expected.includes(st.id) };
       }) })) };
   }
-  return { dir, read, list, saveDraft, deleteDraft, saveGame, createSession, session, saveSession, stats, command, join, joinPractice, answer, vote, snapshot, review, saveSuggestion, report,
+  return { dir, read, list, saveDraft, deleteDraft, saveGame, createSession, session, saveSession, stats, command, join, joinPractice, answer, requestTime, vote, snapshot, review, saveSuggestion, report,
     findCode(code) { if (!/^[A-F0-9]{10}$/.test(code || '')) fail('Enter the ten-character MoonQuest code.'); return list('session').find(s => s.code === code); },
     sessions() { return fs.readdirSync(dir).filter(f => f.startsWith('session-')).map(f => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'))); } };
 }

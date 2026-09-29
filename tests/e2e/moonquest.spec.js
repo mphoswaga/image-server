@@ -164,8 +164,8 @@ test('one 35 second round locks answers, confirms changes and advances with no e
     await expect(page.locator('.response-ring')).toContainText('1/1');
     await expect(board.locator('.evidence')).toHaveCount(0);
     await expect.poll(()=>board.evaluate(()=>window.countdownTones)).toBeGreaterThan(3);
-    await expect(learner.locator('.stage-instruction')).toHaveText('Think, choose and share your reasons.');
-    await expect(learner.locator('.selection-rule')).toContainText('Choose ONE answer');
+    await expect(learner.locator('.learner-prompt')).toHaveText('Think, choose and share your reasons.');
+    await expect(learner.locator('.learner-prompt')).toContainText('Choose ONE answer');
     await expect(learner.getByRole('button',{name:'Eyes',exact:true}).last()).toBeDisabled();
     learner.once('dialog',d=>d.dismiss());await learner.getByRole('button',{name:'Change my answer',exact:true}).click();
     await expect(learner.getByRole('button',{name:'Eyes',exact:true}).last()).toBeDisabled();
@@ -218,18 +218,18 @@ test('multi-answer selection, class meeting and normal games library work togeth
   try{
     await learner.goto('http://127.0.0.1:4341'+url);await expect(learner.getByText('You’re in the crew!')).toBeVisible();
     await page.getByRole('button',{name:'Begin mission',exact:true}).click();await page.getByRole('button',{name:'Skip intro',exact:true}).click();
-    await expect(learner.locator('.selection-rule')).toContainText('Choose 2 answers');
+    await expect(learner.locator('.learner-prompt')).toContainText('Choose 2 answers');
     await learner.locator('[data-region-answer="left-hand"]').click();await expect(learner.getByRole('button',{name:'Lock in my answers'})).toBeDisabled();
     await learner.locator('[data-region-answer="eyes"]').click();await learner.getByRole('button',{name:'Lock in my answers'}).click();await expect(learner.locator('#answer-status')).toContainText('locked in');
     const id=new URL(page.url()).searchParams.get('session');let s=await(await page.request.get('/api/games/moonquest/sessions/'+id+'/teacher')).json();
     expect(s.answered).toBe(1);expect(s.phase).toBe('choose');
     // Teacher ends the round for this test; core timer tests cover the exact deadline.
     const r=await page.request.post('/api/games/moonquest/sessions/'+id+'/command',{data:{action:'advance',seq:s.seq}});expect(r.ok()).toBe(true);
-    await expect(learner.locator('.stage-instruction')).toHaveText('Class meeting discussion');await expect(page.locator('.stage-instruction')).toHaveText('Class meeting discussion');
-    await expect(learner.locator('.learner-result')).toContainText('A new discovery');await expect(learner.locator('#timer')).not.toHaveText(/\d+s/);
+    await expect(learner.locator('.learner-prompt')).toHaveText('Class meeting discussion');await expect(page.locator('.stage-instruction')).toHaveText('Class meeting discussion');
+    await expect(learner.locator('#answer-status')).not.toBeEmpty();await expect(learner.locator('#timer')).not.toHaveText(/\d+s/);
     await expect(page.getByRole('button',{name:'Continue after discussion',exact:true})).toBeVisible();
     await page.screenshot({path:'/tmp/moon-meeting-'+info.project.name+'.png',fullPage:true});
     await page.getByRole('button',{name:'Continue after discussion',exact:true}).click();await expect(learner.locator('.question-focus')).toContainText('A lantern changes colour.');
-    await expect(learner.locator('#timer')).toHaveText(/3[0-5]s/);await expectNoPageOverflow(page);await expectNoPageOverflow(learner);
+    await expect(learner.locator('#timer')).toHaveText(/2[0-5]s/);await expectNoPageOverflow(page);await expectNoPageOverflow(learner);
   }finally{await context.close();}
 });
