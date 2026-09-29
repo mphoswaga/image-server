@@ -275,7 +275,7 @@ test('an open My assignments panel updates learner readiness without being reope
     await expect(results.getByRole('button', { name: 'Release results' })).toBeEnabled();
     const released = await page.request.patch(`/api/assignment/${assessment.assessmentId}/release`, { data: { released: true } });
     expect(released.ok(), await released.text()).toBeTruthy();
-    await expect(results).toContainText('Results released to students');
+    await expect(results).toContainText('Official marks · Visible to learners');
   } finally {
     await learnerContext.close();
   }

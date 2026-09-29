@@ -230,6 +230,7 @@ function render(){
   $('turn').textContent=state.story?'Sanctuary reached · Every fish made it home!':'Expedition complete · Everyone had a turn';$('question').textContent=max?winners.join(' & ')+' led the feeding!':'Our ocean learned together!';
   $('options').innerHTML='';$('feedback').textContent=state.answers.filter(a=>a.correct).length+' correct answers from '+state.answers.length+' turns. Every fish is part of our crew.';$('hero').hidden=true;$('food').innerHTML='';
  }
+ $('boardLearningReview').hidden=state.phase!=='ended';if(state.phase==='ended')$('boardLearningReview').innerHTML=LearningReport.html(LearningReport.scores('FishQuest classroom review',state.players.map((p,i)=>{const a=state.answers.filter(a=>a.player===i);return {name:p.name,value:a.length?Math.round(a.filter(v=>v.correct).length/a.length*100):null,detail:a.filter(v=>v.correct).length+' correct of '+a.length+' team-supported turns'};}),'These are shared-board turns with team support, not independent assessment. Print this review before starting a new game; this board review is not a permanent report.'));
  renderStory();
  showClock();FishBoardSwim.pause(state.paused);
  requestAnimationFrame(()=>{sizeOcean();if(state?.phase==='reveal'&&state.answers.at(-1)?.correct)feedScene()});
@@ -240,7 +241,7 @@ $('start').onclick=()=>{try{state=FishBoard.create(students,data.game.questions,
 $('restore').onclick=()=>{state=FishBoard.upgrade(saved);state.paused=true;persist();render()};
 $('pause').onclick=()=>{updateClock();state.paused=!state.paused;persist();render()};
 $('next').onclick=()=>{if(FishBoard.next(state)){persist();render()}};
-$('restart').onclick=()=>{if(state.phase!=='ended'&&!confirm('Finish this board game and return to team setup?'))return;clearTimeout(timer);sessionStorage.removeItem(storageKey);state=null;saved=null;FishBoardSwim.clear();$('restore').hidden=true;$('play').hidden=true;$('setup').hidden=false;document.body.classList.remove('paused','game-active')};
+$('restart').onclick=()=>{if(state.phase!=='ended'&&!confirm('Finish this board game and return to team setup?'))return;clearTimeout(timer);sessionStorage.removeItem(storageKey);state=null;saved=null;$('boardLearningReview').hidden=true;FishBoardSwim.clear();$('restore').hidden=true;$('play').hidden=true;$('setup').hidden=false;document.body.classList.remove('paused','game-active')};
 $('sound').onclick=()=>{sound=!sound;$('sound').textContent=sound?'Sound on':'Sound off'};
 $('full').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen()}catch{$('error').textContent='Use your browser’s full-screen control on this device.'}};
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&state&&state.phase!=='ended'){updateClock();state.paused=true;persist();render()}});

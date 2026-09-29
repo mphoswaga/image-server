@@ -2488,7 +2488,7 @@
     }
   </style>
   <link rel="stylesheet" href="/byte-feedback.css" />
-</head>
+<link rel="stylesheet" href="/learning-report.css?v=1"><script src="/learning-report.js?v=1"></script></head>
 <body data-byte-ui="teacher">
   <!-- SPLASH (plays once per visit, then fades to reveal the app) -->
   <div id="splash">
@@ -6404,22 +6404,7 @@
     // At-a-glance analytics for one assignment: class average, submission count,
     // and the questions students found hardest — before the row-by-row grading.
     function assignmentSummary(d){
-      const subs=(d.submissions||[]).filter(student=>!student.draftOnly); if(!subs.length) return '';
-      const pcts=subs.map(s=>s.maxMarks?s.totalMarks/s.maxMarks:0);
-      const avg=pcts.reduce((a,b)=>a+b,0)/pcts.length;
-      // per-question difficulty: mean of (marksAwarded/marks) across submissions
-      const qDiff=d.questions.map(q=>{
-        const vals=subs.map(s=>{ const g=(s.grades||{})[q.id]; return g&&q.marks?g.marksAwarded/q.marks:0; });
-        return { q, pct: vals.reduce((a,b)=>a+b,0)/vals.length };
-      }).sort((a,b)=>a.pct-b.pct);
-      const hardest=qDiff.slice(0,2).filter(x=>x.pct<0.85);
-      const stat=(v,l)=>`<div class="gb-stat"><div class="v">${v}</div><div class="l">${l}</div></div>`;
-      const hardestBlock=hardest.length?`<div style="margin-top:6px;font-size:12.5px;color:var(--muted)"><b style="color:#b26a00">Hardest:</b> ${hardest.map(h=>esc(stripMarksText(h.q.question))+' ('+Math.round(h.pct*100)+'%)').join(' · ')}</div>`:'';
-      return `<div class="gb-summary" style="margin-bottom:8px">
-        ${stat(Math.round(avg*100)+'%','Class average')}
-        ${stat(subs.length,'Submitted')}
-        ${stat(d.questions.length,'Questions')}
-      </div>${hardestBlock}`;
+      return LearningReport.html(LearningReport.assignment(d));
     }
 
     async function loadAssignmentResults(assignId, wrapId='assignSubmissions', view,options={}){
@@ -7270,7 +7255,7 @@
       return `<div style="margin-top:10px;padding:11px 13px;border:2px solid #9dcfb9;background:#f1fbf6;border-radius:8px"><b style="color:var(--primary);font-size:16px">${headline}</b><span class="hint" style="display:block;margin-top:3px">${winnerDetail}</span></div>${teams?`<div class="res-table"><div class="res-row"><span>Colony</span><span class="sc">Accuracy</span><span class="pc">Strength</span></div>${teams}</div>`:''}${gameBreakdown(d)}`;
     }
     async function loadGameResults(gid,elId){ const wrap=$(elId); if(!wrap) return;
-      try{ const d=await (await fetch('/api/game/'+gid+'/results')).json(); wrap.innerHTML=d.mode==='colonyquest'?colonyQuestResults(d):resultsTable(d.results)+gameBreakdown(d); }
+      try{ const d=await (await fetch('/api/game/'+gid+'/results')).json(); wrap.innerHTML=LearningReport.html(LearningReport.game(d))+(d.mode==='colonyquest'?'<details><summary>Game performance · Colony strength</summary>'+colonyQuestResults(d)+'</details>':''); }
       catch{ wrap.innerHTML='<p class="hint">Could not load results.</p>'; }
     }
     function resetGameSection(){ $('makeGameBtn').disabled=false; $('makeGameBtn').innerHTML=`${ICON('i-spark')} ${GAME_MODE_COPY[selectedGameMode].button}`; $('gamePanel').style.display='none'; $('gamePanel').innerHTML=''; }
@@ -7979,7 +7964,7 @@
         <td class="avg">${r.average!=null?`<span class="gb-cell ${pctClass(r.average)}">${pctTxt(r.average)}</span>`:'<span class="gb-none">—</span>'}</td>
       </tr>`).join('');
       const foot=`<tr><td class="sticky">Class average</td>${g.assessments.map(a=>`<td>${pctTxt(a.average)}</td>`).join('')}<td>${pctTxt(g.classAverage)}</td></tr>`;
-      $('marksBody').innerHTML=summary+`<div class="gb-scroll"><table class="gb"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>
+      $('marksBody').innerHTML=summary+LearningReport.html(LearningReport.scores('Assessment overview',g.assessments.map(a=>({name:a.title,value:a.average,detail:(a.excluded?'Excluded from weighted average · ':'')+(a.kind==='game'?'Game':'Assessment')})),'Each bar is the recorded assessment average. This unweighted overview does not change the weighted class average shown above.'))+`<div class="gb-scroll"><table class="gb"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>
         <p class="hint" style="margin-top:10px;font-size:12px">Marks combine assignments and games for this class. Weight controls how much each task counts in the average: 1 is normal, 0.5 is half, and 0 excludes it.</p>`;
       $('marksBody').querySelectorAll('.gb-weight-input').forEach(input=>input.addEventListener('change',async()=>{
         const weights={};
@@ -9215,7 +9200,7 @@
       const view = students.map(s => {
         const results = currentSubject ? s.results.filter(r => r.subject === currentSubject) : s.results;
         const gamesPlayed = results.length;
-        const scored = results.filter(result => Number.isFinite(Number(result.pct)));
+        const scored = results.filter(result => LearningReport.valid(result.pct));
         const avgPct = scored.length ? Math.round(scored.reduce((sum, result) => sum + Number(result.pct), 0) / scored.length) : null;
         const lastAt = results.length ? results[0].at : null;
         return { ...s, results, gamesPlayed, avgPct, lastAt };
@@ -9231,6 +9216,8 @@
         `<div class="prog-stat"><div class="v">${totalPlays}</div><div class="l">Activities</div></div>` +
         (classAvg !== null ? `<div class="prog-stat"><div class="v ${pctCls(classAvg)}">${classAvg}%</div><div class="l">Class average</div></div>` : '') +
         `<div class="prog-stat"><div class="v">${active.length}</div><div class="l">Active students</div></div>`;
+
+      let insights=$('progressInsights');if(!insights){insights=document.createElement('div');insights.id='progressInsights';$('progressStats').after(insights);}insights.innerHTML=LearningReport.html(LearningReport.scores('Learner progress overview',view.map(s=>({name:s.name,value:s.avgPct,detail:s.gamesPlayed+' recorded activities'})),'Reflects the selected subject. This is an activity overview, not a term grade. Pending evidence is not scored.'));
 
       // Search + sort on filtered view
       const q = ($('progressSearch').value || '').toLowerCase().trim();

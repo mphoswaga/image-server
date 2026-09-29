@@ -12,7 +12,7 @@ test('class board celebrates, locks answers, pauses, resumes after reload and fi
  await page.locator('#pause').click();await page.clock.fastForward(6600);await expect(page.locator('#turn')).toContainText('Bao');
  await page.locator('[data-answer="1"]').click();await expect(page.locator('#feedback')).toContainText('Let’s learn together');
  await expect(page.locator('#hero')).toBeVisible();await expect(page.locator('#hero')).not.toHaveClass(/celebrating/);await page.clock.fastForward(6600);
- await expect(page.locator('#turn')).toContainText('Everyone had a turn');expect(errors).toEqual([]);
+ await expect(page.locator('#turn')).toContainText('Everyone had a turn');await expect(page.locator('#boardLearningReview')).toBeVisible();await expect(page.locator('#boardLearningReview')).toContainText('team-supported turns');expect(errors).toEqual([]);
 });
 test('full class stays visible and class selection excludes other rosters',async({page},info)=>{
  const roster=Array.from({length:30},(_,i)=>({rosterId:'r1',studentId:String(i),name:'Learner '+(i+1)}));

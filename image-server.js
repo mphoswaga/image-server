@@ -5146,6 +5146,7 @@ app.get('/api/game/:id/results', requireAuth, (req, res) => {
         answered: attempts.length,
         correctIndex: q.correctIndex,
         options: q.options || null,
+        needsReview: attempts.filter(answer=>!answer.correct).map(answer=>({name: (rosterData?.students||[]).find(s=>roster.normalizeStudentId(s.id)===roster.normalizeStudentId(answer.studentId))?.name || 'Unidentified team turn'})),
       };
     });
     const participated = new Set(answers.map(answer => roster.normalizeStudentId(answer.studentId)).filter(Boolean));
@@ -5192,7 +5193,7 @@ app.get('/api/game/:id/results', requireAuth, (req, res) => {
       answered++;
       if (a === q.correctIndex) correct++;
     }
-    return { index: i, question: q.question, correct, answered, correctIndex: q.correctIndex, options: q.options || null };
+    return { index: i, question: q.question, correct, answered, correctIndex: q.correctIndex, options: q.options || null, needsReview: raw.filter(r=>{const answer=(r.answers||[])[i];return answer!=null&&answer!==-1&&answer!==q.correctIndex;}).map(r=>({name:rosterMap[roster.normalizeStudentId(r.studentId)]||r.name})) };
   });
   // Who's on the roster but hasn't played yet, so the teacher can chase them.
   const played = new Set(raw.map(r => `${r.rosterId || '*'}:${roster.normalizeStudentId(r.studentId)}`));
