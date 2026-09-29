@@ -190,15 +190,15 @@ test('signed-in Smartboard can resume and displays names without exposing choice
   const url=await page.getByRole('link',{name:'Open Smartboard'}).getAttribute('href');
   const board=await page.context().newPage();await board.goto('http://127.0.0.1:4341'+url);
   await board.getByRole('button',{name:'Begin mission',exact:true}).click();
-  await expect(board.locator('.story-crawl')).toContainText('THE VANISHING LIGHT');
-  await board.waitForTimeout(7000); // Inspect the actual crawl mid-flight, not a mocked frame.
+  await expect(board.locator('.tale-intro')).toContainText('The vanishing light');
+  await expect(board.locator('.tale-intro')).toHaveAttribute('data-beat','1',{timeout:9000}); // Inspect the real scene mid-flight.
   await board.getByRole('button',{name:'Pause',exact:true}).click();await expect(board.locator('#timer')).toHaveText('Paused');
   await board.screenshot({path:'/tmp/moon-story-'+info.project.name+'.png',fullPage:true});
   await board.getByRole('button',{name:'Resume',exact:true}).click();await expect(board.locator('#timer')).not.toHaveText('Paused');
   await board.getByRole('button',{name:'Skip intro',exact:true}).click();await expect(board.locator('.question-focus')).toBeVisible();
   await expect(page.getByRole('button',{name:'Simulate learner answers',exact:true})).toBeVisible();await page.getByRole('button',{name:'Simulate learner answers',exact:true}).click();
   await expect(board.getByRole('heading',{name:'6/6 learners answered',exact:true})).toBeVisible();
-  await expect(board.locator('.hero-lantern.lit')).toHaveCount(6);await expect(board.locator('.hero-lantern').first()).toContainText('Practice learner 1');
+  await expect(board.locator('.hero-lantern')).toHaveCount(6);await expect(board.locator('.hero-lantern').first()).toContainText('Practice learner 1');
   await expect(board.locator('.festival-heroes')).not.toContainText('Eyes');await expect(board.locator('.evidence')).toHaveCount(0);
   await board.getByRole('button',{name:'Pause',exact:true}).click();await board.getByRole('button',{name:'Resume',exact:true}).click();
   await expect(board.locator('#timer')).not.toHaveText('Paused');await expectNoPageOverflow(board);

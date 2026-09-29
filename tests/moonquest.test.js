@@ -304,7 +304,7 @@ test('a complete 24 learner duel mission preserves scores on reload and assessme
   cmd('advance');v=f.store.snapshot(s.id,'teacher');assert.equal(v.duels.teams[0].points,(round+1)*120);assert.equal(v.duels.teams[1].points,(round+1)*120);
   // Repeated reads and persisted records must not award the points again.
   assert.deepEqual(f.store.snapshot(s.id,'teacher').duels,v.duels);assert.equal(f.store.session(s.id).rounds.length,round+1);
-  cmd('next');v=f.store.snapshot(s.id,'teacher');if(v.phase==='story-vote'){f.step(8000);f.store.snapshot(s.id,'teacher');f.step(5000);f.store.snapshot(s.id,'teacher');}
+  cmd('next');v=f.store.snapshot(s.id,'teacher');if(v.phase==='story-vote'){f.step(8000);f.store.snapshot(s.id,'teacher');f.step(9000);f.store.snapshot(s.id,'teacher');}
  }
  const end=f.store.snapshot(s.id,'student','p0');assert.equal(end.phase,'ended');assert.equal(end.duels.personal.points,600);assert.equal(end.duels.personal.correct,5);
  const recovered=createStore(f.dir,f.clock);assert.equal(recovered.snapshot(s.id,'student','p0').duels.personal.points,600);
@@ -347,4 +347,27 @@ test('solo test duels add a labelled computer, answer once, and retire it for tw
  f.store.joinPractice(s.id,'00000000-0000-0000-0000-000000000002');cmd('next');
  assert.equal(f.store.session(s.id).rounds[1].expected.includes('practice-computer'),false);
  assert.equal(f.store.session(s.id).rounds[0].expected.includes('practice-computer'),true);
+});
+
+test('new fairy-tale choices persist as distinct worlds and the finale keeps assessment evidence intact',t=>{
+ const f=setup(t,2),s=f.store.createSession('teacher',f.game.id,{id:'c',name:'C',students:[{id:'a',name:'A'},{id:'b',name:'B'}]},false,'duels');
+ const cmd=(action,body={})=>f.store.command(s.id,'teacher',action,{seq:f.store.session(s.id).seq,...body});
+ ['a','b'].forEach((id,i)=>{f.store.join(s.id,id);cmd('set-team',{studentId:id,team:i});});cmd('next');
+ let checkpoint=0;
+ for(let round=0;round<5;round++){
+  f.step(4000);f.store.snapshot(s.id,'teacher');
+  for(const id of ['a','b'])f.store.answer(s.id,id,{round,phase:'choose',regionId:'a',eventId:'answer-'+round+id});
+  cmd('advance');cmd('next');let v=f.store.snapshot(s.id,'teacher');
+  if(v.phase==='story-vote'){
+   for(const [i,id] of ['a','b'].entries())f.store.vote(s.id,id,{checkpoint:v.story.id,choice:v.story.options[i].id});
+   f.step(8000);v=f.store.snapshot(s.id,'teacher');assert.equal(v.phase,'story-action');assert.equal(v.deadline-v.serverNow,9000);
+   f.step(3000);cmd('pause');const elapsed=f.store.snapshot(s.id,'teacher').storyElapsedMs;f.step(30000);assert.equal(f.store.snapshot(s.id,'teacher').storyElapsedMs,elapsed);
+   assert.throws(()=>f.store.command(s.id,'outsider','skip-story',{seq:f.store.session(s.id).seq}),/another teacher/);cmd('pause');
+   const before=f.store.snapshot(s.id,'teacher').narrative;cmd('skip-story');assert.deepEqual(f.store.snapshot(s.id,'teacher').narrative.worlds,before.worlds);checkpoint++;
+  }
+ }
+ const end=f.store.snapshot(s.id,'teacher');assert.equal(checkpoint,3);assert.equal(end.phase,'ended');assert.equal(end.narrative.complete,true);
+ assert.deepEqual(end.narrative.worlds.map(w=>[w.route,w.beacon,w.celebration]),[['bridge','kite','mooncakes'],['stars','tower','drums']]);
+ const reopened=createStore(f.dir,f.clock).snapshot(s.id,'teacher');assert.deepEqual(reopened.narrative,end.narrative);
+ assert.equal(f.store.report(s.id,'teacher').rounds.length,5);assert.equal(end.duels.teams[0].points,600);assert.equal(end.duels.teams[1].points,600);
 });

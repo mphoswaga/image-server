@@ -5,6 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 const duels = require('./moonquest-duels');
 const lighting = require('./moonquest-lighting');
+const narrative = require('./moonquest-story');
 const {summarize}=require('./moonquest-report');
 const { DATA_DIR, writeJsonAtomic } = require('./storage');
 const uid = () => crypto.randomUUID();
@@ -118,7 +119,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     const s = { id: uid(), teacherId, game, rosterId: test ? null : roster.id, className: test ? 'Practice crew' : roster.name, students,
       test, code: crypto.randomBytes(5).toString('hex').toUpperCase(), boardToken: crypto.randomBytes(24).toString('hex'), phase: 'lobby', paused: false, deadline: null,
       duels: mode==='duels'?duels.create(students):null,
-      story: {enabled: !!game.timing.automatic, history: [], spent: {}}, seq: 0, round: -1, rounds: [], nextQuestion: 0, members: {}, queue: [], createdAt: clock(), boot };
+      story: {version:2,enabled: !!game.timing.automatic, history: [], spent: {}}, seq: 0, round: -1, rounds: [], nextQuestion: 0, members: {}, queue: [], createdAt: clock(), boot };
     return saveSession(s);
   }
   const current = s => s.rounds[s.round];
@@ -167,8 +168,10 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     const r=current(s);if(!s.story?.enabled||!r?.revealedAt||r.storyHandled)return false;
     r.storyHandled=true;
     const interval=Math.max(2,Math.ceil(s.game.questions.length/4));
-    if(s.nextQuestion>=s.game.questions.length||(s.round+1)%interval!==0||s.story.history.length>=3)return false;
-    const chapter=storyChapters[s.story.history.length];
+    const finalChapter=s.story.version===2&&s.nextQuestion>=s.game.questions.length;
+    if(finalChapter&&s.story.history.some(c=>c.options?.some(o=>o.id==='drums')))return false;
+    if((!finalChapter&&(s.nextQuestion>=s.game.questions.length||(s.round+1)%interval!==0))||s.story.history.length>=3)return false;
+    const chapter=(s.story.version===2?narrative.chapters:storyChapters)[finalChapter?2:s.story.history.length];
     const eligible=Object.keys(s.members).filter(id=>!s.members[id].absent&&!(s.removedStudents||[]).includes(id)&&(s.duels||sparks(s,id)-2*(s.story.spent[id]||0)>=2));
     s.story.current={...copy(chapter),id:uid(),eligible,votes:{}};
     s.phase='story-vote';s.deadline=clock()+8000;s.teachingPause=null;return true;
@@ -183,7 +186,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
       return {team,winner:totals[0]===totals[1]?(tied?crypto.randomInt(2):0):totals[0]>totals[1]?0:1,tied,noVotes:totals.every(n=>!n)};
     });
     c.tied=tied;c.noVotes=counts.every(n=>!n);s.story.history.push(copy(c));
-    s.phase='story-action';s.deadline=clock()+5000;
+    s.phase='story-action';s.story.actionDurationMs=s.story.version===2?9000:5000;s.deadline=clock()+s.story.actionDurationMs;
   }
   function vote(id,studentId,body){
     const s=tick(session(id)),c=s.story?.current;
@@ -243,7 +246,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
       s.paused = true; s.remaining = 10000; s.deadline = null; s.teachingPause = 'attendance';
     } else if (follow) { begin(s, follow.question); follow.status = 'asked'; }
     else if (s.nextQuestion < s.game.questions.length) begin(s, s.game.questions[s.nextQuestion++]);
-    else { s.phase = 'ended'; s.deadline = null; }
+    else { s.phase = 'ended'; s.deadline = null; if(s.story)s.story.complete=true; }
   }
   function command(id, teacherId, action, body = {}) {
     const s = tick(session(id));
@@ -285,6 +288,9 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
         if (s.phase !== 'lobby') fail('This mission has already started.');
         if (!Object.keys(s.members).length) fail('Wait for learners to join first.');
         s.phase = 'intro'; s.deadline = clock() + 24000;
+      } else if(action==='skip-story'){
+        if(s.phase!=='story-action')fail('There is no story scene to skip.');
+        nextRound(s);
       } else if (action === 'skip-intro') {
         if (s.phase !== 'intro') fail('The introduction has already finished.');
         nextRound(s);
@@ -414,10 +420,11 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     view.lighting=lighting.snapshot(s,isCorrect);
     view.revealedAt=r?.revealedAt||null;
     if(s.story?.enabled){
-      view.storyProgress=s.story.history.length;
+      view.storyProgress=s.story.history.length;view.narrative=narrative.snapshot(s);
+      if(s.phase==='story-action')view.storyElapsedMs=Math.max(0,(s.story.actionDurationMs||5000)-(s.paused?s.remaining:s.deadline-clock()));
       if(role==='student')view.reward={sparks:sparks(s,studentId),available:Math.max(0,sparks(s,studentId)-2*(s.story.spent[studentId]||0))};
       if(['story-vote','story-action'].includes(s.phase)){
-        const c=s.story.current;view.story={id:c.id,title:c.title,options:c.options,winner:c.winner,tied:c.tied,noVotes:c.noVotes,eligibleCount:c.eligible.length,voted:Object.keys(c.votes).length,...(c.teamResults?{teamResults:c.teamResults}:{})};
+        const c=s.story.current;view.story={id:c.id,title:c.title,obstacle:c.obstacle,options:c.options,winner:c.winner,tied:c.tied,noVotes:c.noVotes,eligibleCount:c.eligible.length,voted:Object.keys(c.votes).length,...(c.teamResults?{teamResults:c.teamResults}:{})};
         if(role==='student'){view.story.canVote=c.eligible.includes(studentId)&&!c.votes[studentId]&&!s.members[studentId]?.absent;view.story.myVote=c.votes[studentId]||null;}
       }
     }
