@@ -371,3 +371,9 @@ test('new fairy-tale choices persist as distinct worlds and the finale keeps ass
  const reopened=createStore(f.dir,f.clock).snapshot(s.id,'teacher');assert.deepEqual(reopened.narrative,end.narrative);
  assert.equal(f.store.report(s.id,'teacher').rounds.length,5);assert.equal(end.duels.teams[0].points,600);assert.equal(end.duels.teams[1].points,600);
 });
+test('team preparation blocks sign-in and starting until confirmed; absent learners stay excluded',t=>{
+ const {store,id,cmd}=setup(t,4);const s=store.session(id);s.duels=require('../moonquest-duels').create(s.students);s.joinOpen=false;s.members={};store.saveSession(s);
+ assert.throws(()=>store.join(id,'s0'),/preparing/);assert.throws(()=>cmd('launch'),/Confirm teams/);assert.throws(()=>cmd('next'),/Confirm teams/);
+ cmd('remove-learner',{studentId:'s0',removed:true});cmd('open-joining');assert.throws(()=>store.join(id,'s0'),/removed/);store.join(id,'s1');assert.equal(store.snapshot(id,'teacher').joined,1);
+ assert.throws(()=>cmd('shuffle-teams'),/before opening/);
+});

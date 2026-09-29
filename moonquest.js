@@ -252,7 +252,15 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     const s = tick(session(id));
     if (s.teacherId !== teacherId) fail('This session belongs to another teacher.');
     if (body.seq !== s.seq && !(body.round === s.round && body.phase === s.phase && body.paused === s.paused)) fail('The room has updated. Check the current stage and try again.');
-    if(action==='set-team'){
+    if(action==='open-joining'){
+      if(s.test||!s.duels||s.phase!=='lobby')fail('Open sign-in from the class team setup.');
+      const present=s.students.filter(st=>!(s.removedStudents||[]).includes(st.id));
+      if(![0,1].every(team=>present.some(st=>s.duels.teams[st.id]===team)))fail('Include at least one present learner in each team.');
+      s.joinOpen=true;
+    } else if(action==='shuffle-teams'){
+      if(s.phase!=='lobby'||s.joinOpen!==false||!s.duels)fail('Shuffle teams before opening sign-in.');
+      s.duels.teams=duels.create(s.students).teams;
+    } else if(action==='set-team'){
       if(!s.duels||s.phase!=='lobby')fail('Adjust teams before starting the mission.');
       if(!s.students.some(st=>st.id===body.studentId)||![0,1].includes(body.team))fail('Choose a learner and team.');
       s.duels.teams[body.studentId]=body.team;
@@ -284,6 +292,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     } else if (action === 'end') { s.phase = 'ended'; s.deadline = null; s.paused = false;
     } else {
       if (s.paused) fail('Resume the game first.');
+      if (s.joinOpen === false && ['launch','next'].includes(action)) fail('Confirm teams and open learner sign-in first.');
       if (action === 'launch') {
         if (s.phase !== 'lobby') fail('This mission has already started.');
         if (!Object.keys(s.members).length) fail('Wait for learners to join first.');
@@ -321,6 +330,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
   function join(id, studentId) {
     const s = tick(session(id));
     if (s.phase === 'ended') fail('This game has finished.');
+    if (s.joinOpen === false) fail('Your teacher is preparing the teams. Sign-in will open shortly.');
     if ((s.removedStudents || []).includes(studentId)) fail('Your teacher has removed you from this game.');
     if (!s.students.some(x => x.id === studentId)) fail('Learner not in this session.');
     if (!s.members[studentId]) { s.members[studentId] = { joinedAt: clock(), absent: false }; saveSession(s); }
@@ -409,12 +419,13 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     const s = tick(session(id)); const r = current(s); const revealed = s.phase === 'reveal' || s.phase === 'ended';
     const q = r?.question;
     const view = { id: s.id, title: s.game.title, className: s.className, test: s.test, seq: s.seq, phase: s.phase, paused: s.paused, recovered: s.recovered,
-      extraTimeUsed: !!r?.extraTimeUsed, automatic: !!s.game.timing.automatic, singleTimer: s.game.timing.flow === 'single', teachingPause: s.teachingPause || null, serverNow: clock(), deadline: s.deadline, round: s.round, total: s.game.questions.length, remainingQuestions: s.game.questions.length - s.nextQuestion,
+      joinOpen:s.joinOpen!==false, extraTimeUsed: !!r?.extraTimeUsed, automatic: !!s.game.timing.automatic, singleTimer: s.game.timing.flow === 'single', teachingPause: s.teachingPause || null, serverNow: clock(), deadline: s.deadline, round: s.round, total: s.game.questions.length, remainingQuestions: s.game.questions.length - s.nextQuestion,
       joined: Object.keys(s.members).filter(id => !(s.removedStudents || []).includes(id)).length, expected: r?.expected.length || 0, answered: r ? r.expected.filter(id => r.answers[id]?.final || r.answers[id]?.first).length : 0,
       question: q ? { id: q.id, prompt: q.prompt, concept: q.concept, answerMode: q.answerMode || 'one', selectionCount: q.answerMode === 'all' ? q.accepted.length : 1, ...(revealed ? { accepted: q.accepted, explanation: q.explanation } : {}) } : null,
       diagram: q ? s.game.diagrams.find(d => d.id === q.diagramId) : null,
       stats: revealed ? stats(s) : null,
       lanterns: s.rounds.filter(r => r.revealedAt).reduce((n, r) => n + stats(s, r).correct, 0) };
+    if(s.duels&&s.phase==='lobby'&&role!=='student') view.teamRoster=s.students.filter(st=>role==='teacher'||!(s.removedStudents||[]).includes(st.id)).map(st=>({name:st.name,team:s.duels.teams[st.id],joined:!!s.members[st.id],...(role==='teacher'?{id:st.id,removed:(s.removedStudents||[]).includes(st.id)}:{})}));
     view.duels=duels.snapshot(s,studentId,role,isCorrect);
     if(view.duels)view.duels.presentation=s.phase==='matchup'?'matchup':s.phase==='reveal'&&!s.paused?(s.deadline&&s.deadline-clock()<=3000?'sparks':'result'):null;
     view.lighting=lighting.snapshot(s,isCorrect);
@@ -434,6 +445,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     if (role === 'student') { view.mine = r?.answers[studentId] || {}; view.heroName = s.students.find(st => st.id === studentId)?.name || ''; if (revealed) view.myCorrect = choices(view.mine.final ?? view.mine.first).length ? isCorrect(q, view.mine.final ?? view.mine.first) : null; view.canAnswer = !!r?.expected.includes(studentId); }
     if (role === 'teacher') {
       const lastRevealed=s.rounds.findLast(r=>r.revealedAt);
+      view.teamSetup=s.teamSetup||null;
       view.unansweredRound=lastRevealed?s.rounds.indexOf(lastRevealed):-1;
       view.unansweredLearners = lastRevealed ? s.students.filter(st=>lastRevealed.expected.includes(st.id)&&!lastRevealed.answers[st.id]?.first&&!lastRevealed.answers[st.id]?.final).map(st=>({id:st.id,name:st.name})) : [];
       Object.assign(view, { liveStats: stats(s), code: s.code, boardToken: s.boardToken, queue: s.queue.map(item => {

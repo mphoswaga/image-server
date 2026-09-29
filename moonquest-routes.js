@@ -12,6 +12,8 @@ const { writeJsonAtomic, writeFileAtomic } = require('./storage');
 function installMoonQuest(app, deps) {
   const { requireAuth, sessionSecret, roster, studentAccount, learnerPickerEntries, studentHandle, joinLimiter, generationLimiter, uploadLimiter, reserve, capture, release, declareFree, costOf } = deps;
   const store = createStore();
+  const observer = require('./moonquest-observer').observerService(store);
+  const teamProfiles = require('./class-game-teams').createTeamProfiles();
   const base = '/api/games/moonquest';
   app.use(base, (_req, res, next) => process.env.MOONQUEST_ENABLED === 'false' ? res.status(503).json({ error: 'MoonQuest is temporarily unavailable. Your saved games and answers are safe.' }) : next());
   const assetDir = path.join(store.dir, 'assets'); fs.mkdirSync(assetDir, { recursive: true });
@@ -120,8 +122,14 @@ function installMoonQuest(app, deps) {
     ownGame(req, req.params.id);
     const test = req.body.test === true;
     const classRoster = test ? null : roster.getRoster(req.userId, req.body.rosterId);
+    if (!test && req.body.mode === 'duels' && classRoster) {
+      const priorTeams=teamProfiles.load(req.userId,classRoster);
+      if(priorTeams && priorTeams.teams.length!==2) throw Error('This class has more than two saved teams. MoonQuest needs two sides; review the class teams first.');
+    }
     const s = store.createSession(req.userId, req.params.id, classRoster, test, req.body.mode || 'cooperative');
+    if (!test && s.duels) {s.joinOpen=false;store.saveSession(s);}
     if (test) for (const st of s.students) store.join(s.id, st.id);
+    teamProfiles.applyMoon(store, s, classRoster);
     res.json({ id: s.id });
   }));
   app.get(base + '/sessions/:id/teacher', teacher, wrap((req, res) => { ownSession(req); res.json(store.snapshot(req.params.id, 'teacher')); }));
@@ -129,7 +137,18 @@ function installMoonQuest(app, deps) {
     ownSession(req); res.json({ ...store.snapshot(req.params.id, 'board'), canControl: true });
   }));
   app.post(base + '/sessions/:id/command', teacher, wrap((req, res) => {
-    ownSession(req); store.command(req.params.id, req.userId, req.body.action, req.body);
+    const before = ownSession(req);
+    if (req.body.action === 'remember-teams') {
+      if (before.phase !== 'lobby' || !before.duels || before.test) throw Error('Save class teams from a real duel lobby.');
+      teamProfiles.rememberMoon(before, roster.getRoster(req.userId,before.rosterId));
+      before.teamSetup={source:'Saved class teams',needsReview:0};store.saveSession(before);
+    } else {
+      const updated=store.command(req.params.id, req.userId, req.body.action, req.body);
+      if(req.body.action==='open-joining') {
+        teamProfiles.rememberMoon(updated,roster.getRoster(req.userId,updated.rosterId));
+        updated.teamSetup={source:'Saved class teams',needsReview:0};store.saveSession(updated);
+      }
+    }
     res.json(req.body.presentation === true ? { ...store.snapshot(req.params.id, 'board'), canControl: true } : store.snapshot(req.params.id, 'teacher'));
   }));
   app.post(base + '/sessions/:id/simulate', teacher, wrap((req, res) => {
@@ -142,6 +161,24 @@ function installMoonQuest(app, deps) {
       store.answer(s.id, st.id, { phase: s.phase, round: s.round, changeConfirmed: true, ...(q.answerMode === 'all' ? {regionIds: req.body.pattern === 'misconception' ? [...regions.filter(r => !q.accepted.includes(r.id)), ...regions.filter(r => q.accepted.includes(r.id))].slice(0, q.accepted.length).map(r => r.id) : q.accepted} : {}), regionId: req.body.pattern === 'misconception' ? (regions.find(r => !q.accepted.includes(r.id)) || regions[0]).id : regions[i % regions.length].id, eventId: crypto.randomUUID() });
     }
     res.json(store.snapshot(s.id, 'teacher'));
+  }));
+  const observerHtml = ['moonquest-observer.js','moonquest-observer.css'].reduce((html, filename) => {
+    const version = crypto.createHash('sha256').update(fs.readFileSync(path.join(__dirname,'public',filename))).digest('hex').slice(0,16);
+    return html.replace('/'+filename+'\"', '/'+filename+'?v='+version+'\"');
+  }, fs.readFileSync(path.join(__dirname,'public/moonquest-observer.html'),'utf8'));
+  app.get('/moonquest/observe', (_req, res) => {
+    res.set({'Cache-Control':'no-store', 'Referrer-Policy':'no-referrer', 'X-Robots-Tag':'noindex, nofollow'});
+    res.type('html').send(observerHtml);
+  });
+  app.post(base + '/sessions/:id/observer-link', teacher, wrap((req,res) => {
+    ownSession(req); res.json(observer.issue(req.params.id, req.userId));
+  }));
+  app.post(base + '/sessions/:id/observer-revoke', teacher, wrap((req,res) => {
+    ownSession(req); observer.revoke(req.params.id, req.userId); res.json({ok:true});
+  }));
+  app.get(base + '/sessions/:id/observe', wrap((req,res) => {
+    try { res.json(observer.read(req.params.id, String(req.get('Authorization') || '').replace(/^Bearer /, ''))); }
+    catch (_) { res.status(403).json({error:'This observer link has expired or been withdrawn. Ask the teacher for a new link.'}); }
   }));
   app.post(base + '/sessions/:id/reflection', teacher, wrap((req,res)=>res.json(store.saveReflection(req.params.id,req.userId,req.body))));
   app.get(base + '/sessions/:id/report', teacher, wrap((req, res) => res.json(store.report(req.params.id, req.userId))));
@@ -170,6 +207,7 @@ function installMoonQuest(app, deps) {
   app.get(base + '/rooms/:code', joinLimiter, wrap((req, res) => {
     const s = store.findCode(String(req.params.code).toUpperCase());
     if (!s || s.phase === 'ended') throw new Error('This room is unavailable. Check the code with your teacher.');
+    if(s.joinOpen===false)return res.json({id:s.id,title:s.game.title,joinOpen:false,students:[]});
     res.json({ id: s.id, title: s.game.title, test: !!s.test, students: s.test ? [] : learnerPickerEntries(s.students.filter(st => !(s.removedStudents || []).includes(st.id)), s.id) });
   }));
   app.post(base + '/rooms/:code/test-enter', joinLimiter, wrap((req, res) => {
@@ -181,6 +219,8 @@ function installMoonQuest(app, deps) {
   app.post(base + '/sessions/:id/join', joinLimiter, wrap((req, res) => {
     const s = store.session(req.params.id);
     if (s.test) throw new Error('This is a teacher practice session.');
+    if(s.joinOpen===false)throw Error('Your teacher is preparing the teams. Sign-in will open shortly.');
+    if((s.removedStudents||[]).some(id=>studentHandle(s.id,id)===req.body.handle))throw Error('You are not included in this game. Ask your teacher.');
     const st = s.students.find(st => studentHandle(s.id, st.id) === req.body.handle);
     if (!st) throw new Error('Select your name from this class.');
     const pin = String(req.body.pin || '');
