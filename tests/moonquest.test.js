@@ -268,3 +268,41 @@ test('learners share exactly one durable ten-second extension per question',t=>{
  f.cmd('next');assert.equal(f.store.snapshot(f.id,'board').extraTimeUsed,false);
  assert.throws(()=>f.store.requestTime(f.id,'s0',{round:start.round}),/not open/);
 });
+test('duel rooms preserve timing, membership, per-team votes and report evidence',t=>{
+ const f=setup(t,4),s=f.store.createSession('teacher',f.game.id,{id:'class',name:'Class',students:[0,1,2,3].map(i=>({id:'d'+i,name:'Player '+i}))},false,'duels');
+ const cmd=(action,body={})=>f.store.command(s.id,'teacher',action,{seq:f.store.session(s.id).seq,...body});
+ for(let i=0;i<4;i++){f.store.join(s.id,'d'+i);cmd('set-team',{studentId:'d'+i,team:i%2});}
+ f.store.avatar(s.id,'d0',{avatar:'bow'});assert.equal(f.store.snapshot(s.id,'student','d0').duels.me.avatar,'bow');
+ assert.throws(()=>f.store.avatar(s.id,'outsider',{avatar:'bow'}));cmd('next');
+ assert.equal(f.store.snapshot(s.id,'student','d0').deadline-f.clock(),25000);
+ assert.throws(()=>cmd('set-team',{studentId:'d0',team:1}));
+ for(let n=0;n<2;n++){
+  const r=f.store.session(s.id).round;for(let i=0;i<4;i++)f.store.answer(s.id,'d'+i,{round:r,phase:'choose',regionId:'a',eventId:'r'+r+'d'+i});
+  assert.equal(f.store.snapshot(s.id,'student','d0').duels.result,undefined);cmd('advance');
+  assert.equal(f.store.snapshot(s.id,'student','d0').duels.result.points,120);cmd('next');
+ }
+ let v=f.store.snapshot(s.id,'student','d0');assert.equal(v.phase,'story-vote');
+ for(let i=0;i<4;i++)f.store.vote(s.id,'d'+i,{checkpoint:v.story.id,choice:i%2?'stars':'bridge'});
+ f.step(8000);v=f.store.snapshot(s.id,'teacher');assert.deepEqual(v.story.teamResults.map(t=>t.winner),[0,1]);
+ assert.equal(f.store.report(s.id,'teacher').students[0].rounds[0].revisedCorrect,true);
+ assert.equal(f.store.snapshot(s.id,'board').duels.assignments,undefined);
+});
+
+test('a complete 24 learner duel mission preserves scores on reload and assessment reports',t=>{
+ const f=setup(t,24),students=Array.from({length:24},(_,i)=>({id:'p'+i,name:'Player '+i}));
+ const s=f.store.createSession('teacher',f.game.id,{id:'c',name:'Class',students},false,'duels');
+ const cmd=(action)=>f.store.command(s.id,'teacher',action,{seq:f.store.session(s.id).seq});
+ for(const st of students)f.store.join(s.id,st.id);cmd('next');
+ for(let round=0;round<5;round++){
+  let v=f.store.snapshot(s.id,'teacher');assert.equal(v.phase,'choose');
+  const groups=f.store.session(s.id).rounds[round].duelGroups;assert.equal(new Set(groups.flat()).size,24);
+  for(const st of students)f.store.answer(s.id,st.id,{round,phase:'choose',regionId:'a',eventId:'r'+round+st.id});
+  cmd('advance');v=f.store.snapshot(s.id,'teacher');assert.equal(v.duels.teams[0].points,(round+1)*120);assert.equal(v.duels.teams[1].points,(round+1)*120);
+  // Repeated reads and persisted records must not award the points again.
+  assert.deepEqual(f.store.snapshot(s.id,'teacher').duels,v.duels);assert.equal(f.store.session(s.id).rounds.length,round+1);
+  cmd('next');v=f.store.snapshot(s.id,'teacher');if(v.phase==='story-vote'){f.step(8000);f.store.snapshot(s.id,'teacher');f.step(5000);f.store.snapshot(s.id,'teacher');}
+ }
+ const end=f.store.snapshot(s.id,'student','p0');assert.equal(end.phase,'ended');assert.equal(end.duels.personal.points,600);assert.equal(end.duels.personal.correct,5);
+ const recovered=createStore(f.dir,f.clock);assert.equal(recovered.snapshot(s.id,'student','p0').duels.personal.points,600);
+ assert.equal(f.store.report(s.id,'teacher').students.length,24);
+});

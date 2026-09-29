@@ -121,7 +121,7 @@ function installMoonQuest(app, deps) {
     ownGame(req, req.params.id);
     const test = req.body.test === true;
     const classRoster = test ? null : roster.getRoster(req.userId, req.body.rosterId);
-    const s = store.createSession(req.userId, req.params.id, classRoster, test);
+    const s = store.createSession(req.userId, req.params.id, classRoster, test, req.body.mode || 'cooperative');
     if (test) for (const st of s.students) store.join(s.id, st.id);
     res.json({ id: s.id });
   }));
@@ -202,6 +202,10 @@ function installMoonQuest(app, deps) {
   app.post(base + '/sessions/:id/story-vote', wrap((req,res)=>{
     const {role,studentId}=audience(req);if(role!=='student')throw Error('Only learners can vote.');
     store.vote(req.params.id,studentId,req.body);res.json(store.snapshot(req.params.id,role,studentId));
+  }));
+  app.post(base + '/sessions/:id/avatar', wrap((req,res)=>{
+    const {role,studentId}=audience(req);if(role!=='student')throw Error('Only learners can choose their rabbit.');
+    store.avatar(req.params.id,studentId,req.body);res.json(store.snapshot(req.params.id,role,studentId));
   }));
   app.post(base + '/sessions/:id/request-time', wrap((req,res)=>{
     const {role,studentId}=audience(req);if(role!=='student')throw Error('Only learners can request time.');

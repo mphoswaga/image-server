@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const duels = require('./moonquest-duels');
 const { DATA_DIR, writeJsonAtomic } = require('./storage');
 const uid = () => crypto.randomUUID();
 const copy = value => structuredClone(value);
@@ -104,14 +105,17 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     const g = { ...normalized, id: prior?.id || uid(), teacherId, version: (prior?.version || 0) + 1, createdAt: prior?.createdAt || clock(), updatedAt: clock() };
     save('game', g); return g;
   }
-  function createSession(teacherId, gameId, roster, test = false) {
+  function createSession(teacherId, gameId, roster, test = false, mode = 'cooperative') {
     const game = read('game', gameId);
     if (game.timing.automatic !== false) game.timing = { ...game.timing, automatic: true, flow: 'single', choose: 25, reveal: 8 };
+    if(!['cooperative','duels'].includes(mode))fail('Choose a valid game mode.');
+    if(mode==='duels')game.timing={...game.timing,automatic:true,flow:'single',choose:25,reveal:8};
     if (game.teacherId !== teacherId) fail('This game belongs to another teacher.');
     if (!test && (!roster?.id || !roster.students?.length)) fail('Select a class with learners first.');
     const students = test ? Array.from({ length: 6 }, (_, i) => ({ id: 'practice-' + i, name: 'Practice learner ' + (i + 1) })) : roster.students.map(s => ({ id: String(s.id), name: s.name }));
     const s = { id: uid(), teacherId, game, rosterId: test ? null : roster.id, className: test ? 'Practice crew' : roster.name, students,
       test, code: crypto.randomBytes(5).toString('hex').toUpperCase(), boardToken: crypto.randomBytes(24).toString('hex'), phase: 'lobby', paused: false, deadline: null,
+      duels: mode==='duels'?duels.create(students):null,
       story: {enabled: !!game.timing.automatic, history: [], spent: {}}, seq: 0, round: -1, rounds: [], nextQuestion: 0, members: {}, queue: [], createdAt: clock(), boot };
     return saveSession(s);
   }
@@ -139,7 +143,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
       const r = current(s); r.revealedAt = clock();
       const score = stats(s); const n = score.correct + score.wrong;
       const single = s.game.timing.flow === 'single';
-      const misconception = single ? score.wrong / Math.max(1, r.expected.length) > .3 : n > 0 && score.wrong / n > .7;
+      const misconception = single ? score.wrong / Math.max(1, s.duels?n:r.expected.length) > .3 : n > 0 && score.wrong / n > .7;
       if (s.game.timing.automatic && (misconception || (!single && n / Math.max(1, r.expected.length) < .8))) {
         s.teachingPause = misconception ? 'misconception' : 'participation';
         s.paused = true; s.remaining = 10000; s.deadline = null;
@@ -162,7 +166,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     const interval=Math.max(2,Math.ceil(s.game.questions.length/4));
     if(s.nextQuestion>=s.game.questions.length||(s.round+1)%interval!==0||s.story.history.length>=3)return false;
     const chapter=storyChapters[s.story.history.length];
-    const eligible=Object.keys(s.members).filter(id=>!s.members[id].absent&&!(s.removedStudents||[]).includes(id)&&sparks(s,id)-2*(s.story.spent[id]||0)>=2);
+    const eligible=Object.keys(s.members).filter(id=>!s.members[id].absent&&!(s.removedStudents||[]).includes(id)&&(s.duels||sparks(s,id)-2*(s.story.spent[id]||0)>=2));
     s.story.current={...copy(chapter),id:uid(),eligible,votes:{}};
     s.phase='story-vote';s.deadline=clock()+8000;s.teachingPause=null;return true;
   }
@@ -170,6 +174,11 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     const c=s.story.current,counts=c.options.map(o=>Object.values(c.votes).filter(v=>v===o.id).length);
     const tied=counts[0]===counts[1]&&counts[0]>0;
     c.winner=counts[0]===counts[1]?(tied?crypto.randomInt(2):0):counts[0]>counts[1]?0:1;
+    if(s.duels)c.teamResults=[0,1].map(team=>{
+      const totals=c.options.map(o=>Object.entries(c.votes).filter(([id,v])=>s.duels.teams[id]===team&&v===o.id).length);
+      const tied=totals[0]===totals[1]&&totals[0]>0;
+      return {team,winner:totals[0]===totals[1]?(tied?crypto.randomInt(2):0):totals[0]>totals[1]?0:1,tied,noVotes:totals.every(n=>!n)};
+    });
     c.tied=tied;c.noVotes=counts.every(n=>!n);s.story.history.push(copy(c));
     s.phase='story-action';s.deadline=clock()+5000;
   }
@@ -196,7 +205,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     const expected = Object.entries(s.members).filter(([, m]) => !m.absent).map(([id]) => id);
     if (!expected.length) fail('Wait for learners to join, or run Test game.');
     s.rounds.push({ question: copy(question), expected, answers: {}, events: [], startedAt: clock() });
-    s.round++; s.phase = s.game.timing.automatic ? 'choose' : 'read';
+    s.round++; if(s.duels)current(s).duelGroups=duels.pair(s,expected); s.phase = s.game.timing.automatic ? 'choose' : 'read';
     s.deadline = s.game.timing.automatic ? clock() + s.game.timing.choose * 1000 : null;
     s.teachingPause = null;
   }
@@ -214,7 +223,11 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     const s = tick(session(id));
     if (s.teacherId !== teacherId) fail('This session belongs to another teacher.');
     if (body.seq !== s.seq && !(body.round === s.round && body.phase === s.phase && body.paused === s.paused)) fail('The room has updated. Check the current stage and try again.');
-    if (action === 'continue-meeting') {
+    if(action==='set-team'){
+      if(!s.duels||s.phase!=='lobby')fail('Adjust teams before starting the mission.');
+      if(!s.students.some(st=>st.id===body.studentId)||![0,1].includes(body.team))fail('Choose a learner and team.');
+      s.duels.teams[body.studentId]=body.team;
+    } else if (action === 'continue-meeting') {
       if (!s.paused || s.teachingPause !== 'misconception') fail('There is no class meeting to finish.');
       s.paused = false; s.recovered = false; s.teachingPause = null; s.remaining = null; nextRound(s);
     } else if (action === 'pause') {
@@ -302,6 +315,12 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     if ((s.removedStudents || []).includes(studentId)) fail('Your teacher has removed you from this game.');
     return { studentId, name: s.students.find(st => st.id === studentId).name };
   }
+  function avatar(id,studentId,body){
+    const s=tick(session(id));
+    if(!s.duels||s.phase!=='lobby'||!s.members[studentId]||(s.removedStudents||[]).includes(studentId))fail('Choose your rabbit in the lobby.');
+    if(!['bow','scarf','star'].includes(body.avatar))fail('Choose one of the rabbit styles.');
+    s.duels.avatars[studentId]=body.avatar;return saveSession(s);
+  }
   function requestTime(id, studentId, body) {
     const s = tick(session(id)), r = current(s);
     if (!r || body.round !== s.round || s.phase !== 'choose' || s.paused || !s.deadline || s.game.timing.flow !== 'single') fail('The answer timer is not open.');
@@ -363,12 +382,13 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
       diagram: q ? s.game.diagrams.find(d => d.id === q.diagramId) : null,
       stats: revealed ? stats(s) : null,
       lanterns: s.rounds.filter(r => r.revealedAt).reduce((n, r) => n + stats(s, r).correct, 0) };
+    view.duels=duels.snapshot(s,studentId,role,isCorrect);
     view.revealedAt=r?.revealedAt||null;
     if(s.story?.enabled){
       view.storyProgress=s.story.history.length;
       if(role==='student')view.reward={sparks:sparks(s,studentId),available:Math.max(0,sparks(s,studentId)-2*(s.story.spent[studentId]||0))};
       if(['story-vote','story-action'].includes(s.phase)){
-        const c=s.story.current;view.story={id:c.id,title:c.title,options:c.options,winner:c.winner,tied:c.tied,noVotes:c.noVotes,eligibleCount:c.eligible.length,voted:Object.keys(c.votes).length};
+        const c=s.story.current;view.story={id:c.id,title:c.title,options:c.options,winner:c.winner,tied:c.tied,noVotes:c.noVotes,eligibleCount:c.eligible.length,voted:Object.keys(c.votes).length,...(c.teamResults?{teamResults:c.teamResults}:{})};
         if(role==='student'){view.story.canVote=c.eligible.includes(studentId)&&!c.votes[studentId]&&!s.members[studentId]?.absent;view.story.myVote=c.votes[studentId]||null;}
       }
     }
@@ -402,7 +422,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
           revisedCorrect: (a.final ?? a.first) ? isCorrect(r.question, a.final ?? a.first) : null, confirmed: !!a.confirmed, expected: r.expected.includes(st.id) };
       }) })) };
   }
-  return { dir, read, list, saveDraft, deleteDraft, saveGame, createSession, session, saveSession, stats, command, join, joinPractice, answer, requestTime, vote, snapshot, review, saveSuggestion, report,
+  return { dir, read, list, saveDraft, deleteDraft, saveGame, createSession, session, saveSession, stats, command, join, joinPractice, answer, requestTime, avatar, vote, snapshot, review, saveSuggestion, report,
     findCode(code) { if (!/^[A-F0-9]{10}$/.test(code || '')) fail('Enter the ten-character MoonQuest code.'); return list('session').find(s => s.code === code); },
     sessions() { return fs.readdirSync(dir).filter(f => f.startsWith('session-')).map(f => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'))); } };
 }
