@@ -1,0 +1,9 @@
+const {test,expect}=require('@playwright/test');const {signInDisposableTeacher}=require('./helpers');
+test('lost answer acknowledgement retries the same receipt and survives refresh',async({page,browser})=>{
+ await signInDisposableTeacher(page,'-receipt');await page.goto('/moonquest');await page.getByRole('button',{name:'Try the senses example'}).click();await page.locator('#reviewed').check();await page.getByRole('button',{name:'Save adventure',exact:true}).click();await page.getByRole('button',{name:'Test team duels',exact:true}).click();await page.waitForURL('**/moonquest?session=*');const id=new URL(page.url()).searchParams.get('session'),base='/api/games/moonquest/sessions/'+id;
+ const state=await(await page.request.get(base+'/teacher')).json();const context=await browser.newContext();try{const learner=await context.newPage();await learner.goto('http://127.0.0.1:4341/moonquest/join?code='+state.code);await expect(learner.locator('[data-avatar]')).toHaveCount(9);
+ const fresh=await(await page.request.get(base+'/teacher')).json();await page.request.post(base+'/command',{data:{action:'next',seq:fresh.seq}});await expect(learner.getByRole('button',{name:'Need more time',exact:true})).toBeVisible();
+ const receipts=[];await learner.route('**/answer',async route=>{receipts.push(route.request().postDataJSON().eventId);if(receipts.length===1){await route.fetch();await route.abort('failed');}else await route.continue();});
+ await learner.locator('#diagram polygon[data-region="left-hand"]').click();await expect(learner.locator('#answer-status')).toContainText('locked in');await expect.poll(()=>receipts.length).toBe(2);expect(receipts[0]).toBe(receipts[1]);await learner.reload();await expect(learner.locator('#answer-status')).toContainText('locked in');
+ }finally{await context.close();}
+});

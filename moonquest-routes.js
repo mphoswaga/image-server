@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const sharp = require('sharp');
 const QRCode = require('qrcode');
+const {createRateLimiter}=require('./security');
 const { createStore, validateGame } = require('./moonquest');
 const { generateQuestions } = require('./moonquest-ai');
 const { writeJsonAtomic, writeFileAtomic } = require('./storage');
@@ -15,6 +16,8 @@ function installMoonQuest(app, deps) {
   const observer = require('./moonquest-observer').observerService(store);
   const teamProfiles = require('./class-game-teams').createTeamProfiles();
   const base = '/api/games/moonquest';
+  // Room discovery must not consume the PIN-attempt budget on a shared school IP.
+  const roomLookupLimiter=createRateLimiter({name:'moonquest-room-lookup',windowMs:60000,max:240});
   app.use(base, (_req, res, next) => process.env.MOONQUEST_ENABLED === 'false' ? res.status(503).json({ error: 'MoonQuest is temporarily unavailable. Your saved games and answers are safe.' }) : next());
   const assetDir = path.join(store.dir, 'assets'); fs.mkdirSync(assetDir, { recursive: true });
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
@@ -166,7 +169,7 @@ function installMoonQuest(app, deps) {
     const version = crypto.createHash('sha256').update(fs.readFileSync(path.join(__dirname,'public',filename))).digest('hex').slice(0,16);
     return html.replace('/'+filename+'\"', '/'+filename+'?v='+version+'\"');
   }, fs.readFileSync(path.join(__dirname,'public/moonquest-observer.html'),'utf8'));
-  app.get('/moonquest/observe', (_req, res) => {
+  app.get(['/moonquest/observe','/moonquest/analysis'], (_req, res) => {
     res.set({'Cache-Control':'no-store', 'Referrer-Policy':'no-referrer', 'X-Robots-Tag':'noindex, nofollow'});
     res.type('html').send(observerHtml);
   });
@@ -178,7 +181,7 @@ function installMoonQuest(app, deps) {
   }));
   app.get(base + '/sessions/:id/observe', wrap((req,res) => {
     try { res.json(observer.read(req.params.id, String(req.get('Authorization') || '').replace(/^Bearer /, ''))); }
-    catch (_) { res.status(403).json({error:'This observer link has expired or been withdrawn. Ask the teacher for a new link.'}); }
+    catch (_) { res.status(403).json({error:'This report link has expired or been withdrawn. Ask the teacher for a new link.'}); }
   }));
   app.post(base + '/sessions/:id/reflection', teacher, wrap((req,res)=>res.json(store.saveReflection(req.params.id,req.userId,req.body))));
   app.get(base + '/sessions/:id/report', teacher, wrap((req, res) => res.json(store.report(req.params.id, req.userId))));
@@ -204,7 +207,7 @@ function installMoonQuest(app, deps) {
       store.saveSuggestion(s.id, req.userId, item.id, suggestion); res.json(suggestion);
     } finally { aiPending.delete(item.id); }
   }));
-  app.get(base + '/rooms/:code', joinLimiter, wrap((req, res) => {
+  app.get(base + '/rooms/:code', roomLookupLimiter, wrap((req, res) => {
     const s = store.findCode(String(req.params.code).toUpperCase());
     if (!s || s.phase === 'ended') throw new Error('This room is unavailable. Check the code with your teacher.');
     if(s.joinOpen===false)return res.json({id:s.id,title:s.game.title,joinOpen:false,students:[]});

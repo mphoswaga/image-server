@@ -293,6 +293,10 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     } else {
       if (s.paused) fail('Resume the game first.');
       if (s.joinOpen === false && ['launch','next'].includes(action)) fail('Confirm teams and open learner sign-in first.');
+      if(!s.test&&s.duels&&s.phase==='lobby'&&['launch','next'].includes(action)){
+        const waiting=s.students.filter(st=>!(s.removedStudents||[]).includes(st.id)&&!s.members[st.id]);
+        if(waiting.length)fail(`${waiting.length} learners have not signed in. Wait for them or mark them absent before starting.`);
+      }
       if (action === 'launch') {
         if (s.phase !== 'lobby') fail('This mission has already started.');
         if (!Object.keys(s.members).length) fail('Wait for learners to join first.');

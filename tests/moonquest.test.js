@@ -377,3 +377,18 @@ test('team preparation blocks sign-in and starting until confirmed; absent learn
  cmd('remove-learner',{studentId:'s0',removed:true});cmd('open-joining');assert.throws(()=>store.join(id,'s0'),/removed/);store.join(id,'s1');assert.equal(store.snapshot(id,'teacher').joined,1);
  assert.throws(()=>cmd('shuffle-teams'),/before opening/);
 });
+test('all 25 learners can answer every duel question, including previous losers',t=>{
+ const {store,id,cmd,answer,step}=setup(t,25);const s=store.session(id);s.duels=require('../moonquest-duels').create(s.students);s.game.timing={automatic:true,flow:'single',choose:25,reveal:8};s.story.enabled=false;store.saveSession(s);
+ for(let round=0;round<5;round++){
+  cmd('next');step(4001);store.snapshot(id,'teacher');
+  for(let i=0;i<25;i++){assert.equal(store.snapshot(id,'student','s'+i).canAnswer,true);answer(i,i<7?'b':'a');}
+  assert.equal(store.stats(store.session(id)).correct,18);cmd('advance');
+  assert.equal(store.session(id).rounds[round].expected.length,25);
+ }
+ cmd('end');const report=store.report(id,'teacher');assert.equal(report.summary.totals.answered,125);assert.equal(report.summary.totals.expected,125);assert.equal(report.summary.totals.missing,0);
+});
+test('real duel waits for every present learner before the first question',t=>{
+ const {store,id,cmd}=setup(t,4);const s=store.session(id);s.duels=require('../moonquest-duels').create(s.students);delete s.members.s3;store.saveSession(s);
+ assert.throws(()=>cmd('launch'),/1 learners have not signed in/);assert.throws(()=>cmd('next'),/1 learners have not signed in/);
+ cmd('remove-learner',{studentId:'s3',removed:true});assert.doesNotThrow(()=>cmd('next'));
+});

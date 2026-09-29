@@ -19,7 +19,7 @@ function observerService(store, clock = Date.now) {
   function read(id, token) {
     const s = store.session(id), grant = s.observer;
     if (!grant || grant.expiresAt <= clock() || !/^[a-f0-9]{64}$/.test(token || '') ||
-      !crypto.timingSafeEqual(Buffer.from(grant.hash, 'hex'), Buffer.from(digest(token), 'hex'))) throw Error('This observer link has expired or been withdrawn. Ask the teacher for a new link.');
+      !crypto.timingSafeEqual(Buffer.from(grant.hash, 'hex'), Buffer.from(digest(token), 'hex'))) throw Error('This report link has expired or been withdrawn. Ask the teacher for a new link.');
     const live = store.snapshot(id, 'board');
     const report = store.report(id, s.teacherId), summary = summarize(report);
     const rounds = summary.questions.filter(q => q.completed).map(q => ({
