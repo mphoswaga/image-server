@@ -19,12 +19,12 @@ test('simultaneous duels: rabbit choice, shared time, private answers and team r
  await a.getByRole('button',{name:'Need more time',exact:true}).click();await expect(b.getByRole('button',{name:'10 extra seconds added'})).toBeDisabled();
  await a.locator('#diagram polygon[data-region="left-hand"]').click();await expect(a.locator('#answer-status')).toContainText('locked in');
  expect(await a.evaluate(()=>document.documentElement.scrollHeight<=innerHeight+2)).toBeTruthy();
- await expect(b.locator('.duel-strip')).not.toContainText('points');
+ await expect(b.locator('.duel-strip')).not.toContainText('points');await expect(a.getByRole('progressbar',{name:'School illumination'})).toHaveAttribute('aria-valuenow','0');
  await b.locator('#diagram polygon[data-region="left-hand"]').click();await command('advance');
- await expect(a.locator('.duel-strip')).toContainText('points');await expect(a.locator('#diagram polygon.selected')).toHaveCount(1);
+ await expect(a.getByRole('progressbar',{name:'School illumination'})).toHaveAttribute('aria-valuenow','25');await a.reload();await expect(a.getByRole('progressbar',{name:'School illumination'})).toHaveAttribute('aria-valuenow','25');await expect(a.locator('.duel-strip')).toContainText('points');await expect(a.locator('#diagram polygon.selected')).toHaveCount(1);
  await expect(page.locator('.duel-race')).toContainText('Jade Rabbits');
  await a.screenshot({path:'/tmp/moon-duels-learner-'+info.project.name+'.png'});
- const board=await page.context().newPage();await board.goto('/moonquest?session='+id+'&board='+state.boardToken);await expect(board.locator('.duel-race')).toBeVisible();await board.screenshot({path:'/tmp/moon-duels-board-'+info.project.name+'.png',fullPage:true});await board.close();
+ const board=await page.context().newPage();await board.goto('/moonquest?session='+id+'&board='+state.boardToken);await expect(board.locator('.duel-race')).toBeVisible();await expect(board.locator('.lighting-school')).toBeVisible();await expect(board.locator('.lighting-zones .restored')).toHaveCount(1);await board.screenshot({path:'/tmp/moon-duels-board-'+info.project.name+'.png',fullPage:true});await board.emulateMedia({reducedMotion:'reduce'});await expect(board.locator('.scene-rabbit .rabbit-eyes').first()).toHaveCSS('animation-name','none');await expect(board.locator('.festival-fireflies i').first()).toHaveCSS('animation-name','none');await board.close();
  await command('next');await expect(a.locator('.question-label')).toHaveText('QUESTION 2');await a.locator('#diagram polygon[data-region="eyes"]').click();await b.locator('#diagram polygon[data-region="eyes"]').click();await command('advance');await command('next');
  await expect(a.locator('.story-options')).toBeVisible();await a.locator('[data-story-choice=bridge]').click();await b.locator('[data-story-choice=stars]').click();
  await expect(page.locator('.crew-story-results')).toBeVisible({timeout:12000});await expect(page.locator('.crew-story-results')).toContainText('Jade Rabbits');await expect(page.locator('.crew-story-results')).toContainText('Golden Rabbits');

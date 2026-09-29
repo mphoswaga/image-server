@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const duels = require('./moonquest-duels');
+const lighting = require('./moonquest-lighting');
 const {summarize}=require('./moonquest-report');
 const { DATA_DIR, writeJsonAtomic } = require('./storage');
 const uid = () => crypto.randomUUID();
@@ -386,6 +387,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
       stats: revealed ? stats(s) : null,
       lanterns: s.rounds.filter(r => r.revealedAt).reduce((n, r) => n + stats(s, r).correct, 0) };
     view.duels=duels.snapshot(s,studentId,role,isCorrect);
+    view.lighting=lighting.snapshot(s,isCorrect);
     view.revealedAt=r?.revealedAt||null;
     if(s.story?.enabled){
       view.storyProgress=s.story.history.length;
