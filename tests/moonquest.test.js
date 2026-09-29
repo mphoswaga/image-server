@@ -272,6 +272,8 @@ test('duel rooms preserve timing, membership, per-team votes and report evidence
  const f=setup(t,4),s=f.store.createSession('teacher',f.game.id,{id:'class',name:'Class',students:[0,1,2,3].map(i=>({id:'d'+i,name:'Player '+i}))},false,'duels');
  const cmd=(action,body={})=>f.store.command(s.id,'teacher',action,{seq:f.store.session(s.id).seq,...body});
  for(let i=0;i<4;i++){f.store.join(s.id,'d'+i);cmd('set-team',{studentId:'d'+i,team:i%2});}
+ for(const style of require('../moonquest-duels').styles){f.store.avatar(s.id,'d0',{avatar:style.id});assert.equal(f.store.snapshot(s.id,'student','d0').duels.me.avatar,style.id);}
+ assert.throws(()=>f.store.avatar(s.id,'d0',{avatar:'unknown-rabbit'}));
  f.store.avatar(s.id,'d0',{avatar:'bow'});assert.equal(f.store.snapshot(s.id,'student','d0').duels.me.avatar,'bow');
  assert.throws(()=>f.store.avatar(s.id,'outsider',{avatar:'bow'}));cmd('next');
  assert.equal(f.store.snapshot(s.id,'student','d0').deadline-f.clock(),25000);

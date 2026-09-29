@@ -14,7 +14,7 @@ test('simultaneous duels: rabbit choice, shared time, private answers and team r
   await learner.goto('/moonquest/join');await learner.evaluate(({id,token})=>sessionStorage.setItem('moonquest:'+id,token),{id,token:joined.token});await learner.goto('/moonquest?session='+id);students.push(learner);
   await command('set-team',{studentId:'practice-'+i,team:i});
  }
- const [a,b]=students;await a.getByRole('button',{name:'Pink bow'}).click();await expect(a.getByRole('button',{name:'Pink bow'})).toHaveAttribute('aria-pressed','true');
+ const [a,b]=students;await expect(a.locator('[data-avatar]')).toHaveCount(9);await a.getByRole('button',{name:'Festival DJ',exact:true}).click();await a.reload();await expect(a.getByRole('button',{name:'Festival DJ',exact:true})).toHaveAttribute('aria-pressed','true');await a.screenshot({path:'/tmp/moon-rabbit-picker-'+info.project.name+'.png',fullPage:true});await a.getByRole('button',{name:'Pink bow'}).click();await expect(a.getByRole('button',{name:'Pink bow'})).toHaveAttribute('aria-pressed','true');
  await command('next');await expect(a.locator('.duel-strip')).toContainText('Practice learner 2');await expect(b.locator('.duel-strip')).toContainText('Practice learner 1');
  await a.getByRole('button',{name:'Need more time',exact:true}).click();await expect(b.getByRole('button',{name:'10 extra seconds added'})).toBeDisabled();
  await a.locator('#diagram polygon[data-region="left-hand"]').click();await expect(a.locator('#answer-status')).toContainText('locked in');

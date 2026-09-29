@@ -322,7 +322,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
   function avatar(id,studentId,body){
     const s=tick(session(id));
     if(!s.duels||s.phase!=='lobby'||!s.members[studentId]||(s.removedStudents||[]).includes(studentId))fail('Choose your rabbit in the lobby.');
-    if(!['bow','scarf','star'].includes(body.avatar))fail('Choose one of the rabbit styles.');
+    if(!duels.styles.some(style=>style.id===body.avatar))fail('Choose one of the rabbit styles.');
     s.duels.avatars[studentId]=body.avatar;return saveSession(s);
   }
   function requestTime(id, studentId, body) {

@@ -1,5 +1,6 @@
 // Competition is derived from revealed evidence; never mutate assessment marks.
 const crypto = require('crypto');
+const styles=[{id:'bow',name:'Pink bow'},{id:'scarf',name:'Blue scarf'},{id:'star',name:'Golden star'},{id:'blossom',name:'Peach Blossom'},{id:'explorer',name:'Trail Scout'},{id:'astronomer',name:'Moon Scholar'},{id:'headphones',name:'Festival DJ'},{id:'crown',name:'Lantern Royal'},{id:'leaf',name:'Bamboo Guardian'}];
 const names = ['Jade Rabbits', 'Golden Rabbits'];
 function create(students) {
   const ids = students.map(s=>s.id);
@@ -36,7 +37,7 @@ function snapshot(s,studentId,role,right) {
     const scores=score(s,r,right);rounds++;
     for(let t=0;t<2;t++){const ids=r.expected.filter(id=>s.duels.teams[id]===t);const sum=ids.reduce((n,id)=>n+scores[id].points,0);raw[t]+=sum;totals[t]+=ids.length?sum/ids.length:0;}
   }
-  const view={teams:names.map((name,i)=>({name,points:Math.round(totals[i]*10)/10,rawPoints:raw[i],progress:Math.min(100,totals[i]/(120*s.game.questions.length)*100)})),rounds,winner:totals[0]===totals[1]?null:totals[0]>totals[1]?0:1};
+  const view={styles,teams:names.map((name,i)=>({name,points:Math.round(totals[i]*10)/10,rawPoints:raw[i],progress:Math.min(100,totals[i]/(120*s.game.questions.length)*100)})),rounds,winner:totals[0]===totals[1]?null:totals[0]>totals[1]?0:1};
   if(role==='teacher'&&s.phase==='lobby')view.assignments=s.students.filter(st=>!(s.removedStudents||[]).includes(st.id)).map(st=>({...st,team:s.duels.teams[st.id]}));
   if(role==='student'){
     const r=s.rounds[s.round],group=r?.duelGroups?.find(g=>g.includes(studentId))||[];
@@ -51,4 +52,4 @@ function snapshot(s,studentId,role,right) {
   }
   return view;
 }
-module.exports={create,pair,score,snapshot,names};
+module.exports={create,pair,score,snapshot,names,styles};
