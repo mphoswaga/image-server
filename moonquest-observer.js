@@ -30,7 +30,7 @@ function observerService(store, clock = Date.now) {
       meetingStarted:!!q.classMeetingStartedAt, meetingContinued:!!q.classMeetingContinuedAt,
     }));
     // Share only assessed evidence, never private annotations or internal learner IDs.
-    const sharedReport={title:report.title,className:report.className,test:report.test,createdAt:report.createdAt,phase:report.phase,
+    const sharedReport={reflection:Object.fromEntries(['noticed','action','impact','next','updatedAt'].map(key=>[key,report.reflection?.[key]??''])),title:report.title,className:report.className,test:report.test,createdAt:report.createdAt,phase:report.phase,
       rounds:report.rounds.map(q=>({number:q.number,prompt:q.prompt,concept:q.concept,followUp:q.followUp,completed:q.completed,extraTimeUsed:q.extraTimeUsed,classMeetingStartedAt:q.classMeetingStartedAt,classMeetingContinuedAt:q.classMeetingContinuedAt})),
       students:report.students.map((st,i)=>({id:'learner-'+(i+1),name:st.name,rounds:st.rounds.map((a,j)=>({expected:a.expected,initialCorrect:report.rounds[j].completed?a.initialCorrect:null,revisedCorrect:report.rounds[j].completed?a.revisedCorrect:null}))}))};
     sharedReport.summary=summarize(sharedReport);
