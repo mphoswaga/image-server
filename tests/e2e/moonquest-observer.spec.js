@@ -11,7 +11,7 @@ test('teacher shares a private live observer dashboard, then withdraws access',a
 
  await page.request.post(base+'/reflection',{data:{version:0,noticed:'Learners explained the distinction.',action:'Compared examples',impact:'Checked explanations',next:'Apply in a new context'}});
  await expect(observer.locator('#shared-reflection')).toContainText('Learners explained the distinction.');
- const report=await(await page.request.get(base+'/report')).json();const learner=report.students[0];
+ const report=await(await page.request.get(base+'/report')).json();expect(report.analysisVisits.total).toBe(1);await expect(observer.locator('#analysis-visits')).toHaveCount(0);const learner=report.students[0];
  const changed=await page.request.post(base+'/assessment',{data:{version:report.assessmentVersion,round:0,studentId:learner.id,correct:!learner.rounds[0].revisedCorrect,reason:'Private evidence note'}});expect(changed.ok()).toBeTruthy();const adjusted=await changed.json();
  const publicData=await(await observer.request.get(base+'/observe',{headers:{Authorization:'Bearer '+new URL(url).hash.slice(1)}})).json();expect(publicData.totals.finalCorrect).toBe(adjusted.summary.totals.finalCorrect);expect(JSON.stringify(publicData)).not.toMatch(/Private evidence note|assessmentHistory|adjusted|Teacher checked/);
  expect((await observer.request.post(base+'/assessment',{data:{version:1,round:0,studentId:learner.id,correct:true,reason:'Unauthorized'}})).ok()).toBeFalsy();

@@ -485,7 +485,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
   function report(id, teacherId) {
     const s = session(id);
     if (s.teacherId !== teacherId) fail('This session belongs to another teacher.');
-    const result = { id: s.id, title: s.game.title, className: s.className, test: s.test, formative: true, createdAt:s.createdAt, phase:s.phase, assessmentVersion:s.assessmentVersion||0, reflection:s.reflection||{version:0}, competition:duels.snapshot(s,null,'report',isCorrect),
+    const result = { id: s.id, title: s.game.title, className: s.className, test: s.test, formative: true, createdAt:s.createdAt, phase:s.phase, analysisVisits:{total:s.analysisVisits?.total||0,lastOpenedAt:s.analysisVisits?.lastOpenedAt||null,recent:(s.analysisVisits?.recent||[]).slice(-50).reverse().map(v=>({openedAt:v.openedAt}))},assessmentVersion:s.assessmentVersion||0, reflection:s.reflection||{version:0}, competition:duels.snapshot(s,null,'report',isCorrect),
       rounds: s.rounds.map((r, i) => ({ number: i + 1, questionId:r.question.id, parentId:r.question.parentId||null, extraTimeUsed:!!r.extraTimeUsed, classMeetingStartedAt:r.classMeetingStartedAt||null, classMeetingContinuedAt:r.classMeetingContinuedAt||null, prompt: r.question.prompt, concept: r.question.concept, followUp: !!r.question.parentId, completed: !!r.revealedAt, stats: stats(s, r) })),
       students: s.students.map(st => ({ ...st, rounds: s.rounds.map((r,roundIndex) => {
         const history=(s.assessmentHistory||[]).filter(h=>h.round===roundIndex&&h.studentId===st.id);const last=history.at(-1);const assessment=last&&last.correct!==null?last:null;
