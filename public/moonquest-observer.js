@@ -22,7 +22,7 @@
     try{
       if(!id||!token){stopped=true;throw Error('Open the complete analysis report link supplied by the teacher.');}
       const res=await fetch('/api/games/moonquest/sessions/'+encodeURIComponent(id)+'/observe',{headers:{Authorization:'Bearer '+token},cache:'no-store',credentials:'omit',signal:AbortSignal.timeout(10000)});
-      if(res.status===403){stopped=true;$('dashboard').replaceChildren();throw Error('This report link has expired or been withdrawn. Ask the teacher for a new link.');}
+      if(res.status===403){stopped=true;$('dashboard').replaceChildren();throw Error('This report link is invalid or has been withdrawn. Ask the teacher for a new link.');}
       if(!res.ok)throw Error('Updates interrupted. Reconnecting automatically…');
       const s=await res.json();render(s);$('error').textContent='';$('connection').textContent=(s.phase==='ended'?'Final snapshot':'Live')+' · Updated '+new Date(s.updatedAt).toLocaleTimeString();
     }catch(err){$('error').textContent=err.message;$('connection').textContent=stopped?'Access unavailable':'Connection interrupted · displayed data may be out of date';}

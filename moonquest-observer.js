@@ -7,7 +7,7 @@ function observerService(store, clock = Date.now) {
     const s = store.session(id);
     if (s.teacherId !== teacherId) throw Error('Session not found for this teacher.');
     const token = crypto.randomBytes(32).toString('hex');
-    s.observer = { hash: digest(token), expiresAt: clock() + 12 * 60 * 60 * 1000 };
+    s.observer = { hash: digest(token), expiresAt: null };
     store.saveSession(s);
     return { token, expiresAt: s.observer.expiresAt };
   }
@@ -18,8 +18,8 @@ function observerService(store, clock = Date.now) {
   }
   function read(id, token) {
     const s = store.session(id), grant = s.observer;
-    if (!grant || grant.expiresAt <= clock() || !/^[a-f0-9]{64}$/.test(token || '') ||
-      !crypto.timingSafeEqual(Buffer.from(grant.hash, 'hex'), Buffer.from(digest(token), 'hex'))) throw Error('This report link has expired or been withdrawn. Ask the teacher for a new link.');
+    if (!grant || !/^[a-f0-9]{64}$/.test(token || '') ||
+      !crypto.timingSafeEqual(Buffer.from(grant.hash, 'hex'), Buffer.from(digest(token), 'hex'))) throw Error('This report link is invalid or has been withdrawn. Ask the teacher for a new link.');
     const live = store.snapshot(id, 'board');
     const report = store.report(id, s.teacherId), summary = summarize(report);
     const rounds = summary.questions.filter(q => q.completed).map(q => ({
@@ -39,7 +39,7 @@ function observerService(store, clock = Date.now) {
     for(const q of sharedReport.summary.questions)delete q.adjusted;
     for(const l of sharedReport.summary.learners)delete l.adjusted;
     return { report:sharedReport, title:live.title, test:live.test, phase:live.phase, paused:live.paused,
-      teachingPause:live.teachingPause, updatedAt:clock(), expiresAt:grant.expiresAt,
+      teachingPause:live.teachingPause, updatedAt:clock(), expiresAt:null,
       joined:live.joined, expected:live.expected, answered:live.answered, round:live.round+1,
       question:live.question ? {prompt:live.question.prompt, concept:live.question.concept} : null,
       extraTimeUsed:live.extraTimeUsed, totals:Object.fromEntries(['questions','participants','roster','answered','assessed','expected','firstCorrect','finalCorrect','improved','regressed','missing'].map(key=>[key,summary.totals[key]])), rounds };
