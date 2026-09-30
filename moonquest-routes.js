@@ -13,6 +13,7 @@ const { writeJsonAtomic, writeFileAtomic } = require('./storage');
 function installMoonQuest(app, deps) {
   const { requireAuth, sessionSecret, roster, studentAccount, learnerPickerEntries, studentHandle, joinLimiter, generationLimiter, uploadLimiter, reserve, capture, release, declareFree, costOf } = deps;
   const store = createStore();
+  require('./moonquest-link-recovery').recoverAnalysisLink(store);
   const observer = require('./moonquest-observer').observerService(store);
   const teamProfiles = require('./class-game-teams').createTeamProfiles();
   const base = '/api/games/moonquest';
