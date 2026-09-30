@@ -7,7 +7,7 @@ function observerService(store, clock = Date.now) {
     const s = store.session(id);
     if (s.teacherId !== teacherId) throw Error('Session not found for this teacher.');
     const token = crypto.randomBytes(32).toString('hex');
-    s.observer = { hash: digest(token), expiresAt: null };
+    s.observer = { hashes:[...new Set([...(s.observer?.hashes||[]),...(s.observer?.hash?[s.observer.hash]:[]),digest(token)])], expiresAt: null };
     store.saveSession(s);
     return { token, expiresAt: s.observer.expiresAt };
   }
@@ -19,7 +19,7 @@ function observerService(store, clock = Date.now) {
   function read(id, token, visitId) {
     const s = store.session(id), grant = s.observer;
     if (!grant || !/^[a-f0-9]{64}$/.test(token || '') ||
-      !crypto.timingSafeEqual(Buffer.from(grant.hash, 'hex'), Buffer.from(digest(token), 'hex'))) throw Error('This report link is invalid or has been withdrawn. Ask the teacher for a new link.');
+      ![...(grant.hashes||[]),...(grant.hash?[grant.hash]:[])].some(hash=>/^[a-f0-9]{64}$/.test(hash)&&crypto.timingSafeEqual(Buffer.from(hash,'hex'),Buffer.from(digest(token),'hex')))) {const error=Error('This report link is invalid or has been withdrawn. Ask the teacher for a new link.');error.code='ANALYSIS_ACCESS_DENIED';throw error;}
     // One event per page load, not per polling request. No IP or browser fingerprint.
     if(typeof visitId==='string'&&/^[a-f0-9-]{36}$/.test(visitId)){
       const visits=s.analysisVisits||{total:0,recent:[]};

@@ -181,7 +181,7 @@ function installMoonQuest(app, deps) {
   }));
   app.get(base + '/sessions/:id/observe', wrap((req,res) => {
     try { res.json(observer.read(req.params.id, String(req.get('Authorization') || '').replace(/^Bearer /, ''),req.get('X-Analysis-Visit'))); }
-    catch (_) { res.status(403).json({error:'This report link has expired or been withdrawn. Ask the teacher for a new link.'}); }
+    catch (error) { if(error.code==='ANALYSIS_ACCESS_DENIED')res.status(403).json({error:error.message});else res.status(503).json({error:'The report is temporarily unavailable. Please retry.'}); }
   }));
   app.post(base + '/sessions/:id/assessment', teacher, wrap((req,res)=>res.json(store.saveAssessment(req.params.id,req.userId,req.body))));
   app.post(base + '/sessions/:id/reflection', teacher, wrap((req,res)=>res.json(store.saveReflection(req.params.id,req.userId,req.body))));
