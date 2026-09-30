@@ -24,16 +24,16 @@ function observerService(store, clock = Date.now) {
     const report = store.report(id, s.teacherId), summary = summarize(report);
     const rounds = summary.questions.filter(q => q.completed).map(q => ({
       number:q.number, prompt:q.prompt, concept:q.concept, followUp:q.followUp,
-      expected:q.expected, answered:q.answered, firstCorrect:q.firstCorrect, finalCorrect:q.finalCorrect,
+      assessed:q.assessed, expected:q.expected, answered:q.answered, firstCorrect:q.firstCorrect, finalCorrect:q.finalCorrect,
       wrong:q.wrong, missing:q.missing, improved:q.improved, regressed:q.regressed,
-      commonWrong:q.commonWrong, extraTimeUsed:q.extraTimeUsed,
+      commonWrong:q.commonWrong.filter(c=>c.answer!=='Teacher checked: incorrect'), extraTimeUsed:q.extraTimeUsed,
       meetingStarted:!!q.classMeetingStartedAt, meetingContinued:!!q.classMeetingContinuedAt,
     }));
     return { title:live.title, test:live.test, phase:live.phase, paused:live.paused,
       teachingPause:live.teachingPause, updatedAt:clock(), expiresAt:grant.expiresAt,
       joined:live.joined, expected:live.expected, answered:live.answered, round:live.round+1,
       question:live.question ? {prompt:live.question.prompt, concept:live.question.concept} : null,
-      extraTimeUsed:live.extraTimeUsed, totals:summary.totals, rounds };
+      extraTimeUsed:live.extraTimeUsed, totals:Object.fromEntries(['questions','participants','roster','answered','assessed','expected','firstCorrect','finalCorrect','improved','regressed','missing'].map(key=>[key,summary.totals[key]])), rounds };
   }
   return { issue, revoke, read };
 }

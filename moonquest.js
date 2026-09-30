@@ -469,20 +469,35 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     for(const key of ['noticed','action','impact','next'])s.reflection[key]=text(input[key],4000);
     saveSession(s);return s.reflection;
   }
+  function saveAssessment(id,teacherId,input){
+    const s=session(id);if(s.teacherId!==teacherId)fail('This session belongs to another teacher.');
+    if(input.version!==(s.assessmentVersion||0))fail('Results changed in another tab. Reload the report before saving.');
+    const round=s.rounds[input.round];
+    if(!Number.isInteger(input.round)||!round?.revealedAt)fail('Only completed questions can be assessed.');
+    if(!s.students.some(st=>st.id===input.studentId)||!round.expected.includes(input.studentId))fail('This learner was not included in this round.');
+    if(input.correct!==null&&typeof input.correct!=='boolean')fail('Choose correct, incorrect or restore.');
+    const reason=text(input.reason,1000).trim();if(!reason)fail('Add a short note about the evidence you checked.');
+    s.assessmentVersion=(s.assessmentVersion||0)+1;
+    s.assessmentHistory=s.assessmentHistory||[];
+    s.assessmentHistory.push({round:input.round,studentId:input.studentId,correct:input.correct,reason,teacherId,updatedAt:clock(),version:s.assessmentVersion});
+    saveSession(s);return report(id,teacherId);
+  }
   function report(id, teacherId) {
     const s = session(id);
     if (s.teacherId !== teacherId) fail('This session belongs to another teacher.');
-    const result = { id: s.id, title: s.game.title, className: s.className, test: s.test, formative: true, createdAt:s.createdAt, phase:s.phase, reflection:s.reflection||{version:0}, competition:duels.snapshot(s,null,'report',isCorrect),
+    const result = { id: s.id, title: s.game.title, className: s.className, test: s.test, formative: true, createdAt:s.createdAt, phase:s.phase, assessmentVersion:s.assessmentVersion||0, reflection:s.reflection||{version:0}, competition:duels.snapshot(s,null,'report',isCorrect),
       rounds: s.rounds.map((r, i) => ({ number: i + 1, questionId:r.question.id, parentId:r.question.parentId||null, extraTimeUsed:!!r.extraTimeUsed, classMeetingStartedAt:r.classMeetingStartedAt||null, classMeetingContinuedAt:r.classMeetingContinuedAt||null, prompt: r.question.prompt, concept: r.question.concept, followUp: !!r.question.parentId, completed: !!r.revealedAt, stats: stats(s, r) })),
-      students: s.students.map(st => ({ ...st, rounds: s.rounds.map(r => {
+      students: s.students.map(st => ({ ...st, rounds: s.rounds.map((r,roundIndex) => {
+        const history=(s.assessmentHistory||[]).filter(h=>h.round===roundIndex&&h.studentId===st.id);const last=history.at(-1);const assessment=last&&last.correct!==null?last:null;
         const a = r.answers[st.id] || {}; const d = s.game.diagrams.find(d => d.id === r.question.diagramId);
         const label = value => choices(value).map(id => d.regions.find(x => x.id === id)?.label || '').join(' + ');
         return { initial: label(a.first), revised: label(a.final ?? a.first), initialCorrect: a.first ? isCorrect(r.question, a.first) : null,
-          revisedCorrect: (a.final ?? a.first) ? isCorrect(r.question, a.final ?? a.first) : null, confirmed: !!a.confirmed, expected: r.expected.includes(st.id) };
+          assessment, assessmentHistory:history, gameFinalCorrect:(a.final ?? a.first)?isCorrect(r.question,a.final ?? a.first):null,
+          revisedCorrect: assessment ? assessment.correct : (a.final ?? a.first) ? isCorrect(r.question, a.final ?? a.first) : null, confirmed: !!a.confirmed, expected: r.expected.includes(st.id) };
       }) })) };
     result.summary=summarize(result);return result;
   }
-  return { dir, read, list, saveDraft, deleteDraft, saveGame, createSession, session, saveSession, stats, command, join, joinPractice, answer, requestTime, avatar, vote, snapshot, review, saveSuggestion, report, saveReflection,
+  return { dir, read, list, saveDraft, deleteDraft, saveGame, createSession, session, saveSession, stats, command, join, joinPractice, answer, requestTime, avatar, vote, snapshot, review, saveSuggestion, report, saveReflection, saveAssessment,
     findCode(code) { if (!/^[A-F0-9]{10}$/.test(code || '')) fail('Enter the ten-character MoonQuest code.'); return list('session').find(s => s.code === code); },
     sessions() { return fs.readdirSync(dir).filter(f => f.startsWith('session-')).map(f => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'))); } };
 }

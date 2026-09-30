@@ -183,6 +183,7 @@ function installMoonQuest(app, deps) {
     try { res.json(observer.read(req.params.id, String(req.get('Authorization') || '').replace(/^Bearer /, ''))); }
     catch (_) { res.status(403).json({error:'This report link has expired or been withdrawn. Ask the teacher for a new link.'}); }
   }));
+  app.post(base + '/sessions/:id/assessment', teacher, wrap((req,res)=>res.json(store.saveAssessment(req.params.id,req.userId,req.body))));
   app.post(base + '/sessions/:id/reflection', teacher, wrap((req,res)=>res.json(store.saveReflection(req.params.id,req.userId,req.body))));
   app.get(base + '/sessions/:id/report', teacher, wrap((req, res) => res.json(store.report(req.params.id, req.userId))));
   app.get(base + '/sessions/:id/qr', teacher, wrap(async (req, res) => {

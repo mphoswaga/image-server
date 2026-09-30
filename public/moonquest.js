@@ -589,15 +589,24 @@
     }catch(e){tell(e.message,true);if(el)el.textContent='Not saved yet. Check your connection and try again.';}finally{busyAnswer=false;}
   }
   async function command(action,extra={}){const s=await api('/sessions/'+sessionId+'/command',{action,presentation:role==='board',seq:state.seq,round:state.round,phase:state.phase,paused:state.paused,...extra});state=s;lastRender='';renderLive();}
+  async function shareAnalysis(id){
+        const grant=await api('/sessions/'+id+'/observer-link',{});
+        const url=location.origin+'/moonquest/analysis?session='+encodeURIComponent(id)+'#'+grant.token;
+        const dialog=document.createElement('dialog');
+        dialog.innerHTML=`<h2>Live analysis report</h2><p>Read-only learning evidence. No login needed. Current assessment results are included; learner names, private notes and assessment history are not shared. Expires in 12 hours. Creating another link replaces this one.</p><label>Share this read-only report link<input readonly style="width:100%" value="${esc(url)}"></label><p><a target="_blank" rel="noopener noreferrer" href="${esc(url)}">Preview analysis report</a></p><button id="copy-observer">Copy link</button> <button id="close-observer">Close</button><p role="status" id="observer-copy-status"></p>`;
+        document.body.append(dialog);dialog.showModal();
+        dialog.querySelector('#copy-observer').onclick=async()=>{try{await navigator.clipboard.writeText(url);dialog.querySelector('#observer-copy-status').textContent='Link copied';}catch{dialog.querySelector('input').select();dialog.querySelector('#observer-copy-status').textContent='Select and copy the link above.';}};
+        dialog.querySelector('#close-observer').onclick=()=>dialog.close();dialog.onclose=()=>dialog.remove();
+  }
   async function report(id) {
     stopPoll();view='report';const r=await api('/sessions/'+id+'/report');nav('/moonquest?report='+encodeURIComponent(id));
     stopMusic();musicEnabled=false;document.getElementById('music').textContent='Music off';document.getElementById('music').setAttribute('aria-pressed','false');
     document.body.dataset.view='report';document.body.dataset.audience='teacher';document.body.classList.remove('learner-round','duel-round','duel-board','mission-paused','celebrate');
-    MoonQuestReport.render(root,r,{back:()=>openSession(id,'teacher'),csv:()=>downloadReportCsv(r),save:input=>api('/sessions/'+id+'/reflection',input)});
+    MoonQuestReport.render(root,r,{share:()=>shareAnalysis(id),back:()=>openSession(id,'teacher'),csv:current=>downloadReportCsv(current),adjust:input=>api('/sessions/'+id+'/assessment',input),save:input=>api('/sessions/'+id+'/reflection',input)});
   }
   function downloadReportCsv(r){
       const cell=v=>'"'+String(v??'').replace(/^[=+@-]/,"'$&").replace(/"/g,'""')+'"';
-      const rows=[['Student ID','Learner','Question','Stage','Initial choice','Initial correct','Final choice','Final correct','Confirmed']];r.students.forEach(st=>st.rounds.forEach((a,i)=>rows.push([st.id,st.name,r.rounds[i].prompt,r.rounds[i].followUp?'Later check':'Initial encounter',a.initial,a.initialCorrect??'',a.revised,a.revisedCorrect??'',a.confirmed])));
+      const rows=[['Student ID','Learner','Question','Stage','Initial choice','Initial correct','Final choice','Game final correct','Confirmed','Teacher assessed correct','Assessment note','Assessment updated','Current correct']];r.students.forEach(st=>st.rounds.forEach((a,i)=>rows.push([st.id,st.name,r.rounds[i].prompt,r.rounds[i].followUp?'Later check':'Initial encounter',a.initial,a.initialCorrect??'',a.revised,a.gameFinalCorrect??'',a.confirmed,a.assessment?.correct??'',a.assessment?.reason||'',a.assessment?new Date(a.assessment.updatedAt).toISOString():'',a.revisedCorrect??''])));
       const url=URL.createObjectURL(new Blob(['\uFEFF'+rows.map(r=>r.map(cell).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='moonquest-learning.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   async function joinPage(code='') {
@@ -678,13 +687,7 @@
       else if(action==='end'){if(confirm('Finish this mission? Learners will no longer be able to answer.'))await command('end');}
       else if(action==='simulate'||action==='simulate-misconception'){state=await api('/sessions/'+sessionId+'/simulate',{pattern:action==='simulate-misconception'?'misconception':'mixed'});renderLive();}
       else if(action==='observer-link') {
-        const grant=await api('/sessions/'+sessionId+'/observer-link',{});
-        const url=location.origin+'/moonquest/analysis?session='+encodeURIComponent(sessionId)+'#'+grant.token;
-        const dialog=document.createElement('dialog');
-        dialog.innerHTML=`<h2>Live analysis report</h2><p>Read-only learning evidence. No learner names or private notes. Expires in 12 hours. Creating another link replaces this one.</p><label>Share this read-only report link<input readonly style="width:100%" value="${esc(url)}"></label><p><a target="_blank" rel="noopener noreferrer" href="${esc(url)}">Preview analysis report</a></p><button id="copy-observer">Copy link</button> <button id="close-observer">Close</button><p role="status" id="observer-copy-status"></p>`;
-        document.body.append(dialog);dialog.showModal();
-        dialog.querySelector('#copy-observer').onclick=async()=>{try{await navigator.clipboard.writeText(url);dialog.querySelector('#observer-copy-status').textContent='Link copied';}catch{dialog.querySelector('input').select();dialog.querySelector('#observer-copy-status').textContent='Select and copy the link above.';}};
-        dialog.querySelector('#close-observer').onclick=()=>dialog.close();dialog.onclose=()=>dialog.remove();
+        await shareAnalysis(sessionId);
       }
       else if(action==='observer-revoke') {await api('/sessions/'+sessionId+'/observer-revoke',{});tell('Report access withdrawn.');}
       else if(action==='report')await report(sessionId);

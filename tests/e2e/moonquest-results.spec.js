@@ -19,4 +19,16 @@ test('saved results remain discoverable after fifty newer practice rooms',async(
  const download=page.waitForEvent('download');await page.getByRole('button',{name:'Download CSV'}).click();expect((await download).suggestedFilename()).toBe('moonquest-learning.csv');
  await page.getByRole('tab',{name:'Learners',exact:true}).click();await page.locator('#review-filter').selectOption('missing');await expect(page.locator('#review-learners')).toBeVisible();
  await page.getByRole('tab',{name:'All answers'}).click();await page.locator('[data-cell]').first().click();await expect(page.locator('#review-detail')).toContainText('First answer');
+ const before=await(await page.request.get(base+'/report')).json();const a=before.students[0].rounds[0];
+ await page.locator('#assessment-form select').selectOption(String(!a.revisedCorrect));
+ await page.locator('#assessment-form textarea').fill('Explained correctly after discussion.');
+ await page.getByRole('button',{name:'Save assessment',exact:true}).click();
+ await expect(page.locator('#assessment-status')).toContainText('Saved.');
+ await page.screenshot({path:'/tmp/moonquest-assessment-'+test.info().project.name+'.png',fullPage:true});
+ const after=await(await page.request.get(base+'/report')).json();expect(after.students[0].rounds[0].revisedCorrect).toBe(!a.revisedCorrect);expect(after.students[0].rounds[0].initialCorrect).toBe(a.initialCorrect);expect(after.summary.totals.finalCorrect).toBe(before.summary.totals.finalCorrect+(a.revisedCorrect?-1:1));
+ await page.reload();await page.getByRole('tab',{name:'All answers'}).click();await page.locator('[data-cell]').first().click();await expect(page.locator('#review-detail')).toContainText('Explained correctly after discussion.');
+ await page.getByRole('button',{name:'Close details'}).click();const revisedDownload=page.waitForEvent('download');await page.getByRole('button',{name:'Download CSV'}).click();const csvText=require('fs').readFileSync(await(await revisedDownload).path(),'utf8');expect(csvText).toContain('Teacher assessed correct');expect(csvText).toContain('Explained correctly after discussion.');await page.locator('[data-cell]').first().click();
+ await page.locator('#assessment-form select').selectOption('restore');await page.locator('#assessment-form textarea').fill('Restore original result.');await page.getByRole('button',{name:'Save assessment',exact:true}).click();await expect(page.locator('#assessment-status')).toContainText('Saved.');
+ expect((await(await page.request.get(base+'/report')).json()).summary.totals.finalCorrect).toBe(before.summary.totals.finalCorrect);
+
 });

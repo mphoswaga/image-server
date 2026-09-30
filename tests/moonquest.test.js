@@ -392,3 +392,17 @@ test('real duel waits for every present learner before the first question',t=>{
  assert.throws(()=>cmd('launch'),/1 learners have not signed in/);assert.throws(()=>cmd('next'),/1 learners have not signed in/);
  cmd('remove-learner',{studentId:'s3',removed:true});assert.doesNotThrow(()=>cmd('next'));
 });
+test('teacher assessments persist, restore, protect raw evidence and reject stale or foreign edits',t=>{
+ const {store,id,cmd,answer,dir,clock}=setup(t,3);cmd('next');cmd('open');answer(0,'b');answer(1,'a');
+ assert.throws(()=>store.saveAssessment(id,'teacher',{version:0,round:0,studentId:'s0',correct:true,reason:'Checked'}),/completed/);
+ cmd('advance');cmd('advance');cmd('advance');
+ const edit=(studentId,correct,version)=>store.saveAssessment(id,'teacher',{version,round:0,studentId,correct,reason:'Explained after discussion'});
+ let r=edit('s0',true,0);assert.equal(r.summary.totals.finalCorrect,2);assert.equal(r.summary.totals.firstCorrect,1);assert.equal(r.summary.totals.improved,0);assert.equal(r.students[0].rounds[0].gameFinalCorrect,false);
+ r=edit('s1',false,1);assert.equal(r.summary.totals.finalCorrect,1);
+ r=edit('s2',true,2);assert.equal(r.summary.totals.assessed,3);assert.equal(r.summary.totals.answered,2);assert.equal(r.summary.totals.missing,0);assert.equal(r.summary.totals.gameMissing,1);
+ assert.throws(()=>edit('s0',false,0),/another tab/);assert.throws(()=>store.saveAssessment(id,'other',{version:3}),/another teacher/);
+ assert.throws(()=>edit('missing',true,3),/not included/);
+ assert.equal(createStore(dir,clock).report(id,'teacher').summary.totals.finalCorrect,2);
+ const service=require('../moonquest-observer').observerService(store,clock);const grant=service.issue(id,'teacher');const shared=service.read(id,grant.token);assert.equal(shared.totals.finalCorrect,2);assert.equal(shared.totals.adjusted,undefined);assert.equal(shared.rounds[0].adjusted,undefined);assert.equal(JSON.stringify(shared).includes('Teacher checked'),false);assert.equal(JSON.stringify(shared).includes('Explained after discussion'),false);
+ r=edit('s2',null,3);assert.equal(r.summary.totals.assessed,2);assert.equal(r.students[2].rounds[0].assessmentHistory.length,2);assert.equal(r.students[2].rounds[0].revisedCorrect,null);
+});
