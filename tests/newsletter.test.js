@@ -19,9 +19,11 @@ test('generated newsletter has subject-specific LMS homework and correct weekly 
   assert.match(request.messages[0].content, /this week/);
   assert.match(result.text, /How can you help at home\?/);
   assert.match(result.text, /Homework\nPlease make sure your child completes the Global Perspectives homework on LMS/);
-  assert.match(result.text, /Key vocabulary\nHabitat: The place where an animal or plant lives\./);
+  assert.match(result.text, /Key Vocabulary:\nHabitat: The place where an animal or plant lives\./);
   assert.ok(request.response_format.json_schema.schema.required.includes('vocabulary'));
   assert.equal(result.timing, 'this');
+  assert.ok(result.text.indexOf('Key Vocabulary:')<result.text.indexOf('How can you help at home?'));
+  assert.match(request.messages[0].content,/Write in English/);
   assert.ok(!planToText({ ...plan, newsletter: result }).includes('LMS'));
 });
 test('incomplete AI response fails without inventing a newsletter', async () => {
