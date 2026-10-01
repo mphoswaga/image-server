@@ -2088,7 +2088,7 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
     if (isRewrite) planRegens.set(regenKey, { n: used + 1, at: Date.now() });
 
     res.json({
-      sections, successCriteria: plan.successCriteria, teachingModelId, lessonPurpose, assessmentDraft: plan.assessmentDraft, model: getTeachingModel(teachingModelId),
+      sections, successCriteria: plan.successCriteria, addedSuccessCriteria:plan.addedSuccessCriteria||[], teachingModelId, lessonPurpose, assessmentDraft: plan.assessmentDraft, model: getTeachingModel(teachingModelId),
       sequence: lessonSequence, sequenceLessonNumber,
       weekPlannerFields: plannerOutline ? plannerOutline.map(f => f.label) : null,
       usedTemplate: !!tpl, templateName: tpl ? tpl.name : null, templateId: tpl ? tpl.id : null,

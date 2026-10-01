@@ -15,8 +15,11 @@ const {
 const TEMPLATE_PROMPT_LIMIT = 6000;
 
 const lessonDesign = require('./lesson-design');
+const {reviewObjectives}=require('./lesson-objective-review');
 
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+// Objective coverage and feasible schedules require the stronger planning model.
+const LESSON_MODEL = process.env.OPENAI_LESSON_MODEL || 'gpt-4.1';
 
 function planSchema(model, sequence = null, structuredSequence = false, includeAssessment = false, includeTeachingEvidence = false) {
   const lessonCount = Math.min(5, Math.max(2, parseInt(sequence && sequence.lessonCount, 10) || 3));
@@ -32,6 +35,7 @@ function planSchema(model, sequence = null, structuredSequence = false, includeA
   }
   const properties = {
     successCriteria: {
+      description: 'Preserve supplied criteria and append any missing observable criteria so EVERY learning objective is covered.',
       type: 'array',
       items: { type: 'string' },
     },
@@ -159,8 +163,8 @@ ${templateText.slice(0, TEMPLATE_PROMPT_LIMIT)}
   const suppliedCriteria = (Array.isArray(successCriteria) ? successCriteria : [])
     .map(value => String(value || '').trim()).filter(Boolean);
   const criteriaBlock = suppliedCriteria.length
-    ? `The teacher/school supplied these SUCCESS CRITERIA. Return them exactly in successCriteria, without rewriting or adding to them:\n${suppliedCriteria.join('\n')}`
-    : `No success criteria were supplied. Create 2-5 concise, observable success criteria from the learning objectives. Every item must begin "I can..." and describe evidence a student can demonstrate by the end of this lesson; do not use vague verbs such as understand, know, or learn.`;
+    ? `The teacher/school supplied these SUCCESS CRITERIA. Preserve their wording and order in successCriteria. LEARNING OBJECTIVES TAKE PRIORITY: check every objective, and append an observable "I can..." criterion for any objective not covered. Do not let supplied criteria narrow or replace the objectives. Avoid duplicate criteria:\n${suppliedCriteria.join('\n')}`
+    : `No success criteria were supplied. Create concise, observable success criteria covering EVERY learning objective; use as many as needed. Every item must begin "I can..." and describe evidence a student can demonstrate by the end of this lesson; do not use vague verbs such as understand, know, or learn.`;
   const modelDetailRule = model.id === 'gradual_release'
     ? `GRADUAL RELEASE REQUIREMENT:
 In the main teaching/activity field, begin with "Teaching model: Gradual Release" and use these labels exactly: "I Do", "We Do", "You Do Together", and "You Do Alone". Under every label give concrete teacher actions, concrete student actions, the example/task or materials, and a check for understanding or transition. Do not reduce a phase to a single generic sentence. The closing/plenary must provide the Exit and Reflect phase.`
@@ -468,7 +472,7 @@ function objectiveLines(objectives) {
 
 function criterionFromObjective(objective) {
   let text = String(objective || '').trim()
-    .replace(/^\s*[A-Z]{0,5}\d+(?:\.\d+)*\s*[:.)-]?\s*/i, '')
+    .replace(/^\s*(?:\d+[A-Z]+(?:\.\d+)+|[A-Z]{0,5}\d+(?:\.\d+)*)\s*[:.)-]?\s*/i, '')
     .replace(/[.!?]+$/, '');
   const colon = text.indexOf(':');
   if (colon >= 0 && text.slice(colon + 1).trim()) text = text.slice(colon + 1).trim();
@@ -491,7 +495,7 @@ function normalizeGeneratedCriteria(criteria, objectives) {
       const sentence = /^i can\b/i.test(value) ? value : `I can ${value.charAt(0).toLowerCase()}${value.slice(1)}`;
       return /[.!?]$/.test(sentence) ? sentence : `${sentence}.`;
     });
-  return generated.length ? generated.slice(0, 5) : deriveSuccessCriteria(objectives);
+  return generated.length ? generated : deriveSuccessCriteria(objectives);
 }
 
 function ensureGradualReleaseVisible(sections) {
@@ -508,7 +512,7 @@ function ensureGradualReleaseVisible(sections) {
     ['You Do Alone', 'Teacher: Set an independent task and collect evidence of learning.\nStudents: Complete the task independently and self-check against the success criteria.'],
   ];
   for (const [label, fallback] of required) {
-    if (!new RegExp(`(?:^|\\n)${label.replace(/ /g, '\\s+')}\\s*(?:[:(]|$)`, 'i').test(content)) {
+    if (!new RegExp(`(?:^|\\n)${label.replace(/ /g, '\\s+')}\\s*(?:[:(]|$)`, 'im').test(content)) {
       content += `\n${label}\n${fallback}`;
     }
   }
@@ -587,11 +591,17 @@ function ensureAssessmentFlowVisible(sections, lessonPurpose, options = {}, asse
 function finalizeLessonPlan(raw, { objectives = '', suppliedSuccessCriteria = [], teachingModelId = 'standard', lessonPurpose = 'lesson' } = {}) {
   const supplied = (Array.isArray(suppliedSuccessCriteria) ? suppliedSuccessCriteria : [])
     .map(value => String(value || '').trim()).filter(Boolean);
-  const successCriteria = supplied.length ? supplied : normalizeGeneratedCriteria(raw && raw.successCriteria, objectives);
+  const key=v=>v.toLowerCase().replace(/[.!?]+$/,'').trim();
+  const rawCriteria=Array.isArray(raw?.successCriteria)?raw.successCriteria:[];
+  const remaining=rawCriteria.filter(v=>typeof v==='string'&&!supplied.some(s=>key(s)===key(v)));
+  const generated=rawCriteria.length&&remaining.length===0?[]:normalizeGeneratedCriteria(remaining,objectives);
+  const additions=generated.filter(v=>!supplied.some(s=>key(s)===key(v)));
+  const successCriteria = supplied.length ? [...supplied,...(lessonPurpose==='lesson'?additions:[])] : generated;
+  const addedSuccessCriteria=supplied.length&&lessonPurpose==='lesson'?additions:[];
   const sections = dedupeSectionLines(normalizeLessonPurpose(lessonPurpose) === 'lesson' && teachingModelId === 'gradual_release'
     ? ensureGradualReleaseVisible(raw && raw.sections)
     : (Array.isArray(raw && raw.sections) ? raw.sections : []));
-  return { ...(raw || {}), sections, successCriteria };
+  return { ...(raw || {}), sections, successCriteria, addedSuccessCriteria };
 }
 
 function placeholderPlan(objectives, teachingModel, lessonPurpose = 'lesson') {
@@ -844,7 +854,8 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     teachingModelId,
     lessonPurpose: purpose,
     assessmentOptions,
-    lessonPlanQualityVersion: 8,
+    lessonPlanQualityVersion: 9,
+    planningModel: purpose === 'lesson' ? LESSON_MODEL : MODEL,
     observationGuidanceVersion: OBSERVATION_GUIDANCE_VERSION,
     lessonSettings: settings,
     sequence: cleanSequence,
@@ -871,20 +882,27 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
       }
       if (hasPlannedGame && activityHeadings.length) schema.properties.gamePlacement.properties.sectionHeading.enum = activityHeadings;
     }
+    if (hasPlannedGame) {
+      schema.properties.gamePlacement.properties.startMinute.enum = [settings.game.startMinute];
+      schema.properties.gamePlacement.properties.durationMinutes.enum = [settings.game.durationMinutes];
+    }
     let lastIssues = [];
+    let previousDraft = null;
     for (let attempt = 1; attempt <= 3; attempt++) {
       const correction = lastIssues.length ? `\n\nYour previous draft failed these required checks: ${lastIssues.join('; ')}. Correct every issue in the new response.` : '';
       const response = await client.chat.completions.create({
-        model: MODEL,
+        model: purpose === 'lesson' ? LESSON_MODEL : MODEL,
         max_tokens: cleanSequence && structuredSequence && !cleanLessonNumber ? 12000 : (purpose === 'lesson' ? 6000 : 12000),
         messages: [
           { role: 'system', content: observationPromptBlock(purpose) + (purpose === 'lesson' ? '\nReturn teachingEvidence with exactly one checkpoint per lesson. Use lesson=1 for a single or staged lesson; for a structured sequence use the matching section.lesson. sectionHeading must exactly match an existing teaching/practice section. Provide a concrete question, expectedReasoning, an allLearnerCheck response method, a specific ifThenResponse to a likely misconception (and extension when ready), a new recheck task, and studentReview describing a criterion-based self-check and actual revision. These will be inserted into the chosen section, so allocate time within its activity and do not duplicate them in section content. Do not put these in Reflection, Resources, Objectives or Overview. Each field must be substantive, topic-specific and classroom-ready, not generic advice.' : '') + correction },
           { role: 'user', content: basePrompt + lessonDesign.prompt(settings, structuredSequence && settings?.game ? settings.game.lesson : designLesson) },
+          ...(previousDraft ? [{role:'assistant',content:previousDraft},{role:'user',content:correction+' Return the complete corrected plan.'}] : []),
         ],
         response_format: { type: 'json_schema', json_schema: { name: 'lesson_plan', strict: true, schema } },
       });
       const text = response.choices[0]?.message?.content;
       if (!text) throw new Error('No lesson plan returned from the model');
+      previousDraft = text;
       const parsed = repairGeneratedPlan(JSON.parse(text), {
         lessonPurpose: purpose,
         templateText,
@@ -892,10 +910,16 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
       });
       const planIssues = lessonPlanIssues(parsed, { lessonPurpose: purpose, templateText, structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber) });
       if (purpose === 'lesson') {
-        const integrated = integrateTeachingEvidence(lessonDesign.alignGameTimings(parsed, settings, designLesson, !!(structuredSequence && !cleanLessonNumber)), { periodMinutes: settings?.durationMinutes || (cleanSequence && cleanSequence.periodMinutes) });
+        const integrated = integrateTeachingEvidence(parsed, { periodMinutes: settings?.durationMinutes || (cleanSequence && cleanSequence.periodMinutes) });
         const gameResult = lessonDesign.integrateGame(integrated.plan, settings, designLesson, !!(structuredSequence && !cleanLessonNumber));
-        lastIssues = [...planIssues, ...integrated.issues, ...gameResult.issues];
-        if (!lastIssues.length) return { ...gameResult.plan, teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
+        const candidate = finalizeLessonPlan(gameResult.plan, {
+          objectives, suppliedSuccessCriteria: successCriteria, teachingModelId, lessonPurpose: purpose,
+        });
+        const coverageIssues = await reviewObjectives(client, candidate, {
+          objectives, settings, sequence: cleanSequence, lessonNumber: cleanLessonNumber, previousLessonPlanText, model: LESSON_MODEL,
+        });
+        lastIssues = [...planIssues, ...integrated.issues, ...gameResult.issues, ...coverageIssues];
+        if (!lastIssues.length) return { ...candidate, teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
         continue;
       }
       if (planIssues.length) {

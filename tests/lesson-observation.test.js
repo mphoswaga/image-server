@@ -27,7 +27,7 @@ test('ordinary and sequential plans require observable thinking and responsive a
     assert.match(prompt, /self-check followed by improvement/);
     assert.match(prompt, /do not label groups by fixed ability/);
     assert.match(prompt, /exactly its headings, exactly once|every authored template heading exactly once/);
-    assert.match(prompt, /Return them exactly in successCriteria/);
+    assert.match(prompt, /Preserve their wording and order in successCriteria/);
   }
 });
 
@@ -109,4 +109,10 @@ test('timing totals are checked against the requested period and never placed in
   for (const timings of [[], [{ sectionHeading: 'Reflection', minutes: 35 }], [{ sectionHeading: 'Guided Practice', minutes: -1 }], [checkpoint.timings[0], checkpoint.timings[0]]]) {
     assert.ok(integrateTeachingEvidence({ sections, teachingEvidence: [{ ...checkpoint, timings }] }).issues.length);
   }
+});
+
+test('rejects an oversized forty-minute plenary in a seventy-minute lesson',()=>{
+ const sections=['Starter','Main Activity','Plenary'].map(heading=>({heading,content:'Task'}));
+ const evidence={...checkpoint,sectionHeading:'Main Activity',timings:[{sectionHeading:'Starter',minutes:15},{sectionHeading:'Main Activity',minutes:15},{sectionHeading:'Plenary',minutes:40}]};
+ const result=integrateTeachingEvidence({sections,teachingEvidence:[evidence]},{periodMinutes:70});assert.ok(result.issues.some(issue=>issue.includes('closing review brief')));
 });

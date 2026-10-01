@@ -162,17 +162,17 @@ test('missing success criteria are derived as observable I can statements', () =
   ]);
 });
 
-test('school success criteria always win without being rewritten', () => {
+test('school success criteria retain wording while missing-objective criteria are appended', () => {
   const supplied = ['SC 1: Open a folder independently.', 'Use the school checklist correctly.'];
   const plan = finalizeLessonPlan({
-    successCriteria: ['I can use a computer.'],
+    successCriteria: ['I can identify hardware parts.'],
     sections: [],
   }, {
     objectives: 'Identify hardware parts.',
     suppliedSuccessCriteria: supplied,
     teachingModelId: 'standard',
   });
-  assert.deepEqual(plan.successCriteria, supplied);
+  assert.deepEqual(plan.successCriteria, [...supplied,'I can identify hardware parts.']);
 });
 
 test('lesson-plan schema requires success criteria alongside sections', () => {

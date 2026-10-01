@@ -1,14 +1,14 @@
 // Practical planning guidance distilled from the school's September 2026 CPD
 // and observation rubric. This is a planning aid, not an observation score.
 // Keep it independent of template fields and out of assessed-content teaching.
-const OBSERVATION_GUIDANCE_VERSION = 1;
+const OBSERVATION_GUIDANCE_VERSION = 2;
 
 function observationPromptBlock(purpose = 'lesson') {
   const common = `
 OBSERVABLE LEARNING AND SAFE PLANNING:
-Use the supplied objectives, subject, age, teaching model, resources and class context. Preserve the school's headings, their order and supplied success criteria. Integrate practical actions into existing fields; do not append an observation checklist, component scores or a new prescribed lesson format.
+Use the supplied objectives, subject, age, teaching model, resources and class context. Preserve the school's headings and their order. Preserve supplied success criteria and add observable criteria for any uncovered learning objective; objectives take priority. Integrate practical actions into existing fields; do not append an observation checklist, component scores or a new prescribed lesson format.
 Plan opportunities for student learning, never claim that students have already achieved them or that an observation rating is guaranteed. Do not invent learner identities, diagnoses, attainment, prior results, classroom facilities or school policies. Where context is missing, propose conditional support and identify resources the teacher must prepare.
-Make timing feasible within the requested period, including transitions and checks. Adapt the amount of activity to the time rather than packing in every strategy. In a sequence, apply this guidance within each period, building on previous learning.
+Make timing feasible within the requested period, including transitions and checks. A reserved game interval is part of the total, not extra time. Do not put all Gradual Release stages into time occupied by the game. Allocate realistic teaching and independent practice time, and keep the plenary brief. Write timings once in teachingEvidence, not again in section prose. Adapt the amount of activity to the time rather than packing in every strategy. In a sequence, apply this guidance within each period, building on previous learning.
 Plan respectful participation, a brief task-relevant behaviour expectation, efficient materials/grouping/transition routines and safe accessible use of space. Offer age-appropriate student responsibility rather than requiring the teacher to manage every action. Do not assume technology is available; when it is needed, include a practical alternative if it fails.
 Leave the teacher's Reflection/post-lesson reflection field blank. Never fabricate completed reflection or observation evidence. The planned assessment evidence should help the teacher later identify what worked, who needs support and what to change.
 `;
@@ -84,11 +84,16 @@ function integrateTeachingEvidence(plan, { periodMinutes = null } = {}) {
         issues.push('Allocate positive minutes once per existing activity heading, excluding administrative fields.');
         continue;
       }
+      if(periodMinutes && /plenary|closing|wrap.up/i.test(timing.sectionHeading) && timing.minutes>Math.max(10,Math.ceil(periodMinutes*.25))) issues.push('Keep the closing review brief and allocate more time to teaching and learner practice; do not put the remaining lesson into the plenary.');
       timed.add(target);
       total += timing.minutes;
       sections[target].content = `Time: ${timing.minutes} minutes (including transitions and learning checks).\n${sections[target].content}`;
     }
-    if (!total || (periodMinutes && total !== periodMinutes)) issues.push(`Lesson ${period} activity timings must total ${periodMinutes || 'the planned lesson duration'} minutes.`);
+    if (!total || (periodMinutes && total !== periodMinutes)) {
+      const practice = (Array.isArray(item.timings) ? item.timings : []).filter(t => t && Number.isInteger(t.minutes) && !/starter|hook|plenary|closing|wrap.up|reflection|resources|objectives|overview/i.test(t.sectionHeading)).sort((a,b)=>b.minutes-a.minutes)[0];
+      const suggestion = practice && periodMinutes > total ? ` For example, change ${practice.sectionHeading} from ${practice.minutes} to ${practice.minutes + periodMinutes - total} minutes and keep the other stage durations, allocating the extra time to learner practice.` : '';
+      issues.push(`Lesson ${period} activity timings currently total ${total} minutes but must total ${periodMinutes || 'the planned lesson duration'} minutes. Recalculate the complete schedule, including transitions; reserve game time and allocate the remaining time to teaching and practice.${suggestion}`);
+    }
     if (!timed.has(index)) issues.push('Allocate time to the activity containing the learning checkpoint.');
     sections[index].content = [sections[index].content,
       `Learning checkpoint: ${item.question}`,

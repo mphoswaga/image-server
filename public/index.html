@@ -3198,7 +3198,7 @@
       <div class="plan-actions" style="margin-top:16px">
         <button id="acceptBtn" class="btn accent"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Accept &amp; create slides</button>
         <button id="dlPlanBtn" class="btn ghost"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Download lesson plan</button>
-        <button id="regenPlanBtn" class="btn ghost"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg> Regenerate plan</button>
+        <button id="regenPlanBtn" class="btn ghost"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg> Rebuild from learning objectives</button>
         <button id="backBtn" class="btn ghost">← Back</button>
       </div>
     </section>
@@ -5120,6 +5120,11 @@
     }
     function paintPlan(d){
       planTemplateId=d.templateId||null;
+      let criteriaReview=$('planCriteriaReview');
+      if(!criteriaReview){criteriaReview=document.createElement('div');criteriaReview.id='planCriteriaReview';$('planSections').before(criteriaReview);}
+      const criteria=d.successCriteria||ctx?.successCriteria||[],added=d.addedSuccessCriteria||ctx?.addedSuccessCriteria||[];
+      criteriaReview.innerHTML=criteria.length?`<h3>Success criteria</h3><p>Learning objectives guide the lesson. Review or edit these criteria.</p>${criteria.map((sc,i)=>`<label style="display:block;margin:10px 0">${added.includes(sc)?'<small>Added to cover learning objective</small>':''}<input data-criterion="${i}" style="width:100%" value="${esc(sc)}"></label>`).join('')}`:'';
+      criteriaReview.querySelectorAll('input').forEach(input=>input.oninput=()=>{if(ctx)ctx.successCriteria=[...criteriaReview.querySelectorAll('input')].map(x=>x.value.trim()).filter(Boolean);scheduleWorkspaceSave();});
       const purpose=(ctx&&ctx.lessonPurpose)||d.lessonPurpose||'lesson';
       // Their own slides are already made — this screen is for the plan only.
       $('acceptBtn').innerHTML=deckImported
@@ -5217,7 +5222,7 @@
       $('dlPlanBtn').innerHTML=ICON('i-download')+(complete?' Download updated lesson plan':' Complete all plans to download');
     }
     function renderPlan(d,{preservePublishedAssessment=false}={}){
-      if(ctx&&Array.isArray(d.successCriteria)&&d.successCriteria.length) ctx.successCriteria=d.successCriteria.slice();
+      if(ctx&&Array.isArray(d.successCriteria)&&d.successCriteria.length){ctx.successCriteria=d.successCriteria.slice();ctx.addedSuccessCriteria=d.addedSuccessCriteria||[];}
       if(ctx&&d.lessonPurpose) ctx.lessonPurpose=d.lessonPurpose;
       const keepPublishedAssessment=preservePublishedAssessment&&automaticAssessmentIsPublished();
       if(Object.prototype.hasOwnProperty.call(d,'assessmentDraft')&&!keepPublishedAssessment){
@@ -5245,7 +5250,7 @@
       paintPlan(sequencePlans[activeSequencePlanIndex]); renderDesignReview(sequencePlans[activeSequencePlanIndex]); renderSequencePlanFlow();
     });
     function collectPlan(){
-      return { sections:[...planStage.querySelectorAll('.plan-section')].map(el=>({
+      return { successCriteria:(ctx?.successCriteria||[]).slice(),addedSuccessCriteria:(ctx?.addedSuccessCriteria||[]).slice(),sections:[...planStage.querySelectorAll('.plan-section')].map(el=>({
         heading:el.querySelector('.heading').value.trim(),
         content:el.querySelector('.content').value.trim(),
         stageId:el.dataset.stage||undefined,
@@ -5399,16 +5404,28 @@
     $('backBtn').addEventListener('click',()=>{ setComposerPage(3,{push:false}); show('composer'); setStep(1); statusEl.innerHTML=''; });
     // Leaving the slides route means the next plan is ours to build slides from.
     $('modeSelect')?.addEventListener('click',()=>{ deckImported=false; });
-    $('regenPlanBtn').addEventListener('click', async ()=>{
-      $('regenPlanBtn').disabled=true; statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>Rewriting the plan…';
-      // regenerate:true is what makes this actually re-run — without it the
-      // cache key matches the first call and the identical plan comes back.
-      try{ const r=await fetch('/api/lesson-plan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...ctx,regenerate:true,
+    async function regenerateSavedPlan(){
+      const button=$('regenPlanBtn');
+      if(button.disabled||!ctx)return;
+      const context=ctx;
+      button.disabled=true;
+      statusEl.className='status';statusEl.innerHTML='<span class="spinner"></span>Rebuilding from your learning objectives and checking coverage…';
+      try{
+        if(!await saveWorkspaceNow())throw new Error('Save the current lesson before regenerating. Please retry.');
+        const r=await fetch('/api/lesson-plan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...context,regenerate:true,
           ...(sequenceMode()?{sequenceLessonNumber:activeSequencePlanIndex+1,previousLessonPlanText:earlierSequencePlansText(activeSequencePlanIndex+1)}:{})})});
-        const d=await r.json(); if(!r.ok) throw new Error(d.error); statusEl.innerHTML=''; renderPlan(d);
-      }catch(err){ statusEl.className='status err'; statusEl.textContent=err.message; }
-      $('regenPlanBtn').disabled=false;
-    });
+        const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not regenerate the plan.');
+        if(ctx!==context)return;
+        renderPlan(d);show('plan');setStep(2);
+        const saved=await saveWorkspaceNow();
+        statusEl.className=saved?'status':'status err';
+        statusEl.textContent=saved?'Updated plan saved. Review the objectives and added success criteria before building your slides.':'Updated plan is ready, but saving failed. Keep this page open and retry Save.';
+        if(newsletter?.text)$('newsletterStatus').textContent='The lesson has changed. Use “Update from revised plan” to refresh your newsletter.';
+        refreshCredits();
+      }catch(err){if(ctx===context){statusEl.className='status err';statusEl.textContent=err.message+' Your existing plan has been kept.';}}
+      finally{button.disabled=false;}
+    }
+    $('regenPlanBtn').addEventListener('click',regenerateSavedPlan);
 
     const STEPS=['Turning the plan into slides…','Finding & matching images (new topics are fetched + captioned)…','Assembling your deck…'];
     function applyEditsToDeck(deck,edits){
@@ -7552,6 +7569,7 @@
         setActiveNav('lessonsBtn');
         history.pushState({workspaceId:saved.id},'',`#lesson/${saved.id}`);
         setWorkspaceSaveStatus('saved','Lesson restored and saved');
+        return true;
       }catch(err){
         toast(err.message);
         list?.querySelectorAll('button').forEach(button=>button.disabled=false);
@@ -7585,6 +7603,7 @@
           <div class="lesson-workspace-actions">
             ${lesson.assignmentCount?`<button type="button" class="btn ghost" data-workspace-assignments="${esc(lesson.id)}">Assignments</button>`:''}
             ${lesson.gameCount?`<button type="button" class="btn ghost" data-workspace-games="${esc(lesson.id)}">Games</button>`:''}
+            ${lesson.hasPlan?`<button type="button" class="btn ghost" data-workspace-rebuild="${esc(lesson.id)}" title="Reuse saved settings and regenerate with objective coverage checks">Rebuild from learning objectives</button>`:''}
             <button type="button" class="btn primary" data-workspace-resume="${esc(lesson.id)}">Resume lesson</button>
             <button type="button" class="btn ghost archive-lesson" data-workspace-archive="${esc(lesson.id)}" title="Archive lesson" aria-label="Archive ${esc(lesson.topic||lesson.title)}">${ICON('i-trash')}</button>
           </div>
@@ -7615,6 +7634,13 @@
     $('lessonsBtn').onclick=openLessons;
     $('lessonsSearch').addEventListener('input',renderLessonWorkspaces);
     $('lessonsList').addEventListener('click',async e=>{
+      const rebuild=e.target.closest('[data-workspace-rebuild]');
+      if(rebuild){
+        if(await resumeLessonWorkspace(rebuild.dataset.workspaceRebuild)){
+          show('plan');setStep(2);await regenerateSavedPlan();
+        }
+        return;
+      }
       const resume=e.target.closest('[data-workspace-resume]');
       if(resume){ await resumeLessonWorkspace(resume.dataset.workspaceResume); return; }
       if(e.target.closest('[data-workspace-assignments]')){ openAssignments(); return; }

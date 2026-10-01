@@ -19,3 +19,29 @@ test('saved MoonQuest can be linked from review and another teacher cannot use i
  await page.locator('#linkPlannedGame').click();await expect(page.locator('#reviewLinkedGame')).toBeVisible();await page.locator('#reviewLinkedGame').selectOption(id);await expect(page.locator('#preparePlannedGame')).toHaveText('Open selected game');await page.evaluate(()=>saveWorkspaceNow());expect(await page.evaluate(()=>ctx.lessonSettings.game.existingId)).toBe(id);
  const other=await browser.newContext();const otherPage=await other.newPage();await signInDisposableTeacher(otherPage,'-foreign-game');const response=await otherPage.request.post('/api/lesson-plan',{data:{subject:'ICT',topic:'Senses',objectives:'Explain senses',lessonSettings:{durationMinutes:70,game:{mode:'moonquest',startMinute:15,durationMinutes:15,existingId:id}}}});expect(response.status()).toBe(400);expect((await response.json()).error).toContain('belonging to your account');await other.close();
 });
+
+test('added objective criterion is labelled, editable and saved with the plan',async({page})=>{
+ const added='I can explain that device activity may be monitored.';
+ await page.route('**/api/lesson-plan',r=>r.fulfill({json:{...plan,successCriteria:[...plan.successCriteria,added],addedSuccessCriteria:[added]}}));
+ await setup(page);await page.locator('#planBtn').click();await expect(page.locator('#planCriteriaReview')).toContainText('Added to cover learning objective');
+ await page.locator('[data-criterion="1"]').fill('I can explain how school device activity may be monitored.');
+ await page.evaluate(()=>saveWorkspaceNow());const id=await page.evaluate(()=>currentWorkspaceId);await page.reload();await page.evaluate(id=>resumeLessonWorkspace(id),id);
+ await expect(page.locator('[data-criterion="1"]')).toHaveValue('I can explain how school device activity may be monitored.');
+ expect(await page.evaluate(()=>collectPlan().successCriteria.length)).toBe(2);
+});
+
+test('saved-plan rebuild reuses settings, persists replacement and preserves it on generation failure',async({page})=>{
+ let request,fail=false;
+ await page.route('**/api/lesson-plan',async route=>{
+  request=route.request().postDataJSON();
+  await route.fulfill(fail?{status:503,json:{error:'Generation temporarily unavailable'}}:{json:request.regenerate?{...plan,sections:[{...plan.sections[0],content:'Rebuilt objective-aligned lesson.'},...plan.sections.slice(1)]}:plan});
+ });
+ await setup(page);await page.locator('#lessonMinutes').fill('70');await page.locator('#plannedGame').selectOption('moonquest');await page.locator('#plannedGameStart').fill('15');await page.locator('#planBtn').click();await expect(page.locator('#planStage')).toBeVisible();
+ await page.evaluate(()=>saveWorkspaceNow());const id=await page.evaluate(()=>currentWorkspaceId);
+ await page.reload();await page.locator('#lessonsBtn').click();await page.locator(`[data-workspace-rebuild="${id}"]`).click();
+ await expect(page.locator('#status')).toContainText('Updated plan saved');
+ expect(request.regenerate).toBe(true);expect(request.objectives).toContain('Identify senses');expect(request.lessonSettings.durationMinutes).toBe(70);expect(request.lessonSettings.game.mode).toBe('moonquest');
+ await page.reload();await page.evaluate(id=>resumeLessonWorkspace(id),id);await expect(page.locator('textarea.content').first()).toHaveValue('Rebuilt objective-aligned lesson.');
+ fail=true;await page.locator('#regenPlanBtn').click();await expect(page.locator('#status')).toContainText('Your existing plan has been kept');
+ await page.reload();await page.evaluate(id=>resumeLessonWorkspace(id),id);await expect(page.locator('textarea.content').first()).toHaveValue('Rebuilt objective-aligned lesson.');
+});
