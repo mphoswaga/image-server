@@ -219,7 +219,7 @@ test('multi-answer selection, class meeting and normal games library work togeth
     await learner.goto('http://127.0.0.1:4341'+url);await expect(learner.getByText('You’re in the crew!')).toBeVisible();
     await page.getByRole('button',{name:'Begin mission',exact:true}).click();await page.getByRole('button',{name:'Skip intro',exact:true}).click();
     await expect(learner.locator('.learner-prompt')).toContainText('Choose 2 answers');
-    await learner.locator('[data-region-answer="left-hand"]').click();await expect(learner.getByRole('button',{name:'Lock in my answers'})).toBeDisabled();
+    await learner.locator('[data-region-answer="left-hand"]').click();await expect(learner.locator('#answer-status')).toContainText('1/2 selected');await expect(learner.getByRole('button',{name:'Lock in my answers'})).toBeDisabled();
     await learner.locator('[data-region-answer="eyes"]').click();await learner.getByRole('button',{name:'Lock in my answers'}).click();await expect(learner.locator('#answer-status')).toContainText('locked in');
     const id=new URL(page.url()).searchParams.get('session');let s=await(await page.request.get('/api/games/moonquest/sessions/'+id+'/teacher')).json();
     expect(s.answered).toBe(1);expect(s.phase).toBe('choose');
