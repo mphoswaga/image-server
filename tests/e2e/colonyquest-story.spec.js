@@ -52,7 +52,9 @@ test('all automatic story scenes render, pause and resume without changing resou
     );
     await expect(page.locator('canvas')).toHaveAttribute('data-story', key);
     await page.waitForTimeout(100);
-    if (['predator', 'footsteps', 'acorn'].includes(key))
+    if (key === 'predator') await expect(page.locator('canvas')).toHaveAttribute('data-spider-artwork', 'ready');
+    if (key === 'birds') await expect(page.locator('canvas')).toHaveAttribute('data-bird-artwork', 'ready');
+    if (['predator', 'birds', 'footsteps', 'acorn'].includes(key))
       await page.screenshot({ path: info.outputPath(key + '.png') });
   }
   await page.evaluate(() => {

@@ -14,6 +14,8 @@
     queen: load('queen'),
     worker: load('pip-worker'),
     guard: load('guardian'),
+    bird: load('meadow-bird-atlas'),
+    spider: load('meadow-spider-atlas'),
   };
   const TAU = Math.PI * 2;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -141,6 +143,19 @@
       if (!image.complete || !image.naturalWidth) return;
       const ratio = image.naturalHeight / image.naturalWidth;
       this.ctx.drawImage(image, x - size / 2, y - (size * ratio) / 2, size, size * ratio);
+    }
+    creature(kind, x, y, size, seconds, right = false) {
+      const image = art[kind];
+      if (!image?.complete || !image.naturalWidth) return;
+      const frame = this.reduced ? 0 : Math.floor(seconds * 6) % 2;
+      const cell = image.naturalWidth / 2;
+      const c = this.ctx;
+      c.save();
+      c.translate(x, y);
+      c.scale(right ? -1 : 1, 1);
+      c.drawImage(image, frame * cell, 0, cell, image.naturalHeight, -size / 2, -size / 2, size, size);
+      c.restore();
+      this.canvas.dataset[kind + 'Artwork'] = 'ready';
     }
     cover(image, x, y, w, h, alpha = 1) {
       if (!image.complete || !image.naturalWidth) return;
@@ -648,24 +663,55 @@
       }
       const age = this.effects.findLast((e) => e.kind === 'defense');
       const progress = age ? clamp((this.clock - age.start) / 2500, 0, 1) : 1;
-      for (let i = 0; i < (colony.defense || 0) * 3; i++) {
-        const theta = Math.PI + ((i + 0.5) / (colony.defense * 3)) * Math.PI;
-        const radius = size * 0.74;
-        c.save();
-        c.translate(
-          w * 0.5 + Math.cos(theta) * radius,
-          surface + Math.sin(theta) * radius - (1 - progress) * 22,
-        );
-        c.rotate(theta + Math.PI / 2);
-        c.fillStyle = colony.defense > 1 ? '#8fa4a1' : '#9e633d';
-        c.strokeStyle = '#e6c795';
-        c.lineWidth = 1.5;
+      const defense = clamp(colony.defense || 0, 0, 4);
+      const level = Math.max(0, defense - (age && !this.reduced ? 1 - smooth(progress) : 0));
+      const domeWidth = Math.min(w * 0.22, 48 + level * 19);
+      const domeHeight = 20 + level * 12;
+      const domeX = w * 0.5;
+      const mud = c.createLinearGradient(domeX - domeWidth, surface - domeHeight, domeX + domeWidth, surface);
+      mud.addColorStop(0, '#e0b778');
+      mud.addColorStop(0.45, '#ac7545');
+      mud.addColorStop(1, '#603c29');
+      ellipse(c, domeX + 4, surface + 3, domeWidth * 1.12, 8, '#291c2260');
+      c.beginPath();
+      c.moveTo(domeX - domeWidth, surface);
+      c.bezierCurveTo(
+        domeX - domeWidth * 0.65,
+        surface - domeHeight * 0.35,
+        domeX - domeWidth * 0.65,
+        surface - domeHeight,
+        domeX,
+        surface - domeHeight,
+      );
+      c.bezierCurveTo(
+        domeX + domeWidth * 0.65,
+        surface - domeHeight,
+        domeX + domeWidth * 0.65,
+        surface - domeHeight * 0.35,
+        domeX + domeWidth,
+        surface,
+      );
+      c.closePath();
+      c.fillStyle = mud;
+      c.fill();
+      c.strokeStyle = '#6a442b';
+      c.lineWidth = 3;
+      c.stroke();
+      // Packed soil layers and embedded stones make each reinforcement visible.
+      for (let i = 0; i <= defense; i++) {
+        const y = surface - 7 - i * 9;
+        const span = domeWidth * (1 - (i + 1) / (defense + 3));
+        c.strokeStyle = '#ecc28a80';
+        c.lineWidth = 2;
         c.beginPath();
-        c.roundRect(-size * 0.17, -5, size * 0.34, 10, 3);
-        c.fill();
+        c.moveTo(domeX - span, y);
+        c.quadraticCurveTo(domeX, y - 5, domeX + span, y);
         c.stroke();
-        c.restore();
+        for (const side of [-1, 1]) ellipse(c, domeX + side * span * 0.85, y + 3, 4, 2.5, '#79543b');
       }
+      ellipse(c, domeX, surface - 4, 14 + level * 2, 10 + level * 2, '#37251b', '#dbaf76', 3 + level);
+      this.canvas.dataset.wallLevel = String(defense + 1);
+      this.canvas.dataset.domeHeight = String(domeHeight);
       const building = this.effects.findLast(
         (e) => ['expansion', 'defense'].includes(e.kind) && this.clock - e.start < 3500,
       );
@@ -898,17 +944,14 @@
             t * 0.4 + i,
           );
       }
-      if (['warning', 'attack'].includes(world.birdStage)) {
-        c.strokeStyle = '#29383b';
-        c.lineWidth = 4;
+      if (
+        ['warning', 'attack'].includes(world.birdStage) &&
+        !['birds', 'birds-warning'].includes(this.state?.story?.key)
+      ) {
         for (let i = 0; i < 3; i++) {
-          const x = ((t * 55 + (i * w) / 3) % (w + 100)) - 50,
-            y = surface * 0.45 + Math.sin(t + i) * 12;
-          c.beginPath();
-          c.moveTo(x - 17, y + Math.sin(t * 7) * 9);
-          c.quadraticCurveTo(x - 8, y - 8, x, y);
-          c.quadraticCurveTo(x + 8, y - 8, x + 17, y + Math.sin(t * 7) * 9);
-          c.stroke();
+          const x = ((t * 55 + (i * w) / 3) % (w + 150)) - 75;
+          const y = surface * 0.45 + Math.sin(t + i) * 12;
+          this.creature('bird', x, y, Math.min(110, w * 0.17), t + i * 0.2, true);
         }
       }
       c.restore();

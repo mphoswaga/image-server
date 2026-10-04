@@ -181,3 +181,20 @@ test('reduced motion keeps workers still while showing room and reward feedback'
   await page.waitForTimeout(200);
   expect(await page.evaluate(() => invalidGeometry)).toEqual([]);
 });
+
+test('every wall level grows the soil dome and survives a restored snapshot', async ({ page }, info) => {
+  await world(page, true);
+  const heights = [];
+  for (let defense = 0; defense <= 4; defense++) {
+    await page.evaluate((level) => {
+      fixture.me.colony.defense = level;
+      scene.update(structuredClone(fixture));
+    }, defense);
+    await expect(page.locator('canvas')).toHaveAttribute('data-wall-level', String(defense + 1));
+    heights.push(Number(await page.locator('canvas').getAttribute('data-dome-height')));
+    if ([0, 4].includes(defense)) await page.screenshot({ path: info.outputPath(`dome-${defense}.png`) });
+  }
+  for (let i = 1; i < heights.length; i++) expect(heights[i]).toBeGreaterThan(heights[i - 1]);
+  await page.evaluate(() => scene.update(structuredClone(fixture)));
+  await expect(page.locator('canvas')).toHaveAttribute('data-dome-height', String(heights[4]));
+});

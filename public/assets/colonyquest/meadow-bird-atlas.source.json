@@ -1,0 +1,6 @@
+{
+  "tool": "Built-in image_gen",
+  "asset": "meadow-bird-atlas.webp",
+  "purpose": "Shared illustrated bird for smartboard and multiplayer ColonyQuest. Two aligned animation poses, transparent background.",
+  "processing": "Original 1774 x 887 PNG preserved in Codex generated_images. Resized to 1024 x 512 WebP with alpha; two 512px square frames."
+}

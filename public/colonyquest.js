@@ -1543,6 +1543,8 @@
         preload() {
           this.load.image('cq-world', ASSETS.world);
           this.load.image('cq-world-dry', ASSETS.dryWorld);
+          this.load.spritesheet('cq-bird', '/assets/colonyquest/meadow-bird-atlas.webp', { frameWidth: 512, frameHeight: 512 });
+          this.load.spritesheet('cq-spider', '/assets/colonyquest/meadow-spider-atlas.webp', { frameWidth: 512, frameHeight: 512 });
           this.load.image('cq-worker', ASSETS.worker);
           this.load.image('cq-queen', ASSETS.queen);
           this.load.image('cq-guardian', ASSETS.guardian);
@@ -1936,9 +1938,29 @@
         graphics.fillStyle(palette.primary, 1); graphics.fillTriangle(flagX, flagY - 25, flagX + 14, flagY - 19, flagX, flagY - 12);
       }
     }
-    ellipse(graphics, entrance.x, entrance.y, 48, 19, 0x261a13);
-    graphics.lineStyle(3, material.wall, 1); graphics.strokeEllipse(entrance.x, entrance.y, 48, 19);
-    if (team.defense >= 1) { graphics.lineStyle(8, material.wall, 1); graphics.lineBetween(entrance.x - 26, entrance.y - 7, entrance.x + 26, entrance.y - 7); }
+    const defense = Math.max(0, Math.min(4, team.defense || 0));
+    const domeWidth = Math.min(zone.w * .32, 30 + defense * 12);
+    const domeHeight = 14 + defense * 8;
+    const dome = scene.add.graphics().setDepth(1);
+    dome.fillStyle(0x36241a, .24); dome.fillEllipse(entrance.x + 3, entrance.y + 5, domeWidth * 2.15, 13);
+    const soil = [];
+    for (let i = 0; i <= 32; i++) {
+      const t = i / 32;
+      soil.push({ x: entrance.x - domeWidth + t * domeWidth * 2, y: entrance.y - Math.pow(Math.sin(t * Math.PI), 1.6) * domeHeight });
+    }
+    dome.fillStyle(0x946039); dome.fillPoints(soil, true);
+    dome.lineStyle(3, 0x66422c); dome.strokePoints(soil, false);
+    for (let layer = 0; layer <= defense; layer++) {
+      const span = domeWidth * (1 - (layer + 1) / (defense + 3));
+      dome.lineStyle(3, 0xd9ad70, .8);
+      dome.lineBetween(entrance.x - span, entrance.y - 5 - layer * 6, entrance.x + span * .65, entrance.y - 7 - layer * 6);
+      for (const side of [-1, 1]) {
+        dome.fillStyle(0x6f4a32); dome.fillEllipse(entrance.x + side * span * .85, entrance.y - 3 - layer * 6, 7, 4);
+      }
+    }
+    dome.fillStyle(0x261a13); dome.fillEllipse(entrance.x, entrance.y - 2, 30 + defense * 3, 14 + defense * 2);
+    dome.lineStyle(3 + defense, 0xd6aa70); dome.strokeEllipse(entrance.x, entrance.y - 2, 30 + defense * 3, 14 + defense * 2);
+
     const title = scene.add.text(zone.x + 12, zone.y + 2, team.name, {
       fontFamily: 'Arial', fontSize: '14px', fontStyle: 'bold', color: '#f1fff5',
       backgroundColor: '#1c4036', padding: { x: 9, y: 6 }, wordWrap: { width: zone.w - 44 },
@@ -2186,33 +2208,10 @@
         const x = view.zone.x + view.zone.w * (index + 1) / ((team.birdsIncoming || core.birdCount(team)) + 1);
         const bird = scene.add.container(x, 30).setDepth(18);
         const shadow = scene.add.ellipse(x, 128, 115, 17, 0x152721, .18).setDepth(5);
-        const wing = (far) => {
-          const feathers = scene.add.graphics();
-          feathers.fillStyle(far ? 0x493d33 : 0x76553a);
-          feathers.fillPoints([{x:5,y:2},{x:-3,y:-18},{x:-28,y:-45},{x:-67,y:-53},{x:-57,y:-40},{x:-50,y:-34},{x:-38,y:-18},{x:-17,y:5}], true);
-          for (let f = 0; f < 6; f++) {
-            feathers.lineStyle(2, far ? 0x2b2928 : 0xb58b60, .85);
-            feathers.lineBetween(-8-f*6, -9-f*4, -30-f*6, -22-f*5);
-          }
-          return feathers;
-        };
-        const farWing = wing(true).setPosition(-2, -3);
-        const tail = scene.add.graphics();
-        tail.fillStyle(0x382e28); tail.fillPoints([{x:-17,y:-4},{x:-60,y:-11},{x:-48,y:2},{x:-59,y:9},{x:-17,y:8}], true);
-        const body = scene.add.ellipse(0, 0, 58, 27, 0x8e6747).setAngle(-8);
-        const breast = scene.add.ellipse(13, 5, 30, 21, 0xd6b181).setAngle(-16);
-        const head = scene.add.ellipse(28, -10, 27, 24, 0x745139);
-        const cheek = scene.add.ellipse(31, -5, 17, 10, 0xe0c69b);
-        const beak = scene.add.triangle(45, -7, 0, 0, 16, 4, 0, 8, 0x302b25);
-        const eye = scene.add.circle(33, -13, 3, 0x151916);
-        const glint = scene.add.circle(34, -14, .9, 0xffffff);
-        const nearWing = wing(false);
-        const feet = scene.add.graphics().lineStyle(2, 0x4a3527);
-        feet.lineBetween(2, 12, -3, 20); feet.lineBetween(-3, 20, 5, 21);
-        feet.lineBetween(12, 12, 9, 20); feet.lineBetween(9, 20, 17, 21);
+        const creature = scene.add.sprite(0, -7, 'cq-bird', 0).setDisplaySize(138, 138).setFlipX(true);
         const seed = scene.add.ellipse(48, -2, 10, 6, 0xf2ce64).setVisible(false);
-        bird.add([farWing, tail, feet, body, breast, head, cheek, beak, eye, glint, nearWing, seed]);
-        scene.birdActors.push({ bird, shadow, nearWing, farWing, seed, team, index, x, zone: view.zone });
+        bird.add([creature, seed]);
+        scene.birdActors.push({ bird, shadow, creature, seed, team, index, x, zone: view.zone });
       }
     });
     updateBirdFlight();
@@ -2225,7 +2224,7 @@
     const elapsed = duration - session.birdStageMs;
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     for (const actor of scene.birdActors) {
-      const { bird, shadow, nearWing, farWing, seed, team, index, x, zone } = actor;
+      const { bird, shadow, creature, seed, team, index, x, zone } = actor;
       if (!bird.active) continue;
       const t = Math.max(0, elapsed - index * 300) / 1000;
       const protectedFood = team.defense >= 2;
@@ -2238,8 +2237,7 @@
       bird.x = reduced ? x : stage === 'warning' ? x - zone.w * .7 * (1 - approach) : stage === 'attack' ? x + Math.sin(t * .8) * 35 : x + departure * zone.w;
       bird.y = reduced ? 78 : stage === 'warning' ? 15 + approach * 65 : stage === 'attack' ? 65 + swoop * (protectedFood ? 22 : 65) : 80 - departure * 130;
       bird.angle = reduced ? 0 : stage === 'attack' ? Math.cos(t * .9) * 12 : -8;
-      nearWing.setAngle(reduced ? -15 : Math.sin(t * 10) * 33);
-      farWing.setAngle(reduced ? 15 : -Math.sin(t * 10) * 25);
+      creature.setFrame(reduced ? 0 : Math.floor(t * 6) % 2);
       shadow.setPosition(bird.x + 12, 139).setScale(scale * (stage === 'attack' ? 1 + swoop * .4 : 1));
       shadow.setAlpha(stage === 'result' ? .2 * (1-departure) : .1 + scale * .14);
       seed.setVisible(!protectedFood && (stage === 'attack' && t > 5 || stage === 'result' && team.birdFoodLoss > 0));
@@ -2416,7 +2414,7 @@
     if (kind === 'defense') {
       playAntSound('build');
       const builder = actionWorker(view, palette, nursery);
-      const route = [nursery, ...view.rooms.slice(1, 8)];
+      const route = [nursery, entrance, { x: entrance.x - 18, y: entrance.y - 12 }, entrance, ...view.rooms.slice(1, 8)];
       moveActionActor(builder, route, 2300, actor => scene.tweens.add({ targets: actor, alpha: 0, duration: 250, onComplete: () => actor.destroy(true) }));
       for (const room of view.rooms.slice(0, 8)) {
         const ring = scene.add.ellipse(room.x, room.y, 72, 44, palette.light, .04).setStrokeStyle(4, core.fortification(team).edge, .95).setDepth(12);
@@ -2631,20 +2629,21 @@
 
   function createMeadowSpider(point, scale = 1) {
     const spider = scene.add.container(point.x, point.y).setDepth(24).setScale(scale);
-    const legs = scene.add.graphics();
-    legs.lineStyle(5, 0x39271f, 1);
-    for (let side = -1; side <= 1; side += 2) {
-      for (let leg = 0; leg < 4; leg += 1) {
-        const y = -14 + leg * 10;
-        legs.beginPath().moveTo(side * 4, y * .45).lineTo(side * (24 + leg * 3), y - 8).lineTo(side * (38 + leg * 4), y + (leg < 2 ? -2 : 9)).strokePath();
-      }
+    const creature = scene.add.sprite(0, -8, 'cq-spider', 0).setDisplaySize(120, 120);
+    spider.add(creature);
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      let elapsed = 0;
+      let previousX = spider.x;
+      const animate = (_time, delta) => {
+        if (!spider.active || session?.phase === 'paused') return;
+        elapsed += delta;
+        creature.setFrame(Math.floor(elapsed / 180) % 2);
+        if (Math.abs(spider.x - previousX) > .1) creature.setFlipX(spider.x > previousX);
+        previousX = spider.x;
+      };
+      scene.events.on('update', animate);
+      spider.once('destroy', () => scene.events.off('update', animate));
     }
-    const body = scene.add.ellipse(0, 5, 43, 39, 0x2c201d, 1).setStrokeStyle(3, 0x6f4a32, 1);
-    const head = scene.add.circle(0, -19, 16, 0x3b2922, 1).setStrokeStyle(2, 0x7f5639, 1);
-    const mark = scene.add.ellipse(0, 7, 12, 18, 0xb96532, .9);
-    const eyeLeft = scene.add.circle(-6, -23, 3, 0xffdf7c, 1);
-    const eyeRight = scene.add.circle(6, -23, 3, 0xffdf7c, 1);
-    spider.add([legs, body, mark, head, eyeLeft, eyeRight]);
     return spider;
   }
 

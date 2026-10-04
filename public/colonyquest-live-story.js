@@ -25,31 +25,6 @@
       c.stroke();
     }
   };
-  function spider(c, x, y, size, t, retreat) {
-    c.save();
-    c.translate(x, y);
-    c.scale(size / 70, size / 70);
-    c.strokeStyle = '#423747';
-    c.lineWidth = 4;
-    c.lineCap = 'round';
-    for (let i = 0; i < 4; i++)
-      for (const side of [-1, 1]) {
-        const hop = Math.sin(t * 12 + i * 1.7) * 5;
-        c.beginPath();
-        c.moveTo(-8 + i * 6, side * 8);
-        c.lineTo(-22 + i * 12 + hop, side * 24);
-        c.lineTo(-30 + i * 16 + hop, side * 36);
-        c.stroke();
-      }
-    oval(c, -11, 0, 23, 17, '#6b5d89', '#352c4d');
-    oval(c, 15, 0, 16, 13, '#9486b0');
-    for (const side of [-1, 1]) {
-      oval(c, 21, side * 6, 7, 6, '#fff4d5');
-      oval(c, retreat ? 20 : 24, side * 6, 3, 3, '#263431');
-    }
-    for (let i = 0; i < 3; i++) oval(c, -18 + i * 9, -5, 2, 2, '#c5b6d7');
-    c.restore();
-  }
   function acorn(c, x, y, size, turn) {
     c.save();
     c.translate(x, y);
@@ -145,7 +120,14 @@
           );
       } else if (story.key === 'predator') {
         const toward = q < 0.55 ? q / 0.55 : 1 - (q - 0.55) / 0.45;
-        spider(c, lerp(w + size, w * 0.64, toward), ground - size * 0.24, size * 0.82, t, q > 0.55);
+        scene.creature(
+          'spider',
+          lerp(w + size, w * 0.64, toward),
+          ground - size * 0.24,
+          size * 1.3,
+          t,
+          q > 0.55,
+        );
         const x = w * 0.48 + Math.min(q, 0.5) * w * 0.12;
         scene.sprite(images.guard, x, ground - size * 0.26, size);
         if (q > 0.55) {
@@ -249,21 +231,12 @@
           c.stroke();
         }
       } else if (story.key === 'birds' || story.key === 'birds-warning') {
-        if (story.key === 'birds')
-          for (let i = 0; i < 3; i++) {
-            const x = lerp(w * 1.1, -w * 0.1, q) + i * size * 0.5,
-              y = ground - size * 0.4 - Math.sin(q * Math.PI) * ground * 0.35;
-            c.strokeStyle = '#394954';
-            c.lineWidth = size * 0.11;
-            c.lineCap = 'round';
-            c.beginPath();
-            c.moveTo(x - size * 0.45, y - Math.sin(t * 8) * size * 0.23);
-            c.lineTo(x, y);
-            c.lineTo(x + size * 0.45, y - Math.sin(t * 8) * size * 0.23);
-            c.stroke();
-            oval(c, x + size * 0.1, y, size * 0.24, size * 0.12, '#647482');
-            if (q > 0.55 && own?.food < 0) scene.cargo(x, y + size * 0.13, 'seed', 7);
-          }
+        for (let i = 0; i < 3; i++) {
+          const x = lerp(w * 1.1, -w * 0.1, q) + i * size * 1.15,
+            y = ground - size * 0.4 - Math.sin(q * Math.PI) * ground * 0.35 - (i % 2) * size * 0.2;
+          scene.creature('bird', x, y, size * 1.5, t + i * 0.2);
+          if (q > 0.55 && own?.food < 0) scene.cargo(x, y + size * 0.13, 'seed', 7);
+        }
         scene.sprite(images.guard, w * 0.48, ground - size * 0.26, size);
       } else if (story.key === 'footsteps-warning' || story.key === 'footsteps') {
         const warning = story.key === 'footsteps-warning';
