@@ -44,6 +44,7 @@
     supplies: 'Building supplies arrive!',
     expansion: 'Digging a new room!',
     defense: 'Reinforcing the entrance!',
+    repair: 'Workers are repairing the nest',
     soldiers: 'Guard reporting for duty!',
     queen: 'An egg for the nursery!',
     hatch: 'A baby worker has hatched!',
@@ -73,7 +74,12 @@
       cancelAnimationFrame(this.raf);
     }
     cue(kind, extra = {}) {
-      this.effects.push({ kind, start: this.clock, duration: kind === 'raid' ? 6200 : 4800, ...extra });
+      this.effects.push({
+        kind,
+        start: this.clock,
+        duration: kind === 'raid' ? 6200 : ['expansion', 'defense'].includes(kind) ? 7200 : 4800,
+        ...extra,
+      });
       this.effects = this.effects.slice(-8);
       this.canvas.dataset.action = kind;
       if (labels[kind]) this.canvas.dispatchEvent(new CustomEvent('colony-action', { detail: labels[kind] }));
@@ -85,6 +91,8 @@
         this.effects = [];
         this.seen.clear();
         this.roomBirths.clear();
+        this.layoutTransition = null;
+        this.displayedRooms = null;
         this.clock = 0;
         this.dryFade = Number(!!state?.world?.dryOccurred && !state?.world?.rainOccurred);
       }
@@ -106,6 +114,15 @@
             });
         }
         this.effects = this.effects.slice(-12);
+        if (
+          old.story &&
+          old.story.id !== state.story?.id &&
+          ['rain', 'collapse', 'footsteps'].includes(old.story.key)
+        ) {
+          const outcome = old.story.results?.find((result) => result.playerId === state.me.id);
+          if (outcome && (outcome.food < 0 || outcome.pointsLost > 0))
+            this.cue('repair', { hazard: old.story.key });
+        }
         const u = state.me.lastUpgrade;
         const previous = old.me.lastUpgrade;
         if (
@@ -245,36 +262,36 @@
       const bottom = h < 350 ? 30 : 70;
       const depth = Math.max(100, h - surface - bottom);
       const definitions = this.rooms(colony);
-      const slots = [
-        [0.5, 0.3],
-        [0.22, 0.55],
-        [0.78, 0.55],
-        [0.19, 0.18],
-        [0.81, 0.18],
-        [0.35, 0.82],
-        [0.72, 0.82],
-      ];
-      const rooms = definitions.slice(0, 19).map((room, i) => {
-        let p = slots[i];
-        if (definitions.length > 7) {
-          const rows = Math.ceil(definitions.length / 3);
-          p =
-            i === 0
-              ? [0.5, 0.14]
-              : [0.16 + ((i - 1) % 3) * 0.34, 0.3 + Math.floor((i - 1) / 3) * (0.6 / Math.max(1, rows - 1))];
-        }
-        const crowded = definitions.length > 7;
+      const visible = definitions.slice(0, 19);
+      const rows = 1 + Math.ceil((visible.length - 1) / 2);
+      const floorHeight = depth / Math.max(2, rows);
+      const rooms = visible.map((room, i) => {
+        const floor = i === 0 ? 0 : 1 + Math.floor((i - 1) / 2);
         return {
           ...room,
-          x: w * p[0],
-          y: surface + depth * p[1],
-          rx: Math.min(
-            w * (i === 0 && !crowded ? 0.205 : 0.145),
-            depth * (crowded ? 0.065 : i === 0 ? 0.125 : 0.102) * 2.3,
-          ),
-          ry: depth * (crowded ? 0.065 : i === 0 ? 0.125 : 0.102),
+          x: w * (i === 0 ? 0.5 : i % 2 ? 0.24 : 0.76),
+          y: surface + floorHeight * (floor + 0.52),
+          rx: Math.min(w * (i === 0 ? 0.24 : 0.205), floorHeight * 1.2),
+          ry: Math.min(floorHeight * 0.36, w * 0.16),
         };
       });
+      const signature = w + ':' + h + ':' + visible.map((room) => room.id).join(',');
+      if (this.layoutTransition?.signature !== signature) {
+        this.layoutTransition = {
+          signature,
+          start: this.clock,
+          before: new Map((this.displayedRooms || []).map((room) => [room.id, room])),
+        };
+      }
+      const moving = this.reduced
+        ? 1
+        : smooth(clamp((this.clock - this.layoutTransition.start) / 1000, 0, 1));
+      for (const room of rooms) {
+        const before = this.layoutTransition.before.get(room.id);
+        if (before && moving < 1)
+          for (const key of ['x', 'y', 'rx', 'ry']) room[key] = mix(before[key], room[key], moving);
+      }
+      this.displayedRooms = rooms.map((room) => ({ ...room }));
       return {
         w,
         h,
@@ -379,11 +396,23 @@
     }
     room(room, colony, age, g) {
       const c = this.ctx,
-        build = age < 2200 ? smooth(age / 2200) : 1;
+        build = this.reduced ? 1 : clamp(age / 6500, 0, 1);
       const { x, y, rx, ry } = room;
       c.save();
       c.translate(x, y);
-      c.scale(Math.max(0.02, build), Math.max(0.02, build));
+      if (build < 1) {
+        c.beginPath();
+        c.ellipse(
+          0,
+          0,
+          Math.max(1, rx * 1.1 * Math.min(1, build * 3)),
+          Math.max(1, ry * 1.3 * Math.min(1, build * 3)),
+          0,
+          0,
+          TAU,
+        );
+        c.clip();
+      }
       if (art.chamber.complete && art.chamber.naturalWidth) {
         c.drawImage(art.chamber, -rx * 1.08, -ry * 1.25, rx * 2.16, ry * 2.5);
       } else {
@@ -406,8 +435,44 @@
           this.mushroom(k * rx * 0.72, ry * 0.28, Math.min(12, ry * 0.35), '#bd7443');
         }
       }
+      // Every chamber has a lit work floor; material and room purpose stay readable at a glance.
+      const glow = c.createRadialGradient(-rx * 0.4, -ry * 0.4, 0, 0, 0, rx);
+      glow.addColorStop(0, '#ffe1a53d');
+      glow.addColorStop(1, '#ffd27b00');
+      ellipse(c, 0, 0, rx, ry, glow);
+      c.fillStyle = '#674329';
+      c.fillRect(-rx * 0.76, ry * 0.36, rx * 1.52, Math.max(3, ry * 0.12));
+      c.strokeStyle = '#dbac6a';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.moveTo(-rx * 0.75, ry * 0.35);
+      c.lineTo(rx * 0.75, ry * 0.35);
+      c.stroke();
+      if (build > 0.3) {
+        for (const side of [-1, 1]) {
+          const post = rx * side * 0.77;
+          c.strokeStyle = '#58361f';
+          c.lineWidth = 7 + (colony.defense || 0);
+          c.beginPath();
+          c.moveTo(post, ry * 0.36);
+          c.lineTo(post * 0.9, -ry * 0.45);
+          c.lineTo(post * 0.55, -ry * 0.72);
+          c.stroke();
+          c.strokeStyle = '#d7ab70';
+          c.lineWidth = 2;
+          c.stroke();
+          for (let band = 0; band < (colony.defense || 0); band++) {
+            c.fillStyle = '#adc1b5';
+            c.fillRect(post - 5, ry * (0.22 - band * 0.16), 10, 3);
+          }
+          this.mushroom(post * 0.9, ry * 0.3, Math.min(10, ry * 0.25), '#edb866');
+        }
+      }
+      c.save();
+      c.globalAlpha *= clamp((build - 0.5) * 2, 0, 1);
+      this.roomFurniture(room, colony, rx, ry);
       if (room.kind === 'nursery') {
-        for (let i = 0; i < Math.min(9, colony.food || 0); i++)
+        for (let i = 0; i < Math.min(9, colony.pantryBuilt ? 0 : colony.food || 0); i++)
           this.cargo(-rx * 0.58 + (i % 3) * 9, ry * 0.25 - Math.floor(i / 3) * 6, 'seed', 5);
         for (let i = 0; i < (colony.eggs || []).length; i++) {
           const ex = rx * 0.34 + i * 8;
@@ -429,14 +494,7 @@
           Math.min(rx * 0.88, ry * 2.3),
         );
       } else if (room.kind === 'food') {
-        for (let i = 0; i < Math.min(22, colony.food || 0); i++)
-          this.cargo(
-            -rx * 0.5 + (i % 6) * rx * 0.16,
-            ry * 0.3 - Math.floor(i / 6) * ry * 0.23,
-            'seed',
-            Math.min(7, ry * 0.18),
-          );
-        this.leaf(rx * 0.35, -ry * 0.32, Math.min(14, rx * 0.2));
+        this.leaf(rx * 0.35, -ry * 0.55, Math.min(14, rx * 0.2));
       } else if (room.kind === 'guard') {
         for (let i = -1; i <= 1; i++) {
           c.fillStyle = '#596f77';
@@ -450,16 +508,8 @@
           c.fillStyle = '#ffd986';
           c.fillRect(i * rx * 0.3 - 1, -ry * 0.3, 2, ry * 0.35);
         }
-      } else if (room.label.includes('Seed')) {
-        for (let i = 0; i < Math.min(18, colony.food || 0); i++)
-          this.cargo(
-            -rx * 0.48 + (i % 6) * rx * 0.19,
-            ry * 0.3 - Math.floor(i / 6) * ry * 0.24,
-            'seed',
-            Math.min(9, ry * 0.22),
-          );
-      } else if (room.label.includes('Workshop')) {
-        for (let i = 0; i < 5; i++) this.cargo(-rx * 0.3 + i * 10, ry * 0.2, i % 2 ? 'leaf' : 'stick', 9);
+      } else if (room.label.includes('Seed') || room.label.includes('Workshop') || room.kind === 'workers') {
+        // Furnished above; keep the work floor clear for the ants.
       } else if (room.label.includes('Water')) {
         ellipse(c, 0, ry * 0.2, rx * 0.48, ry * 0.35, '#66a8b0', '#b4e4df', 2);
         ellipse(
@@ -481,8 +531,179 @@
           );
       }
       c.restore();
+      c.restore();
+      if (build < 1) this.construction(room, build, g);
       if (g.h >= 340 && build > 0.8)
         this.tag(room.label.replace(/ \d+$/, ''), x, y - ry - 7, 10, '#fbe9b2', '#3d2921e8');
+    }
+    roomFurniture(room, colony, rx, ry) {
+      const c = this.ctx;
+      const timber = (x, y, w, h) => {
+        c.fillStyle = '#573820';
+        c.fillRect(x, y, w, h);
+        c.fillStyle = '#ca9857';
+        c.fillRect(x, y, w, Math.max(2, h * 0.3));
+      };
+      if (room.kind === 'food' || room.label.includes('Seed')) {
+        for (const shelf of [-0.32, 0.08]) timber(-rx * 0.62, ry * shelf, rx * 1.24, Math.max(4, ry * 0.12));
+        for (const side of [-1, 1]) timber(side * rx * 0.6, -ry * 0.5, 4, ry * 0.9);
+        // Filled stores reflect actual food rather than a decorative full pantry.
+        const stores = this.rooms(colony).filter(
+          (item) => item.kind === 'food' || item.label.includes('Seed'),
+        );
+        const index = stores.findIndex((item) => item.id === room.id);
+        const food = Math.max(0, colony.food || 0);
+        const stored = Math.floor(food / stores.length) + (index < food % stores.length ? 1 : 0);
+        for (let i = 0; i < Math.min(18, stored); i++) {
+          const x = -rx * 0.5 + (i % 6) * rx * 0.2;
+          const y = ry * (-0.42 + Math.floor(i / 6) * 0.32);
+          this.cargo(x, y, 'seed', Math.min(7, rx * 0.055));
+        }
+      } else if (room.label.includes('Workshop')) {
+        timber(-rx * 0.55, 0, rx * 1.1, ry * 0.16);
+        for (const side of [-1, 1]) timber(side * rx * 0.42, ry * 0.12, 5, ry * 0.24);
+        for (let i = 0; i < Math.min(6, colony.sticks || 0); i++)
+          this.cargo(-rx * 0.4 + i * rx * 0.14, -ry * 0.08, 'stick', Math.min(10, rx * 0.1));
+      } else if (room.kind === 'workers') {
+        for (const side of [-1, 1]) {
+          timber(side * rx * 0.45 - rx * 0.2, -ry * 0.2, rx * 0.4, 4);
+          this.leaf(side * rx * 0.42, 0, rx * 0.25, 0.1);
+          ellipse(c, side * rx * 0.5, -ry * 0.1, rx * 0.07, ry * 0.12, '#e8d4a1');
+        }
+      } else if (room.kind === 'guard') {
+        timber(-rx * 0.6, ry * 0.3, rx * 1.2, 4);
+        ellipse(c, rx * 0.48, -ry * 0.1, rx * 0.12, ry * 0.32, '#b59057', '#543620', 2);
+        ellipse(c, rx * 0.48, -ry * 0.1, rx * 0.06, ry * 0.15, null, '#f1d69c', 2);
+      }
+    }
+    construction(room, progress, g) {
+      const c = this.ctx;
+      const { x, y, rx, ry } = room;
+      c.save();
+      c.strokeStyle = '#e8c38590';
+      c.lineWidth = 2;
+      c.setLineDash([5, 6]);
+      c.beginPath();
+      c.ellipse(x, y, rx, ry, 0, 0, TAU);
+      c.stroke();
+      c.setLineDash([]);
+      const phase = progress < 0.33 ? 'digging' : progress < 0.67 ? 'reinforcing' : 'furnishing';
+      this.canvas.dataset.constructionPhase = phase;
+      c.fillStyle = '#33251f';
+      c.fillRect(x - rx * 0.55, y + ry + 7, rx * 1.1, 4);
+      c.fillStyle = '#f1cd76';
+      c.fillRect(x - rx * 0.55, y + ry + 7, rx * 1.1 * progress, 4);
+      if (!this.reduced && progress < 0.7)
+        for (let i = 0; i < 7; i++) {
+          const p = (this.clock / 750 + i / 7) % 1;
+          ellipse(
+            c,
+            x + rx * 0.65 - p * rx * 0.35,
+            y + ry * 0.2 - Math.sin(p * Math.PI) * ry * 0.6,
+            2 * (1 - p),
+            2 * (1 - p),
+            '#d7ae73',
+          );
+        }
+      c.restore();
+    }
+    indoorWorker(i, g, colony) {
+      const elapsed = this.reduced ? i * 4200 + 8000 : this.clock + i * 4200;
+      const cycle = Math.floor(elapsed / 18000);
+      const room = g.rooms[(cycle + Math.floor(i / 3)) % g.rooms.length];
+      const p = (elapsed % 18000) / 18000;
+      const working = p >= 0.22 && p <= 0.78;
+      const path = [
+        [g.home.x, g.home.y + g.home.ry * 0.14],
+        [g.home.x, room.y + room.ry * 0.14],
+        [room.x - room.rx * 0.22, room.y + room.ry * 0.14],
+      ];
+      const point = this.pathPoint(
+        path,
+        p < 0.22 ? smooth(p / 0.22) : p > 0.78 ? 1 - smooth((p - 0.78) / 0.22) : 1,
+      );
+      if (p > 0.78) point.angle += Math.PI;
+      const job =
+        room.kind === 'food' || room.label.includes('Seed')
+          ? 'stocking'
+          : room.label.includes('Workshop')
+            ? 'building'
+            : room.kind === 'nursery'
+              ? 'nursing'
+              : 'tending';
+      return {
+        ...point,
+        id: i,
+        job: working ? job : 'walking',
+        carrying: !working,
+        cargo: room.label.includes('Workshop') ? 'stick' : room.label.includes('garden') ? 'leaf' : 'seed',
+        p,
+        room: room.id,
+      };
+    }
+    habitatWeather(g, colony) {
+      const story = this.state?.story;
+      const rain = story?.key === 'rain' || this.state?.world?.birdStage === 'rain';
+      const repair = this.effects.findLast((effect) => effect.kind === 'repair');
+      if (!rain && !repair) {
+        this.canvas.dataset.habitatResponse = '';
+        return;
+      }
+      if (!rain && repair) {
+        this.canvas.dataset.habitatResponse = 'repairing';
+        const p = clamp((this.clock - repair.start) / repair.duration, 0, 1);
+        const c = this.ctx;
+        c.save();
+        c.globalAlpha = 1 - p;
+        if (repair.hazard === 'rain')
+          for (const room of g.rooms)
+            ellipse(c, room.x, room.y + room.ry * 0.32, room.rx * 0.7, room.ry * 0.12, '#6fbbd97a');
+        else
+          for (const room of g.rooms) {
+            c.strokeStyle = '#382518';
+            c.lineWidth = 3;
+            c.beginPath();
+            c.moveTo(room.x - room.rx * 0.4, room.y - room.ry * 0.6);
+            c.lineTo(room.x - room.rx * 0.3, room.y - room.ry * 0.2);
+            c.lineTo(room.x - room.rx * 0.5, room.y + room.ry * 0.2);
+            c.stroke();
+          }
+        c.restore();
+        return;
+      }
+      const c = this.ctx;
+      const protectedNest = colony.defense >= 1;
+      this.canvas.dataset.habitatResponse = protectedNest ? 'sheltered' : 'flood-response';
+      if (protectedNest) {
+        for (const side of [-1, 1]) {
+          c.strokeStyle = '#bcebf2a0';
+          c.lineWidth = 2;
+          c.beginPath();
+          c.moveTo(g.w * 0.5 + side * 24, g.surface - 20);
+          c.quadraticCurveTo(g.w * 0.5 + side * 50, g.surface - 10, g.w * 0.5 + side * 65, g.surface + 2);
+          c.stroke();
+        }
+      } else {
+        c.strokeStyle = '#8bd3e090';
+        c.lineWidth = 4;
+        c.beginPath();
+        c.moveTo(g.w * 0.5, g.surface);
+        c.lineTo(g.home.x, g.home.y);
+        c.stroke();
+        for (const room of g.rooms) {
+          const ripple = this.reduced ? 0 : Math.sin(this.clock / 350 + room.x) * 2;
+          ellipse(
+            c,
+            room.x,
+            room.y + room.ry * 0.32,
+            room.rx * 0.7,
+            room.ry * 0.12 + ripple,
+            '#6fbbd97a',
+            '#b5edf28a',
+            1,
+          );
+        }
+      }
     }
     mushroom(x, y, size, color) {
       const c = this.ctx;
@@ -560,6 +781,49 @@
       c.restore();
     }
     workerJourney(i, g, colony) {
+      const repair = this.effects.findLast((effect) => effect.kind === 'repair');
+      if (i === 0 && repair && this.state?.story?.key !== 'rain') {
+        const p = clamp((this.clock - repair.start) / repair.duration, 0, 1);
+        const target = g.pantry;
+        const path = [
+          [g.home.x, g.home.y],
+          [g.home.x, target.y],
+          [target.x + target.rx * 0.35, target.y],
+        ];
+        const at = this.pathPoint(
+          path,
+          p < 0.3 ? smooth(p / 0.3) : p > 0.8 ? 1 - smooth((p - 0.8) / 0.2) : 1,
+        );
+        return {
+          ...at,
+          id: i,
+          p,
+          job: p < 0.3 || p > 0.8 ? 'walking' : 'building',
+          carrying: p < 0.3,
+          cargo: 'stick',
+        };
+      }
+      if (this.state?.story?.key === 'rain') {
+        const elapsed = this.state.story.elapsed + (this.clock - this.receivedAt);
+        const p = this.reduced ? 1 : clamp((elapsed - i * 120) / 2800, 0, 1);
+        const shelter = i % 2 ? g.pantry : g.home;
+        const path = [
+          [g.w * (0.5 + (i % 2 ? -0.18 : 0.18)), g.surface - 8],
+          [g.w * 0.5, g.surface],
+          [g.home.x, shelter.y],
+          [shelter.x + ((i % 3) - 1) * g.size * 0.4, shelter.y + shelter.ry * 0.16],
+        ];
+        const point = this.pathPoint(path, smooth(p));
+        return {
+          ...point,
+          id: i,
+          p,
+          job: p < 1 ? 'sheltering' : 'tending',
+          carrying: colony.defense < 1 && p < 1,
+          cargo: 'seed',
+        };
+      }
+      if (i % 3 === 2 && g.rooms.length > 1) return this.indoorWorker(i, g, colony);
       const home = g.pantry,
         gate = [g.w * 0.5, g.surface - 8];
       const side = i % 2 ? 1 : -1;
@@ -574,35 +838,13 @@
       const source = [g.w * (0.5 + side * (0.27 + random(i + trip) * 0.16)), g.surface - 10];
       const path = [
         [home.x, home.y + home.ry * 0.25],
+        [g.home.x, home.y],
         [g.home.x, g.home.y],
         [g.w * 0.5, g.surface + g.depth * 0.07],
         gate,
         [g.w * (0.5 + side * 0.12), g.surface - 12],
         source,
       ];
-      // Some workers tend an interior room on alternate trips; routes still pass through actual tunnels.
-      if (i % 3 === 2 && trip % 2 && g.rooms.length > 2) {
-        const target = g.rooms[2 + ((trip + i) % (g.rooms.length - 2))];
-        const indoor = [
-          [home.x, home.y],
-          [g.home.x, g.home.y],
-          [mix(g.home.x, target.x, 0.55), mix(g.home.y, target.y, 0.3)],
-          [target.x, target.y + target.ry * 0.2],
-        ];
-        const point = this.pathPoint(
-          indoor,
-          p < 0.45 ? smooth(p / 0.45) : p < 0.6 ? 1 : 1 - smooth((p - 0.6) / 0.4),
-        );
-        if (p >= 0.6) point.angle += Math.PI;
-        return {
-          ...point,
-          job: p > 0.45 && p < 0.6 ? 'tending' : 'stocking',
-          carrying: p < 0.48,
-          cargo: 'seed',
-          p,
-          id: i,
-        };
-      }
       let point,
         job,
         carrying = false;
@@ -622,7 +864,7 @@
         job = 'unloading';
         carrying = p < 0.97;
       }
-      const cargo = (trip + i) % 2 ? 'leaf' : 'stick';
+      const cargo = ['seed', 'leaf', 'stick'][(trip + i) % 3];
       return { ...point, job, carrying, cargo, p, id: i };
     }
     nest(g, colony) {
@@ -641,13 +883,14 @@
         this.tunnel(
           [
             [home.x, home.y],
-            [mix(home.x, room.x, 0.55), mix(home.y, room.y, 0.3)],
+            [home.x, room.y],
             [room.x, room.y],
           ],
           clamp(w * 0.035, 12, 26),
-          clamp(age / 1700, 0.02, 1),
+          this.reduced ? 1 : clamp(age / 2200, 0.02, 1),
         );
       }
+      this.canvas.dataset.constructionPhase = '';
       for (const room of rooms)
         this.room(room, colony, this.clock - (this.roomBirths.get(room.id) ?? -10000), g);
       // Resource patches make the reason for each surface trip immediately visible.
@@ -713,10 +956,10 @@
       this.canvas.dataset.wallLevel = String(defense + 1);
       this.canvas.dataset.domeHeight = String(domeHeight);
       const building = this.effects.findLast(
-        (e) => ['expansion', 'defense'].includes(e.kind) && this.clock - e.start < 3500,
+        (e) => ['expansion', 'defense'].includes(e.kind) && this.clock - e.start < 7000,
       );
       const hatch = this.effects.findLast((e) => ['workers', 'hatch'].includes(e.kind));
-      this.workers = Array.from({ length: Math.min(24, colony.workers || 1) }, (_, i) =>
+      this.workers = Array.from({ length: Math.min(24, Math.max(0, colony.workers ?? 1)) }, (_, i) =>
         this.workerJourney(i, g, colony),
       );
       for (const worker of this.workers.filter(
@@ -725,19 +968,36 @@
         this.ant(
           worker.x,
           worker.y,
-          size * 1.12,
+          worker.y > surface + 8 ? Math.min(size * 1.12, home.ry * 1.15) : size * 1.12,
           worker.angle,
           worker.id,
           'worker',
           worker.carrying ? worker.cargo : null,
-          !['gathering', 'unloading', 'tending'].includes(worker.job),
-          worker.job,
+          !['gathering', 'unloading', 'tending', 'nursing', 'building', 'stocking'].includes(worker.job),
+          ['building', 'nursing', 'stocking'].includes(worker.job) ? 'gathering' : worker.job,
         );
       // Guards patrol the entrance rather than shuffling in one fixed line.
       const guards = Math.min(8, Math.max(0, (colony.soldiers || 0) - (colony.raidAway || 0)));
       const recruit = this.effects.findLast((e) => e.kind === 'soldiers');
       for (let i = 0; i < guards; i++) {
         if (recruit && i === guards - 1) continue;
+        if (i % 2 && rooms.some((room) => room.kind === 'guard')) {
+          const barracks = rooms.find((room) => room.kind === 'guard');
+          const p = this.reduced ? 0.5 : (this.clock / 14000 + i * 0.2) % 1;
+          const x = barracks.x + barracks.rx * (0.05 + (this.reduced ? 0 : Math.sin(p * TAU) * 0.15));
+          this.ant(
+            x,
+            barracks.y + barracks.ry * 0.14,
+            Math.min(size, barracks.ry * 1.1),
+            p < 0.5 ? 0 : Math.PI,
+            i,
+            'guard',
+            null,
+            false,
+            'gathering',
+          );
+          continue;
+        }
         const p = (this.clock / 7500 + i / guards) % 1;
         const x = w * (0.36 + (0.28 * (1 - Math.cos(p * TAU))) / 2);
         this.ant(x, surface - size * 0.1, size, p < 0.5 ? 0 : Math.PI, i, 'guard');
@@ -746,6 +1006,7 @@
         const barracks = rooms.find((r) => r.kind === 'guard') || home;
         const path = [
           [barracks.x, barracks.y],
+          [home.x, barracks.y],
           [home.x, home.y],
           [w * 0.5, surface],
           [w * 0.61, surface - 5],
@@ -771,13 +1032,34 @@
         c.globalAlpha = 1;
       }
       // Short construction scenes use the worker already earned, without inventing extra colony population.
-      if (building && this.clock - building.start < 3500) {
+      if (building && this.clock - building.start < 7000) {
         const room = rooms.at(-1),
           target =
             building.kind === 'defense'
               ? { x: w * 0.5 + size, y: surface - 5 }
               : { x: room.x + room.rx * 0.7, y: room.y };
-        this.ant(target.x, target.y, size, Math.PI + Math.sin(this.clock / 95) * 0.12, 3, 'builder');
+        const p = clamp((this.clock - building.start) / 7000, 0, 1);
+        const path = [
+          [g.pantry.x, g.pantry.y],
+          [home.x, g.pantry.y],
+          [home.x, target.y],
+          [target.x, target.y],
+        ];
+        const at = this.pathPoint(
+          path,
+          p < 0.28 ? smooth(p / 0.28) : p > 0.85 ? 1 - smooth((p - 0.85) / 0.15) : 1,
+        );
+        this.ant(
+          at.x,
+          at.y,
+          size,
+          p > 0.85 ? at.angle + Math.PI : at.angle,
+          0,
+          'builder',
+          p < 0.28 ? 'stick' : null,
+          p < 0.28 || p > 0.85,
+          p < 0.28 ? 'carrying' : 'building',
+        );
         for (let i = 0; i < 9; i++) {
           const phase = (this.clock / 650 + i / 9) % 1;
           ellipse(
@@ -825,6 +1107,7 @@
           );
         c.globalAlpha = 1;
       }
+      this.habitatWeather(g, colony);
       const raid = this.effects.findLast((e) => e.kind === 'raid');
       if (raid) {
         const p = clamp((this.clock - raid.start) / raid.duration, 0, 1),

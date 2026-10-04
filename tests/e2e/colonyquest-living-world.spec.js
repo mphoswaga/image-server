@@ -198,3 +198,128 @@ test('every wall level grows the soil dome and survives a restored snapshot', as
   await page.evaluate(() => scene.update(structuredClone(fixture)));
   await expect(page.locator('canvas')).toHaveAttribute('data-dome-height', String(heights[4]));
 });
+
+test('habitat construction has stages, real workers and recoverable rain damage', async ({ page }, info) => {
+  await world(page);
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.evaluate(() => {
+    fixture.me.colony.workers = 9;
+    fixture.me.colony.expansionRooms = 3;
+    fixture.me.lastUpgrade = { round: 2, key: 'expansion' };
+    scene.update(structuredClone(fixture));
+    fixture.phase = 'paused';
+    scene.update(structuredClone(fixture));
+  });
+  for (const [age, phase] of [
+    [800, 'digging'],
+    [3000, 'reinforcing'],
+    [5000, 'furnishing'],
+  ]) {
+    await page.evaluate((age) => {
+      const birth = scene.roomBirths.get('expansion-3');
+      scene.clock = birth + age;
+    }, age);
+    await expect(page.locator('canvas')).toHaveAttribute('data-construction-phase', phase);
+    await page.screenshot({ path: info.outputPath(`construction-${phase}.png`) });
+  }
+  await page.evaluate(() => {
+    scene.clock += 4000;
+    fixture.me.colony.defense = 0;
+    fixture.phase = 'story';
+    fixture.story = {
+      id: 'rain-1',
+      key: 'rain',
+      duration: 5000,
+      elapsed: 3000,
+      results: [{ playerId: 'a', food: -4 }],
+    };
+    scene.update(structuredClone(fixture));
+  });
+  await expect(page.locator('canvas')).toHaveAttribute('data-habitat-response', 'flood-response');
+  await expect.poll(() => page.evaluate(() => scene.workers.length)).toBe(9);
+  await expect
+    .poll(() =>
+      page.evaluate(() => scene.workers.every((worker) => ['sheltering', 'tending'].includes(worker.job))),
+    )
+    .toBe(true);
+  await page.screenshot({ path: info.outputPath('rain-response.png') });
+  await page.evaluate(() => {
+    fixture.story = null;
+    fixture.phase = 'answer';
+    scene.update(structuredClone(fixture));
+    scene.update(structuredClone(fixture));
+  });
+  await expect(page.locator('canvas')).toHaveAttribute('data-habitat-response', 'repairing');
+  expect(await page.evaluate(() => scene.effects.filter((effect) => effect.kind === 'repair').length)).toBe(
+    1,
+  );
+  expect(await page.evaluate(() => fixture.me.colony.food)).toBe(26);
+  await page.evaluate(() => {
+    fixture.me.colony.defense = 2;
+    fixture.story = {
+      id: 'rain-2',
+      key: 'rain',
+      duration: 5000,
+      elapsed: 3000,
+      results: [{ playerId: 'a', food: 0 }],
+    };
+    scene.update(structuredClone(fixture));
+  });
+  await expect(page.locator('canvas')).toHaveAttribute('data-habitat-response', 'sheltered');
+  await page.evaluate(() => {
+    fixture.story = null;
+    fixture.phase = 'paused';
+    scene.update(structuredClone(fixture));
+    scene.clock += 8000;
+  });
+  await expect(page.locator('canvas')).toHaveAttribute('data-construction-phase', '');
+  await page.screenshot({ path: info.outputPath('finished-habitat.png') });
+  expect(errors).toEqual([]);
+});
+
+test('large habitats keep rooms in bounds and animation does not create resources or workers', async ({
+  page,
+}, info) => {
+  await world(page);
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.evaluate(() => {
+    fixture.me.colony.expansionRooms = 16;
+    fixture.me.colony.workers = 24;
+    fixture.me.colony.soldiers = 8;
+    scene.update(structuredClone(fixture));
+    window.drawCosts = [];
+    const original = scene.nest.bind(scene);
+    scene.nest = (...args) => {
+      const start = performance.now();
+      original(...args);
+      drawCosts.push(performance.now() - start);
+    };
+  });
+  await expect(page.locator('canvas')).toHaveAttribute('data-rooms', '19');
+  await page.waitForTimeout(1500);
+  const result = await page.evaluate(() => {
+    const g = scene.layout(innerWidth, innerHeight, fixture.me.colony);
+    return {
+      inside: g.rooms.every(
+        (r) => r.x - r.rx >= 0 && r.x + r.rx <= g.w && r.y - r.ry >= g.surface && r.y + r.ry <= g.h,
+      ),
+      workers: scene.workers.length,
+      food: fixture.me.colony.food,
+      samples: drawCosts.length,
+      medianDrawMs: drawCosts.sort((a, b) => a - b)[Math.floor(drawCosts.length / 2)],
+    };
+  });
+  expect(result.inside).toBe(true);
+  expect(result.workers).toBe(24);
+  expect(result.food).toBe(26);
+  expect(result.samples).toBeGreaterThan(5);
+  await info.attach('local-render-cost', { body: JSON.stringify(result), contentType: 'application/json' });
+  await page.evaluate(() => {
+    fixture.me.colony.workers = 0;
+    scene.update(structuredClone(fixture));
+  });
+  await expect.poll(() => page.evaluate(() => scene.workers.length)).toBe(0);
+  expect(errors).toEqual([]);
+});
