@@ -300,3 +300,12 @@ test('project decks retain progress questions without answer bullets or shortcut
   assert.ok(slides.filter(slide => slide.type === 'content').every(slide => slide.shortcuts.length === 0));
   assert.equal(slides.at(-1).title, 'Project submission');
 });
+
+
+test('repeated Gradual Release labels are allowed across a weekly sequence', () => {
+  const raw = { sections: [
+    { heading: 'Lesson 1 Activities', lesson: 1, content: 'Teaching model: Gradual Release\nI Do\nModel the first fact.\nWe Do\nTry one together.' },
+    { heading: 'Lesson 2 Activities', lesson: 2, content: 'Teaching model: Gradual Release\nI Do\nModel a related fact.\nWe Do\nTry another together.' },
+  ] };
+  assert.deepEqual(lessonPlanIssues(raw, { lessonPurpose: 'lesson', structuredSequence: true }), []);
+});

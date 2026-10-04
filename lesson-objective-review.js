@@ -2,6 +2,32 @@
 function objectivesList(value) {
   return String(value || '').replace(/\\\./g, '.').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
 }
+
+function objectiveKey(value) {
+  return String(value || '')
+    .replace(/\\\./g, '.')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function objectiveCode(value) {
+  const match = String(value || '').replace(/\\\./g, '.').match(/\b([a-z]{0,5}\d+[a-z]*(?:\.\d+)+)\b/i);
+  return match ? match[1].toLowerCase() : '';
+}
+
+function objectiveMatches(returned, expected) {
+  const returnedKey = objectiveKey(returned);
+  const expectedKey = objectiveKey(expected);
+  if (returnedKey === expectedKey) return true;
+  const returnedCode = objectiveCode(returned);
+  const expectedCode = objectiveCode(expected);
+  if (returnedCode && expectedCode && returnedCode === expectedCode) return true;
+  return false;
+}
+
 async function reviewObjectives(ai, plan, { objectives, settings, sequence, lessonNumber = null, previousLessonPlanText = '', model }) {
   const objectivesToCheck = objectivesList(objectives);
   if (!objectivesToCheck.length) return ['Supply learning objectives before generating a lesson.'];
@@ -27,18 +53,23 @@ async function reviewObjectives(ai, plan, { objectives, settings, sequence, less
   if (typeof result.timingValid !== 'boolean' || !Array.isArray(result.coverage) || !Array.isArray(result.timingIssues) || result.timingIssues.some(v => typeof v !== 'string')) throw Error('The objective review was incomplete. Please try again.');
   const issues = [];
   const canDefer = sequence?.enabled && lessonNumber && lessonNumber < sequence.lessonCount;
+  const matchedCoverageIndexes = new Set();
   for (const objective of objectivesToCheck) {
-    const rows = result.coverage.filter(r => r?.objective === objective);
-    if (rows.length !== 1 || fields.some(f => typeof rows[0][f] !== 'string') || typeof rows[0].deferred !== 'boolean') {
+    const rows = result.coverage
+      .map((row, index) => ({ row, index }))
+      .filter(({ row }) => objectiveMatches(row?.objective, objective));
+    if (rows.length !== 1 || fields.some(f => typeof rows[0].row[f] !== 'string') || typeof rows[0].row.deferred !== 'boolean') {
       issues.push('Review every learning objective exactly once: ' + objective);
       continue;
     }
+    matchedCoverageIndexes.add(rows[0].index);
+    const row = rows[0].row;
     for (const field of fields) {
-      if (field !== 'criterion' && canDefer && rows[0].deferred) continue;
-      if (!rows[0][field].trim() || (field === 'criterion' && /^I can (understand|know|learn)\b/i.test(rows[0][field].trim()))) issues.push(`${objective}: Add explicit ${field} evidence to the plan, within this objective's scope.`);
+      if (field !== 'criterion' && canDefer && row.deferred) continue;
+      if (!row[field].trim() || (field === 'criterion' && /^I can (understand|know|learn)\b/i.test(row[field].trim()))) issues.push(`${objective}: Add explicit ${field} evidence to the plan, within this objective's scope.`);
     }
   }
-  if (result.coverage.length !== objectivesToCheck.length) issues.push('Review only the supplied learning objectives.');
+  if (matchedCoverageIndexes.size !== result.coverage.length) issues.push('Review only the supplied learning objectives.');
   for (const section of plan.sections || []) {
     const intervals = [...String(section.content || '').matchAll(/^(I Do|We Do|You Do Together|You Do Alone)\s*\(minutes?\s+(\d+)\s*[–—-]\s*(\d+)/gim)];
     for (let i = 0; i < intervals.length; i++) for (let j = i + 1; j < intervals.length; j++) {

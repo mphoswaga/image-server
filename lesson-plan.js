@@ -418,6 +418,7 @@ function lessonPlanIssues(raw, { lessonPurpose = 'lesson', templateText = '', st
     for (const line of String(section && section.content || '').replace(/\r/g, '').split('\n')) {
       const normalized = normalizedPlanLine(line);
       if (normalized.length < 20) continue;
+      if (/^(teaching model gradual release|teaching model: gradual release|i do|we do|you do together|you do alone)$/i.test(normalized)) continue;
       if (seenLines.has(normalized)) repeated.add(line.trim());
       seenLines.add(normalized);
     }

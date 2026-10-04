@@ -30,3 +30,13 @@ test('standalone Gradual Release headings do not accumulate generic fallback sta
  assert.equal(second.sections[0].content,first.sections[0].content);
  assert.doesNotMatch(second.sections[0].content,/Model the target skill/);
 });
+
+
+test('coverage review tolerates objective code formatting differences', async()=>{
+ const ai={chat:{completions:{create:async()=>({choices:[{message:{content:JSON.stringify({coverage:[
+  {objective:'3Ni.07 Know 1, 2, 3, 4, 5, 6, 8, 9 and 10 times tables',deferred:false,criterion:'I can recall the 3Ni.07 times tables.',teaching:'Teacher models a skip-counting pattern.',practice:'Students solve times-table facts on mini-whiteboards.',check:'Every learner writes one fact and answer.'},
+  {objective:'Times tables',deferred:false,criterion:'I can use times-table facts.',teaching:'Teacher explains how facts connect.',practice:'Students complete a short set of facts.',check:'Every learner completes an exit fact.'}
+ ],timingValid:true,timingIssues:[]})}}]})}}};
+ const issues=await reviewObjectives(ai,{sections:[]},{objectives:'3Ni\\.07 • Know 1, 2, 3, 4, 5, 6, 8, 9 and 10 times tables.\ntimes tables.',model:'test'});
+ assert.deepEqual(issues,[]);
+});
