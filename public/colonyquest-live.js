@@ -20,7 +20,8 @@
     stopped = false,
     retries = 0,
     lastReceived = Date.now(),
-    lastBeep = '';
+    lastBeep = '',
+    actionCue = null;
   const soundtrack = new ColonyMusic((track) => {
     $('musicTrackLabel').textContent = `${track.title} — ${track.artist}`;
   });
@@ -33,6 +34,9 @@
     );
   }
   $('musicVolume').oninput = () => soundtrack.setVolume(Number($('musicVolume').value) / 200);
+  $('colonyCanvas').addEventListener('colony-action', (event) => {
+    actionCue = { text: event.detail, until: scene.clock + 4800 };
+  });
   const symbols = {
     workers: '🐜',
     food: '🌾',
@@ -166,7 +170,13 @@
       .map((x) => `<span>${esc(x.name)} · ${x.strength} pts</span>`)
       .join('');
     const recent = s.events.at(-1);
-    $('event').textContent = recent && Date.now() + offset - recent.at < 9000 ? recent.text : season(s);
+    const activeCue = actionCue && scene.clock < actionCue.until;
+    $('event').classList.toggle('action-cue', !!activeCue);
+    $('event').textContent = activeCue
+      ? actionCue.text
+      : recent && Date.now() + offset - recent.at < 9000
+        ? recent.text
+        : season(s);
     if (
       pending &&
       (pending.matchId !== s.id ||

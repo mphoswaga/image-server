@@ -766,3 +766,37 @@ h2 {
     max-width: 60px;
   }
 }
+
+/* Keep the new underground stage readable; feedback never covers the answer controls. */
+.colony-stage {
+  background: #3e2b25;
+  isolation: isolate;
+}
+.event-ribbon {
+  bottom: 45px;
+  padding: 7px 12px;
+  font-size: 12px;
+  pointer-events: none;
+}
+.event-ribbon.action-cue {
+  background: #fff2b3;
+  border-color: #ffd269;
+  box-shadow: 0 0 22px #ffd56b45;
+}
+.resources {
+  pointer-events: none;
+}
+.resources span {
+  backdrop-filter: blur(6px);
+}
+@media (max-width: 620px) {
+  .colony-stage {
+    height: 39%;
+    min-height: 220px;
+  }
+  .event-ribbon {
+    bottom: 6px;
+    font-size: 10px;
+    padding: 5px 8px;
+  }
+}

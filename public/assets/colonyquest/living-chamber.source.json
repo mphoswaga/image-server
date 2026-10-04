@@ -1,0 +1,6 @@
+{
+  "tool": "Built-in image_gen",
+  "asset": "living-chamber.webp",
+  "purpose": "Multiplayer-only transparent, naturally carved chamber with roots and warm mushroom lamps. Empty interior furnished dynamically from earned colony state.",
+  "processing": "Resized to 800px wide and encoded as WebP, preserving alpha transparency."
+}

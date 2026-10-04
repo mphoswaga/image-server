@@ -1,0 +1,6 @@
+{
+  "tool": "Built-in image_gen",
+  "asset": "living-underground.webp",
+  "purpose": "Multiplayer-only warm storybook soil cutaway, roots and minerals. No static chambers or ants: earned rooms and characters are animated at runtime.",
+  "processing": "Resized to 1400px wide and encoded as WebP for browser delivery."
+}

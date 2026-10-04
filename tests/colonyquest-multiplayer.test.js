@@ -186,3 +186,17 @@ test('raid cooldown survives a busy classroom event history and reload', () => {
   restored.active()[0].colony.raidReturnMs = 0;
   assert.match(restored.raidAllowed(restored.active()[0], restored.active()[1]).reason, /three rounds/);
 });
+
+test('visual feedback exposes only the learner upgrade and retains their raid amid rival activity', () => {
+  const m = room(3),
+    [a, b, c] = m.active();
+  a.upgrades.push({ round: 0, key: 'workers', target: null });
+  m.event('Own raid', { kind: 'raid', attacker: a.id, target: b.id, success: true });
+  for (let i = 0; i < 8; i++) m.event('Other raid', { kind: 'raid', attacker: b.id, target: c.id });
+  assert.deepEqual(m.snapshot(a.id).me.lastUpgrade, { round: 0, key: 'workers', target: null });
+  assert.equal(m.snapshot(b.id).me.lastUpgrade, null);
+  assert.equal(m.snapshot(a.id).events.length, 1);
+  assert.equal(m.snapshot(a.id).events[0].text, 'Own raid');
+  assert.equal(m.snapshot(null, true).events.length, 4);
+  assert.equal(m.snapshot(a.id).question.correctIndex, undefined);
+});

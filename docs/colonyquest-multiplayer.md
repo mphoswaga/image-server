@@ -45,6 +45,22 @@ computer opponents. It never records learner marks or alters a smartboard game.
 - Colony points never modify correct/incorrect learning marks. Missing responses
   remain absent answers, not invented wrong submissions. Reports state denominators.
 
+## Living colony graphics
+
+The multiplayer renderer uses its own illustrated soil and transparent chamber
+art. The smartboard renderer is unchanged. Rooms are drawn from the same earned
+room definitions as the economy: queen chamber, pantry, barracks and expansions.
+Workers follow foraging, gathering, carrying and unloading paths through the
+entrance into storage. Some workers alternate indoor tending trips. Guards patrol.
+
+An earned upgrade triggers a brief local scene: digging, wall construction,
+delivery, a new worker, an egg or a guard. Eggs hatch only when the saved colony
+state says they did. Raid animations use the actual server outcome. No extra
+choice, modal or confirmation is added. Replayed snapshots and reconnections do
+not replay old rewards; paused/offline/hidden games stop movement. Reduced-motion
+settings keep workers stationary and retain visual feedback. Resource counters
+always come from the server. Artwork and animation add no position packets.
+
 ## Music
 
 Both smartboard and multiplayer use the supplied **Ghibli Station — The Mini

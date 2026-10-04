@@ -361,7 +361,9 @@ class ColonyMatch {
             ...(revealed ? { correctIndex: q.correctIndex, explanation: q.explanation } : {}),
           }
         : null,
-      events: s.events.slice(-4),
+      events: s.events
+        .filter((e) => e.kind !== 'raid' || teacher || e.attacker === playerId || e.target === playerId)
+        .slice(-4),
       me: p
         ? {
             id: p.id,
@@ -369,6 +371,7 @@ class ColonyMatch {
             colony: p.colony,
             choice: p.answers.find((a) => a.round === s.round)?.choice ?? null,
             ...(revealed ? { correct: !!p.answers.find((a) => a.round === s.round)?.correct } : {}),
+            lastUpgrade: p.upgrades.at(-1) || null,
             upgraded: p.upgrades.some((u) => u.round === s.round),
             upgrades: s.phase === 'upgrade' ? this.options(p) : [],
           }
