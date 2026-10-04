@@ -45,7 +45,7 @@ test('learner name and PIN join, locked answer, one upgrade, reconnect and perma
   browser,
 }, info) => {
   test.skip(!['windows-100', 'mobile', 'desktop-safari'].includes(info.project.name));
-  test.setTimeout(65000);
+  test.setTimeout(125000);
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   const id = await create(page);
@@ -80,6 +80,8 @@ test('learner name and PIN join, locked answer, one upgrade, reconnect and perma
     await expect(learner.locator('#question')).toHaveText('Your colony is ready!');
     await expect(page.locator('#hostCount')).toContainText('1 colonies');
     await page.locator('#start').click();
+    await expect(learner.locator('#question')).toHaveText('The quest for the Ancient Acorn');
+    await expect(learner.locator('#choices button')).toHaveCount(0);
     await expect(learner.locator('#question')).toHaveText(questions[0].question);
     await learner.locator('#sound').click();
     await expect.poll(() => learner.locator('audio[data-colony-music]').evaluate(el => el.currentTime)).toBeGreaterThan(0.1);
@@ -100,11 +102,11 @@ test('learner name and PIN join, locked answer, one upgrade, reconnect and perma
     await expect(learner.locator('#question')).toHaveText('The meadow is resting');
     await expect(learner.locator('#resources')).toContainText('2 workers');
     await page.locator('#resume').click();
-    await expect(learner.locator('#question')).toHaveText(questions[1].question, { timeout: 17000 });
+    await expect(learner.locator('#question')).toHaveText(questions[1].question, { timeout: 35000 });
     await learner.getByRole('button', { name: 'A. Water', exact: true }).click();
     await expect(learner.locator('#question')).toHaveText('Correct! Grow your colony.');
     await learner.getByRole('button', { name: /^🍃Collect materials/ }).click();
-    await expect(learner.locator('#question')).toHaveText('Your colony made it through!', { timeout: 18000 });
+    await expect(learner.locator('#question')).toHaveText('Your colony made it through!', { timeout: 45000 });
     await expect(page.locator('#hostPhase')).toHaveText('Game complete');
     const payload = await (await page.request.get(`/api/game/${id}/colonyquest-live`)).json();
     await page.selectOption('#history', payload.match.id);

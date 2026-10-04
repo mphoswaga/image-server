@@ -112,8 +112,8 @@
       ? Math.ceil((state.remaining || 0) / 1000)
       : Math.max(0, Math.ceil((state.deadline - (Date.now() + offset)) / 1000));
     const el = $(host ? 'hostTimer' : 'timer');
-    el.textContent = paused ? 'Ⅱ' : ['lobby', 'ended'].includes(state.phase) ? '🐜' : sec;
-    el.classList.toggle('urgent', sec <= 5 && !paused);
+    el.textContent = paused ? 'Ⅱ' : ['lobby', 'ended', 'story'].includes(state.phase) ? '🐜' : sec;
+    el.classList.toggle('urgent', sec <= 5 && !paused && state.phase !== 'story');
     if (
       !host &&
       state.phase === 'answer' &&
@@ -190,6 +190,7 @@
     const key = JSON.stringify([
       s.phase,
       s.round,
+      s.story?.id,
       p.choice,
       p.correct,
       p.upgraded,
@@ -200,6 +201,7 @@
     if (key === renderKey) return;
     renderKey = key;
     $('learner').classList.toggle('preview', s.preview);
+    $('learner').classList.toggle('story-playing', s.phase === 'story');
     $('roundLabel').textContent = s.preview
       ? 'PRACTICE · NO LEARNER MARKS SAVED'
       : `QUESTION ${s.round + 1} OF ${s.total}`;
@@ -207,6 +209,18 @@
     $('choices').className = 'choices';
     $('choices').innerHTML = '';
     $('finished').hidden = true;
+    if (s.phase === 'story' && s.story) {
+      const beat = s.story;
+      $('roundLabel').textContent = 'THE MOONROOT MEADOW ADVENTURE';
+      $('question').textContent = beat.title;
+      $('instruction').textContent = beat.line;
+      const result = beat.results.find((r) => r.playerId === p.id);
+      $('choices').innerHTML =
+        `<div class="story-character"><img src="/assets/colonyquest/${esc(beat.art)}.webp" alt="${esc(beat.speaker)}"><strong>${esc(beat.speaker)}</strong>${beat.speaker === 'Dot' ? '<span class="builder-hat" aria-hidden="true">⛑</span>' : ''}</div>${result?.message ? `<div class="story-outcome">${esc(result.message)}</div>` : ''}`;
+      if (beat.key === 'acorn')
+        $('explanation').textContent = 'Ancient Acorn champions: ' + beat.winners.join(', ');
+      return;
+    }
     if (s.phase === 'lobby') {
       $('question').textContent = 'Your colony is ready!';
       $('instruction').textContent =
@@ -498,13 +512,14 @@
       answer: 'Choose an answer',
       upgrade: 'Colony upgrades',
       reveal: 'Next question shortly',
+      story: s.story?.title || 'Meadow adventure',
       paused: 'Paused',
       ended: 'Game complete',
     }[s.phase];
     $('hostCount').textContent =
       `${s.players.length} colonies · ${s.players.filter((p) => p.connected).length} connected · ${s.players.filter((p) => p.answered).length}/${s.players.length} answered`;
     $('start').hidden = s.phase !== 'lobby';
-    $('pause').hidden = !['answer', 'upgrade', 'reveal'].includes(s.phase);
+    $('pause').hidden = !['answer', 'upgrade', 'reveal', 'story'].includes(s.phase);
     $('resume').hidden = s.phase !== 'paused';
     $('end').hidden = s.phase === 'ended';
     $('hostSeason').textContent = season(s);
@@ -513,14 +528,16 @@
         ? 'Your colonies are gathering.'
         : s.phase === 'ended'
           ? 'The meadow champions have arrived!'
-          : s.question?.question || '';
+          : s.phase === 'story'
+            ? s.story?.line || ''
+            : s.question?.question || '';
     $('projectedQuestion').textContent = $('hostQuestion').textContent;
     $('projectedCount').textContent = $('hostCount').textContent;
     $('leaderboard').innerHTML =
       s.players
         .map(
           (p, i) =>
-            `<article class="colony-card ${p.answered ? 'answered' : ''}"><strong>${i + 1}. ${esc(p.name)}</strong><div class="mini-ants">🐜 ${'🏡'.repeat(Math.min(4, p.rooms))}</div><b>${p.strength}</b> colony points<small>🌾 ${p.food} · 🐜 ${p.workers} · 🛡 ${p.soldiers}</small><small>${p.answered ? '✓ Answer saved' : p.connected ? 'Thinking…' : 'Reconnecting…'}</small></article>`,
+            `<article class="colony-card ${p.answered ? 'answered' : ''}"><strong>${i + 1}. ${esc(p.name)}</strong><div class="mini-ants">🐜 ${'🏡'.repeat(Math.min(4, p.rooms))}</div><b>${p.strength}</b> colony points<small>🌾 ${p.food} · 🐜 ${p.workers} · 🛡 ${p.soldiers}</small><small>${s.phase === 'story' ? 'Meadow adventure' : p.answered ? '✓ Answer saved' : p.connected ? 'Thinking…' : 'Reconnecting…'}</small></article>`,
         )
         .join('') ||
       '<article class="colony-card"><strong>Waiting for your learners</strong><p>Share the learner link above.</p></article>';

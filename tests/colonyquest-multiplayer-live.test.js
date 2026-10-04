@@ -138,6 +138,7 @@ test(
     await until(() => clients.every((ws) => ws.states.length));
     assert.equal(m.active().length, 30);
     await f.live.mutate(f.game.id, (m) => m.start());
+    await until(() => m.state.phase === 'answer');
     const began = Date.now();
     for (const ws of clients) {
       ws.send('null');
@@ -239,6 +240,9 @@ test('server recovery pauses persisted running rounds with answer state intact',
   await until(() => ws.states.length);
   await f.live.mutate(f.game.id, (m) => {
     m.start();
+  });
+  await until(() => m.state.phase === 'answer');
+  await f.live.mutate(f.game.id, (m) => {
     m.answer(m.active()[0].id, 0, 0);
   });
   const app = express(),
@@ -267,6 +271,9 @@ test('raid command runs once over the socket, add-back restores access and resul
   await until(() => a.states.length && b.states.length);
   await f.live.mutate(f.game.id, (m) => {
     m.start();
+  });
+  await until(() => m.state.phase === 'answer');
+  await f.live.mutate(f.game.id, (m) => {
     m.active()[0].colony.soldiers = 3;
     m.active()[1].colony.food = 12;
     for (const p of m.active()) m.answer(p.id, 0, 0);

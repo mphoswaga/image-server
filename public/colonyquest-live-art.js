@@ -541,7 +541,9 @@
       // Interpolate the server's progress only until its next snapshot. Never invent resource awards.
       const p = this.reduced
         ? 0.18 + ((i * 0.11) % 0.7)
-        : ((colony.forageProgress?.[i] || 0) + (this.clock - this.receivedAt) / duration) % 1;
+        : ((colony.forageProgress?.[i] || 0) +
+            (this.state?.story ? 0 : this.clock - this.receivedAt) / duration) %
+          1;
       const source = [g.w * (0.5 + side * (0.27 + random(i + trip) * 0.16)), g.surface - 10];
       const path = [
         [home.x, home.y + home.ry * 0.25],
@@ -900,6 +902,8 @@
           );
       } else this.nest(g, colony);
       if (!this.reduced) this.weather(w, h, this.overview ? h * 0.65 : g.surface);
+      if (this.state?.story) window.ColonyStoryCanvas?.draw(this, g);
+      else this.canvas.dataset.story = '';
       this.effects = this.effects.filter((e) => this.clock - e.start < e.duration);
       if (!this.effects.length) this.canvas.dataset.action = '';
     }

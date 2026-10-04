@@ -13,7 +13,7 @@ const game = {
   })),
 };
 function room(n = 2) {
-  const m = new ColonyMatch(game, { now: 0 });
+  const m = new ColonyMatch(game, { now: 0, storyEnabled: false });
   for (let i = 0; i < n; i++) m.join({ studentId: 's' + i, name: 'Learner ' + i }, 0);
   m.start(0);
   return m;
@@ -155,7 +155,8 @@ test('preview computer colonies answer automatically; snapshot never gives other
     p = m.join({ studentId: 'teacher', name: 'Teacher' }, 0);
   m.join({ studentId: 'npc', name: 'Fern', npc: true }, 0);
   m.start(0);
-  m.tick(9000);
+  m.tick(5000);
+  m.tick(14000);
   assert.equal(m.active()[1].answers.length, 1);
   const view = m.snapshot(p.id);
   assert.ok(view.players.every((p) => !('answers' in p)));

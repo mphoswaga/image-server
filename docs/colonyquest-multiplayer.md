@@ -114,3 +114,24 @@ add one. Automated local load checks do not establish classroom Wi-Fi latency.
 
 Before classroom rollout, use the deployed room with physical student devices
 and the school's Wi-Fi, including a brief disconnect and reconnection.
+
+## Shared story in individual multiplayer
+
+New multiplayer matches follow the smartboard game's Ancient Acorn adventure:
+Pip, Queen Aurelia, Dot and Bramble introduce berry and seed discoveries, the
+spider, tunnel repairs, a lost scout and new territory. Dry season, rain, birds
+and the human footsteps use the main game's resource and protection rules.
+The ending celebrates the Ancient Acorn champions; penalties affect colony
+points, never the learners' saved assessment marks.
+
+Scenes play automatically between questions. Learners still only answer and
+choose an upgrade. Question clocks and resource collection wait during scenes;
+teachers can pause, and reconnects restore scene progress without repeating
+resource rewards. Eight or more questions include all six optional encounters;
+shorter games use fewer discoveries while retaining the seasonal adventure and
+ending. Existing saved matches keep their original flow; start a new match to
+use the story sequence.
+
+`tests/colonyquest-story.test.js` checks scheduling, outcomes, answer privacy,
+pause/restart and legacy saves. `tests/e2e/colonyquest-story.spec.js` checks every
+animated scene on desktop, mobile and Safari, including paused animation clocks.

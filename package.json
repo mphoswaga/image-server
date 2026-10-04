@@ -21,7 +21,7 @@
     "backup:verify": "node scripts/verify-backup.js",
     "restore": "node scripts/restore-data.js",
     "data:inventory": "node scripts/inventory-data.js",
-    "check:colonyquest-live": "node --check public/colonyquest-live.js && node --check public/colonyquest-live-art.js && node --check public/colonyquest-music.js"
+    "check:colonyquest-live": "node --check public/colonyquest-live.js && node --check public/colonyquest-live-art.js && node --check public/colonyquest-live-story.js && node --check public/colonyquest-music.js"
   },
   "engines": {
     "node": ">=20"

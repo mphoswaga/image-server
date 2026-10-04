@@ -1,7 +1,8 @@
 'use strict';
 const crypto = require('node:crypto');
 const core = require('./public/colonyquest-core');
-const ACTIVE = ['answer', 'upgrade', 'reveal'];
+const story = require('./colonyquest-story');
+const ACTIVE = ['answer', 'upgrade', 'reveal', 'story'];
 const UPGRADE_KEYS = ['workers', 'food', 'supplies', 'expansion', 'defense', 'soldiers', 'queen'];
 const LABELS = {
   workers: 'Worker ant',
@@ -16,9 +17,12 @@ const LABELS = {
 // The server owns resources, question clocks and outcomes. Animation positions
 // never enter this state: thirty clients send two decisions each per round.
 class ColonyMatch {
-  constructor(game, { state, preview = false, rosterIds = [], now = Date.now() } = {}) {
+  constructor(game, { state, preview = false, rosterIds = [], storyEnabled = true, now = Date.now() } = {}) {
     this.state = state || {
       version: 1,
+      storyVersion: storyEnabled ? 1 : 0,
+      storyQueue: [],
+      storySeen: [],
       id: crypto.randomUUID(),
       gameId: game.id,
       title: game.lessonTitle,
@@ -89,7 +93,35 @@ class ColonyMatch {
     if (!this.active().some((p) => p.connected && !p.npc))
       throw Error('Wait for at least one learner to join.');
     this.state.startedAt = now;
-    this.setPhase('answer', this.state.questionSeconds, now);
+    if (this.state.storyVersion) {
+      this.state.afterStory = 'answer';
+      this.beginStory('intro', now);
+    } else this.setPhase('answer', this.state.questionSeconds, now);
+  }
+  beginStory(key, now) {
+    const beat = story.beats[key];
+    const results = story.apply(this, key);
+    this.state.storySeen.push(key);
+    this.state.story = {
+      key,
+      id: `${this.state.round}:${key}`,
+      ...beat,
+      duration: beat.seconds * 1000,
+      results,
+    };
+    this.event(beat.title, { kind: 'story', key, results }, now);
+    this.setPhase('story', beat.seconds, now);
+  }
+  advanceStory(now) {
+    const s = this.state;
+    if (s.story?.key === 'rain') s.world.birdStage = 'rush';
+    if (s.story?.key === 'birds') s.world.birdStage = 'done';
+    const key = s.storyQueue.shift();
+    if (key) return this.beginStory(key, now);
+    s.story = null;
+    if (s.afterStory === 'end') return this.end(now);
+    if (s.afterStory === 'next') s.round++;
+    this.setPhase('answer', s.questionSeconds, now);
   }
   setPhase(phase, seconds, now) {
     Object.assign(this.state, { phase, deadline: now + seconds * 1000, phaseStartedAt: now, updatedAt: now });
@@ -232,11 +264,17 @@ class ColonyMatch {
       this.lastTick = now;
       return;
     }
+    if (s.phase === 'story') {
+      if (now >= s.deadline) this.advanceStory(now);
+      this.lastTick = now;
+      s.updatedAt = now;
+      return;
+    }
     const dt = Math.min(1000, Math.max(0, now - this.lastTick));
     this.lastTick = now;
     const world = this.world();
     core.advanceEconomy(world, dt);
-    core.advanceBirdEvent(world, dt);
+    if (!s.storyVersion) core.advanceBirdEvent(world, dt);
     const { teams, phase, ...worldState } = world;
     s.world = worldState;
     for (const p of this.active().filter((p) => p.npc)) {
@@ -296,6 +334,15 @@ class ColonyMatch {
       this.setPhase('reveal', 4, now);
     } else if (s.phase === 'reveal' && now >= s.deadline) {
       core.applyUpkeep(this.teams());
+      if (s.storyVersion) {
+        s.storyQueue = (story.schedule(s.questions.length)[s.round + 1] || []).filter(
+          (key) => !s.storySeen.includes(key),
+        );
+        s.afterStory = s.round + 1 >= s.questions.length ? 'end' : 'next';
+        this.advanceStory(now);
+        s.updatedAt = now;
+        return;
+      }
       if (s.round + 1 >= s.questions.length) {
         this.end(now);
         return;
@@ -353,6 +400,30 @@ class ColonyMatch {
       remaining: s.remaining,
       preview: s.preview,
       world: s.world,
+      story:
+        phase === 'story' && s.story
+          ? {
+              ...s.story,
+              results: teacher ? s.story.results : s.story.results.filter((r) => r.playerId === playerId),
+              elapsed: Math.max(
+                0,
+                s.story.duration - (s.phase === 'paused' ? s.remaining : Math.max(0, s.deadline - now)),
+              ),
+              winners:
+                s.story.key === 'acorn'
+                  ? core
+                      .rankTeams(this.teams())
+                      .filter(
+                        (item, i, ranked) =>
+                          item.score === ranked[0].score &&
+                          item.team.correct === ranked[0].team.correct &&
+                          (item.team.attempts ? item.team.correct / item.team.attempts : 0) ===
+                            (ranked[0].team.attempts ? ranked[0].team.correct / ranked[0].team.attempts : 0),
+                      )
+                      .map((item) => item.team.name)
+                  : [],
+            }
+          : null,
       players,
       question: q
         ? {
@@ -362,6 +433,11 @@ class ColonyMatch {
           }
         : null,
       events: s.events
+        .map((e) =>
+          !teacher && e.kind === 'story'
+            ? { ...e, results: e.results.filter((r) => r.playerId === playerId) }
+            : e,
+        )
         .filter((e) => e.kind !== 'raid' || teacher || e.attacker === playerId || e.target === playerId)
         .slice(-4),
       me: p
