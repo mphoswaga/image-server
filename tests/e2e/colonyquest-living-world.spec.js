@@ -113,8 +113,21 @@ test('upgrade, hatch and raid scenes are one-time feedback and survive replayed 
   });
   await expect(page.locator('canvas')).toHaveAttribute('data-action', 'raid');
   expect(await page.evaluate(() => scene.effects.filter((e) => e.kind === 'raid').length)).toBe(1);
-  await page.waitForTimeout(700);
-  await page.screenshot({ path: info.outputPath('raid-in-motion.png') });
+  for (const [progress, phase] of [
+    [0.05, 'rally'],
+    [0.3, 'approach'],
+    [0.58, 'clash'],
+    [0.8, 'return'],
+  ]) {
+    await page.evaluate((progress) => {
+      fixture.phase = 'paused';
+      scene.update(structuredClone(fixture));
+      const raid = scene.effects.find((e) => e.kind === 'raid');
+      scene.clock = raid.start + raid.duration * progress;
+    }, progress);
+    await expect(page.locator('canvas')).toHaveAttribute('data-raid-phase', phase);
+    if (phase === 'clash') await page.screenshot({ path: info.outputPath('raid-in-motion.png') });
+  }
   for (const [index, key] of ['food', 'supplies', 'soldiers', 'queen'].entries()) {
     await page.evaluate(
       ({ index, key }) => {
@@ -148,10 +161,23 @@ test('reduced motion keeps workers still while showing room and reward feedback'
   await page.waitForTimeout(300);
   expect(await page.evaluate(() => scene.workers.map((a) => [a.x, a.y]))).toEqual(positions);
   await page.evaluate(() => {
+    window.invalidGeometry = [];
+    const original = scene.ctx.roundRect.bind(scene.ctx);
+    scene.ctx.roundRect = (...args) => {
+      if (!args.slice(0, 4).every(Number.isFinite)) invalidGeometry.push(args.slice(0, 4));
+      return original(...args);
+    };
     fixture.me.lastUpgrade = { round: 2, key: 'food' };
     fixture.me.colony.food += 5;
     scene.update(structuredClone(fixture));
   });
   expect(await page.evaluate(() => cues)).toContain('Food delivery!');
   await expect(page.locator('canvas')).toHaveAttribute('data-action', 'food');
+  expect(
+    await page.evaluate(() => scene.effects.filter((e) => e.kind === 'income').map((e) => e.text)),
+  ).toEqual(['+5 🌾']);
+  await page.evaluate(() => scene.update(structuredClone(fixture)));
+  expect(await page.evaluate(() => scene.effects.filter((e) => e.kind === 'income').length)).toBe(1);
+  await page.waitForTimeout(200);
+  expect(await page.evaluate(() => invalidGeometry)).toEqual([]);
 });

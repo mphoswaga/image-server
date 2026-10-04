@@ -889,8 +889,15 @@ test('world keeps animating after the wall upgrade actor disappears', async ({ p
   });
   await page.locator('#resumeBtn').click();
   await page.locator('[data-reward="defense"]').click();
+  await page.waitForFunction(() => {
+    const actor = window.animationGame.scene.scenes[0].children.list.find(item => item.depth === 18 && item.gait);
+    if (!actor) return false;
+    window.retiredGait = actor.gait;
+    return true;
+  });
   await expect(page.locator('#questionOverlay')).toBeVisible();
   await page.waitForTimeout(4000);
+  expect(await page.evaluate(() => window.animationGame.scene.scenes[0].tweens.getTweens().some(tween => tween.targets.includes(window.retiredGait)))).toBe(false);
   const frame = await page.evaluate(() => window.animationGame.loop.frame);
   await expect.poll(() => page.evaluate(() => window.animationGame.loop.frame)).toBeGreaterThan(frame + 10);
   expect(errors).toEqual([]);

@@ -84,7 +84,9 @@ test('learner name and PIN join, locked answer, one upgrade, reconnect and perma
     await expect(learner.locator('#choices button')).toHaveCount(0);
     await expect(learner.locator('#question')).toHaveText(questions[0].question);
     await learner.locator('#sound').click();
-    await expect.poll(() => learner.locator('audio[data-colony-music]').evaluate(el => el.currentTime)).toBeGreaterThan(0.1);
+    await expect
+      .poll(() => learner.locator('audio[data-colony-music]').evaluate((el) => el.currentTime))
+      .toBeGreaterThan(0.1);
     await learner.getByRole('button', { name: 'A. Forest', exact: true }).click();
     await expect(learner.locator('#instruction')).toContainText('Answer locked in');
     await expect(learner.locator('[data-choice="0"]')).toHaveClass(/selected/);
@@ -97,7 +99,9 @@ test('learner name and PIN join, locked answer, one upgrade, reconnect and perma
     await expect(learner.locator('#resources')).toContainText('2 workers');
     await page.locator('#pause').click();
     await expect(learner.locator('#question')).toHaveText('The meadow is resting');
-    await expect.poll(() => learner.locator('audio[data-colony-music]').evaluate(el => el.paused)).toBe(true);
+    await expect
+      .poll(() => learner.locator('audio[data-colony-music]').evaluate((el) => el.paused))
+      .toBe(true);
     await learner.reload();
     await expect(learner.locator('#question')).toHaveText('The meadow is resting');
     await expect(learner.locator('#resources')).toContainText('2 workers');
@@ -105,7 +109,7 @@ test('learner name and PIN join, locked answer, one upgrade, reconnect and perma
     await expect(learner.locator('#question')).toHaveText(questions[1].question, { timeout: 35000 });
     await learner.getByRole('button', { name: 'A. Water', exact: true }).click();
     await expect(learner.locator('#question')).toHaveText('Correct! Grow your colony.');
-    await learner.getByRole('button', { name: /^🍃Collect materials/ }).click();
+    await learner.getByRole('button', { name: /^Collect materials/ }).click();
     await expect(learner.locator('#question')).toHaveText('Your colony made it through!', { timeout: 45000 });
     await expect(page.locator('#hostPhase')).toHaveText('Game complete');
     const payload = await (await page.request.get(`/api/game/${id}/colonyquest-live`)).json();
@@ -143,6 +147,13 @@ test('teacher can test against computer colonies without changing the smartboard
   await expect(learner.locator('#connection')).toHaveText('Practice vs computer');
   await expect(learner.locator('#rank')).toContainText('of 4');
   await expect(learner.locator('#choices button')).toHaveCount(4);
+  await expect(learner.locator('#colonyCanvas')).toHaveAttribute('data-ants', 'illustrated');
+  await expect(learner.locator('#survival')).toContainText('Earth nest');
+  await expect(learner.locator('#survival [role="progressbar"]')).toHaveAttribute('aria-valuemax', '12');
+  await expect(learner.locator('#survival')).toContainText('Store food for drought');
+  expect(await learner.locator('#timer').evaluate((el) => getComputedStyle(el).color)).toBe(
+    'rgb(25, 60, 46)',
+  );
   const music = learner.locator('audio[data-colony-music]');
   await expect.poll(() => music.evaluate((el) => el.paused)).toBe(true);
   await learner.locator('#sound').click();
@@ -160,6 +171,16 @@ test('teacher can test against computer colonies without changing the smartboard
   await expect.poll(() => music.evaluate((el) => el.paused)).toBe(false);
   await expectNoPageOverflow(learner);
   await learner.screenshot({ path: info.outputPath('colony-rivals-playing.png') });
+  await learner.getByRole('button', { name: 'A. Forest', exact: true }).click();
+  await expect(learner.locator('#question')).toHaveText('Correct! Grow your colony.', { timeout: 15000 });
+  await expect(learner.locator('.choices.upgrades img').first()).toBeVisible();
+  expect(
+    await learner
+      .locator('.choices.upgrades img')
+      .evaluateAll((images) => images.every((image) => image.complete && image.naturalWidth > 0)),
+  ).toBe(true);
+  await learner.screenshot({ path: info.outputPath('colony-rivals-upgrades.png'), fullPage: true });
+
   const after = await (await page.request.get(`/api/game/${id}/colonyquest`)).json();
   expect(after.game.colonyquest).toEqual(before.game.colonyquest);
   expect(after.session).toEqual(before.session);

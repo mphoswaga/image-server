@@ -852,3 +852,300 @@ h2 {
     padding: 9px;
   }
 }
+
+/* Multiplayer expedition shell: compact survival data and illustrated upgrade cards. */
+#learner {
+  background: #102c27;
+}
+#learner .play-status {
+  color: #fff0c5;
+  background: linear-gradient(110deg, #143d32, #09241f);
+  border-bottom: 2px solid #ad8744;
+  box-shadow: inset 0 1px #f5d38a30;
+}
+#learner .play-status .eyebrow {
+  color: #d9bb7b;
+}
+#learner .play-status #rank {
+  color: #fff0bc;
+  border: 1px solid #a48242;
+  border-radius: 20px;
+  padding: 8px 14px;
+}
+#learner .decision {
+  background: radial-gradient(ellipse at top, #fff8dd, #ece2c3);
+  border-left: 5px solid #876236;
+  box-shadow: inset 5px 0 18px #44341b20;
+}
+#learner .choices button {
+  border-color: #a4ab82;
+  box-shadow:
+    0 5px 0 #697c52,
+    inset 0 1px #fff;
+  border-radius: 16px;
+}
+#learner .choices button.selected,
+#learner .choices button.correct {
+  border-color: #26704b;
+  box-shadow: 0 5px 0 #1d5139;
+}
+#learner .choices button.incorrect {
+  border-color: #b16644;
+  box-shadow: 0 5px 0 #87472e;
+}
+#learner .resources {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+  top: 10px;
+}
+#learner .resources span {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 5px;
+  padding: 7px 8px;
+  border: 1px solid #c3a567;
+  border-radius: 9px;
+  background: linear-gradient(#20483eed, #102c25ed);
+  box-shadow:
+    0 3px 8px #0004,
+    inset 0 1px #fff2;
+}
+.resources i {
+  font-style: normal;
+  font-size: 20px;
+  grid-row: span 2;
+}
+.resources b {
+  font-size: 20px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.resources small {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: #dfd3af;
+}
+.survival {
+  position: absolute;
+  top: 78px;
+  right: 12px;
+  width: min(210px, 43%);
+  color: #fff0cc;
+  border: 1px solid #ad915e;
+  border-radius: 12px;
+  background: #112d28e8;
+  box-shadow: 0 6px 16px #0003;
+  pointer-events: none;
+}
+.nest-level {
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  gap: 6px;
+  border-bottom: 1px solid #ccb27645;
+  font-weight: 900;
+  font-size: 14px;
+}
+.nest-level img {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+}
+.nest-level small {
+  display: block;
+  font-size: 10px;
+  color: #d5dcc1;
+  font-weight: 600;
+}
+.survival-goal {
+  padding: 8px 10px;
+}
+.survival-goal b {
+  font-size: 11px;
+  display: block;
+}
+.survival-goal small {
+  font-size: 10px;
+  color: #e4d6b5;
+}
+.survival-meter {
+  height: 7px;
+  background: #061b17;
+  border-radius: 10px;
+  margin: 7px 0 3px;
+  overflow: hidden;
+}
+.survival-meter i {
+  height: 100%;
+  display: block;
+  background: linear-gradient(90deg, #ba8035, #ffdb79);
+  border-radius: inherit;
+  transition: width 0.5s ease;
+}
+.ready .survival-meter i {
+  background: linear-gradient(90deg, #479670, #bce99d);
+}
+#learner .rivals {
+  gap: 6px;
+}
+#learner .rivals span {
+  min-width: 110px;
+  flex: 1;
+  position: relative;
+  padding: 8px 8px 12px;
+  border: 1px solid #74947b;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.rivals b {
+  display: block;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 10px;
+}
+.rivals strong {
+  color: #ffdc85;
+  font-size: 17px;
+}
+.rivals i {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 4px;
+  background: #98bb86;
+}
+#learner .rivals .own-colony {
+  border-color: #ebc260;
+  background: #345238ef;
+}
+.rivals .own-colony i {
+  background: #f9ce6b;
+}
+#learner .event-ribbon {
+  bottom: 82px;
+  background: #143a2cef;
+  color: #fff0c1;
+  border-color: #b99b56;
+  border-radius: 8px;
+}
+.choices.upgrades .symbol {
+  position: relative;
+  display: block;
+  float: left;
+  width: 65px;
+  height: 64px;
+  margin: 0 10px 2px 0;
+}
+.choices.upgrades .symbol img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.choices.upgrades .symbol i {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  font-size: 19px;
+  font-style: normal;
+}
+#learner .choices.upgrades button {
+  background: linear-gradient(145deg, #fffcef, #e5edcc);
+  min-height: 94px;
+}
+#learner .choices.upgrades button:disabled {
+  opacity: 0.65;
+}
+@media (max-width: 600px) {
+  #learner .resources {
+    left: 7px;
+    right: 7px;
+  }
+  #learner .resources span {
+    padding: 5px;
+    column-gap: 3px;
+  }
+  .resources i {
+    font-size: 14px;
+  }
+  .resources b {
+    font-size: 16px;
+  }
+  .resources small {
+    font-size: 8px;
+    letter-spacing: 0;
+  }
+  .survival {
+    top: 65px;
+    width: 155px;
+  }
+  .nest-level {
+    font-size: 11px;
+    padding: 4px;
+  }
+  .nest-level img {
+    width: 25px;
+    height: 25px;
+  }
+  .survival-goal {
+    padding: 5px 7px;
+  }
+  .survival-goal b {
+    font-size: 10px;
+  }
+  #learner .decision {
+    border-left: 0;
+    border-top: 3px solid #876236;
+  }
+  .choices.upgrades .symbol {
+    width: 46px;
+    height: 48px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .survival-meter i {
+    transition: none;
+  }
+}
+
+#learner .clock {
+  color: #193c2e;
+}
+#learner .clock.urgent {
+  color: #a62f17;
+}
+@media (min-width: 1100px) {
+  #learner .play-layout {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .survival {
+    top: auto;
+    bottom: 9px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    display: grid;
+    grid-template-columns: 1fr 1.35fr;
+  }
+  .nest-level {
+    border-bottom: 0;
+    border-right: 1px solid #ccb27645;
+  }
+  .nest-level small {
+    font-size: 9px;
+  }
+  .survival-goal {
+    padding: 5px 8px;
+  }
+  .survival-meter {
+    margin-top: 4px;
+  }
+  #learner .event-ribbon {
+    bottom: 73px;
+  }
+}

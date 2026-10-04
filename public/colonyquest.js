@@ -874,6 +874,10 @@
   function showBattleBurst(point, colors, effects) {
     if (!scene) return;
     scene.cameras.main.shake(280, .006);
+    const ring = scene.add.ellipse(point.x, point.y, 20, 12, colors[0], .08).setStrokeStyle(3, colors[0], .9).setDepth(17);
+    effects.push(ring);
+    scene.tweens.add({ targets: ring, scaleX: 4, scaleY: 3, alpha: 0, duration: 540, ease: 'Cubic.easeOut' });
+
     for (let index = 0; index < 12; index += 1) {
       const angle = Math.PI * 2 * index / 12;
       const spark = scene.add.circle(point.x, point.y, 3 + index % 3, colors[index % colors.length], .95).setDepth(18);
@@ -1603,16 +1607,17 @@
     const sprite = scene.add.image(0, 0, naturalAntTexture(texture, teamColor));
     sprite.setDisplaySize(width, width * .67);
     const legs = scene.add.graphics();
-    const gait = { phase: 0 };
+    const gait = { phase: Math.random() * Math.PI * 2, stride: 0, distance: 0, lastX: point.x, lastY: point.y };
+    const dust = scene.add.graphics();
     const paintLegs = () => {
       legs.clear().lineStyle(Math.max(1.4, width * .025), teamColor, 1);
       for (let side = -1; side <= 1; side += 2) {
         for (let leg = 0; leg < 3; leg += 1) {
           const x = (leg - 1) * width * .12;
-          const step = Math.sin(gait.phase + leg * 2.1 + side) * width * .055;
+          const step = Math.sin(gait.distance + leg * 2.1 + side) * width * .065 * gait.stride;
           legs.beginPath().moveTo(x, width * .06);
           legs.lineTo(x + side * width * .09, width * .19);
-          legs.lineTo(x + side * width * .15 + step, width * .3);
+          legs.lineTo(x + side * width * .15 + step, width * (.3 - Math.max(0, step / width) * .5));
           legs.strokePath();
         }
       }
@@ -1622,7 +1627,7 @@
     const twig = scene.add.rectangle(width * .03, -width * .3, width * .36, Math.max(2, width * .045), 0xbf8245).setAngle(-25).setVisible(false);
     const leaf = scene.add.ellipse(width * .03, -width * .32, width * .29, width * .15, 0x91c95a).setAngle(-30).setVisible(false);
     cargo.setFillStyle(0xf3c764);
-    container.add([shadow, legs, sprite, badge, cargo, twig, leaf]);
+    container.add([shadow, dust, legs, sprite, badge, cargo, twig, leaf]);
     container.twig = twig;
     container.leaf = leaf;
     container.sprite = sprite;
@@ -1631,11 +1636,38 @@
     container.carriesFood = carriesFood;
     paintLegs();
     if (animateLegs && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      scene.tweens.add({ targets: gait, phase: Math.PI * 2, duration: 430, repeat: -1, onUpdate: paintLegs });
-    }
-    if (animateLegs && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      const baseY = sprite.y;
-      scene.tweens.add({ targets: sprite, y: baseY - Math.max(1, width * .025), duration: 170 + Math.random() * 80, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      const baseScaleX = sprite.scaleX, baseScaleY = sprite.scaleY;
+      const motion = scene.tweens.add({ targets: gait, phase: gait.phase + Math.PI * 2, duration: 1100, repeat: -1,
+        onUpdate: () => {
+          if (!container.active || !sprite.active || session?.phase === 'paused') return;
+          const dx = container.x - gait.lastX, dy = container.y - gait.lastY;
+          const distance = Math.hypot(dx, dy);
+          gait.lastX = container.x; gait.lastY = container.y;
+          gait.stride += ((distance > .015 ? 1 : 0) - gait.stride) * .22;
+          gait.distance += Math.min(distance, width * .15) / Math.max(1, width * .065);
+          const bounce = Math.abs(Math.sin(gait.distance)) * gait.stride;
+          sprite.y = -bounce * width * .035;
+          sprite.setScale(baseScaleX * (1 + bounce * .018), baseScaleY * (1 - bounce * .025 + Math.sin(gait.phase) * .008));
+          shadow.setScale(1 - bounce * .1, 1 - bounce * .08);
+          cargo.y = -width * .24 + sprite.y;
+          twig.y = -width * .3 + sprite.y;
+          leaf.y = -width * .32 + sprite.y;
+          twig.angle = -25 + Math.sin(gait.distance) * 3 * gait.stride;
+          leaf.angle = -30 + Math.sin(gait.distance) * 5 * gait.stride;
+          dust.clear();
+          if (gait.stride > .5) {
+            dust.fillStyle(0xd9b77e, .25 * gait.stride);
+            const direction = sprite.flipX ? 1 : -1;
+            for (let n = 0; n < 3; n++) {
+              const drift = (gait.distance / 6 + n / 3) % 1;
+              dust.fillEllipse(direction * width * (.3 + drift * .3), width * (.25 - drift * .06), width * .035 * (1 - drift), width * .018);
+            }
+          }
+          paintLegs();
+        },
+      });
+      // Action actors are short lived; release their infinite gait when they leave the scene.
+      container.once('destroy', () => motion.remove());
     }
     return container;
   }
@@ -1721,7 +1753,7 @@
         const team = session.teams.find(item => item.id === agent.getData('teamId'));
         const progress = team?.forageProgress?.[agent.getData('workerIndex')] || 0;
         const point = route.getPoint(progress);
-        agent.sprite?.setFlipX(point.x < agent.x);
+        if (Math.abs(point.x - agent.x) > .15) agent.sprite?.setFlipX(point.x < agent.x);
         agent.setPosition(point.x, point.y);
         agent.cargo?.setVisible(progress >= .5);
         const worker = agent.getData('workerIndex');
@@ -2306,7 +2338,7 @@
       onUpdate: () => {
         if (!actor.active) return;
         const point = route.getPoint(Phaser.Math.Clamp(progress.value, 0, 1)) || points[0];
-        actor.sprite.setFlipX(point.x < actor.x);
+        if (Math.abs(point.x - actor.x) > .15) actor.sprite.setFlipX(point.x < actor.x);
         actor.setPosition(point.x, point.y);
       },
       onComplete: () => {
@@ -2320,7 +2352,7 @@
   }
 
   function actionWorker(view, palette, point, width = 32, guardian = false) {
-    return makeAntAgent(guardian ? 'cq-guardian' : 'cq-worker', point, width, palette.primary, false, false).setDepth(18);
+    return makeAntAgent(guardian ? 'cq-guardian' : 'cq-worker', point, width, palette.primary, false, true).setDepth(18);
   }
 
   function depositVisibleSeeds(point, count = 5) {

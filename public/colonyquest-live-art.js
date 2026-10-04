@@ -12,6 +12,8 @@
     soil: load('living-underground'),
     chamber: load('living-chamber'),
     queen: load('queen'),
+    worker: load('pip-worker'),
+    guard: load('guardian'),
   };
   const TAU = Math.PI * 2;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -86,6 +88,22 @@
       }
       if (old?.id === state?.id && own && old?.me?.colony) {
         const before = old.me.colony;
+        for (const [key, icon] of [
+          ['food', '🌾'],
+          ['sticks', '🪵'],
+          ['leaves', '🍃'],
+        ]) {
+          const gain = (own[key] || 0) - (before[key] || 0);
+          if (gain > 0)
+            this.effects.push({
+              kind: 'income',
+              key,
+              text: '+' + gain + ' ' + icon,
+              start: this.clock,
+              duration: 1800,
+            });
+        }
+        this.effects = this.effects.slice(-12);
         const u = state.me.lastUpgrade;
         const previous = old.me.lastUpgrade;
         if (
@@ -470,66 +488,60 @@
       c.fillStyle = color;
       c.fillText(text, x, y + 1);
     }
-    ant(x, y, size, angle, seed = 0, role = 'worker', cargo = null, working = true) {
+    ant(x, y, size, angle, seed = 0, role = 'worker', cargo = null, working = true, activity = 'walk') {
       const c = this.ctx,
         t = this.clock / 1000;
+      const image = role === 'guard' ? art.guard : art.worker;
+      const stride = working && !this.reduced ? Math.sin(t * 12 + seed * 1.7) : 0;
+      const facing = Math.cos(angle) < -0.05 ? -1 : 1;
+      const height = size * 0.84;
+      const gathering = ['gathering', 'unloading', 'tending'].includes(activity);
+      const bend = gathering && !this.reduced ? (1 + Math.sin(t * 5 + seed)) * 0.5 : 0;
+      // Keep the illustrated characters upright on vertical tunnels, as on the smartboard.
+      // Small gait, lean and squash convey walking without rotating their faces upside down.
       c.save();
       c.translate(x, y);
-      c.rotate(angle);
-      c.scale(size / 50, size / 50);
-      ellipse(c, 0, 7, 22, 6, '#1c181b33');
-      // Six articulated legs, antennae, blinking eyes and a breathing body. Facing follows the path.
-      c.strokeStyle = '#4b241b';
-      c.lineWidth = 2.6;
+      ellipse(c, 0, height * 0.38, size * 0.34, size * 0.075, '#1a100b50');
+      c.scale(facing, 1);
+      c.translate(0, -Math.abs(stride) * size * 0.035);
+      c.rotate(Math.sin(angle) * facing * 0.13 + stride * 0.028 + bend * 0.16);
+      c.scale(1 + stride * 0.015, 1 - stride * 0.025);
+      // Six feet work in alternating groups behind the illustrated body.
+      c.strokeStyle = role === 'guard' ? '#854124' : '#ac5729';
+      c.lineWidth = Math.max(1.2, size * 0.025);
       c.lineCap = 'round';
-      for (let i = 0; i < 3; i++)
+      for (let leg = 0; leg < 3; leg++) {
         for (const side of [-1, 1]) {
-          const stride = working && !this.reduced ? Math.sin(t * 14 + i * 2.1 + side + seed) * 4 : 0;
-          const bx = -7 + i * 7;
+          const step = working && !this.reduced ? Math.sin(t * 12 + seed * 1.7 + leg * 2.1 + side) : 0;
+          const lx = (leg - 1) * size * 0.17;
           c.beginPath();
-          c.moveTo(bx, side * 4);
-          c.lineTo(bx - 3 + stride, side * 11);
-          c.lineTo(bx - 8 + stride, side * 16);
+          c.moveTo(lx, height * 0.1);
+          c.lineTo(lx + side * size * 0.08, height * 0.27);
+          c.lineTo(lx + side * size * 0.16 + step * size * 0.07, height * (0.43 - Math.max(0, step) * 0.055));
           c.stroke();
         }
-      const body = c.createLinearGradient(-20, -9, -10, 10);
-      body.addColorStop(0, '#f3b04e');
-      body.addColorStop(0.5, role === 'guard' ? '#735642' : '#b44e27');
-      body.addColorStop(1, '#713323');
-      ellipse(c, -13, 0, 12, 9, body, '#6c3521', 1.2);
-      c.strokeStyle = '#ebac624f';
-      c.lineWidth = 1.3;
-      for (let i = 0; i < 2; i++) {
-        c.beginPath();
-        c.moveTo(-17 + i * 6, -7);
-        c.quadraticCurveTo(-21 + i * 6, 0, -17 + i * 6, 7);
-        c.stroke();
       }
-      ellipse(c, 1, 0, 8, 6.6, '#ab4825', '#78371f');
-      ellipse(c, 14, 0, 9, 8, '#dd8033', '#84411f');
-      for (const side of [-1, 1]) {
-        c.strokeStyle = '#603423';
-        c.lineWidth = 1.5;
-        c.beginPath();
-        c.moveTo(18, side * 4);
-        c.quadraticCurveTo(23 + Math.sin(t * 3 + seed), side * 10, 28, side * 8);
-        c.stroke();
-        const blink = !this.reduced && Math.sin(t * 0.7 + seed) > 0.995;
-        ellipse(c, 17, side * 4.5, 3.8, blink ? 0.5 : 3.5, '#fffbe2');
-        if (!blink) ellipse(c, 18, side * 4.5, 1.6, 2.3, '#1d2d29');
+      if (working && !this.reduced) {
+        for (let i = 0; i < 3; i++) {
+          const drift = (t * 2 + seed + i / 3) % 1;
+          ellipse(
+            c,
+            -size * (0.45 + drift * 0.3),
+            height * 0.4,
+            size * 0.03 * (1 - drift),
+            size * 0.012,
+            '#e2c28b50',
+          );
+        }
       }
-      if (role === 'guard') {
-        ellipse(c, 10, 0, 6, 8, '#5f7e88', '#a8cbd0', 1.8);
-        c.fillStyle = '#e5b85f';
-        c.fillRect(8, -8, 3, 16);
+      if (image.complete && image.naturalWidth) {
+        c.drawImage(image, -size * 0.65, -height * 0.7, size * 1.3, height * 1.3);
+        this.canvas.dataset.ants = 'illustrated';
       }
       if (role === 'builder') {
-        c.fillStyle = '#f8cf61';
-        c.beginPath();
-        c.roundRect(8, -10, 13, 7, 3);
-        c.fill();
+        ellipse(c, size * 0.23, -height * 0.36, size * 0.17, size * 0.07, '#f5c653', '#795223');
       }
-      if (cargo) this.cargo(-8, -13, cargo, 10);
+      if (cargo) this.cargo(-size * 0.16, -height * 0.55, cargo, size * 0.25);
       c.restore();
     }
     workerJourney(i, g, colony) {
@@ -667,12 +679,13 @@
         this.ant(
           worker.x,
           worker.y,
-          size * 0.85,
+          size * 1.12,
           worker.angle,
           worker.id,
           'worker',
           worker.carrying ? worker.cargo : null,
-          !['gathering', 'unloading'].includes(worker.job),
+          !['gathering', 'unloading', 'tending'].includes(worker.job),
+          worker.job,
         );
       // Guards patrol the entrance rather than shuffling in one fixed line.
       const guards = Math.min(8, Math.max(0, (colony.soldiers || 0) - (colony.raidAway || 0)));
@@ -776,33 +789,75 @@
               [w * 0.53, surface - 8],
             ]
           : [
-              [w * 0.5, surface - 8],
-              [w + size, surface - 8],
+              [w * 0.35, surface - 8],
+              [w * 0.68, surface - 8],
             ];
-        const movement = this.pathPoint(route, p < 0.55 ? p / 0.55 : 1 - (p - 0.55) / 0.45);
+        const advancing = p < 0.68;
+        const progress = this.reduced
+          ? 0.85
+          : p < 0.15
+            ? 0
+            : p < 0.5
+              ? smooth((p - 0.15) / 0.35)
+              : p < 0.68
+                ? 1
+                : 1 - smooth((p - 0.68) / 0.32);
+        const movement = this.pathPoint(route, progress);
+        this.canvas.dataset.raidPhase =
+          p < 0.15 ? 'rally' : p < 0.5 ? 'approach' : p < 0.68 ? 'clash' : 'return';
+        if (p >= 0.5 && p < 0.68) {
+          const clash = this.reduced ? 0.5 : (p - 0.5) / 0.18;
+          c.save();
+          c.strokeStyle = raid.event.success ? '#ffd774' : '#a8e8d0';
+          c.lineWidth = 3;
+          c.globalAlpha = 1 - clash;
+          c.beginPath();
+          c.arc(route[1][0], route[1][1], size * (0.35 + clash), 0, TAU);
+          c.stroke();
+          for (let n = 0; n < 8; n++) {
+            const theta = (n / 8) * TAU;
+            ellipse(
+              c,
+              route[1][0] + Math.cos(theta) * size * clash,
+              route[1][1] + Math.sin(theta) * size * clash * 0.55,
+              3,
+              2,
+              '#ffe5a0',
+            );
+          }
+          c.restore();
+        }
         for (let i = 0; i < 3; i++)
           this.ant(
-            movement.x - i * size * 0.6,
+            movement.x + (advancing ? (incoming ? 1 : -1) : incoming ? -1 : 1) * i * size * 0.6,
             movement.y,
             size,
-            p < 0.55 ? (incoming ? Math.PI : 0) : incoming ? 0 : Math.PI,
+            advancing ? (incoming ? Math.PI : 0) : incoming ? 0 : Math.PI,
             i,
             'guard',
-            p > 0.55 && raid.event.success ? 'seed' : null,
+            p >= 0.68 && raid.event.success ? 'seed' : null,
+            !(p < 0.15 || (p >= 0.5 && p < 0.68)),
           );
         this.tag(
-          incoming
-            ? raid.event.success
-              ? 'Raiders at the pantry!'
-              : 'Your guards held strong!'
-            : raid.event.success
-              ? 'Your raid brought food home!'
-              : 'Your guards are coming home',
+          p < 0.15
+            ? 'Guards assemble!'
+            : p < 0.5
+              ? 'The raiding party approaches!'
+              : p < 0.68
+                ? 'Clash at the entrance!'
+                : incoming
+                  ? raid.event.success
+                    ? 'Raiders at the pantry!'
+                    : 'Your guards held strong!'
+                  : raid.event.success
+                    ? 'Your raid brought food home!'
+                    : 'Your guards are coming home',
           w / 2,
           surface - size * 1.3,
           h < 350 ? 10 : 13,
         );
       }
+      if (!raid) this.canvas.dataset.raidPhase = '';
       if (this.rooms(colony).length > rooms.length)
         this.tag(`+${this.rooms(colony).length - rooms.length} deeper rooms`, w / 2, h - 74, 11);
       this.canvas.dataset.rooms = String(this.rooms(colony).length);
@@ -902,6 +957,36 @@
           );
       } else this.nest(g, colony);
       if (!this.reduced) this.weather(w, h, this.overview ? h * 0.65 : g.surface);
+      if (!this.overview) {
+        // Soft edge lighting frames the playable nest; earned deliveries rise from its pantry.
+        const shade = c.createRadialGradient(
+          w * 0.5,
+          h * 0.5,
+          w * 0.16,
+          w * 0.5,
+          h * 0.5,
+          Math.max(w, h) * 0.72,
+        );
+        shade.addColorStop(0, '#160e0800');
+        shade.addColorStop(1, '#160e0870');
+        c.fillStyle = shade;
+        c.fillRect(0, 0, w, h);
+        this.effects
+          .filter((e) => e.kind === 'income')
+          .forEach((e, i) => {
+            const age = clamp((this.clock - e.start) / e.duration, 0, 1);
+            c.save();
+            c.globalAlpha = this.reduced ? 1 : 1 - age;
+            this.tag(
+              e.text,
+              g.pantry.x + ((i % 3) - 1) * 34,
+              g.pantry.y - g.pantry.ry - 12 - (this.reduced ? 0 : age * 38),
+              12,
+              '#ffe6a0',
+            );
+            c.restore();
+          });
+      }
       if (this.state?.story) window.ColonyStoryCanvas?.draw(this, g);
       else this.canvas.dataset.story = '';
       this.effects = this.effects.filter((e) => this.clock - e.start < e.duration);

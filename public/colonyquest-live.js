@@ -162,12 +162,55 @@
     $('chapter').textContent = season(s);
     $('rank').textContent = `#${s.players.findIndex((x) => x.id === p.id) + 1} of ${s.players.length}`;
     const c = p.colony;
-    $('resources').innerHTML =
-      `<span>🌾 ${c.food} food</span><span>🪵 ${c.sticks || 0}</span><span>🍃 ${c.leaves || 0}</span><span>🐜 ${c.workers} workers</span><span>🛡 ${c.soldiers} guards</span>`;
-    $('rivals').innerHTML = s.players
-      .filter((x) => x.id !== p.id)
-      .slice(0, 4)
-      .map((x) => `<span>${esc(x.name)} · ${x.strength} pts</span>`)
+    const resources = [
+      ['🌾', c.food, 'Food'],
+      ['🪵', c.sticks || 0, 'Sticks'],
+      ['🍃', c.leaves || 0, 'Leaves'],
+      ['🐜', c.workers, 'Workers'],
+      ['🛡', c.soldiers, 'Guards'],
+    ]
+      .map(
+        ([icon, value, label]) =>
+          `<span><i aria-hidden="true">${icon}</i><b>${value}</b> <small>${label.toLowerCase()}</small></span>`,
+      )
+      .join('');
+    if ($('resources').innerHTML !== resources) $('resources').innerHTML = resources;
+    const world = s.world || {};
+    const goal = !world.dryOccurred
+      ? { title: 'Store food for drought', value: c.food, target: 12, unit: 'food', icon: '🌾' }
+      : !world.rainOccurred
+        ? { title: 'Prepare for rain', value: c.defense, target: 1, unit: 'wall upgrades', icon: '🌧' }
+        : !['done'].includes(world.birdStage)
+          ? {
+              title: 'Protect food from birds',
+              value: c.defense,
+              target: 2,
+              unit: 'wall upgrades',
+              icon: '🦅',
+            }
+          : {
+              title: 'Survive the footsteps',
+              value: c.defense,
+              target: 3,
+              unit: 'wall upgrades',
+              icon: '🥾',
+            };
+    const ready = goal.value >= goal.target;
+    const wallName = ColonyQuestCore.fortification(c).name;
+    const survival = `<div class="nest-level"><img src="/assets/colonyquest/guardian.webp" alt=""><span>${esc(wallName)} nest<small>${ColonyQuestCore.colonyRooms(c).length} ${ColonyQuestCore.colonyRooms(c).length === 1 ? 'room' : 'rooms'} · Level ${c.defense + 1} walls</small></span></div>
+      <div class="survival-goal ${ready ? 'ready' : ''}"><b>${world.stompOccurred ? '✦ Adventure complete' : goal.icon + ' ' + goal.title}</b>
+      <div class="survival-meter" role="progressbar" aria-label="${esc(goal.title)}" aria-valuenow="${Math.min(goal.value, goal.target)}" aria-valuemin="0" aria-valuemax="${goal.target}"><i style="width:${Math.min(100, (goal.value / goal.target) * 100)}%"></i></div>
+      <small>${world.stompOccurred ? 'Your colony braved the meadow' : `${Math.min(goal.value, goal.target)} / ${goal.target} ${goal.unit}${ready ? ' · Ready ✓' : ''}`}</small></div>`;
+    if ($('survival').innerHTML !== survival) $('survival').innerHTML = survival;
+    const ownStanding = s.players.find((x) => x.id === p.id);
+    const leaders = s.players.slice(0, 4);
+    if (ownStanding && !leaders.some((x) => x.id === p.id)) leaders[3] = ownStanding;
+    const best = Math.max(1, ...s.players.map((x) => x.strength));
+    $('rivals').innerHTML = leaders
+      .map(
+        (x) =>
+          `<span class="${x.id === p.id ? 'own-colony' : ''}"><b>${s.players.findIndex((player) => player.id === x.id) + 1}. ${esc(x.id === p.id ? 'Your colony' : x.name)}</b><strong>${x.strength}</strong> pts<i style="width:${Math.max(2, (x.strength / best) * 100)}%"></i></span>`,
+      )
       .join('');
     const recent = s.events.at(-1);
     const activeCue = actionCue && scene.clock < actionCue.until;
@@ -283,7 +326,7 @@
       $('choices').innerHTML = p.upgrades
         .map(
           (u, i) =>
-            `<button data-upgrade="${i}" ${!u.allowed || pending || disconnected ? 'disabled' : ''}><span class="symbol">${symbols[u.key]}</span>${esc(u.label)}<small>${esc(!u.allowed ? (u.cost?.sticks ? `Need ${u.cost.sticks} sticks + ${u.cost.leaves} leaves` : u.reason) : u.key === 'raid' ? u.reason : u.cost?.sticks ? `${u.cost.sticks} sticks + ${u.cost.leaves} leaves` : u.key === 'workers' ? 'Collects food and materials automatically' : u.key === 'supplies' ? '+3 sticks · +2 leaves' : u.key === 'food' ? '+5 food' : u.key === 'queen' ? 'Hatches after two rounds' : 'Protects your colony')}</small></button>`,
+            `<button data-upgrade="${i}" ${!u.allowed || pending || disconnected ? 'disabled' : ''}><span class="symbol" aria-hidden="true"><img src="/assets/colonyquest/${u.key === 'queen' ? 'queen' : ['defense', 'soldiers', 'raid'].includes(u.key) ? 'guardian' : 'pip-worker'}.webp" alt=""><i>${symbols[u.key]}</i></span>${esc(u.label)}<small>${esc(!u.allowed ? (u.cost?.sticks ? `Need ${u.cost.sticks} sticks + ${u.cost.leaves} leaves` : u.reason) : u.key === 'raid' ? u.reason : u.cost?.sticks ? `${u.cost.sticks} sticks + ${u.cost.leaves} leaves` : u.key === 'workers' ? 'Collects food and materials automatically' : u.key === 'supplies' ? '+3 sticks · +2 leaves' : u.key === 'food' ? '+5 food' : u.key === 'queen' ? 'Hatches after two rounds' : 'Protects your colony')}</small></button>`,
         )
         .join('');
       $('choices')

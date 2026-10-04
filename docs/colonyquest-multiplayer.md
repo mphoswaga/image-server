@@ -135,3 +135,24 @@ use the story sequence.
 `tests/colonyquest-story.test.js` checks scheduling, outcomes, answer privacy,
 pause/restart and legacy saves. `tests/e2e/colonyquest-story.spec.js` checks every
 animated scene on desktop, mobile and Safari, including paused animation clocks.
+
+## Multiplayer presentation
+
+Workers and guards use the original smartboard character artwork. Local walking
+poses keep characters upright through tunnels, with carried materials and larger
+figures. Resource gain labels reflect confirmed state changes only and do not
+repeat when the same snapshot arrives again. Existing soil and chamber art remain.
+
+The learner HUD shows actual food, building materials, workers and guards, plus
+nest fortification and the next survival preparation target (12 food, then wall
+upgrades for rain, birds and footsteps). These are existing rules, not additional
+clicks or mechanics. Illustrated upgrade cards and colony point bars keep the
+answer-and-upgrade interaction intact. Reduced motion and paused/offline clocks
+also apply to character movement and resource feedback.
+
+Both ColonyQuest modes now use coordinated leg, body and cargo motion. Smartboard
+action actors release their gait tweens on destruction; standing ants settle
+rather than continuously walking in place. Multiplayer gathering and unloading
+have distinct poses, while raids show rally, approach, clash and return stages.
+These effects use existing outcomes and do not add clicks, scoring changes or
+network traffic. Reduced-motion mode avoids the walking dust and moving poses.
