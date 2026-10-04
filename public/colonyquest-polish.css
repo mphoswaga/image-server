@@ -121,3 +121,26 @@
 .bird-colonies button{padding:7px;border:1px solid #476e55;background:#fff;border-radius:5px;color:#173e38;cursor:pointer;font-weight:bold}
 .bird-colonies button[aria-pressed=true]{background:#c8eed7}
 @media(max-width:850px){.bird-panel{top:195px;left:12px;right:12px;width:auto;font-size:11px;max-height:120px}.bird-active .question-overlay,.bird-active .choice-overlay{place-items:end center;padding:0 8px 8px}.bird-active .question-dialog,.bird-active .choice-dialog{max-height:calc(100vh - 350px);overflow:auto}}
+/* Small resource counters keep strategic information on the board, not in popups. */
+.colony-resources{display:flex;gap:12px;align-items:center;margin-top:5px;font-size:15px;color:#fff3c5}
+.colony-resources span{display:inline-flex;gap:4px;align-items:center;white-space:nowrap}
+.season-food{display:flex;align-items:center;gap:8px;margin-top:4px;color:#fff0bb;font-size:11px}
+.season-food progress{width:65px;height:7px;accent-color:#a5d779}
+.season-food.shortage{color:#ffe09b}.season-food.shortage progress{accent-color:#efad46}
+.game-screen[data-season="dry"] .score-card{background:rgba(75,44,24,.92);border-color:#ca9b55}
+.game-screen[data-season="dry"] .game-top{background:#493321}
+.game-screen[data-season="dry"] .turn-banner{border-color:#dbad62}
+.choice-dialog .reward[data-reward="raid"]{grid-column:auto}
+@media(max-width:850px){.colony-resources{gap:8px;font-size:12px}.season-food{font-size:10px}.season-food progress{width:40px}.turn-banner{top:204px}.bird-panel{top:242px}}
+@media(prefers-reduced-motion:reduce){.game-screen *{scroll-behavior:auto!important}}
+.score-card.current .colony-resources,.score-card.current .season-food{color:#254d36}
+.game-screen[data-season="dry"] .score-card.current{background:#fff1d3}
+.turn-banner{top:222px}
+@media(max-width:850px){.turn-banner{top:214px}.season-food{flex-wrap:wrap;gap:3px}.season-food progress{width:100%}}
+@media(max-width:850px){
+  .score-card{flex:0 0 176px;min-width:176px;max-width:176px}
+  .score-name{gap:6px;font-size:12px}
+  .score-name>span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .score-name>span:last-child{white-space:nowrap;font-size:16px}
+  .game-screen.dock-open .turn-banner{display:none}
+}

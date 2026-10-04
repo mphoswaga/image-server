@@ -14,7 +14,7 @@ const DIR = path.join(DATA_DIR, 'fishquest');
 const fileFor = matchKey => path.join(DIR, `${String(matchKey).replace(/[^a-zA-Z0-9._-]/g, '_')}.json`);
 const soloKey = (gameId, studentId) => `${gameId}.solo.${crypto.createHash('sha256').update(String(studentId)).digest('hex').slice(0, 16)}`;
 
-function createFishQuestLive({ app, games, roster, requireAuth, requireGameAccess, gameSessionCanAccess = () => true, jwtSecret }) {
+function createFishQuestLive({ app, games, roster, requireAuth, requireGameAccess, gameSessionCanAccess = () => true, jwtSecret, canEditQuestions = () => true }) {
   fs.mkdirSync(DIR, { recursive: true });
   const matches = new Map();
   const clients = new Map();
@@ -157,6 +157,7 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
   });
   app.patch('/api/game/:id/fishquest', requireAuth, (req, res) => {
     let game = owner(req, res); if (!game) return;
+    if (Array.isArray(req.body?.questions) && !canEditQuestions(game.id)) return res.status(409).json({ error: 'End the ColonyQuest multiplayer room before changing its questions.' });
     const match = getMatch(game.id);
     if (match && match.state.phase !== 'ended') return res.status(409).json({ error: 'End the current room before changing its questions.' });
     try { game = games.updateFishQuest(game.id, req.body || {}); res.json(teacherPayload(game, null)); }
@@ -229,6 +230,7 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
     wss = new WebSocketServer({ noServer: true, maxPayload: 4096, perMessageDeflate: false });
     server.on('upgrade', (req, socket, head) => {
       const url = new URL(req.url, 'http://localhost');
+      if (url.pathname === '/ws/colonyquest-live') return;
       if (url.pathname !== '/ws/fishquest') { socket.destroy(); return; }
       try {
         const origin = req.headers.origin && new URL(req.headers.origin);

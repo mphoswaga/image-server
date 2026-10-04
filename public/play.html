@@ -190,6 +190,7 @@
         <button class="game-pick" data-game="runner"><span class="gi">🏃</span><span><b>Answer Runner</b><span>Jump, slide, and collect coins. Answer a question when you hit something.</span></span></button>
         <button class="game-pick" data-game="target"><span class="gi">🎯</span><span><b>Target Shot</b><span>Read the question. Fire when the target reaches your answer.</span></span></button>
         <button class="game-pick" data-game="fishquest"><span class="gi">🐠</span><span><b>FishQuest</b><span>Eat plankton, answer questions, and grow into a big fish.</span></span></button>
+        <button class="game-pick" data-game="colonyquest-live"><span class="gi">🐜</span><span><b>ColonyQuest · Colony rivals</b><span>Your own colony. Live questions, upgrades and raids against your classmates.</span></span></button>
         <button class="game-pick" id="colonyQuestPick" data-game="colonyquest" hidden><span class="gi">🐜</span><span><b>ColonyQuest</b><span>Answer as a team and grow the strongest ant colony.</span></span></button>
         <button class="game-pick" id="moonQuestPick" data-game="moonquest" hidden><span class="gi">🌙</span><span><b>MoonQuest</b><span>Choose or create a diagram mission. Learners select answer areas and discuss their choices.</span></span></button>
       </div>
@@ -388,6 +389,7 @@
       }
       if(!r.ok){ const d=await r.json().catch(()=>({})); $('loading').innerHTML='<p class="center">'+esc(d.error||'Game not found.')+'</p>'; show('loading'); return; }
       game=await r.json();
+      if(new URLSearchParams(location.search).get('activity')==='colonyquest-live'){location.replace('/colonyquest-live-play/'+GAME_ID);return;}
       $('colonyQuestPick').hidden=!game.canManageColonyQuest;
       $('moonQuestPick').hidden=!game.canManageColonyQuest;
       if(game.canManageColonyQuest){
@@ -452,6 +454,7 @@
     async function pickGame(key){
       if(key==='fishquest'){ location.href=game.canManageColonyQuest&&!teacherTest?'/fishquest/'+GAME_ID:'/fishquest-play/'+GAME_ID+(game.canManageColonyQuest&&teacherTest?'?test=1':''); return; }
       if(key==='moonquest'){ if(game.canManageColonyQuest)location.href='/moonquest';return; }
+      if(key==='colonyquest-live'){location.href=(game.canManageColonyQuest&&!teacherTest?'/colonyquest-live/':'/colonyquest-live-play/')+GAME_ID;return;}
       if(key==='colonyquest'){ location.href='/colonyquest/'+GAME_ID+(teacherTest?'?test=1':''); return; }
       show('loading');
       const r=await fetch('/api/game/'+GAME_ID+'/play'); const d=await r.json();

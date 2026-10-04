@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ColonyQuest · Colony rivals</title>
+    <link rel="stylesheet" href="/colonyquest-live.css?v=2" />
+    <link rel="stylesheet" href="/learning-report.css" />
+    <script defer src="/learning-report.js"></script>
+    <script defer src="/colonyquest-live-art.js?v=1"></script>
+    <script defer src="/colonyquest-music.js?v=1"></script>
+    <script defer src="/colonyquest-live.js?v=2"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a href="/" class="brand"
+        >🐜 <span>ColonyQuest<small>COLONY RIVALS · INDIVIDUAL MULTIPLAYER</small></span></a
+      >
+      <div class="top-actions">
+        <span id="connection" role="status">Connecting…</span
+        ><button id="sound" type="button">Sound off</button
+        >
+        <details class="music-settings">
+          <summary>Music</summary>
+          <label for="musicVolume">Music volume</label>
+          <input id="musicVolume" type="range" min="0" max="100" value="60" />
+          <small id="musicTrackLabel"></small>
+        </details>
+        <button id="fullscreen" type="button">Full screen</button>
+      </div>
+    </header>
+    <div id="error" class="error" role="alert" hidden></div>
+    <main id="teacher" hidden>
+      <section class="teacher-heading">
+        <div>
+          <span class="eyebrow">MOONROOT MEADOW</span>
+          <h1 id="lessonTitle">Build your own colony. Brave the seasons.</h1>
+          <p>Everyone answers. Every colony grows. Two choices each round: an answer and an upgrade.</p>
+        </div>
+        <a id="smartboard" class="button secondary">Play the original smartboard game</a>
+      </section>
+      <section id="setup" class="panel">
+        <div>
+          <h2>Open a multiplayer lobby</h2>
+          <p>Choose the class, share the learner link, then start when everyone is ready.</p>
+          <div id="classes"></div>
+        </div>
+        <button id="open" class="primary">Open lobby</button>
+      </section>
+      <section id="hostRoom" hidden>
+        <div class="host-toolbar panel">
+          <div><b id="hostPhase">Lobby</b><span id="hostCount"></span></div>
+          <div class="controls">
+            <button id="copy">Copy learner link</button
+            ><a id="manage" class="button secondary">Manage learners</a
+            ><button id="start" class="primary">Start game</button><button id="pause">Pause</button
+            ><button id="resume">Resume</button><button id="end">End game</button>
+          </div>
+        </div>
+        <input id="joinLink" aria-label="Learner join link" readonly />
+        <div class="host-story">
+          <span id="hostSeason"></span><b id="hostQuestion"></b><span id="hostTimer" class="clock"></span>
+        </div>
+        <div id="hostWorld" class="host-world">
+          <div class="projected-heading">
+            <b id="projectedQuestion"></b><span id="projectedCount"></span
+            ><button type="button" onclick="document.exitFullscreen()">Exit full screen</button>
+          </div>
+          <canvas id="boardCanvas" aria-label="Live colonies in the meadow"></canvas>
+          <div id="leaderboard" class="leaderboard"></div>
+        </div>
+        <details class="panel">
+          <summary>Class attendance</summary>
+          <div id="attendance" class="attendance"></div>
+        </details>
+      </section>
+      <section class="panel report-controls">
+        <label for="history">Saved multiplayer reports</label
+        ><select id="history">
+          <option value="">Choose a session</option></select
+        ><button id="viewReport">Open report</button>
+      </section>
+      <div id="report" hidden></div>
+    </main>
+    <main id="learner" hidden>
+      <div class="play-status">
+        <div>
+          <span class="eyebrow" id="chapter">A NEW COLONY</span><strong id="myName">Your colony</strong>
+        </div>
+        <span id="rank"></span><span id="timer" class="clock" aria-label="Time remaining"></span>
+      </div>
+      <div class="play-layout">
+        <section class="colony-stage">
+          <canvas id="colonyCanvas" aria-label="Your growing ant colony"></canvas>
+          <div id="resources" class="resources"></div>
+          <div id="event" class="event-ribbon" role="status">The meadow is waiting for you.</div>
+          <div id="rivals" class="rivals"></div>
+        </section>
+        <section id="decision" class="decision">
+          <span id="roundLabel" class="eyebrow"></span>
+          <h1 id="question">Joining the meadow…</h1>
+          <p id="instruction" role="status"></p>
+          <div id="choices" class="choices"></div>
+          <p id="explanation"></p>
+        </section>
+      </div>
+      <section id="finished" class="panel" hidden></section>
+    </main>
+  </body>
+</html>

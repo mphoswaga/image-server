@@ -5,7 +5,7 @@
 }(typeof globalThis !== 'undefined' ? globalThis : this, function colonyQuestCoreFactory() {
   'use strict';
 
-  const VERSION = 13;
+  const VERSION = 14;
   const FORTIFICATIONS = Object.freeze([
     { name: 'Earth', wall: 0xb68a57, edge: 0x785437, floor: 0x65513a },
     { name: 'Timber', wall: 0xa7743e, edge: 0xe3b571, floor: 0x65513a },
@@ -40,11 +40,12 @@
   ]);
 
   const REWARDS = Object.freeze({
-    workers: { label: 'Add one worker', description: 'Every trip brings one food home.', icon: 'worker' },
+    workers: { label: 'Add one worker', description: 'Collect food, sticks and leaves on every trip.', icon: 'worker' },
     food: { label: 'Find food', description: 'Bring five seeds home.', icon: 'leaf' },
+    supplies: { label: 'Collect materials', description: '+3 sticks and +2 leaves for building.', icon: 'leaf' },
     defense: { label: 'Make walls stronger', description: 'Level 2 seals out rain. Level 3 protects food from birds. Level 4 survives a human footstep.', icon: 'shield' },
     queen: { label: 'Help the queen', description: 'Add one egg. It hatches in two rounds.', icon: 'crown' },
-    expansion: { label: 'Build one room', description: 'Dig one new room.', icon: 'compass' },
+    expansion: { label: 'Build one room', description: 'Build with 3 sticks and 2 leaves.', icon: 'compass' },
     soldiers: { label: 'Add one guard', description: 'Protects against raids. Each guard eats one food every 30 seconds.', icon: 'sword' },
     raid: { label: 'Challenge a colony', description: 'Try to win food. Surviving guards are away for 45 active seconds.', icon: 'flag' },
   });
@@ -87,6 +88,12 @@
       workers: 1,
       soldiers: 0,
       food: 8,
+      sticks: 0,
+      leaves: 0,
+      forageTrips: [],
+      dryFoodSpent: 0,
+      dryShortfall: 0,
+      dryPrepared: false,
       defense: 0,
       pantryBuilt: false,
       barracksBuilt: false,
@@ -120,6 +127,12 @@
     const base = createTeam(input, index);
     const numeric = ['population', 'workers', 'soldiers', 'food', 'defense', 'territory', 'queenLevel', 'nestLevel', 'correct', 'attempts', 'successfulAttacks', 'successfulDefenses', 'guardsLost', 'guardsDefeated', 'upgrades'];
     for (const key of numeric) base[key] = Math.floor(clamp(input && input[key], 0, key === 'food' ? 9999 : 999));
+    // Missing resource fields start at zero, preserving scores in completed older matches.
+    for (const key of ['sticks', 'leaves']) base[key] = Math.floor(clamp(input?.[key] ?? 0, 0, 9999));
+    base.forageTrips = Array.isArray(input?.forageTrips) ? input.forageTrips.slice(0, 999).map(n => Math.floor(clamp(n, 0, 999999))) : [];
+    base.dryFoodSpent = Math.floor(clamp(input?.dryFoodSpent, 0, 12));
+    base.dryShortfall = Math.floor(clamp(input?.dryShortfall, 0, 12));
+    base.dryPrepared = !!input?.dryPrepared;
     base.forageProgress = Array.isArray(input?.forageProgress) ? input.forageProgress.slice(0,999).map(n=>clamp(n,0,.999999)) : [];
     base.upkeepCarry = clamp(input?.upkeepCarry,0,.999999);
     base.rainLoss = Math.floor(clamp(input?.rainLoss, 0, 9999));
@@ -156,7 +169,7 @@
       knowledge: Math.round(correct * 100 + (attempts ? correct / attempts : 0) * 80),
       population: Math.round(clamp(team && team.population, 0, 999) * 3),
       economy: Math.round(clamp(team && team.workers, 0, 999) * 5),
-      resources: Math.round(clamp(team && team.food, 0, 9999)),
+      resources: Math.round(clamp(team && team.food, 0, 9999) + clamp(team?.sticks, 0, 9999) + clamp(team?.leaves, 0, 9999)),
       territory: Math.round(clamp(team && team.territory, 0, 99) * 28),
       defense: Math.round(clamp(team && team.defense, 0, 99) * 28),
       queen: Math.round(clamp(team && team.queenLevel, 0, 99) * 30),
@@ -180,15 +193,23 @@
     return 1;
   }
 
+  function buildingCost(reward) {
+    return reward === 'expansion' ? { sticks: 3, leaves: 2 } : reward === 'defense' ? { sticks: 2, leaves: 1 } : { sticks: 0, leaves: 0 };
+  }
+
   function rewardAvailability(team, reward) {
     let reason = '';
     if (!team || !REWARDS[reward]) reason = 'Choose a colony upgrade.';
-    else if (['expansion', 'defense', 'food'].includes(reward) && team.workers < 1) reason = 'Add a worker first.';
+    else if (['expansion', 'defense', 'food', 'supplies'].includes(reward) && team.workers < 1) reason = 'Add a worker first.';
     else if (reward === 'raid' && homeGuards(team) < 1) reason = team.raidAway ? 'Your guards are still returning from a raid.' : 'Add a guard ant first.';
     else if (reward === 'soldiers' && !team.barracksBuilt) reason = 'Build two rooms before adding a guard.';
     else if (['soldiers', 'queen'].includes(reward) && team.food < 1) reason = 'Find food first.';
     else if (reward === 'queen' && (team.eggs || []).length >= 3) reason = 'There are three eggs. Wait for one to hatch.';
     else if (reward === 'defense' && team.defense >= FORTIFICATIONS.length - 1) reason = 'The walls are as strong as they can be.';
+    const cost = buildingCost(reward);
+    if (!reason && ((team.sticks || 0) < cost.sticks || (team.leaves || 0) < cost.leaves)) {
+      reason = `Need ${cost.sticks} sticks + ${cost.leaves} leaves. Collect materials or let workers gather.`;
+    }
     return { allowed: !reason, reason };
   }
 
@@ -208,8 +229,14 @@
       team.workers += 1;
       team.population += 1;
     } else if (reward === 'food') {
-      team.food += 5;
+      team.food = Math.min(9999, team.food + 5);
+      refuelColony(team);
+    } else if (reward === 'supplies') {
+      team.sticks = Math.min(9999, (team.sticks || 0) + 3);
+      team.leaves = Math.min(9999, (team.leaves || 0) + 2);
     } else if (reward === 'defense') {
+      team.sticks -= buildingCost('defense').sticks;
+      team.leaves -= buildingCost('defense').leaves;
       team.defense += 1;
     } else if (reward === 'queen') {
       team.queenLevel += 1;
@@ -226,7 +253,9 @@
   }
 
   function expandColony(team) {
-    if (team.workers < 1) return;
+    if (!rewardAvailability(team, 'expansion').allowed) return;
+    team.sticks -= buildingCost('expansion').sticks;
+    team.leaves -= buildingCost('expansion').leaves;
     if (!team.pantryBuilt) team.pantryBuilt = true;
     else if (!team.barracksBuilt) team.barracksBuilt = true;
     else team.expansionRooms = (team.expansionRooms ?? Math.max(0, team.territory - 1)) + 1;
@@ -337,6 +366,49 @@
       text: team.defense >= 1 ? 'The reinforced entrances keep the rain out.' : 'Open entrances let rain in: 15% of stored food is lost.' };
   }
 
+  const DRY_FOOD_TARGET = 12;
+
+  function refuelColony(team) {
+    const restored = Math.min(team.food, team.dryShortfall || 0);
+    team.food -= restored;
+    team.dryShortfall = Math.max(0, (team.dryShortfall || 0) - restored);
+    team.dryFoodSpent = Math.min(DRY_FOOD_TARGET, (team.dryFoodSpent || 0) + restored);
+    return restored;
+  }
+
+  function applyDrySeason(session) {
+    if (session.dryOccurred || session.rainOccurred) return false;
+    session.dryOccurred = true;
+    for (const team of session.teams) {
+      team.dryPrepared = team.food >= DRY_FOOD_TARGET;
+      team.dryShortfall = DRY_FOOD_TARGET;
+      team.dryFoodSpent = 0;
+      refuelColony(team);
+    }
+    return true;
+  }
+
+  function seasonSchedule(config) {
+    if (config.matchType === 'time') return { dry: .3, rain: .65 };
+    const rounds = Math.max(2, config.rounds || 5);
+    const dryRound = Math.max(1, Math.floor(rounds * .35));
+    return { dry: dryRound / rounds, rain: Math.min(rounds, Math.max(dryRound + 1, Math.ceil(rounds * .65))) / rounds };
+  }
+
+  function seasonStage(session) {
+    if (session.rainOccurred) return session.birdStage === 'rain' ? 'rain' : 'renewal';
+    return session.dryOccurred ? 'dry' : 'gather';
+  }
+
+  // Resolve only between complete rounds: every team gets the same preparation turns.
+  function advanceSeason(session, progress, config) {
+    if (!session.seasonRules || !session.teams.length || session.turnIndex % session.teams.length !== 0) return null;
+    const schedule = seasonSchedule(config);
+    if (!session.dryOccurred && progress >= schedule.dry && applyDrySeason(session)) return 'dry';
+    if (session.dryOccurred && progress >= schedule.rain && applyRain(session)) return 'rain';
+    return null;
+  }
+
   function advanceEconomy(session, elapsedMs) {
     if (!session || !['question','reward'].includes(session.phase)) return [];
     const elapsed = clamp(elapsedMs, 0, 1000);
@@ -345,11 +417,17 @@
       team.raidReturnMs = Math.max(0, (team.raidReturnMs || 0) - elapsed);
       if (!team.raidReturnMs) team.raidAway = 0;
       const old = team.forageProgress || [];
-      let gathered = 0;
+      let gathered = 0, sticks = 0, leaves = 0;
+      team.forageTrips ||= [];
       team.forageProgress = Array.from({ length: team.workers }, (_, index) => {
-        const progress = (old[index] || 0) + (elapsed / 12000);
+        const progress = (old[index] || 0) + (elapsed / (team.dryShortfall > 0 ? 18000 : 12000));
         const completed = Math.floor(progress + 1e-9);
         gathered += completed * (['rush', 'warning', 'attack'].includes(session.birdStage) ? 2 : 1);
+        for (let trip = 0; trip < completed; trip += 1) {
+          if (((team.forageTrips[index] || 0) + index + trip) % 2 === 0) sticks += 1;
+          else leaves += 1;
+        }
+        team.forageTrips[index] = (team.forageTrips[index] || 0) + completed;
         return Math.max(0, progress - completed);
       });
       // One food per soldier every 30 active seconds. No starvation deaths.
@@ -357,7 +435,10 @@
       const eaten = Math.min(team.food + gathered, Math.floor(cost + 1e-9));
       team.upkeepCarry = Math.max(0, cost - Math.floor(cost + 1e-9));
       team.food = Math.min(9999, Math.max(0, team.food + gathered - eaten));
-      return { teamId: team.id, gathered, eaten, returned: awayBefore > 0 && !team.raidAway };
+      team.sticks = Math.min(9999, (team.sticks || 0) + sticks);
+      team.leaves = Math.min(9999, (team.leaves || 0) + leaves);
+      const recovered = refuelColony(team);
+      return { teamId: team.id, gathered, sticks, leaves, recovered, eaten, returned: awayBefore > 0 && !team.raidAway };
     });
   }
 
@@ -366,7 +447,10 @@
     session.rainOccurred = true;
     session.birdStage = 'rain';
     session.birdStageMs = 6000;
-    for (const team of session.teams) team.rainLoss = rainOutcome(team).exposedFood;
+    for (const team of session.teams) {
+      team.rainLoss = rainOutcome(team).exposedFood;
+      team.dryShortfall = 0; // Rain ends the food shortage and restores normal collection speed.
+    }
     applyEvent(session.teams, 'heavy-rain');
     return true;
   }
@@ -487,6 +571,8 @@
       currentTeamIndex: Math.floor(clamp(source.currentTeamIndex, 0, Math.max(0, teams.length - 1))),
       introSeen: !!source.introSeen,
       stormSeen: !!source.stormSeen,
+      seasonRules: source.seasonRules === true,
+      dryOccurred: !!source.dryOccurred,
       rainOccurred: !!source.rainOccurred,
       birdsOccurred: !!source.birdsOccurred,
       birdStage: ['rain', 'rush', 'warning', 'attack', 'result', 'done'].includes(source.birdStage) ? source.birdStage : '',
@@ -590,7 +676,7 @@
 
   return {
     advanceEconomy, applyRain, applyHumanStomp, homeGuards, birdCount, resolveBirds, advanceBirdEvent,
-    VERSION,
+    VERSION, DRY_FOOD_TARGET, buildingCost, applyDrySeason, seasonSchedule, seasonStage, advanceSeason,
     FORTIFICATIONS,
     fortification,
     colonyRooms,

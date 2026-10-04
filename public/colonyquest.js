@@ -28,11 +28,7 @@
   let audioContext = null;
   let audioOutput = null;
   let effectsBus = null;
-  let ambientTimer = null;
-  let musicBus = null;
-  let musicStep = 0;
-  let musicNextTime = 0;
-  const musicVoices = new Set();
+  const soundtrack = new ColonyMusic(track => { $('musicTrackLabel').textContent = `${track.title} — ${track.artist}`; });
   let worldStoryAction = null;
   let worldStoryTimer = null;
   let worldEventPresentation = [];
@@ -45,23 +41,25 @@
   let weatherAudioStops = [];
   const ASSETS = {
     world: '/assets/colonyquest/moonroot-meadow.webp',
+    dryWorld: '/assets/colonyquest/moonroot-dry-season.webp',
     worker: '/assets/colonyquest/pip-worker.webp',
     queen: '/assets/colonyquest/queen.webp',
     guardian: '/assets/colonyquest/guardian.webp',
   };
   const STORY = {
-    intro: 'Beneath Moonroot Meadow, a tiny colony is waking. Dark clouds are gathering, food is scarce, and each team begins with only a queen, one worker, and a small room. Every correct answer earns one important choice: send workers for food, grow the colony, train guards, dig rooms, or strengthen the walls. Workers keep bringing food home, but every soldier also eats from the store. Build the walls to Level 2 before the Great Rain or water will enter the nest. After rain, food trips earn double food—but hungry birds approach! Reach Level 3 walls before the birds arrive to protect your pantry. Weaker walls let birds steal 40% of stored food. Guards sent raiding are away for 45 active seconds. Then the ground will shake as a giant human crosses the meadow. Only Level 4 walls can withstand the footsteps; weaker colonies lose 25% of their game points. Learn together, choose carefully, and survive to carry the Ancient Acorn.',
+    intro: 'Beneath Moonroot Meadow, a tiny colony is waking. The dry season is coming, food is scarce, and each team begins with only a queen, one worker, and a small room. Every correct answer earns one important choice: send workers for food, grow the colony, train guards, dig rooms, or strengthen the walls. Workers bring food, sticks and leaves home automatically. Store 12 food before the dry season. If supplies run short, workers slow down until they find enough food or rain returns. New rooms cost 3 sticks and 2 leaves; stronger walls cost 2 sticks and 1 leaf. Every soldier also eats from the store. Build the walls to Level 2 before the Great Rain or water will enter the nest. After rain, food trips earn double food—but hungry birds approach! Reach Level 3 walls before the birds arrive to protect your pantry. Weaker walls let birds steal 40% of stored food. Guards sent raiding are away for 45 active seconds. Then the ground will shake as a giant human crosses the meadow. Only Level 4 walls can withstand the footsteps; weaker colonies lose 25% of their game points. Learn together, choose carefully, and survive to carry the Ancient Acorn.',
     chapters: [
       { at: 0, title: 'First Light', line: 'Help Pip wake a worker and gather the first seeds.' },
-      { at: .25, title: 'Deep Roots', line: 'The wind is rising. Dig safe rooms under the old tree.' },
-      { at: .5, title: 'Storm Watch', line: 'Dark clouds are close. Store food and strengthen the nest.' },
+      { at: .2, title: 'The Dry Season', line: 'The meadow is drying. Stored food keeps the workers moving.' },
+      { at: .5, title: 'Storm Watch', line: 'Use sticks and leaves to prepare the walls for rain.' },
       { at: .7, title: 'Moonroot Rally', line: 'Guard ants may challenge rival colonies for precious food.' },
-      { at: .88, title: 'Final Warning', line: 'Thunder is over the meadow. Finish the rain jobs now.' },
+      { at: .88, title: 'Final Warning', line: 'The ground is trembling. Strengthen the walls before the footsteps.' },
     ],
   };
   const REWARD_STORIES = {
     workers: { title: 'Pip wakes a new worker', text: 'The new worker stretches its legs, follows Pip, and begins bringing one seed home every trip.', site: 'nursery', speaker: 'Pip', speech: 'Wake up! We have seeds to find.' },
     food: { title: 'Pip finds five bright seeds', text: 'A worker carries every seed through the entrance and stores it safely underground.', site: 'food', speaker: 'Pip', speech: 'Carry all five seeds to the pantry!' },
+    supplies: { title: 'Pip gathers building materials', text: 'Workers bring sticks and leaves back to the nest.', site: 'nursery', speaker: 'Pip', speech: 'Materials for our next room!' },
     defense: { title: 'Dot strengthens the walls', text: 'Dot the builder repairs every room with a stronger material. The nest can protect more food from rain.', site: 'nursery', speaker: 'Dot', speech: 'New walls make every room safer.' },
     queen: { title: 'Queen Aurelia lays one egg', text: 'The nurse ants place the egg in the warm queen room. It will hatch in two rounds.', site: 'nursery', speaker: 'Queen Aurelia', speech: 'Keep this little egg warm and safe.' },
     expansion: { title: 'Dot opens a new room', text: 'Workers dig through the soil, carry away the dirt, and connect one new room to the colony.', site: 'expansion', speaker: 'Dot', speech: 'Dig together. The new room is this way!' },
@@ -296,6 +294,7 @@
       // Show the mission briefing once at the start of each new match. Saved
       // matches remember it, so resuming never repeats the opening.
       introSeen: false,
+      seasonRules: true,
       warsActive: false,
       teams,
       answers: [],
@@ -443,14 +442,30 @@
   }
 
   function chapterMission(team) {
+    if (session.seasonRules && !session.dryOccurred && !session.rainOccurred) return { title: 'Prepare for dry season', goals: [{ label: 'Food stored', done: team.food >= core.DRY_FOOD_TARGET, value: `${team.food}/${core.DRY_FOOD_TARGET}` }, { label: 'Sticks for a room', done: team.sticks >= 3, value: `${team.sticks}/3` }, { label: 'Leaves for a room', done: team.leaves >= 2, value: `${team.leaves}/2` }] };
     return { title: 'Protect your colony', goals: core.rainPreparation(team) };
   }
 
-  function stormStatus(progress) {
-    if (progress >= .88) return { stage: 'danger', text: 'Thunder overhead - the Great Rain is almost here' };
-    if (progress >= .68) return { stage: 'near', text: 'Dark clouds are crossing the meadow' };
-    if (progress >= .42) return { stage: 'watch', text: 'The wind is rising' };
-    return { stage: 'calm', text: 'The Great Rain is still far away' };
+  function stormStatus() {
+    return { stage: session.rainOccurred ? 'watch' : session.dryOccurred ? 'dry' : 'calm' };
+  }
+
+  function seasonLabel() {
+    if (!session.seasonRules) return session.rainOccurred ? 'Rain passed · Prepare for footsteps' : 'Prepare for rain';
+    if (session.rainOccurred) return session.birdStage === 'rain' ? 'Rain returns · The meadow wakes' : 'Green meadow · Prepare for footsteps';
+    const next = session.dryOccurred ? 'Rain' : 'Dry season';
+    const threshold = core.seasonSchedule(config)[session.dryOccurred ? 'rain' : 'dry'];
+    if (config.matchType === 'time') return `${next} after ${Math.max(0, Math.ceil((threshold - turnProgress()) * config.durationMinutes))} min · at round end`;
+    const rounds = Math.max(0, Math.round(threshold * config.rounds) - Math.floor(session.turnIndex / session.teams.length));
+    return `${next} in ${rounds} ${rounds === 1 ? 'round' : 'rounds'}`;
+  }
+
+  function resourceStrip(team) {
+    const target = core.DRY_FOOD_TARGET;
+    const preparing = session.seasonRules && !session.dryOccurred && !session.rainOccurred;
+    const shortage = session.dryOccurred && !session.rainOccurred && team.dryShortfall > 0;
+    const progress = preparing ? Math.min(target, team.food) : shortage ? target - team.dryShortfall : target;
+    return `<div class="colony-resources"><span title="Food" aria-label="${team.food} food">🌾 <b>${team.food}</b></span><span title="Sticks" aria-label="${team.sticks} sticks">🪵 <b>${team.sticks}</b></span><span title="Leaves" aria-label="${team.leaves} leaves">🍃 <b>${team.leaves}</b></span></div>${preparing || (session.dryOccurred && !session.rainOccurred) ? `<div class="season-food ${shortage ? 'shortage' : ''}"><span>${preparing ? `☀ Food ${team.food}/${target}` : shortage ? `☀ Need ${team.dryShortfall} food · Slower workers` : '☀ Colony fed'}</span><progress aria-label="Dry season food" value="${progress}" max="${target}"></progress></div>` : ''}`;
   }
 
   function chapterKey(chapter) {
@@ -506,14 +521,15 @@
     const goals = mission.goals;
     const weather = stormStatus(turnProgress());
     $('rainSummary').textContent = `${mission.title}: ${goals.filter(goal => goal.done).length}/${goals.length} ready`;
-    $('rainTeam').textContent = `${team.name} · Workers bring 1 food per trip (12 seconds); each guard eats 1 every 30 seconds.`;
+    $('rainTeam').textContent = `${team.name} · Each trip: 1 food + a stick or leaf. Walls: 2 sticks + 1 leaf. Room: 3 sticks + 2 leaves.`;
     $('rainGoals').innerHTML = goals.map(goal => `<li class="${goal.done ? 'ready' : ''}"><input type="checkbox" disabled${goal.done ? ' checked' : ''} aria-label="${esc(goal.label)}"><span>${esc(goal.label)}</span><b>${esc(goal.value)}</b></li>`).join('');
     $('rainApproach').value = turnProgress();
-    $('stormLabel').textContent = session.rainOccurred ? 'Rain passed · Level 4 walls before the final footstep' : `Rain in ${config.matchType === 'time' ? Math.max(0, Math.ceil((.5 - turnProgress()) * config.durationMinutes * 60)) + ' seconds' : Math.max(1, Math.ceil(totalTurns() / 2) - session.turnIndex) + ' question turns'} · Level 2 walls keep food dry`;
+    $('stormLabel').textContent = seasonLabel();
+    $('gameScreen').dataset.season = core.seasonStage(session);
     $('gameScreen').dataset.stormStage = weather.stage;
     $('scoreStrip').innerHTML = session.teams.map((item, index) => {
       const palette = core.TEAM_COLORS[item.colorIndex];
-      return `<div class="score-card${index === session.currentTeamIndex && session.phase !== 'ended' ? ' current' : ''}" style="--team-color:${colorHex(palette.primary)}"><div class="score-name"><span>${esc(item.name)}</span><span>${core.colonyStrength(item)} pts</span></div><div class="score-stats"><span>1 queen</span><span>${item.workers} workers</span><span>${item.soldiers} guards</span><span>${item.food} food</span><span>Walls level ${item.defense + 1}</span></div></div>`;
+      return `<div class="score-card${index === session.currentTeamIndex && session.phase !== 'ended' ? ' current' : ''}" style="--team-color:${colorHex(palette.primary)}"><div class="score-name"><span>${esc(item.name)}</span><span>${core.colonyStrength(item)} pts</span></div><div class="score-stats"><span>1 queen</span><span>${item.workers} workers</span><span>${item.soldiers} guards</span><span>Walls level ${item.defense + 1}</span></div>${resourceStrip(item)}</div>`;
     }).join('');
     const options = session.teams.map(item => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join('');
     session.teams.forEach((item, index) => {
@@ -531,7 +547,7 @@
     const round = Math.floor(session.turnIndex / Math.max(1, session.teams.length)) + 1;
     $('roundLabel').textContent = config.matchType === 'rounds' ? `Round ${Math.min(round, config.rounds)} of ${config.rounds}` : timeLabel();
     const chapter = storyChapter();
-    $('phaseLabel').textContent = session.phase === 'ended' ? 'Journey complete' : session.rainOccurred ? 'Final footstep · Level 4 walls' : `${$('stormLabel').textContent.split(' · ')[0]} · Level 2 walls`;
+    $('phaseLabel').textContent = session.phase === 'ended' ? 'Journey complete' : seasonLabel();
     if (session.phase !== 'ended' && ['rush', 'warning', 'attack'].includes(session.birdStage)) $('phaseLabel').textContent = session.birdStage === 'rush' ? 'Food rush · Prepare for birds' : 'Birds · Level 3 walls protect food';
     $('pauseBtn').textContent = session.phase === 'paused' ? 'Resume' : 'Pause';
     $('pauseBtn').disabled = session.phase === 'ended';
@@ -651,7 +667,8 @@
 
   function rewardChange(key, before, after) {
     if (key === 'workers') return { amount: after.workers - before.workers, secondary: after.food - before.food };
-    if (key === 'food') return { amount: after.food - before.food, secondary: 0 };
+    if (key === 'supplies') return { amount: after.sticks - before.sticks, secondary: after.leaves - before.leaves };
+    if (key === 'food') return { amount: 5, secondary: Math.max(0, (before.dryShortfall || 0) - (after.dryShortfall || 0)) };
     if (key === 'defense') return { amount: after.defense - before.defense, secondary: after.nestLevel - before.nestLevel };
     if (key === 'queen') return { amount: after.population - before.population, secondary: after.workers - before.workers };
     if (key === 'expansion') return { amount: after.food - before.food, secondary: after.nestLevel - before.nestLevel };
@@ -663,8 +680,9 @@
     const amount = Math.max(0, Number(change && change.amount) || 0);
     const secondary = Math.max(0, Number(change && change.secondary) || 0);
     if (key === 'workers') return `+${amount} ${amount === 1 ? 'worker' : 'workers'} - ${team.workers} workers now`;
-    if (key === 'food') return `+${amount} food - ${team.food} seeds stored`;
-    if (key === 'defense') return `${core.fortification(team).name} walls around the colony - wall level ${team.defense}`;
+    if (key === 'supplies') return `+${amount} sticks · +${secondary} leaves`;
+    if (key === 'food') return `+${amount} food${secondary ? ` · ${secondary} feeds hungry workers` : ` · ${team.food} stored`}`;
+    if (key === 'defense') return `${core.fortification(team).name} walls around the colony - wall level ${team.defense + 1}`;
     if (key === 'queen') return `+${Math.max(0, amount - secondary)} ${amount - secondary === 1 ? 'egg' : 'eggs'} - queen level ${team.queenLevel}`;
     if (key === 'expansion') return `+1 permanent room: ${core.colonyRooms(team).at(-1).label} - ${core.colonyRooms(team).length} rooms`;
     if (key === 'soldiers') return `+${amount} ${amount === 1 ? 'soldier' : 'soldiers'} - ${team.soldiers} ${team.soldiers === 1 ? 'soldier' : 'soldiers'} now`;
@@ -710,11 +728,20 @@
     $('rewardGrid').innerHTML = rewardChoices().map(key => {
       const reward = core.REWARDS[key];
       const art = key === 'queen' ? ASSETS.queen : ['defense', 'soldiers', 'raid'].includes(key) ? ASSETS.guardian : ASSETS.worker;
+      const cost = core.buildingCost(key);
       const unavailable = !core.rewardAvailability(team, key).allowed;
-      return `<button type="button" class="reward" data-reward="${key}"${unavailable ? ' disabled' : ''}><span class="reward-symbol"><img src="${art}" alt=""></span><strong>${esc(reward.label)}</strong><span>${esc(reward.description)}</span><span class="reward-effect">${esc(previewReward(key))}</span></button>`;
+      return `<button type="button" class="reward" data-reward="${key}"${unavailable ? ' disabled' : ''}><span class="reward-symbol"><img src="${art}" alt=""></span><strong>${esc(reward.label)}</strong><span>${cost.sticks ? `🪵 ${cost.sticks} + 🍃 ${cost.leaves}` : esc(reward.description)}</span><span class="reward-effect">${esc(previewReward(key))}</span></button>`;
     }).join('');
     setOverlay('rewardOverlay');
     updateWorld();
+  }
+
+  function refreshRewardAvailability() {
+    if (session.phase !== 'reward') return;
+    $('rewardGrid').querySelectorAll('[data-reward]').forEach(button => {
+      button.disabled = !core.rewardAvailability(currentTeam(), button.dataset.reward).allowed;
+      button.querySelector('.reward-effect').textContent = previewReward(button.dataset.reward);
+    });
   }
 
   async function chooseReward(key) {
@@ -993,11 +1020,15 @@
       core.applyUpkeep(session.teams);
       reports = reports.map(report => ({ teamId: report.teamId, gathered: report.gathered, eaten: report.eaten, hatched: session.teams.find(team => team.id === report.teamId).workers - report.workersBefore }));
     }
+    session.currentTeamIndex = session.turnIndex % session.teams.length;
+    const season = core.advanceSeason(session, turnProgress(), config);
+    if (season) session.events.push({ key: `${season}-season`, at: new Date().toISOString() });
     if (matchFinished()) {
-      await finishMatch();
+      await finishMatch(season === 'rain');
       return;
     }
-    session.currentTeamIndex = session.turnIndex % session.teams.length;
+    // Persist the next team's question with its season outcome as one resumable state.
+    session.phase = 'question';
     if (reports) {
       const event = { key: 'round-supplies', chapterBefore: previousChapter, reports, reportIndex: 0, at: new Date().toISOString() };
       session.events.push(event);
@@ -1008,7 +1039,8 @@
       reports.filter(report => report.hatched).forEach(report => celebrate(report.teamId, 'workers', '+1 worker'));
     }
     await beginTurn(previousChapter);
-    if (!session.rainOccurred && session.teams.every(team => team.attempts >= 1) && turnProgress() >= .5) {
+    if (season === 'rain') playWorldEvent('heavy-rain');
+    if (!session.seasonRules && !session.rainOccurred && session.teams.every(team => team.attempts >= 1) && turnProgress() >= .5) {
       core.applyRain(session); updateHUD(); playWorldEvent('heavy-rain'); await saveState();
     }
   }
@@ -1147,7 +1179,7 @@
     if (event.key === 'chapter-final-warning') playWorldEvent('heavy-rain');
   }
 
-  async function finishMatch() {
+  async function finishMatch(rainLeadIn = false) {
     $('teacherTray').classList.remove('open');
     if (!session || session.phase === 'ended') {
       if (session) session.stormSeen ? showFinal() : showRainFinale();
@@ -1163,6 +1195,10 @@
     await saveState();
     playTone('victory');
     updateWorld();
+    if (rainLeadIn && scene) {
+      playWorldEvent('heavy-rain');
+      await new Promise(resolve => setTimeout(resolve, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 200 : 2400));
+    }
     if (stomp && scene) playHumanFootsteps();
     else showFinal();
   }
@@ -1320,7 +1356,7 @@
       const accuracy = entry.team.attempts ? Math.round(entry.team.correct / entry.team.attempts * 100) : 0;
       const tiedFirst = isTie && tiedWinners.some(item => item.team.id === entry.team.id);
       const place = tiedFirst ? 'Winner' : index === 0 ? 'Winner' : `Place ${index + 1}`;
-      return `<div class="podium-place${index === 0 || tiedFirst ? ' first' : ''}" style="--team-color:${colorHex(core.TEAM_COLORS[entry.team.colorIndex].primary)}"><b>${place}: ${esc(entry.team.name)}</b><span>${entry.score} colony strength</span><span>${entry.team.correct}/${entry.team.attempts} answers right (${accuracy}%)</span><small>Answer points ${entry.breakdown.knowledge} · Colony points ${growth} · Food and land ${entry.breakdown.resources + entry.breakdown.territory} · Safety points ${protection} · Collapse penalty ${entry.team.collapsePenalty || 0}</small><small>Challenge record: ${entry.team.successfulAttacks} won · ${entry.team.successfulDefenses} defended · ${entry.team.guardsDefeated || 0} rival guards sent to rest · ${entry.team.guardsLost || 0} guards changed to worker duty</small></div>`;
+      return `<div class="podium-place${index === 0 || tiedFirst ? ' first' : ''}" style="--team-color:${colorHex(core.TEAM_COLORS[entry.team.colorIndex].primary)}"><b>${place}: ${esc(entry.team.name)}</b><span>${entry.score} colony strength</span><span>${entry.team.correct}/${entry.team.attempts} answers right (${accuracy}%)</span><small>Answer points ${entry.breakdown.knowledge} · Colony points ${growth} · Supplies and land ${entry.breakdown.resources + entry.breakdown.territory} · Safety points ${protection} · Collapse penalty ${entry.team.collapsePenalty || 0}</small><small>Challenge record: ${entry.team.successfulAttacks} won · ${entry.team.successfulDefenses} defended · ${entry.team.guardsDefeated || 0} rival guards sent to rest · ${entry.team.guardsLost || 0} guards changed to worker duty</small></div>`;
     }).join('');
     const knowledge = [...session.teams].sort((a, b) => (b.attempts ? b.correct / b.attempts : 0) - (a.attempts ? a.correct / a.attempts : 0) || b.correct - a.correct)[0];
     const improved = session.teams.filter(team => core.learningImprovement(session, team.id) > 0).sort((a, b) => core.learningImprovement(session, b.id) - core.learningImprovement(session, a.id))[0];
@@ -1338,7 +1374,7 @@
       const outcome = core.rainOutcome(team);
       const improvement = core.learningImprovement(session, team.id);
       const missing = core.rainPreparation(team).filter(goal => !goal.done).map(goal => goal.label.toLowerCase());
-      return `<article class="colony-ending"><h3>${esc(team.name)}: Walls level ${team.defense + 1}</h3><p>${session.rainOccurred ? team.defense >= 1 ? 'Reinforced entrances kept the rain out.' : `Rain entered: ${team.rainLoss || 0} food lost.` : 'The game ended before the rain.'}</p><p>${team.workers} workers · ${team.soldiers} guards · ${core.colonyRooms(team).length} rooms · ${team.correct}/${team.attempts} answers right.</p><p>${team.successfulAttacks || team.successfulDefenses ? `Challenge story: ${team.successfulAttacks} won, ${team.successfulDefenses} defended, and ${team.guardsLost || 0} guards changed to worker duty.` : 'This colony did not enter a challenge.'}</p><p>${improvement === null ? 'Answer more questions next time to show what you know.' : improvement > 0 ? 'Your team got more answers right near the end.' : 'Next time, read each answer and talk before you choose.'}</p><strong>${missing.length ? `Build next: ${esc(missing[0])}.` : 'Your walls are ready.'}</strong></article>`;
+      return `<article class="colony-ending"><h3>${esc(team.name)}: Walls level ${team.defense + 1}</h3><p>${session.rainOccurred ? team.defense >= 1 ? 'Reinforced entrances kept the rain out.' : `Rain entered: ${team.rainLoss || 0} food lost.` : 'The game ended before the rain.'}</p><p>${session.dryOccurred ? `Dry season: ${team.dryPrepared ? '12 food ready when the heat arrived.' : 'Supplies ran short; workers slowed until fed or rain returned.'} ` : ''}${team.sticks} sticks · ${team.leaves} leaves stored.</p><p>${team.workers} workers · ${team.soldiers} guards · ${core.colonyRooms(team).length} rooms · ${team.correct}/${team.attempts} answers right.</p><p>${team.successfulAttacks || team.successfulDefenses ? `Challenge story: ${team.successfulAttacks} won, ${team.successfulDefenses} defended, and ${team.guardsLost || 0} guards changed to worker duty.` : 'This colony did not enter a challenge.'}</p><p>${improvement === null ? 'Answer more questions next time to show what you know.' : improvement > 0 ? 'Your team got more answers right near the end.' : 'Next time, read each answer and talk before you choose.'}</p><strong>${missing.length ? `Build next: ${esc(missing[0])}.` : 'Your walls are ready.'}</strong></article>`;
     }).join('');
     setOverlay('finalOverlay');
   }
@@ -1424,7 +1460,7 @@
     await rendererShutdown;
     $('setup').classList.add('hidden');
     $('gameScreen').classList.remove('hidden');
-    $('rainPlan').open = window.innerWidth > 850;
+    $('rainPlan').open = false;
     $('gameLessonTitle').textContent = data.game.lessonTitle;
     soundOn = config.sound !== false;
     initAudio();
@@ -1502,6 +1538,7 @@
       scene: {
         preload() {
           this.load.image('cq-world', ASSETS.world);
+          this.load.image('cq-world-dry', ASSETS.dryWorld);
           this.load.image('cq-worker', ASSETS.worker);
           this.load.image('cq-queen', ASSETS.queen);
           this.load.image('cq-guardian', ASSETS.guardian);
@@ -1530,7 +1567,7 @@
           }
           if (time - (this.lastBirdHUD || 0) > 500) { this.lastBirdHUD = time; updateBirdPanel(); }
           if (reports.some(r => r.gathered || r.eaten)) {
-            updateHUD(); saveLocal();
+            updateHUD(); refreshRewardAvailability(); saveLocal();
             this.children.list.forEach(child => {
               const id = child.getData?.('foodTeamId');
               if (id) child.setText(`Pantry · ${session.teams.find(t => t.id === id)?.food || 0} food`);
@@ -1582,7 +1619,12 @@
     };
     const badge = scene.add.circle(-width * .17, -width * .11, Math.max(2, width * .045), teamColor, .95);
     const cargo = scene.add.ellipse(-width * .04, -width * .24, width * .24, width * .11, 0x7cbd4d, 1).setAngle(-16).setVisible(false);
-    container.add([shadow, legs, sprite, badge, cargo]);
+    const twig = scene.add.rectangle(width * .03, -width * .3, width * .36, Math.max(2, width * .045), 0xbf8245).setAngle(-25).setVisible(false);
+    const leaf = scene.add.ellipse(width * .03, -width * .32, width * .29, width * .15, 0x91c95a).setAngle(-30).setVisible(false);
+    cargo.setFillStyle(0xf3c764);
+    container.add([shadow, legs, sprite, badge, cargo, twig, leaf]);
+    container.twig = twig;
+    container.leaf = leaf;
     container.sprite = sprite;
     container.gait = gait;
     container.cargo = cargo;
@@ -1682,6 +1724,10 @@
         agent.sprite?.setFlipX(point.x < agent.x);
         agent.setPosition(point.x, point.y);
         agent.cargo?.setVisible(progress >= .5);
+        const worker = agent.getData('workerIndex');
+        const carryingStick = ((team?.forageTrips?.[worker] || 0) + worker) % 2 === 0;
+        agent.twig?.setVisible(progress >= .5 && carryingStick);
+        agent.leaf?.setVisible(progress >= .5 && !carryingStick);
       }
     }
   }
@@ -2050,13 +2096,23 @@
     const colonyHeight = COLONY_LAYOUT.baseHeight + Math.ceil((largestRoomCount - 1) / 2) * COLONY_LAYOUT.roomStep;
     const worldHeight = Math.max(height, 133 + colonyHeight + 170);
     $('worldScrollSpace').style.height = `${worldHeight}px`;
+    const dry = core.seasonStage(session) === 'dry';
+    const targetBlend = dry ? 1 : 0;
+    const previousBlend = scene.seasonBlend ?? targetBlend;
+    scene.seasonBlend = previousBlend;
     fitWorldImage('cq-world', worldWidth, height);
+    const dryLayer = scene.textures.exists('cq-world-dry') ? fitWorldImage('cq-world-dry', worldWidth, height).setDepth(-29).setAlpha(previousBlend) : null;
+    if (dryLayer) {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { dryLayer.setAlpha(targetBlend); scene.seasonBlend = targetBlend; }
+      else scene.tweens.add({ targets: dryLayer, alpha: targetBlend, duration: 1800, onUpdate: () => { scene.seasonBlend = dryLayer.alpha; } });
+    }
+    $('worldViewport').dataset.season = core.seasonStage(session);
     // Tile only the soil portion beneath the first screen to keep the surface above ground.
     const texture = scene.textures.get('cq-world').getSourceImage();
     const soilScale = worldWidth / texture.width;
     const soilHeight = texture.height * .6 * soilScale;
     for (let y = height; y < worldHeight; y += soilHeight - 1) {
-      const soil = scene.add.image(worldWidth / 2, y, 'cq-world').setOrigin(.5, 0).setDepth(-30);
+      const soil = scene.add.image(worldWidth / 2, y, dry && scene.textures.exists('cq-world-dry') ? 'cq-world-dry' : 'cq-world').setOrigin(.5, 0).setDepth(-30);
       soil.setCrop(0, texture.height * .4, texture.width, texture.height * .6);
       soil.setScale(soilScale);
       soil.y -= texture.height * .4 * soilScale;
@@ -2072,6 +2128,7 @@
         h: colonyHeight,
       }, index, previous.get(session.teams[index].id));
     }
+    addSeasonAtmosphere();
     addStormAtmosphere();
     drawBirdWave();
     $('worldViewport').dataset.layout = 'shared-surface';
@@ -2305,18 +2362,20 @@
       return 1500;
     }
 
-    if (kind === 'food') {
+    if (kind === 'food' || kind === 'supplies') {
       playAntSound('forage');
       const surface = { x: entrance.x + Math.min(60, view.zone.w * .27), y: entrance.y - 24 };
       const carrier = actionWorker(view, palette, surface);
-      carrier.cargo.setVisible(true);
-      for (let index = 0; index < 5; index += 1) {
+      carrier.cargo.setVisible(kind === 'food');
+      carrier.twig?.setVisible(kind === 'supplies');
+      carrier.leaf?.setVisible(kind === 'supplies');
+      for (let index = 0; index < (kind === 'food' ? 5 : 0); index += 1) {
         const seed = scene.add.ellipse(-11 + index * 5, -10 - index % 2 * 5, 7, 5, [0xf1cc66, 0x8bbc5e, 0xdb7857][index % 3], 1);
         carrier.add(seed);
       }
       moveActionActor(carrier, [surface, entrance, { x: entrance.x, y: (entrance.y + site.y) / 2 }, site], 2200, actor => {
         actor.cargo.setVisible(false);
-        depositVisibleSeeds(site, 5);
+        if (kind === 'food') depositVisibleSeeds(site, 5);
         scene.tweens.add({ targets: actor, alpha: 0, duration: 260, onComplete: () => actor.destroy(true) });
       });
       return 3200;
@@ -2500,10 +2559,26 @@
     scene.tweens.add({ targets: warning, alpha: .58, duration: 410, yoyo: true, repeat: -1 });
   }
 
+  function addSeasonAtmosphere() {
+    if (!scene || !session.dryOccurred || session.rainOccurred) return;
+    const width = scene.scale.width;
+    const sun = scene.add.circle(width * .66, 45, 27, 0xffec9a, .75).setDepth(-2);
+    scene.add.circle(width * .66, 45, 43, 0xffd071, .15).setDepth(-2);
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!reduced) {
+      scene.tweens.add({ targets: sun, alpha: .45, scale: 1.15, duration: 2400, yoyo: true, repeat: -1 });
+      for (let i = 0; i < 9; i++) {
+        const leaf = scene.add.ellipse(i * width / 9, 44 + i % 3 * 26, 10, 4, 0xcd944c, .65).setDepth(2).setAngle(i * 31);
+        scene.tweens.add({ targets: leaf, x: leaf.x + 90, y: leaf.y + 24, angle: leaf.angle + 110, alpha: 0, duration: 3600 + i * 170, repeat: -1 });
+      }
+    }
+  }
+
   function addStormAtmosphere() {
     if (!scene || !session || session.phase === 'ended') return;
     const progress = turnProgress();
-    if (progress < .42) return;
+    if (session.seasonRules && (!session.rainOccurred || session.birdStage !== 'rain')) return;
+    if (!session.seasonRules && progress < .42) return;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const width = scene.scale.width;
     const height = scene.scale.height;
@@ -2513,7 +2588,7 @@
     cloud.fillStyle(0x263b4e, .22 + progress * .35);
     cloud.fillRect(0, 0, width, Math.min(190, height * .3));
     weatherEffects.push(cloud);
-    if (progress >= .68) {
+    if (session.birdStage === 'rain' || progress >= .68) {
       addRainField(reducedMotion ? 14 : 32, .62);
     }
     if (progress >= .88 && !reducedMotion) {
@@ -2892,48 +2967,12 @@
   }
 
   function startAmbient() {
-    if (!soundOn || !audioContext || !audioOutput || ambientTimer || document.hidden || !session || ['paused', 'ended'].includes(session.phase)) return;
-    if (!musicBus) { musicBus = audioContext.createGain(); musicBus.connect(audioOutput); }
-    musicBus.gain.setValueAtTime(Number($('musicVolume').value) / 100, audioContext.currentTime);
-    // Original 104 BPM meadow theme: soft plucks, warm chords and a light bass pulse.
-    // Schedule against the audio clock, rather than relying on timer precision.
-    const beat = 60 / 104;
-    const chords = [[60,64,67], [55,59,62], [57,60,64], [53,57,60]];
-    const melody = [72,0,76,79,76,0,74,72, 71,0,74,79,74,0,71,67, 69,0,72,76,79,76,72,0, 69,72,77,76,74,0,72,0];
-    const note = (midi, time, duration, volume, type = 'sine') => {
-      const oscillator = audioContext.createOscillator();
-      const envelope = audioContext.createGain();
-      oscillator.type = type;
-      oscillator.frequency.value = 440 * 2 ** ((midi - 69) / 12);
-      envelope.gain.setValueAtTime(.0001, time);
-      envelope.gain.exponentialRampToValueAtTime(volume, time + .025);
-      envelope.gain.exponentialRampToValueAtTime(.0001, time + duration);
-      oscillator.connect(envelope); envelope.connect(musicBus);
-      musicVoices.add(oscillator);
-      oscillator.onended = () => { musicVoices.delete(oscillator); oscillator.disconnect(); envelope.disconnect(); };
-      oscillator.start(time); oscillator.stop(time + duration + .03);
-    };
-    musicNextTime = audioContext.currentTime + .05;
-    const schedule = () => {
-      if (musicNextTime < audioContext.currentTime) musicNextTime = audioContext.currentTime + .05;
-      while (musicNextTime < audioContext.currentTime + .15) {
-        const step = musicStep % 32;
-        const chord = chords[Math.floor(step / 8)];
-        const duck = session.birdStage === 'attack' || session.birdStage === 'rain' || session.phase === 'event' ? .5 : 1;
-        if (melody[step]) note(melody[step], musicNextTime, beat * .7, .033 * duck, 'triangle');
-        if (step % 8 === 0) chord.forEach(midi => note(midi, musicNextTime, beat * 3.6, .012 * duck));
-        if (step % 4 === 0) note(chord[0] - 12, musicNextTime, beat * .8, .035 * duck);
-        musicNextTime += beat / 2;
-        musicStep += 1;
-      }
-    };
-    schedule(); ambientTimer = setInterval(schedule, 50);
+    soundtrack.setVolume(Number($('musicVolume').value) / 200);
+    soundtrack.setActive(soundOn && !!session && !['paused', 'ended'].includes(session.phase));
   }
 
   function stopAmbient() {
-    clearInterval(ambientTimer); ambientTimer = null;
-    for (const oscillator of musicVoices) { try { oscillator.stop(); } catch {} }
-    musicVoices.clear();
+    soundtrack.setActive(false);
   }
 
   $('effectsVolume').addEventListener('input', () => {
@@ -2945,7 +2984,7 @@
   $('musicVolume').addEventListener('input', () => {
     const volume = Number($('musicVolume').value);
     $('musicVolumeLabel').textContent = `Music ${volume}%`;
-    if (musicBus) musicBus.gain.setTargetAtTime(volume / 100, audioContext.currentTime, .05);
+    soundtrack.setVolume(volume / 200);
   });
 
   function toggleSound() {

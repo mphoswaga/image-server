@@ -144,9 +144,10 @@ test('the classroom loop opens with one mission briefing and keeps later growth 
 
 test('every strategic reward visibly changes the relevant colony state', () => {
   const gains = [];
-  for (const reward of ['workers', 'food', 'defense', 'queen', 'expansion', 'soldiers']) {
+  for (const reward of ['workers', 'food', 'supplies', 'defense', 'queen', 'expansion', 'soldiers']) {
     const all = teams(2);
     if (reward === 'soldiers') all[0].barracksBuilt = true;
+    Object.assign(all[0], { sticks: 30, leaves: 20 });
     const before = JSON.stringify(all[0]);
     const beforeStrength = core.colonyStrength(all[0]);
     core.applyReward(all[0], reward, all);
@@ -170,6 +171,7 @@ test('round end changes food without silently adding ants or rooms', () => {
 
 test('only expansion choices build permanent rooms, one at a time', () => {
   const all = teams(2), colony = all[0];
+  Object.assign(colony, { sticks: 30, leaves: 20 });
   core.applyReward(colony, 'expansion', all);
   assert.ok(core.colonyRooms(colony).some(room => room.id === 'food'));
   colony.food = 0;
@@ -189,6 +191,7 @@ test('only expansion choices build permanent rooms, one at a time', () => {
 
 test('fortifications reach stone and steel and do not sell an invisible higher tier', () => {
   const all = teams(2), colony = all[0];
+  Object.assign(colony, { sticks: 30, leaves: 20 });
   const materials = [core.fortification(colony).name];
   for (let i = 0; i < 4; i++) {
     core.applyReward(colony, 'defense', all);
@@ -222,6 +225,7 @@ test('recruiting one ant never adds other rewards, including after save and at o
 
 test('food and queen care make only the promised small change', () => {
   const all = teams(2), colony = all[0];
+  Object.assign(colony, { sticks: 30, leaves: 20 });
   core.applyReward(colony, 'food', all);
   assert.equal(colony.food, 13);
   assert.equal(core.colonyRooms(colony).length, 1);
@@ -304,6 +308,7 @@ test('rain and the final footstep apply once and preserve assessment correctness
 
 test('rain preparations and room protections contribute to the ending without destroying progress', () => {
   const colony = core.createTeam({}, 0);
+  Object.assign(colony, { sticks: 30, leaves: 20 });
   const earth = core.rainOutcome(colony);
   for (const reward of ['food', 'expansion', 'expansion', 'soldiers', 'defense']) core.applyReward(colony, reward, [colony]);
   assert.equal(core.rainPreparation(colony).filter(goal => goal.done).length, 1);
@@ -353,8 +358,10 @@ test('natural upgrade requirements are enforced without consuming a blocked choi
   core.applyReward(colony, 'workers', [colony]);
   assert.equal(colony.workers, 1);
   core.applyReward(colony, 'food', [colony]);
+  core.applyReward(colony, 'supplies', [colony]);
   core.applyReward(colony, 'expansion', [colony]);
   assert.equal(core.rewardAvailability(colony, 'soldiers').allowed, false);
+  core.applyReward(colony, 'supplies', [colony]);
   core.applyReward(colony, 'expansion', [colony]);
   assert.equal(core.rewardAvailability(colony, 'soldiers').allowed, true);
   core.applyReward(colony, 'soldiers', [colony]);
@@ -632,12 +639,19 @@ test('persistent ColonyQuest games have no learner room and keep recoverable mat
   const saved = games.saveColonyQuestSession(game.id, {
     phase: 'reward',
     turnIndex: 3,
-    teams: teams(2),
+    seasonRules: true,
+    dryOccurred: true,
+    teams: teams(2).map(team => ({ ...team, sticks: 3, leaves: 2, dryFoodSpent: 8, dryShortfall: 4, forageTrips: [2] })),
     answers: [{ questionIndex: 0, teamId: 'team-1', correct: true }],
   });
   assert.equal(saved.phase, 'reward');
   assert.ok(saved.updatedAt);
-  assert.equal(games.getColonyQuestSession(game.id).turnIndex, 3);
+  const restored = games.getColonyQuestSession(game.id);
+  assert.equal(restored.turnIndex, 3);
+  assert.equal(restored.seasonRules, true);
+  assert.equal(restored.dryOccurred, true);
+  assert.deepEqual([restored.teams[0].sticks, restored.teams[0].leaves, restored.teams[0].dryFoodSpent, restored.teams[0].dryShortfall], [3, 2, 8, 4]);
+  assert.deepEqual(restored.teams[0].forageTrips, [2]);
   assert.equal(games.listTeacherGames('teacher-colony').length, 1, 'session sidecar is not listed as another game');
   games.clearColonyQuestSession(game.id);
   assert.equal(games.getColonyQuestSession(game.id), null);
@@ -724,4 +738,87 @@ test('the dashboard exposes ColonyQuest as a whole-class lesson game', () => {
     assert.equal(asset.subarray(0, 4).toString('ascii'), 'RIFF');
     assert.equal(asset.subarray(8, 12).toString('ascii'), 'WEBP');
   }
+});
+
+test('building consumes collected materials and cannot spend or grow when blocked', () => {
+  const colony = core.createTeam({}, 0);
+  for (const upgrade of ['defense', 'expansion']) {
+    const before = JSON.stringify(colony);
+    core.applyReward(colony, upgrade, [colony]);
+    assert.equal(JSON.stringify(colony), before);
+    assert.match(core.rewardAvailability(colony, upgrade).reason, /sticks/);
+  }
+  core.applyEvent([colony], 'new-territory');
+  assert.equal(core.colonyRooms(colony).length, 1, 'events also respect building costs');
+  core.applyReward(colony, 'supplies', [colony]);
+  assert.deepEqual([colony.sticks, colony.leaves], [3, 2]);
+  core.applyReward(colony, 'expansion', [colony]);
+  assert.deepEqual([colony.sticks, colony.leaves], [0, 0]);
+  assert.equal(core.colonyRooms(colony).length, 2);
+  core.applyReward(colony, 'supplies', [colony]);
+  core.applyReward(colony, 'defense', [colony]);
+  assert.deepEqual([colony.sticks, colony.leaves, colony.defense], [1, 1, 1]);
+  const restored = core.normalizeTeam(colony, 0);
+  for (const key of Object.keys(colony)) assert.deepEqual(restored[key], colony[key], key);
+});
+
+test('workers carry alternating materials with food, retaining progress across save and pause', () => {
+  let state = core.normalizeSession({ teams: [core.createTeam({}, 0)], phase: 'question', seasonRules: true });
+  for (let i = 0; i < 12; i++) core.advanceEconomy(state, 1000);
+  assert.deepEqual([state.teams[0].sticks, state.teams[0].leaves, state.teams[0].food], [1, 0, 9]);
+  state = core.normalizeSession(state);
+  state.phase = 'paused';
+  const before = JSON.stringify(state);
+  core.advanceEconomy(state, 1000);
+  assert.equal(JSON.stringify(state), before);
+  state.phase = 'question';
+  for (let i = 0; i < 12; i++) core.advanceEconomy(state, 1000);
+  assert.deepEqual([state.teams[0].sticks, state.teams[0].leaves, state.teams[0].food], [1, 1, 10]);
+});
+
+test('dry season spends food once, slows shortages and rain restores collection without changing answers', () => {
+  const all = teams(2);
+  all[0].food = 20; all[1].food = 5;
+  let state = core.normalizeSession({ teams: all, phase: 'question', seasonRules: true, answers: [{ teamId: all[0].id, correct: true }] });
+  const answers = JSON.stringify(state.answers);
+  assert.equal(core.applyDrySeason(state), true);
+  assert.deepEqual(state.teams.map(t => t.food), [8, 0]);
+  assert.deepEqual(state.teams.map(t => t.dryShortfall), [0, 7]);
+  assert.deepEqual(state.teams.map(t => t.dryPrepared), [true, false]);
+  state = core.normalizeSession(state);
+  assert.equal(core.applyDrySeason(state), false);
+  for (let i = 0; i < 12; i++) core.advanceEconomy(state, 1000);
+  assert.equal(state.teams[0].food, 9);
+  assert.equal(state.teams[1].dryShortfall, 7);
+  for (let i = 0; i < 6; i++) core.advanceEconomy(state, 1000);
+  assert.equal(state.teams[1].dryShortfall, 6);
+  core.applyReward(state.teams[1], 'food', state.teams);
+  assert.equal(state.teams[1].dryShortfall, 1);
+  core.applyRain(state);
+  assert.equal(core.seasonStage(state), 'rain');
+  assert.equal(state.teams[1].dryShortfall, 0);
+  assert.equal(JSON.stringify(state.answers), answers);
+  assert.deepEqual(state.teams.map(t => t.population), [2, 2]);
+});
+
+test('season boundaries are fair for 2 to 6 teams, short and long games, and survive reload', () => {
+  for (let count = 2; count <= 6; count++) for (let rounds = 2; rounds <= 12; rounds++) {
+    let state = core.normalizeSession({ teams: teams(count), phase: 'question', seasonRules: true });
+    const events = [];
+    for (let turn = 1; turn <= rounds * count; turn++) {
+      state.turnIndex = turn;
+      const event = core.advanceSeason(state, turn / (rounds * count), { matchType: 'rounds', rounds });
+      if (event) { events.push(event); assert.equal(turn % count, 0); }
+      state = core.normalizeSession(state);
+    }
+    assert.deepEqual(events, ['dry', 'rain']);
+  }
+  const legacy = core.normalizeSession({ teams: teams(2), phase: 'question', turnIndex: 4 });
+  assert.equal(core.advanceSeason(legacy, .9, { matchType: 'time' }), null);
+  const timed = { ...legacy, seasonRules: true, turnIndex: 3 };
+  assert.equal(core.advanceSeason(timed, .35, { matchType: 'time' }), null);
+  timed.turnIndex = 4;
+  assert.equal(core.advanceSeason(timed, .35, { matchType: 'time' }), 'dry');
+  timed.turnIndex = 6;
+  assert.equal(core.advanceSeason(timed, .7, { matchType: 'time' }), 'rain');
 });

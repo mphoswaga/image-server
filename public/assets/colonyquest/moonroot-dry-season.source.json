@@ -1,0 +1,7 @@
+{
+  "tool": "Built-in image_gen",
+  "source": "moonroot-meadow.webp",
+  "output": "moonroot-dry-season.webp",
+  "prompt": "Use case: lighting-weather. Edit target: supplied Moonroot Meadow game background. Produce a DRY SEASON version of this exact 16:9 illustrated cutaway game world. Keep identical framing, giant tree on upper right, same roots and underground open soil layout, horizon at same height, crystals at edges. Change surface to golden dry grass, wilted foliage, sparse brown leaves, hot pale amber sky and parched cracked ground. Underground soil warm dusty ochre with small cracks. Beautiful hand-painted family game art, clear readable open center. No characters, no UI, no text. Preserve all composition for smooth seasonal transition back to original lush meadow. Save output image file.",
+  "processing": "Resized to 1600 x 900 and encoded as WebP for the game."
+}

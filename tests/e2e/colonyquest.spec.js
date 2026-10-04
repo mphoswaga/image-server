@@ -13,12 +13,9 @@ const questions = [
 test('meadow music plays and obeys mute, pause and volume controls', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'windows-100');
   await page.addInitScript(() => {
-    window.musicStarts = 0;
     window.rustleStarts = 0;
     const bufferStart = AudioBufferSourceNode.prototype.start;
     AudioBufferSourceNode.prototype.start = function(...args) { window.rustleStarts++; return bufferStart.apply(this, args); };
-    const original = OscillatorNode.prototype.start;
-    OscillatorNode.prototype.start = function(...args) { window.musicStarts++; return original.apply(this, args); };
   });
   const colonies = [colonyCore.createTeam({}, 0), colonyCore.createTeam({}, 1)];
   let saved = colonyCore.normalizeSession({ phase: 'question', introSeen: true, teams: colonies });
@@ -33,14 +30,22 @@ test('meadow music plays and obeys mute, pause and volume controls', async ({ pa
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/colonyquest/cq-music');
   await page.locator('#resumeBtn').click();
-  await expect.poll(() => page.evaluate(() => window.musicStarts)).toBeGreaterThan(6);
+  const music = () => page.evaluate(() => { const a = document.querySelector('[data-colony-music]'); return { paused:a.paused, time:a.currentTime, volume:a.volume, src:a.currentSrc, duration:a.duration }; });
+  await expect.poll(async () => (await music()).time).toBeGreaterThan(.1);
+  expect((await music()).src).toContain('ghibli-station-the-mini-vandals.mp3');
+  await page.evaluate(() => { const a = document.querySelector('[data-colony-music]'); a.currentTime = a.duration - .15; });
+  await expect.poll(async () => (await music()).src).toContain('toys-are-us-blue-deer-studio.mp3');
+  await expect.poll(async () => (await music()).time).toBeGreaterThan(.1);
+  await page.evaluate(() => { const a = document.querySelector('[data-colony-music]'); a.currentTime = a.duration - .15; });
+  await expect.poll(async () => (await music()).src).toContain('ghibli-station-the-mini-vandals.mp3');
   await expect.poll(() => page.evaluate(() => window.rustleStarts)).toBeGreaterThan(1);
   await page.locator('#muteBtn').click();
-  const muted = await page.evaluate(() => window.musicStarts);
+  await expect.poll(async () => (await music()).paused).toBe(true);
+  const muted = (await music()).time;
   await page.waitForTimeout(700);
-  expect(await page.evaluate(() => window.musicStarts)).toBe(muted);
+  expect((await music()).time).toBeCloseTo(muted, 1);
   await page.locator('#muteBtn').click();
-  await expect.poll(() => page.evaluate(() => window.musicStarts)).toBeGreaterThan(muted);
+  await expect.poll(async () => (await music()).time).toBeGreaterThan(muted + .1);
   await page.locator('#teacherHandle').click();
   await page.locator('#musicVolume').fill('25');
   await expect(page.locator('#musicVolumeLabel')).toHaveText('Music 25%');
@@ -48,11 +53,13 @@ test('meadow music plays and obeys mute, pause and volume controls', async ({ pa
   await expect(page.locator('#effectsVolumeLabel')).toHaveText('Game sounds 0%');
   await expect(page.locator('#musicVolume')).toHaveValue('25');
   await page.locator('#pauseBtn').click();
-  const paused = await page.evaluate(() => window.musicStarts);
+  await expect.poll(async () => (await music()).paused).toBe(true);
+  expect((await music()).volume).toBeCloseTo(.125);
+  const paused = (await music()).time;
   await page.waitForTimeout(700);
-  expect(await page.evaluate(() => window.musicStarts)).toBe(paused);
+  expect((await music()).time).toBeCloseTo(paused, 1);
   await page.locator('#pauseBtn').click();
-  await expect.poll(() => page.evaluate(() => window.musicStarts)).toBeGreaterThan(paused);
+  await expect.poll(async () => (await music()).time).toBeGreaterThan(paused + .1);
   expect(errors).toEqual([]);
 });
 
@@ -115,7 +122,7 @@ test('ColonyQuest shows one opening mission then moves from growth to the next q
   await expect(page.locator('#questionOverlay')).toBeVisible();
   await page.locator('.answer').first().click();
   await expect(page.locator('#rewardOverlay')).toBeVisible({ timeout: 4000 });
-  await expect(page.locator('[data-reward]')).toHaveCount(7);
+  await expect(page.locator('[data-reward]')).toHaveCount(8);
   await expect(page.locator('[data-reward="raid"]')).toHaveCount(1);
   await page.locator('[data-reward="workers"]').click();
   await expect(page.locator('#questionOverlay')).toBeVisible({ timeout: 5000 });
@@ -153,6 +160,7 @@ test('growing colonies draw every soldier, retain every room, and scroll to a ne
   const colonies = [colonyCore.createTeam({ name: 'Leaf Colony' }, 0), colonyCore.createTeam({ name: 'River Colony' }, 1)];
   Object.assign(colonies[0], { soldiers: 11, workers: 16, population: 28, pantryBuilt: true, barracksBuilt: true, barracksAnnexes: 1, workerLodges: 1, expansionRooms: 7, territory: 8, defense: 4 });
   const setup = { teamCount: 2, rounds: 12, matchType: 'rounds', durationMinutes: 15, sound: false, teams: colonies };
+  colonies.forEach(team => { team.sticks = 30; team.leaves = 20; });
   let saved = colonyCore.normalizeSession({ phase: 'reward', introSeen: true, teams: colonies, currentTeamIndex: 0, turnIndex: 1 });
   await page.route(/\/api\/game\/cq-growth\/colonyquest(?:\/session)?$/, async route => {
     if (route.request().method() === 'PUT') {
@@ -381,7 +389,7 @@ test.skip('blocked colony choices explain their requirements and allow worker re
   });
   await page.goto('/colonyquest/cq-rules');
   await page.locator('#resumeBtn').click();
-  await expect(page.locator('[data-reward]')).toHaveCount(7);
+  await expect(page.locator('[data-reward]')).toHaveCount(8);
   for (const key of ['raid', 'expansion', 'defense', 'food', 'queen', 'soldiers']) await expect(page.locator(`[data-reward="${key}"]`)).toBeDisabled();
   await expect(page.locator('[data-reward="raid"]')).toContainText('Add a guard ant');
   await expect(page.locator('[data-reward="expansion"]')).toContainText('Add a worker');
@@ -402,6 +410,7 @@ test.skip('all upgrade cards are available and raids visibly travel, return and 
   Object.assign(colonies[0], { soldiers: 5, population: 7, barracksBuilt: true });
   Object.assign(colonies[1], { soldiers: 3, population: 5, barracksBuilt: true });
   const setup = { teamCount: 2, rounds: 12, matchType: 'rounds', durationMinutes: 15, sound: false, teams: colonies };
+  colonies.forEach(team => { team.sticks = 30; team.leaves = 20; });
   let saved = colonyCore.normalizeSession({ phase: 'reward', introSeen: true, teams: colonies, currentTeamIndex: 0, turnIndex: 0 });
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -414,7 +423,7 @@ test.skip('all upgrade cards are available and raids visibly travel, return and 
   });
   await page.goto('/colonyquest/cq-raid');
   await page.locator('#resumeBtn').click();
-  await expect(page.locator('[data-reward]')).toHaveCount(7);
+  await expect(page.locator('[data-reward]')).toHaveCount(8);
   for (const key of Object.keys(colonyCore.REWARDS)) await expect(page.locator(`[data-reward="${key}"]`)).toBeEnabled();
   await expect(page.locator('#worldViewport')).toHaveAttribute('aria-description', /Charcoal ants.*Rust ants/);
   await page.screenshot({ path: `/tmp/colony-cards-${testInfo.project.name}.png` });
@@ -427,7 +436,7 @@ test.skip('all upgrade cards are available and raids visibly travel, return and 
   }
   await page.locator('[data-reward="raid"]').click();
   await page.locator('#targetBack').click();
-  await expect(page.locator('[data-reward]')).toHaveCount(7);
+  await expect(page.locator('[data-reward]')).toHaveCount(8);
   await page.locator('[data-reward="raid"]').click();
   await page.locator('[data-target="team-2"]').click();
   const world = page.locator('#worldViewport');
@@ -868,6 +877,7 @@ test('teacher test never changes the saved classroom session', async ({ page }) 
 
 test('world keeps animating after the wall upgrade actor disappears', async ({ page }) => {
   const teams = [colonyCore.createTeam({}, 0), colonyCore.createTeam({}, 1)];
+  teams.forEach(team => { team.sticks = 3; team.leaves = 2; });
   const session = colonyCore.normalizeSession({ phase: 'reward', introSeen: true, teams });
   await page.route(/\/api\/game\/cq-wall-animation\/colonyquest(?:\/session)?$/, route => route.fulfill({ json: route.request().method() === 'PUT' ? { ok: true } : { game: { id: 'cq-wall-animation', lessonTitle: 'Habitats', questions, colonyquest: { teamCount: 2, rounds: 5, sound: false, teams } }, session } }));
   const errors = [];
@@ -884,4 +894,78 @@ test('world keeps animating after the wall upgrade actor disappears', async ({ p
   const frame = await page.evaluate(() => window.animationGame.loop.frame);
   await expect.poll(() => page.evaluate(() => window.animationGame.loop.frame)).toBeGreaterThan(frame + 10);
   expect(errors).toEqual([]);
+});
+
+test('season resources unlock buildings, persist, and move from dry ground back to green meadow', async ({ page }, testInfo) => {
+  test.skip(!['windows-100', 'mobile', 'desktop-safari'].includes(testInfo.project.name));
+  test.setTimeout(60_000);
+  const colonies = [colonyCore.createTeam({ name: 'Leaf Colony' }, 0), colonyCore.createTeam({ name: 'River Colony', colorIndex: 1 }, 1)];
+  colonies.forEach(team => { team.food = 20; team.attempts = 1; team.correct = 1; });
+  let saved = colonyCore.normalizeSession({ phase: 'reward', introSeen: true, seasonRules: true, teams: colonies, currentTeamIndex: 1, turnIndex: 1 });
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.route(/\/api\/game\/cq-seasons\/colonyquest(?:\/session)?$/, async route => {
+    if (route.request().method() === 'PUT') {
+      saved = colonyCore.normalizeSession(route.request().postDataJSON().session);
+      return route.fulfill({ json: { ok: true } });
+    }
+    return route.fulfill({ json: { game: { id: 'cq-seasons', lessonTitle: 'Habitats', questions, colonyquest: { teamCount: 2, rounds: 5, sound: false, teams: colonies } }, session: saved } });
+  });
+  await page.goto('/colonyquest/cq-seasons');
+  await page.locator('#resumeBtn').click();
+  await expect(page.locator('[data-reward="expansion"]')).toBeDisabled();
+  await expect(page.locator('[data-reward="defense"]')).toBeDisabled();
+  await expect(page.locator('.season-food').first()).toContainText('20/12');
+  await page.locator('[data-reward="supplies"]').click();
+  await expect(page.locator('#questionOverlay')).toBeVisible({ timeout: 8000 });
+  await expect(page.locator('#worldViewport')).toHaveAttribute('data-season', 'dry');
+  await expect.poll(() => saved.dryOccurred).toBe(true);
+  expect(saved.teams[1].sticks).toBeGreaterThanOrEqual(3);
+  expect(saved.teams[1].leaves).toBeGreaterThanOrEqual(2);
+  expect(saved.teams.every(t => t.dryPrepared)).toBe(true);
+  await page.waitForTimeout(1900);
+  await page.screenshot({ path: testInfo.outputPath('dry-season.png') });
+  await page.reload();
+  await page.locator('#resumeBtn').click();
+  await expect(page.locator('#worldViewport')).toHaveAttribute('data-season', 'dry');
+  expect(saved.teams[1].dryFoodSpent).toBe(12);
+  // Stop the active page before replacing the server fixture; its autosave must not overwrite it.
+  await page.goto('about:blank');
+  await page.addInitScript(() => localStorage.clear());
+  // Resume a later saved turn to check the real client rain transition.
+  saved.turnIndex = 7;
+  saved.currentTeamIndex = 1;
+  saved.phase = 'reward';
+  await page.goto('/colonyquest/cq-seasons');
+  await page.locator('#resumeBtn').click();
+  await expect(page.locator('[data-reward="expansion"]')).toBeEnabled();
+  const rooms = colonyCore.colonyRooms(saved.teams[1]).length;
+  await page.locator('[data-reward="expansion"]').click();
+  await expect(page.locator('#questionOverlay')).toBeVisible({ timeout: 8000 });
+  await expect(page.locator('#worldViewport')).toHaveAttribute('data-season', /rain|renewal/);
+  await expect.poll(() => saved.rainOccurred).toBe(true);
+  expect(colonyCore.colonyRooms(saved.teams[1]).length).toBe(rooms + 1);
+  expect(saved.teams.every(t => t.dryShortfall === 0)).toBe(true);
+  await page.waitForTimeout(1900);
+  await page.screenshot({ path: testInfo.outputPath('rain-season.png') });
+  await expect(page.locator('#worldStory')).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+test('materials gathered during an open upgrade panel enable a building without another click', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100');
+  const colonies = [colonyCore.createTeam({}, 0), colonyCore.createTeam({}, 1)];
+  Object.assign(colonies[0], { sticks: 1, leaves: 1, forageProgress: [.98], forageTrips: [0] });
+  let saved = colonyCore.normalizeSession({ phase: 'reward', introSeen: true, seasonRules: true, teams: colonies });
+  await page.route(/\/api\/game\/cq-auto-materials\/colonyquest(?:\/session)?$/, async route => {
+    if (route.request().method() === 'PUT') { saved = colonyCore.normalizeSession(route.request().postDataJSON().session); return route.fulfill({ json: { ok: true } }); }
+    return route.fulfill({ json: { game: { id: 'cq-auto-materials', lessonTitle: 'Habitats', questions, colonyquest: { teamCount: 2, rounds: 5, sound: false, teams: colonies } }, session: saved } });
+  });
+  await page.goto('/colonyquest/cq-auto-materials');
+  await page.locator('#resumeBtn').click();
+  await expect(page.locator('[data-reward="defense"]')).toBeEnabled();
+  await page.locator('[data-reward="defense"]').click();
+  await expect.poll(() => saved.teams[0].defense).toBe(1);
+  expect(saved.teams[0].sticks).toBe(0);
+  expect(saved.teams[0].leaves).toBe(0);
 });

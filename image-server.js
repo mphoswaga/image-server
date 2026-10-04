@@ -73,6 +73,7 @@ const { newsletterSource, generateNewsletter } = require('./newsletter');
 const practice = require('./practice');
 const practiceLive = require('./practice-live');
 const { createFishQuestLive } = require('./fishquest-live');
+const { createColonyQuestMultiplayer } = require('./colonyquest-multiplayer-live');
 const colonyQuestCore = require('./public/colonyquest-core');
 const { runWithUser, usageSnapshot, usageSince, declareAction } = require('./ai-client');
 const usage = require('./usage');
@@ -4745,7 +4746,8 @@ app.post('/api/google-slides/export/:id', requireAuth, async (req, res) => {
 });
 
 // ── Student game: create from a deck, play, store results ──────────────────
-const fishQuestLive = createFishQuestLive({ app, games, roster, requireAuth, requireGameAccess, gameSessionCanAccess, jwtSecret: JWT_SECRET });
+const fishQuestLive = createFishQuestLive({ app, games, roster, requireAuth, requireGameAccess, gameSessionCanAccess, jwtSecret: JWT_SECRET, canEditQuestions: id => !colonyQuestMultiplayer.getMatch(id) || colonyQuestMultiplayer.getMatch(id).state.phase === 'ended' });
+const colonyQuestMultiplayer = createColonyQuestMultiplayer({ app, games, roster, requireAuth, requireGameAccess, gameSessionCanAccess, jwtSecret: JWT_SECRET });
 
 function requestedGameMode(body) {
   if (body && body.mode === 'fishquest') return 'fishquest';
@@ -4879,7 +4881,7 @@ app.patch('/api/game/:id/participants', requireAuth, (req, res) => {
   const st = gameParticipants(g).find(st => games.normalizeStudentId(st.studentId) === games.normalizeStudentId(req.body.studentId));
   if (!st || typeof req.body.removed !== 'boolean') return res.status(400).json({ error: 'Choose a learner in this game.' });
   const updated = games.setStudentRemoved(g.id, st.studentId, st.name, req.body.removed);
-  if (req.body.removed) fishQuestLive.removeStudent(g.id, st.studentId);
+  if (req.body.removed) { fishQuestLive.removeStudent(g.id, st.studentId); colonyQuestMultiplayer.removeStudent(g.id, st.studentId); }
   res.json({ title: updated.lessonTitle, students: gameParticipants(updated) });
 });
 
@@ -4903,6 +4905,8 @@ app.patch('/api/game/:id/questions', requireAuth, (req, res) => {
   const game = games.getGame(req.params.id);
   if (!game) return res.status(404).json({ error: 'Game not found.' });
   if (game.teacherId !== req.userId) return res.status(403).json({ error: 'Not your game.' });
+  const multiplayer = colonyQuestMultiplayer.getMatch(game.id);
+  if (multiplayer && multiplayer.state.phase !== 'ended') return res.status(409).json({ error: 'End the ColonyQuest multiplayer room before changing its questions.' });
   if ((game.mode || 'arcade') !== 'arcade') {
     return res.status(409).json({ error: 'Open the game control room to save questions for this live game format.' });
   }
@@ -4963,6 +4967,8 @@ app.get('/api/game/:id/colonyquest', requireAuth, (req, res) => {
 app.patch('/api/game/:id/colonyquest', requireAuth, (req, res) => {
   const game = ownedColonyQuest(req, res);
   if (!game) return;
+  const multiplayer = colonyQuestMultiplayer.getMatch(game.id);
+  if (Array.isArray(req.body?.questions) && multiplayer && multiplayer.state.phase !== 'ended') return res.status(409).json({ error: 'End the ColonyQuest multiplayer room before changing its questions.' });
   const session = games.getColonyQuestSession(game.id);
   if (session && !['setup', 'ended'].includes(session.phase)) {
     return res.status(409).json({ error: 'End or reset the current match before changing its setup.' });
@@ -5089,6 +5095,7 @@ app.post('/api/game/:id/answer', requireGameAccess, (req, res) => {
   if (!g) return res.status(404).json({ error: 'Game not found.' });
   if (req.gameSession && req.gameSession.gameId !== g.id) return res.status(403).json({ error: 'Session is for a different game.' });
   if (!gameSessionCanAccess(g, req.gameSession)) return res.status(403).json({ error: 'This game is no longer assigned to your class.' });
+  if (req.gameSession && colonyQuestMultiplayer.isPlaying(g.id, req.gameSession.studentId)) return res.status(409).json({ error: 'Answer in your live ColonyQuest room. Answers are revealed together.' });
   const q = g.questions[Number(req.body.questionIndex)];
   if (!q) return res.status(400).json({ error: 'bad question' });
   res.json({ correct: Number(req.body.choice) === q.correctIndex, correctIndex: q.correctIndex, explanation: q.explanation });
@@ -5635,6 +5642,8 @@ const moonquestStore = require('./moonquest-routes').installMoonQuest(app, {
   requireAuth, sessionSecret, roster, studentAccount, learnerPickerEntries, studentHandle,
   joinLimiter, generationLimiter, uploadLimiter, reserve, capture, release, declareFree, costOf,
 });
+app.get('/colonyquest-live/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'colonyquest-live.html')));
+app.get('/colonyquest-live-play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'colonyquest-live.html')));
 app.get('/colonyquest/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'colonyquest.html')));
 
 // Student assignment page (worksheet/exit-ticket/quiz online submission).
@@ -6212,3 +6221,4 @@ app.use((err, req, res, next) => {
 
 const httpServer = app.listen(PORT, () => console.log(`LessonCope running at http://localhost:${PORT}`));
 fishQuestLive.attach(httpServer);
+colonyQuestMultiplayer.attach(httpServer);
