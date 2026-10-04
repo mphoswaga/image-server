@@ -1546,13 +1546,14 @@
           this.load.spritesheet('cq-bird', '/assets/colonyquest/meadow-bird-atlas.webp', { frameWidth: 512, frameHeight: 512 });
           this.load.spritesheet('cq-spider', '/assets/colonyquest/meadow-spider-atlas.webp', { frameWidth: 512, frameHeight: 512 });
           this.load.image('cq-worker', ASSETS.worker);
+          this.load.image('cq-chamber', '/assets/colonyquest/living-chamber.webp');
           this.load.image('cq-queen', ASSETS.queen);
           this.load.image('cq-guardian', ASSETS.guardian);
           this.load.image('cq-human-leg', '/assets/colonyquest/human-leg-shoe.png');
         },
         update(time, delta) {
           if (!session || document.hidden) return;
-          updateForagingWorkers();
+          updateForagingWorkers(delta);
           updateBirdFlight();
           if (['warning', 'attack'].includes(session.birdStage) && ['question', 'reward'].includes(session.phase) && time - (this.lastBirdCall || 0) > 2800) {
             this.lastBirdCall = time;
@@ -1700,7 +1701,7 @@
     if (agent.getData('role') === 'worker') {
       const route = new Phaser.Curves.Path(points[0].x, points[0].y);
       points.slice(1).forEach(point => route.lineTo(point.x, point.y));
-      route.lineTo(points[0].x, points[0].y);
+      if (!agent.getData('habitatJob') || agent.getData('habitatJob') === 'sheltering') route.lineTo(points[0].x, points[0].y);
       // Permanent workers share the scene update loop. Creating a separate
       // 25fps timer for every worker eventually overwhelmed long matches.
       agent.setData('forageRoute', route);
@@ -1746,22 +1747,36 @@
     scene.time.delayedCall(Math.max(startDelay, 160 + index * 120), travel);
   }
 
-  function updateForagingWorkers() {
-    if (!session) return;
+  function updateForagingWorkers(delta = 0) {
+    if (!session || session.phase === 'paused') return;
     for (const view of colonyViews.values()) {
       for (const agent of view.ants) {
         const route = agent.getData?.('forageRoute');
         if (!route || !agent.active) continue;
+        const evacuation = agent.getData('evacuation');
+        if (evacuation) {
+          evacuation.elapsed += delta;
+          const progress = Math.min(1, evacuation.elapsed / 2800);
+          const point = evacuation.route.getPoint(progress);
+          agent.sprite?.setFlipX(point.x < agent.x);
+          agent.setPosition(point.x, point.y);
+          agent.cargo?.setVisible(evacuation.rescue && progress < 1);
+          agent.twig?.setVisible(false); agent.leaf?.setVisible(false);
+          continue;
+        }
         const team = session.teams.find(item => item.id === agent.getData('teamId'));
         const progress = team?.forageProgress?.[agent.getData('workerIndex')] || 0;
-        const point = route.getPoint(progress);
+        const job = agent.getData('habitatJob');
+        const working = job && job !== 'sheltering';
+        const travel = working ? progress < .25 ? progress * 4 : progress < .75 ? 1 : (1 - progress) * 4 : progress;
+        const point = route.getPoint(travel);
         if (Math.abs(point.x - agent.x) > .15) agent.sprite?.setFlipX(point.x < agent.x);
         agent.setPosition(point.x, point.y);
-        agent.cargo?.setVisible(progress >= .5);
+        agent.cargo?.setVisible(working ? progress < .25 : job === 'sheltering' ? false : progress >= .5);
         const worker = agent.getData('workerIndex');
         const carryingStick = ((team?.forageTrips?.[worker] || 0) + worker) % 2 === 0;
-        agent.twig?.setVisible(progress >= .5 && carryingStick);
-        agent.leaf?.setVisible(progress >= .5 && !carryingStick);
+        agent.twig?.setVisible(!job && progress >= .5 && carryingStick);
+        agent.leaf?.setVisible(!job && progress >= .5 && !carryingStick);
       }
     }
   }
@@ -1846,11 +1861,14 @@
         graphics.lineStyle(4, 0xc6a471, 1);
         graphics.lineBetween(x - roomWidth * .34, y + row * 18, x + roomWidth * .34, y + row * 18);
       }
-      const stored = Math.min(30, team.food);
+      const stores = core.colonyRooms(team).filter(item => item.kind === 'food' || item.kind === 'expansion' && item.expansion % 4 === 2);
+      const stored = Math.min(30, Math.floor(team.food / stores.length) + (stores.findIndex(item => item.id === room.id) < team.food % stores.length ? 1 : 0));
       for (let i = 0; i < stored; i += 1) {
         ellipse(graphics, x - roomWidth * .29 + (i % 10) * roomWidth * .064, y - 5 + Math.floor(i / 10) * 8, 7, 5, [0xf1cc66, 0x8bbc5e, 0xdb7857][i % 3]);
       }
     } else if (kind === 'guard') {
+      ellipse(graphics, x + roomWidth * .27, y - 5, 22, 32, 0x91653b);
+      graphics.lineStyle(2, 0xe7c78b); graphics.strokeEllipse(x + roomWidth * .27, y - 5, 12, 19);
       for (let i = 0; i < 6; i += 1) {
         graphics.lineStyle(5, 0xb79463, 1);
         const px = x + (i - 2.5) * roomWidth * .1;
@@ -1876,6 +1894,7 @@
       ellipse(graphics, x, y + 6, roomWidth * .61, roomHeight * .3, 0x71ced8);
       graphics.lineStyle(1, 0xd9ffff, .8); graphics.strokeEllipse(x, y + 6, roomWidth * .38, 10);
     } else {
+      graphics.lineStyle(4, 0x6f492c); graphics.lineBetween(x - roomWidth * .22, y + 6, x - roomWidth * .22, y + 24); graphics.lineBetween(x + roomWidth * .22, y + 6, x + roomWidth * .22, y + 24);
       graphics.fillStyle(0xb68a57); graphics.fillRoundedRect(x - roomWidth * .3, y, roomWidth * .6, 9, 2);
       graphics.lineStyle(4, 0x7e6550); graphics.lineBetween(x - 13, y - 5, x + 9, y - 17);
       graphics.lineStyle(6, 0xb4c8c9); graphics.lineBetween(x + 3, y - 21, x + 14, y - 11);
@@ -1889,8 +1908,8 @@
     const cx = zone.x + zone.w / 2;
     const entrance = { x: cx, y: zone.y + 50 };
     const active = teamIndex === session.currentTeamIndex && session.phase !== 'ended';
-    const roomWidth = Math.min(138, zone.w * .44);
-    const roomHeight = 80;
+    const roomWidth = Math.min(186, zone.w * .44);
+    const roomHeight = 94;
     const rooms = core.colonyRooms(team).map((room, index) => ({
       ...room,
       x: index === 0 ? cx : zone.x + zone.w * ((index - 1) % 2 ? .75 : .25),
@@ -1904,27 +1923,50 @@
     const sites = { entrance, nursery, food, guard, center: nursery, expansion: rooms.at(-1) };
     const lastEvent = session.events.at(-1);
     const harvest = session.phase === 'event' && lastEvent?.key === 'round-supplies' ? lastEvent.reports[lastEvent.reportIndex || 0] : null;
-    const sheltering = session.phase === 'ended';
+    const sheltering = session.phase === 'ended' || session.birdStage === 'rain' || session.phase === 'event' && lastEvent?.key === 'heavy-rain';
 
     drawTunnel(graphics, [entrance, nursery], 14, material);
     for (let index = 1; index < rooms.length; index += 1) {
       const room = rooms[index];
-      const junction = { x: cx, y: room.y - 62 };
+      const junction = { x: cx, y: room.y };
       if (index % 2 === 1) {
-        const previousY = index === 1 ? nursery.y : rooms[index - 2].y - 62;
+        const previousY = index === 1 ? nursery.y : rooms[index - 2].y;
         drawTunnel(graphics, [{ x: cx, y: previousY }, junction], 14, material);
       }
       drawTunnel(graphics, [junction, room], 12, material);
     }
     for (const room of rooms) {
       const newRoom = room === rooms.at(-1) && session.phase === 'event' && lastEvent?.key === 'upgrade-expansion' && lastEvent.teamId === team.id;
-      const roomGraphics = newRoom ? scene.add.graphics().setDepth(1) : graphics;
-      drawChamber(roomGraphics, room.x, room.y, roomWidth, roomHeight, palette, active && room.kind === 'nursery', material, team.defense);
-      furnishRoom(roomGraphics, room, team, roomWidth, roomHeight);
-      if (newRoom && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        roomGraphics.setAlpha(0);
-        scene.tweens.add({ targets: roomGraphics, alpha: 1, delay: 2000, duration: 1500 });
+      const roomGraphics = scene.add.graphics().setDepth(1);
+      const furnishings = scene.add.graphics().setDepth(2);
+      const shell = scene.textures.exists('cq-chamber') ? scene.add.image(room.x, room.y, 'cq-chamber').setDisplaySize(roomWidth + 24, roomHeight + 18).setDepth(.5) : null;
+      if (!shell) drawChamber(roomGraphics, room.x, room.y, roomWidth, roomHeight, palette, active && room.kind === 'nursery', material, team.defense);
+      // Lit floors and reinforced root supports connect the smartboard to the multiplayer habitat.
+      roomGraphics.lineStyle(4, 0xd6aa6e, .9);
+      roomGraphics.lineBetween(room.x - roomWidth * .36, room.y + roomHeight * .28, room.x + roomWidth * .36, room.y + roomHeight * .28);
+      for (const side of [-1, 1]) {
+        const px = room.x + side * roomWidth * .36;
+        roomGraphics.lineStyle(5 + Math.min(4, team.defense), material.wall);
+        roomGraphics.beginPath().moveTo(px, room.y + roomHeight * .26).lineTo(px - side * 4, room.y - roomHeight * .25).lineTo(room.x + side * roomWidth * .24, room.y - roomHeight * .36).strokePath();
+        for (let band = 0; band < team.defense; band++) {
+          roomGraphics.fillStyle(0xb8c8b9); roomGraphics.fillRect(px - 4, room.y + 14 - band * 10, 8, 3);
+        }
       }
+      furnishRoom(furnishings, room, team, roomWidth, roomHeight);
+      if (newRoom && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        const excavation = scene.add.graphics().setVisible(false);
+        const mask = excavation.createGeometryMask();
+        const growth = { value: .03 };
+        const redraw = () => { excavation.clear().fillStyle(0xffffff).fillEllipse(room.x, room.y, (roomWidth + 30) * growth.value, (roomHeight + 24) * growth.value); };
+        redraw();
+        shell?.setMask(mask); roomGraphics.setMask(mask); furnishings.setMask(mask);
+        roomGraphics.setAlpha(0); furnishings.setAlpha(0);
+        scene.tweens.add({ targets: growth, value: 1, duration: 1700, ease: 'Sine.easeOut', onUpdate: redraw });
+        scene.tweens.add({ targets: roomGraphics, alpha: 1, delay: 1300, duration: 700 });
+        scene.tweens.add({ targets: furnishings, alpha: 1, delay: 2300, duration: 1000 });
+        furnishings.once('destroy', () => { mask.destroy(); });
+      }
+      roomGraphics.setData('habitatRoom', room.id);
       const egg = team.eggs?.[0];
       const detail = room.kind === 'food' ? ` · ${team.food} food` : room.kind === 'guard' ? ` · ${Math.min(8, Math.max(0, team.soldiers - guards.indexOf(room) * 8))} soldiers` : room.kind === 'nursery' ? egg ? ` · egg: ${Math.max(1, egg.roundsLeft)} rounds` : ` · level ${team.queenLevel}` : '';
       const tag = chamberTag(room.x, room.y - roomHeight / 2 - 3, room.label + detail, zone.w);
@@ -1977,9 +2019,7 @@
     const ants = [];
     const pathTo = room => {
       if (room === nursery) return [nursery, entrance];
-      const points = [nursery];
-      for (let y = nursery.y + 76; y <= room.y - 61; y += COLONY_LAYOUT.roomStep) points.push({ x: cx, y });
-      points.push(room);
+      const points = [nursery, { x: cx, y: room.y }, room];
       return points;
     };
     for (let index = 0; index < team.workers; index += 1) {
@@ -1989,12 +2029,16 @@
       const route = pathTo(room);
       const surface = { x: cx + (index % 2 ? -1 : 1) * zone.w * .3, y: entrance.y - 19 };
       const indoorPath = route.length > 1 ? [...route.slice().reverse(), ...route] : [{ x: nursery.x - 18, y: nursery.y }, { x: nursery.x + 18, y: nursery.y + 5 }];
-      const path = building ? [{ x: room.x - 12, y: room.y }, { x: room.x + 14, y: room.y + 5 }, { x: room.x, y: room.y - 8 }] : sheltering ? indoorPath : [...route.slice().reverse(), entrance, surface, entrance, ...route];
+      const tending = !building && !sheltering && index % 3 === 2 && rooms.length > 1;
+      const workPath = [...route, { x: room.x - roomWidth * .18, y: room.y + 8 }];
+      const path = building ? [{ x: room.x - 12, y: room.y }, { x: room.x + 14, y: room.y + 5 }, { x: room.x, y: room.y - 8 }] : tending ? workPath : sheltering ? indoorPath : [...route.slice().reverse(), entrance, surface, entrance, ...route];
       const recruit = index === team.workers - 1 && session.phase === 'event' && (lastEvent?.key === 'upgrade-workers' && lastEvent.teamId === team.id || harvest?.teamId === team.id && harvest.hatched);
       if (recruit) path.unshift({ x: nursery.x + roomWidth * .28, y: nursery.y + 4 });
       const ant = makeAntAgent('cq-worker', path[0], 29, palette.primary, !building, index < MAX_MOVING_ANTS_PER_ROLE);
       ant.setData('role', 'worker');
       ant.setData('teamId', team.id); ant.setData('workerIndex', index);
+      if (tending) ant.setData('habitatJob', room.kind === 'food' ? 'stocking' : room.kind === 'nursery' ? 'nursing' : 'tending');
+      if (sheltering) ant.setData('habitatJob', 'sheltering');
       ants.push(ant);
       if (!sheltering && index === 0 && (harvest?.teamId === team.id && harvest.gathered > 0 || session.phase === 'event' && lastEvent?.key === 'upgrade-food' && lastEvent.teamId === team.id)) deliverHarvest(ant, [surface, entrance, ...pathTo(food)]);
       else animateAnt(ant, path, recruit ? 0 : index, preservePositions && !recruit ? previous.workers[index] : null, recruit ? 1400 : 0);
@@ -2414,7 +2458,7 @@
     if (kind === 'defense') {
       playAntSound('build');
       const builder = actionWorker(view, palette, nursery);
-      const route = [nursery, entrance, { x: entrance.x - 18, y: entrance.y - 12 }, entrance, ...view.rooms.slice(1, 8)];
+      const route = [nursery, entrance, { x: entrance.x - 18, y: entrance.y - 12 }, entrance, nursery, ...view.rooms.slice(1, 8).flatMap(room => [{ x: entrance.x, y: room.y }, room, { x: entrance.x, y: room.y }])];
       moveActionActor(builder, route, 2300, actor => scene.tweens.add({ targets: actor, alpha: 0, duration: 250, onComplete: () => actor.destroy(true) }));
       for (const room of view.rooms.slice(0, 8)) {
         const ring = scene.add.ellipse(room.x, room.y, 72, 44, palette.light, .04).setStrokeStyle(4, core.fortification(team).edge, .95).setDepth(12);
@@ -2446,7 +2490,7 @@
     if (kind === 'expansion') {
       playAntSound('dig');
       const builders = [-10, 10].map(offset => actionWorker(view, palette, { x: nursery.x + offset, y: nursery.y }, 29));
-      builders.forEach((builder, index) => moveActionActor(builder, [nursery, { x: (nursery.x + site.x) / 2, y: (nursery.y + site.y) / 2 }, { x: site.x + (index ? 13 : -13), y: site.y }], 1450 + index * 140, actor => {
+      builders.forEach((builder, index) => moveActionActor(builder, [nursery, { x: nursery.x, y: site.y }, { x: site.x + (index ? 13 : -13), y: site.y }], 1450 + index * 140, actor => {
         scene.tweens.add({ targets: actor, x: actor.x + (index ? -9 : 9), angle: index ? -12 : 12, duration: 180, yoyo: true, repeat: 4, onComplete: () => scene.tweens.add({ targets: actor, alpha: 0, duration: 250, onComplete: () => actor.destroy(true) }) });
       }));
       for (let index = 0; index < 14; index += 1) {
@@ -2491,6 +2535,7 @@
       effect.destroy();
     }
     weatherEffects = [];
+    for (const view of colonyViews.values()) for (const ant of view.ants) ant.setData('evacuation', null);
   }
 
   function lightningStrike(withThunder = true, intensity = 1) {
@@ -2557,6 +2602,13 @@
     const entrance = view.sites.entrance;
     const nursery = view.sites.nursery;
     const protectedWalls = colony.defense >= 1;
+    view.ants.filter(ant => ant.getData('role') === 'worker').slice(0, 3).forEach((ant, index) => {
+      const route = new Phaser.Curves.Path(ant.x, ant.y);
+      if (ant.y < entrance.y + 8) route.lineTo(entrance.x, entrance.y);
+      else route.lineTo(entrance.x, ant.y);
+      route.lineTo(nursery.x, nursery.y).lineTo(nursery.x + (index - 1) * 12, nursery.y + 8);
+      ant.setData('evacuation', { route, elapsed: 0, rescue: !protectedWalls });
+    });
     const puddle = scene.add.ellipse(entrance.x + 10, entrance.y + 10, Math.min(100, view.zone.w * .55), 16, 0x5eb9dc, .55).setStrokeStyle(2, 0xbcecff, .8).setDepth(14);
     weatherEffects.push(puddle);
     scene.tweens.add({ targets: puddle, scaleX: 1.2, alpha: .3, duration: 620, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });

@@ -172,7 +172,15 @@ test('growing colonies draw every soldier, retain every room, and scroll to a ne
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/colonyquest/cq-growth');
+  await page.evaluate(() => {
+    const Original = Phaser.Game;
+    Phaser.Game = function(config) { window.habitatGame = new Original(config); return window.habitatGame; };
+  });
   await page.locator('#resumeBtn').click();
+  await page.waitForFunction(() => window.habitatGame.scene.scenes[0].textures.exists('cq-chamber'));
+  await expect.poll(() => page.evaluate(() => window.habitatGame.scene.scenes[0].children.list.filter(item => item.getData?.('habitatRoom')).length)).toBeGreaterThan(10);
+  await expect.poll(() => page.evaluate(() => window.habitatGame.scene.scenes[0].children.list.filter(item => item.getData?.('habitatJob')).length)).toBeGreaterThan(0);
+  await page.screenshot({ path: testInfo.outputPath('smartboard-habitat.png') });
   const world = page.locator('#worldViewport');
   await expect(world).toHaveAttribute('aria-description', /Leaf Colony: 1 queen, 16 workers, 11 guard ants/);
   await expect(world).toHaveAttribute('aria-description', /Stone and steel walls/);
