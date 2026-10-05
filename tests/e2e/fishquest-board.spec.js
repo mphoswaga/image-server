@@ -48,3 +48,20 @@ test('four rounds evolve fish to whales and expressions fit each evolution',asyn
  });
  await page.screenshot({path:info.outputPath('smile-stages.png'),fullPage:true});
 });
+
+for (const count of [2,3,4]) test(`${count} fish teams remain selected after restore and new game`,async({page})=>{
+ await page.route('**/api/game/board/fishquest/smartboard',r=>r.fulfill({json:{storageKey:'team-count:board',classes:[{id:'r1',name:'Class'}],attendance:Array.from({length:12},(_,i)=>({rosterId:'r1',studentId:String(i),name:'Learner '+i})),game:{questions:[{question:'Habitat?',options:['Water','Sky'],correctIndex:0}]}}}));
+ await page.goto('/fishquest-board.html?game=board');
+ await page.locator('#teams').selectOption(String(count));
+ await page.locator('#storyEnabled').uncheck();
+ await page.locator('#start').click();
+ await expect(page.locator('#play')).toBeVisible();
+ await page.reload();await page.locator('#restore').click();
+ page.on('dialog',d=>d.accept());await page.locator('#restart').click();
+ await expect(page.locator('#teams')).toHaveValue(String(count));
+ await expect(page.locator('#teamEditor input')).toHaveCount(count);
+ await expect(page.locator('#roster select')).toHaveCount(12);
+ await page.locator('#start').click();
+ await expect(page.locator('#play')).toBeVisible();
+ expect(await page.locator('#fish').evaluate(el=>el.style.getPropertyValue('--teams'))).toBe(String(count));
+});

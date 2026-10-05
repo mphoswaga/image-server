@@ -143,6 +143,7 @@
 
   function renderTeamEditor() {
     const teams = currentDraftTeams();
+    config.teamCount = teams.length;
     config.teams = teams;
     $('teamEditor').innerHTML = teams.map((team, index) => `<label class="team-line" data-index="${index}"><span class="team-swatch" style="background:${colorHex(core.TEAM_COLORS[team.colorIndex].primary)}"></span><input maxlength="40" value="${esc(team.name)}" aria-label="Team ${index + 1} name"></label>`).join('');
     renderRosterAssignments();
@@ -166,7 +167,8 @@
     const teams = config.teams || [];
     const prior = memberTeamMap();
     $('rosterAssign').innerHTML = roster.students.map((student, index) => {
-      const assigned = prior.get(String(student.id)) || teams[index % teams.length].id;
+      const previous = prior.get(String(student.id));
+      const assigned = teams.some(team => team.id === previous) ? previous : teams[index % teams.length].id;
       return `<label class="student-row"><b>${esc(student.name)}</b><select data-student-id="${esc(student.id)}" data-student-name="${esc(student.name)}" aria-label="Team for ${esc(student.name)}"><option value="__remove__">Remove from this game</option>${teams.map(team => `<option value="${esc(team.id)}"${team.id === assigned ? ' selected' : ''}>${esc(team.name)}</option>`).join('')}</select></label>`;
     }).join('');
     $('rosterAssign').querySelectorAll('select').forEach(el=>el.addEventListener('change',async()=>{
@@ -275,7 +277,7 @@
     renderQuestions();
     if (session) {
       $('resumeBar').classList.add('visible');
-      $('resumeText').textContent = session.phase === 'ended' ? 'The winner and team results are ready.' : `Continue from turn ${session.turnIndex + 1}.`;
+      $('resumeText').textContent = session.phase === 'ended' ? 'The winner and team results are ready.' : `Continue the saved ${session.teams.length}-team game from turn ${session.turnIndex + 1}.`;
       $('resumeBtn').textContent = session.phase === 'ended' ? 'See the winner' : 'Continue game';
       $('startBtn').disabled = session.phase !== 'ended';
     } else {

@@ -238,10 +238,10 @@ function render(){
 }
 $('class').onchange=setupRoster;$('teams').onchange=setupRoster;
 $('start').onclick=()=>{try{state=FishBoard.create(students,data.game.questions,Number($('teams').value),Number($('rounds').value),$('storyEnabled').checked,Number($('questionSeconds').value));state.teamNames=teamNames.slice(0,state.teamCount);persist();tone();render()}catch(e){$('error').textContent=e.message}};
-$('restore').onclick=()=>{state=FishBoard.upgrade(saved);state.paused=true;persist();render()};
+$('restore').onclick=()=>{state=FishBoard.upgrade(saved);$('teams').value=String(state.teamCount);teamNames=teamNames.map((name,i)=>state.teamNames?.[i]||name);state.paused=true;persist();render()};
 $('pause').onclick=()=>{updateClock();state.paused=!state.paused;persist();render()};
 $('next').onclick=()=>{if(FishBoard.next(state)){persist();render()}};
-$('restart').onclick=()=>{if(state.phase!=='ended'&&!confirm('Finish this board game and return to team setup?'))return;clearTimeout(timer);sessionStorage.removeItem(storageKey);state=null;saved=null;$('boardLearningReview').hidden=true;FishBoardSwim.clear();$('restore').hidden=true;$('play').hidden=true;$('setup').hidden=false;document.body.classList.remove('paused','game-active')};
+$('restart').onclick=()=>{if(state.phase!=='ended'&&!confirm('Finish this board game and return to team setup?'))return;clearTimeout(timer);sessionStorage.removeItem(storageKey);state=null;saved=null;$('boardLearningReview').hidden=true;FishBoardSwim.clear();$('restore').hidden=true;$('play').hidden=true;$('setup').hidden=false;document.body.classList.remove('paused','game-active');setupRoster()};
 $('sound').onclick=()=>{sound=!sound;$('sound').textContent=sound?'Sound on':'Sound off'};
 $('full').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen()}catch{$('error').textContent='Use your browser’s full-screen control on this device.'}};
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&state&&state.phase!=='ended'){updateClock();state.paused=true;persist();render()}});

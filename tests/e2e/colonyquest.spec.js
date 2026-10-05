@@ -984,3 +984,33 @@ test('materials gathered during an open upgrade panel enable a building without 
   expect(saved.teams[0].sticks).toBe(0);
   expect(saved.teams[0].leaves).toBe(0);
 });
+
+for (const count of [2, 3, 4, 5, 6]) test(`${count} selected teams survive resetting an old four-team match and keep every learner`, async ({ page }) => {
+  let setup = { teamCount: 4, rounds: 5, sound: false, teams: Array.from({ length: 4 }, (_, i) => colonyCore.createTeam({}, i)) };
+  let saved = colonyCore.normalizeSession({ phase: 'question', teams: setup.teams });
+  const students = Array.from({ length: 12 }, (_, i) => ({ id: 's' + i, name: 'Learner ' + i }));
+  await page.route(/\/api\/game\/cq-team-count\/colonyquest(?:\/session)?$/, async route => {
+    const method = route.request().method();
+    if (method === 'DELETE') { saved = null; return route.fulfill({ json: { ok: true } }); }
+    if (method === 'PATCH') {
+      setup = route.request().postDataJSON();
+      return route.fulfill({ json: { colonyquest: setup, questions } });
+    }
+    if (method === 'PUT') { saved = route.request().postDataJSON().session; return route.fulfill({ json: { ok: true } }); }
+    return route.fulfill({ json: { game: { id: 'cq-team-count', lessonTitle: 'Habitats', questions, colonyquest: setup }, roster: { name: 'Class', students }, session: saved } });
+  });
+  await page.goto('/colonyquest/cq-team-count');
+  await page.locator('#teamCount').selectOption(String(count));
+  await expect(page.locator('.team-line')).toHaveCount(count);
+  expect(await page.locator('#rosterAssign select').evaluateAll(items => items.every(el => el.value !== '__remove__'))).toBe(true);
+  page.on('dialog', dialog => dialog.accept());
+  await page.locator('#discardBtn').click();
+  await expect(page.locator('#teamCount')).toHaveValue(String(count));
+  await page.locator('#startBtn').click();
+  await expect(page.locator('#storyOverlay')).toBeVisible();
+  expect(saved.teams).toHaveLength(count);
+  expect(saved.teams.flatMap(team => team.members)).toHaveLength(12);
+  await page.reload();
+  await expect(page.locator('#teamCount')).toHaveValue(String(count));
+  await expect(page.locator('#resumeText')).toContainText(count + '-team');
+});
