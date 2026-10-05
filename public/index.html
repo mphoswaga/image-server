@@ -3059,7 +3059,7 @@
             </div>
             <div id="plannedGameFields" hidden>
               <div class="grid3">
-                <div><label for="plannedGamePurpose">Learning purpose</label><select id="plannedGamePurpose"><option value="check">Check understanding</option><option value="practise">Practise</option><option value="introduce">Introduce a concept</option><option value="review">Review</option></select></div>
+                <div id="plannedPlayModeWrap"><label for="plannedPlayMode">How learners play</label><select id="plannedPlayMode"><option value="duels">Team duels</option><option value="cooperative">Cooperative</option><option value="smartboard">Smartboard teams</option><option value="multiplayer">Individual multiplayer</option><option value="individual">Individual play</option></select></div><div><label for="plannedGamePurpose">Learning purpose</label><select id="plannedGamePurpose"><option value="check">Check understanding</option><option value="practise">Practise</option><option value="introduce">Introduce a concept</option><option value="review">Review</option></select></div>
                 <div><label for="plannedGameStart">Start at minute (blank = automatic)</label><input id="plannedGameStart" type="number" min="0" max="179" placeholder="Let LessonScope decide"></div>
                 <div><label for="plannedGameMinutes">Game time, including setup and discussion</label><input id="plannedGameMinutes" type="number" min="3" max="180" value="15"></div>
                 <div id="plannedGameLessonWrap" hidden><label for="plannedGameLesson">Include in lesson number</label><input id="plannedGameLesson" type="number" min="1" max="5" value="1"></div>
@@ -4070,11 +4070,14 @@
     function lessonSettingsFromForm(){
       return LessonDesign.normalize({durationMinutes:Number($('lessonMinutes').value),slideCountMode:designManualSlides?'manual':'auto',
         observation:$('observationEnabled').checked?{startMinute:Number($('observationStart').value),durationMinutes:Number($('observationMinutes').value)}:null,
-        game:$('plannedGame').value?{mode:$('plannedGame').value,purpose:$('plannedGamePurpose').value,startMinute:$('plannedGameStart').value===''?null:Number($('plannedGameStart').value),durationMinutes:Number($('plannedGameMinutes').value),lesson:$('sequenceEnabled').checked?Number($('plannedGameLesson').value):1,existingId:$('plannedExistingGame').value||null}:null
+        game:$('plannedGame').value?{mode:$('plannedGame').value,playMode:$('plannedPlayMode').value,purpose:$('plannedGamePurpose').value,startMinute:$('plannedGameStart').value===''?null:Number($('plannedGameStart').value),durationMinutes:Number($('plannedGameMinutes').value),lesson:$('sequenceEnabled').checked?Number($('plannedGameLesson').value):1,existingId:$('plannedExistingGame').value||null}:null
       },{lessonPurpose:currentLessonPurpose(),lessonCount:$('sequenceEnabled').checked?Number($('sequenceLessonCount').value):1});
     }
     function updateDesignRecommendation(sections=[]){
       $('plannedGameFields').hidden=!$('plannedGame').value;
+      const allowedModes=({moonquest:['duels','cooperative'],colonyquest:['smartboard','multiplayer'],fishquest:['smartboard','individual'],arcade:['individual']})[$('plannedGame').value]||['individual'];
+      for(const option of $('plannedPlayMode').options){option.hidden=!allowedModes.includes(option.value);option.disabled=option.hidden;}
+      if(!allowedModes.includes($('plannedPlayMode').value)) $('plannedPlayMode').value=allowedModes[0];
       $('observationFields').hidden=!$('observationEnabled').checked;
       $('plannedGameLessonWrap').hidden=!$('sequenceEnabled').checked;
       try{const settings=lessonSettingsFromForm(),n=LessonDesign.recommendation(settings,sections,activeSequencePlanIndex+1);
@@ -4098,7 +4101,7 @@
       $('lessonMinutes').value=settings?.durationMinutes||35;
       $('observationEnabled').checked=!!settings?.observation;
       $('observationStart').value=settings?.observation?.startMinute||0;$('observationMinutes').value=settings?.observation?.durationMinutes||35;
-      $('plannedGame').value=settings?.game?.mode||'';$('plannedGamePurpose').value=settings?.game?.purpose||'check';
+      $('plannedGame').value=settings?.game?.mode||'';$('plannedPlayMode').value=settings?.game?.playMode||({moonquest:'duels',colonyquest:'smartboard',fishquest:'smartboard',arcade:'individual'}[settings?.game?.mode]||'individual');$('plannedGamePurpose').value=settings?.game?.purpose||'check';
       $('plannedGameStart').value=settings?.game?.startMinute??'';$('plannedGameMinutes').value=settings?.game?.durationMinutes||15;$('plannedGameLesson').value=settings?.game?.lesson||1;
       loadPlannedGames(settings?.game?.existingId||'');updateDesignRecommendation();
     }
@@ -4119,7 +4122,7 @@
       $('ipLessonMinutes').addEventListener('input',()=>{try{const n=LessonDesign.recommendation({durationMinutes:Number($('ipLessonMinutes').value)});$('ipSlideHint').textContent='Recommended: '+n+' content slides. You can change this.';if(!importManual)$('ipSlideCount').value=n;}catch(e){$('ipSlideHint').textContent=e.message;}});
       $('slideCount').addEventListener('input',()=>{designManualSlides=true;});
       $('useDesignRecommendation').onclick=()=>{designManualSlides=false;updateDesignRecommendation();};
-      for(const id of ['lessonMinutes','observationEnabled','observationStart','observationMinutes','plannedGame','plannedGamePurpose','plannedGameStart','plannedGameMinutes','plannedGameLesson','sequenceEnabled','sequenceLessonCount','periodMinutes'])$(id).addEventListener('change',()=>{
+      for(const id of ['lessonMinutes','observationEnabled','observationStart','observationMinutes','plannedGame','plannedPlayMode','plannedGamePurpose','plannedGameStart','plannedGameMinutes','plannedGameLesson','sequenceEnabled','sequenceLessonCount','periodMinutes'])$(id).addEventListener('change',()=>{
         if(id==='periodMinutes')$('lessonMinutes').value=$('periodMinutes').value;
         if(id==='lessonMinutes')$('periodMinutes').value=$('lessonMinutes').value;
         if(id==='plannedGame')loadPlannedGames();updateDesignRecommendation();
@@ -5431,7 +5434,7 @@
     function applyEditsToDeck(deck,edits){
       if(!deck||!Array.isArray(deck.slides)) return deck;
       const byIndex=new Map((edits||[]).map(edit=>[edit.index,edit]));
-      return {...deck,slides:deck.slides.map((slide,index)=>({...slide,...(byIndex.get(index)||{})}))};
+      return {...deck,slides:deck.slides.map((slide,index)=>{const edit=byIndex.get(index)||{};return {...slide,...edit,...(edit.table?{table:{...slide.table,...edit.table}}:{})};})};
     }
     function saveActiveSequenceDeck(){
       if(!sequenceMode()||!sequenceDecks[activeSequenceDeckIndex]) return;
@@ -5552,7 +5555,9 @@
       const bm=badgeMeta(s.imageSource);
       const assessmentProtected=!!s.assessmentProtected||!!s.assessmentPhaseType;
       let thumb;
-      if(s.type==='video'&&s.youtube){
+      if(s.table?.rows?.length){
+        thumb='<div class="thumb" style="display:grid;place-items:center;background:#edf7f2;color:#135b4e">Editable teaching table</div>';
+      } else if(s.type==='video'&&s.youtube){
         thumb=`<div class="thumb"><img src="${esc(s.youtube.thumbnail)}" loading="lazy"><span class="badge" style="background:#ff0033;color:#fff">YouTube</span></div>`;
       } else if(s.youtube){
         thumb=`<div class="thumb"><img src="${esc(s.youtube.thumbnail)}" loading="lazy"><span class="badge" style="background:#ff0033;color:#fff">YouTube</span></div>`;
@@ -5604,7 +5609,8 @@
         const diff=s.differentiation?`<div class="diff"><div><b style="color:#15824b">Support</b> ${esc(s.differentiation.support)}</div><div><b style="color:#1f4e79">Stretch</b> ${esc(s.differentiation.stretch)}</div></div>`:'';
         const sc=(s.shortcuts&&s.shortcuts.length)?`<div class="shortcuts">${s.shortcuts.map(x=>`<div class="sc-row"><span class="sc-act">${esc(x.action)}</span><span class="sc-keys">${String(x.keys).split('+').map(k=>k.trim()).filter(Boolean).map((k,n)=>(n>0?'<span class="sc-plus">+</span>':'')+'<kbd class="keycap">'+esc(k)+'</kbd>').join('')}</span></div>`).join('')}</div>`:'';
         const wk=(s.worked&&s.worked.steps&&s.worked.steps.length)?`<div class="worked">${s.worked.task?`<div class="wtask">${esc(s.worked.task)}</div>`:''}<ol>${s.worked.steps.map(st=>`<li>${esc(st)}</li>`).join('')}</ol></div>`:'';
-        body=`${kicker||stageKicker}<h3${editable} data-field="title">${esc(s.title)}</h3>${bl}${sc}${wk}${ex}${diff}${yt}${actions}`;
+        const table=s.table?.rows?.length?`<table class="lesson-data-table" style="width:100%;border-collapse:collapse"><thead><tr>${s.table.headers.map(h=>`<th contenteditable data-table-header style="border:1px solid #ccc;padding:6px">${esc(h)}</th>`).join('')}</tr></thead><tbody>${s.table.rows.map(row=>`<tr>${row.map(cell=>`<td contenteditable data-table-cell style="border:1px solid #ccc;padding:6px">${esc(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table><p>${esc(s.table.caption||'')}</p>`:'';
+        body=`${kicker||stageKicker}<h3${editable} data-field="title">${esc(s.title)}</h3>${table}${bl}${sc}${wk}${ex}${diff}${yt}${actions}`;
       }
       return `<div class="slide" data-index="${i}" data-slide-type="${esc(s.type||'')}" data-assessment-phase-type="${esc(s.assessmentPhaseType||'')}" data-assessment-protected="${assessmentProtected?'true':'false'}">${thumb}<div class="body">${body}</div></div>`;
     }
@@ -5643,6 +5649,9 @@
       $('gameInfoTip').dataset.tip=$('gamePurposeHint').textContent;
       $('gameInfoTip').setAttribute('aria-label',$('gamePurposeHint').textContent);
       deckEl.className='deck'+(d.band?' band-'+d.band:''); deckEl.innerHTML=d.slides.map((s,i)=>cardHTML(s,i)).join('');
+      document.getElementById('lessonDeckReview')?.remove();
+      const review=d.slides.find(s=>s.lessonReview)?.lessonReview;
+      if(review){const panel=document.createElement('details');panel.id='lessonDeckReview';panel.className='info';panel.innerHTML='<summary>Lesson alignment and preparation</summary><p>'+esc(review.validation)+'</p><p>Timing allocations are proposed. Review pacing before teaching. Edits made after generation have not received the same AI review.</p><ul>'+[...(review.warnings||[]),...(review.externalResources||[]).map(r=>'Prepare: '+r)].map(t=>'<li>'+esc(t)+'</li>').join('')+'</ul><ol>'+review.outline.map(step=>'<li>'+esc(step.startMinute+'–'+step.endMinute+' min · '+step.title)+'</li>').join('')+'</ol>';deckEl.before(panel);}
       $('packPreview').innerHTML=''; // reset lesson-pack for the new deck
       resetGameSection(); // reset the student-game box for the new deck
       loadQuota(); // show remaining AI-visual budget + gate the AI buttons
@@ -5704,6 +5713,7 @@
     });
     function collectEdits(){ return [...deckEl.querySelectorAll('.slide[data-index]')].map(card=>{
       const e={index:+card.dataset.index};
+      const table=card.querySelector('.lesson-data-table');if(table)e.table={headers:[...table.querySelectorAll('th')].map(c=>c.innerText.trim()),rows:[...table.querySelectorAll('tbody tr')].map(row=>[...row.querySelectorAll('td')].map(c=>c.innerText.trim()))};
       const t=card.querySelector('[data-field=title]'); if(t)e.title=t.innerText.trim();
       const su=card.querySelector('[data-field=subtitle]'); if(su)e.subtitle=su.innerText.trim();
       const ex=card.querySelector('[data-field=example]'); if(ex)e.example=ex.innerText.trim();
@@ -7372,6 +7382,7 @@
         subtitle:slide.subtitle||'',
         example:slide.example||'',
         bullets:Array.isArray(slide.bullets)?slide.bullets:[],
+        ...(slide.table?.rows?.length?{table:slide.table}:{}),
       }));
     }
 

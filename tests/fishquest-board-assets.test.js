@@ -25,7 +25,7 @@ test('board serves a complete matching asset set and never caches its entry page
     assert.ok(assetPath.includes('/' + version + '/'));
     const asset = await fetch(base + assetPath);
     assert.equal(asset.status, 200);
-    const name = assetPath.split('/').pop();
+    const name = new URL(assetPath, base).pathname.split('/').pop();
     assert.equal(await asset.text(), fs.readFileSync(path.join(__dirname, '../public', name), 'utf8'));
   }
   assert.equal((await fetch(base + '/fishquest-board-assets/' + version + '/unknown.js')).status, 404);

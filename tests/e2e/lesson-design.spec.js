@@ -45,3 +45,22 @@ test('saved-plan rebuild reuses settings, persists replacement and preserves it 
  fail=true;await page.locator('#regenPlanBtn').click();await expect(page.locator('#status')).toContainText('Your existing plan has been kept');
  await page.reload();await page.evaluate(id=>resumeLessonWorkspace(id),id);await expect(page.locator('textarea.content').first()).toHaveValue('Rebuilt objective-aligned lesson.');
 });
+
+test('game play mode is explicit and survives a saved planning session',async({page})=>{
+ let sent;await page.route('**/api/lesson-plan',async route=>{sent=route.request().postDataJSON();await route.fulfill({json:plan});});
+ await setup(page);await page.locator('#lessonMinutes').fill('70');await page.locator('#plannedGame').selectOption('colonyquest');await page.locator('#plannedPlayMode').selectOption('multiplayer');await page.locator('#planBtn').click();await expect(page.locator('#planStage')).toBeVisible();expect(sent.lessonSettings.game.playMode).toBe('multiplayer');
+ await page.evaluate(()=>saveWorkspaceNow());const id=await page.evaluate(()=>currentWorkspaceId);await page.reload();await page.evaluate(id=>resumeLessonWorkspace(id),id);expect(await page.evaluate(()=>ctx.lessonSettings.game.playMode)).toBe('multiplayer');
+});
+
+test('aligned table preview preserves edited cells and preparation notes across sequence switches',async({page})=>{
+ await setup(page);
+ await page.evaluate(()=>{
+  const d={deckId:'table-fixture',filename:'File-sizes.pptx',slideCount:1,band:'early',slides:[{type:'content',title:'Example file sizes',bullets:[],table:{headers:['File','Size'],rows:[['Video','10 MB'],['Game','200 MB']],caption:'Examples only'},lessonReview:{validation:'Plan checks passed',warnings:['Review pacing'],externalResources:['Prepare MoonQuest diagram'],outline:[{title:'Compare sizes',startMinute:10,endMinute:20}]}}]};
+  renderDeck(d);show('slides');
+ });
+ await page.locator('#lessonDeckReview summary').click();await expect(page.locator('#lessonDeckReview')).toContainText('Prepare MoonQuest diagram');await expect(page.locator('.lesson-data-table')).toBeVisible();await expectNoPageOverflow(page);
+ await page.locator('[data-table-cell]').nth(1).fill('12 MB');
+ expect(await page.evaluate(()=>collectEdits()[0].table.rows[0][1])).toBe('12 MB');
+ await page.evaluate(()=>{const saved=applyEditsToDeck(lastDeckPreview,collectEdits());const edits=workspaceDeckEdits(saved);renderDeck(applyEditsToDeck(saved,edits));});
+ await expect(page.locator('[data-table-cell]').nth(1)).toHaveText('12 MB');await expect(page.locator('#deck')).toContainText('Examples only');
+});

@@ -242,7 +242,7 @@ test('a teacher can submit complete saved attempts without forcing incomplete le
     await expect(results).toContainText('1 complete and ready to submit');
     await expect(results).toContainText('1 still incomplete and will remain open');
     await results.getByRole('button', { name: 'Submit 1 completed attempt' }).click();
-    await expect(results.locator('.gb-stat').filter({ hasText: 'Submitted' }).locator('.v')).toHaveText('1');
+    await expect(results).toContainText('1 of 2 students have made their final submission.');
 
     const after = await (await page.request.get(`/api/assignment/${assessment.assessmentId}/results`)).json();
     expect(after).toMatchObject({ submittedCount: 1, completedDraftsCount: 0, incompleteDraftsCount: 1 });

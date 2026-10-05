@@ -258,6 +258,7 @@ async function selectImages(slides, subject, topic, sourceImages = []) {
   const chosen = [];
 
   for (const slide of slides) {
+    if (slide.table?.rows?.length) { chosen.push({ relpath: '', source: 'native-table' }); continue; }
     // LLM asked for a labelled diagram, and it's not one of the curated ones →
     // generate (or reuse) an SVG diagram for any subject.
     if (slide.visual && slide.visual.type === 'diagram' && !detectLabelledDiagram(`${slide.title} ${slide.imageQuery || ''}`)) {
@@ -269,6 +270,7 @@ async function selectImages(slides, subject, topic, sourceImages = []) {
         const entry = await generateDiagram({ subject, topic, concept });
         addLibraryImages([entry]); used.add(entry.relpath); chosen.push(entry); continue;
       } catch (err) {
+        if (slide.alignment) throw new Error('A required lesson diagram could not be created. Retry the deck; a photo will not replace it.');
         console.log(`Diagram generation failed (${err.message}) — falling back to a photo.`);
         // fall through to normal image selection
       }
@@ -417,11 +419,15 @@ function paginateSlides(slides, t, preset) {
   let position = 0;
   const out = [];
   (slides || []).forEach((slide, sourceIndex) => {
+    if (slide.table?.rows?.length) {
+      out.push({ ...slide, _layout: layoutForSlide(slide, position++, rhythm), _sourceIndex: sourceIndex });
+      return;
+    }
     if (slide.type === 'video') {
       out.push({ ...slide, _layout: layoutForSlide(slide, position, rhythm), _sourceIndex: sourceIndex });
       return;
     }
-    const layout = layoutForSlide(slide, position, rhythm);
+    let layout = layoutForSlide(slide, position, rhythm);
     if (usesLayout(slide)) position++;
     const bullets = Array.isArray(slide.bullets) ? slide.bullets : [];
     const canSplit = ['content', 'objectives', 'activity', 'recap', 'check'].includes(slide.type || 'content') && bullets.length > 1;
@@ -444,7 +450,10 @@ function paginateSlides(slides, t, preset) {
       }
       return;
     }
-    const chunks = chunkBulletsForSlide(slide, t, layout);
+    let chunks = chunkBulletsForSlide(slide, t, layout);
+    // Keep a planned step together when a wider existing layout can fit it.
+    // Legacy decks retain their established pagination and theme rhythm.
+    if (slide.alignment && chunks.length > 1) { layout='twocol'; chunks=chunkBulletsForSlide(slide,t,layout); }
     chunks.forEach((chunk, idx) => {
       const continued = idx > 0;
       out.push({
@@ -657,6 +666,19 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
   const slide = pptx.addSlide();
   slide.background = { color: thm.bg };
   const accent = t.accent;
+  if (slideData.table?.rows?.length) {
+    slide.addNotes(slideData.speakerNotes || '');
+    const table = slideData.table;
+    const tableFit = require('./lesson-slide-table').tableLayout(table);
+    if (table.headers.length < 2 || table.headers.length > 4 || table.rows.length > 8 || table.rows.some(row => row.length !== table.headers.length)) throw new Error('The slide table needs 2–4 columns with matching rows.');
+    addTitle(slide, slideData.title, { x: .5, y: .35, w: 9, h: .8, fontFace: thm.font, fontSize: Math.min(30,t.titleSize), bold: true, color: thm.primary });
+    const rows = [table.headers.map(text => ({ text, options: { bold: true, color: 'FFFFFF', fill: thm.primary } })), ...table.rows.map(row => row.map(text => ({ text, options: { color: thm.primary } })))];
+    slide.addTable(rows, { x: .5, y: 1.35, w: 9, h: 3.1, colW: Array(table.headers.length).fill(9/table.headers.length), rowH: tableFit.rowH, fontFace: thm.font, fontSize: tableFit.fontSize, margin: .08, border: { type: 'solid', color: 'C9D4DF', pt: 1 }, fill: thm.bg, valign: 'mid', autoPage: false });
+    const caption = [table.caption, ...(slideData.bullets || [])].filter(Boolean).join(' ');
+    if (caption) slide.addText(caption, { x: .55, y: 4.7, w: 8.9, h: .75, fontFace: thm.font, fontSize: 14, color: thm.primary, breakLine: false });
+    return;
+  }
+
   const imgSource = slideData.youtube && slideData.youtube.thumbnailData
     ? { data: slideData.youtube.thumbnailData }
     : (imgPath ? { path: imgPath } : null);
@@ -746,7 +768,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
 
       // Curated labelled diagram → hero layout (layout-agnostic; content drives it).
       const labelledKey = detectLabelledDiagram(`${slideData.title} ${slideData.imageQuery || ''} ${slideData.example || ''}`);
-      if (!hasFraction && labelledKey) {
+      if (!hasFraction && labelledKey && (!slideData.alignment || slideData.visual?.type === 'diagram')) {
         slide.addText('LABELLED DIAGRAM', { x: 0.5, y: 0.4, w: 9, h: 0.4, fontFace: thm.font, fontSize: 14, bold: true, color: accent, charSpacing: 3 });
         addTitle(slide, slideData.title, { x: 0.5, y: 0.85, w: 9, h: 0.9, fontFace: thm.font, fontSize: t.titleSize, bold: true, color: thm.primary });
         drawLabelledDiagram(pptx, slide, labelledKey, accent);
@@ -970,8 +992,11 @@ async function buildDeck({ subject, topic, slideCount = 4, grade = 'middle schoo
   const slides = await generateContent(subject, topic, slideCount, grade, tone, focus, { objectives, lessonPlanText, sourceMaterialText, teachingModelId, ...extras });
   const safeSlides = paginateSlides(slides, profile.theme, preset).map(({ _sourceIndex, ...slide }) => slide);
   const images = await selectImages(safeSlides, subject, topic, sourceImages);
-  if (skipAssemble) return { slides: safeSlides, images, band: profile.band, preset };
+  const aligned = safeSlides.some(s => s.alignment);
+  if (skipAssemble && !aligned) return { slides: safeSlides, images, band: profile.band, preset };
   const pptx = assembleDeck(safeSlides, images, profile.theme, preset);
+  if (aligned) require('./lesson-deck-export').validateAlignedExport(await pptx.write({outputType:'nodebuffer'}), {slides:safeSlides,images,grade,presetId});
+  if (skipAssemble) return { slides: safeSlides, images, band: profile.band, preset };
   return { pptx, slides: safeSlides, images, band: profile.band, preset };
 }
 

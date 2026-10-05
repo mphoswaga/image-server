@@ -953,7 +953,7 @@ function placeholderDeck(subject, topic, slideCount, teachingModelId = 'standard
 async function callModel(schema, name, messages, max_tokens = 9000) {
   const client = aiClient();
   const response = await client.chat.completions.create({
-    model: MODEL,
+    model: /^(lesson_outline|aligned_lesson|lesson_alignment|aligned_slide)/.test(name) ? (process.env.OPENAI_LESSON_MODEL || 'gpt-4.1') : MODEL,
     max_tokens,
     messages,
     response_format: { type: 'json_schema', json_schema: { name, strict: true, schema } },
@@ -968,6 +968,8 @@ async function generateContent(subject, topic, slideCount, grade = 'middle schoo
   const lessonPurpose = normalizeLessonPurpose(extras.lessonPurpose);
   const assessmentOptions = normalizeAssessmentOptions(extras);
   const assessmentManifest = assessmentPhaseManifest(extras);
+  const aligned = process.env.LESSON_PLAN_DECKS === '1' && lessonPurpose === 'lesson' && !!String(extras.lessonPlanText || '').trim();
+  if (aligned && !process.env.OPENAI_API_KEY) throw new Error('AI slide generation is unavailable. Your approved lesson remains saved.');
   if (!process.env.OPENAI_API_KEY) {
     console.log('No OPENAI_API_KEY set — using placeholder text. Add a key to .env for AI-written slides.');
     return placeholderDeck(subject, topic, slideCount, teachingModelId, lessonPurpose, extras);
@@ -993,8 +995,10 @@ async function generateContent(subject, topic, slideCount, grade = 'middle schoo
     assessmentOptions,
     assessmentManifest,
     assessmentDeckPolicyVersion: 4,
+    lessonAlignmentVersion: aligned ? 1 : 0,
     regenerate: !!(extras && extras.regenerate),
   }, async () => {
+    if (aligned) return require('./lesson-deck-alignment').generateAlignedDeck({ callModel, slideSchema: DECK_SCHEMA.properties.slides.items, subject, topic, grade, tone, focus, extras, slideCount });
     const prompt = buildPrompt(subject, topic, grade, slideCount, tone, focus, extras);
     // Structured outputs enforce shape, but not the number of slides or the
     // assessment contract. Retry a weak response, then apply a deterministic
@@ -1021,7 +1025,12 @@ async function generateContent(subject, topic, slideCount, grade = 'middle schoo
 }
 
 // Regenerate a single content slide (for the editable preview's "regenerate").
-async function generateOneSlide({ subject, topic, grade, tone = 'clear and engaging', focus = '', teachingModelId = 'standard', lessonPurpose = 'lesson', lessonPlanText = '', assessmentDraft = null, preferredStage = '', avoidTitles = [] }) {
+async function generateOneSlide({ subject, topic, grade, tone = 'clear and engaging', focus = '', teachingModelId = 'standard', lessonPurpose = 'lesson', lessonPlanText = '', assessmentDraft = null, preferredStage = '', avoidTitles = [], alignment = null, lessonSettings = null }) {
+  if (alignment && normalizeLessonPurpose(lessonPurpose) === 'lesson') {
+    if (!process.env.OPENAI_API_KEY) throw new Error('AI slide generation is unavailable.');
+    const fresh = await require('./lesson-deck-alignment').regenerateAlignedSlide({ callModel, slideSchema: DECK_SCHEMA.properties.slides.items, alignment, lessonPlanText, lessonSettings, subject, topic, grade, focus });
+    return { ...fresh, modelLabel: getTeachingModel(teachingModelId).label, modelStageLabel: stageLabel(teachingModelId, alignment.stageId) };
+  }
   const teachingModel = getTeachingModel(teachingModelId);
   const purpose = normalizeLessonPurpose(lessonPurpose);
   const protect = slide => redactPrivateAssessmentContent({ slides: [slide] }, { assessmentDraft }, purpose).slides[0];

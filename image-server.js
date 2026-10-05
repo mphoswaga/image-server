@@ -1203,7 +1203,7 @@ function previewEntry(slide, image) {
     bullets: slide.bullets || [],
     example: slide.example || null,
     imageQuery: slide.imageQuery || null,
-    image: image ? '/' + image.relpath : null,
+    image: image?.relpath ? '/' + image.relpath : null,
     imageSource: image ? (image.source || 'library') : null,
     // an animated concept diagram replaces the photo for fraction slides
     fraction: parseFraction(slide.example) || parseFraction(slide.title) || parseFraction(slide.imageQuery) || null,
@@ -1212,6 +1212,9 @@ function previewEntry(slide, image) {
     youtube: slide.youtube || null,
     differentiation: slide.differentiation || null,
     shortcuts: (Array.isArray(slide.shortcuts) && slide.shortcuts.length) ? slide.shortcuts : null,
+    table: slide.table || null,
+    lessonReview: slide.lessonReview || null,
+    alignment: slide.alignment || null,
     worked: (slide.worked && slide.worked.task && Array.isArray(slide.worked.steps) && slide.worked.steps.length) ? slide.worked : null,
     labelled: detectLabelledDiagram(`${slide.title || ''} ${slide.imageQuery || ''} ${slide.example || ''}`),
   };
@@ -4501,6 +4504,8 @@ app.post('/api/slide/:id/regenerate', requireAuth, async (req, res) => {
       lessonPlanText: deck.lessonPlanText,
       assessmentDraft: deck.assessmentDraft,
       preferredStage: deck.slides[i].modelStage,
+      alignment: deck.slides[i].alignment,
+      lessonSettings: deck.lessonSettings,
       avoidTitles,
     });
     fresh.side = deck.slides[i].side; // keep the image side for layout rhythm
@@ -4517,6 +4522,11 @@ app.post('/api/slide/:id/regenerate', requireAuth, async (req, res) => {
   }
 });
 
+function editedLessonTable(current, edit) {
+  if (!Array.isArray(edit.headers) || !Array.isArray(edit.rows) || edit.headers.length !== current.headers.length || edit.rows.length !== current.rows.length || !edit.rows.every(row => Array.isArray(row) && row.length === edit.headers.length) || ![edit.headers, ...edit.rows].flat().every(cell => typeof cell === 'string' && cell.length <= 60)) throw new Error('Keep the teaching table dimensions unchanged and each cell within 60 characters.');
+  return { ...current, headers: edit.headers.slice(), rows: edit.rows.map(row => row.slice()) };
+}
+
 function applyDeckEdits(deck, edits) {
   for (const edit of (edits || [])) {
     const s = deck.slides[edit.index];
@@ -4525,17 +4535,24 @@ function applyDeckEdits(deck, edits) {
     // stale or forged browser edits so item counts, marks and safe wording
     // cannot drift between preview and export.
     if (deck.lessonPurpose === 'test' || s.assessmentProtected || s.assessmentPhaseType) continue;
+    const before = JSON.stringify({ title:s.title, bullets:s.bullets, example:s.example, subtitle:s.subtitle, table:s.table });
+    if (s.table?.rows?.length && edit.table) s.table = editedLessonTable(s.table, edit.table);
     if (typeof edit.title === 'string') s.title = edit.title;
     if (Array.isArray(edit.bullets)) s.bullets = edit.bullets.filter(b => b.trim());
     if (typeof edit.example === 'string') s.example = edit.example;
     if (typeof edit.subtitle === 'string') s.subtitle = edit.subtitle;
+    if (s.alignment && before !== JSON.stringify({ title:s.title, bullets:s.bullets, example:s.example, subtitle:s.subtitle, table:s.table })) s.alignment.teacherEdited = true;
   }
 }
 
 async function deckPptxBuffer(deck, edits) {
-  applyDeckEdits(deck, edits);
-  const pptx = rebuildDeck({ slides: deck.slides, images: deck.images, grade: deck.grade, presetId: deck.presetId || null });
-  return safeAnimate(await pptx.write({ outputType: 'nodebuffer' }), deck.band);
+  const candidate = deck.slides.some(s=>s.alignment || s.lessonReview) ? cloneWorkspaceValue(deck) : deck;
+  applyDeckEdits(candidate, edits);
+  const pptx = rebuildDeck({ slides: candidate.slides, images: candidate.images, grade: candidate.grade, presetId: candidate.presetId || null });
+  const buffer = safeAnimate(await pptx.write({ outputType: 'nodebuffer' }), candidate.band);
+  require('./lesson-deck-export').validateAlignedExport(buffer, candidate);
+  deck.slides = candidate.slides;
+  return buffer;
 }
 
 function deckFilename(deck) {
@@ -4578,10 +4595,13 @@ function applyWorkspaceDeckEdits(deck, edits) {
     const edit = byIndex.get(index);
     if (!edit) return slide;
     const updated = { ...slide };
+    if (deck.lessonPurpose === 'test' || slide.assessmentProtected || slide.assessmentPhaseType) return slide;
+    if (slide.table?.rows?.length && edit.table) updated.table = editedLessonTable(slide.table, edit.table);
     if (edit.title !== undefined) updated.title = clip(edit.title, 500);
     if (edit.subtitle !== undefined) updated.subtitle = clip(edit.subtitle, 1000);
     if (edit.example !== undefined) updated.example = clip(edit.example, 2000);
     if (Array.isArray(edit.bullets)) updated.bullets = edit.bullets.slice(0, 20).map(item => clip(item, 1000));
+    if (slide.alignment && JSON.stringify(updated) !== JSON.stringify(slide)) updated.alignment = { ...slide.alignment, teacherEdited: true };
     return updated;
   });
   return deck;
