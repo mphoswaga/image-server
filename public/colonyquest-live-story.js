@@ -234,7 +234,12 @@
         for (let i = 0; i < 3; i++) {
           const x = lerp(w * 1.1, -w * 0.1, q) + i * size * 1.15,
             y = ground - size * 0.4 - Math.sin(q * Math.PI) * ground * 0.35 - (i % 2) * size * 0.2;
-          scene.creature('bird', x, y, size * 1.5, t + i * 0.2);
+          if (story.key === 'birds-warning') {
+            c.fillStyle = '#24352d45';
+            oval(c, x, ground + 4, size * .7, size * .12);
+            oval(c, x - size * .35, ground, size * .5, size * .09);
+            oval(c, x + size * .35, ground, size * .5, size * .09);
+          } else scene.creature('bird', x, y, size * 1.5, t + i * 0.2);
           if (q > 0.55 && own?.food < 0) scene.cargo(x, y + size * 0.13, 'seed', 7);
         }
         scene.sprite(images.guard, w * 0.48, ground - size * 0.26, size);
@@ -294,6 +299,17 @@
         }
         scene.sprite(images.queen, x - size * 1.25, y + size * 0.2, size);
         scene.sprite(images.pip, x + size * 1.12, y + size * 0.3, size * 0.7);
+      }
+      const evidence = window.ColonyQuestCore.survivalEvidence(story.key, scene.state.me?.colony, own);
+      if (evidence && q >= 0.6 && !scene.overview) {
+        const site = evidence.site === 'nursery' ? g.home : g.pantry;
+        scene.shield(site.x + site.rx * 0.6, site.y - site.ry * 0.2, Math.min(42, w * 0.1), evidence.good);
+        scene.tag(
+          evidence.text,
+          w / 2,
+          Math.min(h - 32, site.y + site.ry + 20),
+          Math.min(13, Math.max(9, w / 38)),
+        );
       }
       c.restore();
     },

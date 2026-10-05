@@ -117,11 +117,18 @@
         if (
           old.story &&
           old.story.id !== state.story?.id &&
-          ['rain', 'collapse', 'footsteps'].includes(old.story.key)
+          ['rain', 'tunnel-collapse', 'footsteps'].includes(old.story.key)
         ) {
           const outcome = old.story.results?.find((result) => result.playerId === state.me.id);
           if (outcome && (outcome.food < 0 || outcome.pointsLost > 0))
             this.cue('repair', { hazard: old.story.key });
+        }
+        const overtake = window.ColonyQuestCore.overtakeEvidence(old.players, state.players, state.me.id);
+        if (overtake) this.cue('overtake', { ...overtake, duration: 4500 });
+        if (old.story && old.story.id !== state.story?.id) {
+          const outcome = old.story.results?.find((result) => result.playerId === state.me.id);
+          const evidence = window.ColonyQuestCore.survivalEvidence(old.story.key, before, outcome);
+          if (evidence) this.cue('survival', { evidence, duration: 5200 });
         }
         const u = state.me.lastUpgrade;
         const previous = old.me.lastUpgrade;
@@ -628,7 +635,7 @@
           ? 'stocking'
           : room.label.includes('Workshop')
             ? 'building'
-            : room.kind === 'nursery'
+            : room.kind === 'nursery' && this.state.me.colony.eggs?.length
               ? 'nursing'
               : 'tending';
       return {
@@ -731,7 +738,15 @@
       const stride = working && !this.reduced ? Math.sin(t * 12 + seed * 1.7) : 0;
       const facing = Math.cos(angle) < -0.05 ? -1 : 1;
       const height = size * 0.84;
-      const gathering = ['gathering', 'unloading', 'tending'].includes(activity);
+      const gathering = [
+        'gathering',
+        'unloading',
+        'tending',
+        'nursing',
+        'building',
+        'stocking',
+        'training',
+      ].includes(activity);
       const bend = gathering && !this.reduced ? (1 + Math.sin(t * 5 + seed)) * 0.5 : 0;
       // Keep the illustrated characters upright on vertical tunnels, as on the smartboard.
       // Small gait, lean and squash convey walking without rotating their faces upside down.
@@ -740,7 +755,15 @@
       ellipse(c, 0, height * 0.38, size * 0.34, size * 0.075, '#1a100b50');
       c.scale(facing, 1);
       c.translate(0, -Math.abs(stride) * size * 0.035);
-      c.rotate(Math.sin(angle) * facing * 0.13 + stride * 0.028 + bend * 0.16);
+      const alert = ['birds-warning', 'footsteps-warning'].includes(this.state?.story?.key) || this.state?.world?.birdStage === 'warning';
+      c.rotate(Math.sin(angle) * facing * 0.13 + stride * 0.028 + bend * 0.16 - (alert ? .12 : 0));
+      if (alert) {
+        c.strokeStyle = '#ffe7a3'; c.lineWidth = 1.5;
+        for (let ray = -1; ray <= 1; ray++) {
+          c.beginPath(); c.moveTo(size * .28 + ray * 5, -height * .65);
+          c.lineTo(size * .28 + ray * 8, -height * .85); c.stroke();
+        }
+      }
       c.scale(1 + stride * 0.015, 1 - stride * 0.025);
       // Six feet work in alternating groups behind the illustrated body.
       c.strokeStyle = role === 'guard' ? '#854124' : '#ac5729';
@@ -776,6 +799,51 @@
       }
       if (role === 'builder') {
         ellipse(c, size * 0.23, -height * 0.36, size * 0.17, size * 0.07, '#f5c653', '#795223');
+      }
+      if (activity === 'nursing') {
+        this.leaf(size * 0.4, height * 0.15, size * 0.23, 0.1);
+        ellipse(
+          c,
+          size * 0.4,
+          height * 0.03 - bend * size * 0.03,
+          size * 0.1,
+          size * 0.13,
+          '#fff2d1',
+          '#c2a474',
+          1,
+        );
+      } else if (activity === 'building') {
+        c.save();
+        c.translate(size * 0.4, -height * 0.08);
+        c.rotate(-0.4 - bend * 0.9);
+        c.strokeStyle = '#b9874b';
+        c.lineWidth = Math.max(2, size * 0.045);
+        c.beginPath();
+        c.moveTo(0, 0);
+        c.lineTo(0, -size * 0.35);
+        c.stroke();
+        c.fillStyle = '#a4bab0';
+        c.fillRect(-size * 0.12, -size * 0.4, size * 0.24, size * 0.12);
+        c.restore();
+        this.cargo(size * 0.55, height * 0.32, 'stick', size * 0.2);
+      } else if (activity === 'stocking') {
+        this.cargo(size * 0.4, height * (0.15 - bend * 0.35), 'seed', size * 0.17);
+      } else if (activity === 'training') {
+        c.save();
+        c.translate(size * 0.38 + bend * size * 0.07, 0);
+        c.fillStyle = '#658b81';
+        c.strokeStyle = '#f1d484';
+        c.lineWidth = 2;
+        c.beginPath();
+        c.moveTo(-size * 0.15, -size * 0.25);
+        c.lineTo(size * 0.15, -size * 0.25);
+        c.lineTo(size * 0.13, size * 0.05);
+        c.lineTo(0, size * 0.2);
+        c.lineTo(-size * 0.13, size * 0.05);
+        c.closePath();
+        c.fill();
+        c.stroke();
+        c.restore();
       }
       if (cargo) this.cargo(-size * 0.16, -height * 0.55, cargo, size * 0.25);
       c.restore();
@@ -974,7 +1042,7 @@
           'worker',
           worker.carrying ? worker.cargo : null,
           !['gathering', 'unloading', 'tending', 'nursing', 'building', 'stocking'].includes(worker.job),
-          ['building', 'nursing', 'stocking'].includes(worker.job) ? 'gathering' : worker.job,
+          worker.job,
         );
       // Guards patrol the entrance rather than shuffling in one fixed line.
       const guards = Math.min(8, Math.max(0, (colony.soldiers || 0) - (colony.raidAway || 0)));
@@ -994,7 +1062,7 @@
             'guard',
             null,
             false,
-            'gathering',
+            'training',
           );
           continue;
         }
@@ -1192,6 +1260,90 @@
       this.canvas.dataset.rooms = String(this.rooms(colony).length);
       this.canvas.dataset.jobs = [...new Set(this.workers.map((a) => a.job))].join(' ');
     }
+    shield(x, y, size, good = true) {
+      const c = this.ctx;
+      c.save();
+      c.translate(x, y);
+      c.fillStyle = good ? '#1b765f' : '#98572b';
+      c.strokeStyle = '#ffe1a0';
+      c.lineWidth = 3;
+      c.beginPath();
+      c.moveTo(-size * 0.5, -size * 0.55);
+      c.lineTo(size * 0.5, -size * 0.55);
+      c.lineTo(size * 0.44, size * 0.12);
+      c.quadraticCurveTo(0, size * 0.65, 0, size * 0.65);
+      c.quadraticCurveTo(-size * 0.44, size * 0.28, -size * 0.5, -size * 0.55);
+      c.fill();
+      c.stroke();
+      c.strokeStyle = '#fff7d7';
+      c.lineWidth = 3;
+      c.beginPath();
+      if (good) {
+        c.moveTo(-size * 0.23, 0);
+        c.lineTo(-size * 0.03, size * 0.17);
+        c.lineTo(size * 0.28, -size * 0.2);
+      } else {
+        c.moveTo(0, -size * 0.3);
+        c.lineTo(0, size * 0.1);
+      }
+      c.stroke();
+      c.restore();
+    }
+    evidenceMoment(g) {
+      const survival = this.effects.findLast((effect) => effect.kind === 'survival');
+      const overtake = this.effects.findLast((effect) => effect.kind === 'overtake');
+      const raid = this.effects.findLast((effect) => effect.kind === 'raid');
+      const defended =
+        raid &&
+        raid.event.target === this.state.me?.id &&
+        !raid.event.success &&
+        this.clock - raid.start > raid.duration * 0.68;
+      const event = survival || (defended ? raid : overtake);
+      if (!event) {
+        this.canvas.dataset.evidence = '';
+        return;
+      }
+      const evidence = survival?.evidence;
+      const target = evidence?.site === 'nursery' ? g.home : g.pantry;
+      const size = Math.min(44, g.w * 0.09);
+      const text =
+        evidence?.text ||
+        (defended ? 'Raid stopped · stores protected' : 'Overtook ' + (overtake.name.length > 22 ? overtake.name.slice(0, 21) + '…' : overtake.name) + ' · #' + overtake.rank);
+      const good = evidence ? evidence.good : true;
+      const y = Math.min(g.h - 30, target.y + target.ry + 20);
+      this.shield(target.x + target.rx * 0.62, target.y - target.ry * 0.4, size, good);
+      const c = this.ctx;
+      if (good) {
+        c.strokeStyle = '#b4eed39a';
+        c.lineWidth = 2;
+        c.beginPath();
+        c.ellipse(target.x, target.y, target.rx * 1.02, target.ry * 1.05, 0, 0, TAU);
+        c.stroke();
+      }
+      this.tag(text, g.w / 2, y, Math.min(13, Math.max(9, g.w / 38)), good ? '#d6ffe8' : '#ffdeaf');
+      this.canvas.dataset.evidence = evidence
+        ? good
+          ? 'protected'
+          : 'loss'
+        : defended
+          ? 'raid-defended'
+          : 'overtake';
+      if (overtake && !survival && !defended) {
+        // A growing pennant makes the rank change visible without a dialog.
+        c.strokeStyle = '#e6c878';
+        c.lineWidth = 3;
+        c.beginPath();
+        c.moveTo(g.w * 0.5 + 35, g.surface);
+        c.lineTo(g.w * 0.5 + 35, g.surface - 60);
+        c.stroke();
+        c.fillStyle = '#eec95e';
+        c.beginPath();
+        c.moveTo(g.w * 0.5 + 35, g.surface - 60);
+        c.lineTo(g.w * 0.5 + 70, g.surface - 47);
+        c.lineTo(g.w * 0.5 + 35, g.surface - 35);
+        c.fill();
+      }
+    }
     weather(w, h, surface) {
       const c = this.ctx,
         world = this.state?.world || {},
@@ -1226,6 +1378,11 @@
             4,
             t * 0.4 + i,
           );
+      }
+      if (world.birdStage === 'warning' || this.state?.story?.key === 'birds-warning') {
+        const x = this.reduced ? w * 0.65 : w - ((t * 85) % (w + 200));
+        ellipse(c, x, surface - 5, 50, 10, '#101b2f55');
+        for (const side of [-1, 1]) ellipse(c, x + side * 46, surface - 8, 44, 6, '#101b2f40');
       }
       if (
         ['warning', 'attack'].includes(world.birdStage) &&
@@ -1313,6 +1470,7 @@
             c.restore();
           });
       }
+      if (!this.overview) this.evidenceMoment(g);
       if (this.state?.story) window.ColonyStoryCanvas?.draw(this, g);
       else this.canvas.dataset.story = '';
       this.effects = this.effects.filter((e) => this.clock - e.start < e.duration);

@@ -674,6 +674,34 @@
     };
   }
 
+  // Presentation evidence only: never changes resources, scores or learning marks.
+  function overtakeEvidence(before, after, id) {
+    if (!Array.isArray(before) || !Array.isArray(after)) return null;
+    const a = before.find(row => row.id === id), b = after.find(row => row.id === id);
+    if (!a || !b || !Number.isFinite(a.strength) || !Number.isFinite(b.strength)) return null;
+    const rivals = after.filter(row => row.id !== id && Number.isFinite(row.strength));
+    const passed = rivals.filter(row => {
+      const old = before.find(item => item.id === row.id);
+      return old && Number.isFinite(old.strength) && old.strength > a.strength && row.strength < b.strength;
+    });
+    if (!passed.length) return null;
+    return { rank: 1 + rivals.filter(row => row.strength > b.strength).length, name: passed[0].name || 'a rival', count: passed.length };
+  }
+  function survivalEvidence(key, colony, outcome) {
+    if (!colony || !outcome) return null;
+    const lost = Math.max(0, -(Number(outcome.food) || 0));
+    const points = Math.max(0, Number(outcome.pointsLost) || 0);
+    if (key === 'dry') return colony.dryShortfall > 0
+      ? { good: false, symbol: 'food', text: 'More food needed', site: 'food' }
+      : colony.dryPrepared ? { good: true, symbol: 'food', text: 'Stored food kept ants working', site: 'food' } : null;
+    if (key === 'rain' || key === 'birds') {
+      const protectedFood = colony.defense >= (key === 'rain' ? 1 : 2);
+      if (lost) return { good: false, symbol: 'food', text: lost + ' food lost · strengthen walls', site: 'food' };
+      return protectedFood ? { good: true, symbol: 'shield', text: key === 'rain' ? 'Walls kept food dry' : 'Walls stopped the birds', site: 'food' } : { good: false, symbol: 'food', text: 'No food lost this time', site: 'food' };
+    }
+    if (key === 'footsteps') return points ? { good: false, symbol: 'shield', text: points + ' colony points lost', site: 'nursery' } : colony.defense >= 3 ? { good: true, symbol: 'shield', text: 'Strong walls held!', site: 'nursery' } : null;
+    return null;
+  }
   return {
     advanceEconomy, applyRain, applyHumanStomp, homeGuards, birdCount, resolveBirds, advanceBirdEvent,
     VERSION, DRY_FOOD_TARGET, buildingCost, applyDrySeason, seasonSchedule, seasonStage, advanceSeason,
@@ -686,6 +714,7 @@
     clamp,
     createTeam,
     normalizeTeam,
+    overtakeEvidence, survivalEvidence,
     normalizeConfig,
     normalizeSession,
     applyReward,

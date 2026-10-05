@@ -323,3 +323,47 @@ test('large habitats keep rooms in bounds and animation does not create resource
   await expect.poll(() => page.evaluate(() => scene.workers.length)).toBe(0);
   expect(errors).toEqual([]);
 });
+
+test('real overtakes celebrate once and reload never invents a win', async ({ page }, info) => {
+  await world(page);
+  await page.evaluate(() => {
+    fixture.players = [{ id: 'a', strength: 10 }, { id: 'b', name: 'Blue colony', strength: 20 }];
+    scene.update(structuredClone(fixture));
+    fixture.players[0].strength = 30;
+    scene.update(structuredClone(fixture));
+    scene.update(structuredClone(fixture));
+  });
+  await expect(page.locator('canvas')).toHaveAttribute('data-evidence', 'overtake');
+  expect(await page.evaluate(() => scene.effects.filter(e => e.kind === 'overtake').length)).toBe(1);
+  await page.screenshot({ path: info.outputPath('overtake-feedback.png') });
+  await page.evaluate(() => {
+    scene.destroy();
+    window.scene = new ColonyScene(document.querySelector('canvas'));
+    scene.update(structuredClone(fixture));
+  });
+  expect(await page.evaluate(() => scene.effects.filter(e => e.kind === 'overtake').length)).toBe(0);
+});
+
+test('protection and defended raids use recorded results with no resource changes', async ({ page }, info) => {
+  await world(page);
+  await page.evaluate(() => {
+    fixture.story = { id: 'rain-1', key: 'rain', results: [{ playerId: 'a', food: 0 }] };
+    scene.update(structuredClone(fixture));
+    delete fixture.story;
+    scene.update(structuredClone(fixture));
+  });
+  await expect(page.locator('canvas')).toHaveAttribute('data-evidence', 'protected');
+  await page.screenshot({ path: info.outputPath('protected-stores.png') });
+  await page.evaluate(() => {
+    scene.effects = [];
+    fixture.events = [{ id: 'defence-1', kind: 'raid', attacker: 'b', target: 'a', success: false }];
+    scene.update(structuredClone(fixture));
+    fixture.phase = 'paused';
+    scene.update(structuredClone(fixture));
+    const raid = scene.effects.find(e => e.kind === 'raid');
+    scene.clock = raid.start + raid.duration * .8;
+  });
+  await expect(page.locator('canvas')).toHaveAttribute('data-evidence', 'raid-defended');
+  expect(await page.evaluate(() => fixture.me.colony.food)).toBe(26);
+  await page.screenshot({ path: info.outputPath('defended-raid.png') });
+});

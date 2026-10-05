@@ -33,6 +33,9 @@
   let worldStoryTimer = null;
   let worldEventPresentation = [];
   let raidPresentation = null;
+  let feedbackSnapshot = null;
+  let feedbackClock = 0;
+  const colonyFeedback = new Map();
   let actionCamera = false;
   let trackedActionActor = null;
   const ACTION_SPEED = .6;
@@ -513,9 +516,69 @@
     return !!session.endsAt && Date.now() >= session.endsAt;
   }
 
+  function collectColonyFeedback() {
+    const rows = session.teams.map(team => ({ id: team.id, name: team.name, strength: core.colonyStrength(team) }));
+    const now = { rows, dry: !!session.dryOccurred, rain: !!session.rainOccurred, birds: !!session.birdsOccurred, footsteps: !!session.stompOccurred };
+    if (feedbackSnapshot) for (const team of session.teams) {
+      const overtook = core.overtakeEvidence(feedbackSnapshot.rows, rows, team.id);
+      if (overtook) colonyFeedback.set(team.id, { text: 'Overtook ' + overtook.name, badge: '↑ #' + overtook.rank, good: true, site: 'entrance', until: feedbackClock + 5500 });
+      for (const key of ['dry', 'rain', 'birds', 'footsteps']) {
+        if (!now[key] || feedbackSnapshot[key]) continue;
+        const outcome = { food: -(key === 'rain' ? team.rainLoss : key === 'birds' ? team.birdFoodLoss : 0), pointsLost: key === 'footsteps' ? team.collapsePenalty : 0 };
+        const evidence = core.survivalEvidence(key, team, outcome);
+        if (evidence) colonyFeedback.set(team.id, { ...evidence, badge: evidence.good ? '✓ Protected' : 'Check supplies', until: feedbackClock + 6500 });
+      }
+    }
+    feedbackSnapshot = now;
+  }
+  function drawColonyFeedback() {
+    if (!scene || !session) return;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    for (const [id, view] of colonyViews) {
+      const cue = colonyFeedback.get(id);
+      if (!view.feedbackArt?.active) {
+        view.feedbackArt = scene.add.graphics().setDepth(15);
+        view.feedbackText = scene.add.text(0, 0, '', { fontFamily: 'Arial', fontSize: '12px', fontStyle: 'bold', color: '#fff1bd', backgroundColor: '#183f35', padding: { x: 8, y: 5 }, wordWrap: { width: Math.max(100, view.zone.w - 35) }, align: 'center' }).setOrigin(.5).setDepth(16);
+      }
+      const art = view.feedbackArt;
+      art.clear();
+      view.feedbackText.setVisible(!!cue && cue.until > feedbackClock);
+      if (!cue || cue.until <= feedbackClock) continue;
+      const site = view.sites[cue.site] || view.sites.nursery;
+      const pulse = reduced ? 0 : Math.sin(feedbackClock / 180) * 3;
+      art.lineStyle(3, cue.good ? 0xb5f2c7 : 0xefb56b, .85);
+      art.strokeEllipse(site.x, site.y, Math.min(190, view.zone.w * .65) + pulse, 105 + pulse);
+      const x = site.x + Math.min(60, view.zone.w * .2), y = site.y - 22;
+      art.fillStyle(cue.good ? 0x26775a : 0x95562b);
+      art.fillPoints([{x:x-13,y:y-16},{x:x+13,y:y-16},{x:x+11,y:y+5},{x,y:y+17},{x:x-11,y:y+5}], true);
+      art.lineStyle(3, 0xffe5a3);
+      if (cue.good) art.beginPath().moveTo(x-6,y).lineTo(x-1,y+5).lineTo(x+8,y-7).strokePath();
+      else { art.beginPath().moveTo(x,y-8).lineTo(x,y+2).strokePath(); art.fillStyle(0xffe5a3).fillCircle(x,y+8,2); }
+      view.feedbackText.setPosition(site.x, site.y + 67).setText(cue.text);
+    }
+  }
+  function drawRoomAction(agent, job, active) {
+    if (!agent.jobArt) { agent.jobArt = scene.add.graphics(); agent.add(agent.jobArt); }
+    const g = agent.jobArt; g.clear();
+    if (!active || !job) return;
+    const p = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? .5 : (Math.sin(feedbackClock / 230 + (agent.getData('workerIndex') || 0)) + 1) / 2;
+    if (job === 'stocking') { g.fillStyle(0xf4cb63); g.fillEllipse(12, 4 - p * 13, 8, 5); }
+    else if (job === 'building') {
+      g.lineStyle(3, 0xc29251); g.lineBetween(10, 3, 14 + p * 4, -12 + p * 9);
+      g.fillStyle(0xadc4bd); g.fillRect(9 + p * 4, -15 + p * 9, 11, 5);
+    } else if (job === 'nursing') {
+      g.fillStyle(0x8db961); g.fillEllipse(12, 7, 16, 5);
+      g.fillStyle(0xffedca); g.fillEllipse(12 + p * 2, 2, 6, 8);
+    } else if (job === 'training') {
+      g.fillStyle(0x557f70); g.fillPoints([{x:9+p*2,y:-11},{x:22+p*2,y:-11},{x:21+p*2,y:1},{x:16+p*2,y:8},{x:10+p*2,y:1}], true);
+      g.lineStyle(2, 0xffdb7d); g.lineBetween(16+p*2,-8,16+p*2,3);
+    } else { g.fillStyle(0x92bf5e); g.fillEllipse(12, 2-p*5, 13, 5); }
+  }
+
   function updateHUD() {
     if (!session) return;
     updateBirdPanel();
+    collectColonyFeedback();
     const team = currentTeam();
     const mission = chapterMission(team);
     const goals = mission.goals;
@@ -529,7 +592,7 @@
     $('gameScreen').dataset.stormStage = weather.stage;
     $('scoreStrip').innerHTML = session.teams.map((item, index) => {
       const palette = core.TEAM_COLORS[item.colorIndex];
-      return `<div class="score-card${index === session.currentTeamIndex && session.phase !== 'ended' ? ' current' : ''}" style="--team-color:${colorHex(palette.primary)}"><div class="score-name"><span>${esc(item.name)}</span><span>${core.colonyStrength(item)} pts</span></div><div class="score-stats"><span>1 queen</span><span>${item.workers} workers</span><span>${item.soldiers} guards</span><span>Walls level ${item.defense + 1}</span></div>${resourceStrip(item)}</div>`;
+      return `<div class="score-card${index === session.currentTeamIndex && session.phase !== 'ended' ? ' current' : ''}" style="--team-color:${colorHex(palette.primary)}"><div class="score-name"><span>${esc(item.name)}${colonyFeedback.get(item.id)?.until > feedbackClock ? ` · ${esc(colonyFeedback.get(item.id).badge)}` : ''}</span><span>${core.colonyStrength(item)} pts</span></div><div class="score-stats"><span>1 queen</span><span>${item.workers} workers</span><span>${item.soldiers} guards</span><span>Walls level ${item.defense + 1}</span></div>${resourceStrip(item)}</div>`;
     }).join('');
     const options = session.teams.map(item => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join('');
     session.teams.forEach((item, index) => {
@@ -905,6 +968,7 @@
     event.guard = event.guard || defenders * 5 + (event.wallBonus || 0);
     const finish = async () => {
       stopRaidPresentation();
+      if (!event.success) colonyFeedback.set(defender.id, { text: 'Raid stopped · stores protected', badge: '✓ Defended', good: true, site: 'guard', until: feedbackClock + 6500 });
       setOverlay(null);
       focusColony(event.success ? attacker.id : defender.id, event.success ? 'food' : 'guard');
       updateHUD();
@@ -1444,6 +1508,7 @@
   }
 
   function resetMatchRuntime() {
+    feedbackSnapshot = null; feedbackClock = 0; colonyFeedback.clear();
     clearTimeout(worldStoryTimer);
     worldStoryTimer = null;
     answerLocked = false;
@@ -1553,7 +1618,9 @@
         },
         update(time, delta) {
           if (!session || document.hidden) return;
+          if (session.phase !== 'paused') feedbackClock += delta;
           updateForagingWorkers(delta);
+          drawColonyFeedback();
           updateBirdFlight();
           if (['warning', 'attack'].includes(session.birdStage) && ['question', 'reward'].includes(session.phase) && time - (this.lastBirdCall || 0) > 2800) {
             this.lastBirdCall = time;
@@ -1751,10 +1818,12 @@
     if (!session || session.phase === 'paused') return;
     for (const view of colonyViews.values()) {
       for (const agent of view.ants) {
+        if (agent.getData('role') === 'soldier') drawRoomAction(agent, 'training', true);
         const route = agent.getData?.('forageRoute');
         if (!route || !agent.active) continue;
         const evacuation = agent.getData('evacuation');
         if (evacuation) {
+          agent.jobArt?.clear();
           evacuation.elapsed += delta;
           const progress = Math.min(1, evacuation.elapsed / 2800);
           const point = evacuation.route.getPoint(progress);
@@ -1769,9 +1838,11 @@
         const job = agent.getData('habitatJob');
         const working = job && job !== 'sheltering';
         const travel = working ? progress < .25 ? progress * 4 : progress < .75 ? 1 : (1 - progress) * 4 : progress;
+        drawRoomAction(agent, job, working && progress >= .25 && progress < .75);
         const point = route.getPoint(travel);
         if (Math.abs(point.x - agent.x) > .15) agent.sprite?.setFlipX(point.x < agent.x);
         agent.setPosition(point.x, point.y);
+        if (session.birdStage === 'warning') agent.sprite?.setAngle(-8); else agent.sprite?.setAngle(0);
         agent.cargo?.setVisible(working ? progress < .25 : job === 'sheltering' ? false : progress >= .5);
         const worker = agent.getData('workerIndex');
         const carryingStick = ((team?.forageTrips?.[worker] || 0) + worker) % 2 === 0;
@@ -2037,7 +2108,7 @@
       const ant = makeAntAgent('cq-worker', path[0], 29, palette.primary, !building, index < MAX_MOVING_ANTS_PER_ROLE);
       ant.setData('role', 'worker');
       ant.setData('teamId', team.id); ant.setData('workerIndex', index);
-      if (tending) ant.setData('habitatJob', room.kind === 'food' ? 'stocking' : room.kind === 'nursery' ? 'nursing' : 'tending');
+      if (tending) ant.setData('habitatJob', room.kind === 'food' ? 'stocking' : room.kind === 'nursery' && team.eggs?.length ? 'nursing' : room.label.includes('Workshop') ? 'building' : 'tending');
       if (sheltering) ant.setData('habitatJob', 'sheltering');
       ants.push(ant);
       if (!sheltering && index === 0 && (harvest?.teamId === team.id && harvest.gathered > 0 || session.phase === 'event' && lastEvent?.key === 'upgrade-food' && lastEvent.teamId === team.id)) deliverHarvest(ant, [surface, entrance, ...pathTo(food)]);
@@ -2284,6 +2355,7 @@
       creature.setFrame(reduced ? 0 : Math.floor(t * 6) % 2);
       shadow.setPosition(bird.x + 12, 139).setScale(scale * (stage === 'attack' ? 1 + swoop * .4 : 1));
       shadow.setAlpha(stage === 'result' ? .2 * (1-departure) : .1 + scale * .14);
+      if (stage === 'warning') shadow.setScale(1.2 + approach * 1.4, .7 + approach * .5).setAlpha(.12 + approach * .18);
       seed.setVisible(!protectedFood && (stage === 'attack' && t > 5 || stage === 'result' && team.birdFoodLoss > 0));
     }
   }
