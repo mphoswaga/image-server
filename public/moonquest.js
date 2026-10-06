@@ -385,6 +385,7 @@
   }
   function duelCinema(s){
     const stage=s.duels.presentation;
+    if(stage==='result')return `${role!=='student'?presenterControls(s):''}<section class="victory-screen duel-cinema stage-result"><p class="eyebrow">ROUND ${s.round+1} · DUEL RESULTS</p><h1>${role==='student'&&s.duels.result?.outcome==='win'?'You won the duel!':'Our duel champions'}</h1>${matchupCards(s,role==='student')}<p class="duel-explanation">${esc(s.question.explanation)}</p>${rabbitTimer()}</section>`;
     return `${role!=='student'?presenterControls(s):''}<section class="duel-cinema ${role!=='student'?'duel-cinema-board':''} stage-${stage}"><p class="eyebrow">MOON FESTIVAL · ROUND ${s.round+1}</p><h1>${stage==='matchup'?'Meet your rival':stage==='result'?'The duel is decided!':'Your sparks light Vinschool'}</h1>${stage==='sparks'?schoolScene(s):matchupCards(s,role==='student')}${stage==='result'?`<p class="duel-explanation"><strong>${esc((s.diagram?.regions||[]).filter(r=>s.question.accepted?.includes(r.id)).map(r=>r.label).join(' + '))}</strong><br>${esc(s.question.explanation)}</p>`:''}${stage==='matchup'?'<p>Accuracy first. Then speed. Everyone plays.</p>':stage==='sparks'?duelPanel(s):lightingMeter(s)}${rabbitTimer()}</section>`;
   }
   function duelBoard(s){
@@ -418,6 +419,7 @@
     const racePositions=[...root.querySelectorAll('.race-runner')].map(el=>el.style.left);
     cancelAnimationFrame(storyFrame);if(!['intro','story-vote','story-action','ended'].includes(state.phase))window.speechSynthesis?.cancel();document.body.classList.remove('learner-round','duel-round','duel-board','tale-page');document.body.dataset.view='live'; document.body.dataset.audience=role; document.body.dataset.phase=state.phase;
     const s=state,teacher=role==='teacher';document.body.classList.toggle('mission-paused',!!s.paused);document.body.dataset.answerLocked=String(!!s.mine?.first);
+    if(s.phase==='ended'&&s.duels){document.body.classList.add('celebrate');root.innerHTML=victoryFinale(s);revealFireworks(s);return;}
     if(s.duels&&!s.test&&s.phase==='lobby'&&role!=='student'){root.innerHTML=teamLobby(s);return;}
     if(s.duels?.presentation){root.innerHTML=duelCinema(s);updateTimer();revealFireworks(s);return;}
     if(answerRound!==s.round){answerRound=s.round;changingAnswer=false;pendingChoices=[];}
@@ -558,8 +560,13 @@
   function storyFinale(s){
     return `<div class="tale-finale-wrap"><h1>${s.narrative?.complete?'The festival you created':'Your adventure so far'}</h1>${MoonStory.film(s,role,duelRabbit,'finale')}${lightingMeter(s)}${s.duels?duelPanel(s):''}${MoonStory.journey(s,role)}${role==='teacher'?`${button('Explore the learning report','report','primary')}${button('Adventures','home')}`:''}</div>`;
   }
+  function victoryFinale(s){
+    const d=s.duels,crews=d.celebration||[],hasResults=d.rounds>0;
+    const hero=(h,podium=false)=>`<article class="festival-winner ${podium?'podium-place':''}" style="--place:${h.rank};--hop:${(h.name.length%7)*.13}s"><strong>${esc(h.name)}</strong>${duelRabbit(h.avatar,h.team)}${podium?`<div class="podium-block">${h.rank===1?'🥇':h.rank===2?'🥈':'🥉'}<b>${h.rank}</b><span>${h.points} points</span></div>`:''}</article>`;
+    return `<section class="victory-screen final-victory"><p class="eyebrow">MOON FESTIVAL · CELEBRATION</p><h1>${!hasResults?'Thank you, festival heroes!':d.winner===null?'Both teams are champions!':esc(d.teams[d.winner].name)+' win!'}</h1><p>${hasResults?'Every answer helped your crew shine.':'No completed duels yet. Your next adventure awaits!'}</p>${crews.filter(c=>d.winner===null||c.team===d.winner).map(c=>`<section class="champion-crew"><h2>${esc(c.name)} · ${d.teams[c.team].points} moon points</h2><div class="winner-parade">${c.members.map(h=>hero(h)).join('')}</div></section>`).join('')}${crews.map(c=>`<section class="team-podium"><h2>${esc(c.name)} · Top scorers</h2><div class="podium-line">${c.podium.map(h=>hero(h,true)).join('')||'<p>Keep discovering in your next mission.</p>'}</div><p class="muted">Equal points share a place.</p></section>`).join('')}${role==='teacher'?button('Explore the learning report','report','primary')+button('Adventures','home'):''}<details><summary>Your festival story</summary>${s.narrative?storyFinale(s):schoolScene(s)}</details></section>`;
+  }
   function revealFireworks(s){
-    if(!['reveal','ended'].includes(s.phase)||!s.revealedAt)return;
+    if(!['reveal','ended'].includes(s.phase)||(s.phase!=='ended'&&!s.revealedAt))return;
     const key='moonquest-fireworks:'+s.id+':'+s.round+':'+s.phase;
     if(Date.now()+clockOffset-s.revealedAt>4000&&s.phase!=='ended')return;
     try{if(sessionStorage.getItem(key))return;sessionStorage.setItem(key,'1');}catch{}

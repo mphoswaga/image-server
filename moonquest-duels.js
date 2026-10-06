@@ -39,6 +39,23 @@ function snapshot(s,studentId,role,right) {
   }
   const view={styles,teams:names.map((name,i)=>({name,points:Math.round(totals[i]*10)/10,rawPoints:raw[i],progress:Math.min(100,totals[i]/(120*s.game.questions.length)*100)})),rounds,winner:totals[0]===totals[1]?null:totals[0]>totals[1]?0:1};
   const round=s.rounds[s.round];
+  if(s.phase==='ended'){
+    const heroes=new Map();
+    for(const r of s.rounds.filter(r=>r.revealedAt)){
+      const scores=score(s,r,right);
+      for(const id of r.expected){
+        if((s.removedStudents||[]).includes(id))continue;
+        const st=s.students.find(st=>st.id===id);if(!st)continue;
+        const hero=heroes.get(id)||{id,name:st.name,team:s.duels.teams[id],avatar:s.duels.avatars[id]||'scarf',points:0,correct:0};
+        hero.points+=scores[id].points;hero.correct+=Number(scores[id].correct);heroes.set(id,hero);
+      }
+    }
+    view.celebration=names.map((name,team)=>{
+      const members=[...heroes.values()].filter(h=>h.team===team).sort((a,b)=>b.points-a.points||a.name.localeCompare(b.name));
+      let rank=0;members.forEach((h,i)=>{if(!i||h.points!==members[i-1].points)rank=i+1;h.rank=rank;});
+      return {name,team,members,podium:members.filter(h=>h.rank<=3&&h.points>0)};
+    });
+  }
   if(round){
     const scores=round.revealedAt?score(s,round,right):null;
     view.matchups=(round.duelGroups||[]).filter(g=>role!=='student'||g.includes(studentId)).map((g,index)=>{

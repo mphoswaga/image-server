@@ -112,6 +112,9 @@ test('learner name and PIN join, locked answer, one upgrade, reconnect and perma
     await learner.getByRole('button', { name: /^Collect materials/ }).click();
     await expect(learner.locator('#question')).toHaveText('Your colony made it through!', { timeout: 45000 });
     await expect(page.locator('#hostPhase')).toHaveText('Game complete');
+    await expect(learner.locator('#cqCelebration')).toBeVisible();
+    await expect(page.locator('#cqCelebration')).toBeVisible();
+    await page.getByRole('button', { name: 'View results', exact: true }).click();
     const payload = await (await page.request.get(`/api/game/${id}/colonyquest-live`)).json();
     await page.selectOption('#history', payload.match.id);
     await page.locator('#viewReport').click();
@@ -119,6 +122,7 @@ test('learner name and PIN join, locked answer, one upgrade, reconnect and perma
     await expect(page.locator('#report')).toContainText('2 correct · 2 answered · 0 unanswered');
     expect((await learner.request.get(`/api/game/${id}/colonyquest-live/report`)).status()).toBe(401);
     await page.reload();
+    await page.getByRole('button', { name: 'View results', exact: true }).click();
     await page.selectOption('#history', payload.match.id);
     await page.locator('#viewReport').click();
     await expect(page.locator('#report')).toContainText('Amina Test');

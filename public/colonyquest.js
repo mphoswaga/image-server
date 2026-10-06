@@ -1447,6 +1447,12 @@
       return `<article class="colony-ending"><h3>${esc(team.name)}: Walls level ${team.defense + 1}</h3><p>${session.rainOccurred ? team.defense >= 1 ? 'Reinforced entrances kept the rain out.' : `Rain entered: ${team.rainLoss || 0} food lost.` : 'The game ended before the rain.'}</p><p>${session.dryOccurred ? `Dry season: ${team.dryPrepared ? '12 food ready when the heat arrived.' : 'Supplies ran short; workers slowed until fed or rain returned.'} ` : ''}${team.sticks} sticks · ${team.leaves} leaves stored.</p><p>${team.workers} workers · ${team.soldiers} guards · ${core.colonyRooms(team).length} rooms · ${team.correct}/${team.attempts} answers right.</p><p>${team.successfulAttacks || team.successfulDefenses ? `Challenge story: ${team.successfulAttacks} won, ${team.successfulDefenses} defended, and ${team.guardsLost || 0} guards changed to worker duty.` : 'This colony did not enter a challenge.'}</p><p>${improvement === null ? 'Answer more questions next time to show what you know.' : improvement > 0 ? 'Your team got more answers right near the end.' : 'Next time, read each answer and talk before you choose.'}</p><strong>${missing.length ? `Build next: ${esc(missing[0])}.` : 'Your walls are ready.'}</strong></article>`;
     }).join('');
     setOverlay('finalOverlay');
+    let place = 1;
+    window.ColonyCelebration?.show('board:' + session.id + ':' + session.endedAt, ranking.map((entry, i) => {
+      const prior = ranking[i - 1];
+      if (prior && (prior.score !== entry.score || prior.team.correct !== entry.team.correct || (prior.team.attempts ? prior.team.correct / prior.team.attempts : 0) !== (entry.team.attempts ? entry.team.correct / entry.team.attempts : 0))) place = i + 1;
+      return { name: entry.team.name, score: entry.score, rank: place, members: entry.team.members };
+    }));
   }
 
   function resumePhase() {

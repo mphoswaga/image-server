@@ -136,6 +136,10 @@
     scene?.update(next);
     syncMusic();
     clock();
+    if (next.phase === 'ended') {
+      window.ColonyCelebration?.multiplayer(next);
+      if (prior?.phase !== 'ended') { chime(660); setTimeout(() => chime(880), 180); setTimeout(() => chime(1100), 360); }
+    }
     if (host) return;
     if (prior?.phase === 'answer' && next.phase === 'upgrade') chime(next.me?.correct ? 880 : 330);
     renderLearner();
