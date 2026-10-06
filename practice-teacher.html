@@ -97,6 +97,12 @@
     .room-state.playing { border-color:var(--green); background:var(--soft-green); }
     .room-state strong { display:block; }
     .room-state span { display:block; color:var(--muted); font-size:12px; }
+    .stage-control { margin:12px 0; padding:14px; border:2px solid #8edcc7; border-radius:14px; background:linear-gradient(135deg,#effcf7,#eef8ff); }
+    .stage-control strong { display:block; margin-bottom:9px; color:var(--navy); }
+    .stage-control .stage-track { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-bottom:10px; }
+    .stage-control .stage-dot { padding:7px 5px; border-radius:9px; background:#fff; color:var(--muted); font-size:11px; font-weight:800; text-align:center; }
+    .stage-control .stage-dot.current { background:var(--green); color:#fff; box-shadow:0 5px 12px rgba(12,132,94,.2); }
+    .stage-control .stage-actions { display:flex; gap:8px; }
     .attendance { margin-bottom:14px; }
     .attendance-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
     .attendance-head h3,.board-title { margin:0; color:var(--navy); font-size:15px; }
@@ -172,7 +178,7 @@
     <section class="live-room" id="practiceLiveRoom" aria-labelledby="liveRoomTitle">
       <div class="live-head">
         <div><h2 id="liveRoomTitle">Class arcade</h2><p>Run a teacher-controlled class game or share a self-paced homework room.</p><div class="session-beacon" id="sessionBeacon" hidden><i></i><span id="sessionBeaconText">Live class connected</span><span class="sync-freshness" id="sessionFreshness">syncing</span></div></div>
-        <div class="live-actions"><select id="liveMode" aria-label="Session type"><option value="classwork">Live classwork</option><option value="homework">Homework · self-paced</option></select><select id="liveDuration" aria-label="Class game duration"><option value="10">10 minutes</option><option value="15">15 minutes</option><option value="20">20 minutes</option><option value="25" selected>25 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">60 minutes</option></select><select id="liveHomeworkDays" aria-label="Homework availability" hidden><option value="1">Open for 1 day</option><option value="3">Open for 3 days</option><option value="7" selected>Open for 7 days</option><option value="14">Open for 14 days</option></select><select id="liveRoster" aria-label="Class roster"><option value="">No saved class</option></select><select id="liveActivity" aria-label="Practice activity"><option value="g2-pointer-control">Foundation World</option><option value="g3-keyboard-kingdom">Grade 3 World</option><option value="typing-academy">Typing Academy</option></select><button class="btn primary" id="createRoomBtn" type="button">Start live room</button></div>
+        <div class="live-actions"><select id="liveMode" aria-label="Session type"><option value="classwork">Live classwork</option><option value="homework">Homework · self-paced</option></select><select id="liveDuration" aria-label="Class game duration"><option value="10">10 minutes</option><option value="15">15 minutes</option><option value="20">20 minutes</option><option value="25" selected>25 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">60 minutes</option></select><select id="liveHomeworkDays" aria-label="Homework availability" hidden><option value="1">Open for 1 day</option><option value="3">Open for 3 days</option><option value="7" selected>Open for 7 days</option><option value="14">Open for 14 days</option></select><select id="liveRoster" aria-label="Class roster"><option value="">No saved class</option></select><select id="liveActivity" aria-label="Practice activity"><option value="g2-pointer-control">Foundation World</option><option value="g3-keyboard-kingdom">Grade 3 World</option><option value="typing-academy">Typing Academy</option><option value="file-types-sizes">File Types and Sizes Lab</option></select><button class="btn primary" id="createRoomBtn" type="button">Start live room</button></div>
       </div>
       <div class="room-library" id="roomLibrary" hidden><label for="roomSwitcher">Your rooms</label><select id="roomSwitcher" aria-label="Choose a current or recent room"></select><button class="btn" id="newRoomBtn" type="button">Set up another room</button></div>
       <div class="audio-policy" aria-label="Room audio controls"><strong>Room audio</strong><label><input id="teacherSfx" type="checkbox" checked /> Sound effects</label><label><input id="teacherMusic" type="checkbox" checked /> Calm music</label><label for="teacherMusicSource">Music plays on</label><select id="teacherMusicSource"><option value="teacher">Teacher computer</option><option value="students">Student devices</option></select><button class="btn" id="teacherMusicPlay" type="button" hidden>Play music here</button><label><input id="teacherVoice" type="checkbox" checked /> Read aloud</label><small id="audioPolicyNote">Live classwork uses one teacher soundtrack by default. Homework uses each learner's device.</small></div>
@@ -185,6 +191,7 @@
         </div>
         <div>
           <div class="room-state" id="liveRoomState"><div><strong>Class lobby open</strong><span>Learners can join, but only you can start the game.</span></div></div>
+          <div class="stage-control" id="fileLabStageControl" hidden><strong id="fileLabStageTitle">Tab 1 of 4 · Explore files</strong><div class="stage-track" id="fileLabStageTrack"></div><div class="stage-actions"><button class="btn" id="fileLabPrevious" type="button">← Previous tab</button><button class="btn primary" id="fileLabNext" type="button">Next tab →</button></div></div>
           <div class="live-telemetry" id="liveTelemetry" hidden><div class="live-meter"><span id="telemetryJoinedLabel">Joined</span><strong id="telemetryJoined">0</strong></div><div class="live-meter"><span>Online now</span><strong id="telemetryPlaying">0</strong></div><div class="live-meter"><span>Finished</span><strong id="telemetryFinished">0</strong></div><div class="live-meter"><span id="telemetryProgressLabel">Class progress</span><strong id="telemetryProgress">0%</strong></div><div class="class-progress" aria-hidden="true"><i id="classProgressFill"></i></div></div>
           <section class="session-activity" id="sessionActivity" hidden><div class="session-activity-head"><h3>Session activity</h3><span>Live updates</span></div><div class="activity-feed" id="sessionActivityFeed" aria-live="polite"></div></section>
           <section class="attendance" id="liveAttendance" hidden><div class="attendance-head"><h3 id="attendanceTitle">Class attendance</h3><span id="attendanceCount"></span></div><div class="attendance-list" id="attendanceList"></div></section>
@@ -238,6 +245,7 @@
     let liveRooms = [];
     let selectedRoomCode = '';
     let settingUpNewRoom = false;
+    const fileLabStages=['Explore files','Experiment with size','Fill a phone','Check understanding'];
     const esc = (value) => String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const fmtTime = (seconds) => { const n=Number(seconds)||0; const m=Math.floor(n/60),s=n%60; return m ? `${m}m ${s}s` : `${s}s`; };
     const fmtDate = (value) => value ? new Date(value).toLocaleString(undefined,{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '-';
@@ -451,8 +459,17 @@
       $('audioPolicyNote').textContent=ended?'These audio choices will apply to your next room.':room?(audioPolicy.music&&audioPolicy.musicPlayback==='teacher'?'Music is shared from this computer. Student music controls are locked.':'Changes apply to joined learners within a few seconds. Anything switched off is locked off.'):'Live classwork uses one teacher soundtrack by default. Homework uses each learner\'s device.';
       syncTeacherMusic();
       if(!room) return;
+      const fileLab=room.activity.id==='file-types-sizes';
       const roomWorld=room.activity.id==='typing-academy'?'typing':room.activity.id==='g3-keyboard-kingdom'?'g3':'';
       liveJoinUrl=`${location.origin}/student/practice/guest?session=${encodeURIComponent(room.code)}${roomWorld?`&world=${roomWorld}`:''}`;
+      $('fileLabStageControl').hidden=!fileLab||waiting||ended;
+      if(fileLab){
+        const stage=Math.max(0,Math.min(3,Number(room.controlledStage)||0));
+        $('fileLabStageTitle').textContent=`Tab ${stage+1} of 4 · ${fileLabStages[stage]}`;
+        $('fileLabStageTrack').innerHTML=fileLabStages.map((name,index)=>`<span class="stage-dot ${index===stage?'current':''}">${index+1}. ${esc(name)}</span>`).join('');
+        $('fileLabPrevious').disabled=stage===0;
+        $('fileLabNext').disabled=stage===3;
+      }
       $('liveRoomCode').textContent=room.code;
       $('startRoomBtn').hidden=!waiting;
       $('startRoomBtn').textContent=waiting&&room.connectedCount?`Start class game (${room.connectedCount} ready)`:'Start class game';
@@ -569,7 +586,24 @@
       finally { $('pauseRoomBtn').disabled=false; }
     }
 
+    async function moveFileLabStage(direction) {
+      if(!liveRoom||liveRoom.activity.id!=='file-types-sizes') return;
+      const current=Math.max(0,Math.min(3,Number(liveRoom.controlledStage)||0));
+      const stage=Math.max(0,Math.min(3,current+direction));
+      if(stage===current) return;
+      $('fileLabPrevious').disabled=true; $('fileLabNext').disabled=true;
+      try{
+        const response=await fetch(`/api/practice/live-sessions/${encodeURIComponent(liveRoom.code)}/stage`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({stage})});
+        const payload=await response.json();
+        if(!response.ok) throw new Error(payload.error||'The class tab could not be changed.');
+        rememberRoom(payload.room); renderLiveRoom(payload.room);
+      }catch(error){ alert(error.message); renderLiveRoom(liveRoom); }
+    }
+
     function syncLiveSetup() {
+      const fileLab=$('liveActivity').value==='file-types-sizes';
+      if(fileLab) $('liveMode').value='classwork';
+      $('liveMode').disabled=fileLab||Boolean(liveRoom&&liveRoom.status==='open');
       const classwork=$('liveMode').value==='classwork';
       $('createRoomBtn').textContent=classwork?'Create class lobby':'Create homework room';
       $('liveDuration').hidden=!classwork;
@@ -676,6 +710,9 @@
     $('startRoomBtn').addEventListener('click',startLiveRoom);
     $('pauseRoomBtn').addEventListener('click',toggleLivePause);
     $('liveMode').addEventListener('change',syncLiveSetup);
+    $('liveActivity').addEventListener('change',syncLiveSetup);
+    $('fileLabPrevious').addEventListener('click',()=>moveFileLabStage(-1));
+    $('fileLabNext').addEventListener('click',()=>moveFileLabStage(1));
     ['teacherSfx','teacherMusic','teacherVoice','teacherMusicSource'].forEach((id)=>$(id).addEventListener('change',updateLiveAudioPolicy));
     $('teacherMusicPlay').addEventListener('click',unlockTeacherMusic);
     $('endRoomBtn').addEventListener('click',endLiveRoom);

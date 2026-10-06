@@ -2934,6 +2934,19 @@ app.patch('/api/practice/live-sessions/:code/pause', requirePracticeEnabled, req
   }
 });
 
+app.patch('/api/practice/live-sessions/:code/stage', requirePracticeEnabled, requireAuth, (req, res) => {
+  if (req.user && req.user.role === 'student') return res.status(403).json({ error: 'Teacher account required.' });
+  try {
+    res.json({ room: practiceLive.setRoomStage(req.params.code, req.userId, req.body && req.body.stage) });
+  } catch (err) {
+    const status = err.code === 'forbidden' ? 403
+      : err.code === 'room_not_found' ? 404
+        : err.code === 'room_closed' ? 410
+          : 400;
+    res.status(status).json({ error: err.message, code: err.code || 'room_stage_failed' });
+  }
+});
+
 app.patch('/api/practice/live-sessions/:code/audio', requirePracticeEnabled, requireAuth, (req, res) => {
   if (req.user && req.user.role === 'student') return res.status(403).json({ error: 'Teacher account required.' });
   try {

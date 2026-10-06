@@ -65,6 +65,12 @@ section[hidden]{display:none}
 details{padding:16px 0}
 summary{cursor:pointer}
 .foot{font-size:14px;color:#536876;margin:22px 0 0}
+.class-sync{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 18px;padding:12px 16px;border:2px solid #8edcc7;border-radius:14px;background:#effcf7;color:#155c4a;font-weight:800}
+.class-sync i{display:inline-block;width:10px;height:10px;margin-right:7px;border-radius:50%;background:#18a876;box-shadow:0 0 0 5px #18a87622;animation:sync-pulse 1.5s ease-in-out infinite}
+.sync-cover{position:fixed;z-index:30;inset:0;display:grid;place-items:center;padding:20px;background:#143b45e8;backdrop-filter:blur(5px)}
+.sync-cover[hidden]{display:none}.sync-card{width:min(520px,100%);padding:34px;border:4px solid #fff;border-radius:28px;background:linear-gradient(145deg,#fff,#eaf8f4);text-align:center;box-shadow:0 22px 70px #061d2766}.sync-character{font-size:72px;animation:sync-bob 1.4s ease-in-out infinite}.sync-card h2{margin-top:12px}.sync-card p{font-size:20px}.teacher-lock button[data-page]{cursor:not-allowed}.teacher-lock button[data-page]:not([aria-pressed=true]){opacity:.55}
+@keyframes sync-pulse{50%{opacity:.45;transform:scale(.8)}}
+@keyframes sync-bob{50%{transform:translateY(-7px) rotate(2deg)}}
 @media(max-width:720px){.grid{grid-template-columns:1fr}
 .files{grid-template-columns:repeat(2,1fr)}
 main{padding:16px}
@@ -77,7 +83,8 @@ nav button{flex:1;padding:10px;font-size:16px}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}
 }
 
-</style></head><body><header><div class="row"><div><p style="font-weight:700;letter-spacing:3px">LESSONSCOPE PRACTICE · FILE LAB</p><h1>Small files. Big ideas.</h1><p>Explore what files hold — and how much space they need.</p></div><div class="row"><a class="back" href="/student/practice">← Practice home</a><button id="fullscreen">Full screen</button></div></div></header><main>
+</style></head><body><div class="sync-cover" id="syncCover" hidden><div class="sync-card"><div class="sync-character" aria-hidden="true">📱</div><h2 id="syncCoverTitle">Waiting for your teacher</h2><p id="syncCoverText">Stay on this screen. The activity will begin together.</p></div></div><header><div class="row"><div><p style="font-weight:700;letter-spacing:3px">LESSONSCOPE PRACTICE · FILE LAB</p><h1>Small files. Big ideas.</h1><p>Explore what files hold — and how much space they need.</p></div><div class="row"><a class="back" href="/student/practice">← Practice home</a><button id="fullscreen">Full screen</button></div></div></header><main>
+<div class="class-sync" id="classSync" hidden><span><i></i><span id="classSyncName">Teacher-controlled lesson</span></span><span id="classSyncStage">Tab 1 of 4</span></div>
 <nav aria-label="Activities"><button data-page="explore" aria-pressed="true">1 · Explore</button><button data-page="build" aria-pressed="false">2 · Experiment</button><button data-page="store" aria-pressed="false">3 · Fill a drive</button><button data-page="quiz" aria-pressed="false">4 · Quiz</button></nav>
 <section id="explore"><h2>What is inside a file?</h2><p class="muted">A file is a saved collection of information. Choose one to look inside.</p><div class="grid"><div class="files" id="files"></div><div class="card" id="detail" aria-live="polite"></div></div><div class="card" style="margin-top:24px"><h3>The units in this lesson</h3><p>Use <b>B, KB, MB, GB and TB</b> to describe file sizes. Tap each unit to compare it.</p><div class="scale" id="units"></div><p id="unitDetail" aria-live="polite"></p></div></section>
 <section id="build" hidden><h2>Make your file grow</h2><p class="muted">Predict first: which will add more — a text note, a photo, or a video?</p><div class="grid"><div class="card"><h3>Build a multimedia project</h3><div id="sliders"></div><button id="resetBuild">Start again</button></div><div class="card"><span class="badge">Watch the phone fill</span><div class="phone-stage"><div class="phone" aria-label="Example 4 GB phone storage"><div class="phone-screen"><div class="phone-sky"></div><div class="phone-fill" id="buildPhoneFill"></div><div class="phone-apps" id="buildPhoneApps"></div><div class="phone-face" id="buildPhoneFace" aria-hidden="true">😊</div><div class="phone-meter"><span>Storage used</span><b id="buildPhonePercent">0%</b></div></div></div><div class="phone-copy"><h3>Your project uses</h3><div class="big" id="buildSize" aria-live="polite"></div><p class="phone-status" id="buildPhoneStatus">This phone has lots of room!</p></div></div><div id="breakdown"></div><p class="note">More content usually needs more space. Image quality, video quality, and compression also change file size.</p></div></div></section>
@@ -96,8 +103,9 @@ const formats=[{icon:'📝',type:'Text',name:'note.txt',ext:'.txt',size:100,insi
 function fmt(n){if(n===0)return '0 B';const u=['B','KB','MB','GB','TB'];const i=Math.min(4,Math.floor(Math.log10(n)/3));return Number((n/1000**i).toFixed(3)).toLocaleString('en-US',{maximumFractionDigits:3}
 )+' '+u[i]}
 
-document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>{document.querySelectorAll('main>section').forEach(s=>s.hidden=s.id!==b.dataset.page);document.querySelectorAll('[data-page]').forEach(n=>n.setAttribute('aria-pressed',String(n===b)))}
-);
+let teacherControlled=false;
+function showPage(page){document.querySelectorAll('main>section').forEach(s=>s.hidden=s.id!==page);document.querySelectorAll('[data-page]').forEach(n=>n.setAttribute('aria-pressed',String(n.dataset.page===page)))}
+document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>{if(!teacherControlled)showPage(b.dataset.page)});
 $('fullscreen').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen()}
 catch{$('fullscreen').textContent='Use browser full screen'}
 }
@@ -154,4 +162,8 @@ else{$('quizProgress').textContent='Quiz complete';$('question').textContent=sco
 ;
 $('restart').onclick=()=>{qi=0;score=0;renderQuiz()}
 ;renderQuiz();
+const controlledPages=['explore','build','store','quiz'];
+const controlledNames=['Explore files','Experiment with size','Fill a phone','Check understanding'];
+async function startControlledLesson(){const code=String(new URLSearchParams(location.search).get('session')||'').replace(/[^a-z0-9]/gi,'').toUpperCase().slice(0,6);if(!code)return;teacherControlled=true;document.body.classList.add('teacher-lock');$('classSync').hidden=false;const key='ls-live-practice-'+code;let saved=null;try{saved=JSON.parse(sessionStorage.getItem(key)||'null')}catch{}if(!saved||!saved.token){location.replace('/student/practice/guest?session='+encodeURIComponent(code));return}const apply=(room,participant)=>{if(!room||!room.activity||room.activity.id!=='file-types-sizes'){location.replace('/student/practice/guest?session='+encodeURIComponent(code));return}$('classSyncName').textContent=(participant&&participant.name?participant.name+' · ':'')+'Teacher controls the tabs';if(room.status==='closed'){$('syncCover').hidden=false;$('syncCoverTitle').textContent='Lesson finished';$('syncCoverText').textContent='Your teacher has ended this File Lab session.';return}if(room.phase==='lobby'){$('syncCover').hidden=false;$('syncCoverTitle').textContent='Waiting for your teacher';$('syncCoverText').textContent='You are ready. Everyone will begin together.';return}if(room.phase==='paused'){$('syncCover').hidden=false;$('syncCoverTitle').textContent='Class paused';$('syncCoverText').textContent='Look at your teacher. The activity will continue together.';return}$('syncCover').hidden=true;const stage=Math.max(0,Math.min(3,Number(room.controlledStage)||0));showPage(controlledPages[stage]);$('classSyncStage').textContent='Tab '+(stage+1)+' of 4 · '+controlledNames[stage]};const refresh=async()=>{try{const response=await fetch('/api/practice/live-sessions/'+encodeURIComponent(code),{headers:{'X-Practice-Participant':saved.token}});const payload=await response.json();if(response.status===401){sessionStorage.removeItem(key);location.replace('/student/practice/guest?session='+encodeURIComponent(code));return}if(!response.ok)throw new Error(payload.error||'Connection interrupted');apply(payload.room,payload.participant||saved.participant)}catch{$('syncCover').hidden=false;$('syncCoverTitle').textContent='Reconnecting…';$('syncCoverText').textContent='Stay on this screen while File Lab reconnects to your class.'}};apply(saved.room,saved.participant);await refresh();setInterval(()=>{if(!document.hidden)refresh()},1800)}
+startControlledLesson();
 </script></body></html>

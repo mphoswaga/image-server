@@ -352,6 +352,7 @@ function publicRoom(room, { teacherView = false } = {}) {
     status: open ? 'open' : 'closed',
     mode: normalizeMode(room.mode),
     phase: roomPhase(room),
+    controlledStage: room.activityId === 'file-types-sizes' ? Math.max(0, Math.min(3, Number(room.controlledStage) || 0)) : null,
     activity: activity ? {
       id: activity.id,
       version: activity.version,
@@ -390,7 +391,9 @@ function publicRoom(room, { teacherView = false } = {}) {
 }
 
 function createRoom({ teacherId, activityId = 'g2-pointer-control', mode = 'homework', roster = null, audioPolicy = null, durationMinutes, availabilityDays, ttlMs }) {
-  const safeMode = normalizeMode(mode);
+  const activity = practice.getActivity(activityId);
+  if (!activity) throw Object.assign(new Error('Practice activity not found.'), { code: 'activity_not_found' });
+  const safeMode = activity.id === 'file-types-sizes' ? 'classwork' : normalizeMode(mode);
   const openRooms = teacherRooms(teacherId).filter((room) => room.status === 'open');
   if (safeMode === 'classwork' && openRooms.some((room) => room.mode === 'classwork')) {
     throw Object.assign(new Error('End the current live class before starting another live class.'), { code: 'room_exists' });
@@ -398,8 +401,6 @@ function createRoom({ teacherId, activityId = 'g2-pointer-control', mode = 'home
   if (safeMode === 'homework' && openRooms.filter((room) => room.mode === 'homework').length >= 20) {
     throw Object.assign(new Error('Close an older homework room before creating another one.'), { code: 'room_limit' });
   }
-  const activity = practice.getActivity(activityId);
-  if (!activity) throw Object.assign(new Error('Practice activity not found.'), { code: 'activity_not_found' });
   const safeRoster = rosterSnapshot(roster);
   const now = Date.now();
   const safeAvailabilityDays = safeMode === 'homework' ? normalizeAvailabilityDays(availabilityDays) : null;
@@ -411,6 +412,7 @@ function createRoom({ teacherId, activityId = 'g2-pointer-control', mode = 'home
     teacherId: String(teacherId || ''),
     activityId: activity.id,
     activityVersion: activity.version,
+    controlledStage: activity.id === 'file-types-sizes' ? 0 : null,
     mode: safeMode,
     phase: safeMode === 'classwork' ? 'lobby' : 'playing',
     durationMinutes: safeMode === 'classwork' ? normalizeDurationMinutes(durationMinutes) : null,
@@ -572,6 +574,26 @@ function setRoomPaused(code, teacherId, shouldPause) {
     room.pausedRemainingSeconds = null;
     saveRoom(room);
   }
+  return publicRoom(room, { teacherView: true });
+}
+
+function setRoomStage(code, teacherId, stage) {
+  const room = requireOpenRoom(code);
+  if (room.teacherId !== String(teacherId || '')) {
+    throw Object.assign(new Error('This room belongs to another teacher.'), { code: 'forbidden' });
+  }
+  if (room.activityId !== 'file-types-sizes') {
+    throw Object.assign(new Error('This room does not use teacher-controlled tabs.'), { code: 'stage_not_supported' });
+  }
+  if (!['playing', 'paused'].includes(roomPhase(room))) {
+    throw Object.assign(new Error('Start the live lesson before changing tabs.'), { code: 'room_not_playing' });
+  }
+  const wanted = Number.parseInt(stage, 10);
+  if (!Number.isInteger(wanted) || wanted < 0 || wanted > 3) {
+    throw Object.assign(new Error('Choose a File Lab tab from 1 to 4.'), { code: 'invalid_stage' });
+  }
+  room.controlledStage = wanted;
+  saveRoom(room);
   return publicRoom(room, { teacherView: true });
 }
 
@@ -766,6 +788,7 @@ module.exports = {
   joinRoom,
   startRoom,
   setRoomPaused,
+  setRoomStage,
   updateRoomAudio,
   checkpointRoom,
   getRoom,

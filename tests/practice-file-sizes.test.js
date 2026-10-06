@@ -20,6 +20,9 @@ test('File Lab uses the supplied examples and corrected video size everywhere', 
   assert.match(html, /id="storePhoneFill"/);
   assert.match(html, /paintPhone\('store',total\*1e6,2000000000,icons\)/);
   assert.match(html, /Your pretend phone holds <b>2 GB<\/b>/);
+  assert.match(html, /teacherControlled=true/);
+  assert.match(html, /controlledPages=\['explore','build','store','quiz'\]/);
+  assert.match(html, /room\.controlledStage/);
   assert.doesNotMatch(html, /video 3 MB|Video',mb:3\b|The video card is 3 MB/i);
 });
 
@@ -34,6 +37,10 @@ test('File Lab script compiles and the activity is linked through gated Practice
   const teacher = fs.readFileSync(path.join(root, 'practice-teacher.html'), 'utf8');
   assert.match(server, /app\.get\('\/student\/practice\/file-sizes', requirePracticeEnabled/);
   assert.match(server, /app\.get\('\/practice\/file-sizes', requirePracticeEnabled, requireAuth/);
+  assert.match(server, /app\.patch\('\/api\/practice\/live-sessions\/:code\/stage', requirePracticeEnabled, requireAuth/);
   assert.match(learner, /href="\/student\/practice\/file-sizes"/);
+  assert.match(learner, /payload\.room\.activity&&payload\.room\.activity\.id==='file-types-sizes'/);
   assert.match(teacher, /href="\/practice\/file-sizes"/);
+  assert.match(teacher, /<option value="file-types-sizes">File Types and Sizes Lab<\/option>/);
+  assert.match(teacher, /id="fileLabNext"/);
 });

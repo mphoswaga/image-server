@@ -17,6 +17,19 @@ test('a teacher room uses a short code and exposes no ownership secrets', () => 
   assert.equal('participants' in room, false);
 });
 
+test('File Lab is class-paced and only its teacher can move the shared tab', () => {
+  const room = live.createRoom({ teacherId:'teacher-file-lab', activityId:'file-types-sizes', mode:'homework' });
+  assert.equal(room.mode, 'classwork');
+  assert.equal(room.phase, 'lobby');
+  assert.equal(room.controlledStage, 0);
+  assert.throws(() => live.setRoomStage(room.code, 'teacher-file-lab', 1), /start the live lesson/i);
+  live.startRoom(room.code, 'teacher-file-lab');
+  assert.equal(live.setRoomStage(room.code, 'teacher-file-lab', 1).controlledStage, 1);
+  assert.equal(live.getRoom(room.code).controlledStage, 1);
+  assert.throws(() => live.setRoomStage(room.code, 'another-teacher', 2), /another teacher/i);
+  assert.throws(() => live.setRoomStage(room.code, 'teacher-file-lab', 4), /tab from 1 to 4/i);
+});
+
 test('nicknames are temporary, cleaned and made distinct inside one room', () => {
   const room = live.createRoom({ teacherId: 'teacher-2' });
   const first = live.joinRoom(room.code, '  Linh  ');

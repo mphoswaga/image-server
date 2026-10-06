@@ -1481,6 +1481,10 @@
         if(!response.ok) throw new Error(payload.error||'The room could not be joined.');
         const saved={room:payload.room,participant:payload.participant,token:payload.token};
         try { sessionStorage.setItem(liveStorageKey(payload.room.code),JSON.stringify(saved)); } catch {}
+        if(payload.room.activity&&payload.room.activity.id==='file-types-sizes'){
+          location.href=`/student/practice/file-sizes?session=${encodeURIComponent(payload.room.code)}`;
+          return;
+        }
         const world=roomWorld(payload.room);
         if(world!==requestedWorld){ location.href=liveSessionUrl(payload.room.code,world); return; }
         history.replaceState(null,'',liveSessionUrl(payload.room.code,world));
@@ -2843,6 +2847,10 @@
               const saved=JSON.parse(sessionStorage.getItem(liveStorageKey(requestedSessionCode))||'null');
               if(saved&&saved.token&&saved.participant){
                 const {response,data:payload}=await checkpointRequest(`/api/practice/live-sessions/${encodeURIComponent(requestedSessionCode)}`,{headers:{'X-Practice-Participant':saved.token}});
+                if(response.ok&&payload.room&&payload.room.activity&&payload.room.activity.id==='file-types-sizes'){
+                  location.href=`/student/practice/file-sizes?session=${encodeURIComponent(requestedSessionCode)}`;
+                  return;
+                }
                 const sameWorld=roomWorld(payload.room)===requestedWorld;
                 const continuingFoundationRoom=requestedContinue&&requestedWorld==='g3'&&roomWorld(payload.room)==='foundation';
                 if(response.ok&&(sameWorld||continuingFoundationRoom)){

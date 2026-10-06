@@ -12,6 +12,21 @@ const ATTEMPTS_DIR = path.join(PRACTICE_DIR, 'attempts');
 
 const ACTIVITIES = Object.freeze([
   Object.freeze({
+    id: 'file-types-sizes',
+    version: 1,
+    gradeBand: 'Grades 2-3',
+    title: 'File Types and Sizes Lab',
+    description: 'Explore file types and watch how text, photos, audio and video use storage space.',
+    estimatedMinutes: 20,
+    device: 'computer',
+    steps: Object.freeze([
+      Object.freeze({ id: 'explore', title: 'Explore files', action: 'teacher_stage', target: 'explore' }),
+      Object.freeze({ id: 'build', title: 'Experiment with size', action: 'teacher_stage', target: 'build' }),
+      Object.freeze({ id: 'store', title: 'Fill a phone', action: 'teacher_stage', target: 'store' }),
+      Object.freeze({ id: 'quiz', title: 'Check understanding', action: 'teacher_stage', target: 'quiz' }),
+    ]),
+  }),
+  Object.freeze({
     id: 'typing-academy',
     version: 2,
     gradeBand: 'Grades 2-3',
