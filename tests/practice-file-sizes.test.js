@@ -16,6 +16,10 @@ test('File Lab uses the supplied examples and corrected video size everywhere', 
   assert.match(html, /type:'Video'.*size:1000000000/);
   assert.match(html, /name:'Video',mb:1000/);
   assert.match(html, /Which example is the video\?'.*'1 GB'/);
+  assert.match(html, /id="buildPhoneFill"/);
+  assert.match(html, /id="storePhoneFill"/);
+  assert.match(html, /paintPhone\('store',total\*1e6,2000000000,icons\)/);
+  assert.match(html, /Your pretend phone holds <b>2 GB<\/b>/);
   assert.doesNotMatch(html, /video 3 MB|Video',mb:3\b|The video card is 3 MB/i);
 });
 
