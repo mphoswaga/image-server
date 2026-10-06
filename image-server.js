@@ -5648,11 +5648,16 @@ app.get('/start', (req, res) => res.sendFile(path.join(__dirname, 'public', 'sta
 // outside public/ so the feature flag cannot be bypassed with a direct file URL.
 app.get('/student/practice', requirePracticeEnabled, (req, res) => res.sendFile(path.join(__dirname, 'practice.html')));
 app.get('/student/practice/guest', requirePracticeEnabled, (req, res) => res.sendFile(path.join(__dirname, 'practice.html')));
+app.get('/student/practice/file-sizes', requirePracticeEnabled, (req, res) => res.sendFile(path.join(__dirname, 'file-types-sizes-practice.html')));
 app.get('/practice/preview', requirePracticeEnabled, requireAuth, (req, res) => {
   if (req.user && req.user.role === 'student') return res.status(403).send('Teacher account required.');
   res.sendFile(path.join(__dirname, 'practice.html'));
 });
 app.get('/practice', requirePracticeEnabled, (req, res) => res.sendFile(path.join(__dirname, 'practice-teacher.html')));
+app.get('/practice/file-sizes', requirePracticeEnabled, requireAuth, (req, res) => {
+  if (req.user && req.user.role === 'student') return res.status(403).send('Teacher account required.');
+  res.sendFile(path.join(__dirname, 'file-types-sizes-practice.html'));
+});
 
 // Student play page (the shareable link target).
 app.get('/play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'play.html')));

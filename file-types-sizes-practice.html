@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>File Lab • Types & Sizes</title><style>
+:root{font-family:system-ui,-apple-system,sans-serif;color:#182e43;background:#eff5f7;font-size:18px}
+*{box-sizing:border-box}
+body{margin:0}
+header{background:#143b45;color:white;padding:28px max(5vw,20px)}
+header p{color:#cbe6e5;margin:8px 0}
+h1{font-size:clamp(30px,4vw,48px);margin:4px 0}
+h2{font-size:30px;margin:0 0 12px}
+h3{margin:8px 0}
+p{line-height:1.55}
+main{max-width:1200px;margin:auto;padding:24px}
+nav{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px}
+button,select,.back{font:inherit;border:2px solid #ccd9df;border-radius:12px;padding:12px 18px;background:white;color:#182e43;cursor:pointer}
+.back{text-decoration:none;font-weight:700}
+button:hover,.back:hover{border-color:#167769}
+button[aria-pressed=true],button.primary{background:#176c60;color:white;border-color:#176c60}
+button:focus-visible,input:focus-visible,select:focus-visible,.back:focus-visible{outline:4px solid #e7a322;outline-offset:3px}
+button:disabled{cursor:default;opacity:.7}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.card{background:white;border-radius:22px;padding:26px;box-shadow:0 5px 20px #17374808}
+.files{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.file{min-height:115px;text-align:left}
+.file[aria-pressed=true] small{color:white}
+.icon{font-size:32px;display:block;margin-bottom:6px}
+.muted,small{color:#536876}
+.big{font-size:clamp(38px,5vw,65px);font-weight:750;letter-spacing:-2px;margin:12px 0}
+.badge{display:inline-block;background:#e3f4ec;padding:6px 12px;border-radius:9px;color:#155c4a;font-weight:650}
+.note{background:#fff3d4;padding:16px;border-radius:12px;margin-top:18px}
+.bar{height:24px;background:#e4edef;border-radius:12px;overflow:hidden;margin:12px 0}
+.fill{height:100%;background:#218b78;transition:width .25s}
+.scale{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:20px}
+.scale button{padding:18px 8px}
+.scale b{font-size:28px;display:block}
+.scale small{display:block;color:inherit;font-size:14px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between}
+.slider{margin:25px 0}
+.slider label{display:flex;justify-content:space-between;gap:12px}
+input[type=range]{width:100%;accent-color:#167769;margin-top:15px;height:28px}
+.preview{min-height:150px;background:#edf6f5;border-radius:15px;padding:20px;font-size:27px;overflow-wrap:anywhere}
+.choices{display:grid;gap:12px;margin:20px 0}
+.feedback{min-height:65px;line-height:1.5;font-weight:600}
+section[hidden]{display:none}
+.storage-row{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid #e4edef;padding:13px 0}
+.storage-row button{padding:8px 14px}
+.storage-row small{display:block}
+.count{font-variant-numeric:tabular-nums;min-width:25px;text-align:center}
+.segments{display:flex;height:36px;background:#e4edef;border-radius:10px;overflow:hidden;margin:16px 0}
+.segments span{transition:width .2s}
+.teacher{margin-top:26px;color:#536876;font-size:15px}
+details{padding:16px 0}
+summary{cursor:pointer}
+.foot{font-size:14px;color:#536876;margin:22px 0 0}
+@media(max-width:720px){.grid{grid-template-columns:1fr}
+.files{grid-template-columns:repeat(2,1fr)}
+main{padding:16px}
+.card{padding:20px}
+nav button{flex:1;padding:10px;font-size:16px}
+.scale{gap:5px}
+.scale small{font-size:12px}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}
+}
+
+</style></head><body><header><div class="row"><div><p style="font-weight:700;letter-spacing:3px">LESSONSCOPE PRACTICE · FILE LAB</p><h1>Small files. Big ideas.</h1><p>Explore what files hold — and how much space they need.</p></div><div class="row"><a class="back" href="/student/practice">← Practice home</a><button id="fullscreen">Full screen</button></div></div></header><main>
+<nav aria-label="Activities"><button data-page="explore" aria-pressed="true">1 · Explore</button><button data-page="build" aria-pressed="false">2 · Experiment</button><button data-page="store" aria-pressed="false">3 · Fill a drive</button><button data-page="quiz" aria-pressed="false">4 · Quiz</button></nav>
+<section id="explore"><h2>What is inside a file?</h2><p class="muted">A file is a saved collection of information. Choose one to look inside.</p><div class="grid"><div class="files" id="files"></div><div class="card" id="detail" aria-live="polite"></div></div><div class="card" style="margin-top:24px"><h3>The units in this lesson</h3><p>Use <b>B, KB, MB, GB and TB</b> to describe file sizes. Tap each unit to compare it.</p><div class="scale" id="units"></div><p id="unitDetail" aria-live="polite"></p></div></section>
+<section id="build" hidden><h2>Make your file grow</h2><p class="muted">Predict first: which will add more — a text note, a photo, or a video?</p><div class="grid"><div class="card"><h3>Build a multimedia project</h3><div id="sliders"></div><button id="resetBuild">Start again</button></div><div class="card"><span class="badge">Estimated project size</span><div class="big" id="buildSize" aria-live="polite"></div><div class="preview" id="preview" aria-label="Project contents"></div><div id="breakdown"></div><p class="note">More content usually needs more space. Image quality, video quality, and compression also change file size.</p></div></div></section>
+<section id="store" hidden><h2>Can you fit it?</h2><p class="muted">Your pretend drive holds <b>2 GB</b>. Add the lesson files and watch the space fill.</p><div class="grid"><div class="card" id="storageControls"></div><div class="card"><span class="badge">Your 2 GB practice drive</span><div class="big" id="used"></div><p id="remaining"></p><div class="segments" id="segments" role="img" aria-label="Storage used"></div><div id="storageLegend"></div><p class="feedback" id="storageFeedback" aria-live="polite">Try fitting a video, a song, and some photos.</p><button id="clearDrive">Empty the pretend drive</button></div></div></section>
+<section id="quiz" hidden><div class="card" style="max-width:820px;margin:auto"><div class="row"><span class="badge" id="quizProgress"></span><span id="score"></span></div><h2 id="question" style="margin-top:24px"></h2><div class="choices" id="answers"></div><p class="feedback" id="quizFeedback" aria-live="polite"></p><button class="primary" id="next" hidden>Next question →</button><button id="restart" hidden>Play again</button></div></section>
+<details class="teacher"><summary>Teacher notes & model details</summary><p>Ask learners to predict, test, and explain. Compare a file’s name, extension, type, unit and example size. Extensions give clues about format; changing an extension does not convert the file.</p><p>The activity uses the supplied lesson examples: text note 100 B, photo 600 KB, song 5 MB, video 1 GB and game 1 TB. These are teaching examples, not fixed sizes for every file of that type. Actual sizes depend on format, content, quality and compression.</p><p>This activity uses decimal units: 1 KB = 1,000 B; 1 MB = 1,000 KB; 1 GB = 1,000 MB; 1 TB = 1,000 GB. The learner unit focus is B, KB, MB, GB and TB. The 2 GB storage model lets learners test combinations that include the 1 GB video.</p><p>Everything runs offline. Quiz answers and activities reset when the page is reloaded. No accounts, downloads or internet connection are needed.</p></details><p class="foot">LESSONSCOPE PRACTICE · FILE LAB · Look, predict, test, explain.</p></main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const formats=[{icon:'📝',type:'Text',name:'note.txt',ext:'.txt',size:100,inside:'Words and simple text.',example:'Remember my library book.',tip:'This lesson uses 100 B as the example size for a short text note.'}
+,{icon:'🖼️',type:'Image',name:'garden.jpg',ext:'.jpg',size:600000,inside:'A still picture made from tiny picture dots called pixels.',example:'🌳 🌷 ☀️',tip:'This lesson uses 600 KB as the example size for a photo.'}
+,{icon:'🎵',type:'Audio',name:'song.mp3',ext:'.mp3',size:5000000,inside:'Recorded sound, such as music or a voice.',example:'♪ ♫ ♪',tip:'This lesson uses 5 MB as the example size for a song.'}
+,{icon:'🎬',type:'Video',name:'trip.mp4',ext:'.mp4',size:1000000000,inside:'Moving pictures, often with sound.',example:'▶ A high-quality video',tip:'This lesson uses 1 GB as the example size for a video.'}
+,{icon:'🎮',type:'Game',name:'world.game',ext:'.game',size:1000000000000,inside:'Code, pictures, sounds and game worlds.',example:'🎮 A very large game collection',tip:'This lesson uses 1 TB as its largest example.'}
+];
+function fmt(n){if(n===0)return '0 B';const u=['B','KB','MB','GB','TB'];const i=Math.min(4,Math.floor(Math.log10(n)/3));return Number((n/1000**i).toFixed(3)).toLocaleString('en-US',{maximumFractionDigits:3}
+)+' '+u[i]}
+
+document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>{document.querySelectorAll('main>section').forEach(s=>s.hidden=s.id!==b.dataset.page);document.querySelectorAll('[data-page]').forEach(n=>n.setAttribute('aria-pressed',String(n===b)))}
+);
+$('fullscreen').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen()}
+catch{$('fullscreen').textContent='Use browser full screen'}
+}
+;
+document.addEventListener('fullscreenchange',()=>{$('fullscreen').textContent=document.fullscreenElement?'Exit full screen':'Full screen'}
+);
+formats.forEach((f,i)=>{const b=document.createElement('button');b.className='file';b.innerHTML='<span class="icon" aria-hidden="true">'+f.icon+'</span><b>'+f.type+'</b><br><small>'+f.ext+'</small>';b.onclick=()=>selectFile(i);$('files').append(b)}
+);
+function selectFile(i){const f=formats[i];[...$('files').children].forEach((b,j)=>b.setAttribute('aria-pressed',String(i===j)));$('detail').innerHTML='<span class="badge">'+f.name+'</span><h3 style="margin-top:18px">'+f.inside+'</h3><div class="big">'+fmt(f.size)+'</div><p class="muted">Example file size</p><div class="preview">'+f.example+'</div><p>'+f.tip+'</p>'}
+selectFile(0);
+const unitInfo=['A byte (B) is a small unit of data. The text note in this lesson is 100 B.','1 kilobyte (KB) = 1,000 bytes. The photo in this lesson is 600 KB.','1 megabyte (MB) = 1,000 KB. The song in this lesson is 5 MB.','1 gigabyte (GB) = 1,000 MB. The video in this lesson is 1 GB.','1 terabyte (TB) = 1,000 GB. The game example in this lesson is 1 TB.'];
+['B','KB','MB','GB','TB'].forEach((u,i)=>{const b=document.createElement('button');b.innerHTML='<b>'+u+'</b><small>'+['byte','kilobyte','megabyte','gigabyte','terabyte'][i]+'</small>';b.onclick=()=>{[...$('units').children].forEach(n=>n.setAttribute('aria-pressed',String(n===b)));$('unitDetail').textContent=unitInfo[i]}
+;$('units').append(b)}
+);$('units').children[0].click();
+const parts=[{id:'text',label:'Text notes',max:100,bytes:100,icon:'📝'}
+,{id:'photos',label:'Photos',max:15,bytes:600000,icon:'🖼️'}
+,{id:'video',label:'Videos',max:3,bytes:1000000000,icon:'🎬'}
+];
+parts.forEach(p=>{$('sliders').insertAdjacentHTML('beforeend','<div class="slider"><label for="'+p.id+'"><b>'+p.label+'</b><output id="'+p.id+'Value" for="'+p.id+'">0</output></label><input id="'+p.id+'" type="range" min="0" max="'+p.max+'" value="0" step="1"><small>'+fmt(p.bytes)+' per '+(p.id==='text'?'note':p.id==='photos'?'photo':'video')+' in this lesson</small></div>');$(p.id).oninput=updateBuild}
+);
+function updateBuild(){let total=0;const lines=[],icons=[];parts.forEach(p=>{const n=Number($(p.id).value);$(p.id+'Value').value=n;total+=n*p.bytes;lines.push('<p>'+p.label+': '+n+' → <b>'+fmt(n*p.bytes)+'</b></p>');if(n)icons.push(p.icon+' × '+n)}
+);$('buildSize').textContent=fmt(total);$('preview').textContent=icons.join('  +  ')||'Add something to your project!';$('breakdown').innerHTML=lines.join('')}
+
+$('resetBuild').onclick=()=>{parts.forEach(p=>$(p.id).value=0);updateBuild()}
+;updateBuild();
+const stored=[{name:'Text note',mb:.0001,color:'#365f9c'}
+,{name:'Photo',mb:.6,color:'#218b78'}
+,{name:'Song',mb:5,color:'#9a5d9b'}
+,{name:'Video',mb:1000,color:'#b26b24'}
+],counts=[0,0,0,0];
+stored.forEach((s,i)=>{$('storageControls').insertAdjacentHTML('beforeend','<div class="storage-row"><div><b>'+s.name+'</b><small>'+fmt(s.mb*1e6)+' each</small></div><div class="row"><button id="minus'+i+'" aria-label="Remove one '+s.name+'">−</button><span class="count" id="count'+i+'">0</span><button id="plus'+i+'" aria-label="Add one '+s.name+'">+</button></div></div>');$('plus'+i).onclick=()=>changeCount(i,1);$('minus'+i).onclick=()=>changeCount(i,-1)}
+);
+function totalMB(){return counts.reduce((t,n,i)=>t+n*stored[i].mb,0)}
+
+function changeCount(i,d){if(d>0&&totalMB()+stored[i].mb>2000+1e-8){$('storageFeedback').textContent='That file will not fit! Remove a file to make more space.';return}
+counts[i]=Math.max(0,counts[i]+d);renderStore();$('storageFeedback').textContent=totalMB()>=2000-1e-8?'Exactly full! You used all 2 GB.':d>0?'File added. How many more could fit?':'File removed. You have more free space.'}
+
+function renderStore(){const total=totalMB();$('used').textContent=fmt(total*1e6);$('remaining').textContent=fmt(Math.max(0,2000-total)*1e6)+' free · '+Number((total/20).toFixed(2))+'% used';$('segments').innerHTML=stored.map((s,i)=>'<span style="background:'+s.color+';width:'+(counts[i]*s.mb/20)+'%"></span>').join('');$('segments').setAttribute('aria-label',fmt(total*1e6)+' used out of 2 GB');$('storageLegend').innerHTML=stored.map((s,i)=>'<p><span style="color:'+s.color+'">■</span> '+s.name+': '+counts[i]+'</p>').join('');counts.forEach((n,i)=>{$('count'+i).textContent=n;$('minus'+i).disabled=n===0}
+)}
+
+$('clearDrive').onclick=()=>{counts.fill(0);renderStore();$('storageFeedback').textContent='Empty again. Try a different mix of files.'}
+;renderStore();
+const questions=[['Which example matches the text note?',['100 B','600 KB','5 MB'],0,'The text note in this lesson is 100 B.'],['Which is the largest unit in this lesson?',['GB','TB','MB'],1,'TB is larger than GB, MB, KB and B.'],['Which example file is smaller?',['A 600 KB photo','A 100 B note'],1,'100 B is smaller than 600 KB.'],['Which example is the song?',['5 MB','1 GB','1 TB'],0,'The song card is 5 MB.'],['Which example is the video?',['600 KB','1 GB','5 MB'],1,'The video card is 1 GB.'],['Which example is the game?',['1 TB','100 B','5 MB'],0,'The game card is 1 TB, the largest example in this set.']];
+let qi=0,score=0,answered=false;
+function renderQuiz(){answered=false;$('quizProgress').textContent='Question '+(qi+1)+' / '+questions.length;$('score').textContent='Score: '+score;$('question').textContent=questions[qi][0];$('quizFeedback').textContent='Choose your answer.';$('next').hidden=true;$('restart').hidden=true;$('answers').innerHTML='';questions[qi][1].forEach((a,i)=>{const b=document.createElement('button');b.textContent=a;b.onclick=()=>answer(i,b);$('answers').append(b)}
+)}
+
+function answer(i,b){if(answered)return;answered=true;const correct=i===questions[qi][2];if(correct)score++;b.setAttribute('aria-pressed','true');[...$('answers').children].forEach(n=>n.disabled=true);$('score').textContent='Score: '+score;$('quizFeedback').textContent=(correct?'✓ Correct! ':'Good try. ')+questions[qi][3];$('next').hidden=false;$('next').textContent=qi===questions.length-1?'See results →':'Next question →'}
+
+$('next').onclick=()=>{if(qi<questions.length-1){qi++;renderQuiz()}
+else{$('quizProgress').textContent='Quiz complete';$('question').textContent=score+' out of '+questions.length+' — exploration complete!';$('answers').innerHTML='';$('quizFeedback').textContent='Tell a partner: what can make a file bigger? Explore again to test your ideas.';$('next').hidden=true;$('restart').hidden=false}
+}
+;
+$('restart').onclick=()=>{qi=0;score=0;renderQuiz()}
+;renderQuiz();
+</script></body></html>
