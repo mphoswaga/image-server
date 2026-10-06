@@ -406,3 +406,7 @@ test('teacher assessments persist, restore, protect raw evidence and reject stal
  const service=require('../moonquest-observer').observerService(store,clock);const grant=service.issue(id,'teacher');const shared=service.read(id,grant.token);assert.equal(shared.totals.finalCorrect,2);assert.equal(shared.totals.adjusted,undefined);assert.equal(shared.rounds[0].adjusted,undefined);assert.equal(JSON.stringify(shared).includes('Teacher checked'),false);assert.equal(JSON.stringify(shared).includes('Explained after discussion'),false);
  r=edit('s2',null,3);assert.equal(r.summary.totals.assessed,2);assert.equal(r.students[2].rounds[0].assessmentHistory.length,2);assert.equal(r.students[2].rounds[0].revisedCorrect,null);
 });
+test('new team setup requires an explicit choice before learner sign-in',t=>{
+ const {store,id,cmd}=setup(t,4),s=store.session(id);s.duels=require('../moonquest-duels').create(s.students);s.joinOpen=false;s.members={};s.teamSetup={requiresChoice:true,choice:null};store.saveSession(s);
+ assert.throws(()=>cmd('open-joining'),/Choose saved/);cmd('shuffle-teams');assert.equal(store.session(id).teamSetup.choice,'random');cmd('open-joining');assert.equal(store.session(id).joinOpen,true);
+});

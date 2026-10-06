@@ -126,10 +126,6 @@ function installMoonQuest(app, deps) {
     ownGame(req, req.params.id);
     const test = req.body.test === true;
     const classRoster = test ? null : roster.getRoster(req.userId, req.body.rosterId);
-    if (!test && req.body.mode === 'duels' && classRoster) {
-      const priorTeams=teamProfiles.load(req.userId,classRoster);
-      if(priorTeams && priorTeams.teams.length!==2) throw Error('This class has more than two saved teams. MoonQuest needs two sides; review the class teams first.');
-    }
     const s = store.createSession(req.userId, req.params.id, classRoster, test, req.body.mode || 'cooperative');
     if (!test && s.duels) {s.joinOpen=false;store.saveSession(s);}
     if (test) for (const st of s.students) store.join(s.id, st.id);
@@ -142,16 +138,15 @@ function installMoonQuest(app, deps) {
   }));
   app.post(base + '/sessions/:id/command', teacher, wrap((req, res) => {
     const before = ownSession(req);
-    if (req.body.action === 'remember-teams') {
+    if(req.body.action==='use-saved-teams'){
+      if(req.body.seq!==before.seq)throw Error('The room has updated. Review the teams and try again.');
+      teamProfiles.chooseMoon(store,before,roster.getRoster(req.userId,before.rosterId),req.body.groupSides);
+    } else if (req.body.action === 'remember-teams') {
       if (before.phase !== 'lobby' || !before.duels || before.test) throw Error('Save class teams from a real duel lobby.');
       teamProfiles.rememberMoon(before, roster.getRoster(req.userId,before.rosterId));
-      before.teamSetup={source:'Saved class teams',needsReview:0};store.saveSession(before);
+      before.teamSetup={...before.teamSetup,source:'Saved class teams',needsReview:0};store.saveSession(before);
     } else {
-      const updated=store.command(req.params.id, req.userId, req.body.action, req.body);
-      if(req.body.action==='open-joining') {
-        teamProfiles.rememberMoon(updated,roster.getRoster(req.userId,updated.rosterId));
-        updated.teamSetup={source:'Saved class teams',needsReview:0};store.saveSession(updated);
-      }
+      store.command(req.params.id, req.userId, req.body.action, req.body);
     }
     res.json(req.body.presentation === true ? { ...store.snapshot(req.params.id, 'board'), canControl: true } : store.snapshot(req.params.id, 'teacher'));
   }));

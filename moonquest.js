@@ -254,12 +254,14 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     if (body.seq !== s.seq && !(body.round === s.round && body.phase === s.phase && body.paused === s.paused)) fail('The room has updated. Check the current stage and try again.');
     if(action==='open-joining'){
       if(s.test||!s.duels||s.phase!=='lobby')fail('Open sign-in from the class team setup.');
+      if(s.teamSetup?.requiresChoice&&!s.teamSetup.choice)fail('Choose saved class teams or create two random teams first.');
       const present=s.students.filter(st=>!(s.removedStudents||[]).includes(st.id));
       if(![0,1].every(team=>present.some(st=>s.duels.teams[st.id]===team)))fail('Include at least one present learner in each team.');
       s.joinOpen=true;
     } else if(action==='shuffle-teams'){
       if(s.phase!=='lobby'||s.joinOpen!==false||!s.duels)fail('Shuffle teams before opening sign-in.');
       s.duels.teams=duels.create(s.students).teams;
+      s.teamSetup={...s.teamSetup,choice:'random',source:'Two random MoonQuest teams',needsReview:s.students.length};
     } else if(action==='set-team'){
       if(!s.duels||s.phase!=='lobby')fail('Adjust teams before starting the mission.');
       if(!s.students.some(st=>st.id===body.studentId)||![0,1].includes(body.team))fail('Choose a learner and team.');

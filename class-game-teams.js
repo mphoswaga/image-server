@@ -36,19 +36,35 @@ function createTeamProfiles(root=DATA_DIR){
  function applyMoon(store,session,roster){
   if(session.test||!session.duels)return session;
   const profile=load(session.teacherId,roster);
-  if(profile){
-   if(profile.teams.length!==2)throw Error('This class has more than two saved teams. MoonQuest needs two sides; review the class teams before starting a duel.');
+  if(profile && profile.teams.length===2){
    const assignments={},missing=[];profile.teams.forEach((t,i)=>t.members.forEach(m=>assignments[m.id]=i));
    const counts=[0,0];Object.values(assignments).forEach(i=>counts[i]++);
    for(const st of session.students)if(assignments[st.id]===undefined){const side=counts[0]<=counts[1]?0:1;assignments[st.id]=side;counts[side]++;missing.push(st.id);}
    session.duels.teams=assignments;session.teamSetup={source:profile.source,needsReview:missing.length};
-  }else session.teamSetup={source:'New balanced teams',needsReview:session.students.length};
+  }else session.teamSetup={source:profile?'New balanced MoonQuest sides (saved class has '+profile.teams.length+' teams)':'New balanced teams',needsReview:session.students.length};
+  const counts=[0,0];
+  const savedGroups=(profile?.teams||[]).map(t=>{const side=counts[0]<=counts[1]?0:1;counts[side]+=t.members.length;return {id:t.id,name:t.name,count:t.members.length,side};});
+  session.teamSetup={...session.teamSetup,requiresChoice:true,choice:null,savedGroups};
+  store.saveSession(session);return session;
+ }
+ function chooseMoon(store,session,roster,groupSides){
+  if(session.test||!session.duels||session.phase!=='lobby'||session.joinOpen!==false)throw Error('Choose teams before opening sign-in.');
+  const profile=load(session.teacherId,roster);
+  if(!profile)throw Error('No saved class teams are available. Create two random teams instead.');
+  if(!groupSides||Object.keys(groupSides).length!==profile.teams.length||profile.teams.some(t=>![0,1].includes(groupSides[t.id])))throw Error('Choose a MoonQuest side for every saved team.');
+  const assignments={},counts=[0,0],allowed=new Set(session.students.map(s=>s.id));
+  for(const t of profile.teams)for(const m of t.members)if(allowed.has(m.id)){assignments[m.id]=groupSides[t.id];counts[groupSides[t.id]]++;}
+  if(counts.some(n=>!n))throw Error('Place at least one saved team with learners on each side.');
+  let added=0;
+  for(const st of session.students)if(assignments[st.id]===undefined){const side=counts[0]<=counts[1]?0:1;assignments[st.id]=side;counts[side]++;added++;}
+  session.duels.teams=assignments;
+  session.teamSetup={...session.teamSetup,choice:'saved',source:'Saved class teams grouped into MoonQuest sides',needsReview:added,savedGroups:profile.teams.map(t=>({id:t.id,name:t.name,count:t.members.length,side:groupSides[t.id]}))};
   store.saveSession(session);return session;
  }
  function rememberMoon(session,roster){
   if(session.test||!session.duels)return;
   save(session.teacherId,roster,[0,1].map(i=>({name:'Team '+(i+1),members:session.students.filter(st=>session.duels.teams[st.id]===i)})),'Saved class teams');
  }
- return {load,save,applyMoon,rememberMoon};
+ return {load,save,applyMoon,chooseMoon,rememberMoon};
 }
 module.exports={createTeamProfiles};
