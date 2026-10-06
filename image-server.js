@@ -5667,9 +5667,11 @@ app.get('/practice/preview', requirePracticeEnabled, requireAuth, (req, res) => 
   res.sendFile(path.join(__dirname, 'practice.html'));
 });
 app.get('/practice', requirePracticeEnabled, (req, res) => res.sendFile(path.join(__dirname, 'practice-teacher.html')));
-app.get('/practice/file-sizes', requirePracticeEnabled, requireAuth, (req, res) => {
-  if (req.user && req.user.role === 'student') return res.status(403).send('Teacher account required.');
-  res.sendFile(path.join(__dirname, 'file-types-sizes-practice.html'));
+// The File Lab activity is public; teacher session controls remain authenticated.
+// Accept the preview URL when a teacher shares it with learners too.
+app.get('/practice/file-sizes', requirePracticeEnabled, (req, res) => {
+  const query = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+  res.redirect(302, '/student/practice/file-sizes' + query);
 });
 
 // Student play page (the shareable link target).

@@ -36,7 +36,7 @@ test('File Lab script compiles and the activity is linked through gated Practice
   const learner = fs.readFileSync(path.join(root, 'practice.html'), 'utf8');
   const teacher = fs.readFileSync(path.join(root, 'practice-teacher.html'), 'utf8');
   assert.match(server, /app\.get\('\/student\/practice\/file-sizes', requirePracticeEnabled/);
-  assert.match(server, /app\.get\('\/practice\/file-sizes', requirePracticeEnabled, requireAuth/);
+  assert.match(server, /app\.get\('\/practice\/file-sizes', requirePracticeEnabled/);
   assert.match(server, /app\.patch\('\/api\/practice\/live-sessions\/:code\/stage', requirePracticeEnabled, requireAuth/);
   assert.match(learner, /href="\/student\/practice\/file-sizes"/);
   assert.match(learner, /payload\.room\.activity&&payload\.room\.activity\.id==='file-types-sizes'/);
