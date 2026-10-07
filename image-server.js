@@ -1654,6 +1654,8 @@ app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
     const source = deckAsPlanSource(deck);
     if (!source.trim()) return res.status(400).json({ error: 'These slides have no text to build a plan from.' });
 
+    const deckObjectives = String(deck.objectives || '').trim() || objectivesFromDeck(deck);
+    if (!deckObjectives) return res.status(400).json({ error: 'No learning objectives were found in these slides. Add the learning objectives in Start from your slides, then generate the lesson plan.' });
     const { reservation, block } = await reserve(req, 'lessonscope.generate_lesson_plan');
     if (block) return res.status(402).json(block);
     try {
@@ -1679,8 +1681,8 @@ app.post('/api/lesson-plan/download', requireAuth, async (req, res) => {
         topic: String(deck.topic || '').toLowerCase(),
         grade: deck.grade, tone: deck.tone,
         // The deck IS the lesson, so it grounds the plan. Real objectives are
-        // used when the deck has them; otherwise the slides speak for themselves.
-        objectives: String(deck.objectives || '').trim() || objectivesFromDeck(deck) || source,
+        // kept separate from the supporting slide content.
+        objectives: deckObjectives,
         successCriteria: criteriaFromDeck(deck).split('\n').filter(Boolean),
         templateText: tpl ? templatePromptText(req.userId, tpl) : plannerText,
         sourceMaterialText: source,
@@ -2173,7 +2175,7 @@ app.post('/api/import/slides', requireAuth, presentationUpload.single('file'), r
       type: i === 0 ? 'title' : (i === parsed.length - 1 ? 'recap' : 'content'),
       title: p.title,
       subtitle: i === 0 ? (p.bullets[0] || null) : null,
-      bullets: i === 0 ? [] : p.bullets.slice(0, 6),
+      bullets: p.bullets,
       example: null,
       imageQuery: `${topic} ${p.title}`.slice(0, 80),
     }));
@@ -2181,8 +2183,8 @@ app.post('/api/import/slides', requireAuth, presentationUpload.single('file'), r
     const sourceText = parsed.map(p => [p.title, ...p.bullets].join('\n')).join('\n\n').slice(0, LIMITS.source);
     // Keep the wording found in the teacher's own slides for every resource
     // generated later from this restored lesson.
-    const liftedObjectives = objectivesFromDeck({ slides });
-    const liftedCriteria = criteriaFromDeck({ slides }).split('\n').filter(Boolean);
+    const liftedObjectives = clip(req.body.objectives, LIMITS.objectives).trim() || objectivesFromDeck({ slides: parsed });
+    const liftedCriteria = criteriaFromDeck({ slides: parsed }).split('\n').filter(Boolean);
     const id = crypto.randomUUID();
     decks.set(id, {
       ownerId: req.userId,

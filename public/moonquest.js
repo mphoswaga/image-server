@@ -22,11 +22,26 @@
   const answerProgress = (count, total) => `${count}/${total} selected`;
   let musicTimer, musicEnabled=false, musicStep=0;
   // Original pentatonic instrumental: soft zither-like plucks and a breathy flute.
-  // No recordings, external streams, vocals or autoplay.
+  // Gameplay uses synthesized music; the finale uses the teacher-supplied track.
   const melody=[74,0,77,79,81,0,79,77,74,0,72,69,72,0,74,0,77,79,84,0,81,79,77,0,74,72,69,0,72,74,0,0];
-  let musicBus;
+  let musicBus, finaleMusic, finaleSession='';
+  function winnerMusic(){
+    if(!finaleMusic){finaleMusic=new Audio('/assets/colonyquest/music/toys-are-us-blue-deer-studio.mp3');finaleMusic.preload='none';finaleMusic.dataset.moonquestFinale='true';document.body.append(finaleMusic);}
+    finaleMusic.volume=Number(document.getElementById('music-level').value)/100*.5;
+    if(musicEnabled&&!document.hidden&&!finaleMusic.ended)finaleMusic.play().catch(()=>{document.getElementById('music').textContent='Play celebration music';});
+  }
+  function resumeMusic(){
+    if(!musicEnabled||document.hidden)return;
+    if(view==='live'&&state?.phase==='ended'){winnerMusic();return;}
+    musicNote();musicTimer=setInterval(musicNote,850);
+  }
+  function syncFinaleMusic(){
+    if(state.phase==='ended'){
+      if(finaleSession!==sessionId){stopMusic();finaleSession=sessionId;if(finaleMusic)finaleMusic.currentTime=0;winnerMusic();}
+    }else{finaleMusic?.pause();finaleSession='';}
+  }
   const musicVoices=new Set();
-  function stopMusic(){clearInterval(musicTimer);for(const voice of musicVoices){try{voice.stop();}catch{}}musicVoices.clear();}
+  function stopMusic(){finaleMusic?.pause();clearInterval(musicTimer);for(const voice of musicVoices){try{voice.stop();}catch{}}musicVoices.clear();}
   function instrument(note,flute=false){
     const now=audio.currentTime, frequency=440*Math.pow(2,(note-69)/12), duration=flute?1.8:2.6;
     const envelope=audio.createGain();envelope.connect(musicBus);
@@ -39,7 +54,7 @@
     });
   }
   function musicNote(){
-    if(!musicEnabled||document.hidden)return;
+    if(!musicEnabled||document.hidden||(view==='live'&&state?.phase==='ended'))return;
     try{audio ||= new (window.AudioContext||window.webkitAudioContext)();audio.resume();
       if(!musicBus){musicBus=audio.createGain();musicBus.connect(audio.destination);}
       musicBus.gain.setTargetAtTime(Number(document.getElementById('music-level').value)/100*.5,audio.currentTime,.05);
@@ -47,9 +62,9 @@
       if(step%2===0)instrument([50,57,62,57,53,60,65,60][Math.floor(step/2)%8]);
     }catch{}
   }
-  document.getElementById('music-level').oninput=()=>{if(musicBus)musicBus.gain.setTargetAtTime(Number(document.getElementById('music-level').value)/100*.5,audio.currentTime,.05);};
-  document.getElementById('music').onclick=()=>{musicEnabled=!musicEnabled;const b=document.getElementById('music');b.textContent=musicEnabled?'Music on':'Music off';b.setAttribute('aria-pressed',String(musicEnabled));stopMusic();if(musicEnabled){musicNote();musicTimer=setInterval(musicNote,850);}};
-  document.addEventListener('visibilitychange',()=>{stopMusic();if(musicEnabled&&!document.hidden){musicNote();musicTimer=setInterval(musicNote,850);}});
+  document.getElementById('music-level').oninput=()=>{if(finaleMusic)finaleMusic.volume=Number(document.getElementById('music-level').value)/100*.5;if(musicBus)musicBus.gain.setTargetAtTime(Number(document.getElementById('music-level').value)/100*.5,audio.currentTime,.05);};
+  document.getElementById('music').onclick=()=>{musicEnabled=document.getElementById('music').textContent==='Play celebration music'?true:!musicEnabled;const b=document.getElementById('music');b.textContent=musicEnabled?'Music on':'Music off';b.setAttribute('aria-pressed',String(musicEnabled));stopMusic();resumeMusic();};
+  document.addEventListener('visibilitychange',()=>{stopMusic();resumeMusic();});
   window.addEventListener('pagehide',stopMusic);
   function tell(message, error = false) { clearTimeout(noticeTimer); notice.textContent = message; notice.classList.toggle('error', error); noticeTimer = setTimeout(() => { notice.textContent = ''; }, error ? 15000 : 6500); }
   async function api(url, data, opts = {}) {
@@ -58,7 +73,7 @@
     if (!response.ok) throw new Error(result.error || 'Request failed.');
     return result;
   }
-  function stopPoll() { clearTimeout(pollTimer);cancelAnimationFrame(storyFrame);window.speechSynthesis?.cancel(); }
+  function stopPoll() { finaleMusic?.pause();finaleSession='';clearTimeout(pollTimer);cancelAnimationFrame(storyFrame);window.speechSynthesis?.cancel(); }
   function chime() {
     if (!soundEnabled || role==='student') return;
     try { audio ||= new (window.AudioContext || window.webkitAudioContext)(); audio.resume(); [523.25,659.25,783.99].forEach((f,i) => { const o=audio.createOscillator(),g=audio.createGain(), t=audio.currentTime+i*.1; o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(Number(document.getElementById('effects-level').value)/100*.13,t+.02);g.gain.exponentialRampToValueAtTime(.001,t+.45);o.connect(g);g.connect(audio.destination);o.start(t);o.stop(t+.5); }); } catch {}
@@ -423,6 +438,7 @@
   }
   function bindRoyale(){const picker=document.getElementById('royale-watch');if(picker)picker.onchange=()=>{watchedPlayer=picker.value;renderLive();};}
   function renderLive() {
+    syncFinaleMusic();
     const previousImage=root.querySelector('#diagram img');
     const racePositions=[...root.querySelectorAll('.race-runner')].map(el=>el.style.left);
     cancelAnimationFrame(storyFrame);if(!['intro','story-vote','story-action','ended'].includes(state.phase))window.speechSynthesis?.cancel();document.body.classList.remove('learner-round','duel-round','duel-board','tale-page');document.body.dataset.view='live'; document.body.dataset.audience=role; document.body.dataset.phase=state.phase;

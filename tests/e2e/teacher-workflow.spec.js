@@ -271,3 +271,28 @@ test('roster upload controls keep their actions visible and separated', async ({
     expect(box.height).toBeGreaterThan(20);
   }
 });
+
+
+test('Filtering import keeps lesson objectives separate and retains all slide text', async ({ page }) => {
+  const pptx = new pptxgen();
+  const title = pptx.addSlide();
+  title.addText('Filtering', { x: 1, y: 1, w: 6, h: 0.5 });
+  title.addText('Unit 2.4', { x: 1, y: 2, w: 6, h: 0.5 });
+  const objective = pptx.addSlide();
+  objective.addText('Lesson Objectives', { x: 1, y: 1, w: 6, h: 0.5 });
+  objective.addText('Separate an insoluble solid from a liquid.', { x: 1, y: 2, w: 6, h: 0.5 });
+  const content = pptx.addSlide();
+  content.addText('Filtering equipment', { x: 1, y: 0.1, w: 6, h: 0.5 });
+  const lines = ['Filter paper', 'Funnel', 'Beaker', 'Sand', 'Water', 'Mixture', 'Residue', 'Filtrate'];
+  content.addText(lines.join('\n'), { x: 1, y: 1, w: 6, h: 4 });
+  const result = await page.request.post('/api/import/slides', { multipart: {
+    file: { name: 'filtering.pptx', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', buffer: await pptx.write({ outputType: 'nodebuffer' }) },
+    subject: 'Science', topic: 'Filtering', grade: 'Grade 5',
+  } });
+  expect(result.ok()).toBeTruthy();
+  const deck = await result.json();
+  expect(deck.objectives).toBe('Separate an insoluble solid from a liquid.');
+  expect(deck.slides[0].bullets).toContain('Unit 2.4');
+  expect(deck.slides[2].bullets).toEqual(lines);
+  expect(deck.sourceText).toContain('Filtrate');
+});

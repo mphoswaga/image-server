@@ -2859,6 +2859,8 @@
           <span id="isFileName">Choose your slides — PowerPoint (.pptx, up to 50 MB)</span>
         </div>
       </div>
+      <label for="isObjectives">Learning objectives (optional if stated in your slides)</label>
+      <textarea id="isObjectives" rows="3" maxlength="1500" placeholder="Paste the learning objectives if your slides do not state them."></textarea>
       <div class="wp-slot-mount" data-wp-mount="mode:haveSlides" style="margin-top:18px"></div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:18px">
         <button id="importSlidesPlanBtn" class="btn accent" type="button" style="flex:1;min-width:220px"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Upload &amp; write a lesson plan</button>
@@ -5078,13 +5080,13 @@
       btn.disabled=true; const orig=btn.innerHTML;
       statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>Reading your slides…';
       const fd=new FormData();
-      fd.append('file',file); fd.append('subject',subject); fd.append('topic',topic); fd.append('grade',$('isGrade').value);fd.append('durationMinutes',$('isLessonMinutes').value);
+      fd.append('file',file); fd.append('subject',subject); fd.append('topic',topic); fd.append('grade',$('isGrade').value);fd.append('durationMinutes',$('isLessonMinutes').value); fd.append('objectives',$('isObjectives').value.trim());
       const teachingModelId=$('isModel').value||'standard'; fd.append('teachingModelId',teachingModelId);
       try{
         const r=await fetch('/api/import/slides',{method:'POST',body:fd});
         const d=await r.json(); if(!r.ok) throw new Error(d.error);
         ctx={ lessonSettings:{durationMinutes:Number($('isLessonMinutes').value),slideCountMode:'manual',game:null,observation:null}, subject, topic, grade:$('isGrade').value||'middle school', slideCount:d.slideCount||5,
-          tone:'clear and engaging', focus:'', objectives:(d.objectives||'').trim(), successCriteria:d.successCriteria||[],
+          tone:'clear and engaging', focus:'', objectives:($('isObjectives').value||d.objectives||'').trim(), successCriteria:d.successCriteria||[], sourceMaterialText:d.sourceText||'',
           teachingModelId, lessonPlanText:d.sourceText||'' };
         importedPlanText=d.sourceText||''; currentDeckId=d.deckId;
         renderDeck(d);
@@ -5092,13 +5094,14 @@
         // (an empty plan makes the server fall back to ctx.lessonPlanText).
         planTemplateId=null; if($('planSections')) $('planSections').innerHTML='';
         if(withPlan){
+          if(!ctx.objectives){ throw new Error('Your slides were read, but no learning objectives were found. Add the learning objectives above, then choose Upload & write a lesson plan again.'); }
           statusEl.innerHTML='<span class="spinner"></span>Writing a lesson plan from your slides…';
           const pr=await fetch('/api/lesson-plan',{method:'POST',headers:{'Content-Type':'application/json'},
             body:JSON.stringify({subject,topic,lessonSettings:ctx.lessonSettings,grade:$('isGrade').value,teachingModelId,
-              objectives:(d.objectives||'').trim()||d.sourceText, successCriteria:d.successCriteria||[]})});
+              objectives:ctx.objectives, sourceMaterialText:d.sourceText||'', successCriteria:d.successCriteria||[]})});
           const pd=await pr.json();
           if(pr.ok){ renderPlan(pd); }
-          else { toast(pd.error||'Could not write a plan — showing your slides.'); }
+          else { throw new Error(pd.error||'Could not write a plan. Your uploaded slides have been read; please retry.'); }
         }
         deckImported=true;
         statusEl.innerHTML='';
@@ -7360,7 +7363,7 @@
       if($('planSections')) $('planSections').innerHTML='';
       if($('deck')) $('deck').innerHTML='';
       if($('packPreview')) $('packPreview').innerHTML='';
-      ['subject','topic','objectives','focus','ipSubject','ipTopic','isSubject','isTopic'].forEach(id=>{ if($(id)) $(id).value=''; });
+      ['subject','topic','objectives','focus','ipSubject','ipTopic','isSubject','isTopic','isObjectives'].forEach(id=>{ if($(id)) $(id).value=''; });
       const normalPurpose=document.querySelector('input[name="lessonPurpose"][value="lesson"]');
       if(normalPurpose) normalPurpose.checked=true;
       if($('assessmentPlanTotal')) $('assessmentPlanTotal').value='50';

@@ -36,7 +36,7 @@ test('video slides are never a source', () => {
 });
 
 test('the many ways schools title an objectives slide are recognised', () => {
-  for (const title of ['Objectives', 'LOs', 'WALT', 'We are learning', 'Learning outcomes', 'Aims']) {
+  for (const title of ['Objectives', 'LOs', 'WALT', 'We are learning', 'Learning outcomes', 'Lesson Objectives', 'Lesson outcomes', 'Aims']) {
     assert.equal(objectivesFromDeck({ slides: [{ title, bullets: ['x'] }] }), 'x', `missed "${title}"`);
   }
   for (const title of ['Success Criteria', 'WILF', 'I can', 'SC']) {
@@ -56,4 +56,17 @@ test('a slide that merely mentions objectives mid-title is not treated as one', 
   // The match is anchored, so "Reviewing our objectives from last week" — a
   // recap slide — does not become the LO row.
   assert.equal(objectivesFromDeck({ slides: [{ title: 'Reviewing our objectives', bullets: ['x'] }] }), '');
+});
+
+
+test('Filtering slide headings and explanations stay separate from lesson objectives', () => {
+  const objectives = ['Separate an insoluble solid from a liquid by filtering.', 'Describe what passes through filter paper.'];
+  const slides = [
+    { title: 'Filtering', bullets: ['Unit 2.4'] },
+    { title: 'WHAT IS SOLUBLE?', bullets: ['Anything that dissolves in a liquid.'] },
+    { title: 'Lesson Objectives', bullets: objectives },
+    { title: 'Common Mixture Separation Techniques', bullets: ['Picking', 'Sieving', 'Using magnets'] },
+  ];
+  assert.equal(objectivesFromDeck({ slides }), objectives.join('\n'));
+  assert.equal(objectivesFromDeck({ slides: slides.filter(s => s.title !== 'Lesson Objectives') }), '');
 });

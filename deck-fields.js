@@ -9,7 +9,7 @@
 // pacing guide gives them and are never reworded — so these functions COPY, and
 // when the slides don't state something the row stays blank rather than being
 // filled with something invented.
-const OBJECTIVE_SLIDE = /^\s*(learning\s+)?(objectives?|outcomes?|lo'?s?|walt|we are learning|aims?)\b/i;
+const OBJECTIVE_SLIDE = /^\s*((?:learning|lesson)\s+)?(objectives?|outcomes?|lo'?s?|walt|we are learning|aims?)\b/i;
 const CRITERIA_SLIDE = /^\s*(success\s+criteria|sc|wilf|what i'?m looking for|i can)\b/i;
 
 function slideLinesMatching(deck, re) {

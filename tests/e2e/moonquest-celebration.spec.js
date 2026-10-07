@@ -12,9 +12,10 @@ test('Finish during a question celebrates named bunnies and team podiums on lear
  const context=await browser.newContext();const learner=await context.newPage();const errors=[];learner.on('pageerror',e=>errors.push(e.message));
  try{
  await learner.goto('/moonquest/join');await learner.evaluate(({id,token})=>sessionStorage.setItem('moonquest:'+id,token),{id,token:joined.token});await learner.goto('/moonquest?session='+id);
+ await page.locator('#music').click();await expect(page.locator('audio[data-moonquest-finale]')).toHaveCount(0);
  await command('next');await expect(learner.locator('#diagram')).toBeVisible({timeout:20000});await learner.locator('#diagram polygon[data-region="left-hand"]').click();await expect(learner.locator('#answer-status')).toContainText('locked');await command('advance');
  await expect(learner.locator('.victory-screen .duel-verdict')).toBeVisible();
- await command('end');await expect(learner.locator('.final-victory')).toBeVisible();await expect(learner.locator('.team-podium')).toHaveCount(2);await expect(learner.locator('.podium-place').first()).toContainText('points');await expect(page.locator('.final-victory')).toBeVisible();await learner.reload();await expect(learner.locator('.final-victory')).toBeVisible();expect(errors).toEqual([]);
+ await command('end');await expect(learner.locator('.final-victory')).toBeVisible();await expect(learner.locator('.team-podium')).toHaveCount(2);await expect(learner.locator('.podium-place').first()).toContainText('points');await expect(page.locator('.final-victory')).toBeVisible();const track=page.locator('audio[data-moonquest-finale]');await expect.poll(()=>track.evaluate(a=>!a.paused&&a.currentTime>0)).toBe(true);await expect(track).toHaveAttribute('src','/assets/colonyquest/music/toys-are-us-blue-deer-studio.mp3');await page.locator('#music').click();await expect.poll(()=>track.evaluate(a=>a.paused)).toBe(true);await learner.reload();await expect(learner.locator('.final-victory')).toBeVisible();expect(errors).toEqual([]);
  await learner.screenshot({path:'/tmp/moonquest-final-celebration.png',fullPage:true});
  }finally{await context.close();}
 });
