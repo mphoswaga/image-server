@@ -2809,6 +2809,13 @@ app.post('/api/student/logout', (req, res) => {
 
 // Same data as /api/my-work, but identity comes from the verified session —
 // no PIN passed in a URL query string.
+app.get('/api/student/activities', requireStudentAccess, (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json(require('./student-activities').discover(req.studentSession.studentId, {
+    roster, games, assignments, moonquest: moonquestStore, fish: fishQuestLive, colony: colonyQuestMultiplayer,
+  }));
+});
+
 app.get('/api/student/my-work', requireStudentAccess, (req, res) => {
   const includeFreeform = req.query.includeFreeform === '1' || req.query.includeFreeform === 'true';
   const { work } = gatherWork(req.studentSession.studentId, includeFreeform);
@@ -5370,6 +5377,13 @@ app.post('/api/roster', requireAuth, (req, res, next) => {
     res.json({ id: r.id, name: r.name, count: r.students.length });
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
+
+const rosterSharing=require('./roster-sharing').createSharing({roster});
+function rosterShareRoute(fn){return (req,res)=>{if(req.user.role==='student')return res.status(403).json({error:'Teacher account required.'});try{res.set('Cache-Control','no-store');res.json(fn(req));}catch(err){res.status(400).json({error:err.code==='ENOENT'?'Invitation or roster not found.':err.message});}};}
+app.get('/api/roster-sharing',requireAuth,rosterShareRoute(req=>({invitations:rosterSharing.visible(req.user)})));
+app.post('/api/roster-sharing',requireAuth,rosterShareRoute(req=>({id:rosterSharing.create(req.user,req.body||{}).id})));
+app.post('/api/roster-sharing/:id/accept',requireAuth,rosterShareRoute(req=>rosterSharing.accept(req.user,req.params.id)));
+app.delete('/api/roster-sharing/:id',requireAuth,rosterShareRoute(req=>{rosterSharing.revoke(req.user,req.params.id);return {ok:true};}));
 
 app.get('/api/rosters', requireAuth, (req, res) => res.json({ rosters: roster.listRosters(req.userId) }));
 

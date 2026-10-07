@@ -197,7 +197,9 @@ test('FishQuest is offered beside the existing student game choices', () => {
   assert.match(play, /location\.href=game\.canManageColonyQuest&&!teacherTest\?'\/fishquest\/'\+GAME_ID:'\/fishquest-play\/'\+GAME_ID/);
   assert.match(play, /game\.canManageColonyQuest&&teacherTest\?'\?test=1':''/);
   assert.match(dashboard, /Open FishQuest live room/);
-  assert.match(dashboard, /Start FishQuest live/);
+  const hub = fs.readFileSync(path.join(__dirname, '..', 'public', 'games-hub.js'), 'utf8');
+  assert.match(hub, /name:'FishQuest'/);
+  assert.match(hub, /Smartboard','\/fishquest\//);
   assert.match(dashboard, /Learner game link/);
   const teacher = fs.readFileSync(path.join(__dirname, '..', 'public', 'fishquest-teacher.html'), 'utf8');
   assert.match(teacher, /id="sessionClass"/);

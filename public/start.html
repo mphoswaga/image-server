@@ -57,7 +57,8 @@
     .wc-link { display:inline-block; margin-top:10px; font-size:13px; font-weight:600; color:var(--primary); text-decoration:none; }
     .empty { text-align:center; color:var(--muted); font-size:14px; padding:30px 0; }
     .logout-link { display:block; text-align:center; margin-top:20px; font-size:13px; color:var(--muted); text-decoration:none; }
-  </style>
+  .activity-section{background:#f0f9ff;border:1px solid #cfe5ef;border-radius:20px;padding:18px;margin:20px 0}.activity-section h2{font-size:22px;margin:0 0 12px}.activity-section .work-card{background:white;margin-top:12px}.activity-join{margin-top:12px;background:#167a69!important}.activity-empty{padding:14px;color:#526579;line-height:1.5}.activity-section:has(#liveList){background:#effbf5;border-color:#bce9d2}
+</style>
   <link rel="stylesheet" href="/byte-feedback.css" />
 </head>
 <body data-byte-ui="student">
@@ -118,6 +119,9 @@
       <div class="greet" id="greet"></div>
       <p class="greet-sub">Here's your LessonScope space.</p>
 
+      <section class="activity-section"><h2>⚡ Live now</h2><p class="greet-sub">When your teacher opens a game, join here!</p><div id="liveList">Checking your classroom…</div></section>
+      <section class="activity-section"><h2>🎒 To do</h2><div id="todoList">Finding your activities…</div></section>
+      <p id="activityStatus" role="status" class="greet-sub"></p>
       <div class="practice-card" id="practiceCard">
         <b>Digital Skills Practice</b>
         <p>Build confidence with mouse, keyboard and safe-computing skills.</p>
@@ -133,7 +137,7 @@
         <div class="err" id="joinErr"></div>
       </div>
 
-      <div class="section-title">My work</div>
+      <div class="section-title">Completed</div>
       <div id="workList"></div>
 
       <a href="#" class="logout-link" id="logoutLink">Not you? Sign out</a>
@@ -175,12 +179,32 @@
       }).join('');
     }
 
+    let activityBusy=false,activityTimer=null,activitySignature='';
+    async function refreshActivities(){
+      if(activityBusy||document.hidden)return;
+      activityBusy=true;
+      try{
+        const r=await fetch('/api/student/activities');if(r.status===401){clearInterval(activityTimer);$('activityStatus').textContent='Please sign in again to see your activities.';return;}
+        if(!r.ok)throw Error();const d=await r.json();const signature=JSON.stringify(d);
+        if(signature!==activitySignature){
+          activitySignature=signature;
+          for(const [key,id,empty] of [['live','liveList','No live game yet. This page updates by itself.'],['todo','todoList','You’re all caught up! New tasks will appear here.']]){
+            const list=d[key]||[];$(id).replaceChildren();
+            if(!list.length){const p=document.createElement('p');p.className='activity-empty';p.textContent=empty;$(id).append(p);}
+            for(const item of list){const card=document.createElement('div');card.className='work-card';const title=document.createElement('strong');title.textContent=item.title;const meta=document.createElement('p');meta.textContent=item.subject||'Class activity';const button=document.createElement('button');button.className='btn activity-join';button.textContent=key==='live'?'Join now →':'Open task →';button.onclick=async()=>{button.disabled=true;try{const response=await fetch('/api/student/join-room',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:item.code})});const result=await response.json();if(!response.ok)throw Error(result.error);if(result.type==='moonquest'&&result.token)sessionStorage.setItem('moonquest:'+result.id,result.token);location.href=item.activity==='colony'?'/colonyquest-live-play/'+encodeURIComponent(result.id):item.activity==='fish'?'/fishquest-play/'+encodeURIComponent(result.id):result.path;}catch(e){$('activityStatus').textContent=e.message;button.disabled=false;}};card.append(title,meta,button);$(id).append(card);}
+          }
+        }
+        $('activityStatus').textContent='Updates automatically · You can keep this page open.';
+      }catch{$('activityStatus').textContent='Could not check for new activities. Trying again shortly.';}finally{activityBusy=false;}
+    }
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden&&activityTimer)refreshActivities();});
     async function showDashboard(name) {
       if (returnTo) { location.replace(returnTo); return; }
       $('loading').style.display = 'none';
       $('authCard').style.display = 'none';
       $('greet').textContent = `Hi ${name}!`;
       $('dashboard').style.display = 'block';
+      refreshActivities();if(!activityTimer)activityTimer=setInterval(refreshActivities,15000);
       fetch('/api/practice/status').then(r => r.json()).then(d => { if (d.enabled) $('practiceCard').style.display = 'block'; }).catch(() => {});
       try {
         const r = await fetch('/api/student/my-work');

@@ -3545,7 +3545,13 @@
           <p class="page-sub">Upload your class list — Excel or CSV — so students verify themselves with a Student ID. No email, no passwords.</p>
         </div>
       </div>
-      <div id="rosterList" style="margin-bottom:20px"></div>
+      <section class="panel-add" style="padding:18px;margin-bottom:20px" aria-label="Roster sharing">
+        <h3>Share class rosters</h3><p>Invite a teacher by their sign-up email. They receive independent copies of the selected class lists only — no marks, reports, lessons or activities. Later edits do not sync. Learner IDs stay the same.</p>
+        <label for="rosterShareEmail">Colleague’s sign-up email</label><input id="rosterShareEmail" type="email" placeholder="teacher@school.edu" autocomplete="off">
+        <div id="rosterShareClasses" class="class-picker" style="margin:12px 0"></div>
+        <button id="rosterShareSend" class="btn ghost" type="button">Invite to copy rosters</button>
+        <p id="rosterShareStatus" role="status"></p><div id="rosterShareInvites"></div>
+      </section><div id="rosterList" style="margin-bottom:20px"></div>
 
       <details id="rosterAdd" class="panel-add" style="margin-bottom:12px">
         <summary>Add a new roster</summary>
@@ -8802,10 +8808,23 @@
       picker.innerHTML=rosters.length?rosters.map(r=>`<label><input type="checkbox" value="${esc(r.id)}" ${chosen.has(r.id)?'checked':''}> <span>${esc(r.name)} <small>(${r.count})</small></span></label>`).join(''):'<span class="class-picker-empty">Create a class roster first, or leave this game open to free-form names.</span>';
     }
 
+    async function loadRosterSharing(classes){
+      const picker=$('rosterShareClasses');picker.innerHTML=classes.map(r=>`<label><input type="checkbox" value="${esc(r.id)}"> ${esc(r.name)} (${r.count})</label>`).join('')||'<p>Your accepted classes will appear here.</p>';
+      try{const response=await fetch('/api/roster-sharing');const data=await response.json();if(!response.ok)throw Error(data.error);
+        $('rosterShareInvites').innerHTML=(data.invitations||[]).map(i=>`<div class="roster-row" style="display:block"><strong>${i.sent?'Sent to '+esc(i.recipientEmail):'From '+esc(i.ownerName)}</strong><p>${i.classes.map(c=>esc(c.name)+' ('+c.count+')').join(', ')} · ${esc(i.status)}</p>${i.status==='pending'?`<button type="button" class="btn ghost" data-share-id="${esc(i.id)}" data-share-action="${i.sent?'revoke':'accept'}">${i.sent?'Withdraw invitation':'Accept roster copies'}</button>`:''}</div>`).join('');
+      }catch(e){$('rosterShareStatus').textContent=e.message;}
+    }
+    $('rosterShareSend').onclick=async()=>{
+      const button=$('rosterShareSend');button.disabled=true;
+      try{const response=await fetch('/api/roster-sharing',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({recipientEmail:$('rosterShareEmail').value,rosterIds:[...$('rosterShareClasses').querySelectorAll('input:checked')].map(el=>el.value)})});const data=await response.json();if(!response.ok)throw Error(data.error);$('rosterShareStatus').textContent='Invitation ready. Ask your colleague to sign up with this email, then open Rosters to accept. No email was sent.';await loadRosters();}catch(e){$('rosterShareStatus').textContent=e.message;}finally{button.disabled=false;}
+    };
+    $('rosterShareInvites').onclick=async e=>{const button=e.target.closest('[data-share-id]');if(!button)return;button.disabled=true;try{const response=await fetch('/api/roster-sharing/'+encodeURIComponent(button.dataset.shareId)+(button.dataset.shareAction==='accept'?'/accept':''),{method:button.dataset.shareAction==='accept'?'POST':'DELETE'});const data=await response.json();if(!response.ok)throw Error(data.error);$('rosterShareStatus').textContent=button.dataset.shareAction==='accept'?'Class rosters added. Your activities and results remain separate.':'Invitation withdrawn.';await loadRosters();}catch(err){$('rosterShareStatus').textContent=err.message;button.disabled=false;}};
+
     async function loadRosters(populatePicker=true){
       const wrap=$('rosterList'); if(wrap) wrap.innerHTML='<span class="status">Loading…</span>';
       try{
         const d=await (await fetch('/api/rosters')).json();
+        await loadRosterSharing(d.rosters||[]);
         if(populatePicker){
           const rosterOpts='<option value="">— No roster (free-form names) —</option>'+(d.rosters||[]).map(r=>`<option value="${esc(r.id)}">${esc(r.name)} (${r.count} students)</option>`).join('');
           const assessmentRosterOpts='<option value="">— Choose a class roster —</option>'+(d.rosters||[]).map(r=>`<option value="${esc(r.id)}">${esc(r.name)} (${r.count} students)</option>`).join('');
