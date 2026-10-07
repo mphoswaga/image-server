@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const duels = require('./moonquest-duels');
+const royale = require('./moonquest-royale');
 const lighting = require('./moonquest-lighting');
 const narrative = require('./moonquest-story');
 const {summarize}=require('./moonquest-report');
@@ -111,15 +112,16 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
   function createSession(teacherId, gameId, roster, test = false, mode = 'cooperative') {
     const game = read('game', gameId);
     if (game.timing.automatic !== false) game.timing = { ...game.timing, automatic: true, flow: 'single', choose: 25, reveal: 8 };
-    if(!['cooperative','duels'].includes(mode))fail('Choose a valid game mode.');
-    if(mode==='duels')game.timing={...game.timing,automatic:true,flow:'single',choose:25,reveal:8};
+    if(!['cooperative','duels','royale'].includes(mode))fail('Choose a valid game mode.');
+    if(mode==='duels'||mode==='royale')game.timing={...game.timing,automatic:true,flow:'single',choose:25,reveal:8};
     if (game.teacherId !== teacherId) fail('This game belongs to another teacher.');
     if (!test && (!roster?.id || !roster.students?.length)) fail('Select a class with learners first.');
     const students = test ? Array.from({ length: 6 }, (_, i) => ({ id: 'practice-' + i, name: 'Practice learner ' + (i + 1) })) : roster.students.map(s => ({ id: String(s.id), name: s.name }));
     const s = { id: uid(), teacherId, game, rosterId: test ? null : roster.id, className: test ? 'Practice crew' : roster.name, students,
       test, code: crypto.randomBytes(5).toString('hex').toUpperCase(), boardToken: crypto.randomBytes(24).toString('hex'), phase: 'lobby', paused: false, deadline: null,
+      royale: mode==='royale',
       duels: mode==='duels'?duels.create(students):null,
-      story: {version:2,enabled: !!game.timing.automatic, history: [], spent: {}}, seq: 0, round: -1, rounds: [], nextQuestion: 0, members: {}, queue: [], createdAt: clock(), boot };
+      story: {version:2,enabled: mode!=='royale' && !!game.timing.automatic, history: [], spent: {}}, seq: 0, round: -1, rounds: [], nextQuestion: 0, members: {}, queue: [], createdAt: clock(), boot };
     return saveSession(s);
   }
   const current = s => s.rounds[s.round];
@@ -230,7 +232,9 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
         s.members[id]={joinedAt:clock(),absent:false};s.duels.teams[id]=1-s.duels.teams[humans[0][0]];s.duels.avatars[id]='astronomer';
       }else if(s.members[id])s.members[id].absent=true;
     }
-    const expected = Object.entries(s.members).filter(([, m]) => !m.absent).map(([id]) => id);
+    const alive = s.royale ? new Set(royale.standings(s,isCorrect).filter(p=>p.lives>0).map(p=>p.id)) : null;
+    const expected = Object.entries(s.members).filter(([id, m]) => !m.absent && (!alive || alive.has(id))).map(([id]) => id);
+    if(s.royale&&s.round<0&&expected.length<2)fail('At least two learners must join before starting Battle Royale.');
     if (!expected.length) fail('Wait for learners to join, or run Test game.');
     s.rounds.push({ question: copy(question), expected, answers: {}, events: [], startedAt: clock() });
     s.round++; if(s.duels)current(s).duelGroups=duels.pair(s,expected); s.phase = s.game.timing.automatic ? 'choose' : 'read';
@@ -239,6 +243,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     s.teachingPause = null;
   }
   function nextRound(s) {
+    if(s.royale && s.rounds.some(r=>r.revealedAt) && royale.standings(s,isCorrect).filter(p=>p.lives>0&&!p.absent).length<=1){s.phase='ended';s.deadline=null;s.paused=false;return;}
     if(maybeStory(s))return;
     const follow = s.queue.find(q => q.status === 'approved' && s.round >= q.eligibleAfter);
     if (!Object.values(s.members).some(m => !m.absent)) {
@@ -299,6 +304,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
         const waiting=s.students.filter(st=>!(s.removedStudents||[]).includes(st.id)&&!s.members[st.id]);
         if(waiting.length)fail(`${waiting.length} learners have not signed in. Wait for them or mark them absent before starting.`);
       }
+      if(s.royale&&s.phase==='lobby'&&['launch','next'].includes(action)&&Object.values(s.members).filter(m=>!m.absent).length<2)fail('At least two learners must join before starting Battle Royale.');
       if (action === 'launch') {
         if (s.phase !== 'lobby') fail('This mission has already started.');
         if (!Object.keys(s.members).length) fail('Wait for learners to join first.');
@@ -339,6 +345,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     if (s.joinOpen === false) fail('Your teacher is preparing the teams. Sign-in will open shortly.');
     if ((s.removedStudents || []).includes(studentId)) fail('Your teacher has removed you from this game.');
     if (!s.students.some(x => x.id === studentId)) fail('Learner not in this session.');
+    if(s.royale&&s.phase!=='lobby'&&!s.members[studentId])fail('This battle has started. Join the next battle.');
     if (!s.members[studentId]) { s.members[studentId] = { joinedAt: clock(), absent: false }; saveSession(s); }
     return s;
   }
@@ -349,6 +356,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     s.testDevices ||= {};
     let studentId = s.testDevices[deviceKey];
     if (!studentId) {
+      if(s.royale&&s.phase!=='lobby')fail('This battle has started. Join the next battle.');
       const taken = new Set(Object.values(s.testDevices));
       studentId = s.students.find(st => st.id!=='practice-computer' && !taken.has(st.id) && !(s.removedStudents || []).includes(st.id))?.id;
       if (!studentId) fail('All six practice learners are in use. Start a new test room for more devices.');
@@ -382,6 +390,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
   function answer(id, studentId, body) {
     const s = tick(session(id)); const r = current(s);
     if ((s.removedStudents || []).includes(studentId)) fail('Your teacher has removed you from this game.');
+    if(s.royale && !royale.standings(s,isCorrect).some(p=>p.id===studentId&&p.lives>0)) fail('You are now watching the battle.');
     if (!r || !r.expected.includes(studentId)) fail('Join the next round when your teacher starts it.');
     if (typeof body.eventId !== 'string' || body.eventId.length > 80 || !body.eventId) fail('Missing answer receipt ID.');
     if (r.events.some(e => e.studentId === studentId && e.eventId === body.eventId)) return s;
@@ -432,6 +441,11 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
       stats: revealed ? stats(s) : null,
       lanterns: s.rounds.filter(r => r.revealedAt).reduce((n, r) => n + stats(s, r).correct, 0) };
     if(s.duels&&s.phase==='lobby'&&role!=='student') view.teamRoster=s.students.filter(st=>role==='teacher'||!(s.removedStudents||[]).includes(st.id)).map(st=>({name:st.name,team:s.duels.teams[st.id],joined:!!s.members[st.id],...(role==='teacher'?{id:st.id,removed:(s.removedStudents||[]).includes(st.id)}:{})}));
+    if(s.royale){
+      const players=royale.standings(s,isCorrect).map(p=>({...p,answered:!!r?.answers[p.id],...(revealed&&r?.answers[p.id]?{selection:r.answers[p.id].final??r.answers[p.id].first}: {})}));
+      const me=players.find(p=>p.id===studentId);
+      view.royale={players,me,eliminated:me?.lives===0,winners:s.phase==='ended'&&s.rounds.some(r=>r.revealedAt)?players.filter(p=>!p.absent&&p.lives===Math.max(...players.filter(x=>!x.absent).map(x=>x.lives))&&(p.lives>0||r?.expected.includes(p.id))).map(p=>p.id):[]};
+    }
     view.duels=duels.snapshot(s,studentId,role,isCorrect);
     if(view.duels)view.duels.presentation=s.phase==='matchup'?'matchup':s.phase==='reveal'&&!s.paused?(s.deadline&&s.deadline-clock()<=3000?'sparks':'result'):null;
     view.lighting=lighting.snapshot(s,isCorrect);

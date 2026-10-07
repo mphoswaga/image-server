@@ -255,3 +255,6 @@ body[data-audience="board"] .team-setup{margin:8px auto;padding:18px}body[data-a
 @media(max-width:600px){.victory-screen{padding:18px 8px}.festival-winner{width:125px}.podium-place{width:145px}.podium-place>strong{font-size:18px}.winner-parade{padding:10px;gap:10px}}
 .victory-screen .duel-hero{display:flex;flex-direction:column;align-items:center}.victory-screen .duel-hero strong{order:-1;padding:8px 12px;background:#192a4f;border-radius:12px}
 .podium-place[style*="--place:1;"]{order:2}.podium-place[style*="--place:2;"]{order:1}.podium-place[style*="--place:3;"]{order:3}
+.royale-panel{text-align:center}.royale-roster{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:18px}.royale-roster>span{padding:8px 12px;border-radius:20px;background:#344367}.royale-roster article{padding:24px;border:2px solid #ffdf85;border-radius:24px}.royale-rabbit{display:block;font-size:70px}.royale-watched{padding:24px}.royale-panel select{max-width:420px;margin:12px auto}
+.royale-rabbit{width:160px;margin:0 auto}.royale-rabbit svg{width:100%;height:160px}.royale-watched{background:linear-gradient(135deg,#344367,#1d2543);border-radius:24px;margin-top:18px}
+.spectator-diagram{display:block;width:min(100%,600px);max-height:55vh;object-fit:contain;margin:18px auto;border-radius:16px}
