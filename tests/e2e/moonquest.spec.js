@@ -213,7 +213,9 @@ test('multi-answer selection, class meeting and normal games library work togeth
   await page.locator('[data-question]').first().locator('[data-field=answerMode]').selectOption('all');
   await page.locator('#reviewed').check();await page.getByRole('button',{name:'Save adventure',exact:true}).click();
   await page.goto('/');await page.locator('#gamesBtn').click();
-  const card=page.locator('#gamesList .game-card').filter({hasText:'MoonQuest'});await expect(card).toBeVisible();await card.getByRole('link',{name:'Test game',exact:true}).click();
+  const card=page.locator('#gamesList .game-card').filter({hasText:'MoonQuest'});await expect(card).toBeVisible();await card.getByRole('button',{name:'Choose a game',exact:true}).click();
+  const option=page.getByRole('dialog').locator('.games-option').filter({has:page.getByRole('heading',{name:'MoonQuest',exact:true})});await option.locator('summary').click();
+  await page.goto(await option.getByRole('link',{name:'Try without saving scores'}).getAttribute('href'));
   const url=await page.getByRole('link',{name:'Open practice learner',exact:true}).getAttribute('href');const context=await browser.newContext();const learner=await context.newPage();
   try{
     await learner.goto('http://127.0.0.1:4341'+url);await expect(learner.getByText('You’re in the crew!')).toBeVisible();
