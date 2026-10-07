@@ -62,6 +62,11 @@ test('a published game can add and remove several classes from My games', async 
     data: { handle: initialJoin.students[0].handle, pin: '2468' },
   });
   expect(firstEntry.ok(), await firstEntry.text()).toBeTruthy();
+  const rememberedEntry = await page.request.post(`/api/game/${created.gameId}/enter`, { data: { handle: initialJoin.students[0].handle } });
+  expect(rememberedEntry.ok()).toBeTruthy();
+  const otherLearner = await page.request.post(`/api/game/${created.gameId}/enter`, { data: { handle: initialJoin.students[1].handle } });
+  expect(otherLearner.status()).toBe(428);
+  await page.request.post('/api/student/logout');
   const pinChallengeResponse = await page.request.post(`/api/game/${created.gameId}/enter`, {
     data: { handle: initialJoin.students[0].handle },
   });

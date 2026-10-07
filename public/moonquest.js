@@ -669,6 +669,11 @@
       learnerToken=result.token;sessionStorage.setItem('moonquest:'+room.id,learnerToken);
       return openSession(room.id,'student');
     }
+    if(room.signedInHandle){
+      const result=await api('/sessions/'+room.id+'/join',{handle:room.signedInHandle});
+      learnerToken=result.token;sessionStorage.setItem('moonquest:'+room.id,learnerToken);
+      return openSession(room.id,'student');
+    }
     document.getElementById('join-class').innerHTML=`<h2>${esc(room.title)}</h2><p>Choose your name, then enter your PIN.</p><input id="join-name" type="hidden"><div class="join-names" role="group" aria-label="Choose your name">${room.students.map(st=>`<button data-learner-handle="${esc(st.handle)}" aria-pressed="false">${esc(st.label)}</button>`).join('')}</div><div class="stack"><label>Your PIN<input id="join-pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off"></label><p class="muted">Use your usual four-digit PIN. If you have never set one, choose one now.</p>${button('Join the mission','join','primary')}</div>`;
 
   }

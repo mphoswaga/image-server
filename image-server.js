@@ -3011,7 +3011,9 @@ app.post('/api/practice/live-sessions/:code/join', requirePracticeEnabled, (req,
       const studentId = roster.normalizeStudentId(student.id);
       const pin = String(input.pin || '').trim();
       const pinState = studentAccount.getAccountState(studentId);
-      if (pinState === 'unset') {
+      if (optionalStudentSession(req)?.studentId === studentId) {
+        // Already authenticated as this roster learner; no second PIN challenge.
+      } else if (pinState === 'unset') {
         if (!pin) return res.status(428).json({ needsPinSetup: true, error: 'Set up a 4-digit PIN to continue.' });
         if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
         if (!studentAccount.setPin(studentId, pin)) return res.status(409).json({ error: pinSetupConflict(studentId, pin, 'A PIN was just set for this learner. Enter it instead.') });
@@ -3358,7 +3360,9 @@ app.post('/api/assignment/:id/enter', async (req, res) => {
     if (!s) return res.status(403).json({ error: 'Student ID not found. Check with your teacher.' });
     displayName = s.name;
     const pinState = studentAccount.getAccountState(studentId);
-    if (pinState === 'unset') {
+    if (optionalStudentSession(req)?.studentId === studentId) {
+      // Already authenticated as this roster learner; no second PIN challenge.
+    } else if (pinState === 'unset') {
       if (!pin) return res.status(428).json({ needsPinSetup: true, error: 'Set up a 4-digit PIN to continue.' });
       if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
       if (!studentAccount.setPin(studentId, pin)) return res.status(409).json({ error: pinSetupConflict(studentId, pin, 'A PIN was just set for this ID — enter it instead.') });
@@ -5059,7 +5063,9 @@ app.post('/api/game/:id/enter', async (req, res) => {
     displayName = match.student.name;
     matchedRosterId = match.rosterId;
     const pinState = studentAccount.getAccountState(studentId);
-    if (pinState === 'unset') {
+    if (optionalStudentSession(req)?.studentId === studentId) {
+      // Already authenticated as this roster learner; no second PIN challenge.
+    } else if (pinState === 'unset') {
       if (!pin) return res.status(428).json({ needsPinSetup: true, error: 'Set up a 4-digit PIN to continue.' });
       if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits.' });
       if (!studentAccount.setPin(studentId, pin)) return res.status(409).json({ error: pinSetupConflict(studentId, pin, 'A PIN was just set for this ID — enter it instead.') });
@@ -5681,7 +5687,7 @@ app.get('/play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', '
 app.get('/fishquest-play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'fishquest.html')));
 app.get('/fishquest/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'fishquest-teacher.html')));
 const moonquestStore = require('./moonquest-routes').installMoonQuest(app, {
-  requireAuth, sessionSecret, roster, studentAccount, learnerPickerEntries, studentHandle,
+  requireAuth, sessionSecret, roster, studentAccount, learnerPickerEntries, studentHandle, optionalStudentSession,
   joinLimiter, generationLimiter, uploadLimiter, reserve, capture, release, declareFree, costOf,
 });
 app.get('/colonyquest-live/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'colonyquest-live.html')));

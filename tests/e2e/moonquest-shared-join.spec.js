@@ -12,6 +12,9 @@ test('already signed-in learner joins from normal start page and another class c
   const context=await browser.newContext(),learner=await context.newPage();
   try{
     expect((await context.request.post('http://127.0.0.1:4341/api/student/login',{data:{studentId,pin:'4829'}})).ok()).toBe(true);
+    await learner.goto('http://127.0.0.1:4341/moonquest/join?code='+state.code);
+    await expect(learner.getByText('You’re in the crew!')).toBeVisible();
+    await expect(learner.locator('#join-pin')).toHaveCount(0);
     await learner.goto('http://127.0.0.1:4341/start');await learner.locator('#roomCode').fill(state.code);await learner.locator('#joinBtn').click();
     await expect(learner.getByText('You’re in the crew!')).toBeVisible();await expect(learner.locator('#join-pin')).toHaveCount(0);await expect(learner.locator('.hero-welcome')).toContainText('Hero learner');
     expect((await context.request.post('http://127.0.0.1:4341/api/student/login',{data:{studentId:otherId,pin:'4829'}})).ok()).toBe(true);
