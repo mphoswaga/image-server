@@ -34,6 +34,11 @@
 #worldStoryDetails summary {cursor:pointer;color:#d6e8ce;}
 #worldStoryDetails p {max-height:100px;overflow:auto;}
 #worldStoryContinue {font-size:12px;padding:8px;}
+</style><style>
+/* Raids are shown by the ants; keep the battle banner out of their path. */
+#raidHud {display:none!important;}
+#birdPanel {animation:colony-bird-cue 3s forwards;}
+@keyframes colony-bird-cue {0%,75%{opacity:1}100%{opacity:0;visibility:hidden}}
 </style></head>
 <body>
   <div id="loading" class="loading"><div><div class="spinner"></div>Preparing ColonyQuest...</div></div>
@@ -148,7 +153,7 @@
   <script src="/vendor/phaser.min.js"></script>
   <script src="/colonyquest-core.js?v=18"></script>
   <script src="/colonyquest-music.js?v=1"></script>
-  <script src="/colonyquest.js?v=35"></script>
+  <script src="/colonyquest.js?v=36"></script>
 <script>document.getElementById('multiplayerLink').href='/colonyquest-live/'+encodeURIComponent(location.pathname.split('/').filter(Boolean).pop());</script>
 </body>
 </html>

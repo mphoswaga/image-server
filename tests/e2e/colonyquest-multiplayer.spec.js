@@ -45,7 +45,7 @@ test('learner name and PIN join, locked answer, one upgrade, reconnect and perma
   browser,
 }, info) => {
   test.skip(!['windows-100', 'mobile', 'desktop-safari'].includes(info.project.name));
-  test.setTimeout(125000);
+  test.setTimeout(190000);
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   const id = await create(page);
@@ -80,9 +80,9 @@ test('learner name and PIN join, locked answer, one upgrade, reconnect and perma
     await expect(learner.locator('#question')).toHaveText('Your colony is ready!');
     await expect(page.locator('#hostCount')).toContainText('1 colonies');
     await page.locator('#start').click();
-    await expect(learner.locator('#question')).toHaveText('The quest for the Ancient Acorn');
+    await expect(learner.locator('#question')).toHaveText('Build our home');
     await expect(learner.locator('#choices button')).toHaveCount(0);
-    await expect(learner.locator('#question')).toHaveText(questions[0].question);
+    await expect(learner.locator('#question')).toHaveText(questions[0].question, { timeout: 70000 });
     await learner.locator('#sound').click();
     await expect
       .poll(() => learner.locator('audio[data-colony-music]').evaluate((el) => el.currentTime))
@@ -139,7 +139,7 @@ test('teacher can test against computer colonies without changing the smartboard
   page,
 }, info) => {
   test.skip(!['windows-100', 'mobile', 'desktop-safari'].includes(info.project.name));
-  test.setTimeout(40000);
+  test.setTimeout(110000);
   const id = await create(page);
   await page.goto('/colonyquest/' + id);
   await expect(page.locator('#setup')).toBeVisible();
@@ -150,7 +150,7 @@ test('teacher can test against computer colonies without changing the smartboard
   const learner = await pop;
   await expect(learner.locator('#connection')).toHaveText('Practice vs computer');
   await expect(learner.locator('#rank')).toContainText('of 4');
-  await expect(learner.locator('#choices button')).toHaveCount(4);
+  await expect(learner.locator('#choices button')).toHaveCount(4, { timeout: 70000 });
   await expect(learner.locator('#colonyCanvas')).toHaveAttribute('data-ants', 'illustrated');
   await expect(learner.locator('#survival')).toContainText('Earth nest');
   await expect(learner.locator('#survival [role="progressbar"]')).toHaveAttribute('aria-valuemax', '12');

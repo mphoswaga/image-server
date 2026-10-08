@@ -1167,3 +1167,10 @@ h2 {
 .scene-details summary {cursor:pointer;padding:5px;}
 .scene-details .story-character {display:none;}
 .scene-details .story-outcome {font-size:14px;padding:8px;}
+
+/* Guidance lives between decisions, outside the animated colony. */
+#learner .decision .survival, #learner .decision .event-ribbon, #learner .decision .rivals {position:static;inset:auto;width:auto;transform:none;margin:8px 0;max-width:100%;}
+#learner .decision .survival {font-size:12px;}
+#learner .decision .event-ribbon {animation:colony-brief-message 3s forwards;}
+@keyframes colony-brief-message {0%,80%{opacity:1}100%{opacity:0;visibility:hidden}}
+@media(prefers-reduced-motion:reduce){#learner .decision .event-ribbon{animation:none;}}

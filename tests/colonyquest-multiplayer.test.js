@@ -155,8 +155,9 @@ test('preview computer colonies answer automatically; snapshot never gives other
     p = m.join({ studentId: 'teacher', name: 'Teacher' }, 0);
   m.join({ studentId: 'npc', name: 'Fern', npc: true }, 0);
   m.start(0);
-  m.tick(5000);
-  m.tick(14000);
+  const introEnds = m.state.deadline;
+  m.tick(introEnds);
+  m.tick(introEnds + 9000);
   assert.equal(m.active()[1].answers.length, 1);
   const view = m.snapshot(p.id);
   assert.ok(view.players.every((p) => !('answers' in p)));

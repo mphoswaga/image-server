@@ -216,6 +216,10 @@
           `<span class="${x.id === p.id ? 'own-colony' : ''}"><b>${s.players.findIndex((player) => player.id === x.id) + 1}. ${esc(x.id === p.id ? 'Your colony' : x.name)}</b><strong>${x.strength}</strong> pts<i style="width:${Math.max(2, (x.strength / best) * 100)}%"></i></span>`,
       )
       .join('');
+    // Only show explanatory banners during the gap between questions.
+    $('survival').hidden = s.phase !== 'upgrade';
+    $('event').hidden = s.phase !== 'reveal';
+    $('rivals').hidden = !['upgrade', 'reveal', 'ended'].includes(s.phase);
     const recent = s.events.at(-1);
     const activeCue = actionCue && scene.clock < actionCue.until;
     $('event').classList.toggle('action-cue', !!activeCue);
@@ -238,6 +242,7 @@
       s.phase,
       s.round,
       s.story?.id,
+      s.story?.key === 'intro' ? Math.min(3, Math.floor(s.story.elapsed / 16000)) : 0,
       p.choice,
       p.correct,
       p.upgraded,
@@ -248,7 +253,7 @@
     if (key === renderKey) return;
     renderKey = key;
     $('learner').classList.toggle('preview', s.preview);
-    $('learner').classList.toggle('story-playing', s.phase === 'story');
+    $('learner').classList.toggle('story-playing', s.phase === 'story' && s.story?.key !== 'intro');
     $('roundLabel').textContent = s.preview
       ? 'PRACTICE · NO LEARNER MARKS SAVED'
       : `QUESTION ${s.round + 1} OF ${s.total}`;
@@ -261,6 +266,13 @@
       $('roundLabel').textContent = 'THE MOONROOT MEADOW ADVENTURE';
       $('question').textContent = beat.title;
       $('instruction').textContent = '';
+      if (beat.key === 'intro') {
+        const chapter = Math.min(3, Math.floor(beat.elapsed / 16000));
+        $('roundLabel').textContent = `PIP’S FIELD GUIDE · ${chapter + 1} / 4`;
+        $('question').textContent = ['Build our home', 'Prepare for danger', 'Choose a raid wisely', 'Protect each other'][chapter];
+        $('instruction').textContent = beat.line.split('\n\n')[chapter] || beat.line;
+        return;
+      }
       const result = beat.results.find((r) => r.playerId === p.id);
       $('choices').innerHTML =
         `<details class="scene-details"><summary>What is happening?</summary><p>${esc(beat.line)}</p><div class="story-character"><img src="/assets/colonyquest/${esc(beat.art)}.webp" alt="${esc(beat.speaker)}"><strong>${esc(beat.speaker)}</strong>${beat.speaker === 'Dot' ? '<span class="builder-hat" aria-hidden="true">⛑</span>' : ''}</div>${result?.message ? `<div class="story-outcome">${esc(result.message)}</div>` : ''}</details>`;

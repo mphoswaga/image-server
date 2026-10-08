@@ -4,8 +4,8 @@ const beats = {
   intro: {
     title: 'The quest for the Ancient Acorn',
     speaker: 'Pip',
-    line: 'Grow your colony. Brave the seasons. Bring the Ancient Acorn home!',
-    seconds: 5,
+    line: '“Welcome to Moonroot Meadow!” says Pip. “Every correct answer earns one colony choice. Workers bring food, sticks and leaves home. Save 12 food for the dry season; hungry workers collect more slowly. Rooms need 3 sticks and 2 leaves. Each wall upgrade needs 2 sticks and 1 leaf.”\n\n“The clouds are coming,” calls the queen. “Level 2 walls protect us from rain, Level 3 protects our food from birds, and Level 4 withstands the giant footsteps. Guards need food too. Build and feed your colony before danger arrives!”\n\nPip spies a rival pantry. “Can we raid it?” “Count their home guards and inspect their walls,” says the queen. “More defenders can stop us. Walls and barracks strengthen them—even equal guards may lose! Our correct answers help our attack. A higher wall level is harder to raid, but level alone never decides.”\n\n“A successful raid moves up to 5 food from their pantry into ours, leaving them at least 3. A failed raid brings nothing home and earns the defenders 5 food. Defeated guards become workers. Surviving raiders stay away for 45 active seconds, so fewer guards protect our own pantry. Choose wisely, then bring the Ancient Acorn home!”',
+    seconds: 64,
     art: 'pip-worker',
   },
   'fallen-fruit': {

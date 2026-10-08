@@ -50,7 +50,7 @@
     guardian: '/assets/colonyquest/guardian.webp',
   };
   const STORY = {
-    intro: 'Beneath Moonroot Meadow, a tiny colony is waking. The dry season is coming, food is scarce, and each team begins with only a queen, one worker, and a small room. Every correct answer earns one important choice: send workers for food, grow the colony, train guards, dig rooms, or strengthen the walls. Workers bring food, sticks and leaves home automatically. Store 12 food before the dry season. If supplies run short, workers slow down until they find enough food or rain returns. New rooms cost 3 sticks and 2 leaves; stronger walls cost 2 sticks and 1 leaf. Every soldier also eats from the store. Build the walls to Level 2 before the Great Rain or water will enter the nest. After rain, food trips earn double food—but hungry birds approach! Reach Level 3 walls before the birds arrive to protect your pantry. Weaker walls let birds steal 40% of stored food. Guards sent raiding are away for 45 active seconds. Then the ground will shake as a giant human crosses the meadow. Only Level 4 walls can withstand the footsteps; weaker colonies lose 25% of their game points. Learn together, choose carefully, and survive to carry the Ancient Acorn.',
+    intro: 'Beneath Moonroot Meadow, a tiny colony is waking. The dry season is coming, food is scarce, and each team begins with only a queen, one worker, and a small room. Every correct answer earns one important choice: send workers for food, grow the colony, train guards, dig rooms, or strengthen the walls. Workers bring food, sticks and leaves home automatically. Store 12 food before the dry season. If supplies run short, workers slow down until they find enough food or rain returns. New rooms cost 3 sticks and 2 leaves; stronger walls cost 2 sticks and 1 leaf. Every soldier also eats from the store. Build the walls to Level 2 before the Great Rain or water will enter the nest. After rain, food trips earn double food—but hungry birds approach! Reach Level 3 walls before the birds arrive to protect your pantry. Weaker walls let birds steal 40% of stored food. Pip spots a neighbouring pantry. “Shall we raid it?” he asks. “Look carefully,” says the queen. “More home guards can stop us. Stronger walls and barracks help them too—even the same number of guards may not be enough! Our correct answers strengthen our attack.” A successful raid brings food from their pantry into yours. If it fails, you bring no food home and the defenders earn 5 food. Guards who lose their guard role become workers, so nobody disappears. Surviving raiders are away for 45 active seconds, leaving fewer guards at home. Choose your neighbour carefully: a higher wall level makes a raid harder, but level alone does not decide the winner. Then the ground will shake as a giant human crosses the meadow. Only Level 4 walls can withstand the footsteps; weaker colonies lose 25% of their game points. Learn together, choose carefully, and survive to carry the Ancient Acorn.',
     chapters: [
       { at: 0, title: 'First Light', line: 'Help Pip wake a worker and gather the first seeds.' },
       { at: .2, title: 'The Dry Season', line: 'The meadow is drying. Stored food keeps the workers moving.' },
@@ -512,6 +512,7 @@
 
   function restartStoryCrawl() {
     const crawl = $('storyCrawl');
+    crawl.style.animationDuration = `${Math.max(45, STORY.intro.split(/\s+/).length * .45)}s`;
     crawl.classList.remove('is-moving', 'is-paused');
     void crawl.offsetWidth;
     crawl.classList.add('is-moving');
@@ -648,7 +649,9 @@
   function updateBirdPanel() {
     const panel = $('birdPanel');
     const stage = session.birdStage;
-    const visible = ['rush', 'warning', 'attack', 'result'].includes(stage) && session.phase !== 'ended';
+    const cueKey = `${stage}:${session.phase}`;
+    if (panel.dataset.cueKey !== cueKey) { panel.dataset.cueKey = cueKey; panel.dataset.cueAt = String(Date.now()); }
+    const visible = ['rush', 'warning', 'result'].includes(stage) && session.phase === 'event' && Date.now() - Number(panel.dataset.cueAt) < 3000;
     panel.classList.toggle('hidden', !visible);
     $('gameScreen').classList.toggle('bird-active', visible);
     if (!visible) return;
