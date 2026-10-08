@@ -60,7 +60,7 @@
   .activity-section{background:#f0f9ff;border:1px solid #cfe5ef;border-radius:20px;padding:18px;margin:20px 0}.activity-section h2{font-size:22px;margin:0 0 12px}.activity-section .work-card{background:white;margin-top:12px}.activity-join{margin-top:12px;background:#167a69!important}.activity-empty{padding:14px;color:#526579;line-height:1.5}.activity-section:has(#liveList){background:#effbf5;border-color:#bce9d2}
 </style>
   <link rel="stylesheet" href="/byte-feedback.css" />
-</head>
+<link rel="stylesheet" href="/ui-language.css?v=1"><script src="/locales/vi.js?v=1"></script><script defer src="/ui-language.js?v=1"></script></head>
 <body data-byte-ui="student">
   <div class="logo">
     <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -74,73 +74,73 @@
   </div>
 
   <div class="wrap">
-    <div id="loading" class="card" style="text-align:center;margin:0 auto">Loading…</div>
+    <div id="loading" class="card" style="text-align:center;margin:0 auto" data-ui-i18n>Loading…</div>
 
     <div id="authCard" class="card" style="display:none;margin:0 auto">
-      <h1>Sign in</h1>
-      <p class="sub" id="authIntro">Enter your Student ID to continue.</p>
+      <h1 data-ui-i18n>Sign in</h1>
+      <p class="sub" id="authIntro" data-ui-i18n>Enter your Student ID to continue.</p>
       <form id="authForm">
-        <label for="studentId">Student ID</label>
+        <label for="studentId" data-ui-i18n>Student ID</label>
         <input id="studentId" class="sid-input" type="text" maxlength="40" placeholder="e.g. STU-99432" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" required />
 
         <div id="pinSetupBlock" style="display:none">
-          <p class="sub" style="margin:0 0 10px">First time — create a 4-digit PIN. You'll use this every time you come back.</p>
-          <label for="pinNew">Create a 4-digit PIN</label>
+          <p class="sub" style="margin:0 0 10px" data-ui-i18n>First time — create a 4-digit PIN. You'll use this every time you come back.</p>
+          <label for="pinNew" data-ui-i18n>Create a 4-digit PIN</label>
           <input id="pinNew" class="pin-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" />
-          <label for="pinConfirm">Confirm PIN</label>
+          <label for="pinConfirm" data-ui-i18n>Confirm PIN</label>
           <input id="pinConfirm" class="pin-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" />
         </div>
 
         <div id="pinEnterBlock" style="display:none">
-          <label for="pinInput">Your PIN</label>
+          <label for="pinInput" data-ui-i18n>Your PIN</label>
           <input id="pinInput" class="pin-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="margin-bottom:6px" />
-          <button type="button" id="forgotPinBtn" class="link-btn">Forgot your PIN?</button>
+          <button type="button" id="forgotPinBtn" class="link-btn" data-ui-i18n>Forgot your PIN?</button>
         </div>
 
-        <button class="btn" type="submit" id="authBtn">Continue →</button>
+        <button class="btn" type="submit" id="authBtn" data-ui-i18n>Continue →</button>
         <div class="err" id="authErr"></div>
         <div class="ok-msg" id="forgotMsg"></div>
       </form>
       <div id="studentSocial" style="display:none">
-        <div class="social-divider"><span>or</span></div>
+        <div class="social-divider"><span data-ui-i18n>or</span></div>
         <a id="studentGoogleBtn" class="google-btn" href="#">
           <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.9 2.4 30.4 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.3 13.2 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.6c0-1.6-.1-2.8-.4-4.1H24v7.4h12.6c-.3 2.1-1.6 5.2-4.7 7.3l7.2 5.6c4.3-4 6.9-9.9 6.9-16.2z"/><path fill="#FBBC05" d="M10.5 28.3c-.5-1.5-.8-3.1-.8-4.8s.3-3.3.8-4.8l-7.9-6.1C1 15.6 0 19.7 0 24s1 8.4 2.6 11.4l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.2-5.6c-2 1.4-4.6 2.4-8.7 2.4-6.3 0-11.7-3.7-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>
-          <span>Continue with Google</span>
+          <span data-ui-i18n>Continue with Google</span>
         </a>
-        <p class="social-note">Use your school Google account. PIN sign-in will still work.</p>
+        <p class="social-note" data-ui-i18n>Use your school Google account. PIN sign-in will still work.</p>
       </div>
       <div class="guest-practice" id="guestPractice">
-        <a class="btn ghost" href="/student/practice/guest">Practise without signing in</a>
-        <p>Your guest practice is temporary and will not appear in teacher reports.</p>
+        <a class="btn ghost" href="/student/practice/guest" data-ui-i18n>Practise without signing in</a>
+        <p data-ui-i18n>Your guest practice is temporary and will not appear in teacher reports.</p>
       </div>
     </div>
 
     <div id="dashboard">
       <div class="greet" id="greet"></div>
-      <p class="greet-sub">Here's your LessonScope space.</p>
+      <p class="greet-sub" data-ui-i18n>Here's your LessonScope space.</p>
 
-      <section class="activity-section"><h2>⚡ Live now</h2><p class="greet-sub">When your teacher opens a game, join here!</p><div id="liveList">Checking your classroom…</div></section>
-      <section class="activity-section"><h2>🎒 To do</h2><div id="todoList">Finding your activities…</div></section>
+      <section class="activity-section"><h2 data-ui-i18n>⚡ Live now</h2><p class="greet-sub" data-ui-i18n>When your teacher opens a game, join here!</p><div id="liveList" data-ui-i18n>Checking your classroom…</div></section>
+      <section class="activity-section"><h2 data-ui-i18n>🎒 To do</h2><div id="todoList" data-ui-i18n>Finding your activities…</div></section>
       <p id="activityStatus" role="status" class="greet-sub"></p>
       <div class="practice-card" id="practiceCard">
-        <b>Digital Skills Practice</b>
-        <p>Build confidence with mouse, keyboard and safe-computing skills.</p>
-        <a href="/student/practice">Open Practice &rarr;</a>
+        <b data-ui-i18n>Digital Skills Practice</b>
+        <p data-ui-i18n>Build confidence with mouse, keyboard and safe-computing skills.</p>
+        <a href="/student/practice" data-ui-i18n>Open Practice &rarr;</a>
       </div>
 
       <div class="join-card">
-        <label for="roomCode" style="margin-bottom:8px">Join something new</label>
+        <label for="roomCode" style="margin-bottom:8px" data-ui-i18n>Join something new</label>
         <div class="join-row">
-          <input id="roomCode" type="text" maxlength="10" placeholder="Room Code" autocomplete="off" autocorrect="off" spellcheck="false" />
-          <button class="btn" id="joinBtn" type="button" style="width:auto">Join →</button>
+          <input id="roomCode" type="text" maxlength="10" placeholder="Room Code" autocomplete="off" autocorrect="off" spellcheck="false"  data-ui-placeholder/>
+          <button class="btn" id="joinBtn" type="button" style="width:auto" data-ui-i18n>Join →</button>
         </div>
         <div class="err" id="joinErr"></div>
       </div>
 
-      <div class="section-title">Completed</div>
+      <div class="section-title" data-ui-i18n>Completed</div>
       <div id="workList"></div>
 
-      <a href="#" class="logout-link" id="logoutLink">Not you? Sign out</a>
+      <a href="#" class="logout-link" id="logoutLink" data-ui-i18n>Not you? Sign out</a>
     </div>
   </div>
 
@@ -202,7 +202,8 @@
       if (returnTo) { location.replace(returnTo); return; }
       $('loading').style.display = 'none';
       $('authCard').style.display = 'none';
-      $('greet').textContent = `Hi ${name}!`;
+      if (!window.LessonScopeI18n) await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, {once:true}));
+      LessonScopeI18n.bind($('greet'), 'Hi {name}!', {name});
       $('dashboard').style.display = 'block';
       refreshActivities();if(!activityTimer)activityTimer=setInterval(refreshActivities,15000);
       fetch('/api/practice/status').then(r => r.json()).then(d => { if (d.enabled) $('practiceCard').style.display = 'block'; }).catch(() => {});
@@ -302,7 +303,7 @@
           const d = await r.json();
           if (!r.ok) throw new Error(d.error);
           $('authCard').querySelector('h1').textContent = 'Connect Google';
-          $('authIntro').textContent = `Signed in as ${d.email}. Enter your Student ID, then your current PIN.`;
+          LessonScopeI18n.bind($('authIntro'), 'Signed in as {email}. Enter your Student ID, then your current PIN.', {email:d.email});
           $('authBtn').textContent = 'Connect my account';
         } catch (error) { $('authErr').textContent = error.message; }
       } else {

@@ -18,7 +18,7 @@
       if (!response.ok || !(data.providers || []).some(provider => provider.id === 'google')) return;
       for (const container of containers) {
         const next = encodeURIComponent(returnPath(container));
-        container.innerHTML = `<div class="student-social-divider"><span>or</span></div><a class="student-google-button" href="/auth/google?student=1&next=${next}">${GOOGLE_ICON}<span>Continue with Google</span></a><p class="student-social-note">Use your school Google account.</p>`;
+        container.innerHTML = `<div class="student-social-divider"><span data-ui-i18n>or</span></div><a class="student-google-button" href="/auth/google?student=1&next=${next}">${GOOGLE_ICON}<span data-ui-i18n>Continue with Google</span></a><p class="student-social-note" data-ui-i18n>Use your school Google account.</p>`;
         container.hidden = false;
       }
     } catch {}

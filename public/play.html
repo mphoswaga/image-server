@@ -128,7 +128,7 @@
   @media(max-width:440px){.result-details{grid-template-columns:1fr}.result-detail{display:flex;align-items:center;justify-content:space-between;text-align:left}.result-detail span{margin:0}.result-detail b{font-size:18px}}
 </style>
   <link rel="stylesheet" href="/byte-feedback.css" />
-</head>
+<link rel="stylesheet" href="/ui-language.css?v=1"><script src="/locales/vi.js?v=1"></script><script defer src="/ui-language.js?v=1"></script></head>
 <body data-byte-ui="student">
   <div class="wrap">
     <div class="brand">
@@ -139,32 +139,32 @@
     <div id="loading" class="card center"><div class="spinner"></div></div>
 
     <div id="authScreen" class="card" style="display:none">
-      <h1>Join the lesson game</h1>
-      <p class="sub" id="authSub">Enter your Student ID to join.</p>
+      <h1 data-ui-i18n>Join the lesson game</h1>
+      <p class="sub" id="authSub" data-ui-i18n>Enter your Student ID to join.</p>
       <form id="authForm">
         <!-- A class list, tapped rather than typed. A seven-year-old can find
              their own name in a list; typing a school ID correctly is another
              matter, and a misspelling silently becomes a different person. -->
         <div id="nameGrid" class="name-grid" style="display:none"></div>
-        <p id="nameGridHint" class="sub" style="display:none;margin:6px 0 0">Can't see your name? Ask your teacher.</p>
-        <label for="auSid" id="sidLabel">Student ID</label>
+        <p id="nameGridHint" class="sub" style="display:none;margin:6px 0 0" data-ui-i18n>Can't see your name? Ask your teacher.</p>
+        <label for="auSid" id="sidLabel" data-ui-i18n>Student ID</label>
         <input id="auSid" type="text" placeholder="e.g. STU-99432" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" maxlength="40" required style="font-family:monospace;font-size:18px;letter-spacing:1px" />
 
         <div id="pinSetupBlock" style="display:none">
           <p class="sub" style="margin:10px 0">First time — create a 4-digit PIN. You'll use this to get back in next time.</p>
-          <label>Create a 4-digit PIN</label>
+          <label data-ui-i18n>Create a 4-digit PIN</label>
           <input id="auPinNew" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="font-size:20px;letter-spacing:6px;text-align:center;font-family:ui-monospace,monospace" />
-          <label>Confirm PIN</label>
+          <label data-ui-i18n>Confirm PIN</label>
           <input id="auPinConfirm" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="font-size:20px;letter-spacing:6px;text-align:center;font-family:ui-monospace,monospace" />
         </div>
 
         <div id="pinEnterBlock" style="display:none">
-          <label>Your PIN</label>
+          <label data-ui-i18n>Your PIN</label>
           <input id="auPin" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="font-size:20px;letter-spacing:6px;text-align:center;font-family:ui-monospace,monospace" />
-          <button type="button" id="forgotPinBtn" style="background:none;border:none;color:var(--muted);font-size:12.5px;cursor:pointer;padding:6px 0;display:block">Forgot your PIN?</button>
+          <button type="button" id="forgotPinBtn" style="background:none;border:none;color:var(--muted);font-size:12.5px;cursor:pointer;padding:6px 0;display:block" data-ui-i18n>Forgot your PIN?</button>
         </div>
 
-        <div style="margin-top:18px"><button id="authBtn" class="btn primary" type="submit">Join game →</button></div>
+        <div style="margin-top:18px"><button id="authBtn" class="btn primary" type="submit" data-ui-i18n>Join game →</button></div>
         <div id="authErr" class="err"></div>
         <div id="forgotMsg" class="err" style="color:var(--ok, #1f9d55)"></div>
       </form>
@@ -178,7 +178,7 @@
       <div class="overview" id="sumOverview"></div>
       <div id="sumConcepts"></div>
       <div id="sumHighScores" style="display:none;background:#fff7e6;border:1.5px solid #ffd43b;border-radius:14px;padding:12px 16px;margin-top:18px;font-size:13.5px"></div>
-      <div style="margin-top:22px"><button id="startBtn" class="btn accent">Choose a game</button></div>
+      <div style="margin-top:22px"><button id="startBtn" class="btn accent" data-ui-i18n>Choose a game</button></div>
     </div>
 
     <div id="pickerScreen" class="card" style="display:none">

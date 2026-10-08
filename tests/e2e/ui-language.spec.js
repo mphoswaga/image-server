@@ -1,0 +1,42 @@
+const {test,expect}=require('@playwright/test');
+const {expectNoPageOverflow}=require('./helpers');
+test('Vietnamese sign-in persists across routes and preserves form entries',async({page})=>{
+ await page.route('**/api/student/me',r=>r.fulfill({status:401,json:{error:'Not signed in.'}}));
+ await page.goto('/start');
+ await page.locator('#uiLanguage').selectOption('vi');
+ await expect(page.locator('#authCard h1')).toHaveText('Đăng nhập');
+ await page.locator('#studentId').fill('TEST123');
+ await page.locator('#uiLanguage').selectOption('en');
+ await expect(page.locator('#authCard h1')).toHaveText('Sign in');
+ await expect(page.locator('#studentId')).toHaveValue('TEST123');
+ await page.locator('#uiLanguage').selectOption('vi');
+ await page.goto('/join');
+ await expect(page.locator('#step1 h1')).toHaveText('Tham gia trò chơi');
+ await expect(page.locator('html')).toHaveAttribute('lang','vi');
+ await expectNoPageOverflow(page);
+});
+test('homework UI translates without translating learner names or assignment titles',async({page},info)=>{
+ await page.route('**/api/student/me',r=>r.fulfill({json:{name:'Nguyễn An'}}));
+ await page.route('**/api/student/my-work',r=>r.fulfill({json:{work:[]}}));
+ await page.route('**/api/student/activities',r=>r.fulfill({json:{live:[],todo:[{id:'a',title:'Sign in',subject:'ICT',code:'ABC123'}]}}));
+ await page.addInitScript(()=>localStorage.setItem('lessonscope.language','vi'));
+ await page.goto('/start');
+ await expect(page.locator('#greet')).toHaveText('Chào Nguyễn An!');
+ await expect(page.locator('#todoList strong')).toHaveText('Sign in');
+ await expect(page.locator('.activity-join')).toHaveText('Mở bài →');
+ await page.locator('#uiLanguage').selectOption('en');
+ await expect(page.locator('#greet')).toHaveText('Hi Nguyễn An!');
+ await expect(page.locator('.activity-join')).toHaveText('Open task →');
+ await page.locator('#uiLanguage').selectOption('vi');
+ await expectNoPageOverflow(page);
+ await page.screenshot({path:info.outputPath('vietnamese-homework.png'),fullPage:true});
+});
+test('dynamic errors translate and unknown strings fall back to English',async({page})=>{
+ await page.goto('/join');await page.locator('#uiLanguage').selectOption('vi');
+ await page.evaluate(()=>document.getElementById('codeErr').textContent='PIN must be exactly 4 digits.');
+ await expect(page.locator('#codeErr')).toHaveText('Mã PIN phải gồm đúng 4 chữ số.');
+ await page.evaluate(()=>document.getElementById('codeErr').textContent='An unrecognised service message.');
+ await expect(page.locator('#codeErr')).toHaveText('An unrecognised service message.');
+ await page.evaluate(()=>document.getElementById('codeErr').textContent="PINs don't match.");
+ await expect(page.locator('#codeErr')).toHaveText('Hai mã PIN không giống nhau.');
+});

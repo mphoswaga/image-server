@@ -7,8 +7,8 @@ window.GamesHub = (() => {
     {id:'arcade',name:'Arcade games',icon:'🎮',text:'Car Dodge, Space Blaster, Answer Runner and Target Shot.',modes:[['Independent practice · learner chooses a game','/play/']]},
   ];
   let games=[], classes=()=>[], dialog;
-  const node=(tag,text,cls)=>{const el=document.createElement(tag);if(text)el.textContent=text;if(cls)el.className=cls;return el;};
-  function link(text,url){const a=node('a',text,'btn ghost');a.href=url;return a;}
+  const node=(tag,text,cls)=>{const el=document.createElement(tag);if(text)el.textContent=text;if(cls)el.className=cls;if(['button','summary','small'].includes(tag))el.setAttribute('data-ui-i18n','');return el;};
+  function link(text,url){const a=node('a',text,'btn ghost');a.href=url;a.setAttribute('data-ui-i18n','');return a;}
   function open(game){
     if(!dialog){dialog=node('dialog',null,'games-picker');document.body.append(dialog);dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});}
     dialog.replaceChildren();
@@ -64,6 +64,23 @@ window.GamesHub = (() => {
       const choose=node('button','Choose a game','btn accent');choose.onclick=()=>open(game);
       const primary=node('div',null,'gc-actions');primary.append(choose);
       const more=node('details',null,'games-more');more.append(node('summary','More options'));
+      let sharing=body.querySelector('.games-share');
+      if(!sharing){
+        sharing=node('details',null,'games-share');sharing.append(node('summary','Learner links'));
+        for(const button of [...actions.querySelectorAll('.gcopy')]){
+          const match=button.textContent.match(/^Copy (.+) learner link$/);
+          if(match&&window.LessonScopeI18n)LessonScopeI18n.bind(button,'Copy {name} learner link',{name:match[1]});
+          sharing.append(button);
+        }
+        if(sharing.children.length===1)sharing.append(node('p','Set up a class session first. Its learner link will appear here.','hint'));
+        body.append(sharing);
+      }
+      const share=node('button','Share with learners','btn ghost');
+      share.setAttribute('aria-expanded',String(sharing.open));
+      share.onclick=()=>{sharing.open=!sharing.open;if(sharing.open)sharing.scrollIntoView({behavior:'smooth',block:'nearest'});};
+      sharing.addEventListener('toggle',()=>share.setAttribute('aria-expanded',String(sharing.open)));
+      primary.append(share);
+
       if(game.mode==='moonquest'){
         const results=node('details',null,'games-more');results.append(node('summary','Results'));
         for(const a of [...actions.querySelectorAll('a')]){

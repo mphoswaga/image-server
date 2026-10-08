@@ -55,38 +55,38 @@
 </style>
   <link rel="stylesheet" href="/byte-feedback.css" />
   <link rel="stylesheet" href="/student-auth.css?v=1" />
-</head>
+<link rel="stylesheet" href="/ui-language.css?v=1"><script src="/locales/vi.js?v=1"></script><script defer src="/ui-language.js?v=1"></script></head>
 <body data-byte-ui="student">
   <div class="wrap">
-    <div id="loading" class="card center">Loading…</div>
+    <div id="loading" class="card center" data-ui-i18n>Loading…</div>
 
     <div id="authScreen" class="card" style="display:none">
-      <h1 id="authTitle">Join this assignment</h1>
-      <p class="sub" id="authSub">Enter your Student ID to continue.</p>
+      <h1 id="authTitle" data-ui-i18n>Join this assignment</h1>
+      <p class="sub" id="authSub" data-ui-i18n>Enter your Student ID to continue.</p>
       <form id="authForm" style="margin-top:16px">
         <!-- A class list, tapped rather than typed. A seven-year-old can find
              their own name in a list; typing a school ID correctly is another
              matter, and a misspelling silently becomes a different person. -->
         <div id="nameGrid" class="name-grid" style="display:none"></div>
-        <p id="nameGridHint" class="sub" style="display:none;margin:6px 0 0">Can't see your name? Ask your teacher.</p>
-        <label for="auSid" id="sidLabel" style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Student ID</label>
+        <p id="nameGridHint" class="sub" style="display:none;margin:6px 0 0" data-ui-i18n>Can't see your name? Ask your teacher.</p>
+        <label for="auSid" id="sidLabel" style="font-size:13px;font-weight:600;display:block;margin-bottom:6px" data-ui-i18n>Student ID</label>
         <input id="auSid" type="text" placeholder="e.g. STU-99432" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" maxlength="40" required style="width:100%;padding:12px 14px;font-size:15px;border:1.5px solid var(--border);border-radius:10px;margin-bottom:14px" />
 
         <div id="pinSetupBlock" style="display:none">
           <p class="sub" style="margin:0 0 10px">First time — create a 4-digit PIN. You'll use this to get back in next time.</p>
-          <label for="auPinNew" style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Create a 4-digit PIN</label>
+          <label for="auPinNew" style="font-size:13px;font-weight:600;display:block;margin-bottom:6px" data-ui-i18n>Create a 4-digit PIN</label>
           <input id="auPinNew" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="width:100%;padding:12px 14px;font-size:20px;letter-spacing:6px;text-align:center;border:1.5px solid var(--border);border-radius:10px;margin-bottom:10px;font-family:ui-monospace,monospace" />
-          <label for="auPinConfirm" style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Confirm PIN</label>
+          <label for="auPinConfirm" style="font-size:13px;font-weight:600;display:block;margin-bottom:6px" data-ui-i18n>Confirm PIN</label>
           <input id="auPinConfirm" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="width:100%;padding:12px 14px;font-size:20px;letter-spacing:6px;text-align:center;border:1.5px solid var(--border);border-radius:10px;margin-bottom:14px;font-family:ui-monospace,monospace" />
         </div>
 
         <div id="pinEnterBlock" style="display:none">
-          <label for="auPin" style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Your PIN</label>
+          <label for="auPin" style="font-size:13px;font-weight:600;display:block;margin-bottom:6px" data-ui-i18n>Your PIN</label>
           <input id="auPin" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="width:100%;padding:12px 14px;font-size:20px;letter-spacing:6px;text-align:center;border:1.5px solid var(--border);border-radius:10px;margin-bottom:6px;font-family:ui-monospace,monospace" />
-          <button type="button" id="forgotPinBtn" style="background:none;border:none;color:var(--muted);font-size:12.5px;cursor:pointer;padding:0 0 14px;display:block">Forgot your PIN?</button>
+          <button type="button" id="forgotPinBtn" style="background:none;border:none;color:var(--muted);font-size:12.5px;cursor:pointer;padding:0 0 14px;display:block" data-ui-i18n>Forgot your PIN?</button>
         </div>
 
-        <button class="btn" id="authBtn" type="submit">Continue</button>
+        <button class="btn" id="authBtn" type="submit" data-ui-i18n>Continue</button>
         <div class="err" id="authErr"></div>
         <div class="err" id="forgotMsg" style="color:var(--ok)"></div>
       </form>
@@ -102,7 +102,7 @@
       </div>
       <div class="card" id="questions"></div>
       <div class="card" id="submitActions">
-        <button class="btn" id="submitBtn">Submit</button>
+        <button class="btn" id="submitBtn" data-ui-i18n>Submit</button>
         <div class="err" id="submitErr"></div>
       </div>
     </div>
@@ -113,7 +113,7 @@
         <p class="sub">out of <span id="scoreMax"></span> marks</p>
       </div>
       <div class="card center" id="pendingMsg" style="display:none">
-        <h1>Submitted</h1>
+        <h1 data-ui-i18n>Submitted</h1>
         <p class="sub" id="pendingSub">Your teacher hasn't released marks for this assignment yet — check back once it's been reviewed.</p>
       </div>
       <div class="card" id="gradeBreakdown"></div>

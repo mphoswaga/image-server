@@ -2488,7 +2488,7 @@
     }
   </style>
   <link rel="stylesheet" href="/byte-feedback.css" />
-<link rel="stylesheet" href="/learning-report.css?v=1"><script src="/learning-report.js?v=1"></script></head>
+<link rel="stylesheet" href="/learning-report.css?v=1"><script src="/learning-report.js?v=1"></script><link rel="stylesheet" href="/ui-language.css?v=1"><script src="/locales/vi.js?v=1"></script><script defer src="/ui-language.js?v=1"></script></head>
 <body data-byte-ui="teacher">
   <!-- SPLASH (plays once per visit, then fades to reveal the app) -->
   <div id="splash">
@@ -2572,7 +2572,7 @@
         <div style="font-weight:800;color:var(--ink);margin-bottom:4px">Use your EducScope account</div>
         <div style="font-size:13px;color:var(--muted);line-height:1.45;margin-bottom:12px">Sign in once for EducScope, LessonScope, and TeacherScope. Your password is only entered on EducScope.</div>
         <div class="auth-suite-actions">
-          <button id="educscopeLoginBtn" type="button" class="btn primary full">Log in</button>
+          <button id="educscopeLoginBtn" type="button" class="btn primary full" data-ui-i18n>Log in</button>
           <button id="educscopeSignupBtn" type="button" class="btn ghost full">Sign up</button>
         </div>
       </div>
@@ -2581,21 +2581,21 @@
         <p>No login required. Guest progress is not saved.</p>
       </div>
       <div class="tabs" style="display:none" aria-hidden="true" data-legacy-local-auth="true">
-        <button id="tabLogin" class="active" type="button">Log in</button>
+        <button id="tabLogin" class="active" type="button" data-ui-i18n>Log in</button>
         <button id="tabSignup" type="button">Sign up</button>
       </div>
       <form id="authForm" style="display:none" aria-hidden="true" data-legacy-local-auth="true">
         <div id="nameRow" style="display:none">
-          <label for="auName">Name</label>
-          <input id="auName" type="text" placeholder="Your name" autocomplete="name" />
+          <label for="auName" data-ui-i18n>Name</label>
+          <input id="auName" type="text" placeholder="Your name" autocomplete="name"  data-ui-placeholder/>
         </div>
-        <label for="auEmail">Email</label>
+        <label for="auEmail" data-ui-i18n>Email</label>
         <input id="auEmail" type="email" placeholder="you@school.edu" autocomplete="email" required />
-        <label for="auPass">Password</label>
+        <label for="auPass" data-ui-i18n>Password</label>
         <input id="auPass" type="password" placeholder="At least 6 characters" autocomplete="current-password" required />
-        <button id="authBtn" class="btn primary full" type="submit">Log in</button>
+        <button id="authBtn" class="btn primary full" type="submit" data-ui-i18n>Log in</button>
         <div id="authErr" class="err"></div>
-        <button id="forgotPwBtn" type="button" style="background:none;border:none;color:var(--muted);font-size:12.5px;cursor:pointer;padding:8px 0 0;display:block;text-align:center;width:100%">Forgot password?</button>
+        <button id="forgotPwBtn" type="button" style="background:none;border:none;color:var(--muted);font-size:12.5px;cursor:pointer;padding:8px 0 0;display:block;text-align:center;width:100%" data-ui-i18n>Forgot password?</button>
         <button id="passkeyLoginBtn" type="button" class="btn full" style="margin-top:10px;background:#fff;border:1.5px solid var(--border);color:var(--ink);display:none">
           <svg class="ic" aria-hidden="true" style="margin-right:4px"><use href="#i-key"/></svg> Sign in with a passkey
         </button>
@@ -2607,7 +2607,7 @@
 
       <form id="resetRequestForm" style="display:none" aria-hidden="true" data-legacy-local-auth="true">
         <p class="sub" style="margin-bottom:14px">Enter your email and we'll send you a reset link.</p>
-        <label for="resetEmail">Email</label>
+        <label for="resetEmail" data-ui-i18n>Email</label>
         <input id="resetEmail" type="email" placeholder="you@school.edu" autocomplete="email" required />
         <button id="resetRequestBtn" class="btn primary full" type="submit">Send reset link</button>
         <div id="resetRequestErr" class="err"></div>
@@ -2676,8 +2676,8 @@
     </div>
     <button id="homeBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg><span class="app-menu-label">Plan</span></button>
     <button id="lessonsBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg><span class="app-menu-label">My lessons</span></button>
-    <button id="rostersBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg><span class="app-menu-label">Rosters</span></button>
-    <button id="gamesBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-gamepad"/></svg><span class="app-menu-label">My games</span></button>
+    <button id="rostersBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg><span class="app-menu-label" data-ui-i18n>Rosters</span></button>
+    <button id="gamesBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-gamepad"/></svg><span class="app-menu-label" data-ui-i18n>My games</span></button>
     <a id="practiceBtn" class="nav-link" href="/practice" style="display:none;text-decoration:none"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg><span class="app-menu-label">Practice</span></a>
     <button id="assignmentsBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg><span class="app-menu-label">Test or project</span></button>
     <button id="marksBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg><span class="app-menu-label">Marks</span></button>
@@ -2982,7 +2982,7 @@
             <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Topic / Unit title <span style="color:var(--err)">*</span></label><input id="wkTopic" type="text" style="font-size:13px" placeholder="Auto-filled from your plan — or type it"/></div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-            <div><label for="wkGrade" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Grade</label><select id="wkGrade" style="font-size:13px"><option value="">— Select grade —</option></select></div>
+            <div><label for="wkGrade" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px" data-ui-i18n>Grade</label><select id="wkGrade" style="font-size:13px"><option value="">— Select grade —</option></select></div>
             <div><label for="wkWeek" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Week</label><select id="wkWeek" style="font-size:13px"><option value="">— Select week —</option></select></div>
           </div>
           <div id="unitTitleCard" class="utc-card" style="display:none">
@@ -3117,7 +3117,7 @@
                 <label style="font-weight:500"><input type="checkbox" name="assessmentPlanType" value="extended-response" style="width:auto"> Extended response</label>
                 <label style="font-weight:500"><input type="checkbox" name="assessmentPlanType" value="practical" checked style="width:auto"> Practical / observation</label>
               </div></div>
-              <div class="full"><label for="assessmentPlanBrief">Requirements <span style="font-weight:400;color:var(--muted)">(optional)</span></label><textarea id="assessmentPlanBrief" rows="2" maxlength="1200" placeholder="e.g. 20 multiple-choice marks, then a 30-mark investigation"></textarea></div>
+              <div class="full"><label for="assessmentPlanBrief">Requirements <span style="font-weight:400;color:var(--muted)" data-ui-i18n>(optional)</span></label><textarea id="assessmentPlanBrief" rows="2" maxlength="1200" placeholder="e.g. 20 multiple-choice marks, then a 30-mark investigation"></textarea></div>
             </div>
           </div>
           <div class="framework-picker">
@@ -3126,7 +3126,7 @@
               <select id="planningFramework" aria-label="Planning framework"><option value="">LessonScope best practice</option></select>
               <span id="frameworkSelectionStatus" class="framework-status active">Built-in</span>
             </div>
-            <p id="frameworkSelectionHint" class="hint">No personal framework selected. Lesson generation works exactly as before.</p>
+            <p id="frameworkSelectionHint" class="hint" data-ui-i18n>No personal framework selected. Lesson generation works exactly as before.</p>
           </div>
           <details class="materials-box" id="sequenceDetails">
             <summary><svg class="ic" aria-hidden="true"><use href="#i-calendar"/></svg> Weekly lesson sequence <span class="opt-tag">optional</span></summary>
@@ -3148,7 +3148,7 @@
               </div>
             </div>
           </details>
-          <label for="focus">Lesson style or focus <span style="color:var(--muted);font-weight:400">(optional)</span> <span class="hint-i" tabindex="0" role="img" aria-label="An optional steer, e.g. use real-world examples, lots of group work." data-tip="e.g. use real-world examples; lots of group work">i</span></label>
+          <label for="focus">Lesson style or focus <span style="color:var(--muted);font-weight:400" data-ui-i18n>(optional)</span> <span class="hint-i" tabindex="0" role="img" aria-label="An optional steer, e.g. use real-world examples, lots of group work." data-tip="e.g. use real-world examples; lots of group work">i</span></label>
           <textarea id="focus" rows="2" maxlength="400" placeholder="e.g. use real-world examples, group work, and simple classroom computer examples"></textarea>
           <div class="char-row"><span></span><span class="char-count" id="focusCount"></span></div>
         </div>
@@ -3243,9 +3243,9 @@
         <p id="packPurposeHint" class="hint">Turn this lesson into student-facing materials — generate, tweak, and download each as a Word document.</p>
         <div class="pack-actions">
           <button type="button" class="btn ghost" data-pack="notes"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> <span data-pack-label>Study notes</span></button>
-          <button type="button" class="btn ghost" data-pack="worksheet"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> <span data-pack-label>Worksheet</span></button>
-          <button type="button" class="btn ghost" data-pack="exit-ticket"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg> <span data-pack-label>Exit ticket</span></button>
-          <button type="button" class="btn ghost" data-pack="quiz"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> <span data-pack-label>Quiz</span></button>
+          <button type="button" class="btn ghost" data-pack="worksheet"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> <span data-pack-label data-ui-i18n>Worksheet</span></button>
+          <button type="button" class="btn ghost" data-pack="exit-ticket"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg> <span data-pack-label data-ui-i18n>Exit ticket</span></button>
+          <button type="button" class="btn ghost" data-pack="quiz"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg> <span data-pack-label data-ui-i18n>Quiz</span></button>
           <button type="button" class="btn ghost" data-pack="homework"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg> <span data-pack-label>Homework</span></button>
           <button type="button" class="btn ghost" data-pack="activities"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg> <span data-pack-label>Differentiated</span></button>
         </div>
@@ -3272,13 +3272,13 @@
         </div>
         <p id="gameModeHint" class="hint">Share the Room Code on the board. Learners join on their own devices.</p>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
-          <span id="gameRosterPickLabel" style="font-size:13px;font-weight:600;white-space:nowrap">Classes <span style="font-weight:400;color:var(--muted)">(choose any number)</span></span>
-          <div id="gameRosterPick" class="class-picker" role="group" aria-labelledby="gameRosterPickLabel"><span class="class-picker-empty">No classes selected: learners use free-form names.</span></div>
+          <span id="gameRosterPickLabel" style="font-size:13px;font-weight:600;white-space:nowrap">Classes <span style="font-weight:400;color:var(--muted)" data-ui-i18n>(choose any number)</span></span>
+          <div id="gameRosterPick" class="class-picker" role="group" aria-labelledby="gameRosterPickLabel"><span class="class-picker-empty" data-ui-i18n>No classes selected: learners use free-form names.</span></div>
           <label for="gameQCount" style="font-size:13px;font-weight:600;white-space:nowrap">Questions</label>
           <input id="gameQCount" type="number" min="4" max="20" value="6" style="width:64px;font-size:13px;padding:8px 10px" />
         </div>
         <div class="cutoff-field" id="gameCutoffWrap">
-          <label for="gameCutoff">Close game at <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+          <label for="gameCutoff">Close game at <span style="font-weight:400;color:var(--muted)" data-ui-i18n>(optional)</span></label>
           <input id="gameCutoff" type="datetime-local" />
         </div>
         <button type="button" id="makeGameBtn" class="btn accent" style="width:auto;margin-top:10px"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Create individual game</button>
@@ -3350,7 +3350,7 @@
 
       <div class="section-divider"><h3><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Recently added <span id="adminRecentDays" style="color:var(--muted);font-weight:400;font-size:12px;letter-spacing:0;text-transform:none"></span></h3></div>
       <p class="hint">Images fetched in the last 7 days. Click the <b>×</b> on any image to delete it from the library and disk.</p>
-      <div id="adminRecent" class="admin-recent"><span class="status">Loading…</span></div>
+      <div id="adminRecent" class="admin-recent"><span class="status" data-ui-i18n>Loading…</span></div>
 
       <div class="section-divider"><h3><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> All images by topic <span id="adminTotal" style="color:var(--muted);font-weight:400;font-size:12px;letter-spacing:0;text-transform:none"></span></h3></div>
       <p class="hint">Click <b>Browse</b> on any topic to see its images and delete ones you don't want.</p>
@@ -3382,43 +3382,43 @@
         <button class="back-btn" id="gamesBackTop"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back</button>
         <div class="phd-icon" style="background:var(--accent-soft);color:var(--accent)"><svg class="ic" aria-hidden="true"><use href="#i-gamepad"/></svg></div>
         <div>
-          <h2>My games</h2>
-          <p class="page-sub">Your saved lesson content. Choose a game, check your class, then play.</p>
+          <h2 data-ui-i18n>My games</h2>
+          <p class="page-sub" data-ui-i18n>Your saved lesson content. Choose a game, check your class, then play.</p>
         </div>
       </div>
 
-      <div class="games-hub-toolbar"><button type="button" class="btn accent" onclick="GamesHub.open()">Browse games</button><span class="hint">1. Choose content &nbsp; → &nbsp; 2. Choose a game &nbsp; → &nbsp; 3. Set up your class</span></div>
+      <div class="games-hub-toolbar"><button type="button" class="btn accent" onclick="GamesHub.open()" data-ui-i18n>Browse games</button><span class="hint">1. Choose content &nbsp; → &nbsp; 2. Choose a game &nbsp; → &nbsp; 3. Set up your class</span></div>
       <details id="fromPptxDetails" class="panel-add" style="margin-bottom:20px">
-        <summary>Create lesson content</summary>
+        <summary data-ui-i18n>Create lesson content</summary>
         <p class="hint">For clickable diagrams, <a href="/moonquest">create diagram content</a>. For multiple-choice questions, upload a lesson below.</p>
         <div class="add-body">
         <p class="hint" style="margin:10px 0 14px">Upload a PowerPoint, Word lesson plan, PDF, or text file. We’ll create questions you can review and edit before playing. Your usual generation credits apply.</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-          <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Subject</label><input id="pptxSubject" type="text" placeholder="e.g. maths" style="width:100%;box-sizing:border-box" /></div>
-          <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Topic</label><input id="pptxTopic" type="text" placeholder="e.g. fractions" style="width:100%;box-sizing:border-box" /></div>
+          <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px" data-ui-i18n>Subject</label><input id="pptxSubject" type="text" placeholder="e.g. maths" style="width:100%;box-sizing:border-box" /></div>
+          <div><label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px" data-ui-i18n>Topic</label><input id="pptxTopic" type="text" placeholder="e.g. fractions" style="width:100%;box-sizing:border-box" /></div>
           <div>
-            <label for="pptxGrade" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Grade</label>
+            <label for="pptxGrade" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px" data-ui-i18n>Grade</label>
             <select id="pptxGrade" style="width:100%;font-size:13px;padding:8px 10px;box-sizing:border-box">
               <option>Grade R</option><option>Grade 1</option><option>Grade 2</option><option>Grade 3</option><option>Grade 4</option><option selected>Grade 5</option><option>Grade 6</option><option>Grade 7</option><option>Grade 8</option><option>Grade 9</option><option>Grade 10</option><option>Grade 11</option><option>Grade 12</option>
             </select>
           </div>
-          <div><label for="pptxQCount" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Questions (4–20)</label><input id="pptxQCount" type="number" min="4" max="20" value="6" style="width:100%;box-sizing:border-box;font-size:13px;padding:8px 10px" /></div>
+          <div><label for="pptxQCount" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px" data-ui-i18n>Questions (4–20)</label><input id="pptxQCount" type="number" min="4" max="20" value="6" style="width:100%;box-sizing:border-box;font-size:13px;padding:8px 10px" /></div>
           <div style="grid-column:1/-1"><label for="pptxGameMode" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Game format</label>
             <select id="pptxGameMode" style="width:100%;font-size:13px;padding:8px 10px;box-sizing:border-box">
               <option value="arcade">Individual arcade</option><option value="fishquest">Live multiplayer - FishQuest</option><option value="colonyquest">Whole class - ColonyQuest</option>
             </select>
           </div>
-          <div style="grid-column:1/-1"><span id="pptxRosterPickLabel" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Classes <span style="font-weight:400;color:var(--muted)">(choose any number)</span></span>
-            <div id="pptxRosterPick" class="class-picker" role="group" aria-labelledby="pptxRosterPickLabel"><span class="class-picker-empty">No classes selected: learners use free-form names.</span></div>
+          <div style="grid-column:1/-1"><span id="pptxRosterPickLabel" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Classes <span style="font-weight:400;color:var(--muted)" data-ui-i18n>(choose any number)</span></span>
+            <div id="pptxRosterPick" class="class-picker" role="group" aria-labelledby="pptxRosterPickLabel"><span class="class-picker-empty" data-ui-i18n>No classes selected: learners use free-form names.</span></div>
           </div>
-          <div id="pptxCutoffWrap" style="grid-column:1/-1"><label for="pptxCutoff" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Close game at <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+          <div id="pptxCutoffWrap" style="grid-column:1/-1"><label for="pptxCutoff" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Close game at <span style="font-weight:400;color:var(--muted)" data-ui-i18n>(optional)</span></label>
             <input id="pptxCutoff" type="datetime-local" style="width:100%;font-size:13px;padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;background:#fff;box-sizing:border-box" />
           </div>
         </div>
         <div id="pptxDrop" role="button" tabindex="0" aria-label="Upload a lesson file" style="border:2px dashed var(--border);border-radius:12px;padding:22px;text-align:center;cursor:pointer;color:var(--muted);font-size:13px;margin-bottom:10px;transition:border-color .15s">
           <svg class="ic" aria-hidden="true" style="font-size:22px;display:block;margin:0 auto 6px"><use href="#i-image"/></svg>
-          Drop your <b>lesson file</b> here or <span style="color:var(--primary);font-weight:600">click to browse</span>
-          <p class="hint">PowerPoint (.pptx): up to 50 MB. Other lesson files: up to 15 MB.</p>
+          Drop your <b data-ui-i18n>lesson file</b> here or <span style="color:var(--primary);font-weight:600" data-ui-i18n>click to browse</span>
+          <p class="hint" data-ui-i18n>PowerPoint (.pptx): up to 50 MB. Other lesson files: up to 15 MB.</p>
           <input id="pptxFileInput" aria-label="Choose a lesson file" type="file" accept=".pptx,.ppt,.docx,.pdf,.txt,.md" style="display:none" />
         </div>
         <div id="pptxFileName" style="font-size:12.5px;color:var(--primary);font-weight:600;margin-bottom:10px;display:none"></div>
@@ -3428,14 +3428,14 @@
       </details>
 
       <div class="games-filter">
-        <input id="gamesSearch" type="text" placeholder="Search by topic…" autocomplete="off" />
+        <input id="gamesSearch" type="text" placeholder="Search by topic…" autocomplete="off"  data-ui-placeholder/>
         <select id="gamesClassFilter" aria-label="Filter games by class">
-          <option value="all">All classes</option>
+          <option value="all" data-ui-i18n>All classes</option>
         </select>
         <select id="gamesStatusFilter" aria-label="Filter games by status">
-          <option value="all">All games</option>
-          <option value="live">Open for learners</option>
-          <option value="closed">Closed</option>
+          <option value="all" data-ui-i18n>All games</option>
+          <option value="live" data-ui-i18n>Open for learners</option>
+          <option value="closed" data-ui-i18n>Closed</option>
         </select>
       </div>
       <div id="gamesList"></div>
@@ -3454,7 +3454,7 @@
       </div>
       <button id="newAssessmentBtn" type="button" class="btn accent" style="width:auto;margin-bottom:16px"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Create test or project</button>
       <div id="assessmentBuilder" class="assessment-builder" style="display:none">
-        <div class="assessment-section-head"><div><h3 style="margin:0">Assessment structure</h3><p class="hint" style="margin:3px 0 0">Set the total, then decide exactly how students will earn those marks.</p></div><button id="closeAssessmentBtn" type="button" class="assessment-remove">Close</button></div>
+        <div class="assessment-section-head"><div><h3 style="margin:0">Assessment structure</h3><p class="hint" style="margin:3px 0 0">Set the total, then decide exactly how students will earn those marks.</p></div><button id="closeAssessmentBtn" type="button" class="assessment-remove" data-ui-i18n>Close</button></div>
         <div class="assessment-presets">
           <button type="button" class="btn ghost assessment-mini" data-assessment-preset="blank">Blank</button>
           <button type="button" class="btn ghost assessment-mini" data-assessment-preset="theory-practical">50 marks: theory + practical</button>
@@ -3465,12 +3465,12 @@
           <div><label for="assessmentDelivery">Delivery</label><select id="assessmentDelivery"><option value="live">Live classroom — teacher controls sections</option><option value="self-paced">Self-paced — students see all sections</option></select></div>
           <div></div>
           <div class="full"><label for="assessmentTitle">Title</label><input id="assessmentTitle" maxlength="160" placeholder="e.g. Unit 1 Document Creation"></div>
-          <div><label for="assessmentSubject">Subject</label><input id="assessmentSubject" maxlength="100" placeholder="e.g. Computing, English, Science"></div>
+          <div><label for="assessmentSubject" data-ui-i18n>Subject</label><input id="assessmentSubject" maxlength="100" placeholder="e.g. Computing, English, Science"></div>
           <div><label for="assessmentGrade">Grade or year group</label><input id="assessmentGrade" maxlength="60" placeholder="e.g. Grade 2"></div>
           <div class="full"><label for="assessmentObjectives">Learning objectives or skills <span style="font-weight:400;color:var(--muted)">(one per line)</span></label><textarea id="assessmentObjectives" rows="3" placeholder="I can open Word or Google Docs&#10;I can enter and format text"></textarea></div>
-          <div class="full"><label for="assessmentInstructions">Student instructions <span style="font-weight:400;color:var(--muted)">(optional)</span></label><textarea id="assessmentInstructions" rows="2" placeholder="What students need to know before they begin"></textarea></div>
+          <div class="full"><label for="assessmentInstructions">Student instructions <span style="font-weight:400;color:var(--muted)" data-ui-i18n>(optional)</span></label><textarea id="assessmentInstructions" rows="2" placeholder="What students need to know before they begin"></textarea></div>
           <div><label for="assessmentRoster">Class roster <span style="font-weight:400;color:var(--muted)">(required for results and TeacherScope)</span></label><select id="assessmentRoster"><option value="">— Choose a class roster —</option></select></div>
-          <div><label for="assessmentCutoff">Due date <span style="font-weight:400;color:var(--muted)">(optional)</span></label><input id="assessmentCutoff" type="datetime-local"></div>
+          <div><label for="assessmentCutoff">Due date <span style="font-weight:400;color:var(--muted)" data-ui-i18n>(optional)</span></label><input id="assessmentCutoff" type="datetime-local"></div>
         </div>
         <div id="assessmentSections"></div>
         <div style="margin-top:12px"><button id="addAssessmentSection" type="button" class="btn ghost assessment-mini">+ Add section</button></div>
@@ -3541,22 +3541,22 @@
         <button class="back-btn" id="rostersBackTop"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back</button>
         <div class="phd-icon" style="background:var(--primary-soft);color:var(--primary)"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg></div>
         <div>
-          <h2>Class rosters</h2>
-          <p class="page-sub">Upload your class list — Excel or CSV — so students verify themselves with a Student ID. No email, no passwords.</p>
+          <h2 data-ui-i18n>Class rosters</h2>
+          <p class="page-sub" data-ui-i18n>Upload your class list — Excel or CSV — so students verify themselves with a Student ID. No email, no passwords.</p>
         </div>
       </div>
       <section class="panel-add" style="padding:18px;margin-bottom:20px" aria-label="Roster sharing">
-        <h3>Share class rosters</h3><p>Invite a teacher by their sign-up email. They receive independent copies of the selected class lists only — no marks, reports, lessons or activities. Later edits do not sync. Learner IDs stay the same.</p>
-        <label for="rosterShareEmail">Colleague’s sign-up email</label><input id="rosterShareEmail" type="email" placeholder="teacher@school.edu" autocomplete="off">
+        <h3 data-ui-i18n>Share class rosters</h3><p data-ui-i18n>Invite a teacher by their sign-up email. They receive independent copies of the selected class lists only — no marks, reports, lessons or activities. Later edits do not sync. Learner IDs stay the same.</p>
+        <label for="rosterShareEmail" data-ui-i18n>Colleague’s sign-up email</label><input id="rosterShareEmail" type="email" placeholder="teacher@school.edu" autocomplete="off">
         <div id="rosterShareClasses" class="class-picker" style="margin:12px 0"></div>
-        <button id="rosterShareSend" class="btn ghost" type="button">Invite to copy rosters</button>
+        <button id="rosterShareSend" class="btn ghost" type="button" data-ui-i18n>Invite to copy rosters</button>
         <p id="rosterShareStatus" role="status"></p><div id="rosterShareInvites"></div>
       </section><div id="rosterList" style="margin-bottom:20px"></div>
 
       <details id="rosterAdd" class="panel-add" style="margin-bottom:12px">
-        <summary>Add a new roster</summary>
+        <summary data-ui-i18n>Add a new roster</summary>
         <div class="add-body" style="display:flex;flex-direction:column;gap:12px;padding-top:14px">
-          <input id="rosterName" type="text" maxlength="60" placeholder="Class name (e.g. Grade 5A)" style="max-width:340px" />
+          <input id="rosterName" type="text" maxlength="60" placeholder="Class name (e.g. Grade 5A)" style="max-width:340px"  data-ui-placeholder/>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:#f7fbff;max-width:720px">
             <a class="btn ghost" href="/api/roster/template" download style="width:auto;padding:9px 13px;text-decoration:none;display:inline-flex;align-items:center;gap:6px"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Download safe roster template</a>
             <span class="hint" style="margin:0">Optional. Use this when a teacher wants the safest Excel layout. Existing Excel and CSV uploads still work.</span>
@@ -3565,8 +3565,8 @@
           <!-- Step 1: file drop zone -->
           <div id="rosterDropZone" style="border:2px dashed var(--border);border-radius:12px;padding:24px 16px;text-align:center;cursor:pointer;transition:.15s;background:#fafbfd;max-width:440px" role="button" tabindex="0" aria-label="Upload roster file">
             <svg class="ic" aria-hidden="true" style="width:28px;height:28px;color:var(--primary);margin-bottom:8px"><use href="#i-doc"/></svg>
-            <p style="margin:0;font-size:14px;font-weight:600">Drop file here or click to browse</p>
-            <p style="margin:4px 0 0;font-size:12px;color:var(--muted)">Excel (.xlsx, .xls) or CSV — any column layout</p>
+            <p style="margin:0;font-size:14px;font-weight:600" data-ui-i18n>Drop file here or click to browse</p>
+            <p style="margin:4px 0 0;font-size:12px;color:var(--muted)" data-ui-i18n>Excel (.xlsx, .xls) or CSV — any column layout</p>
             <input id="rosterFileInput" aria-label="Choose a class roster file" type="file" accept=".csv,.xls,.xlsx,.txt" style="display:none" />
           </div>
 
@@ -3575,16 +3575,16 @@
             <p style="font-size:13px;margin:0 0 10px"><strong id="rosterRowCount"></strong> rows detected. Confirm which columns contain the Student ID and the student's name. <span id="rosterPreviewNote" style="color:var(--muted)"></span></p>
             <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px">
               <div style="display:flex;flex-direction:column;gap:4px">
-                <label for="rosterIdCol" style="font-size:12px;font-weight:600">Student ID column</label>
+                <label for="rosterIdCol" style="font-size:12px;font-weight:600" data-ui-i18n>Student ID column</label>
                 <select id="rosterIdCol" style="font-size:13px;padding:8px 10px;border-radius:8px;border:1.5px solid var(--border)"></select>
               </div>
               <div style="display:flex;flex-direction:column;gap:4px">
-                <label for="rosterGenderCol" style="font-size:12px;font-weight:600">Gender column <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+                <label for="rosterGenderCol" style="font-size:12px;font-weight:600">Gender column <span style="font-weight:400;color:var(--muted)" data-ui-i18n>(optional)</span></label>
                 <select id="rosterGenderCol" style="font-size:13px;padding:8px 10px;border-radius:8px;border:1.5px solid var(--border)"></select>
               </div>
               <div style="display:flex;flex-direction:column;gap:4px">
-                <label for="rosterNameCol" style="font-size:12px;font-weight:600">Name column</label>
-                <select id="rosterNameCol" style="font-size:13px;padding:8px 10px;border-radius:8px;border:1.5px solid var(--border)"><option value="">(none — use ID as display name)</option></select>
+                <label for="rosterNameCol" style="font-size:12px;font-weight:600" data-ui-i18n>Name column</label>
+                <select id="rosterNameCol" style="font-size:13px;padding:8px 10px;border-radius:8px;border:1.5px solid var(--border)"><option value="" data-ui-i18n>(none — use ID as display name)</option></select>
               </div>
             </div>
             <!-- Preview table -->
@@ -3592,8 +3592,8 @@
               <table id="rosterPreviewTable" style="width:100%;border-collapse:collapse;font-size:12.5px"></table>
             </div>
             <div class="roster-verify-actions">
-              <button id="rosterConfirmBtn" class="btn primary" style="width:auto;padding:10px 18px">Save roster</button>
-              <button id="rosterCancelVerify" class="btn ghost" style="width:auto;padding:10px 14px">Cancel</button>
+              <button id="rosterConfirmBtn" class="btn primary" style="width:auto;padding:10px 18px" data-ui-i18n>Save roster</button>
+              <button id="rosterCancelVerify" class="btn ghost" style="width:auto;padding:10px 14px" data-ui-i18n>Cancel</button>
             </div>
           </div>
 
@@ -3627,7 +3627,7 @@
       <div class="sort-bar">
         <input id="progressSearch" class="prog-search" type="search" placeholder="Search student…" autocomplete="off" />
         <span style="font-size:12px;color:var(--muted);font-weight:600">Sort:</span>
-        <button class="sort-btn active" data-sort="name">Name</button>
+        <button class="sort-btn active" data-sort="name" data-ui-i18n>Name</button>
         <button class="sort-btn" data-sort="score">Score</button>
         <button class="sort-btn" data-sort="recent">Recent</button>
       </div>
@@ -3689,7 +3689,7 @@
         <button class="wz-skip" id="wizardSkipBtn">Close for now</button>
         <div style="display:flex;gap:10px">
           <button class="btn ghost" id="wizardBackBtn" style="padding:10px 18px">← Back</button>
-          <button class="btn primary" id="wizardNextBtn" style="padding:10px 24px">Next →</button>
+          <button class="btn primary" id="wizardNextBtn" style="padding:10px 24px" data-ui-i18n>Next →</button>
         </div>
       </div>
     </div>
@@ -3697,7 +3697,7 @@
 
   <link rel="stylesheet" href="/games-welcome.css?v=1">
   <script src="/games-welcome.js?v=1"></script>
-  <script src="/games-hub.js"></script>
+  <script src="/games-hub.js?v=2"></script>
   <link rel="stylesheet" href="/games-hub.css">
   <script src="/lesson-design.js"></script>
   <script>
@@ -8505,7 +8505,7 @@
       const html=games.map(g=>{
         if(g.mode==='moonquest')return `<div class="game-card"><div class="gc-head"><div class="gc-title">${esc(g.lessonTitle)}</div><div class="gc-meta"><span class="gc-chip">MoonQuest</span><span class="gc-chip">${g.questionCount} questions</span><span class="gc-chip">${esc(g.subject)}</span>${gameClassNames(g).map(n=>`<span class="gc-chip">${esc(n)}</span>`).join('')}</div></div><div class="gc-body"><p>Vinschool heroes · Diagram choices and classroom discussion</p><div class="gc-actions"><a class="btn accent" href="/moonquest?game=${esc(g.id)}">Set up class</a><a class="btn ghost" href="/moonquest?game=${esc(g.id)}&action=test">Test game</a><a class="btn ghost" href="/moonquest?game=${esc(g.id)}&action=edit">Edit questions</a>${g.missions.map(m=>`<a class="btn ghost" href="/moonquest?session=${esc(m.id)}">${m.phase==='ended'?'Open':'Resume'} ${esc(m.className)}</a><a class="btn ghost" href="/moonquest?report=${esc(m.id)}">${esc(m.className)} results · ${esc(new Date(m.createdAt).toLocaleDateString())} · ${m.savedAnswers||0} answers</a>${m.phase!=='ended'?`<button type="button" class="btn ghost gcopy" data-url="${esc(location.origin+'/moonquest/join?code='+m.code)}">Copy ${esc(m.className)} learner link</button>`:''}`).join('')}</div></div></div>`;
         const mode=g.mode||'arcade', colony=mode==='colonyquest', fish=mode==='fishquest';
-        const studentUrl=location.origin+'/play/'+g.id;
+        const studentUrl=location.origin+'/play/'+g.id+(colony?'?activity=colonyquest-live':'');
         const launchUrl=colony?location.origin+'/colonyquest/'+g.id:fish?location.origin+'/fishquest/'+g.id:studentUrl;
         const subjectChip=g.subject?`<span class="gc-chip">${esc(g.subject)}</span>`:'';
         const gradeChip=g.grade?`<span class="gc-chip">${esc(g.grade)}</span>`:'';
@@ -8531,8 +8531,9 @@
           </div>
           <div class="gc-body">
             <details class="games-share"><summary>Learner access · links and QR cards</summary>
+            ${colony?'<p>For learner devices, start a ColonyQuest multiplayer session before learners join. Smartboard mode uses the teacher’s screen.</p>':''}
             ${g.roomCode?`<p>Room code: <strong>${esc(g.roomCode)}</strong> · ${esc(joinUrl)}</p>`:''}
-            ${colony?'':`<label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:5px">Learner game link</label><div class="game-link"><input readonly value="${esc(studentUrl)}" aria-label="Learner game link"><button type="button" class="btn ghost gcopy" data-url="${esc(studentUrl)}" style="width:auto;padding:9px 13px">${ICON('i-doc')} Copy learner link</button></div>`}
+            ${`<label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:5px">${colony?'ColonyQuest multiplayer learner link':'Learner game link'}</label><div class="game-link"><input readonly value="${esc(studentUrl)}" aria-label="Learner game link"><button type="button" class="btn ghost gcopy" data-url="${esc(studentUrl)}" style="width:auto;padding:9px 13px">${ICON('i-doc')} Copy learner link</button></div>`}
             ${!colony&&gameRosterIds(g).length?`<a href="/api/game/${esc(g.id)}/qr-sheet" style="font-size:12.5px;font-weight:600;color:var(--primary);display:inline-flex;align-items:center;gap:4px;margin-top:8px">${ICON('i-image')} Print QR cards</a>`:''}
             </details>
             <div class="gc-actions" style="margin-top:10px">

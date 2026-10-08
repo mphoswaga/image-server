@@ -41,6 +41,15 @@ test('invited teacher gets games workspace, can return, and keeps account on upg
   await expectNoPageOverflow(page);
   await page.screenshot({path:testInfo.outputPath('workspace.png'),fullPage:true});
   await page.reload();await expect(page.locator('#gamesWelcome')).toBeVisible();
+  const card=page.locator('#gamesList .game-card').first();
+  await card.getByRole('button',{name:'Share with learners',exact:true}).click();
+  await expect(card.getByRole('button',{name:'Copy learner link',exact:true})).toBeVisible();
+  await expect(card.locator('.game-link input')).toHaveValue(new RegExp('/play/'+created.gameId+'\\?activity=colonyquest-live$'));
+  await expect(card.locator('.games-share')).toContainText('Smartboard mode uses');
+  await page.locator('#uiLanguage').selectOption('vi');
+  await expect(card.getByRole('button',{name:'Chia sẻ với học sinh',exact:true})).toBeVisible();
+  await expect(card.getByRole('button',{name:'Sao chép liên kết cho học sinh',exact:true})).toBeVisible();
+  await page.locator('#uiLanguage').selectOption('en');
   const saved=await page.request.post('/api/roster',{data:{name:'My retained class',rows:[{id:'TEST001',name:'Test Learner'}],idCol:'id',nameCol:'name'}});
   expect(saved.ok()).toBeTruthy();
   const before=await (await page.request.get('/api/rosters')).json();
@@ -57,4 +66,15 @@ test('invalid invitation shows a useful error and cannot continue',async({page})
   await page.goto('/welcome-games.html?invite=not-real');
   await expect(page.locator('#status')).toContainText('invalid');
   await expect(page.locator('#start')).toHaveAttribute('aria-disabled','true');
+});
+
+
+test('MoonQuest learner links survive game-card decoration',async({page})=>{
+  await page.goto('/healthz');
+  await page.setContent('<div id="cards"><div class="game-card"><div class="gc-body"><div class="gc-actions"><button class="gcopy" data-url="/moonquest/join?code=ABC123">Copy Grade 3 learner link</button></div></div></div></div>');
+  await page.addScriptTag({url:'/games-hub.js'});
+  await page.evaluate(()=>GamesHub.decorate(document.getElementById('cards'),[{id:'moon',mode:'moonquest'}],[],()=>[]));
+  await page.getByRole('button',{name:'Share with learners'}).click();
+  await expect(page.getByRole('button',{name:'Copy Grade 3 learner link'})).toBeVisible();
+  await expect(page.locator('.gcopy')).toHaveAttribute('data-url','/moonquest/join?code=ABC123');
 });
