@@ -78,6 +78,6 @@ function revoke(code) {
 }
 function gamesRouteAllowed(url) {
   const p = String(url).split('?')[0];
-  return /^\/api\/(?:me$|teacher-access(?:\/|$)|game(?:s)?(?:\/|$)|rosters?(?:\/|$)|student(?:s)?(?:\/|$)|billing(?:\/|$)|credits(?:\/|$)|config\/apps$|webauthn(?:\/|$)|logout$)/.test(p);
+  return /^\/api\/(?:me$|teacher-access(?:\/|$)|game(?:s)?(?:\/|$)|rosters?(?:\/|$)|roster-sharing(?:\/|$)|student(?:s)?(?:\/|$)|billing(?:\/|$)|credits(?:\/|$)|config\/apps$|webauthn(?:\/|$)|logout$)/.test(p);
 }
 module.exports = { accessFor, createInvite, previewInvite, claimInvite, upgrade, removeAccount, listInvites, revoke, gamesRouteAllowed };

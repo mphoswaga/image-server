@@ -39,7 +39,7 @@ test('invalid, withdrawn, and expired invitations fail without assigning access'
   assert.throws(()=>access.claimInvite(invite.code,{id:'new2',role:'teacher'}),/expired/);
 });
 test('games access permits game setup and rosters but blocks full-workspace endpoints',()=>{
-  for(const p of ['/api/games','/api/game/1/fishquest/start','/api/game/1/colonyquest','/api/roster/1/pins','/api/credits','/api/me']) assert.equal(access.gamesRouteAllowed(p),true,p);
+  for(const p of ['/api/games','/api/game/1/fishquest/start','/api/game/1/colonyquest','/api/roster/1/pins','/api/roster-sharing','/api/roster-sharing/abc/accept','/api/credits','/api/me']) assert.equal(access.gamesRouteAllowed(p),true,p);
   for(const p of ['/api/lesson-plan','/api/assessment','/api/admin/teacher-invites','/api/assistant/message','/api/templates']) assert.equal(access.gamesRouteAllowed(p),false,p);
 });
 test('EducScope sign-in keeps games access on the same teacher identity',async()=>{

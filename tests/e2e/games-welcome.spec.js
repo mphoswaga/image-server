@@ -19,6 +19,7 @@ test('invited teacher gets games workspace, can return, and keeps account on upg
   await expect(page.locator('#assignmentsBtn')).toBeHidden();
   expect((await page.request.get('/api/templates')).status()).toBe(403);
   expect((await page.request.get('/api/games')).ok()).toBeTruthy();
+  expect((await page.request.get('/api/roster-sharing')).ok()).toBeTruthy();
   expect((await page.request.get('/api/admin/teacher-invites')).status()).toBe(403);
   await page.locator('[data-game="colonyquest"]').click();
   await expect(page.locator('#pptxGameMode')).toHaveValue('colonyquest');
