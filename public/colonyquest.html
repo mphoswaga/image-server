@@ -24,7 +24,17 @@
   <link rel="stylesheet" href="/colonyquest-polish.css?v=15">
 <link rel="stylesheet" href="/colonyquest-celebration.css?v=1">
 <script defer src="/colonyquest-celebration.js?v=1"></script>
-</head>
+<style>
+.world-story {padding:10px 14px;gap:12px;max-width:760px;margin-inline:auto;}
+.world-story h2 {font-size:clamp(16px,2vw,22px);margin:0 0 3px;}
+.world-story img {width:48px;height:48px;object-fit:contain;}
+.world-story-kicker {display:none;}
+.world-story-effect {font-size:14px;}
+#worldStoryDetails {font-size:12px;margin-top:5px;}
+#worldStoryDetails summary {cursor:pointer;color:#d6e8ce;}
+#worldStoryDetails p {max-height:100px;overflow:auto;}
+#worldStoryContinue {font-size:12px;padding:8px;}
+</style></head>
 <body>
   <div id="loading" class="loading"><div><div class="spinner"></div>Preparing ColonyQuest...</div></div>
 
@@ -112,7 +122,7 @@
     <section id="eventOverlay" class="overlay hidden" aria-label="Colony event"><div class="dialog event-dialog"><img id="eventGuide" class="event-guide" src="/assets/colonyquest/pip-worker.webp" alt="Pip the scout ant"><div id="eventMark" class="event-mark">A Moonroot Meadow event</div><div class="dialog-kicker" id="eventKicker">World event</div><h2 id="eventTitle"></h2><p id="eventText"></p><button id="eventContinue" class="btn gold" type="button">Continue</button></div></section>
 
     <section id="worldStory" class="world-story hidden" aria-live="polite">
-      <img id="worldStoryArt" src="/assets/colonyquest/pip-worker.webp" alt="Pip the scout ant"><div><div id="worldStoryKicker" class="world-story-kicker">The colony changes</div><h2 id="worldStoryTitle">Watch the colony</h2><p id="worldStoryText"></p><strong id="worldStoryEffect" class="world-story-effect"></strong></div><button id="worldStoryContinue" class="btn gold" type="button">Continue journey</button>
+      <img id="worldStoryArt" src="/assets/colonyquest/pip-worker.webp" alt="Pip the scout ant"><div><div id="worldStoryKicker" class="world-story-kicker">The colony changes</div><h2 id="worldStoryTitle">Watch the colony</h2><strong id="worldStoryEffect" class="world-story-effect"></strong><details id="worldStoryDetails"><summary>Details · hold scene</summary><p id="worldStoryText"></p></details></div><button id="worldStoryContinue" class="btn gold" type="button">Continue journey</button>
     </section>
 
     <section id="finalOverlay" class="overlay hidden" aria-label="Final ColonyQuest results"><div class="dialog final-dialog">
@@ -138,7 +148,7 @@
   <script src="/vendor/phaser.min.js"></script>
   <script src="/colonyquest-core.js?v=18"></script>
   <script src="/colonyquest-music.js?v=1"></script>
-  <script src="/colonyquest.js?v=34"></script>
+  <script src="/colonyquest.js?v=35"></script>
 <script>document.getElementById('multiplayerLink').href='/colonyquest-live/'+encodeURIComponent(location.pathname.split('/').filter(Boolean).pop());</script>
 </body>
 </html>

@@ -682,6 +682,14 @@
       const protectedNest = colony.defense >= 1;
       this.canvas.dataset.habitatResponse = protectedNest ? 'sheltered' : 'flood-response';
       if (protectedNest) {
+        c.save();
+        c.strokeStyle = '#baffdf';
+        c.globalAlpha = this.reduced ? 0.6 : 0.4 + Math.sin(this.clock / 450) * 0.2;
+        c.lineWidth = 3;
+        c.beginPath();
+        c.arc(g.w * 0.5, g.surface, 37, Math.PI, Math.PI * 2);
+        c.stroke();
+        c.restore();
         for (const side of [-1, 1]) {
           c.strokeStyle = '#bcebf2a0';
           c.lineWidth = 2;
@@ -903,7 +911,7 @@
         : ((colony.forageProgress?.[i] || 0) +
             (this.state?.story ? 0 : this.clock - this.receivedAt) / duration) %
           1;
-      const source = [g.w * (0.5 + side * (0.27 + random(i + trip) * 0.16)), g.surface - 10];
+      const source = [g.w * (0.5 + side * ((this.state?.world?.dryOccurred && !this.state?.world?.rainOccurred ? 0.38 : 0.27) + random(i + trip) * 0.06)), g.surface - 10];
       const path = [
         [home.x, home.y + home.ry * 0.25],
         [g.home.x, home.y],
@@ -1352,7 +1360,10 @@
       c.beginPath();
       c.rect(0, 0, w, surface);
       c.clip();
-      if (world.birdStage === 'rain') {
+      if (world.birdStage === 'rain' || this.state?.story?.key === 'rain') {
+        for (let i = 0; i < 5; i++) {
+          ellipse(c, w * (i / 4), 8, w * 0.2, 28, '#25384755');
+        }
         c.fillStyle = '#36596840';
         c.fillRect(0, 0, w, surface);
         c.strokeStyle = '#d4efffa0';

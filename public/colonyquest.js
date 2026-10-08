@@ -400,6 +400,22 @@
     worldStoryAction = onContinue || null;
     $('worldStoryContinue').disabled = false;
     $('worldStory').classList.remove('hidden');
+    $('worldStoryDetails').open = false;
+    scheduleWorldStory(5000);
+  }
+
+  // One timer per scene; opening details holds the scene for the teacher.
+  function scheduleWorldStory(delay) {
+    clearTimeout(worldStoryTimer);
+    const expectedAction = worldStoryAction;
+    worldStoryTimer = setTimeout(function advance() {
+      if (!expectedAction || worldStoryAction !== expectedAction || $('worldStory').classList.contains('hidden')) return;
+      if (session?.phase === 'paused' || document.hidden || $('worldStoryDetails').open || transitionLocked) {
+        worldStoryTimer = setTimeout(advance, 500);
+        return;
+      }
+      $('worldStoryContinue').click();
+    }, delay);
   }
 
   function showWorldStory(details, onContinue) {
@@ -430,6 +446,7 @@
       if (worldStoryAction !== expectedAction || $('worldStory').classList.contains('hidden')) return;
       button.textContent = readyLabel;
       button.disabled = false;
+      scheduleWorldStory(900);
     }, wait);
   }
 
@@ -2106,7 +2123,7 @@
       const building = index === 0 && session.phase === 'event' && lastEvent?.key === 'upgrade-expansion' && lastEvent.teamId === team.id;
       const room = building ? sites.expansion : index % 3 === 0 ? food : rooms[index % rooms.length];
       const route = pathTo(room);
-      const surface = { x: cx + (index % 2 ? -1 : 1) * zone.w * .3, y: entrance.y - 19 };
+      const surface = { x: cx + (index % 2 ? -1 : 1) * zone.w * (session.dryOccurred && !session.rainOccurred ? .43 : .3), y: entrance.y - 19 };
       const indoorPath = route.length > 1 ? [...route.slice().reverse(), ...route] : [{ x: nursery.x - 18, y: nursery.y }, { x: nursery.x + 18, y: nursery.y + 5 }];
       const tending = !building && !sheltering && index % 3 === 2 && rooms.length > 1;
       const workPath = [...route, { x: room.x - roomWidth * .18, y: room.y + 8 }];
@@ -2789,6 +2806,9 @@
     const entrance = view.sites.entrance;
     const nursery = view.sites.nursery;
     if (key === 'predator') {
+      const shadow = scene.add.ellipse(entrance.x + view.zone.w * .4, entrance.y - 4, 64, 12, 0x14201b, .3).setDepth(10);
+      worldEventPresentation.push(shadow);
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) scene.tweens.add({ targets: shadow, x: entrance.x + 35, scaleX: 1.25, duration: 1800, ease: 'Sine.easeOut' });
       const spider = createMeadowSpider({ x: entrance.x + Math.min(78, view.zone.w * .3), y: entrance.y - 35 }, .72);
       worldEventPresentation.push(spider);
       scene.tweens.add({ targets: spider, x: spider.x - 12, y: spider.y + 4, angle: 3, duration: 720, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });

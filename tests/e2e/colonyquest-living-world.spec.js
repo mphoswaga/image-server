@@ -367,3 +367,41 @@ test('protection and defended raids use recorded results with no resource change
   expect(await page.evaluate(() => fixture.me.colony.food)).toBe(26);
   await page.screenshot({ path: info.outputPath('defended-raid.png') });
 });
+
+test('drought extends visible foraging without changing earned supplies', async ({ page }) => {
+  await world(page);
+  const result = await page.evaluate(() => {
+    const c = fixture.me.colony;
+    const before = JSON.stringify(c);
+    c.forageProgress[0] = 0.45;
+    scene.update(structuredClone(fixture));
+    const g = scene.layout(innerWidth, innerHeight, c);
+    const normal = scene.workerJourney(0, g, c);
+    fixture.world = { dryOccurred: true, rainOccurred: false };
+    scene.update(structuredClone(fixture));
+    const dry = scene.workerJourney(0, g, c);
+    return { normal: Math.abs(normal.x - g.w / 2), dry: Math.abs(dry.x - g.w / 2), food: c.food, before: JSON.parse(before).food };
+  });
+  expect(result.dry).toBeGreaterThan(result.normal);
+  expect(result.food).toBe(result.before);
+});
+
+test('automatic encounter layout leaves the colony visible and details optional', async ({ page }, info) => {
+  await page.goto('/healthz');
+  await page.setContent(`<link rel="stylesheet" href="/colonyquest-live.css"><section id="learner" class="story-playing"><div class="play-layout"><div class="colony-stage"><canvas id="colonyCanvas"></canvas></div><div class="decision"><h1>Rain reaches the meadow</h1><div class="choices"><details class="scene-details"><summary>What is happening?</summary><p>The walls protect your food.</p></details></div></div></div></section>`);
+  await page.addScriptTag({ url: '/colonyquest-core.js' });
+  await page.addScriptTag({ url: '/colonyquest-live-art.js' });
+  await page.evaluate(() => {
+    const colony = ColonyQuestCore.createTeam({ name: 'Leaf colony' }, 0);
+    Object.assign(colony, { workers: 4, food: 20, defense: 2, pantryBuilt: true });
+    window.scene = new ColonyScene(document.getElementById('colonyCanvas'));
+    scene.update({ phase: 'story', world: { birdStage: 'rain' }, me: { id: 'a', colony }, events: [] });
+  });
+  await expect(page.locator('.scene-details p')).toBeHidden();
+  const stage = await page.locator('.colony-stage').boundingBox();
+  const panel = await page.locator('.decision').boundingBox();
+  expect(panel.height).toBeLessThan(stage.height * .35);
+  await page.locator('summary').click();
+  await expect(page.locator('.scene-details p')).toBeVisible();
+  await page.screenshot({ path: `/tmp/colony-clear-scene-${info.project.name}.png` });
+});

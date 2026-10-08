@@ -260,10 +260,10 @@
       const beat = s.story;
       $('roundLabel').textContent = 'THE MOONROOT MEADOW ADVENTURE';
       $('question').textContent = beat.title;
-      $('instruction').textContent = beat.line;
+      $('instruction').textContent = '';
       const result = beat.results.find((r) => r.playerId === p.id);
       $('choices').innerHTML =
-        `<div class="story-character"><img src="/assets/colonyquest/${esc(beat.art)}.webp" alt="${esc(beat.speaker)}"><strong>${esc(beat.speaker)}</strong>${beat.speaker === 'Dot' ? '<span class="builder-hat" aria-hidden="true">⛑</span>' : ''}</div>${result?.message ? `<div class="story-outcome">${esc(result.message)}</div>` : ''}`;
+        `<details class="scene-details"><summary>What is happening?</summary><p>${esc(beat.line)}</p><div class="story-character"><img src="/assets/colonyquest/${esc(beat.art)}.webp" alt="${esc(beat.speaker)}"><strong>${esc(beat.speaker)}</strong>${beat.speaker === 'Dot' ? '<span class="builder-hat" aria-hidden="true">⛑</span>' : ''}</div>${result?.message ? `<div class="story-outcome">${esc(result.message)}</div>` : ''}</details>`;
       if (beat.key === 'acorn')
         $('explanation').textContent = 'Ancient Acorn champions: ' + beat.winners.join(', ');
       return;

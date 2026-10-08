@@ -119,6 +119,13 @@
             q > 0.5 ? 'seed' : null,
           );
       } else if (story.key === 'predator') {
+        // The approaching shadow arrives before the spider reaches the nest.
+        c.save();
+        c.fillStyle = '#18241e44';
+        c.beginPath();
+        c.ellipse(lerp(w * 0.98, w * 0.64, Math.min(1, q * 3)), ground - 2, size * 0.9, size * 0.12, 0, 0, Math.PI * 2);
+        c.fill();
+        c.restore();
         const toward = q < 0.55 ? q / 0.55 : 1 - (q - 0.55) / 0.45;
         scene.creature(
           'spider',
