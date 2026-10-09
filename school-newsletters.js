@@ -145,7 +145,7 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
           },
         ],
         invites: [],
-        settings: { example: "", minimum: 0, vietnameseMinimum: 0 },
+        settings: { example: "", minimum: 0, vietnameseMinimum: 0, design: demo ? "vinschool" : "standard" },
         reports: demo ? [require("./school-newsletter-demo").demoReport()] : [],
       };
       return view(save(w), user);
@@ -154,6 +154,11 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
       const existing = all().find(
         (w) => w.demo && w.members.some((m) => m.userId === user.id),
       );
+      if(existing && !existing.settings.design){
+        existing.settings.design="vinschool";
+        existing.revision++;
+        save(existing);
+      }
       return existing
         ? view(existing, user)
         : this.create(user, { name: "Sample school · Demo" }, true);
@@ -221,8 +226,14 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
           coordinator(w, user);
           if (!w.demo) fail("Only the demo can be reset.");
           w.reports = [require("./school-newsletter-demo").demoReport()];
-          w.settings = { example: "", minimum: 0, vietnameseMinimum: 0 };
+          w.settings = { example: "", minimum: 0, vietnameseMinimum: 0, design: "vinschool" };
           delete w.preview;
+          return;
+        }
+        if (action === "design") {
+          coordinator(w, user);
+          if (!["standard", "vinschool"].includes(input.design)) fail("Unknown report design.");
+          w.settings.design=input.design;
           return;
         }
         if (action === "settings") {

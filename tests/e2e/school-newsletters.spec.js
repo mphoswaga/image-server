@@ -21,6 +21,10 @@ test("school newsletter drafts, minimum, bilingual review and print layout", asy
   await page.locator("[name=subjects]").first().fill("ICT\nMaths");
   await page.locator("#reportForm button").click();
   await expect(page.locator(".subject")).toHaveCount(2);
+  await page.getByRole('button',{name:'Use Vinschool design'}).click();
+  await expect(page.locator('#pdfFrame')).toHaveAttribute('src', /^blob:/);
+  await page.locator('#closePdfPreview').click();
+  await expect(page.locator('.report-preview-card')).toContainText('Vinschool');
   await page.getByText("Manage workspace", { exact: true }).click();
   await page.getByText("Format and minimum length", { exact: true }).click();
   await page.locator("#settings [name=design]").selectOption("vinschool");

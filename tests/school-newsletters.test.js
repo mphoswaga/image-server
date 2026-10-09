@@ -304,6 +304,7 @@ test("downloadable PDF preserves Vietnamese, all subjects and demo label", async
     demoReport(),
   );
   assert.equal(bytes.subarray(0, 4).toString(), "%PDF");
+  assert.match(bytes.toString("latin1"), /\/Subtype \/Image/);
   const parser = new PDFParse({ data: bytes });
   try {
     const result = await parser.getText();

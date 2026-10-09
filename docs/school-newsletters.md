@@ -54,3 +54,9 @@ preview action. Subject rows expand to edit and retain their open state within
 the browser session. Assigned teachers' subjects open automatically. Coordinator
 settings are under **Manage workspace**; regeneration/history are under **Report
 tools and previous versions**. The teacher preview has English/Vietnamese options.
+
+Sample demos now default to the Vinschool design, including older demos that
+never selected a PDF design. Real school workspaces retain their selected design;
+coordinators can use **Use Vinschool design** beside **Preview PDF** to save that
+choice and immediately open the branded PDF. This display-only change preserves
+contributions, translation reviews and approval.

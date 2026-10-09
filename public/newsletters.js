@@ -142,7 +142,7 @@ function render() {
   $("coordinator").hidden = !coord;
   $("newReport").hidden = !coord || workspace.demo;
   $("invite").closest("details").hidden = !!workspace.demo;
-  $("settings").elements.design.value = workspace.settings.design || "standard";
+  $("settings").elements.design.value = workspace.settings.design || (workspace.demo ? "vinschool" : "standard");
   $("settings").elements.example.value = workspace.settings.example;
   $("settings").elements.minimum.value = workspace.settings.minimum;
   $("settings").elements.vietnameseMinimum.value =
@@ -175,7 +175,7 @@ function render() {
     return;
   }
   $("editor").innerHTML =
-    `<div class="report-heading"><div><p class="eyebrow">${esc(r.week)}</p><h2>${esc(r.className)}</h2><p class="hint">${r.sendDate ? "Sending " + esc(r.sendDate) : "Your weekly update for families"}</p></div><span class="pill">${r.approved ? "Approved for sharing" : r.entries.every((e) => e.submitted && e.reviewed) ? "Ready for approval" : r.entries.every((e) => e.submitted) ? "Awaiting translation & review" : "Draft"}</span></div><div class="workflow-progress"><span><b>${r.entries.filter((e) => e.submitted).length}/${r.entries.length}</b> contributions submitted</span><span><b>${r.entries.filter((e) => e.reviewed).length}/${r.entries.length}</b> translations reviewed</span></div><div class="report-preview-card"><div class="paper-symbol" aria-hidden="true">▤</div><div><h3>Your family newsletter</h3><p class="hint">${workspace.settings.design === "vinschool" ? "Vinschool · Cambridge weekly report" : "LessonScope report"} · Preview the saved pages before sharing.</p><div class="actions"><button data-action="pdf-preview">Preview PDF</button><button data-action="teacher-preview" class="secondary">Teacher preview</button>${coord && !r.approved ? '<button data-action="approve" class="secondary">Approve newsletter</button>' : ""}${r.approved ? '<button data-action="print" class="secondary">Download approved PDF</button>' : ""}</div></div></div><div class="section-heading"><h3>Subject contributions</h3><p class="hint">${coord ? "Review each subject, then approve the finished report." : workspace.myRole === "translator" ? "Review the Vietnamese wording, then mark each translation reviewed." : "Open your subject, add your learning update and submit it for translation."}</p></div>` +
+    `<div class="report-heading"><div><p class="eyebrow">${esc(r.week)}</p><h2>${esc(r.className)}</h2><p class="hint">${r.sendDate ? "Sending " + esc(r.sendDate) : "Your weekly update for families"}</p></div><span class="pill">${r.approved ? "Approved for sharing" : r.entries.every((e) => e.submitted && e.reviewed) ? "Ready for approval" : r.entries.every((e) => e.submitted) ? "Awaiting translation & review" : "Draft"}</span></div><div class="workflow-progress"><span><b>${r.entries.filter((e) => e.submitted).length}/${r.entries.length}</b> contributions submitted</span><span><b>${r.entries.filter((e) => e.reviewed).length}/${r.entries.length}</b> translations reviewed</span></div><div class="report-preview-card"><div class="paper-symbol" aria-hidden="true">▤</div><div><h3>Your family newsletter</h3><p class="hint">${(workspace.settings.design || (workspace.demo ? "vinschool" : "standard")) === "vinschool" ? "Vinschool · Cambridge weekly report" : "LessonScope report"} · Preview the saved pages before sharing.</p><div class="actions"><button data-action="pdf-preview">Preview PDF</button>${coord&&workspace.settings.design!=="vinschool"?'<button data-action="school-design" class="secondary">Use Vinschool design</button>':''}<button data-action="teacher-preview" class="secondary">Teacher preview</button>${coord && !r.approved ? '<button data-action="approve" class="secondary">Approve newsletter</button>' : ""}${r.approved ? '<button data-action="print" class="secondary">Download approved PDF</button>' : ""}</div></div></div><div class="section-heading"><h3>Subject contributions</h3><p class="hint">${coord ? "Review each subject, then approve the finished report." : workspace.myRole === "translator" ? "Review the Vietnamese wording, then mark each translation reviewed." : "Open your subject, add your learning update and submit it for translation."}</p></div>` +
     r.entries
       .map((e, i) => {
         const edit =
@@ -414,6 +414,11 @@ $("editor").onclick = (e) => {
       const action = b.dataset.action;
       if (action === "teacher-preview") {
         openTeacherPreview();
+        return;
+      }
+      if (action === "school-design") {
+        await change("design", {design:"vinschool"});
+        await openPdfPreview();
         return;
       }
       if (action === "pdf-preview") {

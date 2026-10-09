@@ -1,9 +1,10 @@
 const PDFDocument = require("pdfkit");
 const path = require("path");
 function newsletterPdf(workspace, report) {
+  const schoolDesign = (workspace.settings?.design || (workspace.demo ? "vinschool" : "standard")) === "vinschool";
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
-      size: workspace.settings?.design === "vinschool" ? "LETTER" : "A4",
+      size: schoolDesign ? "LETTER" : "A4",
       margin: 48,
       bufferPages: true,
       info: {
@@ -23,7 +24,7 @@ function newsletterPdf(workspace, report) {
       "Bold",
       path.join(__dirname, "assets/fonts/noto-sans/NotoSans-Bold.ttf"),
     );
-    if (workspace.settings?.design === "vinschool") {
+    if (schoolDesign) {
       require("./school-newsletter-school-design").drawSchoolReport(
         doc,
         workspace,
