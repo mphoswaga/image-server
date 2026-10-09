@@ -399,3 +399,9 @@ test("parent publication is an approved snapshot, stays private until republishe
   change("publish");
   assert.notEqual(w.reports[0].publication.token, token);
 });
+
+test("parent demo cannot bypass approval on a real workspace", (t) => {
+  const { store, owner, w } = setup(t);
+  assert.throws(() => store.change(owner, w.id, w.revision, "prepare-parent-demo", {reportId: w.reports[0].id}), /only available in a demo/);
+  assert.equal(store.read(w.id).reports[0].publication, undefined);
+});

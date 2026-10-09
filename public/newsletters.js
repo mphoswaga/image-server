@@ -80,6 +80,8 @@ async function api(url, body) {
 }
 function status(message) {
   $("message").textContent = message;
+  const local = $("parentShareStatus");
+  if (local) local.textContent = message;
 }
 async function run(fn) {
   try {
@@ -209,7 +211,7 @@ function render() {
   if (coord) {
     const share = document.createElement("div");
     share.className = "parent-sharing";
-    share.innerHTML = `<h3>Share with families</h3><p class="hint">A phone-friendly page, with no parent sign-in. Only published, approved content is shared.</p>${workspace.demo && !r.publication ? '<button data-action="test-parent">Prepare parent demo</button><p class="hint">Approve and publish your saved sample, then open its parent view or copy the link to your phone. Real newsletters are unchanged.</p>' : ""}${r.approved ? '<button data-action="publish-parent">' + (r.publication ? "Publish latest approved version" : "Publish parent newsletter") + "</button>" : '<p class="hint">Approve the newsletter to publish it.</p>'}${r.publication ? '<label>Parent reading link<input id="parentLink" readonly></label><div class="actions"><button data-action="copy-parent" class="secondary">Copy parent link</button><a id="openParent" class="button secondary" target="_blank" rel="noopener noreferrer">Open parent view</a><button data-action="revoke-parent" class="secondary">Revoke link</button></div><p class="hint">The link stays available until revoked. New edits stay private until you approve and publish again.</p>' : ""}`;
+    share.innerHTML = `<h3>Share with families</h3><p id="parentShareStatus" role="status" aria-live="polite"></p><p class="hint">A phone-friendly page, with no parent sign-in. Only published, approved content is shared.</p>${workspace.demo && !r.publication ? '<button data-action="test-parent">Prepare parent demo</button><p class="hint">Create a ready-to-read fictional sample, then open its parent view or copy the link to your phone. Your saved work is unchanged.</p>' : ""}${r.approved ? '<button data-action="publish-parent">' + (r.publication ? "Publish latest approved version" : "Publish parent newsletter") + "</button>" : '<p class="hint">Approve the newsletter to publish it.</p>'}${r.publication ? '<label>Parent reading link<input id="parentLink" readonly></label><div class="actions"><button data-action="copy-parent" class="secondary">Copy parent link</button><a id="openParent" class="button secondary" target="_blank" rel="noopener noreferrer">Open parent view</a><button data-action="revoke-parent" class="secondary">Revoke link</button></div><p class="hint">The link stays available until revoked. New edits stay private until you approve and publish again.</p>' : ""}`;
     $("editor").append(share);
     if (r.publication) {
       const link =
@@ -437,8 +439,8 @@ $("editor").onclick = (e) => {
           status("Save your sample edits before preparing the parent demo.");
           return;
         }
-        if (!current().approved) await change("approve");
-        await change("publish");
+        status("Preparing your parent demo…");
+        await change("prepare-parent-demo");
         status(
           "Parent demo ready. Open parent view below, or copy the link to test on your phone without signing in.",
         );

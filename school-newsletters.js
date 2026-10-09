@@ -335,13 +335,19 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
           return;
         }
         const r = report(w, input.reportId);
-        if (action === "publish" || action === "revoke-publication") {
+        if (
+          action === "publish" ||
+          action === "revoke-publication" ||
+          action === "prepare-parent-demo"
+        ) {
           coordinator(w, user);
           if (action === "revoke-publication") {
             delete r.publication;
             return;
           }
-          if (!r.approved)
+          if (action === "prepare-parent-demo" && !w.demo)
+            fail("Sample preview is only available in a demo workspace.");
+          if (action !== "prepare-parent-demo" && !r.approved)
             fail("Approve this newsletter before publishing it.");
           r.publication = {
             token:
@@ -354,13 +360,14 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
               sendDate: r.sendDate,
               design: w.settings.design || (w.demo ? "vinschool" : "standard"),
               publishedAt: new Date().toISOString(),
-              entries: r.approved.entries.map(
-                ({ subject, english, vietnamese }) => ({
-                  subject,
-                  english,
-                  vietnamese,
-                }),
-              ),
+              entries: (action === "prepare-parent-demo"
+                ? require("./school-newsletter-demo").demoReport().entries
+                : r.approved.entries
+              ).map(({ subject, english, vietnamese }) => ({
+                subject,
+                english,
+                vietnamese,
+              })),
             },
           };
           return;

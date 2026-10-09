@@ -17,19 +17,11 @@ test("parents read approved subjects without signing in, switch language and los
     expect(r.ok(), await r.text()).toBeTruthy();
     w = await r.json();
   };
-  for (const e of w.reports[0].entries) {
-    await change("english", {
-      subject: e.subject,
-      text: e.english,
-      submit: true,
-    });
-    await change("vietnamese", {
-      subject: e.subject,
-      text: e.vietnamese,
-      review: true,
-    });
-  }
-
+  await change("english", {
+    subject: "ICT",
+    text: "Unsubmitted sample draft",
+    submit: false,
+  });
   await page.goto("/newsletters.html");
   await page.locator("#spaces").selectOption(w.id);
   await page
