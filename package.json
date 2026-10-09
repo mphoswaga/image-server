@@ -1,7 +1,7 @@
 {
   "name": "image-agent",
   "version": "1.0.0",
-  "description": "LessonCope — type a subject and topic, get a finished, illustrated PowerPoint.",
+  "description": "LessonCope \u2014 type a subject and topic, get a finished, illustrated PowerPoint.",
   "main": "image-server.js",
   "scripts": {
     "start": "node image-server.js",
@@ -15,13 +15,14 @@
     "check:html": "node scripts/check-html-scripts.mjs public/index.html public/assignment.html public/assessment-present.html public/colonyquest.html public/fishquest.html public/fishquest-teacher.html public/join.html public/my-work.html public/oauth-consent.html public/play.html public/start.html practice.html practice-teacher.html file-types-sizes-practice.html public/colonyquest-live.html",
     "check:server": "for f in *.js; do node --check \"$f\" || exit 1; done",
     "check:moonquest": "node --check public/moonquest-observer.js && node --check public/moonquest.js && node --check public/moonquest-story.js && node --check public/moonquest-report.js && node --check public/learning-report.js && node scripts/check-html-scripts.mjs public/moonquest.html public/moonquest-observer.html",
-    "check": "npm run check:server && npm run check:html && npm run check:moonquest && npm run check:colonyquest-live",
+    "check": "npm run check:server && npm run check:html && npm run check:moonquest && npm run check:colonyquest-live && npm run check:newsletters",
     "deployed": "node scripts/deployed.js",
     "backup": "node scripts/backup-data.js",
     "backup:verify": "node scripts/verify-backup.js",
     "restore": "node scripts/restore-data.js",
     "data:inventory": "node scripts/inventory-data.js",
-    "check:colonyquest-live": "node --check public/colonyquest-live.js && node --check public/colonyquest-live-art.js && node --check public/colonyquest-live-story.js && node --check public/colonyquest-music.js"
+    "check:colonyquest-live": "node --check public/colonyquest-live.js && node --check public/colonyquest-live-art.js && node --check public/colonyquest-live-story.js && node --check public/colonyquest-music.js",
+    "check:newsletters": "node --check public/newsletters.js && node scripts/check-html-scripts.mjs public/newsletters.html"
   },
   "engines": {
     "node": ">=20"

@@ -255,6 +255,7 @@ function requireAuth(req, res, next) {
   if (!user) return res.status(401).json({ error: 'Not signed in.' });
   req.userId = uid;
   req.user = user;
+  if (user.role !== 'admin' && user.accessMode === 'newsletter' && !require('./teacher-access').newsletterRouteAllowed(req.originalUrl || req.url)) return res.status(403).json({error:'This account has newsletter access only.'});
   if (user.role !== 'admin' && user.accessMode === 'games' && !require('./teacher-access').gamesRouteAllowed(req.originalUrl || req.url)) {
     return res.status(403).json({ error: 'This feature needs full LessonScope access. Contact your administrator to upgrade your account.', needsFullAccess: true });
   }

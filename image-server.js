@@ -327,6 +327,7 @@ app.get(['/moonquest.js', '/moonquest.css', '/moonquest-report.js'], (req, res) 
 });
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(observability.requestMiddleware);
+require('./school-newsletter-routes').register(app, { requireAuth, upload, requireUploads, generationLimiter, uploadLimiter });
 
 // Guided curriculum advice only. This endpoint cannot mutate plans, generate
 // paid artefacts, or access student records. Any future action-taking tool must

@@ -2677,6 +2677,7 @@
     <button id="homeBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg><span class="app-menu-label">Plan</span></button>
     <button id="lessonsBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg><span class="app-menu-label">My lessons</span></button>
     <button id="rostersBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg><span class="app-menu-label" data-ui-i18n>Rosters</span></button>
+    <a class="nav-link" href="/newsletters.html">✉ Newsletters</a>
     <button id="gamesBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-gamepad"/></svg><span class="app-menu-label" data-ui-i18n>My games</span></button>
     <a id="practiceBtn" class="nav-link" href="/practice" style="display:none;text-decoration:none"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg><span class="app-menu-label">Practice</span></a>
     <button id="assignmentsBtn" class="nav-link" type="button"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg><span class="app-menu-label">Test or project</span></button>
@@ -7005,6 +7006,7 @@
     async function enterApp(user){
       try { user=await window.GamesWelcome.claim(user); }
       catch(err){ showAuth(); $('authErr').textContent=err.message; return; }
+      if (user.accessMode === 'newsletter' || sessionStorage.getItem('newsletter.invite')) { location.replace('/newsletters.html'); return; }
       appReady=true;
       authScreen.style.display='none'; nav.style.display='flex'; if(mainNavMenu) mainNavMenu.style.display='flex'; appEl.style.display='block';
       disableStartupClickShield();

@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>School newsletters · LessonScope</title>
+    <link rel="stylesheet" href="/newsletters.css" />
+  </head>
+  <body>
+    <header>
+      <a href="/">LessonScope</a><span>School newsletters</span
+      ><span class="pill">Free for your school</span
+      ><button id="signout" class="secondary" hidden>Sign out</button>
+    </header>
+    <main>
+      <section class="hero">
+        <p class="eyebrow">A little teamwork. A clearer week.</p>
+        <h1>Your school week, ready for home.</h1>
+        <p>
+          Bring every subject together, review Vietnamese translations and share
+          one polished newsletter.
+        </p>
+      </section>
+      <p id="message" role="status" aria-live="polite"></p>
+      <section id="login" hidden>
+        <h2>Sign in to join your team</h2>
+        <p>
+          Use the email address your coordinator invited. After signing in,
+          return to this page.
+        </p>
+        <a class="button" href="/">Sign in to LessonScope</a>
+      </section>
+      <section id="home" hidden>
+        <div class="toolbar">
+          <label>School workspace<select id="spaces"></select></label
+          ><button id="reload">Reload saved work</button>
+        </div>
+        <details id="createWorkspaceDetails">
+          <summary>Create a newsletter workspace</summary>
+          <form id="createSpace">
+            <label
+              >School or team name<input
+                name="name"
+                required
+                maxlength="100"
+                placeholder="Cambridge primary newsletters" /></label
+            ><button>Create workspace</button>
+          </form>
+        </details>
+      </section>
+      <div id="workspace" hidden>
+        <div class="toolbar">
+          <h2 id="spaceName"></h2>
+          <span id="role" class="pill"></span>
+        </div>
+        <div class="layout">
+          <aside>
+            <h3>Class newsletters</h3>
+            <div id="reports"></div>
+            <details id="newReport">
+              <summary>+ Add class and week</summary>
+              <form id="reportForm">
+                <label
+                  >Class<input
+                    name="className"
+                    placeholder="Grade 3B2"
+                    required /></label
+                ><label
+                  >Week / learning dates<input
+                    name="week"
+                    placeholder="Week 10 · 12–16 October"
+                    required /></label
+                ><label>Sending date<input name="sendDate" type="date" /></label
+                ><label
+                  >Subjects (one per line)<textarea name="subjects" rows="7">
+FLE
+Maths
+Science
+Global Perspectives
+ICT
+Homework</textarea
+                  ></label
+                ><button>Create newsletter</button>
+              </form>
+            </details>
+          </aside>
+          <div>
+            <section id="editor"></section>
+            <section id="coordinator" hidden>
+              <h2>Coordinator desk</h2>
+              <details>
+                <summary>Format and minimum length</summary>
+                <form id="settings">
+                  <label
+                    >Example newsletter<textarea
+                      name="example"
+                      rows="7"
+                      placeholder="Paste an example to guide tone, headings and structure. Its facts will not be copied."
+                    ></textarea>
+                  </label>
+                  <div class="two">
+                    <label
+                      >English minimum characters<input
+                        name="minimum"
+                        type="number"
+                        min="0"
+                        max="10000" /></label
+                    ><label
+                      >Vietnamese minimum characters<input
+                        name="vietnameseMinimum"
+                        type="number"
+                        min="0"
+                        max="10000"
+                    /></label>
+                  </div>
+                  <p class="hint">
+                    Per subject, including spaces; leading and trailing
+                    whitespace is ignored. Drafts can be shorter. Submission and
+                    approval enforce the minimum.
+                  </p>
+                  <button>Save format settings</button>
+                </form>
+              </details>
+              <details>
+                <summary>Invite a colleague</summary>
+                <form id="invite">
+                  <label
+                    >Email<input name="email" type="email" required /></label
+                  ><label
+                    >Role<select name="role">
+                      <option value="teacher">Subject teacher</option>
+                      <option value="translator">
+                        Teaching assistant / translator
+                      </option>
+                      <option value="coordinator">Coordinator</option>
+                    </select></label
+                  ><label
+                    >Assigned subjects (one per line)<textarea
+                      name="subjects"
+                      rows="3"
+                      placeholder="ICT"
+                    ></textarea></label
+                  ><button>Create invitation link</button>
+                </form>
+                <p id="inviteResult"></p>
+                <p class="hint">
+                  Copy the link and send it to your colleague. Only the invited
+                  email can accept it.
+                </p>
+              </details>
+              <details>
+                <summary>Team access</summary>
+                <div id="members"></div>
+              </details>
+            </section>
+          </div>
+        </div>
+      </div>
+    </main>
+    <dialog id="preview">
+      <h2>Review regenerated content</h2>
+      <p>
+        Applying replaces the selected English contributions. They will need
+        submission again; Vietnamese translations will need review.
+      </p>
+      <div id="previewBody"></div>
+      <button id="apply">Apply changes</button
+      ><button id="closePreview" class="secondary">
+        Keep existing content
+      </button>
+    </dialog>
+    <div id="printReport"></div>
+    <script src="/newsletters.js" defer></script>
+  </body>
+</html>

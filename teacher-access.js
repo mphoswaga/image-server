@@ -78,6 +78,17 @@ function revoke(code) {
 }
 function gamesRouteAllowed(url) {
   const p = String(url).split('?')[0];
-  return /^\/api\/(?:me$|teacher-access(?:\/|$)|game(?:s)?(?:\/|$)|rosters?(?:\/|$)|roster-sharing(?:\/|$)|student(?:s)?(?:\/|$)|billing(?:\/|$)|credits(?:\/|$)|config\/apps$|webauthn(?:\/|$)|logout$)/.test(p);
+  return /^\/api\/(?:me$|teacher-access(?:\/|$)|school-newsletters(?:\/|$)|game(?:s)?(?:\/|$)|rosters?(?:\/|$)|roster-sharing(?:\/|$)|student(?:s)?(?:\/|$)|billing(?:\/|$)|credits(?:\/|$)|config\/apps$|webauthn(?:\/|$)|logout$)/.test(p);
 }
 module.exports = { accessFor, createInvite, previewInvite, claimInvite, upgrade, removeAccount, listInvites, revoke, gamesRouteAllowed };
+
+module.exports.newsletterRouteAllowed = url => /^\/api\/(?:me$|school-newsletters(?:\/|$)|teacher-access(?:\/|$)|logout$|webauthn(?:\/|$))/.test(String(url).split('?')[0]);
+
+// Only newly created invitees enter the free focused workspace. Existing app
+// entitlements and explicit upgrades are never downgraded by a school invite.
+module.exports.grantNewsletterIfNew = function(user, invitedAt) {
+  const data = read();
+  if (user.role === 'admin' || data.accounts[user.id] || !Number.isFinite(Date.parse(invitedAt)) || !Number.isFinite(Date.parse(user.createdAt)) || Date.parse(user.createdAt) < Date.parse(invitedAt)) return;
+  data.accounts[user.id] = { mode: 'newsletter', updatedAt: new Date().toISOString() };
+  writeJsonAtomic(file, data);
+};
