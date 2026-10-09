@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Your school week · Family newsletter</title>
+    <link rel="stylesheet" href="/family-newsletter.css?v=1" />
+  </head>
+  <body>
+    <div class="sky" aria-hidden="true"></div>
+    <main>
+      <header>
+        <span class="brand"
+          >School & home <span aria-hidden="true">✦</span></span
+        >
+        <div class="language" role="group" aria-label="Language">
+          <button data-lang="en" aria-pressed="true">English</button
+          ><button data-lang="vi" aria-pressed="false">Tiếng Việt</button>
+        </div>
+      </header>
+      <div id="status" role="status">Opening your newsletter…</div>
+      <div id="content" hidden>
+        <section class="welcome">
+          <img
+            id="logo"
+            src="/newsletter-school-logo.png"
+            alt="Vinschool"
+            hidden
+          />
+          <p id="school" class="eyebrow"></p>
+          <p id="week" class="week"></p>
+          <h1 id="title"></h1>
+          <p id="intro"></p>
+          <div class="chips">
+            <span id="className"></span><span id="date"></span>
+          </div>
+          <p id="demo" hidden></p>
+        </section>
+        <nav id="subjects" aria-label="Subjects"></nav>
+        <div class="reading-heading">
+          <h2 id="readingTitle"></h2>
+          <button id="expand" class="text-button"></button>
+        </div>
+        <div id="entries"></div>
+        <footer>
+          <div>
+            <h2 id="footerTitle"></h2>
+            <p id="footerText"></p>
+          </div>
+          <button id="download"></button>
+          <p id="downloadStatus" role="status"></p>
+          <p id="updated" class="updated"></p>
+          <span class="signature">Shared with care · LessonScope</span>
+        </footer>
+      </div>
+    </main>
+    <script src="/family-newsletter.js?v=1" defer></script>
+  </body>
+</html>

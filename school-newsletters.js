@@ -44,6 +44,9 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
   function view(w, user) {
     const m = member(w, user);
     const copy = structuredClone(w);
+    if (m.role !== "coordinator")
+      for (const r of copy.reports)
+        if (r.publication) delete r.publication.token;
     copy.myRole = m.role;
     copy.mySubjects = m.subjects;
     if (m.role !== "coordinator") delete copy.invites;
@@ -103,6 +106,24 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
   }
   return {
     read,
+    published(id, reportId, token) {
+      if (!/^[a-f0-9]{64}$/.test(token || ""))
+        fail("This newsletter link is unavailable.", 404);
+      let w;
+      try {
+        w = read(id);
+      } catch {
+        fail("This newsletter link is unavailable.", 404);
+      }
+      const p = w.reports.find((r) => r.id === reportId)?.publication;
+      if (
+        !p ||
+        !p.token ||
+        !crypto.timingSafeEqual(Buffer.from(p.token), Buffer.from(token))
+      )
+        fail("This newsletter link is unavailable.", 404);
+      return structuredClone(p.content);
+    },
     member,
     coordinator,
     editable,
@@ -145,7 +166,12 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
           },
         ],
         invites: [],
-        settings: { example: "", minimum: 0, vietnameseMinimum: 0, design: demo ? "vinschool" : "standard" },
+        settings: {
+          example: "",
+          minimum: 0,
+          vietnameseMinimum: 0,
+          design: demo ? "vinschool" : "standard",
+        },
         reports: demo ? [require("./school-newsletter-demo").demoReport()] : [],
       };
       return view(save(w), user);
@@ -154,8 +180,8 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
       const existing = all().find(
         (w) => w.demo && w.members.some((m) => m.userId === user.id),
       );
-      if(existing && !existing.settings.design){
-        existing.settings.design="vinschool";
+      if (existing && !existing.settings.design) {
+        existing.settings.design = "vinschool";
         existing.revision++;
         save(existing);
       }
@@ -226,14 +252,20 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
           coordinator(w, user);
           if (!w.demo) fail("Only the demo can be reset.");
           w.reports = [require("./school-newsletter-demo").demoReport()];
-          w.settings = { example: "", minimum: 0, vietnameseMinimum: 0, design: "vinschool" };
+          w.settings = {
+            example: "",
+            minimum: 0,
+            vietnameseMinimum: 0,
+            design: "vinschool",
+          };
           delete w.preview;
           return;
         }
         if (action === "design") {
           coordinator(w, user);
-          if (!["standard", "vinschool"].includes(input.design)) fail("Unknown report design.");
-          w.settings.design=input.design;
+          if (!["standard", "vinschool"].includes(input.design))
+            fail("Unknown report design.");
+          w.settings.design = input.design;
           return;
         }
         if (action === "settings") {
@@ -303,6 +335,36 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
           return;
         }
         const r = report(w, input.reportId);
+        if (action === "publish" || action === "revoke-publication") {
+          coordinator(w, user);
+          if (action === "revoke-publication") {
+            delete r.publication;
+            return;
+          }
+          if (!r.approved)
+            fail("Approve this newsletter before publishing it.");
+          r.publication = {
+            token:
+              r.publication?.token || crypto.randomBytes(32).toString("hex"),
+            content: {
+              school: w.name,
+              demo: !!w.demo,
+              className: r.className,
+              week: r.week,
+              sendDate: r.sendDate,
+              design: w.settings.design || (w.demo ? "vinschool" : "standard"),
+              publishedAt: new Date().toISOString(),
+              entries: r.approved.entries.map(
+                ({ subject, english, vietnamese }) => ({
+                  subject,
+                  english,
+                  vietnamese,
+                }),
+              ),
+            },
+          };
+          return;
+        }
         if (action === "restore") {
           coordinator(w, user);
           const previous = r.history[input.index];

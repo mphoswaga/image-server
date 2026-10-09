@@ -142,7 +142,8 @@ function render() {
   $("coordinator").hidden = !coord;
   $("newReport").hidden = !coord || workspace.demo;
   $("invite").closest("details").hidden = !!workspace.demo;
-  $("settings").elements.design.value = workspace.settings.design || (workspace.demo ? "vinschool" : "standard");
+  $("settings").elements.design.value =
+    workspace.settings.design || (workspace.demo ? "vinschool" : "standard");
   $("settings").elements.example.value = workspace.settings.example;
   $("settings").elements.minimum.value = workspace.settings.minimum;
   $("settings").elements.vietnameseMinimum.value =
@@ -175,7 +176,7 @@ function render() {
     return;
   }
   $("editor").innerHTML =
-    `<div class="report-heading"><div><p class="eyebrow">${esc(r.week)}</p><h2>${esc(r.className)}</h2><p class="hint">${r.sendDate ? "Sending " + esc(r.sendDate) : "Your weekly update for families"}</p></div><span class="pill">${r.approved ? "Approved for sharing" : r.entries.every((e) => e.submitted && e.reviewed) ? "Ready for approval" : r.entries.every((e) => e.submitted) ? "Awaiting translation & review" : "Draft"}</span></div><div class="workflow-progress"><span><b>${r.entries.filter((e) => e.submitted).length}/${r.entries.length}</b> contributions submitted</span><span><b>${r.entries.filter((e) => e.reviewed).length}/${r.entries.length}</b> translations reviewed</span></div><div class="report-preview-card"><div class="paper-symbol" aria-hidden="true">▤</div><div><h3>Your family newsletter</h3><p class="hint">${(workspace.settings.design || (workspace.demo ? "vinschool" : "standard")) === "vinschool" ? "Vinschool · Cambridge weekly report" : "LessonScope report"} · Preview the saved pages before sharing.</p><div class="actions"><button data-action="pdf-preview">Preview PDF</button>${coord&&workspace.settings.design!=="vinschool"?'<button data-action="school-design" class="secondary">Use Vinschool design</button>':''}<button data-action="teacher-preview" class="secondary">Teacher preview</button>${coord && !r.approved ? '<button data-action="approve" class="secondary">Approve newsletter</button>' : ""}${r.approved ? '<button data-action="print" class="secondary">Download approved PDF</button>' : ""}</div></div></div><div class="section-heading"><h3>Subject contributions</h3><p class="hint">${coord ? "Review each subject, then approve the finished report." : workspace.myRole === "translator" ? "Review the Vietnamese wording, then mark each translation reviewed." : "Open your subject, add your learning update and submit it for translation."}</p></div>` +
+    `<div class="report-heading"><div><p class="eyebrow">${esc(r.week)}</p><h2>${esc(r.className)}</h2><p class="hint">${r.sendDate ? "Sending " + esc(r.sendDate) : "Your weekly update for families"}</p></div><span class="pill">${r.approved ? "Approved for sharing" : r.entries.every((e) => e.submitted && e.reviewed) ? "Ready for approval" : r.entries.every((e) => e.submitted) ? "Awaiting translation & review" : "Draft"}</span></div><div class="workflow-progress"><span><b>${r.entries.filter((e) => e.submitted).length}/${r.entries.length}</b> contributions submitted</span><span><b>${r.entries.filter((e) => e.reviewed).length}/${r.entries.length}</b> translations reviewed</span></div><div class="report-preview-card"><div class="paper-symbol" aria-hidden="true">▤</div><div><h3>Your family newsletter</h3><p class="hint">${(workspace.settings.design || (workspace.demo ? "vinschool" : "standard")) === "vinschool" ? "Vinschool · Cambridge weekly report" : "LessonScope report"} · Preview the saved pages before sharing.</p><div class="actions"><button data-action="pdf-preview">Preview PDF</button>${coord && workspace.settings.design !== "vinschool" ? '<button data-action="school-design" class="secondary">Use Vinschool design</button>' : ""}<button data-action="teacher-preview" class="secondary">Teacher preview</button>${coord && !r.approved ? '<button data-action="approve" class="secondary">Approve newsletter</button>' : ""}${r.approved ? '<button data-action="print" class="secondary">Download approved PDF</button>' : ""}</div></div></div><div class="section-heading"><h3>Subject contributions</h3><p class="hint">${coord ? "Review each subject, then approve the finished report." : workspace.myRole === "translator" ? "Review the Vietnamese wording, then mark each translation reviewed." : "Open your subject, add your learning update and submit it for translation."}</p></div>` +
     r.entries
       .map((e, i) => {
         const edit =
@@ -205,6 +206,24 @@ function render() {
             .join("") || "<p>No previous versions yet.</p>"
         }</details></details>`
       : "");
+  if (coord) {
+    const share = document.createElement("div");
+    share.className = "parent-sharing";
+    share.innerHTML = `<h3>Share with families</h3><p class="hint">A phone-friendly page, with no parent sign-in. Only published, approved content is shared.</p>${workspace.demo && !r.publication ? '<button data-action="test-parent">Prepare parent demo</button><p class="hint">Approve and publish your saved sample, then open its parent view or copy the link to your phone. Real newsletters are unchanged.</p>' : ""}${r.approved ? '<button data-action="publish-parent">' + (r.publication ? "Publish latest approved version" : "Publish parent newsletter") + "</button>" : '<p class="hint">Approve the newsletter to publish it.</p>'}${r.publication ? '<label>Parent reading link<input id="parentLink" readonly></label><div class="actions"><button data-action="copy-parent" class="secondary">Copy parent link</button><a id="openParent" class="button secondary" target="_blank" rel="noopener noreferrer">Open parent view</a><button data-action="revoke-parent" class="secondary">Revoke link</button></div><p class="hint">The link stays available until revoked. New edits stay private until you approve and publish again.</p>' : ""}`;
+    $("editor").append(share);
+    if (r.publication) {
+      const link =
+        location.origin +
+        "/family-newsletter.html#" +
+        workspace.id +
+        "/" +
+        r.id +
+        "/" +
+        r.publication.token;
+      $("parentLink").value = link;
+      $("openParent").href = link;
+    }
+  }
   const pending = drafts();
   dirty = false;
   document.querySelectorAll(".subject").forEach((card) => {
@@ -412,12 +431,54 @@ $("editor").onclick = (e) => {
         return;
       }
       const action = b.dataset.action;
+      if (action === "test-parent") {
+        if (!workspace.demo) return;
+        if (dirty) {
+          status("Save your sample edits before preparing the parent demo.");
+          return;
+        }
+        if (!current().approved) await change("approve");
+        await change("publish");
+        status(
+          "Parent demo ready. Open parent view below, or copy the link to test on your phone without signing in.",
+        );
+        $("openParent").focus();
+        return;
+      }
+      if (action === "publish-parent") {
+        if (dirty) {
+          status("Save and approve your edits before publishing.");
+          return;
+        }
+        await change("publish");
+        status("Published. Copy the parent link below.");
+        return;
+      }
+      if (action === "copy-parent") {
+        try {
+          await navigator.clipboard.writeText($("parentLink").value);
+          status("Parent link copied.");
+        } catch {
+          $("parentLink").select();
+          status("Select and copy the parent link.");
+        }
+        return;
+      }
+      if (action === "revoke-parent") {
+        if (
+          confirm(
+            "Close this parent link? Anyone with the link will lose access.",
+          )
+        )
+          await change("revoke-publication");
+        return;
+      }
       if (action === "teacher-preview") {
         openTeacherPreview();
         return;
       }
       if (action === "school-design") {
-        await change("design", {design:"vinschool"});
+        await change("design", { design: "vinschool" });
         await openPdfPreview();
         return;
       }

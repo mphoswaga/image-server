@@ -350,3 +350,52 @@ test("school design embeds logo and keeps long bilingual contributions through p
     await parser.destroy();
   }
 });
+
+test("parent publication is an approved snapshot, stays private until republished and can be revoked", (t) => {
+  const { store, owner } = setup(t);
+  let w = store.list(owner)[0];
+  w = store.view(store.read(w.id), owner);
+  const id = w.id,
+    rid = w.reports[0].id;
+  const change = (action, extra = {}) =>
+    (w = store.change(owner, id, w.revision, action, {
+      reportId: rid,
+      ...extra,
+    }));
+  assert.throws(() => change("publish"), /Approve/);
+  for (const subject of ["ICT", "Maths"]) {
+    change("english", { subject, text: "Approved English", submit: true });
+    change("vietnamese", {
+      subject,
+      text: "Tiếng Việt đã duyệt",
+      review: true,
+    });
+  }
+  change("approve");
+  change("publish");
+  const token = w.reports[0].publication.token;
+  let p = store.published(id, rid, token);
+  assert.equal(p.entries[0].english, "Approved English");
+  assert.equal(p.history, undefined);
+  assert.equal(p.members, undefined);
+  assert.equal(p.token, undefined);
+  assert.throws(() => store.published(id, rid, "0".repeat(64)), /unavailable/);
+  change("english", { subject: "ICT", text: "Private edit", submit: true });
+  assert.equal(
+    store.published(id, rid, token).entries[0].english,
+    "Approved English",
+  );
+  assert.throws(() => change("publish"), /Approve/);
+  change("vietnamese", { subject: "ICT", text: "Bản cập nhật", review: true });
+  change("approve");
+  change("publish");
+  assert.equal(w.reports[0].publication.token, token);
+  assert.equal(
+    store.published(id, rid, token).entries[0].english,
+    "Private edit",
+  );
+  change("revoke-publication");
+  assert.throws(() => store.published(id, rid, token), /unavailable/);
+  change("publish");
+  assert.notEqual(w.reports[0].publication.token, token);
+});

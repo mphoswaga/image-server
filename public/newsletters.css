@@ -692,11 +692,63 @@ summary:focus-visible {
     grid-template-columns: 1fr;
   }
 }
-.has-workspace .hero{display:none}
-.has-workspace main{padding-top:20px}
-.has-workspace #home{padding:12px 20px;margin-bottom:16px}
-.has-workspace #home .toolbar label{display:flex;align-items:center;gap:12px;max-width:580px;font-size:12px;white-space:nowrap}
-.has-workspace #home select{margin:0;min-width:0}
-.has-workspace #demoBar .toolbar label{display:flex;align-items:center;gap:12px;margin:6px 0;font-size:12px}
-.has-workspace #demoBar select{margin:0}
-@media(max-width:800px){.has-workspace #home .toolbar label{display:block;white-space:normal}.has-workspace #home select{margin-top:6px}.has-workspace #demoBar .toolbar label{display:block;width:100%}}
+.has-workspace .hero {
+  display: none;
+}
+.has-workspace main {
+  padding-top: 20px;
+}
+.has-workspace #home {
+  padding: 12px 20px;
+  margin-bottom: 16px;
+}
+.has-workspace #home .toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 580px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.has-workspace #home select {
+  margin: 0;
+  min-width: 0;
+}
+.has-workspace #demoBar .toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 6px 0;
+  font-size: 12px;
+}
+.has-workspace #demoBar select {
+  margin: 0;
+}
+@media (max-width: 800px) {
+  .has-workspace #home .toolbar label {
+    display: block;
+    white-space: normal;
+  }
+  .has-workspace #home select {
+    margin-top: 6px;
+  }
+  .has-workspace #demoBar .toolbar label {
+    display: block;
+    width: 100%;
+  }
+}
+.parent-sharing {
+  border-top: 1px solid #e2e7ef;
+  margin-top: 24px;
+  padding-top: 20px;
+}
+.parent-sharing h3 {
+  font-size: 16px;
+}
+.parent-sharing input {
+  font-size: 12px;
+  background: #f6f8fb;
+}
+.parent-sharing .actions {
+  margin-top: 12px;
+}

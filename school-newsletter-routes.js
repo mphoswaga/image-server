@@ -17,6 +17,47 @@ function register(
 ) {
   const store = newsStore;
   const root = "/api/school-newsletters";
+  // Capability-only public reader: no account or editable workspace data.
+  const publicRoot = "/api/parent-newsletters/:id/:reportId";
+  app.get([publicRoot, publicRoot + "/pdf"], async (req, res) => {
+    res.set({
+      "Cache-Control": "no-store",
+      "Referrer-Policy": "no-referrer",
+      "X-Robots-Tag": "noindex, nofollow",
+    });
+    try {
+      const p = store.published(
+        req.params.id,
+        req.params.reportId,
+        (req.headers.authorization || "").replace(/^Bearer /, ""),
+      );
+      if (req.path.endsWith("/pdf")) {
+        const bytes = await require("./school-newsletter-pdf").newsletterPdf(
+          { name: p.school, demo: p.demo, settings: { design: p.design } },
+          { ...p, approved: { entries: p.entries } },
+        );
+        res
+          .set({
+            "Content-Type": "application/pdf",
+            "Content-Disposition":
+              'attachment; filename="weekly-newsletter.pdf"',
+          })
+          .send(bytes);
+      } else res.json(p);
+    } catch (e) {
+      res
+        .status(404)
+        .json({
+          error:
+            "This newsletter link is unavailable. Please ask your school for the current link.",
+        });
+    }
+  });
+  app.get("/newsletter-school-logo.png", (_req, res) =>
+    res.sendFile(
+      require("path").join(__dirname, "assets/newsletters/vinschool.png"),
+    ),
+  );
   app.use(root, requireAuth, (req, res, next) => {
     res.set("Cache-Control", "no-store");
     if (req.user.role === "student")
