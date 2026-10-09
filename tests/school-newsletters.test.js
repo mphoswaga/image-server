@@ -317,3 +317,35 @@ test("downloadable PDF preserves Vietnamese, all subjects and demo label", async
     await parser.destroy();
   }
 });
+
+test("school design embeds logo and keeps long bilingual contributions through page breaks", async () => {
+  const { newsletterPdf } = require("../school-newsletter-pdf");
+  const { PDFParse } = require("pdf-parse");
+  const bytes = await newsletterPdf(
+    { name: "School", settings: { design: "vinschool" } },
+    {
+      className: "3B2",
+      week: "Week 8",
+      approved: null,
+      entries: [
+        {
+          subject: "ICT",
+          english: "Learn safely. ".repeat(350) + "FINAL ENGLISH",
+          vietnamese: "Tiếng Việt — cuối bài.",
+        },
+      ],
+    },
+  );
+  assert.match(bytes.toString("latin1"), /\/Subtype \/Image/);
+  const parser = new PDFParse({ data: bytes });
+  try {
+    const result = await parser.getText();
+    assert.match(result.text, /Cambridge Program/);
+    assert.match(result.text, /FINAL ENGLISH/);
+    assert.match(result.text, /cuối bài/);
+    assert.match(result.text, /DRAFT/);
+    assert.ok(result.pages.length > 1);
+  } finally {
+    await parser.destroy();
+  }
+});

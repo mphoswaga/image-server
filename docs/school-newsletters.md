@@ -38,3 +38,19 @@ The print layout is a new clean bilingual report; exact school PDF branding awai
 - **Try a sample demo** is available to signed-in staff, including newsletter-only members. Every person gets their own reusable demo workspace with fictional ICT, Maths and Science contributions. It cannot invite other people; it does not touch a real report.
 - The demo can simulate coordinator, ICT teacher and translator screens. Role switching is only a UI rehearsal inside the owner's demo, never a permission change. Reset demo restores the examples and settings. Generation deliberately uses fixed samples rather than live AI, as stated in the demo banner.
 - Demo PDF downloads remain labelled DEMO even after approval. Real unapproved PDFs remain labelled DRAFT.
+
+### School PDF design
+
+Under **Coordinator desk → Format and minimum length → PDF design**, select
+**Vinschool · Cambridge weekly report** and save. This uses the supplied school
+logo, navy/gold title, blue subject bands and Letter portrait page size. Longer
+English/Vietnamese contributions continue on additional pages with repeated
+school and subject headings. The LessonScope design remains the default.
+Both PDF actions now open the same server-rendered PDF; the downloaded bytes
+match the preview. Draft and demo labels are retained.
+
+The publishing overview shows class/week, submission/review progress and a PDF
+preview action. Subject rows expand to edit and retain their open state within
+the browser session. Assigned teachers' subjects open automatically. Coordinator
+settings are under **Manage workspace**; regeneration/history are under **Report
+tools and previous versions**. The teacher preview has English/Vietnamese options.

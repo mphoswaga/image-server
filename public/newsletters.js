@@ -1,4 +1,12 @@
 "use strict";
+const expandedSubjects = new Set();
+try {
+  for (const key of JSON.parse(
+    sessionStorage.getItem("newsletter.expanded") || "[]",
+  ))
+    expandedSubjects.add(key);
+} catch {}
+
 const $ = (id) => document.getElementById(id);
 const esc = (value) =>
   String(value ?? "").replace(
@@ -45,10 +53,10 @@ function remember(card) {
   dirty = true;
 }
 
-function clearSaved(subject, lang) {
+function clearSaved(subject, lang, savedText) {
   const d = drafts(),
     i = current().entries.findIndex((e) => e.subject === subject);
-  if (d[i]) {
+  if (d[i] && d[i][lang] === savedText) {
     delete d[i][lang];
     localStorage.setItem(draftKey(), JSON.stringify(d));
   }
@@ -115,7 +123,7 @@ async function change(action, extra = {}) {
   if (["apply-preview", "restore"].includes(action))
     localStorage.removeItem(draftKey());
   if (action === "english" || action === "vietnamese")
-    clearSaved(extra.subject, action);
+    clearSaved(extra.subject, action, extra.text);
   setWorkspace(w);
   status(
     dirty
@@ -124,6 +132,7 @@ async function change(action, extra = {}) {
   );
 }
 function render() {
+  document.body.classList.add("has-workspace");
   $("workspace").hidden = false;
   $("spaceName").textContent = workspace.name;
   $("role").textContent = workspace.myRole;
@@ -133,6 +142,7 @@ function render() {
   $("coordinator").hidden = !coord;
   $("newReport").hidden = !coord || workspace.demo;
   $("invite").closest("details").hidden = !!workspace.demo;
+  $("settings").elements.design.value = workspace.settings.design || "standard";
   $("settings").elements.example.value = workspace.settings.example;
   $("settings").elements.minimum.value = workspace.settings.minimum;
   $("settings").elements.vietnameseMinimum.value =
@@ -165,7 +175,7 @@ function render() {
     return;
   }
   $("editor").innerHTML =
-    `<p class="eyebrow">${esc(r.className)} · ${esc(r.week)}</p><h2>Build this week together</h2><p class="hint">${r.entries.filter((e) => e.submitted).length}/${r.entries.length} English submitted · ${r.entries.filter((e) => e.reviewed).length}/${r.entries.length} translations reviewed${r.approved ? " · Approved for sharing" : ""}</p><div class="actions"><button data-action="teacher-preview" class="secondary">Teacher preview</button><button data-action="pdf-preview">Preview PDF</button><button data-action="print" class="secondary">${r.approved ? "Print / Save approved PDF" : "Preview report / Save draft PDF"}</button>${coord ? '<button data-action="approve">Approve newsletter</button>' : ""}</div>` +
+    `<div class="report-heading"><div><p class="eyebrow">${esc(r.week)}</p><h2>${esc(r.className)}</h2><p class="hint">${r.sendDate ? "Sending " + esc(r.sendDate) : "Your weekly update for families"}</p></div><span class="pill">${r.approved ? "Approved for sharing" : r.entries.every((e) => e.submitted && e.reviewed) ? "Ready for approval" : r.entries.every((e) => e.submitted) ? "Awaiting translation & review" : "Draft"}</span></div><div class="workflow-progress"><span><b>${r.entries.filter((e) => e.submitted).length}/${r.entries.length}</b> contributions submitted</span><span><b>${r.entries.filter((e) => e.reviewed).length}/${r.entries.length}</b> translations reviewed</span></div><div class="report-preview-card"><div class="paper-symbol" aria-hidden="true">▤</div><div><h3>Your family newsletter</h3><p class="hint">${workspace.settings.design === "vinschool" ? "Vinschool · Cambridge weekly report" : "LessonScope report"} · Preview the saved pages before sharing.</p><div class="actions"><button data-action="pdf-preview">Preview PDF</button><button data-action="teacher-preview" class="secondary">Teacher preview</button>${coord && !r.approved ? '<button data-action="approve" class="secondary">Approve newsletter</button>' : ""}${r.approved ? '<button data-action="print" class="secondary">Download approved PDF</button>' : ""}</div></div></div><div class="section-heading"><h3>Subject contributions</h3><p class="hint">${coord ? "Review each subject, then approve the finished report." : workspace.myRole === "translator" ? "Review the Vietnamese wording, then mark each translation reviewed." : "Open your subject, add your learning update and submit it for translation."}</p></div>` +
     r.entries
       .map((e, i) => {
         const edit =
@@ -173,11 +183,19 @@ function render() {
           (workspace.myRole === "teacher" &&
             workspace.mySubjects.includes(e.subject));
         const translate = coord || workspace.myRole === "translator";
-        return `<article class="subject" data-index="${i}"><h3>${esc(e.subject)}<span class="status">${e.submitted ? "English submitted" : "Draft"} · ${e.reviewed ? "Vietnamese reviewed" : "Translation needs review"}</span></h3><div class="two"><div><label>English<textarea data-field="english" rows="10" maxlength="30000" ${edit ? "" : "readonly"}>${esc(e.english)}</textarea></label><p class="hint" data-count="english"></p>${edit ? `<div class="actions"><button data-action="save-en">Save draft</button><button data-action="submit" class="secondary">Submit English</button></div><details><summary>Reuse another class or week</summary><select data-reuse><option value="">Choose saved contribution</option>${workspace.reports.flatMap((other) => (other.id === r.id ? [] : other.entries.filter((x) => x.subject === e.subject && x.english).map((x) => `<option value="${other.id}">${esc(other.className)} · ${esc(other.week)}</option>`))).join("")}</select><p class="hint">Copies English into your draft for review. Other classes stay unchanged.</p></details><details><summary>Create from a lesson plan</summary><label>Upload lesson plan<input type="file" data-upload accept=".pdf,.docx,.pptx,.xlsx,.txt,.md"></label><button data-action="plans" class="secondary">Choose my saved LessonScope plan</button><select data-plans hidden><option value="">Choose a plan</option></select><label>Lesson content<textarea data-source rows="6" placeholder="Upload a plan, select a saved plan or paste the learning content here.">${workspace.demo ? esc(e.english) : ""}</textarea></label><button data-action="draft">Generate English draft</button><p class="hint">Review the generated draft before saving. Generation does not submit your contribution.</p></details>` : ""}</div><div><label>Vietnamese<textarea data-field="vietnamese" rows="10" maxlength="30000" ${translate ? "" : "readonly"}>${esc(e.vietnamese)}</textarea></label><p class="hint" data-count="vietnamese"></p>${translate ? '<div class="actions"><button data-action="save-vi">Save translation</button><button data-action="review" class="secondary">Mark reviewed</button><button data-action="translate" class="secondary">Draft translation</button></div><p class="hint">Translation uses saved English. Check the wording before marking reviewed.</p>' : ""}</div></div></article>`;
+        const owners = workspace.members
+          .filter(
+            (m) =>
+              m.role === "teacher" && (m.subjects || []).includes(e.subject),
+          )
+          .map((m) => m.name)
+          .join(", ");
+        const key = workspace.id + ":" + r.id + ":" + i;
+        return `<details class="subject" data-index="${i}" data-expansion="${esc(key)}" ${expandedSubjects.has(key) || (workspace.myRole === "teacher" && edit) ? "open" : ""}><summary><span class="subject-name">${esc(e.subject)}</span><span class="subject-owner">${esc(owners || "Subject team")}</span><span class="status">${e.submitted ? "English submitted" : "Draft"} · ${e.reviewed ? "Vietnamese reviewed" : "Translation needs review"}</span></summary><div class="subject-content"><div class="two"><div><label>English<textarea data-field="english" rows="10" maxlength="30000" ${edit ? "" : "readonly"}>${esc(e.english)}</textarea></label><p class="hint" data-count="english"></p>${edit ? `<div class="actions"><button data-action="save-en" class="secondary">Save draft</button><button data-action="submit">Submit English</button></div><details><summary>Reuse another class or week</summary><select data-reuse><option value="">Choose saved contribution</option>${workspace.reports.flatMap((other) => (other.id === r.id ? [] : other.entries.filter((x) => x.subject === e.subject && x.english).map((x) => `<option value="${other.id}">${esc(other.className)} · ${esc(other.week)}</option>`))).join("")}</select><p class="hint">Copies English into your draft for review. Other classes stay unchanged.</p></details><details><summary>Create from a lesson plan</summary><label>Upload lesson plan<input type="file" data-upload accept=".pdf,.docx,.pptx,.xlsx,.txt,.md"></label><button data-action="plans" class="secondary">Choose my saved LessonScope plan</button><select data-plans hidden><option value="">Choose a plan</option></select><label>Lesson content<textarea data-source rows="6" placeholder="Upload a plan, select a saved plan or paste the learning content here.">${workspace.demo ? esc(e.english) : ""}</textarea></label><button data-action="draft">Generate English draft</button><p class="hint">Review the generated draft before saving. Generation does not submit your contribution.</p></details>` : ""}</div><div><label>Vietnamese<textarea data-field="vietnamese" rows="10" maxlength="30000" ${translate ? "" : "readonly"}>${esc(e.vietnamese)}</textarea></label><p class="hint" data-count="vietnamese"></p>${translate ? '<div class="actions"><button data-action="save-vi" class="secondary">Save translation</button><button data-action="review">Mark reviewed</button><button data-action="translate" class="secondary">Draft translation</button></div><p class="hint">Translation uses saved English. Check the wording before marking reviewed.</p>' : ""}</div></div></div></details>`;
       })
       .join("") +
     (coord
-      ? `<details><summary>Regenerate subjects using your example</summary><p>Save your example under Format and minimum length first. A preview will appear before anything is replaced.</p>${r.entries.map((e) => `<label class="choice"><input type="checkbox" data-subject value="${esc(e.subject)}" checked>${esc(e.subject)}</label>`).join("")}<button data-action="reformat">Generate preview</button></details><details><summary>Previous versions (${r.history.length})</summary>${
+      ? `<details class="report-maintenance"><summary>Report tools and previous versions</summary><details><summary>Regenerate subjects using your example</summary><p>Save your example under Format and minimum length first. A preview will appear before anything is replaced.</p>${r.entries.map((e) => `<label class="choice"><input type="checkbox" data-subject value="${esc(e.subject)}" checked>${esc(e.subject)}</label>`).join("")}<button data-action="reformat">Generate preview</button></details><details><summary>Previous versions (${r.history.length})</summary>${
           r.history
             .map(
               (h, i) =>
@@ -185,11 +203,21 @@ function render() {
             )
             .reverse()
             .join("") || "<p>No previous versions yet.</p>"
-        }</details>`
+        }</details></details>`
       : "");
   const pending = drafts();
   dirty = false;
   document.querySelectorAll(".subject").forEach((card) => {
+    card.addEventListener("toggle", () => {
+      if (card.open) expandedSubjects.add(card.dataset.expansion);
+      else expandedSubjects.delete(card.dataset.expansion);
+      try {
+        sessionStorage.setItem(
+          "newsletter.expanded",
+          JSON.stringify([...expandedSubjects]),
+        );
+      } catch {}
+    });
     const d = pending[card.dataset.index];
     if (d) {
       for (const lang of ["english", "vietnamese"]) {
@@ -269,6 +297,7 @@ $("settings").onsubmit = (e) => {
   const f = e.target.elements;
   run(() =>
     change("settings", {
+      design: f.design.value,
       example: f.example.value,
       minimum: Number(f.minimum.value),
       vietnameseMinimum: Number(f.vietnameseMinimum.value),
@@ -392,7 +421,7 @@ $("editor").onclick = (e) => {
         return;
       }
       if (action === "print") {
-        printReport();
+        await openPdfPreview();
         return;
       }
       if (action === "approve") {
@@ -475,23 +504,6 @@ $("apply").onclick = () =>
     $("preview").close();
   });
 $("closePreview").onclick = () => $("preview").close();
-function printReport() {
-  if (dirty) {
-    status("Save your edits before printing.");
-    return;
-  }
-  const r = current(),
-    entries = r.approved?.entries || r.entries;
-  $("printReport").innerHTML =
-    `<div class="print-meta">${esc(workspace.name)} · LessonScope</div><h1>Weekly newsletter</h1><p>${esc(r.className)} · ${esc(r.week)}${r.sendDate ? " · " + esc(r.sendDate) : ""}</p>${workspace.demo ? "<p><strong>DEMO — fictional sample for staff training</strong></p>" : r.approved ? "" : "<p><strong>DRAFT — not approved for sharing</strong></p>"}` +
-    entries
-      .map(
-        (e) =>
-          `<div class="subject-print"><h2>${esc(e.subject)}</h2><h3>English</h3><p>${esc(e.english || "Contribution pending")}</p><h3>Tiếng Việt</h3><p lang="vi">${esc(e.vietnamese || "Translation pending")}</p></div>`,
-      )
-      .join("");
-  window.print();
-}
 window.addEventListener("beforeunload", (e) => {
   if (dirty) {
     e.preventDefault();
@@ -547,9 +559,10 @@ function renderTeacherPreview() {
     e = r.entries.find((e) => e.subject === $("previewSubject").value);
   if (!e) return;
   $("teacherPreviewBody").innerHTML =
-    `<p class="eyebrow">${esc(r.className)} · ${esc(r.week)}</p><h3>${esc(e.subject)} · Subject teacher view</h3><p class="hint">${e.submitted ? "Submitted for translation" : "Draft — ready for the teacher to complete"} · ${chars(e.english)} characters · minimum ${workspace.settings.minimum}</p><label>English contribution<textarea readonly rows="12">${esc(e.english)}</textarea></label><p class="hint">Teachers can write, generate a draft and submit their assigned subject. Translators review Vietnamese separately.</p>`;
+    `<p class="eyebrow">${esc(r.className)} · ${esc(r.week)}</p><h3>${esc(e.subject)} · Subject teacher view</h3><p class="hint">${e.submitted ? "Submitted for translation" : "Draft — ready for the teacher to complete"} · ${chars(e.english)} characters · minimum ${workspace.settings.minimum}</p><label>${$("previewLanguage").value === "vietnamese" ? "Vietnamese translation" : "English contribution"}<textarea readonly rows="12">${esc(e[$("previewLanguage").value])}</textarea></label><p class="hint">Teachers can write, generate a draft and submit their assigned subject. Translators review Vietnamese separately.</p>`;
 }
 $("previewSubject").onchange = renderTeacherPreview;
+$("previewLanguage").onchange = renderTeacherPreview;
 $("closeTeacherPreview").onclick = () => $("teacherPreview").close();
 $("teacherPdf").onclick = () => run(openPdfPreview);
 async function openPdfPreview() {

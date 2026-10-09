@@ -21,10 +21,14 @@ test("school newsletter drafts, minimum, bilingual review and print layout", asy
   await page.locator("[name=subjects]").first().fill("ICT\nMaths");
   await page.locator("#reportForm button").click();
   await expect(page.locator(".subject")).toHaveCount(2);
+  await page.getByText("Manage workspace", { exact: true }).click();
   await page.getByText("Format and minimum length", { exact: true }).click();
+  await page.locator("#settings [name=design]").selectOption("vinschool");
   await page.locator("#settings [name=minimum]").fill("20");
   await page.locator("#settings [name=vietnameseMinimum]").fill("10");
   await page.locator("#settings button").click();
+  await page.locator(".subject > summary").nth(0).click();
+  await page.locator(".subject > summary").nth(1).click();
   const en = page.locator("[data-field=english]");
   await en.nth(0).fill("Too short");
   await page.locator("[data-action=submit]").first().click();
@@ -40,7 +44,9 @@ test("school newsletter drafts, minimum, bilingual review and print layout", asy
   await expect(en.nth(1)).toHaveValue(
     "Next week we will compare and order larger whole numbers.",
   );
+  await expect(page.locator(".subject .status").first()).toContainText("English submitted");
   await page.locator("[data-action=submit]").nth(1).click();
+  await expect(page.locator(".subject .status").nth(1)).toContainText("English submitted");
   await page.reload();
   await expect(en.first()).toHaveValue(
     "Next week we will explore file sizes and compare examples.",
@@ -51,23 +57,20 @@ test("school newsletter drafts, minimum, bilingual review and print layout", asy
       .nth(i)
       .fill("Tuần tới, các em sẽ tìm hiểu và thực hành.");
     await page.locator("[data-action=review]").nth(i).click();
+    await expect(page.locator(".subject .status").nth(i)).toContainText("Vietnamese reviewed");
   }
   await page.locator("[data-action=approve]").click();
   await expect(page.locator("#editor")).toContainText("Approved for sharing");
-  await page.evaluate(() => (window.print = () => {}));
+  await expect(page.locator("#settings [name=design]")).toHaveValue(
+    "vinschool",
+  );
   await page.locator("[data-action=print]").click();
-  await expect(page.locator("#printReport")).toContainText("Grade 3B2");
-  await expect(page.locator("#printReport")).toContainText("Tiếng Việt");
-  await page.emulateMedia({ media: "print" });
-  await expect(page.locator("#printReport")).toBeVisible();
-  await expect(page.locator("main")).toBeHidden();
-  if (testInfo.project.use.browserName === "chromium")
-    await page.pdf({
-      path: testInfo.outputPath("approved-newsletter.pdf"),
-      format: "A4",
-      printBackground: true,
-    });
-  await page.emulateMedia({ media: "screen" });
+  await expect(page.locator("#pdfFrame")).toHaveAttribute("src", /^blob:/);
+  const pendingDownload = page.waitForEvent("download");
+  await page.locator("#pdfDownload").click();
+  const download = await pendingDownload;
+  await download.saveAs(testInfo.outputPath("approved-newsletter.pdf"));
+  await page.locator("#pdfPreview button").filter({ hasText: "Close" }).click();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
@@ -224,6 +227,9 @@ test("coordinator regenerates selected subjects through a preview", async ({
     "Vinschool · Cambridge newsletters",
   );
   await page
+    .getByText("Report tools and previous versions", { exact: true })
+    .click();
+  await page
     .getByText("Regenerate subjects using your example", { exact: true })
     .click();
   await page.locator("[data-subject][value=Maths]").uncheck();
@@ -329,4 +335,33 @@ test("demo bypasses old cached script and responds visibly while opening", async
   await expect(page.locator("#demoBar")).toBeVisible();
   await expect(page.locator("#openDemo")).toBeEnabled();
   await expect(page.locator("#role")).toHaveText("coordinator");
+});
+
+test("newsletter publishing overview stays compact and previews both languages", async ({
+  page,
+}, testInfo) => {
+  await signInDisposableTeacher(page, "-publishing");
+  await page.goto("/newsletters.html");
+  await page.locator("#openDemo").click();
+  await expect(page.locator(".subject")).toHaveCount(3);
+  await expect(page.locator(".subject[open]")).toHaveCount(0);
+  await expect(page.locator("#coordinator")).not.toHaveAttribute("open", "");
+  await expect(page.locator(".report-preview-card")).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("newsletter-workspace.png"),
+    fullPage: true,
+  });
+  await page.locator("[data-action=teacher-preview]").click();
+  await page.locator("#previewLanguage").selectOption("vietnamese");
+  await expect(page.locator("#teacherPreviewBody textarea")).toContainText(
+    "Tuần tới",
+  );
+  await page.locator("#closeTeacherPreview").click();
+  await page.locator(".subject > summary").first().click();
+  await expect(page.locator("[data-field=english]").first()).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
 });

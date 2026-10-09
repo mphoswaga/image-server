@@ -9,13 +9,13 @@
   <body>
     <header>
       <a href="/">LessonScope</a><span>School newsletters</span
-      ><span class="pill">Free for your school</span
+      ><span class="pill">School workspace</span
       ><button id="signout" class="secondary" hidden>Sign out</button>
     </header>
     <main>
       <section class="hero">
-        <p class="eyebrow">A little teamwork. A clearer week.</p>
-        <h1>Your school week, ready for home.</h1>
+        <p class="eyebrow">LESSONSCOPE · SCHOOL NEWSLETTERS</p>
+        <h1>Prepare this week’s newsletter.</h1>
         <p>
           Bring every subject together, review Vietnamese translations and share
           one polished newsletter.
@@ -32,9 +32,9 @@
       </section>
       <section id="home" hidden>
         <div class="toolbar">
-          <button id="openDemo">Try a sample demo</button>
+          <button id="openDemo" class="secondary">Try a sample demo</button>
           <label>School workspace<select id="spaces"></select></label
-          ><button id="reload">Reload saved work</button>
+          ><button id="reload" class="secondary">Refresh</button>
         </div>
         <details id="createWorkspaceDetails">
           <summary>Create a newsletter workspace</summary>
@@ -98,19 +98,26 @@ Maths
 Science
 Global Perspectives
 ICT
-Homework</textarea
-                  ></label
+Homework</textarea></label
                 ><button>Create newsletter</button>
               </form>
             </details>
           </aside>
           <div>
             <section id="editor"></section>
-            <section id="coordinator" hidden>
-              <h2>Coordinator desk</h2>
+            <details id="coordinator" hidden>
+              <summary>Manage workspace</summary>
               <details>
                 <summary>Format and minimum length</summary>
                 <form id="settings">
+                  <label
+                    >PDF design<select name="design">
+                      <option value="standard">LessonScope</option>
+                      <option value="vinschool">
+                        Vinschool · Cambridge weekly report
+                      </option>
+                    </select></label
+                  >
                   <label
                     >Example newsletter<textarea
                       name="example"
@@ -172,7 +179,7 @@ Homework</textarea
                 <summary>Team access</summary>
                 <div id="members"></div>
               </details>
-            </section>
+            </details>
           </div>
         </div>
       </div>
@@ -200,7 +207,15 @@ Homework</textarea
         Read-only view of saved content. This does not change anyone’s role or
         newsletter.
       </p>
-      <label>Subject<select id="previewSubject"></select></label>
+      <div class="two">
+        <label>Subject<select id="previewSubject"></select></label
+        ><label
+          >Language<select id="previewLanguage">
+            <option value="english">English</option>
+            <option value="vietnamese">Vietnamese</option>
+          </select></label
+        >
+      </div>
       <div id="teacherPreviewBody"></div>
       <button id="teacherPdf">Preview PDF</button>
     </dialog>

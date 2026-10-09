@@ -234,7 +234,11 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
               input[key] > 10000
             )
               fail("Character minimum must be between 0 and 10,000.");
+          const design = input.design ?? w.settings.design ?? "standard";
+          if (!["standard", "vinschool"].includes(design))
+            fail("Unknown report design.");
           w.settings = {
+            design,
             example: text(input.example, 10000),
             minimum: input.minimum,
             vietnameseMinimum: input.vietnameseMinimum,
