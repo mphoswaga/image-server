@@ -286,3 +286,11 @@ body.learner-round.royale-round main{grid-template-rows:auto auto auto minmax(0,
 .royale-round .royale-compact .eyebrow{margin:0 0 4px}
 .royale-round .learner-question .question-focus h1{font-size:clamp(23px,3vw,40px)}
 @media(max-width:600px){.royale-compact .royale-faceoff{gap:4px}.royale-compact .royale-faceoff article{min-width:85px;flex-wrap:wrap;justify-content:center}.royale-compact .royale-faceoff span{display:none}.royale-compact .royale-faceoff svg{width:25px;height:28px}.royale-compact .royale-faceoff h2{font-size:11px}}
+.battle-audio{font-size:12px;padding:4px 10px;min-height:28px;margin:0 0 5px}
+.royale-cinema .royale-vs{animation:rival-breathe 1.4s ease-in-out infinite}
+.royale-round[data-battle-score=urgent] .rabbit-timer{box-shadow:0 0 24px #f4ad5877;animation:rival-breathe .8s ease-in-out infinite}
+.royale-round[data-battle-score=matchup] .royale-faceoff article{animation:rival-arrival .6s ease-out both}
+.royale-round[data-battle-score=reveal] .royale-winner{background:radial-gradient(ellipse at top,#70512f,#15243c 75%)}
+@keyframes rival-breathe{50%{transform:scale(1.035)}}
+@keyframes rival-arrival{from{opacity:0;transform:translateY(18px) scale(.95)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.royale-cinema .royale-vs,.royale-round[data-battle-score=urgent] .rabbit-timer,.royale-round[data-battle-score=matchup] .royale-faceoff article{animation:none}}

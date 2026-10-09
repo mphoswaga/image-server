@@ -24,6 +24,7 @@
   // Original pentatonic instrumental: soft zither-like plucks and a breathy flute.
   // Gameplay uses synthesized music; the finale uses the teacher-supplied track.
   const melody=[74,0,77,79,81,0,79,77,74,0,72,69,72,0,74,0,77,79,84,0,81,79,77,0,74,72,69,0,72,74,0,0];
+  let battleMusicPhase='', battleMusicStep=0;
   let musicBus, finaleMusic, finaleSession='';
   function winnerMusic(){
     if(!finaleMusic){finaleMusic=new Audio('/assets/colonyquest/music/toys-are-us-blue-deer-studio.mp3');finaleMusic.preload='none';finaleMusic.dataset.moonquestFinale='true';document.body.append(finaleMusic);}
@@ -33,15 +34,17 @@
   function resumeMusic(){
     if(!musicEnabled||document.hidden)return;
     if(view==='live'&&state?.phase==='ended'){winnerMusic();return;}
-    musicNote();musicTimer=setInterval(musicNote,850);
+    clearTimeout(musicTimer);
+    const playNext=()=>{musicNote();if(musicEnabled&&!document.hidden&&!(view==='live'&&state?.phase==='ended'))musicTimer=setTimeout(playNext,state?.royale?MoonBattleScore.tracks[MoonBattleScore.phase(state,Date.now()+clockOffset)].beat:850);};
+    playNext();
   }
   function syncFinaleMusic(){
     if(state.phase==='ended'){
       if(finaleSession!==sessionId){stopMusic();finaleSession=sessionId;if(finaleMusic)finaleMusic.currentTime=0;winnerMusic();}
-    }else{finaleMusic?.pause();finaleSession='';}
+    }else{const returning=!!finaleSession;finaleMusic?.pause();finaleSession='';if(returning)resumeMusic();}
   }
   const musicVoices=new Set();
-  function stopMusic(){finaleMusic?.pause();clearInterval(musicTimer);for(const voice of musicVoices){try{voice.stop();}catch{}}musicVoices.clear();}
+  function stopMusic(){finaleMusic?.pause();clearTimeout(musicTimer);for(const voice of musicVoices){try{voice.stop();}catch{}}musicVoices.clear();}
   function instrument(note,flute=false){
     const now=audio.currentTime, frequency=440*Math.pow(2,(note-69)/12), duration=flute?1.8:2.6;
     const envelope=audio.createGain();envelope.connect(musicBus);
@@ -53,11 +56,28 @@
       musicVoices.add(oscillator);oscillator.onended=()=>{musicVoices.delete(oscillator);oscillator.disconnect();gain.disconnect();if(!--remaining)envelope.disconnect();};oscillator.start(now);oscillator.stop(now+duration);
     });
   }
+  function battleDrum(accent){
+    const t=audio.currentTime,o=audio.createOscillator(),g=audio.createGain();
+    o.type='sine';o.frequency.setValueAtTime(accent?115:180,t);o.frequency.exponentialRampToValueAtTime(42,t+.17);
+    g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(accent?.25:.09,t+.008);g.gain.exponentialRampToValueAtTime(.0001,t+.22);
+    o.connect(g);g.connect(musicBus);musicVoices.add(o);o.onended=()=>{musicVoices.delete(o);o.disconnect();g.disconnect();};o.start(t);o.stop(t+.24);
+  }
   function musicNote(){
     if(!musicEnabled||document.hidden||(view==='live'&&state?.phase==='ended'))return;
     try{audio ||= new (window.AudioContext||window.webkitAudioContext)();audio.resume();
       if(!musicBus){musicBus=audio.createGain();musicBus.connect(audio.destination);}
       musicBus.gain.setTargetAtTime(Number(document.getElementById('music-level').value)/100*.5,audio.currentTime,.05);
+      if(view==='live'&&state?.royale){
+        const phase=MoonBattleScore.phase(state,Date.now()+clockOffset),track=MoonBattleScore.tracks[phase];
+        if(phase!==battleMusicPhase){battleMusicPhase=phase;battleMusicStep=0;}
+        document.body.dataset.battleScore=phase;
+        const step=battleMusicStep++;
+        const note=track.notes[step%track.notes.length];
+        if(note)instrument(note,!track.drums);
+        if(step%2===0)instrument(track.bass[Math.floor(step/2)%track.bass.length]);
+        if(track.drums)battleDrum(step%4===0);
+        return;
+      }
       const step=musicStep++%melody.length;if(melody[step])instrument(melody[step],true);
       if(step%2===0)instrument([50,57,62,57,53,60,65,60][Math.floor(step/2)%8]);
     }catch{}
@@ -431,6 +451,7 @@
   }
   let watchedPlayer='';
   function royalePanel(s){
+    const audioButton=`<button class="battle-audio small" data-action="battle-audio" aria-pressed="${musicEnabled}">${musicEnabled?'♫ Battle music on':'♫ Enable battle music'}</button>`;
     const r=s.royale,active=r.players.filter(p=>p.lives>0&&!p.absent);
     if(!active.some(p=>p.id===watchedPlayer))watchedPlayer=active[0]?.id;
     const focus=r.eliminated&&!(s.phase==='reveal'&&r.matchups.some(m=>m.players.some(p=>p.id===r.me?.id)))?watchedPlayer:r.me?.id;
@@ -438,9 +459,9 @@
     const finalists=r.players.filter(p=>!p.absent).map((p,i,all)=>({...p,rank:all.findIndex(x=>x.lives===p.lives&&x.correct===p.correct&&x.responseTime===p.responseTime)+1}));
     const rabbit=p=>duelRabbit(['bow','scarf','star','blossom','explorer'][[...p.id].reduce((n,c)=>n+c.charCodeAt(0),0)%5],0);
     const cards=matches.map(m=>`<div class="royale-faceoff">${m.players.map((p,i)=>`${i?'<strong class="royale-vs">VS</strong>':''}<article class="${m.winners?.includes(p.id)?'royale-winner':''}"><h2>${esc(p.name)}</h2>${rabbit(p)}<p class="royale-hearts ${p.lostLife?'heart-lost':''}">${'♥'.repeat(p.lives)}${'♡'.repeat(3-p.lives)}</p>${m.winners?`<strong>${m.winners.includes(p.id)?'DUEL WINNER!':p.lives===0?'Join the fans':p.lostLife?'One heart lost':'Your hearts are safe'}</strong>`:`<span>${p.answered?'Locked in ✓':'Ready to duel'}</span>`}</article>`).join('')}</div>`).join('');
-    if(s.phase==='ended')return `<section class="victory-screen"><h1>Festival champions!</h1><div class="royale-faceoff">${r.players.filter(p=>r.winners.includes(p.id)).map(p=>`<article class="royale-winner"><h2>${esc(p.name)}</h2>${rabbit(p)}<p>${p.lives} hearts · ${p.correct} correct</p></article>`).join('')}</div><h2>Top survivors</h2><div class="royale-faceoff">${finalists.filter(p=>p.rank<=3).map((p,i)=>`<article><strong>${['🥇','🥈','🥉'][p.rank-1]} ${esc(p.name)}</strong>${rabbit(p)}<p>${p.lives} hearts · ${p.correct} correct</p></article>`).join('')}</div></section>`;
+    if(s.phase==='ended')return `<section class="victory-screen">${audioButton}<h1>Festival champions!</h1><div class="royale-faceoff">${r.players.filter(p=>r.winners.includes(p.id)).map(p=>`<article class="royale-winner"><h2>${esc(p.name)}</h2>${rabbit(p)}<p>${p.lives} hearts · ${p.correct} correct</p></article>`).join('')}</div><h2>Top survivors</h2><div class="royale-faceoff">${finalists.filter(p=>p.rank<=3).map((p,i)=>`<article><strong>${['🥇','🥈','🥉'][p.rank-1]} ${esc(p.name)}</strong>${rabbit(p)}<p>${p.lives} hearts · ${p.correct} correct</p></article>`).join('')}</div></section>`;
     const advice=r.fanAdvice;
-    return `<section class="royale-panel ${['matchup','reveal'].includes(s.phase)?'royale-cinema':'royale-compact'}"><p class="eyebrow">BATTLE ROYALE · ${active.length} remaining${r.me?' · '+r.me.lives+' hearts':''}</p>${r.eliminated?`<h2>You are now a spectator</h2><label>Who do you think will win? Watch and support<select id="royale-watch">${active.map(p=>`<option value="${esc(p.id)}" ${p.id===watchedPlayer?'selected':''}>${esc(p.name)}</option>`).join('')}</select></label>`:''}${cards}${s.phase==='matchup'?'<h2>Meet your rival!</h2><p>Correct keeps your hearts. Speed wins the duel.</p>':''}${advice?.fans.length?`<details class="fan-strip"><summary>Your fans suggest an answer · ${advice.fans.length} supporter${advice.fans.length===1?'':'s'}</summary>${advice.fans.map(esc).join(', ')}</details>`:''}</section>`;
+    return `<section class="royale-panel ${['matchup','reveal'].includes(s.phase)?'royale-cinema':'royale-compact'}"><p class="eyebrow">BATTLE ROYALE · ${active.length} remaining${r.me?' · '+r.me.lives+' hearts':''}</p>${audioButton}${r.eliminated?`<h2>You are now a spectator</h2><label>Who do you think will win? Watch and support<select id="royale-watch">${active.map(p=>`<option value="${esc(p.id)}" ${p.id===watchedPlayer?'selected':''}>${esc(p.name)}</option>`).join('')}</select></label>`:''}${cards}${s.phase==='matchup'?'<h2>Meet your rival!</h2><p>Correct keeps your hearts. Speed wins the duel.</p>':''}${advice?.fans.length?`<details class="fan-strip"><summary>Your fans suggest an answer · ${advice.fans.length} supporter${advice.fans.length===1?'':'s'}</summary>${advice.fans.map(esc).join(', ')}</details>`:''}</section>`;
   }
   function bindRoyale(){
     const picker=document.getElementById('royale-watch');
@@ -579,6 +600,8 @@
     }catch{}
   }
   function updateTimer(){
+    if(state?.royale)document.body.dataset.battleScore=MoonBattleScore.phase(state,Date.now()+clockOffset);
+    else delete document.body.dataset.battleScore;
     const el=document.getElementById('timer');if(view!=='live'||!el||!state)return;
     const seconds=state.deadline?Math.max(0,Math.ceil((state.deadline-Date.now()-clockOffset)/1000)):null;
     const shown=state.automatic&&state.phase==='discuss'&&seconds!==null?seconds+5:seconds;
@@ -720,6 +743,7 @@
       else if(b.dataset.avatar){state=await api('/sessions/'+sessionId+'/avatar',{avatar:b.dataset.avatar});lastRender='';renderLive();}
       else if(action==='request-time'){state=await api('/sessions/'+sessionId+'/request-time',{round:state.round});lastRender='';renderLive();}
       else if(b.dataset.storyChoice){state=await api('/sessions/'+sessionId+'/story-vote',{checkpoint:state.story.id,choice:b.dataset.storyChoice});lastRender='';renderLive();}
+      else if(action==='battle-audio'){document.getElementById('music').click();renderLive();}
       else if(action==='enable-audio'){document.getElementById('sound').click();renderLive();}
       else if(action==='change-answer'){if(confirm('Are you sure you want to change your locked answer?')){changingAnswer=true;pendingChoices=[];renderLive();}}
       else if(action==='cancel-change'){changingAnswer=false;pendingChoices=[];renderLive();}

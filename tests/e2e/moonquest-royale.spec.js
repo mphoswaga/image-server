@@ -14,8 +14,10 @@ test('royale elimination becomes a persistent read-only spectator screen',async(
  const command=async action=>{const s=await fresh();const response=await page.request.post(base+'/command',{data:{action,seq:s.seq}});expect(response.ok(),await response.text()).toBeTruthy();};
  try{
  await learner.goto('/moonquest/join');await learner.evaluate(({id,token})=>sessionStorage.setItem('moonquest:'+id,token),{id:session.id,token:joins[0].token});await learner.goto('/moonquest?session='+session.id);
+ await learner.locator('[data-action=battle-audio]').click();
+ await expect(learner.locator('[data-action=battle-audio]')).toHaveAttribute('aria-pressed','true');
  for(let round=0;round<3;round++){
- await command('next');await expect.poll(async()=> (await fresh()).phase).toBe('choose');const s=await fresh();const q=game.questions.find(q=>q.id===s.question.id),d=game.diagrams.find(d=>d.id===q.diagramId);
+ await command('next');await expect(learner.locator('body')).toHaveAttribute('data-battle-score','matchup');await expect.poll(async()=> (await fresh()).phase).toBe('choose');const s=await fresh();const q=game.questions.find(q=>q.id===s.question.id),d=game.diagrams.find(d=>d.id===q.diagramId);
  for(let i=0;i<3;i++){const response=await page.request.post(base+'/answer',{headers:{Authorization:'Bearer '+joins[i].token},data:{round,phase:'choose',eventId:`e${round}-${i}`,regionId:i? q.accepted[0]:d.regions.find(r=>!q.accepted.includes(r.id)).id}});expect(response.ok(),await response.text()).toBeTruthy();}
  await command('advance');if((await fresh()).paused)await command('pause');
  }
@@ -32,6 +34,10 @@ test('royale elimination becomes a persistent read-only spectator screen',async(
  await expect(supported.locator('.fan-area')).toBeVisible({timeout:15000});
  await supported.locator('.fan-strip summary').click();
  await expect(supported.locator('.fan-strip')).toContainText('Practice learner 1');
+ await supported.locator('[data-action=battle-audio]').click();
+ await expect(supported.locator('body')).toHaveAttribute('data-battle-score','answering');
+ await supported.locator('[data-action=battle-audio]').click();
+ await expect(supported.locator('[data-action=battle-audio]')).toHaveAttribute('aria-pressed','false');
  await supported.screenshot({path:'/tmp/moonquest-fan-advice.png'});
  await command('end');await expect(learner.getByRole('heading',{name:'Festival champions'})).toBeVisible();await learner.screenshot({path:'/tmp/moonquest-royale.png'});
  }finally{await context.close();}

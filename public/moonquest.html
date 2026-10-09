@@ -10,7 +10,7 @@
 <body>
   <div class="sky" aria-hidden="true"><div class="moon"></div><div class="lantern l1"></div><div class="lantern l2"></div><div class="lantern l3"></div></div>
   <header><a href="/" class="brand">Lesson<span>Scope</span></a><span class="wordmark">☾ MOONQUEST <small id="version"></small></span><div class="tools"><button id="sound" aria-pressed="false">Sound off</button><button id="music" aria-pressed="false">Music off</button><button id="narration" aria-pressed="false">Narration off</button><button id="full">Full screen</button></div></header>
-  <details class="audio-settings"><summary>Audio levels</summary><label>Effects<input id="effects-level" type="range" min="0" max="100" value="60"></label><p class="music-caption">Moonlit garden · soft flute &amp; plucked strings</p><label>Music<input id="music-level" type="range" min="0" max="100" value="35"></label></details>
+  <details class="audio-settings"><summary>Audio levels</summary><label>Effects<input id="effects-level" type="range" min="0" max="100" value="60"></label><p class="music-caption">Moon Festival score · music follows the battle</p><label>Music<input id="music-level" type="range" min="0" max="100" value="35"></label></details>
   <main id="app"><p>Preparing your Moon Festival adventure…</p></main>
   <p id="notice" role="status" aria-live="polite"></p>
   <template id="mascot"><svg viewBox="0 0 240 260" role="img" aria-label="Jade rabbit carrying a glowing festival lantern">
@@ -30,5 +30,6 @@
   </svg></template>
   <script src="/moonquest-report.js"></script>
 <script src="/moonquest-story.js"></script>
+<script src="/moonquest-battle-score.js?v=1"></script>
 <script src="/moonquest.js" defer></script>
 </body></html>
