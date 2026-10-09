@@ -258,3 +258,31 @@ body[data-audience="board"] .team-setup{margin:8px auto;padding:18px}body[data-a
 .royale-panel{text-align:center}.royale-roster{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:18px}.royale-roster>span{padding:8px 12px;border-radius:20px;background:#344367}.royale-roster article{padding:24px;border:2px solid #ffdf85;border-radius:24px}.royale-rabbit{display:block;font-size:70px}.royale-watched{padding:24px}.royale-panel select{max-width:420px;margin:12px auto}
 .royale-rabbit{width:160px;margin:0 auto}.royale-rabbit svg{width:100%;height:160px}.royale-watched{background:linear-gradient(135deg,#344367,#1d2543);border-radius:24px;margin-top:18px}
 .spectator-diagram{display:block;width:min(100%,600px);max-height:55vh;object-fit:contain;margin:18px auto;border-radius:16px}
+
+/* Royale: the rivalry stays visible without crowding the question. */
+.royale-faceoff{display:flex;align-items:center;justify-content:center;gap:clamp(10px,3vw,40px);flex-wrap:wrap;text-align:center}
+.royale-faceoff article{flex:1;min-width:100px;max-width:300px;padding:12px;border-radius:24px;background:linear-gradient(145deg,#263456,#15243c)}
+.royale-faceoff svg{width:min(22vw,220px);height:220px}
+.royale-vs{font-size:clamp(24px,6vw,64px);color:#ffd884;text-shadow:0 0 20px #eaa83c}
+.royale-hearts{font-size:28px;color:#ffadb9;letter-spacing:5px}
+.royale-winner{outline:3px solid #ffe39b;box-shadow:0 0 35px #e8b65566;animation:royale-cheer 1.8s ease-in-out infinite}
+.royale-cinema{min-height:55vh;text-align:center;padding:24px}
+.royale-compact .royale-faceoff article{display:flex;align-items:center;gap:8px;max-width:400px;padding:4px 10px}
+.royale-compact .royale-faceoff svg{width:42px;height:48px}
+.royale-compact h2,.royale-compact p,.royale-compact span{font-size:14px;margin:3px}
+.royale-compact .royale-vs{font-size:22px}
+.fan-strip{font-size:13px;padding:6px;max-height:75px;overflow:auto}
+.fan-suggestion{animation:fan-glow 1.8s ease-in-out infinite;outline:2px solid #efc568}
+.fan-suggestion small{display:block;font-size:12px}
+[data-fan-answer][aria-pressed=true]{outline:3px solid #efc568;background:#285a58}
+@keyframes fan-glow{50%{box-shadow:0 0 15px #ffd66a99}}
+@keyframes royale-cheer{50%{transform:translateY(-7px)}}
+@media(prefers-reduced-motion:reduce){.fan-suggestion,.royale-winner{animation:none}}
+.diagram svg polygon.fan-area{stroke:#ffd66a;stroke-width:5;stroke-dasharray:10 5;fill:#ffd66a22;animation:fan-glow 1.8s ease-in-out infinite}
+@media(prefers-reduced-motion:reduce){.diagram svg polygon.fan-area{animation:none}}
+body.learner-round.royale-round main{grid-template-rows:auto auto auto minmax(0,1fr)}
+.royale-round .learner-question .lighting-meter{display:none}
+.royale-round .royale-compact{margin:0}
+.royale-round .royale-compact .eyebrow{margin:0 0 4px}
+.royale-round .learner-question .question-focus h1{font-size:clamp(23px,3vw,40px)}
+@media(max-width:600px){.royale-compact .royale-faceoff{gap:4px}.royale-compact .royale-faceoff article{min-width:85px;flex-wrap:wrap;justify-content:center}.royale-compact .royale-faceoff span{display:none}.royale-compact .royale-faceoff svg{width:25px;height:28px}.royale-compact .royale-faceoff h2{font-size:11px}}

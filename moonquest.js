@@ -239,7 +239,8 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     s.rounds.push({ question: copy(question), expected, answers: {}, events: [], startedAt: clock() });
     s.round++; if(s.duels)current(s).duelGroups=duels.pair(s,expected); s.phase = s.game.timing.automatic ? 'choose' : 'read';
     s.deadline = s.game.timing.automatic ? clock() + s.game.timing.choose * 1000 : null;
-    if(s.duels){s.phase='matchup';s.deadline=clock()+4000;}
+    if(s.royale)current(s).royaleGroups=royale.pair(expected);
+    if(s.duels||s.royale){s.phase='matchup';s.deadline=clock()+4000;}
     s.teachingPause = null;
   }
   function nextRound(s) {
@@ -387,6 +388,20 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     s.deadline += 10000;
     return saveSession(s);
   }
+  function support(id, studentId, body) {
+    const s=tick(session(id)),r=current(s);
+    const players=royale.standings(s,isCorrect),fan=players.find(p=>p.id===studentId);
+    if(!s.royale||!fan||fan.lives!==0||fan.absent)fail('Only eliminated spectators can send support.');
+    if(!r||s.paused||body.round!==s.round||!['matchup','choose'].includes(s.phase))fail('This support stage has closed.');
+    if(!players.some(p=>p.id===body.target&&p.lives>0&&!p.absent)||!r.expected.includes(body.target))fail('Choose a surviving player.');
+    const regionIds=body.regionIds||[];
+    const diagram=s.game.diagrams.find(d=>d.id===r.question.diagramId);
+    const required=r.question.answerMode==='all'?r.question.accepted.length:1;
+    if(!Array.isArray(regionIds)||regionIds.length>required||new Set(regionIds).size!==regionIds.length||regionIds.some(id=>!diagram.regions.some(a=>a.id===id)))fail('Choose valid answer areas.');
+    if(s.phase==='matchup'&&regionIds.length)fail('Wait for the question.');
+    r.fanVotes??={};r.fanVotes[studentId]={target:body.target,regionIds};
+    return saveSession(s);
+  }
   function answer(id, studentId, body) {
     const s = tick(session(id)); const r = current(s);
     if ((s.removedStudents || []).includes(studentId)) fail('Your teacher has removed you from this game.');
@@ -443,8 +458,10 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
     if(s.duels&&s.phase==='lobby'&&role!=='student') view.teamRoster=s.students.filter(st=>role==='teacher'||!(s.removedStudents||[]).includes(st.id)).map(st=>({name:st.name,team:s.duels.teams[st.id],joined:!!s.members[st.id],...(role==='teacher'?{id:st.id,removed:(s.removedStudents||[]).includes(st.id)}:{})}));
     if(s.royale){
       const players=royale.standings(s,isCorrect).map(p=>({...p,answered:!!r?.answers[p.id],...(revealed&&r?.answers[p.id]?{selection:r.answers[p.id].final??r.answers[p.id].first}: {})}));
+      const matchups=royale.matches(s,players,isCorrect);
+      const fanAdvice=royale.advice(s,studentId,clock());
       const me=players.find(p=>p.id===studentId);
-      view.royale={players,me,eliminated:me?.lives===0,winners:s.phase==='ended'&&s.rounds.some(r=>r.revealedAt)?players.filter(p=>!p.absent&&p.lives===Math.max(...players.filter(x=>!x.absent).map(x=>x.lives))&&(p.lives>0||r?.expected.includes(p.id))).map(p=>p.id):[]};
+      view.royale={players,me,matchups,fanAdvice,mySupport:r?.fanVotes?.[studentId]||null,eliminated:me?.lives===0,winners:s.phase==='ended'&&s.rounds.some(r=>r.revealedAt)?players.filter(p=>!p.absent&&(p.lives>0||r?.expected.includes(p.id))).filter((p,i,all)=>p.lives===all[0].lives&&p.correct===all[0].correct&&p.responseTime===all[0].responseTime).map(p=>p.id):[]};
     }
     view.duels=duels.snapshot(s,studentId,role,isCorrect);
     if(view.duels)view.duels.presentation=s.phase==='matchup'?'matchup':s.phase==='reveal'&&!s.paused?(s.deadline&&s.deadline-clock()<=3000?'sparks':'result'):null;
@@ -513,7 +530,7 @@ function createStore(dir = path.join(DATA_DIR, 'moonquest'), clock = Date.now) {
       }) })) };
     result.summary=summarize(result);return result;
   }
-  return { dir, read, list, saveDraft, deleteDraft, saveGame, createSession, session, saveSession, stats, command, join, joinPractice, answer, requestTime, avatar, vote, snapshot, review, saveSuggestion, report, saveReflection, saveAssessment,
+  return { dir, read, list, saveDraft, deleteDraft, saveGame, createSession, session, saveSession, stats, command, join, joinPractice, answer, support, requestTime, avatar, vote, snapshot, review, saveSuggestion, report, saveReflection, saveAssessment,
     findCode(code) { if (!/^[A-F0-9]{10}$/.test(code || '')) fail('Enter the ten-character MoonQuest code.'); return list('session').find(s => s.code === code); },
     sessions() { return fs.readdirSync(dir).filter(f => f.startsWith('session-')).map(f => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'))); } };
 }

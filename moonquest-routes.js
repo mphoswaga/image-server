@@ -255,6 +255,12 @@ function installMoonQuest(app, deps) {
     const {role,studentId}=audience(req);if(role!=='student')throw Error('Only learners can request time.');
     store.requestTime(req.params.id,studentId,req.body);res.json(store.snapshot(req.params.id,role,studentId));
   }));
+  app.post(base + '/sessions/:id/support', wrap((req, res) => {
+    const { role, studentId } = audience(req);
+    if(role!=='student')throw new Error('Only learners can send support.');
+    store.support(req.params.id,studentId,req.body);
+    res.json(store.snapshot(req.params.id,role,studentId));
+  }));
   app.post(base + '/sessions/:id/answer', wrap((req, res) => {
     const { role, studentId } = audience(req); if (role !== 'student') throw new Error('Only learners can answer.');
     store.answer(req.params.id, studentId, req.body); res.json(store.snapshot(req.params.id, role, studentId));
