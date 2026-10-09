@@ -32,6 +32,7 @@
       </section>
       <section id="home" hidden>
         <div class="toolbar">
+          <button id="openDemo">Try a sample demo</button>
           <label>School workspace<select id="spaces"></select></label
           ><button id="reload">Reload saved work</button>
         </div>
@@ -47,6 +48,25 @@
             ><button>Create workspace</button>
           </form>
         </details>
+      </section>
+      <section id="demoBar" hidden aria-label="Demo controls">
+        <strong>Demo · Fictional sample content</strong>
+        <p>
+          Try the roles below. Changes stay in your own demo; real newsletters
+          are untouched. Generation uses fixed sample text, not live AI.
+        </p>
+        <div class="toolbar">
+          <label
+            >Try a role<select id="demoRole">
+              <option value="coordinator">Coordinator</option>
+              <option value="teacher">ICT teacher</option>
+              <option value="translator">
+                Teaching assistant / translator
+              </option>
+            </select></label
+          ><button id="resetDemo" class="secondary">Reset demo</button
+          ><button id="exitDemo" class="secondary">Leave demo</button>
+        </div>
       </section>
       <div id="workspace" hidden>
         <div class="toolbar">
@@ -168,6 +188,51 @@ Homework</textarea
       ><button id="closePreview" class="secondary">
         Keep existing content
       </button>
+    </dialog>
+    <dialog id="teacherPreview" aria-labelledby="teacherPreviewTitle">
+      <div class="toolbar">
+        <h2 id="teacherPreviewTitle">Teacher preview</h2>
+        <button id="closeTeacherPreview" class="secondary">
+          Close teacher preview
+        </button>
+      </div>
+      <p class="hint">
+        Read-only view of saved content. This does not change anyone’s role or
+        newsletter.
+      </p>
+      <label>Subject<select id="previewSubject"></select></label>
+      <div id="teacherPreviewBody"></div>
+      <button id="teacherPdf">Preview PDF</button>
+    </dialog>
+    <dialog id="pdfPreview" aria-labelledby="pdfPreviewTitle">
+      <div class="toolbar">
+        <h2 id="pdfPreviewTitle">PDF preview</h2>
+        <button id="closePdfPreview" class="secondary">
+          Close PDF preview
+        </button>
+      </div>
+      <p id="pdfStatus" role="status"></p>
+      <div class="actions">
+        <a
+          id="pdfDownload"
+          class="button"
+          download="weekly-newsletter.pdf"
+          hidden
+          >Download PDF</a
+        ><a
+          id="pdfOpen"
+          class="button secondary"
+          target="_blank"
+          rel="noopener"
+          hidden
+          >Open PDF in a new tab</a
+        >
+      </div>
+      <iframe id="pdfFrame" title="Newsletter PDF preview" hidden></iframe>
+      <p class="hint">
+        If your browser cannot display the PDF here, use Open PDF in a new tab
+        or Download PDF.
+      </p>
     </dialog>
     <div id="printReport"></div>
     <script src="/newsletters.js" defer></script>

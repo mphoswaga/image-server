@@ -200,7 +200,9 @@ test("AI reformat API validates every subject, preserves source, and requires ex
       },
     }),
     requireAuth: (q, r, n) => {
-      q.user = owner;
+      q.user = q.headers["x-test-outsider"]
+        ? { ...owner, id: "outsider" }
+        : owner;
       n();
     },
     upload: { single: () => pass },
@@ -228,6 +230,20 @@ test("AI reformat API validates every subject, preserves source, and requires ex
     );
     return { status: r.status, body: await r.json() };
   };
+  const pdfEndpoint = `http://127.0.0.1:${server.address().port}/api/school-newsletters/${w.id}/reports/${reportId}/pdf`;
+  const privatePdf = await fetch(pdfEndpoint, {
+    headers: { "x-test-outsider": "1" },
+  });
+  assert.equal(privatePdf.status, 403);
+  const allowedPdf = await fetch(pdfEndpoint);
+  assert.equal(allowedPdf.status, 200);
+  assert.match(allowedPdf.headers.get("content-type"), /application\/pdf/);
+  assert.equal(
+    Buffer.from(await allowedPdf.arrayBuffer())
+      .subarray(0, 4)
+      .toString(),
+    "%PDF",
+  );
   const generated = await post();
   assert.equal(generated.status, 200);
   assert.equal(store.read(w.id).reports[0].entries[0].english, "Original ICT");
@@ -241,4 +257,63 @@ test("AI reformat API validates every subject, preserves source, and requires ex
     store.read(w.id).reports[0].entries[0].english,
     "Reformatted ICT",
   );
+});
+
+test("demos are private per teacher, resettable and cannot invite real staff", (t) => {
+  const { store, owner, w } = setup(t);
+  let demo = store.demo(owner);
+  const other = {
+    id: "another",
+    email: "another@school.test",
+    role: "teacher",
+  };
+  assert.equal(demo.demo, true);
+  assert.equal(demo.reports[0].entries.length, 3);
+  assert.equal(store.demo(owner).id, demo.id);
+  assert.notEqual(store.demo(other).id, demo.id);
+  assert.throws(() => store.view(store.read(demo.id), other), /access/);
+  assert.throws(
+    () =>
+      store.invite(owner, demo.id, demo.revision, {
+        email: other.email,
+        role: "translator",
+      }),
+    /cannot invite/,
+  );
+  const reportId = demo.reports[0].id;
+  demo = store.change(owner, demo.id, demo.revision, "english", {
+    reportId,
+    subject: "ICT",
+    text: "Demo edit",
+  });
+  assert.equal(store.read(w.id).reports[0].entries[0].english, "");
+  demo = store.change(owner, demo.id, demo.revision, "reset-demo", {});
+  assert.match(demo.reports[0].entries[0].english, /file types/);
+  assert.throws(
+    () => store.change(owner, w.id, w.revision, "reset-demo", {}),
+    /Only the demo/,
+  );
+});
+
+test("downloadable PDF preserves Vietnamese, all subjects and demo label", async () => {
+  const { newsletterPdf } = require("../school-newsletter-pdf");
+  const { demoReport } = require("../school-newsletter-demo");
+  const { PDFParse } = require("pdf-parse");
+  const bytes = await newsletterPdf(
+    { name: "Sample school", demo: true },
+    demoReport(),
+  );
+  assert.equal(bytes.subarray(0, 4).toString(), "%PDF");
+  const parser = new PDFParse({ data: bytes });
+  try {
+    const result = await parser.getText();
+    assert.match(result.text, /DEMO/);
+    assert.match(result.text, /Tiếng Việt/);
+    assert.match(result.text, /Maths/);
+    assert.match(result.text, /Science/);
+    assert.match(result.text, /các con sẽ/);
+    assert.ok(result.pages.length >= 2);
+  } finally {
+    await parser.destroy();
+  }
 });

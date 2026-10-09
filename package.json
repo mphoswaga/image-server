@@ -1,7 +1,7 @@
 {
   "name": "image-agent",
   "version": "1.0.0",
-  "description": "LessonCope \u2014 type a subject and topic, get a finished, illustrated PowerPoint.",
+  "description": "LessonCope — type a subject and topic, get a finished, illustrated PowerPoint.",
   "main": "image-server.js",
   "scripts": {
     "start": "node image-server.js",
@@ -46,6 +46,7 @@
     "multer": "^2.2.0",
     "openai": "^6.49.0",
     "pdf-parse": "^2.4.5",
+    "pdfkit": "^0.17.2",
     "phaser": "^3.90.0",
     "pizzip": "^3.2.0",
     "pptxgenjs": "^4.0.1",

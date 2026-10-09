@@ -61,7 +61,12 @@ test("school newsletter drafts, minimum, bilingual review and print layout", asy
   await page.emulateMedia({ media: "print" });
   await expect(page.locator("#printReport")).toBeVisible();
   await expect(page.locator("main")).toBeHidden();
-  if (testInfo.project.use.browserName === "chromium") await page.pdf({path:testInfo.outputPath("approved-newsletter.pdf"),format:"A4",printBackground:true});
+  if (testInfo.project.use.browserName === "chromium")
+    await page.pdf({
+      path: testInfo.outputPath("approved-newsletter.pdf"),
+      format: "A4",
+      printBackground: true,
+    });
   await page.emulateMedia({ media: "screen" });
   expect(
     await page.evaluate(
@@ -147,6 +152,9 @@ test("invited new teacher receives only assigned newsletter access and can uploa
       },
     );
     expect(forbidden.status()).toBe(403);
+    const ownDemo=await teacher.request.post('/api/school-newsletters/demo',{data:{}});
+    expect(ownDemo.ok()).toBeTruthy();expect((await ownDemo.json()).demo).toBe(true);
+    expect((await teacher.request.get('/api/rosters')).status()).toBe(403);
     await teacher.goto("/");
     await expect(teacher).toHaveURL(/newsletters.html/);
   } finally {
@@ -227,4 +235,62 @@ test("coordinator regenerates selected subjects through a preview", async ({
     path: testInfo.outputPath("newsletter-workspace.png"),
     fullPage: true,
   });
+});
+
+test("staff demo offers role rehearsal, teacher preview and actual PDF download", async ({
+  page,
+}, testInfo) => {
+  await signInDisposableTeacher(page, "-demo");
+  await page.goto("/newsletters.html");
+  await page.locator("#openDemo").click();
+  await expect(page.locator("#demoBar")).toBeVisible();
+  await expect(page.locator(".subject")).toHaveCount(3);
+  await page.locator("#demoRole").selectOption("teacher");
+  await expect(page.locator("#role")).toHaveText("teacher");
+  await expect(page.locator("[data-field=english]").first()).toBeEditable();
+  await expect(page.locator("[data-field=english]").nth(1)).not.toBeEditable();
+  await page
+    .locator("[data-field=english]")
+    .first()
+    .fill("Testing the sample teacher contribution.");
+  await page.locator("[data-action=save-en]").click();
+  await page.locator("[data-action=teacher-preview]").click();
+  await expect(page.locator("#teacherPreview")).toBeVisible();
+  await expect(page.locator("#teacherPreviewBody textarea")).toHaveValue(
+    "Testing the sample teacher contribution.",
+  );
+  await expect(page.locator("#teacherPreviewBody textarea")).not.toBeEditable();
+  await page.screenshot({path:testInfo.outputPath("teacher-preview.png")});
+  await page.locator("#teacherPdf").click();
+  await expect(page.locator("#pdfPreview")).toBeVisible();
+  await expect(page.locator("#pdfStatus")).toContainText("Demo PDF");
+  await expect(page.locator("#pdfFrame")).toHaveAttribute("src", /^blob:/);
+  const download = page.waitForEvent("download");
+  await page.locator("#pdfDownload").click();
+  const file = await download;
+  await file.saveAs(testInfo.outputPath("demo-newsletter.pdf"));
+  await page.locator("#closePdfPreview").click();
+  await page.locator("#closeTeacherPreview").click();
+  await page.locator("#demoRole").selectOption("translator");
+  await expect(page.locator("[data-field=english]").first()).not.toBeEditable();
+  await expect(page.locator("[data-field=vietnamese]").first()).toBeEditable();
+  page.once("dialog", (d) => d.accept());
+  await page.locator("#resetDemo").click();
+  await expect(page.locator("[data-field=english]").first()).toHaveValue(
+    /file types/,
+  );
+  await page.route("**/reports/*/pdf", (route) =>
+    route.fulfill({
+      status: 503,
+      json: { error: "Please try the preview again." },
+    }),
+  );
+  await page.locator("[data-action=pdf-preview]").click();
+  await expect(page.locator("#pdfStatus")).toHaveText(
+    "Please try the preview again.",
+  );
+  await page.locator("#closePdfPreview").click();
+  await page.unroute("**/reports/*/pdf");
+  await page.locator("#exitDemo").click();
+  await expect(page.locator("#demoBar")).toBeHidden();
 });

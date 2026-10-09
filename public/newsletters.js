@@ -18,6 +18,9 @@ let workspace,
   reportId,
   user,
   dirty = false;
+let demoRole = "coordinator",
+  pdfUrl = null,
+  pdfAbort = null;
 const root = "/api/school-newsletters";
 function draftKey() {
   return `newsletter.drafts.${user?.id}.${workspace?.id}.${reportId}`;
@@ -93,6 +96,10 @@ function safeLeave() {
 }
 function setWorkspace(w) {
   workspace = w;
+  if (w.demo) {
+    workspace.myRole = demoRole;
+    workspace.mySubjects = ["ICT"];
+  }
   dirty = false;
   localStorage.setItem("newsletter.workspace", w.id);
   if (!w.reports.some((r) => r.id === reportId)) reportId = w.reports[0]?.id;
@@ -120,9 +127,12 @@ function render() {
   $("workspace").hidden = false;
   $("spaceName").textContent = workspace.name;
   $("role").textContent = workspace.myRole;
+  $("demoBar").hidden = !workspace.demo;
+  $("demoRole").value = demoRole;
   const coord = workspace.myRole === "coordinator";
   $("coordinator").hidden = !coord;
-  $("newReport").hidden = !coord;
+  $("newReport").hidden = !coord || workspace.demo;
+  $("invite").closest("details").hidden = !!workspace.demo;
   $("settings").elements.example.value = workspace.settings.example;
   $("settings").elements.minimum.value = workspace.settings.minimum;
   $("settings").elements.vietnameseMinimum.value =
@@ -155,7 +165,7 @@ function render() {
     return;
   }
   $("editor").innerHTML =
-    `<p class="eyebrow">${esc(r.className)} · ${esc(r.week)}</p><h2>Build this week together</h2><p class="hint">${r.entries.filter((e) => e.submitted).length}/${r.entries.length} English submitted · ${r.entries.filter((e) => e.reviewed).length}/${r.entries.length} translations reviewed${r.approved ? " · Approved for sharing" : ""}</p><div class="actions"><button data-action="print" class="secondary">${r.approved ? "Print / Save approved PDF" : "Preview report / Save draft PDF"}</button>${coord ? '<button data-action="approve">Approve newsletter</button>' : ""}</div>` +
+    `<p class="eyebrow">${esc(r.className)} · ${esc(r.week)}</p><h2>Build this week together</h2><p class="hint">${r.entries.filter((e) => e.submitted).length}/${r.entries.length} English submitted · ${r.entries.filter((e) => e.reviewed).length}/${r.entries.length} translations reviewed${r.approved ? " · Approved for sharing" : ""}</p><div class="actions"><button data-action="teacher-preview" class="secondary">Teacher preview</button><button data-action="pdf-preview">Preview PDF</button><button data-action="print" class="secondary">${r.approved ? "Print / Save approved PDF" : "Preview report / Save draft PDF"}</button>${coord ? '<button data-action="approve">Approve newsletter</button>' : ""}</div>` +
     r.entries
       .map((e, i) => {
         const edit =
@@ -163,7 +173,7 @@ function render() {
           (workspace.myRole === "teacher" &&
             workspace.mySubjects.includes(e.subject));
         const translate = coord || workspace.myRole === "translator";
-        return `<article class="subject" data-index="${i}"><h3>${esc(e.subject)}<span class="status">${e.submitted ? "English submitted" : "Draft"} · ${e.reviewed ? "Vietnamese reviewed" : "Translation needs review"}</span></h3><div class="two"><div><label>English<textarea data-field="english" rows="10" maxlength="30000" ${edit ? "" : "readonly"}>${esc(e.english)}</textarea></label><p class="hint" data-count="english"></p>${edit ? `<div class="actions"><button data-action="save-en">Save draft</button><button data-action="submit" class="secondary">Submit English</button></div><details><summary>Reuse another class or week</summary><select data-reuse><option value="">Choose saved contribution</option>${workspace.reports.flatMap((other) => (other.id === r.id ? [] : other.entries.filter((x) => x.subject === e.subject && x.english).map((x) => `<option value="${other.id}">${esc(other.className)} · ${esc(other.week)}</option>`))).join("")}</select><p class="hint">Copies English into your draft for review. Other classes stay unchanged.</p></details><details><summary>Create from a lesson plan</summary><label>Upload lesson plan<input type="file" data-upload accept=".pdf,.docx,.pptx,.xlsx,.txt,.md"></label><button data-action="plans" class="secondary">Choose my saved LessonScope plan</button><select data-plans hidden><option value="">Choose a plan</option></select><label>Lesson content<textarea data-source rows="6" placeholder="Upload a plan, select a saved plan or paste the learning content here."></textarea></label><button data-action="draft">Generate English draft</button><p class="hint">Review the generated draft before saving. Generation does not submit your contribution.</p></details>` : ""}</div><div><label>Vietnamese<textarea data-field="vietnamese" rows="10" maxlength="30000" ${translate ? "" : "readonly"}>${esc(e.vietnamese)}</textarea></label><p class="hint" data-count="vietnamese"></p>${translate ? '<div class="actions"><button data-action="save-vi">Save translation</button><button data-action="review" class="secondary">Mark reviewed</button><button data-action="translate" class="secondary">Draft translation</button></div><p class="hint">Translation uses saved English. Check the wording before marking reviewed.</p>' : ""}</div></div></article>`;
+        return `<article class="subject" data-index="${i}"><h3>${esc(e.subject)}<span class="status">${e.submitted ? "English submitted" : "Draft"} · ${e.reviewed ? "Vietnamese reviewed" : "Translation needs review"}</span></h3><div class="two"><div><label>English<textarea data-field="english" rows="10" maxlength="30000" ${edit ? "" : "readonly"}>${esc(e.english)}</textarea></label><p class="hint" data-count="english"></p>${edit ? `<div class="actions"><button data-action="save-en">Save draft</button><button data-action="submit" class="secondary">Submit English</button></div><details><summary>Reuse another class or week</summary><select data-reuse><option value="">Choose saved contribution</option>${workspace.reports.flatMap((other) => (other.id === r.id ? [] : other.entries.filter((x) => x.subject === e.subject && x.english).map((x) => `<option value="${other.id}">${esc(other.className)} · ${esc(other.week)}</option>`))).join("")}</select><p class="hint">Copies English into your draft for review. Other classes stay unchanged.</p></details><details><summary>Create from a lesson plan</summary><label>Upload lesson plan<input type="file" data-upload accept=".pdf,.docx,.pptx,.xlsx,.txt,.md"></label><button data-action="plans" class="secondary">Choose my saved LessonScope plan</button><select data-plans hidden><option value="">Choose a plan</option></select><label>Lesson content<textarea data-source rows="6" placeholder="Upload a plan, select a saved plan or paste the learning content here.">${workspace.demo ? esc(e.english) : ""}</textarea></label><button data-action="draft">Generate English draft</button><p class="hint">Review the generated draft before saving. Generation does not submit your contribution.</p></details>` : ""}</div><div><label>Vietnamese<textarea data-field="vietnamese" rows="10" maxlength="30000" ${translate ? "" : "readonly"}>${esc(e.vietnamese)}</textarea></label><p class="hint" data-count="vietnamese"></p>${translate ? '<div class="actions"><button data-action="save-vi">Save translation</button><button data-action="review" class="secondary">Mark reviewed</button><button data-action="translate" class="secondary">Draft translation</button></div><p class="hint">Translation uses saved English. Check the wording before marking reviewed.</p>' : ""}</div></div></article>`;
       })
       .join("") +
     (coord
@@ -373,6 +383,14 @@ $("editor").onclick = (e) => {
         return;
       }
       const action = b.dataset.action;
+      if (action === "teacher-preview") {
+        openTeacherPreview();
+        return;
+      }
+      if (action === "pdf-preview") {
+        await openPdfPreview();
+        return;
+      }
       if (action === "print") {
         printReport();
         return;
@@ -465,7 +483,7 @@ function printReport() {
   const r = current(),
     entries = r.approved?.entries || r.entries;
   $("printReport").innerHTML =
-    `<div class="print-meta">${esc(workspace.name)} · LessonScope</div><h1>Weekly newsletter</h1><p>${esc(r.className)} · ${esc(r.week)}${r.sendDate ? " · " + esc(r.sendDate) : ""}</p>${r.approved ? "" : "<p><strong>DRAFT — not approved for sharing</strong></p>"}` +
+    `<div class="print-meta">${esc(workspace.name)} · LessonScope</div><h1>Weekly newsletter</h1><p>${esc(r.className)} · ${esc(r.week)}${r.sendDate ? " · " + esc(r.sendDate) : ""}</p>${workspace.demo ? "<p><strong>DEMO — fictional sample for staff training</strong></p>" : r.approved ? "" : "<p><strong>DRAFT — not approved for sharing</strong></p>"}` +
     entries
       .map(
         (e) =>
@@ -513,4 +531,129 @@ $("signout").onclick = () =>
     if (!safeLeave()) return;
     await fetch("/api/logout", { method: "POST" });
     location.href = "/";
+  });
+
+function openTeacherPreview() {
+  const r = current();
+  if (!r) return;
+  $("previewSubject").innerHTML = r.entries
+    .map((e) => `<option>${esc(e.subject)}</option>`)
+    .join("");
+  renderTeacherPreview();
+  $("teacherPreview").showModal();
+}
+function renderTeacherPreview() {
+  const r = current(),
+    e = r.entries.find((e) => e.subject === $("previewSubject").value);
+  if (!e) return;
+  $("teacherPreviewBody").innerHTML =
+    `<p class="eyebrow">${esc(r.className)} · ${esc(r.week)}</p><h3>${esc(e.subject)} · Subject teacher view</h3><p class="hint">${e.submitted ? "Submitted for translation" : "Draft — ready for the teacher to complete"} · ${chars(e.english)} characters · minimum ${workspace.settings.minimum}</p><label>English contribution<textarea readonly rows="12">${esc(e.english)}</textarea></label><p class="hint">Teachers can write, generate a draft and submit their assigned subject. Translators review Vietnamese separately.</p>`;
+}
+$("previewSubject").onchange = renderTeacherPreview;
+$("closeTeacherPreview").onclick = () => $("teacherPreview").close();
+$("teacherPdf").onclick = () => run(openPdfPreview);
+async function openPdfPreview() {
+  const r = current(),
+    w = workspace;
+  if (!r) return;
+  if (pdfAbort) pdfAbort.abort();
+  const controller = new AbortController();
+  pdfAbort = controller;
+  $("pdfPreview").showModal();
+  $("pdfStatus").textContent = "Building PDF from saved content…";
+  $("pdfFrame").hidden = true;
+  $("pdfDownload").hidden = true;
+  $("pdfOpen").hidden = true;
+  if (pdfUrl) {
+    URL.revokeObjectURL(pdfUrl);
+    pdfUrl = null;
+  }
+  try {
+    const res = await fetch(root + "/" + w.id + "/reports/" + r.id + "/pdf", {
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw Error(error.error || "Could not build the PDF.");
+    }
+    const blob = await res.blob();
+    if (!$("pdfPreview").open || pdfAbort !== controller) return;
+    pdfUrl = URL.createObjectURL(blob);
+    $("pdfFrame").src = pdfUrl;
+    $("pdfFrame").hidden = false;
+    for (const id of ["pdfDownload", "pdfOpen"]) {
+      $(id).href = pdfUrl;
+      $(id).hidden = false;
+    }
+    $("pdfStatus").textContent = w.demo
+      ? "Demo PDF · Fictional sample content."
+      : r.approved
+        ? "Approved newsletter · Ready to download."
+        : "Draft PDF · Saved content only; not approved for sharing.";
+  } catch (error) {
+    if (!controller.signal.aborted)
+      $("pdfStatus").textContent =
+        error.message ||
+        "Could not load the PDF. Close this preview and try again.";
+  }
+}
+$("closePdfPreview").onclick = () => $("pdfPreview").close();
+$("pdfPreview").addEventListener("close", () => {
+  if (pdfAbort) pdfAbort.abort();
+  pdfAbort = null;
+  $("pdfFrame").src = "about:blank";
+  if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+  pdfUrl = null;
+});
+$("openDemo").onclick = () =>
+  run(async () => {
+    if (!safeLeave()) return;
+    if (workspace && !workspace.demo)
+      sessionStorage.setItem("newsletter.returnWorkspace", workspace.id);
+    demoRole = "coordinator";
+    const w = await api("/demo", {});
+    await loadSpaces(w.id);
+    status("Demo ready. Try each role, then preview the PDF.");
+  });
+$("demoRole").onchange = () => {
+  if (!safeLeave()) {
+    $("demoRole").value = demoRole;
+    return;
+  }
+  demoRole = $("demoRole").value;
+  workspace.myRole = demoRole;
+  workspace.mySubjects = ["ICT"];
+  render();
+};
+$("resetDemo").onclick = () =>
+  run(async () => {
+    if (
+      !confirm(
+        "Reset your demo to the sample content? Real newsletters are unaffected.",
+      )
+    )
+      return;
+    localStorage.removeItem(draftKey());
+    await change("reset-demo");
+    status("Demo reset.");
+  });
+$("exitDemo").onclick = () =>
+  run(async () => {
+    if (!safeLeave()) return;
+    const list = await api("");
+    const id = sessionStorage.getItem("newsletter.returnWorkspace");
+    const target =
+      list.workspaces.find((w) => w.id === id) ||
+      list.workspaces.find((w) => !w.demo);
+    if (target) {
+      await loadSpaces(target.id);
+    } else {
+      $("workspace").hidden = true;
+      $("demoBar").hidden = true;
+      workspace = null;
+      reportId = null;
+      dirty = false;
+      localStorage.removeItem("newsletter.workspace");
+    }
+    status("You have left the demo.");
   });

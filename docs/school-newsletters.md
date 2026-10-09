@@ -30,3 +30,11 @@ New accounts created after their newsletter invitation receive newsletter-only a
 Unit/API tests cover membership, email-matched invites, role/subject restrictions, concurrent edits, counts, review invalidation, previews, restore, and malformed AI output. Browser tests cover desktop/mobile/Safari, upload, focused accounts, edit recovery, approval and printable layout. AI responses are deterministic test doubles; actual model quality and the production sign-in flow still require a release smoke test.
 
 The print layout is a new clean bilingual report; exact school PDF branding awaits a final parent PDF sample. No live Google Sheets synchronization or import of historical workbook newsletters is included. The supplied 3B2 workbook informed the class/week/subject workflow; it is not modified.
+
+## Teacher preview and demos
+
+- **Teacher preview** shows saved subject content read-only. It does not impersonate another account or change permissions.
+- **Preview PDF** generates an actual A4 PDF on the authenticated server, embeds it in a dialog, and offers the same bytes for download or opening separately. It uses bundled, OFL-licensed Noto Sans fonts for Vietnamese. Membership and the shared generation rate limit protect this endpoint.
+- **Try a sample demo** is available to signed-in staff, including newsletter-only members. Every person gets their own reusable demo workspace with fictional ICT, Maths and Science contributions. It cannot invite other people; it does not touch a real report.
+- The demo can simulate coordinator, ICT teacher and translator screens. Role switching is only a UI rehearsal inside the owner's demo, never a permission change. Reset demo restores the examples and settings. Generation deliberately uses fixed samples rather than live AI, as stated in the demo banner.
+- Demo PDF downloads remain labelled DEMO even after approval. Real unapproved PDFs remain labelled DRAFT.

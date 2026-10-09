@@ -114,13 +114,19 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
         fail("Teacher sign-in required.", 403);
       return all()
         .filter((w) => w.members.some((m) => m.userId === user.id))
-        .map((w) => ({ id: w.id, name: w.name, role: member(w, user).role }));
+        .map((w) => ({
+          id: w.id,
+          name: w.name,
+          role: member(w, user).role,
+          demo: !!w.demo,
+        }));
     },
-    create(user, input) {
+    create(user, input, demo = false) {
       if (
         !user ||
         user.role === "student" ||
-        require("./teacher-access").accessFor(user.id) === "newsletter"
+        (!demo &&
+          require("./teacher-access").accessFor(user.id) === "newsletter")
       )
         fail("Ask your coordinator for an invitation.", 403);
       const name = text(input.name, 100);
@@ -128,6 +134,7 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
       const w = {
         id: crypto.randomUUID(),
         name,
+        demo,
         revision: 0,
         members: [
           {
@@ -139,14 +146,26 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
         ],
         invites: [],
         settings: { example: "", minimum: 0, vietnameseMinimum: 0 },
-        reports: [],
+        reports: demo ? [require("./school-newsletter-demo").demoReport()] : [],
       };
       return view(save(w), user);
+    },
+    demo(user) {
+      const existing = all().find(
+        (w) => w.demo && w.members.some((m) => m.userId === user.id),
+      );
+      return existing
+        ? view(existing, user)
+        : this.create(user, { name: "Sample school · Demo" }, true);
     },
     invite(user, id, revision, input) {
       let invitation;
       const result = this.mutate(user, id, revision, (w) => {
         coordinator(w, user);
+        if (w.demo)
+          fail(
+            "Demo workspaces cannot invite colleagues. Each colleague can open their own demo.",
+          );
         const email = text(input.email, 254).toLowerCase();
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
           fail("Enter a valid email.");
@@ -198,6 +217,14 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
     },
     change(user, id, revision, action, input) {
       return this.mutate(user, id, revision, (w) => {
+        if (action === "reset-demo") {
+          coordinator(w, user);
+          if (!w.demo) fail("Only the demo can be reset.");
+          w.reports = [require("./school-newsletter-demo").demoReport()];
+          w.settings = { example: "", minimum: 0, vietnameseMinimum: 0 };
+          delete w.preview;
+          return;
+        }
         if (action === "settings") {
           coordinator(w, user);
           for (const key of ["minimum", "vietnameseMinimum"])

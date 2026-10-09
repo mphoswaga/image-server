@@ -246,7 +246,9 @@ dialog::backdrop {
   }
 }
 @media print {
-  :root { background: white; }
+  :root {
+    background: white;
+  }
   @page {
     size: A4;
     margin: 16mm;
@@ -294,4 +296,25 @@ dialog::backdrop {
 
 #editor > .eyebrow {
   color: #24776a;
+}
+#demoBar {
+  background: #fff3d9;
+  border: 1px solid #e7c58a;
+}
+#pdfPreview {
+  width: min(1100px, 96vw);
+  height: 92vh;
+}
+#pdfFrame {
+  width: 100%;
+  height: 64vh;
+  border: 1px solid #d9e6e2;
+  border-radius: 8px;
+}
+#teacherPreviewBody .eyebrow {
+  color: #24776a;
+}
+#pdfOpen {
+  background: #eaf2ef;
+  color: #215449;
 }

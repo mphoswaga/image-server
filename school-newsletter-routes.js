@@ -48,6 +48,10 @@ function register(
     root + "/accept",
     route((req) => store.accept(req.user, req.body.token)),
   );
+  app.post(
+    root + "/demo",
+    route((req) => store.demo(req.user)),
+  );
   app.get(
     root + "/saved-plans",
     route((req) => ({
@@ -70,6 +74,28 @@ function register(
   app.get(
     root + "/:id",
     route((req) => store.view(access(req), req.user)),
+  );
+  app.get(
+    root + "/:id/reports/:reportId/pdf",
+    generationLimiter,
+    async (req, res) => {
+      try {
+        const w = access(req),
+          report = store.report(w, req.params.reportId);
+        const bytes = await require("./school-newsletter-pdf").newsletterPdf(
+          w,
+          report,
+        );
+        res.set("Content-Type", "application/pdf");
+        res.set(
+          "Content-Disposition",
+          'inline; filename="weekly-newsletter.pdf"',
+        );
+        res.send(bytes);
+      } catch (e) {
+        res.status(e.status || 400).json({ error: e.message });
+      }
+    },
   );
   app.post(
     root + "/:id/invite",
@@ -143,6 +169,27 @@ function register(
           mode === "translate" ? entry.english : String(b.source || "").trim();
         if (!source || source.length > 60000)
           throw Error("Provide lesson content (up to 60,000 characters).");
+      }
+      if (w.demo) {
+        const sample = require("./school-newsletter-demo").demoReport();
+        if (mode === "reformat")
+          return store.preview(
+            req.user,
+            w.id,
+            w.revision,
+            r.id,
+            source.map((e) => ({
+              subject: e.subject,
+              english: "This week’s learning\n\n" + e.english,
+            })),
+          );
+        const entry =
+          sample.entries.find((e) => e.subject === b.subject) ||
+          sample.entries[0];
+        return {
+          text: mode === "translate" ? entry.vietnamese : entry.english,
+          demo: true,
+        };
       }
       declareAction(prices.assertKnown("lessonscope.school_newsletter"));
       const instructions =
