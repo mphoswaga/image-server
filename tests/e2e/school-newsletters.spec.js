@@ -152,9 +152,12 @@ test("invited new teacher receives only assigned newsletter access and can uploa
       },
     );
     expect(forbidden.status()).toBe(403);
-    const ownDemo=await teacher.request.post('/api/school-newsletters/demo',{data:{}});
-    expect(ownDemo.ok()).toBeTruthy();expect((await ownDemo.json()).demo).toBe(true);
-    expect((await teacher.request.get('/api/rosters')).status()).toBe(403);
+    const ownDemo = await teacher.request.post("/api/school-newsletters/demo", {
+      data: {},
+    });
+    expect(ownDemo.ok()).toBeTruthy();
+    expect((await ownDemo.json()).demo).toBe(true);
+    expect((await teacher.request.get("/api/rosters")).status()).toBe(403);
     await teacher.goto("/");
     await expect(teacher).toHaveURL(/newsletters.html/);
   } finally {
@@ -260,7 +263,7 @@ test("staff demo offers role rehearsal, teacher preview and actual PDF download"
     "Testing the sample teacher contribution.",
   );
   await expect(page.locator("#teacherPreviewBody textarea")).not.toBeEditable();
-  await page.screenshot({path:testInfo.outputPath("teacher-preview.png")});
+  await page.screenshot({ path: testInfo.outputPath("teacher-preview.png") });
   await page.locator("#teacherPdf").click();
   await expect(page.locator("#pdfPreview")).toBeVisible();
   await expect(page.locator("#pdfStatus")).toContainText("Demo PDF");
@@ -293,4 +296,37 @@ test("staff demo offers role rehearsal, teacher preview and actual PDF download"
   await page.unroute("**/reports/*/pdf");
   await page.locator("#exitDemo").click();
   await expect(page.locator("#demoBar")).toBeHidden();
+});
+
+test("demo bypasses old cached script and responds visibly while opening", async ({
+  page,
+}) => {
+  await signInDisposableTeacher(page, "-demo-cache");
+  let oldScriptRequested = false;
+  await page.route(/\/newsletters\.js$/, (route) => {
+    oldScriptRequested = true;
+    return route.fulfill({
+      contentType: "application/javascript",
+      body: "window.oldNewsletterScript=true;",
+    });
+  });
+  await page.goto("/newsletters.html");
+  await expect(page.locator("#home")).toBeVisible();
+  expect(oldScriptRequested).toBe(false);
+  const script = await page.request.get("/newsletters.js?v=demo2");
+  expect(script.headers()["cache-control"]).toContain("no-store");
+  expect(script.headers()["cloudflare-cdn-cache-control"]).toBe("no-store");
+  let release;
+  const gate = new Promise((resolve) => (release = resolve));
+  await page.route("**/api/school-newsletters/demo", async (route) => {
+    await gate;
+    await route.continue();
+  });
+  await page.locator("#openDemo").click();
+  await expect(page.locator("#openDemo")).toHaveText("Opening demo…");
+  await expect(page.locator("#openDemo")).toBeDisabled();
+  release();
+  await expect(page.locator("#demoBar")).toBeVisible();
+  await expect(page.locator("#openDemo")).toBeEnabled();
+  await expect(page.locator("#role")).toHaveText("coordinator");
 });

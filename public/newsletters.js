@@ -606,15 +606,30 @@ $("pdfPreview").addEventListener("close", () => {
   pdfUrl = null;
 });
 $("openDemo").onclick = () =>
-  run(async () => {
-    if (!safeLeave()) return;
-    if (workspace && !workspace.demo)
-      sessionStorage.setItem("newsletter.returnWorkspace", workspace.id);
-    demoRole = "coordinator";
-    const w = await api("/demo", {});
-    await loadSpaces(w.id);
-    status("Demo ready. Try each role, then preview the PDF.");
-  });
+  run(() =>
+    busy($("openDemo"), async () => {
+      if (!safeLeave()) return;
+      const button = $("openDemo");
+      button.textContent = "Opening demo…";
+      status("Opening your sample demo…");
+      try {
+        if (workspace && !workspace.demo)
+          sessionStorage.setItem("newsletter.returnWorkspace", workspace.id);
+        demoRole = "coordinator";
+        const w = await api("/demo", {});
+        // The create/open response already includes the full workspace. Avoid two
+        // extra requests before showing the demo, particularly on school networks.
+        if (![...$("spaces").options].some((o) => o.value === w.id))
+          $("spaces").add(new Option(w.name, w.id));
+        $("spaces").value = w.id;
+        setWorkspace(w);
+        status("Demo ready. Try each role, then preview the PDF.");
+        $("demoBar").scrollIntoView({ behavior: "smooth", block: "start" });
+      } finally {
+        button.textContent = "Try a sample demo";
+      }
+    }),
+  );
 $("demoRole").onchange = () => {
   if (!safeLeave()) {
     $("demoRole").value = demoRole;
