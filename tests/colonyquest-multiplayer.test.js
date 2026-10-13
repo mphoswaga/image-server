@@ -199,6 +199,29 @@ test('visual feedback exposes only the learner upgrade and retains their raid am
   assert.equal(m.snapshot(b.id).me.lastUpgrade, null);
   assert.equal(m.snapshot(a.id).events.length, 1);
   assert.equal(m.snapshot(a.id).events[0].text, 'Own raid');
-  assert.equal(m.snapshot(null, true).events.length, 4);
+  assert.equal(m.snapshot(null, true).events.length, 9);
   assert.equal(m.snapshot(a.id).question.correctIndex, undefined);
+});
+
+test('every rival is visible and raid ledger reconciles both food balances', () => {
+  const m=room(25), [a,b]=m.active();
+  a.colony.soldiers=4; b.colony.food=20;
+  const options=m.options(a).filter(o=>o.key==='raid');
+  assert.equal(options.length,24);
+  assert.equal(new Set(options.map(o=>o.target)).size,24);
+  assert.ok(options.every(o=>Number.isFinite(o.guards)&&Number.isFinite(o.wallLevel)));
+  for(const p of m.active()) m.answer(p.id,0,0,100);
+  m.tick(4000);
+  const before=[a.colony.food,b.colony.food];
+  m.upgrade(a.id,0,'raid',b.id,4100);
+  const event=m.snapshot(null,true).events.at(-1);
+  assert.equal(event.attackerName,a.name);
+  assert.equal(event.targetName,b.name);
+  assert.equal(event.attackerFoodChange,a.colony.food-before[0]);
+  assert.equal(event.targetFoodChange,b.colony.food-before[1]);
+  assert.equal(event.stolen,5);
+  const recovery=m.options(m.active()[2]).find(o=>o.target===b.id);
+  assert.equal(recovery.allowed,false);
+  assert.match(recovery.reason,/recovering/);
+  assert.ok(!m.snapshot(m.active()[2].id).events.some(e=>e.kind==='raid'));
 });

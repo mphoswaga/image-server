@@ -66,6 +66,10 @@
       this.workers = [];
       this.dryFade = 0;
       this.frameCount = 0;
+      this.lastPaint = -Infinity;
+      this.paintCost = 0;
+      this.renderScale = 1.5;
+      this.backgroundBuilds = 0;
       this.stopped = false;
       this.raf = requestAnimationFrame((t) => this.draw(t));
     }
@@ -159,6 +163,7 @@
       if (this.seen.size > 120) this.seen = new Set([...this.seen].slice(-60));
       this.state = state;
       this.receivedAt = this.clock;
+      this.needsPaint = true;
     }
     rooms(colony) {
       return window.ColonyQuestCore.colonyRooms(colony);
@@ -199,7 +204,7 @@
       );
       c.restore();
     }
-    background(w, h, surface) {
+    paintBackground(w, h, surface) {
       const c = this.ctx;
       c.fillStyle = '#49613c';
       c.fillRect(0, 0, w, h);
@@ -221,7 +226,7 @@
       c.fillRect(0, surface, w, h - surface);
       this.cover(art.soil, 0, surface, w, h - surface, 0.86);
       // Cached static decoration avoids painting hundreds of rocks on every animation frame.
-      const cacheKey = `${Math.round(w)}:${Math.round(h)}`;
+      const cacheKey = `${Math.round(w)}:${Math.round(h)}:${Math.round(surface)}`;
       if (this.cacheKey !== cacheKey) {
         this.cacheKey = cacheKey;
         this.soilLayer = document.createElement('canvas');
@@ -250,6 +255,20 @@
         s.stroke();
       }
       c.drawImage(this.soilLayer, 0, 0);
+    }
+    background(w, h, surface) {
+      const c = this.ctx;
+      const key = [w,h,surface,Math.round(this.dryFade*24),art.meadow.naturalWidth,art.dry.naturalWidth,art.soil.naturalWidth].join(':');
+      if (key !== this.backgroundKey) {
+        this.backgroundLayer ||= document.createElement('canvas');
+        this.backgroundLayer.width = Math.ceil(w);
+        this.backgroundLayer.height = Math.ceil(h);
+        this.ctx = this.backgroundLayer.getContext('2d');
+        try { this.paintBackground(w,h,surface); } finally { this.ctx = c; }
+        this.backgroundKey = key;
+        this.backgroundBuilds++;
+      }
+      c.drawImage(this.backgroundLayer,0,0,w,h);
       // Quiet drifting pollen and fireflies give depth without obscuring answers.
       for (let i = 0; i < 10; i++) {
         const x = (random(i + 13) * w + this.clock * 0.006) % w;
@@ -1410,15 +1429,20 @@
     draw(t) {
       if (this.stopped) return;
       this.raf = requestAnimationFrame((time) => this.draw(time));
-      const dt = clamp(t - this.last, 0, 60);
+      if (document.hidden) { this.last = t; return; }
+      // Keep game clocks time-based while capping decorative painting at 30fps.
+      const interval = this.reduced ? 100 : 1000 / 30;
+      if (t - this.lastPaint < interval - 1) return;
+      this.lastPaint = t;
+      const dt = clamp(t - this.last, 0, 100);
       this.last = t;
-      if (document.hidden) return;
+      const paintStarted = performance.now();
       const canvas = this.canvas,
         c = this.ctx,
         w = canvas.clientWidth,
         h = canvas.clientHeight;
       if (!w || !h) return;
-      const dpr = Math.min(devicePixelRatio || 1, 1.5);
+      const dpr = Math.min(devicePixelRatio || 1, this.renderScale);
       if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
         canvas.width = Math.round(w * dpr);
         canvas.height = Math.round(h * dpr);
@@ -1429,14 +1453,17 @@
         !['paused', 'ended', 'lobby'].includes(this.state.phase) &&
         !document.body.classList.contains('offline');
       if (running) this.clock += dt;
-      // Reduced motion retains feedback, with stationary workers and no weather sweeps.
-      if (this.reduced && ++this.frameCount % 6) return;
+      // Static states need a refresh for newly loaded assets, not continuous animation.
+      if (!running && !this.needsPaint && t - (this.lastStaticPaint || 0) < 500) return;
+      this.lastStaticPaint = t;
+      this.needsPaint = false;
+      this.frameCount++;
       const colony = this.state?.me?.colony || { workers: 1, territory: 1, food: 8, eggs: [] };
       const g = this.layout(w, h, colony);
       if (running)
         this.dryFade +=
           (Number(!!this.state?.world?.dryOccurred && !this.state?.world?.rainOccurred) - this.dryFade) *
-          0.03;
+          (1 - Math.exp(-dt / 550));
       this.background(w, h, this.overview ? h * 0.65 : g.surface);
       if (this.overview) {
         for (let i = 0; i < 10; i++)
@@ -1486,6 +1513,11 @@
       else this.canvas.dataset.story = '';
       this.effects = this.effects.filter((e) => this.clock - e.start < e.duration);
       if (!this.effects.length) this.canvas.dataset.action = '';
+      this.paintCost = this.paintCost * .9 + (performance.now() - paintStarted) * .1;
+      if (this.frameCount > 30 && this.paintCost > 18 && this.renderScale > 1) {
+        this.renderScale = 1;
+        this.canvas.dataset.renderQuality = 'balanced';
+      }
     }
   };
 })();

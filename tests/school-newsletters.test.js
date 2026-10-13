@@ -558,3 +558,21 @@ test("only coordinators request revisions and reminders; resubmission resolves f
   assert.equal(state.reports[0].entries[0].feedbackResolved,true);
   assert.equal(state.reports[0].entries[0].reminder,undefined);
 });
+
+test('older fictional demos gain missing materials without replacing teacher writing', t => {
+  const {store,owner}=setup(t);
+  let w=store.demo(owner);
+  w=store.mutate(owner,w.id,w.revision,raw=>{
+    const r=raw.reports[0];delete r.demoMaterialsVersion;
+    r.entries[0].english='My saved demo writing';
+    r.entries[0].links=[{label:'My resource',url:'https://example.com/kept'}];
+    r.entries[0].images=[];
+  });
+  w=store.demo(owner);
+  assert.equal(w.reports[0].entries[0].english,'My saved demo writing');
+  assert.equal(w.reports[0].entries[0].links[0].label,'My resource');
+  assert.equal(w.reports[0].entries[0].images.length,1);
+  assert.equal(w.reports[0].entries[0].reviewed,false);
+  const revision=w.revision;
+  assert.equal(store.demo(owner).revision,revision);
+});

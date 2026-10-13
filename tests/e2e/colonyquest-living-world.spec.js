@@ -405,3 +405,22 @@ test('automatic encounter layout leaves the colony visible and details optional'
   await expect(page.locator('.scene-details p')).toBeVisible();
   await page.screenshot({ path: `/tmp/colony-clear-scene-${info.project.name}.png` });
 });
+
+test('renderer reuses scenery and caps drawing without slowing its clock', async ({page}) => {
+  await world(page);
+  await page.waitForTimeout(500);
+  const result=await page.evaluate(()=>{
+    cancelAnimationFrame(scene.raf);
+    const start=scene.last+100, before=scene.frameCount;
+    scene.last=start; scene.lastPaint=start; scene.clock=0;
+    for(let i=1;i<=60;i++){ scene.draw(start+i*1000/60); cancelAnimationFrame(scene.raf); }
+    const builds=scene.backgroundBuilds;
+    scene.background(scene.canvas.clientWidth,scene.canvas.clientHeight,scene.layout(scene.canvas.clientWidth,scene.canvas.clientHeight,fixture.me.colony).surface);
+    scene.background(scene.canvas.clientWidth,scene.canvas.clientHeight,scene.layout(scene.canvas.clientWidth,scene.canvas.clientHeight,fixture.me.colony).surface);
+    return {frames:scene.frameCount-before,clock:scene.clock,builds,reused:scene.backgroundBuilds===builds};
+  });
+  expect(result.frames).toBeGreaterThanOrEqual(28);
+  expect(result.frames).toBeLessThanOrEqual(31);
+  expect(result.clock).toBeGreaterThan(950);
+  expect(result.reused).toBe(true);
+});

@@ -17,7 +17,10 @@ const LABELS = {
 // The server owns resources, question clocks and outcomes. Animation positions
 // never enter this state: thirty clients send two decisions each per round.
 class ColonyMatch {
-  constructor(game, { state, preview = false, rosterIds = [], storyEnabled = true, now = Date.now() } = {}) {
+  constructor(
+    game,
+    { state, preview = false, rosterIds = [], storyEnabled = true, now = Date.now() } = {},
+  ) {
     this.state = state || {
       version: 1,
       storyVersion: storyEnabled ? 1 : 0,
@@ -55,14 +58,20 @@ class ColonyMatch {
     return { ...this.state.world, teams: this.teams(), phase: 'question' };
   }
   event(text, extra = {}, now = Date.now()) {
-    this.state.events.push({ id: crypto.randomUUID(), text, at: now, ...extra });
+    this.state.events.push({
+      id: crypto.randomUUID(),
+      text,
+      at: now,
+      ...extra,
+    });
     this.state.events = this.state.events.slice(-80);
   }
   join(identity, now = Date.now()) {
     const s = this.state;
     let p = s.players.find((p) => p.studentId === identity.studentId);
     if (!p) {
-      if (s.phase !== 'lobby') throw Error('This round has started. Ask your teacher to open a new game.');
+      if (s.phase !== 'lobby')
+        throw Error('This round has started. Ask your teacher to open a new game.');
       if (s.players.length >= 80) throw Error('This room is full.');
       const id = crypto.randomUUID();
       p = {
@@ -77,7 +86,11 @@ class ColonyMatch {
         upgrades: [],
         protectedUntilRound: -1,
         colony: core.createTeam(
-          { id, name: identity.name, colorIndex: s.players.length % core.TEAM_COLORS.length },
+          {
+            id,
+            name: identity.name,
+            colorIndex: s.players.length % core.TEAM_COLORS.length,
+          },
           s.players.length,
         ),
       };
@@ -124,7 +137,12 @@ class ColonyMatch {
     this.setPhase('answer', s.questionSeconds, now);
   }
   setPhase(phase, seconds, now) {
-    Object.assign(this.state, { phase, deadline: now + seconds * 1000, phaseStartedAt: now, updatedAt: now });
+    Object.assign(this.state, {
+      phase,
+      deadline: now + seconds * 1000,
+      phaseStartedAt: now,
+      updatedAt: now,
+    });
     this.lastTick = now;
   }
   pause(now = Date.now()) {
@@ -152,7 +170,12 @@ class ColonyMatch {
     if (this.state.phase === 'ended') return;
     // A manually ended open question still records submitted work; blanks stay blank.
     this.settleAnswers();
-    Object.assign(this.state, { phase: 'ended', deadline: null, endedAt: now, updatedAt: now });
+    Object.assign(this.state, {
+      phase: 'ended',
+      deadline: null,
+      endedAt: now,
+      updatedAt: now,
+    });
   }
   settleAnswers() {
     for (const p of this.state.players) {
@@ -167,7 +190,8 @@ class ColonyMatch {
     if (!Number.isInteger(round) || round !== s.round) throw Error('That question has finished.');
     const previous = p.answers.find((a) => a.round === round);
     if (previous) return previous; // retries must never earn a second upgrade
-    if (s.phase !== 'answer' || now >= s.deadline) throw Error('Answers are closed for this question.');
+    if (s.phase !== 'answer' || now >= s.deadline)
+      throw Error('Answers are closed for this question.');
     const q = s.questions[round];
     if (!Number.isInteger(choice) || choice < 0 || choice >= q.options.length)
       throw Error('Choose one of the answers.');
@@ -184,8 +208,15 @@ class ColonyMatch {
       return { allowed: false, reason: 'This colony is recovering.' };
     const lastRound = (p.lastRaids || {})[target.id];
     if (Number.isInteger(lastRound) && this.state.round - lastRound < 3)
-      return { allowed: false, reason: 'Choose a different rival for three rounds.' };
-    if (target.colony.food <= 3) return { allowed: false, reason: 'This colony needs its remaining food.' };
+      return {
+        allowed: false,
+        reason: 'Choose a different rival for three rounds.',
+      };
+    if (target.colony.food <= 3)
+      return {
+        allowed: false,
+        reason: 'This colony needs its remaining food.',
+      };
     return core.raidAvailability(p.colony, target.colony);
   }
   options(p) {
@@ -201,17 +232,21 @@ class ColonyMatch {
       .filter((t) => t.id !== p.id)
       .sort((a, b) => core.colonyStrength(b.colony) - core.colonyStrength(a.colony))) {
       const availability = this.raidAllowed(p, target);
-      if (availability.allowed)
-        rewards.push({
-          key: 'raid',
-          target: target.id,
-          label: `Raid ${target.name}`,
-          allowed: true,
-          reason: core.raidForecast(p.colony, target.colony).success
-            ? 'Guards have the advantage'
-            : 'Rival walls or guards are stronger',
-        });
-      if (rewards.length >= 10) break;
+      rewards.push({
+        key: 'raid',
+        target: target.id,
+        label: `Raid ${target.name}`,
+        rivalName: target.name,
+        food: target.colony.food,
+        guards: core.homeGuards(target.colony),
+        wallLevel: target.colony.defense + 1,
+        allowed: availability.allowed,
+        reason: !availability.allowed
+          ? availability.reason
+          : core.raidForecast(p.colony, target.colony).success
+            ? 'Your guards have the advantage'
+            : 'Risky: rival walls or guards are stronger',
+      });
     }
     return rewards;
   }
@@ -221,7 +256,8 @@ class ColonyMatch {
     if (!p || p.removed) throw Error('Join this room again.');
     if (round !== s.round) throw Error('That upgrade window has finished.');
     if (p.upgrades.some((u) => u.round === round)) return;
-    if (s.phase !== 'upgrade' || now >= s.deadline) throw Error('Upgrades are closed for this question.');
+    if (s.phase !== 'upgrade' || now >= s.deadline)
+      throw Error('Upgrades are closed for this question.');
     if (!p.answers.some((a) => a.round === round && a.correct))
       throw Error('Answer correctly to earn an upgrade.');
     if (key === 'raid') {
@@ -229,6 +265,7 @@ class ColonyMatch {
         allowed = this.raidAllowed(p, target);
       if (!allowed.allowed) throw Error(allowed.reason);
       const food = target.colony.food;
+      const attackerFood = p.colony.food;
       const outcome = core.resolveRaid(p.colony, target.colony, this.teams());
       const capped = Math.min(outcome.stolen, 5, Math.max(0, food - 3));
       target.colony.food += outcome.stolen - capped;
@@ -238,9 +275,15 @@ class ColonyMatch {
       this.event(
         outcome.success
           ? `${p.name} brought home ${capped} food from ${target.name}.`
-          : `${target.name}'s guards held the entrance.`,
+          : `${target.name} defended against ${p.name} and earned 5 food.`,
         {
           kind: 'raid',
+          attackerName: p.name,
+          targetName: target.name,
+          attackerFoodChange: p.colony.food - attackerFood,
+          targetFoodChange: target.colony.food - food,
+          attackerGuardsChanged: outcome.attackerLosses,
+          targetGuardsChanged: outcome.defenderLosses,
           attacker: p.id,
           target: target.id,
           round: s.round,
@@ -300,7 +343,7 @@ class ColonyMatch {
         const preferred = ['expansion', 'soldiers', 'defense', 'workers', 'supplies', 'food'];
         const options = this.options(p);
         const pick =
-          options.find((o) => o.key === 'raid') ||
+          options.find((o) => o.key === 'raid' && o.allowed) ||
           preferred.map((k) => options.find((o) => o.key === k && o.allowed)).find(Boolean);
         this.upgrade(p.id, s.round, pick.key, pick.target, Math.min(now, s.deadline - 1));
       }
@@ -353,7 +396,11 @@ class ColonyMatch {
       const world = this.world();
       if (!world.dryOccurred && progress >= schedule.dry) {
         core.applyDrySeason(world);
-        this.event('Dry season! Colonies use 12 stored food. Keep your workers fed.', { kind: 'dry' }, now);
+        this.event(
+          'Dry season! Colonies use 12 stored food. Keep your workers fed.',
+          { kind: 'dry' },
+          now,
+        );
       } else if (world.dryOccurred && !world.rainOccurred && progress >= schedule.rain) {
         core.applyRain(world);
         this.event('Rain returns! Strong walls protect your stores.', { kind: 'rain' }, now);
@@ -384,7 +431,10 @@ class ColonyMatch {
         color: p.colony.colorIndex,
         answered: p.answers.some((a) => a.round === s.round),
         ...(teacher || s.phase === 'ended'
-          ? { score: p.answers.filter((a) => a.correct).length, answeredCount: p.answers.length }
+          ? {
+              score: p.answers.filter((a) => a.correct).length,
+              answeredCount: p.answers.length,
+            }
           : {}),
       }))
       .sort((a, b) => b.strength - a.strength);
@@ -404,10 +454,13 @@ class ColonyMatch {
         phase === 'story' && s.story
           ? {
               ...s.story,
-              results: teacher ? s.story.results : s.story.results.filter((r) => r.playerId === playerId),
+              results: teacher
+                ? s.story.results
+                : s.story.results.filter((r) => r.playerId === playerId),
               elapsed: Math.max(
                 0,
-                s.story.duration - (s.phase === 'paused' ? s.remaining : Math.max(0, s.deadline - now)),
+                s.story.duration -
+                  (s.phase === 'paused' ? s.remaining : Math.max(0, s.deadline - now)),
               ),
               winners:
                 s.story.key === 'acorn'
@@ -418,7 +471,9 @@ class ColonyMatch {
                           item.score === ranked[0].score &&
                           item.team.correct === ranked[0].team.correct &&
                           (item.team.attempts ? item.team.correct / item.team.attempts : 0) ===
-                            (ranked[0].team.attempts ? ranked[0].team.correct / ranked[0].team.attempts : 0),
+                            (ranked[0].team.attempts
+                              ? ranked[0].team.correct / ranked[0].team.attempts
+                              : 0),
                       )
                       .map((item) => item.team.name)
                   : [],
@@ -435,18 +490,27 @@ class ColonyMatch {
       events: s.events
         .map((e) =>
           !teacher && e.kind === 'story'
-            ? { ...e, results: e.results.filter((r) => r.playerId === playerId) }
+            ? {
+                ...e,
+                results: e.results.filter((r) => r.playerId === playerId),
+              }
             : e,
         )
-        .filter((e) => e.kind !== 'raid' || teacher || e.attacker === playerId || e.target === playerId)
-        .slice(-4),
+        .filter(
+          (e) => e.kind !== 'raid' || teacher || e.attacker === playerId || e.target === playerId,
+        )
+        .slice(teacher ? -80 : -4),
       me: p
         ? {
             id: p.id,
             name: p.name,
             colony: p.colony,
             choice: p.answers.find((a) => a.round === s.round)?.choice ?? null,
-            ...(revealed ? { correct: !!p.answers.find((a) => a.round === s.round)?.correct } : {}),
+            ...(revealed
+              ? {
+                  correct: !!p.answers.find((a) => a.round === s.round)?.correct,
+                }
+              : {}),
             lastUpgrade: p.upgrades.at(-1) || null,
             upgraded: p.upgrades.some((u) => u.round === s.round),
             upgrades: s.phase === 'upgrade' ? this.options(p) : [],

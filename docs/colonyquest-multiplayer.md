@@ -156,3 +156,15 @@ rather than continuously walking in place. Multiplayer gathering and unloading
 have distinct poses, while raids show rally, approach, clash and return stages.
 These effects use existing outcomes and do not add clicks, scoring changes or
 network traffic. Reduced-motion mode avoids the walking dust and moving poses.
+
+### Rival selection, audio and activity feed
+
+Correct answers still earn exactly one upgrade or raid. The learner upgrade panel now lists every active rival, including temporarily unavailable targets, with food, home guards, wall level and an eligibility/advantage message. The server rechecks eligibility at submission; the displayed forecast is not a guarantee if another action changes the colony first. Computer players select only allowed raids.
+
+Multiplayer audio adds short original synthesized motifs for raid rally/clash/result, rain, birds, footsteps and other threats. The background playlist ducks during these cues. Sound defaults off, follows the music volume, and stops on mute, pause, hidden tab or disconnect. Replayed snapshots do not replay event sounds.
+
+The teacher control room shows the latest 80 events with raid/meadow filters. Raid records retain names, food changes for both sides and guards converted to workers. Meadow events expand to show per-colony outcomes. Learners continue to receive only their own raid events; detailed logs are not added over their colony. The existing saved session report data also retains these event records.
+
+### Rendering performance
+
+ColonyScene caches the painted meadow/soil background, invalidating it for viewport changes, newly loaded images and season transitions. Decorative rendering is capped at 30fps (10fps for reduced motion); animation elapsed time remains time-based. Static scenes paint at most twice a second unless new state arrives, and hidden tabs do not paint. Sustained render costs above 18ms automatically reduce canvas pixel density to 1. Food-only updates refresh rival statistics without rebuilding the selection buttons. These reduce client work; local transport benchmarks do not establish performance on a school's Wi-Fi or learner hardware.

@@ -4,14 +4,15 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>ColonyQuest · Colony rivals</title>
-    <link rel="stylesheet" href="/colonyquest-live.css?v=8" />
+    <link rel="stylesheet" href="/colonyquest-live.css?v=9" />
     <link rel="stylesheet" href="/learning-report.css" />
     <script defer src="/learning-report.js"></script>
     <script defer src="/colonyquest-core.js?v=18"></script>
     <script defer src="/colonyquest-live-story.js?v=4"></script>
-    <script defer src="/colonyquest-live-art.js?v=10"></script>
+    <script defer src="/colonyquest-live-art.js?v=11"></script>
     <script defer src="/colonyquest-music.js?v=1"></script>
-    <script defer src="/colonyquest-live.js?v=8"></script>
+    <script defer src="/colonyquest-event-audio.js?v=1"></script>
+    <script defer src="/colonyquest-live.js?v=9"></script>
   <link rel="stylesheet" href="/colonyquest-celebration.css?v=1">
 <script defer src="/colonyquest-celebration.js?v=1"></script>
 </head>
@@ -73,6 +74,11 @@
           <canvas id="boardCanvas" aria-label="Live colonies in the meadow"></canvas>
           <div id="leaderboard" class="leaderboard"></div>
         </div>
+        <details class="panel" id="activityPanel" open>
+          <summary>Colony activity · latest 80 events</summary>
+          <label>Show <select id="activityFilter"><option value="all">All events</option><option value="raid">Raids and defences</option><option value="story">Meadow events</option></select></label>
+          <div id="activityLog" class="activity-log"></div>
+        </details>
         <details class="panel">
           <summary>Class attendance</summary>
           <div id="attendance" class="attendance"></div>

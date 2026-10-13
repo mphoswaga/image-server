@@ -1174,3 +1174,13 @@ h2 {
 #learner .decision .event-ribbon {animation:colony-brief-message 3s forwards;}
 @keyframes colony-brief-message {0%,80%{opacity:1}100%{opacity:0;visibility:hidden}}
 @media(prefers-reduced-motion:reduce){#learner .decision .event-ribbon{animation:none;}}
+
+.raid-picker { grid-column:1/-1; padding:12px; border:1px solid #c9d5a1; border-radius:16px; background:#e6edce; }
+.raid-picker h3,.raid-picker p { margin:0 0 8px; }
+.raid-targets { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:8px; max-height:270px; overflow:auto; }
+.raid-targets .raid-target { display:flex; flex-direction:column; gap:6px; text-align:left; min-height:100px; }
+.raid-targets .raid-target:disabled { opacity:.7; }
+.raid-target span { font-size:.85rem; }
+.activity-log { max-height:460px; overflow:auto; margin-top:12px; }
+.activity-log article { padding:14px; border-bottom:1px solid #cbd5c2; }
+.activity-log p { margin:6px 0; }

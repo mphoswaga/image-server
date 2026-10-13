@@ -4,7 +4,14 @@
     esc = (value) =>
       String(value ?? '').replace(
         /[&<>"']/g,
-        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
+        (c) =>
+          ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;',
+          })[c],
       );
   const gameId = location.pathname.split('/').filter(Boolean).at(-1),
     host = location.pathname.startsWith('/colonyquest-live/');
@@ -25,7 +32,25 @@
   const soundtrack = new ColonyMusic((track) => {
     $('musicTrackLabel').textContent = `${track.title} — ${track.artist}`;
   });
+  const eventAudio = new ColonyEventAudio();
+  let duckTimer;
+  eventAudio.onCue = (duration) => {
+    clearTimeout(duckTimer);
+    soundtrack.setVolume(Number($('musicVolume').value) / 600);
+    duckTimer = setTimeout(
+      () => soundtrack.setVolume(Number($('musicVolume').value) / 200),
+      duration,
+    );
+  };
   function syncMusic() {
+    eventAudio.configure(
+      sound &&
+        !!state &&
+        !['paused', 'ended'].includes(state.phase) &&
+        !document.hidden &&
+        !document.body.classList.contains('offline'),
+      Number($('musicVolume').value) / 100,
+    );
     soundtrack.setActive(
       sound &&
         !!state &&
@@ -33,7 +58,11 @@
         !document.body.classList.contains('offline'),
     );
   }
-  $('musicVolume').oninput = () => soundtrack.setVolume(Number($('musicVolume').value) / 200);
+  $('musicVolume').oninput = () => {
+    soundtrack.setVolume(Number($('musicVolume').value) / 200);
+    syncMusic();
+  };
+  document.addEventListener('visibilitychange', syncMusic);
   $('colonyCanvas').addEventListener('colony-action', (event) => {
     actionCue = { text: event.detail, until: scene.clock + 4800 };
   });
@@ -129,6 +158,38 @@
     }
   }
   setInterval(clock, 200);
+  function renderActivity(s) {
+    const filter = $('activityFilter').value;
+    const signature = JSON.stringify([
+      s.id,
+      filter,
+      s.events,
+      s.players.map((p) => [p.id, p.name]),
+    ]);
+    if ($('activityLog').dataset.signature === signature) return;
+    $('activityLog').dataset.signature = signature;
+    const names = new Map(s.players.map((p) => [p.id, p.name]));
+    const events = (s.events || [])
+      .filter(
+        (e) => filter === 'all' || (filter === 'raid' ? e.kind === 'raid' : e.kind !== 'raid'),
+      )
+      .slice()
+      .reverse();
+    const signed = (n) => `${n > 0 ? '+' : ''}${n}`;
+    $('activityLog').innerHTML =
+      events
+        .map((e) => {
+          const result =
+            e.kind === 'raid'
+              ? `<p>${esc(e.attackerName || names.get(e.attacker) || 'Attacker')} → ${esc(e.targetName || names.get(e.target) || 'Defender')} · <strong>${e.success ? 'Raid succeeded' : 'Raid defended'}</strong></p><p>Raider: ${signed(e.attackerFoodChange ?? (e.success ? e.stolen : 0))} food · Defender: ${signed(e.targetFoodChange ?? (e.success ? -e.stolen : 5))} food</p>${e.attackerGuardsChanged != null ? `<small>Guards returned to worker roles: raider ${e.attackerGuardsChanged}, defender ${e.targetGuardsChanged}</small>` : ''}`
+              : `<p>${esc(e.text)}</p>${e.results?.length ? `<details><summary>Effects on ${e.results.length} colonies</summary>${e.results.map((r) => `<p><strong>${esc(names.get(r.playerId) || 'Colony')}</strong>: ${esc(r.message)}${r.pointsLost ? ` · ${r.pointsLost} points lost` : ''}</p>`).join('')}</details>` : ''}`;
+          return `<article><small>${esc(new Date(e.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }))}${Number.isInteger(e.round) ? ` · Question ${e.round + 1}` : ''}</small>${result}</article>`;
+        })
+        .join('') || '<p>No events in this view yet.</p>';
+  }
+  $('activityFilter').onchange = () => {
+    if (state) renderActivity(state);
+  };
   function setState(next) {
     const prior = state;
     state = next;
@@ -136,9 +197,14 @@
     scene?.update(next);
     syncMusic();
     clock();
+    eventAudio.update(next, prior, host);
     if (next.phase === 'ended') {
       window.ColonyCelebration?.multiplayer(next);
-      if (prior?.phase !== 'ended') { chime(660); setTimeout(() => chime(880), 180); setTimeout(() => chime(1100), 360); }
+      if (prior?.phase !== 'ended') {
+        chime(660);
+        setTimeout(() => chime(880), 180);
+        setTimeout(() => chime(1100), 360);
+      }
     }
     if (host) return;
     if (prior?.phase === 'answer' && next.phase === 'upgrade') chime(next.me?.correct ? 880 : 330);
@@ -152,7 +218,12 @@
       document.body.classList.contains('offline')
     )
       return;
-    pending = { ...message, matchId: state.id, round: state.round, commandId: crypto.randomUUID() };
+    pending = {
+      ...message,
+      matchId: state.id,
+      round: state.round,
+      commandId: crypto.randomUUID(),
+    };
     socket.send(JSON.stringify(pending));
     renderKey = '';
     renderLearner();
@@ -164,7 +235,8 @@
     const disconnected = document.body.classList.contains('offline');
     $('myName').textContent = p.name;
     $('chapter').textContent = season(s);
-    $('rank').textContent = `#${s.players.findIndex((x) => x.id === p.id) + 1} of ${s.players.length}`;
+    $('rank').textContent =
+      `#${s.players.findIndex((x) => x.id === p.id) + 1} of ${s.players.length}`;
     const c = p.colony;
     const resources = [
       ['🌾', c.food, 'Food'],
@@ -181,9 +253,21 @@
     if ($('resources').innerHTML !== resources) $('resources').innerHTML = resources;
     const world = s.world || {};
     const goal = !world.dryOccurred
-      ? { title: 'Store food for drought', value: c.food, target: 12, unit: 'food', icon: '🌾' }
+      ? {
+          title: 'Store food for drought',
+          value: c.food,
+          target: 12,
+          unit: 'food',
+          icon: '🌾',
+        }
       : !world.rainOccurred
-        ? { title: 'Prepare for rain', value: c.defense, target: 1, unit: 'wall upgrades', icon: '🌧' }
+        ? {
+            title: 'Prepare for rain',
+            value: c.defense,
+            target: 1,
+            unit: 'wall upgrades',
+            icon: '🌧',
+          }
         : !['done'].includes(world.birdStage)
           ? {
               title: 'Protect food from birds',
@@ -210,12 +294,13 @@
     const leaders = s.players.slice(0, 4);
     if (ownStanding && !leaders.some((x) => x.id === p.id)) leaders[3] = ownStanding;
     const best = Math.max(1, ...s.players.map((x) => x.strength));
-    $('rivals').innerHTML = leaders
+    const rivalsHTML = leaders
       .map(
         (x) =>
           `<span class="${x.id === p.id ? 'own-colony' : ''}"><b>${s.players.findIndex((player) => player.id === x.id) + 1}. ${esc(x.id === p.id ? 'Your colony' : x.name)}</b><strong>${x.strength}</strong> pts<i style="width:${Math.max(2, (x.strength / best) * 100)}%"></i></span>`,
       )
       .join('');
+    if ($('rivals').innerHTML !== rivalsHTML) $('rivals').innerHTML = rivalsHTML;
     // Only show explanatory banners during the gap between questions.
     $('survival').hidden = s.phase !== 'upgrade';
     $('event').hidden = s.phase !== 'reveal';
@@ -246,10 +331,14 @@
       p.choice,
       p.correct,
       p.upgraded,
-      p.upgrades,
+      p.upgrades.map(({food, ...option}) => option),
       pending?.commandId,
       disconnected,
     ]);
+    document.querySelectorAll('.raid-target').forEach(button => {
+      const u = p.upgrades[Number(button.dataset.upgrade)];
+      if (u?.key === 'raid') button.querySelector('.raid-stats').textContent = `🌾 ${u.food} food · 🛡 ${u.guards} guards · Wall ${u.wallLevel}`;
+    });
     if (key === renderKey) return;
     renderKey = key;
     $('learner').classList.toggle('preview', s.preview);
@@ -269,7 +358,12 @@
       if (beat.key === 'intro') {
         const chapter = Math.min(3, Math.floor(beat.elapsed / 16000));
         $('roundLabel').textContent = `PIP’S FIELD GUIDE · ${chapter + 1} / 4`;
-        $('question').textContent = ['Build our home', 'Prepare for danger', 'Choose a raid wisely', 'Protect each other'][chapter];
+        $('question').textContent = [
+          'Build our home',
+          'Prepare for danger',
+          'Choose a raid wisely',
+          'Protect each other',
+        ][chapter];
         $('instruction').textContent = beat.line.split('\n\n')[chapter] || beat.line;
         return;
       }
@@ -288,7 +382,8 @@
     }
     if (s.phase === 'paused') {
       $('question').textContent = 'The meadow is resting';
-      $('instruction').textContent = 'Your teacher will resume the game. Your answers and colony are safe.';
+      $('instruction').textContent =
+        'Your teacher will resume the game. Your answers and colony are safe.';
       return;
     }
     if (s.phase === 'ended') {
@@ -330,21 +425,25 @@
         .querySelectorAll('[data-choice]')
         .forEach(
           (button) =>
-            (button.onclick = () => submit({ type: 'answer', choice: Number(button.dataset.choice) })),
+            (button.onclick = () =>
+              submit({
+                type: 'answer',
+                choice: Number(button.dataset.choice),
+              })),
         );
     } else if (s.phase === 'upgrade' && p.correct && !p.upgraded) {
       $('question').textContent = 'Correct! Grow your colony.';
       $('instruction').textContent = pending
         ? 'Saving your upgrade…'
         : 'Choose one upgrade. Raids run automatically.';
-      $('explanation').textContent = 'Correct answer: ' + s.question.options[s.question.correctIndex];
+      $('explanation').textContent =
+        'Correct answer: ' + s.question.options[s.question.correctIndex];
       $('choices').classList.add('upgrades');
-      $('choices').innerHTML = p.upgrades
-        .map(
-          (u, i) =>
-            `<button data-upgrade="${i}" ${!u.allowed || pending || disconnected ? 'disabled' : ''}><span class="symbol" aria-hidden="true"><img src="/assets/colonyquest/${u.key === 'queen' ? 'queen' : ['defense', 'soldiers', 'raid'].includes(u.key) ? 'guardian' : 'pip-worker'}.webp" alt=""><i>${symbols[u.key]}</i></span>${esc(u.label)}<small>${esc(!u.allowed ? (u.cost?.sticks ? `Need ${u.cost.sticks} sticks + ${u.cost.leaves} leaves` : u.reason) : u.key === 'raid' ? u.reason : u.cost?.sticks ? `${u.cost.sticks} sticks + ${u.cost.leaves} leaves` : u.key === 'workers' ? 'Collects food and materials automatically' : u.key === 'supplies' ? '+3 sticks · +2 leaves' : u.key === 'food' ? '+5 food' : u.key === 'queen' ? 'Hatches after two rounds' : 'Protects your colony')}</small></button>`,
-        )
-        .join('');
+      const upgradeCard = (u, i) =>
+        `<button data-upgrade="${i}" ${!u.allowed || pending || disconnected ? 'disabled' : ''}><span class="symbol" aria-hidden="true"><img src="/assets/colonyquest/${u.key === 'queen' ? 'queen' : ['defense', 'soldiers', 'raid'].includes(u.key) ? 'guardian' : 'pip-worker'}.webp" alt=""><i>${symbols[u.key]}</i></span>${esc(u.label)}<small>${esc(!u.allowed ? u.reason : u.cost?.sticks ? `${u.cost.sticks} sticks + ${u.cost.leaves} leaves` : u.key === 'workers' ? 'Collects food and materials automatically' : u.key === 'supplies' ? '+3 sticks · +2 leaves' : u.key === 'food' ? '+5 food' : u.key === 'queen' ? 'Hatches after two rounds' : 'Protects your colony')}</small></button>`;
+      $('choices').innerHTML =
+        p.upgrades.map((u, i) => (u.key === 'raid' ? '' : upgradeCard(u, i))).join('') +
+        `<section class="raid-picker"><h3>Or raid a rival</h3><p>One tap sends your guards. This uses your upgrade.</p><div class="raid-targets">${p.upgrades.map((u, i) => (u.key !== 'raid' ? '' : `<button data-upgrade="${i}" class="raid-target" ${!u.allowed || pending || disconnected ? 'disabled' : ''}><strong>⚔ ${esc(u.label)}</strong><span class="raid-stats">🌾 ${u.food} food · 🛡 ${u.guards} guards · Wall ${u.wallLevel}</span><small>${esc(u.reason)}</small></button>`)).join('') || '<p>No rival colonies yet.</p>'}</div></section>`;
       $('choices')
         .querySelectorAll('[data-upgrade]')
         .forEach(
@@ -378,7 +477,9 @@
       const ticket = await request('/ticket', {});
       if (stopped) return;
       socket = new WebSocket(
-        (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/colonyquest-live',
+        (location.protocol === 'https:' ? 'wss://' : 'ws://') +
+          location.host +
+          '/ws/colonyquest-live',
       );
       socket.onopen = () => socket.send(JSON.stringify({ type: 'auth', token: ticket.token }));
       socket.onmessage = (event) => {
@@ -416,7 +517,10 @@
           return;
         }
         $('connection').textContent = 'Reconnecting…';
-        setTimeout(connect, Math.min(8000, 700 * 2 ** Math.min(retries++, 4)) + Math.random() * 400);
+        setTimeout(
+          connect,
+          Math.min(8000, 700 * 2 ** Math.min(retries++, 4)) + Math.random() * 400,
+        );
       };
       socket.onerror = () => {};
     } catch (e) {
@@ -600,6 +704,7 @@
         )
         .join('') ||
       '<article class="colony-card"><strong>Waiting for your learners</strong><p>Share the learner link above.</p></article>';
+    renderActivity(s);
     $('attendance').innerHTML =
       data.attendance.map((p) => `<span>${p.joined ? '✓' : '○'} ${esc(p.name)}</span>`).join('') ||
       '<p>Learners appear here when they join.</p>';
@@ -616,7 +721,8 @@
     practice.rel = 'noopener';
     practice.textContent = 'Test against computer colonies';
     $('setup').append(practice);
-    const join = location.origin + '/play/' + encodeURIComponent(gameId) + '?activity=colonyquest-live';
+    const join =
+      location.origin + '/play/' + encodeURIComponent(gameId) + '?activity=colonyquest-live';
     $('joinLink').value = join;
     $('copy').onclick = async () => {
       try {
@@ -638,7 +744,11 @@
         try {
           const body =
             cmd === 'open'
-              ? { rosterIds: [...$('classes').querySelectorAll('input:checked')].map((i) => i.value) }
+              ? {
+                  rosterIds: [...$('classes').querySelectorAll('input:checked')].map(
+                    (i) => i.value,
+                  ),
+                }
               : {};
           renderHost(await request('/' + cmd, body));
           error('');

@@ -265,6 +265,21 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
       const existing = all().find(
         (w) => w.demo && w.members.some((m) => m.userId === user.id),
       );
+      if (existing) {
+        let changed = false;
+        for (const report of existing.reports) {
+          if (report.demoMaterialsVersion || report.approved || report.publication) continue;
+          // Enrich older samples once; never overwrite edits, approved snapshots or publications.
+          for (const entry of report.entries) {
+            const materials = require("./school-newsletter-demo").sampleMaterials(entry.subject);
+            if (!entry.links?.length && materials.links) { entry.links = materials.links; entry.submitted = false; entry.reviewed = false; changed = true; }
+            if (!entry.images?.length && materials.images) { entry.images = materials.images; entry.submitted = false; entry.reviewed = false; changed = true; }
+          }
+          report.demoMaterialsVersion = 1;
+          changed = true;
+        }
+        if (changed) { existing.revision++; save(existing); }
+      }
       if (existing && !existing.settings.design) {
         existing.settings.design = "vinschool";
         existing.revision++;
