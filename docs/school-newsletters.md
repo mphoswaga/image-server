@@ -95,3 +95,11 @@ already downloaded PDFs.
 Subject teachers/coordinators can add up to eight labelled HTTP(S) links and three PNG/JPEG/WebP images through **Links and images**. Images are resized client-side and decoded/re-encoded server-side with pixel and size limits; remote image URLs and arbitrary HTML are not accepted. Captions accompany images in both language views. Media drafts recover locally where browser storage permits; media edits invalidate submission, translation review and approval. Publication snapshots preserve their media until explicitly republished or revoked. Images also appear in phone previews, parent readers and PDFs; PDF links are clickable.
 
 Image bytes are stored under `DATA_DIR/school-newsletters/media` with immutable SHA-256 filenames; report/history snapshots keep references. Include this folder in backups. It has no unauthenticated static route. Removing an image from a draft does not erase older approved/history copies or previously downloaded PDFs.
+
+### Weekly overview and family checklist
+
+The coordinator's Weekly progress view is a class-by-subject matrix, filtered by week. Cells open the relevant contribution and distinguish missing text, draft, submitted English, reviewed translation and approval. Assigned teachers respect subject and class scope. Selected outstanding contributions can receive in-app reminders; these appear when staff open the workspace and do not send email.
+
+Coordinators can request a subject revision with private feedback. This clears submission, review and approval for the current draft while leaving the last published edition unchanged. Resubmitting English resolves the feedback request. Feedback and reminders are excluded from the public snapshot.
+
+The family reader collects explicitly headed sections from the selected language of the published newsletter: Homework, Things to bring, Important dates and Conversation starters (also How can you help at home?). Matching Vietnamese headings are supported. Details go directly below the heading, ending at a blank line or next heading. No dates or tasks are inferred. If no matching sections exist, the checklist is hidden. Ticks are local to the current visit, are not sent to school, and are scoped to edition, class and text. Draft phone previews use the same reader. Existing PDF content is unchanged.

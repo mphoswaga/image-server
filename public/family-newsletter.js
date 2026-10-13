@@ -175,6 +175,7 @@ function render() {
     d.addEventListener("toggle", updateExpand);
     $("entries").append(d);
   });
+  renderFamilyChecklist();
   updateExpand();
 }
 function updateExpand() {
@@ -292,3 +293,59 @@ $("download").onclick = async () => {
     $("status").textContent = copy[lang].error;
   }
 })();
+
+const checkedActions = new Set();
+function renderFamilyChecklist() {
+  const box = $("familyChecklist");
+  const items = NewsletterChecklist.extract(data.entries, lang);
+  box.replaceChildren();
+  box.hidden = !items.length;
+  if (!items.length) return;
+  const title = document.createElement("h2");
+  title.textContent = lang === "vi" ? "Tuần này tại nhà" : "This week at home";
+  box.append(title);
+  paragraph(
+    box,
+    lang === "vi"
+      ? "Đánh dấu để theo dõi trong lần xem này. Nhà trường không nhận các dấu chọn."
+      : "Tick items as you go. Your ticks stay in this visit and are not sent to school.",
+  );
+  const labels =
+    lang === "vi"
+      ? {
+          homework: "Bài tập về nhà",
+          bring: "Đồ dùng cần mang",
+          dates: "Ngày quan trọng",
+          talk: "Cùng con trò chuyện",
+        }
+      : {
+          homework: "Homework",
+          bring: "Things to bring",
+          dates: "Important dates",
+          talk: "Talk together",
+        };
+  for (const item of items) {
+    const label = document.createElement("label"),
+      input = document.createElement("input"),
+      body = document.createElement("span"),
+      heading = document.createElement("strong"),
+      text = document.createElement("span");
+    const key = JSON.stringify([
+      data.week,
+      data.className,
+      selectedEdition,
+      item.subject,
+      item.category,
+      item.text,
+    ]);
+    input.type = "checkbox";
+    input.checked = checkedActions.has(key);
+    input.onchange = () =>
+      input.checked ? checkedActions.add(key) : checkedActions.delete(key);
+    heading.textContent = labels[item.category] + " · " + item.subject;
+    text.textContent = item.text;
+    body.append(heading, text);
+    label.append(input, body);
+    box.append(label);
+  }
+}

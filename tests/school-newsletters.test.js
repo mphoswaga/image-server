@@ -542,3 +542,19 @@ test("permanent class links expose only published editions and revoke independen
   );
   assert.equal(store.published(w.id, first, weeklyToken).week, "Sample week");
 });
+
+test("only coordinators request revisions and reminders; resubmission resolves feedback", t => {
+  const {store,owner,w}=setup(t);
+  const teacher={id:'teacher-feedback',email:'feedback@school.test',role:'teacher'};
+  const invitation=store.invite(owner,w.id,w.revision,{email:teacher.email,role:'teacher',subjects:['ICT']});
+  let state=store.accept(teacher,invitation.token);
+  const target={reportId:w.reports[0].id,subject:'ICT'};
+  assert.throws(()=>store.change(teacher,w.id,state.revision,'feedback',{...target,text:'Change this'}),/coordinator/);
+  assert.throws(()=>store.change(teacher,w.id,state.revision,'remind',{targets:[target]}),/coordinator/);
+  state=store.change(owner,w.id,state.revision,'feedback',{...target,text:'Please add a deadline.'});
+  state=store.change(owner,w.id,state.revision,'remind',{targets:[target]});
+  assert.ok(state.reports[0].entries[0].reminder);
+  state=store.change(teacher,w.id,state.revision,'english',{...target,text:'Homework: Complete by Friday.',submit:true});
+  assert.equal(state.reports[0].entries[0].feedbackResolved,true);
+  assert.equal(state.reports[0].entries[0].reminder,undefined);
+});

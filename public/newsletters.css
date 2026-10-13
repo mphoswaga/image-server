@@ -837,3 +837,266 @@ summary:focus-visible {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+/* Keep setup secondary; put the weekly task within the first screen. */
+.has-workspace main {
+  max-width: 1440px;
+  margin: auto;
+  padding-top: 12px;
+}
+.has-workspace #home {
+  padding: 10px 18px;
+  margin-bottom: 10px;
+}
+#home .toolbar {
+  margin: 0;
+  gap: 12px;
+}
+#home select {
+  max-width: 360px;
+}
+.has-workspace #createWorkspaceDetails {
+  border: 0;
+  margin: 0;
+}
+.has-workspace #createWorkspaceDetails > summary {
+  font-size: 12px;
+  padding: 5px 0;
+  color: #637389;
+}
+#demoBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  padding: 10px 18px;
+  margin-bottom: 18px;
+  font-size: 13px;
+}
+#demoBar .toolbar {
+  margin: 0;
+  gap: 8px;
+  margin-left: auto;
+}
+#demoBar .toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  white-space: nowrap;
+}
+#demoBar select {
+  width: 230px;
+  padding: 8px;
+}
+#demoBar button {
+  padding: 8px 12px;
+  font-size: 12px;
+}
+#demoBar .demo-help {
+  border: 0;
+  margin: 0;
+  max-width: 360px;
+}
+#demoBar .demo-help summary {
+  padding: 4px;
+  color: #705d36;
+  font-size: 12px;
+}
+#workspace > .toolbar {
+  display: none;
+}
+.layout {
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 20px;
+}
+#editor {
+  padding: 24px;
+  border: 0;
+  background: white;
+}
+.contribution-overview.newsletter-workflow {
+  margin: 0 0 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+}
+.overview-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+}
+.overview-heading h2 {
+  margin: 5px 0;
+  font-size: 28px;
+}
+.overview-heading label {
+  min-width: 180px;
+  margin: 0;
+  font-size: 12px;
+}
+.task-grid {
+  grid-template-columns: 1fr;
+  margin: 12px 0;
+  gap: 8px;
+}
+.task-card {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 18px;
+  background: #f6f8fc;
+  border: 1px solid #e1e7ef;
+}
+.task-description {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.task-description > span,
+.task-description > small {
+  font-size: 12px;
+  font-weight: 400;
+  color: #5f7289;
+}
+.task-action {
+  font-size: 13px;
+  color: #23466f;
+  white-space: nowrap;
+}
+.report-heading {
+  border-top: 1px solid #e1e7ef;
+  padding-top: 20px;
+}
+body[data-newsletter-role="teacher"] .layout,
+body[data-newsletter-role="translator"] .layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+body[data-newsletter-role="teacher"] .layout > aside,
+body[data-newsletter-role="translator"] .layout > aside {
+  display: none;
+}
+body[data-newsletter-role="teacher"] .report-preview-card,
+body[data-newsletter-role="translator"] .report-preview-card {
+  padding: 12px 16px;
+  margin: 12px 0;
+  background: transparent;
+  border: 1px solid #e1e7ef;
+}
+body[data-newsletter-role="teacher"] .paper-symbol,
+body[data-newsletter-role="translator"] .paper-symbol {
+  display: none;
+}
+@media (max-width: 800px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #demoBar .toolbar {
+    margin-left: 0;
+    flex-wrap: wrap;
+  }
+  #demoBar select {
+    width: 190px;
+  }
+  .overview-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .overview-heading h2 {
+    font-size: 24px;
+  }
+  .overview-heading label {
+    min-width: 0;
+    width: 100%;
+  }
+  .task-card {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+  #editor {
+    padding: 18px;
+  }
+  .has-workspace #home .toolbar label {
+    display: block;
+  }
+  #home select {
+    max-width: 100%;
+  }
+}
+@media (max-width: 800px) {
+  .has-workspace #home .toolbar {
+    flex-wrap: wrap;
+  }
+  .has-workspace #home .toolbar label {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
+  .has-workspace #home select {
+    width: 100%;
+  }
+  #demoBar .demo-help {
+    font-size: 12px;
+  }
+}
+.contribution-overview .eyebrow {
+  color: #527585;
+}
+
+.matrix-scroll {
+  overflow: auto;
+  max-width: 100%;
+  border: 1px solid #d9e3ec;
+  border-radius: 14px;
+}
+.progress-matrix table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.progress-matrix th,
+.progress-matrix td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #e5ebf1;
+  min-width: 145px;
+}
+.progress-matrix th {
+  background: #f5f8fc;
+}
+.progress-matrix small {
+  display: block;
+  font-weight: 400;
+  margin-top: 5px;
+}
+.matrix-cell {
+  width: 100%;
+  text-align: left;
+  background: #edf2f7;
+  color: #253d58;
+  border: 1px solid #ccd9e5;
+}
+.matrix-cell.state-missing {
+  background: #fff1eb;
+  color: #843d24;
+}
+.matrix-cell.state-draft {
+  background: #fff8e6;
+  color: #75500f;
+}
+.matrix-cell.state-submitted {
+  background: #eaf2ff;
+  color: #234a7e;
+}
+.matrix-cell.state-translated,
+.matrix-cell.state-approved {
+  background: #e6f4ee;
+  color: #1e624b;
+}
+.review-feedback {
+  border-left: 4px solid #ca9143;
+  padding: 14px;
+  background: #fff8e9;
+  margin-bottom: 18px;
+}

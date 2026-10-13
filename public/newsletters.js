@@ -145,6 +145,7 @@ function render() {
   $("demoBar").hidden = !workspace.demo;
   $("demoRole").value = demoRole;
   const coord = workspace.myRole === "coordinator";
+  document.body.dataset.newsletterRole = workspace.myRole;
   $("coordinator").hidden = !coord;
   $("newReport").hidden = !coord || workspace.demo;
   $("invite").closest("details").hidden = !!workspace.demo;
@@ -199,7 +200,9 @@ function render() {
         const owners = workspace.members
           .filter(
             (m) =>
-              m.role === "teacher" && (m.subjects || []).includes(e.subject),
+              m.role === "teacher" &&
+              (m.subjects || []).includes(e.subject) &&
+              (!m.classes || m.classes.includes(r.className)),
           )
           .map((m) => m.name)
           .join(", ");
@@ -788,7 +791,20 @@ function workflowTools(r, coord) {
   const unique = [
     ...new Map(workspace.reports.map((x) => [x.className, x])).values(),
   ];
-  panel.innerHTML = `<h2>${coord ? "Weekly progress" : "My contributions"}</h2><label>Week<select id="taskWeek"><option value="">All weeks</option>${[...new Set(workspace.reports.map((x) => x.week))].map((w) => `<option>${esc(w)}</option>`).join("")}</select></label><div class="task-grid">${tasks.map(({ r: x, e }) => `<button class="secondary task-card" data-task="${x.id}" data-subject-name="${esc(e.subject)}" data-week="${esc(x.week)}"><strong>${esc(x.className)} · ${esc(e.subject)}</strong><span>${esc(x.week)}</span><span>${!e.submitted ? "English needed" : !e.reviewed ? "Translation review needed" : x.approved ? "Approved" : "Ready for approval"}</span><small>${x.deadline ? "Due " + esc(x.deadline) : "No deadline set"}</small></button>`).join("") || "<p>No assigned contributions.</p>"}</div>`;
+  panel.classList.add("contribution-overview");
+  panel.innerHTML = `<div class="overview-heading"><div><p class="eyebrow">${coord ? "Coordinator overview" : "Your weekly newsletter"}</p><h2>${coord ? "Weekly progress" : "My contributions"}</h2></div><label>Week<select id="taskWeek"><option value="">All weeks</option>${[...new Set(workspace.reports.map((x) => x.week))].map((w) => `<option>${esc(w)}</option>`).join("")}</select></label></div><p id="taskSummary" class="hint"></p><div class="task-grid">${
+    tasks
+      .map(({ r: x, e }) => {
+        const done = coord
+          ? e.submitted && e.reviewed
+          : workspace.myRole === "translator"
+            ? e.reviewed
+            : e.submitted;
+        return `<button class="secondary task-card" data-task="${x.id}" data-subject-name="${esc(e.subject)}" data-week="${esc(x.week)}" data-done="${done}"><span class="task-description"><strong>${esc(x.className)} · ${esc(e.subject)}</strong><span>${e.reminder ? "Reminder · " : ""}${e.feedback && !e.feedbackResolved ? "Changes requested · " : ""}${!e.submitted ? "Contribution needed" : !e.reviewed ? "Submitted · awaiting translation" : x.approved ? "Approved" : "Awaiting coordinator approval"}</span>${x.deadline ? `<small>Due ${esc(x.deadline)}</small>` : ""}</span><span class="task-action">${done ? "View contribution" : "Open contribution"} →</span></button>`;
+      })
+      .join("") || "<p>No assigned contributions.</p>"
+  }</div>`;
+  if (coord) panel.querySelector(".task-grid").hidden = true;
   if (coord)
     panel.innerHTML += `<details><summary>Set up next week</summary><p>Copy the class and subject setup. Contributions start blank; staff assignments stay in place.</p><form id="nextWeekForm"><label>New week<input name="week" required maxlength="80"></label><label>Submission deadline<input name="deadline" type="date"></label><label>Sending date<input name="sendDate" type="date"></label>${unique.map((x) => `<label><input type="checkbox" name="source" value="${x.id}" checked> ${esc(x.className)}</label>`).join("")}<button>Create next week</button></form></details><details><summary>Class assignments</summary><p>Existing staff keep access to all classes until you choose specific classes.</p>${
       workspace.members
@@ -816,14 +832,19 @@ function workflowTools(r, coord) {
       }
     }
   };
-  $("taskWeek").onchange = (event) =>
-    panel
-      .querySelectorAll("[data-week]")
-      .forEach(
-        (b) =>
-          (b.hidden =
-            !!event.target.value && b.dataset.week !== event.target.value),
-      );
+  $("taskWeek").onchange = (event) => {
+    const cards = [...panel.querySelectorAll("[data-week]")];
+    cards.forEach(
+      (b) =>
+        (b.hidden =
+          !!event.target.value && b.dataset.week !== event.target.value),
+    );
+    const shown = cards.filter((b) => !b.hidden),
+      done = shown.filter((b) => b.dataset.done === "true").length;
+    if (coord) renderProgressMatrix(panel, event.target.value);
+    $("taskSummary").textContent =
+      `${done} ${coord ? "ready" : workspace.myRole === "translator" ? "reviewed" : "submitted"} · ${shown.length - done} needing action`;
+  };
   $("taskWeek").value = r.week;
   $("taskWeek").dispatchEvent(new Event("change"));
   panel.onsubmit = (event) => {
@@ -1024,7 +1045,7 @@ function newsletterExtras(r, coord) {
     const section = document.createElement("details");
     section.className = "newsletter-workflow";
     section.innerHTML = `<summary>Coordinator reports</summary><p>See responsibilities and follow up with staff. Downloads use the selected filters.</p><form id="progressFilters"><label>Report type<select name="type"><option value="all">All contributions</option><option value="missing">Not submitted</option><option value="submitted">Submitted</option><option value="translation">Translation review outstanding</option><option value="overdue">Overdue contributions or reviews</option><option value="publication">Awaiting approval or publication</option><option value="unassigned">No teacher assigned</option></select></label><label>Week<select name="week"><option value="">All weeks</option>${[...new Set(workspace.reports.map((x) => x.week))].map((x) => `<option>${esc(x)}</option>`).join("")}</select></label><label>Class<select name="className"><option value="">All classes</option>${[...new Set(workspace.reports.map((x) => x.className))].map((x) => `<option>${esc(x)}</option>`).join("")}</select></label><button>Run report</button> <a id="progressDownload" hidden>Download CSV</a></form><div id="progressResult" role="status"></div>`;
-    $("editor").prepend(section);
+    $("editor").querySelector(".contribution-overview").after(section);
     section.onclick = (e) => e.stopPropagation();
     section.onchange = () => {
       $("progressDownload").hidden = true;
@@ -1052,12 +1073,51 @@ function newsletterExtras(r, coord) {
   }
   document.querySelectorAll(".subject").forEach((card) => {
     const entry = r.entries[Number(card.dataset.index)];
+    if (entry.reminder && (!entry.submitted || !entry.reviewed)) {
+      const reminder = document.createElement("p");
+      reminder.className = "review-feedback";
+      reminder.textContent = `${entry.reminder.by} requested an update on ${new Date(entry.reminder.at).toLocaleDateString()}. ${entry.submitted ? "Please review the translation." : "Please submit this contribution."}`;
+      card.querySelector(".subject-content").prepend(reminder);
+    }
+    if (entry.feedback) {
+      const note = document.createElement("aside");
+      note.className = "review-feedback";
+      note.innerHTML = `<strong>${entry.feedbackResolved ? "Previous coordinator feedback · resubmitted" : "Changes requested"}</strong><p>${esc(entry.feedback)}</p><small>${esc(entry.feedbackBy || "Coordinator")}</small>`;
+      card.querySelector(".subject-content").prepend(note);
+    }
+    if (coord) {
+      const feedback = document.createElement("details");
+      feedback.innerHTML = `<summary>Request a change</summary><label>Feedback for this subject<textarea maxlength="2000" placeholder="Identify the paragraph and explain the change needed."></textarea></label><button type="button">Send back for revision</button>`;
+      feedback.onclick = (e) => e.stopPropagation();
+      feedback.oninput = (e) => e.stopPropagation();
+      feedback.onchange = (e) => e.stopPropagation();
+      feedback.querySelector("button").onclick = () => {
+        if (dirty) return status("Save your edits first.");
+        const text = feedback.querySelector("textarea").value.trim();
+        if (!text) return status("Write feedback first.");
+        run(() =>
+          busy(feedback.querySelector("button"), () =>
+            change("feedback", {
+              reportId: r.id,
+              subject: entry.subject,
+              text,
+            }),
+          ),
+        );
+      };
+      card.querySelector(".subject-content").append(feedback);
+    }
     const editable =
       coord ||
       (workspace.myRole === "teacher" &&
         workspace.mySubjects.includes(entry.subject) &&
         (!workspace.myClasses || workspace.myClasses.includes(r.className)));
     if (!editable) return;
+    const guidance = document.createElement("p");
+    guidance.className = "hint";
+    guidance.textContent =
+      "For the parent checklist, add a heading on its own line: Homework, Things to bring, Important dates or Conversation starters. Put the details directly below it. Only include what families actually need; the published reader collects these sections automatically.";
+    card.querySelector(".subject-content").append(guidance);
     const d = document.createElement("details");
     d.className = "subject-media";
     const key = mediaKey(entry.subject);
@@ -1181,4 +1241,73 @@ function newsletterExtras(r, coord) {
         );
     };
   });
+}
+
+function renderProgressMatrix(panel, week) {
+  panel.querySelector(".progress-matrix")?.remove();
+  const reports = workspace.reports.filter((r) => !week || r.week === week);
+  const subjects = [
+    ...new Set(reports.flatMap((r) => r.entries.map((e) => e.subject))),
+  ];
+  const box = document.createElement("div");
+  box.className = "progress-matrix";
+  box.innerHTML = `<p class="hint">Select a subject to review it. Missing → Draft → Submitted → Translated → Approved.</p><div class="matrix-scroll" tabindex="0" role="region" aria-label="Class and subject progress"><table><thead><tr><th>Class / week</th>${subjects.map((s) => `<th>${esc(s)}</th>`).join("")}</tr></thead><tbody>${reports
+    .map(
+      (r) =>
+        `<tr><th>${esc(r.className)}<small>${esc(r.week)}</small>${r.deadline ? `<small>Due ${esc(r.deadline)}</small>` : ""}</th>${subjects
+          .map((subject) => {
+            const e = r.entries.find((e) => e.subject === subject);
+            if (!e) return '<td aria-label="Not assigned">—</td>';
+            const state = r.approved
+              ? "Approved"
+              : e.reviewed && e.submitted
+                ? "Translated"
+                : e.submitted
+                  ? "Submitted"
+                  : e.english?.trim()
+                    ? "Draft"
+                    : "Missing";
+            const owners =
+              workspace.members
+                .filter(
+                  (m) =>
+                    m.role === "teacher" &&
+                    m.subjects?.includes(subject) &&
+                    (!m.classes || m.classes.includes(r.className)),
+                )
+                .map((m) => m.name)
+                .join(", ") || "No teacher assigned";
+            return `<td>${state !== "Approved" && state !== "Translated" ? `<label><input type="checkbox" data-remind-report="${r.id}" data-remind-subject="${esc(subject)}"> Remind</label>` : ""}<button class="matrix-cell state-${state.toLowerCase()}" data-task="${r.id}" data-subject-name="${esc(subject)}"><strong>${state}</strong><small>${esc(owners)}</small>${e.feedback && !e.feedbackResolved ? "<small>Changes requested</small>" : ""}</button></td>`;
+          })
+          .join("")}</tr>`,
+    )
+    .join("")}</tbody></table></div>`;
+  const remind = document.createElement("button");
+  remind.className = "secondary";
+  remind.textContent = "Send selected in-app reminders";
+  const result = document.createElement("p");
+  result.setAttribute("role", "status");
+  remind.onclick = () => {
+    if (dirty) return status("Save your edits first.");
+    const targets = [
+      ...box.querySelectorAll("[data-remind-report]:checked"),
+    ].map((el) => ({
+      reportId: el.dataset.remindReport,
+      subject: el.dataset.remindSubject,
+    }));
+    if (!targets.length) {
+      result.textContent = "Select at least one contribution above.";
+      return;
+    }
+    run(() =>
+      busy(remind, async () => {
+        await change("remind", { targets });
+        status(
+          "Reminders saved. Staff will see them when they open the workspace; no email was sent.",
+        );
+      }),
+    );
+  };
+  box.append(remind, result);
+  panel.querySelector("#taskSummary").after(box);
 }

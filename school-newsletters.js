@@ -341,6 +341,27 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
     },
     change(user, id, revision, action, input) {
       return this.mutate(user, id, revision, (w) => {
+        if (action === "remind") {
+          coordinator(w, user);
+          if (
+            !Array.isArray(input.targets) ||
+            !input.targets.length ||
+            input.targets.length > 500
+          )
+            fail("Select contributions to remind.");
+          const entries = input.targets.map((t) => {
+            const r = report(w, t.reportId);
+            const e = r.entries.find((e) => e.subject === t.subject);
+            if (!e) fail("Subject not found.");
+            return e;
+          });
+          for (const e of entries)
+            e.reminder = {
+              at: new Date().toISOString(),
+              by: user.name || user.email,
+            };
+          return;
+        }
         if (action === "reset-demo") {
           coordinator(w, user);
           if (!w.demo) fail("Only the demo can be reset.");
@@ -635,7 +656,22 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
         }
         const e = r.entries.find((e) => e.subject === input.subject);
         if (!e) fail("Subject not found.");
-        if (action === "media") {
+        if (action === "feedback") {
+          coordinator(w, user);
+          if (
+            typeof input.text !== "string" ||
+            !input.text.trim() ||
+            input.text.length > 2000
+          )
+            fail("Write feedback of at most 2,000 characters.");
+          archive(r, user);
+          e.feedback = input.text.trim();
+          e.feedbackBy = user.name || user.email;
+          e.feedbackResolved = false;
+          e.submitted = false;
+          e.submittedAt = null;
+          e.reviewed = false;
+        } else if (action === "media") {
           editable(w, user, e.subject, false, r.className);
           archive(r, user);
           e.links = input.links;
@@ -656,6 +692,10 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
           if (e.english !== value) e.reviewed = false;
           e.english = value;
           e.submitted = !!input.submit;
+          if (e.submitted) {
+            e.feedbackResolved = true;
+            delete e.reminder;
+          }
           e.submittedAt = e.submitted ? new Date().toISOString() : null;
           e.submittedBy = e.submitted ? user.name || user.email : null;
         } else if (action === "vietnamese") {
@@ -675,6 +715,7 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
           e.vietnamese = value;
           e.reviewed = !!input.review;
           if (e.reviewed) {
+            delete e.reminder;
             e.reviewedEnglish = e.english;
             e.reviewedBy = user.name || user.email;
             e.reviewedAt = new Date().toISOString();
