@@ -752,3 +752,88 @@ summary:focus-visible {
 .parent-sharing .actions {
   margin-top: 12px;
 }
+
+.newsletter-workflow {
+  border: 1px solid #dce5ec;
+  border-radius: 18px;
+  padding: 24px;
+  margin: 24px 0;
+  background: #f7fafc;
+}
+.task-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+}
+.task-card {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.newsletter-workflow details {
+  padding: 14px 0;
+}
+.newsletter-workflow form {
+  padding: 16px;
+  background: white;
+  border-radius: 12px;
+  margin: 10px 0;
+}
+.newsletter-workflow label {
+  display: block;
+  margin: 10px 0;
+}
+.newsletter-workflow input[type="checkbox"] {
+  width: auto;
+  display: inline;
+}
+.newsletter-workflow pre {
+  white-space: pre-wrap;
+  max-height: 240px;
+  overflow: auto;
+  font: inherit;
+}
+.phone-dialog {
+  max-width: 440px;
+}
+.task-card[hidden] {
+  display: none;
+}
+
+.readiness-item {
+  display: block;
+  text-align: left;
+  margin: 8px 0;
+  width: 100%;
+}
+.layout > *,
+#editor,
+.newsletter-workflow,
+#progressResult {
+  min-width: 0;
+}
+#progressResult table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+#progressResult th,
+#progressResult td {
+  text-align: left;
+  padding: 10px;
+  border-bottom: 1px solid #dce5ec;
+  min-width: 105px;
+}
+@media (max-width: 800px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .newsletter-workflow {
+    padding: 16px;
+  }
+  .task-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

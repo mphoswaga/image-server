@@ -1,5 +1,8 @@
 "use strict";
 const expandedSubjects = new Set();
+const mediaDrafts = new Map();
+const mediaKey = (subject) =>
+  `newsletter.media.${user?.id}.${workspace?.id}.${reportId}.${subject}`;
 try {
   for (const key of JSON.parse(
     sessionStorage.getItem("newsletter.expanded") || "[]",
@@ -126,6 +129,7 @@ async function change(action, extra = {}) {
     localStorage.removeItem(draftKey());
   if (action === "english" || action === "vietnamese")
     clearSaved(extra.subject, action, extra.text);
+  if (action === "next-week") reportId = w.reports[w.reports.length - 1]?.id;
   setWorkspace(w);
   status(
     dirty
@@ -184,8 +188,14 @@ function render() {
         const edit =
           coord ||
           (workspace.myRole === "teacher" &&
-            workspace.mySubjects.includes(e.subject));
-        const translate = coord || workspace.myRole === "translator";
+            workspace.mySubjects.includes(e.subject) &&
+            (!workspace.myClasses ||
+              workspace.myClasses.includes(r.className)));
+        const translate =
+          coord ||
+          (workspace.myRole === "translator" &&
+            (!workspace.myClasses ||
+              workspace.myClasses.includes(r.className)));
         const owners = workspace.members
           .filter(
             (m) =>
@@ -226,6 +236,8 @@ function render() {
       $("openParent").href = link;
     }
   }
+  workflowTools(r, coord);
+  newsletterExtras(r, coord);
   const pending = drafts();
   dirty = false;
   document.querySelectorAll(".subject").forEach((card) => {
@@ -253,6 +265,8 @@ function render() {
     }
     updateCounts(card);
   });
+  if (current().entries.some((e) => mediaDrafts.has(mediaKey(e.subject))))
+    dirty = true;
 }
 function updateCounts(card) {
   for (const lang of ["english", "vietnamese"]) {
@@ -753,3 +767,418 @@ $("exitDemo").onclick = () =>
     }
     status("You have left the demo.");
   });
+
+function workflowTools(r, coord) {
+  const panel = document.createElement("section");
+  panel.className = "newsletter-workflow";
+  const allowed = (x) =>
+    coord || !workspace.myClasses || workspace.myClasses.includes(x.className);
+  const tasks = workspace.reports.flatMap((x) =>
+    allowed(x)
+      ? x.entries
+          .filter(
+            (e) =>
+              coord ||
+              workspace.myRole === "translator" ||
+              workspace.mySubjects.includes(e.subject),
+          )
+          .map((e) => ({ r: x, e }))
+      : [],
+  );
+  const unique = [
+    ...new Map(workspace.reports.map((x) => [x.className, x])).values(),
+  ];
+  panel.innerHTML = `<h2>${coord ? "Weekly progress" : "My contributions"}</h2><label>Week<select id="taskWeek"><option value="">All weeks</option>${[...new Set(workspace.reports.map((x) => x.week))].map((w) => `<option>${esc(w)}</option>`).join("")}</select></label><div class="task-grid">${tasks.map(({ r: x, e }) => `<button class="secondary task-card" data-task="${x.id}" data-subject-name="${esc(e.subject)}" data-week="${esc(x.week)}"><strong>${esc(x.className)} · ${esc(e.subject)}</strong><span>${esc(x.week)}</span><span>${!e.submitted ? "English needed" : !e.reviewed ? "Translation review needed" : x.approved ? "Approved" : "Ready for approval"}</span><small>${x.deadline ? "Due " + esc(x.deadline) : "No deadline set"}</small></button>`).join("") || "<p>No assigned contributions.</p>"}</div>`;
+  if (coord)
+    panel.innerHTML += `<details><summary>Set up next week</summary><p>Copy the class and subject setup. Contributions start blank; staff assignments stay in place.</p><form id="nextWeekForm"><label>New week<input name="week" required maxlength="80"></label><label>Submission deadline<input name="deadline" type="date"></label><label>Sending date<input name="sendDate" type="date"></label>${unique.map((x) => `<label><input type="checkbox" name="source" value="${x.id}" checked> ${esc(x.className)}</label>`).join("")}<button>Create next week</button></form></details><details><summary>Class assignments</summary><p>Existing staff keep access to all classes until you choose specific classes.</p>${
+      workspace.members
+        .filter((m) => m.role !== "coordinator")
+        .map(
+          (m, i) =>
+            `<form data-assignment="${esc(m.userId)}"><strong>${esc(m.name)} · ${esc(m.role)} · ${esc((m.subjects || []).join(", "))}</strong><label><input type="checkbox" name="all" ${!m.classes ? "checked" : ""}>All classes, including future classes</label>${unique.map((x) => `<label><input type="checkbox" name="class" value="${esc(x.className)}" ${m.classes?.includes(x.className) ? "checked" : ""}>${esc(x.className)}</label>`).join("")}<button>Save assignment</button></form>`,
+        )
+        .join("") || "<p>Invite teachers or translators first.</p>"
+    }</details>`;
+  $("editor").prepend(panel);
+  panel.onclick = (event) => {
+    event.stopPropagation();
+    const b = event.target.closest("[data-task]");
+    if (b && safeLeave()) {
+      reportId = b.dataset.task;
+      render();
+      const i = current().entries.findIndex(
+        (e) => e.subject === b.dataset.subjectName,
+      );
+      const d = document.querySelector(`.subject[data-index="${i}"]`);
+      if (d) {
+        d.open = true;
+        d.scrollIntoView({ block: "start" });
+      }
+    }
+  };
+  $("taskWeek").onchange = (event) =>
+    panel
+      .querySelectorAll("[data-week]")
+      .forEach(
+        (b) =>
+          (b.hidden =
+            !!event.target.value && b.dataset.week !== event.target.value),
+      );
+  $("taskWeek").value = r.week;
+  $("taskWeek").dispatchEvent(new Event("change"));
+  panel.onsubmit = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (dirty) {
+      status("Save your edits first.");
+      return;
+    }
+    const f = event.target,
+      fd = new FormData(f);
+    run(() =>
+      busy(f.querySelector("button"), () =>
+        f.id === "nextWeekForm"
+          ? change("next-week", {
+              week: fd.get("week"),
+              deadline: fd.get("deadline"),
+              sendDate: fd.get("sendDate"),
+              reportIds: fd.getAll("source"),
+            })
+          : change("assignment", {
+              userId: f.dataset.assignment,
+              classes: fd.get("all") ? null : fd.getAll("class"),
+            }),
+      ),
+    );
+  };
+  const tools = document.createElement("section");
+  tools.className = "newsletter-workflow";
+  const readiness = r.readiness || { issues: [], warnings: [] };
+  tools.innerHTML = `<h3>Ready to publish?</h3>${readiness.issues.map((x) => `<button class="secondary readiness-item" data-issue="${esc(x.subject)}">${esc(x.subject)} — ${esc(x.message)} →</button>`).join("") || "<p>✓ All subject contributions and translations are ready.</p>"}${readiness.warnings.map((x) => `<p>${esc(x)}</p>`).join("")}`;
+  if (coord)
+    tools.innerHTML += `<details><summary>Dates and deadline</summary><form id="scheduleForm"><label>Deadline<input type="date" name="deadline" value="${esc(r.deadline || "")}"></label><label>Sending date<input type="date" name="sendDate" value="${esc(r.sendDate || "")}"></label><button>Save dates</button></form></details>`;
+  tools.innerHTML += `<details><summary>Copy a saved subject to other classes</summary><p>Review the saved text below. Applying replaces English in the selected reports and requires fresh submission and translation review.</p><form id="copySubjectForm"><label>Subject<select name="subject">${r.entries
+    .filter(
+      (e) =>
+        coord ||
+        (allowed(r) &&
+          workspace.myRole === "teacher" &&
+          workspace.mySubjects.includes(e.subject)),
+    )
+    .map((e) => `<option>${esc(e.subject)}</option>`)
+    .join("")}</select></label><pre id="copyText"></pre>${workspace.reports
+    .filter((x) => x.id !== r.id && allowed(x))
+    .map(
+      (x) =>
+        `<label><input type="checkbox" name="target" value="${x.id}">${esc(x.className)} · ${esc(x.week)}</label>`,
+    )
+    .join("")}<button>Apply to selected reports</button></form></details>`;
+  if (coord) {
+    const c = workspace.classLinks?.find((c) => c.className === r.className);
+    tools.innerHTML += `<details><summary>Permanent class link</summary><p>Parents can bookmark this link for the latest published newsletter and previous weeks.</p>${c ? `<input aria-label="Permanent class link" readonly value="${esc(location.origin + "/family-newsletter.html#" + workspace.id + "/" + c.id + "/" + c.token)}"><button data-channel="revoke-class-link">Revoke class link</button>` : '<button data-channel="class-link">Create class link</button>'}</details><button data-phone>Preview on a phone</button>`;
+  }
+  $("editor").append(tools);
+  const updateCopy = () => {
+    const f = $("copySubjectForm");
+    $("copyText").textContent =
+      r.entries.find((e) => e.subject === f.elements.subject.value)?.english ||
+      "No saved English content.";
+  };
+  updateCopy();
+  $("copySubjectForm").elements.subject.onchange = updateCopy;
+  tools.onsubmit = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (dirty) {
+      status("Save your edits first.");
+      return;
+    }
+    const f = event.target,
+      fd = new FormData(f);
+    run(() =>
+      busy(f.querySelector("button"), async () => {
+        if (f.id === "scheduleForm")
+          await change("schedule", {
+            deadline: fd.get("deadline"),
+            sendDate: fd.get("sendDate"),
+          });
+        else if (
+          confirm(
+            "Replace English in the selected reports with this saved text?",
+          )
+        )
+          await change("copy-subject", {
+            subject: fd.get("subject"),
+            reportIds: fd.getAll("target"),
+          });
+      }),
+    );
+  };
+  tools.onclick = (event) => {
+    event.stopPropagation();
+    const b = event.target.closest("button");
+    if (!b) return;
+    if (b.dataset.channel)
+      run(async () => {
+        if (dirty) {
+          status("Save your edits first.");
+          return;
+        }
+        if (
+          b.dataset.channel === "revoke-class-link" &&
+          !confirm(
+            "Revoke this permanent class link? Existing weekly links remain available.",
+          )
+        )
+          return;
+        await change(b.dataset.channel);
+      });
+    if (b.dataset.issue) {
+      const i = r.entries.findIndex((e) => e.subject === b.dataset.issue);
+      const card = document.querySelector(`.subject[data-index="${i}"]`);
+      if (card) {
+        card.open = true;
+        card.scrollIntoView({ block: "start" });
+      }
+    }
+    if (b.hasAttribute("data-phone")) openPhonePreview(r);
+  };
+  document.querySelectorAll(".subject").forEach((card) => {
+    const e = r.entries[Number(card.dataset.index)];
+    if (e.reviewedEnglish !== undefined && e.reviewedEnglish !== e.english) {
+      const d = document.createElement("details");
+      d.innerHTML =
+        "<summary>English changes since translation review</summary>";
+      const old = e.reviewedEnglish.split("\n"),
+        now = e.english.split("\n");
+      for (const [label, rows, other] of [
+        ["Removed or changed", old, now],
+        ["Added or changed", now, old],
+      ]) {
+        const h = document.createElement("h4");
+        h.textContent = label;
+        d.append(h);
+        for (const line of rows.filter((l) => l.trim() && !other.includes(l))) {
+          const p = document.createElement("p");
+          const mark = document.createElement("mark");
+          mark.textContent = line;
+          p.append(mark);
+          d.append(p);
+        }
+      }
+      card.querySelector(".subject-content").prepend(d);
+    }
+  });
+}
+function openPhonePreview(r) {
+  const d = document.createElement("dialog");
+  d.className = "phone-dialog";
+  d.innerHTML =
+    '<button>Close preview</button><p>Saved draft preview · Not published</p><iframe title="Phone newsletter preview" style="width:390px;max-width:100%;height:65vh;border:0"></iframe>';
+  document.body.append(d);
+  d.querySelector("button").onclick = () => d.close();
+  d.onclose = () => {
+    window.removeEventListener("message", ready);
+    d.remove();
+  };
+  d.showModal();
+  const frame = d.querySelector("iframe");
+  frame.src = "/family-newsletter.html?preview=1";
+  const ready = (event) => {
+    if (
+      event.origin !== location.origin ||
+      event.source !== frame.contentWindow ||
+      event.data?.type !== "newsletter-preview-ready"
+    )
+      return;
+    frame.contentWindow.postMessage(
+      {
+        type: "newsletter-preview",
+        data: {
+          school: workspace.name,
+          className: r.className,
+          week: r.week,
+          sendDate: r.sendDate,
+          design: workspace.settings.design,
+          demo: workspace.demo,
+          publishedAt: new Date().toISOString(),
+          entries: r.entries.map(
+            ({ subject, english, vietnamese, links, images }) => ({
+              subject,
+              english,
+              vietnamese,
+              links,
+              images,
+            }),
+          ),
+        },
+      },
+      location.origin,
+    );
+  };
+  window.addEventListener("message", ready);
+}
+
+function newsletterExtras(r, coord) {
+  if (coord) {
+    const section = document.createElement("details");
+    section.className = "newsletter-workflow";
+    section.innerHTML = `<summary>Coordinator reports</summary><p>See responsibilities and follow up with staff. Downloads use the selected filters.</p><form id="progressFilters"><label>Report type<select name="type"><option value="all">All contributions</option><option value="missing">Not submitted</option><option value="submitted">Submitted</option><option value="translation">Translation review outstanding</option><option value="overdue">Overdue contributions or reviews</option><option value="publication">Awaiting approval or publication</option><option value="unassigned">No teacher assigned</option></select></label><label>Week<select name="week"><option value="">All weeks</option>${[...new Set(workspace.reports.map((x) => x.week))].map((x) => `<option>${esc(x)}</option>`).join("")}</select></label><label>Class<select name="className"><option value="">All classes</option>${[...new Set(workspace.reports.map((x) => x.className))].map((x) => `<option>${esc(x)}</option>`).join("")}</select></label><button>Run report</button> <a id="progressDownload" hidden>Download CSV</a></form><div id="progressResult" role="status"></div>`;
+    $("editor").prepend(section);
+    section.onclick = (e) => e.stopPropagation();
+    section.onchange = () => {
+      $("progressDownload").hidden = true;
+    };
+    section.onsubmit = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      run(async () => {
+        const query = new URLSearchParams(
+            new FormData($("progressFilters")),
+          ).toString(),
+          result = await api("/" + workspace.id + "/progress-report?" + query);
+        $("progressDownload").hidden = false;
+        $("progressDownload").href =
+          root +
+          "/" +
+          workspace.id +
+          "/progress-report?" +
+          query +
+          "&format=csv";
+        $("progressResult").innerHTML =
+          `<p>${result.rows.length} contributions</p><div style="overflow:auto"><table><thead><tr><th>Class / week</th><th>Subject</th><th>Teacher</th><th>Translator</th><th>Submitted</th><th>Submitted by</th><th>Reviewed</th><th>Approved</th><th>Published</th><th>Due</th></tr></thead><tbody>${result.rows.map((x) => `<tr><td>${esc(x.className)} · ${esc(x.week)}</td><td>${esc(x.subject)}</td><td>${esc(x.teachers || "Unassigned")}</td><td>${esc(x.translators || "Unassigned")}</td><td>${x.submitted}</td><td>${esc(x.submittedBy)}</td><td>${x.reviewed}</td><td>${x.approved ? "Yes" : "No"}</td><td>${x.publicationCurrent ? "Current" : x.published ? "Older version" : "No"}</td><td>${esc(x.deadline)}${x.overdue ? " · Overdue" : ""}</td></tr>`).join("")}</tbody></table></div>`;
+      });
+    };
+  }
+  document.querySelectorAll(".subject").forEach((card) => {
+    const entry = r.entries[Number(card.dataset.index)];
+    const editable =
+      coord ||
+      (workspace.myRole === "teacher" &&
+        workspace.mySubjects.includes(entry.subject) &&
+        (!workspace.myClasses || workspace.myClasses.includes(r.className)));
+    if (!editable) return;
+    const d = document.createElement("details");
+    d.className = "subject-media";
+    const key = mediaKey(entry.subject);
+    if (!mediaDrafts.has(key)) {
+      try {
+        const saved = JSON.parse(localStorage.getItem(key) || "null");
+        if (saved) mediaDrafts.set(key, saved);
+      } catch {}
+    }
+    const draft = mediaDrafts.get(key);
+    let images = structuredClone(draft?.images || entry.images || []);
+    d.innerHTML = `<summary>Links and images</summary><p>Add up to 8 useful links and 3 images. Changes require submission and review before publication.</p><label>Links — one per line: title | https://address<textarea data-links rows="3">${esc(draft?.linksText ?? (entry.links || []).map((l) => l.label + " | " + l.url).join("\n"))}</textarea></label><label>Add an image<input data-image type="file" accept="image/png,image/jpeg,image/webp"></label><div data-images></div><button data-save-media>Save links and images</button><p data-media-status role="status"></p>`;
+    card.querySelector(".subject-content").append(d);
+    const keep = () => {
+      const value = {
+        images: structuredClone(images),
+        linksText: d.querySelector("[data-links]").value,
+      };
+      mediaDrafts.set(key, value);
+      dirty = true;
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch {
+        d.querySelector("[data-media-status]").textContent =
+          "This image draft is too large to keep after reload. Save it now.";
+      }
+    };
+    const renderImages = () => {
+      d.querySelector("[data-images]").innerHTML = images
+        .map(
+          (i, n) =>
+            `<figure><img src="${esc(i.data)}" alt="Newsletter image" style="max-width:220px;max-height:140px"><label>Image description / caption<input data-caption="${n}" value="${esc(i.caption)}" maxlength="300"></label><button data-remove-image="${n}">Remove image</button></figure>`,
+        )
+        .join("");
+    };
+    renderImages();
+    d.addEventListener("input", (e) => {
+      if (e.target.dataset.caption !== undefined)
+        images[Number(e.target.dataset.caption)].caption = e.target.value;
+      keep();
+    });
+    d.onchange = async (e) => {
+      if (!e.target.matches("[data-image]")) return;
+      try {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (images.length >= 3)
+          throw Error("Remove an image before adding another.");
+        if (file.size > 8000000)
+          throw Error("Choose an image smaller than 8 MB.");
+        const bitmap = await createImageBitmap(file),
+          canvas = document.createElement("canvas");
+        const scale = Math.min(1, 1200 / bitmap.width, 900 / bitmap.height);
+        canvas.width = Math.round(bitmap.width * scale);
+        canvas.height = Math.round(bitmap.height * scale);
+        canvas
+          .getContext("2d")
+          .drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        bitmap.close();
+        images.push({
+          data: canvas.toDataURL("image/jpeg", 0.75),
+          caption: "",
+        });
+        renderImages();
+        keep();
+        d.querySelector("[data-media-status]").textContent =
+          "Image ready. Save links and images to keep it.";
+      } catch (err) {
+        d.querySelector("[data-media-status]").textContent = err.message;
+      } finally {
+        e.target.value = "";
+      }
+    };
+    d.onclick = (e) => {
+      e.stopPropagation();
+      const b = e.target.closest("button");
+      if (!b) return;
+      e.preventDefault();
+      if (b.dataset.removeImage !== undefined) {
+        images.splice(Number(b.dataset.removeImage), 1);
+        renderImages();
+        keep();
+      }
+      if (b.hasAttribute("data-save-media"))
+        run(() =>
+          busy(b, async () => {
+            try {
+              const links = lines(d.querySelector("[data-links]").value).map(
+                (line) => {
+                  const i = line.indexOf("|");
+                  return i < 0
+                    ? { label: line, url: line }
+                    : {
+                        label: line.slice(0, i).trim(),
+                        url: line.slice(i + 1).trim(),
+                      };
+                },
+              );
+              const snapshot = JSON.stringify(mediaDrafts.get(key));
+              const result = await api("/" + workspace.id + "/change", {
+                revision: workspace.revision,
+                reportId,
+                action: "media",
+                subject: entry.subject,
+                links,
+                images,
+              });
+              if (JSON.stringify(mediaDrafts.get(key)) === snapshot) {
+                mediaDrafts.delete(key);
+                localStorage.removeItem(key);
+              }
+              setWorkspace(result);
+              status(
+                "Links and images saved. Submit the contribution when ready.",
+              );
+            } catch (err) {
+              d.querySelector("[data-media-status]").textContent = err.message;
+              throw err;
+            }
+          }),
+        );
+    };
+  });
+}

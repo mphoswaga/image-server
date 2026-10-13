@@ -118,6 +118,20 @@ function drawSchoolReport(doc, workspace, report) {
       }
       y += 8;
     }
+    y = require("./newsletter-media").draw(
+      doc,
+      entry,
+      x + 22,
+      y,
+      width - 44,
+      bottom,
+      () => {
+        doc.addPage();
+        header();
+        band(entry.subject + " · continued", navy, 25, 12);
+        return y;
+      },
+    );
     doc
       .moveTo(x, y)
       .lineTo(x + width, y)

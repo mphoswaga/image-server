@@ -76,3 +76,22 @@ Links have no time expiry. Republish keeps the link, while **Revoke link** inval
 it; publishing afterwards creates a new link. Draft edits never update the public
 version until the coordinator approves and republishes. Revocation cannot retract
 already downloaded PDFs.
+
+## Weekly organisation and class delivery
+
+- Weekly progress lists each class/subject and defaults to the selected week. Teachers and translators get **My contributions**, filtered by their subjects and class assignments. Clicking a task opens its contribution.
+- **Set up next week** copies selected classes and subjects into blank reports, retaining workspace staff assignments. Duplicate class/week creation is rejected atomically. Set a submission deadline and sending date; deadlines after sending dates are rejected.
+- **Class assignments** scopes existing teachers/translators to selected class names. Legacy memberships keep all-class access until explicitly changed. Server checks cover editing, AI generation and cross-class copying. These scopes control contribution responsibility; workspace members can still read other reports.
+- **Copy a saved subject to other classes** previews the exact saved English. Applying requires confirmation, preserves target history, clears approval/submission and requires translation review again. Existing public snapshots remain unchanged.
+- Vietnamese review stores the English reviewed at that time. Later English edits display changed/added and removed lines. Older records without a baseline cannot reconstruct a precise comparison until a new review (or a change from a currently reviewed contribution).
+- Readiness lists missing submission/review and character-minimum issues with links to the relevant subject. Missing sending dates are advisory. Dates do not cause automatic sending or reminders.
+- **Preview on a phone** renders saved draft text using the parent reader inside a phone-width frame without publishing it. No public capability is created for draft previews.
+- **Permanent class link** is created after the first publication. It resolves to the latest published sending date (publication date when absent) and offers only published editions. Withdrawing a weekly publication removes it from this archive. Class-link revocation is independent of previously shared weekly links. There is no expiry. Class identity uses the existing class name; use consistent names across weeks.
+
+## Coordinator reports and subject media
+
+**Coordinator reports** offers all contributions, submitted, not submitted, outstanding translation review, overdue, awaiting approval/publication and unassigned subjects. Filter by class and week, then run the report and download its CSV. The API requires coordinator membership. Assigned teachers and actual submitters are separate fields; historical submissions without recorded attribution show “Not recorded”. Overdue includes outstanding submission or review after the deadline, using the school timezone (Asia/Ho_Chi_Minh). CSV values are quoted and formula-leading text is escaped.
+
+Subject teachers/coordinators can add up to eight labelled HTTP(S) links and three PNG/JPEG/WebP images through **Links and images**. Images are resized client-side and decoded/re-encoded server-side with pixel and size limits; remote image URLs and arbitrary HTML are not accepted. Captions accompany images in both language views. Media drafts recover locally where browser storage permits; media edits invalidate submission, translation review and approval. Publication snapshots preserve their media until explicitly republished or revoked. Images also appear in phone previews, parent readers and PDFs; PDF links are clickable.
+
+Image bytes are stored under `DATA_DIR/school-newsletters/media` with immutable SHA-256 filenames; report/history snapshots keep references. Include this folder in backups. It has no unauthenticated static route. Removing an image from a draft does not erase older approved/history copies or previously downloaded PDFs.

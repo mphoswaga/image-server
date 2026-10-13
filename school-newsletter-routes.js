@@ -30,6 +30,7 @@ function register(
         req.params.id,
         req.params.reportId,
         (req.headers.authorization || "").replace(/^Bearer /, ""),
+        req.query.edition,
       );
       if (req.path.endsWith("/pdf")) {
         const bytes = await require("./school-newsletter-pdf").newsletterPdf(
@@ -45,12 +46,10 @@ function register(
           .send(bytes);
       } else res.json(p);
     } catch (e) {
-      res
-        .status(404)
-        .json({
-          error:
-            "This newsletter link is unavailable. Please ask your school for the current link.",
-        });
+      res.status(404).json({
+        error:
+          "This newsletter link is unavailable. Please ask your school for the current link.",
+      });
     }
   });
   app.get("/newsletter-school-logo.png", (_req, res) =>
@@ -112,6 +111,25 @@ function register(
       return { text: JSON.stringify(newsletterSource(w), null, 2) };
     }),
   );
+  app.get(root + "/:id/progress-report", (req, res) => {
+    try {
+      const w = access(req);
+      store.coordinator(w, req.user);
+      const progress = require("./newsletter-progress"),
+        rows = progress.rows(w, req.query);
+      if (req.query.format === "csv")
+        res
+          .type("text/csv")
+          .set(
+            "Content-Disposition",
+            'attachment; filename="newsletter-progress.csv"',
+          )
+          .send(progress.csv(rows));
+      else res.json({ rows });
+    } catch (e) {
+      res.status(e.status || 400).json({ error: e.message });
+    }
+  });
   app.get(
     root + "/:id",
     route((req) => store.view(access(req), req.user)),
@@ -146,15 +164,25 @@ function register(
   );
   app.post(
     root + "/:id/change",
-    route((req) =>
-      store.change(
+    route(async (req) => {
+      const input = { ...req.body };
+      if (input.action === "media") {
+        const w = access(req),
+          r = store.report(w, input.reportId);
+        store.editable(w, req.user, input.subject, false, r.className);
+        Object.assign(
+          input,
+          await require("./newsletter-media").normalise(input),
+        );
+      }
+      return store.change(
         req.user,
         req.params.id,
-        req.body.revision,
-        req.body.action,
-        req.body,
-      ),
-    ),
+        input.revision,
+        input.action,
+        input,
+      );
+    }),
   );
   app.post(
     root + "/:id/upload",
@@ -203,7 +231,13 @@ function register(
         if (!source.length || source.some((e) => !e.english.trim()))
           throw Error("Choose subjects with saved English content.");
       } else {
-        store.editable(w, req.user, b.subject, mode === "translate");
+        store.editable(
+          w,
+          req.user,
+          b.subject,
+          mode === "translate",
+          r.className,
+        );
         const entry = r.entries.find((e) => e.subject === b.subject);
         if (!entry) throw Error("Subject not found.");
         source =

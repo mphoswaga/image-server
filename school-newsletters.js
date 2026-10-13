@@ -14,6 +14,7 @@ function fail(message, status = 400) {
   throw e;
 }
 function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
+  const mediaRoot = path.join(dir, "media");
   const filename = (id) => {
     if (!/^[a-f0-9-]{36}$/.test(id || "")) fail("Workspace not found.", 404);
     return path.join(dir, id + ".json");
@@ -21,7 +22,10 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
   function read(id) {
     const f = filename(id);
     if (!fs.existsSync(f)) fail("Workspace not found.", 404);
-    return JSON.parse(fs.readFileSync(f));
+    return require("./newsletter-media").hydrate(
+      JSON.parse(fs.readFileSync(f)),
+      mediaRoot,
+    );
   }
   const all = () =>
     fs.existsSync(dir)
@@ -43,12 +47,15 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
   }
   function view(w, user) {
     const m = member(w, user);
-    const copy = structuredClone(w);
+    const copy = require("./newsletter-media").hydrate(w, mediaRoot);
     if (m.role !== "coordinator")
       for (const r of copy.reports)
         if (r.publication) delete r.publication.token;
     copy.myRole = m.role;
     copy.mySubjects = m.subjects;
+    copy.myClasses = m.classes ?? null;
+    if (m.role !== "coordinator") delete copy.classLinks;
+    copy.reports.forEach((r) => (r.readiness = readiness(w, r)));
     if (m.role !== "coordinator") delete copy.invites;
     if (m.role !== "coordinator")
       copy.members = copy.members.map(({ name, role, subjects }) => ({
@@ -61,7 +68,10 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
   function save(w) {
     w.revision++;
     w.updatedAt = new Date().toISOString();
-    writeJsonAtomic(filename(w.id), w);
+    writeJsonAtomic(
+      filename(w.id),
+      require("./newsletter-media").pack(w, mediaRoot),
+    );
     return w;
   }
   function mutate(user, id, revision, fn) {
@@ -94,19 +104,59 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
     if (!r) fail("Newsletter not found.", 404);
     return r;
   }
-  function editable(w, user, subject, translation = false) {
+  function editable(w, user, subject, translation = false, className) {
     const m = member(w, user);
     if (
       m.role === "coordinator" ||
-      (translation && m.role === "translator") ||
-      (!translation && m.role === "teacher" && m.subjects.includes(subject))
+      ((!m.classes || m.classes.includes(className)) &&
+        ((translation && m.role === "translator") ||
+          (!translation &&
+            m.role === "teacher" &&
+            m.subjects.includes(subject))))
     )
       return;
     fail("This subject or review stage is not assigned to you.", 403);
   }
+  function readiness(w, r) {
+    const issues = [];
+    for (const e of r.entries) {
+      if (!e.submitted)
+        issues.push({ subject: e.subject, message: "Submit English" });
+      if (count(e.english) < Math.max(1, w.settings.minimum))
+        issues.push({
+          subject: e.subject,
+          message: "English is below the minimum",
+        });
+      if (!e.reviewed)
+        issues.push({
+          subject: e.subject,
+          message: "Review Vietnamese against the latest English",
+        });
+      if (count(e.vietnamese) < Math.max(1, w.settings.vietnameseMinimum))
+        issues.push({
+          subject: e.subject,
+          message: "Vietnamese is below the minimum",
+        });
+    }
+    return {
+      issues,
+      warnings: !r.sendDate ? ["Choose a sending date"] : [],
+      ready: !issues.length,
+    };
+  }
+  function date(value) {
+    if (!value) return "";
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+      !Number.isFinite(Date.parse(value)) ||
+      new Date(value).toISOString().slice(0, 10) !== value
+    )
+      fail("Choose a valid date.");
+    return value;
+  }
   return {
     read,
-    published(id, reportId, token) {
+    published(id, reportId, token, edition) {
       if (!/^[a-f0-9]{64}$/.test(token || ""))
         fail("This newsletter link is unavailable.", 404);
       let w;
@@ -114,6 +164,41 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
         w = read(id);
       } catch {
         fail("This newsletter link is unavailable.", 404);
+      }
+      const channel = (w.classLinks || []).find((c) => c.id === reportId);
+      if (channel) {
+        if (
+          !channel.token ||
+          !crypto.timingSafeEqual(
+            Buffer.from(channel.token),
+            Buffer.from(token),
+          )
+        )
+          fail("This newsletter link is unavailable.", 404);
+        const editions = w.reports
+          .filter((r) => r.className === channel.className && r.publication)
+          .sort((a, b) =>
+            (
+              b.publication.content.sendDate ||
+              b.publication.content.publishedAt
+            ).localeCompare(
+              a.publication.content.sendDate ||
+                a.publication.content.publishedAt,
+            ),
+          );
+        const selected = edition
+          ? editions.find((r) => r.id === edition)
+          : editions[0];
+        if (!selected) fail("No published newsletter is available.", 404);
+        return {
+          ...structuredClone(selected.publication.content),
+          editionId: selected.id,
+          editions: editions.map((r) => ({
+            id: r.id,
+            week: r.publication.content.week,
+            sendDate: r.publication.content.sendDate,
+          })),
+        };
       }
       const p = w.reports.find((r) => r.id === reportId)?.publication;
       if (
@@ -217,6 +302,13 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
           email,
           role: input.role,
           subjects,
+          classes: Array.isArray(input.classes)
+            ? [
+                ...new Set(
+                  input.classes.map((c) => text(c, 80)).filter(Boolean),
+                ),
+              ]
+            : null,
           createdAt: new Date().toISOString(),
         };
         w.invites.push(invitation);
@@ -240,6 +332,7 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
           name: user.name || user.email,
           role: i.role,
           subjects: i.subjects,
+          classes: i.classes ?? null,
         });
       require("./teacher-access").grantNewsletterIfNew(user, i.createdAt);
       w.invites = w.invites.filter((x) => x !== i);
@@ -259,6 +352,7 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
             design: "vinschool",
           };
           delete w.preview;
+          delete w.classLinks;
           return;
         }
         if (action === "design") {
@@ -321,7 +415,7 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
             id: crypto.randomUUID(),
             className,
             week,
-            sendDate: text(input.sendDate, 20),
+            sendDate: date(input.sendDate),
             entries: subjects.map((subject) => ({
               subject,
               english: "",
@@ -334,7 +428,125 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
           });
           return;
         }
+        if (action === "assignment") {
+          coordinator(w, user);
+          const m = w.members.find((m) => m.userId === input.userId);
+          if (!m || m.role === "coordinator")
+            fail("Choose a teacher or translator.");
+          if (
+            input.classes !== null &&
+            (!Array.isArray(input.classes) || !input.classes.length)
+          )
+            fail("Choose classes or all classes.");
+          m.classes =
+            input.classes === null
+              ? null
+              : [...new Set(input.classes.map((c) => text(c, 80)))];
+          return;
+        }
+        if (action === "next-week") {
+          coordinator(w, user);
+          const week = text(input.week, 80),
+            ids = [...new Set(input.reportIds || [])];
+          if (!week || !ids.length)
+            fail("Choose source classes and enter the new week.");
+          const sources = ids.map((id) => report(w, id));
+          if (new Set(sources.map((r) => r.className)).size !== sources.length)
+            fail("Choose one source per class.");
+          if (
+            sources.some((r) =>
+              w.reports.some(
+                (x) => x.className === r.className && x.week === week,
+              ),
+            )
+          )
+            fail("That week already exists for a selected class.");
+          const sendDate = date(input.sendDate),
+            deadline = date(input.deadline);
+          if (deadline && sendDate && deadline > sendDate)
+            fail("Deadline must not follow the sending date.");
+          for (const r of sources)
+            w.reports.push({
+              id: crypto.randomUUID(),
+              className: r.className,
+              week,
+              sendDate,
+              deadline,
+              entries: r.entries.map((e) => ({
+                subject: e.subject,
+                english: "",
+                vietnamese: "",
+                submitted: false,
+                reviewed: false,
+              })),
+              history: [],
+              approved: null,
+            });
+          return;
+        }
         const r = report(w, input.reportId);
+        if (action === "schedule") {
+          coordinator(w, user);
+          const deadline = date(input.deadline),
+            sendDate = date(input.sendDate);
+          if (deadline && sendDate && deadline > sendDate)
+            fail("Deadline must not follow the sending date.");
+          if (r.sendDate !== sendDate) archive(r, user);
+          r.deadline = deadline;
+          r.sendDate = sendDate;
+          return;
+        }
+        if (action === "class-link" || action === "revoke-class-link") {
+          coordinator(w, user);
+          w.classLinks ||= [];
+          let c = w.classLinks.find((c) => c.className === r.className);
+          if (action === "revoke-class-link") {
+            w.classLinks = w.classLinks.filter((x) => x !== c);
+            return;
+          }
+          if (
+            !w.reports.some((x) => x.className === r.className && x.publication)
+          )
+            fail("Publish a newsletter for this class first.");
+          if (!c)
+            w.classLinks.push({
+              id: crypto.randomUUID(),
+              className: r.className,
+              token: crypto.randomBytes(32).toString("hex"),
+            });
+          return;
+        }
+        if (action === "copy-subject") {
+          const source = r.entries.find((e) => e.subject === input.subject);
+          if (!source?.english.trim())
+            fail("Save the source contribution first.");
+          editable(w, user, source.subject, false, r.className);
+          const targets = [...new Set(input.reportIds || [])].map((id) =>
+            report(w, id),
+          );
+          if (
+            !targets.length ||
+            targets.some(
+              (x) =>
+                x.id === r.id ||
+                !x.entries.some((e) => e.subject === source.subject),
+            )
+          )
+            fail("Choose other reports with this subject.");
+          for (const target of targets)
+            editable(w, user, source.subject, false, target.className);
+          for (const target of targets) {
+            archive(target, user);
+            const e = target.entries.find((e) => e.subject === source.subject);
+            e.english = source.english;
+            e.links = structuredClone(source.links || []);
+            e.images = structuredClone(source.images || []);
+            e.submittedAt = null;
+            e.submitted = false;
+            e.reviewed = false;
+          }
+          return;
+        }
         if (
           action === "publish" ||
           action === "revoke-publication" ||
@@ -363,10 +575,12 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
               entries: (action === "prepare-parent-demo"
                 ? require("./school-newsletter-demo").demoReport().entries
                 : r.approved.entries
-              ).map(({ subject, english, vietnamese }) => ({
+              ).map(({ subject, english, vietnamese, links, images }) => ({
                 subject,
                 english,
                 vietnamese,
+                links: links || [],
+                images: images || [],
               })),
             },
           };
@@ -412,6 +626,7 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
           for (const item of p.entries) {
             const e = r.entries.find((e) => e.subject === item.subject);
             e.english = item.english;
+            e.submittedAt = null;
             e.submitted = false;
             e.reviewed = false;
           }
@@ -420,19 +635,31 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
         }
         const e = r.entries.find((e) => e.subject === input.subject);
         if (!e) fail("Subject not found.");
-        if (action === "english") {
-          editable(w, user, e.subject);
+        if (action === "media") {
+          editable(w, user, e.subject, false, r.className);
+          archive(r, user);
+          e.links = input.links;
+          e.images = input.images;
+          e.submitted = false;
+          e.submittedAt = null;
+          e.reviewed = false;
+        } else if (action === "english") {
+          editable(w, user, e.subject, false, r.className);
           if (typeof input.text !== "string" || input.text.length > 30000)
             fail("Contributions must be text of at most 30,000 characters.");
           const value = text(input.text);
           if (input.submit && count(value) < Math.max(1, w.settings.minimum))
             fail("The contribution is below the English character minimum.");
           archive(r, user);
+          if (e.reviewed && e.reviewedEnglish === undefined)
+            e.reviewedEnglish = e.english;
           if (e.english !== value) e.reviewed = false;
           e.english = value;
           e.submitted = !!input.submit;
+          e.submittedAt = e.submitted ? new Date().toISOString() : null;
+          e.submittedBy = e.submitted ? user.name || user.email : null;
         } else if (action === "vietnamese") {
-          editable(w, user, e.subject, true);
+          editable(w, user, e.subject, true, r.className);
           if (typeof input.text !== "string" || input.text.length > 30000)
             fail("Contributions must be text of at most 30,000 characters.");
           const value = text(input.text);
@@ -447,6 +674,11 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
           archive(r, user);
           e.vietnamese = value;
           e.reviewed = !!input.review;
+          if (e.reviewed) {
+            e.reviewedEnglish = e.english;
+            e.reviewedBy = user.name || user.email;
+            e.reviewedAt = new Date().toISOString();
+          }
         } else fail("Unknown action.");
       });
     },

@@ -38,10 +38,11 @@ const copy = {
     failed: "Không thể tải bản PDF. Ba mẹ vui lòng thử lại.",
   },
 };
+let selectedEdition = "";
 let data,
   lang = "en";
 const [workspace, report, token] = location.hash.slice(1).split("/");
-const endpoint =
+let endpoint =
   "/api/parent-newsletters/" +
   encodeURIComponent(workspace || "") +
   "/" +
@@ -95,6 +96,9 @@ function render() {
       lang === "vi" ? "vi-VN" : "en-GB",
       { day: "numeric", month: "long", year: "numeric" },
     );
+  if (new URLSearchParams(location.search).has("preview"))
+    $("updated").textContent =
+      lang === "vi" ? "Bản xem trước" : "Draft preview";
   $("subjects").replaceChildren();
   $("entries").replaceChildren();
   data.entries.forEach((e, i) => {
@@ -139,6 +143,34 @@ function render() {
       }
       if (lines.join("\n").trim()) paragraph(prose, lines.join("\n"));
     }
+    for (const link of e.links || []) {
+      try {
+        const u = new URL(link.url);
+        if (!["https:", "http:"].includes(u.protocol)) continue;
+        const p = document.createElement("p"),
+          a = document.createElement("a");
+        a.href = u.href;
+        a.textContent = link.label || u.href;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        p.append(a);
+        prose.append(p);
+      } catch {}
+    }
+    for (const item of e.images || []) {
+      if (!/^data:image\/jpeg;base64,/.test(item.data)) continue;
+      const figure = document.createElement("figure"),
+        img = document.createElement("img"),
+        caption = document.createElement("figcaption");
+      img.src = item.data;
+      img.alt = item.caption || e.subject;
+      img.loading = "lazy";
+      img.style.cssText = "width:100%;height:auto;border-radius:12px";
+      caption.textContent = item.caption || "";
+      figure.style.margin = "20px 0";
+      figure.append(img, caption);
+      prose.append(figure);
+    }
     d.append(prose);
     d.addEventListener("toggle", updateExpand);
     $("entries").append(d);
@@ -171,7 +203,14 @@ $("download").onclick = async () => {
   b.disabled = true;
   $("downloadStatus").textContent = copy[lang].loading;
   try {
-    const r = await fetch(endpoint + "/pdf", options);
+    const r = await fetch(
+      endpoint +
+        "/pdf" +
+        (selectedEdition
+          ? "?edition=" + encodeURIComponent(selectedEdition)
+          : ""),
+      options,
+    );
     if (!r.ok) throw Error();
     const url = URL.createObjectURL(await r.blob()),
       a = document.createElement("a");
@@ -188,10 +227,63 @@ $("download").onclick = async () => {
 };
 (async () => {
   try {
+    if (new URLSearchParams(location.search).has("preview")) {
+      $("status").textContent = "Opening preview…";
+      window.addEventListener("message", (event) => {
+        if (
+          event.origin !== location.origin ||
+          event.source !== parent ||
+          event.data?.type !== "newsletter-preview"
+        )
+          return;
+        data = event.data.data;
+        render();
+        $("updated").textContent =
+          lang === "vi" ? "Bản xem trước" : "Draft preview";
+        $("download").hidden = true;
+        $("content").hidden = false;
+        $("status").textContent = "";
+      });
+      parent.postMessage({ type: "newsletter-preview-ready" }, location.origin);
+      return;
+    }
     if (!token) throw Error();
     const r = await fetch(endpoint, options);
     if (!r.ok) throw Error();
     data = await r.json();
+    if (data.editions) {
+      const label = document.createElement("label");
+      label.textContent = "Choose a week / Chọn tuần";
+      const select = document.createElement("select");
+      label.append(select);
+      $("content").prepend(label);
+      for (const e of data.editions) {
+        const o = document.createElement("option");
+        o.value = e.id;
+        o.textContent = e.week + (e.sendDate ? " · " + e.sendDate : "");
+        select.append(o);
+      }
+      select.value = data.editionId;
+      selectedEdition = data.editionId;
+      select.onchange = async () => {
+        select.disabled = true;
+        try {
+          const response = await fetch(
+            endpoint + "?edition=" + encodeURIComponent(select.value),
+            options,
+          );
+          if (!response.ok) throw Error();
+          data = await response.json();
+          selectedEdition = data.editionId;
+          render();
+        } catch {
+          $("status").textContent = copy[lang].error;
+          $("content").hidden = true;
+        } finally {
+          select.disabled = false;
+        }
+      };
+    }
     render();
     $("status").textContent = "";
     $("content").hidden = false;

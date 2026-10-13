@@ -331,3 +331,20 @@ footer p {
     }
   }
 }
+
+#content > label {
+  display: block;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+#content > label select {
+  display: block;
+  font: inherit;
+  padding: 12px;
+  margin-top: 8px;
+  width: 100%;
+  border: 1px solid #cbd8df;
+  border-radius: 12px;
+  background: white;
+  color: #203b53;
+}

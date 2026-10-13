@@ -402,6 +402,143 @@ test("parent publication is an approved snapshot, stays private until republishe
 
 test("parent demo cannot bypass approval on a real workspace", (t) => {
   const { store, owner, w } = setup(t);
-  assert.throws(() => store.change(owner, w.id, w.revision, "prepare-parent-demo", {reportId: w.reports[0].id}), /only available in a demo/);
+  assert.throws(
+    () =>
+      store.change(owner, w.id, w.revision, "prepare-parent-demo", {
+        reportId: w.reports[0].id,
+      }),
+    /only available in a demo/,
+  );
   assert.equal(store.read(w.id).reports[0].publication, undefined);
+});
+
+test("weekly setup, scoped assignments, safe bulk reuse and translation baselines", (t) => {
+  const { store, owner, w: initial } = setup(t);
+  let w = initial;
+  const first = w.reports[0].id;
+  const change = (action, input = {}) =>
+    (w = store.change(owner, w.id, w.revision, action, {
+      reportId: first,
+      ...input,
+    }));
+  change("schedule", { sendDate: "2026-10-23", deadline: "2026-10-21" });
+  change("next-week", {
+    reportIds: [first],
+    week: "Week 10",
+    sendDate: "2026-10-30",
+    deadline: "2026-10-28",
+  });
+  const next = w.reports[1];
+  assert.equal(next.entries[0].english, "");
+  assert.equal(next.approved, null);
+  assert.equal(next.deadline, "2026-10-28");
+  assert.throws(
+    () => change("next-week", { reportIds: [first], week: "Week 10" }),
+    /already exists/,
+  );
+  assert.throws(
+    () =>
+      change("schedule", { deadline: "2026-11-01", sendDate: "2026-10-30" }),
+    /Deadline/,
+  );
+  change("english", {
+    subject: "ICT",
+    text: "Original learning",
+    submit: true,
+  });
+  change("vietnamese", {
+    subject: "ICT",
+    text: "Vietnamese translation",
+    review: true,
+  });
+  change("english", { subject: "ICT", text: "Updated learning", submit: true });
+  assert.equal(w.reports[0].entries[0].reviewedEnglish, "Original learning");
+  assert.equal(w.reports[0].entries[0].reviewed, false);
+  change("copy-subject", { subject: "ICT", reportIds: [next.id] });
+  assert.equal(w.reports[1].entries[0].english, "Updated learning");
+  assert.equal(w.reports[1].entries[0].submitted, false);
+  const teacher = {
+    id: "scoped",
+    email: "scoped@school.test",
+    role: "teacher",
+  };
+  const invitation = store.invite(owner, w.id, w.revision, {
+    email: teacher.email,
+    role: "teacher",
+    subjects: ["ICT"],
+    classes: ["Other class"],
+  });
+  store.accept(teacher, invitation.token);
+  w = store.view(store.read(w.id), owner);
+  assert.throws(
+    () =>
+      store.change(teacher, w.id, w.revision, "english", {
+        reportId: first,
+        subject: "ICT",
+        text: "No",
+        submit: false,
+      }),
+    /not assigned/,
+  );
+  assert.throws(
+    () =>
+      store.change(teacher, w.id, w.revision, "copy-subject", {
+        reportId: first,
+        subject: "ICT",
+        reportIds: [next.id],
+      }),
+    /not assigned/,
+  );
+  change("assignment", { userId: teacher.id, classes: ["3B2"] });
+  w = store.change(teacher, w.id, w.revision, "english", {
+    reportId: next.id,
+    subject: "ICT",
+    text: "Allowed",
+    submit: false,
+  });
+  assert.equal(w.reports[1].entries[0].english, "Allowed");
+  assert.ok(w.reports[1].readiness.issues.length);
+});
+
+test("permanent class links expose only published editions and revoke independently", (t) => {
+  const { store, owner } = setup(t);
+  let w = store.demo(owner);
+  const first = w.reports[0].id;
+  const change = (action, input = {}) =>
+    (w = store.change(owner, w.id, w.revision, action, {
+      reportId: first,
+      ...input,
+    }));
+  change("prepare-parent-demo");
+  change("class-link");
+  const link = w.classLinks[0];
+  change("next-week", {
+    week: "Later week",
+    reportIds: [first],
+    sendDate: "2026-11-06",
+  });
+  const second = w.reports[1].id;
+  let publicView = store.published(w.id, link.id, link.token);
+  assert.equal(publicView.editions.length, 1);
+  change("prepare-parent-demo", { reportId: second });
+  publicView = store.published(w.id, link.id, link.token);
+  assert.equal(publicView.editionId, second);
+  assert.equal(publicView.editions.length, 2);
+  assert.equal(
+    store.published(w.id, link.id, link.token, first).week,
+    "Sample week",
+  );
+  assert.throws(
+    () => store.published(w.id, link.id, link.token, "unknown"),
+    /No published/,
+  );
+  change("revoke-publication", { reportId: second });
+  assert.equal(store.published(w.id, link.id, link.token).editionId, first);
+  const weeklyToken = w.reports[0].publication.token;
+  change("revoke-class-link");
+  assert.throws(
+    () => store.published(w.id, link.id, link.token),
+    /unavailable/,
+  );
+  assert.equal(store.published(w.id, first, weeklyToken).week, "Sample week");
 });

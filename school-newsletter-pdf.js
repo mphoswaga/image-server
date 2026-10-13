@@ -1,7 +1,9 @@
 const PDFDocument = require("pdfkit");
 const path = require("path");
 function newsletterPdf(workspace, report) {
-  const schoolDesign = (workspace.settings?.design || (workspace.demo ? "vinschool" : "standard")) === "vinschool";
+  const schoolDesign =
+    (workspace.settings?.design ||
+      (workspace.demo ? "vinschool" : "standard")) === "vinschool";
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: schoolDesign ? "LETTER" : "A4",
@@ -89,6 +91,18 @@ function newsletterPdf(workspace, report) {
             );
           doc.moveDown();
         }
+        doc.y = require("./newsletter-media").draw(
+          doc,
+          entry,
+          48,
+          doc.y,
+          doc.page.width - 96,
+          doc.page.height - 65,
+          () => {
+            doc.addPage();
+            return 48;
+          },
+        );
       }
     }
     const { count } = doc.bufferedPageRange();
