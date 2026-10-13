@@ -182,8 +182,9 @@ function render() {
       "<h2>Ready for the first week</h2><p>Add a class newsletter, then invite your subject teachers and assistants.</p>";
     return;
   }
+  const canPublish = coord || (workspace.myRole === "translator" && (!workspace.myClasses || workspace.myClasses.includes(r.className)));
   $("editor").innerHTML =
-    `<div class="report-heading"><div><p class="eyebrow">${esc(r.week)}</p><h2>${esc(r.className)}</h2><p class="hint">${r.sendDate ? "Sending " + esc(r.sendDate) : "Your weekly update for families"}</p></div><span class="pill">${r.approved ? "Approved for sharing" : r.entries.every((e) => e.submitted && e.reviewed) ? "Ready for approval" : r.entries.every((e) => e.submitted) ? "Awaiting translation & review" : "Draft"}</span></div><div class="workflow-progress"><span><b>${r.entries.filter((e) => e.submitted).length}/${r.entries.length}</b> contributions submitted</span><span><b>${r.entries.filter((e) => e.reviewed).length}/${r.entries.length}</b> translations reviewed</span></div><div class="report-preview-card"><div class="paper-symbol" aria-hidden="true">▤</div><div><h3>Your family newsletter</h3><p class="hint">${(workspace.settings.design || (workspace.demo ? "vinschool" : "standard")) === "vinschool" ? "Vinschool · Cambridge weekly report" : "LessonScope report"} · Preview the saved pages before sharing.</p><div class="actions"><button data-action="pdf-preview">Preview PDF</button>${coord && workspace.settings.design !== "vinschool" ? '<button data-action="school-design" class="secondary">Use Vinschool design</button>' : ""}<button data-action="teacher-preview" class="secondary">Teacher preview</button>${coord && !r.approved ? '<button data-action="approve" class="secondary">Approve newsletter</button>' : ""}${r.approved ? '<button data-action="print" class="secondary">Download approved PDF</button>' : ""}</div></div></div><div class="section-heading"><h3>Subject contributions</h3><p class="hint">${coord ? "Review each subject, then approve the finished report." : workspace.myRole === "translator" ? "Review the Vietnamese wording, then mark each translation reviewed." : "Open your subject, add your learning update and submit it for translation."}</p></div>` +
+    `<div class="report-heading"><div><p class="eyebrow">${esc(r.week)}</p><h2>${esc(r.className)}</h2><p class="hint">${r.sendDate ? "Sending " + esc(r.sendDate) : "Your weekly update for families"}</p></div><span class="pill">${r.approved ? "Approved for sharing" : r.entries.every((e) => e.submitted && e.reviewed) ? "Ready for approval" : r.entries.every((e) => e.submitted) ? "Awaiting translation & review" : "Draft"}</span></div><div class="workflow-progress"><span><b>${r.entries.filter((e) => e.submitted).length}/${r.entries.length}</b> contributions submitted</span><span><b>${r.entries.filter((e) => e.reviewed).length}/${r.entries.length}</b> translations reviewed</span></div><div class="report-preview-card"><div class="paper-symbol" aria-hidden="true">▤</div><div><h3>Your family newsletter</h3><p class="hint">${(workspace.settings.design || (workspace.demo ? "vinschool" : "standard")) === "vinschool" ? "Vinschool · Cambridge weekly report" : "LessonScope report"} · Preview the saved pages before sharing.</p><div class="actions"><button data-action="pdf-preview">Preview PDF</button>${coord && workspace.settings.design !== "vinschool" ? '<button data-action="school-design" class="secondary">Use Vinschool design</button>' : ""}<button data-action="teacher-preview" class="secondary">Teacher preview</button>${canPublish && !r.approved ? '<button data-action="approve" class="secondary">Approve newsletter</button>' : ""}${r.approved ? '<button data-action="print" class="secondary">Download approved PDF</button>' : ""}</div></div></div><div class="section-heading"><h3>Subject contributions</h3><p class="hint">${coord ? "Review each subject, then approve the finished report." : workspace.myRole === "translator" ? "Review each translation, approve the completed newsletter and publish the parent link." : "Open your subject, add your learning update and submit it for translation."}</p></div>` +
     r.entries
       .map((e, i) => {
         const edit =
@@ -221,7 +222,7 @@ function render() {
             .join("") || "<p>No previous versions yet.</p>"
         }</details></details>`
       : "");
-  if (coord) {
+  if (canPublish) {
     const share = document.createElement("div");
     share.className = "parent-sharing";
     share.innerHTML = `<h3>Share with families</h3><p id="parentShareStatus" role="status" aria-live="polite"></p><p class="hint">A phone-friendly page, with no parent sign-in. Only published, approved content is shared.</p>${workspace.demo && !r.publication ? '<button data-action="test-parent">Prepare parent demo</button><p class="hint">Create a ready-to-read fictional sample, then open its parent view or copy the link to your phone. Your saved work is unchanged.</p>' : ""}${r.approved ? '<button data-action="publish-parent">' + (r.publication ? "Publish latest approved version" : "Publish parent newsletter") + "</button>" : '<p class="hint">Approve the newsletter to publish it.</p>'}${r.publication ? '<label>Parent reading link<input id="parentLink" readonly></label><div class="actions"><button data-action="copy-parent" class="secondary">Copy parent link</button><a id="openParent" class="button secondary" target="_blank" rel="noopener noreferrer">Open parent view</a><button data-action="revoke-parent" class="secondary">Revoke link</button></div><p class="hint">The link stays available until revoked. New edits stay private until you approve and publish again.</p>' : ""}`;
@@ -241,6 +242,7 @@ function render() {
   }
   workflowTools(r, coord);
   newsletterExtras(r, coord);
+  if (coord) renderEmailSettings();
   const pending = drafts();
   dirty = false;
   document.querySelectorAll(".subject").forEach((card) => {
@@ -800,7 +802,7 @@ function workflowTools(r, coord) {
           : workspace.myRole === "translator"
             ? e.reviewed
             : e.submitted;
-        return `<button class="secondary task-card" data-task="${x.id}" data-subject-name="${esc(e.subject)}" data-week="${esc(x.week)}" data-done="${done}"><span class="task-description"><strong>${esc(x.className)} · ${esc(e.subject)}</strong><span>${e.reminder ? "Reminder · " : ""}${e.feedback && !e.feedbackResolved ? "Changes requested · " : ""}${!e.submitted ? "Contribution needed" : !e.reviewed ? "Submitted · awaiting translation" : x.approved ? "Approved" : "Awaiting coordinator approval"}</span>${x.deadline ? `<small>Due ${esc(x.deadline)}</small>` : ""}</span><span class="task-action">${done ? "View contribution" : "Open contribution"} →</span></button>`;
+        return `<button class="secondary task-card" data-task="${x.id}" data-subject-name="${esc(e.subject)}" data-week="${esc(x.week)}" data-done="${done}"><span class="task-description"><strong>${esc(x.className)} · ${esc(e.subject)}</strong><span>${e.reminder ? "Reminder · " : ""}${e.feedback && !e.feedbackResolved ? "Changes requested · " : ""}${!e.submitted ? "Contribution needed" : !e.reviewed ? "Submitted · awaiting translation" : x.approved ? "Approved" : "Ready for TA approval"}</span>${x.deadline ? `<small>Due ${esc(x.deadline)}</small>` : ""}</span><span class="task-action">${done ? "View contribution" : "Open contribution"} →</span></button>`;
       })
       .join("") || "<p>No assigned contributions.</p>"
   }</div>`;
@@ -1310,4 +1312,40 @@ function renderProgressMatrix(panel, week) {
   };
   box.append(remind, result);
   panel.querySelector("#taskSummary").after(box);
+}
+
+async function renderEmailSettings() {
+  const workspaceId = workspace.id;
+  const panel = document.createElement('details');
+  panel.className = 'report-maintenance';
+  panel.innerHTML = '<summary>Email notifications</summary><p role="status">Loading notification settings…</p>';
+  $('editor').append(panel);
+  const endpoint = '/' + workspaceId + '/notifications';
+  try {
+    const data = await api(endpoint);
+    if (!panel.isConnected || workspace.id !== workspaceId) return;
+    const s = data.settings;
+    panel.innerHTML = `<summary>Email notifications</summary><p>Teachers submit → assigned TAs receive a translation notice → TAs review and publish. Coordinators receive one weekly summary.</p><label>Delivery mode<select data-mail-mode><option value="off">Off — previews only</option><option value="test">Test — send only to my email</option>${workspace.demo ? '' : '<option value="live">Live — send to assigned staff</option>'}</select></label><p class="hint">Test recipient: ${esc(data.testEmail)}. No parent emails are sent. ${data.configured ? '' : 'Hosting email configuration is needed before sending.'}</p><div class="two"><label>Coordinator summary day<select data-mail-day>${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((day,i)=>`<option value="${i}">${day}</option>`).join('')}</select></label><label>Time in Vietnam<input data-mail-time type="time" value="${esc(s.time)}"></label></div><div class="actions"><button data-mail-save>Save notification settings</button><button class="secondary" data-mail-preview>Preview emails</button><button class="secondary" data-mail-test ${data.configured ? '' : 'disabled'}>Send test to my email</button></div><p data-mail-status role="status"></p><div data-mail-previews></div><h4>Recent deliveries</h4><div>${data.deliveries.length ? data.deliveries.map(d=>`<p>${esc(d.subject)} · ${esc(d.to)} · <strong>${esc(d.status)}</strong>${d.error ? ' · '+esc(d.error) : ''}</p>`).join('') : '<p>No deliveries yet.</p>'}</div>`;
+    panel.querySelector('[data-mail-mode]').value=s.mode;
+    panel.querySelector('[data-mail-day]').value=String(s.day);
+    panel.addEventListener('click', async event => {
+      event.stopPropagation();
+      const b = event.target.closest('button');
+      if (!b) return;
+      const status = panel.querySelector('[data-mail-status]');
+      b.disabled=true;
+      try {
+        if (b.hasAttribute('data-mail-save')) {
+          await api(endpoint,{mode:panel.querySelector('[data-mail-mode]').value,day:Number(panel.querySelector('[data-mail-day]').value),time:panel.querySelector('[data-mail-time]').value});
+          status.textContent='Settings saved. New submissions use this mode. The weekly summary follows your Vietnam-time schedule.';
+        } else if (b.hasAttribute('data-mail-preview')) {
+          const messages=await api(endpoint+'/preview');
+          panel.querySelector('[data-mail-previews]').innerHTML=messages.map(m=>`<article><h4>${esc(m.subject)}</h4><p>Intended recipient: ${esc(m.recipient)}</p><p style="white-space:pre-line">${esc(m.body)}</p></article>`).join('') || '<p>No pending notifications.</p>';
+          status.textContent='Preview only — nothing sent.';
+        } else if (b.hasAttribute('data-mail-test')) {
+          await api(endpoint+'/test',{});status.textContent='Test email sent to your account email. No staff or parents were emailed.';
+        }
+      } catch(error) {status.textContent=error.message;} finally {b.disabled=false;}
+    });
+  } catch(error) {panel.querySelector('[role="status"]').textContent=error.message;}
 }

@@ -1,0 +1,21 @@
+const {test,expect}=require('@playwright/test');
+const {signInDisposableTeacher}=require('./helpers');
+test('coordinator can preview and configure weekly notifications without sending',async({page},info)=>{
+ await signInDisposableTeacher(page,'-mailsettings');
+ const w=await(await page.request.post('/api/school-newsletters/demo',{data:{}})).json();
+ await page.goto('/newsletters.html');await page.locator('#spaces').selectOption(w.id);
+ await page.locator('#demoRole').selectOption('coordinator');
+ await page.getByText('Email notifications',{exact:true}).click();
+ await expect(page.locator('[data-mail-mode]')).toHaveValue('off');
+ await page.getByRole('button',{name:'Preview emails',exact:true}).click();
+ await expect(page.locator('[data-mail-status]')).toHaveText('Preview only — nothing sent.');
+ await expect(page.locator('[data-mail-previews]')).toContainText('weekly newsletter summary');
+ await page.locator('[data-mail-mode]').selectOption('test');
+ await page.locator('[data-mail-day]').selectOption('4');
+ await page.locator('[data-mail-time]').fill('16:30');
+ await page.getByRole('button',{name:'Save notification settings',exact:true}).click();
+ await expect(page.locator('[data-mail-status]')).toContainText('Settings saved');
+ const data=await(await page.request.get('/api/school-newsletters/'+w.id+'/notifications')).json();
+ expect(data.settings).toMatchObject({mode:'test',day:4,time:'16:30'});expect(data.deliveries).toEqual([]);
+ await page.screenshot({path:info.outputPath('notification-settings.png')});
+});

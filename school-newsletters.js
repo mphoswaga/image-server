@@ -45,12 +45,17 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
     if (member(w, user).role !== "coordinator")
       fail("Only a coordinator can do this.", 403);
   }
+  function publisher(w, user, className) {
+    const m = member(w, user);
+    if (m.role !== "coordinator" && !(m.role === "translator" && (!m.classes || m.classes.includes(className))))
+      fail("Only the assigned TA or coordinator can publish this class newsletter.", 403);
+  }
   function view(w, user) {
     const m = member(w, user);
     const copy = require("./newsletter-media").hydrate(w, mediaRoot);
     if (m.role !== "coordinator")
       for (const r of copy.reports)
-        if (r.publication) delete r.publication.token;
+        if (r.publication && !(m.role === "translator" && (!m.classes || m.classes.includes(r.className)))) delete r.publication.token;
     copy.myRole = m.role;
     copy.mySubjects = m.subjects;
     copy.myClasses = m.classes ?? null;
@@ -156,6 +161,7 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
   }
   return {
     read,
+    all,
     published(id, reportId, token, edition) {
       if (!/^[a-f0-9]{64}$/.test(token || ""))
         fail("This newsletter link is unavailable.", 404);
@@ -588,7 +594,7 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
           action === "revoke-publication" ||
           action === "prepare-parent-demo"
         ) {
-          coordinator(w, user);
+          publisher(w, user, r.className);
           if (action === "revoke-publication") {
             delete r.publication;
             return;
@@ -632,7 +638,7 @@ function createStore(dir = path.join(DATA_DIR, "school-newsletters")) {
           return;
         }
         if (action === "approve") {
-          coordinator(w, user);
+          publisher(w, user, r.className);
           if (
             !r.entries.every(
               (e) =>

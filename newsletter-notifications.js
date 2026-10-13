@@ -1,0 +1,92 @@
+// Durable staff notifications. Disabled until a coordinator configures a workspace.
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+const { DATA_DIR, writeJsonAtomic } = require('./storage');
+const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const key = value => crypto.createHash('sha256').update(value).digest('hex');
+function vietnamTime(now) {
+  const d = new Date(now.getTime() + 7 * 3600000);
+  return { date: d.toISOString().slice(0,10), day: d.getUTCDay(), time: d.toISOString().slice(11,16) };
+}
+function createNotifications({store, filename = path.join(DATA_DIR, 'newsletter-notifications.json'), getUser = id => require('./auth').getUserById(id), send = options => require('./email').sendEmail(options), configured = () => !!(process.env.RESEND_API_KEY && process.env.EMAIL_FROM), now = () => new Date()} = {}) {
+  const load = () => fs.existsSync(filename) ? JSON.parse(fs.readFileSync(filename, 'utf8')) : { settings:{}, deliveries:[] };
+  const save = state => writeJsonAtomic(filename,state);
+  let busy = false;
+  function authorised(user, id) { const w = store.read(id); store.coordinator(w,user); return w; }
+  function settings(user,id) {
+    authorised(user,id); const s=load();
+    return { settings:s.settings[id] || {mode:'off',day:5,time:'15:00'}, configured:configured(), testEmail:user.email, deliveries:s.deliveries.filter(d=>d.workspace===id).slice(-30).reverse() };
+  }
+  function configure(user,id,input) {
+    const w=authorised(user,id);
+    if(!['off','test','live'].includes(input.mode) || !Number.isInteger(input.day) || input.day<0 || input.day>6 || !/^([01]\d|2[0-3]):[0-5]\d$/.test(input.time||'')) throw Error('Choose a mode, weekday and valid time.');
+    if(w.demo && input.mode==='live') throw Error('Demo workspaces support test notifications only.');
+    const s=load(), old=s.settings[id];
+    s.settings[id]={mode:input.mode,day:input.day,time:input.time,owner:user.id,enabledAt:old?.mode===input.mode ? old.enabledAt : now().toISOString()};
+    save(s); return settings(user,id);
+  }
+  function messages(w,config,date,{preview=false}={}) {
+    const result=[];
+    for(const m of w.members.filter(m=>m.role==='translator')) {
+      const sent = new Set(load().deliveries.filter(d=>d.workspace===w.id && d.kind==='translation' && d.recipient===m.userId && d.mode===config.mode && d.status==='sent').flatMap(d=>(d.signature||'').split('|')));
+      const entries=w.reports.flatMap(r=>(!m.classes||m.classes.includes(r.className)) ? r.entries.filter(e=>e.submitted&&!e.reviewed&&(preview || e.submittedAt>=config.enabledAt)).map(e=>({r,e})).filter(({r,e})=>preview || !sent.has(`${r.id}:${e.subject}:${e.submittedAt}`)) : []);
+      if(entries.length) result.push({recipient:m.userId,kind:'translation',signature:entries.map(({r,e})=>`${r.id}:${e.subject}:${e.submittedAt}`).sort().join('|'),subject:`${w.name}: newsletter ready for translation`,body:entries.map(({r,e})=>`${r.className} · ${r.week} · ${e.subject}`).join('\n')+'\n\nTranslate and review the submitted subjects. When the class newsletter is complete, approve and publish it to get the parent link.'});
+    }
+    const local=vietnamTime(date);
+    if(preview || (local.day===config.day && local.time>=config.time)) {
+      const lines=w.reports.filter(r=>!r.publication || !r.approved || r.approved.at>r.publication.content.publishedAt).map(r=>{
+        const missing=r.entries.filter(e=>!e.submitted).map(e=>e.subject);
+        const translation=r.entries.filter(e=>e.submitted&&!e.reviewed).map(e=>e.subject);
+        const owners=w.members.filter(m=>m.role==='teacher'&&(!m.classes||m.classes.includes(r.className))&&(m.subjects||[]).some(subject=>missing.includes(subject))).map(m=>getUser(m.userId)?.name||getUser(m.userId)?.email||'Assigned teacher');
+        return `${r.className} · ${r.week}${owners.length ? ' ('+owners.join(', ')+')' : ''}: ${missing.length ? 'Not submitted: '+missing.join(', ')+'. ' : ''}${translation.length ? 'Translation/review needed: '+translation.join(', ')+'. ' : ''}${!missing.length&&!translation.length ? 'Ready for TA approval/publication.' : ''}`;
+      });
+      for(const m of w.members.filter(m=>m.role==='coordinator')) result.push({recipient:m.userId,kind:'weekly',signature:local.date,subject:`${w.name}: weekly newsletter summary`,body:lines.join('\n')||'All class newsletters have been published. There are no outstanding items.'});
+    }
+    return result;
+  }
+  function preview(user,id) {
+    const w=authorised(user,id), config=load().settings[id]||{day:5,time:'15:00'};
+    return messages(w,config,now(),{preview:true}).map(m=>({...m,recipient:getUser(m.recipient)?.email||'Account email unavailable'}));
+  }
+  async function deliver(w,config,m,{test=false}={}) {
+    const date=now(), s=load();
+    const recipient=getUser(test||config.mode==='test' ? config.owner : m.recipient)?.email;
+    if(!recipient) return;
+    const id=key(`${w.id}:${config.mode}:${test?'manual-'+date.toISOString():m.kind}:${m.recipient}:${m.signature}`);
+    let record=s.deliveries.find(d=>d.id===id);
+    if(record?.status==='sent' || record?.status==='uncertain') return;
+    if(record?.attemptedAt && date-new Date(record.attemptedAt)<60000) return;
+    if(record?.firstAttempt && date-new Date(record.firstAttempt)>=23*3600000) { record.status='uncertain'; record.error='Delivery could not be confirmed. Check the provider before retrying.'; save(s); return; }
+    if(!configured()) throw Error('Email delivery requires RESEND_API_KEY and a verified EMAIL_FROM in hosting.');
+    // Conservative newsletter allowance leaves room for password-reset emails.
+    if(s.deliveries.filter(d=>d.firstAttempt && date-new Date(d.firstAttempt)<86400000).length>=90 && !record?.firstAttempt) throw Error('Newsletter daily safety limit reached. Pending notifications will wait.');
+    if(!record) { record={id,workspace:w.id,kind:m.kind,recipient:m.recipient,mode:config.mode,signature:m.signature,to:recipient,subject:m.subject,status:'pending'}; s.deliveries.push(record); }
+    record.firstAttempt ||= date.toISOString(); record.attemptedAt=date.toISOString(); save(s);
+    try {
+      const response=await send({to:recipient,subject:(test||config.mode==='test'?'[TEST] ':'')+m.subject,html:`<p>${escape(m.body).replace(/\n/g,'<br>')}</p><p><a href="https://lesson.educscope.com/newsletters.html">Open school newsletters</a></p>`,idempotencyKey:id});
+      if(response?.dev) throw Error('Email provider did not deliver this message.');
+      const latest=load(), d=latest.deliveries.find(d=>d.id===id); d.status='sent';d.sentAt=now().toISOString();delete d.error; save(latest);
+    } catch(error) { const latest=load(),d=latest.deliveries.find(d=>d.id===id);d.status='failed';d.error='Delivery failed. It will retry safely while still relevant.';save(latest); throw error; }
+  }
+  async function tick() {
+    if(busy) return; busy=true;
+    try {
+      for(const w of store.all()) {
+        const config=load().settings[w.id];
+        if(!config || config.mode==='off' || !w.members.some(m=>m.userId===config.owner&&m.role==='coordinator')) continue;
+        for(const m of messages(w,config,now())) {
+          try { await deliver(w,config,m); } catch(_) { /* Status is available to the coordinator; no content or email addresses logged. */ }
+        }
+      }
+    } finally {busy=false;}
+  }
+  async function test(user,id) {
+    const w=authorised(user,id);
+    if(busy) throw Error('Notification processing is busy. Please try again shortly.');
+    busy=true;
+    try { await deliver(w,{mode:'test',owner:user.id},{recipient:user.id,kind:'test',signature:'preview',subject:`${w.name}: notification delivery test`,body:messages(w,{},now(),{preview:true}).map(m=>m.subject+'\n'+m.body).join('\n\n')},{test:true}); return settings(user,id); } finally {busy=false;}
+  }
+  return {settings,configure,preview,tick,test};
+}
+module.exports={createNotifications,vietnamTime};

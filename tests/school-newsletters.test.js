@@ -576,3 +576,23 @@ test('older fictional demos gain missing materials without replacing teacher wri
   const revision=w.revision;
   assert.equal(store.demo(owner).revision,revision);
 });
+
+test('assigned TA approves and publishes, with class-scoped link access', t => {
+ const {store,owner,w}=setup(t);
+ const ta={id:'ta-publisher',email:'ta@school.test',role:'teacher'};
+ const invitation=store.invite(owner,w.id,w.revision,{email:ta.email,role:'translator',classes:['3B2']});
+ store.accept(ta,invitation.token);
+ const change=(actor,action,input)=>store.change(actor,w.id,store.read(w.id).revision,action,input);
+ const reportId=w.reports[0].id;
+ assert.throws(()=>change(ta,'approve',{reportId}),/All subjects/);
+ for(const subject of ['ICT','Maths']) {
+  change(owner,'english',{reportId,subject,text:'Learning update',submit:true});
+  change(ta,'vietnamese',{reportId,subject,text:'Nội dung học tập',review:true});
+ }
+ change(ta,'approve',{reportId});const published=change(ta,'publish',{reportId});
+ assert.match(published.reports[0].publication.token,/^[a-f0-9]{64}$/);
+ const another=change(owner,'create-report',{className:'3B1',week:'Week 9',subjects:['ICT']});
+ const otherId=another.reports.find(r=>r.className==='3B1').id;
+ assert.throws(()=>change(ta,'approve',{reportId:otherId}),/assigned TA/);
+ assert.throws(()=>change(ta,'publish',{reportId:otherId}),/assigned TA/);
+});

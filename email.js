@@ -5,14 +5,15 @@
 // any future transactional email) work in dev before a provider is wired up.
 const FROM = process.env.EMAIL_FROM || 'LessonScope <onboarding@resend.dev>';
 
-async function sendEmail({ to, subject, html }) {
+async function sendEmail({ to, subject, html, idempotencyKey }) {
   if (!process.env.RESEND_API_KEY) {
     console.log(`\n[email:dev-fallback] No RESEND_API_KEY set — would have sent:\n  To: ${to}\n  Subject: ${subject}\n  ${html}\n`);
     return { dev: true };
   }
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(30000),
+    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json', ...(idempotencyKey ? {'Idempotency-Key':idempotencyKey} : {}) },
     body: JSON.stringify({ from: FROM, to, subject, html }),
   });
   if (!res.ok) {

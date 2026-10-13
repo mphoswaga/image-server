@@ -71,6 +71,15 @@ function register(
       res.status(e.status || 400).json({ error: e.message });
     }
   };
+  const notifications = require("./newsletter-notifications").createNotifications({store});
+  app.get(root + "/:id/notifications", route(req => notifications.settings(req.user, req.params.id)));
+  app.get(root + "/:id/notifications/preview", route(req => notifications.preview(req.user, req.params.id)));
+  app.post(root + "/:id/notifications", route(req => notifications.configure(req.user, req.params.id, req.body)));
+  app.post(root + "/:id/notifications/test", route(req => notifications.test(req.user, req.params.id)));
+  if (process.env.NODE_ENV !== "test") {
+    const timer = setInterval(() => notifications.tick().catch(() => {}), 60000);
+    timer.unref();
+  }
   const access = (req) => {
     const w = store.read(req.params.id);
     store.member(w, req.user);
