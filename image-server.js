@@ -3289,7 +3289,7 @@ function classListForGame(game) {
   return students;
 }
 
-function combinedGameRoster(game) {
+function combinedGameRoster(game, includeGender = false) {
   const records = gameRosterRecords(game);
   if (!records.length) return null;
   const seen = new Set();
@@ -3299,7 +3299,7 @@ function combinedGameRoster(game) {
       const id = roster.normalizeStudentId(student.id);
       if (seen.has(id)) continue;
       seen.add(id);
-      students.push({ id: student.id, name: student.name, rosterId: classRoster.id, rosterName: classRoster.name });
+      students.push({ id: student.id, name: student.name, rosterId: classRoster.id, rosterName: classRoster.name, ...(includeGender ? { gender: roster.normalizeGender(student.gender) } : {}) });
     }
   }
   return { id: records.map(item => item.id).join(','), name: records.map(item => item.name).join(' + '), students };
@@ -4991,7 +4991,7 @@ function ownedColonyQuest(req, res) {
 app.get('/api/game/:id/colonyquest', requireAuth, (req, res) => {
   const game = ownedColonyQuest(req, res);
   if (!game) return;
-  const classRoster = combinedGameRoster(game);
+  const classRoster = combinedGameRoster(game, true);
   res.json({
     game: {
       id: game.id,
@@ -5005,7 +5005,7 @@ app.get('/api/game/:id/colonyquest', requireAuth, (req, res) => {
     roster: classRoster ? {
       id: classRoster.id,
       name: classRoster.name,
-      students: classRoster.students.map(student => ({ id: student.id, name: student.name })),
+      students: classRoster.students.map(student => ({ id: student.id, name: student.name, gender: student.gender })),
     } : null,
     session: games.getColonyQuestSession(game.id),
   });

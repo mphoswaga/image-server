@@ -601,7 +601,7 @@ test('LessonScope creates ColonyQuest as a teacher-owned whole-class game', asyn
   await expect(page.locator('#lessonTitle')).toHaveText('habitats');
 
   const rosterResponse = await page.request.post('/api/roster', {
-    data: { name: 'Colony class', rows: [{ ID: 'ANT-1', Name: 'Amina Test' }, { ID: 'ANT-2', Name: 'Bao Test' }], idCol: 'ID', nameCol: 'Name' },
+    data: { name: 'Colony class', rows: [{ ID: 'ANT-1', Name: 'Amina Test', Gender: 'Female' }, { ID: 'ANT-2', Name: 'Bao Test', Gender: 'Male' }], idCol: 'ID', nameCol: 'Name', genderCol: 'Gender' },
   });
   expect(rosterResponse.ok()).toBeTruthy();
   const classRoster = await rosterResponse.json();
@@ -617,6 +617,9 @@ test('LessonScope creates ColonyQuest as a teacher-owned whole-class game', asyn
   await expect(page.locator('#rosterAssign .student-row')).toHaveCount(2);
   await expect(page.locator('#rosterAssign')).toContainText('Amina Test');
   await expect(page.locator('#rosterAssign')).toContainText('Bao Test');
+  await page.locator('#boysGirlsBtn').click();
+  await expect(page.locator('[data-student-id="ANT-1"]')).toHaveValue('team-2');
+  await expect(page.locator('[data-student-id="ANT-2"]')).toHaveValue('team-1');
 
   await page.goto(`/play/${created.gameId}?test=1`);
   await page.locator('#startBtn').click();
@@ -1009,4 +1012,40 @@ for (const count of [2, 3, 4, 5, 6]) test(`${count} selected teams survive reset
   await page.reload();
   await expect(page.locator('#teamCount')).toHaveValue(String(count));
   await expect(page.locator('#resumeText')).toContainText(count + '-team');
+});
+
+test('boys versus girls preset reviews missing genders, saves overrides and starts exactly two colonies', async ({page})=>{
+  const students=[{id:'b',name:'Ben',gender:'male'},{id:'g',name:'Mai',gender:'female'},{id:'u',name:'Sam'}];
+  let setup={teamCount:4,rounds:5,sound:false,teams:[]},saved=null,patches=0;
+  await page.route(/\/api\/game\/cq-gender\/colonyquest(?:\/session)?$/,async route=>{
+    const method=route.request().method();
+    if(method==='PATCH'){patches++;setup=route.request().postDataJSON();return route.fulfill({json:{colonyquest:setup,questions}});}
+    if(method==='PUT'){saved=route.request().postDataJSON().session;return route.fulfill({json:{ok:true}});}
+    return route.fulfill({json:{game:{id:'cq-gender',lessonTitle:'Habitats',questions,colonyquest:setup},roster:{name:'Grade 2',students},session:saved}});
+  });
+  await page.goto('/colonyquest/cq-gender');
+  await page.locator('#boysGirlsBtn').click();
+  await expect(page.locator('#teamCount')).toHaveValue('2');
+  expect(await page.locator('.team-line input').evaluateAll(inputs=>inputs.map(input=>input.value))).toEqual(['Boys','Girls']);
+  await expect(page.locator('[data-student-id="b"]')).toHaveValue('team-1');
+  await expect(page.locator('[data-student-id="g"]')).toHaveValue('team-2');
+  await expect(page.locator('[data-student-id="u"]')).toHaveValue('');
+  await page.locator('#saveSetupBtn').click();
+  await expect(page.locator('#setupNotice')).toContainText('Choose a team for every learner');
+  expect(patches).toBe(0);
+  await page.locator('[data-student-id="u"]').selectOption('team-1');
+  await page.locator('[data-student-id="b"]').selectOption('team-2');
+  await expect(page.locator('#rosterNote')).toContainText('Boys: 1 · Girls: 2');
+  await expect(page.locator('#rosterNote')).not.toContainText('need a team');
+  await page.locator('#saveSetupBtn').click();
+  await expect.poll(()=>patches).toBe(1);
+  expect(setup.teams[0].members.map(s=>s.id)).toEqual(['u']);
+  expect(setup.teams[1].members.map(s=>s.id)).toEqual(['b','g']);
+  await page.reload();
+  await expect(page.locator('[data-student-id="b"]')).toHaveValue('team-2');
+  await page.locator('#startBtn').click();
+  await expect(page.locator('#storyOverlay')).toBeVisible();
+  expect(saved.teams).toHaveLength(2);
+  expect(saved.teams.map(t=>t.name)).toEqual(['Boys','Girls']);
+  expect(saved.teams.flatMap(t=>t.members)).toHaveLength(3);
 });

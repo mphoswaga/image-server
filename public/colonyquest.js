@@ -156,6 +156,13 @@
     return map;
   }
 
+  function updateRosterSummary() {
+    const assignments = [...document.querySelectorAll('#rosterAssign select[data-student-id]')];
+    const counts = (config.teams || []).map(team => `${team.name}: ${assignments.filter(select => select.value === team.id).length}`);
+    const missing = assignments.filter(select => !select.value).length;
+    $('rosterNote').textContent = `${counts.join(' · ')}. ${missing ? `${missing} learner(s) need a team. Gender was not recorded as male or female; choose their team below. ` : ''}Review and change any assignment before starting.`;
+  }
+
   function renderRosterAssignments() {
     const roster = data && data.roster;
     if (!roster || !roster.students.length) {
@@ -168,13 +175,13 @@
     const prior = memberTeamMap();
     $('rosterAssign').innerHTML = roster.students.map((student, index) => {
       const previous = prior.get(String(student.id));
-      const assigned = teams.some(team => team.id === previous) ? previous : teams[index % teams.length].id;
-      return `<label class="student-row"><b>${esc(student.name)}</b><select data-student-id="${esc(student.id)}" data-student-name="${esc(student.name)}" aria-label="Team for ${esc(student.name)}"><option value="__remove__">Remove from this game</option>${teams.map(team => `<option value="${esc(team.id)}"${team.id === assigned ? ' selected' : ''}>${esc(team.name)}</option>`).join('')}</select></label>`;
+      const assigned = previous === '' ? '' : teams.some(team => team.id === previous) ? previous : teams[index % teams.length].id;
+      return `<label class="student-row"><b>${esc(student.name)}</b><select data-student-id="${esc(student.id)}" data-student-name="${esc(student.name)}" aria-label="Team for ${esc(student.name)}"><option value=""${assigned === '' ? ' selected' : ''}>Choose a team</option><option value="__remove__">Remove from this game</option>${teams.map(team => `<option value="${esc(team.id)}"${team.id === assigned ? ' selected' : ''}>${esc(team.name)}</option>`).join('')}</select></label>`;
     }).join('');
     $('rosterAssign').querySelectorAll('select').forEach(el=>el.addEventListener('change',async()=>{
-      if(el.value!=='__remove__')return;
+      if(el.value!=='__remove__'){updateRosterSummary();return;}
       el.disabled=true;
-      try{const r=await fetch('/api/game/'+encodeURIComponent(gameId)+'/participants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({studentId:el.dataset.studentId,removed:true})});const d=await r.json();if(!r.ok)throw Error(d.error);data.roster.students=data.roster.students.filter(st=>String(st.id)!==el.dataset.studentId);config.teams.forEach(t=>t.members=(t.members||[]).filter(st=>String(st.id)!==el.dataset.studentId));el.closest('label').remove();showNotice('Learner removed from this game. Class roster and marks are unchanged.');}catch(e){el.value=teams[0].id;showNotice(e.message);el.disabled=false;}
+      try{const r=await fetch('/api/game/'+encodeURIComponent(gameId)+'/participants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({studentId:el.dataset.studentId,removed:true})});const d=await r.json();if(!r.ok)throw Error(d.error);data.roster.students=data.roster.students.filter(st=>String(st.id)!==el.dataset.studentId);config.teams.forEach(t=>t.members=(t.members||[]).filter(st=>String(st.id)!==el.dataset.studentId));el.closest('label').remove();updateRosterSummary();showNotice('Learner removed from this game. Class roster and marks are unchanged.');}catch(e){el.value=teams[0].id;showNotice(e.message);el.disabled=false;}
     }));
   }
 
@@ -184,6 +191,27 @@
       const options = Array.from({ length: 4 }, (_, optionIndex) => (question.options || [])[optionIndex] || '');
       return `<div class="question-row" data-question-index="${index}"><span class="question-number">${index + 1}</span><input class="qtext" value="${esc(question.question)}" aria-label="Question ${index + 1}">${options.map((option, optionIndex) => `<input class="qopt" value="${esc(option)}" aria-label="Question ${index + 1} answer ${optionIndex + 1}">`).join('')}<select class="qcorrect" aria-label="Correct answer for question ${index + 1}">${options.map((_, optionIndex) => `<option value="${optionIndex}"${optionIndex === Number(question.correctIndex) ? ' selected' : ''}>${String.fromCharCode(65 + optionIndex)}</option>`).join('')}</select></div>`;
     }).join('');
+  }
+
+  function assignBoysGirls() {
+    const students = data?.roster?.students || [];
+    if (!students.length) return;
+    config.teams = ['Boys', 'Girls'].map((name, index) => ({
+      id: `team-${index + 1}`, name, colorIndex: index, members: [],
+    }));
+    $('teamCount').value = '2';
+    // Discard the previous draft assignment only after the teacher chooses this preset.
+    $('teamEditor').innerHTML = '';
+    $('rosterAssign').innerHTML = '';
+    renderTeamEditor();
+    for (const select of document.querySelectorAll('#rosterAssign select[data-student-id]')) {
+      const student = students.find(item => String(item.id) === select.dataset.studentId);
+      if (student.gender === 'male') { select.value = 'team-1'; }
+      else if (student.gender === 'female') { select.value = 'team-2'; }
+      else { select.value = ''; }
+    }
+    updateRosterSummary();
+    showNotice('Boys vs girls is ready to review. Save setup or start when the teams are ready.');
   }
 
   function collectTeams() {
@@ -210,6 +238,7 @@
   }
 
   async function saveSetup() {
+    if ([...document.querySelectorAll('#rosterAssign select[data-student-id]')].some(select => !select.value)) throw new Error('Choose a team for every learner before saving or starting.');
     const questions = collectQuestions();
     const incomplete = questions.find(question => !question.question || question.options.filter(Boolean).length < 2 || !question.options[question.correctIndex]);
     if (incomplete) throw new Error('Every question needs text, at least two answers, and a valid correct answer.');
@@ -3188,6 +3217,7 @@
   $('worldSurface').addEventListener('click', () => { resetActionCamera(); $('worldViewport').scrollTo({ top: 0, behavior: 'smooth' }); });
   $('colonyViewPick').addEventListener('change', event => focusColony(event.target.value));
   $('teamCount').addEventListener('change', renderTeamEditor);
+  $('boysGirlsBtn').addEventListener('click', assignBoysGirls);
   $('worldStoryContinue').addEventListener('click', async () => {
     if (!worldStoryAction || transitionLocked) return;
     const action = worldStoryAction;
