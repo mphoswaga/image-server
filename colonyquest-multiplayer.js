@@ -19,10 +19,11 @@ const LABELS = {
 class ColonyMatch {
   constructor(
     game,
-    { state, preview = false, rosterIds = [], storyEnabled = true, now = Date.now() } = {},
+    { state, preview = false, rosterIds = [], storyEnabled = true, pacing = 'synchronised', now = Date.now() } = {},
   ) {
     this.state = state || {
       version: 1,
+      pacing,
       storyVersion: storyEnabled ? 1 : 0,
       storyQueue: [],
       storySeen: [],
@@ -98,6 +99,10 @@ class ColonyMatch {
     }
     if (p.removed) throw Error('Your teacher has removed you from this game.');
     p.connected = true;
+    if (s.pacing === 'individual' && s.phase === 'answer' && p.personalRemaining !== undefined) {
+      p.deadline = now + p.personalRemaining;
+      delete p.personalRemaining;
+    }
     s.updatedAt = now;
     return p;
   }
@@ -109,7 +114,8 @@ class ColonyMatch {
     if (this.state.storyVersion) {
       this.state.afterStory = 'answer';
       this.beginStory('intro', now);
-    } else this.setPhase('answer', this.state.questionSeconds, now);
+    } else if (this.state.pacing === 'individual') this.startIndividual(now);
+    else this.setPhase('answer', this.state.questionSeconds, now);
   }
   beginStory(key, now) {
     const beat = story.beats[key];
@@ -132,6 +138,7 @@ class ColonyMatch {
     const key = s.storyQueue.shift();
     if (key) return this.beginStory(key, now);
     s.story = null;
+    if (s.pacing === 'individual') return this.startIndividual(now);
     if (s.afterStory === 'end') return this.end(now);
     if (s.afterStory === 'next') s.round++;
     this.setPhase('answer', s.questionSeconds, now);
@@ -147,6 +154,9 @@ class ColonyMatch {
   }
   pause(now = Date.now()) {
     if (!ACTIVE.includes(this.state.phase)) throw Error('The game is not running.');
+    if (this.state.pacing === 'individual') for (const p of this.active()) {
+      if(p.personalRemaining === undefined) p.personalRemaining = Math.max(0, (p.deadline || now) - now);
+    }
     Object.assign(this.state, {
       resumePhase: this.state.phase,
       remaining: Math.max(0, this.state.deadline - now),
@@ -157,10 +167,14 @@ class ColonyMatch {
   resume(now = Date.now()) {
     if (this.state.phase !== 'paused') throw Error('The game is not paused.');
     this.setPhase(this.state.resumePhase, (this.state.remaining || 0) / 1000, now);
+    if(this.state.pacing === 'individual' && this.state.phase !== 'story') {
+      this.state.deadline = null;
+      for(const p of this.active()) if(p.connected) {p.deadline = now + (p.personalRemaining || 0);delete p.personalRemaining;}
+    }
   }
   restore(now = Date.now()) {
     if (ACTIVE.includes(this.state.phase))
-      this.pause(Math.min(this.state.updatedAt || now, this.state.deadline));
+      this.pause(Math.min(this.state.updatedAt || now, this.state.deadline ?? now));
     this.state.players.forEach((p) => {
       p.connected = !!p.npc;
     });
@@ -187,16 +201,18 @@ class ColonyMatch {
     const s = this.state,
       p = this.player(playerId);
     if (!p || p.removed) throw Error('Join this room again.');
-    if (!Number.isInteger(round) || round !== s.round) throw Error('That question has finished.');
+    const individual = s.pacing === 'individual', currentRound = individual ? p.round : s.round;
+    if (!Number.isInteger(round) || round !== currentRound) throw Error('That question has finished.');
     const previous = p.answers.find((a) => a.round === round);
     if (previous) return previous; // retries must never earn a second upgrade
-    if (s.phase !== 'answer' || now >= s.deadline)
+    if (s.phase !== 'answer' || (individual && p.phase !== 'answer') || now >= (individual ? p.deadline : s.deadline))
       throw Error('Answers are closed for this question.');
     const q = s.questions[round];
     if (!Number.isInteger(choice) || choice < 0 || choice >= q.options.length)
       throw Error('Choose one of the answers.');
     const a = { round, choice, correct: choice === q.correctIndex, at: now };
     p.answers.push(a);
+    if(individual) this.personalFeedback(p, now);
     s.updatedAt = now;
     return a;
   }
@@ -204,13 +220,14 @@ class ColonyMatch {
     if (!target || target.removed || target.id === p.id)
       return { allowed: false, reason: 'Choose a rival colony.' };
     if (!target.connected) return { allowed: false, reason: 'This colony is reconnecting.' };
-    if (this.state.round <= target.protectedUntilRound)
+    if (this.state.pacing === 'individual' && target.phase === 'spectating') return { allowed: false, reason: 'This colony has finished its questions.' };
+    if (this.state.pacing === 'individual' ? (this.state.elapsedMs || 0) < (target.protectedUntilMs || 0) : this.state.round <= target.protectedUntilRound)
       return { allowed: false, reason: 'This colony is recovering.' };
     const lastRound = (p.lastRaids || {})[target.id];
-    if (Number.isInteger(lastRound) && this.state.round - lastRound < 3)
+    if (Number.isInteger(lastRound) && (this.state.pacing === 'individual' ? (this.state.elapsedMs || 0) - lastRound < 60000 : this.state.round - lastRound < 3))
       return {
         allowed: false,
-        reason: 'Choose a different rival for three rounds.',
+        reason: this.state.pacing === 'individual' ? 'Choose a different rival while this colony recovers.' : 'Choose a different rival for three rounds.',
       };
     if (target.colony.food <= 3)
       return {
@@ -254,9 +271,10 @@ class ColonyMatch {
     const s = this.state,
       p = this.player(playerId);
     if (!p || p.removed) throw Error('Join this room again.');
-    if (round !== s.round) throw Error('That upgrade window has finished.');
+    const individual = s.pacing === 'individual';
+    if (round !== (individual ? p.round : s.round)) throw Error('That upgrade window has finished.');
     if (p.upgrades.some((u) => u.round === round)) return;
-    if (s.phase !== 'upgrade' || now >= s.deadline)
+    if ((individual ? s.phase !== 'answer' || p.phase !== 'upgrade' : s.phase !== 'upgrade') || now >= (individual ? p.deadline : s.deadline))
       throw Error('Upgrades are closed for this question.');
     if (!p.answers.some((a) => a.round === round && a.correct))
       throw Error('Answer correctly to earn an upgrade.');
@@ -271,7 +289,8 @@ class ColonyMatch {
       target.colony.food += outcome.stolen - capped;
       p.colony.food -= outcome.stolen - capped;
       target.protectedUntilRound = s.round + 1;
-      (p.lastRaids ||= {})[target.id] = s.round;
+      if(individual) target.protectedUntilMs = (s.elapsedMs || 0) + 20000;
+      (p.lastRaids ||= {})[target.id] = individual ? (s.elapsedMs || 0) : s.round;
       this.event(
         outcome.success
           ? `${p.name} brought home ${capped} food from ${target.name}.`
@@ -286,7 +305,7 @@ class ColonyMatch {
           targetGuardsChanged: outcome.defenderLosses,
           attacker: p.id,
           target: target.id,
-          round: s.round,
+          round,
           stolen: capped,
           success: outcome.success,
         },
@@ -299,6 +318,7 @@ class ColonyMatch {
       core.applyReward(p.colony, key, this.teams());
     }
     p.upgrades.push({ round, key, target: targetId || null });
+    if(individual) this.setPersonalPhase(p, 'reveal', key === 'raid' ? 5.6 : 2.5, now);
     s.updatedAt = now;
   }
   tick(now = Date.now()) {
@@ -307,6 +327,7 @@ class ColonyMatch {
       this.lastTick = now;
       return;
     }
+    if (s.pacing === 'individual' && s.phase !== 'story') return this.tickIndividual(now);
     if (s.phase === 'story') {
       if (now >= s.deadline) this.advanceStory(now);
       this.lastTick = now;
@@ -411,13 +432,9 @@ class ColonyMatch {
     }
     s.updatedAt = now;
   }
-  snapshot(playerId = null, teacher = false, now = Date.now()) {
-    const s = this.state,
-      p = this.player(playerId),
-      q = s.questions[s.round];
-    const phase = s.phase === 'paused' ? s.resumePhase : s.phase;
-    const revealed = ['upgrade', 'reveal', 'ended'].includes(phase);
-    const players = this.active()
+  playerSummaries(teacher = false) {
+    const s = this.state;
+    return this.active()
       .map((p) => ({
         id: p.id,
         name: p.name,
@@ -429,7 +446,8 @@ class ColonyMatch {
         soldiers: p.colony.soldiers,
         rooms: p.colony.territory,
         color: p.colony.colorIndex,
-        answered: p.answers.some((a) => a.round === s.round),
+        answered: p.answers.some((a) => a.round === (s.pacing === 'individual' ? p.round : s.round)),
+        ...(s.pacing === 'individual' ? {questionNumber: Math.min(s.questions.length, (p.round || 0) + 1), finished: p.phase === 'spectating', stage: p.phase || 'lobby'} : {}),
         ...(teacher || s.phase === 'ended'
           ? {
               score: p.answers.filter((a) => a.correct).length,
@@ -438,7 +456,15 @@ class ColonyMatch {
           : {}),
       }))
       .sort((a, b) => b.strength - a.strength);
-    return {
+  }
+  snapshot(playerId = null, teacher = false, now = Date.now(), sharedPlayers = null, watchId = null) {
+    const s = this.state,
+      p = this.player(playerId),
+      q = s.questions[s.round];
+    const phase = s.phase === 'paused' ? s.resumePhase : s.phase;
+    const revealed = ['upgrade', 'reveal', 'ended'].includes(phase);
+    const players = sharedPlayers || this.playerSummaries(teacher);
+    const snapshot = {
       id: s.id,
       title: s.title,
       phase: s.phase,
@@ -517,6 +543,7 @@ class ColonyMatch {
           }
         : null,
     };
+    return s.pacing === 'individual' ? this.individualSnapshot(snapshot, p, teacher, now, watchId) : snapshot;
   }
   report() {
     const s = this.state,
@@ -550,4 +577,5 @@ class ColonyMatch {
     };
   }
 }
+Object.assign(ColonyMatch.prototype, require('./colonyquest-individual'));
 module.exports = { ColonyMatch, ACTIVE };

@@ -225,3 +225,14 @@ test('every rival is visible and raid ledger reconciles both food balances', () 
   assert.match(recovery.reason,/recovering/);
   assert.ok(!m.snapshot(m.active()[2].id).events.some(e=>e.kind==='raid'));
 });
+
+test('shared classroom summaries preserve personal answers and never expose rival choices', () => {
+  const m = room(30), [a,b] = m.active();
+  m.answer(a.id,0,0,100);m.answer(b.id,0,1,100);
+  const shared = m.playerSummaries();
+  const own = m.snapshot(a.id,false,200,shared);
+  assert.deepEqual(own,m.snapshot(a.id,false,200));
+  assert.equal(own.me.choice,0);
+  assert.equal(m.snapshot(b.id,false,200,shared).me.choice,1);
+  assert.ok(shared.every(p=>!('choice' in p)&&!('score' in p)&&!('answers' in p)));
+});

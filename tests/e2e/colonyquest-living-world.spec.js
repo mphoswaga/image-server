@@ -424,3 +424,25 @@ test('renderer reuses scenery and caps drawing without slowing its clock', async
   expect(result.clock).toBeGreaterThan(950);
   expect(result.reused).toBe(true);
 });
+
+test('sprite cache keeps animation frames distinct, reuses sizes and bounds memory', async ({page}) => {
+  await world(page);
+  const result=await page.evaluate(async()=>{
+    cancelAnimationFrame(scene.raf);
+    const image=new Image();
+    image.src='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100"><rect width="100" height="100" fill="red"/><rect x="100" width="100" height="100" fill="blue"/></svg>');
+    await image.decode();
+    const first=scene.raster(image,32,32,0),second=scene.raster(image,32,32,1);
+    const builds=scene.spriteBuilds;
+    for(let i=0;i<100;i++)scene.raster(image,32,32,0);
+    const reused=scene.spriteBuilds===builds;
+    const red=first.getContext('2d').getImageData(10,10,1,1).data[0];
+    const blue=second.getContext('2d').getImageData(10,10,1,1).data[2];
+    for(let i=1;i<150;i++)scene.raster(image,i*9,i*9,0);
+    const pixels=scene.spritePixels,entries=scene.spriteCache.size;
+    scene.destroy();
+    return {reused,red,blue,pixels,entries,after:scene.spriteCache.size};
+  });
+  expect(result.reused).toBe(true);expect(result.red).toBe(255);expect(result.blue).toBe(255);
+  expect(result.pixels).toBeLessThanOrEqual(4*1024*1024);expect(result.entries).toBeLessThanOrEqual(80);expect(result.after).toBe(0);
+});

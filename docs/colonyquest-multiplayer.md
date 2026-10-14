@@ -14,7 +14,7 @@ removal controls. No new AI generation or additional credits are required.
    New players join in the lobby; existing players may reconnect during play.
 3. Start once. Questions, upgrades and reveals advance automatically. Pause,
    resume and end remain available. Full screen projects the colony standings
-   with the shared question and answer count.
+   with each learner’s question progress and finished count.
 4. Select a session under **Saved multiplayer reports** for question charts,
    learner evidence, missing answers, independent colony standings, CSV and
    print/PDF. Sessions retain their own question snapshots and can be reopened
@@ -25,22 +25,31 @@ computer opponents. It never records learner marks or alters a smartboard game.
 
 ## Round and colony rules
 
-- Everyone answers the same multiple-choice question, with a 25-second limit.
-  A submitted choice locks after a durable server save. Once everyone has
-  answered, the phase ends (minimum four seconds for the question).
-- Correct answers earn one upgrade: worker, food, materials, room, walls, guard,
-  nursery egg or an eligible rival raid. The 12-second upgrade window can end
-  early after everyone has chosen (minimum four seconds); an unused earned
-  choice becomes food. A four-second reveal follows. Incorrect and unanswered
-  learners still see the correct answer and explanation.
+- New matches use individual pacing within the shared competition. Every learner
+  receives every original question, in order, with a personal 25-second limit.
+  A choice locks only after a durable server save. Correct answers immediately
+  open that learner's upgrade choices; nobody waits for the class to answer.
+- A correct answer earns one upgrade or eligible raid. Learners have up to 12
+  seconds to choose; an unused choice becomes food. A normal upgrade has a
+  2.5-second consequence scene; raids have 5.6 seconds for approach and return.
+  The next question then opens automatically. Incorrect or unanswered questions
+  show the correct answer and explanation for three seconds before continuing.
+- Finished learners choose a colony to watch, without further upgrades or answers.
+  Only that colony's visual state and relevant raid events are sent; rival answers
+  stay private. The match ends after all active human learners finish, or when
+  the teacher ends it. The teacher can pause everyone's questions and world time.
+- Personal question time freezes on disconnection and resumes on reconnect.
+  Existing saved matches retain their original synchronized pacing. Start a new
+  multiplayer match to use individual pacing; smartboard pacing is unchanged.
 - Workers forage without clicks. Rooms and walls require sticks/leaves. Guards
   unlock after two rooms, so longer question sets give more opportunity for raids.
 - Drought, rain and birds follow the same shared seasonal clock. The drought
   consumes a target of 12 food, shortages slow gathering, rain restores gathering,
   and walls protect stores. No learner is eliminated.
 - Raids use the existing guard/wall combat rules but transfer at most five food,
-  leave at least three food with the defender, and protect the defender through
-  the next round. The same rival cannot be targeted again for three rounds.
+  leave at least three food with the defender, and protect the defender for
+  20 active seconds. The same attacker cannot target that rival again for 60
+  active seconds. Finished colonies cannot be raided.
   Guards need 45 active seconds to return. Disconnected colonies cannot be raided.
 - Colony points never modify correct/incorrect learning marks. Missing responses
   remain absent answers, not invented wrong submissions. Reports state denominators.
@@ -124,13 +133,14 @@ and the human footsteps use the main game's resource and protection rules.
 The ending celebrates the Ancient Acorn champions; penalties affect colony
 points, never the learners' saved assessment marks.
 
-Scenes play automatically between questions. Learners still only answer and
-choose an upgrade. Question clocks and resource collection wait during scenes;
-teachers can pause, and reconnects restore scene progress without repeating
-resource rewards. Eight or more questions include all six optional encounters;
-shorter games use fewer discoveries while retaining the seasonal adventure and
-ending. Existing saved matches keep their original flow; start a new match to
-use the story sequence.
+The opening field guide introduces the rules before personal questions begin.
+After that, encounters follow shared active world time (a target of 12 seconds
+per question, at least 60 seconds), independent of any learner's progress.
+Encounter animations do not block personal questions or add clicks. Pausing
+freezes world time as well as personal timers. Encounters apply once and survive
+reconnections. Faster games may finish before all scheduled encounters occur.
+Eight or more questions schedule all six optional encounters; shorter games
+schedule fewer discoveries alongside the seasonal threats.
 
 `tests/colonyquest-story.test.js` checks scheduling, outcomes, answer privacy,
 pause/restart and legacy saves. `tests/e2e/colonyquest-story.spec.js` checks every
@@ -168,3 +178,25 @@ The teacher control room shows the latest 80 events with raid/meadow filters. Ra
 ### Rendering performance
 
 ColonyScene caches the painted meadow/soil background, invalidating it for viewport changes, newly loaded images and season transitions. Decorative rendering is capped at 30fps (10fps for reduced motion); animation elapsed time remains time-based. Static scenes paint at most twice a second unless new state arrives, and hidden tabs do not paint. Sustained render costs above 18ms automatically reduce canvas pixel density to 1. Food-only updates refresh rival statistics without rebuilding the selection buttons. These reduce client work; local transport benchmarks do not establish performance on a school's Wi-Fi or learner hardware.
+
+### Performance follow-up (14 October 2026)
+
+- Broadcasts build the public class ranking once and reuse it for learner snapshots. Personal choices, correctness, upgrades and private raid evidence remain per learner.
+- Answer and upgrade commands arriving within an 8 ms window are applied individually and committed together. A failed save rolls back the batch and rejects its acknowledgements; learners may retry. Every command still persists the full match before acknowledgement. The separate active-match pointer is only rewritten when the match changes, removing one redundant atomic file replacement from normal commands/ticks.
+- Resource badges use a nearly opaque fill instead of five live backdrop blurs over the animated canvas, avoiding repeated compositor filtering.
+- Local sprites (ant bodies, queen, chambers and creature frames) reuse size-quantised bitmaps. The cache is bounded to 80 entries and 4,194,304 pixels (approximately 16 MiB of pixel data), and is cleared when the scene is destroyed. Gait, construction, weather and interaction continue to animate.
+- `node scripts/benchmark-colony-rendering.cjs` compares the HEAD renderer with the working tree in a synthetic mature-colony scene. It forces canvas readback; these figures are diagnostic, not FPS or a school hardware capacity guarantee. The first local comparison showed broadly unchanged median paint cost (~4.6 ms). A real classroom run is still needed to establish whether these changes address the reported lag.
+- Existing socket tests exercise 30 simultaneous answers with durable acknowledgements, refresh/reconnection, raids, restart recovery and final reports. With an injected 40 ms write delay, a local burst of 30 answers required one match write and was acknowledged in approximately 64 ms. Local latency is not a measurement of school Wi-Fi or production disk performance.
+
+### Individual pacing verification
+
+- `tests/colonyquest-individual.test.js` covers immediate feedback, independent
+  progress, missing answers, pause/restart, reconnect deadlines, spectators,
+  full-question completion, shared threats and time-based raid protection.
+- Socket tests include a 30-learner individual burst, durable personal phases,
+  reconnecting at the saved question, and same-room spectator access restrictions.
+- Browser checks exercise the real learner join/answer/upgrade/pause/reload/report
+  flow on desktop and mobile, plus the spectator UI on Chromium, mobile and Safari.
+- Final focused server run: 34 passed. Full repository run: 749 passed, one existing
+  guest-practice markup assertion failed; the same failure was reproduced on the
+  unchanged baseline commit. Syntax checks passed.

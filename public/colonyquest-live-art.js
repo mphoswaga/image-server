@@ -70,18 +70,25 @@
       this.paintCost = 0;
       this.renderScale = 1.5;
       this.backgroundBuilds = 0;
+      this.spriteCache = new Map();
+      this.spriteBuilds = 0;
+      this.spritePixels = 0;
       this.stopped = false;
       this.raf = requestAnimationFrame((t) => this.draw(t));
     }
     destroy() {
       this.stopped = true;
       cancelAnimationFrame(this.raf);
+      this.spriteCache.clear();
+      this.spritePixels = 0;
     }
     cue(kind, extra = {}) {
       this.effects.push({
         kind,
         start: this.clock,
-        duration: kind === 'raid' ? 6200 : ['expansion', 'defense'].includes(kind) ? 7200 : 4800,
+        duration: this.state?.pacing === 'individual'
+          ? (kind === 'raid' ? 5200 : 2300)
+          : kind === 'raid' ? 6200 : ['expansion', 'defense'].includes(kind) ? 7200 : 4800,
         ...extra,
       });
       this.effects = this.effects.slice(-8);
@@ -168,21 +175,43 @@
     rooms(colony) {
       return window.ColonyQuestCore.colonyRooms(colony);
     }
+    raster(image, width, height, frame = -1) {
+      // Quantised sizes prevent animated scale changes creating unbounded bitmaps.
+      const scale = Math.min(devicePixelRatio || 1, this.renderScale);
+      const w = Math.max(8, Math.min(1024, Math.ceil(width * scale / 8) * 8));
+      const h = Math.max(8, Math.min(1024, Math.ceil(height * scale / 8) * 8));
+      const key = image.src + ':' + frame + ':' + w + ':' + h;
+      if (this.spriteCache.has(key)) return this.spriteCache.get(key);
+      const bitmap = document.createElement('canvas');
+      bitmap.width = w; bitmap.height = h;
+      const c = bitmap.getContext('2d');
+      if (frame < 0) c.drawImage(image, 0, 0, w, h);
+      else c.drawImage(image, frame * image.naturalWidth / 2, 0, image.naturalWidth / 2, image.naturalHeight, 0, 0, w, h);
+      while (this.spriteCache.size && (this.spriteCache.size >= 80 || this.spritePixels + w * h > 4 * 1024 * 1024)) {
+        const oldest = this.spriteCache.keys().next().value;
+        const old = this.spriteCache.get(oldest);
+        this.spritePixels -= old.width * old.height;
+        this.spriteCache.delete(oldest);
+      }
+      this.spritePixels += w * h;
+      this.spriteCache.set(key, bitmap);
+      this.spriteBuilds++;
+      return bitmap;
+    }
     sprite(image, x, y, size) {
       if (!image.complete || !image.naturalWidth) return;
       const ratio = image.naturalHeight / image.naturalWidth;
-      this.ctx.drawImage(image, x - size / 2, y - (size * ratio) / 2, size, size * ratio);
+      this.ctx.drawImage(this.raster(image, size, size * ratio), x - size / 2, y - (size * ratio) / 2, size, size * ratio);
     }
     creature(kind, x, y, size, seconds, right = false) {
       const image = art[kind];
       if (!image?.complete || !image.naturalWidth) return;
       const frame = this.reduced ? 0 : Math.floor(seconds * 6) % 2;
-      const cell = image.naturalWidth / 2;
       const c = this.ctx;
       c.save();
       c.translate(x, y);
       c.scale(right ? -1 : 1, 1);
-      c.drawImage(image, frame * cell, 0, cell, image.naturalHeight, -size / 2, -size / 2, size, size);
+      c.drawImage(this.raster(image, size, size, frame), -size / 2, -size / 2, size, size);
       c.restore();
       this.canvas.dataset[kind + 'Artwork'] = 'ready';
     }
@@ -440,7 +469,7 @@
         c.clip();
       }
       if (art.chamber.complete && art.chamber.naturalWidth) {
-        c.drawImage(art.chamber, -rx * 1.08, -ry * 1.25, rx * 2.16, ry * 2.5);
+        c.drawImage(this.raster(art.chamber, rx * 2.16, ry * 2.5), -rx * 1.08, -ry * 1.25, rx * 2.16, ry * 2.5);
       } else {
         ellipse(c, 0, 3, rx + 6, ry + 7, '#211612');
         ellipse(c, 0, 0, rx + 3, ry + 3, '#af7742', '#dbaf66', 2);
@@ -821,7 +850,7 @@
         }
       }
       if (image.complete && image.naturalWidth) {
-        c.drawImage(image, -size * 0.65, -height * 0.7, size * 1.3, height * 1.3);
+        c.drawImage(this.raster(image, size * 1.3, height * 1.3), -size * 0.65, -height * 0.7, size * 1.3, height * 1.3);
         this.canvas.dataset.ants = 'illustrated';
       }
       if (role === 'builder') {

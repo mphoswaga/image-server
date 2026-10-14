@@ -28,7 +28,8 @@
     retries = 0,
     lastReceived = Date.now(),
     lastBeep = '',
-    actionCue = null;
+    actionCue = null,
+    watchingId = null;
   const soundtrack = new ColonyMusic((track) => {
     $('musicTrackLabel').textContent = `${track.title} — ${track.artist}`;
   });
@@ -141,8 +142,8 @@
       ? Math.ceil((state.remaining || 0) / 1000)
       : Math.max(0, Math.ceil((state.deadline - (Date.now() + offset)) / 1000));
     const el = $(host ? 'hostTimer' : 'timer');
-    el.textContent = paused ? 'Ⅱ' : ['lobby', 'ended', 'story'].includes(state.phase) ? '🐜' : sec;
-    el.classList.toggle('urgent', sec <= 5 && !paused && state.phase !== 'story');
+    el.textContent = paused ? 'Ⅱ' : ['lobby', 'ended', 'story', 'spectating'].includes(state.phase) || (host && state.pacing === 'individual') ? '🐜' : sec;
+    el.classList.toggle('urgent', sec <= 5 && !paused && state.phase === 'answer' && !(host && state.pacing === 'individual'));
     if (
       !host &&
       state.phase === 'answer' &&
@@ -190,11 +191,20 @@
   $('activityFilter').onchange = () => {
     if (state) renderActivity(state);
   };
+  function updateScene(next) {
+    const watch = next.phase === 'spectating' && next.watching?.id === watchingId ? next.watching : null;
+    const viewedId = watch?.id || next.me?.id;
+    if(scene && scene.viewedPlayerId !== viewedId) {scene.update(null);scene.viewedPlayerId = viewedId;}
+    if (watch) {
+      // Watch colony artwork only: never copy another learner's questions or answers.
+      scene?.update({...next, me:{id:watch.id,name:watch.name,colony:watch.colony,lastUpgrade:watch.lastUpgrade},events:watch.events || [],story:next.story ? {...next.story,results:[]} : null});
+    } else scene?.update(next);
+  }
   function setState(next) {
     const prior = state;
     state = next;
     offset = next.serverNow - Date.now();
-    scene?.update(next);
+    updateScene(next);
     syncMusic();
     clock();
     eventAudio.update(next, prior, host);
@@ -207,7 +217,7 @@
       }
     }
     if (host) return;
-    if (prior?.phase === 'answer' && next.phase === 'upgrade') chime(next.me?.correct ? 880 : 330);
+    if (prior?.phase === 'answer' && ['upgrade','reveal'].includes(next.phase)) chime(next.me?.correct ? 880 : 330);
     renderLearner();
   }
   function submit(message) {
@@ -233,11 +243,12 @@
       p = s.me;
     if (!p) return;
     const disconnected = document.body.classList.contains('offline');
-    $('myName').textContent = p.name;
+    const watching = s.phase === 'spectating' && s.watching?.id === watchingId ? s.watching : null;
+    $('myName').textContent = watching ? 'Watching ' + watching.name : p.name;
     $('chapter').textContent = season(s);
     $('rank').textContent =
-      `#${s.players.findIndex((x) => x.id === p.id) + 1} of ${s.players.length}`;
-    const c = p.colony;
+      `#${s.players.findIndex((x) => x.id === (watching?.id || p.id)) + 1} of ${s.players.length}`;
+    const c = watching?.colony || p.colony;
     const resources = [
       ['🌾', c.food, 'Food'],
       ['🪵', c.sticks || 0, 'Sticks'],
@@ -334,6 +345,8 @@
       p.upgrades.map(({food, ...option}) => option),
       pending?.commandId,
       disconnected,
+      watchingId,
+      s.phase === 'spectating' ? s.spectators?.map(p=>[p.id,p.name,p.round,p.finished]) : null,
     ]);
     document.querySelectorAll('.raid-target').forEach(button => {
       const u = p.upgrades[Number(button.dataset.upgrade)];
@@ -384,6 +397,20 @@
       $('question').textContent = 'The meadow is resting';
       $('instruction').textContent =
         'Your teacher will resume the game. Your answers and colony are safe.';
+      return;
+    }
+    if (s.phase === 'spectating') {
+      $('question').textContent = 'Your questions are complete!';
+      $('roundLabel').textContent = 'WATCH THE MEADOW';
+      $('instruction').textContent = 'Choose a colony to watch while your classmates finish.';
+      $('choices').innerHTML = `<label class="watch-colony">Watch a colony<select id="watchColony"><option value="">My colony</option>${(s.spectators || []).map(p=>`<option value="${esc(p.id)}">${esc(p.name)} · ${p.finished ? 'Finished' : 'Question '+(p.round+1)}</option>`).join('')}</select></label>`;
+      if (!(s.spectators || []).some(p=>p.id===watchingId)) watchingId=null;
+      $('watchColony').value=watchingId || '';
+      $('watchColony').onchange=()=>{
+        watchingId=$('watchColony').value || null;
+        if(socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({type:'watch',matchId:s.id,target:watchingId}));
+        updateScene(state);renderLearner();
+      };
       return;
     }
     if (s.phase === 'ended') {
@@ -493,6 +520,7 @@
           retries = 0;
           setState(msg.state);
           if (wasOffline && pending) socket.send(JSON.stringify(pending));
+          if (wasOffline && watchingId && msg.state.phase === 'spectating') socket.send(JSON.stringify({type:'watch',matchId:msg.state.id,target:watchingId}));
         }
         if (msg.type === 'ack' && pending?.commandId === msg.commandId) {
           pending = null;
@@ -672,7 +700,7 @@
     const s = state;
     $('hostPhase').textContent = {
       lobby: 'Lobby open',
-      answer: 'Choose an answer',
+      answer: s.pacing === 'individual' ? 'Colonies playing at their own pace' : 'Choose an answer',
       upgrade: 'Colony upgrades',
       reveal: 'Next question shortly',
       story: s.story?.title || 'Meadow adventure',
@@ -680,7 +708,7 @@
       ended: 'Game complete',
     }[s.phase];
     $('hostCount').textContent =
-      `${s.players.length} colonies · ${s.players.filter((p) => p.connected).length} connected · ${s.players.filter((p) => p.answered).length}/${s.players.length} answered`;
+      s.pacing === 'individual' ? `${s.players.length} colonies · ${s.players.filter(p=>p.connected).length} connected · ${s.finishedCount || 0}/${s.players.length} finished` : `${s.players.length} colonies · ${s.players.filter((p) => p.connected).length} connected · ${s.players.filter((p) => p.answered).length}/${s.players.length} answered`;
     $('start').hidden = s.phase !== 'lobby';
     $('pause').hidden = !['answer', 'upgrade', 'reveal', 'story'].includes(s.phase);
     $('resume').hidden = s.phase !== 'paused';
@@ -693,14 +721,14 @@
           ? 'The meadow champions have arrived!'
           : s.phase === 'story'
             ? s.story?.line || ''
-            : s.question?.question || '';
+            : s.pacing === 'individual' ? 'Answer → choose an upgrade → watch your colony grow' : s.question?.question || '';
     $('projectedQuestion').textContent = $('hostQuestion').textContent;
     $('projectedCount').textContent = $('hostCount').textContent;
     $('leaderboard').innerHTML =
       s.players
         .map(
           (p, i) =>
-            `<article class="colony-card ${p.answered ? 'answered' : ''}"><strong>${i + 1}. ${esc(p.name)}</strong><div class="mini-ants">🐜 ${'🏡'.repeat(Math.min(4, p.rooms))}</div><b>${p.strength}</b> colony points<small>🌾 ${p.food} · 🐜 ${p.workers} · 🛡 ${p.soldiers}</small><small>${s.phase === 'story' ? 'Meadow adventure' : p.answered ? '✓ Answer saved' : p.connected ? 'Thinking…' : 'Reconnecting…'}</small></article>`,
+            `<article class="colony-card ${p.answered ? 'answered' : ''}"><strong>${i + 1}. ${esc(p.name)}</strong><div class="mini-ants">🐜 ${'🏡'.repeat(Math.min(4, p.rooms))}</div><b>${p.strength}</b> colony points<small>🌾 ${p.food} · 🐜 ${p.workers} · 🛡 ${p.soldiers}</small><small>${s.phase === 'story' ? 'Meadow adventure' : !p.connected ? 'Reconnecting…' : s.pacing === 'individual' ? p.finished ? '✓ Finished · watching' : `Question ${p.questionNumber}/${s.total} · ${p.stage === 'upgrade' ? 'Choosing upgrade' : p.stage === 'reveal' ? 'Colony in action' : 'Answering'}` : p.answered ? '✓ Answer saved' : 'Thinking…'}</small></article>`,
         )
         .join('') ||
       '<article class="colony-card"><strong>Waiting for your learners</strong><p>Share the learner link above.</p></article>';

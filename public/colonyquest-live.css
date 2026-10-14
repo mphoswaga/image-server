@@ -787,7 +787,8 @@ h2 {
   pointer-events: none;
 }
 .resources span {
-  backdrop-filter: blur(6px);
+  /* Avoid re-blurring the moving canvas underneath five resource badges. */
+  background: #193c2ef5;
 }
 @media (max-width: 620px) {
   .colony-stage {
@@ -1184,3 +1185,6 @@ h2 {
 .activity-log { max-height:460px; overflow:auto; margin-top:12px; }
 .activity-log article { padding:14px; border-bottom:1px solid #cbd5c2; }
 .activity-log p { margin:6px 0; }
+
+.watch-colony {display:flex;flex-direction:column;gap:8px;width:100%;font-weight:700;}
+.watch-colony select {font:inherit;color:#183b2d;background:#fffdf1;border:2px solid #a2b58c;border-radius:12px;padding:12px;max-width:100%;min-height:48px;}

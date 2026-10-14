@@ -88,8 +88,7 @@ test('learner name and PIN join, locked answer, one upgrade, reconnect and perma
       .poll(() => learner.locator('audio[data-colony-music]').evaluate((el) => el.currentTime))
       .toBeGreaterThan(0.1);
     await learner.getByRole('button', { name: 'A. Forest', exact: true }).click();
-    await expect(learner.locator('#instruction')).toContainText('Answer locked in');
-    await expect(learner.locator('[data-choice="0"]')).toHaveClass(/selected/);
+    await expect(learner.locator('#question')).toHaveText('Correct! Grow your colony.', {timeout:3000});
     const cheat = await learner.request.post(`/api/game/${id}/answer`, {
       data: { questionIndex: 0, choice: 0 },
     });

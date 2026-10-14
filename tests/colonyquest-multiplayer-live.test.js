@@ -13,7 +13,7 @@ process.env.DATA_DIR = temp;
 const { createColonyQuestMultiplayer } = require('../colonyquest-multiplayer-live');
 const { createFishQuestLive } = require('../fishquest-live');
 const secret = 'colony-test-secret';
-async function fixture(t, id, { withFish = false } = {}) {
+async function fixture(t, id, { withFish = false, individual = false } = {}) {
   const game = {
     id,
     teacherId: 'teacher',
@@ -71,6 +71,10 @@ async function fixture(t, id, { withFish = false } = {}) {
   const fish = withFish ? createFishQuestLive(args) : null,
     live = createColonyQuestMultiplayer(args),
     server = http.createServer(app);
+  if (!individual) {
+    const open = live.openMatch;
+    live.openMatch = (game, options) => open(game, {...options, pacing:'synchronised'});
+  }
   const fishWss = fish?.attach(server),
     wss = live.attach(server),
     sockets = [];
@@ -139,6 +143,16 @@ test(
     assert.equal(m.active().length, 30);
     await f.live.mutate(f.game.id, (m) => { m.state.storyVersion = 0; m.start(); });
     await until(() => m.state.phase === 'answer');
+    const originalWrite = fs.promises.writeFile;
+    let commandWrites = 0;
+    fs.promises.writeFile = async (name, ...args) => {
+      if (String(name).includes(`classroom.${m.state.id}.json.`)) {
+        commandWrites++;
+        await new Promise(resolve => setTimeout(resolve, 40));
+      }
+      return originalWrite.call(fs.promises, name, ...args);
+    };
+    t.after(() => { fs.promises.writeFile = originalWrite; });
     const began = Date.now();
     for (const ws of clients) {
       ws.send('null');
@@ -150,7 +164,10 @@ test(
     await until(() => clients.every((ws) => ws.messages.some((x) => x.type === 'ack' && x.accepted)));
     const latency = Date.now() - began;
     t.diagnostic(`30 simultaneous answer acknowledgements: ${latency} ms`);
-    assert.ok(latency < 8000);
+    fs.promises.writeFile = originalWrite;
+    t.diagnostic(`Durable writes for the classroom answer burst: ${commandWrites}`);
+    assert.ok(commandWrites <= 3, 'simultaneous answers share durable writes');
+    assert.ok(latency < 1000, 'slow storage should not create a per-learner save backlog');
     assert.equal(m.active().filter((p) => p.answers.length === 1).length, 30);
     const stored = JSON.parse(
       fs.readFileSync(path.join(temp, 'colonyquest-multiplayer', `classroom.${m.state.id}.json`)),
@@ -317,4 +334,89 @@ test('raid command runs once over the socket, add-back restores access and resul
   await f.live.finalize(f.game.id, m);
   assert.equal(f.writes.length, 2);
   assert.ok(m.state.resultsSavedAt);
+});
+
+test('batched choices reject failed saves and can retry without losing other learners', async t => {
+  const f = await fixture(t, 'batch-failure');
+  const m = await f.live.openMatch(f.game, {rosterIds:['classA']});
+  const clients = await Promise.all([f.join('S0'), f.join('S1'), f.join('S2')]);
+  await until(()=>clients.every(ws=>ws.states.length));
+  await f.live.mutate(f.game.id, match=>{match.state.storyVersion=0;match.start();});
+  const original = fs.promises.writeFile;
+  fs.promises.writeFile = async (name,...args)=>{
+    if(String(name).includes(`batch-failure.${m.state.id}.json.`))throw Error('Simulated disk failure');
+    return original.call(fs.promises,name,...args);
+  };
+  t.after(()=>{fs.promises.writeFile=original;});
+  const choose=(ws,commandId,choice)=>ws.send(JSON.stringify({type:'answer',commandId,matchId:m.state.id,round:0,choice}));
+  clients.forEach((ws,i)=>choose(ws,'failed',i===2?99:0));
+  await until(()=>clients.every(ws=>ws.messages.some(msg=>msg.type==='ack'&&msg.commandId==='failed')));
+  assert.ok(clients.every(ws=>ws.messages.find(msg=>msg.type==='ack'&&msg.commandId==='failed').accepted===false));
+  assert.ok(m.active().every(p=>p.answers.length===0));
+  fs.promises.writeFile=original;
+  clients.forEach(ws=>choose(ws,'retry',0));
+  await until(()=>clients.every(ws=>ws.messages.some(msg=>msg.type==='ack'&&msg.commandId==='retry'&&msg.accepted)));
+  assert.ok(m.active().every(p=>p.answers.length===1));
+  const stored=JSON.parse(fs.readFileSync(path.join(temp,'colonyquest-multiplayer',`batch-failure.${m.state.id}.json`)));
+  assert.ok(stored.players.every(p=>p.answers.length===1));
+});
+
+test('individual socket flow advances one learner, persists feedback and reconnects at their own question', async t => {
+ const f=await fixture(t,'individual-sockets',{individual:true});
+ const m=await f.live.openMatch(f.game,{rosterIds:['classA']});
+ assert.equal(m.state.pacing,'individual');
+ const a=await f.join('S0'),b=await f.join('S1');
+ await until(()=>a.states.length&&b.states.length);
+ await f.live.mutate(f.game.id,m=>{m.state.storyVersion=0;m.start();});
+ const send=(ws,body)=>ws.send(JSON.stringify({matchId:m.state.id,round:0,...body}));
+ send(a,{type:'answer',choice:0,commandId:'a-answer'});
+ await until(()=>a.states.at(-1)?.phase==='upgrade');
+ assert.equal(m.player(b.states.at(-1).me.id).phase,'answer');
+ assert.equal(b.states.at(-1).question?.correctIndex,undefined);
+ send(a,{type:'upgrade',key:'food',commandId:'a-upgrade'});
+ await until(()=>a.states.at(-1)?.phase==='reveal');
+ await until(()=>a.states.at(-1)?.round===1,5000);
+ assert.equal(b.states.at(-1).round,0);
+ const replacement=await f.join('S0');await until(()=>replacement.states.length);
+ assert.equal(replacement.states.at(-1).round,1);assert.equal(replacement.states.at(-1).phase,'answer');
+ const saved=JSON.parse(fs.readFileSync(path.join(temp,'colonyquest-multiplayer',`individual-sockets.${m.state.id}.json`)));
+ assert.equal(saved.players.find(p=>p.studentId==='S0').round,1);
+ assert.equal(saved.players.find(p=>p.studentId==='S1').answers.length,0);
+});
+
+test('individual classroom burst persists personal feedback and restricts spectator access', async t => {
+  const f = await fixture(t, 'individual-classroom', {individual:true});
+  const m = await f.live.openMatch(f.game, {rosterIds:['classA']});
+  const clients = await Promise.all(Array.from({length:30}, (_,i)=>f.join('S'+i)));
+  await until(()=>clients.every(ws=>ws.states.length));
+  await f.live.mutate(f.game.id, match=>{match.state.storyVersion=0;match.start();});
+  const target=m.active()[1].id;
+  clients[0].send(JSON.stringify({type:'watch',matchId:m.state.id,target,commandId:'early-watch'}));
+  await until(()=>clients[0].messages.some(msg=>msg.commandId==='early-watch'));
+  assert.equal(clients[0].messages.find(msg=>msg.commandId==='early-watch').accepted,false);
+  for(const ws of clients)ws.send(JSON.stringify({type:'answer',matchId:m.state.id,round:0,choice:0,commandId:'answer'}));
+  await until(()=>clients.every(ws=>ws.messages.some(msg=>msg.commandId==='answer'&&msg.accepted)));
+  assert.ok(clients.every(ws=>ws.states.at(-1).phase==='upgrade'));
+  const stored=JSON.parse(fs.readFileSync(path.join(temp,'colonyquest-multiplayer',`individual-classroom.${m.state.id}.json`)));
+  assert.equal(stored.players.length,30);
+  assert.ok(stored.players.every(p=>p.answers.length===1 && p.phase==='upgrade'));
+  const spectator=m.player(clients[0].states.at(-1).me.id);
+  await f.live.mutate(f.game.id, match=>{
+    const now=Date.now();
+    match.upgrade(spectator.id,0,'food',null,now);
+    match.finishPersonalQuestion(spectator,now);
+    match.answer(spectator.id,1,0,now);
+    match.upgrade(spectator.id,1,'food',null,now);
+    match.finishPersonalQuestion(spectator,now);
+  });
+  clients[0].send(JSON.stringify({type:'watch',matchId:m.state.id,target}));
+  await until(()=>clients[0].states.at(-1)?.watching?.id===target);
+  const view=clients[0].states.at(-1);
+  assert.equal(view.spectators.length,29);
+  assert.ok(view.spectators.every(p=>p.colony===undefined && p.answers===undefined));
+  assert.equal(view.watching.answers,undefined);
+  assert.equal(view.watching.question,undefined);
+  clients[0].send(JSON.stringify({type:'watch',matchId:m.state.id,target:'outside-room',commandId:'invalid-watch'}));
+  await until(()=>clients[0].messages.some(msg=>msg.commandId==='invalid-watch'));
+  assert.equal(clients[0].messages.find(msg=>msg.commandId==='invalid-watch').accepted,false);
 });

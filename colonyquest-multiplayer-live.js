@@ -27,8 +27,10 @@ function createColonyQuestMultiplayer({
     groups = new Map(),
     broadcastTimers = new Map(),
     histories = new Map(),
+    activePointers = new Map(),
+    commandBatches = new Map(),
     queueDepths = new Map();
-  let wss;
+  let wss, closed = false;
   const file = (key, suffix) => path.join(DIR, `${clean(key)}.${suffix}.json`);
   const read = (name) => {
     try {
@@ -48,7 +50,10 @@ function createColonyQuestMultiplayer({
   }
   async function save(key, match) {
     await atomic(file(key, match.state.id), match.state);
-    await atomic(file(key, 'active'), { id: match.state.id });
+    if (activePointers.get(key) !== match.state.id) {
+      await atomic(file(key, 'active'), { id: match.state.id });
+      activePointers.set(key, match.state.id);
+    }
     const cached = histories.get(key);
     if (cached) {
       const s = match.state,
@@ -101,12 +106,44 @@ function createColonyQuestMultiplayer({
       }
     });
   }
-  async function openMatch(game, { rosterIds = [], preview = false, key = game.id } = {}) {
+  function mutateChoice(key, fn) {
+    let batch = commandBatches.get(key);
+    if (batch && batch.length >= 128)
+      return Promise.reject(Error('The room is busy. Please try your choice again.'));
+    const first = !batch;
+    if (first) { batch = []; commandBatches.set(key, batch); }
+    const result = new Promise((resolve, reject) => batch.push({ fn, resolve, reject }));
+    if (first) {
+      enqueue(key, async () => {
+        // Collect near-simultaneous classroom answers, then commit once before any acknowledgement.
+        await new Promise(resolve => setTimeout(resolve, 8));
+        if (commandBatches.get(key) === batch) commandBatches.delete(key);
+        const match = getMatch(key, key.split('.preview.')[0]);
+        if (!match) throw Error('Open the lobby first.');
+        const before = structuredClone(match.state), accepted = [];
+        for (const item of batch) {
+          const checkpoint = structuredClone(match.state);
+          try { item.value = item.fn(match); accepted.push(item); }
+          catch (error) { match.state = checkpoint; item.reject(error); }
+        }
+        if (!accepted.length) return;
+        try { await save(key, match); }
+        catch (error) { match.state = before; throw error; }
+        broadcast(key);
+        for (const item of accepted) item.resolve(item.value);
+      }).catch(error => {
+        if (commandBatches.get(key) === batch) commandBatches.delete(key);
+        for (const item of batch) item.reject(error);
+      });
+    }
+    return result;
+  }
+  async function openMatch(game, { rosterIds = [], preview = false, key = game.id, pacing = 'individual' } = {}) {
     return enqueue(key, async () => {
       const old = getMatch(key, game.id);
       if (old && old.state.phase !== 'ended') return old;
       if (old) await finalize(key, old);
-      const match = new ColonyMatch(game, { preview, rosterIds });
+      const match = new ColonyMatch(game, { preview, rosterIds, pacing });
       await save(key, match);
       matches.set(key, match);
       return match;
@@ -297,7 +334,7 @@ function createColonyQuestMultiplayer({
     }
   });
   function broadcast(key) {
-    if (broadcastTimers.has(key)) return;
+    if (closed || broadcastTimers.has(key)) return;
     const timer = setTimeout(() => {
       broadcastTimers.delete(key);
       try {
@@ -310,10 +347,12 @@ function createColonyQuestMultiplayer({
     broadcastTimers.set(key, timer);
   }
   function broadcastNow(key) {
+    if (!groups.get(key)?.size) return;
     const match = matches.get(key);
     if (!match) return;
     const game = games.getGame(match.state.gameId),
       assigned = game ? classes(game) : [];
+    const now = Date.now(), players = match.playerSummaries(false);
     for (const ws of groups.get(key) || [])
       if (!ws.replaced) {
         if (!game || (!ws.identity.preview && !eligible(game, match, ws.identity, assigned))) {
@@ -321,7 +360,7 @@ function createColonyQuestMultiplayer({
           ws.close(4003, 'Your access to this room changed');
           continue;
         }
-        send(ws, { type: 'state', state: match.snapshot(ws.playerId) });
+        send(ws, { type: 'state', state: match.snapshot(ws.playerId, false, now, players, ws.watchId) });
       }
   }
   function attach(server) {
@@ -410,7 +449,7 @@ function createColonyQuestMultiplayer({
           send(ws, { type: 'pong' });
           return;
         }
-        if (!['answer', 'upgrade'].includes(message.type)) return;
+        if (!['answer', 'upgrade', 'watch'].includes(message.type)) return;
         if (!ws.commandWindow || receivedAt - ws.commandWindow > 1000) {
           ws.commandWindow = receivedAt;
           ws.commandCount = 0;
@@ -424,7 +463,16 @@ function createColonyQuestMultiplayer({
             m = getMatch(ws.key, ws.gameId);
           if (!g || !m || (!ws.identity.preview && !eligible(g, m, ws.identity)))
             throw Error('Your access to this room has changed.');
-          await mutate(ws.key, (match) => {
+          if(message.type === 'watch') {
+            const player=m.player(ws.playerId);
+            if(ws.replaced || message.matchId !== m.state.id || m.state.pacing !== 'individual' || player?.phase !== 'spectating')
+              throw Error('Finish your questions before watching another colony.');
+            if(message.target && !m.active().some(p=>p.id===message.target)) throw Error('Choose a colony in this room.');
+            ws.watchId=message.target || null;
+            send(ws, {type:'state',state:m.snapshot(ws.playerId,false,Date.now(),null,ws.watchId)});
+            return;
+          }
+          await mutateChoice(ws.key, (match) => {
             if (ws.replaced || message.matchId !== match.state.id)
               throw Error('This room has changed. Join again.');
             if (message.type === 'answer')
@@ -482,6 +530,7 @@ function createColonyQuestMultiplayer({
     }, 1000);
     tick.unref();
     wss.on('close', () => {
+      closed = true;
       clearInterval(heartbeat);
       clearInterval(tick);
       for (const timer of broadcastTimers.values()) clearTimeout(timer);
