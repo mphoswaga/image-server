@@ -20,7 +20,8 @@
     @media(max-width:850px){.question-overlay,.choice-overlay{place-items:end center;padding:0 8px 58px}.question-dialog,.choice-dialog{width:100%;max-height:48vh;padding:13px}.question-dialog h2,.choice-dialog h2{font-size:20px}.question-dialog .guide-line{margin:-3px 0 7px}.question-dialog .guide-line img{width:38px;height:30px}.question-dialog .answers{grid-template-columns:1fr 1fr;gap:6px}.question-dialog .answer{min-height:52px;padding:7px;font-size:14px}.choice-dialog .reward-grid{display:flex;overflow-x:auto}.choice-dialog .reward{flex:0 0 min(280px,80vw)}.game-screen.dock-open .turn-banner{left:50%}.world-story{left:8px;right:8px;bottom:58px;grid-template-columns:58px minmax(0,1fr);gap:8px;min-height:0;padding:9px}.world-story img{width:54px;height:52px}.world-story h2{font-size:17px}.world-story p{font-size:12px}.world-story-effect{font-size:12px}.world-story .btn{grid-column:1/-1;justify-self:stretch;padding:9px}}
     @media(max-width:440px){.question-dialog .dialog-kicker{font-size:11px}.question-dialog .guide-line{font-size:11px}.question-dialog h2{font-size:18px}.question-dialog .answer{font-size:13px}.question-dialog .question-foot{font-size:11px}.question-dialog .feedback{font-size:12px}}
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
-  </style>
+  .study-note-editor{display:grid;gap:8px;margin:18px 0;padding:16px;background:#fff;border:1px solid #cbded5;border-radius:12px}.study-note-editor input,.study-note-editor textarea{width:100%;font:inherit;padding:12px;border:1px solid #a8bfb4;border-radius:8px}.study-note-editor textarea{min-height:110px;resize:vertical}.lesson-review{position:fixed;inset:0;z-index:20000;background:linear-gradient(145deg,#eef7ec,#fff7df);display:flex;flex-direction:column;padding:clamp(16px,4vw,50px);overflow:auto}.lesson-review header,.lesson-review footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.lesson-review header>span{font-weight:800;letter-spacing:.1em;color:#366750}.lesson-review main{width:min(1100px,100%);margin:auto;padding:30px 0}.lesson-review h1{font-size:clamp(26px,4vw,58px);line-height:1.15;overflow-wrap:anywhere}.lesson-review article{background:white;border-left:8px solid #279565;border-radius:18px;padding:clamp(18px,3vw,36px);box-shadow:0 12px 40px #214b3712}.lesson-review #reviewAnswer{font-size:clamp(24px,3.6vw,48px);font-weight:800;line-height:1.25;margin:14px 0;overflow-wrap:anywhere}.lesson-review #reviewExplanation{font-size:clamp(18px,2vw,26px);line-height:1.5;color:#526b60}.lesson-review #reviewExplanation:empty{display:none}.lesson-review footer{justify-content:center}.lesson-review button:disabled{opacity:.5;cursor:default}
+</style>
   <link rel="stylesheet" href="/colonyquest-polish.css?v=15">
 <link rel="stylesheet" href="/colonyquest-celebration.css?v=1">
 <script defer src="/colonyquest-celebration.js?v=1"></script>
@@ -71,11 +72,17 @@
       </div>
 
       <details class="question-review"><summary><span id="questionCount">0</span> questions ready - review and edit</summary><div id="questionList" class="question-list"></div></details>
-      <div class="setup-actions"><button id="saveSetupBtn" class="btn" type="button">Save setup</button><button id="startBtn" class="btn primary" type="button">Start ColonyQuest</button></div>
+      <details id="studyNotesEditor" class="question-review"><summary>Study notes · review or edit before presenting</summary><p>Short teaching notes for the class. Notes use the saved explanations where available. Check the wording before presenting; add a note where one is missing.</p><div id="studyNotesList"></div></details>
+      <div class="setup-actions"><button id="saveSetupBtn" class="btn" type="button">Save setup</button><button id="reviewLessonBtn" class="btn gold" type="button">Read study notes with class</button><button id="startBtn" class="btn primary" type="button">Start ColonyQuest</button></div>
       <div id="setupNotice" class="setup-notice" role="status"></div>
     </main>
   </div>
 
+  <section id="lessonReview" class="lesson-review hidden" role="dialog" aria-modal="true" aria-labelledby="reviewQuestion">
+    <header><span>COLONYQUEST · LEARN TOGETHER</span><button id="reviewClose" class="btn" type="button">Back to setup</button></header>
+    <main><p id="reviewProgress"></p><h1 id="reviewQuestion" tabindex="-1"></h1><article><span class="eyebrow">Learn together</span><p id="reviewAnswer"></p><p id="reviewExplanation"></p></article></main>
+    <footer><button id="reviewPrevious" class="btn" type="button">← Previous</button><button id="reviewNext" class="btn" type="button">Next →</button><button id="reviewStart" class="btn primary" type="button">Ready · Start ColonyQuest</button></footer>
+  </section>
   <div id="gameScreen" class="game-screen hidden">
     <div id="worldViewport" class="world-viewport" tabindex="0" role="region" aria-label="Colony world"><div id="worldScrollSpace"><div id="gameMount" class="game-mount"></div></div></div>
     <header class="game-top">

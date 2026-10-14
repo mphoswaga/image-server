@@ -185,12 +185,33 @@
     }));
   }
 
+  function defaultStudyNote(question, index) {
+    const answer = String(question.options?.[question.correctIndex] || '').replace(/^[A-D][.)]\s+/, '').trim();
+    const definition = String(question.question || '').match(/^what (is|are) (.+?)\?*$/i);
+    const rawTitle = definition ? definition[2].replace(/\?$/, '') : `Key idea ${index + 1}`;
+    const title = rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1);
+    let text = String(question.explanation || '').trim();
+    // An answer-key reference alone is not a teaching note.
+    if (/^(?:(?:the )?correct )?answer\s*(?:is|:)|^[A-D] (?:is|was) (?:correct|right)/i.test(text) || text.includes('?')) text = '';
+    if (!text && definition && answer) text = answer.toLowerCase().startsWith(title.toLowerCase() + ' ') ? answer : `${title} ${definition[1].toLowerCase()} ${answer.replace(/^(A|An|The) /, word => word.toLowerCase()).replace(/[.!]$/, '')}.`;
+    if (!text && answer.split(/\s+/).length >= 4) text = answer;
+    return { title: question.studyTitle || title, text: question.studyNote || text };
+  }
+
+  function renderStudyNotesEditor() {
+    $('studyNotesList').innerHTML = data.game.questions.map((q, index) => {
+      const note = defaultStudyNote(q, index);
+      return `<div class="study-note-editor" data-note-index="${index}"><label for="noteTitle${index}">Note ${index + 1} heading</label><input id="noteTitle${index}" class="note-title" maxlength="120" value="${esc(note.title)}"><label for="noteText${index}">Teaching note</label><textarea id="noteText${index}" class="note-text" maxlength="1500" placeholder="Write a short explanation, for example: Software is a set of instructions that tells a computer what to do.">${esc(note.text)}</textarea></div>`;
+    }).join('');
+  }
+
   function renderQuestions() {
     $('questionCount').textContent = data.game.questions.length;
     $('questionList').innerHTML = data.game.questions.map((question, index) => {
       const options = Array.from({ length: 4 }, (_, optionIndex) => (question.options || [])[optionIndex] || '');
       return `<div class="question-row" data-question-index="${index}"><span class="question-number">${index + 1}</span><input class="qtext" value="${esc(question.question)}" aria-label="Question ${index + 1}">${options.map((option, optionIndex) => `<input class="qopt" value="${esc(option)}" aria-label="Question ${index + 1} answer ${optionIndex + 1}">`).join('')}<select class="qcorrect" aria-label="Correct answer for question ${index + 1}">${options.map((_, optionIndex) => `<option value="${optionIndex}"${optionIndex === Number(question.correctIndex) ? ' selected' : ''}>${String.fromCharCode(65 + optionIndex)}</option>`).join('')}</select></div>`;
     }).join('');
+    renderStudyNotesEditor();
   }
 
   function assignBoysGirls() {
@@ -234,6 +255,8 @@
       options: [...row.querySelectorAll('.qopt')].map(input => input.value.trim()),
       correctIndex: Number(row.querySelector('.qcorrect').value),
       explanation: (data.game.questions[index] && data.game.questions[index].explanation) || '',
+      studyTitle: document.getElementById(`noteTitle${index}`)?.value.trim() || '',
+      studyNote: document.getElementById(`noteText${index}`)?.value.trim() || '',
     }));
   }
 
@@ -335,6 +358,51 @@
       events: [],
     });
   }
+
+  let reviewQuestions = [], reviewIndex = 0;
+  function renderLessonReview() {
+    const q = reviewQuestions[reviewIndex];
+    $('reviewProgress').textContent = `Study note ${reviewIndex + 1} of ${reviewQuestions.length}`;
+    $('reviewQuestion').textContent = q.studyTitle || `Key idea ${reviewIndex + 1}`;
+    $('reviewAnswer').textContent = q.studyNote;
+    $('reviewExplanation').textContent = '';
+    $('reviewPrevious').disabled = reviewIndex === 0;
+    $('reviewNext').disabled = reviewIndex === reviewQuestions.length - 1;
+    $('reviewQuestion').focus();
+  }
+  function closeLessonReview() {
+    $('lessonReview').classList.add('hidden');
+    $('setup').inert = false;
+    $('reviewLessonBtn').focus();
+  }
+  $('reviewLessonBtn').addEventListener('click', () => {
+    reviewQuestions = collectQuestions();
+    if (!reviewQuestions.length || reviewQuestions.some(q => !q.studyNote)) {
+      showNotice('Add the missing teaching notes before presenting to the class.');
+      $('studyNotesEditor').open = true;
+      [...document.querySelectorAll('.note-text')].find(input => !input.value.trim())?.focus();
+      return;
+    }
+    reviewIndex = 0;
+    $('setup').inert = true;
+    $('lessonReview').classList.remove('hidden');
+    $('reviewStart').disabled = $('startBtn').disabled;
+    renderLessonReview();
+  });
+  $('reviewPrevious').onclick = () => { if (reviewIndex > 0) { reviewIndex--; renderLessonReview(); } };
+  $('reviewNext').onclick = () => { if (reviewIndex + 1 < reviewQuestions.length) { reviewIndex++; renderLessonReview(); } };
+  $('reviewClose').onclick = closeLessonReview;
+  $('reviewStart').onclick = () => { closeLessonReview(); startNewMatch(); };
+  $('lessonReview').addEventListener('keydown', event => {
+    if (event.key === 'Escape') { event.preventDefault(); closeLessonReview(); }
+    if (event.key === 'ArrowRight') { event.preventDefault(); $('reviewNext').click(); }
+    if (event.key === 'ArrowLeft') { event.preventDefault(); $('reviewPrevious').click(); }
+    if (event.key === 'Tab') {
+      const buttons = [...$('lessonReview').querySelectorAll('button:not(:disabled)')];
+      if (event.shiftKey && document.activeElement === buttons[0]) { event.preventDefault(); buttons.at(-1).focus(); }
+      else if (!event.shiftKey && document.activeElement === buttons.at(-1)) { event.preventDefault(); buttons[0].focus(); }
+    }
+  });
 
   async function startNewMatch() {
     if (startingMatch) return;

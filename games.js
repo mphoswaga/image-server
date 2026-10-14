@@ -250,6 +250,7 @@ function normalizeQuestionsInput(questions, { maxQuestions = 40 } = {}) {
     options: Array.isArray(q && q.options) ? q.options.map(value => String(value || '').trim().slice(0, 250)).slice(0, 4) : [],
     correctIndex: Number(q && q.correctIndex),
     explanation: String(q && q.explanation || '').trim().slice(0, 1000),
+    ...(q && q.studyNote ? { studyTitle: String(q.studyTitle || '').trim().slice(0, 120), studyNote: String(q.studyNote).trim().slice(0, 1500) } : {}),
   })).filter(q => q.question && q.options.filter(Boolean).length >= 2 && Number.isInteger(q.correctIndex) && q.correctIndex >= 0 && q.correctIndex < q.options.length && q.options[q.correctIndex]).slice(0, maxQuestions);
   return checkedQuestions(normalized).questions;
 }

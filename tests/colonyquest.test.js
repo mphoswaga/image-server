@@ -631,8 +631,10 @@ test('persistent ColonyQuest games have no learner room and keep recoverable mat
     matchType: 'time',
     durationMinutes: 10,
     teams: [{ name: 'Leaf Colony' }, { name: 'River Colony' }],
-    questions: game.questions,
+    questions: game.questions.map(q => ({...q, studyTitle:'Habitats',studyNote:'A forest is a habitat where living things live.'})),
   });
+  assert.equal(games.getGame(game.id).questions[0].studyTitle, 'Habitats');
+  assert.equal(games.getGame(game.id).questions[0].studyNote, 'A forest is a habitat where living things live.');
   assert.equal(configured.colonyquest.teams.length, 2);
   assert.equal(configured.colonyquest.teams[0].name, 'Leaf Colony');
 

@@ -1049,3 +1049,43 @@ test('boys versus girls preset reviews missing genders, saves overrides and star
   expect(saved.teams.map(t=>t.name)).toEqual(['Boys','Girls']);
   expect(saved.teams.flatMap(t=>t.members)).toHaveLength(3);
 });
+
+test('pre-game study notes teach statements without questions or option letters and wait for the teacher', async ({page},info)=>{
+  const notesQuestions=[
+    {question:'What is software?',options:['A. A set of instructions that tells a computer what to do','A computer screen'],correctIndex:0,explanation:''},
+    {question:'Which place is a habitat?',options:['Forest','Spoon'],correctIndex:0,explanation:'A forest is a habitat where plants and animals live.'},
+  ];
+  let setup={teamCount:2,sound:false,teams:[]},saved=null,stored=notesQuestions;
+  await page.route(/\/api\/game\/cq-notes\/colonyquest(?:\/session)?$/, async route=>{
+    if(route.request().method()==='PATCH'){const body=route.request().postDataJSON();setup=body;stored=body.questions;return route.fulfill({json:{colonyquest:setup,questions:stored}});}
+    if(route.request().method()==='PUT'){saved=route.request().postDataJSON().session;return route.fulfill({json:{ok:true}});}
+    return route.fulfill({json:{game:{id:'cq-notes',lessonTitle:'Our learning',questions:stored,colonyquest:setup},session:saved}});
+  });
+  await page.goto('/colonyquest/cq-notes');
+  await page.locator('#reviewLessonBtn').click();
+  await expect(page.locator('#reviewQuestion')).toHaveText('Software');
+  await expect(page.locator('#reviewAnswer')).toHaveText('Software is a set of instructions that tells a computer what to do.');
+  await expect(page.locator('#lessonReview')).not.toContainText('What is software?');
+  await expect(page.locator('#lessonReview')).not.toContainText('A.');
+  await page.screenshot({path:info.outputPath('study-notes.png')});
+  await expect(page.locator('#reviewPrevious')).toBeDisabled();
+  await page.locator('#reviewNext').click();
+  await expect(page.locator('#reviewAnswer')).toHaveText('A forest is a habitat where plants and animals live.');
+  await expect(page.locator('#reviewNext')).toBeDisabled();
+  expect(saved).toBeNull();
+  await page.locator('#reviewClose').click();
+  await page.locator('#studyNotesEditor summary').click();
+  await page.locator('#noteTitle1').fill('Habitats');
+  await page.locator('#noteText1').fill('A habitat is a place where living things make their home.');
+  await page.locator('#saveSetupBtn').click();
+  await expect.poll(()=>stored[1].studyTitle).toBe('Habitats');
+  await page.reload();
+  await page.locator('#reviewLessonBtn').click();
+  await page.locator('#reviewNext').click();
+  await expect(page.locator('#reviewQuestion')).toHaveText('Habitats');
+  await expect(page.locator('#reviewAnswer')).toContainText('living things make their home');
+  await page.locator('#reviewStart').click();
+  await expect(page.locator('#lessonReview')).toBeHidden();
+  await expect(page.locator('#storyOverlay')).toBeVisible();
+  expect(saved.answers).toHaveLength(0);
+});
