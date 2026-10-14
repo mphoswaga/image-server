@@ -10,6 +10,10 @@ test('coordinator can preview and configure weekly notifications without sending
  await page.getByRole('button',{name:'Preview emails',exact:true}).click();
  await expect(page.locator('[data-mail-status]')).toHaveText('Preview only — nothing sent.');
  await expect(page.locator('[data-mail-previews]')).toContainText('weekly newsletter summary');
+ await expect(page.locator('[data-mail-ta-time]')).toHaveValue('16:00');
+ await page.locator('[data-mail-teacher-day]').selectOption('3');
+ await page.locator('[data-mail-teacher-time]').fill('14:15');
+ await page.locator('[data-mail-ta-time]').fill('16:15');
  await page.locator('[data-mail-mode]').selectOption('test');
  await page.locator('[data-mail-day]').selectOption('4');
  await page.locator('[data-mail-time]').fill('16:30');
@@ -17,5 +21,8 @@ test('coordinator can preview and configure weekly notifications without sending
  await expect(page.locator('[data-mail-status]')).toContainText('Settings saved');
  const data=await(await page.request.get('/api/school-newsletters/'+w.id+'/notifications')).json();
  expect(data.settings).toMatchObject({mode:'test',day:4,time:'16:30'});expect(data.deliveries).toEqual([]);
+ expect(data.settings.teacher).toEqual({enabled:true,day:3,time:'14:15'});
+ expect(data.settings.ta).toEqual({enabled:true,time:'16:15'});
+ expect(data.settings.coordinator).toEqual({enabled:true,day:4,time:'16:30'});
  await page.screenshot({path:info.outputPath('notification-settings.png')});
 });
