@@ -694,6 +694,13 @@
 
   function updateHUD() {
     if (!session) return;
+    const teamOptions = session.teams.map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
+    if ($('deductTeam').innerHTML !== teamOptions) {
+      const selected = $('deductTeam').value;
+      $('deductTeam').innerHTML = teamOptions;
+      if (session.teams.some(t => t.id === selected)) $('deductTeam').value = selected;
+    }
+    $('deductPointsBtn').disabled = deductionPending || session.phase === 'ended';
     updateBirdPanel();
     collectColonyFeedback();
     const team = currentTeam();
@@ -1543,7 +1550,7 @@
       const accuracy = entry.team.attempts ? Math.round(entry.team.correct / entry.team.attempts * 100) : 0;
       const tiedFirst = isTie && tiedWinners.some(item => item.team.id === entry.team.id);
       const place = tiedFirst ? 'Winner' : index === 0 ? 'Winner' : `Place ${index + 1}`;
-      return `<div class="podium-place${index === 0 || tiedFirst ? ' first' : ''}" style="--team-color:${colorHex(core.TEAM_COLORS[entry.team.colorIndex].primary)}"><b>${place}: ${esc(entry.team.name)}</b><span>${entry.score} colony strength</span><span>${entry.team.correct}/${entry.team.attempts} answers right (${accuracy}%)</span><small>Answer points ${entry.breakdown.knowledge} · Colony points ${growth} · Supplies and land ${entry.breakdown.resources + entry.breakdown.territory} · Safety points ${protection} · Collapse penalty ${entry.team.collapsePenalty || 0}</small><small>Challenge record: ${entry.team.successfulAttacks} won · ${entry.team.successfulDefenses} defended · ${entry.team.guardsDefeated || 0} rival guards sent to rest · ${entry.team.guardsLost || 0} guards changed to worker duty</small></div>`;
+      return `<div class="podium-place${index === 0 || tiedFirst ? ' first' : ''}" style="--team-color:${colorHex(core.TEAM_COLORS[entry.team.colorIndex].primary)}"><b>${place}: ${esc(entry.team.name)}</b><span>${entry.score} colony strength</span><span>${entry.team.correct}/${entry.team.attempts} answers right (${accuracy}%)</span><small>Answer points ${entry.breakdown.knowledge} · Colony points ${growth} · Supplies and land ${entry.breakdown.resources + entry.breakdown.territory} · Safety points ${protection} · Teacher deductions ${entry.team.teacherDeduction || 0} · Collapse penalty ${entry.team.collapsePenalty || 0}</small><small>Challenge record: ${entry.team.successfulAttacks} won · ${entry.team.successfulDefenses} defended · ${entry.team.guardsDefeated || 0} rival guards sent to rest · ${entry.team.guardsLost || 0} guards changed to worker duty</small></div>`;
     }).join('');
     const knowledge = [...session.teams].sort((a, b) => (b.attempts ? b.correct / b.attempts : 0) - (a.attempts ? a.correct / a.attempts : 0) || b.correct - a.correct)[0];
     const improved = session.teams.filter(team => core.learningImprovement(session, team.id) > 0).sort((a, b) => core.learningImprovement(session, b.id) - core.learningImprovement(session, a.id))[0];
@@ -3346,6 +3353,22 @@
     toast(`Answer: ${question.options[question.correctIndex]}`);
   });
   $('markCorrectBtn').addEventListener('click', () => handleOutcome(null, true, true));
+  let deductionPending = false;
+  $('deductPointsBtn').addEventListener('click', async () => {
+    if (deductionPending) return;
+    deductionPending = true;
+    const button = $('deductPointsBtn');
+    button.disabled = true;
+    try {
+      const team = session?.teams.find(t => t.id === $('deductTeam').value);
+      const amount = core.deductTeamPoints(session, $('deductTeam').value, Number($('deductAmount').value));
+      updateHUD();
+      button.disabled = true;
+      const saved = await saveState();
+      $('deductStatus').textContent = `${amount} points deducted from ${team.name}.${saved ? ' Saved.' : ' Saved on this computer; server save will retry.'} Answer marks unchanged.`;
+    } catch (error) { $('deductStatus').textContent = error.message; }
+    finally { deductionPending = false; button.disabled = session?.phase === 'ended'; }
+  });
   $('markWrongBtn').addEventListener('click', () => handleOutcome(null, false, true));
   $('skipQuestionBtn').addEventListener('click', skipQuestion);
   $('nextStudentBtn').addEventListener('click', () => { participantOffset += 1; setCurrentParticipant(chooseParticipant(currentTeam(), participantOffset)); });

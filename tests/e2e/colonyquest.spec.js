@@ -1089,3 +1089,23 @@ test('pre-game study notes teach statements without questions or option letters 
   await expect(page.locator('#storyOverlay')).toBeVisible();
   expect(saved.answers).toHaveLength(0);
 });
+
+test('teacher subtracts colony points during play and the deduction survives reload',async({page})=>{
+ const teams=[colonyCore.createTeam({name:'Boys'},0),colonyCore.createTeam({name:'Girls'},1)];
+ let saved=colonyCore.normalizeSession({phase:'paused',previousPhase:'question',introSeen:true,teams});
+ const before=colonyCore.colonyStrength(saved.teams[1]);
+ await page.route(/\/api\/game\/cq-deduct\/colonyquest(?:\/session)?$/,async route=>{
+  if(route.request().method()==='PUT'){saved=colonyCore.normalizeSession(route.request().postDataJSON().session);return route.fulfill({json:{ok:true}});}
+  return route.fulfill({json:{game:{id:'cq-deduct',lessonTitle:'Habitats',questions,colonyquest:{teamCount:2,sound:false,teams}},session:saved}});
+ });
+ await page.goto('/colonyquest/cq-deduct');await page.locator('#resumeBtn').click();
+ await page.locator('#teacherHandle').click();
+ await page.locator('#deductTeam').selectOption('team-2');
+ await page.locator('#deductAmount').fill('15');
+ await page.locator('#deductPointsBtn').click();
+ await expect(page.locator('#deductStatus')).toContainText('15 points deducted from Girls. Saved.');
+ expect(colonyCore.colonyStrength(saved.teams[1])).toBe(before-15);
+ expect(saved.answers).toHaveLength(0);
+ await page.reload();await page.locator('#resumeBtn').click();
+ expect(saved.teams[1].teacherDeduction).toBe(15);
+});

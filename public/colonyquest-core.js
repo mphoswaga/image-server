@@ -114,6 +114,7 @@
       forageProgress: [],
       upkeepCarry: 0,
       collapsePenalty: 0,
+      teacherDeduction: 0,
       rainLoss: 0,
       raidAway: 0,
       raidReturnMs: 0,
@@ -143,6 +144,7 @@
     base.birdsStopped = Math.floor(clamp(input?.birdsStopped, 0, 999));
     base.birdWorkerLoss = Math.floor(clamp(input?.birdWorkerLoss, 0, 999));
     base.birdsIncoming = Math.floor(clamp(input?.birdsIncoming, 0, 3));
+    base.teacherDeduction = Math.floor(clamp(input?.teacherDeduction,0,999999));
     base.collapsePenalty = Math.floor(clamp(input?.collapsePenalty,0,999999));
     base.correct = Math.min(base.correct, base.attempts);
     base.population = Math.max(1, base.population);
@@ -165,6 +167,7 @@
     const attempts = Math.max(0, Number(team && team.attempts) || 0);
     const correct = Math.max(0, Number(team && team.correct) || 0);
     return {
+      teacherDeduction: -Math.floor(clamp(team?.teacherDeduction,0,999999)),
       collapse: -Math.floor(clamp(team?.collapsePenalty,0,999999)),
       knowledge: Math.round(correct * 100 + (attempts ? correct / attempts : 0) * 80),
       population: Math.round(clamp(team && team.population, 0, 999) * 3),
@@ -181,6 +184,21 @@
 
   function colonyStrength(team) {
     return Math.max(0,Object.values(strengthBreakdown(team)).reduce((sum, value) => sum + value, 0));
+  }
+
+  function deductTeamPoints(session, teamId, points) {
+    if (!session || !['question', 'reward', 'event', 'paused'].includes(session.phase)) throw new Error('Start a game before deducting points.');
+    if (!Number.isInteger(points) || points < 1 || points > 9999) throw new Error('Enter a whole number from 1 to 9999.');
+    const team = session.teams.find(item => item.id === teamId);
+    if (!team) throw new Error('Choose a team.');
+    const amount = Math.min(points, colonyStrength(team), 999999 - (team.teacherDeduction || 0));
+    team.teacherDeduction = (team.teacherDeduction || 0) + amount;
+    if (amount) {
+      session.events ||= [];
+      session.events.push({key:'teacher-deduction',teamId,amount,at:new Date().toISOString()});
+      session.events = session.events.slice(-40);
+    }
+    return amount;
   }
 
   function comebackMultiplier(team, teams) {
@@ -703,7 +721,7 @@
     return null;
   }
   return {
-    advanceEconomy, applyRain, applyHumanStomp, homeGuards, birdCount, resolveBirds, advanceBirdEvent,
+    deductTeamPoints, advanceEconomy, applyRain, applyHumanStomp, homeGuards, birdCount, resolveBirds, advanceBirdEvent,
     VERSION, DRY_FOOD_TARGET, buildingCost, applyDrySeason, seasonSchedule, seasonStage, advanceSeason,
     FORTIFICATIONS,
     fortification,

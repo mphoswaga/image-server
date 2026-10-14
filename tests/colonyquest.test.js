@@ -824,3 +824,21 @@ test('season boundaries are fair for 2 to 6 teams, short and long games, and sur
   timed.turnIndex = 6;
   assert.equal(core.advanceSeason(timed, .7, { matchType: 'time' }), 'rain');
 });
+
+test('teacher deductions lower colony rankings, survive saves and never alter answer marks',()=>{
+ const session=core.normalizeSession({phase:'question',teams:[core.createTeam({},0),core.createTeam({},1)],answers:[{questionIndex:0,teamId:'team-1',correct:true}]});
+ const team=session.teams[0],before=core.colonyStrength(team),answers=JSON.stringify(session.answers);
+ assert.equal(core.deductTeamPoints(session,team.id,10),10);
+ assert.equal(core.colonyStrength(team),before-10);
+ const restored=core.normalizeSession(session);
+ assert.equal(core.colonyStrength(restored.teams[0]),before-10);
+ assert.equal(restored.events.at(-1).amount,10);
+ assert.equal(core.rankTeams(restored.teams)[0].team.id,'team-2');
+ assert.equal(JSON.stringify(session.answers),answers);
+ assert.equal(core.deductTeamPoints(session,team.id,9999),before-10);
+ assert.equal(core.colonyStrength(team),0);
+ assert.equal(team.teacherDeduction,before);
+ assert.throws(()=>core.deductTeamPoints(session,team.id,1.5),/whole number/);
+ assert.throws(()=>core.deductTeamPoints(session,team.id,-1),/whole number/);
+ session.phase='ended';assert.throws(()=>core.deductTeamPoints(session,team.id,1),/Start a game/);
+});
