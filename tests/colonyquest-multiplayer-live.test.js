@@ -241,11 +241,13 @@ test('class restrictions, isolated computer preview, non-owner and stale credent
   assert.notEqual(claims.key, f.game.id);
   const ws = await f.join('teacher', preview.token);
   await until(() => ws.states.length);
-  assert.equal(ws.states.at(-1).players.length, 4);
+  assert.equal(ws.states.at(-1).players.length, 11);
   assert.equal(ws.states.at(-1).preview, true);
   assert.equal(m.state.phase, 'lobby');
   assert.equal(m.state.players.length, 0);
   const previewMatch = f.live.getMatch(claims.key, f.game.id);
+  assert.equal(previewMatch.state.players.filter(p => p.npc).length, 10);
+  assert.equal(previewMatch.state.pacing, 'individual');
   await f.live.mutate(claims.key, (m) => m.end());
   await f.live.finalize(claims.key, previewMatch);
   assert.equal(f.writes.length, 0);

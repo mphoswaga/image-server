@@ -303,7 +303,7 @@ function createColonyQuestMultiplayer({
     identity.studentId = games.normalizeStudentId(identity.studentId);
     try {
       const key = preview
-        ? `${g.id}.preview.${crypto.createHash('sha256').update(req.userId).digest('hex').slice(0, 12)}`
+        ? `${g.id}.preview.npc10.${crypto.createHash('sha256').update(req.userId).digest('hex').slice(0, 12)}`
         : g.id;
       const m = preview ? await openMatch(g, { key, preview: true }) : getMatch(key);
       if (
@@ -418,7 +418,7 @@ function createColonyQuestMultiplayer({
               ws.playerId = p.id;
               ws.identity = claim;
               if (claim.preview && match.state.phase === 'lobby') {
-                ['Fern', 'Clover', 'Acorn'].forEach((name, i) =>
+                ['Fern', 'Clover', 'Acorn', 'Willow', 'Moss', 'Maple', 'Hazel', 'Bramble', 'Poppy', 'Oak'].forEach((name, i) =>
                   match.join({ studentId: `npc-${i}`, name, npc: true }),
                 );
                 match.start();

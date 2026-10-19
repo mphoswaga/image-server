@@ -515,7 +515,7 @@
         if (msg.type === 'state') {
           const wasOffline = document.body.classList.contains('offline');
           document.body.classList.remove('offline');
-          $('connection').textContent = msg.state.preview ? 'Practice vs computer' : 'Connected';
+          $('connection').textContent = msg.state.preview ? 'Practice vs 10 computer colonies' : 'Connected';
           error('');
           retries = 0;
           setState(msg.state);
@@ -747,7 +747,7 @@
     practice.href = '/colonyquest-live-play/' + encodeURIComponent(gameId);
     practice.target = '_blank';
     practice.rel = 'noopener';
-    practice.textContent = 'Test against computer colonies';
+    practice.textContent = 'Test against 10 computer colonies';
     $('setup').append(practice);
     const join =
       location.origin + '/play/' + encodeURIComponent(gameId) + '?activity=colonyquest-live';

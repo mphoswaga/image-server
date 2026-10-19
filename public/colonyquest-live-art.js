@@ -1291,8 +1291,7 @@
             p >= 0.68 && raid.event.success ? 'seed' : null,
             !(p < 0.15 || (p >= 0.5 && p < 0.68)),
           );
-        this.tag(
-          p < 0.15
+        this.raidCaption = p < 0.15
             ? 'Guards assemble!'
             : p < 0.5
               ? 'The raiding party approaches!'
@@ -1304,13 +1303,9 @@
                     : 'Your guards held strong!'
                   : raid.event.success
                     ? 'Your raid brought food home!'
-                    : 'Your guards are coming home',
-          w / 2,
-          surface - size * 1.3,
-          h < 350 ? 10 : 13,
-        );
+                    : 'Your guards are coming home';
       }
-      if (!raid) this.canvas.dataset.raidPhase = '';
+      if (!raid) { this.canvas.dataset.raidPhase = ''; this.raidCaption = ''; }
       if (this.rooms(colony).length > rooms.length)
         this.tag(`+${this.rooms(colony).length - rooms.length} deeper rooms`, w / 2, h - 74, 11);
       this.canvas.dataset.rooms = String(this.rooms(colony).length);
@@ -1493,6 +1488,27 @@
         this.dryFade +=
           (Number(!!this.state?.world?.dryOccurred && !this.state?.world?.rainOccurred) - this.dryFade) *
           (1 - Math.exp(-dt / 550));
+      // Zoom only the learner's colony canvas; answer controls remain stationary.
+      const raidCamera = !this.overview && !this.reduced && this.effects.findLast(e => e.kind === 'raid' && this.clock - e.start < e.duration);
+      c.save();
+      let zoom = 1;
+      if (raidCamera) {
+        const p = clamp((this.clock - raidCamera.start) / raidCamera.duration, 0, 1);
+        const incoming = raidCamera.event.target === this.state.me.id;
+        const travel = p < .15 ? 0 : p < .5 ? smooth((p - .15) / .35) : p < .68 ? 1 : 1 - smooth((p - .68) / .32);
+        const envelope = p < .15 ? smooth(p / .15) : p > .88 ? 1 - smooth((p - .88) / .12) : 1;
+        zoom = 1 + envelope * (p >= .5 && p < .68 ? 1.6 : 1.25);
+        // Ease zoom transitions and keep the viewport entirely within the scene.
+        this.raidZoom = (this.raidZoom || 1) + (zoom - (this.raidZoom || 1)) * (1 - Math.exp(-dt / 110));
+        zoom = this.raidZoom;
+        const x = incoming ? w + (g.size || 40) + (w * .53 - w - (g.size || 40)) * travel : w * (.35 + .33 * travel);
+        const focusX = clamp(x, w / (2 * zoom), w - w / (2 * zoom));
+        const focusY = clamp(g.surface - 8, h / (2 * zoom), h - h / (2 * zoom));
+        c.translate(w / 2, h / 2);
+        c.scale(zoom, zoom);
+        c.translate(-focusX, -focusY);
+      } else this.raidZoom = 1;
+      this.canvas.dataset.raidZoom = zoom.toFixed(2);
       this.background(w, h, this.overview ? h * 0.65 : g.surface);
       if (this.overview) {
         for (let i = 0; i < 10; i++)
@@ -1540,6 +1556,8 @@
       if (!this.overview) this.evidenceMoment(g);
       if (this.state?.story) window.ColonyStoryCanvas?.draw(this, g);
       else this.canvas.dataset.story = '';
+      c.restore();
+      if (this.raidCaption && !this.overview) this.tag(this.raidCaption, w / 2, 26, w < 500 ? 11 : 14);
       this.effects = this.effects.filter((e) => this.clock - e.start < e.duration);
       if (!this.effects.length) this.canvas.dataset.action = '';
       this.paintCost = this.paintCost * .9 + (performance.now() - paintStarted) * .1;

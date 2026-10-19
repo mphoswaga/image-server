@@ -35,3 +35,22 @@ test('personal feedback, next question and a private colony watch view',async({p
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.screenshot({path:info.outputPath('watch-colony.png')});expect(errors).toEqual([]);
 });
+
+for (const incoming of [false,true]) test(`individual raid camera follows ${incoming?'incoming':'outgoing'} attacks and resets`,async({page},info)=>{
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/healthz');
+ await page.setContent('<canvas id="world" style="width:100%;height:600px"></canvas>');
+ await page.addScriptTag({url:'/colonyquest-core.js'});
+ await page.addScriptTag({url:'/colonyquest-live-art.js'});
+ await page.evaluate(incoming=>{
+  const colony=ColonyQuestCore.createTeam({},0);colony.soldiers=4;
+  window.raidScene=new ColonyScene(document.querySelector('canvas'));
+  raidScene.update({id:'test',phase:'reveal',pacing:'individual',me:{id:'me',colony},world:{},players:[]});
+  raidScene.cue('raid',{event:{attacker:incoming?'rival':'me',target:incoming?'me':'rival',success:true}});
+ },incoming);
+ await expect.poll(()=>page.evaluate(()=>Number(document.querySelector('canvas').dataset.raidZoom))).toBeGreaterThan(2);
+ await expect(page.locator('canvas')).toHaveAttribute('data-raid-phase','clash',{timeout:5000});
+ await page.screenshot({path:info.outputPath(incoming?'incoming-raid.png':'outgoing-raid.png')});
+ await expect(page.locator('canvas')).toHaveAttribute('data-raid-zoom','1.00',{timeout:6000});
+ expect(errors).toEqual([]);
+});
