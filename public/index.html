@@ -3149,6 +3149,12 @@
               </div>
             </div>
           </details>
+          <div id="sequencePurposes" hidden style="margin:12px 0;padding:14px;border:1px solid var(--line);border-radius:12px">
+            <strong>Purpose of each lesson</strong><p class="hint">Optional. Keep teaching lessons, or follow teaching with a check and reflection using the same objectives.</p>
+            <div id="sequencePurposeRows"></div>
+            <label for="reflectionMcqCount">Multiple-choice questions in a reflection lesson</label><input id="reflectionMcqCount" type="number" min="1" max="20" value="8" />
+            <p class="hint">Checks cover the supplied objectives. To assess the whole unit, include its earlier objectives too.</p>
+          </div>
           <label for="focus">Lesson style or focus <span style="color:var(--muted);font-weight:400" data-ui-i18n>(optional)</span> <span class="hint-i" tabindex="0" role="img" aria-label="An optional steer, e.g. use real-world examples, lots of group work." data-tip="e.g. use real-world examples; lots of group work">i</span></label>
           <textarea id="focus" rows="2" maxlength="400" placeholder="e.g. use real-world examples, group work, and simple classroom computer examples"></textarea>
           <div class="char-row"><span></span><span class="char-count" id="focusCount"></span></div>
@@ -4146,10 +4152,19 @@
       const lessonCount=Math.min(5,Math.max(2,parseInt(($('sequenceLessonCount')||{}).value,10)||3));
       const periodMinutes=Math.min(180,Math.max(5,parseInt(($('periodMinutes')||{}).value,10)||35));
       return enabled
-        ? { sequenceEnabled:true, sequenceLessonCount:lessonCount, periodMinutes }
+        ? { sequenceEnabled:true, sequenceLessonCount:lessonCount, periodMinutes, sequenceLessonPurposes:[...document.querySelectorAll('[data-period-purpose]')].map(el=>el.value),reflectionMcqCount:Math.max(1,Math.min(20,Number($('reflectionMcqCount').value)||8)) }
         : { sequenceEnabled:false };
     }
 
+    function renderPeriodPurposes(values){
+      const previous=values||[...document.querySelectorAll('[data-period-purpose]')].map(el=>el.value);
+      $('sequencePurposes').hidden=!$('sequenceEnabled').checked||currentLessonPurpose()!=='lesson';
+      const count=Math.max(2,Math.min(5,Number($('sequenceLessonCount').value)||3));
+      $('sequencePurposeRows').innerHTML=Array.from({length:count},(_,i)=>`<label style="display:block;margin:10px 0">Lesson ${i+1}<select data-period-purpose="${i}" aria-label="Purpose of lesson ${i+1}"><option value="teach">Teach and practise</option><option value="reflect" ${previous[i]==='reflect'?'selected':''}>Check understanding and reflect</option></select></label>`).join('');
+    }
+    $('sequenceEnabled').addEventListener('change',()=>renderPeriodPurposes());
+    $('sequenceLessonCount').addEventListener('change',()=>renderPeriodPurposes());
+    renderPeriodPurposes();
     function updateTeachingModelHint(){
       const model=teachingModelsById[$('teachingModel').value]||teachingModelsById.standard;
       selectedTeachingModelId=model.id;
@@ -4167,6 +4182,7 @@
     }
     function updateLessonPurposeUI(){
       const purpose=currentLessonPurpose(), assessment=purpose!=='lesson';
+      renderPeriodPurposes();
       $('autoAssessmentSettings').style.display=assessment?'block':'none';
       $('autoAssessmentHeading').textContent=purpose==='test'?'Automatic test':'Automatic project assessment';
       $('objStepLabel').innerHTML=ICON('i-clipboard')+(purpose==='lesson'?' Lesson objectives':' Objectives and assessed skills')+' <span style="color:var(--err)">*</span>';
@@ -5136,6 +5152,15 @@
     }
     function paintPlan(d){
       planTemplateId=d.templateId||null;
+      let outcomeReview=$('planOutcomeReview');
+      if(!outcomeReview){outcomeReview=document.createElement('div');outcomeReview.id='planOutcomeReview';$('planSections').before(outcomeReview);}
+      outcomeReview.innerHTML=`<label for="planLearningOutcome">Lesson outcome</label><p class="hint">What learners will demonstrate by the end. This appears after the starter in the slides. Review it against this lesson's objectives.</p><textarea id="planLearningOutcome" maxlength="600" rows="3" placeholder="By the end of this lesson, you will be able to…">${esc(d.learningOutcome||'')}</textarea>`;
+      $('planLearningOutcome').addEventListener('input',scheduleWorkspaceSave);
+      if(!sequenceMode() && ((ctx&&ctx.lessonPurpose)||d.lessonPurpose||'lesson')==='lesson'){
+        const follow=document.createElement('button');follow.type='button';follow.id='followUpReflectionBtn';follow.className='btn ghost';follow.textContent='Create follow-up reflection lesson';outcomeReview.append(follow);
+        follow.addEventListener('click',createReflectionFollowUp);
+      }
+
       let criteriaReview=$('planCriteriaReview');
       if(!criteriaReview){criteriaReview=document.createElement('div');criteriaReview.id='planCriteriaReview';$('planSections').before(criteriaReview);}
       const criteria=d.successCriteria||ctx?.successCriteria||[],added=d.addedSuccessCriteria||ctx?.addedSuccessCriteria||[];
@@ -5170,6 +5195,26 @@
       }).join('');
       planStage.querySelectorAll('textarea.content').forEach(t=>{ t.style.height='auto'; t.style.height=t.scrollHeight+'px'; t.addEventListener('input',()=>{t.style.height='auto';t.style.height=t.scrollHeight+'px'; scheduleWorkspaceSave();}); });
       planStage.querySelectorAll('input.heading').forEach(input=>input.addEventListener('input',scheduleWorkspaceSave));
+    }
+    async function createReflectionFollowUp(){
+      const button=$('followUpReflectionBtn');if(!ctx||button.disabled)return;
+      button.disabled=true;const sourceContext=ctx;
+      try{
+        if(!await saveWorkspaceNow())throw Error('Save this lesson before creating its follow-up.');
+        const sourcePlan=collectPlan();
+        const first={...sourcePlan,teachingModelId:ctx.teachingModelId||'standard',lessonPurpose:'lesson',sequenceLessonNumber:1};
+        const nextContext={...ctx,sequenceEnabled:true,sequenceLessonCount:2,sequenceLessonPurposes:['teach','reflect'],periodMinutes:ctx.lessonSettings?.durationMinutes||ctx.periodMinutes||35};
+        statusEl.textContent='Creating a reflection lesson in a new sequence; your original stays saved…';
+        const response=await fetch('/api/lesson-plan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...nextContext,sequenceLessonNumber:2,previousLessonPlanText:first.sections.map(s=>`${s.heading}: ${s.content}`).join('\n').slice(0,8000)})});
+        const d=await response.json();if(!response.ok)throw Error(d.error||'Could not create the follow-up.');
+        if(ctx!==sourceContext)return;
+        await workspaceSaveChain;
+        if(ctx!==sourceContext)return;
+        if(JSON.stringify(collectPlan())!==JSON.stringify(sourcePlan))throw Error('The original lesson changed while generating. Your edits are retained; try again to use the updated lesson.');
+        clearWorkspaceState();ctx=nextContext;restoreContextFields(nextContext);sequencePlans=[first];activeSequencePlanIndex=1;
+        renderPlan(d);if(!await saveWorkspaceNow())throw Error('The follow-up is ready, but could not be saved. Please save again before leaving.');statusEl.textContent='Your new two-lesson sequence is saved. Review the reflection questions and outcome.';refreshCredits();
+      }catch(error){statusEl.textContent=error.message;}
+      finally{button.disabled=false;}
     }
     function currentAutomaticAssessment(){ return pendingAssessmentDraft||(ctx&&ctx.assessmentDraft)||null; }
     function automaticAssessmentIsPublished(){ return !!(ctx&&ctx.assessmentPublishedId&&ctx.assessmentDraft&&!pendingAssessmentDraft); }
@@ -5266,7 +5311,7 @@
       paintPlan(sequencePlans[activeSequencePlanIndex]); renderDesignReview(sequencePlans[activeSequencePlanIndex]); renderSequencePlanFlow();
     });
     function collectPlan(){
-      return { successCriteria:(ctx?.successCriteria||[]).slice(),addedSuccessCriteria:(ctx?.addedSuccessCriteria||[]).slice(),sections:[...planStage.querySelectorAll('.plan-section')].map(el=>({
+      return { learningOutcome:$('planLearningOutcome')?.value.trim()||'', successCriteria:(ctx?.successCriteria||[]).slice(),addedSuccessCriteria:(ctx?.addedSuccessCriteria||[]).slice(),sections:[...planStage.querySelectorAll('.plan-section')].map(el=>({
         heading:el.querySelector('.heading').value.trim(),
         content:el.querySelector('.content').value.trim(),
         stageId:el.dataset.stage||undefined,
@@ -5481,7 +5526,7 @@
       const tmr=setInterval(()=>{ i=Math.min(i+1,STEPS.length-1); statusEl.innerHTML='<span class="spinner"></span>'+STEPS[i]; },1900);
       try{
         const periodSettings=ctx.lessonSettings?{...ctx.lessonSettings,game:ctx.lessonSettings.game?.lesson===index+1?{...ctx.lessonSettings.game,lesson:1}:null}:null;
-        const body={...ctx,lessonWorkspaceId:currentWorkspaceId||undefined,sequenceEnabled:false,lessonSettings:periodSettings,slideCount:periodSettings&&periodSettings.slideCountMode!=='manual'?LessonDesign.recommendation(periodSettings,plan.sections):ctx.slideCount,lessonPlan:{sections:plan.sections},presetId:selectedPresetId,
+        const body={...ctx,lessonWorkspaceId:currentWorkspaceId||undefined,sequenceEnabled:false,lessonSettings:periodSettings,slideCount:periodSettings&&periodSettings.slideCountMode!=='manual'?LessonDesign.recommendation(periodSettings,plan.sections):ctx.slideCount,teachingModelId:plan.teachingModelId||ctx.teachingModelId,learningOutcome:plan.learningOutcome||'',lessonPlan:{sections:plan.sections,learningOutcome:plan.learningOutcome||''},presetId:selectedPresetId,
           lessonNumber:Number.isFinite(sequenceStartLessonNumber)?sequenceStartLessonNumber+index:undefined,
           focus:[ctx.focus,`This is lesson ${index+1} of ${total}. Build slides only for this lesson plan.`].filter(Boolean).join(' ')};
         const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -7507,6 +7552,8 @@
       if($('sequenceEnabled')) $('sequenceEnabled').checked=!!saved.sequenceEnabled;
       if($('sequenceLessonCount')&&saved.sequenceLessonCount) $('sequenceLessonCount').value=String(saved.sequenceLessonCount);
       if($('periodMinutes')&&saved.periodMinutes) $('periodMinutes').value=String(saved.periodMinutes);
+      renderPeriodPurposes(saved.sequenceLessonPurposes||[]);
+      $('reflectionMcqCount').value=String(saved.reflectionMcqCount||8);
       restoreLessonSettings(saved.lessonSettings || (saved.periodMinutes ? {durationMinutes:saved.periodMinutes,slideCountMode:'manual'} : null));
     }
 

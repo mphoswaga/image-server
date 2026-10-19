@@ -1,3 +1,4 @@
+const { outcomePrompt, cleanOutcome, reflectionSchema, reflectionIssues, includeReflectionQuestions } = require('./lesson-learning');
 // Generates a lesson plan that mirrors the teacher's uploaded template format,
 // filled in from the pasted objectives. Output is a list of {heading, content}
 // sections so it can be rendered, edited, and then drive slide creation.
@@ -34,6 +35,7 @@ function planSchema(model, sequence = null, structuredSequence = false, includeA
     sectionRequired.push('lesson');
   }
   const properties = {
+    learningOutcome: { type: 'string', description: outcomePrompt() },
     successCriteria: {
       description: 'Preserve supplied criteria and append any missing observable criteria so EVERY learning objective is covered.',
       type: 'array',
@@ -49,7 +51,7 @@ function planSchema(model, sequence = null, structuredSequence = false, includeA
       },
     },
   };
-  const required = ['successCriteria', 'sections'];
+  const required = ['learningOutcome', 'successCriteria', 'sections'];
   if (includeTeachingEvidence && !includeAssessment) {
     properties.teachingEvidence = teachingEvidenceSchema();
     required.push('teachingEvidence');
@@ -602,7 +604,7 @@ function finalizeLessonPlan(raw, { objectives = '', suppliedSuccessCriteria = []
   const sections = dedupeSectionLines(normalizeLessonPurpose(lessonPurpose) === 'lesson' && teachingModelId === 'gradual_release'
     ? ensureGradualReleaseVisible(raw && raw.sections)
     : (Array.isArray(raw && raw.sections) ? raw.sections : []));
-  return { ...(raw || {}), sections, successCriteria, addedSuccessCriteria };
+  return { ...(raw || {}), learningOutcome: cleanOutcome(raw?.learningOutcome), sections, successCriteria, addedSuccessCriteria };
 }
 
 function placeholderPlan(objectives, teachingModel, lessonPurpose = 'lesson') {
@@ -811,8 +813,10 @@ async function repairAssessmentDraft(client, initialDraft, context, options) {
   throw error;
 }
 
-async function generateLessonPlan({ subject, topic, grade = 'middle school', tone = 'clear and engaging', objectives, successCriteria = [], templateText, unitBlock = '', sourceMaterialText = '', planningFrameworkText = '', teachingModel = 'standard', sequence = null, structuredSequence = false, sequenceLessonNumber = null, previousLessonPlanText = '', lessonPurpose = 'lesson', assessmentTotalMarks = 50, assessmentStructure = 'balanced', assessmentDeliveryMode = 'live', assessmentBrief = '', assessmentQuestionTypes = [], assessmentMcqCount = 15, assessmentPhases = [], regenerate = false, lessonSettings = null }) {
-  const teachingModelId = normalizeTeachingModelId(teachingModel);
+async function generateLessonPlan({ subject, topic, grade = 'middle school', tone = 'clear and engaging', objectives, successCriteria = [], templateText, unitBlock = '', sourceMaterialText = '', planningFrameworkText = '', teachingModel = 'standard', sequence = null, structuredSequence = false, sequenceLessonNumber = null, previousLessonPlanText = '', lessonPurpose = 'lesson', assessmentTotalMarks = 50, assessmentStructure = 'balanced', assessmentDeliveryMode = 'live', assessmentBrief = '', assessmentQuestionTypes = [], assessmentMcqCount = 15, assessmentPhases = [], regenerate = false, lessonSettings = null, lessonIntent = 'teach', sequenceLessonPurposes = [], reflectionMcqCount = 8 }) {
+  const reflecting = lessonPurpose === 'lesson' && lessonIntent === 'reflect';
+  const reflectionCount = Math.max(1, Math.min(20, parseInt(reflectionMcqCount,10)||8));
+  const teachingModelId = reflecting ? 'standard' : normalizeTeachingModelId(teachingModel);
   const model = getTeachingModel(teachingModelId);
   const settings = lessonSettings ? lessonDesign.normalize(lessonSettings, { lessonPurpose, lessonCount: sequence?.lessonCount || 1 }) : null;
   const designLesson = Number(sequenceLessonNumber) || 1;
@@ -828,6 +832,7 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     ? Math.min(cleanSequence.lessonCount, Math.max(1, parseInt(sequenceLessonNumber, 10) || 1))
     : null;
   if (!process.env.OPENAI_API_KEY) {
+    if (reflecting) throw new Error('AI generation is unavailable. Your existing lesson is unchanged; retry when generation is available.');
     console.log('No OPENAI_API_KEY set — using placeholder lesson plan.');
     const placeholder = placeholderPlan(objectives, teachingModelId, purpose);
     if (cleanSequence && structuredSequence && !cleanLessonNumber) {
@@ -855,7 +860,8 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     teachingModelId,
     lessonPurpose: purpose,
     assessmentOptions,
-    lessonPlanQualityVersion: 9,
+    lessonPlanQualityVersion: 10,
+    lessonIntent, sequenceLessonPurposes, reflectionMcqCount,
     planningModel: purpose === 'lesson' ? LESSON_MODEL : MODEL,
     observationGuidanceVersion: OBSERVATION_GUIDANCE_VERSION,
     lessonSettings: settings,
@@ -866,9 +872,13 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     regenerate,
   }, async () => {
     const client = aiClient();
-    const basePrompt = buildPrompt({ subject, topic, grade, tone, objectives, successCriteria, templateText, unitBlock, sourceMaterialText, planningFrameworkText, teachingModel: teachingModelId, sequence: cleanSequence, structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber), sequenceLessonNumber: cleanLessonNumber, previousLessonPlanText, lessonPurpose: purpose, assessmentOptions });
+    let basePrompt = buildPrompt({ subject, topic, grade, tone, objectives, successCriteria, templateText, unitBlock, sourceMaterialText, planningFrameworkText, teachingModel: teachingModelId, sequence: cleanSequence, structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber), sequenceLessonNumber: cleanLessonNumber, previousLessonPlanText, lessonPurpose: purpose, assessmentOptions });
+    basePrompt += '\n' + outcomePrompt();
+    if (sequenceLessonPurposes.length && purpose === 'lesson') basePrompt += '\nSequence intentions (apply only to the current period): ' + sequenceLessonPurposes.slice(0,5).map((intent,i) => `Lesson ${i+1}: ${intent === 'reflect' ? 'check understanding and reflect on previously taught objectives' : 'teach and practise'}`).join('; ');
+    if (reflecting) basePrompt += `\nTHIS PERIOD IS A FORMATIVE CHECK AND REFLECTION LESSON. This overrides the normal teach-new-content flow. Use the earlier approved lessons and supplied objectives; do not introduce new assessed content. Plan a brief starter/recap without giving question answers, an independent check of ${Math.max(1,Math.min(20,Number(reflectionMcqCount)||8))} multiple-choice questions, then review misconceptions, allow corrections with explanations, and finish with a different short recheck. Return every actual MCQ, distinct options, zero-based correctIndex, explanation and a supplied objective link in reflectionCheck. Do not duplicate the questions or answer key in sections: the app appends them to the main activity. Plan the independent-check timings there. Keep answers hidden until everyone has submitted their initial attempt. Include time for student reflection against success criteria. Initial independent answers and post-feedback corrections are distinct evidence, not a formal test score. If an objective requires a practical demonstration, include a brief independent practical check as well; multiple-choice answers alone cannot establish that skill. Preserve school headings. Teaching evidence checks and responsive support belong AFTER the independent check. The outcome describes demonstrating the previously taught knowledge, not learning new content.`;
     const draftContext = assessmentContext({ subject, topic, grade, objectives, sourceMaterialText, lessonPurpose: purpose }, assessmentOptions);
     const schema = planSchema(model, cleanSequence, !!(cleanSequence && structuredSequence && !cleanLessonNumber), purpose !== 'lesson', purpose === 'lesson');
+    if (reflecting) { schema.properties.reflectionCheck = reflectionSchema(reflectionCount); schema.required.push('reflectionCheck'); }
     if (hasPlannedGame) { schema.properties.gamePlacement = lessonDesign.placementSchema(); schema.required.push('gamePlacement'); }
     const exactHeadings = strictTemplateHeadings(templateText);
     if (exactHeadings.length) {
@@ -893,7 +903,7 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
       const correction = lastIssues.length ? `\n\nYour previous draft failed these required checks: ${lastIssues.join('; ')}. Correct every issue in the new response.` : '';
       const response = await client.chat.completions.create({
         model: purpose === 'lesson' ? LESSON_MODEL : MODEL,
-        max_tokens: cleanSequence && structuredSequence && !cleanLessonNumber ? 12000 : (purpose === 'lesson' ? 6000 : 12000),
+        max_tokens: reflecting || (cleanSequence && structuredSequence && !cleanLessonNumber) ? 12000 : (purpose === 'lesson' ? 6000 : 12000),
         messages: [
           { role: 'system', content: observationPromptBlock(purpose) + (purpose === 'lesson' ? '\nReturn teachingEvidence with exactly one checkpoint per lesson. Use lesson=1 for a single or staged lesson; for a structured sequence use the matching section.lesson. sectionHeading must exactly match an existing teaching/practice section. Provide a concrete question, expectedReasoning, an allLearnerCheck response method, a specific ifThenResponse to a likely misconception (and extension when ready), a new recheck task, and studentReview describing a criterion-based self-check and actual revision. These will be inserted into the chosen section, so allocate time within its activity and do not duplicate them in section content. Do not put these in Reflection, Resources, Objectives or Overview. Each field must be substantive, topic-specific and classroom-ready, not generic advice.' : '') + correction },
           { role: 'user', content: basePrompt + lessonDesign.prompt(settings, structuredSequence && settings?.game ? settings.game.lesson : designLesson) + require('./game-teaching-guide').gamePrompt(settings?.game && (structuredSequence || settings.game.lesson === designLesson) ? settings.game : null) },
@@ -911,6 +921,13 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
       });
       const planIssues = lessonPlanIssues(parsed, { lessonPurpose: purpose, templateText, structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber) });
       if (purpose === 'lesson') {
+        if (reflecting) {
+          lastIssues = reflectionIssues(parsed.reflectionCheck, reflectionCount);
+          if (lastIssues.length) continue;
+          const reflected = includeReflectionQuestions(parsed);
+          if (reflected.issues.length) { lastIssues=reflected.issues; continue; }
+          parsed.sections = reflected.plan.sections;
+        }
         const integrated = integrateTeachingEvidence(parsed, { periodMinutes: settings?.durationMinutes || (cleanSequence && cleanSequence.periodMinutes) });
         const gameResult = lessonDesign.integrateGame(integrated.plan, settings, designLesson, !!(structuredSequence && !cleanLessonNumber));
         const candidate = finalizeLessonPlan(gameResult.plan, {
@@ -919,7 +936,7 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
         const coverageIssues = await reviewObjectives(client, candidate, {
           objectives, settings, sequence: cleanSequence, lessonNumber: cleanLessonNumber, previousLessonPlanText, model: LESSON_MODEL,
         });
-        lastIssues = [...planIssues, ...integrated.issues, ...gameResult.issues, ...coverageIssues];
+        lastIssues = [...planIssues, ...integrated.issues, ...gameResult.issues, ...coverageIssues, ...(!cleanOutcome(candidate.learningOutcome) ? ['Provide a concise assessable learningOutcome.'] : [])];
         if (!lastIssues.length) return { ...candidate, teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
         continue;
       }

@@ -1,3 +1,4 @@
+const lessonLearning = require('./lesson-learning');
 require('dotenv').config();
 const crypto = require('crypto');
 const fs = require('fs');
@@ -2062,6 +2063,9 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
       lessonSettings,
       teachingModel: teachingModelId, sequence: lessonSequence, structuredSequence: false,
       sequenceLessonNumber, previousLessonPlanText: clip(req.body.previousLessonPlanText, 8000), regenerate: !!regenerate,
+      lessonIntent: lessonLearning.periodIntent(req.body),
+      sequenceLessonPurposes: lessonSequence && Array.isArray(req.body.sequenceLessonPurposes) ? req.body.sequenceLessonPurposes.slice(0,lessonSequence.lessonCount).map(x=>x==='reflect'?'reflect':'teach') : [],
+      reflectionMcqCount: Math.max(1,Math.min(20,parseInt(req.body.reflectionMcqCount,10)||8)),
       lessonPurpose,
       assessmentTotalMarks: assessmentOptions.totalMarks,
       assessmentStructure: assessmentOptions.structure,
@@ -2095,7 +2099,7 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
     if (isRewrite) planRegens.set(regenKey, { n: used + 1, at: Date.now() });
 
     res.json({
-      sections, successCriteria: plan.successCriteria, addedSuccessCriteria:plan.addedSuccessCriteria||[], teachingModelId, lessonPurpose, assessmentDraft: plan.assessmentDraft, model: getTeachingModel(teachingModelId),
+      sections, learningOutcome:plan.learningOutcome||'', lessonIntent:lessonLearning.periodIntent(req.body), successCriteria: plan.successCriteria, addedSuccessCriteria:plan.addedSuccessCriteria||[], teachingModelId:plan.teachingModelId||teachingModelId, lessonPurpose, assessmentDraft: plan.assessmentDraft, model: getTeachingModel(plan.teachingModelId||teachingModelId),
       sequence: lessonSequence, sequenceLessonNumber,
       weekPlannerFields: plannerOutline ? plannerOutline.map(f => f.label) : null,
       usedTemplate: !!tpl, templateName: tpl ? tpl.name : null, templateId: tpl ? tpl.id : null,
@@ -4168,6 +4172,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
     const lessonPlanText = mergeSourceIntoPlanText(resolvePlanText(req.body) || (unitBlock || ''), materialText);
     const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives, lessonPlanText, sourceMaterialText: materialText, sourceImages: materialImages, teachingModelId, extras: {
       regenerate: !!regenerate, lessonSequence, lessonPurpose, lessonSettings,
+      learningOutcome: lessonLearning.cleanOutcome(req.body.lessonPlan?.learningOutcome ?? req.body.learningOutcome),
       ...generationAssessment,
     }, skipAssemble: true, presetId: presetId || null });
     const id = crypto.randomUUID();

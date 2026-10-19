@@ -38,9 +38,12 @@ test('AI slide generation carries assessment settings through the cache and appr
 
   for (const lessonPurpose of ['lesson', 'project', 'test']) {
     const slides = await moduleObject.exports.generateContent('ICT', 'documents', 1, 'Grade 2', 'clear', '', {
+      learningOutcome: 'By the end of this lesson, you will be able to create and save a letter.',
       lessonPurpose, lessonPlanText: 'Approved plan: students create and submit a letter.',
       assessmentTotalMarks: 80, assessmentQuestionTypes: ['mcq', 'practical'], assessmentMcqCount: 20,
     });
+    assert.equal(slides.filter(s=>s.title==='Lesson outcome').length,1);
+    assert.equal(slides.find(s=>s.title==='Lesson outcome').bullets[0],cacheInputs.at(-1).learningOutcome);
     const expectedContentSlides = { lesson: 1, project: 2, test: 4 }[lessonPurpose];
     assert.equal(slides.filter(slide => slide.type === 'content').length, expectedContentSlides,
       'assessment decks include every selected phase plus the required administration slides');
