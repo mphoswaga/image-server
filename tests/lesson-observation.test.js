@@ -54,7 +54,7 @@ test('assessment plans retain integrity instead of importing taught-lesson discu
 
 test('observation improvements do not introduce required export fields or ratings', () => {
   const schema = planSchema(getTeachingModel('standard'));
-  assert.deepEqual(schema.required, ['successCriteria', 'sections']);
+  assert.deepEqual(schema.required, ['learningOutcome', 'successCriteria', 'sections']);
   assert.deepEqual(schema.properties.sections.items.required, ['heading', 'content', 'stageId']);
 });
 
@@ -116,3 +116,16 @@ test('rejects an oversized forty-minute plenary in a seventy-minute lesson',()=>
  const evidence={...checkpoint,sectionHeading:'Main Activity',timings:[{sectionHeading:'Starter',minutes:15},{sectionHeading:'Main Activity',minutes:15},{sectionHeading:'Plenary',minutes:40}]};
  const result=integrateTeachingEvidence({sections,teachingEvidence:[evidence]},{periodMinutes:70});assert.ok(result.issues.some(issue=>issue.includes('closing review brief')));
 });
+
+ test('staged lesson two accepts its actual number without weakening multi-period checks', () => {
+ const sections=[{heading:'Guided Practice',content:'Review initial responses.'},{heading:'Reflection',content:''}];
+ const evidence={...checkpoint,lesson:2};
+ assert.ok(integrateTeachingEvidence({sections,teachingEvidence:[evidence]}).issues.length);
+ const result=integrateTeachingEvidence({sections,teachingEvidence:[evidence]},{sequenceLessonNumber:2});
+ assert.deepEqual(result.issues,[]);
+ assert.match(result.plan.sections[0].content,/Learning checkpoint/);
+ assert.equal(result.plan.sections[1].content,'');
+ for(const items of [[{...evidence,lesson:3}],[evidence,evidence],[{...evidence,recheck:''}],[{...evidence,sectionHeading:'Reflection'}]])assert.ok(integrateTeachingEvidence({sections,teachingEvidence:items},{sequenceLessonNumber:2}).issues.length);
+ const schema=planSchema(getTeachingModel('standard'),null,false,false,true).properties.teachingEvidence;
+ assert.deepEqual(schema.items.properties.lesson.enum,[1]);assert.equal(schema.minItems,1);assert.equal(schema.maxItems,1);
+ });

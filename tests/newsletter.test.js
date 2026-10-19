@@ -37,3 +37,8 @@ test('missing or empty vocabulary is rejected rather than saved as a complete ne
     await assert.rejects(generateNewsletter({ subject: 'Science' }, 'next', ai), /incomplete/);
   }
 });
+
+test('sequence newsletter includes reviewed outcomes and period intentions',()=>{
+ const source=newsletterSource({subject:'ICT',context:{sequenceEnabled:true,sequenceLessonCount:2,sequenceLessonPurposes:['teach','reflect']},sequencePlans:[{...plan,learningOutcome:'Choose keywords.'},{...plan,learningOutcome:'Explain and improve keyword choices.'}]});
+ assert.equal(source.lessons[0].learningOutcome,'Choose keywords.');assert.equal(source.lessons[1].lessonIntent,'reflect');assert.equal(source.lessons[1].learningOutcome,'Explain and improve keyword choices.');
+});

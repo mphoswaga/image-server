@@ -54,6 +54,9 @@ function planSchema(model, sequence = null, structuredSequence = false, includeA
   const required = ['learningOutcome', 'successCriteria', 'sections'];
   if (includeTeachingEvidence && !includeAssessment) {
     properties.teachingEvidence = teachingEvidenceSchema();
+    properties.teachingEvidence.minItems = structuredSequence ? lessonCount : 1;
+    properties.teachingEvidence.maxItems = structuredSequence ? lessonCount : 1;
+    properties.teachingEvidence.items.properties.lesson.enum = structuredSequence ? Array.from({length:lessonCount},(_,i)=>i+1) : [1];
     required.push('teachingEvidence');
   }
   if (includeAssessment) {
@@ -860,7 +863,7 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     teachingModelId,
     lessonPurpose: purpose,
     assessmentOptions,
-    lessonPlanQualityVersion: 10,
+    lessonPlanQualityVersion: 11,
     lessonIntent, sequenceLessonPurposes, reflectionMcqCount,
     planningModel: purpose === 'lesson' ? LESSON_MODEL : MODEL,
     observationGuidanceVersion: OBSERVATION_GUIDANCE_VERSION,
@@ -928,7 +931,7 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
           if (reflected.issues.length) { lastIssues=reflected.issues; continue; }
           parsed.sections = reflected.plan.sections;
         }
-        const integrated = integrateTeachingEvidence(parsed, { periodMinutes: settings?.durationMinutes || (cleanSequence && cleanSequence.periodMinutes) });
+        const integrated = integrateTeachingEvidence(parsed, { sequenceLessonNumber: cleanLessonNumber, periodMinutes: settings?.durationMinutes || (cleanSequence && cleanSequence.periodMinutes) });
         const gameResult = lessonDesign.integrateGame(integrated.plan, settings, designLesson, !!(structuredSequence && !cleanLessonNumber));
         const candidate = finalizeLessonPlan(gameResult.plan, {
           objectives, suppliedSuccessCriteria: successCriteria, teachingModelId, lessonPurpose: purpose,

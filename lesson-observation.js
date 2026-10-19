@@ -1,7 +1,7 @@
 // Practical planning guidance distilled from the school's September 2026 CPD
 // and observation rubric. This is a planning aid, not an observation score.
 // Keep it independent of template fields and out of assessed-content teaching.
-const OBSERVATION_GUIDANCE_VERSION = 2;
+const OBSERVATION_GUIDANCE_VERSION = 3;
 
 function observationPromptBlock(purpose = 'lesson') {
   const common = `
@@ -50,7 +50,7 @@ function teachingEvidenceSchema() {
   } };
 }
 
-function integrateTeachingEvidence(plan, { periodMinutes = null } = {}) {
+function integrateTeachingEvidence(plan, { periodMinutes = null, sequenceLessonNumber = null } = {}) {
   const sections = (plan.sections || []).map(section => ({ ...section }));
   const evidence = plan.teachingEvidence;
   const periods = new Set(sections.map(section => section.lesson || 1));
@@ -62,7 +62,11 @@ function integrateTeachingEvidence(plan, { periodMinutes = null } = {}) {
       issues.push('Every teachingEvidence checkpoint must be a complete object.');
       continue;
     }
-    const period = item.lesson;
+    // Staged generation returns one period without section.lesson. Accept its
+    // real sequence number as an alias for the local period, never another period.
+    const staged = Number.isInteger(sequenceLessonNumber) && sequenceLessonNumber > 1
+      && sections.every(section => section.lesson == null) && evidence.length === 1;
+    const period = staged && item.lesson === sequenceLessonNumber ? 1 : item.lesson;
     const index = sections.findIndex(section => (section.lesson || 1) === period && section.heading === item.sectionHeading);
     if (!periods.has(period) || seen.has(period) || index < 0
       || /reflection|resources|objectives|overview|phonics/i.test(item.sectionHeading)
