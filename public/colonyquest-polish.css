@@ -144,3 +144,8 @@
   .score-name>span:last-child{white-space:nowrap;font-size:16px}
   .game-screen.dock-open .turn-banner{display:none}
 }
+
+/* Clear the stage for short meadow encounters, keeping teacher controls available. */
+.encounter-playing .score-strip,.encounter-playing .turn-banner,.encounter-playing .rain-plan{visibility:hidden;pointer-events:none}
+
+.raid-playing .raid-hud{top:16px}

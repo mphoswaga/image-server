@@ -141,12 +141,16 @@ test('a raid stays visible but returns to questions without a report popup', asy
     return route.fulfill({ json: { game: { id: 'cq-raid-streamlined', lessonTitle: 'Habitats', questions, colonyquest: setup }, session: saved } });
   });
   await page.goto('/colonyquest/cq-raid-streamlined');
+  await page.evaluate(() => { const Original = Phaser.Game; Phaser.Game = function(config) { window.raidGame = new Original(config); return window.raidGame; }; });
   await page.locator('#resumeBtn').click();
   await page.locator('[data-reward="raid"]').click();
   await page.locator('[data-target="team-2"]').click();
   await expect(page.locator('#worldViewport')).toHaveAttribute('data-raid-phase', 'outbound');
   await expect(page.locator('#worldStory')).toBeHidden();
+  await expect(page.locator('#worldViewport')).toHaveAttribute('data-raid-phase', 'at-nest');
+  await expect.poll(() => page.evaluate(() => window.raidGame.scene.scenes[0].cameras.main.zoom)).toBeGreaterThan(3);
   await expect(page.locator('#questionOverlay')).toBeVisible({ timeout: 7000 });
+  expect(await page.evaluate(() => window.raidGame.scene.scenes[0].cameras.main.zoom)).toBe(1);
   expect(saved.events.at(-1).key).toBe('raid-result');
 });
 
@@ -1108,4 +1112,71 @@ test('teacher subtracts colony points during play and the deduction survives rel
  expect(saved.answers).toHaveLength(0);
  await page.reload();await page.locator('#resumeBtn').click();
  expect(saved.teams[1].teacherDeduction).toBe(15);
+});
+
+test('smartboard spider appears between rounds and reload does not apply losses twice', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100');
+  const teams = [colonyCore.createTeam({}, 0), colonyCore.createTeam({}, 1)];
+  let saved = colonyCore.normalizeSession({ phase: 'question', introSeen: true, teams, turnIndex: 3, questionCursor: 3, currentTeamIndex: 1 });
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.route(/\/api\/game\/cq-spider-check\/colonyquest(?:\/session)?$/, async route => {
+    if (route.request().method() === 'PUT') {
+      saved = colonyCore.normalizeSession(route.request().postDataJSON().session);
+      return route.fulfill({ json: { ok: true } });
+    }
+    return route.fulfill({ json: { game: { id: 'cq-spider-check', lessonTitle: 'Habitats', questions, colonyquest: { teamCount: 2, rounds: 6, sound: false, teams } }, session: saved } });
+  });
+  await page.goto('/colonyquest/cq-spider-check');
+  await page.locator('#resumeBtn').click();
+  await page.locator('.answer').nth(1).click();
+  await expect(page.locator('#worldViewport')).toHaveAttribute('data-encounter', 'predator');
+  await expect(page.locator('#questionOverlay')).toBeHidden();
+  await expect(page.locator('#worldStory')).toBeHidden();
+  expect(saved.events.filter(e => e.automatic && e.key === 'predator')).toHaveLength(1);
+  const food = saved.teams.map(t => t.food);
+  await page.screenshot({ path: testInfo.outputPath('spider-encounter.png') });
+  await page.reload();
+  await page.locator('#resumeBtn').click();
+  await expect(page.locator('#worldViewport')).toHaveAttribute('data-encounter', 'predator');
+  await expect(page.locator('#questionOverlay')).toBeVisible({ timeout: 10000 });
+  expect(saved.teams.map(t => t.food)).toEqual(food);
+  expect(saved.turnIndex).toBe(4);
+  expect(saved.events.filter(e => e.automatic && e.key === 'predator')).toHaveLength(1);
+  expect(errors).toEqual([]);
+});
+
+for (const stage of ['attack', 'rain']) test(`smartboard ${stage} has moving actors and pauses cleanly`, async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100');
+  const teams = [colonyCore.createTeam({}, 0), colonyCore.createTeam({}, 1)];
+  let saved = colonyCore.normalizeSession({ phase: 'question', introSeen: true, teams, seasonRules: true, rainOccurred: true, birdStage: stage, birdStageMs: 10000 });
+  await page.route(/\/api\/game\/cq-motion\/colonyquest(?:\/session)?$/, async route => {
+    if (route.request().method() === 'PUT') {
+      saved = colonyCore.normalizeSession(route.request().postDataJSON().session);
+      return route.fulfill({ json: { ok: true } });
+    }
+    return route.fulfill({ json: { game: { id: 'cq-motion', lessonTitle: 'Habitats', questions, colonyquest: { teamCount: 2, rounds: 6, sound: false, teams } }, session: saved } });
+  });
+  await page.goto('/colonyquest/cq-motion');
+  await page.evaluate(() => { const Original = Phaser.Game; Phaser.Game = function(config) { window.motionGame = new Original(config); return window.motionGame; }; });
+  await page.locator('#resumeBtn').click();
+  await page.waitForFunction(() => window.motionGame?.scene.scenes[0]?.children.list.length > 10);
+  const motion = await page.evaluate(async stage => {
+    const scene = window.motionGame.scene.scenes[0];
+    const frames = new Set(), positions = new Set();
+    for (let i=0;i<20;i++) {
+      if (stage === 'attack') { const bird = scene.birdActors[0]; frames.add(bird.creature.frame.name); positions.add(bird.bird.y); }
+      else { const foam = scene.children.list.find(o => o.type === 'Ellipse' && o.depth === 19 && o.width === 5); if (foam) positions.add(foam.y); }
+      await new Promise(r => setTimeout(r, 35));
+    }
+    return { frames: frames.size, positions: positions.size };
+  }, stage);
+  expect(motion.positions).toBeGreaterThan(3);
+  if (stage === 'attack') expect(motion.frames).toBe(2);
+  await page.locator('#pauseBtn').click();
+  await page.waitForTimeout(100);
+  expect(await page.evaluate(() => window.motionGame.scene.scenes[0].tweens.timeScale)).toBe(0);
+  await page.locator('#pauseBtn').click();
+  await expect(page.locator('#questionOverlay')).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath(`${stage}.png`) });
 });

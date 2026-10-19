@@ -611,6 +611,7 @@
       })) : [],
       events: Array.isArray(source.events) ? source.events.slice(-40).map(event => ({
         key: text(event && event.key, 40),
+        ...(event?.automatic && EVENTS.some(item => item.key === event.key) ? { automatic: true, turnIndex: Math.floor(clamp(event.turnIndex, 0, 9999)) } : {}),
         at: text(event && event.at, 40),
         teamId: text(event && event.teamId, 40) || null,
         amount: Math.floor(clamp(event && event.amount, 0, 9999)),

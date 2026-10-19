@@ -23,6 +23,7 @@
   let clockTimer = null;
   let rendererShutdown = Promise.resolve();
   let startingMatch = false;
+  let encounterRun = 0;
   let soundOn = true;
   let winnerCelebrationPlayed = false;
   let audioContext = null;
@@ -988,7 +989,10 @@
   }
 
   function eventForTurn() {
-    return core.EVENTS[Math.floor(session.turnIndex / Math.max(1, session.teams.length * 2)) % core.EVENTS.length];
+    // Give every normal-length match its spider encounter, before later events.
+    const order = ['predator', 'fallen-fruit', 'food-trail', 'tunnel-collapse', 'lost-ant', 'new-territory'];
+    const index = Math.max(0, Math.floor(session.turnIndex / Math.max(1, session.teams.length * 2)) - 1);
+    return core.EVENTS.find(event => event.key === order[index % order.length]);
   }
 
   function worldEventFocusTeam(event) {
@@ -1137,17 +1141,26 @@
     setRaidHud(event, attacker, defender, 'outbound');
     const progress = { value: 0 };
     const camera = scene.cameras.main;
-    camera.setZoom(1.35);
+    resetActionCamera();
+    $('worldViewport').scrollTo({ top: 0, behavior: 'instant' });
+    const raidZoomLimit = Math.max(1.5, Math.min(3.3, camera.width / 200, camera.height / 145));
+    camera.setZoom(Math.min(1.8, raidZoomLimit));
     const meeting = route.getPoint(1);
     const attackLossVisuals = event.attackerLosses ? Math.max(1, Math.round(event.attackerLosses / attackers * attackerActorCount)) : 0;
     const defenseLossVisuals = event.defenderLosses && defenderActorCount ? Math.max(1, Math.round(event.defenderLosses / defenders * defenderActorCount)) : 0;
     let lastPhase = '';
-    raid.tween = scene.tweens.add({ targets: progress, value: 1, duration: 4200, ease: 'Linear',
+    raid.tween = scene.tweens.add({ targets: progress, value: 1, duration: 6200, ease: 'Linear',
       onUpdate: () => {
         if (raidPresentation !== raid) return;
         const p = progress.value;
         const phase = p < .34 ? 'outbound' : p < .68 ? 'at-nest' : 'returning';
         const battleProgress = Phaser.Math.Clamp((p - .34) / .34, 0, 1);
+        if (phase === 'at-nest' && Math.floor(battleProgress * 5) !== raid.lastImpact) {
+          raid.lastImpact = Math.floor(battleProgress * 5);
+          showBattleBurst(meeting, [0xffd66b, 0xe2bd82], effects);
+          playAntSound('battle');
+          camera.shake(120, .002);
+        }
         const distance = phase === 'outbound' ? p / .34 : phase === 'returning' ? (1 - p) / .32 : 1;
         for (let index = 0; index < attackActors.length; index += 1) {
           const ant = attackActors[index];
@@ -1176,7 +1189,8 @@
           if (lost && phase !== 'outbound' && battleProgress > .58) ant.setAlpha(1).setAngle(0);
         }
         const lead = attackActors.find(actor => actor.visible) || attackActors[0];
-        camera.setZoom(phase === 'at-nest' ? 2.15 : phase === 'outbound' ? 1.55 + distance * .35 : 1.7);
+        const targetZoom = Math.min(raidZoomLimit, phase === 'at-nest' ? 3.3 : phase === 'outbound' ? 2.2 + distance * .5 : 2.3);
+        camera.setZoom(Phaser.Math.Linear(camera.zoom, targetZoom, .12));
         camera.centerOn(phase === 'at-nest' ? meeting.x : lead.x, (phase === 'at-nest' ? meeting.y : lead.y) + 18);
         if (phase !== lastPhase) {
           lastPhase = phase;
@@ -1283,10 +1297,41 @@
       await saveState();
       playTone('upgrade');
     }
+    if (shouldShowEvent() && !session.events.some(event => event.automatic && event.turnIndex === session.turnIndex)) {
+      const before = worldEventSnapshot();
+      const event = { ...core.applyEvent(session.teams, eventForTurn().key), automatic: true, turnIndex: session.turnIndex, effects: worldEventEffects(before), at: new Date().toISOString() };
+      session.events.push(event);
+      session.phase = 'event';
+      await saveState();
+      return playAutomaticEncounter(event);
+    }
     session.phase = 'question';
     updateWorld();
     await saveState();
     presentQuestion();
+  }
+
+  async function playAutomaticEncounter(event) {
+    const run = ++encounterRun;
+    setOverlay(null);
+    await waitForWorldReady();
+    if (session.phase !== 'event') return;
+    updateWorld();
+    resetActionCamera();
+    const team = worldEventFocusTeam(event);
+    focusColony(team.id, 'entrance');
+    $('worldViewport').dataset.encounter = event.key;
+    $('gameScreen').classList.add('encounter-playing');
+    if (event.key === 'predator') playTone('wars');
+    const duration = playWorldEvent(event.key, team.id);
+    // Scene time pauses with the game. Resuming replays the visual, never its outcome.
+    scene.time.delayedCall(duration + 300, () => {
+      if (run !== encounterRun || session.phase !== 'event' || session.events.at(-1) !== event) return;
+      delete $('worldViewport').dataset.encounter;
+      $('gameScreen').classList.remove('encounter-playing');
+      for (const effect of event.effects || []) colonyFeedback.set(effect.teamId, { text: effect.foodDelta < 0 ? `${effect.foodDelta} food` : effect.foodDelta > 0 ? `+${effect.foodDelta} food` : 'Stores protected', badge: effect.foodDelta < 0 ? '!' : '✓', good: effect.foodDelta >= 0, site: 'food', until: feedbackClock + 4000 });
+      continueAfterEvent().catch(error => toast(error.message));
+    });
   }
 
   async function continueAfterEvent() {
@@ -1374,6 +1419,9 @@
   }
 
   async function finishMatch(rainLeadIn = false) {
+    encounterRun++;
+    $('gameScreen').classList.remove('encounter-playing');
+    delete $('worldViewport').dataset.encounter;
     $('teacherTray').classList.remove('open');
     if (!session || session.phase === 'ended') {
       if (session) session.stormSeen ? showFinal() : showRainFinale();
@@ -1588,6 +1636,7 @@
       // into the streamlined loop instead of reopening the old click-through
       // panels.
       if (last && String(last.key).startsWith('upgrade-')) return showGrowth(last);
+      if (last?.automatic) return playAutomaticEncounter(last);
       if (last?.key === 'raid-result') return showRaidStory(last, true);
       return continueAfterEvent();
     }
@@ -1641,6 +1690,9 @@
 
   function resetMatchRuntime() {
     feedbackSnapshot = null; feedbackClock = 0; colonyFeedback.clear();
+    encounterRun++;
+    $('gameScreen').classList.remove('encounter-playing');
+    delete $('worldViewport').dataset.encounter;
     clearTimeout(worldStoryTimer);
     worldStoryTimer = null;
     answerLocked = false;
@@ -1750,6 +1802,8 @@
         },
         update(time, delta) {
           if (!session || document.hidden) return;
+          this.tweens.timeScale = session.phase === 'paused' ? 0 : actionCamera ? ACTION_SPEED : 1;
+          this.time.paused = session.phase === 'paused';
           if (session.phase !== 'paused') feedbackClock += delta;
           updateForagingWorkers(delta);
           drawColonyFeedback();
@@ -2347,6 +2401,7 @@
       }
       return;
     }
+    if (session.phase === 'event' && event?.automatic) return;
     if (session.phase === 'event' && WORLD_EVENT_SCENES[event?.key]) {
       const eventScene = WORLD_EVENT_SCENES[event.key];
       const team = worldEventFocusTeam(event);
@@ -2446,6 +2501,13 @@
   function drawBirdWave() {
     if (!scene) return;
     scene.birdActors = [];
+    if (session.birdStage === 'attack') for (const view of colonyViews.values()) {
+      view.ants.filter(ant => ant.getData('role') === 'worker').forEach((ant, i) => {
+        const route = new Phaser.Curves.Path(ant.x, ant.y);
+        route.lineTo(view.sites.entrance.x, view.sites.entrance.y).lineTo(view.sites.nursery.x + (i % 3 - 1) * 12, view.sites.nursery.y);
+        ant.setData('evacuation', { route, elapsed: 0, rescue: true });
+      });
+    }
     $('worldViewport').dataset.birdScene = session.birdStage || 'none';
     if (!['warning', 'attack', 'result'].includes(session.birdStage)) return;
     session.teams.forEach(team => {
@@ -2476,15 +2538,25 @@
       const t = Math.max(0, elapsed - index * 300) / 1000;
       const protectedFood = team.defense >= 2;
       const approach = Math.min(1, t / 7);
-      const swoop = Math.sin(Math.min(1, t / 6) * Math.PI);
+      const swoop = Math.pow(Math.max(0, Math.sin(t * 2.8 + index)), 2);
       const departure = Math.min(1, t / 3);
       bird.setVisible(stage !== 'result' || departure < 1);
       const scale = stage === 'warning' ? .25 + approach * .55 : 1;
       bird.setScale(scale);
-      bird.x = reduced ? x : stage === 'warning' ? x - zone.w * .7 * (1 - approach) : stage === 'attack' ? x + Math.sin(t * .8) * 35 : x + departure * zone.w;
+      bird.x = reduced ? x : stage === 'warning' ? x - zone.w * .7 * (1 - approach) : stage === 'attack' ? x + Math.sin(t * 1.4 + index) * Math.min(85, zone.w * .22) : x + departure * zone.w;
       bird.y = reduced ? 78 : stage === 'warning' ? 15 + approach * 65 : stage === 'attack' ? 65 + swoop * (protectedFood ? 22 : 65) : 80 - departure * 130;
       bird.angle = reduced ? 0 : stage === 'attack' ? Math.cos(t * .9) * 12 : -8;
-      creature.setFrame(reduced ? 0 : Math.floor(t * 6) % 2);
+      const flap = feedbackClock / 1000 + index * .3;
+      creature.setFrame(reduced ? 0 : Math.floor(flap * 8) % 2);
+      // Stretch each wing stroke and bob the body: a continuous beat between poses.
+      creature.setDisplaySize(138, reduced ? 138 : 138 * (1 + Math.sin(flap * 16) * .18));
+      creature.y = -7 + (reduced ? 0 : Math.sin(flap * 16) * 4);
+      if (!reduced && stage === 'attack' && swoop > .92 && t - (actor.lastStrike || -10) > 1) {
+        actor.lastStrike = t;
+        const dust = scene.add.ellipse(bird.x, 142, 26, 9, protectedFood ? 0xbdeaf0 : 0xcba673, .65).setDepth(19);
+        scene.tweens.add({ targets: dust, scaleX: 2.5, scaleY: 2, alpha: 0, duration: 450, onComplete: () => dust.destroy() });
+        playBirdArrivalSound();
+      }
       shadow.setPosition(bird.x + 12, 139).setScale(scale * (stage === 'attack' ? 1 + swoop * .4 : 1));
       shadow.setAlpha(stage === 'result' ? .2 * (1-departure) : .1 + scale * .14);
       if (stage === 'warning') shadow.setScale(1.2 + approach * 1.4, .7 + approach * .5).setAlpha(.12 + approach * .18);
@@ -2672,7 +2744,7 @@
           scene.tweens.add({ targets: material, alpha: 1, y: room.y + 6, duration: 320, delay: 450 + view.rooms.indexOf(room) * 190 + block * 70, yoyo: true, hold: 420, onComplete: () => material.destroy() });
         }
       }
-      return 2700;
+      return 4400;
     }
 
     if (kind === 'queen') {
@@ -2834,6 +2906,12 @@
     stream.lineStyle(4, 0xbceeff, .8).beginPath().moveTo(entrance.x, entrance.y + 3).lineTo(entrance.x + dx * .45, entrance.y + dy * .45).lineTo(nursery.x, nursery.y).strokePath();
     weatherEffects.push(stream);
     scene.tweens.add({ targets: stream, alpha: { from: .45, to: 1 }, duration: 330, yoyo: true, repeat: -1 });
+    // Foam moves down the tunnel rather than merely flashing in place.
+    for (let index = 0; index < 10; index += 1) {
+      const foam = scene.add.ellipse(entrance.x, entrance.y + 5, 5, 12, 0xe1faff, .85).setDepth(19);
+      weatherEffects.push(foam);
+      scene.tweens.add({ targets: foam, x: nursery.x, y: nursery.y, duration: 1050, delay: index * 105, repeat: -1, ease: 'Linear' });
+    }
     for (let index = 0; index < 3; index += 1) {
       const progress = .48 + index * .23;
       const pool = scene.add.ellipse(entrance.x + dx * progress, entrance.y + dy * progress + 8, 42 + index * 19, 12 + index * 5, 0x4aaad3, .55).setStrokeStyle(2, 0x9ee4f9, .65).setDepth(17);
@@ -2875,7 +2953,8 @@
     cloud.fillRect(0, 0, width, Math.min(190, height * .3));
     weatherEffects.push(cloud);
     if (session.birdStage === 'rain' || progress >= .68) {
-      addRainField(reducedMotion ? 14 : 32, .62);
+      addRainField(reducedMotion ? 14 : 56, .8);
+      if (session.birdStage === 'rain' && !reducedMotion) for (const [id, view] of colonyViews) addFloodWater(view, session.teams.find(team => team.id === id));
     }
     if (progress >= .88 && !reducedMotion) {
       const timer = scene.time.addEvent({ delay: 5200, loop: true, callback: () => lightningStrike(true) });
@@ -3008,19 +3087,23 @@
     }
     if (key === 'predator') {
       const entrance = view ? view.sites.entrance : { x: scene.scale.width / 2, y: scene.scale.height * .25 };
-      const spider = createMeadowSpider({ x: entrance.x + Math.min(120, view ? view.zone.w * .45 : 120), y: entrance.y - 38 }, .9);
+      const spider = createMeadowSpider({ x: entrance.x + Math.min(120, view ? view.zone.w * .45 : 120), y: entrance.y - 38 }, 1.35);
       const guardStart = view ? view.sites.guard : { x: entrance.x, y: entrance.y + 90 };
-      const guard = view ? actionWorker(view, palette, guardStart, 33, true) : null;
-      scene.tweens.add({ targets: spider, x: entrance.x + 28, y: entrance.y - 24, duration: 1050, ease: 'Sine.easeInOut' });
-      if (guard) moveActionActor(guard, [guardStart, entrance], 950, actor => {
+      const guard = view && core.homeGuards(team) > 0 ? actionWorker(view, palette, guardStart, 33, true) : null;
+      const loss = session.events.at(-1)?.effects?.find(effect => effect.teamId === team?.id)?.foodDelta || 0;
+      const stolenSeed = scene.add.ellipse(18, 19, 15, 9, 0xf2ce64).setVisible(false);
+      spider.add(stolenSeed);
+      scene.time.delayedCall(2100, () => { if (spider.active) stolenSeed.setVisible(loss < 0); });
+      scene.tweens.add({ targets: spider, x: entrance.x + 28, y: entrance.y - 24, duration: 1900, ease: 'Sine.easeInOut' });
+      if (guard) moveActionActor(guard, [guardStart, entrance], 2200, actor => {
         scene.cameras.main.shake(230, .004);
         playTone('battle');
         scene.tweens.add({ targets: actor, x: actor.x + 17, angle: -12, duration: 180, yoyo: true, repeat: 2 });
         scene.tweens.add({ targets: spider, x: entrance.x + Math.min(150, view.zone.w * .6), y: entrance.y - 80, angle: 24, alpha: .1, duration: 900, delay: 260, ease: 'Cubic.easeIn', onComplete: () => spider.destroy(true) });
         scene.time.delayedCall(1450, () => { if (actor.active) actor.destroy(true); });
       });
-      else scene.tweens.add({ targets: spider, x: entrance.x + 140, alpha: 0, duration: 950, delay: 1050, onComplete: () => spider.destroy(true) });
-      return 2700;
+      else scene.tweens.add({ targets: spider, x: entrance.x + 140, alpha: 0, duration: 1200, delay: 2200, onComplete: () => spider.destroy(true) });
+      return 4400;
     }
     if (key === 'tunnel-collapse' && view) {
       const fall = { x: (view.sites.entrance.x + view.sites.nursery.x) / 2, y: (view.sites.entrance.y + view.sites.nursery.y) / 2 };
