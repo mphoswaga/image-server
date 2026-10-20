@@ -3479,6 +3479,17 @@
         </div>
       </div>
       <button id="newAssessmentBtn" type="button" class="btn accent" style="width:auto;margin-bottom:16px"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Create test or project</button>
+      <button id="topicMcqOpen" type="button" class="btn ghost" style="width:auto;margin-bottom:16px">Generate multiple-choice questions</button>
+      <section id="topicMcqPanel" class="assessment-builder" hidden>
+        <h3>Questions from a published topic</h3>
+        <label for="topicMcqSource">Published topic</label><select id="topicMcqSource"></select>
+        <label for="topicMcqGrade">Grade or year group</label><input id="topicMcqGrade" placeholder="e.g. Grade 3">
+        <label for="topicMcqPrompt">What should the questions cover?</label><textarea id="topicMcqPrompt" rows="4" placeholder="For example: Cover file sizes from bytes to TB, including text, images, audio, video and games. Include ordering and comparing sizes."></textarea>
+        <p class="hint">Questions use vocabulary and difficulty suited to the selected grade. Include a question count in your instructions, or let LessonScope choose a suitable number (up to 40). You can edit every question before publishing.</p>
+        <button id="topicMcqGenerate" type="button" class="btn accent">Generate draft questions</button>
+        <button id="topicMcqCancel" type="button" class="btn ghost">Close</button>
+        <p id="topicMcqStatus" role="status"></p>
+      </section>
       <div id="assessmentBuilder" class="assessment-builder" style="display:none">
         <div class="assessment-section-head"><div><h3 style="margin:0">Assessment structure</h3><p class="hint" style="margin:3px 0 0">Set the total, then decide exactly how students will earn those marks.</p></div><button id="closeAssessmentBtn" type="button" class="assessment-remove" data-ui-i18n>Close</button></div>
         <div class="assessment-presets">
@@ -8291,6 +8302,7 @@
       panel.scrollIntoView({behavior:'smooth',block:'start'});
     }
     async function openExistingAssessmentEditor(assessmentId){
+      assessmentFromTopic=false;
       const response=await fetch('/api/assignment/'+encodeURIComponent(assessmentId)+'/edit');
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||'This assessment cannot be edited.');
@@ -8320,6 +8332,7 @@
       $('assessmentBuilder').scrollIntoView({behavior:'smooth',block:'start'});
     }
     function openGeneratedAssessmentDraft(draft){
+      assessmentFromTopic=false;
       if(!draft)return;
       editingGeneratedAssessmentDraft=true;
       editingAssessmentId=null;
@@ -8342,7 +8355,38 @@
       loadRosters(true);
       $('assessmentBuilder').scrollIntoView({behavior:'smooth',block:'start'});
     }
+    let topicMcqSources=[], assessmentFromTopic=false;
+    $('topicMcqOpen').onclick=async()=>{
+      $('topicMcqPanel').hidden=false;$('topicMcqStatus').textContent='Loading your published topics…';
+      try{
+        const response=await fetch('/api/assessment-topics');const data=await response.json();
+        if(!response.ok)throw new Error(data.error||'Could not load topics.');
+        topicMcqSources=data.topics||[];
+        $('topicMcqSource').innerHTML=topicMcqSources.map((t,i)=>`<option value="${i}">${esc(t.title)} · ${esc(t.grade||'')} · ${t.source==='game'?'Game':'Assessment'}</option>`).join('');
+        $('topicMcqSource').onchange=()=>{ $('topicMcqGrade').value=topicMcqSources[Number($('topicMcqSource').value)]?.grade||''; };
+        $('topicMcqSource').onchange();
+        $('topicMcqStatus').textContent=topicMcqSources.length?'':'Publish a game or assessment first to use its topic.';
+        $('topicMcqGenerate').disabled=!topicMcqSources.length;
+      }catch(error){$('topicMcqStatus').textContent=error.message;}
+    };
+    $('topicMcqCancel').onclick=()=>{$('topicMcqPanel').hidden=true;};
+    $('topicMcqGenerate').onclick=async()=>{
+      const source=topicMcqSources[Number($('topicMcqSource').value)];
+      if(!source)return;
+      if(!$('topicMcqPrompt').value.trim()||!$('topicMcqGrade').value.trim()){ $('topicMcqStatus').textContent='Enter a grade and your instructions.';return; }
+      if(assessmentSectionsState.length&&!confirm('Replace the current unsaved assessment draft with new questions?'))return;
+      const button=$('topicMcqGenerate');button.disabled=true;$('topicMcqStatus').textContent='Creating your questions…';
+      try{
+        const response=await fetch('/api/assessment-mcq',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source:source.source,sourceId:source.id,grade:$('topicMcqGrade').value,instructions:$('topicMcqPrompt').value})});
+        const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not generate questions.');
+        openGeneratedAssessmentDraft(data.assessment);
+        editingGeneratedAssessmentDraft=false;editingAssessmentId=null;assessmentFromTopic=true;
+        $('assessmentPublishResult').textContent='Review the questions and correct answers, then choose a class and publish.';
+        $('topicMcqPanel').hidden=true;
+      }catch(error){$('topicMcqStatus').textContent=error.message;}finally{button.disabled=false;}
+    };
     $('newAssessmentBtn').addEventListener('click',()=>{
+      assessmentFromTopic=false;
       editingGeneratedAssessmentDraft=false;
       editingAssessmentId=null;
       $('assessmentRoster').disabled=false;
@@ -8389,9 +8433,9 @@
           if(!workspaceSaved||!currentWorkspaceId) throw new Error('This lesson could not be saved, so its assessment was not published. Check your connection and try again.');
         }
         if(!existingAssessmentId){
-          assessment.lessonWorkspaceId=currentWorkspaceId||null;
-          assessment.unitId=(ctx&&ctx.unitId)||null;
-          assessment.unitName=(ctx&&ctx.unitName)||null;
+          assessment.lessonWorkspaceId=assessmentFromTopic?null:currentWorkspaceId||null;
+          assessment.unitId=assessmentFromTopic?null:(ctx&&ctx.unitId)||null;
+          assessment.unitName=assessmentFromTopic?null:(ctx&&ctx.unitName)||null;
         }
         const requestBody=JSON.stringify({assessment,rosterId:selectedRosterId,cutoffAt:$('assessmentCutoff').value||null});
         const response=existingAssessmentId

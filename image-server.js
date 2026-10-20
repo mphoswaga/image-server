@@ -2331,6 +2331,39 @@ app.get('/api/assignments', requireAuth, (req, res) => res.json({ assignments: a
 // Teacher-built, subject-neutral tests and projects. These publish into the
 // existing assignment runtime, but retain their section/objective structure
 // for marking, reporting, and future TeacherScope evidence transfer.
+app.get('/api/assessment-topics', requireAuth, (req, res) => {
+  const topics = [
+    ...assignments.listTeacherAssignments(req.userId).filter(a => a.status !== 'draft').map(a => ({ source: 'assignment', id: a.id, title: a.title, subject: a.subject, grade: a.grade })),
+    ...games.listTeacherGames(req.userId).map(g => ({ source: 'game', id: g.id, title: g.lessonTitle || g.topic, subject: g.subject, grade: g.grade })),
+  ];
+  res.json({ topics });
+});
+app.post('/api/assessment-mcq', requireAuth, async (req, res) => {
+  const body = req.body || {};
+  const source = body.source === 'assignment' ? assignments.getAssignment(body.sourceId) : body.source === 'game' ? games.getGame(body.sourceId) : null;
+  if (!source || source.teacherId !== req.userId || source.status === 'draft') return res.status(404).json({ error: 'Choose one of your published topics.' });
+  const instructions = String(body.instructions || '').trim().slice(0, 6000);
+  const grade = String(body.grade || source.grade || '').trim().slice(0, 60);
+  if (!instructions || !grade) return res.status(400).json({ error: 'Enter a grade and instructions for the questions.' });
+  const { reservation, block } = await reserve(req, 'lessonscope.generate_pack_item');
+  if (block) return res.status(402).json(block);
+  try {
+    const subject = source.subject || 'General';
+    const topic = source.title || source.lessonTitle || source.topic;
+    const objectives = (source.objectives || []).map(o => o.text || o).join('\n');
+    const quiz = await require('./lesson-pack').generateTopicMcq({ subject, grade, topic, instructions, objectives });
+    const draft = { title: quiz.title, subject, grade, assessmentType: 'test', deliveryMode: 'self-paced', totalMarks: quiz.mcq.length, instructions: quiz.instructions,
+      objectives: [{ id: 'topic-skill', text: objectives || 'Demonstrate understanding of ' + topic }],
+      sections: [{ id: 'mcq', title: 'Multiple-choice questions', type: 'mcq', objectiveIds: ['topic-skill'], items: quiz.mcq.map((q,i) => ({ id: 'mcq-'+i, prompt: q.question, options: q.options, correctIndex: q.correctIndex, marks: 1 })) }] };
+    assignments.normalizeAssessment(draft);
+    await capture(req, reservation, 'lessonscope.generate_pack_item', 'topic-mcq');
+    res.json({ assessment: draft });
+  } catch (error) {
+    await release(req, reservation, 'lessonscope.generate_pack_item', error.message);
+    res.status(400).json({ error: error.message });
+  }
+});
+
 app.post('/api/assessment', requireAuth, (req, res) => {
   const { assessment, rosterId, cutoffAt } = req.body || {};
   try {
