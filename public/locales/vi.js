@@ -1,5 +1,8 @@
 /* UI strings only; lesson content is never translated here. */
 window.LessonScopeVietnamese = {
+  "Teaching": "Giảng dạy",
+  "Classes & families": "Lớp học và gia đình",
+  "Tools & support": "Công cụ và hỗ trợ",
   "Sign in": "Đăng nhập",
   "Log in": "Đăng nhập",
   "Sign out": "Đăng xuất",
