@@ -1,0 +1,13 @@
+.spoken-story{display:block!important;position:relative;height:clamp(200px,43vh,500px);overflow:hidden!important;perspective:700px;mask-image:linear-gradient(transparent,#000 10%,#000 88%,transparent);text-align:center}
+.spoken-track{display:block;position:relative;transition:transform .28s linear;transform-origin:50% 100%;padding-bottom:50px}
+.spoken-passage{display:block;margin:0 auto 22px;max-width:760px;line-height:1.5;font-size:clamp(19px,2.4vw,30px);font-weight:700;color:#b3c8c2;transform:rotateX(8deg);transition:color .2s,text-shadow .2s}
+.spoken-passage.is-speaking{color:#ffe794;text-shadow:0 0 18px #ffc75a55}
+.spoken-passage.was-spoken{color:#718d86}
+#storyCrawl:has(.spoken-story){animation:none!important;transform:none!important;position:relative}
+#storyCrawl:has(.spoken-story) .story-goals{display:none}
+#instruction.spoken-story,#hostQuestion.spoken-story{background:#0b2228;border-radius:14px;padding:16px;margin-top:12px}
+@media(prefers-reduced-motion:reduce){.spoken-track{transition:none}.spoken-passage{transform:none}.spoken-story{overflow:auto!important}}
+
+.colony-voice-caption{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:1500;pointer-events:none;background:#102829ed;color:#ffe794;border:1px solid #e8c86b;border-radius:14px;padding:9px 20px;font:900 clamp(18px,3vw,30px)/1.2 system-ui;box-shadow:0 5px 22px #0006}
+
+.spoken-story.manual-reading{overflow:auto!important;mask-image:none}.manual-reading .spoken-track{transition:none}

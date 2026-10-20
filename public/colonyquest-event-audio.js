@@ -104,6 +104,7 @@
             ].includes(e.key || e.kind),
         )
         .at(-1);
+      if(e)this.voice?.play(e.kind==='raid'?'raid':e.key||e.kind);
       if (e)
         this.play(
           e.kind === 'raid' ? 'raid' : e.key || e.kind,

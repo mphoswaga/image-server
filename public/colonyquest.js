@@ -602,6 +602,8 @@
   }
 
   const openingVoice = new OpeningNarration($('openingVoice'), speaking => { soundtrack.media.muted = speaking; });
+  const storyReader=new ColonyStoryText(openingVoice);
+  const actionVoice=new ColonyActionVoice(()=>soundOn&&!openingVoice.active&&session?.phase!=='paused',speaking=>{soundtrack.media.muted=speaking;},()=>Number($('effectsVolume').value)/100);
   function showStoryIntro() {
     $('storyKicker').textContent = 'The Moonroot Meadow Mission';
     $('storyTitle').textContent = 'Build. Prepare. Survive.';
@@ -618,6 +620,7 @@
     crawl.classList.remove('is-moving', 'is-paused');
     void crawl.offsetWidth;
     crawl.classList.add('is-moving');
+    storyReader.attach($('storyText'),'colony-board');
     $('storyPause').textContent = 'Pause story';
     $('storyPause').setAttribute('aria-pressed', 'false');
   }
@@ -951,6 +954,7 @@
   async function chooseReward(key) {
     if (session.phase !== 'reward' || transitionLocked) return;
     if (!core.rewardAvailability(currentTeam(), key).allowed) return;
+    actionVoice.play(key);
     transitionLocked = true;
     if (key === 'raid') {
       const team = currentTeam();
@@ -1102,6 +1106,7 @@
   }
 
   function showRaidStory(event, animate = false) {
+    if(animate)actionVoice.play('raid');
     const attacker = session.teams.find(team => team.id === event.attackerId);
     const defender = session.teams.find(team => team.id === event.defenderId);
     if (!attacker || !defender) return showEvent({ title: 'The raid is over', description: 'The colonies are ready for their next turn.' }, nextTurn);
@@ -1671,6 +1676,7 @@
   }
 
   function showPaused() {
+    actionVoice.stop();
     $('eventKicker').textContent = 'Teacher pause';
     $('eventTitle').textContent = 'The colonies are resting';
     $('eventText').textContent = 'The timer and all turns are paused for the whole class.';
@@ -3079,6 +3085,7 @@
   }
 
   function playWorldEvent(key, teamId) {
+    actionVoice.play(key);
     if (!scene) return 250;
     const view = colonyViews.get(teamId) || colonyViews.values().next().value;
     const team = session.teams.find(item => item.id === teamId) || currentTeam();
@@ -3414,6 +3421,7 @@
 
   function toggleSound() {
     soundOn = !soundOn;
+    if(!soundOn)actionVoice.stop();
     openingVoice.paused=!soundOn||$('storyCrawl').classList.contains('is-paused');openingVoice.update();
     if (soundOn) initAudio(); else stopAmbient();
     if (effectsBus) effectsBus.gain.setTargetAtTime(soundOn ? Number($('effectsVolume').value) / 100 : 0, audioContext.currentTime, .03);

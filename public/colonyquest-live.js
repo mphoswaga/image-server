@@ -36,7 +36,10 @@
   const openingVoice=new OpeningNarration($('openingVoice'),speaking=>{soundtrack.media.muted=speaking;});
   const openingChapters=Array.from({length:4},(_,i)=>OpeningNarrationData.clips['colony-'+i]);
   function openingChapter(elapsed){let start=0;for(let i=0;i<4;i++){const end=start+(openingChapters[i].seconds+1)*1000;if(elapsed<end||i===3)return {index:i,position:Math.max(0,(elapsed-start)/1000)};start=end;}}
+  const storyReader=new ColonyStoryText(openingVoice);
+  const actionVoice=new ColonyActionVoice(()=>sound&&!openingVoice.active&&!['paused','ended'].includes(state?.phase)&&!state?.me?.teacherPaused,speaking=>{soundtrack.media.muted=speaking;});
   const eventAudio = new ColonyEventAudio();
+  eventAudio.voice=actionVoice;
   let duckTimer;
   eventAudio.onCue = (duration) => {
     clearTimeout(duckTimer);
@@ -118,6 +121,7 @@
   }
   $('sound').onclick = () => {
     sound = !sound;
+    if(!sound)actionVoice.stop();
     $('sound').textContent = sound ? 'Sound on' : 'Sound off';
     if (sound) chime();
     syncMusic();
@@ -206,6 +210,8 @@
   function setState(next) {
     const prior = state;
     state = next;
+    if(next.phase==='paused'||next.phase==='ended'||(next.phase==='story'&&next.story?.key==='intro'))actionVoice.stop();
+    if(prior&&next.me?.lastUpgrade&&JSON.stringify(next.me.lastUpgrade)!==JSON.stringify(prior.me?.lastUpgrade))actionVoice.play(next.me.lastUpgrade.key);
     if(next.phase==='story'&&next.story?.key==='intro'){const chapter=openingChapter(next.story.elapsed);openingVoice.sync(openingChapters[chapter.index].src,next.id+':intro:'+chapter.index,chapter.position);}else openingVoice.stop();
     offset = next.serverNow - Date.now();
     updateScene(next);
@@ -365,6 +371,7 @@
       ? 'PRACTICE · NO LEARNER MARKS SAVED'
       : `QUESTION ${s.round + 1} OF ${s.total}`;
     $('explanation').textContent = '';
+    if(s.phase!=='story'||s.story?.key!=='intro')$('instruction').classList.remove('spoken-story');
     $('choices').className = 'choices';
     $('choices').innerHTML = '';
     $('finished').hidden = true;
@@ -372,7 +379,7 @@
       const beat = s.story;
       $('roundLabel').textContent = 'THE MOONROOT MEADOW ADVENTURE';
       $('question').textContent = beat.title;
-      $('instruction').textContent = '';
+      if(beat.key !== 'intro')$('instruction').textContent = '';
       if (beat.key === 'intro') {
         const chapter = openingChapter(beat.elapsed).index;
         $('roundLabel').textContent = `PIP’S FIELD GUIDE · ${chapter + 1} / 4`;
@@ -382,7 +389,7 @@
           'Choose a raid wisely',
           'Protect each other',
         ][chapter];
-        $('instruction').textContent = beat.line.split('\n\n')[chapter] || beat.line;
+        storyReader.attach($('instruction'),'colony-'+chapter);
         return;
       }
       const result = beat.results.find((r) => r.playerId === p.id);
@@ -729,6 +736,7 @@
             : s.pacing === 'individual' ? 'Answer → choose an upgrade → watch your colony grow' : s.question?.question || '';
     $('projectedQuestion').textContent = $('hostQuestion').textContent;
     $('projectedCount').textContent = $('hostCount').textContent;
+    if(s.phase==='story'&&s.story?.key==='intro')storyReader.attach($('hostQuestion'),'colony-'+openingChapter(s.story.elapsed).index);else $('hostQuestion').classList.remove('spoken-story');
     $('leaderboard').innerHTML =
       s.players
         .map(
