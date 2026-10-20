@@ -305,6 +305,26 @@ function getColonyQuestSession(id) {
   catch { return null; }
 }
 
+// Keep named smartboard evidence even when the board is reset for a new run.
+const colonyMarksPath = id => path.join(GAMES_DIR, 'smartboard-marks', `${id}.json`);
+function colonyQuestMarkRuns(id) {
+  let runs = [];
+  try { runs = JSON.parse(fs.readFileSync(colonyMarksPath(id), 'utf8')); } catch {}
+  const current = getColonyQuestSession(id), game = getGame(id);
+  if (current && current.startedAt && game) {
+    const run = { startedAt: current.startedAt, at: current.updatedAt || current.startedAt, rosterIds: getRosterIds(game), answers: current.answers || [] };
+    runs = runs.filter(r => r.startedAt !== run.startedAt).concat(run);
+  }
+  return runs;
+}
+function saveColonyQuestMarks(id, session) {
+  if (!session.startedAt || !(session.answers || []).length) return;
+  const game = getGame(id); if (!game) return;
+  const runs = colonyQuestMarkRuns(id).filter(r => r.startedAt !== session.startedAt);
+  runs.push({ startedAt: session.startedAt, at: session.updatedAt || session.startedAt, rosterIds: getRosterIds(game), answers: session.answers });
+  writeJsonAtomic(colonyMarksPath(id), runs);
+}
+
 function saveColonyQuestSession(id, session) {
   fs.mkdirSync(GAMES_DIR, { recursive: true });
   const normalized = colonyQuest.normalizeSession(session);
@@ -314,11 +334,15 @@ function saveColonyQuestSession(id, session) {
     updatedAt: new Date().toISOString(),
     summary: normalized.phase === 'ended' ? colonyQuest.sessionSummary(normalized) : null,
   };
+  const previous = getColonyQuestSession(id);
+  if (previous && previous.startedAt !== record.startedAt) saveColonyQuestMarks(id, previous);
+  saveColonyQuestMarks(id, record);
   writeJsonAtomic(colonySessionPath(String(id)), record);
   return record;
 }
 
 function clearColonyQuestSession(id) {
+  const existing = getColonyQuestSession(id); if (existing) saveColonyQuestMarks(id, existing);
   const p = colonySessionPath(String(id));
   if (fs.existsSync(p)) fs.unlinkSync(p);
   return true;
@@ -344,6 +368,7 @@ function repairStoredMathAnswers() {
 }
 
 module.exports = {
+  colonyQuestMarkRuns,
   recordParticipant, isStudentRemoved, setStudentRemoved, createGame, getGame, recordResult, getResults, getHighScores, listTeacherGames, getRoomCode,
   updateGameCutoff, updateGameRosters, updateGameQuestions, updateFishQuest, updateColonyQuest, getColonyQuestSession,
   saveColonyQuestSession, clearColonyQuestSession, normalizeStudentId, normalizeRosterIds,

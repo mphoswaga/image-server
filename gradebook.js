@@ -11,7 +11,34 @@ const { patchWorkbookMarks } = require('./school-template');
 const games = require('./games');
 const assignments = require('./assignments');
 const roster = require('./roster');
-const isIndividuallyGradedGame = game => game.mode !== 'colonyquest';
+function gradebookGames(userId) {
+  const entries = games.listTeacherGames(userId).flatMap(game => {
+    const entries = game.mode !== 'colonyquest' || games.getResults(game.id).length ? [game] : [];
+    for (const run of games.colonyQuestMarkRuns(game.id)) {
+      const learners = new Map();
+      for (const answer of run.answers || []) {
+        const id = games.normalizeStudentId(answer.studentId);
+        if (!id || typeof answer.correct !== 'boolean') continue;
+        const result = learners.get(id) || { studentId: id, name: answer.studentName, score: 0, total: 0, at: run.at };
+        result.total++; if (answer.correct) result.score++;
+        learners.set(id, result);
+      }
+      if (!learners.size) continue;
+      entries.push({ ...game, id: game.id + ':smartboard:' + run.startedAt, lessonTitle: game.lessonTitle + ' · Smartboard', createdAt: run.startedAt,
+        rosterId: run.rosterIds?.[0] || game.rosterId, rosterIds: run.rosterIds || games.getRosterIds(game), smartboardResults: [...learners.values()] });
+    }
+    return entries;
+  });
+  const moon = require('./moonquest').createStore();
+  for (const session of moon.sessions().filter(s => s.teacherId === userId && !s.test && s.rosterId)) {
+    const report = moon.report(session.id, userId);
+    const results = report.summary.learners.filter(s => s.assessed > 0).map(s => ({ studentId: s.id, name: s.name, score: s.finalCorrect, total: s.assessed, at: session.createdAt, rosterId: session.rosterId }));
+    if (!results.length) continue;
+    entries.push({ id: 'moonquest:' + session.id, rosterId: session.rosterId, rosterIds: [session.rosterId], lessonTitle: session.game.title + ' · MoonQuest', subject: session.game.subject, createdAt: new Date(session.createdAt).toISOString(), defaultWeight: 0, smartboardResults: results });
+  }
+  return entries;
+}
+const gameMarks = game => game.smartboardResults || games.getResults(game.id);
 const FINAL_ASSESSMENT_GRADE_SOURCES = new Set(['auto', 'teacher', 'ai-confirmed']);
 
 // Releasing controls only what learners can see. A complete, valid item-level
@@ -234,7 +261,7 @@ function listClasses(userId) {
   const rosters = roster.listRosters(userId).map(item => roster.getRoster(userId, item.id)).filter(Boolean);
   const asgs = assignments.listTeacherAssignments(userId)
     .filter(assignment => assignment.type !== 'assessment' || assignment.teacherMarked || assignment.resultsReleased);
-  const gms = games.listTeacherGames(userId).filter(isIndividuallyGradedGame);
+  const gms = gradebookGames(userId);
   const consumed = new Set();
   const classes = [];
   for (const r of rosters) {
@@ -294,19 +321,20 @@ function buildGradebook(userId, rosterId) {
     }
   }
   for (const id of excludedIds) if (!(id in weights)) weights[id] = 0;
+  const defaultWeights = {};
   const weightFor = id => {
     const key = String(id);
-    return key in weights ? weights[key] : 1;
+    return key in weights ? weights[key] : (defaultWeights[key] ?? 1);
   };
 
   const asgs = assignments.listTeacherAssignments(userId)
     .filter(a => rosterIds.has(a.rosterId))
     .map(a => ({ summary: a, record: assignmentRecord(a) }))
     .filter(({ record }) => isAssessmentOnRecord(record));
-  // ColonyQuest records team/class evidence. It must not create blank or
-  // manufactured individual marks in a learner gradebook.
-  const gms = games.listTeacherGames(userId).filter(g => [...rosterIds].some(id => games.hasRoster(g, id)) && isIndividuallyGradedGame(g));
+  // Smartboard marks use named learner turns only; team resources never become marks.
+  const gms = gradebookGames(userId).filter(g => [...rosterIds].some(id => games.hasRoster(g, id)));
 
+  for (const game of gms) if (game.defaultWeight !== undefined) defaultWeights[game.id] = game.defaultWeight;
   const assessments = [];
   const cells = {}; // studentId -> { assessmentId -> { mark, max, pct } }
   students.forEach(s => { cells[sid(s.id)] = {}; });
@@ -336,7 +364,7 @@ function buildGradebook(userId, rosterId) {
   }
 
   for (const g of gms) {
-    const byStu = Object.fromEntries(games.getResults(g.id)
+    const byStu = Object.fromEntries(gameMarks(g)
       .filter(result => !result.rosterId || rosterIds.has(result.rosterId))
       .map(x => [sid(x.studentId), x]));
     const pcts = [];
@@ -525,8 +553,8 @@ function gatherStudentResults(teacherIds, studentId) {
   const rows = [];
   let name = null;
   for (const tid of teacherIds) {
-    for (const g of games.listTeacherGames(tid).filter(isIndividuallyGradedGame)) {
-      for (const r of games.getResults(g.id)) {
+    for (const g of gradebookGames(tid)) {
+      for (const r of gameMarks(g)) {
         if (sid(r.studentId) !== studentId) continue;
         if (r.name && !name) name = r.name;
         rows.push({ kind: 'game', assessmentId: g.id, title: g.lessonTitle, subject: g.subject || null, topic: g.topic || null,

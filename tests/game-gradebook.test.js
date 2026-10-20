@@ -1,0 +1,33 @@
+const {test}=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+process.env.DATA_DIR=fs.mkdtempSync(path.join(os.tmpdir(),'game-marks-'));
+const games=require('../games'),roster=require('../roster'),gradebook=require('../gradebook');
+test('ColonyQuest multiplayer and named smartboard marks appear without team scores or absent zeroes',()=>{
+ const r=roster.saveRoster('t',{name:'3B4',students:[{id:'S1',name:'One'},{id:'S2',name:'Two'},{id:'S3',name:'Three'}]});
+ const game=games.createGame({teacherId:'t',lessonTitle:'Files',subject:'ICT',grade:'3',rosterId:r.id,mode:'colonyquest',game:{questions:[{question:'Largest?',options:['B','TB'],correctIndex:1}]}});
+ games.recordResult(game.id,{studentId:'S1',name:'One',score:1,total:1,answers:[1],rosterId:r.id,gameType:'colonyquest-live',arcadeScore:999});
+ const session={phase:'ended',startedAt:'2026-10-01T10:00:00Z',teams:[{id:'a',name:'A'},{id:'b',name:'B'}],answers:[{studentId:'S2',studentName:'Two',correct:false,questionIndex:0,teamId:'a'},{studentId:'S2',correct:true,questionIndex:0,teamId:'a'},{correct:true,questionIndex:0,teamId:'b'}]};
+ games.saveColonyQuestSession(game.id,session);
+ let book=gradebook.buildGradebook('t',r.id);assert.equal(book.assessments.length,2);
+ assert.equal(book.rows.find(s=>s.studentId==='S1').cells[game.id].mark,1);
+ const board=book.assessments.find(a=>a.title.includes('Smartboard'));
+ assert.deepEqual(book.rows.find(s=>s.studentId==='S2').cells[board.id],{mark:1,max:2,pct:.5});
+ assert.deepEqual(book.rows.find(s=>s.studentId==='S3').cells,{});
+ games.clearColonyQuestSession(game.id);
+ book=gradebook.buildGradebook('t',r.id);assert.equal(book.assessments.length,2);
+ assert.equal(gradebook.listClasses('t')[0].games,2);
+ assert.equal(gradebook.buildGradebook('other',r.id),null);
+});
+test('MoonQuest completed answers appear as formative marks and stay out of averages by default',()=>{
+ const r=roster.saveRoster('moon-teacher',{name:'3B1',students:[{id:'S1',name:'One'},{id:'S2',name:'Two'}]});
+ const store=require('../moonquest').createStore();
+ const game=store.saveGame('moon-teacher',{title:'File sizes',grade:'Grade 3',reviewed:true,diagrams:[{id:'d',asset:'00000000-0000-0000-0000-000000000000',regions:[{id:'a',label:'Byte',points:[[0,0],[.2,0],[.2,.2]]},{id:'b',label:'TB',points:[[.5,0],[.7,0],[.7,.2]]}]}],questions:[{id:'q',diagramId:'d',prompt:'Smallest?',concept:'Compare sizes',accepted:['a'],explanation:'Byte is smaller.'}],timing:{automatic:false}});
+ const s=store.createSession('moon-teacher',game.id,r);store.join(s.id,'S1');
+ const cmd=action=>store.command(s.id,'moon-teacher',action,{seq:store.session(s.id).seq});
+ cmd('next');cmd('open');let current=store.session(s.id);store.answer(s.id,'S1',{round:current.round,phase:current.phase,regionId:'a',eventId:'answer-1'});
+ current=store.session(s.id);current.rounds[0].revealedAt=Date.now();current.phase='ended';store.saveSession(current);
+ const book=gradebook.buildGradebook('moon-teacher',r.id);
+ assert.equal(book.assessments.length,1);assert.equal(book.assessments[0].weight,0);
+ assert.equal(book.rows.find(r=>r.studentId==='S1').cells[book.assessments[0].id].mark,1);
+ assert.deepEqual(book.rows.find(r=>r.studentId==='S2').cells,{});
+ assert.equal(book.classAverage,null);
+});
