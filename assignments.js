@@ -483,6 +483,38 @@ function assessmentContentEditable(record) {
   return delivery.mode !== 'live' || delivery.phase === 'lobby';
 }
 
+function legacyContentEditable(record) {
+  return !!record && ['quiz', 'worksheet', 'exit-ticket'].includes(record.type)
+    && !record.resultsReleased && !loadSubmissions(record.id).length && !loadDrafts(record.id).length;
+}
+function updateLegacyContent(id, data) {
+  const rec = getAssignment(id);
+  if (!legacyContentEditable(rec)) throw assessmentStateError('Questions cannot be changed after learner work has been saved.', 'assignment_content_locked');
+  if (Number(data.version || 1) !== Number(rec.version || 1)) throw assessmentStateError('This assignment changed. Reopen the editor before saving.', 'assignment_version_conflict');
+  const existing = rec.content.questions;
+  if (!Array.isArray(data.questions) || data.questions.length !== existing.length) throw new Error('Keep all existing questions.');
+  const questions = existing.map((old, i) => {
+    const q = data.questions[i];
+    if (!q || q.id !== old.id) throw new Error('Question order has changed. Reopen the editor.');
+    const question = cleanText(q.question, 10000), marks = Number(q.marks);
+    if (!question || !Number.isFinite(marks) || marks <= 0 || marks > 1000) throw new Error('Each question needs text and marks between 0 and 1000.');
+    if (old.kind === 'mcq') {
+      const options = Array.isArray(q.options) ? q.options.map(v => cleanText(v, 3000)) : [];
+      const correctIndex = Number(q.correctIndex);
+      if (options.length !== old.options.length || options.some(v => !v) || !Number.isInteger(correctIndex) || correctIndex < 0 || correctIndex >= options.length) throw new Error('Complete every answer choice and select the correct answer.');
+      return { ...old, question, marks, options, correctIndex };
+    }
+    const answerKey = cleanText(q.answerKey, 10000);
+    if (!answerKey) throw new Error('Enter an expected answer for each written question.');
+    return { ...old, question, marks, answerKey };
+  });
+  rec.content = { ...rec.content, instructions: cleanText(data.instructions, 10000), questions };
+  rec.version = Number(rec.version || 1) + 1;
+  rec.editedAt = new Date().toISOString();
+  writeJsonAtomic(recPath(id), rec);
+  return rec;
+}
+
 function assertAssessmentContentEditable(record) {
   if (!record || record.type !== 'assessment') {
     throw assessmentStateError('This item is not a test or project.', 'assessment_content_not_supported');
@@ -1060,7 +1092,7 @@ function listTeacherAssignments(teacherId) {
       teacherMarkedAt: a.teacherMarkedAt || a.finalisedAt || null,
       submissions: loadSubmissions(a.id).length,
       marking: assessmentMarkingSummary(a),
-      contentEditable: assessmentContentEditable(a),
+      contentEditable: assessmentContentEditable(a) || legacyContentEditable(a),
     }))
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
@@ -1103,7 +1135,7 @@ function renameAssessmentStudent(teacherId, rosterId, studentId, name) {
 }
 
 module.exports = {
-  createAssignment, createAssessment, copyAssessmentToRoster, normalizeAssessment, getAssignment, updateAssignmentCutoff, updateAssessmentRoster, updateAssessmentContent, assessmentContentEditable, getRoomCode,
+  legacyContentEditable, updateLegacyContent, createAssignment, createAssessment, copyAssessmentToRoster, normalizeAssessment, getAssignment, updateAssignmentCutoff, updateAssessmentRoster, updateAssessmentContent, assessmentContentEditable, getRoomCode,
   publishedAssessmentGenerationContext,
   releaseResults, setTeacherMarked, isReleased,
   assessmentIsFinalised, saveSubmission, saveNewSubmission, getSubmissions, getSubmission, reassignRoster,

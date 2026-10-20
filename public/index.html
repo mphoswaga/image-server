@@ -8265,10 +8265,36 @@
       clearTimeout(assessmentDraftSyncTimer);
       assessmentDraftSyncTimer=setTimeout(captureGeneratedAssessmentEdits,180);
     }
+    function openLegacyQuestionEditor(id,data){
+      document.getElementById('legacyQuestionEditor')?.remove();
+      const panel=document.createElement('section');
+      panel.id='legacyQuestionEditor'; panel.className='card';
+      panel.innerHTML=`<h3>Edit questions</h3><p class="hint">Save changes before learners begin. The learner link and room code stay the same.</p>
+        <label>Instructions<textarea class="legacy-instructions">${esc(data.content.instructions||'')}</textarea></label>
+        ${data.content.questions.map((q,i)=>`<fieldset class="legacy-question" style="margin:16px 0;padding:16px;border:1px solid var(--border);border-radius:8px"><legend>Question ${i+1}</legend>
+        <label>Question<textarea class="legacy-prompt">${esc(q.question)}</textarea></label>
+        ${q.kind==='mcq'?q.options.map((o,j)=>`<label>Answer ${j+1}<input class="legacy-option" value="${esc(o)}"></label>`).join('')+`<label>Correct answer<select class="legacy-correct">${q.options.map((o,j)=>`<option value="${j}" ${j===q.correctIndex?'selected':''}>Answer ${j+1}</option>`).join('')}</select></label>`:`<label>Expected answer<textarea class="legacy-answer">${esc(q.answerKey||'')}</textarea></label>`}
+        <label>Marks<input class="legacy-marks" type="number" min="0.01" max="1000" step="any" value="${esc(q.marks)}"></label></fieldset>`).join('')}
+        <p class="legacy-status" role="status"></p><div style="display:flex;gap:12px"><button type="button" class="btn primary legacy-save">Save changes</button><button type="button" class="btn ghost legacy-cancel">Cancel</button></div>`;
+      $('assignmentsList').prepend(panel);
+      panel.querySelector('.legacy-cancel').onclick=()=>panel.remove();
+      panel.querySelector('.legacy-save').onclick=async()=>{
+        const button=panel.querySelector('.legacy-save'),status=panel.querySelector('.legacy-status');
+        button.disabled=true;status.textContent='Saving…';
+        const questions=[...panel.querySelectorAll('.legacy-question')].map((row,i)=>({...data.content.questions[i],question:row.querySelector('.legacy-prompt').value,marks:Number(row.querySelector('.legacy-marks').value),...(data.content.questions[i].kind==='mcq'?{options:[...row.querySelectorAll('.legacy-option')].map(el=>el.value),correctIndex:Number(row.querySelector('.legacy-correct').value)}:{answerKey:row.querySelector('.legacy-answer').value})}));
+        try{
+          const response=await fetch('/api/assignment/'+encodeURIComponent(id)+'/content',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({version:data.version,instructions:panel.querySelector('.legacy-instructions').value,questions})});
+          const result=await response.json();if(!response.ok)throw new Error(result.error||'Could not save changes.');
+          data.version=result.version;status.textContent='Changes saved. Learners will see the updated questions.';
+        }catch(error){status.textContent=error.message;}finally{button.disabled=false;}
+      };
+      panel.scrollIntoView({behavior:'smooth',block:'start'});
+    }
     async function openExistingAssessmentEditor(assessmentId){
       const response=await fetch('/api/assignment/'+encodeURIComponent(assessmentId)+'/edit');
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||'This assessment cannot be edited.');
+      if(data.content){ openLegacyQuestionEditor(assessmentId,data); return; }
       const draft=data.assessment||{};
       editingGeneratedAssessmentDraft=false;
       editingAssessmentId=data.assessmentId;
@@ -8448,7 +8474,7 @@
               <div class="gc-actions" style="margin-top:10px">
                 ${!isDraft?`<button type="button" class="btn ghost a-toggle-btn" data-assign-id="${esc(a.id)}" data-wrap-id="${wrapId}" data-detail-id="${detailId}" data-closed-label="${a.type==='assessment'?'Run classroom / mark':'Review submissions'}" style="font-size:12px;padding:6px 12px;width:auto">${a.type==='assessment'?'Run classroom / mark':'Review submissions'}</button>`:''}
                 ${a.type==='assessment'&&!isDraft?`<a class="btn ghost" href="/assessment/${esc(a.id)}/present" target="_blank" rel="noopener" style="font-size:12px;padding:6px 12px;width:auto;text-decoration:none">Present</a>`:''}
-                ${a.type==='assessment'&&a.contentEditable?`<button type="button" class="btn accent a-edit-btn" data-id="${esc(a.id)}" style="font-size:12px;padding:6px 12px;width:auto">${isDraft?'Edit questions and publish':'Edit questions'}</button>`:''}
+                ${a.contentEditable?`<button type="button" class="btn accent a-edit-btn" data-id="${esc(a.id)}" style="font-size:12px;padding:6px 12px;width:auto">${isDraft?'Edit questions and publish':'Edit questions'}</button>`:''}
                 ${a.type==='assessment'?`<button type="button" class="btn ghost a-class-btn" data-row="${classRowId}" ${a.resultsReleased?'disabled title="Hide the released results before changing the class."':''} style="font-size:12px;padding:6px 12px;width:auto">${a.rosterId?'Change class':'Assign class'}</button>`:''}
                 ${a.type==='assessment'&&!isDraft?`<button type="button" class="btn ghost a-class-copy-btn" data-row="${copyClassRowId}" ${availableCopyClasses.length?'':'disabled title="This assessment has already been given to every saved class."'} style="font-size:12px;padding:6px 12px;width:auto">Give to another class</button>`:''}
               </div>

@@ -2491,7 +2491,10 @@ app.get('/api/assignment/:id/edit', requireAuth, (req, res) => {
   const assessment = assignments.getAssignment(req.params.id);
   if (!assessment) return res.status(404).json({ error: 'Assessment not found.' });
   if (assessment.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assessment.' });
-  if (assessment.type !== 'assessment') return res.status(400).json({ error: 'Only tests and projects can be edited here.' });
+  if (assessment.type !== 'assessment') {
+    if (!assignments.legacyContentEditable(assessment)) return res.status(409).json({ error: 'Questions cannot be changed after learner work has been saved.' });
+    return res.json({ assignmentId: assessment.id, type: assessment.type, version: assessment.version || 1, content: assessment.content });
+  }
   if (!assignments.assessmentContentEditable(assessment)) {
     return res.status(409).json({ code: 'assessment_content_locked', error: 'Questions cannot be changed after a learner has started this class run.' });
   }
@@ -2521,7 +2524,12 @@ app.patch('/api/assignment/:id/content', requireAuth, (req, res) => {
   const assessment = assignments.getAssignment(req.params.id);
   if (!assessment) return res.status(404).json({ error: 'Assessment not found.' });
   if (assessment.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assessment.' });
-  if (assessment.type !== 'assessment') return res.status(400).json({ error: 'Only tests and projects can be edited here.' });
+  if (assessment.type !== 'assessment') {
+    try {
+      const updated = assignments.updateLegacyContent(assessment.id, req.body || {});
+      return res.json({ ok: true, assignmentId: updated.id, version: updated.version });
+    } catch (error) { return res.status(error.status || 400).json({ error: error.message }); }
+  }
   try {
     const updated = assignments.updateAssessmentContent(
       assessment.id,
