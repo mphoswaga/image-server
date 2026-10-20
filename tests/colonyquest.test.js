@@ -119,7 +119,7 @@ test('the classroom loop opens with one mission briefing and keeps later growth 
   assert.match(client, /async function showGrowth/);
   assert.match(client, /await showGrowth\(event\)/);
   assert.match(client, /function showRaidStory/);
-  assert.match(client, /duration: 6200/);
+  assert.match(client, /duration: 8400/);
   assert.match(client, /function playAntSound\(kind\)/);
   assert.match(client, /playAntSound\('march'\)/);
   assert.match(client, /function playWinnerCelebration\(\)/);

@@ -563,7 +563,23 @@
     return Math.round((accuracy(answers.slice(midpoint)) - accuracy(answers.slice(0, midpoint))) * 100);
   }
 
-  function applyEvent(teams, key) {
+  function applySpiderSwarm(team) {
+    const before = colonyRooms(team).length;
+    // Walls protect ten percentage points per upgrade; home guards protect two each.
+    const fraction = Math.max(0, 40 - (team.defense || 0) * 10 - Math.min(20, homeGuards(team) * 2)) / 100;
+    const foodLost = Math.min(Math.max(0, team.food - 1), Math.ceil(team.food * fraction));
+    team.food -= foodLost;
+    if (before > 1 && (team.defense || 0) < 2 && homeGuards(team) < 6) {
+      if (team.expansionRooms > 0) team.expansionRooms--;
+      else if (team.workerLodges > 0) team.workerLodges--;
+      else if (team.barracksAnnexes > 0) team.barracksAnnexes--;
+      else if (team.barracksBuilt) team.barracksBuilt = false;
+      else if (team.pantryBuilt) team.pantryBuilt = false;
+      team.territory = colonyRooms(team).length;
+    }
+    return {foodLost, roomsLost:before - colonyRooms(team).length};
+  }
+  function applyEvent(teams, key, options = {}) {
     const event = EVENTS.find(item => item.key === key) || EVENTS[0];
     const strengths = (teams || []).map(colonyStrength);
     const weakest = strengths.length ? Math.min(...strengths) : 0;
@@ -572,7 +588,8 @@
       if (event.key === 'fallen-fruit') team.food += strengths[index] === weakest ? 20 : 12;
       if (event.key === 'heavy-rain') team.food = Math.max(0, team.food - rainOutcome(team).exposedFood);
       if (event.key === 'food-trail' && team.workers > 0) team.food += 7 + Math.min(12, team.workers);
-      if (event.key === 'predator') team.food = Math.max(0, team.food - Math.max(0, 12 - team.defense * 3 - team.soldiers));
+      if (event.key === 'predator' && options.swarm) applySpiderSwarm(team);
+      if (event.key === 'predator' && !options.swarm) team.food = Math.max(0, team.food - Math.max(0, 12 - team.defense * 3 - team.soldiers));
       if (event.key === 'tunnel-collapse') team.food = Math.max(0, team.food - Math.max(0, 4 - team.workers - team.defense));
       if (event.key === 'lost-ant' && index === strengths.indexOf(weakest)) team.food += 5;
       if (event.key === 'new-territory' && strengths[index] <= weakest * 1.08) expandColony(team);
@@ -649,6 +666,7 @@
       events: Array.isArray(source.events) ? source.events.slice(-40).map(event => ({
         key: text(event && event.key, 40),
         ...(event?.automatic && EVENTS.some(item => item.key === event.key) ? { automatic: true, turnIndex: Math.floor(clamp(event.turnIndex, 0, 9999)) } : {}),
+        ...(event?.key === 'predator' && Array.isArray(event.beforeTeams) ? {beforeTeams:event.beforeTeams.slice(0,6).map(normalizeTeam)} : {}),
         at: text(event && event.at, 40),
         teamId: text(event && event.teamId, 40) || null,
         amount: Math.floor(clamp(event && event.amount, 0, 9999)),
@@ -759,7 +777,7 @@
     return null;
   }
   return {
-    pickLearner, deductTeamResource, deductTeamPoints, advanceEconomy, applyRain, applyHumanStomp, homeGuards, birdCount, resolveBirds, advanceBirdEvent,
+    applySpiderSwarm, pickLearner, deductTeamResource, deductTeamPoints, advanceEconomy, applyRain, applyHumanStomp, homeGuards, birdCount, resolveBirds, advanceBirdEvent,
     VERSION, DRY_FOOD_TARGET, buildingCost, applyDrySeason, seasonSchedule, seasonStage, advanceSeason,
     FORTIFICATIONS,
     fortification,

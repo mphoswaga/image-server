@@ -5,7 +5,7 @@ test('coordinator can preview and configure weekly notifications without sending
  const w=await(await page.request.post('/api/school-newsletters/demo',{data:{}})).json();
  await page.goto('/newsletters.html');await page.locator('#spaces').selectOption(w.id);
  await page.locator('#demoRole').selectOption('coordinator');
- await page.getByText('Email notifications',{exact:true}).click();
+ await page.locator('#newsletterNav').getByRole('button',{name:'Settings & staff'}).click();
  await expect(page.locator('[data-mail-mode]')).toHaveValue('off');
  await page.getByRole('button',{name:'Preview emails',exact:true}).click();
  await expect(page.locator('[data-mail-status]')).toHaveText('Preview only — nothing sent.');

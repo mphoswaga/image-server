@@ -1100,3 +1100,15 @@ body[data-newsletter-role="translator"] .paper-symbol {
   background: #fff8e9;
   margin-bottom: 18px;
 }
+
+/* Keep daily work separate from administration without recreating draft fields. */
+#newsletterNav{display:grid;gap:6px;margin-bottom:24px;position:sticky;top:16px}
+#newsletterNav button{text-align:left;width:100%;background:transparent;color:#294869;border:1px solid transparent;border-radius:9px;padding:12px 14px;font-weight:700}
+#newsletterNav button:hover{background:#edf4fa}
+#newsletterNav button[aria-current="page"]{background:#21466e;color:white;border-color:#21466e}
+#editor>[hidden],.contribution-overview>[hidden]{display:none!important}
+@media(max-width:760px){#newsletterNav{display:flex;position:static;overflow-x:auto;gap:8px;margin-bottom:12px}#newsletterNav button{width:auto;flex:0 0 auto}}
+
+body[data-newsletter-role] .layout{grid-template-columns:220px minmax(0,1fr)}
+body[data-newsletter-role] .layout>aside{display:block}
+@media(max-width:760px){body[data-newsletter-role] .layout{grid-template-columns:minmax(0,1fr)}}

@@ -14,7 +14,7 @@ test("teacher lands on a compact actionable contribution overview", async ({
     page.getByRole("heading", { name: "My contributions", exact: true }),
   ).toBeVisible();
   await expect(page.locator("#taskSummary")).toContainText("1 submitted");
-  await expect(page.locator(".layout>aside")).toBeHidden();
+  await expect(page.locator("#newsletterNav")).toBeVisible();
   const task = page.locator(".task-card").first();
   await expect(task).toContainText("View contribution");
   if (testInfo.project.name === "windows-100")

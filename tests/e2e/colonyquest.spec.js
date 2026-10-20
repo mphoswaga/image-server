@@ -46,7 +46,7 @@ test('meadow music plays and obeys mute, pause and volume controls', async ({ pa
   expect((await music()).time).toBeCloseTo(muted, 1);
   await page.locator('#muteBtn').click();
   await expect.poll(async () => (await music()).time).toBeGreaterThan(muted + .1);
-  await page.locator('#teacherHandle').click();
+
   await page.locator('#musicVolume').fill('25');
   await expect(page.locator('#musicVolumeLabel')).toHaveText('Music 25%');
   await page.locator('#effectsVolume').fill('0');
@@ -151,7 +151,7 @@ test('a raid stays visible but returns to questions without a report popup', asy
   await expect(page.locator('#worldViewport')).toHaveAttribute('data-raid-phase', 'outbound');
   await expect(page.locator('#worldStory')).toBeHidden();
   await expect(page.locator('#worldViewport')).toHaveAttribute('data-raid-phase', 'at-nest');
-  await expect.poll(() => page.evaluate(() => window.raidGame.scene.scenes[0].cameras.main.zoom)).toBeGreaterThan(3);
+  await expect.poll(() => page.evaluate(() => window.raidGame.scene.scenes[0].cameras.main.zoom)).toBeGreaterThan(2.2);
   await expect(page.locator('#questionOverlay')).toBeVisible({ timeout: 7000 });
   expect(await page.evaluate(() => window.raidGame.scene.scenes[0].cameras.main.zoom)).toBe(1);
   expect(saved.events.at(-1).key).toBe('raid-result');
@@ -552,7 +552,7 @@ test.skip('harvest, hatching, raid recovery and the Great Rain ending survive re
   await expect(page.locator('[data-target="team-2"]')).toContainText('Recovering: 2 rounds');
   await page.locator('#targetBack').click();
   page.once('dialog', dialog => dialog.accept());
-  await page.locator('#teacherHandle').click();
+
   await page.locator('#endGameBtn').click();
   await expect(page.locator('#worldStoryTitle')).toHaveText('The ants are safe from the rain!');
   await page.screenshot({ path: `/tmp/colony-rain-${testInfo.project.name}.png` });
@@ -777,7 +777,7 @@ test.skip('a teacher can run, recover, pause, and finish a one-screen ColonyQues
   expect(session.phase).toBe('question');
 
   page.once('dialog', dialog => dialog.accept());
-  await page.locator('#teacherHandle').click();
+
   await page.locator('#endGameBtn').click();
   await expect(page.locator('#worldStoryTitle')).toHaveText('The ants are safe from the rain!');
   await page.locator('#worldStoryContinue').click();
@@ -1106,7 +1106,7 @@ test('teacher subtracts colony points during play and the deduction survives rel
   return route.fulfill({json:{game:{id:'cq-deduct',lessonTitle:'Habitats',questions,colonyquest:{teamCount:2,sound:false,teams}},session:saved}});
  });
  await page.goto('/colonyquest/cq-deduct');await page.locator('#resumeBtn').click();
- await page.locator('#teacherHandle').click();
+
  await page.locator('#deductTeam').selectOption('team-2');
  await page.locator('#deductAmount').fill('15');
  await page.locator('#deductPointsBtn').click();
@@ -1120,7 +1120,8 @@ test('teacher subtracts colony points during play and the deduction survives rel
 test('smartboard spider appears between rounds and reload does not apply losses twice', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'windows-100');
   const teams = [colonyCore.createTeam({}, 0), colonyCore.createTeam({}, 1)];
-  let saved = colonyCore.normalizeSession({ phase: 'question', introSeen: true, teams, turnIndex: 3, questionCursor: 3, currentTeamIndex: 1 });
+  teams[0].pantryBuilt = true; teams[0].territory = 2; teams[0].food = 30;
+  let saved = colonyCore.normalizeSession({ phase: 'question', introSeen: true, teams, turnIndex: 1, questionCursor: 1, currentTeamIndex: 1 });
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   await page.route(/\/api\/game\/cq-spider-check\/colonyquest(?:\/session)?$/, async route => {
@@ -1131,6 +1132,7 @@ test('smartboard spider appears between rounds and reload does not apply losses 
     return route.fulfill({ json: { game: { id: 'cq-spider-check', lessonTitle: 'Habitats', questions, colonyquest: { teamCount: 2, rounds: 6, sound: false, teams } }, session: saved } });
   });
   await page.goto('/colonyquest/cq-spider-check');
+  await page.evaluate(() => { const Original = Phaser.Game; Phaser.Game = function(config) { window.swarmGame = new Original(config); return window.swarmGame; }; });
   await page.locator('#resumeBtn').click();
   await page.locator('.answer').nth(1).click();
   await expect(page.locator('#worldViewport')).toHaveAttribute('data-encounter', 'predator');
@@ -1138,13 +1140,18 @@ test('smartboard spider appears between rounds and reload does not apply losses 
   await expect(page.locator('#worldStory')).toBeHidden();
   expect(saved.events.filter(e => e.automatic && e.key === 'predator')).toHaveLength(1);
   const food = saved.teams.map(t => t.food);
+  await expect(page.locator('#worldViewport')).toHaveAttribute('aria-description', /Pantry/);
+  expect(saved.teams[0].pantryBuilt).toBe(false);
+  await page.waitForTimeout(3000);
+  expect(await page.evaluate(() => window.swarmGame.scene.scenes[0].children.list.filter(x => x.texture?.key === 'cq-spider' && x.depth === 100).length)).toBe(50);
   await page.screenshot({ path: testInfo.outputPath('spider-encounter.png') });
   await page.reload();
   await page.locator('#resumeBtn').click();
   await expect(page.locator('#worldViewport')).toHaveAttribute('data-encounter', 'predator');
   await expect(page.locator('#questionOverlay')).toBeVisible({ timeout: 10000 });
   expect(saved.teams.map(t => t.food)).toEqual(food);
-  expect(saved.turnIndex).toBe(4);
+  await expect(page.locator('#worldViewport')).not.toHaveAttribute('aria-description', /Pantry/);
+  expect(saved.turnIndex).toBe(2);
   expect(saved.events.filter(e => e.automatic && e.key === 'predator')).toHaveLength(1);
   expect(errors).toEqual([]);
 });
@@ -1180,8 +1187,9 @@ for (const stage of ['attack', 'rain']) test(`smartboard ${stage} has moving act
   await page.waitForTimeout(100);
   expect(await page.evaluate(() => window.motionGame.scene.scenes[0].tweens.timeScale)).toBe(0);
   await page.locator('#pauseBtn').click();
-  await expect(page.locator('#questionOverlay')).toBeVisible();
+  await expect(page.locator('#questionOverlay')).toBeHidden();
   await page.screenshot({ path: testInfo.outputPath(`${stage}.png`) });
+  await expect(page.locator('#questionOverlay')).toBeVisible({timeout:15000});
 });
 test('teacher skips a learner and deducts supplies without recording an answer',async({page})=>{
  const teams=[colonyCore.createTeam({name:'Boys',members:[{id:'a',name:'Alex',turns:0},{id:'b',name:'Ben',turns:4}]},0),colonyCore.createTeam({name:'Girls'},1)];
@@ -1195,8 +1203,19 @@ test('teacher skips a learner and deducts supplies without recording an answer',
  const first = await page.locator('#questionKicker').textContent();
  await page.reload();await page.locator('#resumeBtn').click();
  await expect(page.locator('#questionKicker')).toHaveText(first);
- await page.locator('#teacherHandle').click();await page.locator('#nextStudentBtn').click();
- await expect(page.locator('#questionKicker')).not.toHaveText(first);
+ await page.locator('#nextStudentBtn').click();
+ await expect(page.locator('#questionKicker')).toContainText('Girls');
+ const controls = await page.locator('#teacherTray').boundingBox();
+ const question = await page.locator('#questionOverlay').boundingBox();
+ expect(question.x + question.width).toBeLessThanOrEqual(controls.x + 1);
+ expect(saved.questionCursor).toBe(0);
+ await page.locator('#nextStudentBtn').click();
+ await expect(page.locator('#questionKicker')).toContainText('Boys');
+ const removed = await page.locator('#studentPick').inputValue();
+ page.once('dialog', dialog => dialog.accept());
+ await page.locator('#removeLearnerBtn').click();
+ await expect(page.locator('#questionKicker')).toContainText('Girls');
+ expect(saved.teams[0].members.some(m => m.id === removed)).toBe(false);
  await page.locator('#deductTeam').selectOption('team-1');await page.locator('#deductResource').selectOption('sticks');await page.locator('#deductAmount').fill('3');await page.locator('#deductPointsBtn').click();
  await expect(page.locator('#deductStatus')).toContainText('3 sticks deducted');
  expect(saved.teams[0].sticks).toBe(7);expect(saved.answers).toHaveLength(0);

@@ -447,6 +447,7 @@
     session.selectedLearnerId = member?.id || null;
     const team = currentTeam();
     if (team) $('questionKicker').textContent = `${team.name} - ${member ? member.name : 'team answer'}`;
+    $('teacherCurrentLearner').textContent = `${team?.name || ''} · ${member?.name || 'Team answer'}`;
     $('turnStudent').textContent = member ? `Next learner: ${member.name} · Other teams: choose the upgrade they need` : 'Choose together · Other teams: predict the best upgrade';
     $('studentPick').innerHTML = '<option value="">Choose learner</option>' + (team && team.members || []).map(item => `<option value="${esc(item.id)}"${member && member.id === item.id ? ' selected' : ''}>${esc(item.name)}</option>`).join('');
   }
@@ -757,6 +758,14 @@
   function updateBirdPanel() {
     const panel = $('birdPanel');
     const stage = session.birdStage;
+    const spotlight = ['rain', 'attack'].includes(stage) && ['question', 'reward', 'paused'].includes(session.phase);
+    $('gameScreen').classList.toggle('threat-spotlight', spotlight);
+    if (spotlight && panel.dataset.spotlight !== stage) {
+      resetActionCamera();
+      $('worldViewport').scrollTo({top:0, behavior:'auto'});
+      if (scene) scene.cameras.main.setScroll(0,0);
+    }
+    panel.dataset.spotlight = spotlight ? stage : '';
     const cueKey = `${stage}:${session.phase}`;
     if (panel.dataset.cueKey !== cueKey) { panel.dataset.cueKey = cueKey; panel.dataset.cueAt = String(Date.now()); }
     const visible = ['rush', 'warning', 'result'].includes(stage) && session.phase === 'event' && Date.now() - Number(panel.dataset.cueAt) < 3000;
@@ -796,6 +805,7 @@
   }
 
   function handleOutcome(choice, correct, teacherJudged = false) {
+    if ($('gameScreen').classList.contains('threat-spotlight')) return;
     if (answerLocked || session.phase !== 'question') return;
     answerLocked = true;
     const question = questionAtCursor();
@@ -994,7 +1004,8 @@
 
   function eventForTurn() {
     // Give every normal-length match its spider encounter, before later events.
-    const order = ['predator', 'fallen-fruit', 'food-trail', 'tunnel-collapse', 'lost-ant', 'new-territory'];
+    if (!session.events.some(event => event.automatic && event.key === 'predator')) return core.EVENTS.find(event => event.key === 'predator');
+    const order = ['fallen-fruit', 'food-trail', 'tunnel-collapse', 'lost-ant', 'new-territory'];
     const index = Math.max(0, Math.floor(session.turnIndex / Math.max(1, session.teams.length * 2)) - 1);
     return core.EVENTS.find(event => event.key === order[index % order.length]);
   }
@@ -1148,12 +1159,12 @@
     resetActionCamera();
     $('worldViewport').scrollTo({ top: 0, behavior: 'instant' });
     const raidZoomLimit = Math.max(1.5, Math.min(3.3, camera.width / 200, camera.height / 145));
-    camera.setZoom(Math.min(1.8, raidZoomLimit));
+    camera.setZoom(1);
     const meeting = route.getPoint(1);
     const attackLossVisuals = event.attackerLosses ? Math.max(1, Math.round(event.attackerLosses / attackers * attackerActorCount)) : 0;
     const defenseLossVisuals = event.defenderLosses && defenderActorCount ? Math.max(1, Math.round(event.defenderLosses / defenders * defenderActorCount)) : 0;
     let lastPhase = '';
-    raid.tween = scene.tweens.add({ targets: progress, value: 1, duration: 6200, ease: 'Linear',
+    raid.tween = scene.tweens.add({ targets: progress, value: 1, duration: 8400, ease: 'Linear',
       onUpdate: () => {
         if (raidPresentation !== raid) return;
         const p = progress.value;
@@ -1193,8 +1204,8 @@
           if (lost && phase !== 'outbound' && battleProgress > .58) ant.setAlpha(1).setAngle(0);
         }
         const lead = attackActors.find(actor => actor.visible) || attackActors[0];
-        const targetZoom = Math.min(raidZoomLimit, phase === 'at-nest' ? 3.3 : phase === 'outbound' ? 2.2 + distance * .5 : 2.3);
-        camera.setZoom(Phaser.Math.Linear(camera.zoom, targetZoom, .12));
+        const targetZoom = Math.min(raidZoomLimit, phase === 'at-nest' ? 2.6 : phase === 'outbound' ? 1.7 + distance * .4 : 1.9);
+        camera.setZoom(Phaser.Math.Linear(camera.zoom, targetZoom, .045));
         camera.centerOn(phase === 'at-nest' ? meeting.x : lead.x, (phase === 'at-nest' ? meeting.y : lead.y) + 18);
         if (phase !== lastPhase) {
           lastPhase = phase;
@@ -1217,7 +1228,7 @@
   }
 
   function shouldShowEvent() {
-    return session.turnIndex > 0 && session.turnIndex % (session.teams.length * 2) === 0 && !matchFinished();
+    return session.turnIndex > 0 && (session.turnIndex === session.teams.length || session.turnIndex % (session.teams.length * 2) === 0) && !matchFinished();
   }
 
   async function nextTurn() {
@@ -1232,7 +1243,7 @@
       core.applyUpkeep(session.teams);
       reports = reports.map(report => ({ teamId: report.teamId, gathered: report.gathered, eaten: report.eaten, hatched: session.teams.find(team => team.id === report.teamId).workers - report.workersBefore }));
     }
-    session.currentTeamIndex = session.turnIndex % session.teams.length;
+    session.currentTeamIndex = (session.currentTeamIndex + 1) % session.teams.length;
     const season = core.advanceSeason(session, turnProgress(), config);
     if (season) session.events.push({ key: `${season}-season`, at: new Date().toISOString() });
     if (matchFinished()) {
@@ -1303,7 +1314,9 @@
     }
     if (shouldShowEvent() && !session.events.some(event => event.automatic && event.turnIndex === session.turnIndex)) {
       const before = worldEventSnapshot();
-      const event = { ...core.applyEvent(session.teams, eventForTurn().key), automatic: true, turnIndex: session.turnIndex, effects: worldEventEffects(before), at: new Date().toISOString() };
+      const eventKey = eventForTurn().key;
+      const beforeTeams = eventKey === 'predator' ? structuredClone(session.teams) : null;
+      const event = { ...core.applyEvent(session.teams, eventKey, {swarm:true}), ...(beforeTeams ? {beforeTeams} : {}), automatic: true, turnIndex: session.turnIndex, effects: worldEventEffects(before), at: new Date().toISOString() };
       session.events.push(event);
       session.phase = 'event';
       await saveState();
@@ -1320,10 +1333,15 @@
     setOverlay(null);
     await waitForWorldReady();
     if (session.phase !== 'event') return;
-    updateWorld();
+    const damagedTeams = session.teams;
+    if (event.beforeTeams) session.teams = event.beforeTeams;
+    try { updateWorld(); } finally { session.teams = damagedTeams; }
     resetActionCamera();
     const team = worldEventFocusTeam(event);
-    focusColony(team.id, 'entrance');
+    if (event.key === 'predator' && event.beforeTeams) {
+      $('worldViewport').scrollTo({top:0,behavior:'auto'});
+      scene.cameras.main.setZoom(1).setScroll(0,0);
+    } else focusColony(team.id, 'entrance', true);
     $('worldViewport').dataset.encounter = event.key;
     $('gameScreen').classList.add('encounter-playing');
     if (event.key === 'predator') playTone('wars');
@@ -1333,7 +1351,7 @@
       if (run !== encounterRun || session.phase !== 'event' || session.events.at(-1) !== event) return;
       delete $('worldViewport').dataset.encounter;
       $('gameScreen').classList.remove('encounter-playing');
-      for (const effect of event.effects || []) colonyFeedback.set(effect.teamId, { text: effect.foodDelta < 0 ? `${effect.foodDelta} food` : effect.foodDelta > 0 ? `+${effect.foodDelta} food` : 'Stores protected', badge: effect.foodDelta < 0 ? '!' : '✓', good: effect.foodDelta >= 0, site: 'food', until: feedbackClock + 4000 });
+      for (const effect of event.effects || []) colonyFeedback.set(effect.teamId, { text: effect.roomsDelta < 0 ? `${effect.roomsDelta} room · ${effect.foodDelta} food` : effect.foodDelta < 0 ? `${effect.foodDelta} food` : effect.foodDelta > 0 ? `+${effect.foodDelta} food` : 'Stores protected', badge: effect.foodDelta < 0 || effect.roomsDelta < 0 ? '!' : '✓', good: effect.foodDelta >= 0 && effect.roomsDelta >= 0, site: 'food', until: feedbackClock + 4000 });
       continueAfterEvent().catch(error => toast(error.message));
     });
   }
@@ -1443,13 +1461,15 @@
     updateWorld();
     if (rainLeadIn && scene) {
       playWorldEvent('heavy-rain');
-      await new Promise(resolve => setTimeout(resolve, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 200 : 2400));
+      await new Promise(resolve => setTimeout(resolve, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 1200 : 6000));
     }
     if (stomp && scene) playHumanFootsteps();
     else showFinal();
   }
 
   function playHumanFootsteps() {
+    resetActionCamera();
+    if (scene) scene.cameras.main.setScroll(0, 0);
     $('gameScreen').classList.add('human-crossing');
     $('worldViewport').scrollTo({ top: 0, behavior: 'auto' });
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1685,6 +1705,7 @@
   }
 
   function skipQuestion() {
+    if ($('gameScreen').classList.contains('threat-spotlight')) return toast('Watch the encounter finish first.');
     if (!session || session.phase !== 'question' || transitionLocked) return;
     transitionLocked = true;
     answerLocked = true;
@@ -2381,8 +2402,8 @@
         $('worldViewport').dataset.actionFocus = `${teamId}:${siteName}`;
         if (reduced) camera.setZoom(zoom).centerOn(target.x, centerY);
         else {
-          camera.zoomTo(zoom, upgrade ? 250 : 750, 'Sine.easeInOut', true);
-          camera.pan(target.x, centerY, upgrade ? 250 : 750, 'Sine.easeInOut', true);
+          camera.zoomTo(zoom, 850, 'Sine.easeInOut', true);
+          camera.pan(target.x, centerY, 850, 'Sine.easeInOut', true);
         }
         return;
       }
@@ -3030,12 +3051,40 @@
     if (key === 'heavy-rain') lightningStrike(false);
   }
 
+  function playSpiderSwarm() {
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const camera = scene.cameras.main, width = camera.width, height = camera.height;
+    const swarm = [];
+    // One shared progress tween keeps the swarm inexpensive on classroom computers.
+    for (let i = 0; i < 50; i++) {
+      const sprite = scene.add.sprite(0,0,'cq-spider',0).setDepth(100).setScrollFactor(0);
+      sprite.setDisplaySize(52 + i % 4 * 13,52 + i % 4 * 13);
+      swarm.push(sprite);
+    }
+    const progress = {value:0};
+    scene.tweens.add({targets:progress,value:1,duration:9000,ease:'Linear',onUpdate:()=>{
+      swarm.forEach((sprite,i)=>{
+        const row = (i * 37 % 100) / 100, column = (i * 61 % 100) / 100;
+        const p=progress.value, side=i%2 ? 1 : -1;
+        const insideX=40+column*Math.max(1,width-80);
+        const arrival=Math.min(1,p/.25), departure=Math.max(0,(p-.72)/.28);
+        sprite.x=reduced ? insideX : insideX + side*(1-arrival)*(width+100) + side*departure*(width+120) + Math.sin(p*22+i)*20;
+        sprite.y=50+row*Math.max(1,height-100)+(reduced ? 0 : Math.sin(p*17+i)*14);
+        sprite.setFrame(reduced ? 0 : Math.floor(p*50+i)%2);
+        sprite.setFlipX(side<0);
+        sprite.setAlpha(reduced && p>.72 ? 1-departure : 1);
+      });
+    },onComplete:()=>swarm.forEach(sprite=>sprite.destroy())});
+    return 9000;
+  }
+
   function playWorldEvent(key, teamId) {
     if (!scene) return 250;
     const view = colonyViews.get(teamId) || colonyViews.values().next().value;
     const team = session.teams.find(item => item.id === teamId) || currentTeam();
     const palette = team ? core.TEAM_COLORS[team.colorIndex] : core.TEAM_COLORS[0];
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (key === 'predator' && session.events.at(-1)?.beforeTeams) return playSpiderSwarm();
     if (reducedMotion) return 300;
     if (key === 'heavy-rain') {
       stopWeather();
@@ -3102,11 +3151,11 @@
         scene.cameras.main.shake(230, .004);
         playTone('battle');
         scene.tweens.add({ targets: actor, x: actor.x + 17, angle: -12, duration: 180, yoyo: true, repeat: 2 });
-        scene.tweens.add({ targets: spider, x: entrance.x + Math.min(150, view.zone.w * .6), y: entrance.y - 80, angle: 24, alpha: .1, duration: 900, delay: 260, ease: 'Cubic.easeIn', onComplete: () => spider.destroy(true) });
+        scene.tweens.add({ targets: spider, x: entrance.x + Math.min(150, view.zone.w * .6), y: entrance.y - 80, angle: 24, alpha: .1, duration: 1200, delay: 850, ease: 'Cubic.easeIn', onComplete: () => spider.destroy(true) });
         scene.time.delayedCall(1450, () => { if (actor.active) actor.destroy(true); });
       });
-      else scene.tweens.add({ targets: spider, x: entrance.x + 140, alpha: 0, duration: 1200, delay: 2200, onComplete: () => spider.destroy(true) });
-      return 4400;
+      else scene.tweens.add({ targets: spider, x: entrance.x + 140, alpha: 0, duration: 1400, delay: 2900, onComplete: () => spider.destroy(true) });
+      return 5100;
     }
     if (key === 'tunnel-collapse' && view) {
       const fall = { x: (view.sites.entrance.x + view.sites.nursery.x) / 2, y: (view.sites.entrance.y + view.sites.nursery.y) / 2 };
@@ -3461,13 +3510,32 @@
   $('markWrongBtn').addEventListener('click', () => handleOutcome(null, false, true));
   $('skipQuestionBtn').addEventListener('click', skipQuestion);
   function pickNextLearner(requestedId) {
+    if ($('gameScreen').classList.contains('threat-spotlight')) return toast('Watch the encounter finish first.');
     if (session?.phase !== 'question' || answerLocked) return toast('Choose a learner while a question is open.');
     const member = core.pickLearner(currentTeam(), requestedId);
     if (!member) return toast('That learner has already been selected. Give everyone a turn first.');
     setCurrentParticipant(member);
     saveState();
   }
-  $('nextStudentBtn').addEventListener('click', () => pickNextLearner());
+  function skipToNextTeam() {
+    if ($('gameScreen').classList.contains('threat-spotlight')) return toast('Watch the encounter finish first.');
+    if (session?.phase !== 'question' || answerLocked || transitionLocked) return toast('Wait for the next open question.');
+    session.currentTeamIndex = (session.currentTeamIndex + 1) % session.teams.length;
+    session.selectedTurn = -1;
+    session.selectedLearnerId = null;
+    presentQuestion();
+  }
+  $('nextStudentBtn').addEventListener('click', skipToNextTeam);
+  $('removeLearnerBtn').addEventListener('click', () => {
+    if ($('gameScreen').classList.contains('threat-spotlight')) return toast('Watch the encounter finish first.');
+    if (session?.phase !== 'question' || answerLocked || transitionLocked || !currentParticipant) return;
+    const team = currentTeam(), member = currentParticipant;
+    if (!confirm(`Remove ${member.name} from this game’s learner rotation? Their class roster and marks will stay unchanged.`)) return;
+    team.members = team.members.filter(m => m.id !== member.id);
+    team.selectedLearners = (team.selectedLearners || []).filter(id => id !== member.id);
+    skipToNextTeam();
+    toast(`${member.name} removed from this game.`);
+  });
   $('randomStudentBtn').addEventListener('click', () => pickNextLearner());
   $('studentPick').addEventListener('change', event => {
     if (event.target.value === currentParticipant?.id) return;

@@ -149,3 +149,23 @@
 .encounter-playing .score-strip,.encounter-playing .turn-banner,.encounter-playing .rain-plan{visibility:hidden;pointer-events:none}
 
 .raid-playing .raid-hud{top:16px}
+
+/* Reserve space for teacher actions; never layer them over the question. */
+.game-stage{position:absolute;inset:0 260px 0 0;overflow:hidden}
+#teacherTray{display:flex;flex-direction:column;align-items:stretch;flex-wrap:nowrap;position:absolute;inset:0 0 0 auto;width:260px;max-height:none;overflow-y:auto;padding:14px;gap:8px;border-left:2px solid #d4a24c;box-sizing:border-box}
+#teacherTray button,#teacherTray select,#teacherTray input{max-width:100%;min-width:0;box-sizing:border-box}
+#teacherTray fieldset{display:grid;gap:6px;margin:4px 0;min-width:0}
+#teacherTray small{line-height:1.4;color:#d8e9df}
+#teacherTray details{margin-top:8px}#teacherTray details input{width:100%}
+#teacherHandle,#closeTrayBtn{display:none!important}
+#saveIndicator{margin:0}
+.game-stage .game-top{grid-template-columns:minmax(0,1fr) auto;gap:6px}
+.game-stage .phase-box{display:none}
+.game-stage .question-dialog,.game-stage .choice-dialog{width:min(100%,620px)}
+@media(max-width:700px){.game-stage{inset:0 0 160px}#teacherTray{inset:auto 0 0;width:100%;height:160px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-content:start}.game-stage .dialog{max-height:calc(100dvh - 250px)}}
+
+/* Clear the stage for six-second rain and ten-second bird attacks. */
+.threat-spotlight .question-overlay,.threat-spotlight .choice-overlay{visibility:hidden;pointer-events:none}
+.threat-spotlight .turn-banner,.threat-spotlight .rain-plan{visibility:hidden}
+
+.threat-spotlight .score-strip,.encounter-playing .score-strip{visibility:hidden}

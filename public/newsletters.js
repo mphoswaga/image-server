@@ -137,6 +137,44 @@ async function change(action, extra = {}) {
       : "Saved.",
   );
 }
+let newsletterPage = 'overview';
+let newsletterNavRole = '';
+function showNewsletterPage(page) {
+  const coord = workspace?.myRole === 'coordinator';
+  const allowed = ['overview','newsletter','sharing',...(coord ? ['reports','settings'] : [])];
+  newsletterPage = allowed.includes(page) ? page : 'overview';
+  const overview = $('editor').querySelector('.contribution-overview');
+  if (overview) {
+    overview.dataset.pages = 'overview settings';
+    for (const child of overview.children) {
+      const destination = child.tagName === 'DETAILS' ? 'settings' : 'overview';
+      child.hidden = destination !== newsletterPage;
+    }
+  }
+  for (const child of $('editor').children) {
+    child.hidden = !(child.dataset.pages || 'newsletter').split(' ').includes(newsletterPage);
+    if (!child.hidden && child.tagName === 'DETAILS') child.open = true;
+  }
+  $('coordinator').hidden = !coord || newsletterPage !== 'settings';
+  if (!$('coordinator').hidden) $('coordinator').open = true;
+  $('newReport').hidden = !coord || !!workspace.demo || newsletterPage !== 'settings';
+  for (const button of $('newsletterNav').querySelectorAll('button')) {
+    button.setAttribute('aria-current', button.dataset.page === newsletterPage ? 'page' : 'false');
+  }
+}
+function renderNewsletterNavigation() {
+  const coord = workspace.myRole === 'coordinator';
+  const roleKey = workspace.id + ':' + workspace.myRole;
+  if (newsletterNavRole !== roleKey) {newsletterPage = 'overview';newsletterNavRole = roleKey;}
+  const items = [['overview',coord?'Weekly progress':'My tasks'],['newsletter',workspace.myRole==='translator'?'Translations & content':'Newsletter content'],['sharing','Preview & sharing'],...(coord?[['reports','Reports'],['settings','Settings & staff']]:[])];
+  $('newsletterNav').innerHTML = items.map(([id,label])=>`<button type="button" data-page="${id}">${label}</button>`).join('');
+  $('newsletterNav').onclick = event => {
+    const button = event.target.closest('[data-page]');
+    if (!button) return;
+    showNewsletterPage(button.dataset.page);
+  };
+  showNewsletterPage(newsletterPage);
+}
 function render() {
   document.body.classList.add("has-workspace");
   $("workspace").hidden = false;
@@ -180,6 +218,7 @@ function render() {
   if (!r) {
     $("editor").innerHTML =
       "<h2>Ready for the first week</h2><p>Add a class newsletter, then invite your subject teachers and assistants.</p>";
+    renderNewsletterNavigation();
     return;
   }
   const canPublish = coord || (workspace.myRole === "translator" && (!workspace.myClasses || workspace.myClasses.includes(r.className)));
@@ -225,6 +264,7 @@ function render() {
   if (canPublish) {
     const share = document.createElement("div");
     share.className = "parent-sharing";
+    share.dataset.pages = "sharing";
     share.innerHTML = `<h3>Share with families</h3><p id="parentShareStatus" role="status" aria-live="polite"></p><p class="hint">A phone-friendly page, with no parent sign-in. Only published, approved content is shared.</p>${workspace.demo && !r.publication ? '<button data-action="test-parent">Prepare parent demo</button><p class="hint">Create a ready-to-read fictional sample, then open its parent view or copy the link to your phone. Your saved work is unchanged.</p>' : ""}${r.approved ? '<button data-action="publish-parent">' + (r.publication ? "Publish latest approved version" : "Publish parent newsletter") + "</button>" : '<p class="hint">Approve the newsletter to publish it.</p>'}${r.publication ? '<label>Parent reading link<input id="parentLink" readonly></label><div class="actions"><button data-action="copy-parent" class="secondary">Copy parent link</button><a id="openParent" class="button secondary" target="_blank" rel="noopener noreferrer">Open parent view</a><button data-action="revoke-parent" class="secondary">Revoke link</button></div><p class="hint">The link stays available until revoked. New edits stay private until you approve and publish again.</p>' : ""}`;
     $("editor").append(share);
     if (r.publication) {
@@ -243,6 +283,10 @@ function render() {
   workflowTools(r, coord);
   newsletterExtras(r, coord);
   if (coord) renderEmailSettings();
+  const maintenance = $('editor').querySelector('.report-maintenance');
+  if (maintenance && !maintenance.dataset.pages) maintenance.dataset.pages = 'settings';
+  const previewCard = $('editor').querySelector('.report-preview-card');
+  if (previewCard) previewCard.dataset.pages = 'sharing';
   const pending = drafts();
   dirty = false;
   document.querySelectorAll(".subject").forEach((card) => {
@@ -272,6 +316,7 @@ function render() {
   });
   if (current().entries.some((e) => mediaDrafts.has(mediaKey(e.subject))))
     dirty = true;
+  renderNewsletterNavigation();
 }
 function updateCounts(card) {
   for (const lang of ["english", "vietnamese"]) {
@@ -374,6 +419,7 @@ $("invite").onsubmit = (e) => {
 $("reports").onclick = (e) => {
   const b = e.target.closest("[data-report]");
   if (b && safeLeave()) {
+    newsletterPage = 'newsletter';
     reportId = b.dataset.report;
     dirty = false;
     render();
@@ -822,6 +868,7 @@ function workflowTools(r, coord) {
     event.stopPropagation();
     const b = event.target.closest("[data-task]");
     if (b && safeLeave()) {
+      newsletterPage = 'newsletter';
       reportId = b.dataset.task;
       render();
       const i = current().entries.findIndex(
@@ -876,6 +923,7 @@ function workflowTools(r, coord) {
   };
   const tools = document.createElement("section");
   tools.className = "newsletter-workflow";
+  tools.dataset.pages = "sharing";
   const readiness = r.readiness || { issues: [], warnings: [] };
   tools.innerHTML = `<h3>Ready to publish?</h3>${readiness.issues.map((x) => `<button class="secondary readiness-item" data-issue="${esc(x.subject)}">${esc(x.subject)} — ${esc(x.message)} →</button>`).join("") || "<p>✓ All subject contributions and translations are ready.</p>"}${readiness.warnings.map((x) => `<p>${esc(x)}</p>`).join("")}`;
   if (coord)
@@ -960,6 +1008,7 @@ function workflowTools(r, coord) {
       const i = r.entries.findIndex((e) => e.subject === b.dataset.issue);
       const card = document.querySelector(`.subject[data-index="${i}"]`);
       if (card) {
+        showNewsletterPage('newsletter');
         card.open = true;
         card.scrollIntoView({ block: "start" });
       }
@@ -1046,6 +1095,7 @@ function newsletterExtras(r, coord) {
   if (coord) {
     const section = document.createElement("details");
     section.className = "newsletter-workflow";
+    section.dataset.pages = "reports";
     section.innerHTML = `<summary>Coordinator reports</summary><p>See responsibilities and follow up with staff. Downloads use the selected filters.</p><form id="progressFilters"><label>Report type<select name="type"><option value="all">All contributions</option><option value="missing">Not submitted</option><option value="submitted">Submitted</option><option value="translation">Translation review outstanding</option><option value="overdue">Overdue contributions or reviews</option><option value="publication">Awaiting approval or publication</option><option value="unassigned">No teacher assigned</option></select></label><label>Week<select name="week"><option value="">All weeks</option>${[...new Set(workspace.reports.map((x) => x.week))].map((x) => `<option>${esc(x)}</option>`).join("")}</select></label><label>Class<select name="className"><option value="">All classes</option>${[...new Set(workspace.reports.map((x) => x.className))].map((x) => `<option>${esc(x)}</option>`).join("")}</select></label><button>Run report</button> <a id="progressDownload" hidden>Download CSV</a></form><div id="progressResult" role="status"></div>`;
     $("editor").querySelector(".contribution-overview").after(section);
     section.onclick = (e) => e.stopPropagation();
@@ -1318,6 +1368,7 @@ async function renderEmailSettings() {
   const workspaceId = workspace.id;
   const panel = document.createElement('details');
   panel.className = 'report-maintenance';
+  panel.dataset.pages = 'settings';
   panel.innerHTML = '<summary>Email notifications</summary><p role="status">Loading notification settings…</p>';
   $('editor').append(panel);
   const endpoint = '/' + workspaceId + '/notifications';

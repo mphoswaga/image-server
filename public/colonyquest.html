@@ -22,7 +22,7 @@
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
   .study-note-editor{display:grid;gap:8px;margin:18px 0;padding:16px;background:#fff;border:1px solid #cbded5;border-radius:12px}.study-note-editor input,.study-note-editor textarea{width:100%;font:inherit;padding:12px;border:1px solid #a8bfb4;border-radius:8px}.study-note-editor textarea{min-height:110px;resize:vertical}.lesson-review{position:fixed;inset:0;z-index:20000;background:linear-gradient(145deg,#eef7ec,#fff7df);display:flex;flex-direction:column;padding:clamp(16px,4vw,50px);overflow:auto}.lesson-review header,.lesson-review footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.lesson-review header>span{font-weight:800;letter-spacing:.1em;color:#366750}.lesson-review main{width:min(1100px,100%);margin:auto;padding:30px 0}.lesson-review h1{font-size:clamp(26px,4vw,58px);line-height:1.15;overflow-wrap:anywhere}.lesson-review article{background:white;border-left:8px solid #279565;border-radius:18px;padding:clamp(18px,3vw,36px);box-shadow:0 12px 40px #214b3712}.lesson-review #reviewAnswer{font-size:clamp(24px,3.6vw,48px);font-weight:800;line-height:1.25;margin:14px 0;overflow-wrap:anywhere}.lesson-review #reviewExplanation{font-size:clamp(18px,2vw,26px);line-height:1.5;color:#526b60}.lesson-review #reviewExplanation:empty{display:none}.lesson-review footer{justify-content:center}.lesson-review button:disabled{opacity:.5;cursor:default}
 </style>
-  <link rel="stylesheet" href="/colonyquest-polish.css?v=15">
+  <link rel="stylesheet" href="/colonyquest-polish.css?v=16">
 <link rel="stylesheet" href="/colonyquest-celebration.css?v=1">
 <script defer src="/colonyquest-celebration.js?v=1"></script>
 <style>
@@ -84,6 +84,7 @@
     <footer><button id="reviewPrevious" class="btn" type="button">← Previous</button><button id="reviewNext" class="btn" type="button">Next →</button><button id="reviewStart" class="btn primary" type="button">Ready · Start ColonyQuest</button></footer>
   </section>
   <div id="gameScreen" class="game-screen hidden">
+    <div class="game-stage">
     <div id="worldViewport" class="world-viewport" tabindex="0" role="region" aria-label="Colony world"><div id="worldScrollSpace"><div id="gameMount" class="game-mount"></div></div></div>
     <header class="game-top">
       <div class="game-title"><strong>ColonyQuest</strong><span id="gameLessonTitle"></span></div>
@@ -146,25 +147,29 @@
       <div class="final-actions"><button id="backToSetupBtn" class="btn" type="button">Back to setup</button><button id="playAgainBtn" class="btn primary" type="button">Play again</button></div>
     </div></section>
 
+    </div>
     <button id="teacherHandle" class="teacher-handle" type="button">Teacher controls</button>
-    <div id="teacherTray" class="teacher-tray">
-      <label for="effectsVolume" id="effectsVolumeLabel">Game sounds 80%</label>
+    <div id="teacherTray" class="teacher-tray" aria-label="Teacher controls"><strong>Teacher controls</strong><small id="teacherCurrentLearner"></small>
+<button id="nextStudentBtn" type="button">Skip → next team</button><button id="removeLearnerBtn" class="warn" type="button">Remove current learner</button>
+      <button id="markCorrectBtn" class="good" type="button">Mark correct</button><button id="markWrongBtn" class="warn" type="button">Mark incorrect</button><button id="randomStudentBtn" type="button">Random learner</button><select id="studentPick" aria-label="Choose learner"><option value="">Choose learner</option></select><button id="skipQuestionBtn" type="button">Skip question</button><button id="endGameBtn" class="danger" type="button">End game</button><button id="closeTrayBtn" type="button" hidden>Close</button><span id="saveIndicator" class="save-indicator">Ready</span>
+      <fieldset style="width:100%;border:1px solid #8da898;border-radius:10px;padding:10px"><legend>Team deductions</legend><label for="deductTeam">Team</label><select id="deductTeam"></select><label for="deductResource">Deduct</label><select id="deductResource"><option value="points">Points</option><option value="food">Food</option><option value="sticks">Sticks</option><option value="leaves">Leaves</option></select><label for="deductAmount">Amount</label><input id="deductAmount" type="number" min="1" max="9999" step="1" value="10" style="width:90px"><button id="deductPointsBtn" type="button" class="warn">Subtract</button><small id="deductStatus" role="status">Game points only. Answer marks stay unchanged.</small></fieldset>
+
+<details><summary>Sound settings</summary>      <label for="effectsVolume" id="effectsVolumeLabel">Game sounds 80%</label>
       <input id="effectsVolume" type="range" min="0" max="100" value="80" aria-label="Game sound effects volume">
       <small id="musicTrackLabel"></small>
       <label for="musicVolume" id="musicVolumeLabel">Music 60%</label>
       <input id="musicVolume" type="range" min="0" max="100" value="60" aria-label="Background music volume">
-      <fieldset style="width:100%;border:1px solid #8da898;border-radius:10px;padding:10px"><legend>Team deductions</legend><label for="deductTeam">Team</label><select id="deductTeam"></select><label for="deductResource">Deduct</label><select id="deductResource"><option value="points">Points</option><option value="food">Food</option><option value="sticks">Sticks</option><option value="leaves">Leaves</option></select><label for="deductAmount">Amount</label><input id="deductAmount" type="number" min="1" max="9999" step="1" value="10" style="width:90px"><button id="deductPointsBtn" type="button" class="warn">Subtract</button><small id="deductStatus" role="status">Game points only. Answer marks stay unchanged.</small></fieldset>
-      <button id="markCorrectBtn" class="good" type="button">Mark correct</button><button id="markWrongBtn" class="warn" type="button">Mark incorrect</button><button id="nextStudentBtn" type="button">Skip learner</button><button id="randomStudentBtn" type="button">Random learner</button><select id="studentPick" aria-label="Choose learner"><option value="">Choose learner</option></select><button id="skipQuestionBtn" type="button">Skip question</button><button id="endGameBtn" class="danger" type="button">End game</button><button id="closeTrayBtn" type="button">Close</button><span id="saveIndicator" class="save-indicator">Ready</span>
+</details>
     </div>
     <div id="toast" class="toast hidden" role="status"></div>
   </div>
 
   <script src="/vendor/phaser.min.js"></script>
-  <script src="/colonyquest-core.js?v=19"></script>
+  <script src="/colonyquest-core.js?v=20"></script>
   <script src="/colonyquest-music.js?v=1"></script>
   <script src="/opening-narration-data.js?v=1"></script>
 <script src="/opening-narration.js?v=1"></script>
-<script src="/colonyquest.js?v=37"></script>
+<script src="/colonyquest.js?v=38"></script>
 <script>document.getElementById('multiplayerLink').href='/colonyquest-live/'+encodeURIComponent(location.pathname.split('/').filter(Boolean).pop());</script>
 </body>
 </html>
