@@ -248,7 +248,7 @@
     if (!p) return;
     const disconnected = document.body.classList.contains('offline');
     const watching = s.phase === 'spectating' && s.watching?.id === watchingId ? s.watching : null;
-    $('myName').textContent = watching ? 'Watching ' + watching.name : p.name;
+    $('myName').textContent = p.name + (watching ? ' · Watching ' + watching.name : '');
     $('chapter').textContent = season(s);
     $('rank').textContent =
       `#${s.players.findIndex((x) => x.id === (watching?.id || p.id)) + 1} of ${s.players.length}`;
@@ -399,7 +399,7 @@
       return;
     }
     if (s.phase === 'paused') {
-      $('question').textContent = 'The meadow is resting';
+      $('question').textContent = s.individuallyPaused ? 'Pause and listen' : 'The meadow is resting';
       $('instruction').textContent =
         'Your teacher will resume the game. Your answers and colony are safe.';
       return;
@@ -733,7 +733,7 @@
       s.players
         .map(
           (p, i) =>
-            `<article class="colony-card ${p.answered ? 'answered' : ''}"><strong>${i + 1}. ${esc(p.name)}</strong><div class="mini-ants">🐜 ${'🏡'.repeat(Math.min(4, p.rooms))}</div><b>${p.strength}</b> colony points<small>🌾 ${p.food} · 🐜 ${p.workers} · 🛡 ${p.soldiers}</small><small>${s.phase === 'story' ? 'Meadow adventure' : !p.connected ? 'Reconnecting…' : s.pacing === 'individual' ? p.finished ? '✓ Finished · watching' : `Question ${p.questionNumber}/${s.total} · ${p.stage === 'upgrade' ? 'Choosing upgrade' : p.stage === 'reveal' ? 'Colony in action' : 'Answering'}` : p.answered ? '✓ Answer saved' : 'Thinking…'}</small></article>`,
+            `<article class="colony-card ${p.answered ? 'answered' : ''}"><strong>${i + 1}. ${esc(p.name)}</strong><div class="mini-ants">🐜 ${'🏡'.repeat(Math.min(4, p.rooms))}</div><b>${p.strength}</b> colony points<small>🌾 ${p.food} · 🐜 ${p.workers} · 🛡 ${p.soldiers}</small><small>${p.teacherPaused ? 'Paused by teacher' : s.phase === 'story' ? 'Meadow adventure' : !p.connected ? 'Reconnecting…' : s.pacing === 'individual' ? p.finished ? '✓ Finished · watching' : `Question ${p.questionNumber}/${s.total} · ${p.stage === 'upgrade' ? 'Choosing upgrade' : p.stage === 'reveal' ? 'Colony in action' : 'Answering'}` : p.answered ? '✓ Answer saved' : 'Thinking…'}</small>${s.pacing === 'individual' && ['answer','paused'].includes(s.phase) && !p.npc && !p.finished ? `<button type="button" data-player-pause="${esc(p.id)}" data-paused="${!p.teacherPaused}">${p.teacherPaused ? 'Resume learner' : 'Pause learner'}</button>` : ''}</article>`,
         )
         .join('') ||
       '<article class="colony-card"><strong>Waiting for your learners</strong><p>Share the learner link above.</p></article>';
@@ -743,6 +743,14 @@
       '<p>Learners appear here when they join.</p>';
   }
   if (host) {
+    $('leaderboard').addEventListener('click', async event => {
+      const button = event.target.closest('[data-player-pause]');
+      if (!button || hostBusy) return;
+      hostBusy = true; hostRevision++; button.disabled = true;
+      try { renderHost(await request('/player-pause', {playerId:button.dataset.playerPause, paused:button.dataset.paused === 'true', matchId:state.id})); }
+      catch (err) { error(err.message); }
+      finally { hostBusy = false; button.disabled = false; }
+    });
     $('teacher').hidden = false;
     scene = new ColonyScene($('boardCanvas'), true);
     $('smartboard').href = '/colonyquest/' + encodeURIComponent(gameId);

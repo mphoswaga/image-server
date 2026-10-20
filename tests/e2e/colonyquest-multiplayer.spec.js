@@ -205,3 +205,19 @@ test('multiplayer opening uses recorded voice with ten computer rivals',async({p
  await learner.locator('#openingVoice').click();expect(await learner.locator('audio[data-opening-narration]').evaluate(a=>a.paused)).toBe(true);
  expect(errors).toEqual([]);await learner.close();
 });
+test('host can pause and resume one named learner from their colony card',async({page})=>{
+ const {ColonyMatch}=require('../../colonyquest-multiplayer');
+ const m=new ColonyMatch({id:'pause-ui',questions},{pacing:'individual',storyEnabled:false});
+ const learner=m.join({studentId:'A',name:'Amina Test'});m.start();
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route(/\/api\/game\/pause-ui\/colonyquest-live(?:\/player-pause)?$/,async route=>{
+  if(route.request().method()==='POST') {const body=route.request().postDataJSON();expect(body.matchId).toBe(m.state.id);m.pausePlayer(body.playerId,body.paused);}
+  return route.fulfill({json:{title:'Habitats',classes:[],rosterIds:[],history:[],attendance:[],match:m.snapshot(null,true)}});
+ });
+ await page.goto('/colonyquest-live/pause-ui');
+ await expect(page.locator('#leaderboard')).toContainText('Amina Test');
+ await page.getByRole('button',{name:'Pause learner',exact:true}).click();
+ await expect(page.locator('#leaderboard')).toContainText('Paused by teacher');expect(learner.teacherPaused).toBe(true);
+ await page.getByRole('button',{name:'Resume learner',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Pause learner',exact:true})).toBeVisible();expect(learner.teacherPaused).toBe(false);expect(errors).toEqual([]);
+});

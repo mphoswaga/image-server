@@ -93,3 +93,24 @@ test('NPC colonies can still defend raids after their questions end, while real 
  assert.match(m.raidAllowed(a,b).reason,/recovering:.*s left/);
  m.state.elapsedMs=61000;assert.equal(m.raidAllowed(a,b).allowed,true);
 });
+test('individual teacher pause freezes one colony and survives reconnect and whole class pause',()=>{
+ const {m,a,b}=room();m.pausePlayer(a.id,true,1000);const remaining=a.personalRemaining,food=a.colony.food;
+ assert.equal(m.snapshot(a.id,false,1000).phase,'paused');
+ assert.equal(m.snapshot(a.id,false,1000).question.correctIndex,undefined);
+ assert.throws(()=>m.answer(a.id,0,0,2000),/paused/);
+ assert.throws(()=>m.upgrade(a.id,0,'food',null,2000),/paused/);
+ assert.equal(m.raidAllowed(b,a).allowed,false);
+ m.tick(25000);assert.equal(a.colony.food,food);assert.equal(a.round,0);assert.equal(b.phase,'reveal');
+ m.join({studentId:'a'},26000);assert.equal(a.personalRemaining,remaining);
+ m.pause(27000);m.resume(28000);assert.equal(a.teacherPaused,true);assert.equal(a.personalRemaining,remaining);
+ m.pausePlayer(a.id,false,30000);assert.equal(a.deadline,30000+remaining);
+ m.answer(a.id,0,0,30001);assert.equal(a.phase,'upgrade');
+});
+test('individual pause is validated and restored from saved match',()=>{
+ const {m,a}=room();assert.throws(()=>m.pausePlayer(a.id,'true',1000),/Choose/);
+ m.pausePlayer(a.id,true,1000);
+ const restored=new ColonyMatch(game,{state:structuredClone(m.state),now:2000});restored.restore(2000);
+ restored.join({studentId:'a'},3000);restored.resume(4000);
+ assert.equal(restored.snapshot(a.id,false,4000).phase,'paused');
+ restored.pausePlayer(a.id,false,5000);assert.equal(restored.snapshot(a.id,false,5000).phase,'answer');
+});

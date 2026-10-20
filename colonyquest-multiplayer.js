@@ -53,7 +53,7 @@ class ColonyMatch {
     return this.state.players.filter((p) => !p.removed);
   }
   teams() {
-    return this.active().map((p) => p.colony);
+    return this.active().filter(p => this.state.phase === 'ended' || !p.teacherPaused).map((p) => p.colony);
   }
   world() {
     return { ...this.state.world, teams: this.teams(), phase: 'question' };
@@ -99,7 +99,7 @@ class ColonyMatch {
     }
     if (p.removed) throw Error('Your teacher has removed you from this game.');
     p.connected = true;
-    if (s.pacing === 'individual' && s.phase === 'answer' && p.personalRemaining !== undefined) {
+    if (s.pacing === 'individual' && s.phase === 'answer' && !p.teacherPaused && p.personalRemaining !== undefined) {
       p.deadline = now + p.personalRemaining;
       delete p.personalRemaining;
     }
@@ -152,6 +152,20 @@ class ColonyMatch {
     });
     this.lastTick = now;
   }
+  pausePlayer(playerId, paused, now = Date.now()) {
+    const p = this.player(playerId), s = this.state;
+    if (typeof paused !== 'boolean') throw Error('Choose pause or resume.');
+    if (s.pacing !== 'individual' || !['answer','paused'].includes(s.phase)) throw Error('Start individual play first.');
+    if (!p || p.removed || p.npc || p.phase === 'spectating') throw Error('Choose an active learner.');
+    if (!!p.teacherPaused === paused) return;
+    if (paused && p.personalRemaining === undefined) p.personalRemaining = Math.max(0, (p.deadline || now) - now);
+    p.teacherPaused = paused;
+    if (!paused && s.phase !== 'paused' && p.connected) {
+      p.deadline = now + (p.personalRemaining || 0);
+      delete p.personalRemaining;
+    }
+    s.updatedAt = now;
+  }
   pause(now = Date.now()) {
     if (!ACTIVE.includes(this.state.phase)) throw Error('The game is not running.');
     if (this.state.pacing === 'individual') for (const p of this.active()) {
@@ -169,7 +183,7 @@ class ColonyMatch {
     this.setPhase(this.state.resumePhase, (this.state.remaining || 0) / 1000, now);
     if(this.state.pacing === 'individual' && this.state.phase !== 'story') {
       this.state.deadline = null;
-      for(const p of this.active()) if(p.connected) {p.deadline = now + (p.personalRemaining || 0);delete p.personalRemaining;}
+      for(const p of this.active()) if(p.connected && !p.teacherPaused) {p.deadline = now + (p.personalRemaining || 0);delete p.personalRemaining;}
     }
   }
   restore(now = Date.now()) {
@@ -201,6 +215,7 @@ class ColonyMatch {
     const s = this.state,
       p = this.player(playerId);
     if (!p || p.removed) throw Error('Join this room again.');
+    if (p.teacherPaused) throw Error('Your teacher has paused your game.');
     const individual = s.pacing === 'individual', currentRound = individual ? p.round : s.round;
     if (!Number.isInteger(round) || round !== currentRound) throw Error('That question has finished.');
     const previous = p.answers.find((a) => a.round === round);
@@ -219,6 +234,7 @@ class ColonyMatch {
   raidAllowed(p, target) {
     if (!target || target.removed || target.id === p.id)
       return { allowed: false, reason: 'Choose a rival colony.' };
+    if (p.teacherPaused || target.teacherPaused) return {allowed:false, reason:'This learner’s game is paused.'};
     const guards = core.rewardAvailability(p.colony, 'raid');
     if (!guards.allowed) return guards;
     if (!target.connected) return { allowed: false, reason: 'This colony is reconnecting.' };
@@ -273,6 +289,7 @@ class ColonyMatch {
     const s = this.state,
       p = this.player(playerId);
     if (!p || p.removed) throw Error('Join this room again.');
+    if (p.teacherPaused) throw Error('Your teacher has paused your game.');
     const individual = s.pacing === 'individual';
     if (round !== (individual ? p.round : s.round)) throw Error('That upgrade window has finished.');
     if (p.upgrades.some((u) => u.round === round)) return;
@@ -442,6 +459,7 @@ class ColonyMatch {
         name: p.name,
         connected: p.connected,
         npc: p.npc,
+        teacherPaused: !!p.teacherPaused,
         strength: core.colonyStrength(p.colony),
         food: p.colony.food,
         workers: p.colony.workers,

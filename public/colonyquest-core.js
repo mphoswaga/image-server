@@ -124,8 +124,29 @@
     };
   }
 
+  function pickLearner(team, requestedId, random = Math.random) {
+    const members = team?.members || [];
+    if (!members.length) return null;
+    const ids = new Set(members.map(m => m.id));
+    team.selectedLearners = [...new Set(team.selectedLearners || [])].filter(id => ids.has(id));
+    let available = members.filter(m => !team.selectedLearners.includes(m.id));
+    if (!available.length) {
+      team.selectedLearners = [];
+      available = members.filter(m => members.length === 1 || m.id !== team.lastSelectedLearner);
+    }
+    const requested = requestedId && available.find(m => m.id === requestedId);
+    if (requestedId && !requested) return null;
+    const member = requested || available[Math.floor(random() * available.length)];
+    team.selectedLearners.push(member.id);
+    team.lastSelectedLearner = member.id;
+    return member;
+  }
+
   function normalizeTeam(input, index) {
     const base = createTeam(input, index);
+    const memberIds = new Set(base.members.map(m => m.id));
+    base.selectedLearners = Array.isArray(input?.selectedLearners) ? [...new Set(input.selectedLearners)].filter(id => memberIds.has(id)) : [];
+    base.lastSelectedLearner = memberIds.has(input?.lastSelectedLearner) ? input.lastSelectedLearner : null;
     const numeric = ['population', 'workers', 'soldiers', 'food', 'defense', 'territory', 'queenLevel', 'nestLevel', 'correct', 'attempts', 'successfulAttacks', 'successfulDefenses', 'guardsLost', 'guardsDefeated', 'upgrades'];
     for (const key of numeric) base[key] = Math.floor(clamp(input && input[key], 0, key === 'food' ? 9999 : 999));
     // Missing resource fields start at zero, preserving scores in completed older matches.
@@ -201,6 +222,20 @@
     return amount;
   }
 
+  function deductTeamResource(session, teamId, amount, resource = 'points') {
+    if (resource === 'points') return deductTeamPoints(session, teamId, amount);
+    if (!session || !['question','reward','event','paused'].includes(session.phase)) throw Error('Start a game before making deductions.');
+    if (!['food','sticks','leaves'].includes(resource)) throw Error('Choose points or supplies.');
+    if (!Number.isInteger(amount) || amount < 1 || amount > 9999) throw Error('Enter a whole number from 1 to 9999.');
+    const team = session.teams.find(t => t.id === teamId);
+    if (!team) throw Error('Choose a team.');
+    amount = Math.min(amount, Math.max(0, team[resource] || 0));
+    team[resource] -= amount;
+    session.events ||= [];
+    session.events.push({key:'teacher-deduction',teamId,amount,resource,at:new Date().toISOString()});
+    session.events = session.events.slice(-40);
+    return amount;
+  }
   function comebackMultiplier(team, teams) {
     if (!Array.isArray(teams) || teams.length < 2) return 1;
     const scores = teams.map(colonyStrength);
@@ -587,6 +622,8 @@
       turnIndex: Math.floor(clamp(source.turnIndex, 0, 9999)),
       questionCursor: Math.floor(clamp(source.questionCursor, 0, 9999)),
       currentTeamIndex: Math.floor(clamp(source.currentTeamIndex, 0, Math.max(0, teams.length - 1))),
+      selectedTurn: Number.isInteger(source.selectedTurn) ? source.selectedTurn : -1,
+      selectedLearnerId: text(source.selectedLearnerId, 80) || null,
       introSeen: !!source.introSeen,
       stormSeen: !!source.stormSeen,
       seasonRules: source.seasonRules === true,
@@ -722,7 +759,7 @@
     return null;
   }
   return {
-    deductTeamPoints, advanceEconomy, applyRain, applyHumanStomp, homeGuards, birdCount, resolveBirds, advanceBirdEvent,
+    pickLearner, deductTeamResource, deductTeamPoints, advanceEconomy, applyRain, applyHumanStomp, homeGuards, birdCount, resolveBirds, advanceBirdEvent,
     VERSION, DRY_FOOD_TARGET, buildingCost, applyDrySeason, seasonSchedule, seasonStage, advanceSeason,
     FORTIFICATIONS,
     fortification,

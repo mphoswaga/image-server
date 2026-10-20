@@ -44,7 +44,7 @@ module.exports = {
       this.event(beat.title,{kind:'story',key:next.key,results},now);
     }
     for(const p of this.active()) {
-      if(p.phase==='spectating')continue;
+      if(p.phase==='spectating' || p.teacherPaused)continue;
       if(!p.connected) {
         if(p.personalRemaining===undefined)p.personalRemaining=Math.max(0,p.deadline-now);
         continue;
@@ -75,7 +75,8 @@ module.exports = {
     if(!p || teacher) {if(s.phase==='answer')out.question=null;return out;}
     if(['lobby','story'].includes(s.phase))return out;
     const phase=s.phase==='ended'?'ended':p.phase||'answer';
-    out.phase=s.phase==='paused'?'paused':phase;
+    out.individuallyPaused=!!p.teacherPaused;
+    out.phase=(s.phase==='paused' || (p.teacherPaused && s.phase!=='ended'))?'paused':phase;
     out.round=p.round||0;out.deadline=p.deadline;out.remaining=p.personalRemaining??Math.max(0,(p.deadline||now)-now);
     const q=s.questions[out.round],answer=p.answers.find(a=>a.round===out.round);
     const revealed=phase!=='answer';

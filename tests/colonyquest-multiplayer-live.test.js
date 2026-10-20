@@ -422,3 +422,15 @@ test('individual classroom burst persists personal feedback and restricts specta
   await until(()=>clients[0].messages.some(msg=>msg.commandId==='invalid-watch'));
   assert.equal(clients[0].messages.find(msg=>msg.commandId==='invalid-watch').accepted,false);
 });
+test('only owning teacher can pause a learner in the current match',async t=>{
+ const f=await fixture(t,'teacher-pause',{individual:true});const m=await f.live.openMatch(f.game,{rosterIds:['classA'],storyEnabled:false});
+ const p=m.join({studentId:'S0',name:'Learner 0'},Date.now());m.start();m.state.phase='answer';m.startIndividual(Date.now());
+ const post=(body,teacher='teacher')=>fetch(f.api+'/player-pause',{method:'POST',headers:{'content-type':'application/json','x-teacher':teacher},body:JSON.stringify(body)});
+ const body={playerId:p.id,paused:true,matchId:m.state.id};
+ assert.equal((await post(body,'other')).status,403);
+ assert.equal((await post({...body,matchId:'stale'})).status,409);
+ assert.equal((await post(body)).status,200);
+ assert.equal(f.live.getMatch(f.game.id).player(p.id).teacherPaused,true);
+ assert.equal((await post({...body,paused:false})).status,200);
+ assert.equal(f.live.getMatch(f.game.id).player(p.id).teacherPaused,false);
+});

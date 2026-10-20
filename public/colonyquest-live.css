@@ -1188,3 +1188,5 @@ h2 {
 
 .watch-colony {display:flex;flex-direction:column;gap:8px;width:100%;font-weight:700;}
 .watch-colony select {font:inherit;color:#183b2d;background:#fffdf1;border:2px solid #a2b58c;border-radius:12px;padding:12px;max-width:100%;min-height:48px;}
+
+#learner #myName { font-size: clamp(20px, 2.5vw, 30px); font-weight: 800; overflow-wrap: anywhere; }

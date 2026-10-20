@@ -17,7 +17,6 @@
   let pendingOutcome = null;
   let transitionLocked = false;
   let currentParticipant = null;
-  let participantOffset = 0;
   let saveChain = Promise.resolve();
   let toastTimer = null;
   let clockTimer = null;
@@ -438,16 +437,16 @@
     return session && session.teams[session.currentTeamIndex];
   }
 
-  function chooseParticipant(team, offset = 0) {
-    if (!team || !team.members.length) return null;
-    const minTurns = Math.min(...team.members.map(member => member.turns || 0));
-    const preferred = team.members.filter(member => (member.turns || 0) === minTurns);
-    return preferred[(session.turnIndex + offset) % preferred.length];
+  function chooseParticipant(team) {
+    return core.pickLearner(team);
   }
 
   function setCurrentParticipant(member) {
     currentParticipant = member || null;
+    session.selectedTurn = session.turnIndex;
+    session.selectedLearnerId = member?.id || null;
     const team = currentTeam();
+    if (team) $('questionKicker').textContent = `${team.name} - ${member ? member.name : 'team answer'}`;
     $('turnStudent').textContent = member ? `Next learner: ${member.name} · Other teams: choose the upgrade they need` : 'Choose together · Other teams: predict the best upgrade';
     $('studentPick').innerHTML = '<option value="">Choose learner</option>' + (team && team.members || []).map(item => `<option value="${esc(item.id)}"${member && member.id === item.id ? ' selected' : ''}>${esc(item.name)}</option>`).join('');
   }
@@ -778,9 +777,10 @@
     answerLocked = false;
     transitionLocked = false;
     pendingOutcome = null;
-    participantOffset = 0;
     const team = currentTeam();
-    setCurrentParticipant(chooseParticipant(team));
+    const savedMember = session.selectedTurn === session.turnIndex && team.members.find(m => m.id === session.selectedLearnerId);
+    setCurrentParticipant(savedMember || chooseParticipant(team));
+    saveState();
     const question = questionAtCursor();
     $('questionKicker').textContent = `${team.name} - ${currentParticipant ? currentParticipant.name : 'team answer'}`;
     $('guideLine').textContent = `${storyChapter().line} Get this right to win one upgrade.`;
@@ -1703,7 +1703,6 @@
     pendingOutcome = null;
     transitionLocked = false;
     currentParticipant = null;
-    participantOffset = 0;
     worldStoryAction = null;
     worldEventPresentation = [];
     raidPresentation = null;
@@ -3450,25 +3449,31 @@
     button.disabled = true;
     try {
       const team = session?.teams.find(t => t.id === $('deductTeam').value);
-      const amount = core.deductTeamPoints(session, $('deductTeam').value, Number($('deductAmount').value));
+      const resource = $('deductResource').value;
+      const amount = core.deductTeamResource(session, $('deductTeam').value, Number($('deductAmount').value), resource);
       updateHUD();
       button.disabled = true;
       const saved = await saveState();
-      $('deductStatus').textContent = `${amount} points deducted from ${team.name}.${saved ? ' Saved.' : ' Saved on this computer; server save will retry.'} Answer marks unchanged.`;
+      $('deductStatus').textContent = `${amount} ${resource} deducted from ${team.name}.${saved ? ' Saved.' : ' Saved on this computer; server save will retry.'} Answer marks unchanged.`;
     } catch (error) { $('deductStatus').textContent = error.message; }
     finally { deductionPending = false; button.disabled = session?.phase === 'ended'; }
   });
   $('markWrongBtn').addEventListener('click', () => handleOutcome(null, false, true));
   $('skipQuestionBtn').addEventListener('click', skipQuestion);
-  $('nextStudentBtn').addEventListener('click', () => { participantOffset += 1; setCurrentParticipant(chooseParticipant(currentTeam(), participantOffset)); });
-  $('randomStudentBtn').addEventListener('click', () => {
-    const members = currentTeam() && currentTeam().members || [];
-    if (!members.length) return;
-    const fewestTurns = Math.min(...members.map(member => member.turns || 0));
-    const eligible = members.filter(member => (member.turns || 0) === fewestTurns);
-    setCurrentParticipant(eligible[Math.floor(Math.random() * eligible.length)]);
+  function pickNextLearner(requestedId) {
+    if (session?.phase !== 'question' || answerLocked) return toast('Choose a learner while a question is open.');
+    const member = core.pickLearner(currentTeam(), requestedId);
+    if (!member) return toast('That learner has already been selected. Give everyone a turn first.');
+    setCurrentParticipant(member);
+    saveState();
+  }
+  $('nextStudentBtn').addEventListener('click', () => pickNextLearner());
+  $('randomStudentBtn').addEventListener('click', () => pickNextLearner());
+  $('studentPick').addEventListener('change', event => {
+    if (event.target.value === currentParticipant?.id) return;
+    pickNextLearner(event.target.value || undefined);
+    event.target.value = currentParticipant?.id || '';
   });
-  $('studentPick').addEventListener('change', event => { const member = currentTeam() && currentTeam().members.find(item => item.id === event.target.value); setCurrentParticipant(member || chooseParticipant(currentTeam())); });
   $('teacherHandle').addEventListener('click', () => { $('teacherTray').classList.add('open'); $('teacherHandle').classList.add('hidden'); });
   $('closeTrayBtn').addEventListener('click', () => { $('teacherTray').classList.remove('open'); $('teacherHandle').classList.remove('hidden'); });
   $('pauseBtn').addEventListener('click', () => togglePause().catch(error => toast(error.message)));

@@ -269,6 +269,17 @@ function createColonyQuestMultiplayer({
       res.status(409).json({ error: e.message });
     }
   });
+  app.post(route + '/player-pause', requireAuth, async (req, res) => {
+    const g = owner(req, res);
+    if (!g) return;
+    try {
+      await mutate(g.id, m => {
+        if (req.body.matchId !== m.state.id) throw Error('Refresh this game before changing a learner.');
+        m.pausePlayer(req.body.playerId, req.body.paused);
+      });
+      res.json(payload(g, getMatch(g.id)));
+    } catch (e) { res.status(409).json({error:e.message}); }
+  });
   for (const command of ['start', 'pause', 'resume', 'end'])
     app.post(route + '/' + command, requireAuth, async (req, res) => {
       const g = owner(req, res);

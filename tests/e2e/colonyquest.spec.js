@@ -1183,3 +1183,21 @@ for (const stage of ['attack', 'rain']) test(`smartboard ${stage} has moving act
   await expect(page.locator('#questionOverlay')).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath(`${stage}.png`) });
 });
+test('teacher skips a learner and deducts supplies without recording an answer',async({page})=>{
+ const teams=[colonyCore.createTeam({name:'Boys',members:[{id:'a',name:'Alex',turns:0},{id:'b',name:'Ben',turns:4}]},0),colonyCore.createTeam({name:'Girls'},1)];
+ teams[0].sticks=10;
+ let saved=colonyCore.normalizeSession({phase:'question',introSeen:true,teams});
+ await page.route(/\/api\/game\/cq-skip\/colonyquest(?:\/session)?$/,async route=>{
+  if(route.request().method()==='PUT'){saved=colonyCore.normalizeSession(route.request().postDataJSON().session);return route.fulfill({json:{ok:true}});}
+  return route.fulfill({json:{game:{id:'cq-skip',lessonTitle:'Habitats',questions,colonyquest:{teamCount:2,sound:false,teams}},session:saved}});
+ });
+ await page.goto('/colonyquest/cq-skip');await page.locator('#resumeBtn').click();
+ const first = await page.locator('#questionKicker').textContent();
+ await page.reload();await page.locator('#resumeBtn').click();
+ await expect(page.locator('#questionKicker')).toHaveText(first);
+ await page.locator('#teacherHandle').click();await page.locator('#nextStudentBtn').click();
+ await expect(page.locator('#questionKicker')).not.toHaveText(first);
+ await page.locator('#deductTeam').selectOption('team-1');await page.locator('#deductResource').selectOption('sticks');await page.locator('#deductAmount').fill('3');await page.locator('#deductPointsBtn').click();
+ await expect(page.locator('#deductStatus')).toContainText('3 sticks deducted');
+ expect(saved.teams[0].sticks).toBe(7);expect(saved.answers).toHaveLength(0);
+});
