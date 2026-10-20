@@ -1117,7 +1117,8 @@ test('teacher subtracts colony points during play and the deduction survives rel
  expect(saved.teams[1].teacherDeduction).toBe(15);
 });
 
-test('smartboard spider appears between rounds and reload does not apply losses twice', async ({ page }, testInfo) => {
+for (const reducedMotion of ['no-preference', 'reduce']) test(`smartboard spider appears between rounds and reload does not apply losses twice (${reducedMotion})`, async ({ page }, testInfo) => {
+  await page.emulateMedia({reducedMotion});
   test.skip(testInfo.project.name !== 'windows-100');
   const teams = [colonyCore.createTeam({}, 0), colonyCore.createTeam({}, 1)];
   teams[0].pantryBuilt = true; teams[0].territory = 2; teams[0].food = 30;
@@ -1144,11 +1145,21 @@ test('smartboard spider appears between rounds and reload does not apply losses 
   expect(saved.teams[0].pantryBuilt).toBe(false);
   await page.waitForTimeout(3000);
   expect(await page.evaluate(() => window.swarmGame.scene.scenes[0].children.list.filter(x => x.texture?.key === 'cq-spider' && x.depth === 100).length)).toBe(50);
+  const spiderPositions = () => page.evaluate(() => window.swarmGame.scene.scenes[0].children.list.filter(x => x.texture?.key === 'cq-spider' && x.depth === 100).map(x => [x.x,x.y]));
+  const beforeMovement = await spiderPositions();
+  await page.waitForTimeout(500);
+  expect(await spiderPositions()).not.toEqual(beforeMovement);
   await page.screenshot({ path: testInfo.outputPath('spider-encounter.png') });
   await page.reload();
   await page.locator('#resumeBtn').click();
   await expect(page.locator('#worldViewport')).toHaveAttribute('data-encounter', 'predator');
-  await expect(page.locator('#questionOverlay')).toBeVisible({ timeout: 10000 });
+  await page.locator('#deductTeam').selectOption('team-1');
+  await page.locator('#deductAmount').fill('5');
+  await page.locator('#deductPointsBtn').click();
+  await expect(page.locator('#deductStatus')).toContainText('5 points deducted');
+  await expect(page.locator('#questionOverlay')).toBeVisible({ timeout: 12000 });
+  await expect(page.locator('.score-card').first()).toBeVisible();
+  expect(saved.teams[0].teacherDeduction).toBe(5);
   expect(saved.teams.map(t => t.food)).toEqual(food);
   await expect(page.locator('#worldViewport')).not.toHaveAttribute('aria-description', /Pantry/);
   expect(saved.turnIndex).toBe(2);

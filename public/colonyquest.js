@@ -539,7 +539,7 @@
     clearTimeout(worldStoryTimer);
     button.disabled = true;
     button.textContent = label;
-    const wait = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 180 : Math.max(3500, duration / (actionCamera ? ACTION_SPEED : 1) + 650);
+    const wait = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 2500 : Math.max(3500, duration / (actionCamera ? ACTION_SPEED : 1) + 650);
     worldStoryTimer = setTimeout(() => {
       worldStoryTimer = null;
       if (worldStoryAction !== expectedAction || $('worldStory').classList.contains('hidden')) return;
@@ -922,9 +922,10 @@
     updateHUD();
     // The ants visibly build, gather, hatch, or strengthen their home. A
     // short automatic beat preserves that reward without a story popup.
-    await new Promise(resolve => setTimeout(resolve, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 180 : Math.max(1200, actionDuration / ACTION_SPEED + 250)));
+    const hold = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 2500 : Math.max(2400, actionDuration + 700);
+    await new Promise(resolve => scene.time.delayedCall(hold, resolve));
     resetActionCamera();
-    if (session && session.phase === 'event') await nextTurn();
+    if (session && session.phase === 'event' && lastGameplayEvent() === event) await nextTurn();
   }
 
   function showRewards() {
@@ -1124,8 +1125,8 @@
       updateHUD();
       // Keep the battle and its colony change visible, then continue without
       // asking the class to click through a written raid report.
-      await new Promise(resolve => setTimeout(resolve, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 180 : 700));
-      if (session && session.phase === 'event') await nextTurn();
+      await new Promise(resolve => setTimeout(resolve, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 2500 : 1000));
+      if (session && session.phase === 'event' && lastGameplayEvent() === event) await nextTurn();
     };
     if (!animate || !scene || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return finish();
     const home = colonyViews.get(attacker.id), away = colonyViews.get(defender.id);
@@ -1353,7 +1354,7 @@
     const duration = playWorldEvent(event.key, team.id);
     // Scene time pauses with the game. Resuming replays the visual, never its outcome.
     scene.time.delayedCall(duration + 300, () => {
-      if (run !== encounterRun || session.phase !== 'event' || session.events.at(-1) !== event) return;
+      if (run !== encounterRun || session.phase !== 'event' || lastGameplayEvent() !== event) return;
       delete $('worldViewport').dataset.encounter;
       $('gameScreen').classList.remove('encounter-playing');
       for (const effect of event.effects || []) colonyFeedback.set(effect.teamId, { text: effect.roomsDelta < 0 ? `${effect.roomsDelta} room · ${effect.foodDelta} food` : effect.foodDelta < 0 ? `${effect.foodDelta} food` : effect.foodDelta > 0 ? `+${effect.foodDelta} food` : 'Stores protected', badge: effect.foodDelta < 0 || effect.roomsDelta < 0 ? '!' : '✓', good: effect.foodDelta >= 0 && effect.roomsDelta >= 0, site: 'food', until: feedbackClock + 4000 });
@@ -1656,11 +1657,16 @@
     }));
   }
 
+  // Teacher adjustments belong to the audit history, not the active animation.
+  function lastGameplayEvent() {
+    return session?.events?.findLast(event => event.key !== 'teacher-deduction');
+  }
+
   function resumePhase() {
     if (session.phase === 'ended') return session.stormSeen ? showFinal() : showRainFinale();
     if (session.phase === 'reward') return showRewards();
     if (session.phase === 'event') {
-      const last = session.events[session.events.length - 1];
+      const last = lastGameplayEvent();
       // Older saved matches can still contain a narrative event. Resume them
       // into the streamlined loop instead of reopening the old click-through
       // panels.
@@ -2208,7 +2214,7 @@
     const guards = rooms.filter(room => room.kind === 'guard');
     const guard = guards.at(-1) || nursery;
     const sites = { entrance, nursery, food, guard, center: nursery, expansion: rooms.at(-1) };
-    const lastEvent = session.events.at(-1);
+    const lastEvent = lastGameplayEvent();
     const harvest = session.phase === 'event' && lastEvent?.key === 'round-supplies' ? lastEvent.reports[lastEvent.reportIndex || 0] : null;
     const sheltering = session.phase === 'ended' || session.birdStage === 'rain' || session.phase === 'event' && lastEvent?.key === 'heavy-rain';
 
@@ -2310,7 +2316,7 @@
       return points;
     };
     for (let index = 0; index < team.workers; index += 1) {
-      const lastEvent = session.events.at(-1);
+      const lastEvent = lastGameplayEvent();
       const building = index === 0 && session.phase === 'event' && lastEvent?.key === 'upgrade-expansion' && lastEvent.teamId === team.id;
       const room = building ? sites.expansion : index % 3 === 0 ? food : rooms[index % rooms.length];
       const route = pathTo(room);
@@ -2341,7 +2347,7 @@
       soldier.setData('role', 'soldier');
       ants.push(soldier);
       animateAnt(soldier, path, index, preservePositions ? previous.soldiers[index] : null);
-      const lastEvent = session.events.at(-1);
+      const lastEvent = lastGameplayEvent();
       if (index === team.soldiers - 1 && session.phase === 'event' && lastEvent?.key === 'upgrade-soldiers' && lastEvent.teamId === team.id) revealRecruit(soldier);
     }
     colonyViews.set(team.id, { zone, graphics, ants, queen, rooms, center: nursery, sites, labels: [title, subtitle] });
@@ -2421,7 +2427,7 @@
 
   function restoreWorldFocus() {
     if (!session) return;
-    const event = session.events.at(-1);
+    const event = lastGameplayEvent();
     if (session.phase === 'ended' && !session.stormSeen) { playWorldEvent('heavy-rain'); return; }
     if (session.phase === 'event' && event?.key === 'round-supplies') {
       const report = event.reports[event.reportIndex || 0];
@@ -3074,9 +3080,9 @@
         const p=progress.value, side=i%2 ? 1 : -1;
         const insideX=40+column*Math.max(1,width-80);
         const arrival=Math.min(1,p/.25), departure=Math.max(0,(p-.72)/.28);
-        sprite.x=reduced ? insideX : insideX + side*(1-arrival)*(width+100) + side*departure*(width+120) + Math.sin(p*22+i)*20;
-        sprite.y=50+row*Math.max(1,height-100)+(reduced ? 0 : Math.sin(p*17+i)*14);
-        sprite.setFrame(reduced ? 0 : Math.floor(p*50+i)%2);
+        sprite.x=reduced ? insideX + Math.sin(p*12+i)*6 : insideX + side*(1-arrival)*(width+100) + side*departure*(width+120) + Math.sin(p*22+i)*20;
+        sprite.y=50+row*Math.max(1,height-100)+(reduced ? Math.sin(p*10+i)*4 : Math.sin(p*17+i)*14);
+        sprite.setFrame(Math.floor(p*(reduced ? 18 : 50)+i)%2);
         sprite.setFlipX(side<0);
         sprite.setAlpha(reduced && p>.72 ? 1-departure : 1);
       });
@@ -3091,8 +3097,8 @@
     const team = session.teams.find(item => item.id === teamId) || currentTeam();
     const palette = team ? core.TEAM_COLORS[team.colorIndex] : core.TEAM_COLORS[0];
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (key === 'predator' && session.events.at(-1)?.beforeTeams) return playSpiderSwarm();
-    if (reducedMotion) return 300;
+    if (key === 'predator' && lastGameplayEvent()?.beforeTeams) return playSpiderSwarm();
+    if (reducedMotion) return 2500;
     if (key === 'heavy-rain') {
       stopWeather();
       const cloud = scene.add.graphics().setDepth(-3);
@@ -3149,7 +3155,7 @@
       const spider = createMeadowSpider({ x: entrance.x + Math.min(120, view ? view.zone.w * .45 : 120), y: entrance.y - 38 }, 1.35);
       const guardStart = view ? view.sites.guard : { x: entrance.x, y: entrance.y + 90 };
       const guard = view && core.homeGuards(team) > 0 ? actionWorker(view, palette, guardStart, 33, true) : null;
-      const loss = session.events.at(-1)?.effects?.find(effect => effect.teamId === team?.id)?.foodDelta || 0;
+      const loss = lastGameplayEvent()?.effects?.find(effect => effect.teamId === team?.id)?.foodDelta || 0;
       const stolenSeed = scene.add.ellipse(18, 19, 15, 9, 0xf2ce64).setVisible(false);
       spider.add(stolenSeed);
       scene.time.delayedCall(2100, () => { if (spider.active) stolenSeed.setVisible(loss < 0); });
