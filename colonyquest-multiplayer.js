@@ -219,15 +219,17 @@ class ColonyMatch {
   raidAllowed(p, target) {
     if (!target || target.removed || target.id === p.id)
       return { allowed: false, reason: 'Choose a rival colony.' };
+    const guards = core.rewardAvailability(p.colony, 'raid');
+    if (!guards.allowed) return guards;
     if (!target.connected) return { allowed: false, reason: 'This colony is reconnecting.' };
-    if (this.state.pacing === 'individual' && target.phase === 'spectating') return { allowed: false, reason: 'This colony has finished its questions.' };
+    if (this.state.pacing === 'individual' && target.phase === 'spectating' && !target.npc) return { allowed: false, reason: 'This colony has finished its questions.' };
     if (this.state.pacing === 'individual' ? (this.state.elapsedMs || 0) < (target.protectedUntilMs || 0) : this.state.round <= target.protectedUntilRound)
-      return { allowed: false, reason: 'This colony is recovering.' };
+      return { allowed: false, reason: this.state.pacing === 'individual' ? `This colony is recovering: ${Math.ceil(((target.protectedUntilMs || 0) - (this.state.elapsedMs || 0))/1000)}s left.` : 'This colony is recovering.' };
     const lastRound = (p.lastRaids || {})[target.id];
     if (Number.isInteger(lastRound) && (this.state.pacing === 'individual' ? (this.state.elapsedMs || 0) - lastRound < 60000 : this.state.round - lastRound < 3))
       return {
         allowed: false,
-        reason: this.state.pacing === 'individual' ? 'Choose a different rival while this colony recovers.' : 'Choose a different rival for three rounds.',
+        reason: this.state.pacing === 'individual' ? `Try another rival; this colony is protected for ${Math.ceil((60000 - ((this.state.elapsedMs || 0) - lastRound))/1000)}s.` : 'Choose a different rival for three rounds.',
       };
     if (target.colony.food <= 3)
       return {

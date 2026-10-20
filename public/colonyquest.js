@@ -475,6 +475,7 @@
   }
 
   function setOverlay(id) {
+    if(id !== 'storyOverlay') openingVoice.stop();
     stopRaidPresentation();
     stopWeather();
     hideWorldStory();
@@ -600,6 +601,7 @@
     return { key, title: chapter.title, description: chapter.line, kicker: `Chapter ${index + 1}`, tone };
   }
 
+  const openingVoice = new OpeningNarration($('openingVoice'), speaking => { soundtrack.media.muted = speaking; });
   function showStoryIntro() {
     $('storyKicker').textContent = 'The Moonroot Meadow Mission';
     $('storyTitle').textContent = 'Build. Prepare. Survive.';
@@ -609,8 +611,10 @@
   }
 
   function restartStoryCrawl() {
+    const clip=OpeningNarrationData.clips['colony-board'];
+    openingVoice.sync(clip.src,'board-'+Date.now(),0,!soundOn);
     const crawl = $('storyCrawl');
-    crawl.style.animationDuration = `${Math.max(45, STORY.intro.split(/\s+/).length * .45)}s`;
+    crawl.style.animationDuration = `${OpeningNarrationData.clips['colony-board'].seconds}s`;
     crawl.classList.remove('is-moving', 'is-paused');
     void crawl.offsetWidth;
     crawl.classList.add('is-moving');
@@ -717,7 +721,7 @@
     $('gameScreen').dataset.stormStage = weather.stage;
     $('scoreStrip').innerHTML = session.teams.map((item, index) => {
       const palette = core.TEAM_COLORS[item.colorIndex];
-      return `<div class="score-card${index === session.currentTeamIndex && session.phase !== 'ended' ? ' current' : ''}" style="--team-color:${colorHex(palette.primary)}"><div class="score-name"><span>${esc(item.name)}${colonyFeedback.get(item.id)?.until > feedbackClock ? ` · ${esc(colonyFeedback.get(item.id).badge)}` : ''}</span><span>${core.colonyStrength(item)} pts</span></div><div class="score-stats"><span>1 queen</span><span>${item.workers} workers</span><span>${item.soldiers} guards</span><span>Walls level ${item.defense + 1}</span></div>${resourceStrip(item)}</div>`;
+      return `<div class="score-card${index === session.currentTeamIndex && session.phase !== 'ended' ? ' current' : ''}" style="--team-color:${colorHex(palette.primary)}"><div class="score-name"><span>${esc(item.name)}${colonyFeedback.get(item.id)?.until > feedbackClock ? ` · ${esc(colonyFeedback.get(item.id).badge)}` : ''}</span><span>${core.colonyStrength(item)} pts</span></div><div class="score-stats"><span>1 queen</span><span>${item.workers} workers</span><span>${core.homeGuards(item)} guards at home${item.raidAway ? ` · ${item.raidAway} returning` : ''}</span><span>Walls level ${item.defense + 1}</span></div>${resourceStrip(item)}</div>`;
     }).join('');
     const options = session.teams.map(item => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join('');
     session.teams.forEach((item, index) => {
@@ -944,7 +948,7 @@
         const eligibility = core.raidAvailability(team, item, session);
         const forecast = core.raidForecast(team, item);
         const comparison = `${forecast.attackers} attacking guards vs ${forecast.defenders} home guards. Rooms and walls add ${forecast.supportBonus || 0} defense power`;
-        return `<button type="button" data-target="${esc(item.id)}"${!eligibility.allowed ? ' disabled' : ''}>${esc(item.name)}<small>${esc(core.TEAM_COLORS[item.colorIndex].name)} ants · ${item.food} food · ${item.soldiers} guards · ${esc(core.fortification(item).name)} walls</small><small>${!eligibility.allowed ? esc(eligibility.reason) : `${esc(comparison)}. ${forecast.success ? 'Your group is favoured.' : 'Some guards may need to rest afterward.'}`}</small></button>`;
+        return `<button type="button" data-target="${esc(item.id)}"${!eligibility.allowed ? ' disabled' : ''}>${esc(item.name)}<small>${esc(core.TEAM_COLORS[item.colorIndex].name)} ants · ${item.food} food · ${core.homeGuards(item)} guards at home${item.raidAway ? ` · ${item.raidAway} returning` : ''} · ${esc(core.fortification(item).name)} walls</small><small>${!eligibility.allowed ? esc(eligibility.reason) : `${esc(comparison)}. ${forecast.success ? 'Your group is favoured.' : 'Some guards may need to rest afterward.'}`}</small></button>`;
       }).join('');
       setOverlay('targetOverlay');
       updateWorld();
@@ -3362,6 +3366,7 @@
 
   function toggleSound() {
     soundOn = !soundOn;
+    openingVoice.paused=!soundOn||$('storyCrawl').classList.contains('is-paused');openingVoice.update();
     if (soundOn) initAudio(); else stopAmbient();
     if (effectsBus) effectsBus.gain.setTargetAtTime(soundOn ? Number($('effectsVolume').value) / 100 : 0, audioContext.currentTime, .03);
     updateHUD();
@@ -3395,6 +3400,7 @@
   $('storyPause').addEventListener('click', () => {
     const crawl = $('storyCrawl');
     const paused = crawl.classList.toggle('is-paused');
+    openingVoice.paused=paused||!soundOn;openingVoice.update();
     $('storyPause').textContent = paused ? 'Play story' : 'Pause story';
     $('storyPause').setAttribute('aria-pressed', String(paused));
   });

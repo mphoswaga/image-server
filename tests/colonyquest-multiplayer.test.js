@@ -220,6 +220,7 @@ test('every rival is visible and raid ledger reconciles both food balances', () 
   assert.equal(event.attackerFoodChange,a.colony.food-before[0]);
   assert.equal(event.targetFoodChange,b.colony.food-before[1]);
   assert.equal(event.stolen,5);
+  m.active()[2].colony.soldiers=1;
   const recovery=m.options(m.active()[2]).find(o=>o.target===b.id);
   assert.equal(recovery.allowed,false);
   assert.match(recovery.reason,/recovering/);

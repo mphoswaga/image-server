@@ -118,6 +118,7 @@
           </div>
         </div>
         <div class="story-controls">
+          <button id="openingVoice" class="btn" type="button">Opening voice on</button><small>AI story voice</small>
           <button id="storyPause" class="btn" type="button">Pause story</button>
           <button id="storyReplay" class="btn" type="button">Read again</button>
           <button id="storyContinue" class="btn gold" type="button">Start game</button>
@@ -159,9 +160,11 @@
   </div>
 
   <script src="/vendor/phaser.min.js"></script>
-  <script src="/colonyquest-core.js?v=18"></script>
+  <script src="/colonyquest-core.js?v=19"></script>
   <script src="/colonyquest-music.js?v=1"></script>
-  <script src="/colonyquest.js?v=36"></script>
+  <script src="/opening-narration-data.js?v=1"></script>
+<script src="/opening-narration.js?v=1"></script>
+<script src="/colonyquest.js?v=37"></script>
 <script>document.getElementById('multiplayerLink').href='/colonyquest-live/'+encodeURIComponent(location.pathname.split('/').filter(Boolean).pop());</script>
 </body>
 </html>

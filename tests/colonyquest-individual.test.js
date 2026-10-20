@@ -60,13 +60,13 @@ test('all original questions complete before automatic finish; teacher finish pr
  const other=room();other.m.answer(other.a.id,0,0,100);other.m.end(101);assert.equal(other.m.report().learners[1].answered,0);
 });
 test('shared threats use active world time, not the fastest learners round',()=>{
- const {m,a,b}=room(true);m.tick(64000);assert.equal(m.state.phase,'answer');
+ const {m,a,b}=room(true);const t=m.state.deadline;m.tick(t);assert.equal(m.state.phase,'answer');
  m.state.encounters=[{key:'dry',at:1000},{key:'rain',at:2000}];
- m.answer(a.id,0,0,64100);m.tick(65000);
+ m.answer(a.id,0,0,t+100);m.tick(t+1000);
  assert.equal(m.state.world.dryOccurred,true);assert.equal(b.round,0);
- assert.equal(m.snapshot(a.id,false,65000).story.key,'dry');assert.equal(m.snapshot(b.id,false,65000).story.key,'dry');
- assert.equal(m.snapshot(b.id,false,65000).phase,'answer');assert.equal(m.snapshot(b.id,false,65000).question.correctIndex,undefined);
- m.pause(65100);const elapsed=m.state.elapsedMs;m.tick(90000);assert.equal(m.state.elapsedMs,elapsed);
+ assert.equal(m.snapshot(a.id,false,t+1000).story.key,'dry');assert.equal(m.snapshot(b.id,false,t+1000).story.key,'dry');
+ assert.equal(m.snapshot(b.id,false,t+1000).phase,'answer');assert.equal(m.snapshot(b.id,false,t+1000).question.correctIndex,undefined);
+ m.pause(t+1100);const elapsed=m.state.elapsedMs;m.tick(t+26000);assert.equal(m.state.elapsedMs,elapsed);
 });
 
 test('raid protection uses shared seconds rather than different personal question numbers',()=>{
@@ -79,4 +79,17 @@ test('raid protection uses shared seconds rather than different personal questio
  assert.equal(m.raidAllowed(a,b).allowed,false);
  m.state.elapsedMs=60000;assert.equal(m.raidAllowed(a,b).allowed,true);
  b.phase='spectating';assert.equal(m.raidAllowed(a,b).allowed,false);
+});
+
+test('NPC colonies can still defend raids after their questions end, while real finishers remain protected',()=>{
+ const {m,a,b}=room();a.colony.soldiers=3;b.colony.food=20;b.phase='spectating';
+ assert.equal(m.raidAllowed(a,b).allowed,false);
+ b.npc=true;assert.equal(m.raidAllowed(a,b).allowed,true);
+ m.answer(a.id,0,0,100);m.upgrade(a.id,0,'raid',b.id,101);
+ assert.equal(m.state.events.at(-1).kind,'raid');
+ assert.ok(a.colony.raidAway>0);
+ assert.match(m.raidAllowed(a,b).reason,/returning:.*s left/);
+ a.colony.raidAway=0;a.colony.raidReturnMs=0;
+ assert.match(m.raidAllowed(a,b).reason,/recovering:.*s left/);
+ m.state.elapsedMs=61000;assert.equal(m.raidAllowed(a,b).allowed,true);
 });

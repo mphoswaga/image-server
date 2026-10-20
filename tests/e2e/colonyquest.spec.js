@@ -111,10 +111,13 @@ test('ColonyQuest shows one opening mission then moves from growth to the next q
     return route.fulfill({ json: { game: { id: 'cq-streamlined', lessonTitle: 'Habitats', questions, colonyquest: setup }, session: saved } });
   });
   await page.goto('/colonyquest/cq-streamlined');
+  await page.locator('#soundEnabled').check();
   await page.locator('#startBtn').click();
   await expect(page.locator('#storyOverlay')).toBeVisible();
   await expect(page.locator('#storyText')).toContainText('Level 3 walls');
+  await expect.poll(()=>page.locator('audio[data-opening-narration]').evaluate(a=>a.currentTime)).toBeGreaterThan(0);
   await page.locator('#storyContinue').click();
+  expect(await page.locator('audio[data-opening-narration]').evaluate(a=>a.paused)).toBe(true);
   await expect(page.locator('#questionOverlay')).toBeVisible();
   await page.locator('.answer').first().click();
   await expect(page.locator('#rewardOverlay')).toBeVisible({ timeout: 4000 });

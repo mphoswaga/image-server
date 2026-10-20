@@ -192,3 +192,16 @@ test('teacher can test against computer colonies without changing the smartboard
   expect(live.history).toHaveLength(0);
   await learner.close();
 });
+
+test('multiplayer opening uses recorded voice with ten computer rivals',async({page})=>{
+ const id=await create(page);await page.goto('/colonyquest-live/'+id);
+ const popup=page.waitForEvent('popup');await page.getByRole('link',{name:'Test against 10 computer colonies'}).click();const learner=await popup;
+ const errors=[];learner.on('pageerror',e=>errors.push(e.message));
+ await expect(learner.locator('#rank')).toContainText('of 11');
+ await expect(learner.locator('#openingVoice')).toBeVisible();
+ await learner.locator('#question').click();
+ await expect.poll(()=>learner.locator('audio[data-opening-narration]').evaluate(a=>a.currentTime)).toBeGreaterThan(0);
+ await expect.poll(()=>learner.locator('audio[data-opening-narration]').evaluate(a=>a.currentSrc)).toContain('colony-0.mp3');
+ await learner.locator('#openingVoice').click();expect(await learner.locator('audio[data-opening-narration]').evaluate(a=>a.paused)).toBe(true);
+ expect(errors).toEqual([]);await learner.close();
+});

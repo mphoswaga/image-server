@@ -219,7 +219,7 @@
     let reason = '';
     if (!team || !REWARDS[reward]) reason = 'Choose a colony upgrade.';
     else if (['expansion', 'defense', 'food', 'supplies'].includes(reward) && team.workers < 1) reason = 'Add a worker first.';
-    else if (reward === 'raid' && homeGuards(team) < 1) reason = team.raidAway ? 'Your guards are still returning from a raid.' : 'Add a guard ant first.';
+    else if (reward === 'raid' && homeGuards(team) < 1) reason = team.raidAway ? `Your guards are returning: ${Math.ceil((team.raidReturnMs || 0)/1000)}s left.` : 'Add a guard ant first.';
     else if (reward === 'soldiers' && !team.barracksBuilt) reason = 'Build two rooms before adding a guard.';
     else if (['soldiers', 'queen'].includes(reward) && team.food < 1) reason = 'Find food first.';
     else if (reward === 'queen' && (team.eggs || []).length >= 3) reason = 'There are three eggs. Wait for one to hatch.';

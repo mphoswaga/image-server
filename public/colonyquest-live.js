@@ -33,6 +33,9 @@
   const soundtrack = new ColonyMusic((track) => {
     $('musicTrackLabel').textContent = `${track.title} — ${track.artist}`;
   });
+  const openingVoice=new OpeningNarration($('openingVoice'),speaking=>{soundtrack.media.muted=speaking;});
+  const openingChapters=Array.from({length:4},(_,i)=>OpeningNarrationData.clips['colony-'+i]);
+  function openingChapter(elapsed){let start=0;for(let i=0;i<4;i++){const end=start+(openingChapters[i].seconds+1)*1000;if(elapsed<end||i===3)return {index:i,position:Math.max(0,(elapsed-start)/1000)};start=end;}}
   const eventAudio = new ColonyEventAudio();
   let duckTimer;
   eventAudio.onCue = (duration) => {
@@ -203,6 +206,7 @@
   function setState(next) {
     const prior = state;
     state = next;
+    if(next.phase==='story'&&next.story?.key==='intro'){const chapter=openingChapter(next.story.elapsed);openingVoice.sync(openingChapters[chapter.index].src,next.id+':intro:'+chapter.index,chapter.position);}else openingVoice.stop();
     offset = next.serverNow - Date.now();
     updateScene(next);
     syncMusic();
@@ -254,7 +258,8 @@
       ['🪵', c.sticks || 0, 'Sticks'],
       ['🍃', c.leaves || 0, 'Leaves'],
       ['🐜', c.workers, 'Workers'],
-      ['🛡', c.soldiers, 'Guards'],
+      ['🛡', ColonyQuestCore.homeGuards(c), 'Guards at home'],
+      ...(c.raidAway ? [['⚔', c.raidAway, 'Guards returning']] : []),
     ]
       .map(
         ([icon, value, label]) =>
@@ -338,7 +343,7 @@
       s.phase,
       s.round,
       s.story?.id,
-      s.story?.key === 'intro' ? Math.min(3, Math.floor(s.story.elapsed / 16000)) : 0,
+      s.story?.key === 'intro' ? openingChapter(s.story.elapsed).index : 0,
       p.choice,
       p.correct,
       p.upgraded,
@@ -369,7 +374,7 @@
       $('question').textContent = beat.title;
       $('instruction').textContent = '';
       if (beat.key === 'intro') {
-        const chapter = Math.min(3, Math.floor(beat.elapsed / 16000));
+        const chapter = openingChapter(beat.elapsed).index;
         $('roundLabel').textContent = `PIP’S FIELD GUIDE · ${chapter + 1} / 4`;
         $('question').textContent = [
           'Build our home',

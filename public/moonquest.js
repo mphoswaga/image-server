@@ -93,7 +93,7 @@
     if (!response.ok) throw new Error(result.error || 'Request failed.');
     return result;
   }
-  function stopPoll() { finaleMusic?.pause();finaleSession='';clearTimeout(pollTimer);cancelAnimationFrame(storyFrame);window.speechSynthesis?.cancel(); }
+  function stopPoll() { finaleMusic?.pause();finaleSession='';clearTimeout(pollTimer);cancelAnimationFrame(storyFrame);openingVoice.stop(); }
   function chime() {
     if (!soundEnabled || role==='student') return;
     try { audio ||= new (window.AudioContext || window.webkitAudioContext)(); audio.resume(); [523.25,659.25,783.99].forEach((f,i) => { const o=audio.createOscillator(),g=audio.createGain(), t=audio.currentTime+i*.1; o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(Number(document.getElementById('effects-level').value)/100*.13,t+.02);g.gain.exponentialRampToValueAtTime(.001,t+.45);o.connect(g);g.connect(audio.destination);o.start(t);o.stop(t+.5); }); } catch {}
@@ -485,7 +485,7 @@
     syncFinaleMusic();
     const previousImage=root.querySelector('#diagram img');
     const racePositions=[...root.querySelectorAll('.race-runner')].map(el=>el.style.left);
-    cancelAnimationFrame(storyFrame);if(!['intro','story-vote','story-action','ended'].includes(state.phase))window.speechSynthesis?.cancel();document.body.classList.remove('learner-round','duel-round','duel-board','tale-page');document.body.dataset.view='live'; document.body.dataset.audience=role; document.body.dataset.phase=state.phase;
+    cancelAnimationFrame(storyFrame);if(!['intro','story-vote','story-action','ended'].includes(state.phase))openingVoice.stop();document.body.classList.remove('learner-round','duel-round','duel-board','tale-page');document.body.dataset.view='live'; document.body.dataset.audience=role; document.body.dataset.phase=state.phase;
     const s=state,teacher=role==='teacher';document.body.classList.toggle('royale-round',!!s.royale);document.body.classList.toggle('mission-paused',!!s.paused);document.body.dataset.answerLocked=String(!!s.mine?.first);
     if(s.royale&&(s.phase==='ended'||['matchup','reveal'].includes(s.phase)||(role==='student'&&s.royale.eliminated))){
       root.innerHTML=(role!=='student'?presenterControls(s):'')+royalePanel(s)+(s.phase==='ended'?(teacher?button('View learning report','report','primary')+button('Back to games','home'):''):`<section class="panel"><h2>${esc(s.phase==='matchup'?'Get ready for your question':s.question?.prompt||'Watch the festival battle')}</h2>${rabbitTimer()}${s.phase!=='matchup'&&s.diagram?diagramHtml(s.diagram,null,s.question?.accepted||[]):''}${s.royale.eliminated&&s.phase==='choose'?`<p>Help your player · choose ${s.question.selectionCount} answer${s.question.selectionCount===1?'':'s'}. Advice appears after 10 seconds.</p><div class="region-list">${s.diagram.regions.map(a=>`<button data-fan-answer="${esc(a.id)}" aria-pressed="${!!(s.royale.mySupport?.target===watchedPlayer&&s.royale.mySupport.regionIds.includes(a.id))}" ${s.paused?'disabled':''}>${esc(a.label)}</button>`).join('')}</div>`:''}${s.question?.explanation?`<p>${esc(s.question.explanation)}</p>`:''}</section>`);
@@ -572,21 +572,19 @@
       o.connect(g);g.connect(audio.destination);o.start(t);o.stop(t+.1);
     }catch{}
   }
-  let storyFrame,storyCueKey='',narrationEnabled=false;
+  let storyFrame,storyCueKey='';
   const narrator=document.getElementById('narration');
-  if(!('speechSynthesis' in window)){narrator.disabled=true;narrator.title='Narration is not available in this browser.';}
-  narrator.onclick=()=>{narrationEnabled=!narrationEnabled;narrator.textContent=narrationEnabled?'Narration on':'Narration off';narrator.setAttribute('aria-pressed',String(narrationEnabled));window.speechSynthesis?.cancel();storyCueKey='';};
-  window.addEventListener('pagehide',()=>{cancelAnimationFrame(storyFrame);window.speechSynthesis?.cancel();});
-  document.addEventListener('visibilitychange',()=>{if(document.hidden)window.speechSynthesis?.cancel();});
+  const openingVoice=new OpeningNarration(narrator);
+  window.addEventListener('pagehide',()=>{cancelAnimationFrame(storyFrame);openingVoice.stop();});
   function animateStory(){
-    if(view!=='live'||!root.querySelector('.tale-stage')){window.speechSynthesis?.cancel();return;}
+    if(view!=='live'||!root.querySelector('.tale-stage')){openingVoice.stop();return;}
     const cue=MoonStory.sync(state,Date.now()+clockOffset);
-    if(state.paused||document.hidden){window.speechSynthesis?.cancel();}
+    if(state.phase==='intro'&&cue?.mode==='intro'){const elapsed=Math.max(0,(state.introElapsedMs||0)/1000+(state.paused?0:(Date.now()+clockOffset-state.serverNow)/1000));openingVoice.sync(OpeningNarrationData.clips['moon-'+cue.beat].src,state.id+':intro:'+cue.beat,Math.max(0,elapsed-cue.beat*6),state.paused);}else openingVoice.stop();
+    if(state.paused||document.hidden){openingVoice.media.pause();}
     else if(cue&&cue.mode!=='vote'&&cue.key!==storyCueKey){
       storyCueKey=cue.key;
-      // One narrator on the teacher/board device; learner devices remain quiet.
+      // Keep later story sound effects on the teacher/board; spoken audio is opening-only.
       if(role!=='student'){
-        if(narrationEnabled&&window.speechSynthesis){window.speechSynthesis.cancel();const speech=new SpeechSynthesisUtterance(cue.voice||cue.text);speech.lang='en-GB';speech.rate=1;speech.volume=Number(document.getElementById('effects-level').value)/100;window.speechSynthesis.speak(speech);}
         storySound(cue);
       }
     }
