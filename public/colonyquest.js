@@ -33,6 +33,7 @@
   let worldStoryTimer = null;
   let worldEventPresentation = [];
   let raidPresentation = null;
+  let growthPresentation = null;
   let feedbackSnapshot = null;
   let feedbackClock = 0;
   const colonyFeedback = new Map();
@@ -916,8 +917,28 @@
     return key === 'expansion' ? `+1 ${core.colonyRooms(preview).at(-1).label}. ${core.roomBenefit(core.colonyRooms(preview).at(-1))}` : effect;
   }
 
+  // Unlike Phaser timers, this survives a canvas rebuild and pauses with the class.
+  function waitForPresentation(milliseconds) {
+    const owner = session;
+    return new Promise(resolve => {
+      let elapsed = 0, previous = performance.now();
+      const tick = now => {
+        const delta = Math.min(100, Math.max(0, now - previous));
+        previous = now;
+        if (session !== owner || !scene || session.phase === 'ended') return resolve();
+        if (!document.hidden && session.phase !== 'paused') elapsed += delta * (scene.time.timeScale || 1);
+        if (elapsed >= milliseconds) return resolve();
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+  }
+
   async function showGrowth(event) {
     if (session.phase !== 'event') return;
+    if (growthPresentation?.event === event) { setOverlay(null); return; }
+    const presentation = { event };
+    growthPresentation = presentation;
     const key = String(event && event.key || '').replace(/^upgrade-/, '');
     const team = session.teams.find(item => item.id === (event && event.teamId)) || currentTeam();
     const story = REWARD_STORIES[key] || { title: 'The colony grows', text: 'The ants put their new reward to work inside the nest.', site: 'center' };
@@ -929,9 +950,11 @@
     // The ants visibly build, gather, hatch, or strengthen their home. A
     // short automatic beat preserves that reward without a story popup.
     const hold = Math.max(5000, actionDuration + 1500);
-    await new Promise(resolve => scene.time.delayedCall(hold, resolve));
+    await waitForPresentation(hold);
+    if (growthPresentation !== presentation) return;
+    growthPresentation = null;
     resetActionCamera();
-    if (session && session.phase === 'event' && lastGameplayEvent() === event) await nextTurn();
+    if (session && session.phase === 'event' && lastGameplayEvent() === event) { updateWorld(); await nextTurn(); }
   }
 
   function showRewards() {
@@ -1127,14 +1150,15 @@
     event.guard = event.guard || defenders * 5 + (event.wallBonus || 0);
     const finish = async () => {
       stopRaidPresentation();
-      raidMoment.update(visualEvent, .9);
+      updateWorld();
       if (!event.success) colonyFeedback.set(defender.id, { text: 'Raid stopped · stores protected', badge: '✓ Defended', good: true, site: 'guard', until: feedbackClock + 6500 });
       setOverlay(null);
+      raidMoment.update(visualEvent, .9);
       focusColony(event.success ? attacker.id : defender.id, event.success ? 'food' : 'guard');
       updateHUD();
       // Keep the battle and its colony change visible, then continue without
       // asking the class to click through a written raid report.
-      await new Promise(resolve => scene ? scene.time.delayedCall(window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 2500 : 1400, resolve) : setTimeout(resolve,1400));
+      await waitForPresentation(2200);
       raidMoment.clear();
       if (session && session.phase === 'event' && lastGameplayEvent() === event) await nextTurn();
     };
@@ -1745,6 +1769,7 @@
   }
 
   function resetMatchRuntime() {
+    growthPresentation = null;
     feedbackSnapshot = null; feedbackClock = 0; colonyFeedback.clear();
     encounterRun++;
     $('gameScreen').classList.remove('encounter-playing');
@@ -1857,7 +1882,7 @@
         },
         update(time, delta) {
           if (!session || document.hidden) return;
-          this.tweens.timeScale = session.phase === 'paused' ? 0 : actionCamera ? ACTION_SPEED : 1;
+          this.tweens.timeScale = session.phase === 'paused' ? 0 : actionCamera && !window.matchMedia('(prefers-reduced-motion: reduce)').matches ? ACTION_SPEED : 1;
           this.time.paused = session.phase === 'paused';
           if (session.phase !== 'paused') feedbackClock += delta;
           updateForagingWorkers(delta);
@@ -2446,6 +2471,7 @@
 
   function restoreWorldFocus() {
     if (!session) return;
+    if (raidPresentation || growthPresentation) return;
     const event = lastGameplayEvent();
     if (session.phase === 'ended' && !session.stormSeen) { playWorldEvent('heavy-rain'); return; }
     if (session.phase === 'event' && event?.key === 'round-supplies') {
@@ -2482,6 +2508,9 @@
 
   function updateWorld() {
     if (!scene || !session) return;
+    // A resize or resource update must not erase an in-flight scene or its timers.
+    // Rebuild once the scene finishes; its recorded outcome is already in session.
+    if (['event', 'paused'].includes(session.phase) && (raidPresentation || growthPresentation)) return;
     clearWorldEventPresentation();
     stopWeather();
     if (raidPresentation) {

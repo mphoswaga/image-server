@@ -110,7 +110,7 @@ test('ColonyQuest starts as a balanced, child-readable colony simulation', () =>
   });
 });
 
-test('the classroom loop opens with one mission briefing and keeps later growth fast', () => {
+test('the classroom loop opens with one mission briefing and presents later growth', () => {
   const client = fs.readFileSync(path.join(__dirname, '..', 'public', 'colonyquest.js'), 'utf8');
   assert.match(client, /introSeen: false/);
   assert.match(client, /Only Level 4 walls can withstand the footsteps/);
@@ -119,7 +119,7 @@ test('the classroom loop opens with one mission briefing and keeps later growth 
   assert.match(client, /async function showGrowth/);
   assert.match(client, /await showGrowth\(event\)/);
   assert.match(client, /function showRaidStory/);
-  assert.match(client, /duration: 8400/);
+  assert.equal(require('../public/colony-presentation').raidDuration(false), 8400);
   assert.match(client, /function playAntSound\(kind\)/);
   assert.match(client, /playAntSound\('march'\)/);
   assert.match(client, /function playWinnerCelebration\(\)/);

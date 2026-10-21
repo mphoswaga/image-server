@@ -51,3 +51,13 @@ test('dance spins and jumps while learner labels stay still; reduced motion keep
  await page.emulateMedia({reducedMotion:'reduce'});
  expect(await page.locator('.cq-winners img').first().evaluate(img=>getComputedStyle(img).animationName)).toBe('cq-gentle-celebration');
 });
+test('a whole winning team keeps readable names alongside the podium',async({page},info)=>{
+ await page.setViewportSize({width:1366,height:768});
+ await page.route('**/colonyquest-live.js*',route=>route.fulfill({contentType:'application/javascript',body:''}));
+ await page.goto('/colonyquest-live.html');
+ await page.evaluate(()=>ColonyCelebration.show('large-team',[{name:'Leaf Legends',rank:1,score:200,members:Array.from({length:25},(_,i)=>({name:i===0?'Nguyễn Hoàng Trác Việt':`Learner ${i+1}`}))},{name:'Root Rangers',rank:2,score:150}]));
+ await expect(page.locator('.cq-winners figcaption')).toHaveCount(25);
+ const results=await page.locator('.cq-results').boundingBox();expect(results.y+results.height).toBeLessThanOrEqual(768);
+ expect(await page.locator('#cqCelebration').evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
+ await page.screenshot({path:info.outputPath('winning-team.png')});
+});

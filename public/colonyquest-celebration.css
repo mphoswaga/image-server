@@ -33,3 +33,22 @@
 /* Gentle celebration preserves the winner moment without spins or large jumps. */
 @keyframes cq-gentle-celebration{50%{transform:translateY(-2px)}}
 @media(prefers-reduced-motion:reduce){.cq-champion .cq-dance-travel img{animation:cq-gentle-celebration 3s ease-in-out var(--delay) infinite}}
+/* Keep the podium and results button in view on classroom displays. */
+@media(min-width:1000px){
+ .cq-celebration-content{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(360px,1fr);column-gap:28px;align-items:center}
+ .cq-celebration-content>.cq-kicker,.cq-celebration-content>h1,.cq-celebration-content>p,.cq-celebration-content>.cq-results{grid-column:1/-1}
+ .cq-celebration-content>p{margin:6px 0}
+ .cq-winners{display:grid;grid-template-columns:repeat(auto-fit,minmax(94px,1fr));width:100%;max-height:55vh;overflow:auto;align-content:start;gap:12px 6px;padding-top:4px}
+ .cq-winners .cq-champion{width:100%}
+ .cq-winners figcaption{font-size:14px;padding:6px;min-height:36px;display:grid;place-items:center}
+ .cq-winners .cq-dance-floor{height:104px}
+ .cq-winners .cq-dance-travel img{height:76px}
+ .cq-podium{width:100%;gap:10px}
+ .cq-place{flex:1;max-width:32%}
+ .cq-results{justify-self:center}
+}
+@media(min-width:1000px){
+ .cq-celebration-content{padding:20px 20px 24px}
+ .cq-celebration h1{font-size:clamp(32px,3.2vw,48px)}
+ .cq-winners{margin:14px 0;max-height:calc(100dvh - 310px)}
+}
