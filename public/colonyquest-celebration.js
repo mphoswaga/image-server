@@ -4,7 +4,7 @@
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const seen = new Set();
   function ant(name, index, queen = false) {
-    return `<figure class="cq-champion" style="--delay:${index % 7 * .13}s"><figcaption>${esc(name)}</figcaption><img src="/assets/colonyquest/${queen ? 'queen' : index % 2 ? 'guardian' : 'pip-worker'}.webp" alt="Celebrating ant"></figure>`;
+    return `<figure class="cq-champion" style="--delay:${index % 7 * .13}s"><figcaption>${esc(name)}</figcaption><span class="cq-dance-floor"><span class="cq-dance-shadow" aria-hidden="true"></span><span class="cq-dance-travel"><img src="/assets/colonyquest/${queen ? 'queen' : index % 2 ? 'guardian' : 'pip-worker'}.webp" alt="Dancing ant"></span></span></figure>`;
   }
   window.ColonyCelebration = {
     show(key, entries) {

@@ -8,6 +8,7 @@ test('colony celebrations show named winners, tied podiums and dismiss safely', 
   await expect(page.locator('.cq-winners figcaption')).toHaveText(['Amina','Bao']);
   await expect(page.locator('.cq-place')).toHaveCount(3);
   await expect(page.locator('.cq-rank-1')).toHaveCount(2);
+  expect(await page.locator('#cqCelebration').evaluate(el=>el.scrollWidth <= el.clientWidth)).toBe(true);
   await page.screenshot({path:'/tmp/colonyquest-celebration.png'});
   await page.getByRole('button',{name:'View results',exact:true}).click();
   await page.evaluate(() => window.ColonyCelebration.multiplayer({id:'celebration-test',players:[]}));
@@ -28,9 +29,25 @@ test('smartboard finish early opens a celebration with winning team members', as
   });
   await page.goto('/colonyquest/cq-party');
   await page.locator('#resumeBtn').click();
-  await page.locator('#teacherHandle').click();
+  if (await page.locator('#teacherHandle').isVisible()) await page.locator('#teacherHandle').click();
   page.on('dialog', dialog=>dialog.accept());
   await page.locator('#endGameBtn').click();
   await expect(page.locator('#cqCelebration')).toBeVisible({timeout:20000});
   await expect(page.locator('.cq-winners')).toContainText('Amina');
+});
+test('dance spins and jumps while learner labels stay still; reduced motion stops it',async({page})=>{
+ await page.route('**/colonyquest-live.js*',route=>route.fulfill({contentType:'application/javascript',body:''}));
+ await page.goto('/colonyquest-live.html');
+ await page.evaluate(()=>window.ColonyCelebration.show('dance',[{rank:1,name:'Champions',score:100,members:[{name:'Nguyễn Hoàng Trác Việt'},{name:'Amina'}]}]));
+ const label=page.locator('.cq-winners figcaption').first();
+ const before=await label.boundingBox();
+ const poses=await page.locator('.cq-winners img').first().evaluate(img=>{
+  const animation=img.getAnimations()[0];animation.pause();
+  return [0,2700,4200].map(time=>{animation.currentTime=time;return getComputedStyle(img).transform;});
+ });
+ expect(new Set(poses).size).toBe(3);
+ expect(await label.boundingBox()).toEqual(before);
+ await expect(label).toHaveText('Nguyễn Hoàng Trác Việt');
+ await page.emulateMedia({reducedMotion:'reduce'});
+ expect(await page.locator('.cq-winners img').first().evaluate(img=>getComputedStyle(img).animationName)).toBe('none');
 });
