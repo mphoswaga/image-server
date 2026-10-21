@@ -229,3 +229,21 @@ test('the plan assessment row mirrors the editable phase order, titles, counts a
   const normal = ensureAssessmentFlowVisible(sections, 'lesson', {}, assessmentDraft);
   assert.deepEqual(normal, sections, 'ordinary lessons are unchanged');
 });
+
+test('seven-period sequence keeps its count and later evidence beyond the old context limit', () => {
+  const { sequenceStepPromptBlock } = require('../lesson-plan');
+  const previous='Earlier evidence. '.repeat(600)+'Lesson 6: learners test their predictions.';
+  const prompt=sequenceStepPromptBlock({enabled:true,lessonCount:7,periodMinutes:35},7,previous);
+  assert.match(prompt,/ONLY Lesson 7 of 7/);
+  assert.match(prompt,/exactly 35 minutes/);
+  assert.match(prompt,/Lesson 6: learners test their predictions/);
+});
+
+test('long unit objectives are allocated once across seven teaching periods without changing short sequences', () => {
+  const {sequenceObjectiveFocus}=require('../lesson-plan');
+  const objectives=require('fs').readFileSync(require('path').join(__dirname,'fixtures/science-unit-review-objectives.txt'),'utf8').trim().split('\n');
+  const allocation=Array.from({length:7},(_,i)=>sequenceObjectiveFocus(objectives.join('\n'),7,i+1));
+  assert.deepEqual(allocation.flat(),objectives);
+  assert.ok(allocation.every(group=>group.length===3));
+  assert.equal(sequenceObjectiveFocus('Explain mixtures.\nSort materials.',3,1),null);
+});

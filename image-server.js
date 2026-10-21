@@ -268,7 +268,8 @@ app.disable('x-powered-by');
 // URIs) and req.ip is the real client address for audit logs.
 app.set('trust proxy', true);
 const PORT = process.env.PORT || 4000;
-const presentationUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: PRESENTATION_LIMITS.maxBytes, files: 1 } });
+// Multer stops at its boundary; allow one extra byte so validation accepts exactly 150 MB.
+const presentationUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: PRESENTATION_LIMITS.maxBytes + 1, files: 1 } });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
 // Stripe webhook needs the raw body for signature verification, so its parser
@@ -1901,7 +1902,7 @@ app.delete('/api/planning-sources/:id', requireAuth, (req, res) => {
 
 // Hard truncation limits — enforce here as a server-side backstop so malformed
 // or oversized requests can't inflate token budgets even if the UI is bypassed.
-const LIMITS = { subject: 60, topic: 80, objectives: 1500, focus: 400, source: 24000 };
+const LIMITS = { subject: 60, topic: 80, objectives: 12000, focus: 400, source: 24000 };
 function clip(val, max) { return String(val || '').slice(0, max); }
 function validatedLessonSettings(req) {
   if (!req.body.lessonSettings) return null;
@@ -1917,7 +1918,7 @@ function validatedLessonSettings(req) {
 function lessonSequenceFromBody(body) {
   const enabled = body && (body.sequenceEnabled === true || body.sequenceEnabled === 'true' || body.sequenceEnabled === 'on');
   if (!enabled) return null;
-  const lessonCount = Math.min(5, Math.max(2, parseInt(body.sequenceLessonCount, 10) || 3));
+  const lessonCount = Math.min(10, Math.max(2, parseInt(body.sequenceLessonCount, 10) || 3));
   const periodMinutes = Math.min(180, Math.max(5, parseInt(body.periodMinutes, 10) || 35));
   return { enabled: true, lessonCount, periodMinutes };
 }
@@ -2072,7 +2073,7 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
       sourceMaterialText: sourceMaterialText(req.body), planningFrameworkText: planningFramework.promptText(framework),
       lessonSettings,
       teachingModel: teachingModelId, sequence: lessonSequence, structuredSequence: false,
-      sequenceLessonNumber, previousLessonPlanText: clip(req.body.previousLessonPlanText, 8000), regenerate: !!regenerate,
+      sequenceLessonNumber, previousLessonPlanText: clip(req.body.previousLessonPlanText, 96000), regenerate: !!regenerate,
       lessonIntent: lessonLearning.periodIntent(req.body),
       sequenceLessonPurposes: lessonSequence && Array.isArray(req.body.sequenceLessonPurposes) ? req.body.sequenceLessonPurposes.slice(0,lessonSequence.lessonCount).map(x=>x==='reflect'?'reflect':'teach') : [],
       reflectionMcqCount: Math.max(1,Math.min(20,parseInt(req.body.reflectionMcqCount,10)||8)),
@@ -2184,7 +2185,7 @@ app.post('/api/import/slides', requireAuth, presentationUpload.single('file'), r
   let lessonSettings;try {lessonSettings=req.body.durationMinutes?lessonDesign.normalize({durationMinutes:req.body.durationMinutes}):null;}catch(err){return res.status(400).json({error:err.message});}
   try {
     const parsed = await extractPptxSlides(req.file.buffer);
-    if (!parsed.length) return res.status(400).json({ error: "Couldn't read any slides from that file." });
+    if (!parsed.length) return res.status(400).json({ error: "No readable slide text was found in this PowerPoint. If its slides are pictures or scans, upload a copy with editable text, or start from objectives and paste the lesson content." });
     // Map the parsed slides into the deck shape the UI + downloader expect.
     const slides = parsed.map((p, i) => ({
       type: i === 0 ? 'title' : (i === parsed.length - 1 ? 'recap' : 'content'),
@@ -4710,6 +4711,7 @@ function workspaceDeckSnapshots(req, existing) {
 function workspaceUpdateFrom(req, existing) {
   const body = req.body || {};
   const update = {
+    requestKey: body.requestKey,
     title: body.title,
     subject: body.subject,
     topic: body.topic,
@@ -6333,7 +6335,7 @@ app.use((err, req, res, next) => {
   const tooLarge = err.code === 'LIMIT_FILE_SIZE' || err.code === 'LIMIT_FILE_COUNT';
   observability.recordFailure('upload', { requestId: req.requestId, operation: 'multer', error: err.code });
   res.status(tooLarge ? 413 : 400).json({
-    error: tooLarge ? (['/api/import/slides', '/api/game/from-pptx'].includes(req.path) ? 'Upload one PowerPoint (.pptx) file up to 50 MB. For larger presentations, compress pictures or remove embedded videos in a copy before uploading. Other lesson files must be under 15 MB.' : 'The upload is too large. Use fewer or smaller files.') : 'The upload could not be accepted.',
+    error: tooLarge ? (['/api/import/slides', '/api/game/from-pptx'].includes(req.path) ? 'Upload one PowerPoint (.pptx) file up to 150 MB. For larger presentations, compress pictures or remove embedded videos in a copy before uploading. Other lesson files must be under 15 MB.' : 'The upload is too large. Use fewer or smaller files.') : 'The upload could not be accepted.',
     uploadError: err.code,
   });
 });

@@ -2854,7 +2854,7 @@
     <section id="importSlidesCard" class="card wide" style="display:none">
       <button type="button" class="back-btn mode-back" data-mode-back><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Choose a different starting point</button>
       <h2 class="card-title"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Start from your slides</h2>
-      <p class="hint" style="margin-bottom:20px">Upload your PowerPoint and your slides show up here on the system. From them we can write you a matching lesson plan, or skip straight to worksheets, quizzes and games — all based on what you uploaded.</p>
+      <p class="hint" style="margin-bottom:20px">Upload one PowerPoint, or select several for your week. Each file creates its own lesson plan and saved lesson. Review the titles below before generating. Each plan uses its own slides and the grade, subject and lesson structure you choose here.</p>
       <div data-tpl-mount="mode:haveSlides"></div>
       <div class="grid2">
         <div><label for="isSubject">Subject <span style="color:var(--err)">*</span></label><input id="isSubject" list="subjectList" placeholder="e.g. Science, Mathematics" maxlength="60" /></div>
@@ -2868,19 +2868,22 @@
         </select>
       </div>
       <label for="isLessonMinutes">Lesson duration (minutes)</label><input id="isLessonMinutes" type="number" min="5" max="180" value="35" style="max-width:220px">
+      <label for="isLessonCount">Lessons from each PowerPoint</label><input id="isLessonCount" type="number" min="1" max="10" value="1" style="max-width:220px">
+      <p class="hint">Choose more than one to spread the objectives across connected lessons. Review the first plan, then generate the next lesson from the saved sequence.</p>
       <label for="isModel">Lesson structure</label>
       <select id="isModel">
         <option value="standard">Standard lesson</option><option value="gradual_release">Gradual Release</option><option value="explicit_instruction">Explicit Instruction</option><option value="five_e">5E Inquiry</option><option value="inquiry">Inquiry-Based</option><option value="project_based">Project-Based Lesson</option>
       </select>
       <div class="drop" id="isDrop" style="margin-top:16px">
-        <input id="isFile" aria-label="Choose a slides file to import" type="file" accept=".pptx" style="display:none" />
+        <input id="isFile" aria-label="Choose one or more PowerPoint files" multiple type="file" accept=".pptx" style="display:none" />
         <div class="drop-inner">
           <svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg>
-          <span id="isFileName">Choose your slides — PowerPoint (.pptx, up to 50 MB)</span>
+          <span id="isFileName">Choose one or more PowerPoints (.pptx, up to 150 MB each)</span>
         </div>
       </div>
+      <div id="slideBatchPanel" style="margin-top:16px" hidden></div>
       <label for="isObjectives">Learning objectives (optional if stated in your slides)</label>
-      <textarea id="isObjectives" rows="3" maxlength="1500" placeholder="Paste the learning objectives if your slides do not state them."></textarea>
+      <textarea id="isObjectives" rows="3" maxlength="12000" placeholder="Paste the learning objectives if your slides do not state them."></textarea>
       <div class="wp-slot-mount" data-wp-mount="mode:haveSlides" style="margin-top:18px"></div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:18px">
         <button id="importSlidesPlanBtn" class="btn accent" type="button" style="flex:1;min-width:220px"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg> Upload &amp; write a lesson plan</button>
@@ -3042,7 +3045,7 @@
           </div>
           <!-- Manual mode: textarea -->
           <div id="manualObjSection">
-            <textarea id="objectives" rows="4" maxlength="1500" placeholder="Paste what students should be able to do, e.g.&#10;• Identify the numerator and denominator&#10;• Compare two fractions&#10;• Add fractions with the same denominator"></textarea>
+            <textarea id="objectives" rows="4" maxlength="12000" placeholder="Paste what students should be able to do, e.g.&#10;• Identify the numerator and denominator&#10;• Compare two fractions&#10;• Add fractions with the same denominator"></textarea>
             <div class="char-row"><div id="objErr" class="field-err">Please add at least one objective.</div><span class="char-count" id="objCount"></span></div>
           </div>
           <details class="materials-box" id="materialsDetails">
@@ -3159,7 +3162,7 @@
                 </label>
                 <div>
                   <label for="sequenceLessonCount">Lessons</label>
-                  <input id="sequenceLessonCount" type="number" min="2" max="5" value="3" />
+                  <input id="sequenceLessonCount" type="number" min="2" max="10" value="3" />
                 </div>
                 <div>
                   <label for="periodMinutes">Minutes each</label>
@@ -3444,7 +3447,7 @@
         <div id="pptxDrop" role="button" tabindex="0" aria-label="Upload a lesson file" style="border:2px dashed var(--border);border-radius:12px;padding:22px;text-align:center;cursor:pointer;color:var(--muted);font-size:13px;margin-bottom:10px;transition:border-color .15s">
           <svg class="ic" aria-hidden="true" style="font-size:22px;display:block;margin:0 auto 6px"><use href="#i-image"/></svg>
           Drop your <b data-ui-i18n>lesson file</b> here or <span style="color:var(--primary);font-weight:600" data-ui-i18n>click to browse</span>
-          <p class="hint" data-ui-i18n>PowerPoint (.pptx): up to 50 MB. Other lesson files: up to 15 MB.</p>
+          <p class="hint" data-ui-i18n>PowerPoint (.pptx): up to 150 MB. Other lesson files: up to 15 MB.</p>
           <input id="pptxFileInput" aria-label="Choose a lesson file" type="file" accept=".pptx,.ppt,.docx,.pdf,.txt,.md" style="display:none" />
         </div>
         <div id="pptxFileName" style="font-size:12.5px;color:var(--primary);font-weight:600;margin-bottom:10px;display:none"></div>
@@ -3737,6 +3740,7 @@
   <script src="/games-hub.js?v=2"></script>
   <link rel="stylesheet" href="/games-hub.css">
   <script src="/lesson-design.js"></script>
+  <script src="/slide-upload-batch.js?v=1"></script>
   <script>
     const $=id=>document.getElementById(id);
     const cap=s=>s.replace(/\b\w/g,c=>c.toUpperCase());
@@ -4179,7 +4183,7 @@
 
     function lessonSequenceFromForm(){
       const enabled=!!$('sequenceEnabled')?.checked;
-      const lessonCount=Math.min(5,Math.max(2,parseInt(($('sequenceLessonCount')||{}).value,10)||3));
+      const lessonCount=Math.min(10,Math.max(2,parseInt(($('sequenceLessonCount')||{}).value,10)||3));
       const periodMinutes=Math.min(180,Math.max(5,parseInt(($('periodMinutes')||{}).value,10)||35));
       return enabled
         ? { sequenceEnabled:true, sequenceLessonCount:lessonCount, periodMinutes, sequenceLessonPurposes:[...document.querySelectorAll('[data-period-purpose]')].map(el=>el.value),reflectionMcqCount:Math.max(1,Math.min(20,Number($('reflectionMcqCount').value)||8)) }
@@ -4189,7 +4193,7 @@
     function renderPeriodPurposes(values){
       const previous=values||[...document.querySelectorAll('[data-period-purpose]')].map(el=>el.value);
       $('sequencePurposes').hidden=!$('sequenceEnabled').checked||currentLessonPurpose()!=='lesson';
-      const count=Math.max(2,Math.min(5,Number($('sequenceLessonCount').value)||3));
+      const count=Math.max(2,Math.min(10,Number($('sequenceLessonCount').value)||3));
       $('sequencePurposeRows').innerHTML=Array.from({length:count},(_,i)=>`<label style="display:block;margin:10px 0">Lesson ${i+1}<select data-period-purpose="${i}" aria-label="Purpose of lesson ${i+1}"><option value="teach">Teach and practise</option><option value="reflect" ${previous[i]==='reflect'?'selected':''}>Check understanding and reflect</option></select></label>`).join('');
     }
     $('sequenceEnabled').addEventListener('change',()=>renderPeriodPurposes());
@@ -4430,7 +4434,7 @@
       el.addEventListener('input', update);
       update();
     }
-    charCounter('objectives', 'objCount', 1500);
+    charCounter('objectives', 'objCount', 12000);
     charCounter('focus', 'focusCount', 400);
 
     // Template packs: save several lesson-plan formats, pick one per lesson.
@@ -5084,15 +5088,15 @@
     // A small drop-zone helper: click to pick, drag-drop to fill, shows the name.
     function wireDrop(dropId, fileId, nameId, defaultLabel){
       const drop=$(dropId), file=$(fileId), name=$(nameId);
-      drop.addEventListener('click',()=>file.click());
-      const setName=()=>{ if(file.files[0]){ name.textContent=file.files[0].name; drop.classList.add('filled'); } else { name.textContent=defaultLabel; drop.classList.remove('filled'); } };
+      drop.addEventListener('click',()=>{if(!file.disabled)file.click();});
+      const setName=()=>{ if(file.files[0]){ name.textContent=file.files.length>1?`${file.files.length} PowerPoints selected`:file.files[0].name; drop.classList.add('filled'); } else { name.textContent=defaultLabel; drop.classList.remove('filled'); } };
       file.addEventListener('change',setName);
       drop.addEventListener('dragover',e=>{ e.preventDefault(); drop.classList.add('drag'); });
       drop.addEventListener('dragleave',()=>drop.classList.remove('drag'));
-      drop.addEventListener('drop',e=>{ e.preventDefault(); drop.classList.remove('drag'); if(e.dataTransfer.files[0]){ file.files=e.dataTransfer.files; setName(); } });
+      drop.addEventListener('drop',e=>{ e.preventDefault(); drop.classList.remove('drag'); if(!file.disabled&&e.dataTransfer.files[0]){ file.files=e.dataTransfer.files; file.dispatchEvent(new Event('change')); } });
     }
     wireDrop('ipDrop','ipFile','ipFileName','Choose your lesson plan — Word, PDF, or text');
-    wireDrop('isDrop','isFile','isFileName','Choose your slides — PowerPoint (.pptx, up to 50 MB)');
+    wireDrop('isDrop','isFile','isFileName','Choose one or more PowerPoints (.pptx, up to 150 MB each)');
 
     // Path A — upload a lesson plan, skip objectives, go straight to slides.
     $('importPlanBtn').addEventListener('click', async ()=>{
@@ -5124,47 +5128,39 @@
     // Path B — upload slides. Both buttons parse + show the deck; "plan" also
     // writes a lesson plan from the slide content, "only" jumps to the pack.
     let importedPlanText='';
+    const slideBatch = new SlideUploadBatch({
+      fileInput:$('isFile'), panel:$('slideBatchPanel'),
+      onOpen:async id=>{ if(ctx) await saveWorkspaceNow(); await resumeLessonWorkspace(id); },
+      onBusy:busy=>{ $('importSlidesPlanBtn').disabled=busy; $('importSlidesOnlyBtn').disabled=busy; },
+    });
+    $('isFile').addEventListener('change',()=>{
+      const multiple=$('isFile').files.length>1;
+      $('isTopic').parentElement.hidden=multiple;
+      $('importSlidesPlanBtn').textContent=multiple?'Upload & write lesson plans':'Upload & write a lesson plan';
+      $('importSlidesOnlyBtn').textContent=multiple?'Upload & save all slides':'Upload & go to worksheets';
+      document.querySelector('label[for="isObjectives"]').textContent=multiple?'Shared learning objectives (optional; applies to every file unless overridden above)':'Learning objectives (optional if stated in your slides)';
+    });
     async function importSlides(withPlan){
-      // Writing a plan needs the school's format; going straight to worksheets
-      // doesn't, so only the plan path is gated.
-      if(withPlan && !requireTemplate('your lesson plan')) return;
-      const subject=$('isSubject').value.trim(), topic=$('isTopic').value.trim(), file=$('isFile').files[0];
-      if(!subject){ toast('Enter the subject.'); nudge('isSubject'); return; }
-      if(!topic){ toast('Enter the topic.'); nudge('isTopic'); return; }
-      if(!file){ toast('Choose your slides (.pptx) file.'); nudge('isDrop'); return; }
-      const btn=withPlan?$('importSlidesPlanBtn'):$('importSlidesOnlyBtn');
-      btn.disabled=true; const orig=btn.innerHTML;
-      statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>Reading your slides…';
-      const fd=new FormData();
-      fd.append('file',file); fd.append('subject',subject); fd.append('topic',topic); fd.append('grade',$('isGrade').value);fd.append('durationMinutes',$('isLessonMinutes').value); fd.append('objectives',$('isObjectives').value.trim());
-      const teachingModelId=$('isModel').value||'standard'; fd.append('teachingModelId',teachingModelId);
-      try{
-        const r=await fetch('/api/import/slides',{method:'POST',body:fd});
-        const d=await r.json(); if(!r.ok) throw new Error(d.error);
-        ctx={ lessonSettings:{durationMinutes:Number($('isLessonMinutes').value),slideCountMode:'manual',game:null,observation:null}, subject, topic, grade:$('isGrade').value||'middle school', slideCount:d.slideCount||5,
-          tone:'clear and engaging', focus:'', objectives:($('isObjectives').value||d.objectives||'').trim(), successCriteria:d.successCriteria||[], sourceMaterialText:d.sourceText||'',
-          teachingModelId, lessonPlanText:d.sourceText||'' };
-        importedPlanText=d.sourceText||''; currentDeckId=d.deckId;
-        renderDeck(d);
-        // Clear any prior plan so the lesson pack grounds on the slide content
-        // (an empty plan makes the server fall back to ctx.lessonPlanText).
-        planTemplateId=null; if($('planSections')) $('planSections').innerHTML='';
-        if(withPlan){
-          if(!ctx.objectives){ throw new Error('Your slides were read, but no learning objectives were found. Add the learning objectives above, then choose Upload & write a lesson plan again.'); }
-          statusEl.innerHTML='<span class="spinner"></span>Writing a lesson plan from your slides…';
-          const pr=await fetch('/api/lesson-plan',{method:'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({subject,topic,lessonSettings:ctx.lessonSettings,grade:$('isGrade').value,teachingModelId,
-              objectives:ctx.objectives, sourceMaterialText:d.sourceText||'', successCriteria:d.successCriteria||[]})});
-          const pd=await pr.json();
-          if(pr.ok){ renderPlan(pd); }
-          else { throw new Error(pd.error||'Could not write a plan. Your uploaded slides have been read; please retry.'); }
-        }
-        deckImported=true;
-        statusEl.innerHTML='';
-        if(withPlan && $('planSections').children.length){ show('plan'); setStep(2); planStage.scrollIntoView({behavior:'smooth'}); }
-        else { show('slides'); setStep(3); results.scrollIntoView({behavior:'smooth'}); }
-      }catch(err){ statusEl.className='status err'; statusEl.textContent=err.message; }
-      btn.disabled=false; btn.innerHTML=orig;
+      if(slideBatch.busy)return;
+      const subject=$('isSubject').value.trim(), single=$('isFile').files.length===1;
+      if(!subject){toast('Enter the subject.');nudge('isSubject');return;}
+      if(!$('isFile').files.length){toast('Choose your slides (.pptx) file.');nudge('isDrop');return;}
+      if(single&&!$('isTopic').value.trim()){toast('Enter the topic.');nudge('isTopic');return;}
+      if(withPlan&&!requireTemplate(single?'your lesson plan':'your lesson plans'))return;
+      if(single&&!slideBatch.hasProgress)slideBatch.rows[0].topic=$('isTopic').value.trim();
+      await slideBatch.run(withPlan,{
+        subject,grade:$('isGrade').value,objectives:$('isObjectives').value.trim(),
+        teachingModelId:$('isModel').value||'standard',
+        sequenceEnabled:Number($('isLessonCount').value)>1,
+        sequenceLessonCount:Number($('isLessonCount').value),
+        periodMinutes:Number($('isLessonMinutes').value),
+        lessonSettings:{durationMinutes:Number($('isLessonMinutes').value),slideCountMode:'manual',game:null,observation:null},
+        templateId:selectedTemplateId,planningFrameworkId:selectedPlanningFrameworkId,
+        useWeekPlanner:!selectedTemplateId&&!!weekPlannerState?.present,
+        weekPlannerId:!selectedTemplateId?weekPlannerState?.activeId:null,
+      });
+      refreshCredits();
+      if(single&&slideBatch.rows[0]?.done)await slideBatch.onOpen(slideBatch.rows[0].workspaceId);
     }
     $('importSlidesPlanBtn').addEventListener('click',()=>importSlides(true));
     $('importSlidesOnlyBtn').addEventListener('click',()=>importSlides(false));
@@ -5235,7 +5231,7 @@
         const first={...sourcePlan,teachingModelId:ctx.teachingModelId||'standard',lessonPurpose:'lesson',sequenceLessonNumber:1};
         const nextContext={...ctx,sequenceEnabled:true,sequenceLessonCount:2,sequenceLessonPurposes:['teach','reflect'],periodMinutes:ctx.lessonSettings?.durationMinutes||ctx.periodMinutes||35};
         statusEl.textContent='Creating a reflection lesson in a new sequence; your original stays saved…';
-        const response=await fetch('/api/lesson-plan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...nextContext,sequenceLessonNumber:2,previousLessonPlanText:first.sections.map(s=>`${s.heading}: ${s.content}`).join('\n').slice(0,8000)})});
+        const response=await fetch('/api/lesson-plan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...nextContext,sequenceLessonNumber:2,previousLessonPlanText:first.sections.map(s=>`${s.heading}: ${s.content}`).join('\n').slice(0,96000)})});
         const d=await response.json();if(!response.ok)throw Error(d.error||'Could not create the follow-up.');
         if(ctx!==sourceContext)return;
         await workspaceSaveChain;
@@ -5354,7 +5350,7 @@
       return sequencePlans.slice(0,Math.max(0,nextLessonNumber-1)).filter(Boolean).map((plan,index)=>[
         `LESSON ${index+1}`,
         ...(plan.sections||[]).map(section=>`${section.heading}: ${section.content}`),
-      ].join('\n')).join('\n\n').slice(0,8000);
+      ].join('\n')).join('\n\n').slice(0,96000);
     }
     function combinedSequencePlan(){
       saveActiveSequencePlan();

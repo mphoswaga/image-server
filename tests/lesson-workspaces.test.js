@@ -74,3 +74,19 @@ test('archived workspaces leave the default list without being deleted', () => {
 test('unsafe workspace ids cannot escape a teacher directory', () => {
   assert.equal(workspaces.get('teacher-a', '../../teacher-b/private'), null);
 });
+
+
+test('retrying a batch creation preserves the original lesson and remains teacher scoped', () => {
+  const requestKey = require('crypto').randomUUID();
+  const first = workspaces.create('batch-owner', { requestKey, topic: 'Plants' });
+  workspaces.update('batch-owner', first.id, { plan: { sections: [{ heading: 'Teaching', content: 'Saved plan' }] } });
+  const retry = workspaces.create('batch-owner', { requestKey, topic: 'Different stale payload' });
+  assert.equal(retry.id, first.id);
+  assert.equal(retry.topic, 'Plants');
+  assert.equal(retry.plan.sections[0].content, 'Saved plan');
+  assert.equal(workspaces.list('batch-owner').length, 1);
+  assert.equal(workspaces.get('batch-other', first.id), null);
+  const other = workspaces.create('batch-other', { requestKey, topic: 'Other private lesson' });
+  assert.equal(other.topic, 'Other private lesson');
+  assert.equal(workspaces.get('batch-owner', first.id).topic, 'Plants');
+});

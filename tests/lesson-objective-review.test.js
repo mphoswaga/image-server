@@ -40,3 +40,13 @@ test('coverage review tolerates objective code formatting differences', async()=
  const issues=await reviewObjectives(ai,{sections:[]},{objectives:'3Ni\\.07 • Know 1, 2, 3, 4, 5, 6, 8, 9 and 10 times tables.\ntimes tables.',model:'test'});
  assert.deepEqual(issues,[]);
 });
+
+test('staged review retains earlier lessons and cannot defer final-period gaps', async()=>{
+ let request;
+ const ai={chat:{completions:{create:async input=>{request=input;return {choices:[{message:{content:JSON.stringify({coverage:objectives.split('\n').map(objective=>({objective,deferred:true,criterion:'I can explain with an example.',teaching:'',practice:'',check:''})),timingValid:true,timingIssues:[]})}}]};}}}};
+ const options={objectives,model:'test',sequence:{enabled:true,lessonCount:7,periodMinutes:35},previousLessonPlanText:'Earlier content '.repeat(700)+'Sixth lesson evidence'};
+ assert.deepEqual(await reviewObjectives(ai,{sections:[]},{...options,lessonNumber:1}),[]);
+ const issues=await reviewObjectives(ai,{sections:[]},{...options,lessonNumber:7});
+ assert.equal(issues.length,6);
+ assert.match(JSON.parse(request.messages[1].content).previousLessons,/Sixth lesson evidence/);
+});

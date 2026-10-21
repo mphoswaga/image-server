@@ -129,3 +129,12 @@ test('rejects an oversized forty-minute plenary in a seventy-minute lesson',()=>
  const schema=planSchema(getTeachingModel('standard'),null,false,false,true).properties.teachingEvidence;
  assert.deepEqual(schema.items.properties.lesson.enum,[1]);assert.equal(schema.minItems,1);assert.equal(schema.maxItems,1);
  });
+
+test('timing schema excludes zero minutes and repair feedback identifies the invalid field', () => {
+  const schema = planSchema(getTeachingModel('standard'), null, false, false, true);
+  assert.equal(schema.properties.teachingEvidence.items.properties.timings.items.properties.minutes.minimum, 1);
+  const result=integrateTeachingEvidence({sections:[{heading:'Guided Practice',content:'Task'},{heading:'Resources',content:'Paper'}],teachingEvidence:[{...checkpoint,timings:[{sectionHeading:'Resources',minutes:5},{sectionHeading:'Unknown activity',minutes:5},{sectionHeading:'Guided Practice',minutes:60}]}]},{periodMinutes:70});
+  assert.ok(result.issues.some(s=>s.includes('"Resources" (5 minutes)')&&s.includes('remove this timing')));
+  assert.ok(result.issues.some(s=>s.includes('"Unknown activity"')&&s.includes('Allowed headings: Guided Practice')));
+  assert.ok(result.issues.some(s=>s.includes('total 60 minutes')));
+});

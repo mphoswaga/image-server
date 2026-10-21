@@ -23,7 +23,7 @@ const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const LESSON_MODEL = process.env.OPENAI_LESSON_MODEL || 'gpt-4.1';
 
 function planSchema(model, sequence = null, structuredSequence = false, includeAssessment = false, includeTeachingEvidence = false) {
-  const lessonCount = Math.min(5, Math.max(2, parseInt(sequence && sequence.lessonCount, 10) || 3));
+  const lessonCount = Math.min(10, Math.max(2, parseInt(sequence && sequence.lessonCount, 10) || 3));
   const sectionProperties = {
     heading: { type: 'string' },
     content: { type: 'string' },
@@ -74,7 +74,7 @@ function planSchema(model, sequence = null, structuredSequence = false, includeA
 function sequencePromptBlock(sequence, hasTemplate, structuredSequence = false, lessonPurpose = 'lesson') {
   if (!sequence || !sequence.enabled) return '';
   const purpose = normalizeLessonPurpose(lessonPurpose);
-  const lessonCount = Math.min(5, Math.max(2, parseInt(sequence.lessonCount, 10) || 3));
+  const lessonCount = Math.min(10, Math.max(2, parseInt(sequence.lessonCount, 10) || 3));
   const periodMinutes = Math.min(180, Math.max(5, parseInt(sequence.periodMinutes, 10) || 35));
   const periodRequirements = purpose === 'project'
     ? 'Every lesson must include its project phase, concrete student work, teacher observation, a visible checkpoint or submission check, and the resources needed for that phase. Students do the assessed work; do not add teacher modelling or guided practice.'
@@ -106,10 +106,10 @@ ${hasTemplate ? 'Keep the school template headings exactly as given, but inside 
 function sequenceStepPromptBlock(sequence, lessonNumber, previousLessonPlanText = '', lessonPurpose = 'lesson') {
   if (!sequence || !sequence.enabled || !lessonNumber) return '';
   const purpose = normalizeLessonPurpose(lessonPurpose);
-  const lessonCount = Math.min(5, Math.max(2, parseInt(sequence.lessonCount, 10) || 3));
+  const lessonCount = Math.min(10, Math.max(2, parseInt(sequence.lessonCount, 10) || 3));
   const periodMinutes = Math.min(180, Math.max(5, parseInt(sequence.periodMinutes, 10) || 35));
   const step = Math.min(lessonCount, Math.max(1, parseInt(lessonNumber, 10) || 1));
-  const previous = String(previousLessonPlanText || '').slice(0, 8000).trim();
+  const previous = String(previousLessonPlanText || '').slice(0, 96000).trim();
   const periodRequirements = purpose === 'project'
     ? 'Include the concrete student project work for this phase, teacher observation, a visible checkpoint or submission check, and useful resources. Students perform the assessed skills; do not add teacher modelling or guided practice.'
     : purpose === 'test'
@@ -169,7 +169,7 @@ ${templateText.slice(0, TEMPLATE_PROMPT_LIMIT)}
     .map(value => String(value || '').trim()).filter(Boolean);
   const criteriaBlock = suppliedCriteria.length
     ? `The teacher/school supplied these SUCCESS CRITERIA. Preserve their wording and order in successCriteria. LEARNING OBJECTIVES TAKE PRIORITY: check every objective, and append an observable "I can..." criterion for any objective not covered. Do not let supplied criteria narrow or replace the objectives. Avoid duplicate criteria:\n${suppliedCriteria.join('\n')}`
-    : `No success criteria were supplied. Create concise, observable success criteria covering EVERY learning objective; use as many as needed. Every item must begin "I can..." and describe evidence a student can demonstrate by the end of this lesson; do not use vague verbs such as understand, know, or learn.`;
+    : `No success criteria were supplied. Create concise, observable success criteria covering EVERY learning objective; use as many as needed. Every item must begin "I can..." and describe evidence a student can demonstrate by the end of ${sequence?.enabled ? 'the complete sequence' : 'this lesson'}; do not use vague verbs such as understand, know, or learn.`;
   const modelDetailRule = model.id === 'gradual_release'
     ? `GRADUAL RELEASE REQUIREMENT:
 In the main teaching/activity field, begin with "Teaching model: Gradual Release" and use these labels exactly: "I Do", "We Do", "You Do Together", and "You Do Alone". Under every label give concrete teacher actions, concrete student actions, the example/task or materials, and a check for understanding or transition. Do not reduce a phase to a single generic sentence. The closing/plenary must provide the Exit and Reflect phase.`
@@ -816,6 +816,15 @@ async function repairAssessmentDraft(client, initialDraft, context, options) {
   throw error;
 }
 
+// Long unit lists need a stable allocation, not a fresh guess each period.
+// Preserve the curriculum order; short lists and mixed teaching/reflection
+// sequences keep their existing flexible progression.
+function sequenceObjectiveFocus(objectives, count, number) {
+  const lines = objectiveLines(objectives);
+  if (!count || !number || lines.length < count * 2) return null;
+  return lines.slice(Math.floor((number - 1) * lines.length / count), Math.floor(number * lines.length / count));
+}
+
 async function generateLessonPlan({ subject, topic, grade = 'middle school', tone = 'clear and engaging', objectives, successCriteria = [], templateText, unitBlock = '', sourceMaterialText = '', planningFrameworkText = '', teachingModel = 'standard', sequence = null, structuredSequence = false, sequenceLessonNumber = null, previousLessonPlanText = '', lessonPurpose = 'lesson', assessmentTotalMarks = 50, assessmentStructure = 'balanced', assessmentDeliveryMode = 'live', assessmentBrief = '', assessmentQuestionTypes = [], assessmentMcqCount = 15, assessmentPhases = [], regenerate = false, lessonSettings = null, lessonIntent = 'teach', sequenceLessonPurposes = [], reflectionMcqCount = 8 }) {
   const reflecting = lessonPurpose === 'lesson' && lessonIntent === 'reflect';
   const reflectionCount = Math.max(1, Math.min(20, parseInt(reflectionMcqCount,10)||8));
@@ -828,12 +837,14 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
   const assessmentOptions = normalizeAssessmentOptions({ assessmentTotalMarks, assessmentStructure, assessmentDeliveryMode, assessmentBrief, assessmentQuestionTypes, assessmentMcqCount, assessmentPhases });
   const cleanSequence = sequence && sequence.enabled ? {
     enabled: true,
-    lessonCount: Math.min(5, Math.max(2, parseInt(sequence.lessonCount, 10) || 3)),
+    lessonCount: Math.min(10, Math.max(2, parseInt(sequence.lessonCount, 10) || 3)),
     periodMinutes: Math.min(180, Math.max(5, parseInt(sequence.periodMinutes, 10) || 35)),
   } : null;
   const cleanLessonNumber = cleanSequence && sequenceLessonNumber != null
     ? Math.min(cleanSequence.lessonCount, Math.max(1, parseInt(sequenceLessonNumber, 10) || 1))
     : null;
+  const periodObjectives = purpose === 'lesson' && !reflecting && cleanLessonNumber && !sequenceLessonPurposes.includes('reflect')
+    ? sequenceObjectiveFocus(objectives, cleanSequence.lessonCount, cleanLessonNumber) : null;
   if (!process.env.OPENAI_API_KEY) {
     if (reflecting) throw new Error('AI generation is unavailable. Your existing lesson is unchanged; retry when generation is available.');
     console.log('No OPENAI_API_KEY set — using placeholder lesson plan.');
@@ -863,7 +874,7 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     teachingModelId,
     lessonPurpose: purpose,
     assessmentOptions,
-    lessonPlanQualityVersion: 11,
+    lessonPlanQualityVersion: 13,
     lessonIntent, sequenceLessonPurposes, reflectionMcqCount,
     planningModel: purpose === 'lesson' ? LESSON_MODEL : MODEL,
     observationGuidanceVersion: OBSERVATION_GUIDANCE_VERSION,
@@ -871,19 +882,24 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
     sequence: cleanSequence,
     structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber),
     sequenceLessonNumber: cleanLessonNumber,
-    previousLessonPlanText: String(previousLessonPlanText || '').slice(0, 8000).trim(),
+    previousLessonPlanText: String(previousLessonPlanText || '').slice(0, 96000).trim(),
     regenerate,
   }, async () => {
     const client = aiClient();
     let basePrompt = buildPrompt({ subject, topic, grade, tone, objectives, successCriteria, templateText, unitBlock, sourceMaterialText, planningFrameworkText, teachingModel: teachingModelId, sequence: cleanSequence, structuredSequence: !!(cleanSequence && structuredSequence && !cleanLessonNumber), sequenceLessonNumber: cleanLessonNumber, previousLessonPlanText, lessonPurpose: purpose, assessmentOptions });
     basePrompt += '\n' + outcomePrompt();
-    if (sequenceLessonPurposes.length && purpose === 'lesson') basePrompt += '\nSequence intentions (apply only to the current period): ' + sequenceLessonPurposes.slice(0,5).map((intent,i) => `Lesson ${i+1}: ${intent === 'reflect' ? 'check understanding and reflect on previously taught objectives' : 'teach and practise'}`).join('; ');
+    if (purpose === 'lesson' && !cleanLessonNumber) basePrompt += '\nOBJECTIVE COVERAGE: The single detailed teachingEvidence checkpoint is NOT the only assessment in the lesson. Within the teaching/practice sections, explicitly connect EVERY supplied objective to a concrete learner task and an observable response that the teacher checks. Use the objective codes where available. For a unit review, organise related objectives into concise review tasks or stations, with the exact question/action, expected response and how every learner shows it. A single task can cover several objectives only when its observable responses genuinely demonstrate each one. Include research, practical and diagram tasks where required, not only oral recall. Do not hide these checks in the objectives list, success criteria or resources. Keep them within the requested time; do not claim all objectives are checked by one generic exit question.';
+    if (cleanSequence && cleanLessonNumber) basePrompt += '\nSEQUENCE COVERAGE SCOPE: Select a manageable, coherent subset of objectives for this period (typically two to four main objectives in a 35-minute period, with related enquiry skills embedded where genuinely practised), guided by its position in the sequence and previous lessons. State this period\'s focus and its objective codes in the Lesson Overview. The full objective list and success criteria describe the whole sequence, not tasks to cram into this lesson. Explicitly state that remaining objectives are reserved for subsequent periods (without outlining those periods). Distribute all supplied objectives across the connected sequence; do not attempt the entire unit in each short lesson. Earlier approved lessons count towards coverage. Use the final period to address remaining gaps and consolidate. Keep concrete teaching, learner practice and checks for each objective addressed in this period.';
+    if (periodObjectives) basePrompt += '\nREQUIRED PERIOD ALLOCATION: Teach, practise and individually check exactly these core objectives in this period:\n' + periodObjectives.join('\n') + '\nOther objectives in the whole-unit list are assigned to other periods. Do not introduce extra topics or turn their success criteria into activities now. Supporting safety and prerequisite reminders are allowed. Preserve the whole-sequence criteria separately. On the last period, also close any genuine gaps from the earlier plans.';
+    if (sequenceLessonPurposes.length && purpose === 'lesson') basePrompt += '\nSequence intentions (apply only to the current period): ' + sequenceLessonPurposes.slice(0,10).map((intent,i) => `Lesson ${i+1}: ${intent === 'reflect' ? 'check understanding and reflect on previously taught objectives' : 'teach and practise'}`).join('; ');
     if (reflecting) basePrompt += `\nTHIS PERIOD IS A FORMATIVE CHECK AND REFLECTION LESSON. This overrides the normal teach-new-content flow. Use the earlier approved lessons and supplied objectives; do not introduce new assessed content. Plan a brief starter/recap without giving question answers, an independent check of ${Math.max(1,Math.min(20,Number(reflectionMcqCount)||8))} multiple-choice questions, then review misconceptions, allow corrections with explanations, and finish with a different short recheck. Return every actual MCQ, distinct options, zero-based correctIndex, explanation and a supplied objective link in reflectionCheck. Do not duplicate the questions or answer key in sections: the app appends them to the main activity. Plan the independent-check timings there. Keep answers hidden until everyone has submitted their initial attempt. Include time for student reflection against success criteria. Initial independent answers and post-feedback corrections are distinct evidence, not a formal test score. If an objective requires a practical demonstration, include a brief independent practical check as well; multiple-choice answers alone cannot establish that skill. Preserve school headings. Teaching evidence checks and responsive support belong AFTER the independent check. The outcome describes demonstrating the previously taught knowledge, not learning new content.`;
     const draftContext = assessmentContext({ subject, topic, grade, objectives, sourceMaterialText, lessonPurpose: purpose }, assessmentOptions);
     const schema = planSchema(model, cleanSequence, !!(cleanSequence && structuredSequence && !cleanLessonNumber), purpose !== 'lesson', purpose === 'lesson');
     if (reflecting) { schema.properties.reflectionCheck = reflectionSchema(reflectionCount); schema.required.push('reflectionCheck'); }
     if (hasPlannedGame) { schema.properties.gamePlacement = lessonDesign.placementSchema(); schema.required.push('gamePlacement'); }
-    const exactHeadings = strictTemplateHeadings(templateText);
+    const exactHeadings = !templateText && purpose === 'lesson' && model.id === 'standard'
+      ? ['Lesson Overview', 'Learning Objectives', 'Starter / Hook', 'Main Teaching', 'Guided Practice / Activity', 'Plenary / Exit Card', 'Resources & Differentiation']
+      : strictTemplateHeadings(templateText);
     if (exactHeadings.length) {
       schema.properties.sections.items.properties.heading.enum = exactHeadings;
       const count = exactHeadings.length * (cleanSequence && structuredSequence && !cleanLessonNumber ? cleanSequence.lessonCount : 1);
@@ -906,7 +922,7 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
       const correction = lastIssues.length ? `\n\nYour previous draft failed these required checks: ${lastIssues.join('; ')}. Correct every issue in the new response.` : '';
       const response = await client.chat.completions.create({
         model: purpose === 'lesson' ? LESSON_MODEL : MODEL,
-        max_tokens: reflecting || (cleanSequence && structuredSequence && !cleanLessonNumber) ? 12000 : (purpose === 'lesson' ? 6000 : 12000),
+        max_tokens: reflecting || (cleanSequence && structuredSequence && !cleanLessonNumber) ? 12000 : (purpose === 'lesson' ? Math.min(12000, Math.max(6000, objectiveLines(objectives).length * 450)) : 12000),
         messages: [
           { role: 'system', content: observationPromptBlock(purpose) + (purpose === 'lesson' ? '\nReturn teachingEvidence with exactly one checkpoint per lesson. Use lesson=1 for a single or staged lesson; for a structured sequence use the matching section.lesson. sectionHeading must exactly match an existing teaching/practice section. Provide a concrete question, expectedReasoning, an allLearnerCheck response method, a specific ifThenResponse to a likely misconception (and extension when ready), a new recheck task, and studentReview describing a criterion-based self-check and actual revision. These will be inserted into the chosen section, so allocate time within its activity and do not duplicate them in section content. Do not put these in Reflection, Resources, Objectives or Overview. Each field must be substantive, topic-specific and classroom-ready, not generic advice.' : '') + correction },
           { role: 'user', content: basePrompt + lessonDesign.prompt(settings, structuredSequence && settings?.game ? settings.game.lesson : designLesson) + require('./game-teaching-guide').gamePrompt(settings?.game && (structuredSequence || settings.game.lesson === designLesson) ? settings.game : null) },
@@ -937,7 +953,8 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
           objectives, suppliedSuccessCriteria: successCriteria, teachingModelId, lessonPurpose: purpose,
         });
         const coverageIssues = await reviewObjectives(client, candidate, {
-          objectives, settings, sequence: cleanSequence, lessonNumber: cleanLessonNumber, previousLessonPlanText, model: LESSON_MODEL,
+          objectives: periodObjectives && cleanLessonNumber < cleanSequence.lessonCount ? periodObjectives.join('\n') : objectives, settings,
+          sequence: periodObjectives && cleanLessonNumber < cleanSequence.lessonCount ? null : cleanSequence, lessonNumber: cleanLessonNumber, previousLessonPlanText, model: LESSON_MODEL,
         });
         lastIssues = [...planIssues, ...integrated.issues, ...gameResult.issues, ...coverageIssues, ...(!cleanOutcome(candidate.learningOutcome) ? ['Provide a concise assessable learningOutcome.'] : [])];
         if (!lastIssues.length) return { ...candidate, teachingModelId, sequence: cleanSequence, sequenceLessonNumber: cleanLessonNumber };
@@ -970,7 +987,7 @@ function planToText(plan) {
 }
 
 module.exports = {
-  TEMPLATE_PROMPT_LIMIT, generateLessonPlan, planToText, planSchema,
+  TEMPLATE_PROMPT_LIMIT, generateLessonPlan, planToText, planSchema, sequenceObjectiveFocus,
   sequencePromptBlock, sequenceStepPromptBlock, buildPrompt,
   deriveSuccessCriteria, finalizeLessonPlan, ensureGradualReleaseVisible,
   ensureAssessmentFlowVisible, strictTemplateHeadings, dedupeSectionLines, lessonPlanIssues, isAllowedBlankPlanSection,

@@ -83,9 +83,13 @@ function normalizeInput(input = {}, previous = null) {
 }
 
 function create(teacherId, input = {}) {
+  // A retried batch save must return the original lesson, not create a duplicate.
+  const id = safeId(input.requestKey).toLowerCase() || crypto.randomUUID();
+  const existing = get(teacherId, id);
+  if (existing) return existing;
   const now = new Date().toISOString();
   const record = {
-    id: crypto.randomUUID(),
+    id,
     ...normalizeInput(input),
     createdAt: now,
     updatedAt: now,

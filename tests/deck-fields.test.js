@@ -70,3 +70,14 @@ test('Filtering slide headings and explanations stay separate from lesson object
   assert.equal(objectivesFromDeck({ slides }), objectives.join('\n'));
   assert.equal(objectivesFromDeck({ slides: slides.filter(s => s.title !== 'Lesson Objectives') }), '');
 });
+
+test('explicit objective labels in later text boxes and inline labels are extracted separately', () => {
+  const deck={slides:[{title:'File sizes',bullets:['Learning objectives:', 'Compare bytes and kilobytes.', 'Success criteria:', 'I can order file sizes.', 'Activity: Sort the cards', 'Work in pairs.']},
+    {title:'LO: Recognise text files.',bullets:[]}]};
+  assert.equal(objectivesFromDeck(deck),'Compare bytes and kilobytes.\nRecognise text files.');
+  assert.equal(criteriaFromDeck(deck),'I can order file sizes.');
+});
+
+test('discussion about objectives is not mistaken for a labelled objective', () => {
+  assert.equal(objectivesFromDeck({slides:[{title:'Objectives help us plan our work',bullets:['Talk with a partner.']}]}),'');
+});

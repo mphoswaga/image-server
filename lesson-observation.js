@@ -1,7 +1,7 @@
 // Practical planning guidance distilled from the school's September 2026 CPD
 // and observation rubric. This is a planning aid, not an observation score.
 // Keep it independent of template fields and out of assessed-content teaching.
-const OBSERVATION_GUIDANCE_VERSION = 3;
+const OBSERVATION_GUIDANCE_VERSION = 4;
 
 function observationPromptBlock(purpose = 'lesson') {
   const common = `
@@ -43,7 +43,7 @@ function teachingEvidenceSchema() {
   return { type: 'array', items: { type: 'object', additionalProperties: false,
     properties: { lesson: { type: 'integer' }, ...Object.fromEntries(evidenceFields.map(key => [key, { type: 'string', description: evidenceDescriptions[key] }])),
       timings: { type: 'array', description: 'Allocate the full lesson duration once across existing activity headings, including checkpoint, transitions and closing. No time for metadata or reflection fields.', items: {
-        type: 'object', additionalProperties: false, properties: { sectionHeading: { type: 'string' }, minutes: { type: 'integer' } }, required: ['sectionHeading', 'minutes'],
+        type: 'object', additionalProperties: false, properties: { sectionHeading: { type: 'string', description: 'Copy an existing activity heading exactly. Omit Resources, Objectives, Overview and teacher Reflection fields entirely; do not add zero-minute entries.' }, minutes: { type: 'integer', minimum: 1, maximum: 180 } }, required: ['sectionHeading', 'minutes'],
       } },
     },
     required: ['lesson', ...evidenceFields, 'timings'],
@@ -85,7 +85,9 @@ function integrateTeachingEvidence(plan, { periodMinutes = null, sequenceLessonN
       const target = sections.findIndex(section => (section.lesson || 1) === period && section.heading === timing.sectionHeading);
       if (target < 0 || timed.has(target) || !Number.isInteger(timing.minutes) || timing.minutes < 1 || timing.minutes > 180
         || /reflection|resources|objectives|overview|phonics/i.test(timing.sectionHeading)) {
-        issues.push('Allocate positive minutes once per existing activity heading, excluding administrative fields.');
+        const reason = target < 0 ? 'does not exactly match an existing section' : timed.has(target) ? 'duplicates an already timed section' : /reflection|resources|objectives|overview|phonics/i.test(timing.sectionHeading) ? 'is an administrative or teacher-reflection field; remove this timing entry and allocate its minutes to an activity' : 'needs an integer duration from 1 to 180; omit unused fields instead of assigning zero';
+        const allowed = sections.filter(section => (section.lesson || 1) === period && !/reflection|resources|objectives|overview|phonics/i.test(section.heading)).map(section => section.heading);
+        issues.push(`Invalid timing "${timing.sectionHeading}" (${timing.minutes} minutes): ${reason}. Allowed headings: ${allowed.join('; ')}.`);
         continue;
       }
       if(periodMinutes && /plenary|closing|wrap.up/i.test(timing.sectionHeading) && timing.minutes>Math.max(10,Math.ceil(periodMinutes*.25))) issues.push('Keep the closing review brief and allocate more time to teaching and learner practice; do not put the remaining lesson into the plenary.');

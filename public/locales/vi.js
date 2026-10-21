@@ -1,5 +1,7 @@
 /* UI strings only; lesson content is never translated here. */
 window.LessonScopeVietnamese = {
+  "Lessons from each PowerPoint": "Số tiết học từ mỗi tệp PowerPoint",
+  "Choose more than one to spread the objectives across connected lessons. Review the first plan, then generate the next lesson from the saved sequence.": "Chọn nhiều hơn một tiết để phân bổ mục tiêu qua các bài học liên tiếp. Xem lại kế hoạch đầu tiên, sau đó tạo tiết tiếp theo trong chuỗi đã lưu.",
   "Teaching": "Giảng dạy",
   "Classes & families": "Lớp học và gia đình",
   "Tools & support": "Công cụ và hỗ trợ",
@@ -150,7 +152,7 @@ window.LessonScopeVietnamese = {
   "(choose any number)": "(có thể chọn nhiều lớp)",
   "lesson file": "tệp bài học",
   "click to browse": "nhấn để chọn tệp",
-  "PowerPoint (.pptx): up to 50 MB. Other lesson files: up to 15 MB.": "PowerPoint (.pptx): tối đa 50 MB. Các tệp bài học khác: tối đa 15 MB.",
+  "PowerPoint (.pptx): up to 150 MB. Other lesson files: up to 15 MB.": "PowerPoint (.pptx): tối đa 150 MB. Các tệp bài học khác: tối đa 15 MB.",
   "Upload a lesson file": "Tải tệp bài học lên",
   "Choose a lesson file": "Chọn tệp bài học",
   "Not you? Sign out": "Không phải con? Đăng xuất",
