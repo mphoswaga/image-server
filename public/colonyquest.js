@@ -1797,7 +1797,30 @@
     $('gameLessonTitle').textContent = data.game.lessonTitle;
     soundOn = config.sound !== false;
     initAudio();
-    createRenderer();
+    $('eventKicker').textContent = 'Preparing the meadow';
+    $('eventTitle').textContent = 'Your colonies are getting ready';
+    $('eventText').textContent = 'Loading the ants and their world…';
+    $('eventContinue').classList.add('hidden');
+    setOverlay('eventOverlay');
+    $('gameScreen').inert = true;
+    const loadingStarted = Date.now();
+    try {
+      createRenderer();
+      await new Promise((resolve, reject) => {
+        const check = () => {
+          if (scene && colonyViews.size === session.teams.length) return resolve();
+          if (Date.now() - loadingStarted > 45000) return reject(new Error('The colony graphics could not finish loading. Please try Continue game again.'));
+          setTimeout(check, 50);
+        };
+        check();
+      });
+    } catch (error) {
+      await destroyRenderer();
+      $('gameScreen').classList.add('hidden');
+      $('setup').classList.remove('hidden');
+      throw error;
+    } finally { $('gameScreen').inert = false; }
+    if (session.endsAt && session.phase !== 'paused' && session.phase !== 'ended') session.endsAt += Date.now() - loadingStarted;
     updateHUD();
     clearInterval(clockTimer);
     clockTimer = setInterval(() => {

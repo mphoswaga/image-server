@@ -11,6 +11,7 @@ for(const motion of ['reduce','no-preference']) test(`smartboard raid finishes b
   if(route.request().method()==='PUT'){session=route.request().postDataJSON().session;return route.fulfill({json:{ok:true}});}
   return route.fulfill({json:{game:{id:'cinema',questions:[{question:'Where?',options:['Nest','Cup'],correctIndex:0}],colonyquest:{teamCount:2,rounds:10,sound:false,teams}},session}});
  });
+ await page.route('**/assets/colonyquest/moonroot-meadow.webp',async route=>{await new Promise(r=>setTimeout(r,1500));await route.continue();});
  await page.goto('/colonyquest/cinema');await page.locator('#resumeBtn').click();
  await page.locator('[data-reward="raid"]').click();await page.locator('[data-target]').first().click();
  await expect(page.locator('#worldViewport')).toHaveAttribute('data-raid-phase','outbound');
