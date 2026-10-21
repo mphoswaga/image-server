@@ -49,7 +49,7 @@ test('dance spins and jumps while learner labels stay still; reduced motion keep
  expect(await label.boundingBox()).toEqual(before);
  await expect(label).toHaveText('Nguyễn Hoàng Trác Việt');
  await page.emulateMedia({reducedMotion:'reduce'});
- expect(await page.locator('.cq-winners img').first().evaluate(img=>getComputedStyle(img).animationName)).toBe('cq-gentle-celebration');
+ await expect.poll(()=>page.locator('.cq-winners img').first().evaluate(img=>getComputedStyle(img).animationName)).toBe('cq-gentle-celebration');
 });
 test('a whole winning team keeps readable names alongside the podium',async({page},info)=>{
  await page.setViewportSize({width:1366,height:768});

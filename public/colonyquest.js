@@ -943,7 +943,7 @@
     const team = session.teams.find(item => item.id === (event && event.teamId)) || currentTeam();
     const story = REWARD_STORIES[key] || { title: 'The colony grows', text: 'The ants put their new reward to work inside the nest.', site: 'center' };
     setOverlay(null);
-    celebrate(team.id, key);
+    if (!['expansion', 'defense'].includes(key)) celebrate(team.id, key);
     focusColony(team.id, story.site, true);
     const actionDuration = playUpgradeAction(team.id, key);
     updateHUD();
@@ -953,8 +953,8 @@
     await waitForPresentation(hold);
     if (growthPresentation !== presentation) return;
     growthPresentation = null;
-    resetActionCamera();
-    if (session && session.phase === 'event' && lastGameplayEvent() === event) { updateWorld(); await nextTurn(); }
+    // Keep the completed building in frame until the next question covers it.
+    if (session && session.phase === 'event' && lastGameplayEvent() === event) await nextTurn();
   }
 
   function showRewards() {
@@ -1905,7 +1905,7 @@
         },
         update(time, delta) {
           if (!session || document.hidden) return;
-          this.tweens.timeScale = session.phase === 'paused' ? 0 : actionCamera && !window.matchMedia('(prefers-reduced-motion: reduce)').matches ? ACTION_SPEED : 1;
+          this.tweens.timeScale = session.phase === 'paused' ? 0 : actionCamera && !growthPresentation && !window.matchMedia('(prefers-reduced-motion: reduce)').matches ? ACTION_SPEED : 1;
           this.time.paused = session.phase === 'paused';
           if (session.phase !== 'paused') feedbackClock += delta;
           updateForagingWorkers(delta);
@@ -2313,7 +2313,7 @@
         }
       }
       furnishRoom(furnishings, room, team, roomWidth, roomHeight);
-      if (newRoom && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      if (newRoom) {
         const excavation = scene.add.graphics().setVisible(false);
         const mask = excavation.createGeometryMask();
         const growth = { value: .03 };
@@ -2321,9 +2321,8 @@
         redraw();
         shell?.setMask(mask); roomGraphics.setMask(mask); furnishings.setMask(mask);
         roomGraphics.setAlpha(0); furnishings.setAlpha(0);
-        scene.tweens.add({ targets: growth, value: 1, duration: 1700, ease: 'Sine.easeOut', onUpdate: redraw });
-        scene.tweens.add({ targets: roomGraphics, alpha: 1, delay: 1300, duration: 700 });
-        scene.tweens.add({ targets: furnishings, alpha: 1, delay: 2300, duration: 1000 });
+        // Start excavation only when the camera and the builders are ready.
+        room.construction = { growth, redraw, roomGraphics, furnishings };
         furnishings.once('destroy', () => { mask.destroy(); });
       }
       roomGraphics.setData('habitatRoom', room.id);
@@ -2417,7 +2416,7 @@
       const lastEvent = lastGameplayEvent();
       if (index === team.soldiers - 1 && session.phase === 'event' && lastEvent?.key === 'upgrade-soldiers' && lastEvent.teamId === team.id) revealRecruit(soldier);
     }
-    colonyViews.set(team.id, { zone, graphics, ants, queen, rooms, center: nursery, sites, labels: [title, subtitle] });
+    colonyViews.set(team.id, { zone, graphics, dome, ants, queen, rooms, center: nursery, sites, labels: [title, subtitle] });
   }
 
   function revealRecruit(ant) {
@@ -2460,10 +2459,13 @@
   }
 
   function focusColony(teamId, siteName = 'nursery', upgrade = false) {
+    if (growthPresentation && !upgrade) return;
     const view = colonyViews.get(teamId);
     if (!view) return;
     $('colonyViewPick').value = teamId;
-    const target = view.sites[siteName] || view.center;
+    const target = upgrade && growthPresentation?.event?.key === 'upgrade-defense'
+      ? { x: view.sites.entrance.x, y: (view.sites.entrance.y + view.sites.nursery.y) / 2 }
+      : view.sites[siteName] || view.center;
     const viewport = $('worldViewport');
     const lowerPanel = !$('worldStory').classList.contains('hidden') ? $('worldStory').offsetHeight + 45 : 80;
     const visibleHeight = viewport.clientHeight - lowerPanel;
@@ -2473,10 +2475,10 @@
       if (upgrade || !$('worldStory').classList.contains('hidden')) {
         actionCamera = true;
         const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        scene.tweens.timeScale = reduced ? 1 : ACTION_SPEED;
-        scene.time.timeScale = reduced ? 1 : ACTION_SPEED;
+        scene.tweens.timeScale = reduced || growthPresentation ? 1 : ACTION_SPEED;
+        scene.time.timeScale = reduced || growthPresentation ? 1 : ACTION_SPEED;
         // Frame the room above the story banner, including space for dialogue.
-        const zoom = Math.max(1.25, Math.min(2.2, viewport.clientWidth / 280, Math.max(180, visibleHeight) / 150));
+        const zoom = Math.max(1.25, Math.min(2.2, viewport.clientWidth / 280, Math.max(180, visibleHeight) / 180));
         const centerY = target.y + lowerPanel / (2 * zoom) - 15;
         $('worldViewport').dataset.actionFocus = `${teamId}:${siteName}`;
         if (reduced) camera.setZoom(zoom).centerOn(target.x, centerY);
@@ -2534,6 +2536,9 @@
     // A resize or resource update must not erase an in-flight scene or its timers.
     // Rebuild once the scene finishes; its recorded outcome is already in session.
     if (['event', 'paused'].includes(session.phase) && (raidPresentation || growthPresentation)) return;
+    $('gameScreen').classList.remove('construction-playing');
+    delete $('worldViewport').dataset.buildStage;
+    delete $('worldViewport').dataset.buildTeam;
     clearWorldEventPresentation();
     stopWeather();
     if (raidPresentation) {
@@ -2581,7 +2586,7 @@
       soil.y -= texture.height * .4 * soilScale;
     }
     scene.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
-    scene.cameras.main.scrollY = $('worldViewport').scrollTop;
+    if (!actionCamera) scene.cameras.main.scrollY = $('worldViewport').scrollTop;
     addAmbientLife(worldWidth, height);
     for (let index = 0; index < count; index += 1) {
       drawColony(session.teams[index], {
@@ -2743,7 +2748,7 @@
   function moveActionActor(actor, points, duration, onComplete) {
     if (!scene || !actor || !points.length) return;
     actor.setPosition(points[0].x, points[0].y);
-    if (actionCamera && !trackedActionActor && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (actionCamera && !growthPresentation && !trackedActionActor && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       trackedActionActor = actor;
       const camera = scene.cameras.main;
       camera.panEffect.reset();
@@ -2795,19 +2800,77 @@
     }
   }
 
+  function playConstruction(teamId, kind) {
+    const view = colonyViews.get(teamId);
+    const team = session.teams.find(item => item.id === teamId);
+    const palette = core.TEAM_COLORS[team.colorIndex];
+    const room = kind === 'expansion' ? view.rooms.at(-1) : view.rooms[0];
+    const site = kind === 'expansion' ? room : view.sites.entrance;
+    const material = core.fortification(team);
+    const viewport = $('worldViewport');
+    $('gameScreen').classList.add('construction-playing');
+    scene.children.list.filter(child => child.type === 'Text' && child.depth < 9).forEach(label => label.setVisible(false));
+    viewport.dataset.buildTeam = teamId;
+    viewport.dataset.buildStage = 'materials';
+    playAntSound(kind === 'expansion' ? 'dig' : 'build');
+    // A small crew stays at this team's building site. No camera chasing a
+    // worker around the other rooms, and no extra learner interactions.
+    if (kind === 'defense') {
+      const growth = { value: Math.max(.6, (14 + Math.max(0, team.defense - 1) * 8) / (14 + team.defense * 8)) };
+      const shape = () => view.dome.setScale(growth.value).setPosition(site.x * (1 - growth.value), site.y * (1 - growth.value));
+      shape();
+      scene.tweens.add({ targets: growth, value: 1, delay: 1500, duration: 3200, ease: 'Sine.easeInOut', onUpdate: shape });
+    }
+    const crew = [-1, 0, 1].map((side, i) => {
+      const destination = { x: site.x + side * 32, y: site.y + 15 };
+      const start = { x: site.x + side * 55 - 25, y: site.y + 68 };
+      const ant = actionWorker(view, palette, start, 36).setData('builderTeam', teamId);
+      ant.twig?.setVisible(i !== 1);
+      ant.leaf?.setVisible(i === 1);
+      moveActionActor(ant, [start, destination], 1200 + i * 180, actor => {
+        actor.twig?.setVisible(false); actor.leaf?.setVisible(false);
+        scene.tweens.add({ targets: actor, angle: { from: -9, to: 9 }, y: actor.y - 3, duration: 260 + i * 40, yoyo: true, repeat: 5 });
+      });
+      return ant;
+    });
+    scene.time.delayedCall(1500, () => { viewport.dataset.buildStage = 'building'; });
+    const construction = room.construction;
+    if (kind === 'expansion' && construction) {
+      scene.tweens.add({ targets: construction.growth, value: 1, delay: 1600, duration: 2700, ease: 'Sine.easeInOut', onUpdate: construction.redraw });
+      scene.tweens.add({ targets: construction.roomGraphics, alpha: 1, delay: 3100, duration: 900 });
+      scene.tweens.add({ targets: construction.furnishings, alpha: 1, delay: 4300, duration: 850 });
+    }
+    // Materials arrive one at a time and stay in place until the scene ends.
+    for (let i = 0; i < 12; i++) {
+      const angle = Math.PI + i / 11 * Math.PI;
+      const x = site.x + Math.cos(angle) * (kind === 'expansion' ? 65 : 48);
+      const y = site.y + Math.sin(angle) * (kind === 'expansion' ? 37 : 24);
+      const block = scene.add.rectangle(x, y + 30, 15, 9, material.wall).setStrokeStyle(2, material.edge).setDepth(21).setAlpha(0).setAngle(angle * 180 / Math.PI + 90);
+      scene.tweens.add({ targets: block, x, y, alpha: 1, delay: 1800 + i * 190, duration: 450, ease: 'Sine.easeOut' });
+      const dirt = scene.add.circle(x, y, 3 + i % 3, 0xc69b67, 0).setDepth(22);
+      scene.tweens.add({ targets: dirt, x: x + (i % 2 ? 18 : -18), y: y + 22, alpha: { from: .8, to: 0 }, delay: 1800 + i * 190, duration: 600, onComplete: () => dirt.destroy() });
+    }
+    scene.time.delayedCall(4700, () => {
+      viewport.dataset.buildStage = 'ready';
+      crew.forEach((ant, i) => {
+        if (!ant.active) return;
+        const home = kind === 'expansion' ? { x: room.x + (i - 1) * 22, y: room.y + 12 } : view.sites.nursery;
+        moveActionActor(ant, [{ x: ant.x, y: ant.y }, home], 1100, actor => {
+          if (kind === 'expansion') drawRoomAction(actor, room.kind === 'guard' ? 'training' : 'stocking', true);
+        });
+      });
+    });
+    scene.time.delayedCall(6500, () => { delete viewport.dataset.buildStage; delete viewport.dataset.buildTeam; });
+    return 6000;
+  }
+
   function playUpgradeAction(teamId, kind) {
     if (!scene) return 250;
     const view = colonyViews.get(teamId);
     if (!view) return 250;
     const team = session.teams.find(item => item.id === teamId);
     const palette = core.TEAM_COLORS[team.colorIndex];
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reducedMotion) {
-      const site = view.sites[REWARD_STORIES[kind]?.site || 'center'] || view.center;
-      const marker = scene.add.ellipse(site.x, site.y, 90, 55, palette.light, .12).setStrokeStyle(3, palette.light, 1).setDepth(20);
-      scene.tweens.add({targets:marker,alpha:.35,duration:1200,yoyo:true,repeat:1,onComplete:()=>marker.destroy()});
-      return 4800;
-    }
+    if (kind === 'expansion' || kind === 'defense') return playConstruction(teamId, kind);
     const nursery = view.sites.nursery;
     const entrance = view.sites.entrance;
     const site = view.sites[REWARD_STORIES[kind]?.site || 'center'] || view.center;
@@ -2843,22 +2906,6 @@
       return 3200;
     }
 
-    if (kind === 'defense') {
-      playAntSound('build');
-      const builder = actionWorker(view, palette, nursery);
-      const route = [nursery, entrance, { x: entrance.x - 18, y: entrance.y - 12 }, entrance, nursery, ...view.rooms.slice(1, 8).flatMap(room => [{ x: entrance.x, y: room.y }, room, { x: entrance.x, y: room.y }])];
-      moveActionActor(builder, route, 2300, actor => scene.tweens.add({ targets: actor, alpha: 0, duration: 250, onComplete: () => actor.destroy(true) }));
-      for (const room of view.rooms.slice(0, 8)) {
-        const ring = scene.add.ellipse(room.x, room.y, 72, 44, palette.light, .04).setStrokeStyle(4, core.fortification(team).edge, .95).setDepth(12);
-        scene.tweens.add({ targets: ring, scaleX: 1.75, scaleY: 1.75, alpha: 0, duration: 1050, delay: 280 + view.rooms.indexOf(room) * 190, onComplete: () => ring.destroy() });
-        for (let block = 0; block < 3; block += 1) {
-          const material = scene.add.rectangle(room.x - 17 + block * 17, room.y - 3, 13, 8, core.fortification(team).wall, 1).setStrokeStyle(1, core.fortification(team).edge, 1).setDepth(13).setAlpha(0);
-          scene.tweens.add({ targets: material, alpha: 1, y: room.y + 6, duration: 320, delay: 450 + view.rooms.indexOf(room) * 190 + block * 70, yoyo: true, hold: 420, onComplete: () => material.destroy() });
-        }
-      }
-      return 4400;
-    }
-
     if (kind === 'queen') {
       playAntSound('hatch');
       const egg = scene.add.ellipse(site.x + 24, site.y + 13, 14, 10, 0xfff4d2, 1).setStrokeStyle(2, 0xd9b976, 1).setDepth(12).setScale(.2);
@@ -2875,18 +2922,6 @@
       return 1600;
     }
 
-    if (kind === 'expansion') {
-      playAntSound('dig');
-      const builders = [-10, 10].map(offset => actionWorker(view, palette, { x: nursery.x + offset, y: nursery.y }, 29));
-      builders.forEach((builder, index) => moveActionActor(builder, [nursery, { x: nursery.x, y: site.y }, { x: site.x + (index ? 13 : -13), y: site.y }], 1450 + index * 140, actor => {
-        scene.tweens.add({ targets: actor, x: actor.x + (index ? -9 : 9), angle: index ? -12 : 12, duration: 180, yoyo: true, repeat: 4, onComplete: () => scene.tweens.add({ targets: actor, alpha: 0, duration: 250, onComplete: () => actor.destroy(true) }) });
-      }));
-      for (let index = 0; index < 14; index += 1) {
-        const dirt = scene.add.circle(site.x + (index % 5 - 2) * 6, site.y, 3 + index % 3, index % 2 ? 0x8b5b35 : 0xc08a52, .95).setDepth(12);
-        scene.tweens.add({ targets: dirt, x: dirt.x + (index % 2 ? 1 : -1) * (22 + index * 2), y: dirt.y - 16 - index % 5 * 6, alpha: 0, duration: 850 + index * 25, delay: 1050, ease: 'Cubic.easeOut', onComplete: () => dirt.destroy() });
-      }
-      return 4000;
-    }
     return 1400;
   }
 
@@ -2972,11 +3007,8 @@
       const startX = (index * 67 + (index % 7) * 19) % width;
       const drop = scene.add.rectangle(startX, -18 - (index % 11) * 17, foreground ? 3 : 2, (foreground ? 24 : 14) + index % 5 * 2, foreground ? 0xdaf4ff : 0xaadcf4, (foreground ? .9 : .55) * intensity).setDepth(foreground ? 16 : 12).setAngle(13);
       weatherEffects.push(drop);
-      if (reducedMotion) {
-        drop.y = index * 17 % floor;
-        continue;
-      }
-      scene.tweens.add({ targets: drop, y: floor + 4, x: startX + 48, duration: 610 + (index % 7) * 65, delay: (index % 13) * 42, repeat: -1, ease: 'Linear' });
+      drop.setData('rainDrop', true);
+      scene.tweens.add({ targets: drop, y: floor + 4, x: startX + (reducedMotion ? 10 : 48), duration: (reducedMotion ? 1400 : 610) + (index % 7) * 65, delay: (index % 13) * 42, repeat: -1, ease: 'Linear' });
       if (index % 4 === 0) {
         const splash = scene.add.ellipse(startX + 48, floor + 3, 8, 3, 0xcceeff, 0).setStrokeStyle(1, 0xdaf5ff, .75).setDepth(15);
         weatherEffects.push(splash);
@@ -3066,7 +3098,7 @@
     weatherEffects.push(cloud);
     if (session.birdStage === 'rain' || progress >= .68) {
       addRainField(reducedMotion ? 14 : 56, .8);
-      if (session.birdStage === 'rain' && !reducedMotion) for (const [id, view] of colonyViews) addFloodWater(view, session.teams.find(team => team.id === id));
+      if (session.birdStage === 'rain') for (const [id, view] of colonyViews) addFloodWater(view, session.teams.find(team => team.id === id));
     }
     if (progress >= .88 && !reducedMotion) {
       const timer = scene.time.addEvent({ delay: 5200, loop: true, callback: () => lightningStrike(true) });
@@ -3168,7 +3200,7 @@
     const palette = team ? core.TEAM_COLORS[team.colorIndex] : core.TEAM_COLORS[0];
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (key === 'predator' && lastGameplayEvent()?.beforeTeams) return playSpiderSwarm();
-    if (reducedMotion) return 2500;
+    if (reducedMotion && key !== 'heavy-rain') return 2500;
     if (key === 'heavy-rain') {
       stopWeather();
       const cloud = scene.add.graphics().setDepth(-3);
@@ -3178,19 +3210,21 @@
       const mist = scene.add.rectangle(scene.scale.width / 2, Math.min(225, scene.scale.height * .34), scene.scale.width, 48, 0x8ed8ed, .13).setDepth(11);
       weatherEffects.push(mist);
       scene.tweens.add({ targets: mist, alpha: .25, scaleY: 1.35, duration: 700, yoyo: true, repeat: -1 });
-      addRainField(68, 1);
+      addRainField(reducedMotion ? 24 : 68, 1);
       for (const [id, colonyView] of colonyViews) addFloodWater(colonyView, session.teams.find(item => item.id === id));
       const stopRain = playRainSound(4.8, 1);
       if (stopRain) weatherAudioStops.push(stopRain);
-      lightningStrike(true, 1.08);
-      weatherTimers.push(scene.time.addEvent({ delay: 4050, loop: true, callback: () => lightningStrike(true, .92) }));
+      if (!reducedMotion) {
+        lightningStrike(true, 1.08);
+        weatherTimers.push(scene.time.addEvent({ delay: 4050, loop: true, callback: () => lightningStrike(true, .92) }));
+      }
       if (view) {
         for (let index = 0; index < Math.min(2, team.workers); index += 1) {
           const runner = actionWorker(view, palette, { x: view.sites.entrance.x + (index ? 12 : -12), y: view.sites.entrance.y - 22 }, 28);
           moveActionActor(runner, [{ x: runner.x, y: runner.y }, view.sites.entrance, view.sites.nursery], 1650 + index * 160, actor => scene.tweens.add({ targets: actor, alpha: 0, duration: 220, onComplete: () => actor.destroy(true) }));
         }
       }
-      return 3400;
+      return 6500;
     }
     if (key === 'fallen-fruit') {
       const fruitX = view ? view.sites.entrance.x + 30 : scene.scale.width * .52;

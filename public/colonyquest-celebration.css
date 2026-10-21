@@ -52,3 +52,17 @@
  .cq-celebration h1{font-size:clamp(32px,3.2vw,48px)}
  .cq-winners{margin:14px 0;max-height:calc(100dvh - 310px)}
 }
+
+/* These scoped rules also override the smartboard page's global reduced-motion
+   reset. A gentle dance must keep moving, not finish in 0.01 milliseconds. */
+.cq-celebration[data-motion="gentle"] .cq-dance-travel,
+.cq-celebration[data-motion="gentle"] .cq-dance-shadow,
+.cq-celebration[data-motion="gentle"] .cq-sparks i{animation:none!important}
+.cq-celebration[data-motion="gentle"] .cq-champion .cq-dance-travel img{animation:cq-gentle-celebration 2.4s ease-in-out var(--delay) infinite!important}
+@keyframes cq-gentle-celebration{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-6px) rotate(3deg)}}
+.cq-celebration[data-motion="full"] .cq-dance-travel{animation:cq-side-step 6s ease-in-out var(--delay) infinite!important}
+.cq-celebration[data-motion="full"] .cq-champion .cq-dance-travel img{animation:cq-dance 6s ease-in-out var(--delay) infinite!important}
+.cq-celebration[data-motion="full"] .cq-dance-shadow{animation:cq-shadow 6s ease-in-out var(--delay) infinite!important}
+.cq-celebration[data-motion="full"] .cq-sparks i{animation:cq-confetti 4s linear var(--delay) 3!important}
+.cq-motion-toggle{grid-column:1/-1;justify-self:center;margin:0 0 12px;border:1px solid #e1ce83;border-radius:12px;background:#163c35;color:#fff7d8;padding:9px 18px;font:inherit;cursor:pointer}
+.cq-motion-toggle:focus-visible{outline:3px solid white;outline-offset:3px}

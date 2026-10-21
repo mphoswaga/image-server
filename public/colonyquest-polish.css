@@ -194,3 +194,6 @@
  .game-stage .question-dialog{padding:12px;gap:8px}
  .game-stage .question-dialog .answer{font-size:16px;padding:8px;min-height:52px}
 }
+
+/* Keep the worksite clear while builders are in the spotlight. */
+.construction-playing .turn-banner,.construction-playing .rain-plan{visibility:hidden;pointer-events:none}
