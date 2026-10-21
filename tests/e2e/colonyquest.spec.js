@@ -148,10 +148,17 @@ test('a raid stays visible but returns to questions without a report popup', asy
   await page.locator('#resumeBtn').click();
   await page.locator('[data-reward="raid"]').click();
   await page.locator('[data-target="team-2"]').click();
+  await expect(page.locator('.colony-raid-moment')).toHaveAttribute('data-moment','versus');
+  await expect(page.locator('.colony-raid-moment')).toContainText('Leaf Colony');
+  await expect(page.locator('.colony-raid-moment')).toContainText('River Colony');
+  await page.screenshot({path:testInfo.outputPath('raid-versus.png')});
   await expect(page.locator('#worldViewport')).toHaveAttribute('data-raid-phase', 'outbound');
   await expect(page.locator('#worldStory')).toBeHidden();
   await expect(page.locator('#worldViewport')).toHaveAttribute('data-raid-phase', 'at-nest');
+  await expect(page.locator('.colony-raid-moment')).toBeHidden();
   await expect.poll(() => page.evaluate(() => window.raidGame.scene.scenes[0].cameras.main.zoom)).toBeGreaterThan(2.2);
+  await expect(page.locator('.colony-raid-moment')).toHaveAttribute('data-moment','result');
+  await page.screenshot({path:testInfo.outputPath('raid-result.png')});
   await expect(page.locator('#questionOverlay')).toBeVisible({ timeout: 7000 });
   expect(await page.evaluate(() => window.raidGame.scene.scenes[0].cameras.main.zoom)).toBe(1);
   expect(saved.events.at(-1).key).toBe('raid-result');
@@ -495,6 +502,10 @@ test.skip('a defended raid can be paused without duplicate rewards', async ({ pa
   await page.locator('#resumeBtn').click();
   await page.locator('[data-reward="raid"]').click();
   await page.locator('[data-target="team-2"]').click();
+  await expect(page.locator('.colony-raid-moment')).toHaveAttribute('data-moment','versus');
+  await expect(page.locator('.colony-raid-moment')).toContainText('Leaf Colony');
+  await expect(page.locator('.colony-raid-moment')).toContainText('River Colony');
+  await page.screenshot({path:testInfo.outputPath('raid-versus.png')});
   await expect(page.locator('#worldViewport')).toHaveAttribute('data-raid-phase', 'outbound');
   await page.locator('#pauseBtn').click();
   await expect(page.locator('#eventOverlay')).toBeVisible();

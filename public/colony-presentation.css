@@ -1,0 +1,17 @@
+/* Brief duel-style moments stay within the colony, never over answer controls. */
+.colony-raid-moment{position:absolute;z-index:35;top:92px;left:50%;transform:translateX(-50%);width:min(480px,calc(100% - 28px));box-sizing:border-box;padding:10px 16px;border:2px solid #e5c879;border-radius:18px;color:#fff4cf;background:linear-gradient(125deg,#122f2df5,#203b34f5);box-shadow:0 10px 25px #0005;text-align:center;pointer-events:none;font-family:Arial,sans-serif}
+.colony-raid-moment[hidden]{display:none!important}
+.raid-moment-title{font-size:clamp(14px,1.7vw,20px);letter-spacing:.04em}
+.raid-moment-contestants{display:flex;align-items:center;justify-content:center;gap:12px}
+.raid-moment-side{display:flex;flex:1;min-width:0;align-items:center;flex-direction:column;font-weight:800;font-size:clamp(14px,1.6vw,19px);overflow-wrap:anywhere;line-height:1.15}
+.raid-moment-side img{object-fit:contain;filter:drop-shadow(0 4px 3px #0005)}
+.raid-moment-side:last-child img{transform:scaleX(-1)}
+.raid-moment-vs{font-size:28px;color:#ffd36e}
+.colony-raid-moment p{font-size:16px;margin:9px 0 0;font-weight:800;color:#fff}
+.raid-moment-side.is-winner{color:#ffe082;text-shadow:0 0 15px #f3d25688}
+.raid-moment-side.is-winner img{animation:colony-victor .7s ease-in-out infinite alternate}
+.colony-raid-moment.is-paused *{animation-play-state:paused!important}
+.colony-stage>.colony-raid-moment{top:12px}
+@keyframes colony-victor{to{translate:0 -6px}}
+@media(prefers-reduced-motion:reduce){.raid-moment-side.is-winner img{animation:none}}
+@media(max-height:600px){.colony-raid-moment{top:80px;padding:8px}.raid-moment-side img{height:38px;width:50px}}

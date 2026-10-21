@@ -40,7 +40,7 @@
 #raidHud {display:none!important;}
 #birdPanel {animation:colony-bird-cue 3s forwards;}
 @keyframes colony-bird-cue {0%,75%{opacity:1}100%{opacity:0;visibility:hidden}}
-</style><link rel="stylesheet" href="/colony-voices.css?v=1"></head>
+</style><link rel="stylesheet" href="/colony-voices.css?v=1"><link rel="stylesheet" href="/colony-presentation.css?v=1"></head>
 <body>
   <div id="loading" class="loading"><div><div class="spinner"></div>Preparing ColonyQuest...</div></div>
 
@@ -169,7 +169,9 @@
   <script src="/colonyquest-music.js?v=1"></script>
   <script src="/opening-narration-data.js?v=1"></script>
 <script src="/opening-narration.js?v=1"></script><script src="/colony-voice-data.js?v=1"></script><script src="/colony-voices.js?v=1"></script>
-<script src="/colonyquest.js?v=40"></script>
+<script src="/colony-presentation.js?v=1"></script>
+<script src="/colonyquest-event-audio.js?v=3"></script>
+<script src="/colonyquest.js?v=41"></script>
 <script>document.getElementById('multiplayerLink').href='/colonyquest-live/'+encodeURIComponent(location.pathname.split('/').filter(Boolean).pop());</script>
 </body>
 </html>

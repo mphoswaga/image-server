@@ -126,15 +126,15 @@
         c.ellipse(lerp(w * 0.98, w * 0.64, Math.min(1, q * 3)), ground - 2, size * 0.9, size * 0.12, 0, 0, Math.PI * 2);
         c.fill();
         c.restore();
-        const toward = q < 0.55 ? q / 0.55 : 1 - (q - 0.55) / 0.45;
-        scene.creature(
-          'spider',
-          lerp(w + size, w * 0.64, toward),
-          ground - size * 0.24,
-          size * 1.3,
-          t,
-          q > 0.55,
-        );
+        // Borrow the smartboard swarm, with one shared time-based path and cached poses.
+        const count=scene.overview?12:50;
+        for(let i=0;i<count;i++){
+          const pose=ColonyPresentation.swarmPose(i,p,w,h,scene.reduced);
+          c.save();c.globalAlpha=pose.alpha;
+          scene.creature('spider',pose.x,pose.y,Math.min(80,Math.max(34,w*.055))+(i%3)*6,pose.seconds,pose.right);
+          c.restore();
+        }
+        scene.canvas.dataset.spiderCount=String(count);
         const x = w * 0.48 + Math.min(q, 0.5) * w * 0.12;
         scene.sprite(images.guard, x, ground - size * 0.26, size);
         if (q > 0.55) {

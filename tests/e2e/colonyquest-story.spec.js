@@ -12,6 +12,7 @@ test('all automatic story scenes render, pause and resume without changing resou
   );
   await page.addScriptTag({ url: '/colonyquest-core.js' });
   await page.addScriptTag({ url: '/colonyquest-live-story.js' });
+  await page.addScriptTag({ url: '/colony-presentation.js' });
   await page.addScriptTag({ url: '/colonyquest-live-art.js' });
   await page.evaluate(() => {
     const colony = ColonyQuestCore.createTeam({ name: 'Story colony' }, 0);
@@ -52,7 +53,10 @@ test('all automatic story scenes render, pause and resume without changing resou
     );
     await expect(page.locator('canvas')).toHaveAttribute('data-story', key);
     await page.waitForTimeout(100);
-    if (key === 'predator') await expect(page.locator('canvas')).toHaveAttribute('data-spider-artwork', 'ready');
+    if (key === 'predator') {
+      await expect(page.locator('canvas')).toHaveAttribute('data-spider-artwork', 'ready');
+      await expect(page.locator('canvas')).toHaveAttribute('data-spider-count','50');
+    }
     if (key === 'birds') await expect(page.locator('canvas')).toHaveAttribute('data-bird-artwork', 'ready');
     if (['predator', 'birds', 'footsteps', 'acorn'].includes(key))
       await page.screenshot({ path: info.outputPath(key + '.png') });

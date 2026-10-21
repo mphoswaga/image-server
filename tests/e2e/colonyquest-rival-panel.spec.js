@@ -126,6 +126,6 @@ test('event audio deduplicates snapshots and stops scheduled cues on mute', asyn
     audio.configure(false, 1);
     return { cues, stopped };
   });
-  expect(result.cues).toEqual([['raid', true]]);
+  expect(result.cues).toEqual([['raid', true, 8400]]);
   expect(result.stopped).toBe(1);
 });

@@ -41,22 +41,24 @@
         this.nodes = this.nodes.filter((n) => n !== o);
       };
     }
-    play(kind, success = true) {
+    play(kind, success = true, duration = 6400) {
       if (!this.enabled || !this.volume || document.hidden) return;
       try {
         this.context ||= new (window.AudioContext || window.webkitAudioContext)();
         this.context.resume().catch(() => {});
         this.stop();
-        this.onCue?.(kind === 'raid' ? 5600 : 3000);
+        this.onCue?.(kind === 'raid' ? duration : kind === 'raid-result' ? 1400 : 3000);
         const t = this.context.currentTime + 0.03;
-        if (kind === 'raid') {
+        if (kind === 'raid-result') {
+          (success ? [392,494,587,784] : [392,494,659]).forEach((f,i)=>this.tone(f,t+i*.18,.45));
+        } else if (kind === 'raid') {
           // Rally, advancing footsteps, clash, then the result motif.
           for (let i = 0; i < 8; i++)
             this.tone(i % 2 ? 110 : 82, t + i * 0.32, 0.2, 'triangle', 0.07);
-          this.tone(196, t + 2.8, 0.6, 'triangle');
-          this.tone(207.65, t + 2.8, 0.55, 'triangle');
+          this.tone(196, t + duration / 1000 * .5, 0.6, 'triangle');
+          this.tone(207.65, t + duration / 1000 * .5, 0.55, 'triangle');
           (success ? [392, 494, 587, 784] : [392, 330, 262]).forEach((f, i) =>
-            this.tone(f, t + 4 + i * 0.22, 0.5),
+            this.tone(f, t + duration / 1000 * .76 + i * 0.22, 0.5),
           );
         } else if (kind === 'rain') {
           [784, 659, 587, 494, 440, 392, 330, 294].forEach((f, i) =>
@@ -109,6 +111,7 @@
         this.play(
           e.kind === 'raid' ? 'raid' : e.key || e.kind,
           e.kind === 'raid' && !host && e.target === next.me?.id ? !e.success : e.success,
+          next.pacing === 'individual' ? 6400 : 8400,
         );
     }
   }

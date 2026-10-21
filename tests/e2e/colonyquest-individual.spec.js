@@ -28,7 +28,7 @@ test('personal feedback, next question and a private colony watch view',async({p
  await page.locator('#watchColony').selectOption('b');
  expect(await page.evaluate(()=>window.lastCommand)).toMatchObject({type:'watch',target:'b',matchId:'match'});
  await page.evaluate(()=>{nextState.watching={id:'b',name:'Noah',colony:otherColony,lastUpgrade:null,events:[]};pushState(structuredClone(nextState));});
- await expect(page.locator('#myName')).toHaveText('Watching Noah');
+ await expect(page.locator('#myName')).toHaveText('Mia · Watching Noah');
  await expect(page.locator('#rank')).toHaveText('#2 of 2');
  await expect(page.locator('[data-choice]')).toHaveCount(0);await expect(page.locator('[data-upgrade]')).toHaveCount(0);
  await expect(page.locator('#watchColony')).toHaveValue('b');
@@ -41,6 +41,7 @@ for (const incoming of [false,true]) test(`individual raid camera follows ${inco
  await page.goto('/healthz');
  await page.setContent('<canvas id="world" style="width:100%;height:600px"></canvas>');
  await page.addScriptTag({url:'/colonyquest-core.js'});
+ await page.addScriptTag({url:'/colony-presentation.js'});
  await page.addScriptTag({url:'/colonyquest-live-art.js'});
  await page.evaluate(incoming=>{
   const colony=ColonyQuestCore.createTeam({},0);colony.soldiers=4;

@@ -604,6 +604,12 @@
   const openingVoice = new OpeningNarration($('openingVoice'), speaking => { soundtrack.media.muted = speaking; });
   const storyReader=new ColonyStoryText(openingVoice);
   const actionVoice=new ColonyActionVoice(()=>soundOn&&!openingVoice.active&&session?.phase!=='paused',speaking=>{soundtrack.media.muted=speaking;},()=>Number($('effectsVolume').value)/100);
+  const raidMoment = new ColonyPresentation.RaidMoment(document.querySelector('.game-stage'));
+  const raidAudio = new ColonyEventAudio();
+  function raidResultSound(success) {
+    raidAudio.configure(soundOn && session?.phase !== 'paused', Number($('effectsVolume').value)/100);
+    raidAudio.play('raid-result', success);
+  }
   function showStoryIntro() {
     $('storyKicker').textContent = 'The Moonroot Meadow Mission';
     $('storyTitle').textContent = 'Build. Prepare. Survive.';
@@ -1051,6 +1057,7 @@
   function stopRaidPresentation() {
     const raid = raidPresentation;
     $('raidHud').classList.add('hidden');
+    raidMoment.clear();
     if (!raid) return;
     raidPresentation = null;
     raid.tween?.stop();
@@ -1111,6 +1118,7 @@
     const attacker = session.teams.find(team => team.id === event.attackerId);
     const defender = session.teams.find(team => team.id === event.defenderId);
     if (!attacker || !defender) return showEvent({ title: 'The raid is over', description: 'The colonies are ready for their next turn.' }, nextTurn);
+    const visualEvent = {...event, attackerName:attacker.name, targetName:defender.name};
     const attackers = Math.max(1, event.attackers || attacker.soldiers + (event.attackerLosses || 0));
     const defenders = Math.max(0, event.defenders || defender.soldiers + (event.defenderLosses || 0));
     event.attackers = attackers;
@@ -1119,16 +1127,18 @@
     event.guard = event.guard || defenders * 5 + (event.wallBonus || 0);
     const finish = async () => {
       stopRaidPresentation();
+      raidMoment.update(visualEvent, .9);
       if (!event.success) colonyFeedback.set(defender.id, { text: 'Raid stopped · stores protected', badge: '✓ Defended', good: true, site: 'guard', until: feedbackClock + 6500 });
       setOverlay(null);
       focusColony(event.success ? attacker.id : defender.id, event.success ? 'food' : 'guard');
       updateHUD();
       // Keep the battle and its colony change visible, then continue without
       // asking the class to click through a written raid report.
-      await new Promise(resolve => setTimeout(resolve, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 2500 : 1000));
+      await new Promise(resolve => scene ? scene.time.delayedCall(window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 2500 : 1400, resolve) : setTimeout(resolve,1400));
+      raidMoment.clear();
       if (session && session.phase === 'event' && lastGameplayEvent() === event) await nextTurn();
     };
-    if (!animate || !scene || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return finish();
+    if (!animate || !scene || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { if(animate)raidResultSound(event.success); return finish(); }
     const home = colonyViews.get(attacker.id), away = colonyViews.get(defender.id);
     if (!home || !away) return finish();
     setOverlay(null);
@@ -1160,6 +1170,7 @@
     raidPresentation = raid;
     $('gameScreen').classList.add('raid-playing');
     setRaidHud(event, attacker, defender, 'outbound');
+    raidMoment.update(visualEvent, 0);
     const progress = { value: 0 };
     const camera = scene.cameras.main;
     resetActionCamera();
@@ -1170,19 +1181,22 @@
     const attackLossVisuals = event.attackerLosses ? Math.max(1, Math.round(event.attackerLosses / attackers * attackerActorCount)) : 0;
     const defenseLossVisuals = event.defenderLosses && defenderActorCount ? Math.max(1, Math.round(event.defenderLosses / defenders * defenderActorCount)) : 0;
     let lastPhase = '';
-    raid.tween = scene.tweens.add({ targets: progress, value: 1, duration: 8400, ease: 'Linear',
+    raid.tween = scene.tweens.add({ targets: progress, value: 1, duration: ColonyPresentation.raidDuration(false), ease: 'Linear',
       onUpdate: () => {
         if (raidPresentation !== raid) return;
         const p = progress.value;
-        const phase = p < .34 ? 'outbound' : p < .68 ? 'at-nest' : 'returning';
-        const battleProgress = Phaser.Math.Clamp((p - .34) / .34, 0, 1);
+        const beat = ColonyPresentation.raidBeat(p);
+        const phase = {rally:'rally',approach:'outbound',clash:'at-nest',return:'returning'}[beat.phase];
+        const battleProgress = beat.clash;
+        raidMoment.update(visualEvent, p);
+        if(p >= .76 && !raid.resultSound){raid.resultSound=true;raidResultSound(event.success);}
         if (phase === 'at-nest' && Math.floor(battleProgress * 5) !== raid.lastImpact) {
           raid.lastImpact = Math.floor(battleProgress * 5);
           showBattleBurst(meeting, [0xffd66b, 0xe2bd82], effects);
           playAntSound('battle');
           camera.shake(120, .002);
         }
-        const distance = phase === 'outbound' ? p / .34 : phase === 'returning' ? (1 - p) / .32 : 1;
+        const distance = beat.travel;
         for (let index = 0; index < attackActors.length; index += 1) {
           const ant = attackActors[index];
           const lost = index >= attackActors.length - attackLossVisuals;
@@ -1663,6 +1677,7 @@
   }
 
   function resumePhase() {
+    raidMoment.pause(false);
     if (session.phase === 'ended') return session.stormSeen ? showFinal() : showRainFinale();
     if (session.phase === 'reward') return showRewards();
     if (session.phase === 'event') {
@@ -1683,6 +1698,7 @@
 
   function showPaused() {
     actionVoice.stop();
+    raidAudio.stop();raidMoment.pause(true);
     $('eventKicker').textContent = 'Teacher pause';
     $('eventTitle').textContent = 'The colonies are resting';
     $('eventText').textContent = 'The timer and all turns are paused for the whole class.';
@@ -2583,10 +2599,10 @@
       bird.y = reduced ? 78 : stage === 'warning' ? 15 + approach * 65 : stage === 'attack' ? 65 + swoop * (protectedFood ? 22 : 65) : 80 - departure * 130;
       bird.angle = reduced ? 0 : stage === 'attack' ? Math.cos(t * .9) * 12 : -8;
       const flap = feedbackClock / 1000 + index * .3;
-      creature.setFrame(reduced ? 0 : Math.floor(flap * 8) % 2);
-      // Stretch each wing stroke and bob the body: a continuous beat between poses.
-      creature.setDisplaySize(138, reduced ? 138 : 138 * (1 + Math.sin(flap * 16) * .18));
-      creature.y = -7 + (reduced ? 0 : Math.sin(flap * 16) * 4);
+      const pose = ColonyPresentation.creaturePose('bird', flap, reduced);
+      creature.setFrame(pose.frame).setDisplaySize(138,138);
+      creature.y = -7 + pose.bob * 138;
+      $('worldViewport').dataset.birdFrame = String(pose.frame);
       if (!reduced && stage === 'attack' && swoop > .92 && t - (actor.lastStrike || -10) > 1) {
         actor.lastStrike = t;
         const dust = scene.add.ellipse(bird.x, 142, 26, 9, protectedFood ? 0xbdeaf0 : 0xcba673, .65).setDepth(19);
@@ -3008,7 +3024,7 @@
       const animate = (_time, delta) => {
         if (!spider.active || session?.phase === 'paused') return;
         elapsed += delta;
-        creature.setFrame(Math.floor(elapsed / 180) % 2);
+        creature.setFrame(ColonyPresentation.creaturePose('spider',elapsed/1000).frame);
         if (Math.abs(spider.x - previousX) > .1) creature.setFlipX(spider.x > previousX);
         previousX = spider.x;
       };
@@ -3076,15 +3092,9 @@
     const progress = {value:0};
     scene.tweens.add({targets:progress,value:1,duration:9000,ease:'Linear',onUpdate:()=>{
       swarm.forEach((sprite,i)=>{
-        const row = (i * 37 % 100) / 100, column = (i * 61 % 100) / 100;
-        const p=progress.value, side=i%2 ? 1 : -1;
-        const insideX=40+column*Math.max(1,width-80);
-        const arrival=Math.min(1,p/.25), departure=Math.max(0,(p-.72)/.28);
-        sprite.x=reduced ? insideX + Math.sin(p*12+i)*6 : insideX + side*(1-arrival)*(width+100) + side*departure*(width+120) + Math.sin(p*22+i)*20;
-        sprite.y=50+row*Math.max(1,height-100)+(reduced ? Math.sin(p*10+i)*4 : Math.sin(p*17+i)*14);
-        sprite.setFrame(Math.floor(p*(reduced ? 18 : 50)+i)%2);
-        sprite.setFlipX(side<0);
-        sprite.setAlpha(reduced && p>.72 ? 1-departure : 1);
+        const pose=ColonyPresentation.swarmPose(i,progress.value,width,height,reduced);
+        sprite.setPosition(pose.x,pose.y).setFlipX(pose.right).setAlpha(pose.alpha);
+        sprite.setFrame(ColonyPresentation.creaturePose('spider',pose.seconds,reduced).frame);
       });
     },onComplete:()=>swarm.forEach(sprite=>sprite.destroy())});
     return 9000;
@@ -3417,6 +3427,7 @@
     const volume = Number($('effectsVolume').value);
     $('effectsVolumeLabel').textContent = `Game sounds ${volume}%`;
     if (effectsBus) effectsBus.gain.setTargetAtTime(soundOn ? volume / 100 : 0, audioContext.currentTime, .03);
+    if(!volume)raidAudio.stop();
   });
 
   $('musicVolume').addEventListener('input', () => {
@@ -3427,7 +3438,7 @@
 
   function toggleSound() {
     soundOn = !soundOn;
-    if(!soundOn)actionVoice.stop();
+    if(!soundOn){actionVoice.stop();raidAudio.stop();}
     openingVoice.paused=!soundOn||$('storyCrawl').classList.contains('is-paused');openingVoice.update();
     if (soundOn) initAudio(); else stopAmbient();
     if (effectsBus) effectsBus.gain.setTargetAtTime(soundOn ? Number($('effectsVolume').value) / 100 : 0, audioContext.currentTime, .03);

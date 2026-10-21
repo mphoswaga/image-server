@@ -54,6 +54,7 @@
     constructor(canvas, overview = false) {
       this.canvas = canvas;
       this.ctx = canvas.getContext('2d');
+      this.raidMoment = overview ? null : new ColonyPresentation.RaidMoment(canvas.parentElement);
       this.overview = overview;
       this.state = null;
       this.clock = 0;
@@ -78,6 +79,7 @@
     }
     destroy() {
       this.stopped = true;
+      this.raidMoment?.destroy();
       cancelAnimationFrame(this.raf);
       this.spriteCache.clear();
       this.spritePixels = 0;
@@ -86,9 +88,8 @@
       this.effects.push({
         kind,
         start: this.clock,
-        duration: this.state?.pacing === 'individual'
-          ? (kind === 'raid' ? 5200 : 2300)
-          : kind === 'raid' ? 6200 : ['expansion', 'defense'].includes(kind) ? 7200 : 4800,
+        duration: kind === 'raid' ? ColonyPresentation.raidDuration(this.state?.pacing === 'individual')
+          : this.state?.pacing === 'individual' ? (['expansion','defense'].includes(kind)?3600:2600) : ['expansion', 'defense'].includes(kind) ? 7200 : 4800,
         ...extra,
       });
       this.effects = this.effects.slice(-8);
@@ -206,14 +207,15 @@
     creature(kind, x, y, size, seconds, right = false) {
       const image = art[kind];
       if (!image?.complete || !image.naturalWidth) return;
-      const frame = this.reduced ? 0 : Math.floor(seconds * 6) % 2;
+      const pose = ColonyPresentation.creaturePose(kind, this.reduced ? this.clock/1000 : seconds, this.reduced), frame = pose.frame;
       const c = this.ctx;
       c.save();
-      c.translate(x, y);
+      c.translate(x, y + pose.bob * size);
       c.scale(right ? -1 : 1, 1);
       c.drawImage(this.raster(image, size, size, frame), -size / 2, -size / 2, size, size);
       c.restore();
       this.canvas.dataset[kind + 'Artwork'] = 'ready';
+      this.canvas.dataset[kind + 'Frame'] = String(frame);
     }
     cover(image, x, y, w, h, alpha = 1) {
       if (!image.complete || !image.naturalWidth) return;
@@ -1245,19 +1247,11 @@
               [w * 0.35, surface - 8],
               [w * 0.68, surface - 8],
             ];
-        const advancing = p < 0.68;
-        const progress = this.reduced
-          ? 0.85
-          : p < 0.15
-            ? 0
-            : p < 0.5
-              ? smooth((p - 0.15) / 0.35)
-              : p < 0.68
-                ? 1
-                : 1 - smooth((p - 0.68) / 0.32);
+        const beat = ColonyPresentation.raidBeat(p);
+        const advancing = beat.phase !== 'return';
+        const progress = this.reduced ? 0.85 : smooth(beat.travel);
         const movement = this.pathPoint(route, progress);
-        this.canvas.dataset.raidPhase =
-          p < 0.15 ? 'rally' : p < 0.5 ? 'approach' : p < 0.68 ? 'clash' : 'return';
+        this.canvas.dataset.raidPhase = beat.phase;
         if (p >= 0.5 && p < 0.68) {
           const clash = this.reduced ? 0.5 : (p - 0.5) / 0.18;
           c.save();
@@ -1557,7 +1551,10 @@
       if (this.state?.story) window.ColonyStoryCanvas?.draw(this, g);
       else this.canvas.dataset.story = '';
       c.restore();
-      if (this.raidCaption && !this.overview) this.tag(this.raidCaption, w / 2, 26, w < 500 ? 11 : 14);
+      const duel = this.effects.findLast(e=>e.kind==='raid' && this.clock-e.start<e.duration);
+      this.raidMoment?.pause(!running);
+      if(duel && !['ended','lobby'].includes(this.state?.phase))this.raidMoment?.update(duel.event,(this.clock-duel.start)/duel.duration);
+      else this.raidMoment?.clear();
       this.effects = this.effects.filter((e) => this.clock - e.start < e.duration);
       if (!this.effects.length) this.canvas.dataset.action = '';
       this.paintCost = this.paintCost * .9 + (performance.now() - paintStarted) * .1;

@@ -7,6 +7,7 @@ async function world(page, reduced = false) {
     '<style>body{margin:0;background:#24382e}canvas{display:block;width:100vw;height:100vh}</style><canvas id="world"></canvas>',
   );
   await page.addScriptTag({ url: '/colonyquest-core.js' });
+  await page.addScriptTag({ url: '/colony-presentation.js' });
   await page.addScriptTag({ url: '/colonyquest-live-art.js' });
   await page.evaluate(() => {
     const colony = ColonyQuestCore.createTeam({ name: 'Test colony' }, 0);
@@ -390,6 +391,7 @@ test('automatic encounter layout leaves the colony visible and details optional'
   await page.goto('/healthz');
   await page.setContent(`<link rel="stylesheet" href="/colonyquest-live.css"><section id="learner" class="story-playing"><div class="play-layout"><div class="colony-stage"><canvas id="colonyCanvas"></canvas></div><div class="decision"><h1>Rain reaches the meadow</h1><div class="choices"><details class="scene-details"><summary>What is happening?</summary><p>The walls protect your food.</p></details></div></div></div></section>`);
   await page.addScriptTag({ url: '/colonyquest-core.js' });
+  await page.addScriptTag({ url: '/colony-presentation.js' });
   await page.addScriptTag({ url: '/colonyquest-live-art.js' });
   await page.evaluate(() => {
     const colony = ColonyQuestCore.createTeam({ name: 'Leaf colony' }, 0);
