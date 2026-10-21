@@ -44,7 +44,7 @@ async function signup(email, password, name, forceRole) {
   // Students (signing up from a game link) are always 'student'. Otherwise the
   // first teacher to sign up (or the configured ADMIN_EMAIL) becomes admin.
   const adminEmail = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
-  const role = forceRole === 'student' ? 'student'
+  const role = (forceRole === 'student' || isStudentAccount({ email })) ? 'student'
     : (Object.keys(users).length === 0 || (adminEmail && email === adminEmail)) ? 'admin' : 'teacher';
   const id = crypto.randomUUID();
   users[id] = { id, email, name: (name || '').trim() || email.split('@')[0], passwordHash: await bcrypt.hash(password, 10), role, createdAt: new Date().toISOString() };
@@ -82,12 +82,13 @@ async function findOrCreateSocialUser({ provider, providerUserId, email, name, o
     if (!u.identities[key]) u.identities[key] = { email, linkedAt: new Date().toISOString() };
     if (!u.name && name) u.name = name;
     if (organizationId) u.organizationId = String(organizationId);
+    if (isStudentAccount(u)) u.role = 'student';
     saveUsers(users);
     return publicUser(u);
   }
 
   const adminEmail = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
-  const role = (Object.keys(users).length === 0 || (adminEmail && email === adminEmail)) ? 'admin' : 'teacher';
+  const role = isStudentAccount({ email }) ? 'student' : (Object.keys(users).length === 0 || (adminEmail && email === adminEmail)) ? 'admin' : 'teacher';
   const id = crypto.randomUUID();
   users[id] = {
     id, email, name: (name || '').trim() || email.split('@')[0], role,
@@ -99,7 +100,14 @@ async function findOrCreateSocialUser({ provider, providerUserId, email, name, o
   return publicUser(users[id]);
 }
 
-function publicUser(u) { return { id: u.id, email: u.email, name: u.name, role: u.role || 'teacher', organizationId: u.organizationId || '', createdAt: u.createdAt, accessMode: require('./teacher-access').accessFor(u.id) }; }
+// Apply on every account read so existing sessions cannot retain teacher rights.
+function isStudentAccount(user) {
+  const emails = [user.email, ...Object.values(user.identities || {}).map(identity => identity.email)];
+  return user.role === 'student' || emails.some(email =>
+    String(email || '').trim().toLowerCase().split('@')[1] === 'stu.vinschool.edu.vn');
+}
+
+function publicUser(u) { return { id: u.id, email: u.email, name: u.name, role: isStudentAccount(u) ? 'student' : (u.role || 'teacher'), organizationId: u.organizationId || '', createdAt: u.createdAt, accessMode: isStudentAccount(u) ? 'student' : require('./teacher-access').accessFor(u.id) }; }
 
 function issueToken(userId) { return jwt.sign({ uid: userId }, SECRET, { expiresIn: TOKEN_TTL }); }
 function verifyToken(token) {
@@ -253,6 +261,7 @@ function requireAuth(req, res, next) {
   const uid = token && verifyToken(token);
   const user = uid && getUserById(uid);
   if (!user) return res.status(401).json({ error: 'Not signed in.' });
+  if (user.role === 'student') return res.status(403).json({ error: 'Please use the student sign-in page to join your class.', studentOnly: true, loginUrl: '/start' });
   req.userId = uid;
   req.user = user;
   if (user.role !== 'admin' && user.accessMode === 'newsletter' && !require('./teacher-access').newsletterRouteAllowed(req.originalUrl || req.url)) return res.status(403).json({error:'This account has newsletter access only.'});
@@ -274,4 +283,4 @@ function requireAdmin(req, res, next) {
 // minting key material of their own (see studentHandle in image-server.js).
 function sessionSecret() { return SECRET; }
 
-module.exports = { sessionSecret, signup, login, findOrCreateSocialUser, issueToken, verifyToken, getUserById, listUsers, deleteUser, userHasEducScopeIdentity, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME, createPasswordResetToken, resetPasswordWithToken, addPasskey, listPasskeys, deletePasskey, findByCredentialId, updatePasskeyCounter };
+module.exports = { isStudentAccount, sessionSecret, signup, login, findOrCreateSocialUser, issueToken, verifyToken, getUserById, listUsers, deleteUser, userHasEducScopeIdentity, verifyPassword, listAllUserIds, requireAuth, requireAdmin, COOKIE_NAME, createPasswordResetToken, resetPasswordWithToken, addPasskey, listPasskeys, deletePasskey, findByCredentialId, updatePasskeyCounter };

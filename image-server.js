@@ -114,7 +114,7 @@ function requireGameAccess(req, res, next) {
   if (teacherTok) {
     try {
       const p = verifyToken(teacherTok);
-      if (p) { req.userId = p; req.user = getUserById(p) || {}; return next(); }
+      if (p) { const user = getUserById(p); if (user && user.role !== 'student') { req.userId = p; req.user = user; return next(); } }
     } catch {}
   }
   const gameTok = req.cookies && req.cookies[GAME_COOKIE];
@@ -165,7 +165,7 @@ function requireAssignmentAccess(req, res, next) {
   if (teacherTok) {
     try {
       const p = verifyToken(teacherTok);
-      if (p) { req.userId = p; req.user = getUserById(p) || {}; return next(); }
+      if (p) { const user = getUserById(p); if (user && user.role !== 'student') { req.userId = p; req.user = user; return next(); } }
     } catch {}
   }
   const gameTok = req.cookies && req.cookies[GAME_COOKIE];
@@ -504,6 +504,10 @@ app.get('/api/educscope/session', async (req, res) => {
       name: profile.name,
       organizationId: profile.organizationId,
     });
+    if (user.role === 'student') {
+      res.clearCookie(COOKIE_NAME);
+      return res.status(403).json({ authenticated: false, studentOnly: true, loginUrl: '/start', error: 'This is a student account. Please sign in at /start to join your class.' });
+    }
     roster.assignOrganization(user.id, profile.organizationId);
     const correctedNames = roster.reconcileOrganizationStudentNames(profile.organizationId);
     correctedNames.forEach(item => assignments.renameAssessmentStudent(
@@ -540,6 +544,10 @@ app.post('/api/educscope/token', async (req, res) => {
       name: profile.name,
       organizationId: profile.organizationId,
     });
+    if (user.role === 'student') {
+      res.clearCookie(COOKIE_NAME);
+      return res.status(403).json({ authenticated: false, studentOnly: true, loginUrl: '/start', error: 'This is a student account. Please sign in at /start to join your class.' });
+    }
     roster.assignOrganization(user.id, profile.organizationId);
     const correctedNames = roster.reconcileOrganizationStudentNames(profile.organizationId);
     correctedNames.forEach(item => assignments.renameAssessmentStudent(
@@ -838,7 +846,8 @@ app.get('/auth/:provider/callback', async (req, res) => {
     if (!req.query.code) return fail('No authorization code returned.');
 
     const profile = await socialAuth.fetchProfile(provider, { code: req.query.code, redirectUri: socialRedirectUri(req, provider) });
-    if (studentIntent) {
+    if (studentIntent || require('./auth').isStudentAccount(profile)) {
+      res.clearCookie(COOKIE_NAME);
       if (provider !== 'google' || !profile.emailVerified) return fail('Use a verified school Google account.');
       const linked = studentAccount.findByIdentity(provider, profile.providerUserId);
       if (linked) {
@@ -848,17 +857,18 @@ app.get('/auth/:provider/callback', async (req, res) => {
         res.cookie(STUDENT_COOKIE, issueStudentToken(linked.studentId, displayName), cookieOptions(30 * 24 * 60 * 60 * 1000));
         res.clearCookie(STUDENT_SOCIAL_LINK_COOKIE);
         audit.log('student.social_login', { provider, studentId: linked.studentId, email: profile.email, ip: req.ip });
-        return res.redirect(safeLocalReturn(intent.returnTo));
+        return res.redirect((studentIntent ? safeLocalReturn(intent.returnTo) : '/start'));
       }
       const linkToken = jwt.sign({
         type: 'student-social-link', provider, providerUserId: profile.providerUserId,
-        email: profile.email, name: profile.name, returnTo: safeLocalReturn(intent.returnTo),
+        email: profile.email, name: profile.name, returnTo: (studentIntent ? safeLocalReturn(intent.returnTo) : '/start'),
       }, JWT_SECRET, { expiresIn: '10m' });
       res.cookie(STUDENT_SOCIAL_LINK_COOKIE, linkToken, cookieOptions(10 * 60 * 1000));
-      const next = safeLocalReturn(intent.returnTo);
+      const next = (studentIntent ? safeLocalReturn(intent.returnTo) : '/start');
       return res.redirect(`/start?google=link${next !== '/start' ? `&next=${encodeURIComponent(next)}` : ''}`);
     }
     const user = await findOrCreateSocialUser(profile);
+    if (user.role === 'student') { res.clearCookie(COOKIE_NAME); return res.redirect('/start'); }
     setSession(res, user.id);
     audit.log('social.login', { provider, userId: user.id, email: user.email, ip: req.ip });
     res.redirect('/');

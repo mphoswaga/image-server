@@ -6611,6 +6611,7 @@
           body:JSON.stringify({token})
         });
         const d=await r.json().catch(()=>({}));
+        if(d.studentOnly){ try{ popup?.close(); }catch{} location.replace('/start'); return true; }
         if(!r.ok||!d.authenticated||!d.user) throw new Error(d.error||'EducScope sign-in was not completed.');
         try{ popup?.close(); }catch{}
         $('authErr').textContent='';
@@ -7079,6 +7080,7 @@
     }
 
     async function enterApp(user){
+      if(user?.role === 'student'){ location.replace('/start'); return; }
       try { user=await window.GamesWelcome.claim(user); }
       catch(err){ showAuth(); $('authErr').textContent=err.message; return; }
       if (user.accessMode === 'newsletter' || sessionStorage.getItem('newsletter.invite')) { location.replace('/newsletters.html'); return; }
@@ -9900,6 +9902,7 @@
       try{
         const r=await fetch('/api/educscope/session',{credentials:'include'});
         const d=await r.json().catch(()=>({}));
+        if(d.studentOnly){ location.replace('/start'); return null; }
         educscopeLoginUrl=d.loginUrl||educscopeLoginUrl||'';
         if(r.ok && d.authenticated && d.user) return d.user;
       }catch{}
@@ -9909,7 +9912,7 @@
     (async function init(){
       const bridgedUser=await syncEducScopeSession();
       if(bridgedUser){ enterApp(bridgedUser); window._splashAuthReady?.(); return; }
-      try{ const r=await fetch('/api/me'); if(r.ok){ const {user}=await r.json(); enterApp(user); window._splashAuthReady?.(); return; } }catch{}
+      try{ const r=await fetch('/api/me'); if(r.status===403){ const d=await r.json(); if(d.studentOnly){ location.replace('/start'); return; } } if(r.ok){ const {user}=await r.json(); enterApp(user); window._splashAuthReady?.(); return; } }catch{}
       showAuth(); window._splashAuthReady?.();
     })();
   </script>
