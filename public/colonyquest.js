@@ -928,7 +928,7 @@
     updateHUD();
     // The ants visibly build, gather, hatch, or strengthen their home. A
     // short automatic beat preserves that reward without a story popup.
-    const hold = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 2500 : Math.max(2400, actionDuration + 700);
+    const hold = Math.max(5000, actionDuration + 1500);
     await new Promise(resolve => scene.time.delayedCall(hold, resolve));
     resetActionCamera();
     if (session && session.phase === 'event' && lastGameplayEvent() === event) await nextTurn();
@@ -1138,7 +1138,8 @@
       raidMoment.clear();
       if (session && session.phase === 'event' && lastGameplayEvent() === event) await nextTurn();
     };
-    if (!animate || !scene || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { if(animate)raidResultSound(event.success); return finish(); }
+    if (!animate || !scene) { if(animate)raidResultSound(event.success); return finish(); }
+    const gentleRaid = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const home = colonyViews.get(attacker.id), away = colonyViews.get(defender.id);
     if (!home || !away) return finish();
     setOverlay(null);
@@ -1194,7 +1195,7 @@
           raid.lastImpact = Math.floor(battleProgress * 5);
           showBattleBurst(meeting, [0xffd66b, 0xe2bd82], effects);
           playAntSound('battle');
-          camera.shake(120, .002);
+          if (!gentleRaid) camera.shake(120, .002);
         }
         const distance = beat.travel;
         for (let index = 0; index < attackActors.length; index += 1) {
@@ -1225,8 +1226,10 @@
         }
         const lead = attackActors.find(actor => actor.visible) || attackActors[0];
         const targetZoom = Math.min(raidZoomLimit, phase === 'at-nest' ? 2.6 : phase === 'outbound' ? 1.7 + distance * .4 : 1.9);
-        camera.setZoom(Phaser.Math.Linear(camera.zoom, targetZoom, .045));
-        camera.centerOn(phase === 'at-nest' ? meeting.x : lead.x, (phase === 'at-nest' ? meeting.y : lead.y) + 18);
+        if (!gentleRaid) {
+          camera.setZoom(Phaser.Math.Linear(camera.zoom, targetZoom, .045));
+          camera.centerOn(phase === 'at-nest' ? meeting.x : lead.x, (phase === 'at-nest' ? meeting.y : lead.y) + 18);
+        }
         if (phase !== lastPhase) {
           lastPhase = phase;
           $('worldViewport').dataset.raidPhase = phase;
@@ -2747,7 +2750,12 @@
     const team = session.teams.find(item => item.id === teamId);
     const palette = core.TEAM_COLORS[team.colorIndex];
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reducedMotion) return 250;
+    if (reducedMotion) {
+      const site = view.sites[REWARD_STORIES[kind]?.site || 'center'] || view.center;
+      const marker = scene.add.ellipse(site.x, site.y, 90, 55, palette.light, .12).setStrokeStyle(3, palette.light, 1).setDepth(20);
+      scene.tweens.add({targets:marker,alpha:.35,duration:1200,yoyo:true,repeat:1,onComplete:()=>marker.destroy()});
+      return 4800;
+    }
     const nursery = view.sites.nursery;
     const entrance = view.sites.entrance;
     const site = view.sites[REWARD_STORIES[kind]?.site || 'center'] || view.center;

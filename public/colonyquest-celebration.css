@@ -29,3 +29,7 @@
 @media(max-width:600px){.cq-dance-floor{height:120px}}
 @media(prefers-reduced-motion:reduce){.cq-dance-travel,.cq-champion .cq-dance-travel img,.cq-dance-shadow{animation:none}}
 .cq-celebration-content{width:100%;box-sizing:border-box;min-width:0}.cq-place{min-width:0}.cq-kicker{overflow-wrap:anywhere}
+
+/* Gentle celebration preserves the winner moment without spins or large jumps. */
+@keyframes cq-gentle-celebration{50%{transform:translateY(-2px)}}
+@media(prefers-reduced-motion:reduce){.cq-champion .cq-dance-travel img{animation:cq-gentle-celebration 3s ease-in-out var(--delay) infinite}}
