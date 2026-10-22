@@ -127,6 +127,16 @@ test('exports original assessment marks rather than percentages or a mixed avera
   await assert.rejects(fillSchoolTemplate(GRADEBOOK, template, { assessmentId: 'other-class' }), /this class/);
 });
 
+test('changing the selected assignment exports only its own marks and leaves missing results blank', async () => {
+  const template = workbookBuffer([['no', 'username', 'fullname', 'final_grade', 'comment'], [1, 'VS001', 'Ama', '', 'Keep'], [2, 'VS002', 'Bongi', '', '']]);
+  const first = await fillSchoolTemplate(GRADEBOOK, template, { assessmentId: 'a1' });
+  const second = await fillSchoolTemplate(GRADEBOOK, template, { assessmentId: 'a2' });
+  assert.deepEqual(gridOf(first.buffer).rows.slice(1).map(r => r[3]), [8, 9]);
+  assert.deepEqual(gridOf(second.buffer).rows.slice(1).map(r => r[3]), [1, '']);
+  assert.equal(second.skippedNoMark, 1);
+  assert.equal(gridOf(second.buffer).rows[1][4], 'Keep');
+});
+
 test('preserves every workbook part and all non-mark cells exactly', async () => {
   const PizZip = require('pizzip');
   const template = workbookBuffer([['username', 'fullname', 'final_grade', 'comment'], ['VS001', 'Nguyễn Đức Trí', '', 'Keep this note']]);
