@@ -13,6 +13,26 @@ async function open(page,extra={}) {
  await page.locator('#resumeBtn').click();
  await expect(page.locator('#gameScreen')).not.toHaveAttribute('inert','');
 }
+test('visible answer countdown expires once and pauses with the teacher',async({page})=>{
+  await open(page,{phase:'question'});
+  await expect(page.locator('#answerCountdown')).toBeVisible();
+  await expect(page.locator('#answerCountdown')).toHaveText(/(?:10|9)s/);
+  await page.locator('#pauseBtn').click();
+  const paused=await page.locator('#answerCountdown').textContent();
+  await page.waitForTimeout(1200);
+  await expect(page.locator('#answerCountdown')).toHaveText(paused);
+  await page.locator('#pauseBtn').click();
+  const saved=page.waitForRequest(request=>request.method()==='PUT'&&request.url().includes('/session')&&request.postDataJSON()?.session?.answers?.some(a=>a.choice===null&&a.correct===false));
+  await saved;
+});
+
+test('spider swarm shows food being stolen at the pantry',async({page},info)=>{
+  const beforeTeams=[core.createTeam({name:'Oak'},0),core.createTeam({name:'Leaf'},1)];
+  await open(page,{phase:'event',events:[{key:'predator',automatic:true,beforeTeams,effects:[{teamId:'team-1',foodDelta:-4,roomsDelta:0}]}]});
+  await expect.poll(()=>page.evaluate(()=>window.motionGame.scene.scenes[0].children.list.some(item=>item.text==='−4 food'))).toBe(true);
+  await page.screenshot({path:info.outputPath('spider-food-theft.png')});
+});
+
 for(const motion of ['reduce','no-preference']) {
  test(`smartboard winners keep dancing over time (${motion})`,async({page},info)=>{
   await page.emulateMedia({reducedMotion:motion});await open(page);

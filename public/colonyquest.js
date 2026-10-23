@@ -20,6 +20,26 @@
   let saveChain = Promise.resolve();
   let toastTimer = null;
   let clockTimer = null;
+  let answerClock = { key: '', remaining: 10000, last: 0 };
+
+  function updateAnswerClock() {
+    const now = performance.now();
+    const elapsed = answerClock.last ? now - answerClock.last : 0;
+    answerClock.last = now;
+    const active = session?.phase === 'question' && !answerLocked &&
+      !$('questionOverlay').classList.contains('hidden') &&
+      !$('gameScreen').classList.contains('threat-spotlight');
+    if (active) answerClock.remaining = Math.max(0, answerClock.remaining - elapsed);
+    const display = $('answerCountdown');
+    if (display) {
+      display.textContent = `${Math.ceil(answerClock.remaining / 1000)}s`;
+      display.classList.toggle('urgent', answerClock.remaining <= 3000);
+    }
+    if (active && answerClock.remaining === 0) {
+      handleOutcome(null, false);
+      $('feedbackText').textContent = `Time is up. The right answer is ${questionAtCursor().options[questionAtCursor().correctIndex]}.`;
+    }
+  }
   let rendererShutdown = Promise.resolve();
   let startingMatch = false;
   let encounterRun = 0;
@@ -406,6 +426,7 @@
   });
 
   async function startNewMatch() {
+    answerClock = { key: '', remaining: 10000, last: 0 };
     if (startingMatch) return;
     startingMatch = true;
     showNotice('');
@@ -796,6 +817,9 @@
     answerLocked = false;
     transitionLocked = false;
     pendingOutcome = null;
+    const clockKey = `${session.turnIndex}:${session.questionCursor}`;
+    if (answerClock.key !== clockKey) answerClock = { key: clockKey, remaining: 10000, last: performance.now() };
+    answerClock.last = performance.now();
     const team = currentTeam();
     const savedMember = session.selectedTurn === session.turnIndex && team.members.find(m => m.id === session.selectedLearnerId);
     setCurrentParticipant(savedMember || chooseParticipant(team));
@@ -809,6 +833,7 @@
     $('feedback').className = 'feedback';
     $('feedbackNext').textContent = 'Next';
     setOverlay('questionOverlay');
+    updateAnswerClock();
     updateHUD();
     updateWorld();
     focusColony(team.id);
@@ -1824,6 +1849,7 @@
     updateHUD();
     clearInterval(clockTimer);
     clockTimer = setInterval(() => {
+      updateAnswerClock();
       updateHUD();
       if (session && session.phase !== 'paused' && session.phase !== 'ended' && config.matchType === 'time' && matchFinished()) finishMatch().catch(() => {});
     }, 500);
@@ -3175,6 +3201,32 @@
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const camera = scene.cameras.main, width = camera.width, height = camera.height;
     const swarm = [];
+    // Show the actual loss at its source, not only in the resource counters.
+    const event = lastGameplayEvent();
+    for (const effect of event?.effects || []) {
+      const view = colonyViews.get(effect.teamId);
+      if (!view) continue;
+      const foodLost = Math.max(0, -(effect.foodDelta || 0));
+      scene.time.delayedCall(3000, () => {
+        if (!scene?.sys?.isActive()) return;
+        const site = view.sites.food;
+        const caption = scene.add.text(site.x, site.y - 35, foodLost ? `−${foodLost} food` : 'Food protected', { fontFamily:'Arial', fontSize:'24px', fontStyle:'bold', color:foodLost?'#fff0ae':'#bcffce', backgroundColor:'#38281f', padding:{x:8,y:5} }).setOrigin(.5).setDepth(110);
+        scene.tweens.add({targets:caption,y:caption.y-30,alpha:0,delay:2600,duration:1400,onComplete:()=>caption.destroy()});
+        for (let i=0;i<Math.min(foodLost,12);i++) {
+          const carrier=createMeadowSpider({x:site.x+i%3*10,y:site.y+i%2*8},.48);
+          carrier.setDepth(105);
+          carrier.add(scene.add.ellipse(18,18,18,11,0xf2ce64));
+          scene.tweens.add({targets:carrier,x:view.sites.entrance.x,y:view.sites.entrance.y,duration:2200,delay:i*90,onComplete:()=>{
+            scene.tweens.add({targets:carrier,x:view.zone.x+view.zone.w+70,alpha:0,duration:1500,onComplete:()=>carrier.destroy(true)});
+          }});
+        }
+        const lostRooms=Math.max(0,-(effect.roomsDelta||0));
+        for(const room of view.rooms.slice(-lostRooms || view.rooms.length)) {
+          const rubble=scene.add.circle(room.x,room.y,26,0x9b704c,.85).setDepth(104);
+          scene.tweens.add({targets:rubble,scale:1.8,alpha:0,duration:1700,onComplete:()=>rubble.destroy()});
+        }
+      });
+    }
     // One shared progress tween keeps the swarm inexpensive on classroom computers.
     for (let i = 0; i < 50; i++) {
       const sprite = scene.add.sprite(0,0,'cq-spider',0).setDepth(100).setScrollFactor(0);
