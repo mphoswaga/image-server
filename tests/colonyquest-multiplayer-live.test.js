@@ -434,3 +434,29 @@ test('only owning teacher can pause a learner in the current match',async t=>{
  assert.equal((await post({...body,paused:false})).status,200);
  assert.equal(f.live.getMatch(f.game.id).player(p.id).teacherPaused,false);
 });
+
+test('learner solo rooms isolate one NPC, resume, and save only learner accuracy', async t => {
+ const f=await fixture(t,'solo-private',{individual:true});
+ const ticket=async student=>fetch(f.api+'/ticket',{method:'POST',headers:{'Content-Type':'application/json','x-student':student},body:JSON.stringify({solo:true})});
+ assert.equal((await ticket('Other')).status,403);
+ const a=await(await ticket('S0')).json(),b=await(await ticket('S1')).json();
+ const ca=jwt.verify(a.token,secret),cb=jwt.verify(b.token,secret);
+ assert.notEqual(ca.key,cb.key);assert.equal(f.live.getMatch(f.game.id),null);
+ const ws=await f.join('S0',a.token);await until(()=>ws.states.length);
+ const m=f.live.getMatch(ca.key,f.game.id);
+ assert.equal(m.state.players.length,2);assert.equal(m.state.players.filter(p=>p.npc).length,1);
+ assert.equal(m.state.players.find(p=>p.npc).name,'Computer colony');
+ assert.equal(ws.states.at(-1).solo,true);assert.equal(m.state.preview,false);
+ assert.equal(m.state.pacing,'individual');
+ const thief=await f.join('S1',jwt.sign({...ca,studentId:'S1'},secret));
+ await until(()=>thief.readyState===WebSocket.CLOSED);assert.equal(m.state.players.length,2);
+ await f.live.mutate(ca.key,m=>{m.state.storyVersion=0;m.startIndividual(Date.now());const p=m.state.players.find(p=>!p.npc);m.answer(p.id,0,0);m.pause();});
+ const again=await(await ticket('S0')).json();assert.equal(jwt.verify(again.token,secret).matchId,m.state.id);
+ const resumed=await f.join('S0',again.token);await until(()=>resumed.states.length);
+ assert.notEqual(m.state.phase,'paused');assert.equal(m.state.players.length,2);
+ await f.live.mutate(ca.key,m=>m.end());await f.live.finalize(ca.key,m);
+ assert.equal(f.writes.length,1);assert.equal(f.writes[0].studentId,'S0');
+ assert.equal(f.writes[0].score,1);assert.equal(f.writes[0].total,2);
+ assert.equal(f.writes[0].gameType,'colonyquest-solo');
+ assert.equal(f.live.getMatch(cb.key,f.game.id).state.players.length,0);
+});

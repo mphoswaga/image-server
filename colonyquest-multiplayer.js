@@ -495,6 +495,7 @@ class ColonyMatch {
       deadline: s.deadline,
       remaining: s.remaining,
       preview: s.preview,
+      solo: !!s.soloStudentId,
       world: s.world,
       story:
         phase === 'story' && s.story
@@ -575,6 +576,7 @@ class ColonyMatch {
       startedAt: s.startedAt,
       endedAt: s.endedAt,
       preview: s.preview,
+      solo: !!s.soloStudentId,
       total: s.questions.length,
       learners: players.map((p) => ({
         name: p.name,

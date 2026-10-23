@@ -369,7 +369,7 @@
     $('learner').classList.toggle('story-playing', s.phase === 'story' && s.story?.key !== 'intro');
     $('roundLabel').textContent = s.preview
       ? 'PRACTICE · NO LEARNER MARKS SAVED'
-      : `QUESTION ${s.round + 1} OF ${s.total}`;
+      : `${s.solo ? 'VS COMPUTER · ' : ''}QUESTION ${s.round + 1} OF ${s.total}`;
     $('explanation').textContent = '';
     if(s.phase!=='story'||s.story?.key!=='intro')$('instruction').classList.remove('spoken-story');
     $('choices').className = 'choices';
@@ -513,7 +513,7 @@
     document.body.classList.add('offline');
     syncMusic();
     try {
-      const ticket = await request('/ticket', {});
+      const ticket = await request('/ticket', {solo: !host && new URLSearchParams(location.search).get('solo') === '1'});
       if (stopped) return;
       socket = new WebSocket(
         (location.protocol === 'https:' ? 'wss://' : 'ws://') +
@@ -527,7 +527,7 @@
         if (msg.type === 'state') {
           const wasOffline = document.body.classList.contains('offline');
           document.body.classList.remove('offline');
-          $('connection').textContent = msg.state.preview ? 'Practice vs 10 computer colonies' : 'Connected';
+          $('connection').textContent = msg.state.preview ? 'Practice vs 10 computer colonies' : msg.state.solo ? 'You vs Computer colony' : 'Connected';
           error('');
           retries = 0;
           setState(msg.state);
@@ -565,7 +565,7 @@
       socket.onerror = () => {};
     } catch (e) {
       if (e.status === 401) {
-        location.replace('/play/' + encodeURIComponent(gameId) + '?activity=colonyquest-live');
+        location.replace('/play/' + encodeURIComponent(gameId) + '?activity='+(new URLSearchParams(location.search).get('solo')==='1'?'colonyquest-solo':'colonyquest-live'));
         return;
       }
       if (e.status === 403) {

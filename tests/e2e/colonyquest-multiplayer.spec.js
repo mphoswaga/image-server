@@ -221,3 +221,24 @@ test('host can pause and resume one named learner from their colony card',async(
  await page.getByRole('button',{name:'Resume learner',exact:true}).click();
  await expect(page.getByRole('button',{name:'Pause learner',exact:true})).toBeVisible();expect(learner.teacherPaused).toBe(false);expect(errors).toEqual([]);
 });
+
+test('independent learner sees computer mode and starts a private two-colony match',async({page,browser},info)=>{
+ test.skip(info.project.name!=='windows-100');test.setTimeout(60000);
+ const id=await create(page);
+ const context=await browser.newContext({baseURL:'http://127.0.0.1:4341'});
+ try {
+  const entered=await context.request.post('/api/game/'+id+'/enter',{data:{studentId:'SOLOPLAYER',name:'Solo Learner',pin:'4829'}});
+  expect(entered.ok(),await entered.text()).toBeTruthy();
+  const learner=await context.newPage();const errors=[];learner.on('pageerror',e=>errors.push(e.message));
+  await learner.goto('/play/'+id);await learner.locator('#startBtn').click();
+  await expect(learner.locator('[data-game="colonyquest-live"]')).toHaveCount(0);
+  await expect(learner.locator('[data-game="colonyquest-solo"]')).toContainText('Play against the computer');
+  await learner.locator('[data-game="colonyquest-solo"]').click();
+  await expect(learner).toHaveURL(/solo=1/);
+  await expect(learner.locator('#connection')).toHaveText('You vs Computer colony');
+  await expect(learner.locator('#roundLabel')).toContainText('FIELD GUIDE');
+  await learner.reload();await expect(learner.locator('#connection')).toHaveText('You vs Computer colony');
+  expect(errors).toEqual([]);
+  const teacher=await(await page.request.get('/api/game/'+id+'/colonyquest-live')).json();expect(teacher.match).toBeNull();
+ }finally{await context.close();}
+});

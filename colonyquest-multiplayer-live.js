@@ -92,7 +92,7 @@ function createColonyQuestMultiplayer({
   }
   async function mutate(key, fn) {
     return enqueue(key, async () => {
-      const match = getMatch(key, key.split('.preview.')[0]);
+      const match = getMatch(key, key.split(/\.(?:preview|solo)\./)[0]);
       if (!match) throw Error('Open the lobby first.');
       const before = structuredClone(match.state);
       try {
@@ -118,7 +118,7 @@ function createColonyQuestMultiplayer({
         // Collect near-simultaneous classroom answers, then commit once before any acknowledgement.
         await new Promise(resolve => setTimeout(resolve, 8));
         if (commandBatches.get(key) === batch) commandBatches.delete(key);
-        const match = getMatch(key, key.split('.preview.')[0]);
+        const match = getMatch(key, key.split(/\.(?:preview|solo)\./)[0]);
         if (!match) throw Error('Open the lobby first.');
         const before = structuredClone(match.state), accepted = [];
         for (const item of batch) {
@@ -138,12 +138,13 @@ function createColonyQuestMultiplayer({
     }
     return result;
   }
-  async function openMatch(game, { rosterIds = [], preview = false, key = game.id, pacing = 'individual' } = {}) {
+  async function openMatch(game, { rosterIds = [], preview = false, key = game.id, pacing = 'individual', soloStudentId = null } = {}) {
     return enqueue(key, async () => {
       const old = getMatch(key, game.id);
       if (old && old.state.phase !== 'ended') return old;
       if (old) await finalize(key, old);
       const match = new ColonyMatch(game, { preview, rosterIds, pacing });
+      if (soloStudentId) match.state.soloStudentId = soloStudentId;
       await save(key, match);
       matches.set(key, match);
       return match;
@@ -156,6 +157,7 @@ function createColonyQuestMultiplayer({
       .filter(Boolean);
   }
   function eligible(game, match, identity, assignedClasses = null) {
+    if (match.state.soloStudentId && match.state.soloStudentId !== games.normalizeStudentId(identity.studentId)) return false;
     if (games.isStudentRemoved(game, identity.studentId)) return false;
     if (!gameSessionCanAccess(game, { ...identity, gameId: game.id })) return false;
     const selected = match.state.rosterIds;
@@ -190,7 +192,7 @@ function createColonyQuestMultiplayer({
           .filter(
             (n) =>
               n.startsWith(clean(gameId) + '.') &&
-              !n.includes('.preview.') &&
+              !n.includes('.preview.') && !n.includes('.solo.') &&
               !n.endsWith('.active.json') &&
               n.endsWith('.json'),
           )
@@ -237,7 +239,7 @@ function createColonyQuestMultiplayer({
           score: p.answers.filter((a) => a.correct).length,
           total: s.questions.length,
           answers: s.questions.map((_, i) => p.answers.find((a) => a.round === i)?.choice ?? -1),
-          gameType: 'colonyquest-live',
+          gameType: s.soloStudentId ? 'colonyquest-solo' : 'colonyquest-live',
           arcadeScore: require('./public/colonyquest-core').colonyStrength(p.colony),
           resultId: `${s.id}:${p.studentId}`,
         });
@@ -305,6 +307,7 @@ function createColonyQuestMultiplayer({
     const g = games.getGame(req.params.id);
     if (!g) return res.status(404).json({ error: 'Game not found.' });
     const preview = req.userId === g.teacherId;
+    const solo = req.body?.solo === true && !preview;
     const identity = preview
       ? { studentId: `__TEACHER_${req.userId}`, name: 'Your practice colony' }
       : req.gameSession?.gameId === g.id
@@ -315,8 +318,12 @@ function createColonyQuestMultiplayer({
     try {
       const key = preview
         ? `${g.id}.preview.npc10.${crypto.createHash('sha256').update(req.userId).digest('hex').slice(0, 12)}`
-        : g.id;
-      const m = preview ? await openMatch(g, { key, preview: true }) : getMatch(key);
+        : solo ? `${g.id}.solo.${crypto.createHash('sha256').update(identity.studentId).digest('hex').slice(0, 24)}` : g.id;
+      // A learner can create only their own assigned, private match, never a class lobby.
+      if (solo && !eligible(g, {state:{rosterIds:games.getRosterIds(g).map(String)}}, identity))
+        return res.status(403).json({ error: 'This game is not assigned to you.' });
+      const m = preview ? await openMatch(g, { key, preview: true }) : solo
+        ? await openMatch(g, { key, rosterIds:games.getRosterIds(g).map(String), soloStudentId:identity.studentId }) : getMatch(key);
       if (
         !m ||
         (m.state.phase === 'ended' && !m.state.players.some((p) => p.studentId === identity.studentId))
@@ -335,6 +342,7 @@ function createColonyQuestMultiplayer({
             name: identity.name,
             rosterId: identity.rosterId || null,
             preview,
+            solo,
           },
           jwtSecret,
           { expiresIn: '2h' },
@@ -415,6 +423,7 @@ function createColonyQuestMultiplayer({
               !m ||
               m.state.id !== claim.matchId ||
               m.state.preview !== !!claim.preview ||
+              !!m.state.soloStudentId !== !!claim.solo ||
               (!claim.preview && !eligible(g, m, claim))
             )
               throw Error('Room unavailable');
@@ -428,12 +437,12 @@ function createColonyQuestMultiplayer({
               ws.gameId = g.id;
               ws.playerId = p.id;
               ws.identity = claim;
-              if (claim.preview && match.state.phase === 'lobby') {
-                ['Fern', 'Clover', 'Acorn', 'Willow', 'Moss', 'Maple', 'Hazel', 'Bramble', 'Poppy', 'Oak'].forEach((name, i) =>
+              if ((claim.preview || claim.solo) && match.state.phase === 'lobby') {
+                (claim.solo ? ['Computer colony'] : ['Fern', 'Clover', 'Acorn', 'Willow', 'Moss', 'Maple', 'Hazel', 'Bramble', 'Poppy', 'Oak']).forEach((name, i) =>
                   match.join({ studentId: `npc-${i}`, name, npc: true }),
                 );
                 match.start();
-              } else if (claim.preview && match.state.phase === 'paused') match.resume();
+              } else if ((claim.preview || claim.solo) && match.state.phase === 'paused') match.resume();
             });
             if (ws.readyState !== 1) {
               await mutate(claim.key, (m) => {
