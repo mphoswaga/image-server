@@ -2016,7 +2016,8 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
   const assessmentOptions = normalizeAssessmentOptions(req.body || {});
   const subject = clip(req.body.subject, LIMITS.subject);
   const topic = clip(req.body.topic, LIMITS.topic);
-  const objectives = clip(req.body.objectives, LIMITS.objectives);
+  const objectiveOverride = clip(lessonLearning.periodObjectives(req.body), LIMITS.objectives);
+  const objectives = objectiveOverride || clip(req.body.objectives, LIMITS.objectives);
   const lessonSequence = lessonSequenceFromBody(req.body);
   const sequenceLessonNumber = lessonSequence
     ? Math.min(lessonSequence.lessonCount, Math.max(1, parseInt(req.body.sequenceLessonNumber, 10) || 1))
@@ -2068,7 +2069,8 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
     const plan = await generateLessonPlan({
       subject: subject.toLowerCase(), topic: topic.toLowerCase(),
       grade, tone, objectives,
-      successCriteria: Array.isArray(req.body.successCriteria) ? req.body.successCriteria : [],
+      successCriteria: objectiveOverride ? [] : (Array.isArray(req.body.successCriteria) ? req.body.successCriteria : []),
+      explicitPeriodObjectives: !!objectiveOverride,
       templateText: tpl ? templatePromptText(req.userId, tpl) : plannerTemplateText, unitBlock,
       sourceMaterialText: sourceMaterialText(req.body), planningFrameworkText: planningFramework.promptText(framework),
       lessonSettings,
@@ -2110,7 +2112,7 @@ app.post('/api/lesson-plan', requireAuth, async (req, res) => {
     if (isRewrite) planRegens.set(regenKey, { n: used + 1, at: Date.now() });
 
     res.json({
-      sections, learningOutcome:plan.learningOutcome||'', lessonIntent:lessonLearning.periodIntent(req.body), successCriteria: plan.successCriteria, addedSuccessCriteria:plan.addedSuccessCriteria||[], teachingModelId:plan.teachingModelId||teachingModelId, lessonPurpose, assessmentDraft: plan.assessmentDraft, model: getTeachingModel(plan.teachingModelId||teachingModelId),
+      sections, objectives, learningOutcome:plan.learningOutcome||'', lessonIntent:lessonLearning.periodIntent(req.body), successCriteria: plan.successCriteria, addedSuccessCriteria:plan.addedSuccessCriteria||[], teachingModelId:plan.teachingModelId||teachingModelId, lessonPurpose, assessmentDraft: plan.assessmentDraft, model: getTeachingModel(plan.teachingModelId||teachingModelId),
       sequence: lessonSequence, sequenceLessonNumber,
       weekPlannerFields: plannerOutline ? plannerOutline.map(f => f.label) : null,
       usedTemplate: !!tpl, templateName: tpl ? tpl.name : null, templateId: tpl ? tpl.id : null,

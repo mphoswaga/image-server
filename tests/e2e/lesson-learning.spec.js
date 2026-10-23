@@ -20,3 +20,19 @@ test('per-period purpose controls are optional and sent with the sequence',async
  let sent;await page.route('**/api/lesson-plan',r=>{sent=r.request().postDataJSON();return r.fulfill({json:{...base,sequenceLessonNumber:1}});});
  await setup(page);await page.getByText('Weekly lesson sequence',{exact:false}).first().click();await page.locator('#sequenceEnabled').check();await page.locator('#sequenceLessonCount').fill('2');await page.locator('#sequenceLessonCount').dispatchEvent('change');await page.locator('[data-period-purpose]').nth(1).selectOption('reflect');await page.locator('#reflectionMcqCount').fill('6');await page.locator('#planBtn').click();await expect(page.locator('#planLearningOutcome')).toBeVisible();expect(sent.sequenceLessonPurposes).toEqual(['teach','reflect']);expect(sent.reflectionMcqCount).toBe(6);
 });
+
+test('optional lesson objectives are sent separately and survive control rerenders',async({page})=>{
+ let sent;await page.route('**/api/lesson-plan',r=>{sent=r.request().postDataJSON();return r.fulfill({json:{...base,sequenceLessonNumber:1}});});
+ await setup(page);await page.getByText('Weekly lesson sequence',{exact:false}).first().click();
+ await page.locator('#sequenceEnabled').check();await page.locator('#sequenceLessonCount').fill('2');await page.locator('#sequenceLessonCount').dispatchEvent('change');
+ await page.getByText('Different objectives for lesson 2 (optional)',{exact:true}).click();
+ await page.locator('[data-period-objectives="1"]').fill('Describe the properties of liquids.');
+ await page.locator('#sequenceLessonCount').fill('3');await page.locator('#sequenceLessonCount').dispatchEvent('change');
+ await expect(page.locator('[data-period-objectives="1"]')).toHaveValue('Describe the properties of liquids.');
+ await page.locator('#planBtn').click();await expect(page.locator('#planLearningOutcome')).toBeVisible();
+ expect(sent.sequenceLessonObjectives).toEqual(['','Describe the properties of liquids.','']);
+ await page.evaluate(()=>saveWorkspaceNow());
+ const id=await page.evaluate(()=>currentWorkspaceId);
+ await page.reload();await page.evaluate(id=>resumeLessonWorkspace(id),id);
+ await expect(page.locator('[data-period-objectives="1"]')).toHaveValue('Describe the properties of liquids.');
+});

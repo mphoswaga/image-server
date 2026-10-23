@@ -1,5 +1,13 @@
 'use strict';
 
+function periodObjectives(input = {}) {
+  if (![true, 'true', 'on'].includes(input.sequenceEnabled) || (input.lessonPurpose && input.lessonPurpose !== 'lesson')) return '';
+  const index = Math.max(0, Math.min(9, (Number(input.sequenceLessonNumber) || 1) - 1));
+  const value = Array.isArray(input.sequenceLessonObjectives) ? input.sequenceLessonObjectives[index] : '';
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+
 function cleanOutcome(value) {
   return typeof value === 'string' ? value.trim().slice(0, 600) : '';
 }
@@ -23,7 +31,7 @@ function addOutcomeSlide(slides, value, purpose = 'lesson') {
   result.splice(after + 1, 0, { type: 'objectives', title: 'Lesson outcome', bullets: [outcome], imageQuery: '', modelStage: 'outcome', assessmentProtected: purpose === 'test', speakerNotes: 'Share this intended learning outcome as part of the starter time. Success criteria provide the observable evidence; this statement does not reveal assessment answers.' });
   return result;
 }
-module.exports = { cleanOutcome, periodIntent, outcomePrompt, addOutcomeSlide };
+module.exports = { periodObjectives, cleanOutcome, periodIntent, outcomePrompt, addOutcomeSlide };
 
 function reflectionSchema(count) {
   return { type:'array', minItems:count, maxItems:count, items:{ type:'object', additionalProperties:false, properties:{

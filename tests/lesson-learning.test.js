@@ -3,6 +3,15 @@ const assert=require('node:assert/strict');
 const {addOutcomeSlide,periodIntent,reflectionIssues,includeReflectionQuestions}=require('../lesson-learning');
 const {planSchema}=require('../lesson-plan');
 const {getTeachingModel}=require('../teaching-models');
+test('optional objectives belong only to the selected lesson and do not change legacy planning',()=>{
+ const {periodObjectives}=require('../lesson-learning');
+ const input={sequenceEnabled:true,sequenceLessonObjectives:['','  Describe liquids.  '],sequenceLessonNumber:2};
+ assert.equal(periodObjectives(input),'Describe liquids.');
+ assert.equal(periodObjectives({...input,sequenceLessonNumber:1}),'');
+ assert.equal(periodObjectives({...input,sequenceEnabled:false}),'');
+ assert.equal(periodObjectives({...input,lessonPurpose:'test'}),'');
+ assert.equal(periodObjectives({}),'');
+});
 test('outcome follows starter and preserves all existing content and timing',()=>{
  const slides=[{type:'title',title:'Search'},{type:'objectives',title:'Objectives'},{type:'content',title:'Starter',alignment:{kind:'intro',startMinute:0,endMinute:5}},{type:'content',title:'Model'}];
  const result=addOutcomeSlide(slides,'By the end of this lesson, you will be able to choose useful keywords.');

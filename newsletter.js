@@ -7,7 +7,7 @@ function newsletterSource(workspace) {
     throw new Error('Finish all lesson plans before creating the weekly newsletter.');
   }
   const plans = sequence.length ? sequence : [workspace.plan];
-  const lessons = plans.map((plan, index) => ({ lesson: index + 1, ...(cleanOutcome(plan?.learningOutcome) ? {learningOutcome:cleanOutcome(plan.learningOutcome)} : {}), ...(plan?.lessonIntent || workspace.context?.sequenceLessonPurposes?.[index] ? {lessonIntent:plan?.lessonIntent || workspace.context.sequenceLessonPurposes[index]} : {}), sections: (plan?.sections || []).map(s => ({ heading: String(s.heading || ''), content: String(s.content || '') })) }));
+  const lessons = plans.map((plan, index) => ({ lesson: index + 1, ...(plan?.objectives ? {objectives:String(plan.objectives)} : {}), ...(cleanOutcome(plan?.learningOutcome) ? {learningOutcome:cleanOutcome(plan.learningOutcome)} : {}), ...(plan?.lessonIntent || workspace.context?.sequenceLessonPurposes?.[index] ? {lessonIntent:plan?.lessonIntent || workspace.context.sequenceLessonPurposes[index]} : {}), sections: (plan?.sections || []).map(s => ({ heading: String(s.heading || ''), content: String(s.content || '') })) }));
   if (!lessons.some(plan => plan.sections.some(s => s.content.trim()))) throw new Error('Create or load a lesson plan first.');
   return { subject: workspace.subject, topic: workspace.topic, grade: workspace.grade, lessons };
 }
