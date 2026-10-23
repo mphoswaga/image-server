@@ -722,7 +722,7 @@
       learnerToken=result.token;sessionStorage.setItem('moonquest:'+room.id,learnerToken);
       return openSession(room.id,'student');
     }
-    document.getElementById('join-class').innerHTML=`<h2>${esc(room.title)}</h2><p>Choose your name, then enter your PIN.</p><input id="join-name" type="hidden"><div class="join-names" role="group" aria-label="Choose your name">${room.students.map(st=>`<button data-learner-handle="${esc(st.handle)}" aria-pressed="false">${esc(st.label)}</button>`).join('')}</div><div class="stack"><label>Your PIN<input id="join-pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off"></label><p class="muted">Use your usual four-digit PIN. If you have never set one, choose one now.</p>${button('Join the mission','join','primary')}</div>`;
+    document.getElementById('join-class').innerHTML=`<h2>${esc(room.title)}</h2><p>${room.pinFreeGames?'Choose your name to join.':'Choose your name, then enter your PIN.'}</p><input id="join-name" type="hidden"><div class="join-names" role="group" aria-label="Choose your name">${room.students.map(st=>`<button data-learner-handle="${esc(st.handle)}" aria-pressed="false">${esc(st.label)}</button>`).join('')}</div><div class="stack">${room.pinFreeGames?'':`<label>Your PIN<input id="join-pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off"></label><p class="muted">Use your usual four-digit PIN. If you have never set one, choose one now.</p>`}${button('Join the mission','join','primary')}</div>`;
 
   }
   root.addEventListener('input',e=>{
@@ -735,7 +735,7 @@
     const action=b.dataset.action; b.disabled=true;
     try{
       if(action==='copy-learner-link'){const input=document.getElementById('learner-link');try{await navigator.clipboard.writeText(input.value);tell('Link copied. You can send it to your learners.');}catch{input.focus();input.select();tell('Select Copy to copy the highlighted link.');}}
-      else if(b.dataset.learnerHandle){document.getElementById('join-name').value=b.dataset.learnerHandle;root.querySelectorAll('[data-learner-handle]').forEach(el=>el.setAttribute('aria-pressed',String(el===b)));document.getElementById('join-pin').focus();}
+      else if(b.dataset.learnerHandle){document.getElementById('join-name').value=b.dataset.learnerHandle;root.querySelectorAll('[data-learner-handle]').forEach(el=>el.setAttribute('aria-pressed',String(el===b)));document.getElementById('join-pin')?.focus();}
       else if(b.dataset.duelMedia){document.getElementById(b.dataset.duelMedia)?.click();if(b.dataset.duelMedia!=='full')renderLive();}
       else if(b.dataset.duelTest){const response=await api('/games/'+b.dataset.duelTest+'/sessions',{test:true,mode:'duels'});await openSession(response.id,'teacher');}
       else if(b.dataset.avatar){state=await api('/sessions/'+sessionId+'/avatar',{avatar:b.dataset.avatar});lastRender='';renderLive();}
@@ -798,7 +798,7 @@
       else if(b.dataset.suggest){const id=b.dataset.suggest;tell('Preparing a different scenario. The class can keep playing.');const d=await api('/sessions/'+sessionId+'/suggest',{queueId:id},{timeout:25000});const el=document.querySelector(`[data-queue="${id}"]`);if(el){el.querySelector('[data-prompt]').value=d.prompt;el.querySelector('[data-explanation]').value=d.explanation;}tell('Suggestion ready. Review it before approving.');}
       else if(b.dataset.approve||b.dataset.skip){const id=b.dataset.approve||b.dataset.skip,el=document.querySelector(`[data-queue="${id}"]`);await api('/sessions/'+sessionId+'/review',{queueId:id,skip:!!b.dataset.skip,prompt:el.querySelector('[data-prompt]')?.value,explanation:el.querySelector('[data-explanation]')?.value});lastRender='';}
       else if(action==='find-room')await findRoom();
-      else if(action==='join'){const result=await api('/sessions/'+room.id+'/join',{handle:document.getElementById('join-name').value,pin:document.getElementById('join-pin').value});learnerToken=result.token;sessionStorage.setItem('moonquest:'+room.id,learnerToken);await openSession(room.id,'student');}
+      else if(action==='join'){const result=await api('/sessions/'+room.id+'/join',{handle:document.getElementById('join-name').value,pin:document.getElementById('join-pin')?.value});learnerToken=result.token;sessionStorage.setItem('moonquest:'+room.id,learnerToken);await openSession(room.id,'student');}
     }catch(err){tell(err.message,true);}finally{if(b.isConnected)b.disabled=false;}
   });
   async function init(){

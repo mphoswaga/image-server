@@ -157,11 +157,26 @@
     const ring = scene.add.circle(fish.sprite.x, fish.sprite.y, big ? 44 : 30, big ? 0xffd166 : 0x52e5db, 0).setStrokeStyle(big ? 5 : 3, big ? 0xffd166 : 0x52e5db, .95).setDepth(20);
     scene.tweens.add({ targets: ring, scale: big ? 2.8 : 1.8, alpha: 0, duration: big ? 700 : 420, ease: 'Cubic.easeOut', onComplete: () => ring.destroy() });
   }
+  let pinFreeHandle = false;
+  async function showGameJoin() {
+    show('join');
+    try {
+      const info = await json(`/api/game/${GAME_ID}/join`);
+      if (!info.pinFreeGames) return;
+      pinFreeHandle = true;
+      const select = document.createElement('select'); select.id = 'studentId'; select.required = true;
+      select.style.cssText = 'padding:14px;width:100%;font-size:18px';
+      const placeholder = new Option('Choose your name', ''); select.add(placeholder);
+      for (const student of info.students) select.add(new Option(student.label, student.handle));
+      $('studentId').replaceWith(select); $('nameLabel').textContent = 'Choose your name';
+      $('pin').required = false; $('pin').closest('.field').style.display = 'none';
+    } catch (err) { $('joinError').textContent = err.message; }
+  }
   async function load() {
     try {
       meta = await json(`/api/game/${GAME_ID}`); $('nameLabel').textContent = meta.hasRoster ? 'Student ID' : 'Your name';
       $('roomTitle').textContent = (meta.canManageColonyQuest ? 'Teacher test — ' : '') + (meta.lessonTitle || 'FishQuest'); await getTicket();
-    } catch (err) { if (err.status === 401 || err.status === 403) show('join'); else wait(err.message); }
+    } catch (err) { if (err.status === 401 || err.status === 403) await showGameJoin(); else wait(err.message); }
   }
   function wait(message) { stopMusic(); show('waiting'); $('waitText').textContent = message || 'Waiting for your teacher to open the ocean...'; }
   $('retryButton').onclick = load;
@@ -169,7 +184,7 @@
     event.preventDefault(); unlockAudio(); const button = $('joinButton'); button.disabled = true; $('joinError').textContent = '';
     try {
       const studentId = $('studentId').value.trim();
-      await json(`/api/game/${GAME_ID}/enter`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId, name: studentId, pin: $('pin').value }) });
+      await json(`/api/game/${GAME_ID}/enter`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId: pinFreeHandle ? undefined : studentId, handle: pinFreeHandle ? studentId : undefined, name: studentId, pin: $('pin').value }) });
       meta = await json(`/api/game/${GAME_ID}`); $('roomTitle').textContent = (meta.canManageColonyQuest ? 'Teacher test — ' : '') + (meta.lessonTitle || 'FishQuest'); await getTicket();
     } catch (err) { $('joinError').textContent = err.message; } finally { button.disabled = false; }
   };
@@ -178,7 +193,7 @@
     connecting = true;
     try { ticket = (await json(`/api/game/${GAME_ID}/fishquest/ticket`, { method: 'POST' })).token; connect(); }
     catch (err) {
-      if (err.status === 401 || err.status === 403) { show('join'); $('joinError').textContent = err.message; }
+      if (err.status === 401 || err.status === 403) { await showGameJoin(); $('joinError').textContent = err.message; }
       else if (err.status === 409 || err.status === 404) wait(err.message);
       else scheduleReconnect();
     } finally { connecting = false; }

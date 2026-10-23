@@ -422,6 +422,7 @@ function educscopeOnlyResponse(res) {
 }
 
 const teacherAccess = require('./teacher-access');
+const gameJoinPolicy = require('./game-join-policy');
 app.get('/api/teacher-invite/:code', (req, res) => {
   try { res.json(teacherAccess.previewInvite(req.params.code)); }
   catch (err) { res.status(400).json({ error: err.message }); }
@@ -450,7 +451,13 @@ app.post('/api/admin/teacher-invites/:code/upgrade', requireAdmin, (req, res) =>
   res.json({ ok: true });
 });
 app.get('/api/admin/accounts', requireAdmin, (req, res) => {
-  res.json({ users: listUsers().sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))) });
+  res.json({ users: listUsers().map(u => ({ ...u, pinFreeGames: gameJoinPolicy.enabled(u.id) })).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))) });
+});
+app.put('/api/admin/accounts/:id/game-joining', requireAdmin, (req, res) => {
+  const teacher = getUserById(req.params.id);
+  if (!teacher || teacher.role === 'student') return res.status(404).json({ error: 'Teacher not found.' });
+  try { res.json({ pinFreeGames: gameJoinPolicy.set(teacher.id, req.body?.enabled, req.userId) }); }
+  catch (err) { res.status(400).json({ error: err.message }); }
 });
 app.delete('/api/admin/accounts/:id', requireAdmin, (req, res) => {
   try {
@@ -3401,7 +3408,7 @@ app.get('/api/game/:id/join', (req, res) => {
   const hasRoster = games.getRosterIds(g).length > 0;
   res.json({
     lessonTitle: g.lessonTitle, teacherName: g.teacherName || null,
-    hasRoster,
+    hasRoster, pinFreeGames: hasRoster && gameJoinPolicy.enabled(g.teacherId),
     students: hasRoster ? classListForGame(g) : [],
   });
 });
@@ -5116,6 +5123,7 @@ app.post('/api/game/:id/enter', async (req, res) => {
   // A typed entry (no roster, or a child not on the list) still arrives as text.
   const assignedRosterIds = games.getRosterIds(g);
   const fromList = assignedRosterIds.length ? studentFromGameHandle(g, req.body && req.body.handle) : null;
+  const pinFreeJoin = !!fromList && gameJoinPolicy.enabled(g.teacherId);
   const studentId = fromList
     ? roster.normalizeStudentId(fromList.student.id)
     : roster.normalizeStudentId(req.body && req.body.studentId);
@@ -5131,7 +5139,7 @@ app.post('/api/game/:id/enter', async (req, res) => {
     displayName = match.student.name;
     matchedRosterId = match.rosterId;
     const pinState = studentAccount.getAccountState(studentId);
-    if (optionalStudentSession(req)?.studentId === studentId) {
+    if (pinFreeJoin || optionalStudentSession(req)?.studentId === studentId) {
       // Already authenticated as this roster learner; no second PIN challenge.
     } else if (pinState === 'unset') {
       if (!pin) return res.status(428).json({ needsPinSetup: true, error: 'Set up a 4-digit PIN to continue.' });
@@ -5159,7 +5167,7 @@ app.post('/api/game/:id/enter', async (req, res) => {
   games.recordParticipant(g.id, studentId, displayName);
   const token = issueGameToken({ gameId: g.id, studentId, name: displayName, rosterId: matchedRosterId });
   res.cookie(GAME_COOKIE, token, cookieOptions(30 * 24 * 60 * 60 * 1000));
-  res.cookie(STUDENT_COOKIE, issueStudentToken(studentId, displayName), cookieOptions(30 * 24 * 60 * 60 * 1000));
+  if (!pinFreeJoin) res.cookie(STUDENT_COOKIE, issueStudentToken(studentId, displayName), cookieOptions(30 * 24 * 60 * 60 * 1000));
   res.json({ name: displayName });
 });
 

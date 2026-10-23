@@ -74,7 +74,7 @@
   el('adminPanel').insertBefore(admin, el('adminPanel').children[1]);
   const accounts=document.createElement('section');
   accounts.className='games-help';
-  accounts.innerHTML='<h3>Teacher accounts</h3><p>Remove an EducScope-linked teacher from LessonScope when an account was created by mistake. This also clears their games/full access setting here.</p><p id="teacherAccountStatus" role="status"></p><div id="teacherAccountList"></div>';
+  accounts.innerHTML='<h3>Teacher accounts</h3><p>Choose which teachers allow learners to join roster-based games with their room code and name, without a PIN. Student accounts and assessments still require sign-in. Changes apply to existing game codes.</p><p id="teacherAccountStatus" role="status"></p><div id="teacherAccountList"></div>';
   el('adminPanel').insertBefore(accounts, admin.nextSibling);
   async function loadInvites(){
     try {
@@ -86,7 +86,7 @@
     try {
       const data=await json('/api/admin/accounts');
       const rows=(data.users||[]).filter(u=>u.role!=='student');
-      el('teacherAccountList').innerHTML=rows.map(u=>`<div class="invite-row"><span><strong>${escape(u.name||u.email)}</strong><br>${escape(u.email)} · ${escape(u.role||'teacher')} · ${u.accessMode==='games'?'Games only':'Full access'}</span>${window.currentUser&&u.id===window.currentUser.id?'<span class="hint">Current account</span>':`<button class="btn ghost" data-delete-account="${escape(u.id)}" data-delete-email="${escape(u.email)}">Delete</button>`}</div>`).join('')||'<p>No teacher accounts yet.</p>';
+      el('teacherAccountList').innerHTML=rows.map(u=>`<div class="invite-row"><span><strong>${escape(u.name||u.email)}</strong><br>${escape(u.email)} · ${escape(u.role||'teacher')} · ${u.accessMode==='games'?'Games only':'Full access'}</span><label><input type="checkbox" data-pin-free="${escape(u.id)}" ${u.pinFreeGames?'checked':''}> Allow game joining without a PIN</label>${window.currentUser&&u.id===window.currentUser.id?'<span class="hint">Current account</span>':`<button class="btn ghost" data-delete-account="${escape(u.id)}" data-delete-email="${escape(u.email)}">Delete</button>`}</div>`).join('')||'<p>No teacher accounts yet.</p>';
     }catch(e){el('teacherAccountStatus').textContent=e.message;}
   }
   el('adminBtn').addEventListener('click',()=>{loadInvites();loadAccounts();});
@@ -105,6 +105,13 @@
       if(b.dataset.revoke)await json('/api/admin/teacher-invites/'+b.dataset.revoke,{method:'DELETE'});
       await loadInvites();
     }catch(err){el('teacherInviteStatus').textContent=err.message;b.disabled=false;}
+  });
+  el('teacherAccountList').addEventListener('change',async e=>{
+    const input=e.target.closest('[data-pin-free]');if(!input)return;
+    input.disabled=true;
+    try{await json('/api/admin/accounts/'+encodeURIComponent(input.dataset.pinFree)+'/game-joining',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:input.checked})});el('teacherAccountStatus').textContent='Game joining updated. Existing room codes use this setting immediately.';}
+    catch(err){input.checked=!input.checked;el('teacherAccountStatus').textContent=err.message;}
+    finally{input.disabled=false;}
   });
   el('teacherAccountList').addEventListener('click',async e=>{
     const b=e.target.closest('button');if(!b||!b.dataset.deleteAccount)return;

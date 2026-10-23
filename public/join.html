@@ -148,7 +148,7 @@
           $('sidSub').textContent = 'Type your name to join.';
         } else if (renderNameGrid(meta.students)) {
           $('step2').querySelector('h1').textContent = 'Choose your name';
-          $('sidSub').textContent = 'Tap your name, then enter your PIN.';
+          $('sidSub').textContent = meta.pinFreeGames ? 'Tap your name to join the game.' : 'Tap your name, then enter your PIN.';
         }
         $('gamePill').textContent = meta.lessonTitle || meta.title || (resolvedType === 'assignment' ? 'Assignment' : 'Lesson game');
         $('idBtn').textContent = resolvedType === 'assignment' ? 'Join assignment →' : 'Join game →';

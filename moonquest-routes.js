@@ -1,4 +1,5 @@
 const fs = require('fs');
+const gameJoinPolicy = require('./game-join-policy');
 const path = require('path');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
@@ -210,7 +211,7 @@ function installMoonQuest(app, deps) {
     if(s.joinOpen===false)return res.json({id:s.id,title:s.game.title,joinOpen:false,students:[]});
     const signedIn = optionalStudentSession(req);
     const signedInStudent = !s.test && s.students.find(st => st.id === signedIn?.studentId && !(s.removedStudents || []).includes(st.id));
-    res.json({ signedInHandle: signedInStudent ? studentHandle(s.id, signedInStudent.id) : null, id: s.id, title: s.game.title, test: !!s.test, students: s.test ? [] : learnerPickerEntries(s.students.filter(st => !(s.removedStudents || []).includes(st.id)), s.id) });
+    res.json({ pinFreeGames: gameJoinPolicy.enabled(s.teacherId), signedInHandle: signedInStudent ? studentHandle(s.id, signedInStudent.id) : null, id: s.id, title: s.game.title, test: !!s.test, students: s.test ? [] : learnerPickerEntries(s.students.filter(st => !(s.removedStudents || []).includes(st.id)), s.id) });
   }));
   app.post(base + '/rooms/:code/test-enter', joinLimiter, wrap((req, res) => {
     const s = store.findCode(String(req.params.code).toUpperCase());
@@ -226,7 +227,7 @@ function installMoonQuest(app, deps) {
     const st = s.students.find(st => studentHandle(s.id, st.id) === req.body.handle);
     if (!st) throw new Error('Select your name from this class.');
     const pin = String(req.body.pin || '');
-    if (optionalStudentSession(req)?.studentId !== st.id) {
+    if (!gameJoinPolicy.enabled(s.teacherId) && optionalStudentSession(req)?.studentId !== st.id) {
       if (!/^\d{4}$/.test(pin)) throw new Error('Enter your four-digit PIN. If you have not set one, choose one now.');
       if (studentAccount.getAccountState(st.id) === 'unset') {
         if (!studentAccount.setPin(st.id, pin)) throw new Error('Your PIN was already set. Try your current PIN.');
