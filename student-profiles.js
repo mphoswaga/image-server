@@ -1,3 +1,4 @@
+const { learningSummary } = require('./student-learning-summary');
 // Teacher-scoped learner directory. Never use the global student-account lookup here.
 function createProfiles({ roster, assignments, games, gradebook, practice }) {
   const norm = roster.normalizeStudentId;
@@ -57,7 +58,7 @@ function createProfiles({ roster, assignments, games, gradebook, practice }) {
         evidence:(result.checkpoints||[]).map(c=>({item:c.title||c.label||c.id||'Checkpoint',studentResponse:c.status||'',score:c.score??null,total:c.total??null})) });
     }
     activities.sort((a,b)=>String(b.at||'').localeCompare(String(a.at||'')));
-    return { ...student, activities };
+    return { ...student, activities, learningSummary: learningSummary(activities) };
   }
   return { directory, profile };
 }
