@@ -3585,6 +3585,11 @@
           <p class="page-sub" data-ui-i18n>Upload your class list — Excel or CSV — so students verify themselves with a Student ID. No email, no passwords.</p>
         </div>
       </div>
+      <section class="panel-add" style="padding:18px;margin-bottom:20px" aria-label="Student profiles">
+        <h3>Student profiles</h3><label for="studentProfileSearch">Find a student across your classes</label>
+        <input id="studentProfileSearch" type="search" placeholder="Search by name or student ID" autocomplete="off">
+        <div id="studentProfileMatches" aria-live="polite"></div>
+      </section>
       <section class="panel-add" style="padding:18px;margin-bottom:20px" aria-label="Roster sharing">
         <h3 data-ui-i18n>Share class rosters</h3><p data-ui-i18n>Invite a teacher by their sign-up email. They receive independent copies of the selected class lists only — no marks, reports, lessons or activities. Later edits do not sync. Learner IDs stay the same.</p>
         <label for="rosterShareEmail" data-ui-i18n>Colleague’s sign-up email</label><input id="rosterShareEmail" type="email" placeholder="teacher@school.edu" autocomplete="off">
@@ -9460,7 +9465,7 @@
             ${barFill}${badge}
             <svg class="ic stu-chevron" style="color:var(--muted);transition:transform .2s;flex:none;margin-left:8px" aria-hidden="true"><use href="#i-arrow"/></svg>
           </div>
-          <div class="stu-detail" id="stu-${esc(s.id)}">${detailRows}</div>
+          <div class="stu-detail" id="stu-${esc(s.id)}"><button type="button" class="btn ghost" data-student-profile="${esc(s.id)}">Open student profile</button>${detailRows}</div>
         </div>`;
       }).join('');
 
@@ -9916,5 +9921,6 @@
     })();
   </script>
   <script src="/byte-feedback.js"></script>
+<link rel="stylesheet" href="/student-profiles.css"><script src="/student-profiles.js" defer></script>
 </body>
 </html>
