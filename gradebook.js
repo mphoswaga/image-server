@@ -595,7 +595,7 @@ function gatherStudentResults(teacherIds, studentId) {
       if (name) break;
     }
   }
-  rows.sort((a, b) => (b.at || '').localeCompare(a.at || ''));
+  rows.sort(require('./activity-time').newestActivityFirst);
   return { name, rows };
 }
 

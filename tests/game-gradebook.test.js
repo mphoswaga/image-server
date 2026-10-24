@@ -30,4 +30,11 @@ test('MoonQuest completed answers appear as formative marks and stay out of aver
  assert.equal(book.rows.find(r=>r.studentId==='S1').cells[book.assessments[0].id].mark,1);
  assert.deepEqual(book.rows.find(r=>r.studentId==='S2').cells,{});
  assert.equal(book.classAverage,null);
+ const results=gradebook.gatherStudentResults(['moon-teacher'],'S1');
+ assert.equal(results.rows.length,1);
+ assert.equal(typeof results.rows[0].at,'number');
+ const profile=require('../student-profiles').createProfiles({roster,games,gradebook,assignments:require('../assignments'),practice:require('../practice')}).profile('moon-teacher','S1');
+ assert.equal(profile.activities.length,1);
+ assert.equal(profile.activities[0].score,1);
+
 });

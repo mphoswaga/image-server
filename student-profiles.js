@@ -57,7 +57,7 @@ function createProfiles({ roster, assignments, games, gradebook, practice }) {
         total:result.baseScore || null, at:result.completedAt || result.updatedAt,
         evidence:(result.checkpoints||[]).map(c=>({item:c.title||c.label||c.id||'Checkpoint',studentResponse:c.status||'',score:c.score??null,total:c.total??null})) });
     }
-    activities.sort((a,b)=>String(b.at||'').localeCompare(String(a.at||'')));
+    activities.sort(require('./activity-time').newestActivityFirst);
     return { ...student, activities, learningSummary: learningSummary(activities) };
   }
   return { directory, profile };
