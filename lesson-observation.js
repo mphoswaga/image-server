@@ -1,7 +1,7 @@
 // Practical planning guidance distilled from the school's September 2026 CPD
 // and observation rubric. This is a planning aid, not an observation score.
 // Keep it independent of template fields and out of assessed-content teaching.
-const OBSERVATION_GUIDANCE_VERSION = 4;
+const OBSERVATION_GUIDANCE_VERSION = 5;
 
 function observationPromptBlock(purpose = 'lesson') {
   const common = `
@@ -42,7 +42,7 @@ const evidenceDescriptions = {
 function teachingEvidenceSchema() {
   return { type: 'array', items: { type: 'object', additionalProperties: false,
     properties: { lesson: { type: 'integer' }, ...Object.fromEntries(evidenceFields.map(key => [key, { type: 'string', description: evidenceDescriptions[key] }])),
-      timings: { type: 'array', description: 'Allocate the full lesson duration once across existing activity headings, including checkpoint, transitions and closing. No time for metadata or reflection fields.', items: {
+      timings: { type: 'array', description: 'Allocate the full lesson duration once across existing activity headings, including transitions and closing. The checkpoint sectionHeading MUST appear exactly once as a timing entry with positive minutes; include the check within that activity. No time for metadata or reflection fields.', items: {
         type: 'object', additionalProperties: false, properties: { sectionHeading: { type: 'string', description: 'Copy an existing activity heading exactly. Omit Resources, Objectives, Overview and teacher Reflection fields entirely; do not add zero-minute entries.' }, minutes: { type: 'integer', minimum: 1, maximum: 180 } }, required: ['sectionHeading', 'minutes'],
       } },
     },
@@ -100,7 +100,7 @@ function integrateTeachingEvidence(plan, { periodMinutes = null, sequenceLessonN
       const suggestion = practice && periodMinutes > total ? ` For example, change ${practice.sectionHeading} from ${practice.minutes} to ${practice.minutes + periodMinutes - total} minutes and keep the other stage durations, allocating the extra time to learner practice.` : '';
       issues.push(`Lesson ${period} activity timings currently total ${total} minutes but must total ${periodMinutes || 'the planned lesson duration'} minutes. Recalculate the complete schedule, including transitions; reserve game time and allocate the remaining time to teaching and practice.${suggestion}`);
     }
-    if (!timed.has(index)) issues.push('Allocate time to the activity containing the learning checkpoint.');
+    if (!timed.has(index)) issues.push(`Allocate time to the activity containing the learning checkpoint: lesson ${period}, heading "${item.sectionHeading}". Add this exact heading to timings and redistribute existing minutes so the total remains ${periodMinutes || 'the planned duration'}.`);
     sections[index].content = [sections[index].content,
       `Learning checkpoint: ${item.question}`,
       `Look for: ${item.expectedReasoning}`,

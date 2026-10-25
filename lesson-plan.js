@@ -17,6 +17,7 @@ const TEMPLATE_PROMPT_LIMIT = 6000;
 
 const lessonDesign = require('./lesson-design');
 const {reviewObjectives}=require('./lesson-objective-review');
+const { repairCheckpointTimings } = require('./lesson-timing-repair');
 
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 // Objective coverage and feasible schedules require the stronger planning model.
@@ -948,7 +949,11 @@ async function generateLessonPlan({ subject, topic, grade = 'middle school', ton
           if (reflected.issues.length) { lastIssues=reflected.issues; continue; }
           parsed.sections = reflected.plan.sections;
         }
-        const integrated = integrateTeachingEvidence(parsed, { sequenceLessonNumber: cleanLessonNumber, periodMinutes: settings?.durationMinutes || (cleanSequence && cleanSequence.periodMinutes) });
+        const timingOptions = { sequenceLessonNumber: cleanLessonNumber, periodMinutes: settings?.durationMinutes || (cleanSequence && cleanSequence.periodMinutes) };
+        const timedPlan = attempt === 3
+          ? await repairCheckpointTimings(client, parsed, timingOptions, { model: LESSON_MODEL, settings })
+          : parsed;
+        const integrated = integrateTeachingEvidence(timedPlan, timingOptions);
         const gameResult = lessonDesign.integrateGame(integrated.plan, settings, designLesson, !!(structuredSequence && !cleanLessonNumber));
         const candidate = finalizeLessonPlan(gameResult.plan, {
           objectives, suppliedSuccessCriteria: successCriteria, teachingModelId, lessonPurpose: purpose,
