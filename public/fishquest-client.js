@@ -147,7 +147,8 @@
   }
   function pulseStat(id) {
     const element = $(id); if (!element) return;
-    element.classList.remove('stat-pop'); void element.offsetWidth; element.classList.add('stat-pop');
+    if (element.classList.contains('stat-pop')) return;
+    element.classList.add('stat-pop');
     setTimeout(() => element.classList.remove('stat-pop'), 420);
   }
   function growthRipple(big = false) { optionalEffect('growth effect', () => drawGrowthRipple(big)); }
@@ -211,7 +212,7 @@
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const current = socket = new WebSocket(`${protocol}//${location.host}/ws/fishquest`);
     lastStateAt = Date.now();
-    current.onopen = () => { if (socket === current) current.send(JSON.stringify({ type: 'auth', token: ticket })); };
+    current.onopen = () => { if (socket === current) current.send(JSON.stringify({ type: 'auth', token: ticket, foodDeltas: true })); };
     current.onerror = () => { if (socket === current) current.close(); };
     current.onmessage = event => {
       if (socket !== current) return;
@@ -237,6 +238,12 @@
     };
   }
   function apply(next) {
+    if(next.foodDelta){
+      const food=new Map((state?.food||[]).map(row=>[row[0],row]));
+      for(const id of next.foodDelta.remove)food.delete(id);
+      for(const row of next.foodDelta.upsert)food.set(row[0],row);
+      next.food=[...food.values()];
+    }
     const previousMe = state && me ? { id: me.id, mass: Number(me.mass) || 0, score: Number(me.score) || 0 } : null;
     const previousPhase = state && state.phase;
     state = next; me = state.players.find(p => p.id === state.me); if (!me) return;
@@ -254,7 +261,7 @@
     if(state.respawnAt)$('encounterStatus').textContent=`Returning in ${Math.max(1,Math.ceil((state.respawnAt-state.now)/1000))} seconds…`;
     renderQuestion(); optionalEffect('scene update', renderState);
     const freshEvent = state.event && state.event.id !== lastEvent ? state.event : null;
-    const swallowed = freshEvent && freshEvent.outcome === 'correct' && freshEvent.attacker === state.me;
+    const swallowed = freshEvent && freshEvent.outcome === 'correct' && (freshEvent.attacker === state.me||freshEvent.kind==='whale'||freshEvent.kind==='pearl');
     if (previousMe && previousMe.id === me.id && me.score > previousMe.score && !swallowed) {
       const now = performance.now();
       if (now - lastPlanktonCue > 110) { lastPlanktonCue = now; playCue('plankton'); }
@@ -264,6 +271,11 @@
       lastEvent = freshEvent.id;
       if (previousMe) {
         const mine = freshEvent.attacker === state.me;
+        if(freshEvent.kind==='whale'||freshEvent.kind==='pearl'){
+          const correct=freshEvent.outcome==='correct';
+          toast(correct?(freshEvent.kind==='whale'?'Whale challenge won! +75 points':'Pearl earned! +35 points'):(freshEvent.outcome==='cancelled'?'Challenge ended. Keep exploring!':'Keep exploring. Another challenge is coming!'),correct);
+          playCue(correct?'correct':'wrong');if(correct){pulseStat('score');growthRipple(true);}
+        } else
         if (freshEvent.outcome === 'correct' && mine) { toast('Correct! You swallowed the fish and grew bigger!', true); playCue('correct'); pulseStat('mass'); pulseStat('score'); growthRipple(true); }
         else if (freshEvent.outcome === 'incorrect' && mine) { toast('Not this time. Keep exploring!', false); playCue('wrong'); }
         else if (freshEvent.outcome === 'timeout' && mine) { toast('Time ran out. Keep going!', false); playCue('wrong'); }
@@ -288,6 +300,23 @@
   const FISH_STAGE_STYLE=FishQuestGrowth.style;
   const fishEvolution=FishQuestGrowth.evolution,fishEvolutionName=FishQuestGrowth.name;
   function fishTexture(variant,part='body',stage='minnow') { return FishQuestArt.texture(scene,variant,part,stage); }
+  const warming=new Set();
+  function warmNext(p){
+    const next=FishQuestGrowth.progress(p.mass).next;
+    if(!next||next-p.mass>100)return;
+    const stage=fishEvolution(next);
+    for(const part of ['body','tail','fin']){
+      const key=`${p.variant}:${stage}:${part}`;
+      if(warming.has(key))continue;warming.add(key);warmQueue.push(()=>fishTexture(p.variant,part,stage));
+    }
+    scheduleWarm();
+  }
+  const warmQueue=[];let warmPending=false;
+  function scheduleWarm(){
+    if(warmPending||!warmQueue.length)return;warmPending=true;
+    const schedule=window.requestIdleCallback||((cb)=>setTimeout(cb,80));
+    schedule(()=>{warmPending=false;if(scene&&state?.phase!=='ended'&&!document.hidden)optionalEffect('texture preparation',warmQueue.shift());else warmQueue.length=0;scheduleWarm();});
+  }
   function setFishEvolution(e,p) {
     const stage=fishEvolution(p.mass);
     if(e.stage===stage)return;
@@ -309,7 +338,8 @@
   }
   const fishScale=FishQuestGrowth.scale;
   const bubbles = [];
-  let oceanTime=0;
+  let oceanTime=0,slowSeconds=0,fastSeconds=0,lightEffects=false,decorationElapsed=0;
+  function inView(x,y,padding=120){const v=scene.cameras.main.worldView;return x>=v.x-padding&&x<=v.right+padding&&y>=v.y-padding&&y<=v.bottom+padding;}
   function planktonTexture(variant) {
     const key=`plankton-${variant}`;
     if(scene.textures.exists(key)) return key;
@@ -332,12 +362,14 @@
         bubbles.push({sprite:bubble,x:bubble.x,y:bubble.y,speed:12+i%23,phase:i*2.4});
       }
     }
-    for(const b of bubbles) {
+    for(const [index,b] of bubbles.entries()) {
+      b.sprite.setVisible(!lightEffects||index<18);
+      if(lightEffects&&index>=18)continue;
       b.y-=b.speed*dt;
       if(b.y < -12) b.y=1612;
       b.sprite.setPosition(b.x+Math.sin(t*.55+b.phase)*15,b.y);
     }
-    for(const [id,f] of foods) if(f.visible) {
+    for(const [id,f] of foods) if(f.visible && inView(f.foodX,f.foodY)) {
       const phase=t*1.8+Number(id)*2.3;
       f.rotation=Math.sin(phase)*.16;
       f.setPosition(f.foodX+Math.sin(phase*.7)*2,f.foodY+Math.sin(phase)*3);
@@ -350,24 +382,28 @@
     scene.cameras.main.setBounds(0,0,world.width,world.height);
     const backdrop=scene.children.list.find(child=>child.texture?.key==='lagoon');
     if(backdrop)backdrop.setPosition(world.width/2,world.height/2).setDisplaySize(world.width,world.height);
+    const champion=Math.max(0,...state.players.filter(p=>!p.npc&&p.mass>=800).map(p=>p.challengeWins||0));
     const seen = new Set();
     for (const p of state.players) {
       seen.add(p.id); let e = entities.get(p.id);
       if (!e) { e = makeFish(p); entities.set(p.id,e); }
       setFishEvolution(e,p);
-      const reset = p.respawning || p.locked || state.phase !== 'running' || Math.hypot(p.x-e.tx,p.y-e.ty)>200;
+      if(p.id===state.me||Math.hypot(p.x-me.x,p.y-me.y)<700)warmNext(p);
+      const reset = (p.respawning && !e.respawning) || state.phase !== 'running' || Math.hypot(p.x-e.tx,p.y-e.ty)>200;
       FishQuestMotion.push(e.samples,p,performance.now(),reset);
       if(reset) e.sprite.setPosition(p.x,p.y);
       if(p.biteAt&&p.biteAt!==e.biteAt){e.biteAt=p.biteAt;e.biteUntil=performance.now()+650;}
       e.hungry=p.hungry;
       e.tx=p.x; e.ty=p.y; e.scale=fishScale(p.mass); e.locked=p.locked;e.mass=p.mass;e.connected=p.connected!==false;e.respawning=!!p.respawning;
-      e.sprite.setAlpha(p.respawning ? .2 : p.protected ? .72 : 1); e.label.setText(p.id === state.me ? 'You' : p.npc ? `${FishQuestMotion.shortName(p.name)} · ${p.mass}` : FishQuestMotion.shortName(p.name));
+      e.sprite.setAlpha(p.respawning ? .2 : p.protected ? .72 : 1); e.label.setText((champion>0&&p.mass>=800&&p.challengeWins===champion?'♛ ':'')+(p.id === state.me ? 'You' : p.npc ? `${FishQuestMotion.shortName(p.name)} · ${p.mass}` : FishQuestMotion.shortName(p.name)));
       if(p.id===state.me&&p.hungry)e.label.setText('You · Eat to keep your size');
     }
     for (const [id, e] of entities) if (!seen.has(id)) { e.sprite.destroy(); e.label.destroy(); entities.delete(id); }
+    const incremental=state.foodDelta&&foods.size>0;
     const foodSeen = new Set();
-    for (const [id, x, y] of state.food) { foodSeen.add(id); let f = foods.get(id); if (!f) { f = scene.add.image(x,y,planktonTexture(id%3)).setScale(.34); foods.set(id,f); } f.foodX=x; f.foodY=y; f.setVisible(true); }
-    for (const [id,f] of foods) if (!foodSeen.has(id)) f.setVisible(false);
+    for (const [id, x, y] of (incremental?state.foodDelta.upsert:state.food)) { foodSeen.add(id); let f = foods.get(id); if (!f) { f = scene.add.image(x,y,planktonTexture(id%3)).setScale(.34); foods.set(id,f); } f.foodX=x; f.foodY=y; f.setVisible(true); }
+    if(incremental){for(const id of state.foodDelta.remove)foods.get(id)?.setVisible(false);}
+    else for (const [id,f] of foods) if (!foodSeen.has(id)) f.setVisible(false);
     const labelPlayers=[...entities.values()].map(e=>({id:e.id,npc:e.npc,x:e.tx,y:e.ty,connected:e.connected,respawning:e.respawning}));
     const visibleLabels=FishQuestMotion.visibleLabels(labelPlayers,state.me,innerWidth<600?3:6,innerWidth<600?2:3);
     for(const e of entities.values()) {
@@ -381,12 +417,19 @@
     const dt=state.phase==='paused'||state.phase==='ended'?0:Math.min(50,scene.game.loop.delta)/1000, follow=1-Math.exp(-14*dt);
     oceanTime+=dt*(reducedMotion?.2:1);
     const t=oceanTime;
-    animateOcean(dt,t);
+    if(dt>0&&!document.hidden){
+      if(scene.game.loop.delta>28){slowSeconds+=dt;fastSeconds=0;}else{fastSeconds+=dt;slowSeconds=Math.max(0,slowSeconds-dt);}
+      if(slowSeconds>2)lightEffects=true;if(fastSeconds>10)lightEffects=false;
+    }
+    decorationElapsed+=dt;
+    if(!lightEffects||decorationElapsed>=1/24){animateOcean(decorationElapsed,t);decorationElapsed=0;}
     for (const e of entities.values()) {
+      const visible=inView(e.sprite.x,e.sprite.y,200)||e.id===state.me;
+      if(!visible){e.sprite.setPosition(e.tx,e.ty);e.label.setPosition(e.tx,e.ty-e.labelOffset*e.scale);continue;}
       e.halo.setAlpha(reducedMotion?.8:.65+Math.sin(t*2.5)*.2);
       const bite=Math.max(0,(e.biteUntil-performance.now())/650);
       e.mouth.setVisible(bite>0).setScale(1,Math.max(.1,Math.sin(bite*Math.PI))).setX(65*FISH_STAGE_STYLE[e.stage].body);
-      const target=FishQuestMotion.sample(e.samples,performance.now()-80) || {x:e.tx,y:e.ty};
+      const target=e.locked?{x:e.tx,y:e.ty}:FishQuestMotion.sample(e.samples,performance.now()-80) || {x:e.tx,y:e.ty};
       const dx=target.x-e.sprite.x,dy=target.y-e.sprite.y,speed=Math.min(1,Math.hypot(dx,dy)/16);
       if(Math.abs(dx)>.8) e.facing=dx>0?1:-1;
       e.sprite.x+=dx*follow; e.sprite.y+=dy*follow;
@@ -418,9 +461,20 @@
       return;
     }
     $('question').hidden = false;
-    $('qrole').textContent=q.canAnswer===false?`${q.attackerName} is trying to eat your fish! Watch their question.`:'Answer to eat the fish';
+    $('qrole').textContent=q.kind==='whale'?'Whale challenge · both can win':q.kind==='pearl'?'Pearl challenge · answer to earn a pearl':q.canAnswer===false?`${q.attackerName} is trying to eat your fish! Watch their question.`:'Answer to eat the fish';
     if (renderedQuestionId === q.id) return;
     renderedQuestionId = q.id; clearInterval(qTimer);
+    $('question').dataset.kind=q.kind||'swallow';
+    if(q.kind==='whale'||q.kind==='pearl'){
+      playCue('plankton');
+      optionalEffect('challenge swirl',()=>{
+        const fish=entities.get(state.me);if(!scene||!fish||reducedMotion)return;
+        for(let n=0;n<2;n++){
+          const ring=scene.add.ellipse(fish.sprite.x,fish.sprite.y,140+n*35,65+n*20,0x52e5db,0).setStrokeStyle(3,n?0xffd166:0x52e5db,.8).setDepth(21);
+          scene.tweens.add({targets:ring,angle:n?180:-180,scale:1.5,alpha:0,duration:1400,onComplete:()=>ring.destroy()});
+        }
+      });
+    }
     $('prompt').textContent = q.prompt; $('options').innerHTML = '';
     q.options.forEach((option, choice) => { const b = document.createElement('button'); b.className='option'; b.textContent=option; b.disabled=q.canAnswer===false; b.onclick=()=>{if(q.canAnswer!==false)sendAnswer(q.id,choice);}; $('options').appendChild(b); });
     const update=()=>{ $('qtime').textContent=state.phase==='paused'?'Paused':`${Math.max(0,Math.ceil(((state.question || q).expiresAt-serverNow())/1000))} seconds left`; }; update();qTimer=setInterval(update,250);

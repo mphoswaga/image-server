@@ -22,7 +22,7 @@ test('a full ocean renders and moves smoothly between packets on desktop and mob
     Phaser.Game = function(config) { window.motionGame = new Original(config); return window.motionGame; };
     window.motionState = { phase: 'running', matchId: 'motion', me: '0', now: Date.now(), endsAt: Date.now() + 600000,
       players: Array.from({ length: 30 }, (_, i) => ({ id: String(i), name: `Learner ${i + 1}`, x: 950 + i % 6 * 90, y: 650 + Math.floor(i / 6) * 85, mass: 100 + i * 9, score: 0, variant: i })),
-      food: Array.from({ length: 70 }, (_, i) => [i, 700 + i % 10 * 85, 400 + Math.floor(i / 10) * 90]) };
+      food: Array.from({ length: 871 }, (_, i) => i<70?[i, 700 + i % 10 * 85, 400 + Math.floor(i / 10) * 90]:[i, 100+i%32*65,100+Math.floor(i/32)*50]) };
     window.sendMotion = () => motionSocket.onmessage({ data: JSON.stringify({ type: 'state', state: { ...motionState, now: Date.now() } }) });
     sendMotion();
   });
@@ -51,6 +51,36 @@ test('a full ocean renders and moves smoothly between packets on desktop and mob
   await expect.poll(() => page.evaluate(() => motionGame.scene.scenes[0].children.list.find(o=>o.type==='Container').scaleY)).toBeLessThan(1.9);
   await page.evaluate(() => { motionState.players[0].mass=700;sendMotion(); });
   await expect(page.locator('#fishForm')).toHaveText('orca');
+  const encounter=await page.evaluate(() => {
+    const fish=motionGame.scene.scenes[0].children.list.find(o=>o.type==='Container'&&o.depth===19);
+    const before=fish.x;
+    const leader=document.querySelector('#oceanLeaders span');
+    motionState.players[0].x=before+45;motionState.players[0].locked=true;
+    motionState.players.forEach(p=>p.score+=1);
+    sendMotion();
+    return {snap:Math.abs(fish.x-before),sameLeaderNode:leader===document.querySelector('#oceanLeaders span'),target:before+45};
+  });
+  expect(encounter.snap).toBeLessThan(1);
+  expect(encounter.sameLeaderNode).toBe(true);
+  await expect.poll(()=>page.evaluate(()=>motionGame.scene.scenes[0].children.list.find(o=>o.type==='Container'&&o.depth===19).x)).toBeGreaterThan(encounter.target-3);
+  await page.evaluate(() => {
+    motionState.question={id:'whale-question',kind:'whale',prompt:'Which device shows pictures?',options:['Monitor','Keyboard'],canAnswer:true,expiresAt:Date.now()+30000};
+    motionState.players[0].mass=800;motionState.players[0].challengeWins=2;
+    sendMotion();
+  });
+  await expect(page.locator('#qrole')).toHaveText('Whale challenge · both can win');
+  await expect(page.locator('#rivalry')).toBeHidden();
+  await expect(page.getByRole('button',{name:'Monitor',exact:true})).toBeEnabled();
+  await page.screenshot({path:`/tmp/fishquest-whale-${testInfo.project.name}.png`});
+  await page.evaluate(() => {
+    const {food,...next}=motionState;motionState=next;
+    motionState.question={...motionState.question,id:'pearl-question',kind:'pearl'};
+    motionState.foodDelta={remove:[0],upsert:[[1,900,700]]};sendMotion();
+  });
+  await expect(page.locator('#qrole')).toContainText('Pearl challenge');
+  const deltaFood=await page.evaluate(()=>motionGame.scene.scenes[0].children.list.filter(o=>o.texture?.key?.startsWith('plankton-')).map(o=>({x:o.foodX,y:o.foodY,visible:o.visible})));
+  expect(deltaFood.some(f=>f.x===900&&f.y===700&&f.visible)).toBe(true);
+  expect(deltaFood.some(f=>f.x===700&&f.y===400&&!f.visible)).toBe(true);
   await page.evaluate(() => { clearInterval(motionTick); motionState.phase = 'paused'; sendMotion(); });
   await expect(page.locator('#teacherPause')).toBeVisible();
   expect(errors).toEqual([]);

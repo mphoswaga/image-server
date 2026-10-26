@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const challenges = require('./fishquest-challenges');
 
 const CONFIG = Object.freeze({ width:2400, height:1600, initialMass:100, maxMass:900, eatRatio:1.18,
   foodCount:320, foodGrowth:4, fishGrowthRatio:.3, minimumFishGrowth:14, maximumFishGrowth:150, foodRespawnMs:4000, questionMs:30000, cooldownMs:4000,
@@ -17,7 +18,7 @@ class FishMatch {
   }
   get world(){return this.state.world || {width:CONFIG.width,height:CONFIG.height};}
   point(){return {x:80+this.random()*(this.world.width-160),y:80+this.random()*(this.world.height-160)};}
-  save(){ this.state.revision++;this.persist(this.state);this.lastPersist=this.now(); }
+  save(){ this.state.revision++;if(this.inTick){this.pendingSave=true;return;}this.persist(this.state);this.lastPersist=this.now(); }
   player(id){return this.state.players.find(p=>p.id===id);}
   join(identity){
     let p=this.state.players.find(p=>p.studentId===identity.studentId);
@@ -50,7 +51,7 @@ class FishMatch {
     const foodCount=Math.round(CONFIG.foodCount*factor*factor);
     this.state.food=Array.from({length:foodCount},(_,id)=>({id,...this.point(),readyAt:0}));
     for(const p of this.state.players){Object.assign(p,this.point());p.hungryMs=0;}
-    for(const p of this.state.players)p.protectedUntil=this.now()+CONFIG.protectionMs;
+    for(const p of this.state.players){p.protectedUntil=this.now()+CONFIG.protectionMs;p.nextPearlAt=this.now()+challenges.PEARL_INTERVAL;}
     this.lastTick=this.now();this.save();this.log('start',{});
   }
   pause(){
@@ -63,6 +64,7 @@ class FishMatch {
     if(this.state.phase!=='paused')throw Error('Only a paused match can be resumed.');
     const pausedFor=Math.max(0,this.now()-this.state.pausedAt);
     this.state.endsAt+=pausedFor;
+    for(const p of this.state.players){for(const key of ['nextPearlAt','challengeUntil','protectedUntil','cooldownUntil','respawnAt'])if(p[key])p[key]+=pausedFor;}
     for(const i of this.state.interactions.filter(i=>i.status==='pending'))i.expiresAt+=pausedFor;
     this.state.phase='running';this.state.pausedAt=null;this.lastTick=this.now();
     this.save();this.log('resume',{pausedFor});
@@ -100,20 +102,22 @@ class FishMatch {
     this.log('swallow_attempt',{interactionId:i.id});return i;
   }
   answer(id,message){
-    const i=this.state.interactions.find(i=>i.id===message.interactionId&&i.attacker===id);
+    const i=this.state.interactions.find(i=>i.id===message.interactionId&&(i.participants?i.participants.includes(id):i.attacker===id));
     if(!i)throw Error('That question is no longer active.');
-    if(i.status!=='pending'){this.log('duplicate_answer',{interactionId:i.id});return i;}
+    if(i.status!=='pending'||i.answers?.[id]){this.log('duplicate_answer',{interactionId:i.id});return i;}
     if(this.state.phase==='paused')throw Error('The match is paused.');
     if(this.state.phase!=='running'){this.resolve(i,'cancelled');return i;}
     if(this.now()>=this.state.endsAt){this.end('time');return i;}
     const q=this.game.questions[i.questionIndex];
     if(!Number.isInteger(message.choice)||message.choice<0||message.choice>=q.options.length)throw Error('Choose one answer.');
     if(this.now()>=i.expiresAt)this.resolve(i,'timeout');
+    else if(i.kind){challenges.settle(this,i,id,message.choice===q.correctIndex?'correct':'incorrect',message.choice);}
     else {i.choice=message.choice;this.resolve(i,message.choice===q.correctIndex?'correct':'incorrect');}
     return i;
   }
   resolve(i,outcome){
     if(i.status!=='pending')return;
+    if(i.kind)return challenges.resolve(this,i,outcome);
     const a=this.player(i.attacker),b=this.player(i.victim),t=this.now();
     i.status=outcome;i.finishedAt=t;a.lock=null;b.lock=null;
     a.cooldownUntil=t+CONFIG.cooldownMs;b.protectedUntil=t+CONFIG.escapeMs;
@@ -144,6 +148,14 @@ class FishMatch {
     const speed=105/Math.pow(p.mass/100,.12),r=radius(p);p.x=clamp(p.x+p.dx*speed*dt,r,this.world.width-r);p.y=clamp(p.y+p.dy*speed*dt,r,this.world.height-r);
   }
   tick(){
+    this.inTick=true;
+    try{return this.advanceTick();}
+    finally{
+      this.inTick=false;
+      if(this.pendingSave){this.pendingSave=false;this.persist(this.state);this.lastPersist=this.now();}
+    }
+  }
+  advanceTick(){
     const t=this.now(),dt=Math.min(.1,Math.max(0,(t-this.lastTick)/1000));this.lastTick=t;
     if(this.state.phase!=='running')return;
     if(t>=this.state.endsAt){this.end('time');return;}
@@ -153,7 +165,7 @@ class FishMatch {
       if(!p.connected||p.lock)continue;
       if(p.npc){this.moveNpc(p,t,dt);continue;}
       p.hungryMs=(p.hungryMs||0)+dt*1000;
-      if(p.hungryMs>CONFIG.hungerMs)p.mass=Math.max(CONFIG.initialMass,p.mass*Math.exp(-.003*dt));
+      if(p.hungryMs>CONFIG.hungerMs)p.mass=Math.max(p.mass>=800?800:CONFIG.initialMass,p.mass*Math.exp(-.003*dt));
       if(t-p.inputAt>CONFIG.inputExpiryMs){p.dx=0;p.dy=0;}
       const speed=180/Math.pow(p.mass/100,.18),r=radius(p);
       const steer=1-Math.exp(-dt*(12/Math.sqrt(p.mass/100)));
@@ -166,12 +178,13 @@ class FishMatch {
     for(const npc of this.state.players.filter(p=>p.npc&&!p.respawnAt))for(const p of this.state.players.filter(p=>!p.npc&&p.connected&&!p.respawnAt&&!p.lock)){
       if(p.protectedUntil<=t&&p.cooldownUntil<=t&&npc.mass>=p.mass*CONFIG.eatRatio&&distance(npc,p)<=radius(npc)+radius(p)*.7)this.bump(npc,p);
     }
+    challenges.tick(this);
     for(const a of this.state.players)for(const b of this.state.players)if(this.eligible(a,b))this.claim(a,b);
     if(t-this.lastPersist>=3000)this.save();
   }
   snapshot(id,teacher=false,shared=null){
     const t=this.now(),me=this.player(id);
-    const players=shared ? shared.players : this.state.players.filter(p=>!p.removed).map(p=>({id:p.id,name:p.name,variant:p.variant,npc:!!p.npc,x:Math.round(p.x),y:Math.round(p.y),mass:Math.round(p.mass),score:p.score,connected:p.connected,
+    const players=shared ? shared.players : this.state.players.filter(p=>!p.removed).map(p=>({id:p.id,name:p.name,variant:p.variant,npc:!!p.npc,x:Math.round(p.x),y:Math.round(p.y),mass:Math.round(p.mass),score:p.score,connected:p.connected,challengeWins:p.challengeWins||0,
       protected:p.protectedUntil>t,respawning:!!p.respawnAt,locked:!!p.lock,biteAt:p.biteAt||0,hungry:(p.hungryMs||0)>=CONFIG.hungerWarningMs}));
     const result={matchId:this.state.id,phase:this.state.phase,solo:!!this.state.solo,endsAt:this.state.endsAt,pausedAt:this.state.pausedAt,now:t,players,world:this.world,eatRatio:CONFIG.eatRatio,
       food:shared ? shared.food : this.state.food.filter(f=>f.readyAt<=t).map(f=>[f.id,Math.round(f.x),Math.round(f.y)])};
@@ -179,9 +192,9 @@ class FishMatch {
     if(me){
       const interaction=this.state.interactions.find(i=>i.id===me.lock&&(i.attacker===id||i.victim===id)&&i.status==='pending');
       result.me=id;
-      if(interaction){const q=this.game.questions[interaction.questionIndex];result.question={id:interaction.id,prompt:q.question,options:q.options,expiresAt:interaction.expiresAt,canAnswer:interaction.attacker===id,attackerName:this.player(interaction.attacker)?.name||'Another learner'};}
+      if(interaction){const q=this.game.questions[interaction.questionIndex];result.question={id:interaction.id,prompt:q.question,options:q.options,expiresAt:interaction.expiresAt,kind:interaction.kind||'swallow',canAnswer:interaction.kind? !interaction.answers?.[id]:interaction.attacker===id,attackerName:this.player(interaction.attacker)?.name||'Another learner'};}
       const last=this.state.interactions.filter(i=>i.attacker===id||i.victim===id).at(-1);
-      if(last&&last.status!=='pending')result.event={id:last.id,outcome:last.status,attacker:last.attacker,victim:last.victim};
+      if(last&&(last.answers?.[id]||last.status!=='pending'))result.event={id:last.id,kind:last.kind||'swallow',outcome:last.answers?.[id]?.outcome||last.status,attacker:last.attacker,victim:last.victim};
       result.respawnAt=me.respawnAt;
       result.personal=this.education(me);
     }

@@ -2,14 +2,16 @@
 (() => {
   let lastRank=null, signature='', timer;
   const $=id=>document.getElementById(id);
+  function text(id,value){const el=$(id);if(el.textContent!==value)el.textContent=value;}
   function update(state,me){
     const order=[...state.players].sort((a,b)=>b.score-a.score||b.mass-a.mass||String(a.name).localeCompare(String(b.name)));
     const rank=1+order.filter(p=>p.score>me.score||(p.score===me.score&&p.mass>me.mass)).length;
     const progress=FishQuestGrowth.progress(me.mass);
-    $('growthFill').style.width=`${Math.round(progress.fraction*100)}%`;
-    $('growthLabel').textContent=progress.next?`${Math.ceil(progress.next-me.mass)} size to ${FishQuestGrowth.name(FishQuestGrowth.evolution(progress.next))}`:'Maximum evolution!';
-    $('oceanRank').textContent=`${me.name} · #${rank} of ${order.length}`;
-    const next=JSON.stringify(order.slice(0,3).map(p=>[p.id,p.name,p.score,p.mass]));
+    const width=`${Math.round(progress.fraction*100)}%`;
+    if($('growthFill').style.width!==width)$('growthFill').style.width=width;
+    text('growthLabel',progress.next?`${Math.ceil(progress.next-me.mass)} size to ${FishQuestGrowth.name(FishQuestGrowth.evolution(progress.next))}`:'Whale challenges unlocked!');
+    text('oceanRank',`${me.name} · #${rank} of ${order.length}`);
+    const next=JSON.stringify(order.slice(0,3).map(p=>[p.id,p.name,1+order.filter(other=>other.score>p.score||(other.score===p.score&&other.mass>p.mass)).length]));
     if(signature!==next){
       signature=next;$('oceanLeaders').replaceChildren(...order.slice(0,3).map(p=>{
         const el=document.createElement('span');
@@ -19,7 +21,7 @@
     }
     if(state.phase==='running'&&!state.question&&lastRank!==null&&rank<lastRank){
       $('oceanMoment').textContent=rank===1?'You lead the ocean!':`Overtake! Now #${rank}`;
-      $('oceanMoment').classList.remove('active');void $('oceanMoment').offsetWidth;$('oceanMoment').classList.add('active');
+      $('oceanMoment').classList.add('active');
       clearTimeout(timer);timer=setTimeout(()=>$('oceanMoment').classList.remove('active'),2200);
     }
     if(state.question||state.phase!=='running')$('oceanMoment').classList.remove('active');

@@ -119,3 +119,29 @@ test('teacher testing uses a separate ocean while the classroom is running', asy
   assert.equal(claims.preview,true);assert.equal(claims.solo,true);
   assert.equal(JSON.stringify(classroom.state),before);
 });
+
+test('delta clients reconnect with full food and receive both independent whale results immediately',async t=>{
+ const game={id:'delta-whales',teacherId:'owner',fishquest:{durationMinutes:10,lateJoin:true},questions:[{question:'Yes?',options:['Yes','No'],correctIndex:0}]};
+ const app=express(),server=http.createServer(app),sockets=[];
+ const live=createFishQuestLive({app,games:{isStudentRemoved:()=>false,getGame:()=>game,getRosterIds:()=>[],normalizeStudentId:s=>s,recordResult:()=>{}},roster:{},requireAuth:(_,__,next)=>next(),requireGameAccess:(_,__,next)=>next(),jwtSecret:'test-secret'});
+ const wss=live.attach(server);await new Promise(r=>server.listen(0,'127.0.0.1',r));
+ t.after(async()=>{for(const s of sockets)s.terminate();for(const s of wss.clients)s.terminate();await new Promise(r=>wss.close(r));await new Promise(r=>server.close(r));});
+ const match=live.openMatch(game);
+ async function join(studentId){
+  const ws=new WebSocket(`ws://127.0.0.1:${server.address().port}/ws/fishquest`);sockets.push(ws);ws.messages=[];
+  ws.on('message',raw=>ws.messages.push(JSON.parse(raw)));await once(ws,'open');
+  const first=once(ws,'message');ws.send(JSON.stringify({type:'auth',foodDeltas:true,token:jwt.sign({type:'fishquest',gameId:game.id,studentId,name:studentId},'test-secret')}));await first;return ws;
+ }
+ async function until(check){for(let i=0;i<100;i++){if(check())return;await new Promise(r=>setTimeout(r,20));}assert.ok(check(),'Expected state not received');}
+ const a=await join('A'),b=await join('B');assert.ok(a.messages[0].state.food);
+ match.start();match.state.food=[];for(const p of match.state.players)Object.assign(p,{mass:800,x:500,y:500,protectedUntil:0});
+ await until(()=>a.messages.some(m=>m.state?.question?.kind==='whale'));
+ const q=a.messages.find(m=>m.state?.question?.kind==='whale').state.question;
+ assert.ok(a.messages.some(m=>m.state?.foodDelta));
+ a.send(JSON.stringify({type:'answer',interactionId:q.id,choice:0}));
+ await until(()=>a.messages.some(m=>m.state?.event?.outcome==='correct'));
+ const result=a.messages.find(m=>m.state?.event?.outcome==='correct').state;
+ assert.equal(result.question,undefined);assert.equal(match.state.players[0].score,75);
+ b.send(JSON.stringify({type:'answer',interactionId:q.id,choice:0}));await until(()=>b.messages.some(m=>m.state?.event?.outcome==='correct'));
+ const back=await join('A');assert.ok(back.messages[0].state.food);assert.equal(match.state.players[0].score,75);
+});

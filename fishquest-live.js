@@ -1,3 +1,4 @@
+const foodDelta = require('./fishquest-food-delta');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -134,6 +135,10 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
     try { match.save(); }
     catch (err) { delete match.state.resultsSavedAt; throw err; }
   }
+  function sendState(ws,state){
+    const packet=foodDelta.prepare(ws,state);
+    if(send(ws,{type:'state',state:packet.state}))packet.commit();
+  }
   function broadcast(matchKey) {
     const match = matches.get(matchKey) || getMatch(matchKey);
     if (!match) return;
@@ -141,7 +146,7 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
     if (!group || !group.size) return;
     const shared = match.snapshot(null);
     for (const ws of group) if (ws.readyState === ws.OPEN && ws.playerId && !ws.replaced) {
-      try { send(ws, { type: 'state', state: match.snapshot(ws.playerId, false, shared) }); }
+      try { sendState(ws, match.snapshot(ws.playerId, false, shared)); }
       catch { ws.terminate(); }
     }
   }
@@ -264,7 +269,8 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
             if (!clients.has(matchKey)) clients.set(matchKey, new Set());
             clients.get(matchKey).add(ws);
             for (const old of clients.get(matchKey)) if (old !== ws && old.playerId === p.id) { old.replaced = true; old.close(4002, 'Opened on another device'); }
-            send(ws, { type: 'state', state: match.snapshot(p.id) });
+            ws.foodDeltas = message.foodDeltas === true;
+            sendState(ws, match.snapshot(p.id));
           } catch { ws.close(4003, 'Join the room again'); }
           return;
         }
@@ -274,6 +280,7 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
           if (message.type === 'answer') {
             match.answer(ws.playerId, message);
             send(ws, { type: 'answer_ack', interactionId: message.interactionId, accepted: true });
+            broadcast(ws.matchKey);
           }
         } catch (err) {
           if (message.type === 'answer') send(ws, { type: 'answer_ack', interactionId: message.interactionId, accepted: false, error: 'Please try your answer again.' });

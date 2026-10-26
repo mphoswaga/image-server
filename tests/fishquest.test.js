@@ -28,7 +28,7 @@ test('shared broadcast work preserves private questions and personal results', (
 });
 
 test('hunger shrinks size after two active minutes, pauses during questions and resets on eating', () => {
-  const f=fixture(); f.match.state.food=[]; f.a.mass=850;f.a.x=100;f.b.x=1000;f.c.x=2000;
+  const f=fixture(); for(const p of f.match.state.players)p.nextPearlAt=Infinity; f.match.state.food=[]; f.a.mass=850;f.a.x=100;f.b.x=1000;f.c.x=2000;
   for(let i=0;i<1199;i++){f.advance(100);f.match.tick();}
   assert.equal(f.a.mass,850);
   assert.equal(f.match.snapshot(f.a.id).players.find(p=>p.id===f.a.id).hungry,true);
@@ -306,4 +306,16 @@ test('every learner game surface offers optional state-preserving immersive view
   assert.match(practicePage, /id="immersiveBtn"[^>]+aria-label="Enter immersive view"/);
   assert.match(practicePage, /document\.documentElement\.requestFullscreen \|\| document\.documentElement\.webkitRequestFullscreen/);
   assert.match(practicePage, /document\.body\.classList\.add\('immersive-fallback'\)/);
+});
+test('simultaneous encounters persist once per tick and preserve both answers',()=>{
+ const f=fixture(),d=f.match.join({studentId:'D',name:'Dani'});f.advance(CONFIG.protectionMs+1);
+ for(const [p,x,mass] of [[f.a,400,200],[f.b,400,100],[f.c,1200,200],[d,1200,100]])Object.assign(p,{x,y:600,mass,protectedUntil:0});
+ f.match.state.food=[];
+ const before=f.saves();f.match.tick();
+ assert.equal(f.match.state.interactions.filter(i=>i.status==='pending').length,2);
+ assert.equal(f.saves()-before,1);
+ f.advance(CONFIG.questionMs+1);const prior=f.saves();f.match.tick();
+ assert.equal(f.saves()-prior,1);
+ assert.equal(f.a.attempts.length,1);assert.equal(f.c.attempts.length,1);
+ assert.equal(f.a.attempts[0].outcome,'timeout');assert.equal(f.c.attempts[0].outcome,'timeout');
 });
