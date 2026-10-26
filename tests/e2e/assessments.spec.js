@@ -262,6 +262,20 @@ test('an open My assignments panel updates learner readiness without being reope
     expect(submitted.ok(), await submitted.text()).toBeTruthy();
     await expect(results).toContainText('Amina Learner');
     await expect(results.getByRole('button', { name: /grades? pending/ })).toBeDisabled();
+    const evidence=results.locator('.lr-learners');
+    await evidence.locator('summary').click();
+    await results.locator('.lr-bar').first().locator('summary').click();
+    await evidence.locator('[data-lr-search]').fill('Amina');
+    const pollCount=resultsRequests;
+    await expect.poll(()=>resultsRequests).toBeGreaterThan(pollCount+1);
+    await expect(evidence).toHaveAttribute('open','');
+    await expect(results.locator('.lr-bar').first()).toHaveAttribute('open','');
+    await expect(evidence.locator('[data-lr-search]')).toHaveValue('Amina');
+    await evidence.locator('summary').click();
+    const closedCount=resultsRequests;
+    await expect.poll(()=>resultsRequests).toBeGreaterThan(closedCount+1);
+    await expect(evidence).not.toHaveAttribute('open','');
+
 
     await results.locator('.bulk-grade-student').check();
     await results.getByLabel('Mark for selected learners').fill('4');

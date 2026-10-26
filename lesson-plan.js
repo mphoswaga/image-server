@@ -804,6 +804,10 @@ async function repairAssessmentDraft(client, initialDraft, context, options) {
     const parsed = JSON.parse(text);
     let candidate = normalizedAssessmentCandidate(parsed, context);
     if (candidate && options.questionTypes.includes('mcq')) candidate = await completeAssessmentMcqs(client, candidate, context, options);
+    if (candidate && options.practicalCount) {
+      try { candidate = await require('./assessment-practical-repair').completePracticalPhase(client, candidate, context, options, MODEL); }
+      catch (error) { console.error('Targeted practical completion failed:', error.message); }
+    }
     const issues = assessmentDraftIssues(candidate, options);
     if (!issues.length) return candidate;
     if (!bestDraft || issues.length < bestIssues.length) {

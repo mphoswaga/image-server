@@ -309,13 +309,17 @@ function normalizeAssessmentDraft(raw, context = {}) {
   if (!sections.length) return fallbackDraft({ ...context, lessonPurpose: purpose, assessmentTotalMarks: opts.totalMarks, assessmentQuestionTypes: opts.questionTypes, assessmentMcqCount: opts.mcqCount });
   const exactMarkedPhases = opts.phaseRequirements.length === sections.length
     && opts.phaseRequirements.every((phase, index) => phase.type === sections[index].type && Number.isInteger(phase.marks));
-  if (exactMarkedPhases) {
-    const mixedWithMcq = sections.some(section => section.type === 'mcq') && sections.some(section => section.type !== 'mcq');
+  const partialMarkedPhases = opts.phaseRequirements.length > sections.length
+    && sections.every(section => opts.phaseRequirements.filter(phase => phase.type === section.type && Number.isInteger(phase.marks)).length === 1)
+    && new Set(sections.map(section => section.type)).size === sections.length;
+  if (exactMarkedPhases || partialMarkedPhases) {
+    const allocatedPhases = exactMarkedPhases ? opts.phaseRequirements : sections.map(section => opts.phaseRequirements.find(phase => phase.type === section.type));
+    const mixedWithMcq = opts.questionTypes.includes('mcq') && opts.questionTypes.some(type => type !== 'mcq');
     sections = sections.map((section, index) => ({
       ...section,
       items: section.type === 'mcq' && mixedWithMcq
-        ? section.items.slice(0, opts.phaseRequirements[index].marks).map(item => ({ ...item, marks: 1 }))
-        : allocateMarks(section.items, opts.phaseRequirements[index].marks),
+        ? section.items.slice(0, allocatedPhases[index].marks).map(item => ({ ...item, marks: 1 }))
+        : allocateMarks(section.items, allocatedPhases[index].marks),
     })).filter(section => section.items.length);
   } else {
     const flat = sections.flatMap((section, sectionIndex) => section.items.map((item, itemIndex) => ({ sectionIndex, itemIndex, type: section.type, item })));

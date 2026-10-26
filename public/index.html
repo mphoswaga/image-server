@@ -6498,6 +6498,12 @@
     function renderAssignmentResults(assignId, wrapId, view){
       const wrap=$(wrapId); if(!wrap) return;
       const d=assignResultsCache.get(assignId); if(!d) return;
+      // Polling rebuilds the result DOM: preserve the teacher's report navigation.
+      const report=wrap.querySelector('.learning-report');
+      const detailKey=el=>el.dataset.lrLabel?'question:'+el.dataset.lrLabel:el.className||el.querySelector('summary')?.textContent.replace(/\d+/g,'#');
+      const reportOpen=new Map([...report?.querySelectorAll('details')||[]].map(el=>[detailKey(el),el.open]));
+      const search=report?.querySelector('[data-lr-search]');
+      const searchState=search?{value:search.value,focused:document.activeElement===search,start:search.selectionStart,end:search.selectionEnd}:null;
       wrap.dataset.view=view;
       const liveBar=assessmentLiveControls(d,assignId,wrapId);
       const releaseBar=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:${d.effectivelyReleased||d.teacherMarked?'#eafaf0':'#fdf6ea'}">
@@ -6514,6 +6520,12 @@
       const tabs=`<div style="display:flex;gap:8px;margin-bottom:10px">${tabBtn('student','By student')}${tabBtn('question','By question')}</div>`;
       if(!d.submissions||!d.submissions.length){ wrap.innerHTML=liveBar+submitDraftsBar+releaseBar+tabs+'<p class="hint" style="margin-top:8px">No students have submitted yet.</p>'; return; }
       wrap.innerHTML=liveBar+submitDraftsBar+releaseBar+assignmentSummary(d)+tabs+(view==='question'?renderByQuestion(d,assignId,wrapId):renderByStudent(d,assignId,wrapId));
+      wrap.querySelectorAll('.learning-report details').forEach(el=>{if(reportOpen.has(detailKey(el)))el.open=reportOpen.get(detailKey(el));});
+      const nextSearch=wrap.querySelector('[data-lr-search]');
+      if(nextSearch&&searchState){
+        nextSearch.value=searchState.value;nextSearch.dispatchEvent(new Event('input',{bubbles:true}));
+        if(searchState.focused){nextSearch.focus({preventScroll:true});nextSearch.setSelectionRange(searchState.start,searchState.end);}
+      }
     }
 
     function assessmentLiveControls(d,assignId,wrapId){
