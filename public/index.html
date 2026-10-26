@@ -3513,6 +3513,18 @@
           <div><label for="assessmentCutoff">Due date <span style="font-weight:400;color:var(--muted)" data-ui-i18n>(optional)</span></label><input id="assessmentCutoff" type="datetime-local"></div>
         </div>
         <div id="assessmentGenerateTools" style="margin:16px 0">
+          <h4>Questions and marks</h4>
+          <div class="assessment-presets">
+            <button type="button" class="btn ghost assessment-mini" data-generation-split="25">25 MCQ + 25 practical marks</button>
+            <button type="button" class="btn ghost assessment-mini" data-generation-split="30">30 MCQ + 20 practical marks</button>
+          </div>
+          <label for="assessmentGenerateFormat">Question format</label>
+          <select id="assessmentGenerateFormat"><option value="auto">Written test / practical project</option><option value="mixed">Multiple choice + practical</option><option value="mcq">Multiple choice only</option><option value="practical">Practical only</option></select>
+          <div class="assessment-grid">
+            <div id="assessmentMcqSettings" hidden><label for="assessmentGenerateMcqCount">Multiple-choice questions (1 mark each)</label><input id="assessmentGenerateMcqCount" type="number" min="1" max="50" step="1" value="25"></div>
+            <div id="assessmentPracticalSettings" hidden><label for="assessmentGeneratePracticalCount">Practical tasks</label><input id="assessmentGeneratePracticalCount" type="number" min="1" max="50" step="1" value="5"><label for="assessmentGeneratePracticalMarks">Total practical marks</label><input id="assessmentGeneratePracticalMarks" type="number" min="1" max="1000" step="1" value="25"></div>
+          </div>
+          <p id="assessmentGenerationAllocation" class="hint" aria-live="polite"></p>
           <label for="assessmentGenerateBrief">Extra requirements (optional)</label>
           <textarea id="assessmentGenerateBrief" rows="2" placeholder="For example: Use short questions and familiar classroom examples."></textarea>
           <p class="hint">Enter your subject, grade and objectives above, then choose Test or Project. LessonScope creates grade-appropriate questions or practical tasks with marks and private marking guidance. Review before publishing.</p>
@@ -8398,10 +8410,34 @@
         $('topicMcqPanel').hidden=true;
       }catch(error){$('topicMcqStatus').textContent=error.message;}finally{button.disabled=false;}
     };
+    function updateGenerationAllocation(){
+      const format=$('assessmentGenerateFormat').value;
+      $('assessmentMcqSettings').hidden=!['mixed','mcq'].includes(format);
+      $('assessmentPracticalSettings').hidden=!['mixed','practical'].includes(format);
+      const mcq=['mixed','mcq'].includes(format)?Number($('assessmentGenerateMcqCount').value):0;
+      const practical=['mixed','practical'].includes(format)?Number($('assessmentGeneratePracticalMarks').value):0;
+      $('assessmentGenerationAllocation').textContent=format==='auto'?'':`${mcq} multiple-choice marks + ${practical} practical marks = ${mcq+practical} / ${$('assessmentTotal').value} total marks`;
+    }
+    ['assessmentGenerateFormat','assessmentGenerateMcqCount','assessmentGeneratePracticalCount','assessmentGeneratePracticalMarks','assessmentTotal'].forEach(id=>$(id).addEventListener('input',updateGenerationAllocation));
+    document.querySelectorAll('[data-generation-split]').forEach(button=>button.onclick=()=>{
+      const count=Number(button.dataset.generationSplit);
+      $('assessmentGenerateFormat').value='mixed';$('assessmentGenerateMcqCount').value=count;
+      $('assessmentGeneratePracticalCount').value=5;$('assessmentGeneratePracticalMarks').value=50-count;$('assessmentTotal').value=50;
+      updateGenerationAllocation();updateAssessmentTotal();
+    });
     $('assessmentGenerate').onclick=async()=>{
       const status=$('assessmentGenerateStatus'), button=$('assessmentGenerate');
       if(editingAssessmentId){status.textContent='Create a new assessment to generate a new draft.';return;}
       const body={subject:$('assessmentSubject').value,grade:$('assessmentGrade').value,objectives:$('assessmentObjectives').value,kind:$('assessmentKind').value,totalMarks:Number($('assessmentTotal').value),title:$('assessmentTitle').value,deliveryMode:$('assessmentDelivery').value,brief:$('assessmentGenerateBrief').value};
+      body.format=$('assessmentGenerateFormat').value;
+      body.mcqCount=Number($('assessmentGenerateMcqCount').value);
+      body.practicalCount=Number($('assessmentGeneratePracticalCount').value);
+      body.practicalMarks=Number($('assessmentGeneratePracticalMarks').value);
+      if(body.format!=='auto'){
+        const mcq=['mixed','mcq'].includes(body.format)?body.mcqCount:0;
+        const practical=['mixed','practical'].includes(body.format)?body.practicalMarks:0;
+        if(mcq+practical!==body.totalMarks){status.textContent='Multiple-choice and practical marks must add up to the total marks.';return;}
+      }
       if(!body.subject.trim()||!body.grade.trim()||!body.objectives.trim()){status.textContent='Enter your subject, grade and learning objectives above.';return;}
       if(!['test','project'].includes(body.kind)){status.textContent='Choose Test or Project to generate a draft.';return;}
       syncAssessmentState();

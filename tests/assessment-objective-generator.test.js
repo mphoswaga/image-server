@@ -37,3 +37,23 @@ test('generated answers pass through real normalization and publication validati
   assert.match(draft.sections[0].items[0].answerKey, /water/);
   assert.doesNotThrow(() => require('../assignments').normalizeAssessment(draft));
 });
+test('mixed tests preserve both common mark splits and practical task counts', () => {
+  for (const mcqCount of [25, 30]) {
+    const context = objectiveAssessmentContext({ ...input, totalMarks: 50, format: 'mixed', mcqCount, practicalMarks: 50 - mcqCount, practicalCount: 5 });
+    assert.equal(context.mcqCount, mcqCount);
+    assert.equal(context.practicalCount, 5);
+    assert.deepEqual(context.phaseRequirements.map(p => [p.type, p.marks]), [['mcq', mcqCount], ['practical', 50 - mcqCount]]);
+    assert.match(assessmentOnlyPrompt(context), /exactly 5 distinct task items/);
+  }
+});
+test('invalid splits and impossible task counts are rejected before AI calls', () => {
+  const mixed = { ...input, totalMarks: 50, format: 'mixed', mcqCount: 30, practicalCount: 5, practicalMarks: 20 };
+  for (const change of [{ practicalMarks: 25 }, { mcqCount: 51 }, { practicalCount: 21 }, { practicalCount: 0 }, { practicalCount: 2.5 }]) assert.throws(() => objectiveAssessmentContext({ ...mixed, ...change }));
+});
+test('practical count is validated independently of matching total marks', () => {
+  const { assessmentDraftIssues, normalizeAssessmentDraft } = require('../assessment-draft');
+  const context = objectiveAssessmentContext({ ...input, totalMarks: 20, format: 'practical', practicalCount: 2, practicalMarks: 20 });
+  const raw = { title: 'Materials', sections: [{ title: 'Sorting', type: 'practical', objectiveIndexes: [0], items: [{ prompt: 'Sort the objects into solids and liquids.', marks: 20 }] }] };
+  const draft = normalizeAssessmentDraft(raw, context);
+  assert.ok(assessmentDraftIssues(draft, context).includes('expected 2 practical tasks but received 1'));
+});

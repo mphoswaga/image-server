@@ -128,6 +128,7 @@ function normalizeAssessmentOptions(input = {}) {
     brief,
     questionTypes,
     mcqCount,
+    practicalCount: Number.isInteger(Number(input.practicalCount)) && Number(input.practicalCount) > 0 ? Number(input.practicalCount) : null,
     phaseRequirements,
     phaseRequirementIssue: parsedBrief && parsedBrief.issue ? parsedBrief.issue : '',
   };
@@ -271,6 +272,7 @@ function normalizeAssessmentDraft(raw, context = {}) {
     assessmentBrief: context.brief || context.assessmentBrief,
     assessmentQuestionTypes: context.questionTypes || context.assessmentQuestionTypes,
     assessmentMcqCount: context.mcqCount || context.assessmentMcqCount,
+    practicalCount: context.practicalCount,
     assessmentPhases: context.phaseRequirements || context.assessmentPhases || context.phases,
   });
   const objectives = objectiveRecords(context.objectives);
@@ -380,6 +382,10 @@ function assessmentDraftIssues(draft, options = {}) {
   }
   const mcqCount = sections.filter(section => section.type === 'mcq').reduce((sum, section) => sum + (section.items || []).length, 0);
   if (opts.questionTypes.includes('mcq') && mcqCount !== opts.mcqCount) issues.push(`expected ${opts.mcqCount} multiple-choice items but received ${mcqCount}`);
+  if (opts.practicalCount != null && opts.questionTypes.includes('practical')) {
+    const count = sections.filter(section => section.type === 'practical').reduce((sum, section) => sum + (section.items || []).length, 0);
+    if (count !== opts.practicalCount) issues.push(`expected ${opts.practicalCount} practical tasks but received ${count}`);
+  }
   const mcqMarks = sections.filter(section => section.type === 'mcq').flatMap(section => section.items || []).map(item => Number(item.marks) || 0);
   if (opts.questionTypes.includes('mcq') && opts.questionTypes.length > 1 && mcqMarks.some(mark => mark !== 1)) issues.push('each multiple-choice item must be worth exactly 1 mark');
   const allocated = sections.reduce((sum, section) => sum + (section.items || []).reduce((itemSum, item) => itemSum + (Number(item.marks) || 0), 0), 0);
@@ -509,6 +515,7 @@ Teacher settings:
 - Required sections, in this exact order: ${selectedTypes}
 - Delivery: ${opts.deliveryMode === 'live' ? 'live in the classroom under teacher control' : 'self-paced'}
 ${opts.questionTypes.includes('mcq') ? `- Multiple choice: exactly ${opts.mcqCount} different questions; do not return ${opts.mcqCount - 1} or any other number` : '- Do not create multiple-choice questions'}
+${opts.practicalCount != null ? `- Practical: exactly ${opts.practicalCount} distinct task items, each with observable evidence and positive marks. Do not split one task into extra marking items.` : ''}
 ${opts.brief ? `- Teacher requirements: ${opts.brief}` : ''}
 
 Use every selected section type and no unselected type. Return exactly one section for every required phase. Do not add, remove, merge, split or reorder phases. ${mcqAllocation}
