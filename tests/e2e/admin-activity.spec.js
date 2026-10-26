@@ -31,6 +31,9 @@ test('activity is admin-only and profile directory stays collapsed',async({page,
     const studentEvents=await (await admin.request.get('/api/admin/activity?role=student&search=Sample%20Learner')).json();
     expect(studentEvents.events.some(e=>e.action==='Signed in'&&e.id==='ACTIVITY-STUDENT')).toBeTruthy();
     expect(JSON.stringify(studentEvents)).not.toContain('4826');
+    expect(studentEvents.events.find(e=>e.id==='ACTIVITY-STUDENT').classes).toContain('Activity class');
+    const classSearch=await (await admin.request.get('/api/admin/activity?role=student&search=Activity%20class')).json();
+    expect(classSearch.events.some(e=>e.id==='ACTIVITY-STUDENT')).toBeTruthy();
     expect((await (await admin.request.get('/api/admin/activity?from=2099-01-01')).json()).events).toHaveLength(0);
 
     const adminPage=await admin.newPage();await adminPage.addInitScript(()=>localStorage.setItem('lc_wizard_done','1'));await adminPage.goto('/');

@@ -29,7 +29,7 @@ function middleware(resolveActor) {
     next();
   };
 }
-function list(query={},users=[]) {
+function list(query={},users=[],rosters=require('./roster')) {
   const accounts=new Map(users.map(u=>[u.id,u]));
   const rows=audit.recent(5000).map(e=>{
     if(e.event==='activity')return {time:e.ts,name:e.actorName||e.actorId,id:e.actorId,email:e.actorEmail||'',role:e.actorRole,action:e.action,outcome:e.outcome};
@@ -40,10 +40,28 @@ function list(query={},users=[]) {
     const id=student?e.studentId:user.id;
     return {time:e.ts,name:student?(e.name||id):user.name,id,email:student?'':user.email,role:student?'student':user.role==='admin'?'admin':'teacher',action:String(e.event).replace(/[._]/g,' '),outcome:'recorded'};
   }).filter(Boolean);
+  // Resolve current roster membership once per request, including older ID-only logins.
+  const students=new Map(rows.filter(r=>r.role==='student').map(r=>[rosters.normalizeStudentId(r.id),{names:[],classes:new Set()}]));
+  if(students.size)for(const teacher of users){
+    for(const summary of rosters.listRosters(teacher.id)){
+      const roster=rosters.getRoster(teacher.id,summary.id);
+      for(const student of roster?.students||[]){
+        const match=students.get(rosters.normalizeStudentId(student.id));
+        if(!match)continue;
+        if(student.name&&student.name!==student.id)match.names.push(student.name);
+        if(summary.name)match.classes.add(summary.name);
+      }
+    }
+  }
+  for(const row of rows){
+    const match=row.role==='student'&&students.get(rosters.normalizeStudentId(row.id));
+    row.classes=match?[...match.classes].sort():[];
+    if(match?.names?.length&&(!row.name||rosters.normalizeStudentId(row.name)===rosters.normalizeStudentId(row.id)))row.name=match.names[0];
+  }
   const search=String(query.search||'').trim().toLowerCase();
   const filtered=rows.filter(r=>(!query.role||query.role==='all'||r.role===query.role)
     &&(!query.from||r.time.slice(0,10)>=query.from)&&(!query.to||r.time.slice(0,10)<=query.to)
-    &&(!search||[r.name,r.email,r.id,r.action].join(' ').toLowerCase().includes(search)));
+    &&(!search||[r.name,r.email,r.id,r.action,...r.classes].join(' ').toLowerCase().includes(search)));
   const offset=Math.max(0,Math.min(5000,parseInt(query.offset,10)||0));
   return {events:filtered.slice(offset,offset+100),total:filtered.length,nextOffset:offset+100<filtered.length?offset+100:null};
 }

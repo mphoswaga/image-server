@@ -7167,8 +7167,8 @@
         const response=await fetch('/api/admin/activity?'+query);const data=await response.json();
         if(token!==activityRequest)return;
         if(!response.ok)throw new Error(data.error||'Could not load activity.');
-        if(!more)$('activityResults').innerHTML='<table class="gb"><thead><tr><th>Time</th><th>Person</th><th>Role</th><th>Action</th><th>Result</th></tr></thead><tbody></tbody></table>';
-        $('activityResults').querySelector('tbody').insertAdjacentHTML('beforeend',data.events.map(e=>`<tr><td>${esc(new Date(e.time).toLocaleString())}</td><td>${e.role==='teacher'||e.role==='admin'?`<button type="button" class="btn ghost" data-admin-account="${esc(e.id)}">${esc(e.name)}</button>`:esc(e.name)}<br><small>${esc(e.email||e.id)}</small></td><td>${esc(e.role)}</td><td>${esc(e.action)}</td><td>${esc(e.outcome)}</td></tr>`).join(''));
+        if(!more)$('activityResults').innerHTML='<table class="gb"><thead><tr><th>Time</th><th>Person</th><th>Current class</th><th>Role</th><th>Action</th><th>Result</th></tr></thead><tbody></tbody></table>';
+        $('activityResults').querySelector('tbody').insertAdjacentHTML('beforeend',data.events.map(e=>`<tr><td>${esc(new Date(e.time).toLocaleString())}</td><td>${e.role==='teacher'||e.role==='admin'?`<button type="button" class="btn ghost" data-admin-account="${esc(e.id)}">${esc(e.name)}</button>`:esc(e.name)}<br><small>${esc(e.email||e.id)}</small></td><td>${esc((e.classes||[]).join(', ')||(e.role==='student'?'Not linked to a class':'—'))}</td><td>${esc(e.role)}</td><td>${esc(e.action)}</td><td>${esc(e.outcome)}</td></tr>`).join(''));
         activityOffset=data.nextOffset;$('activityMore').hidden=activityOffset===null;
         $('activityStatus').textContent=data.total?`${data.total} matching events in recent history`:'No recorded activity matches these filters.';
       }catch(error){if(token===activityRequest)$('activityStatus').textContent=error.message;}
