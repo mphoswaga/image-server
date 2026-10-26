@@ -3512,6 +3512,13 @@
           <div><label for="assessmentRoster">Class roster <span style="font-weight:400;color:var(--muted)">(required for results and TeacherScope)</span></label><select id="assessmentRoster"><option value="">— Choose a class roster —</option></select></div>
           <div><label for="assessmentCutoff">Due date <span style="font-weight:400;color:var(--muted)" data-ui-i18n>(optional)</span></label><input id="assessmentCutoff" type="datetime-local"></div>
         </div>
+        <div id="assessmentGenerateTools" style="margin:16px 0">
+          <label for="assessmentGenerateBrief">Extra requirements (optional)</label>
+          <textarea id="assessmentGenerateBrief" rows="2" placeholder="For example: Use short questions and familiar classroom examples."></textarea>
+          <p class="hint">Enter your subject, grade and objectives above, then choose Test or Project. LessonScope creates grade-appropriate questions or practical tasks with marks and private marking guidance. Review before publishing.</p>
+          <button id="assessmentGenerate" type="button" class="btn accent">Generate from objectives</button>
+          <p id="assessmentGenerateStatus" role="status" aria-live="polite"></p>
+        </div>
         <div id="assessmentSections"></div>
         <div style="margin-top:12px"><button id="addAssessmentSection" type="button" class="btn ghost assessment-mini">+ Add section</button></div>
         <div id="assessmentTotalStatus" class="assessment-total"><span>Allocated: 0 marks</span><span>Total: 50 marks</span></div>
@@ -8390,6 +8397,25 @@
         $('assessmentPublishResult').textContent='Review the questions and correct answers, then choose a class and publish.';
         $('topicMcqPanel').hidden=true;
       }catch(error){$('topicMcqStatus').textContent=error.message;}finally{button.disabled=false;}
+    };
+    $('assessmentGenerate').onclick=async()=>{
+      const status=$('assessmentGenerateStatus'), button=$('assessmentGenerate');
+      if(editingAssessmentId){status.textContent='Create a new assessment to generate a new draft.';return;}
+      const body={subject:$('assessmentSubject').value,grade:$('assessmentGrade').value,objectives:$('assessmentObjectives').value,kind:$('assessmentKind').value,totalMarks:Number($('assessmentTotal').value),title:$('assessmentTitle').value,deliveryMode:$('assessmentDelivery').value,brief:$('assessmentGenerateBrief').value};
+      if(!body.subject.trim()||!body.grade.trim()||!body.objectives.trim()){status.textContent='Enter your subject, grade and learning objectives above.';return;}
+      if(!['test','project'].includes(body.kind)){status.textContent='Choose Test or Project to generate a draft.';return;}
+      syncAssessmentState();
+      if(assessmentSectionsState.some(s=>(s.items||[]).some(i=>String(i.prompt||'').trim()))&&!confirm('Replace the current draft with a newly generated assessment?'))return;
+      const roster=$('assessmentRoster').value, cutoff=$('assessmentCutoff').value;
+      button.disabled=true;status.textContent='Creating your grade-appropriate assessment…';
+      try{
+        const response=await fetch('/api/assessment-generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not generate the assessment.');
+        openGeneratedAssessmentDraft(data.assessment);
+        editingGeneratedAssessmentDraft=false;editingAssessmentId=null;assessmentFromTopic=true;
+        await loadRosters(true);$('assessmentRoster').value=roster;$('assessmentCutoff').value=cutoff;
+        status.textContent='Draft ready. Review the tasks, answers and marks, then choose a class and publish.';
+      }catch(error){status.textContent=error.message;}finally{button.disabled=false;}
     };
     $('newAssessmentBtn').addEventListener('click',()=>{
       assessmentFromTopic=false;

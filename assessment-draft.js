@@ -500,6 +500,7 @@ Assessment type: ${purpose}
 Subject: ${String(subject || '').trim()}
 Topic: ${String(topic || '').replace(/-/g, ' ').trim()}
 Grade level: ${String(grade || '').trim()}
+Grade suitability: ${require('./grade').gradeProfile(grade).content.depth} Match reading demands, task length, independence and marking expectations to this exact grade. Use familiar concrete examples for younger learners; do not introduce advanced concepts beyond the supplied objectives.
 Learning objectives:
 ${String(objectives || '').trim()}
 

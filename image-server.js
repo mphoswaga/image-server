@@ -2384,6 +2384,23 @@ app.post('/api/assessment-mcq', requireAuth, async (req, res) => {
   }
 });
 
+app.post('/api/assessment-generate', requireAuth, async (req, res) => {
+  const generator = require('./assessment-objective-generator');
+  try { generator.objectiveAssessmentContext(req.body); }
+  catch (error) { return res.status(400).json({ error: error.message }); }
+  const { reservation, block } = await reserve(req, 'lessonscope.generate_pack_item');
+  if (block) return res.status(402).json(block);
+  try {
+    const assessment = await generator.generateObjectiveAssessment(req.body);
+    assignments.normalizeAssessment(assessment);
+    await capture(req, reservation, 'lessonscope.generate_pack_item', 'objective-assessment');
+    res.json({ assessment });
+  } catch (error) {
+    await release(req, reservation, 'lessonscope.generate_pack_item', error.message);
+    res.status(400).json({ error: error.message });
+  }
+});
+
 app.post('/api/assessment', requireAuth, (req, res) => {
   const { assessment, rosterId, cutoffAt } = req.body || {};
   try {
