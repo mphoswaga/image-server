@@ -15,7 +15,14 @@ function log(event, fields = {}) {
 // Read the most recent entries for the admin panel.
 function recent(limit = 200) {
   try {
-    return fs.readFileSync(AUDIT_PATH, 'utf8')
+    const fd=fs.openSync(AUDIT_PATH,'r');
+    let text;
+    try {
+      const size=fs.fstatSync(fd).size, start=Math.max(0,size-4*1024*1024);
+      const buffer=Buffer.alloc(size-start);fs.readSync(fd,buffer,0,buffer.length,start);
+      text=buffer.toString('utf8');if(start)text=text.slice(text.indexOf('\n')+1);
+    } finally {fs.closeSync(fd);}
+    return text
       .trim().split('\n').filter(Boolean)
       .map(l => { try { return JSON.parse(l); } catch { return null; } })
       .filter(Boolean)

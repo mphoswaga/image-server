@@ -3323,6 +3323,11 @@
         <h2>Admin</h2>
       </div>
 
+      <details id="adminActivityPanel" class="panel-add" style="padding:16px;margin-bottom:20px"><summary style="cursor:pointer;font-weight:700">Teacher and student activity log</summary>
+        <p class="hint">Sign-ins and key actions recorded by LessonScope. Earlier audit history may be incomplete. This is not a record of every click or live online status. Dates filter in UTC; displayed times use your device timezone.</p>
+        <div class="assessment-grid"><label>Person or action<input id="activitySearch" type="search" placeholder="Name, email, student ID or action"></label><label>Role<select id="activityRole"><option value="all">Everyone</option><option value="teacher">Teachers</option><option value="student">Students</option><option value="admin">Admins</option></select></label><label>From<input id="activityFrom" type="date"></label><label>To<input id="activityTo" type="date"></label></div>
+        <button id="activityRefresh" type="button" class="btn ghost">Search / refresh</button><p id="activityStatus" role="status"></p><div id="activityResults" style="overflow:auto"></div><button id="activityMore" type="button" class="btn ghost" hidden>Load more</button>
+      </details>
       <div class="section-divider"><h3><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> AI usage &amp; cost</h3></div>
       <p class="hint">What every OpenAI call has cost so far — overall and per teacher — so you can price the app.</p>
       <div id="usageCards" class="usage-cards"></div>
@@ -3605,9 +3610,9 @@
         </div>
       </div>
       <section class="panel-add" style="padding:18px;margin-bottom:20px" aria-label="Student profiles">
-        <h3>Student profiles</h3><label for="studentProfileSearch">Find a student across your classes</label>
+        <details id="studentProfileDirectory" open><summary style="cursor:pointer;font-weight:700;padding:10px 0">Student profiles — show / hide list</summary><label for="studentProfileSearch">Find a student across your classes</label>
         <input id="studentProfileSearch" type="search" placeholder="Search by name or student ID" autocomplete="off">
-        <div id="studentProfileMatches" aria-live="polite"></div>
+        <div id="studentProfileMatches" aria-live="polite" style="max-height:420px;overflow:auto"></div></details>
       </section>
       <section class="panel-add" style="padding:18px;margin-bottom:20px" aria-label="Roster sharing">
         <h3 data-ui-i18n>Share class rosters</h3><p data-ui-i18n>Invite a teacher by their sign-up email. They receive independent copies of the selected class lists only — no marks, reports, lessons or activities. Later edits do not sync. Learner IDs stay the same.</p>
@@ -7150,6 +7155,26 @@
     }
 
     // ---- admin ----
+    const profileDirectory=$('studentProfileDirectory');
+    try{profileDirectory.open=localStorage.getItem('lc_profiles_expanded')!=='false';}catch{}
+    profileDirectory.addEventListener('toggle',()=>{try{localStorage.setItem('lc_profiles_expanded',String(profileDirectory.open));}catch{}});
+    let activityOffset=0,activityRequest=0;
+    async function loadAdminActivity(more=false){
+      const token=++activityRequest;
+      $('activityStatus').textContent='Loading activity…';
+      try{
+        const query=new URLSearchParams({search:$('activitySearch').value,role:$('activityRole').value,from:$('activityFrom').value,to:$('activityTo').value,offset:String(more?activityOffset:0)});
+        const response=await fetch('/api/admin/activity?'+query);const data=await response.json();
+        if(token!==activityRequest)return;
+        if(!response.ok)throw new Error(data.error||'Could not load activity.');
+        if(!more)$('activityResults').innerHTML='<table class="gb"><thead><tr><th>Time</th><th>Person</th><th>Role</th><th>Action</th><th>Result</th></tr></thead><tbody></tbody></table>';
+        $('activityResults').querySelector('tbody').insertAdjacentHTML('beforeend',data.events.map(e=>`<tr><td>${esc(new Date(e.time).toLocaleString())}</td><td>${esc(e.name)}<br><small>${esc(e.email||e.id)}</small></td><td>${esc(e.role)}</td><td>${esc(e.action)}</td><td>${esc(e.outcome)}</td></tr>`).join(''));
+        activityOffset=data.nextOffset;$('activityMore').hidden=activityOffset===null;
+        $('activityStatus').textContent=data.total?`${data.total} matching events in recent history`:'No recorded activity matches these filters.';
+      }catch(error){if(token===activityRequest)$('activityStatus').textContent=error.message;}
+    }
+    $('activityRefresh').onclick=()=>loadAdminActivity();$('activityMore').onclick=()=>loadAdminActivity(true);
+    $('adminActivityPanel').addEventListener('toggle',()=>{if($('adminActivityPanel').open)loadAdminActivity();});
     const adminPanel=$('adminPanel'), hero=document.querySelector('.hero'), stepsEl=document.querySelector('.steps');
     function openAdmin(){
       hideAllPanels(); adminPanel.style.display='block';

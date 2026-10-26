@@ -277,6 +277,24 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
 app.use('/api/billing/webhook', express.raw({ type: '*/*' }));
 app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser());
+app.use(require('./activity-log').middleware((req,res)=>{
+  // New identity cookies cover PIN/password/passkey joins without reading submitted credentials.
+  const cookies={};
+  for(const line of [].concat(res.getHeader('set-cookie')||[])){
+    const pair=String(line).split(';')[0],split=pair.indexOf('=');
+    if(split>0)cookies[pair.slice(0,split)]=decodeURIComponent(pair.slice(split+1));
+  }
+  const studentActor=token=>{try{const p=jwt.verify(token,JWT_SECRET);return p.studentId?{id:p.studentId,name:p.name||p.studentId,role:'student'}:null;}catch{return null;}};
+  const userActor=id=>{const user=id&&getUserById(id);return user?{id:user.id,name:user.name||user.email,email:user.email,role:user.role==='admin'?'admin':user.role==='student'?'student':'teacher'}:null;};
+  for(const key of [STUDENT_COOKIE,GAME_COOKIE])if(cookies[key]){const actor=studentActor(cookies[key]);if(actor)return actor;}
+  if(cookies[COOKIE_NAME]){const actor=userActor(verifyToken(cookies[COOKIE_NAME]));if(actor)return actor;}
+  if(req.userId)return userActor(req.userId);
+  const session=req.studentSession||req.gameSession;
+  if(session?.studentId)return {id:session.studentId,name:session.name||session.studentId,role:'student'};
+  for(const key of [STUDENT_COOKIE,GAME_COOKIE])if(req.cookies?.[key]){const actor=studentActor(req.cookies[key]);if(actor)return actor;}
+  return req.cookies?.[COOKIE_NAME]?userActor(verifyToken(req.cookies[COOKIE_NAME])):null;
+}));
+
 app.use(securityHeaders);
 
 const authLimiter = createRateLimiter({ name: 'auth', windowMs: 15 * 60_000, max: Number(process.env.AUTH_RATE_LIMIT || 40) });
@@ -2351,6 +2369,8 @@ app.get('/api/assignments', requireAuth, (req, res) => res.json({ assignments: a
 // Teacher-built, subject-neutral tests and projects. These publish into the
 // existing assignment runtime, but retain their section/objective structure
 // for marking, reporting, and future TeacherScope evidence transfer.
+app.get('/api/admin/activity', requireAdmin, (req,res)=>res.json(require('./activity-log').list(req.query, listUsers())));
+
 app.get('/api/assessment-topics', requireAuth, (req, res) => {
   const topics = [
     ...assignments.listTeacherAssignments(req.userId).filter(a => a.status !== 'draft').map(a => ({ source: 'assignment', id: a.id, title: a.title, subject: a.subject, grade: a.grade })),
