@@ -2369,6 +2369,14 @@ app.get('/api/assignments', requireAuth, (req, res) => res.json({ assignments: a
 // Teacher-built, subject-neutral tests and projects. These publish into the
 // existing assignment runtime, but retain their section/objective structure
 // for marking, reporting, and future TeacherScope evidence transfer.
+app.get('/api/admin/accounts/:id/overview', requireAdmin, (req,res)=>{
+  try {
+    const data=require('./admin-account-overview').overview(req.params.id);
+    if(!data)return res.status(404).json({error:'Teacher account not found.'});
+    res.setHeader('Cache-Control','no-store');res.json(data);
+  }catch(error){res.status(500).json({error:'Could not load this account overview.'});}
+});
+
 app.get('/api/admin/activity', requireAdmin, (req,res)=>res.json(require('./activity-log').list(req.query, listUsers())));
 
 app.get('/api/assessment-topics', requireAuth, (req, res) => {

@@ -3765,7 +3765,7 @@
   </div>
 
   <link rel="stylesheet" href="/games-welcome.css?v=1">
-  <script src="/games-welcome.js?v=2"></script>
+  <script src="/games-welcome.js?v=3"></script>
   <script src="/games-hub.js?v=2"></script>
   <link rel="stylesheet" href="/games-hub.css">
   <script src="/lesson-design.js"></script>
@@ -7168,7 +7168,7 @@
         if(token!==activityRequest)return;
         if(!response.ok)throw new Error(data.error||'Could not load activity.');
         if(!more)$('activityResults').innerHTML='<table class="gb"><thead><tr><th>Time</th><th>Person</th><th>Role</th><th>Action</th><th>Result</th></tr></thead><tbody></tbody></table>';
-        $('activityResults').querySelector('tbody').insertAdjacentHTML('beforeend',data.events.map(e=>`<tr><td>${esc(new Date(e.time).toLocaleString())}</td><td>${esc(e.name)}<br><small>${esc(e.email||e.id)}</small></td><td>${esc(e.role)}</td><td>${esc(e.action)}</td><td>${esc(e.outcome)}</td></tr>`).join(''));
+        $('activityResults').querySelector('tbody').insertAdjacentHTML('beforeend',data.events.map(e=>`<tr><td>${esc(new Date(e.time).toLocaleString())}</td><td>${e.role==='teacher'||e.role==='admin'?`<button type="button" class="btn ghost" data-admin-account="${esc(e.id)}">${esc(e.name)}</button>`:esc(e.name)}<br><small>${esc(e.email||e.id)}</small></td><td>${esc(e.role)}</td><td>${esc(e.action)}</td><td>${esc(e.outcome)}</td></tr>`).join(''));
         activityOffset=data.nextOffset;$('activityMore').hidden=activityOffset===null;
         $('activityStatus').textContent=data.total?`${data.total} matching events in recent history`:'No recorded activity matches these filters.';
       }catch(error){if(token===activityRequest)$('activityStatus').textContent=error.message;}
@@ -10021,5 +10021,5 @@
   </script>
   <script src="/byte-feedback.js"></script>
 <link rel="stylesheet" href="/student-profiles.css?v=20261024-summary2"><script src="/student-profiles.js?v=20261024-summary2" defer></script>
-</body>
+<script src="/admin-account-overview.js?v=1" defer></script></body>
 </html>

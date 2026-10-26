@@ -37,5 +37,20 @@ test('activity is admin-only and profile directory stays collapsed',async({page,
     await adminPage.locator('#adminBtn').click();
     await adminPage.locator('#adminActivityPanel summary').click();
     await expect(adminPage.locator('#activityResults')).toContainText('Signed in');
+    const accountId=data.events.find(e=>e.action==='Signed in').id;
+    expect((await page.request.get('/api/admin/accounts/'+accountId+'/overview')).status()).toBe(403);
+    const overview=await admin.request.get('/api/admin/accounts/'+accountId+'/overview');
+    expect(overview.ok()).toBeTruthy();const detail=await overview.json();
+    expect(detail.profile.email).toBe('games-admin@example.test');
+    expect(detail.activity.length).toBeGreaterThan(0);
+    expect(JSON.stringify(detail)).not.toContain('passwordHash');
+    expect(JSON.stringify(detail)).not.toContain('Test-password-123!');
+    await adminPage.locator('#activityResults [data-admin-account]').filter({hasText:'Activity Admin'}).first().click();
+    const modal=adminPage.getByRole('dialog',{name:'Teacher account overview'});
+    await expect(modal).toContainText('games-admin@example.test');
+    await expect(modal).toContainText('Recorded AI usage');
+    await modal.locator('[data-account-close]').click();
+    await expect(modal).not.toBeVisible();
+
   }finally{await admin.close();}
 });

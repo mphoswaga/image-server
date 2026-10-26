@@ -86,7 +86,7 @@
     try {
       const data=await json('/api/admin/accounts');
       const rows=(data.users||[]).filter(u=>u.role!=='student');
-      el('teacherAccountList').innerHTML=rows.map(u=>`<div class="invite-row"><span><strong>${escape(u.name||u.email)}</strong><br>${escape(u.email)} · ${escape(u.role||'teacher')} · ${u.accessMode==='games'?'Games only':'Full access'}</span><label><input type="checkbox" data-pin-free="${escape(u.id)}" ${u.pinFreeGames?'checked':''}> Allow game joining without a PIN</label>${window.currentUser&&u.id===window.currentUser.id?'<span class="hint">Current account</span>':`<button class="btn ghost" data-delete-account="${escape(u.id)}" data-delete-email="${escape(u.email)}">Delete</button>`}</div>`).join('')||'<p>No teacher accounts yet.</p>';
+      el('teacherAccountList').innerHTML=rows.map(u=>`<div class="invite-row"><span><button type="button" class="btn ghost" data-admin-account="${escape(u.id)}">${escape(u.name||u.email)}</button><br>${escape(u.email)} · ${escape(u.role||'teacher')} · ${u.accessMode==='games'?'Games only':'Full access'}</span><label><input type="checkbox" data-pin-free="${escape(u.id)}" ${u.pinFreeGames?'checked':''}> Allow game joining without a PIN</label>${window.currentUser&&u.id===window.currentUser.id?'<span class="hint">Current account</span>':`<button class="btn ghost" data-delete-account="${escape(u.id)}" data-delete-email="${escape(u.email)}">Delete</button>`}</div>`).join('')||'<p>No teacher accounts yet.</p>';
     }catch(e){el('teacherAccountStatus').textContent=e.message;}
   }
   el('adminBtn').addEventListener('click',()=>{loadInvites();loadAccounts();});
