@@ -240,6 +240,7 @@
     const previousMe = state && me ? { id: me.id, mass: Number(me.mass) || 0, score: Number(me.score) || 0 } : null;
     const previousPhase = state && state.phase;
     state = next; me = state.players.find(p => p.id === state.me); if (!me) return;
+    optionalEffect('rivalry', () => FishQuestRivalry.update(state,me));
     if (!scene && !rendererStarting) startRenderer();
     $('mass').textContent=me.mass;$('score').textContent=me.score;$('fishForm').textContent=fishEvolutionName(fishEvolution(me.mass));$('connection').textContent=state.solo?'Homework ocean · computer fish':'Live with your class';
     $('teacherWait').hidden = state.phase !== 'lobby'; $('teacherPause').hidden = state.phase !== 'paused';

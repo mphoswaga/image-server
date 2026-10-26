@@ -3766,7 +3766,7 @@
 
   <link rel="stylesheet" href="/games-welcome.css?v=1">
   <script src="/games-welcome.js?v=3"></script>
-  <script src="/games-hub.js?v=2"></script>
+  <script src="/games-hub.js?v=3"></script>
   <link rel="stylesheet" href="/games-hub.css">
   <script src="/lesson-design.js"></script>
   <script src="/slide-upload-batch.js?v=1"></script>
@@ -4156,7 +4156,7 @@
     }
     function updateDesignRecommendation(sections=[]){
       $('plannedGameFields').hidden=!$('plannedGame').value;
-      const allowedModes=({moonquest:['duels','cooperative'],colonyquest:['smartboard','multiplayer'],fishquest:['smartboard','individual'],arcade:['individual']})[$('plannedGame').value]||['individual'];
+      const allowedModes=({moonquest:['duels','cooperative'],colonyquest:['smartboard','multiplayer'],fishquest:['smartboard','multiplayer','individual'],arcade:['individual']})[$('plannedGame').value]||['individual'];
       for(const option of $('plannedPlayMode').options){option.hidden=!allowedModes.includes(option.value);option.disabled=option.hidden;}
       if(!allowedModes.includes($('plannedPlayMode').value)) $('plannedPlayMode').value=allowedModes[0];
       $('observationFields').hidden=!$('observationEnabled').checked;

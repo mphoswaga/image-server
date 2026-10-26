@@ -25,6 +25,8 @@ test('FishQuest updates paused questions and recovers a silent connection withou
     window.testSockets[0].receive(window.testState);
   });
   await expect(page.locator('#prompt')).toHaveText('Choose yes');
+  await expect(page.locator('#rivalry')).toBeHidden();
+  await expect(page.locator('#growthLabel')).toHaveText('60 size to reef fish');
   await page.evaluate(()=>{
     window.testState.phase='paused';window.testState.pausedAt=Date.now();
     window.testSockets[0].receive(window.testState);
@@ -78,6 +80,9 @@ test('FishQuest names the winner while showing only the learner own result', asy
   });
   await expect(page.locator('#ended')).toBeVisible();
   await expect(page.locator('#winnerLine')).toHaveText('Amina won this game.');
+  await expect(page.locator('#oceanPodium .podium-fish').first()).toContainText('Amina');
+  await expect(page.locator('#oceanPodium .podium-fish').first()).toHaveAttribute('data-place','1');
+  await expect(page.locator('#oceanPodium .prize-fish')).toHaveCount(2);
   await expect(page.locator('#rank')).toContainText('place 2 of 2');
   await expect(page.locator('#finalScore')).toHaveText('125 points');
   await expect(page.locator('#endFacts')).toContainText('3/4');

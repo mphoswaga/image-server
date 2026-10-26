@@ -2,7 +2,7 @@
 window.GamesHub = (() => {
   const catalog = [
     {id:'moonquest',name:'MoonQuest',icon:'🌙',text:'Rabbit teams, diagram duels and a moonlit festival.',modes:[['Learner devices','/moonquest?game=']]},
-    {id:'fishquest',name:'FishQuest',icon:'🐠',text:'Feed your fish and grow an ocean of classroom heroes.',modes:[['Smartboard','/fishquest/'],['Independent practice','/fishquest-play/']]},
+    {id:'fishquest',name:'FishQuest',icon:'🐠',text:'Feed your fish and grow an ocean of classroom heroes.',modes:[['Live multiplayer · learner devices','/fishquest/'],['Smartboard','/fishquest-board.html?game='],['Independent practice','/fishquest-play/']]},
     {id:'colonyquest',name:'ColonyQuest',icon:'🐜',text:'Build a colony, gather supplies and survive together.',modes:[['Smartboard','/colonyquest/'],['Learner devices · colony rivals','/colonyquest-live/']]},
     {id:'arcade',name:'Arcade games',icon:'🎮',text:'Car Dodge, Space Blaster, Answer Runner and Target Shot.',modes:[['Independent practice · learner chooses a game','/play/']]},
   ];

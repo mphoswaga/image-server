@@ -199,7 +199,8 @@ test('FishQuest is offered beside the existing student game choices', () => {
   assert.match(dashboard, /Open FishQuest live room/);
   const hub = fs.readFileSync(path.join(__dirname, '..', 'public', 'games-hub.js'), 'utf8');
   assert.match(hub, /name:'FishQuest'/);
-  assert.match(hub, /Smartboard','\/fishquest\//);
+  assert.ok(hub.includes("['Live multiplayer · learner devices','/fishquest/']"));
+  assert.ok(hub.includes("['Smartboard','/fishquest-board.html?game=']"));
   assert.match(dashboard, /Learner game link/);
   const teacher = fs.readFileSync(path.join(__dirname, '..', 'public', 'fishquest-teacher.html'), 'utf8');
   assert.match(teacher, /id="sessionClass"/);
