@@ -43,3 +43,18 @@ test('profile keeps historical submitted work without listing old outstanding ta
  assert.deepEqual(profile.classes,[{id:target.id,name:'2B2'}]);
  assert.equal(profile.activities.length,1);assert.equal(profile.activities[0].score,40);assert.equal(profile.activities[0].className,'2B1');
 });
+
+test('transfer ledger preserves every move and original names through roster rename and deletion',()=>{
+ const {teacher,source,target}=setup();
+ roster.moveStudent(teacher,source.id,'S1',target.id,'Teacher Mai');
+ roster.renameRoster(teacher,source.id,'Renamed');
+ roster.moveStudent(teacher,target.id,'S1',source.id,'Teacher Mai');
+ roster.deleteRoster(teacher,target.id);
+ const history=roster.transferHistory(teacher);
+ assert.equal(history.length,2);assert.equal(history[0].fromName,'2B1');assert.equal(history[0].toName,'2B2');
+ assert.equal(history[0].studentName,'Mai');assert.equal(history[0].actorName,'Teacher Mai');
+ assert.equal(history[1].toName,'Renamed');assert.notEqual(history[0].id,history[1].id);
+ assert.ok(Number.isFinite(Date.parse(history[0].at)));assert.deepEqual(roster.transferHistory('stranger'),[]);
+ assert.throws(()=>roster.moveStudent(teacher,source.id,'missing','missing'));
+ assert.equal(roster.transferHistory(teacher).length,2);
+});

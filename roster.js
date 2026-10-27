@@ -199,8 +199,13 @@ function removeStudent(teacherId, rosterId, studentId) {
   return { id: student.id, name: student.name };
 }
 
+function transferHistory(teacherId) {
+  try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR,'users',teacherId,'student-transfers.json'),'utf8')); }
+  catch(error) { if(error.code==='ENOENT')return []; throw error; }
+}
+
 // Move membership only. Historical assessments and global accounts keep their IDs.
-function moveStudent(teacherId, sourceId, studentId, targetId) {
+function moveStudent(teacherId, sourceId, studentId, targetId, actorName = teacherId) {
   if (![sourceId, targetId].every(id => typeof id === 'string' && /^[a-zA-Z0-9_-]+$/.test(id)))
     throw new Error('Choose a valid class.');
   if (sourceId === targetId) throw new Error('Choose a different class.');
@@ -218,8 +223,14 @@ function moveStudent(teacherId, sourceId, studentId, targetId) {
   writeJsonAtomic(rosterPath(teacherId, targetId), { ...target, students: [...target.students, moved] });
   try {
     writeJsonAtomic(rosterPath(teacherId, sourceId), { ...source, students: source.students.filter(s => normalizeStudentId(s.id) !== wanted) });
+    const history=transferHistory(teacherId);
+    history.push({id:crypto.randomUUID(),at:new Date().toISOString(),studentId:student.id,studentName:student.name,
+      fromId:source.id,fromName:source.name,toId:target.id,toName:target.name,actorId:teacherId,actorName:String(actorName||teacherId)});
+    writeJsonAtomic(path.join(DATA_DIR,'users',teacherId,'student-transfers.json'),history);
+
   } catch (error) {
     writeJsonAtomic(rosterPath(teacherId, targetId), target);
+    writeJsonAtomic(rosterPath(teacherId, sourceId), source);
     throw error;
   }
   return { student: moved, sourceName: source.name, targetName: target.name };
@@ -494,7 +505,7 @@ function buildStudentsFromMapping(rows, idCol, nameCol, genderCol) {
 }
 
 module.exports = {
-  removeStudent, moveStudent, displayNameFrom, normalizeGender, setStudentGenders, renameRoster, renameStudent, setGradebookExcludedIds, setGradebookWeights, assignOrganization, reconcileOrganizationStudentNames,
+  transferHistory, removeStudent, moveStudent, displayNameFrom, normalizeGender, setStudentGenders, renameRoster, renameStudent, setGradebookExcludedIds, setGradebookWeights, assignOrganization, reconcileOrganizationStudentNames,
   saveRoster, getRoster, listRosters, deleteRoster,
   findStudent, findStudentInRoster, findStudentAcrossAllTeachers, parseCSV,
   parseRosterFile, buildStudentsFromMapping, buildRosterTemplateWorkbook, normalizeStudentId,

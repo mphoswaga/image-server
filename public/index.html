@@ -3614,6 +3614,13 @@
         <input id="studentProfileSearch" type="search" placeholder="Search by name or student ID" autocomplete="off">
         <div id="studentProfileMatches" aria-live="polite" style="max-height:420px;overflow:auto"></div></details>
       </section>
+      <details id="studentTransfers" class="panel-add" style="padding:18px;margin-bottom:20px">
+        <summary style="cursor:pointer;font-weight:700">Student transfer history</summary>
+        <p>Moves between your classes are recorded here. History starts with transfers made after this update.</p>
+        <label for="studentTransferSearch">Find a learner or class</label><input id="studentTransferSearch" type="search" placeholder="Name, student ID or class">
+        <button id="studentTransferRefresh" type="button" class="btn ghost">Refresh history</button>
+        <div id="studentTransferRows" aria-live="polite" style="overflow:auto;max-height:420px"></div>
+      </details>
       <section class="panel-add" style="padding:18px;margin-bottom:20px" aria-label="Roster sharing">
         <h3 data-ui-i18n>Share class rosters</h3><p data-ui-i18n>Invite a teacher by their sign-up email. They receive independent copies of the selected class lists only — no marks, reports, lessons or activities. Later edits do not sync. Learner IDs stay the same.</p>
         <label for="rosterShareEmail" data-ui-i18n>Colleague’s sign-up email</label><input id="rosterShareEmail" type="email" placeholder="teacher@school.edu" autocomplete="off">
@@ -9089,6 +9096,21 @@
     };
     $('rosterShareInvites').onclick=async e=>{const button=e.target.closest('[data-share-id]');if(!button)return;button.disabled=true;try{const response=await fetch('/api/roster-sharing/'+encodeURIComponent(button.dataset.shareId)+(button.dataset.shareAction==='accept'?'/accept':''),{method:button.dataset.shareAction==='accept'?'POST':'DELETE'});const data=await response.json();if(!response.ok)throw Error(data.error);$('rosterShareStatus').textContent=button.dataset.shareAction==='accept'?'Class rosters added. Your activities and results remain separate.':'Invitation withdrawn.';await loadRosters();}catch(err){$('rosterShareStatus').textContent=err.message;button.disabled=false;}};
 
+    let studentTransfers=[];
+    function renderStudentTransfers(){
+      const query=$('studentTransferSearch').value.trim().toLocaleLowerCase();
+      const rows=studentTransfers.filter(t=>[t.studentName,t.studentId,t.fromName,t.toName,t.actorName].some(v=>String(v||'').toLocaleLowerCase().includes(query)));
+      $('studentTransferRows').innerHTML=rows.length?`<table style="width:100%;text-align:left"><thead><tr><th>When</th><th>Learner</th><th>From</th><th>To</th><th>Moved by</th></tr></thead><tbody>${rows.map(t=>`<tr><td>${esc(new Date(t.at).toLocaleString())}</td><td><strong>${esc(t.studentName)}</strong><br>${esc(t.studentId)}</td><td>${esc(t.fromName)}</td><td>${esc(t.toName)}</td><td>${esc(t.actorName)}</td></tr>`).join('')}</tbody></table>`:'<p>No matching transfers recorded.</p>';
+    }
+    async function loadStudentTransfers(){
+      $('studentTransferRows').textContent='Loading transfer history…';
+      try{const response=await fetch('/api/roster-transfers');const data=await response.json();if(!response.ok)throw Error(data.error);studentTransfers=data.transfers;renderStudentTransfers();}
+      catch(error){$('studentTransferRows').textContent=error.message||'Could not load transfer history.';}
+    }
+    $('studentTransfers').addEventListener('toggle',()=>{if($('studentTransfers').open)loadStudentTransfers();});
+    $('studentTransferRefresh').onclick=loadStudentTransfers;
+    $('studentTransferSearch').oninput=renderStudentTransfers;
+
     async function loadRosters(populatePicker=true){
       const wrap=$('rosterList'); if(wrap) wrap.innerHTML='<span class="status">Loading…</span>';
       try{
@@ -9360,7 +9382,7 @@
               const result=await fetch(`/api/roster/${encodeURIComponent(rosterId)}/student/${encodeURIComponent(studentId)}/move`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({targetRosterId:dialog.querySelector('.move-target').value})});
               const moved=await result.json();if(!result.ok)throw Error(moved.error||'Could not move student.');
               dialog.close();delete rosterPins[rosterId];
-              await loadRosters();toast(`${studentName} moved to ${moved.targetName}.`,'ok');
+              await loadRosters();if($('studentTransfers').open)await loadStudentTransfers();toast(`${studentName} moved to ${moved.targetName}.`,'ok');
             }catch(error){dialog.querySelector('.move-error').textContent=error.message;confirm.disabled=false;}
           };
         }catch(error){toast(error.message);moveBtn.disabled=false;}

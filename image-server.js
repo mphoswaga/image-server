@@ -5636,9 +5636,14 @@ app.delete('/api/roster/:rosterId/student/:studentId', requireAuth, (req,res)=>{
   }catch(error){res.status(400).json({error:error.message});}
 });
 
+app.get('/api/roster-transfers',requireAuth,(req,res)=>{
+  try{res.json({transfers:roster.transferHistory(req.userId).slice().reverse()});}
+  catch{res.status(500).json({error:'Could not load transfer history.'});}
+});
+
 app.post('/api/roster/:rosterId/student/:studentId/move', requireAuth, (req, res) => {
   try {
-    const result = roster.moveStudent(req.userId, req.params.rosterId, req.params.studentId, req.body?.targetRosterId);
+    const result = roster.moveStudent(req.userId, req.params.rosterId, req.params.studentId, req.body?.targetRosterId, req.user?.name || req.user?.email || req.userId);
     audit.log('roster.student_moved', { userId: req.userId, rosterId: req.params.rosterId,
       targetRosterId: req.body.targetRosterId, studentId: result.student.id, ip: req.ip });
     res.json({ ok: true, ...result });

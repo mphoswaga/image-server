@@ -20,6 +20,11 @@ test('teacher moves a learner with class picker and persisted memberships',async
  expect(from.students).toHaveLength(0);expect(to.students.map(s=>s.id)).toContain('MOVE-1');
  await row.getByRole('button',{name:'Student access'}).click();
  await expect(row).toContainText('No students in this roster');
+ await page.locator('#studentTransfers summary').click();
+ await expect(page.locator('#studentTransferRows')).toContainText('MOVE-1');
+ await expect(page.locator('#studentTransferRows')).toContainText('Move destination');
+ await page.locator('#studentTransferSearch').fill('does-not-exist');
+ await expect(page.locator('#studentTransferRows')).toContainText('No matching transfers');
  const context=await browser.newContext();const other=await context.newPage();
  try{
   await signInDisposableTeacher(other,'-move-stranger');
