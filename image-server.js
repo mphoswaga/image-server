@@ -2532,6 +2532,21 @@ app.patch('/api/assignment/:id/marked', requireAuth, (req, res) => {
 // Teachers may attach an older open assessment to a saved class, or correct
 // the selected class, until learner work begins. The room code and assessment
 // content stay unchanged; the selected roster is snapshotted at this point.
+app.get('/api/assignment/:id/missing-learners', requireAuth, (req,res)=>{
+  const a=assignments.getAssignment(req.params.id);
+  if(!a || a.teacherId!==req.userId || a.type!=='assessment')return res.status(404).json({error:'Assessment not found.'});
+  const current=roster.getRoster(req.userId,a.rosterId);
+  const existing=new Set((a.rosterSnapshot||[]).map(s=>roster.normalizeStudentId(s.id)));
+  res.json({students:(current?.students||[]).filter(s=>!existing.has(roster.normalizeStudentId(s.id))).map(s=>({id:s.id,name:s.name}))});
+});
+app.post('/api/assignment/:id/learners', requireAuth, (req,res)=>{
+  try{
+    const result=assignments.addAssessmentLearners(req.params.id,req.userId,req.body?.studentIds);
+    audit.log('assessment.learners_added',{userId:req.userId,assignmentId:req.params.id,added:result.added,ip:req.ip});
+    res.json({ok:true,...result});
+  }catch(error){res.status(400).json({error:error.message});}
+});
+
 app.patch('/api/assignment/:id/class', requireAuth, (req, res) => {
   const assessment = assignments.getAssignment(req.params.id);
   if (!assessment) return res.status(404).json({ error: 'Assessment not found.' });
@@ -5611,6 +5626,14 @@ app.patch('/api/roster/:rosterId/gender', requireAuth, (req, res) => {
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
+});
+
+app.delete('/api/roster/:rosterId/student/:studentId', requireAuth, (req,res)=>{
+  try{
+    const student=roster.removeStudent(req.userId,req.params.rosterId,req.params.studentId);
+    audit.log('roster.student_removed',{userId:req.userId,rosterId:req.params.rosterId,studentId:student.id,ip:req.ip});
+    res.json({ok:true,student});
+  }catch(error){res.status(400).json({error:error.message});}
 });
 
 app.post('/api/roster/:rosterId/student/:studentId/move', requireAuth, (req, res) => {

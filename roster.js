@@ -186,6 +186,19 @@ function getRoster(teacherId, id) {
   catch { return null; }
 }
 
+function removeStudent(teacherId, rosterId, studentId) {
+  if (typeof rosterId !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(rosterId)) throw new Error('Class not found.');
+  const record = getRoster(teacherId, rosterId);
+  if (!record) throw new Error('Class not found.');
+  const wanted = normalizeStudentId(studentId);
+  const student = record.students.find(s=>normalizeStudentId(s.id)===wanted);
+  if (!student) throw new Error('Learner not found in this class.');
+  record.formerStudents = [...(record.formerStudents || []).filter(s=>normalizeStudentId(s.id)!==wanted), { ...student, removedAt: new Date().toISOString() }];
+  record.students = record.students.filter(s=>normalizeStudentId(s.id)!==wanted);
+  writeJsonAtomic(rosterPath(teacherId, rosterId), record);
+  return { id: student.id, name: student.name };
+}
+
 // Move membership only. Historical assessments and global accounts keep their IDs.
 function moveStudent(teacherId, sourceId, studentId, targetId) {
   if (![sourceId, targetId].every(id => typeof id === 'string' && /^[a-zA-Z0-9_-]+$/.test(id)))
@@ -481,7 +494,7 @@ function buildStudentsFromMapping(rows, idCol, nameCol, genderCol) {
 }
 
 module.exports = {
-  moveStudent, displayNameFrom, normalizeGender, setStudentGenders, renameRoster, renameStudent, setGradebookExcludedIds, setGradebookWeights, assignOrganization, reconcileOrganizationStudentNames,
+  removeStudent, moveStudent, displayNameFrom, normalizeGender, setStudentGenders, renameRoster, renameStudent, setGradebookExcludedIds, setGradebookWeights, assignOrganization, reconcileOrganizationStudentNames,
   saveRoster, getRoster, listRosters, deleteRoster,
   findStudent, findStudentInRoster, findStudentAcrossAllTeachers, parseCSV,
   parseRosterFile, buildStudentsFromMapping, buildRosterTemplateWorkbook, normalizeStudentId,

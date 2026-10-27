@@ -433,6 +433,27 @@ function updateAssignmentCutoff(id, cutoffAt) {
   return rec;
 }
 
+function addAssessmentLearners(id, teacherId, studentIds) {
+  const rec = getAssignment(id);
+  if (!rec || rec.type !== 'assessment' || rec.teacherId !== teacherId) throw new Error('Assessment not found.');
+  assertAssessmentMutable(rec);
+  if (rec.resultsReleased || rec.status === 'draft' || deliveryState(rec).phase === 'closed')
+    throw new Error('Learners can only be added to an unpublished-results, open assessment.');
+  const current = require('./roster').getRoster(teacherId, rec.rosterId);
+  if (!current) throw new Error('The assigned class was not found.');
+  const ids = [...new Set((Array.isArray(studentIds) ? studentIds : []).map(normalizeStudentId).filter(Boolean))];
+  if (!ids.length) throw new Error('Select at least one learner.');
+  const existing = new Set((rec.rosterSnapshot || []).map(s=>normalizeStudentId(s.id)));
+  const selected = ids.map(id=>current.students.find(s=>normalizeStudentId(s.id)===id));
+  if (selected.some(s=>!s)) throw new Error('A selected learner is no longer in this class. Refresh and try again.');
+  const added = normalizeRosterSnapshot(selected.filter(s=>!existing.has(normalizeStudentId(s.id))));
+  if (!added.length) return { added: 0 };
+  rec.rosterSnapshot = [...(rec.rosterSnapshot || []), ...added];
+  rec.learnerAdmissions = [...(rec.learnerAdmissions || []), { studentIds: added.map(s=>s.id), by: teacherId, at: new Date().toISOString(), mode: 'catch-up' }];
+  writeJsonAtomic(recPath(id), rec);
+  return { added: added.length };
+}
+
 function updateAssessmentRoster(id, rosterId, rosterSnapshot) {
   const rec = getAssignment(id);
   if (!rec || rec.type !== 'assessment') return null;
@@ -1135,6 +1156,7 @@ function renameAssessmentStudent(teacherId, rosterId, studentId, name) {
 }
 
 module.exports = {
+  addAssessmentLearners,
   legacyContentEditable, updateLegacyContent, createAssignment, createAssessment, copyAssessmentToRoster, normalizeAssessment, getAssignment, updateAssignmentCutoff, updateAssessmentRoster, updateAssessmentContent, assessmentContentEditable, getRoomCode,
   publishedAssessmentGenerationContext,
   releaseResults, setTeacherMarked, isReleased,

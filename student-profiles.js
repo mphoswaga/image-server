@@ -6,6 +6,11 @@ function createProfiles({ roster, assignments, games, gradebook, practice }) {
     const students = new Map();
     for (const summary of roster.listRosters(teacherId)) {
       const record = roster.getRoster(teacherId, summary.id);
+      for (const learner of record?.formerStudents || []) {
+        const id=norm(learner.id);
+        if(!students.has(id))students.set(id,{id,name:learner.name,gender:learner.gender||null,classes:[],previousClasses:[]});
+        students.get(id).previousClasses.push({id:record.id,name:record.name},...(learner.previousClasses||[]));
+      }
       for (const learner of record?.students || []) {
         const id = norm(learner.id);
         if (!students.has(id)) students.set(id, { id, name: learner.name, gender: learner.gender || null, classes: [], previousClasses: [] });
