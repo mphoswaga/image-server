@@ -8,7 +8,8 @@ function createProfiles({ roster, assignments, games, gradebook, practice }) {
       const record = roster.getRoster(teacherId, summary.id);
       for (const learner of record?.students || []) {
         const id = norm(learner.id);
-        if (!students.has(id)) students.set(id, { id, name: learner.name, gender: learner.gender || null, classes: [] });
+        if (!students.has(id)) students.set(id, { id, name: learner.name, gender: learner.gender || null, classes: [], previousClasses: [] });
+        students.get(id).previousClasses.push(...(learner.previousClasses || []));
         students.get(id).classes.push({ id: record.id, name: record.name });
       }
     }
@@ -18,16 +19,18 @@ function createProfiles({ roster, assignments, games, gradebook, practice }) {
     const student = directory(teacherId).find(s => s.id === norm(studentId));
     if (!student) return null;
     const classIds = new Set(student.classes.map(c => c.id));
+    const history = new Map(student.previousClasses.map(c => [c.id, c]));
     const activities = [];
     for (const summary of assignments.listTeacherAssignments(teacherId)) {
       const a = assignments.getAssignment(summary.id);
-      if (!a || !classIds.has(a.rosterId) || a.status === 'draft') continue;
+      if (!a || (!classIds.has(a.rosterId) && !history.has(a.rosterId)) || a.status === 'draft') continue;
       const submission = assignments.getSubmission(a.id, student.id);
       const draft = !submission && assignments.getDraft(a.id, student.id);
       const work = submission || draft;
+      if (!classIds.has(a.rosterId) && !work) continue;
       const result = submission && gradebook.teacherSubmissionResult(a, submission);
       activities.push({ key: 'assignment:' + a.id, kind: a.assessmentType || a.type || 'assignment', title: a.title,
-        subject: a.subject, topic: a.topic, className: student.classes.find(c=>c.id===a.rosterId)?.name,
+        subject: a.subject, topic: a.topic, className: student.classes.find(c=>c.id===a.rosterId)?.name || history.get(a.rosterId)?.name,
         status: result ? 'Marked' : submission ? 'Awaiting marking' : draft ? 'In progress' : 'Not submitted',
         score: result ? result.mark : null, total: result ? result.max : a.totalMarks || null,
         at: work?.submittedAt || work?.updatedAt || a.createdAt,
@@ -38,7 +41,7 @@ function createProfiles({ roster, assignments, games, gradebook, practice }) {
     for (const row of recorded.rows || []) {
       if (row.kind !== 'game') continue;
       const game = games.getGame(row.assessmentId);
-      if (game && !games.getRosterIds(game).some(id=>classIds.has(id))) continue;
+      if (game && !games.getRosterIds(game).some(id=>classIds.has(id) || history.has(id))) continue;
       const result = game && games.getResults(game.id).find(r=>norm(r.studentId)===student.id);
       activities.push({ key: 'game:'+row.assessmentId, kind: 'game', title: row.title, subject: row.subject,
         status: 'Completed', score: row.mark, total: row.max, at: row.at,

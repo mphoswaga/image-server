@@ -5613,6 +5613,15 @@ app.patch('/api/roster/:rosterId/gender', requireAuth, (req, res) => {
   }
 });
 
+app.post('/api/roster/:rosterId/student/:studentId/move', requireAuth, (req, res) => {
+  try {
+    const result = roster.moveStudent(req.userId, req.params.rosterId, req.params.studentId, req.body?.targetRosterId);
+    audit.log('roster.student_moved', { userId: req.userId, rosterId: req.params.rosterId,
+      targetRosterId: req.body.targetRosterId, studentId: result.student.id, ip: req.ip });
+    res.json({ ok: true, ...result });
+  } catch (error) { res.status(400).json({ error: error.message }); }
+});
+
 // Correct an imported learner name while preserving the Student ID that owns
 // their PIN, Google link, submissions, marks and TeacherScope evidence.
 app.patch('/api/roster/:rosterId/student/:studentId', requireAuth, (req, res) => {
