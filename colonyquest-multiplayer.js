@@ -2,6 +2,7 @@
 const crypto = require('node:crypto');
 const core = require('./public/colonyquest-core');
 const story = require('./colonyquest-story');
+const presentation = require('./public/colony-presentation');
 const ACTIVE = ['answer', 'upgrade', 'reveal', 'story'];
 const UPGRADE_KEYS = ['workers', 'food', 'supplies', 'expansion', 'defense', 'soldiers', 'queen'];
 const LABELS = {
@@ -337,7 +338,7 @@ class ColonyMatch {
       core.applyReward(p.colony, key, this.teams());
     }
     p.upgrades.push({ round, key, target: targetId || null });
-    if(individual) this.setPersonalPhase(p, 'reveal', key === 'raid' ? 5.6 : 2.5, now);
+    if(individual) this.setPersonalPhase(p, 'reveal', (presentation.actionDuration(key, true) + 400) / 1000, now);
     s.updatedAt = now;
   }
   tick(now = Date.now()) {

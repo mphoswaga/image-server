@@ -20,6 +20,7 @@
    travel:p<.15?0:p<.5?(p-.15)/.35:p<.68?1:1-(p-.68)/.32,
    clash:clamp((p-.5)/.18),moment:p<.15?'versus':p>=.76?'result':''};
  }
+ function actionDuration(key,individual){return key==='raid'?raidDuration(individual):['expansion','defense'].includes(key)?7200:individual?2600:4800;}
  function raidDuration(individual){return individual?6400:8400;}
  function raidResult(event){
   const attacker=event.attackerName||'Raiding colony',defender=event.targetName||'Defending colony';
@@ -54,6 +55,6 @@
    if(moment==='result'){const detail=document.createElement('p');detail.textContent=result.detail;this.element.append(detail);}
   }
  }
- const api={creaturePose,swarmPose,raidBeat,raidDuration,raidResult,RaidMoment};
+ const api={actionDuration,creaturePose,swarmPose,raidBeat,raidDuration,raidResult,RaidMoment};
  if(typeof module==='object'&&module.exports)module.exports=api;else root.ColonyPresentation=api;
 })(typeof window==='object'?window:globalThis);

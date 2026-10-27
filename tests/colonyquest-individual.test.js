@@ -7,9 +7,9 @@ test('correct feedback and upgrade are immediate; next question does not wait fo
  const {m,a,b}=room();m.answer(a.id,0,0,100);
  assert.equal(m.snapshot(a.id,false,100).phase,'upgrade');assert.equal(m.snapshot(b.id,false,100).phase,'answer');
  assert.equal(m.snapshot(b.id,false,100).question.correctIndex,undefined);
- m.upgrade(a.id,0,'food',null,200);m.tick(2700);
- assert.equal(a.round,1);assert.equal(b.round,0);assert.equal(m.snapshot(a.id,false,2700).question.question,'Q1');
- assert.throws(()=>m.answer(a.id,0,0,2800),/finished/);
+ m.upgrade(a.id,0,'food',null,200);m.tick(3200);
+ assert.equal(a.round,1);assert.equal(b.round,0);assert.equal(m.snapshot(a.id,false,3200).question.question,'Q1');
+ assert.throws(()=>m.answer(a.id,0,0,3300),/finished/);
  assert.equal(m.report().questions[0].correct,1);
 });
 test('incorrect and unanswered questions show correction then advance once',()=>{
@@ -39,7 +39,7 @@ test('disconnection freezes a personal question without blocking connected peers
 });
 test('finishing exposes colonies to watch, never rival answers or extra upgrades',()=>{
  const {m,a,b}=room();let time=100;
- for(let round=0;round<3;round++){m.answer(a.id,round,0,time);m.upgrade(a.id,round,'food',null,time+1);m.tick(time+2501);time+=2600;}
+ for(let round=0;round<3;round++){m.answer(a.id,round,0,time);m.upgrade(a.id,round,'food',null,time+1);m.tick(time+3001);time+=3100;}
  const s=m.snapshot(a.id,false,time);assert.equal(s.phase,'spectating');assert.equal(s.spectators[0].id,b.id);
  assert.equal(s.spectators[0].colony,undefined);
  const watched=m.snapshot(a.id,false,time,null,b.id).watching;
@@ -54,7 +54,7 @@ test('all original questions complete before automatic finish; teacher finish pr
  const {m,a,b}=room();let time=100;
  for(let round=0;round<3;round++){
   for(const p of [a,b]){m.answer(p.id,round,0,time);m.upgrade(p.id,round,'food',null,time+1);}
-  m.tick(time+2501);time+=2600;
+  m.tick(time+3001);time+=3100;
  }
  assert.equal(m.state.phase,'ended');assert.equal(m.report().learners[0].answered,3);
  const other=room();other.m.answer(other.a.id,0,0,100);other.m.end(101);assert.equal(other.m.report().learners[1].answered,0);
@@ -113,4 +113,13 @@ test('individual pause is validated and restored from saved match',()=>{
  restored.join({studentId:'a'},3000);restored.resume(4000);
  assert.equal(restored.snapshot(a.id,false,4000).phase,'paused');
  restored.pausePlayer(a.id,false,5000);assert.equal(restored.snapshot(a.id,false,5000).phase,'answer');
+});
+
+for(const key of ['expansion','defense','raid'])test(`${key} finishes its cinematic before advancing the personal question`,()=>{
+ const {m,a,b}=room();Object.assign(a.colony,{sticks:30,leaves:30,soldiers:5,barracksBuilt:true});
+ m.answer(a.id,0,0,100);m.upgrade(a.id,0,key,key==='raid'?b.id:null,200);
+ const duration=require('../public/colony-presentation').actionDuration(key,true);
+ assert.equal(a.deadline,200+duration+400);
+ m.tick(200+duration-1);assert.equal(a.phase,'reveal');assert.equal(a.round,0);
+ m.tick(200+duration+400);assert.equal(a.phase,'answer');assert.equal(a.round,1);
 });

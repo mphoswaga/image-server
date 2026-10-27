@@ -88,8 +88,7 @@
       this.effects.push({
         kind,
         start: this.clock,
-        duration: kind === 'raid' ? ColonyPresentation.raidDuration(this.state?.pacing === 'individual')
-          : this.state?.pacing === 'individual' ? (['expansion','defense'].includes(kind)?3600:2600) : ['expansion', 'defense'].includes(kind) ? 7200 : 4800,
+        duration: ColonyPresentation.actionDuration(kind, this.state?.pacing === 'individual'),
         ...extra,
       });
       this.effects = this.effects.slice(-8);
@@ -1501,7 +1500,21 @@
         c.translate(w / 2, h / 2);
         c.scale(zoom, zoom);
         c.translate(-focusX, -focusY);
-      } else this.raidZoom = 1;
+      } else {
+        this.raidZoom = 1;
+        const building = !this.overview && !this.reduced && this.effects.findLast(e => ['expansion','defense'].includes(e.kind) && this.clock-e.start<e.duration);
+        if(building){
+          const progress=clamp((this.clock-building.start)/building.duration,0,1);
+          const envelope=Math.min(smooth(clamp(progress/.16,0,1)),smooth(clamp((1-progress)/.16,0,1)));
+          zoom=1+envelope*.55;
+          const room=building.kind==='defense'?{x:w*.5,y:g.surface}:g.rooms.at(-1);
+          const focusX=clamp(room.x,w/(2*zoom),w-w/(2*zoom));
+          const focusY=clamp(room.y,h/(2*zoom),h-h/(2*zoom));
+          c.translate(w/2,h/2);c.scale(zoom,zoom);c.translate(-focusX,-focusY);
+        }
+      }
+      this.canvas.dataset.buildZoom = zoom.toFixed(2);
+
       this.canvas.dataset.raidZoom = zoom.toFixed(2);
       this.background(w, h, this.overview ? h * 0.65 : g.surface);
       if (this.overview) {

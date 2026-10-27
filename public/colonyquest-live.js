@@ -480,9 +480,13 @@
       $('choices').classList.add('upgrades');
       const upgradeCard = (u, i) =>
         `<button data-upgrade="${i}" ${!u.allowed || pending || disconnected ? 'disabled' : ''}><span class="symbol" aria-hidden="true"><img src="/assets/colonyquest/${u.key === 'queen' ? 'queen' : ['defense', 'soldiers', 'raid'].includes(u.key) ? 'guardian' : 'pip-worker'}.webp" alt=""><i>${symbols[u.key]}</i></span>${esc(u.label)}<small>${esc(!u.allowed ? u.reason : u.cost?.sticks ? `${u.cost.sticks} sticks + ${u.cost.leaves} leaves` : u.key === 'workers' ? 'Collects food and materials automatically' : u.key === 'supplies' ? '+3 sticks · +2 leaves' : u.key === 'food' ? '+5 food' : u.key === 'queen' ? 'Hatches after two rounds' : 'Protects your colony')}</small></button>`;
+      const raidOptions=p.upgrades.map((u,i)=>({u,i})).filter(({u})=>u.key==='raid');
+      const raidButton=({u,i})=>`<button data-upgrade="${i}" class="raid-target" ${!u.allowed || pending || disconnected ? 'disabled' : ''}><strong>⚔ ${esc(u.label)}</strong><span class="raid-stats">🌾 ${u.food} food · 🛡 ${u.guards} guards · Wall ${u.wallLevel}</span><small>${esc(u.reason)}</small></button>`;
+      // Keep a few actionable rivals in view; every other colony stays reachable.
+      const ordered=[...raidOptions.filter(({u})=>u.allowed),...raidOptions.filter(({u})=>!u.allowed)];
       $('choices').innerHTML =
         p.upgrades.map((u, i) => (u.key === 'raid' ? '' : upgradeCard(u, i))).join('') +
-        `<section class="raid-picker"><h3>Or raid a rival</h3><p>One tap sends your guards. This uses your upgrade.</p><div class="raid-targets">${p.upgrades.map((u, i) => (u.key !== 'raid' ? '' : `<button data-upgrade="${i}" class="raid-target" ${!u.allowed || pending || disconnected ? 'disabled' : ''}><strong>⚔ ${esc(u.label)}</strong><span class="raid-stats">🌾 ${u.food} food · 🛡 ${u.guards} guards · Wall ${u.wallLevel}</span><small>${esc(u.reason)}</small></button>`)).join('') || '<p>No rival colonies yet.</p>'}</div></section>`;
+        `<section class="raid-picker"><h3>Or raid a rival</h3><p>Choose a colony. Your guards go on this turn.</p><div class="raid-targets">${ordered.slice(0,4).map(raidButton).join('') || '<p>No rival colonies yet.</p>'}</div>${ordered.length>4?`<details class="more-rivals"><summary>All other colonies (${ordered.length-4})</summary><div class="raid-targets">${ordered.slice(4).map(raidButton).join('')}</div></details>`:''}</section>`;
       $('choices')
         .querySelectorAll('[data-upgrade]')
         .forEach(

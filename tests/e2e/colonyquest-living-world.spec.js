@@ -448,3 +448,21 @@ test('sprite cache keeps animation frames distinct, reuses sizes and bounds memo
   expect(result.reused).toBe(true);expect(result.red).toBe(255);expect(result.blue).toBe(255);
   expect(result.pixels).toBeLessThanOrEqual(4*1024*1024);expect(result.entries).toBeLessThanOrEqual(80);expect(result.after).toBe(0);
 });
+
+test('individual construction lasts through furnishing and focuses only the colony canvas',async({page})=>{
+ await world(page);
+ await page.evaluate(()=>{
+  fixture.pacing='individual';fixture.me.lastUpgrade={round:1,key:'expansion'};
+  fixture.me.colony.expansionRooms++;
+  scene.update(structuredClone(fixture));
+  scene.state.phase='paused';
+  const effect=scene.effects.find(e=>e.kind==='expansion');scene.clock=effect.start+4000;
+ });
+ await expect.poll(()=>page.evaluate(()=>scene.effects.find(e=>e.kind==='expansion')?.duration)).toBe(7200);
+ await expect.poll(()=>page.evaluate(()=>Number(document.querySelector('canvas').dataset.buildZoom))).toBeGreaterThan(1.2);
+ await expect(page.locator('canvas')).toHaveAttribute('data-construction-phase','reinforcing');
+ await page.evaluate(()=>{const effect=scene.effects.find(e=>e.kind==='expansion');scene.clock=effect.start+6000;});
+ await expect(page.locator('canvas')).toHaveAttribute('data-construction-phase','furnishing');
+ await page.evaluate(()=>{const effect=scene.effects.find(e=>e.kind==='expansion');scene.clock=effect.start+7300;});
+ await expect(page.locator('canvas')).toHaveAttribute('data-build-zoom','1.00');
+});
