@@ -184,7 +184,7 @@ class FishMatch {
   }
   snapshot(id,teacher=false,shared=null){
     const t=this.now(),me=this.player(id);
-    const players=shared ? shared.players : this.state.players.filter(p=>!p.removed).map(p=>({id:p.id,name:p.name,variant:p.variant,npc:!!p.npc,x:Math.round(p.x),y:Math.round(p.y),mass:Math.round(p.mass),score:p.score,connected:p.connected,challengeWins:p.challengeWins||0,
+    const players=shared ? shared.players : this.state.players.filter(p=>!p.removed).map(p=>({id:p.id,name:p.name,variant:p.variant,npc:!!p.npc,x:Math.round(p.x*100)/100,y:Math.round(p.y*100)/100,mass:Math.round(p.mass),score:p.score,connected:p.connected,challengeWins:p.challengeWins||0,
       protected:p.protectedUntil>t,respawning:!!p.respawnAt,locked:!!p.lock,biteAt:p.biteAt||0,hungry:(p.hungryMs||0)>=CONFIG.hungerWarningMs}));
     const result={matchId:this.state.id,phase:this.state.phase,solo:!!this.state.solo,endsAt:this.state.endsAt,pausedAt:this.state.pausedAt,now:t,players,world:this.world,eatRatio:CONFIG.eatRatio,
       food:shared ? shared.food : this.state.food.filter(f=>f.readyAt<=t).map(f=>[f.id,Math.round(f.x),Math.round(f.y)])};

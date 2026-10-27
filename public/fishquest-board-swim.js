@@ -1,6 +1,6 @@
 /* One animation loop, with persistent velocities across question renders. */
 window.FishBoardSwim=(()=>{
- let swimmers=[],elapsed=0,last=0,paused=true,meals=[];
+ let swimmers=[],schools=[],elapsed=0,last=0,paused=true,meals=[];
  const positions=new Map(),reduced=matchMedia('(prefers-reduced-motion: reduce)');
  function bind(isFeeding){
   const ocean=document.getElementById('ocean').getBoundingClientRect();
@@ -15,13 +15,16 @@ window.FishBoardSwim=(()=>{
     return {node,key,motion,body:node.querySelector('.fish-sprite'),originX:rect.left-ocean.left,originY:rect.top-ocean.top};
    });
   });
+  const reefs=new Map();
+  for(const s of swimmers){if(!reefs.has(s.motion.reef))reefs.set(s.motion.reef,[]);reefs.get(s.motion.reef).push(s.motion)}
+  schools=[...reefs.values()];
   paint();
  }
  function paint(){
   for(const s of swimmers){
    const p=s.motion;
    s.node.style.transform='translate3d('+p.x.toFixed(3)+'px,'+p.y.toFixed(3)+'px,0)';
-   s.body.style.setProperty('--heading',p.heading);
+   if(s.heading!==p.heading){s.body.style.setProperty('--heading',p.heading);s.heading=p.heading}
   }
   for(const meal of meals){
    if(!meal.node.isConnected)continue;
@@ -32,13 +35,13 @@ window.FishBoardSwim=(()=>{
  }
  function frame(now){
   let dt=last?Math.min(.05,(now-last)/1000):0;last=now;
-  if(!paused&&!reduced.matches){
+  if(!paused&&!reduced.matches&&!document.hidden){
    // Small integration steps keep movement consistent on 30/60/120 Hz displays.
-   while(dt>0){const step=Math.min(dt,1/120);elapsed+=step;FishBoardMotion.step(swimmers.map(s=>s.motion),elapsed,step);dt-=step}
+   while(dt>0){const step=Math.min(dt,1/120);elapsed+=step;for(const school of schools)FishBoardMotion.step(school,elapsed,step);dt-=step}
    paint();
   }
   requestAnimationFrame(frame);
  }
  requestAnimationFrame(frame);
- return {bind,meal:()=>{meals=[...document.querySelectorAll('.pellet[data-target]')].map(node=>({node,key:node.dataset.target,start:Number(node.dataset.start)}))},pause:value=>{paused=value},clear:()=>{swimmers=[];positions.clear();meals=[];paused=true;elapsed=0}};
+ return {bind,meal:()=>{meals=[...document.querySelectorAll('.pellet[data-target]')].map(node=>({node,key:node.dataset.target,start:Number(node.dataset.start)}))},pause:value=>{paused=value},clear:()=>{swimmers=[];schools=[];positions.clear();meals=[];paused=true;elapsed=0}};
 })();

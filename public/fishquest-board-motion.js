@@ -34,6 +34,10 @@
   fish.forEach((f,i)=>{
    f.vx=velocities[i].x;f.vy=velocities[i].y;
    f.x+=f.vx*dt;f.y+=f.vy*dt;
+   const edge=bounds(f);
+   const x=Math.max(0,Math.min(edge.x,f.x)),y=Math.max(24,Math.min(24+edge.y,f.y));
+   if(x!==f.x)f.vx=0;if(y!==f.y)f.vy=0;
+   f.x=x;f.y=y;
    // Direction hysteresis prevents flickering when a fish slows or changes course.
    if(Math.abs(f.vx)>5&&time-f.lastTurn>1.5){const heading=f.vx<0?-1:1;if(heading!==f.heading){f.heading=heading;f.lastTurn=time}}
   });

@@ -3,6 +3,23 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.FishQuestMotion = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function() {
+  // Map server simulation timestamps onto one stable local timeline. Packet
+  // arrival jitter must not change the apparent velocity of a swimming fish.
+  function timeline() {
+    let offset = null, lastArrival = null, lastServer = null, match = null;
+    return {
+      receive(server, arrival, matchId) {
+        if (!Number.isFinite(server)) server = arrival;
+        const reset = offset === null || match !== matchId || arrival - lastArrival > 600 || server < lastServer;
+        if (reset) offset = arrival - server;
+        // Earlier arrivals improve the clock estimate; late packets never drag it back.
+        else offset = Math.min(offset, arrival - server);
+        lastArrival = arrival; lastServer = server; match = matchId;
+        return { time: server, reset };
+      },
+      render(arrival) { return arrival - (offset || 0) - 140; },
+    };
+  }
   function push(samples, point, time, reset = false) {
     const last = samples.at(-1);
     if (reset || last && (time - last.time > 600 || Math.hypot(point.x - last.x, point.y - last.y) > 200)) samples.length = 0;
@@ -49,5 +66,5 @@
     for (const { player, distance } of ranked.filter(item => item.player.npc).slice(0, npcLimit)) if (distance <= 420) visible.add(player.id);
     return visible;
   }
-  return { push, sample, shortName, visibleLabels };
+  return { timeline, push, sample, shortName, visibleLabels };
 });

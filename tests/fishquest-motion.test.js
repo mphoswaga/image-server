@@ -40,3 +40,22 @@ test('crowded oceans keep only useful nearby learner and NPC labels', () => {
   assert.equal(motion.shortName('Nguyen Lam Thien Di'), 'Nguyen Di');
   assert.equal(motion.shortName('Learner Number 13'), 'Learner 13');
 });
+
+test('server timeline keeps constant swimming speed despite uneven Wi-Fi arrivals', () => {
+  const clock = motion.timeline(), samples = [];
+  const arrivals = [1000, 1135, 1205, 1330, 1400, 1535, 1605];
+  for (let i=0;i<arrivals.length;i++) {
+    const stamp=clock.receive(50000+i*100,arrivals[i],'ocean');
+    motion.push(samples,{x:i*18,y:20},stamp.time,stamp.reset);
+  }
+  const points=[1520,1530,1540,1550,1560].map(t=>motion.sample(samples,clock.render(t)).x);
+  for(let i=1;i<points.length;i++) assert.ok(Math.abs(points[i]-points[i-1]-1.8)<1e-8);
+});
+test('movement clock resets after connection gaps and when changing oceans',()=>{
+ const clock=motion.timeline();
+ assert.equal(clock.receive(10000,100,'one').reset,true);
+ assert.equal(clock.receive(10100,230,'one').reset,false);
+ assert.equal(clock.receive(11000,1100,'one').reset,true);
+ assert.equal(clock.receive(11100,1200,'two').reset,true);
+ assert.equal(clock.render(1200),10960);
+});

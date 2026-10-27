@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const sharp = require('sharp');
 
-test('a full ocean renders and moves smoothly between packets on desktop and mobile', async ({ page }, testInfo) => {
+for(const solo of [false,true]) test(`a ${solo?'single-player':'class'} ocean renders and moves smoothly between packets`, async ({ page }, testInfo) => {
   test.skip(!['windows-100', 'mobile'].includes(testInfo.project.name));
   await page.route('**/api/game/motion-test', route => route.fulfill({ json: { lessonTitle: 'Ocean motion', hasRoster: false } }));
   await page.route('**/api/game/motion-test/fishquest/ticket', route => route.fulfill({ json: { token: 'test' } }));
@@ -9,7 +9,7 @@ test('a full ocean renders and moves smoothly between packets on desktop and mob
     window.WebSocket = class {
       static OPEN = 1;
       constructor() { window.motionSocket = this; this.readyState = 1; this.bufferedAmount = 0; setTimeout(() => this.onopen?.(), 0); }
-      send() {}
+      send(data) { (window.sentMovement ||= []).push(JSON.parse(data)); }
       close() {}
     };
   });
@@ -17,18 +17,22 @@ test('a full ocean renders and moves smoothly between packets on desktop and mob
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/fishquest-play/motion-test');
   await expect.poll(() => page.evaluate(() => !!window.motionSocket)).toBeTruthy();
-  await page.evaluate(() => {
+  await page.evaluate((solo) => {
     const Original = Phaser.Game;
     Phaser.Game = function(config) { window.motionGame = new Original(config); return window.motionGame; };
-    window.motionState = { phase: 'running', matchId: 'motion', me: '0', now: Date.now(), endsAt: Date.now() + 600000,
-      players: Array.from({ length: 30 }, (_, i) => ({ id: String(i), name: `Learner ${i + 1}`, x: 950 + i % 6 * 90, y: 650 + Math.floor(i / 6) * 85, mass: 100 + i * 9, score: 0, variant: i })),
+    window.motionState = { solo, phase: 'running', matchId: 'motion', me: '0', now: Date.now(), endsAt: Date.now() + 600000,
+      players: Array.from({ length: solo?9:30 }, (_, i) => ({ npc:solo&&i>0, id: String(i), name: `Learner ${i + 1}`, x: 950 + i % 6 * 90, y: 650 + Math.floor(i / 6) * 85, mass: 100 + i * 9, score: 0, variant: i })),
       food: Array.from({ length: 871 }, (_, i) => i<70?[i, 700 + i % 10 * 85, 400 + Math.floor(i / 10) * 90]:[i, 100+i%32*65,100+Math.floor(i/32)*50]) };
     window.sendMotion = () => motionSocket.onmessage({ data: JSON.stringify({ type: 'state', state: { ...motionState, now: Date.now() } }) });
     sendMotion();
-  });
+  },solo);
   const canvas = page.locator('#game canvas');
   await expect(canvas).toBeVisible();
-  await expect.poll(() => page.evaluate(() => window.motionGame?.scene.scenes[0]?.children.list.filter(o => o.type === 'Container').length)).toBe(30);
+  await expect.poll(() => page.evaluate(() => window.motionGame?.scene.scenes[0]?.children.list.filter(o => o.type === 'Container').length)).toBe(solo?9:30);
+  await page.keyboard.down('ArrowRight');
+  await expect.poll(()=>page.evaluate(()=>window.sentMovement?.some(m=>m.type==='input'&&m.x===1))).toBeTruthy();
+  await page.keyboard.up('ArrowRight');
+  await expect.poll(()=>page.evaluate(()=>window.sentMovement?.filter(m=>m.type==='input').at(-1)?.x)).toBe(0);
   const labelCounts = await page.evaluate(() => {
     const labels = window.motionGame.scene.scenes[0].children.list.filter(object => object.type === 'Text');
     return { visible: labels.filter(label => label.visible).length, own: labels.filter(label => label.visible && label.text === 'You').length };

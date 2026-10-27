@@ -1,8 +1,11 @@
 (() => {
   const $ = id => document.getElementById(id);
+  function setLabel(id, value) { const el=$(id), text=String(value); if(el.textContent!==text)el.textContent=text; }
   const GAME_ID = location.pathname.split('/').filter(Boolean).pop();
   let meta, socket, state, scene, rendererStarting = false, me, reconnects = 0, seq = 0, ticket = '', reconnectTimer, renderedQuestionId = null, answerTimer = null;
   const keys = new Set(); let touch = { x: 0, y: 0 }, entities = new Map(), foods = new Map(), lastEvent = null, qTimer;
+  const movementClock = FishQuestMotion.timeline();
+  let movementStamp = { time: 0, reset: true };
   let lastStateAt = 0, serverOffset = 0, connecting = false, displaced = false;
   const serverNow = () => Date.now() + serverOffset;
   const reportedEffects = new Set();
@@ -246,10 +249,11 @@
     }
     const previousMe = state && me ? { id: me.id, mass: Number(me.mass) || 0, score: Number(me.score) || 0 } : null;
     const previousPhase = state && state.phase;
+    movementStamp = movementClock.receive(next.now, performance.now(), next.matchId);
     state = next; me = state.players.find(p => p.id === state.me); if (!me) return;
     optionalEffect('rivalry', () => FishQuestRivalry.update(state,me));
     if (!scene && !rendererStarting) startRenderer();
-    $('mass').textContent=me.mass;$('score').textContent=me.score;$('fishForm').textContent=fishEvolutionName(fishEvolution(me.mass));$('connection').textContent=state.solo?'Homework ocean · computer fish':'Live with your class';
+    setLabel('mass',me.mass);setLabel('score',me.score);setLabel('fishForm',fishEvolutionName(fishEvolution(me.mass)));setLabel('connection',state.solo?'Homework ocean · computer fish':'Live with your class');
     $('teacherWait').hidden = state.phase !== 'lobby'; $('teacherPause').hidden = state.phase !== 'paused';
     if (state.phase === 'ended') {
       syncMusic();
@@ -379,9 +383,11 @@
   function renderState() {
     if (!scene) return;
     const world=state.world||{width:2400,height:1600};
-    scene.cameras.main.setBounds(0,0,world.width,world.height);
+    const resized=scene.oceanWidth!==world.width||scene.oceanHeight!==world.height;
+    if(resized)scene.cameras.main.setBounds(0,0,world.width,world.height);
     const backdrop=scene.children.list.find(child=>child.texture?.key==='lagoon');
-    if(backdrop)backdrop.setPosition(world.width/2,world.height/2).setDisplaySize(world.width,world.height);
+    if(backdrop&&resized)backdrop.setPosition(world.width/2,world.height/2).setDisplaySize(world.width,world.height);
+    scene.oceanWidth=world.width;scene.oceanHeight=world.height;
     const champion=Math.max(0,...state.players.filter(p=>!p.npc&&p.mass>=800).map(p=>p.challengeWins||0));
     const seen = new Set();
     for (const p of state.players) {
@@ -389,8 +395,8 @@
       if (!e) { e = makeFish(p); entities.set(p.id,e); }
       setFishEvolution(e,p);
       if(p.id===state.me||Math.hypot(p.x-me.x,p.y-me.y)<700)warmNext(p);
-      const reset = (p.respawning && !e.respawning) || state.phase !== 'running' || Math.hypot(p.x-e.tx,p.y-e.ty)>200;
-      FishQuestMotion.push(e.samples,p,performance.now(),reset);
+      const reset = movementStamp.reset || (p.respawning && !e.respawning) || state.phase !== 'running' || Math.hypot(p.x-e.tx,p.y-e.ty)>200;
+      FishQuestMotion.push(e.samples,p,movementStamp.time,reset);
       if(reset) e.sprite.setPosition(p.x,p.y);
       if(p.biteAt&&p.biteAt!==e.biteAt){e.biteAt=p.biteAt;e.biteUntil=performance.now()+650;}
       e.hungry=p.hungry;
@@ -429,7 +435,7 @@
       e.halo.setAlpha(reducedMotion?.8:.65+Math.sin(t*2.5)*.2);
       const bite=Math.max(0,(e.biteUntil-performance.now())/650);
       e.mouth.setVisible(bite>0).setScale(1,Math.max(.1,Math.sin(bite*Math.PI))).setX(65*FISH_STAGE_STYLE[e.stage].body);
-      const target=e.locked?{x:e.tx,y:e.ty}:FishQuestMotion.sample(e.samples,performance.now()-80) || {x:e.tx,y:e.ty};
+      const target=e.locked?{x:e.tx,y:e.ty}:FishQuestMotion.sample(e.samples,movementClock.render(performance.now())) || {x:e.tx,y:e.ty};
       const dx=target.x-e.sprite.x,dy=target.y-e.sprite.y,speed=Math.min(1,Math.hypot(dx,dy)/16);
       if(Math.abs(dx)>.8) e.facing=dx>0?1:-1;
       e.sprite.x+=dx*follow; e.sprite.y+=dy*follow;
@@ -533,7 +539,7 @@
   addEventListener('pointerdown', () => unlockAudio(), { once: true });
   addEventListener('keydown', () => unlockAudio(), { once: true });
   document.addEventListener('visibilitychange', syncMusic);
-  const resetInput = () => { keys.clear(); touch = { x: 0, y: 0 }; $('touchDot').style.transform = ''; };
+  const resetInput = () => { keys.clear(); touch = { x: 0, y: 0 }; $('touchDot').style.transform = ''; sendMovement(); };
   addEventListener('blur', resetInput);
   document.addEventListener('visibilitychange', () => { if (document.hidden) resetInput(); });
   addEventListener('online', () => { if (!socket || socket.readyState !== WebSocket.OPEN) scheduleReconnect(); });
@@ -541,11 +547,12 @@
     if (!socket || displaced || document.hidden || (state && state.phase === 'ended' && state.resultsSaved)) return;
     if (Date.now() - lastStateAt > 12000 && socket.readyState < WebSocket.CLOSING) { socket.close(); scheduleReconnect(); }
   }, 2000);
-  addEventListener('keydown', e => { if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','a','s','d'].includes(e.key)) { keys.add(e.key.toLowerCase()); e.preventDefault(); } });
-  addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+  addEventListener('keydown', e => { if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','a','s','d'].includes(e.key)) { const changed=!keys.has(e.key.toLowerCase()); keys.add(e.key.toLowerCase()); if(changed)sendMovement(); e.preventDefault(); } });
+  addEventListener('keyup', e => { if(keys.delete(e.key.toLowerCase()))sendMovement(); });
   const pad=$('touch'), dot=$('touchDot'); function moveTouch(e){const r=pad.getBoundingClientRect(),x=e.clientX-(r.left+r.width/2),y=e.clientY-(r.top+r.height/2),l=Math.max(1,Math.hypot(x,y)),m=Math.min(r.width*.32,l);touch={x:x/l,y:y/l};dot.style.transform=`translate(${touch.x*m}px,${touch.y*m}px)`;}
-  pad.onpointerdown=e=>{pad.setPointerCapture(e.pointerId);moveTouch(e)};pad.onpointermove=e=>{if(pad.hasPointerCapture(e.pointerId))moveTouch(e)};pad.onpointerup=pad.onpointercancel=()=>{touch={x:0,y:0};dot.style.transform=''};
-  setInterval(()=>{if(!socket||socket.readyState!==1||socket.bufferedAmount>16384||document.hidden||!state||state.phase!=='running'||state.question)return;let x=(keys.has('arrowright')||keys.has('d')?1:0)-(keys.has('arrowleft')||keys.has('a')?1:0),y=(keys.has('arrowdown')||keys.has('s')?1:0)-(keys.has('arrowup')||keys.has('w')?1:0);if(!x&&!y){x=touch.x;y=touch.y}socket.send(JSON.stringify({type:'input',seq:seq++,x,y}));},100);
+  pad.onpointerdown=e=>{pad.setPointerCapture(e.pointerId);moveTouch(e)};pad.onpointermove=e=>{if(pad.hasPointerCapture(e.pointerId))moveTouch(e)};pad.onpointerup=pad.onpointercancel=()=>{touch={x:0,y:0};dot.style.transform='';sendMovement()};
+  function sendMovement(){if(!socket||socket.readyState!==1||socket.bufferedAmount>16384||document.hidden||!state||state.phase!=='running'||state.question)return;let x=(keys.has('arrowright')||keys.has('d')?1:0)-(keys.has('arrowleft')||keys.has('a')?1:0),y=(keys.has('arrowdown')||keys.has('s')?1:0)-(keys.has('arrowup')||keys.has('w')?1:0);if(!x&&!y){x=touch.x;y=touch.y}socket.send(JSON.stringify({type:'input',seq:seq++,x,y}));}
+  setInterval(sendMovement,50);
   setInterval(()=>{if(!state)return;const left=state.endsAt?Math.max(0,state.endsAt-(state.phase==='paused'?state.pausedAt:serverNow())):0;$('time').textContent=state.phase==='lobby'?'Lobby':state.phase==='paused'?'Paused':`${Math.floor(left/60000)}:${String(Math.floor(left/1000)%60).padStart(2,'0')}`;},250);
   updateAudioControls(); load();
 })();
