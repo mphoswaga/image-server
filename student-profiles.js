@@ -36,7 +36,7 @@ function createProfiles({ roster, assignments, games, gradebook, practice }) {
       const result = submission && gradebook.teacherSubmissionResult(a, submission);
       activities.push({ key: 'assignment:' + a.id, kind: a.assessmentType || a.type || 'assignment', title: a.title,
         subject: a.subject, topic: a.topic, className: student.classes.find(c=>c.id===a.rosterId)?.name || history.get(a.rosterId)?.name,
-        status: result ? 'Marked' : submission ? 'Awaiting marking' : draft ? 'In progress' : 'Not submitted',
+        status: assignments.isAbsent?.(a,student.id) ? 'Absent' : result ? 'Marked' : submission ? 'Awaiting marking' : draft ? 'In progress' : 'Not submitted',
         score: result ? result.mark : null, total: result ? result.max : a.totalMarks || null,
         at: work?.submittedAt || work?.updatedAt || a.createdAt,
         evidence: work ? gradebook.questionEvidenceForSubmission(a, work) : [] });

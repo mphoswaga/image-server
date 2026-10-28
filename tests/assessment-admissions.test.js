@@ -58,3 +58,24 @@ test('departed learners retain a historical profile without current class member
  assert.deepEqual(profile.classes,[]);assert.equal(profile.previousClasses[0].id,r.id);
  assert.equal(profile.activities[0].key,'assignment:'+a.id);assert.equal(profile.activities[0].status,'In progress');
 });
+
+test('absence changes expected submissions and averages without deleting marks or draft evidence',()=>{
+ const {teacherId,r,a}=fixture();assignments.addAssessmentLearners(a.id,teacherId,['s2']);
+ assignments.updateDelivery(a.id,'start');
+ assignments.saveDraft(a.id,{studentId:'S1',answers:{q1:0}});
+ const sub={studentId:'S1',name:'Original',answers:{q1:0},grades:{q1:{marksAwarded:1,source:'auto'}},totalMarks:1,maxMarks:1};
+ assignments.saveSubmission(a.id,sub);
+ const draft=assignments.getDraft(a.id,'S1');
+ assignments.setAttendance(a.id,teacherId,'s1','absent');
+ let record=assignments.getAssignment(a.id);
+ assert.equal(assignments.assessmentReleaseReadiness(record,['S1','S2']).missingStudents,1);
+ assert.equal(assignments.draftProgress(record).draftCount,0);
+ assert.equal(require('../gradebook').teacherSubmissionResult(record,sub),null);
+ assert.deepEqual(assignments.getSubmission(a.id,'S1'),sub);assert.deepEqual(assignments.getDraft(a.id,'S1'),draft);
+ assert.throws(()=>assignments.setAttendance(a.id,'stranger','S1','present'));
+ assert.throws(()=>assignments.setAttendance(a.id,teacherId,'forged','absent'));
+ assert.throws(()=>assignments.setAttendance(a.id,teacherId,'S1','invalid'));
+ assignments.setAttendance(a.id,teacherId,'S1','present');record=assignments.getAssignment(a.id);
+ assert.deepEqual(require('../gradebook').teacherSubmissionResult(record,sub),{mark:1,max:1});
+ assert.equal(assignments.draftProgress(record).draftCount,1);
+});

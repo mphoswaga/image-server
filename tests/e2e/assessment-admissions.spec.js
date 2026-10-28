@@ -12,6 +12,15 @@ test('admit a late learner to a running test then remove class membership withou
  await page.getByRole('button',{name:'Add learners to test',exact:true}).click();
  await expect(page.locator('dialog .admit-learner')).toHaveCount(1);await page.locator('.admit-learner').check();
  await page.getByRole('button',{name:'Add selected learners',exact:true}).click();await expect(page.locator('.admit-learner')).toHaveCount(0);
+ await page.getByRole('button',{name:'Attendance',exact:true}).click();
+ await page.locator('.test-attendance-status[data-student-id="LATE"]').selectOption('absent');
+ await expect(page.locator('.attendance-status')).toHaveText('Attendance saved.');
+ const absent=await(await page.request.get(`/api/assignment/${a.assessmentId}/results`)).json();
+ expect(absent.rosterSize).toBe(1);expect(absent.absentLearners[0].id).toBe('LATE');expect(absent.missingStudents).toBe(1);
+ await page.locator('.test-attendance-status[data-student-id="LATE"]').selectOption('present');
+ await expect(page.locator('.attendance-status')).toHaveText('Attendance saved.');
+ const present=await(await page.request.get(`/api/assignment/${a.assessmentId}/results`)).json();expect(present.rosterSize).toBe(2);
+ await page.getByRole('button',{name:'Done',exact:true}).click();
  const context=await browser.newContext();
  try{
   const meta=await(await context.request.get(new URL(`/api/assignment/${a.assessmentId}/join`,page.url()).href)).json();expect(meta.students).toHaveLength(2);

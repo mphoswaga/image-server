@@ -62,7 +62,7 @@ function isAssessmentOnRecord(record) {
 // item still needs a teacher decision. Assessment totals are rebuilt from the
 // item grades rather than trusting a possibly stale submission total.
 function teacherSubmissionResult(record, sub) {
-  if (!record || !sub) return null;
+  if (!record || !sub || assignments.isAbsent(record,sub.studentId)) return null;
   if (record.type !== 'assessment') {
     const mark = Number(sub.totalMarks) || 0;
     const max = Number(sub.maxMarks) || 0;

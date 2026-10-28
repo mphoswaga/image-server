@@ -2532,6 +2532,19 @@ app.patch('/api/assignment/:id/marked', requireAuth, (req, res) => {
 // Teachers may attach an older open assessment to a saved class, or correct
 // the selected class, until learner work begins. The room code and assessment
 // content stay unchanged; the selected roster is snapshotted at this point.
+app.get('/api/assignment/:id/attendance',requireAuth,(req,res)=>{
+  const a=assignments.getAssignment(req.params.id);
+  if(!a || a.teacherId!==req.userId || a.type!=='assessment')return res.status(404).json({error:'Assessment not found.'});
+  res.json({students:(a.rosterSnapshot||[]).map(s=>({id:s.id,name:s.name,status:assignments.isAbsent(a,s.id)?'absent':'present'}))});
+});
+app.patch('/api/assignment/:id/attendance',requireAuth,(req,res)=>{
+  try{
+    const result=assignments.setAttendance(req.params.id,req.userId,req.body?.studentId,req.body?.status);
+    audit.log('assessment.attendance_changed',{userId:req.userId,assignmentId:req.params.id,studentId:req.body.studentId,status:result.status,ip:req.ip});
+    res.json({ok:true,...result});
+  }catch(error){res.status(400).json({error:error.message});}
+});
+
 app.get('/api/assignment/:id/missing-learners', requireAuth, (req,res)=>{
   const a=assignments.getAssignment(req.params.id);
   if(!a || a.teacherId!==req.userId || a.type!=='assessment')return res.status(404).json({error:'Assessment not found.'});
@@ -2687,7 +2700,7 @@ app.get('/api/assignment/:id/presentation', requireAuth, (req, res) => {
   if (a.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assessment.' });
   if (a.type !== 'assessment') return res.status(400).json({ error: 'This item has no assessment presentation.' });
   const questionProgress = assignments.questionAnswerProgress(a);
-  const cohort = a.rosterId ? assignmentCohortStudents(a) : [];
+  const cohort = a.rosterId ? assignmentCohortStudents(a).filter(s=>!assignments.isAbsent(a,s.id)) : [];
   const cohortSize = a.rosterId ? cohort.length : null;
   const question = questionProgress.question;
   const delivery = assignments.deliveryState(a);
@@ -3791,7 +3804,7 @@ app.post('/api/assignment/:id/submit-completed-drafts', requireAuth, async (req,
   for (const draft of drafts) {
     const studentId = roster.normalizeStudentId(draft.studentId);
     if (!studentId || (requested.size && !requested.has(studentId))) continue;
-    if (a.rosterId && !cohortMap.has(studentId)) { skipped.push(studentId); continue; }
+    if (assignments.isAbsent(a,studentId) || (a.rosterId && !cohortMap.has(studentId))) { skipped.push(studentId); continue; }
     if (assignments.getSubmission(a.id, studentId)) { skipped.push(studentId); continue; }
     const answers = assignments.sanitizeLearnerAnswers(a.content.questions || [], draft.answers || {});
     const missing = assignments.incompleteAssessmentAnswers(a.content.questions || [], answers);
@@ -3880,9 +3893,9 @@ app.get('/api/assignment/:id/results', requireAuth, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
   if (a.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assignment.' });
-  const cohort = a.rosterId ? assignmentCohortStudents(a) : [];
+  const cohort = a.rosterId ? assignmentCohortStudents(a).filter(s=>!assignments.isAbsent(a,s.id)) : [];
   const rosterMap = Object.fromEntries(cohort.map(s => [roster.normalizeStudentId(s.id), s.name]));
-  const submissions = assignments.getSubmissions(a.id).map(s => ({ ...s, name: rosterMap[roster.normalizeStudentId(s.studentId)] || s.name }));
+  const submissions = assignments.getSubmissions(a.id).filter(s=>!assignments.isAbsent(a,s.studentId)).map(s => ({ ...s, name: rosterMap[roster.normalizeStudentId(s.studentId)] || s.name }));
   const submittedCount = submissions.length;
   // During a live practical phase, show joined learners and the selected
   // roster before final submission so the teacher can mark observations while
@@ -3918,7 +3931,7 @@ app.get('/api/assignment/:id/results', requireAuth, (req, res) => {
   const cohortIds = new Set(cohort.map(student => roster.normalizeStudentId(student.id)));
   const pendingDrafts = a.type === 'assessment' ? assignments.loadDrafts(a.id).filter(draft => {
     const studentId = roster.normalizeStudentId(draft.studentId);
-    return studentId && !submittedIds.has(studentId) && (!a.rosterId || cohortIds.has(studentId));
+    return studentId && !assignments.isAbsent(a,studentId) && !submittedIds.has(studentId) && (!a.rosterId || cohortIds.has(studentId));
   }) : [];
   const pendingDraftStatus = pendingDrafts.map(draft => {
     const answers = assignments.sanitizeLearnerAnswers(a.content.questions || [], draft.answers || {});
@@ -3926,7 +3939,7 @@ app.get('/api/assignment/:id/results', requireAuth, (req, res) => {
   });
   const completedDraftsCount = pendingDraftStatus.filter(status => status.complete).length;
   const incompleteDraftsCount = pendingDraftStatus.filter(status => status.hasAnswers && !status.complete).length;
-  res.json({ questions: a.content.questions, sections: a.sections || null, objectives: a.objectives || null, assessmentType: a.assessmentType || null, totalMarks: a.totalMarks || null, delivery, liveProgress, rosterSize, submittedCount, submissions, completedDraftsCount, incompleteDraftsCount, resultsReleased: a.resultsReleased, teacherMarked: !!a.teacherMarked, teacherMarkedAt: a.teacherMarkedAt || null, cutoffAt: a.cutoffAt, effectivelyReleased: assignments.isReleased(a), releaseReady: readiness.ready, pendingGrades: readiness.pendingGrades, missingStudents: readiness.missingStudents || 0, releaseReason: readiness.reason || '' });
+  res.json({ absentLearners: (a.rosterSnapshot||[]).filter(s=>assignments.isAbsent(a,s.id)).map(s=>({id:s.id,name:s.name})), questions: a.content.questions, sections: a.sections || null, objectives: a.objectives || null, assessmentType: a.assessmentType || null, totalMarks: a.totalMarks || null, delivery, liveProgress, rosterSize, submittedCount, submissions, completedDraftsCount, incompleteDraftsCount, resultsReleased: a.resultsReleased, teacherMarked: !!a.teacherMarked, teacherMarkedAt: a.teacherMarkedAt || null, cutoffAt: a.cutoffAt, effectivelyReleased: assignments.isReleased(a), releaseReady: readiness.ready, pendingGrades: readiness.pendingGrades, missingStudents: readiness.missingStudents || 0, releaseReason: readiness.reason || '' });
 });
 
 // Teacher: override a student's grade for one question. This both corrects
@@ -3983,7 +3996,7 @@ app.patch('/api/assignment/:id/grade/bulk', requireAuth, (req, res) => {
     return res.status(400).json({ error: `Enter a mark from 0 to ${q.marks}.` });
   }
   const marks = Math.round(numericMarks * 100) / 100;
-  const cohort = a.rosterId ? assignmentCohortStudents(a) : [];
+  const cohort = a.rosterId ? assignmentCohortStudents(a).filter(s=>!assignments.isAbsent(a,s.id)) : [];
   const cohortMap = new Map(cohort.map(student => [roster.normalizeStudentId(student.id), student]));
   const targets = studentIds.map(studentId => ({
     studentId,

@@ -433,6 +433,22 @@ function updateAssignmentCutoff(id, cutoffAt) {
   return rec;
 }
 
+function isAbsent(record, studentId) {
+  return record?.type === 'assessment' && record.attendance?.[normalizeStudentId(studentId)]?.status === 'absent';
+}
+function setAttendance(id, teacherId, studentId, status) {
+  const record=getAssignment(id);
+  if(!record || record.type!=='assessment' || record.teacherId!==teacherId)throw new Error('Assessment not found.');
+  assertAssessmentMutable(record);
+  if(record.resultsReleased)throw new Error('Hide released results before changing attendance.');
+  if(!['present','absent'].includes(status))throw new Error('Choose Present or Absent.');
+  const wanted=normalizeStudentId(studentId);
+  if(!(record.rosterSnapshot||[]).some(s=>normalizeStudentId(s.id)===wanted))throw new Error('Learner is not on this test.');
+  record.attendance={...(record.attendance||{}),[wanted]:{status,by:teacherId,at:new Date().toISOString()}};
+  writeJsonAtomic(recPath(id),record);
+  return record.attendance[wanted];
+}
+
 function addAssessmentLearners(id, teacherId, studentIds) {
   const rec = getAssignment(id);
   if (!rec || rec.type !== 'assessment' || rec.teacherId !== teacherId) throw new Error('Assessment not found.');
@@ -766,7 +782,7 @@ function questionAnswerProgress(record) {
   const question = state.questionSyncEnabled && ['open', 'paused'].includes(state.phase) && section && section.type !== 'practical'
     ? questions[index] || null
     : null;
-  const drafts = loadDrafts(record.id);
+  const drafts = loadDrafts(record.id).filter(draft=>!isAbsent(record,draft.studentId));
   const answeredCount = question
     ? drafts.filter(draft => incompleteAssessmentAnswers([question], draft.answers).length === 0).length
     : 0;
@@ -831,7 +847,7 @@ function updateDelivery(id, action, requestedQuestionIndex) {
 function draftProgress(record) {
   const state = deliveryState(record);
   const section = state.mode === 'live' && state.activeSectionIndex >= 0 ? (record.sections || [])[state.activeSectionIndex] : null;
-  const drafts = loadDrafts(record.id);
+  const drafts = loadDrafts(record.id).filter(draft=>!isAbsent(record,draft.studentId));
   return {
     draftCount: drafts.length,
     readyCount: section ? drafts.filter(draft => (draft.completedSectionIds || []).includes(section.id)).length : 0,
@@ -961,9 +977,9 @@ function assessmentSectionLabel(type) {
 
 function assessmentReleaseReadiness(record, expectedStudentIds = []) {
   if (!record || record.type !== 'assessment') return { ready: true, pendingGrades: 0, submissions: 0 };
-  const submissions = loadSubmissions(record.id);
+  const submissions = loadSubmissions(record.id).filter(sub=>!isAbsent(record,sub.studentId));
   const submittedIds = new Set(submissions.map(submission => normalizeStudentId(submission.studentId)));
-  const missingStudents = [...new Set((expectedStudentIds || []).map(normalizeStudentId).filter(Boolean))].filter(id => !submittedIds.has(id));
+  const missingStudents = [...new Set((expectedStudentIds || []).map(normalizeStudentId).filter(Boolean))].filter(id => !isAbsent(record,id) && !submittedIds.has(id));
   if (missingStudents.length) {
     return {
       ready: false, pendingGrades: 0, submissions: submissions.length, missingStudents: missingStudents.length,
@@ -991,8 +1007,8 @@ function assessmentMarkingSummary(record) {
   if (record.status === 'draft') {
     return { state: 'draft', label: 'Draft', detail: 'Not published yet.', submissions: 0, expected: 0, pendingGrades: 0 };
   }
-  const expectedIds = Array.isArray(record.rosterSnapshot) ? record.rosterSnapshot.map(student => student && student.id).filter(Boolean) : [];
-  const submissions = loadSubmissions(record.id);
+  const expectedIds = Array.isArray(record.rosterSnapshot) ? record.rosterSnapshot.filter(student=>!isAbsent(record,student.id)).map(student => student && student.id).filter(Boolean) : [];
+  const submissions = loadSubmissions(record.id).filter(sub=>!isAbsent(record,sub.studentId));
   const readiness = assessmentReleaseReadiness(record, expectedIds);
   const expected = expectedIds.length || submissions.length;
   if (isReleased(record)) {
@@ -1111,7 +1127,7 @@ function listTeacherAssignments(teacherId) {
       resultsReleased: isReleased(a),
       teacherMarked: !!a.teacherMarked || (a.type === 'assessment' && isReleased(a)),
       teacherMarkedAt: a.teacherMarkedAt || a.finalisedAt || null,
-      submissions: loadSubmissions(a.id).length,
+      submissions: loadSubmissions(a.id).filter(sub=>!isAbsent(a,sub.studentId)).length,
       marking: assessmentMarkingSummary(a),
       contentEditable: assessmentContentEditable(a) || legacyContentEditable(a),
     }))
@@ -1156,7 +1172,7 @@ function renameAssessmentStudent(teacherId, rosterId, studentId, name) {
 }
 
 module.exports = {
-  addAssessmentLearners,
+  isAbsent, setAttendance, addAssessmentLearners,
   legacyContentEditable, updateLegacyContent, createAssignment, createAssessment, copyAssessmentToRoster, normalizeAssessment, getAssignment, updateAssignmentCutoff, updateAssessmentRoster, updateAssessmentContent, assessmentContentEditable, getRoomCode,
   publishedAssessmentGenerationContext,
   releaseResults, setTeacherMarked, isReleased,

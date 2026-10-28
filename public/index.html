@@ -6517,7 +6517,7 @@
       const search=report?.querySelector('[data-lr-search]');
       const searchState=search?{value:search.value,focused:document.activeElement===search,start:search.selectionStart,end:search.selectionEnd}:null;
       wrap.dataset.view=view;
-      const liveBar=assessmentLiveControls(d,assignId,wrapId);
+      const liveBar=assessmentLiveControls(d,assignId,wrapId)+((d.absentLearners||[]).length?`<p class="hint"><strong>Absent (${d.absentLearners.length}):</strong> ${d.absentLearners.map(s=>esc(s.name)).join(', ')} · excluded from expected submissions and averages</p>`:'');
       const releaseBar=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:${d.effectivelyReleased||d.teacherMarked?'#eafaf0':'#fdf6ea'}">
         <span style="font-size:13px;font-weight:600;color:${d.effectivelyReleased||d.teacherMarked?'var(--ok,#1f9d55)':'#b26a00'}">${d.effectivelyReleased?(d.resultsReleased?'Official marks · Visible to learners':'Official marks · Visible after due date'):(d.teacherMarked?'On record · Hidden from learners':d.assessmentType&&d.releaseReady?'Marks ready · Tick “Marked by teacher” to add them to records':'Marks saved privately · Hidden from learners')}</span>
         ${!d.resultsReleased?`<button type="button" class="release-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" ${d.assessmentType&&!d.releaseReady?'disabled title="'+esc(d.releaseReason||'Finish marking first')+'"':''} style="font-size:12.5px;font-weight:600;padding:6px 12px;border:1px solid var(--primary);border-radius:8px;background:#fff;color:var(--primary);cursor:pointer">${d.assessmentType&&!d.releaseReady?esc(d.missingStudents?`${d.missingStudents} submissions missing`:d.pendingGrades?`${d.pendingGrades} grades pending`:'No submissions yet'):'Release results'}</button>`
@@ -8629,6 +8629,7 @@
               ${!isDraft?`<div class="game-link"><input readonly value="${esc(location.origin+'/assignment/'+a.id)}"><button type="button" class="btn ghost acopy" data-url="${esc(location.origin+'/assignment/'+a.id)}" style="width:auto;padding:9px 13px">${ICON('i-doc')} Copy</button></div>`:''}
               <div class="gc-actions" style="margin-top:10px">
                 ${!isDraft?`<button type="button" class="btn ghost a-toggle-btn" data-assign-id="${esc(a.id)}" data-wrap-id="${wrapId}" data-detail-id="${detailId}" data-closed-label="${a.type==='assessment'?'Run classroom / mark':'Review submissions'}" style="font-size:12px;padding:6px 12px;width:auto">${a.type==='assessment'?'Run classroom / mark':'Review submissions'}</button>`:''}
+                ${a.type==='assessment'&&!isDraft?`<button type="button" class="btn ghost a-attendance" data-id="${esc(a.id)}">Attendance</button>`:''}
                 ${a.type==='assessment'&&!isDraft?`<button type="button" class="btn ghost a-add-learners" data-id="${esc(a.id)}" ${a.resultsReleased?'disabled':''}>Add learners to test</button>`:''}
                 ${a.type==='assessment'&&!isDraft?`<a class="btn ghost" href="/assessment/${esc(a.id)}/present" target="_blank" rel="noopener" style="font-size:12px;padding:6px 12px;width:auto;text-decoration:none">Present</a>`:''}
                 ${a.contentEditable?`<button type="button" class="btn accent a-edit-btn" data-id="${esc(a.id)}" style="font-size:12px;padding:6px 12px;width:auto">${isDraft?'Edit questions and publish':'Edit questions'}</button>`:''}
@@ -8642,6 +8643,19 @@
           </div>`;
         }).join('');
       }catch{ wrap.innerHTML='<p class="hint">Could not load assignments.</p>'; }
+    }
+
+    async function openAssessmentAttendance(id){
+      const response=await fetch(`/api/assignment/${encodeURIComponent(id)}/attendance`),data=await response.json();
+      if(!response.ok)throw Error(data.error||'Could not load attendance.');
+      const dialog=document.createElement('dialog');dialog.style.cssText='border:1px solid var(--border);border-radius:16px;padding:24px;max-width:520px;width:90%;max-height:85vh';
+      dialog.innerHTML=`<h3>Test attendance</h3><p>Absent learners are excluded from expected submissions and averages. Saved work is kept. Mark them present when they return for a catch-up.</p><div style="display:grid;gap:12px">${data.students.map(s=>`<label style="display:flex;justify-content:space-between;gap:12px">${esc(s.name)}<select class="test-attendance-status" data-student-id="${esc(s.id)}" data-saved="${esc(s.status)}" aria-label="Attendance for ${esc(s.name)}"><option value="present" ${s.status==='present'?'selected':''}>Present</option><option value="absent" ${s.status==='absent'?'selected':''}>Absent</option></select></label>`).join('')}</div><p class="attendance-status" role="status"></p><button class="btn attendance-close" type="button">Done</button>`;
+      document.body.appendChild(dialog);dialog.showModal();dialog.onclose=()=>{dialog.remove();loadMyAssignments();};dialog.querySelector('.attendance-close').onclick=()=>dialog.close();
+      dialog.querySelectorAll('.test-attendance-status').forEach(select=>select.onchange=async()=>{
+        select.disabled=true;dialog.querySelector('.attendance-status').textContent='Saving…';
+        try{const response=await fetch(`/api/assignment/${encodeURIComponent(id)}/attendance`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({studentId:select.dataset.studentId,status:select.value})});const saved=await response.json();if(!response.ok)throw Error(saved.error||'Could not save attendance.');select.dataset.saved=select.value;dialog.querySelector('.attendance-status').textContent='Attendance saved.';}
+        catch(error){select.value=select.dataset.saved;dialog.querySelector('.attendance-status').textContent=error.message;}finally{select.disabled=false;}
+      });
     }
 
     async function openAssessmentAdmissions(id){
@@ -8669,6 +8683,8 @@
     $('assignmentsList').addEventListener('click', e=>{
       const copyBtn=e.target.closest('.acopy');
       if(copyBtn){ copyLink(copyBtn.dataset.url); return; }
+      const attendance=e.target.closest('.a-attendance');
+      if(attendance){openAssessmentAttendance(attendance.dataset.id).catch(error=>toast(error.message));return;}
       const addLearners=e.target.closest('.a-add-learners');
       if(addLearners){openAssessmentAdmissions(addLearners.dataset.id).catch(error=>toast(error.message));return;}
       const editBtn=e.target.closest('.a-edit-btn');
