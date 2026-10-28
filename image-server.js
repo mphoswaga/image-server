@@ -2532,6 +2532,17 @@ app.patch('/api/assignment/:id/marked', requireAuth, (req, res) => {
 // Teachers may attach an older open assessment to a saved class, or correct
 // the selected class, until learner work begins. The room code and assessment
 // content stay unchanged; the selected roster is snapshotted at this point.
+const assessmentNarration=require('./assessment-narration').createNarration();
+app.get('/api/assignment/:id/presentation-audio',requireAuth,async(req,res)=>{
+  const record=assignments.getAssignment(req.params.id);
+  if(!record || record.teacherId!==req.userId || record.type!=='assessment')return res.status(404).json({error:'Assessment not found.'});
+  let text;
+  try{text=require('./assessment-narration').narrationText(record,req.query.questionId,req.query.choice,req.query.slideIndex,req.query.bulletIndex);}
+  catch(error){return res.status(400).json({error:error.message});}
+  try{const audio=await assessmentNarration(req.userId,text);res.set('Cache-Control','private, no-store').type('audio/mpeg').send(audio);}
+  catch(error){console.error('Assessment narration failed:',error.code||error.status||'unavailable');res.status(503).json({error:'The natural voice is unavailable right now. Please try again.'});}
+});
+
 app.get('/api/assignment/:id/attendance',requireAuth,(req,res)=>{
   const a=assignments.getAssignment(req.params.id);
   if(!a || a.teacherId!==req.userId || a.type!=='assessment')return res.status(404).json({error:'Assessment not found.'});

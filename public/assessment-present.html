@@ -20,6 +20,7 @@
     .buttons{display:flex;gap:8px}.btn{border:1px solid rgba(15,43,92,.2);background:#fff;color:var(--navy);border-radius:999px;padding:10px 16px;font:700 13px inherit;cursor:pointer}.btn.primary{background:var(--navy);color:#fff}.btn:hover{border-color:var(--green);color:var(--green)}.btn.primary:hover{color:#fff;background:#17417f}.btn:disabled{opacity:.35;cursor:default}
     .live{display:inline-flex;align-items:center;gap:7px}.dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 4px rgba(22,163,74,.13)}
     @media(max-width:600px){.stage{padding:12px}.slide{padding:28px 22px}.controls{padding-top:10px}.btn{padding:8px 11px}.keyboard{display:none}}
+    .read-aloud{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;min-width:44px;min-height:44px;margin-left:12px;border:1px solid #9db6a7;border-radius:50%;background:#effcf4;color:#0f5132;font-size:20px;cursor:pointer}.read-aloud::before{content:attr(data-icon)}.read-aloud[aria-pressed="true"]{background:#0f5132;color:white}
   </style>
 </head>
 <body>
@@ -32,15 +33,17 @@
     </section>
     <footer class="controls">
       <div class="status"><span id="liveState" class="live"><span class="dot"></span><span>Teacher presentation</span></span><span id="answerProgress" class="answer-progress"></span><button id="awaitingToggle" class="awaiting-toggle" type="button" aria-expanded="false"></button></div>
-      <span id="counter"></span>
+      <span id="counter"></span><span id="readingStatus" role="status" style="font-size:12px">AI voice · tap a play button to listen.</span>
       <select id="questionPicker" class="question-picker" aria-label="Choose question"></select>
       <div class="buttons"><button id="sync" class="btn primary" type="button" style="display:none">Sync questions to learners</button><button id="previous" class="btn" type="button">← Previous</button><button id="fullscreen" class="btn" type="button">Full screen</button><button id="next" class="btn" type="button">Next →</button></div>
     </footer>
     <aside id="awaitingPanel" class="awaiting-panel" aria-live="polite"><strong>Still to answer this question</strong><div id="awaitingNames" class="awaiting-names"></div></aside>
   </main>
+  <script src="/assessment-narration.js"></script>
   <script>
     const assessmentId=location.pathname.split('/').filter(Boolean).slice(-2,-1)[0];
     const $=id=>document.getElementById(id);
+    const reader=new AssessmentReader(assessmentId);
     let slides=[],index=0,lastDeliveryUpdate='',currentData=null,requestBusy=false,awaitingLearners=[];
     function renderAwaitingLearners(){
       $('awaitingNames').replaceChildren(...awaitingLearners.map(name=>{const item=document.createElement('span');item.className='awaiting-name';item.textContent=name;return item;}));
@@ -50,6 +53,12 @@
       $('eyebrow').textContent=slide.kind==='section'?'Current stage':slide.kind==='finish'?'Finish':slide.kind==='title'?'LessonScope assessment':'Get ready';
       $('title').textContent=slide.title||''; $('subtitle').textContent=slide.subtitle||'';
       $('bullets').innerHTML=(slide.bullets||[]).map(text=>{const li=document.createElement('li');li.textContent=text;return li.outerHTML}).join('');
+      reader.select('slide:'+index+JSON.stringify(slide));
+      if(slide.kind==='section'){
+        $('title').append(reader.button(new URLSearchParams({slideIndex:index}).toString(),'stage title'));
+        [...$('bullets').children].forEach((li,i)=>li.append(reader.button(new URLSearchParams({slideIndex:index,bulletIndex:i}).toString(),`instruction ${i+1}`)));
+      }
+      reader.sync();
       $('counter').textContent=`${index+1} / ${slides.length}`; $('previous').disabled=index===0; $('next').disabled=index>=slides.length-1;
       document.title=(slide.title||'Assessment')+' — LessonScope';
     }
@@ -59,6 +68,10 @@
       $('title').textContent=question.question||'';
       $('subtitle').textContent=question.sectionTitle||'';
       $('bullets').innerHTML=(question.options||[]).map((text,optionIndex)=>{const li=document.createElement('li');li.textContent=`${String.fromCharCode(65+optionIndex)}. ${text}`;return li.outerHTML}).join('');
+      reader.select('question:'+question.id+':'+question.question+JSON.stringify(question.options));
+      $('title').append(reader.button(new URLSearchParams({questionId:question.id}).toString(),'question'));
+      [...$('bullets').children].forEach((li,i)=>li.append(reader.button(new URLSearchParams({questionId:question.id,choice:i}).toString(),`answer choice ${String.fromCharCode(65+i)}`)));
+      reader.sync();
       const progress=data.responseProgress||{};
       const total=Number.isInteger(progress.assigned)?progress.assigned:progress.joined;
       $('answerProgress').innerHTML=`<strong>${progress.answered||0}</strong> of ${total||0} students answered`;
@@ -121,7 +134,7 @@
     $('questionPicker').onchange=event=>updateLive('set-question',Number(event.target.value));
     $('awaitingToggle').onclick=()=>{const panel=$('awaitingPanel');const open=panel.style.display==='block';if(!open)renderAwaitingLearners();panel.style.display=open?'none':'block';$('awaitingToggle').setAttribute('aria-expanded',String(!open));};
     $('fullscreen').onclick=async()=>{if(!document.fullscreenElement)await document.documentElement.requestFullscreen();else await document.exitFullscreen();};
-    addEventListener('keydown',event=>{if(event.key==='ArrowLeft')$('previous').click();if(event.key==='ArrowRight'||event.key===' ')$('next').click();if(event.key.toLowerCase()==='f')$('fullscreen').click();});
+    addEventListener('keydown',event=>{if(event.target.closest('button,select,input,textarea'))return;if(event.key==='ArrowLeft')$('previous').click();if(event.key==='ArrowRight'||event.key===' ')$('next').click();if(event.key.toLowerCase()==='f')$('fullscreen').click();});
     load();setInterval(load,1500);
   </script>
 </body>
