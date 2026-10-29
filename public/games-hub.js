@@ -49,7 +49,7 @@ window.GamesHub = (() => {
           }
           for(const [label,path] of item.modes)actions.append(link(label+' →',path+encodeURIComponent(selected.id)));
           const preview=item.id==='moonquest'?'/moonquest?game='+encodeURIComponent(selected.id)+'&action=test':item.id==='colonyquest'?'/colonyquest/'+encodeURIComponent(selected.id)+'?test=1':item.id==='fishquest'?'/fishquest-play/'+encodeURIComponent(selected.id)+'?test=1':'/play/'+encodeURIComponent(selected.id)+'?test=1';
-          const test=link('Try without saving scores',preview);test.target='_blank';test.rel='noopener';actions.append(test);
+          if(item.id==='blockquest'){for(const [label,mode] of [['Test smartboard · two teams',''],['Test single-player','&mode=solo']]){const test=link(label,'/blockquest.html?game='+encodeURIComponent(selected.id)+'&test=1'+mode);test.target='_blank';test.rel='noopener';actions.append(test);}}else{const test=link('Try without saving scores',preview);test.target='_blank';test.rel='noopener';actions.append(test);}
           actions.append(node('small',item.id==='moonquest'?'Choose duel, cooperative or battle royale in class setup.':'Live formats open teacher setup. Independent practice opens the learner activity.'));
         };select.onchange=render;render();card.append(formats);
       }

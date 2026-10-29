@@ -31,6 +31,7 @@ test('learner solo progress is private, cannot use teacher controls, and saves l
  try{
   const entered=await context.request.post(`${origin}/api/game/${id}/enter`,{data:{studentId:'BLOCK-STUDENT',name:'Mia',pin:'1234'}});expect(entered.ok(),await entered.text()).toBeTruthy();
   const url=`${origin}/api/game/${id}/blockquest`;
+  expect((await context.request.get(url+'?test=1')).status()).toBe(403);
   let s=await(await context.request.post(url,{data:{action:'start'}})).json();expect(s.mode).toBe('solo');expect(s.learner).toBe('Mia');
   expect((await context.request.post(url,{data:{action:'finish',revision:s.revision}})).ok()).toBeFalsy();
   for(let round=0;round<2;round++){
@@ -82,4 +83,23 @@ test('long questions expand upward between tall side boards',async({page},info)=
  const left=await page.locator('.tower').first().boundingBox(),right=await page.locator('.tower').last().boundingBox(),dock=await page.locator('.dock').boundingBox(),choices=await page.locator('#answers').boundingBox();
  expect(left.x+left.width).toBeLessThan(dock.x);expect(dock.x+dock.width).toBeLessThan(right.x);expect(left.height).toBeGreaterThan(300);expect(Math.abs(dock.y+dock.height-left.y-left.height)).toBeLessThan(3);expect(choices.y+choices.height).toBeLessThanOrEqual(page.viewportSize().height);
  await expectNoPageOverflow(page);await page.screenshot({path:info.outputPath('long-question-side-boards.png'),fullPage:true});
+});
+
+test('returning teacher can resume, cancel restart, or restart from question one',async({page})=>{
+ const id=await create(page),url=`/api/game/${id}/blockquest`;
+ await page.goto(`/blockquest.html?game=${id}`);await page.locator('#start').click();await page.locator('#answers button').first().click();
+ const old=(await(await page.request.get(url)).json()).state.id;
+ await page.reload();await expect(page.locator('#resume')).toBeVisible();await expect(page.locator('#restart')).toBeVisible();
+ page.once('dialog',d=>d.dismiss());await page.locator('#restart').click();await expect(page.locator('#resume')).toBeVisible();expect((await(await page.request.get(url)).json()).state.id).toBe(old);
+ page.once('dialog',d=>d.accept());await page.locator('#restart').click();await expect(page.locator('#question')).toContainText('Which device shows pictures?');await expect(page.locator('#seconds')).toHaveText(/^(20|19)$/);
+ const state=(await(await page.request.get(url)).json()).state;expect(state.id).not.toBe(old);expect(state.answers).toEqual([]);expect(state.teams.every(t=>t.points===0)).toBe(true);
+});
+
+test('teacher can test both smartboard teams without changing the real game',async({page})=>{
+ const id=await create(page),url=`/api/game/${id}/blockquest`;
+ await page.goto(`/blockquest.html?game=${id}`);await expect(page.locator('#testBoard')).toBeVisible();await page.locator('#start').click();const real=(await(await page.request.get(url)).json()).state;
+ await page.goto(`/blockquest.html?game=${id}&test=1`);await expect(page.locator('#setupHint')).toContainText('no learner marks saved');await page.locator('#start').click();await expect(page.locator('.tower')).toHaveCount(2);await expect(page.locator('#turn')).toContainText('(demo)');await expect(page.locator('#progress')).toContainText('Test');
+ await page.locator('#answers button').first().click();await page.locator('#place').click();await expect(page.locator('#turn')).toContainText('Moon Builders');await page.locator('#answers button').first().click();await expect(page.locator('#celebration')).toBeVisible();await expect(page.locator('#learning')).toContainText('no learner marks saved');
+ expect((await(await page.request.get(url)).json()).state.id).toBe(real.id);expect((await(await page.request.get(url)).json()).state.answers).toEqual([]);
+ const results=await(await page.request.get(`/api/game/${id}/results`)).json();expect(results.results).toEqual([]);
 });

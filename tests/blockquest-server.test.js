@@ -6,7 +6,7 @@ function fixture(){
  const routes={},game={id:'game-'+(++serial),teacherId:'owner',questions:[{question:'First',sourceIndex:0,options:['Yes','No'],correctIndex:0},{question:'Second',sourceIndex:1,options:['Yes','No'],correctIndex:0}]};
  const app={get:(url,...handlers)=>routes[url.endsWith('/voice')?'voice':'get']=handlers.at(-1),post:(url,...handlers)=>routes.post=handlers.at(-1)};
  register({app,games:{getGame:()=>game,getRosterIds:()=>[],recordResult:()=>{}},roster:{},requireGameAccess(){},gameSessionCanAccess:()=>true});
- const call=(method,body={})=>{let result,status=200;routes[method]({params:{id:game.id},query:{},userId:'owner',body},{json:r=>{result=r;},status:n=>{status=n;return {json:r=>{result=r;}};}});return {status,...result};};
+ const call=(method,body={},query={})=>{let result,status=200;routes[method]({params:{id:game.id},query,userId:'owner',body},{json:r=>{result=r;},status:n=>{status=n;return {json:r=>{result=r;}};}});return {status,...result};};
  const file=path.join(process.env.DATA_DIR,'blockquest',crypto.createHash('sha256').update(game.id+':teacher:owner:board').digest('hex')+'.json');
  return {call,file,routes,game};
 }
@@ -41,4 +41,21 @@ test('narration reads only the current question and rejects stale turns',async()
  const req={params:{id:f.game.id},query:{run:s.id,turn:'0'},userId:'owner'};
  await f.routes.voice(req,res);assert.equal(status,200);assert.deepEqual(spoken,[{owner:'owner',text:'First'}]);assert.ok(Buffer.isBuffer(body));
  await f.routes.voice({...req,query:{run:s.id,turn:'1'}},res);assert.equal(status,409);assert.equal(spoken.length,1);
+});
+
+test('teacher can restart an unfinished run but stale runs and learners cannot reset it',()=>clock(time=>{
+ const {call,routes,game}=fixture();let s=call('post',{action:'start'});const old=s.id;
+ s=call('post',{action:'answer',revision:s.revision,choice:0});assert.equal(s.teams[0].points,100);
+ assert.equal(call('post',{action:'start'}).status,400);
+ assert.equal(call('post',{action:'restart',run:'stale-run'}).status,400);
+ time.add(20000);s=call('post',{action:'restart',run:old});assert.equal(s.status,200);assert.notEqual(s.id,old);assert.equal(s.turn,0);assert.equal(s.phase,'answer');assert.equal(s.answers.length,0);assert.equal(s.deadline-time.now(),20000);assert.ok(s.teams.every(t=>t.points===0&&t.board.flat().every(c=>!c)));
+ assert.equal(call('post',{action:'restart',run:old}).status,400);
+ let status;routes.post({params:{id:game.id},query:{},gameSession:{studentId:'child'},body:{action:'restart',run:s.id}},{status(n){status=n;return this;},json(){}});assert.equal(status,400);assert.equal(call('get').state.id,s.id);
+}));
+
+test('smartboard testing uses a separate run with sample teams and no learner marks',()=>{
+ const {call}=fixture();const real=call('post',{action:'start'});
+ let demo=call('post',{action:'start'},{test:'1'});assert.equal(demo.preview,true);assert.equal(demo.mode,'board');assert.equal(demo.teams.length,2);assert.ok(demo.teams.every(t=>t.names.every(n=>n.endsWith('(demo)'))));assert.notEqual(demo.id,real.id);
+ demo=call('post',{action:'answer',revision:demo.revision,choice:0},{test:'1'});assert.equal(demo.phase,'choose');demo=call('post',{action:'finish',revision:demo.revision},{test:'1'});assert.equal(demo.phase,'ended');assert.equal(demo.saved,false);
+ assert.equal(call('get').state.id,real.id);assert.equal(call('get').state.answers.length,0);
 });

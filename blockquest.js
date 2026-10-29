@@ -7,10 +7,11 @@ function register({app,games,roster,requireGameAccess,gameSessionCanAccess}){
   const teacher=!!req.userId;if(teacher&&game.teacherId!==req.userId)throw Error('Not your question set.');
   if(!teacher&&(!req.gameSession||!gameSessionCanAccess(game,req.gameSession)))throw Error('Join this game with your learner account first.');
   if(!teacher&&game.cutoffAt&&Date.now()>Date.parse(game.cutoffAt))throw Error('This activity has closed.');
-  const board=teacher&&req.query.mode!=='solo';
-  const identity=teacher?'teacher:'+req.userId+':'+(board?'board':'solo'):'student:'+req.gameSession.studentId;
+  const board=teacher&&req.query.mode!=='solo',test=req.query.test==='1';
+  if(test&&!teacher)throw Error('Only teachers can open test games.');
+  const identity=teacher?'teacher:'+req.userId+':'+(board?'board':'solo')+(test?':test':''):'student:'+req.gameSession.studentId;
   const file=path.join(DATA_DIR,'blockquest',crypto.createHash('sha256').update(game.id+':'+identity).digest('hex')+'.json');
-  return {game,teacher,board,file};
+  return {game,teacher,board,test,file};
  }
  function read(file){try{return JSON.parse(fs.readFileSync(file,'utf8'));}catch(e){if(e.code==='ENOENT')return null;throw e;}}
  function members(game){return games.getRosterIds(game).flatMap(id=>(roster.getRoster(game.teacherId,id)?.students||[]).map(s=>({...s,rosterId:id}))).filter((s,i,a)=>a.findIndex(t=>t.id===s.id)===i);}
@@ -19,7 +20,7 @@ function register({app,games,roster,requireGameAccess,gameSessionCanAccess}){
   const q=s.questions[s.turn];out.question=q?{question:q.question,options:q.options}:null;
   if(s.phase==='feedback')out.feedback={correct:s.answers.at(-1)?.correct,answer:q?.options[q.correctIndex],explanation:q?.explanation||''};
   if(s.phase==='choose'||s.phase==='placing')out.question=null;
-  if(ctx.teacher)out.classSize=members(ctx.game).length;
+  if(ctx.teacher)out.classSize=ctx.test?0:members(ctx.game).length;
   return out;
  }
  function saveResults(s,ctx){
@@ -78,22 +79,24 @@ function register({app,games,roster,requireGameAccess,gameSessionCanAccess}){
   }catch(error){res.status(503).json({error:'Question voice is unavailable. You can still answer on screen.'});}
  });
  app.get('/api/game/:id/blockquest',requireGameAccess,(req,res)=>{
-  try{const ctx=scope(req),s=read(ctx.file);if(tick(s))writeJsonAtomic(ctx.file,s);if(s?.phase==='ended'&&!s.saved&&!s.preview){saveResults(s,ctx);writeJsonAtomic(ctx.file,s);}res.json({title:ctx.game.lessonTitle,teacher:ctx.teacher,board:ctx.board,learners:ctx.teacher?members(ctx.game).map(s=>({id:s.id,name:s.name})):undefined,state:s?view(s,ctx):null});}catch(e){res.status(403).json({error:e.message});}
+  try{const ctx=scope(req),s=read(ctx.file);if(tick(s))writeJsonAtomic(ctx.file,s);if(s?.phase==='ended'&&!s.saved&&!s.preview){saveResults(s,ctx);writeJsonAtomic(ctx.file,s);}res.json({title:ctx.game.lessonTitle,teacher:ctx.teacher,board:ctx.board,test:ctx.test,learners:ctx.teacher&&!ctx.test?members(ctx.game).map(s=>({id:s.id,name:s.name})):undefined,state:s?view(s,ctx):null});}catch(e){res.status(403).json({error:e.message});}
  });
  app.post('/api/game/:id/blockquest',requireGameAccess,(req,res)=>{
   try{
    const ctx=scope(req),b=req.body||{};let s=read(ctx.file);if(tick(s))writeJsonAtomic(ctx.file,s);
-   if(b.action==='start'){
+   if(b.action==='start'||b.action==='restart'){
+    const restarting=b.action==='restart';
+    if(restarting&&(!ctx.teacher||!s||b.run!==s.id))throw Error('Only the teacher can restart the current saved game.');
     if(s?.phase==='ended'&&!s.saved&&!s.preview){saveResults(s,ctx);writeJsonAtomic(ctx.file,s);}
-    if(s&&s.phase!=='ended')throw Error('A game is already in progress. Resume it or finish it first.');
-    let people=ctx.teacher?members(ctx.game):[{id:req.gameSession.studentId,name:req.gameSession.name||'Explorer',rosterId:req.gameSession.rosterId}];
-    if(ctx.board&&Array.isArray(b.studentIds)&&people.length){people=people.filter(p=>b.studentIds.includes(p.id));if(!people.length)throw Error('Select at least one learner.');}
+    if(s&&s.phase!=='ended'&&!restarting)throw Error('A game is already in progress. Resume it or finish it first.');
+    let people=ctx.test?['Ava','Leo','Mia','Noah','Lily','Ben'].map(name=>({id:null,name:name+' (demo)'})):ctx.teacher?members(ctx.game):[{id:req.gameSession.studentId,name:req.gameSession.name||'Explorer',rosterId:req.gameSession.rosterId}];
+    if(ctx.board&&!ctx.test&&Array.isArray(b.studentIds)&&people.length){people=people.filter(p=>b.studentIds.includes(p.id));if(!people.length)throw Error('Select at least one learner.');}
     people=people.slice();for(let i=people.length-1;i>0;i--){const j=crypto.randomInt(i+1);[people[i],people[j]]=[people[j],people[i]];}
     if(!people.length)people=[{id:null,name:'Player 1'},{id:null,name:'Player 2'}];
     if(!ctx.board)people=people.slice(0,1);
     const count=ctx.board?2:1,teams=Array.from({length:count},(_,i)=>({name:ctx.board?['Sun Builders','Moon Builders'][i]:'My tower',board:core.empty(),points:0,lines:0,picks:0,members:people.filter((_,j)=>j%count===i)}));
     teams.forEach((t,i)=>{if(!t.members.length)t.members=[{id:null,name:'Team '+(i+1)}];});
-    s={id:crypto.randomUUID(),revision:0,timed:true,mode:ctx.board?'board':'solo',phase:'answer',turn:0,active:0,teams,answers:[],choices:[],questions:ctx.game.questions.map((q,sourceIndex)=>({...q,sourceIndex})).filter(q=>q.options?.length>=2),preview:ctx.teacher&&!ctx.board,saved:false};
+    s={id:crypto.randomUUID(),revision:0,timed:true,mode:ctx.board?'board':'solo',phase:'answer',turn:0,active:0,teams,answers:[],choices:[],questions:ctx.game.questions.map((q,sourceIndex)=>({...q,sourceIndex})).filter(q=>q.options?.length>=2),preview:ctx.teacher&&(!ctx.board||ctx.test),saved:false};
     if(!s.questions.length)throw Error('Add multiple-choice questions to this question set first.');s.learner=teams[0].members[0].name;teams[0].picks++;questionClock(s,Date.now());
    }else{
     if(!s||b.revision!==s.revision)throw Error('This turn has changed. Refresh to continue.');
