@@ -14,7 +14,7 @@ function register({app,games,roster,requireGameAccess,gameSessionCanAccess}){
  function read(file){try{return JSON.parse(fs.readFileSync(file,'utf8'));}catch(e){if(e.code==='ENOENT')return null;throw e;}}
  function members(game){return games.getRosterIds(game).flatMap(id=>(roster.getRoster(game.teacherId,id)?.students||[]).map(s=>({...s,rosterId:id}))).filter((s,i,a)=>a.findIndex(t=>t.id===s.id)===i);}
  function view(s,ctx){
-  const out={...s,total:s.questions.length,teams:s.teams.map(t=>({...t,names:t.members.map(p=>p.name),members:undefined})),questions:undefined};
+  const out={...s,total:s.questions.length,teams:s.teams.map(t=>({...t,names:t.members.map(p=>p.name),members:undefined})),questions:undefined,pieceRounds:undefined,serverNow:Date.now()};
   const q=s.questions[s.turn];out.question=q?{question:q.question,options:q.options}:null;
   if(s.phase==='feedback')out.feedback={correct:s.answers.at(-1)?.correct,answer:q?.options[q.correctIndex],explanation:q?.explanation||''};
   if(s.phase==='choose'||s.phase==='placing')out.question=null;
@@ -50,16 +50,17 @@ function register({app,games,roster,requireGameAccess,gameSessionCanAccess}){
    }else{
     if(!s||b.revision!==s.revision)throw Error('This turn has changed. Refresh to continue.');
     const team=s.teams[s.active],q=s.questions[s.turn];
-    if(b.action==='pause'&&ctx.teacher&&s.phase!=='ended'){if(s.phase==='paused'){s.phase=s.beforePause;}else{s.beforePause=s.phase;s.phase='paused';}}
+    if(b.action==='pause'&&ctx.teacher&&s.phase!=='ended'){if(s.phase==='paused'){const pauseLength=Math.max(0,Date.now()-(s.pausedAt||Date.now()));if(s.beforePause==='placing'){s.readyAt+=pauseLength;if(Number.isFinite(s.placementStartedAt))s.placementStartedAt+=pauseLength;}s.phase=s.beforePause;delete s.pausedAt;}else{s.beforePause=s.phase;s.pausedAt=Date.now();s.phase='paused';}}
     else if(b.action==='finish'&&ctx.teacher){s.phase='ended';}
     else if(b.action==='answer'&&s.phase==='answer'){
      if(!Number.isInteger(b.choice)||b.choice<0||b.choice>=q.options.length)throw Error('Choose an answer.');
      const person=team.members[(team.picks-1)%team.members.length];s.answers.push({studentId:person.id,questionIndex:q.sourceIndex,choice:b.choice,correct:b.choice===q.correctIndex});s.phase='feedback';
     }else if(b.action==='next'&&s.phase==='feedback'){
-     if(s.answers.at(-1).correct){s.choices=core.choices();s.rescued=!core.hasRoom(team.board,s.choices);if(s.rescued)team.board=core.rescue(team.board);s.phase='choose';}else advance(s);
+     if(s.answers.at(-1).correct){s.choices=core.offer(s);s.rescued=!core.hasRoom(team.board,s.choices);if(s.rescued)team.board=core.rescue(team.board);s.phase='choose';}else advance(s);
     }else if(b.action==='place'&&s.phase==='choose'){
      if(!s.choices.includes(b.shape)||!Number.isInteger(b.rotation)||b.rotation<0||b.rotation>3)throw Error('Choose one of your blocks.');
-     s.lastBefore=team.board;s.lastDrop={...core.landing(team.board,b.shape,b.rotation,b.column),shape:b.shape};const result=core.place(team.board,b.shape,b.rotation,b.column);team.board=result.board;team.points+=result.points;team.lines+=result.cleared.length;s.lastPlacement=result.cleared;s.phase='placing';s.readyAt=Date.now()+1000;
+     if(s.mode==='board'){s.pieceRounds ||= {};s.pieceRounds[Math.floor(s.turn/s.teams.length)] ||= s.choices.slice();}
+     s.lastLinesBefore=team.lines;s.lastBefore=team.board;s.lastDrop={...core.landing(team.board,b.shape,b.rotation,b.column),shape:b.shape};const result=core.place(team.board,b.shape,b.rotation,b.column);team.board=result.board;team.points+=result.points;team.lines+=result.cleared.length;s.lastPlacement=result.cleared;s.lastAward={points:result.points,bonus:result.bonus||0};s.phase='placing';s.placementStartedAt=Date.now();s.readyAt=s.placementStartedAt+core.sceneTiming(result.cleared.length).duration;
     }else if(b.action==='next'&&s.phase==='placing'&&Date.now()>=s.readyAt){advance(s);}else throw Error('Wait for the current action to finish.');
    }
    s.revision++;writeJsonAtomic(ctx.file,s);if(s.phase==='ended'){saveResults(s,ctx);writeJsonAtomic(ctx.file,s);}res.json(view(s,ctx));
