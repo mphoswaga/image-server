@@ -29,3 +29,43 @@
 .tower:only-child{width:min(68vw,300px)}
 
 .paused *{animation-play-state:paused!important}
+
+/* Timed classroom turns. The preview is unearned; the solid piece is controllable. */
+nav{flex-wrap:wrap}#turn{font-size:clamp(17px,2vw,26px);text-align:center;flex:1}.countdown{--remaining:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;flex:0 0 68px;width:68px;height:68px;border-radius:50%;background:radial-gradient(circle at center,#fffefa 57%,transparent 60%),conic-gradient(#258675 var(--remaining),#d4e4df 0);color:#145849}.countdown b{font-size:26px;line-height:1}.countdown small{font-size:9px;font-weight:900;letter-spacing:1px;margin-top:3px}.countdown.urgent{color:#a13d31;background:radial-gradient(circle at center,#fffefa 57%,transparent 60%),conic-gradient(#d9634c var(--remaining),#ead5cf 0)}.round{min-height:68px}.tower{width:min(36vw,260px)}.tower:only-child{width:min(68vw,280px)}.moving-block{position:absolute;inset:5px;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(10,1fr);gap:2px;pointer-events:none;z-index:6}.moving-block .cell{outline:1px solid #effff1;outline-offset:-1px;box-shadow:inset 0 2px #ffffff70,0 0 9px #fff5}.moving-block.preview-block{opacity:.35}.preview-block .cell{outline:2px dashed #e1f8e9}#voiceStatus{font-size:11px;color:#53736e;min-height:0;margin:0}.dock:has(#question[hidden]) #explanation:empty{display:none}@media(max-width:600px){nav{margin:0;width:100%;justify-content:center}header{justify-content:center}#turn{flex-basis:65%;font-size:17px;text-align:left}.countdown{flex-basis:58px;width:58px;height:58px}.round #mission{font-size:10px;flex-basis:100%}.tower{width:calc(50vw - 18px)}.tower:only-child{width:min(64vw,260px)}}
+@media(min-width:601px) and (max-height:850px){.tower{width:220px}.tower:only-child{width:220px}.tower-top{min-height:68px}.tower-top h2{font-size:16px}.tower-top small{font-size:11px}.dock{margin-top:10px;padding:12px 20px}.dock .eyebrow{margin:4px 0 8px}.dock h1{font-size:26px;margin:6px 0 12px}.dock #explanation:empty{display:none}.pieces{margin:6px 0}.round{margin-bottom:8px}}
+
+/* Keep the reading area between tall, unobstructed team playfields. */
+@media(min-width:900px){
+ main{max-width:1800px;padding:16px 20px 12px}
+ #arena{display:grid;grid-template-columns:minmax(180px,23%) minmax(0,1fr) minmax(180px,23%);grid-template-rows:auto auto;gap:12px 20px;align-items:end}
+ .round{grid-column:1/-1;margin:0;min-width:0}
+ .round #mission{max-width:280px;font-size:13px}
+ .boards{display:contents}
+ .tower,.tower:only-child{width:100%;height:max(310px,calc(100dvh - 190px));display:flex;flex-direction:column;min-width:0;padding:10px}
+ .tower:first-child{grid-column:1;grid-row:2}
+ .tower:nth-child(2){grid-column:3;grid-row:2}
+ .tower-top{flex:0 0 80px;min-height:80px}
+ .tower-top h2{font-size:clamp(15px,1.4vw,21px)}
+ .tower-top small{font-size:12px}
+ .tower .grid{flex:1;min-height:0;grid-template-rows:repeat(10,minmax(0,1fr))}
+ .tower .cell{aspect-ratio:auto;min-height:0}
+ .dock{grid-column:2;grid-row:2;width:100%;max-width:none;margin:0;padding:22px;align-self:end;min-width:0}
+ .dock h1{font-size:clamp(23px,2.2vw,34px);overflow-wrap:anywhere;margin:12px 0 18px}
+ .dock .eyebrow{margin:0 0 12px}
+ .dock .answers{grid-template-columns:1fr;gap:10px}
+ .dock .answers button{white-space:normal;overflow-wrap:anywhere;line-height:1.35;padding:12px 16px}
+ .dock #explanation:empty,.dock #voiceStatus:empty,.dock .pieces:empty{display:none}
+ #arena:has(.tower:only-child){grid-template-columns:minmax(230px,34%) minmax(0,1fr)}
+ #arena:has(.tower:only-child) .dock{max-width:800px;justify-self:center}
+ #status:empty{display:none}
+}
+@media(min-width:900px) and (max-height:650px){
+ main{padding:8px 14px}
+ #arena{gap:8px 12px}
+ header{padding:8px 14px;gap:12px}header strong{font-size:18px}nav{gap:5px}nav button{font-size:12px;padding:7px 10px}
+ .round #mission{max-width:200px;font-size:11px}
+ .tower,.tower:only-child{height:max(300px,calc(100dvh - 160px));padding:7px}
+ .tower-top{flex-basis:68px;min-height:68px}
+ .dock{padding:16px}.dock h1{font-size:23px;margin:8px 0 12px}.dock .answers{gap:7px}.dock .answers button{padding:9px 12px;font-size:14px}
+}
+@media(min-width:900px) and (max-height:650px){.dock .answers{grid-template-columns:repeat(2,minmax(0,1fr))}.dock h1{font-size:21px}.dock .eyebrow{font-size:10px;margin-bottom:8px}}
