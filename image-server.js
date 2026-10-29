@@ -339,7 +339,7 @@ app.get('/colonyquest.js', (req, res) => {
   res.set('Cloudflare-CDN-Cache-Control', 'no-store');
   res.sendFile(path.join(__dirname, 'public', 'colonyquest.js'));
 });
-app.get(['/blockquest.html', '/blockquest.js', '/blockquest-core.js', '/blockquest-audio.js', '/blockquest.css', '/blockquest-neon.css', '/games-hub.js', '/colonyquest-live.js', '/games-welcome.js', '/moonquest.js', '/moonquest.css', '/moonquest-report.js', '/newsletters.html', '/newsletters.js', '/newsletters.css', '/family-newsletter.html', '/family-newsletter.js', '/family-newsletter.css', '/newsletter-checklist.js'], (req, res) => {
+app.get(['/blockquest-world.js', '/blockquest-world.css', '/blockquest-live.html', '/blockquest-live.js', '/blockquest-live.css', '/blockquest.html', '/blockquest.js', '/blockquest-core.js', '/blockquest-audio.js', '/blockquest.css', '/blockquest-neon.css', '/games-hub.js', '/colonyquest-live.js', '/games-welcome.js', '/moonquest.js', '/moonquest.css', '/moonquest-report.js', '/newsletters.html', '/newsletters.js', '/newsletters.css', '/family-newsletter.html', '/family-newsletter.js', '/family-newsletter.css', '/newsletter-checklist.js'], (req, res) => {
   res.set('Cache-Control', 'no-store, max-age=0');
   res.set('CDN-Cache-Control', 'no-store');
   res.set('Cloudflare-CDN-Cache-Control', 'no-store');
@@ -5883,6 +5883,7 @@ app.get('/practice/file-sizes', requirePracticeEnabled, (req, res) => {
 app.get('/play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'play.html')));
 app.get('/fishquest-play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'fishquest.html')));
 require('./blockquest').register({app,games,roster,requireGameAccess,gameSessionCanAccess});
+require('./blockquest-live').register({app,games,roster,requireGameAccess,gameSessionCanAccess});
 app.get('/fishquest/:id', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'fishquest-teacher.html')));
 const moonquestStore = require('./moonquest-routes').installMoonQuest(app, {
   requireAuth, sessionSecret, roster, studentAccount, learnerPickerEntries, studentHandle, optionalStudentSession,

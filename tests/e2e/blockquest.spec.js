@@ -9,8 +9,8 @@ async function create(page){
 for(const solo of [false,true])test(`${solo?'solo':'smartboard'} answer, choose, rotate, place, resume and celebrate`,async({page},info)=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));const id=await create(page);
  await page.goto(`/blockquest.html?game=${id}${solo?'&mode=solo':''}`);await page.locator('#start').click();
- await expect(page.locator('.tower')).toHaveCount(solo?1:2);await expect(page.locator('#question')).toContainText('Which device shows pictures?');await expect(page.locator('#countdown')).toBeVisible();await expect(page.locator('#seconds')).toHaveText(/^(20|19)$/);await expect(page.locator('.moving-block.preview-block')).toBeVisible();await page.screenshot({path:info.outputPath('answer-countdown.png'),fullPage:true});if(info.project.name==='windows-100'){const box=await page.locator('#answers').boundingBox();expect(box.y+box.height).toBeLessThanOrEqual(768);}
- await page.locator('#answers button').first().click();await expect(page.locator('#phase')).toContainText('Correct');await expect(page.locator('.piece')).toHaveCount(3);await expect(page.locator('#seconds')).toHaveText(/^(15|14)$/);
+ await expect(page.locator('.tower')).toHaveCount(solo?1:2);await expect(page.locator('#question')).toContainText('Which device shows pictures?');await expect(page.locator('#countdown')).toBeVisible();await expect(page.locator('#seconds')).toHaveText(/^(20|19)$/);await expect(page.locator('.moving-block')).toHaveCount(0);await page.screenshot({path:info.outputPath('answer-countdown.png'),fullPage:true});if(info.project.name==='windows-100'){const box=await page.locator('#answers').boundingBox();expect(box.y+box.height).toBeLessThanOrEqual(768);}
+ await page.locator('#answers button').first().click();await expect(page.locator('#phase')).toContainText('Correct');await expect(page.locator('.piece')).toHaveCount(3);await expect(page.locator('.moving-block')).toHaveCount(1);await expect(page.locator('#seconds')).toHaveText(/^(15|14)$/);
  await page.locator('#rotate').click();if(await page.locator('#place').isDisabled())await page.locator('#left').click();await page.locator('#place').click();
  await expect(page.locator('#phase')).toContainText('tower');await expect(page.locator('.tower.active')).toContainText('110 points');await page.screenshot({path:info.outputPath('block-placement.png'),fullPage:true});
  await page.reload();await page.locator('#resume').click();await expect(page.locator('.tower.active')).toContainText('110 points');
@@ -105,8 +105,8 @@ test('teacher can test both smartboard teams without changing the real game',asy
 });
 
 test('BlockQuest controls use versioned assets and bypass stale browser caches',async({request})=>{
- const html=await request.get('/blockquest.html');expect(html.headers()['cache-control']).toContain('no-store');const body=await html.text();expect(body).toContain('/blockquest.js?v=5');expect(body).toContain('/blockquest.css?v=5');
- for(const path of ['/blockquest.js?v=5','/blockquest-core.js?v=5','/blockquest-audio.js?v=5','/blockquest.css?v=5','/blockquest-neon.css?v=5','/games-hub.js?v=4']){const response=await request.get(path);expect(response.ok()).toBe(true);expect(response.headers()['cache-control']).toContain('no-store');expect(response.headers()['cloudflare-cdn-cache-control']).toBe('no-store');}
+ const html=await request.get('/blockquest.html');expect(html.headers()['cache-control']).toContain('no-store');const body=await html.text();expect(body).toContain('/blockquest.js?v=7');expect(body).toContain('/blockquest.css?v=7');
+ for(const path of ['/blockquest-world.js?v=1','/blockquest-world.css?v=1','/blockquest.js?v=7','/blockquest-core.js?v=7','/blockquest-audio.js?v=7','/blockquest.css?v=7','/blockquest-neon.css?v=7','/games-hub.js?v=4']){const response=await request.get(path);expect(response.ok()).toBe(true);expect(response.headers()['cache-control']).toContain('no-store');expect(response.headers()['cloudflare-cdn-cache-control']).toBe('no-store');}
 });
 
 function pulsingSoundtrack(){
@@ -134,4 +134,23 @@ test('neon glow follows actual music and stops for mute, pause and reduced motio
  await page.unroute('**/assets/colonyquest/music/*.mp3');
  await page.evaluate(async()=>{const music=document.querySelector('[data-colony-music]');music.pause();music.src='/assets/colonyquest/music/toys-are-us-blue-deer-studio.mp3';await music.play();});
  await expect.poll(()=>page.evaluate(()=>Number(document.documentElement.style.getPropertyValue('--music-pulse')))).toBeGreaterThan(.02);
+});
+
+test('large answer timer gives one warning beep per second from ten and respects pause and sound off',async({page})=>{
+ const core=require('../../public/blockquest-core');let state;
+ await page.route('**/api/game/warnings/blockquest',r=>{
+  const now=Date.now();state ||= {id:'warnings',timed:true,mode:'board',phase:'answer',revision:1,turn:0,total:2,active:0,learner:'Mia',answers:[],deadline:now+12000,phaseStartedAt:now-8000,teams:['Sun Builders','Moon Builders'].map(name=>({name,board:core.empty(),points:0,lines:0,names:['Mia']})),question:{question:'Which device shows pictures?',options:['Monitor','Keyboard']}};
+  if(r.request().method()==='POST'){
+   if(state.phase==='paused'){state.deadline+=now-state.pausedAt;state.phase='answer';}else{state.phase='paused';state.beforePause='answer';state.pausedAt=now;}state.revision++;return r.fulfill({json:{...state,serverNow:now}});
+  }
+  return r.fulfill({json:{teacher:true,board:true,title:'Countdown test',state:{...state,serverNow:now}}});
+ });
+ await page.goto('/blockquest.html?game=warnings');await page.locator('#voice').click();
+ await page.evaluate(()=>{window.warningBeeps=[];const original=BlockQuestAudio.prototype.cue;BlockQuestAudio.prototype.cue=function(kind){if(kind==='warning'&&this.enabled)window.warningBeeps.push(document.getElementById('seconds').textContent);return original.call(this,kind);};});
+ await page.locator('#resume').click();await expect(page.locator('#seconds')).toHaveText('11');expect(await page.evaluate(()=>window.warningBeeps)).toEqual([]);await expect(page.locator('.moving-block')).toHaveCount(0);
+ const clock=await page.locator('#countdown').boundingBox();expect(clock.width).toBeGreaterThanOrEqual(80);expect(Number.parseFloat(await page.locator('#seconds').evaluate(el=>getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(39);
+ await expect(page.locator('#seconds')).toHaveText('10');await expect(page.locator('#countdown')).toHaveClass(/urgent/);await expect.poll(()=>page.evaluate(()=>window.warningBeeps)).toEqual(['10']);
+ await expect(page.locator('#seconds')).toHaveText('9');expect(await page.evaluate(()=>window.warningBeeps)).toEqual(['10','9']);
+ await page.locator('#pause').click();await page.waitForTimeout(1200);expect(await page.evaluate(()=>window.warningBeeps)).toEqual(['10','9']);
+ await page.locator('#sound').click();await page.locator('#pause').click();await expect(page.locator('#seconds')).toHaveText('8');expect(await page.evaluate(()=>window.warningBeeps)).toEqual(['10','9']);
 });

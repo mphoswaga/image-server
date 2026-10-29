@@ -5,6 +5,7 @@ const gameNow=()=>Date.now()+serverOffset;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 async function json(url,opts){const response=await fetch(url,opts),d=await response.json();if(!response.ok)throw Error(d.error||'Please try again.');return d;}
 const sounds=new BlockQuestAudio(endpoint,text=>{$('voiceStatus').textContent=text;});
+const world=new BlockQuestWorld(sounds);
 function apply(next){
  const before=s,oldKey=before&&[before.id,before.revision,before.phase,before.turn].join(':');s=next;
  if(Number.isFinite(s.serverNow))serverOffset=s.serverNow-Date.now();
@@ -28,17 +29,16 @@ function updateClock(){
  if(!s)return;const active=s.timed&&['answer','choose','paused'].includes(s.phase),phase=s.phase==='paused'?s.beforePause:s.phase;
  $('countdown').hidden=!active||!['answer','choose'].includes(phase);if($('countdown').hidden)return;
  const now=s.phase==='paused'?s.pausedAt:gameNow(),limit=phase==='answer'?BlockQuest.ANSWER_MS:BlockQuest.BUILD_MS,remaining=Math.max(0,s.deadline-now),seconds=Math.ceil(remaining/1000);
- $('seconds').textContent=seconds;$('timerLabel').textContent=phase==='answer'?'ANSWER':'BUILD';$('countdown').style.setProperty('--remaining',remaining/limit*100+'%');$('countdown').classList.toggle('urgent',seconds<=5);
- const key=s.id+':'+s.turn+':'+phase+':'+seconds;if(s.phase!=='paused'&&seconds>0&&seconds<=5&&lastWarning!==key){lastWarning=key;sounds.cue('tick');}
+ $('seconds').textContent=seconds;$('timerLabel').textContent=phase==='answer'?'ANSWER':'BUILD';$('countdown').style.setProperty('--remaining',remaining/limit*100+'%');$('countdown').classList.toggle('urgent',seconds<=(phase==='answer'?10:5));
+ const key=s.id+':'+s.turn+':'+phase+':'+seconds;if(s.phase!=='paused'&&!document.hidden&&seconds>0&&seconds<=(phase==='answer'?10:5)&&lastWarning!==key){lastWarning=key;sounds.cue(phase==='answer'?'warning':'tick');}
  renderMoving();if(remaining===0&&s.phase!=='paused')poll();
 }
 function renderMoving(){
- if(!s?.timed||!['answer','choose'].includes(s.phase))return;
- const team=s.teams[s.active];let f=s.falling,preview=s.phase==='answer';
- if(preview){const key=s.answerPreview||'I',landing=BlockQuest.landing(team.board,key,0,2),progress=Math.max(0,Math.min(1,(gameNow()-s.phaseStartedAt)/BlockQuest.ANSWER_MS));f={shape:key,rotation:0,column:2,y:Math.floor((landing?.y||0)*progress)};}
- if(!f)return;const signature=[s.id,s.turn,s.phase,f.shape,f.rotation,f.column,f.y].join(':');
+ if(!s?.timed||s.phase!=='choose'){$('boards').querySelectorAll('.moving-block').forEach(layer=>layer.remove());movingKey='';return;}
+ const f=s.falling;if(!f)return;
+ const signature=[s.id,s.turn,s.phase,f.shape,f.rotation,f.column,f.y].join(':');
  const grid=$('boards').querySelector('.tower.active .grid');if(!grid)return;if(signature===movingKey&&grid.querySelector('.moving-block'))return;movingKey=signature;grid.querySelector('.moving-block')?.remove();
- const layer=document.createElement('div');layer.className='moving-block'+(preview?' preview-block':'');layer.setAttribute('aria-hidden','true');
+ const layer=document.createElement('div');layer.className='moving-block';layer.setAttribute('aria-hidden','true');
  layer.innerHTML=BlockQuest.cells(f.shape,f.rotation).filter(([x,y])=>f.column+x<8&&f.y+y<10).map(([x,y])=>`<span class="cell ${f.shape}" style="grid-column:${f.column+x+1};grid-row:${f.y+y+1}"></span>`).join('');grid.append(layer);
 }
 function miniature(key){return '<span class="shape" aria-hidden="true">'+BlockQuest.cells(key).map(([x,y])=>`<i class="mini ${key}" style="grid-column:${x+1};grid-row:${y+1}"></i>`).join('')+'</span>';}
@@ -64,13 +64,14 @@ function renderBoards(){const current=s.teams[s.active];const ghost=s.phase==='c
  if(s.timed&&s.phase==='choose')for(const b of $('pieces').children)b.disabled=busy||!fits(b.dataset.shape,0,column);
 }
 function render(){if(!s)return;const ended=s.phase==='ended';$('setup').hidden=true;$('arena').hidden=ended;$('celebration').hidden=!ended;$('pause').hidden=!data.teacher||ended;$('finish').hidden=!data.teacher||ended;$('pause').textContent=s.phase==='paused'?'Resume':'Pause';$('pause').disabled=$('finish').disabled=busy;
- if(ended){const best=Math.max(...s.teams.map(t=>t.points)),winners=s.teams.filter(t=>t.points===best);$('winner').textContent=s.mode==='solo'?(s.teams[0].lines>=3?'Mission complete!':'Brilliant building, explorer!'):winners.length>1?'A shared victory!':winners[0].name+' win!';$('podium').innerHTML=s.teams.map(t=>`<div class="champion"><b>${esc(t.name)}</b>${rocket(t.lines)}<p>${t.points} points · ${t.correctCount||0} correct · ${t.lines} rows</p><p>${(t.names||[]).map(esc).join(', ')}</p></div>`).join('');$('learning').textContent=`${s.answers.filter(a=>a.correct).length} correct of ${s.answers.length} turns · ${s.answers.filter(a=>a.choice<0).length} timed out. Building points are separate from learning marks.${s.preview?' Teacher practice: no learner marks saved.':''}`;$('again').disabled=busy;return;}
+ if(ended){const best=Math.max(...s.teams.map(t=>t.points)),winners=s.teams.filter(t=>t.points===best);$('winner').textContent=s.mode==='solo'?(s.teams[0].lines>=3?'Mission complete!':'Brilliant building, explorer!'):winners.length>1?'A shared victory!':winners[0].name+' win!';$('podium').innerHTML=s.teams.map(t=>`<div class="champion"><b>${esc(t.name)}</b>${rocket(t.lines)}<p>${t.points} points · ${t.correctCount||0} correct · ${t.lines} rows</p><p>${(t.names||[]).map(esc).join(', ')}</p></div>`).join('');$('learning').textContent=`${s.answers.filter(a=>a.correct).length} correct of ${s.answers.length} turns · ${s.answers.filter(a=>a.choice<0).length} timed out. Building points are separate from learning marks.${s.preview?' Teacher practice: no learner marks saved.':''}`;$('again').disabled=busy;world.sync(s);return;}
  $('arena').className=(s.phase==='paused'?'paused ':'')+((s.phase==='placing'||s.phase==='paused'&&s.beforePause==='placing')?'placing'+(s.lastPlacement?.length?' row-celebration':''):'');$('progress').textContent=`${data.test?'Test · ':''}Question ${Math.min(s.turn+1,s.total)} / ${s.total}`;$('turn').textContent=s.mode==='board'?`${s.teams[s.active].name} · ${s.learner}`:s.learner;$('mission').textContent=s.mode==='solo'?`Mission: clear 3 rows · ${s.teams[0].lines}/3`:s.timed?'100 points per correct answer · rows earn more':'Build your rocket · 3 rows to launch';renderBoards();
  $('answers').replaceChildren();$('pieces').replaceChildren();$('placement').hidden=s.phase!=='choose';$('next').hidden=!!s.timed||!['feedback','placing'].includes(s.phase);$('next').disabled=busy;$('explanation').textContent='';
  const names={answer:'Your turn to discover',feedback:s.lastAnswer?.timedOut?'Time’s up. Let’s learn, then change teams.':s.feedback?.correct?'Correct! Choose your next building block.':'Keep learning. The next turn is coming.',choose:s.timed?'Correct! Choose and steer your falling block':'Choose a block, rotate it, then place it',placing:s.lastPlacement?.length?`${s.lastPlacement.length===1?'Row cleared!':s.lastPlacement.length+' rows!'} +${s.lastAward?.points??(10+100*s.lastPlacement.length)} points${s.lastAward?.bonus?' · '+s.lastAward.bonus+' combo bonus':''}`:'A new piece of your tower!',paused:'Paused — listen to your teacher'};$('phase').textContent=names[s.phase]||'';$('question').textContent=s.question?.question||'';$('question').hidden=!s.question?.question;
  if(s.phase==='answer')s.question.options.forEach((text,choice)=>{const b=document.createElement('button');b.textContent=text;b.disabled=busy;b.onclick=()=>act('answer',{choice});$('answers').append(b);});
  if(s.phase==='feedback'){$('explanation').textContent=`${s.feedback.answer}${s.feedback.explanation?' — '+s.feedback.explanation:''}`;$('next').textContent=s.feedback.correct?'Choose my block →':'Next turn →';}
  if(s.phase==='choose'){if(s.rescued)$('explanation').textContent='Rescue! Three rows of space cleared so you can keep building.';s.choices.forEach(key=>{const b=document.createElement('button');b.dataset.shape=key;b.className='piece'+(shape===key?' selected':'');b.setAttribute('aria-label','Choose '+key+' block');b.setAttribute('aria-pressed',String(shape===key));b.innerHTML=miniature(key);b.disabled=busy||(s.timed&&!BlockQuest.fits(s.teams[s.active].board,BlockQuest.cells(key,0),column,s.falling?.y||0));b.onclick=()=>{if(s.timed)act('move',{shape:key,rotation:0});else{shape=key;rotation=0;render();}};$('pieces').append(b);});}
+ world.sync(s);
  clearTimeout(timer);if(s.phase==='placing'){const effect=scene(),left=Math.max(0,s.readyAt-gameNow());$('next').textContent='Next turn →';$('next').disabled=busy||left>0;if(left>0){const untilMission=effect.rows&&effect.elapsed<effect.mission?effect.mission-effect.elapsed:Infinity;timer=setTimeout(render,Math.min(left,untilMission)+30);}}
 }
 $('boards').onclick=e=>{const grid=e.target.closest('.grid');if(!grid||s.phase!=='choose'||Number(grid.dataset.team)!==s.active||busy)return;const r=grid.getBoundingClientRect();const nextColumn=Math.min(7,Math.max(0,Math.floor((e.clientX-r.left)/r.width*8)));if(s.timed)act('move',{column:nextColumn});else{column=nextColumn;render();}};

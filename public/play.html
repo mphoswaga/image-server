@@ -455,7 +455,7 @@
     }
     function loop(t){ if(!active) return; let dt=(t-lastT)/1000; lastT=t; if(dt>0.05) dt=0.05; active.update(dt); active.render(); raf=requestAnimationFrame(loop); }
     async function pickGame(key){
-      if(key==='blockquest'){location.href='/blockquest.html?game='+encodeURIComponent(GAME_ID)+'&mode=solo';return;}
+      if(key==='blockquest'){try{const response=await fetch('/api/game/'+encodeURIComponent(GAME_ID)+'/blockquest-live');const live=await response.json();if(response.ok&&live.state&&live.state.phase!=='ended'){location.href='/blockquest-live.html?game='+encodeURIComponent(GAME_ID);return;}}catch{}location.href='/blockquest.html?game='+encodeURIComponent(GAME_ID)+'&mode=solo';return;}
       if(key==='fishquest'){ location.href=game.canManageColonyQuest&&!teacherTest?'/fishquest/'+GAME_ID:'/fishquest-play/'+GAME_ID+(game.canManageColonyQuest&&teacherTest?'?test=1':''); return; }
       if(key==='moonquest'){ if(game.canManageColonyQuest)location.href='/moonquest';return; }
       if(key==='colonyquest-solo'){location.href='/colonyquest-live-play/'+GAME_ID+'?solo=1';return;}

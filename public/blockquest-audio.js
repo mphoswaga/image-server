@@ -49,18 +49,18 @@ window.BlockQuestAudio=class {
   this.pulseFrame=requestAnimationFrame(frame);
  }
  cue(kind){if(!this.enabled)return;this.unlock();const c=this.context;if(!c)return;
-  const notes=kind==='build'?[180,230,300]:kind==='clear'?[392,523,659,784,1046]:kind==='correct'?[392,523,659]:kind==='tick'?[680]:[160];
-  notes.forEach((hz,i)=>{const o=c.createOscillator(),g=c.createGain(),at=c.currentTime+i*(kind==='build'?.075:.1);o.type=kind==='build'?'triangle':'sine';o.frequency.setValueAtTime(hz,at);if(kind==='build')o.frequency.exponentialRampToValueAtTime(70,at+.08);g.gain.setValueAtTime(.001,at);g.gain.exponentialRampToValueAtTime(kind==='tick'?.015:.055,at+.012);g.gain.exponentialRampToValueAtTime(.001,at+.16);o.connect(g).connect(c.destination);o.start(at);o.stop(at+.18);});
+  const notes=kind==='build'?[180,230,300]:kind==='clear'?[392,523,659,784,1046]:kind==='correct'?[392,523,659]:kind==='warning'?[880]:kind==='tick'?[680]:[160];
+  notes.forEach((hz,i)=>{const o=c.createOscillator(),g=c.createGain(),at=c.currentTime+i*(kind==='build'?.075:.1);o.type=kind==='build'?'triangle':'sine';o.frequency.setValueAtTime(hz,at);if(kind==='build')o.frequency.exponentialRampToValueAtTime(70,at+.08);g.gain.setValueAtTime(.001,at);g.gain.exponentialRampToValueAtTime(kind==='warning'?.09:kind==='tick'?.015:.055,at+.012);g.gain.exponentialRampToValueAtTime(.001,at+.16);o.connect(g).connect(c.destination);o.start(at);o.stop(at+.18);});
  }
  stop(){this.epoch++;this.status('');this.audio.pause();this.speaking=false;this.music.setVolume(.18);if(this.objectUrl){URL.revokeObjectURL(this.objectUrl);this.objectUrl=null;}}
  sync(s){this.state=s;this.music.setActive(this.musicOn&&s&&!['paused','ended'].includes(s.phase));this.syncPulse();
-  const key=s?.id+':'+s?.turn;
+  const key=s?.id+':'+(s?.voiceTurn??s?.turn);
   if(!this.voice||s?.phase!=='answer'){if(s?.phase==='paused'){if(!this.speaking){this.stop();this.voiceKey='';}else this.audio.pause();return;}this.stop();return;}
   if(key===this.voiceKey){if(this.speaking&&!document.hidden&&this.audio.paused)this.audio.play().catch(()=>{});return;}
   this.stop();this.voiceKey=key;const epoch=this.epoch;
   this.status('Preparing question voice…');
   const separator=this.endpoint.includes('?')?'&':'?';
-  const url=this.endpoint.replace('/blockquest','/blockquest/voice')+separator+new URLSearchParams({run:s.id,turn:s.turn});
+  const url=this.endpoint.replace(/\/blockquest(-live)?(?=\?|$)/,'/blockquest$1/voice')+separator+new URLSearchParams({run:s.id,turn:s.turn});
   fetch(url).then(async response=>{if(!response.ok)throw Error('Voice unavailable');return response.blob();}).then(async blob=>{
    if(epoch!==this.epoch||this.state?.phase!=='answer'||!this.voice)return;
    this.objectUrl=URL.createObjectURL(blob);this.audio.src=this.objectUrl;this.speaking=true;this.music.setVolume(.05);await this.audio.play();this.status('');
