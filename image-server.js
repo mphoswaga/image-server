@@ -5882,6 +5882,7 @@ app.get('/practice/file-sizes', requirePracticeEnabled, (req, res) => {
 // Student play page (the shareable link target).
 app.get('/play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'play.html')));
 app.get('/fishquest-play/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'fishquest.html')));
+require('./blockquest').register({app,games,roster,requireGameAccess,gameSessionCanAccess});
 app.get('/fishquest/:id', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'fishquest-teacher.html')));
 const moonquestStore = require('./moonquest-routes').installMoonQuest(app, {
   requireAuth, sessionSecret, roster, studentAccount, learnerPickerEntries, studentHandle, optionalStudentSession,
