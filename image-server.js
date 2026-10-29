@@ -339,7 +339,7 @@ app.get('/colonyquest.js', (req, res) => {
   res.set('Cloudflare-CDN-Cache-Control', 'no-store');
   res.sendFile(path.join(__dirname, 'public', 'colonyquest.js'));
 });
-app.get(['/colonyquest-live.js', '/games-welcome.js', '/moonquest.js', '/moonquest.css', '/moonquest-report.js', '/newsletters.html', '/newsletters.js', '/newsletters.css', '/family-newsletter.html', '/family-newsletter.js', '/family-newsletter.css', '/newsletter-checklist.js'], (req, res) => {
+app.get(['/blockquest.html', '/blockquest.js', '/blockquest-core.js', '/blockquest-audio.js', '/blockquest.css', '/games-hub.js', '/colonyquest-live.js', '/games-welcome.js', '/moonquest.js', '/moonquest.css', '/moonquest-report.js', '/newsletters.html', '/newsletters.js', '/newsletters.css', '/family-newsletter.html', '/family-newsletter.js', '/family-newsletter.css', '/newsletter-checklist.js'], (req, res) => {
   res.set('Cache-Control', 'no-store, max-age=0');
   res.set('CDN-Cache-Control', 'no-store');
   res.set('Cloudflare-CDN-Cache-Control', 'no-store');

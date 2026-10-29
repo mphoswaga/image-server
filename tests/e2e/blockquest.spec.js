@@ -103,3 +103,8 @@ test('teacher can test both smartboard teams without changing the real game',asy
  expect((await(await page.request.get(url)).json()).state.id).toBe(real.id);expect((await(await page.request.get(url)).json()).state.answers).toEqual([]);
  const results=await(await page.request.get(`/api/game/${id}/results`)).json();expect(results.results).toEqual([]);
 });
+
+test('BlockQuest controls use versioned assets and bypass stale browser caches',async({request})=>{
+ const html=await request.get('/blockquest.html');expect(html.headers()['cache-control']).toContain('no-store');const body=await html.text();expect(body).toContain('/blockquest.js?v=4');expect(body).toContain('/blockquest.css?v=4');
+ for(const path of ['/blockquest.js?v=4','/blockquest-core.js?v=4','/blockquest-audio.js?v=4','/blockquest.css?v=4','/games-hub.js?v=4']){const response=await request.get(path);expect(response.ok()).toBe(true);expect(response.headers()['cache-control']).toContain('no-store');expect(response.headers()['cloudflare-cdn-cache-control']).toBe('no-store');}
+});
