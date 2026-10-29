@@ -59,12 +59,12 @@ for(const reduced of [false,true])test(`two-row clear builds a rocket and keeps 
  const core=require('../../public/blockquest-core'),board=core.empty();for(const y of [8,9])board[y]=['T','T','T','T','T','T',null,null];board[7][0]='S';
  const result=core.place(board,'O',0,6);let snapshot;
  await page.route('**/api/game/rocket/blockquest',r=>{
-  const now=Date.now();snapshot ||= {id:'rocket',mode:'board',phase:'placing',revision:3,turn:0,total:4,active:0,learner:'Mia',answers:[{correct:true}],lastBefore:board,lastDrop:{...core.landing(board,'O',0,6),shape:'O'},lastPlacement:[8,9],lastLinesBefore:1,lastAward:{points:result.points,bonus:result.bonus},placementStartedAt:now,readyAt:now+2700,serverNow:now,teams:[{name:'Sun Builders',board:result.board,points:260,lines:3,names:['Mia']},{name:'Moon Builders',board:core.empty(),points:0,lines:0,names:['Noah']}]};
+  const now=Date.now();snapshot ||= {id:'rocket',mode:'board',phase:'placing',revision:3,turn:0,total:4,active:0,learner:'Mia',answers:[{correct:true}],lastBefore:board,lastDrop:{...core.landing(board,'O',0,6),shape:'O'},lastPlacement:[8,9],lastLinesBefore:1,lastAward:{points:result.points,bonus:result.bonus},placementStartedAt:now,readyAt:now+3400,serverNow:now,teams:[{name:'Sun Builders',board:result.board,points:260,lines:3,names:['Mia']},{name:'Moon Builders',board:core.empty(),points:0,lines:0,names:['Noah']}]};
   return r.fulfill({json:{teacher:true,board:true,title:'Rocket builders',state:{...snapshot,serverNow:now}}});
  });
  await page.goto('/blockquest.html?game=rocket');await page.locator('#resume').click();
  await expect(page.locator('#phase')).toContainText('2 rows! +260 points · 50 combo bonus');
- await expect(page.locator('.tower.active .rocket-build')).toHaveAttribute('data-mission-stage','1');await expect(page.locator('#next')).toBeDisabled();
+ await expect(page.locator('.tower.active .rocket-build')).toHaveAttribute('data-mission-stage','1');await expect(page.locator('#next')).toBeDisabled();await expect(page.locator('.clear-beam')).toHaveCount(2);await expect(page.locator('.clear-award')).toContainText('2 ROW COMBO');
  if(!reduced){await expect(page.locator('.cell.clearing')).toHaveCount(16);await expect(page.locator('.row-party i')).toHaveCount(16);}
  await page.waitForTimeout(1050);await page.screenshot({path:info.outputPath('row-celebration.png'),fullPage:true});
  await expect(page.locator('.tower.active .rocket-build')).toHaveAttribute('data-mission-stage','3');
@@ -105,6 +105,33 @@ test('teacher can test both smartboard teams without changing the real game',asy
 });
 
 test('BlockQuest controls use versioned assets and bypass stale browser caches',async({request})=>{
- const html=await request.get('/blockquest.html');expect(html.headers()['cache-control']).toContain('no-store');const body=await html.text();expect(body).toContain('/blockquest.js?v=4');expect(body).toContain('/blockquest.css?v=4');
- for(const path of ['/blockquest.js?v=4','/blockquest-core.js?v=4','/blockquest-audio.js?v=4','/blockquest.css?v=4','/games-hub.js?v=4']){const response=await request.get(path);expect(response.ok()).toBe(true);expect(response.headers()['cache-control']).toContain('no-store');expect(response.headers()['cloudflare-cdn-cache-control']).toBe('no-store');}
+ const html=await request.get('/blockquest.html');expect(html.headers()['cache-control']).toContain('no-store');const body=await html.text();expect(body).toContain('/blockquest.js?v=5');expect(body).toContain('/blockquest.css?v=5');
+ for(const path of ['/blockquest.js?v=5','/blockquest-core.js?v=5','/blockquest-audio.js?v=5','/blockquest.css?v=5','/blockquest-neon.css?v=5','/games-hub.js?v=4']){const response=await request.get(path);expect(response.ok()).toBe(true);expect(response.headers()['cache-control']).toContain('no-store');expect(response.headers()['cloudflare-cdn-cache-control']).toBe('no-store');}
+});
+
+function pulsingSoundtrack(){
+ const rate=22050,frames=rate*3,buffer=Buffer.alloc(44+frames*2);
+ buffer.write('RIFF');buffer.writeUInt32LE(buffer.length-8,4);buffer.write('WAVEfmt ',8);buffer.writeUInt32LE(16,16);buffer.writeUInt16LE(1,20);buffer.writeUInt16LE(1,22);buffer.writeUInt32LE(rate,24);buffer.writeUInt32LE(rate*2,28);buffer.writeUInt16LE(2,32);buffer.writeUInt16LE(16,34);buffer.write('data',36);buffer.writeUInt32LE(frames*2,40);
+ for(let i=0;i<frames;i++){const t=i/rate,beat=t%1,amplitude=beat<.38?.8:.001;buffer.writeInt16LE(Math.round(Math.sin(2*Math.PI*110*t)*amplitude*32767),44+i*2);}return buffer;
+}
+test('neon glow follows actual music and stops for mute, pause and reduced motion',async({page})=>{
+ test.setTimeout(45000);const core=require('../../public/blockquest-core');let state;
+ await page.route('**/assets/colonyquest/music/*.mp3',r=>r.fulfill({contentType:'audio/wav',body:pulsingSoundtrack()}));
+ await page.route('**/api/game/pulse/blockquest',r=>{
+  const now=Date.now();state ||= {id:'pulse',timed:true,mode:'board',phase:'answer',revision:1,turn:0,total:4,active:0,learner:'Mia',answers:[],deadline:now+20000,phaseStartedAt:now,answerPreview:'T',teams:['Sun Builders','Moon Builders'].map(name=>({name,board:core.empty(),points:0,lines:0,names:['Mia']})),question:{question:'Which device shows pictures?',options:['Monitor','Keyboard']}};
+  if(r.request().method()==='POST'){const b=r.request().postDataJSON();if(b.action==='pause'){state.phase=state.phase==='paused'?'answer':'paused';state.beforePause='answer';state.pausedAt=now;state.revision++;}return r.fulfill({json:{...state,serverNow:now}});}
+  return r.fulfill({json:{teacher:true,board:true,title:'Music test',state:{...state,serverNow:now}}});
+ });
+ await page.goto('/blockquest.html?game=pulse');await page.locator('#voice').click();await page.locator('#resume').click();
+ await expect(page.locator('html')).toHaveAttribute('data-music-pulse','on');
+ const levels=await page.evaluate(async()=>{const values=[];for(let i=0;i<50;i++){values.push(Number(document.documentElement.style.getPropertyValue('--music-pulse')));await new Promise(r=>setTimeout(r,50));}return values;});
+ expect(Math.max(...levels)).toBeGreaterThan(.08);expect(Math.max(...levels)-Math.min(...levels)).toBeGreaterThan(.04);
+ await page.locator('#music').click();await expect(page.locator('html')).toHaveAttribute('data-music-pulse','off');expect(await page.evaluate(()=>document.documentElement.style.getPropertyValue('--music-pulse'))).toBe('0');
+ await page.locator('#music').click();await expect(page.locator('html')).toHaveAttribute('data-music-pulse','on');
+ await page.locator('#pause').click();await expect(page.locator('html')).toHaveAttribute('data-music-pulse','off');await page.locator('#pause').click();await expect(page.locator('html')).toHaveAttribute('data-music-pulse','on');
+ await page.emulateMedia({reducedMotion:'reduce'});await expect(page.locator('html')).toHaveAttribute('data-music-pulse','off');await page.emulateMedia({reducedMotion:'no-preference'});await expect(page.locator('html')).toHaveAttribute('data-music-pulse','on');
+ // Verify the bundled production soundtrack also drives the analyser, not just the fixture.
+ await page.unroute('**/assets/colonyquest/music/*.mp3');
+ await page.evaluate(async()=>{const music=document.querySelector('[data-colony-music]');music.pause();music.src='/assets/colonyquest/music/toys-are-us-blue-deer-studio.mp3';await music.play();});
+ await expect.poll(()=>page.evaluate(()=>Number(document.documentElement.style.getPropertyValue('--music-pulse')))).toBeGreaterThan(.02);
 });

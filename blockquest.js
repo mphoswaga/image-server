@@ -30,10 +30,10 @@ function register({app,games,roster,requireGameAccess,gameSessionCanAccess}){
    games.recordResult(ctx.game.id,{studentId,name:learner.name,rosterId:learner.rosterId||null,score:rows.filter(a=>a.correct).length,total:rows.length,answers:Object.fromEntries(rows.map(a=>[a.questionIndex,a.choice])),arcadeScore:s.teams.find(t=>t.members.some(p=>p.id===studentId)).points,gameType:s.mode==='board'?'blockquest-board':'blockquest-solo',resultId:s.id+':'+studentId});
   }s.saved=true;
  }
- function questionClock(s,now){if(s.timed&&s.phase==='answer'){s.phaseStartedAt=now;s.deadline=now+20000;s.answerPreview=core.offer(s)[0];}}
+ function questionClock(s,now){if(s.timed&&s.phase==='answer'){s.phaseStartedAt=now;s.deadline=now+core.ANSWER_MS;s.answerPreview=core.offer(s)[0];}}
  function prepareBlock(s,now){
   const team=s.teams[s.active];s.choices=core.offer(s);s.rescued=!core.hasRoom(team.board,s.choices);if(s.rescued)team.board=core.rescue(team.board);
-  s.phase='choose';s.phaseStartedAt=now;s.deadline=now+15000;
+  s.phase='choose';s.phaseStartedAt=now;s.deadline=now+core.BUILD_MS;
   for(const shape of s.choices)for(let rotation=0;rotation<4;rotation++)for(const column of [2,0,1,3,4,5,6,7])if(core.landing(team.board,shape,rotation,column)){
    s.falling={shape,rotation,column,y:0,lastStepAt:now};return;
   }

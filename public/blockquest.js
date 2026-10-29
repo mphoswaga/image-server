@@ -27,7 +27,7 @@ async function act(action,extra={}){if(busy)return;busy=true;++requestVersion;re
 function updateClock(){
  if(!s)return;const active=s.timed&&['answer','choose','paused'].includes(s.phase),phase=s.phase==='paused'?s.beforePause:s.phase;
  $('countdown').hidden=!active||!['answer','choose'].includes(phase);if($('countdown').hidden)return;
- const now=s.phase==='paused'?s.pausedAt:gameNow(),limit=phase==='answer'?20000:15000,remaining=Math.max(0,s.deadline-now),seconds=Math.ceil(remaining/1000);
+ const now=s.phase==='paused'?s.pausedAt:gameNow(),limit=phase==='answer'?BlockQuest.ANSWER_MS:BlockQuest.BUILD_MS,remaining=Math.max(0,s.deadline-now),seconds=Math.ceil(remaining/1000);
  $('seconds').textContent=seconds;$('timerLabel').textContent=phase==='answer'?'ANSWER':'BUILD';$('countdown').style.setProperty('--remaining',remaining/limit*100+'%');$('countdown').classList.toggle('urgent',seconds<=5);
  const key=s.id+':'+s.turn+':'+phase+':'+seconds;if(s.phase!=='paused'&&seconds>0&&seconds<=5&&lastWarning!==key){lastWarning=key;sounds.cue('tick');}
  renderMoving();if(remaining===0&&s.phase!=='paused')poll();
@@ -35,7 +35,7 @@ function updateClock(){
 function renderMoving(){
  if(!s?.timed||!['answer','choose'].includes(s.phase))return;
  const team=s.teams[s.active];let f=s.falling,preview=s.phase==='answer';
- if(preview){const key=s.answerPreview||'I',landing=BlockQuest.landing(team.board,key,0,2),progress=Math.max(0,Math.min(1,(gameNow()-s.phaseStartedAt)/20000));f={shape:key,rotation:0,column:2,y:Math.floor((landing?.y||0)*progress)};}
+ if(preview){const key=s.answerPreview||'I',landing=BlockQuest.landing(team.board,key,0,2),progress=Math.max(0,Math.min(1,(gameNow()-s.phaseStartedAt)/BlockQuest.ANSWER_MS));f={shape:key,rotation:0,column:2,y:Math.floor((landing?.y||0)*progress)};}
  if(!f)return;const signature=[s.id,s.turn,s.phase,f.shape,f.rotation,f.column,f.y].join(':');
  const grid=$('boards').querySelector('.tower.active .grid');if(!grid)return;if(signature===movingKey&&grid.querySelector('.moving-block'))return;movingKey=signature;grid.querySelector('.moving-block')?.remove();
  const layer=document.createElement('div');layer.className='moving-block'+(preview?' preview-block':'');layer.setAttribute('aria-hidden','true');
@@ -55,8 +55,8 @@ function renderBoards(){const current=s.teams[s.active];const ghost=s.phase==='c
   return `<section class="tower ${i===s.active?'active':''}"><div class="tower-top"><div><h2>${esc(team.name)}</h2><small>${team.points} points · ${team.correctCount||0} correct · ${team.lines} rows</small></div>${rocket(effect.active&&i===s.active&&effect.elapsed<effect.mission?(s.lastLinesBefore??team.lines):team.lines,effect.active&&i===s.active&&effect.elapsed>=effect.mission,effect.active&&i===s.active&&effect.elapsed>=effect.mission&&team.lines>=3&&(s.lastLinesBefore||0)<3)}</div><div class="grid" data-team="${i}" role="img" aria-label="${esc(team.name)} block board">${board.flatMap((row,y)=>row.map((key,x)=>{
    const falling=dropping&&i===s.active&&s.lastDrop?.cells.some(p=>p[0]===x&&p[1]===y);
    const settle=dropping&&i===s.active&&!s.lastPlacement.includes(y)?s.lastPlacement.filter(row=>row>y).length:0;
-   return `<span class="cell ${falling?s.lastDrop.shape:key||''} ${falling?'falling':''} ${settle&&(key||falling)?'settling':''} ${dropping&&i===s.active&&s.lastPlacement.includes(y)?'clearing':''} ${i===s.active&&ghost?.cells.some(p=>p[0]===x&&p[1]===y)?'ghost':''}" style="--fall:${s.lastDrop?.y||0};--settle:${settle}"></span>`;
-  })).join('')}${effect.active&&i===s.active&&effect.rows?`<div class="row-party" style="--party-y:${(s.lastPlacement.reduce((a,b)=>a+b,0)/effect.rows+.5)/BlockQuest.H*100}%" aria-hidden="true">${Array.from({length:16},(_,n)=>`<i style="--x:${8+(n*17)%84}%;--dx:${(n%2?1:-1)*(20+n*4)}px;--dy:${-20-(n%5)*19}px;--r:${n*61}deg;--hue:${n*29}"></i>`).join('')}</div>`:''}</div></section>`;
+   return `<span class="cell ${falling?s.lastDrop.shape:key||''} ${falling?'falling':''} ${settle&&(key||falling)?'settling':''} ${dropping&&i===s.active&&s.lastPlacement.includes(y)?'clearing':''} ${i===s.active&&ghost?.cells.some(p=>p[0]===x&&p[1]===y)?'ghost':''}" style="--fall:${Math.max(0,(s.lastDrop?.y||0)-(s.lastDrop?.fromY||0))};--settle:${settle};--shard-x:${(x-3.5)*9}px;--shard-r:${(x%2?1:-1)*(8+x*3)}deg"></span>`;
+  })).join('')}${effect.active&&i===s.active&&effect.rows?`<div class="clear-effects" aria-hidden="true">${s.lastPlacement.map(row=>`<span class="clear-beam" style="--row-y:${(row+.5)/BlockQuest.H*100}%"></span>`).join('')}<span class="clear-ring"></span><div class="clear-award"><strong>${effect.rows>1?effect.rows+' ROW COMBO':'ROW CLEAR'}</strong><b>+${s.lastAward?.points||0}</b></div></div><div class="row-party" style="--party-y:${(s.lastPlacement.reduce((a,b)=>a+b,0)/effect.rows+.5)/BlockQuest.H*100}%" aria-hidden="true">${Array.from({length:16},(_,n)=>`<i style="--x:${8+(n*17)%84}%;--dx:${(n%2?1:-1)*(20+n*4)}px;--dy:${-20-(n%5)*19}px;--r:${n*61}deg;--hue:${n*29}"></i>`).join('')}</div>`:''}</div></section>`;
  }).join('');
  renderMoving();
  const fits=(key,rot,col)=>!s.timed||BlockQuest.fits(current.board,BlockQuest.cells(key,rot),col,s.falling?.y||0);

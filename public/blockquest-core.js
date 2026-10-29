@@ -1,5 +1,5 @@
 (function(root,factory){if(typeof module==='object')module.exports=factory();else root.BlockQuest=factory();})(typeof window==='object'?window:globalThis,()=>{
- const W=8,H=10,shapes={I:[[0,0],[1,0],[2,0],[3,0]],O:[[0,0],[1,0],[0,1],[1,1]],T:[[0,0],[1,0],[2,0],[1,1]],L:[[0,0],[0,1],[0,2],[1,2]],J:[[1,0],[1,1],[1,2],[0,2]],S:[[1,0],[2,0],[0,1],[1,1]],Z:[[0,0],[1,0],[1,1],[2,1]]};
+ const ANSWER_MS=20000,BUILD_MS=15000,W=8,H=10,shapes={I:[[0,0],[1,0],[2,0],[3,0]],O:[[0,0],[1,0],[0,1],[1,1]],T:[[0,0],[1,0],[2,0],[1,1]],L:[[0,0],[0,1],[0,2],[1,2]],J:[[1,0],[1,1],[1,2],[0,2]],S:[[1,0],[2,0],[0,1],[1,1]],Z:[[0,0],[1,0],[1,1],[2,1]]};
  const empty=()=>Array.from({length:H},()=>Array(W).fill(null));
  function cells(key,rotation=0){let c=shapes[key]?.map(p=>p.slice());if(!c)throw Error('Choose a block.');for(let i=0;i<((rotation%4)+4)%4;i++){c=c.map(([x,y])=>[-y,x]);const minX=Math.min(...c.map(p=>p[0])),minY=Math.min(...c.map(p=>p[1]));c=c.map(([x,y])=>[x-minX,y-minY]);}return c;}
  function fits(board,shape,x,y){return shape.every(([dx,dy])=>x+dx>=0&&x+dx<W&&y+dy>=0&&y+dy<H&&!board[y+dy][x+dx]);}
@@ -16,8 +16,8 @@
   return state.pieceRounds[round].slice();
  }
  function comboBonus(rows){return rows>1?50*rows*(rows-1)/2:0;}
- function sceneTiming(rows){return {duration:rows?2700:1000,settled:rows?1650:1000,mission:1700};}
+ function sceneTiming(rows){return {duration:rows?3400:1000,settled:rows?2200:1000,mission:2250};}
  function mission(lines){const stage=Math.min(3,Math.max(0,Math.floor(Number(lines)||0)));return {stage,goal:3,complete:stage===3,label:['Launch pad ready','Boosters built','Rocket cabin built','Ready for launch!'][stage]};}
  function rescue(board){return [...Array.from({length:3},()=>Array(W).fill(null)),...board.slice(0,H-3).map(r=>r.slice())];}
- return {fits,offer,comboBonus,sceneTiming,mission,W,H,empty,cells,landing,hasRoom,place,choices,rescue};
+ return {ANSWER_MS,BUILD_MS,fits,offer,comboBonus,sceneTiming,mission,W,H,empty,cells,landing,hasRoom,place,choices,rescue};
 });
