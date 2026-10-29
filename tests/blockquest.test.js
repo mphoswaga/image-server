@@ -8,7 +8,7 @@ test('all rotations retain four distinct squares and land within board bounds',(
 });
 test('placement clears completed rows with gravity and never changes original board',()=>{
  const board=core.empty();board[9]=['S','S','S','S',null,null,null,null];
- const result=core.place(board,'I',0,4);assert.deepEqual(result.cleared,[9]);assert.equal(result.points,110);assert.ok(result.board.every(r=>r.every(c=>c===null)));assert.equal(board[9][4],null);
+ const result=core.place(board,'I',0,4);assert.deepEqual(result.cleared,[9]);assert.equal(result.points,260);assert.ok(result.board.every(r=>r.every(c=>c===null)));assert.equal(board[9][4],null);
 });
 test('rescue restores space without deleting the entire tower or inventing points',()=>{
  const board=Array.from({length:10},()=>Array(8).fill('O'));assert.equal(core.hasRoom(board,['O','I','T']),false);
@@ -29,8 +29,8 @@ test('matching team turns share distinct offers and persist through reload witho
 });
 test('two rows award the server-calculated combo and preserve settling blocks',()=>{
  const board=core.empty();for(const y of [8,9])board[y]=['T','T','T','T','T','T',null,null];board[7][0]='S';
- const r=core.place(board,'O',0,6);assert.deepEqual(r.cleared,[8,9]);assert.equal(r.bonus,50);assert.equal(r.points,260);assert.equal(r.board[9][0],'S');assert.equal(board[7][0],'S');
- assert.equal(core.comboBonus(0),0);assert.equal(core.comboBonus(1),0);assert.equal(core.comboBonus(4),300);
+ const r=core.place(board,'O',0,6);assert.deepEqual(r.cleared,[8,9]);assert.equal(r.bonus,150);assert.equal(r.points,660);assert.equal(r.board[9][0],'S');assert.equal(board[7][0],'S');
+ assert.equal(core.comboBonus(0),0);assert.equal(core.comboBonus(1),0);assert.equal(core.comboBonus(4),900);
 });
 test('rocket mission follows earned rows and the clear scene includes settling and construction',()=>{
  for(let lines=0;lines<5;lines++){const m=core.mission(lines);assert.equal(m.stage,Math.min(3,lines));assert.equal(m.complete,lines>=3);}

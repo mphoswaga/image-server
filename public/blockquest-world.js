@@ -36,6 +36,15 @@ window.BlockQuestWorld=class {
     if(rect&&age<3400){const rows=run.lastPlacement||[],ys=rows.length?rows:[run.lastDrop.y];for(const y of ys)this.burst(rect,y,rows.length?'clear':'build',(rows.length?.65:.6)-age/1000);}
    }
   }
+  for(const event of [run.attackEvent,run.defenseEvent].filter(Boolean)){
+   const key='battle:'+event.id;if(this.seen.has(key))continue;this.seen.add(key);if(this.seen.size>100)this.seen.delete(this.seen.values().next().value);
+   const age=(run.serverNow||state.serverNow||Date.now())-event.at;if(age>4000)continue;
+   let from,to;if(event.fromIndex!==undefined){from=document.querySelector(`[data-team="${event.fromIndex}"]`);to=document.querySelector(`[data-team="${event.toIndex}"]`);}else{from=document.querySelector(event.direction==='incoming'?'.rival .grid':'.tower.active .grid');to=document.querySelector(event.direction==='incoming'?'.tower.active .grid':'.rival .grid');}
+   const source=from?.getBoundingClientRect(),target=to?.getBoundingClientRect(),own=document.querySelector('.tower.active .grid')?.getBoundingClientRect();
+   if(event.kind==='attack'&&source&&target){this.events.push({kind:'attack',born:this.time+.9-age/1000,x:source.x+source.width/2,y:source.y+source.height*.75,tx:target.x+target.width/2,ty:target.y+target.height*.75,rows:event.rows,seed:8});if(this.gentle&&!this.paused&&!document.hidden)this.audio.cue?.('attack');}
+   else if(own){const shieldAt=event.from&&target?target:own;this.events.push({kind:event.kind==='incoming'?'received':'shield',born:this.time-age/1000,x:shieldAt.x+shieldAt.width/2,y:shieldAt.y+shieldAt.height*.8,width:shieldAt.width,seed:7});if(!this.paused&&!document.hidden)this.audio.cue?.(event.kind==='incoming'?'build':'shield');}
+  }
+  this.events=this.events.slice(-12);
   if(state.phase==='ended'&&!this.seen.has(state.id+':win')){this.seen.add(state.id+':win');this.events.push({kind:'win',born:this.time,x:this.w/2,y:this.h*.32,seed:19});}
   this.schedule();
  }
@@ -94,7 +103,9 @@ window.BlockQuestWorld=class {
  impacts(){const c=this.ink,w=this.w,h=this.h;c.setTransform(this.dpr,0,0,this.dpr,0,0);c.clearRect(0,0,w,h);if(this.gentle)return;
   c.save();c.beginPath();c.rect(0,0,w,h);for(const r of this.safe||[])c.rect(r.left-2,r.top-2,r.width+4,r.height+4);c.clip('evenodd');c.globalCompositeOperation='screen';
   this.events=this.events.filter(e=>this.time-e.born<3.4);
-  for(const e of this.events){const age=this.time-e.born;if(age<0)continue;const win=e.kind==='win',clear=e.kind==='clear',life=win?3.4:clear?2.6:1,fade=Math.max(0,1-age/life);if(!fade)continue;
+  for(const e of this.events){const age=this.time-e.born;if(age<0)continue;
+   if(e.kind==='attack'){if(!e.played&&!this.paused&&!document.hidden){e.played=true;this.audio.cue?.('attack');}if(age<=1.35){const p=Math.min(1,age/.9),ease=p*p*(3-2*p),x=e.x+(e.tx-e.x)*ease,y=e.y+(e.ty-e.y)*ease-Math.sin(p*Math.PI)*65;c.globalAlpha=Math.max(0,1-Math.max(0,age-.9)/.45);c.strokeStyle='#ffb9e9';c.lineWidth=3;c.beginPath();for(let j=0;j<=8;j++){const q=Math.max(0,p-.22)+Math.min(p,.22)*j/8,u=q*q*(3-2*q),px=e.x+(e.tx-e.x)*u,py=e.y+(e.ty-e.y)*u-Math.sin(q*Math.PI)*65;j?c.lineTo(px,py):c.moveTo(px,py);}c.stroke();for(let i=0;i<e.rows*4;i++){const xx=x+(i%4-1.5)*13,yy=y+Math.floor(i/4)*13;c.drawImage(this.sprites[1][1],xx-13,yy-13,26,26);c.fillStyle='#ffe2f7';c.fillRect(xx-4,yy-4,8,8);}if(p===1){c.strokeStyle='#ffa0dc';c.beginPath();c.arc(e.tx,e.ty,12+(age-.9)*110,0,Math.PI*2);c.stroke();}}continue;}
+   const win=e.kind==='win',clear=e.kind==='clear',life=win?3.4:clear?2.6:1,fade=Math.max(0,1-age/life);if(!fade)continue;
    const count=this.w<650?(clear?32:win?70:14):(clear?64:win?130:24),radius=age*(win?250:clear?210:65);
    c.globalAlpha=fade*.6;c.strokeStyle=clear?'#8df9ff':'#ffc675';c.lineWidth=2;c.beginPath();c.ellipse(e.x,e.y,(e.width||80)/2+radius,radius*.25+2,0,0,Math.PI*2);c.stroke();
    for(let i=0;i<count;i++){const a=this.rand(i+e.seed)*Math.PI*2,speed=.3+this.rand(i*3+e.seed),x=e.x+Math.cos(a)*radius*speed,y=e.y+Math.sin(a)*radius*speed+age*age*18,sz=(clear||win?9:5)*(1-age/life);c.globalAlpha=fade*(.45+speed*.4);c.drawImage(this.sprites[this.scene][i%2],x-sz,y-sz,sz*2,sz*2);

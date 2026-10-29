@@ -13,11 +13,11 @@ function fixture(){
 function clock(fn){const saved=Date.now;let now=100000;Date.now=()=>now;try{fn({now:()=>now,set:v=>now=v,add:v=>now+=v});}finally{Date.now=saved;}}
 test('combo is awarded once, pause freezes its scene and learning marks stay separate',()=>clock(time=>{
  const {call,file}=fixture();let s=call('post',{action:'start'});s=call('post',{action:'answer',revision:s.revision,choice:0});assert.equal(s.phase,'choose');
- const stored=JSON.parse(fs.readFileSync(file));stored.choices=['O','I','T'];stored.pieceRounds[0]=['O','I','T'];stored.falling={shape:'O',rotation:0,column:6,y:0,lastStepAt:time.now()};stored.teams[0].lines=1;
+ const stored=JSON.parse(fs.readFileSync(file));stored.choices=['O','I','T'];stored.pieceRounds ||= {};stored.pieceRounds[0]=['O','I','T'];stored.falling={shape:'O',rotation:0,column:6,y:0,lastStepAt:time.now()};stored.teams[0].lines=1;
  stored.teams[0].board=core.empty();for(const y of [8,9])stored.teams[0].board[y]=['T','T','T','T','T','T',null,null];fs.writeFileSync(file,JSON.stringify(stored));
- const revision=s.revision;s=call('post',{action:'place',revision});assert.equal(s.teams[0].points,360);assert.equal(s.teams[0].lines,3);assert.equal(s.teams[0].correctCount,1);assert.deepEqual(s.lastAward,{points:260,bonus:50});assert.equal(s.readyAt-time.now(),3400);assert.equal(s.answers.filter(a=>a.correct).length,1);
+ const revision=s.revision;s=call('post',{action:'place',revision});assert.equal(s.teams[0].points,760);assert.equal(s.teams[0].lines,3);assert.equal(s.teams[0].correctCount,1);assert.deepEqual(s.lastAward,{points:660,bonus:150,chain:1});assert.equal(s.readyAt-time.now(),3400);assert.equal(s.answers.filter(a=>a.correct).length,1);
  assert.equal(call('post',{action:'place',revision}).status,400);time.add(700);s=call('post',{action:'pause',revision:s.revision});time.add(6000);s=call('post',{action:'pause',revision:s.revision});assert.equal(time.now()-s.placementStartedAt,700);assert.equal(s.readyAt-time.now(),2700);
- time.set(s.readyAt);s=call('get').state;assert.equal(s.turn,1);s=call('post',{action:'answer',revision:s.revision,choice:0});assert.deepEqual(s.choices,['O','I','T']);assert.equal(s.pieceRounds,undefined);assert.equal(s.teams[0].points,360);
+ time.set(s.readyAt);s=call('get').state;assert.equal(s.turn,1);s=call('post',{action:'answer',revision:s.revision,choice:0});assert.deepEqual(s.choices,['I','O','T']);assert.equal(s.pieceRounds,undefined);assert.equal(s.teams[0].points,760);
 }));
 test('question timer starts immediately, expires once and automatically calls the next learner',()=>clock(time=>{
  const {call}=fixture();let s=call('post',{action:'start'});assert.equal(s.deadline-time.now(),20000);assert.ok(s.learner);const original=s.revision;
@@ -28,8 +28,8 @@ test('question timer starts immediately, expires once and automatically calls th
 test('earned blocks fall from the top and auto-lock within 15 seconds without extra clicks',()=>clock(time=>{
  const {call}=fixture();let s=call('post',{action:'start'});time.add(3000);s=call('post',{action:'answer',revision:s.revision,choice:0});assert.equal(s.phase,'choose');assert.equal(s.deadline-time.now(),15000);assert.equal(s.falling.y,0);assert.equal(s.teams[0].points,100);
  time.add(1500);s=call('get').state;assert.equal(s.falling.y,1);s=call('post',{action:'pause',revision:s.revision});const remaining=s.deadline-time.now();time.add(10000);s=call('post',{action:'pause',revision:s.revision});assert.equal(s.deadline-time.now(),remaining);assert.equal(s.falling.y,1);
- time.set(s.deadline);s=call('get').state;assert.equal(s.phase,'placing');assert.equal(s.teams[0].points,110);assert.equal(s.teams[0].board.flat().filter(Boolean).length,4);
- time.set(s.readyAt);s=call('get').state;assert.equal(s.phase,'answer');assert.equal(s.active,1);assert.equal(s.teams[0].points,110);
+ time.set(s.deadline);s=call('get').state;assert.equal(s.phase,'placing');assert.equal(s.teams[0].points,360);assert.equal(s.teams[0].board.flat().filter(Boolean).length,0);
+ time.set(s.readyAt);s=call('get').state;assert.equal(s.phase,'answer');assert.equal(s.active,1);assert.equal(s.teams[0].points,360);
 }));
 
 test('narration reads only the current question and rejects stale turns',async()=>{
@@ -48,7 +48,7 @@ test('teacher can restart an unfinished run but stale runs and learners cannot r
  s=call('post',{action:'answer',revision:s.revision,choice:0});assert.equal(s.teams[0].points,100);
  assert.equal(call('post',{action:'start'}).status,400);
  assert.equal(call('post',{action:'restart',run:'stale-run'}).status,400);
- time.add(20000);s=call('post',{action:'restart',run:old});assert.equal(s.status,200);assert.notEqual(s.id,old);assert.equal(s.turn,0);assert.equal(s.phase,'answer');assert.equal(s.answers.length,0);assert.equal(s.deadline-time.now(),20000);assert.ok(s.teams.every(t=>t.points===0&&t.board.flat().every(c=>!c)));
+ time.add(20000);s=call('post',{action:'restart',run:old});assert.equal(s.status,200);assert.notEqual(s.id,old);assert.equal(s.turn,0);assert.equal(s.phase,'answer');assert.equal(s.answers.length,0);assert.equal(s.deadline-time.now(),20000);assert.ok(s.teams.every(t=>t.points===0&&JSON.stringify(t.board)===JSON.stringify(core.starter())));
  assert.equal(call('post',{action:'restart',run:old}).status,400);
  let status;routes.post({params:{id:game.id},query:{},gameSession:{studentId:'child'},body:{action:'restart',run:s.id}},{status(n){status=n;return this;},json(){}});assert.equal(status,400);assert.equal(call('get').state.id,s.id);
 }));

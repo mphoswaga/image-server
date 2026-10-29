@@ -12,7 +12,7 @@ test('learners progress independently; replayed or invalid moves cannot award po
  const s=setup();start(s);const p=s.players.s0,other=s.players.s1,r=p.run,revision=r.revision;
  duels.action(s,p.id,{action:'answer',run:r.id,revision,choice:0},8000);assert.equal(r.phase,'choose');assert.equal(other.run.phase,'answer');assert.equal(r.teams[0].points,100);
  assert.throws(()=>duels.action(s,p.id,{action:'answer',run:r.id,revision,choice:0},8000));assert.throws(()=>duels.action(s,p.id,{action:'move',run:r.id,revision:r.revision,shape:'FAKE'},8000));
- duels.action(s,p.id,{action:'place',run:r.id,revision:r.revision},8100);assert.equal(r.teams[0].points,110);duels.tick(s,9200);assert.equal(r.phase,'answer');assert.equal(r.answers.length,1);assert.equal(other.run.answers.length,0);
+ duels.action(s,p.id,{action:'place',run:r.id,revision:r.revision},8100);assert.equal(r.teams[0].points,360);duels.tick(s,11600);assert.equal(r.phase,'answer');assert.equal(r.answers.length,1);assert.equal(other.run.answers.length,0);
  const view=duels.view(s,p.id);assert.equal(view.run.questions,undefined);assert.equal(view.run.pieceRounds,undefined);assert.equal(view.run.question.correctIndex,undefined);assert.equal(view.players,undefined);assert.equal(view.opponent.answers,undefined);
 });
 test('pause freezes duel and answer clocks, odd classes keep playing and late learners join next round',()=>{

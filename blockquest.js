@@ -53,9 +53,9 @@ function register({app,games,roster,requireGameAccess,gameSessionCanAccess}){
     people=people.slice();for(let i=people.length-1;i>0;i--){const j=crypto.randomInt(i+1);[people[i],people[j]]=[people[j],people[i]];}
     if(!people.length)people=[{id:null,name:'Player 1'},{id:null,name:'Player 2'}];
     if(!ctx.board)people=people.slice(0,1);
-    const count=ctx.board?2:1,teams=Array.from({length:count},(_,i)=>({name:ctx.board?['Sun Builders','Moon Builders'][i]:'My tower',board:core.empty(),points:0,lines:0,picks:0,members:people.filter((_,j)=>j%count===i)}));
+    const count=ctx.board?2:1,teams=Array.from({length:count},(_,i)=>({name:ctx.board?['Sun Builders','Moon Builders'][i]:'My tower',board:core.starter(),builds:0,points:0,lines:0,picks:0,members:people.filter((_,j)=>j%count===i)}));
     teams.forEach((t,i)=>{if(!t.members.length)t.members=[{id:null,name:'Team '+(i+1)}];});
-    s={id:crypto.randomUUID(),revision:0,timed:true,mode:ctx.board?'board':'solo',phase:'answer',turn:0,active:0,teams,answers:[],choices:[],questions:ctx.game.questions.map((q,sourceIndex)=>({...q,sourceIndex})).filter(q=>q.options?.length>=2),preview:ctx.teacher&&(!ctx.board||ctx.test),saved:false};
+    s={id:crypto.randomUUID(),revision:0,timed:true,mechanics:2,mode:ctx.board?'board':'solo',phase:'answer',turn:0,active:0,teams,answers:[],choices:[],questions:ctx.game.questions.map((q,sourceIndex)=>({...q,sourceIndex})).filter(q=>q.options?.length>=2),preview:ctx.teacher&&(!ctx.board||ctx.test),saved:false};
     if(!s.questions.length)throw Error('Add multiple-choice questions to this question set first.');s.learner=teams[0].members[0].name;teams[0].picks++;questionClock(s,Date.now());
    }else{
     if(!s||b.revision!==s.revision)throw Error('This turn has changed. Refresh to continue.');

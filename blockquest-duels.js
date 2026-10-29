@@ -29,7 +29,7 @@ function pairRound(s,now){
 function participant(s,id){return s.players[id]||s.computer?.id===id&&s.computer;}
 function startRound(s,now){
  for(const pair of s.matchups)for(const id of [pair.a,pair.b]){
-  const p=participant(s,id);p.run={id:crypto.randomUUID(),revision:0,timed:true,mode:'board',loopQuestions:true,phase:'answer',turn:0,active:0,learner:p.name,teams:[{name:p.name,members:[{id:p.id,name:p.name}],board:core.empty(),points:0,lines:0,picks:1}],answers:[],choices:[],questions:s.roundBank,pieceRounds:s.offers};turns.questionClock(p.run,now);p.nextBotAt=now+2500+crypto.randomInt(2500);
+  const p=participant(s,id);p.run={id:crypto.randomUUID(),revision:0,timed:true,mechanics:2,mode:'board',loopQuestions:true,phase:'answer',turn:0,active:0,learner:p.name,teams:[{name:p.name,members:[{id:p.id,name:p.name}],board:core.starter(),builds:0,points:0,lines:0,picks:1}],answers:[],choices:[],questions:s.roundBank,pieceRounds:s.offers};turns.questionClock(p.run,now);p.nextBotAt=now+2500+crypto.randomInt(2500);
  }
  s.phase='running';s.roundEndsAt=now+s.minutes*60000;s.updatedAt=now;
 }
@@ -48,14 +48,18 @@ function botTurn(p,now){
  if(!p.run||now<p.nextBotAt)return;const run=p.run;
  if(run.phase==='answer'){const q=run.questions[run.turn],choice=crypto.randomInt(100)<65?q.correctIndex:(q.correctIndex+1)%q.options.length;turns.answerTimed(run,choice,now);run.revision++;p.nextBotAt=now+1800+crypto.randomInt(2200);}
  else if(run.phase==='choose'){const candidates=[];for(const shape of run.choices)for(let rotation=0;rotation<4;rotation++)for(let column=0;column<8;column++)if(core.fits(run.teams[0].board,core.cells(shape,rotation),column,run.falling.y))candidates.push({shape,rotation,column});
-  if(candidates.length)Object.assign(run.falling,candidates[crypto.randomInt(candidates.length)]);turns.lockBlock(run,now);run.revision++;p.nextBotAt=now+2200;
+  if(candidates.length){const score=c=>{const result=core.place(run.teams[0].board,c.shape,c.rotation,c.column,run.falling.y),top=result.board.findIndex(row=>row.some(Boolean));return result.cleared.length*100-(top<0?0:10-top);};const ranked=candidates.map(c=>({c,score:score(c)})).sort((a,b)=>b.score-a.score);Object.assign(run.falling,!(run.teams[0].builds||0)||crypto.randomInt(100)<70?ranked[0].c:candidates[crypto.randomInt(candidates.length)]);}turns.lockBlock(run,now);run.revision++;p.nextBotAt=now+2200;
  }
+}
+function dispatchAttack(s,p,now){const r=p.run;if(!r||r.mechanics!==2||r.phase!=='placing')return;const key=r.id+':'+r.answers.length;if(p.attackHandled===key)return;p.attackHandled=key;
+ if(!r.attackStrength)return;const pair=s.matchups.find(m=>m.a===p.id||m.b===p.id),foe=pair&&participant(s,pair.a===p.id?pair.b:pair.a);if(!foe?.run)return;
+ const event=turns.sendAttack(r,foe.run.teams[0],p.name,foe.name,now);r.attackEvent={...event,direction:'outgoing'};foe.run.attackEvent={...event,direction:'incoming'};
 }
 function tick(s,now=Date.now()){
  if(['ended','lobby','paused'].includes(s.phase))return false;
  if(s.phase==='matchup'){if(now>=s.transitionAt){startRound(s,now);return true;}return false;}
  let changed=false;const until=Math.min(now,s.roundEndsAt);
- for(const pair of s.matchups)for(const id of [pair.a,pair.b]){const p=participant(s,id);if(turns.tick(p.run,until))changed=true;if(p.isBot&&now<s.roundEndsAt){const rev=p.run.revision;botTurn(p,until);if(p.run.revision!==rev)changed=true;}}
+ for(const pair of s.matchups)for(const id of [pair.a,pair.b]){const p=participant(s,id);if(turns.tick(p.run,until))changed=true;if(p.isBot&&now<s.roundEndsAt){const rev=p.run.revision;botTurn(p,until);if(p.run.revision!==rev)changed=true;}dispatchAttack(s,p,until);}
  if(now>=s.roundEndsAt){finishRound(s,now);changed=true;}if(changed)s.updatedAt=now;return changed;
 }
 function pause(s,now=Date.now()){
@@ -76,7 +80,7 @@ function action(s,id,b,now=Date.now()){
  }else if(b.action==='move'&&r.phase==='choose'){
   const f={...r.falling,...Object.fromEntries(['shape','rotation','column'].filter(k=>Object.hasOwn(b,k)).map(k=>[k,b[k]]))};if(!r.choices.includes(f.shape)||!Number.isInteger(f.rotation)||f.rotation<0||f.rotation>3||!Number.isInteger(f.column)||!core.fits(r.teams[0].board,core.cells(f.shape,f.rotation),f.column,f.y))throw Error('That move is blocked.');r.falling=f;
  }else if(b.action==='place'&&r.phase==='choose')turns.lockBlock(r,now);else throw Error('Wait for this action to finish.');
- r.revision++;s.updatedAt=now;
+ dispatchAttack(s,p,now);r.revision++;s.updatedAt=now;
 }
 function ranking(s){return Object.values(s.players).map(p=>{const answers=p.answers.concat(p.run?.answers||[]);return {id:p.id,name:p.name,team:p.team,points:p.score+runPoints(p),wins:p.wins,correct:answers.filter(a=>a.correct).length,answered:answers.length,rows:p.run?.teams[0]?.lines||0,joined:p.joined};}).sort((a,b)=>b.points-a.points||b.wins-a.wins||a.name.localeCompare(b.name));}
 function publicRun(r){if(!r)return null;const q=r.questions[r.turn];return {...r,questions:undefined,pieceRounds:undefined,teams:r.teams.map(t=>({...t,members:undefined})),question:r.phase==='answer'?{question:q.question,options:q.options}:null,feedback:r.phase==='feedback'?{correct:r.answers.at(-1)?.correct,answer:q.options[q.correctIndex],explanation:q.explanation||''}:undefined};}
@@ -84,7 +88,7 @@ function view(s,id,teacher=false,now=Date.now()){
  const ranks=ranking(s),p=s.players[id],pair=s.matchups.find(m=>m.a===id||m.b===id),foe=pair?participant(s,pair.a===id?pair.b:pair.a):null;
  return {id:s.id,phase:s.phase,preview:s.preview,minutes:s.minutes,rounds:s.rounds,roundNumber:s.roundNumber,serverNow:now,roundEndsAt:s.roundEndsAt,transitionAt:s.transitionAt,resultsUntil:s.resultsUntil,pausedAt:s.pausedAt,beforePause:s.beforePause,rosterId:s.rosterId,
   teams:s.teams.map(t=>({id:t.id,name:t.name,points:ranks.filter(p=>p.team===t.id).reduce((n,p)=>n+p.points,0)})),top10:ranks.filter(p=>p.joined).slice(0,10),lastRound:s.lastRound,
-  me:p?{id:p.id,name:p.name,team:p.team,joined:p.joined,points:p.score+runPoints(p),rank:ranks.findIndex(q=>q.id===id)+1}:null,run:publicRun(p?.run),opponent:foe?{id:foe.id,name:foe.name,team:foe.team,points:runPoints(foe),board:foe.run?.teams[0]?.board||core.empty(),rows:foe.run?.teams[0]?.lines||0,answered:foe.run?.answers.length||0}:null,friendly:pair?.friendly||false,
+  me:p?{id:p.id,name:p.name,team:p.team,joined:p.joined,points:p.score+runPoints(p),rank:ranks.findIndex(q=>q.id===id)+1}:null,run:publicRun(p?.run),opponent:foe?{id:foe.id,name:foe.name,team:foe.team,points:runPoints(foe),board:foe.run?.teams[0]?.board||core.empty(),rows:foe.run?.teams[0]?.lines||0,answered:foe.run?.answers.length||0,incoming:foe.run?.teams[0]?.incoming?.length||0}:null,friendly:pair?.friendly||false,
   ...(teacher?{players:ranks,matchups:s.matchups.map(m=>({id:m.id,a:participant(s,m.a).name,b:participant(s,m.b).name,aPoints:runPoints(participant(s,m.a)),bPoints:runPoints(participant(s,m.b)),friendly:m.friendly}))}:{})};
 }
 module.exports={create,pairRound,startRound,finishRound,tick,pause,action,view,ranking};

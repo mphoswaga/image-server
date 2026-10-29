@@ -49,7 +49,7 @@ test('corresponding team turns get the same offer after a refresh',async({page})
  const id=await create(page),url=`/api/game/${id}/blockquest`;
  const command=async(action,s,extra={})=>{const r=await page.request.post(url,{data:{action,revision:s?.revision,...extra}});expect(r.ok(),await r.text()).toBeTruthy();return r.json();};
  let s=await command('start');s=await command('answer',s,{choice:0});const first=s.choices.slice();expect(s.pieceRounds).toBeUndefined();
- s=await command('place',s,{shape:first[0],rotation:0,column:0});await page.waitForTimeout(1050);s=(await(await page.request.get(url)).json()).state;
+ s=await command('place',s,{shape:first[0],rotation:0,column:0});await page.waitForTimeout(Math.max(0,s.readyAt-Date.now())+80);s=(await(await page.request.get(url)).json()).state;
  const resumed=await(await page.request.get(url)).json();expect(resumed.state.turn).toBe(1);
  s=await command('answer',resumed.state,{choice:1});expect(s.choices).toEqual(first);
 });
@@ -59,11 +59,11 @@ for(const reduced of [false,true])test(`two-row clear builds a rocket and keeps 
  const core=require('../../public/blockquest-core'),board=core.empty();for(const y of [8,9])board[y]=['T','T','T','T','T','T',null,null];board[7][0]='S';
  const result=core.place(board,'O',0,6);let snapshot;
  await page.route('**/api/game/rocket/blockquest',r=>{
-  const now=Date.now();snapshot ||= {id:'rocket',mode:'board',phase:'placing',revision:3,turn:0,total:4,active:0,learner:'Mia',answers:[{correct:true}],lastBefore:board,lastDrop:{...core.landing(board,'O',0,6),shape:'O'},lastPlacement:[8,9],lastLinesBefore:1,lastAward:{points:result.points,bonus:result.bonus},placementStartedAt:now,readyAt:now+3400,serverNow:now,teams:[{name:'Sun Builders',board:result.board,points:260,lines:3,names:['Mia']},{name:'Moon Builders',board:core.empty(),points:0,lines:0,names:['Noah']}]};
+  const now=Date.now();snapshot ||= {id:'rocket',mode:'board',phase:'placing',revision:3,turn:0,total:4,active:0,learner:'Mia',answers:[{correct:true}],lastBefore:board,lastDrop:{...core.landing(board,'O',0,6),shape:'O'},lastPlacement:[8,9],lastLinesBefore:1,lastAward:{points:result.points,bonus:result.bonus},placementStartedAt:now,readyAt:now+3400,serverNow:now,teams:[{name:'Sun Builders',board:result.board,points:660,lines:3,names:['Mia']},{name:'Moon Builders',board:core.empty(),points:0,lines:0,names:['Noah']}]};
   return r.fulfill({json:{teacher:true,board:true,title:'Rocket builders',state:{...snapshot,serverNow:now}}});
  });
  await page.goto('/blockquest.html?game=rocket');await page.locator('#resume').click();
- await expect(page.locator('#phase')).toContainText('2 rows! +260 points · 50 combo bonus');
+ await expect(page.locator('#phase')).toContainText('2 rows! +660 points · 150 combo bonus');
  await expect(page.locator('.tower.active .rocket-build')).toHaveAttribute('data-mission-stage','1');await expect(page.locator('#next')).toBeDisabled();await expect(page.locator('.clear-beam')).toHaveCount(2);await expect(page.locator('.clear-award')).toContainText('2 ROW COMBO');
  if(!reduced){await expect(page.locator('.cell.clearing')).toHaveCount(16);await expect(page.locator('.row-party i')).toHaveCount(16);}
  await page.waitForTimeout(1050);await page.screenshot({path:info.outputPath('row-celebration.png'),fullPage:true});
@@ -105,8 +105,8 @@ test('teacher can test both smartboard teams without changing the real game',asy
 });
 
 test('BlockQuest controls use versioned assets and bypass stale browser caches',async({request})=>{
- const html=await request.get('/blockquest.html');expect(html.headers()['cache-control']).toContain('no-store');const body=await html.text();expect(body).toContain('/blockquest.js?v=8');expect(body).toContain('/blockquest.css?v=8');
- for(const path of ['/blockquest-motion.js?v=1','/blockquest-world.js?v=2','/blockquest-world.css?v=2','/blockquest.js?v=8','/blockquest-core.js?v=8','/blockquest-audio.js?v=8','/blockquest.css?v=8','/blockquest-neon.css?v=8','/games-hub.js?v=4']){const response=await request.get(path);expect(response.ok()).toBe(true);expect(response.headers()['cache-control']).toContain('no-store');expect(response.headers()['cloudflare-cdn-cache-control']).toBe('no-store');}
+ const html=await request.get('/blockquest.html');expect(html.headers()['cache-control']).toContain('no-store');const body=await html.text();expect(body).toContain('/blockquest.js?v=9');expect(body).toContain('/blockquest.css?v=9');
+ for(const path of ['/blockquest-motion.js?v=1','/blockquest-world.js?v=3','/blockquest-world.css?v=3','/blockquest.js?v=9','/blockquest-core.js?v=9','/blockquest-audio.js?v=9','/blockquest.css?v=9','/blockquest-neon.css?v=9','/games-hub.js?v=4']){const response=await request.get(path);expect(response.ok()).toBe(true);expect(response.headers()['cache-control']).toContain('no-store');expect(response.headers()['cloudflare-cdn-cache-control']).toBe('no-store');}
 });
 
 function pulsingSoundtrack(){

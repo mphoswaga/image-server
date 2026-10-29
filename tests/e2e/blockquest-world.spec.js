@@ -41,3 +41,7 @@ test('routine game snapshots preserve the scenery clock and adaptive quality',as
 test('resuming a placement does not duplicate its impact burst',async({page})=>{
  await world(page);const result=await page.evaluate(()=>{const start=Date.now(),run={id:'resume',turn:0,answers:[{}],phase:'placing',teams:[{lines:0}],lastDrop:{y:8},lastPlacement:[],placementStartedAt:start,serverNow:start};testWorld.sync(run);const born=testWorld.events[0].born;testWorld.sync({...run,phase:'paused'});testWorld.sync({...run,placementStartedAt:start+3000,serverNow:start+3200});return {count:testWorld.events.length,born,after:testWorld.events[0].born,delay:born-testWorld.time};});expect(result.count).toBe(1);expect(result.after).toBe(result.born);expect(result.delay).toBeCloseTo(.6,1);
 });
+
+test('restoring a paused attack never plays a battle sound',async({page})=>{
+ await world(page);const count=await page.evaluate(()=>{const calls=[];testWorld.audio.cue=kind=>calls.push(kind);testWorld.sync({id:'silent-pause',phase:'paused',beforePause:'choose',teams:[],defenseEvent:{id:'shield-restore',kind:'shield',at:Date.now(),rows:1}});return calls.length;});expect(count).toBe(0);
+});

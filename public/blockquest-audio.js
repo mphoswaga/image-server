@@ -1,7 +1,7 @@
 /* Local effects + the ColonyQuest soundtrack; narration reads the prompt only. */
 window.BlockQuestAudio=class {
  constructor(endpoint,status){
-  this.endpoint=endpoint;this.status=status;this.enabled=true;this.voice=true;this.musicOn=true;this.run='';this.voiceKey='';this.epoch=0;this.audio=new Audio();
+  this.endpoint=endpoint;this.status=status;this.enabled=true;this.voice=true;this.musicOn=true;this.energy=0;this.lastBeat=0;this.run='';this.voiceKey='';this.epoch=0;this.audio=new Audio();
   this.music=new ColonyMusic();this.music.index=1;this.music.selectTrack();this.music.media.loop=true;this.music.setVolume(.18);
   this.motion=matchMedia('(prefers-reduced-motion: reduce)');this.pulseFrame=0;this.pulseLevel=0;
   this.motion.addEventListener('change',()=>this.syncPulse());
@@ -49,8 +49,16 @@ window.BlockQuestAudio=class {
   };
   this.pulseFrame=requestAnimationFrame(frame);
  }
+ setEnergy(level,clock=Date.now()){
+  const active=this.musicOn&&this.music.active&&!document.hidden&&this.state?.phase!=='paused'&&this.state?.phase!=='ended';this.energy+=((active?Math.max(0,Math.min(1,level)):0)-this.energy)*.18;
+  this.music.media.preservesPitch=true;this.music.media.playbackRate=1+this.energy*.12;
+  const volume=this.speaking?.05:.18+this.energy*.045;if(Math.abs(this.music.media.volume-volume)>.004)this.music.setVolume(volume);
+  document.body.classList.toggle('game-climax',active&&this.energy>.15);
+  const interval=900-this.energy*250;
+  if(active&&this.energy>.15&&clock-this.lastBeat>=interval&&this.context?.state==='running'&&!this.music.media.paused){this.lastBeat=clock;const c=this.context,o=c.createOscillator(),g=c.createGain(),at=c.currentTime;o.frequency.setValueAtTime(90,at);o.frequency.exponentialRampToValueAtTime(42,at+.12);g.gain.setValueAtTime(this.speaking?.008:.025*this.energy,at);g.gain.exponentialRampToValueAtTime(.001,at+.18);o.connect(g).connect(c.destination);o.start();o.stop(at+.2);}
+ }
  cue(kind){if(!this.enabled)return;this.unlock();const c=this.context;if(!c)return;
-  const notes=kind==='build'?[180,230,300]:kind==='clear'?[392,523,659,784,1046]:kind==='correct'?[392,523,659]:kind==='warning'?[880]:kind==='tick'?[680]:[160];
+  const notes=kind==='build'?[180,230,300]:kind==='clear'?[392,523,659,784,1046]:kind==='correct'?[392,523,659]:kind==='attack'?[196,147,98]:kind==='shield'?[523,659]:kind==='warning'?[880]:kind==='tick'?[680]:[160];
   notes.forEach((hz,i)=>{const o=c.createOscillator(),g=c.createGain(),at=c.currentTime+i*(kind==='build'?.075:.1);o.type=kind==='build'?'triangle':'sine';o.frequency.setValueAtTime(hz,at);if(kind==='build')o.frequency.exponentialRampToValueAtTime(70,at+.08);g.gain.setValueAtTime(.001,at);g.gain.exponentialRampToValueAtTime(kind==='warning'?.09:kind==='tick'?.015:.055,at+.012);g.gain.exponentialRampToValueAtTime(.001,at+.16);o.connect(g).connect(c.destination);o.start(at);o.stop(at+.18);});
  }
  stop(){this.epoch++;this.status('');this.audio.pause();this.speaking=false;this.music.setVolume(.18);if(this.objectUrl){URL.revokeObjectURL(this.objectUrl);this.objectUrl=null;}}
