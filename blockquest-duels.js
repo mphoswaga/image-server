@@ -24,7 +24,7 @@ function pairRound(s,now){
   s.matchups.push({id:crypto.randomUUID(),a,b,friendly:!bot&&s.players[a].team===s.players[b].team});s.pairCounts[pairKey(a,b)]=(s.pairCounts[pairKey(a,b)]||0)+1;
  }
  for(const p of Object.values(s.players))p.run=null;
- s.phase='matchup';s.transitionAt=now+6000;s.updatedAt=now;
+ s.phase='matchup';s.transitionAt=Math.max(now,s.resultsUntil||0)+6000;s.updatedAt=now;
 }
 function participant(s,id){return s.players[id]||s.computer?.id===id&&s.computer;}
 function startRound(s,now){
@@ -41,6 +41,7 @@ function finishRound(s,now,final=false){
   return {aId:a.id,bId:b.id,a:a.name,b:b.name,aPoints:ap,bPoints:bp,winner:winner?.name||null,winnerId:winner?.id||null,friendly:pair.friendly};
  });
  for(const p of Object.values(s.players)){if(!p.run)continue;p.score+=runPoints(p);p.answers.push(...p.run.answers);p.run=null;}
+ s.resultsUntil=now+4000;
  if(final||s.roundNumber>=s.rounds){s.phase='ended';s.updatedAt=now;}else pairRound(s,now);
 }
 function botTurn(p,now){
@@ -59,7 +60,7 @@ function tick(s,now=Date.now()){
 }
 function pause(s,now=Date.now()){
  if(s.phase==='paused'){
-  const delay=now-s.pausedAt;s.phase=s.beforePause;for(const field of ['roundEndsAt','transitionAt'])if(Number.isFinite(s[field]))s[field]+=delay;
+  const delay=now-s.pausedAt;s.phase=s.beforePause;for(const field of ['roundEndsAt','transitionAt','resultsUntil'])if(Number.isFinite(s[field]))s[field]+=delay;
   for(const p of [...Object.values(s.players),s.computer].filter(Boolean))if(p.run){const r=p.run;r.phase=r.beforePause;for(const field of ['deadline','readyAt','placementStartedAt','phaseStartedAt'])if(Number.isFinite(r[field]))r[field]+=delay;if(r.falling)r.falling.lastStepAt+=delay;delete r.pausedAt;p.nextBotAt+=delay;}
   delete s.pausedAt;
  }else{
@@ -81,7 +82,7 @@ function ranking(s){return Object.values(s.players).map(p=>{const answers=p.answ
 function publicRun(r){if(!r)return null;const q=r.questions[r.turn];return {...r,questions:undefined,pieceRounds:undefined,teams:r.teams.map(t=>({...t,members:undefined})),question:r.phase==='answer'?{question:q.question,options:q.options}:null,feedback:r.phase==='feedback'?{correct:r.answers.at(-1)?.correct,answer:q.options[q.correctIndex],explanation:q.explanation||''}:undefined};}
 function view(s,id,teacher=false,now=Date.now()){
  const ranks=ranking(s),p=s.players[id],pair=s.matchups.find(m=>m.a===id||m.b===id),foe=pair?participant(s,pair.a===id?pair.b:pair.a):null;
- return {id:s.id,phase:s.phase,preview:s.preview,minutes:s.minutes,rounds:s.rounds,roundNumber:s.roundNumber,serverNow:now,roundEndsAt:s.roundEndsAt,transitionAt:s.transitionAt,pausedAt:s.pausedAt,beforePause:s.beforePause,rosterId:s.rosterId,
+ return {id:s.id,phase:s.phase,preview:s.preview,minutes:s.minutes,rounds:s.rounds,roundNumber:s.roundNumber,serverNow:now,roundEndsAt:s.roundEndsAt,transitionAt:s.transitionAt,resultsUntil:s.resultsUntil,pausedAt:s.pausedAt,beforePause:s.beforePause,rosterId:s.rosterId,
   teams:s.teams.map(t=>({id:t.id,name:t.name,points:ranks.filter(p=>p.team===t.id).reduce((n,p)=>n+p.points,0)})),top10:ranks.filter(p=>p.joined).slice(0,10),lastRound:s.lastRound,
   me:p?{id:p.id,name:p.name,team:p.team,joined:p.joined,points:p.score+runPoints(p),rank:ranks.findIndex(q=>q.id===id)+1}:null,run:publicRun(p?.run),opponent:foe?{id:foe.id,name:foe.name,team:foe.team,points:runPoints(foe),board:foe.run?.teams[0]?.board||core.empty(),rows:foe.run?.teams[0]?.lines||0,answered:foe.run?.answers.length||0}:null,friendly:pair?.friendly||false,
   ...(teacher?{players:ranks,matchups:s.matchups.map(m=>({id:m.id,a:participant(s,m.a).name,b:participant(s,m.b).name,aPoints:runPoints(participant(s,m.a)),bPoints:runPoints(participant(s,m.b)),friendly:m.friendly}))}:{})};

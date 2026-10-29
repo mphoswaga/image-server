@@ -31,3 +31,13 @@ test('immersive smartboard worlds preserve readable questions and clear animatio
  await page.locator('.world-controls summary').click();await page.getByLabel('Scenery world').selectOption('1');await page.locator('.world-controls summary').click();await page.waitForTimeout(2600);await page.screenshot({path:info.outputPath('ember-city.png'),fullPage:true});
  await page.locator('.world-controls summary').click();await page.getByLabel('Scenery world').selectOption('2');await page.locator('.world-controls summary').click();await page.waitForTimeout(2600);await page.screenshot({path:info.outputPath('stardust.png'),fullPage:true});
 });
+
+test('routine game snapshots preserve the scenery clock and adaptive quality',async({page})=>{
+ await world(page);await expect.poll(()=>page.evaluate(()=>testWorld.time)).toBeGreaterThan(.05);
+ const result=await page.evaluate(()=>{testWorld.fps=30;testWorld.budget=50;const before=testWorld.last;testWorld.sync({id:'same',phase:'answer',teams:[{lines:0}]});return {before,after:testWorld.last,fps:testWorld.fps,budget:testWorld.budget};});
+ expect(result.after).toBe(result.before);expect(result.fps).toBe(30);expect(result.budget).toBe(50);
+});
+
+test('resuming a placement does not duplicate its impact burst',async({page})=>{
+ await world(page);const result=await page.evaluate(()=>{const start=Date.now(),run={id:'resume',turn:0,answers:[{}],phase:'placing',teams:[{lines:0}],lastDrop:{y:8},lastPlacement:[],placementStartedAt:start,serverNow:start};testWorld.sync(run);const born=testWorld.events[0].born;testWorld.sync({...run,phase:'paused'});testWorld.sync({...run,placementStartedAt:start+3000,serverNow:start+3200});return {count:testWorld.events.length,born,after:testWorld.events[0].born,delay:born-testWorld.time};});expect(result.count).toBe(1);expect(result.after).toBe(result.born);expect(result.delay).toBeCloseTo(.6,1);
+});

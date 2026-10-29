@@ -23,30 +23,37 @@ window.BlockQuestWorld=class {
  rand(n){const v=Math.sin(n*127.1+311.7)*43758.5453;return v-Math.floor(v);}
  sprite(hue){const c=document.createElement('canvas');c.width=c.height=48;const g=c.getContext('2d'),r=g.createRadialGradient(24,24,0,24,24,24);r.addColorStop(0,'#ffffff');r.addColorStop(.1,`hsl(${hue} 100% 85%)`);r.addColorStop(.3,`hsla(${hue},100%,60%,.45)`);r.addColorStop(1,`hsla(${hue},100%,50%,0)`);g.fillStyle=r;g.fillRect(0,0,48,48);return c;}
  resetMotion(){this.gentle=this.light||this.motion.matches;document.body.classList.toggle('world-gentle',this.gentle);this.events=[];this.paint();this.schedule();}
- setScene(next){next%=palettes.length;if(next!==this.scene){this.previous=this.scene;this.scene=next;this.transition=this.time;}document.body.dataset.world=palettes[this.scene].name;this.paint();}
+ setScene(next){next%=palettes.length;if(next===this.scene&&document.body.dataset.world)return;this.previous=this.scene;this.scene=next;this.transition=this.time;document.body.dataset.world=palettes[this.scene].name;if(!this.frame)this.paint();}
  measure(){this.reading=!!document.querySelector('#arena:not([hidden]) #answers button');this.safe=[...document.querySelectorAll('header,.dock,.round,.panel:not(.dock),.tower-top')].filter(e=>!e.hidden&&e.getClientRects().length).map(e=>e.getBoundingClientRect());}
  sync(state){
   if(!state)return;const run=state.run||state;this.paused=state.phase==='paused'||run.phase==='paused';
   const lines=(run.teams||[]).reduce((n,t)=>n+(t.lines||0),0);this.progressScene=(Math.floor(lines/3)+Math.max(0,(state.roundNumber||1)-1))%3;
   if(!this.manual)this.setScene(this.progressScene);this.measure();
-  if(run.phase==='placing'&&run.lastDrop){const key=run.id+':'+run.turn+':'+run.placementStartedAt;
+  if(run.phase==='placing'&&run.lastDrop){const key=run.id+':'+run.turn+':'+(run.answers?.length??run.placementStartedAt);
    if(!this.seen.has(key)){this.seen.add(key);if(this.seen.size>100)this.seen.delete(this.seen.values().next().value);
     const age=(run.serverNow||state.serverNow||Date.now())-(run.placementStartedAt||Date.now());
     const rect=document.querySelector('.tower.active .grid')?.getBoundingClientRect();
-    if(rect&&age<3400){const rows=run.lastPlacement||[],ys=rows.length?rows:[run.lastDrop.y];for(const y of ys)this.burst(rect,y,rows.length?'clear':'build',rows.length?.65-age/1000:-age/1000);}
+    if(rect&&age<3400){const rows=run.lastPlacement||[],ys=rows.length?rows:[run.lastDrop.y];for(const y of ys)this.burst(rect,y,rows.length?'clear':'build',(rows.length?.65:.6)-age/1000);}
    }
   }
   if(state.phase==='ended'&&!this.seen.has(state.id+':win')){this.seen.add(state.id+':win');this.events.push({kind:'win',born:this.time,x:this.w/2,y:this.h*.32,seed:19});}
   this.schedule();
  }
  burst(rect,row,kind,delay){if(this.gentle)return;this.events.push({kind,born:this.time+delay,x:rect.left+rect.width/2,y:rect.top+(row+.5)*rect.height/10,width:rect.width,seed:Math.floor(this.time*100)});this.events=this.events.slice(-12);}
- schedule(){cancelAnimationFrame(this.frame);this.frame=0;this.last=0;this.canvas.dataset.motion=this.gentle||this.paused||document.hidden?'still':'animated';
-  if(this.destroyed||this.gentle||this.paused||document.hidden){this.paint();return;}
-  const tick=stamp=>{if(!this.last)this.last=stamp;const delta=stamp-this.last;if(delta>=1000/this.fps){this.time+=Math.min(delta,100)/1000;this.last=stamp;const start=performance.now();this.paint();const cost=performance.now()-start;this.slow=cost>18?(this.slow||0)+1:Math.max(0,(this.slow||0)-1);if(this.slow>12){this.fps=20;this.budget=60;}}this.frame=requestAnimationFrame(tick);};
-  this.fps=this.w<650?24:30;this.budget=this.w<650?80:150;this.frame=requestAnimationFrame(tick);
+ schedule(){const stop=this.destroyed||this.gentle||this.paused||document.hidden;this.canvas.dataset.motion=stop?'still':'animated';
+  if(stop){cancelAnimationFrame(this.frame);this.frame=0;this.last=0;this.lastPaint=0;this.paint();return;}
+  // Polling must never restart the animation clock or erase adaptive quality.
+  if(this.frame)return;this.fps ||= 60;this.budget ||= this.w<650?80:150;
+  const tick=stamp=>{const dt=this.last?stamp-this.last:0;this.last=stamp;this.time+=Math.min(dt,100)/1000;
+   const interval=1000/this.fps,elapsed=stamp-(this.lastPaint||0);
+   if(elapsed+.5>=interval){this.lastPaint=stamp-(elapsed%interval);const start=performance.now();this.paint();const cost=performance.now()-start;
+    this.slow=cost>10?(this.slow||0)+1:Math.max(0,(this.slow||0)-1);
+    if(this.slow>20){if(this.budget>50)this.budget=Math.max(50,this.budget-30);else this.fps=30;this.slow=0;}
+   }this.frame=requestAnimationFrame(tick);
+  };this.frame=requestAnimationFrame(tick);
  }
  paint(){if(!this.ctx)return;const c=this.ctx;c.setTransform(this.dpr,0,0,this.dpr,0,0);c.clearRect(0,0,this.w,this.h);
-  const blend=this.gentle?1:Math.min(1,(this.time-this.transition)/2.5);if(blend<1&&this.previous!==this.scene)this.world(this.previous,1-blend);this.world(this.scene,blend<1&&this.previous!==this.scene?blend:1);this.impacts();
+  const progress=this.gentle?1:Math.min(1,(this.time-this.transition)/2.5),blend=progress*progress*(3-2*progress);if(blend<1&&this.previous!==this.scene)this.world(this.previous,1-blend);this.world(this.scene,blend<1&&this.previous!==this.scene?blend:1);this.impacts();
  }
  world(index,opacity){const c=this.ctx,{hue,second}=palettes[index],w=this.w,h=this.h,t=this.time,pulse=this.gentle?0:(this.audio.pulseLevel||0),quiet=this.reading;
   c.save();c.globalAlpha=opacity;c.fillStyle='#030611';c.fillRect(0,0,w,h);

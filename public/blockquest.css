@@ -15,7 +15,7 @@
 .rocket-part{opacity:.13;filter:grayscale(1)}.rocket-part.built{opacity:1;filter:none}.rocket-part.new-part{transform-box:fill-box;transform-origin:center;animation:rocketBuild .55s ease-out both;animation-delay:calc(1.7s + var(--elapsed,0ms))}
 .rocket-flame{opacity:0}.launching svg{animation:rocketLift 1s ease-out both;animation-delay:calc(1.7s + var(--elapsed,0ms))}.launching .rocket-flame{animation:rocketFlame 1s ease-in-out both;animation-delay:calc(1.7s + var(--elapsed,0ms))}
 .champion .rocket-build{margin:12px auto}.champion .rocket-build svg{width:80px;height:88px}.champion .rocket-build{width:90px}
-@keyframes pieceFall{from{transform:translateY(calc(-100% * var(--fall)));opacity:.3}to{transform:translateY(0);opacity:1}}
+@keyframes pieceFall{from{transform:translateY(calc((100% + 2px) * -1 * var(--fall)));opacity:.3}to{transform:translateY(0);opacity:1}}
 @keyframes rowGlow{0%{opacity:1}50%{background:#fff4b5;box-shadow:0 0 18px #ffe68a;opacity:1}100%{background:#fff4b5;opacity:0}}
 @keyframes rowSettle{from{transform:translateY(0)}to{transform:translateY(calc(var(--settle) * (100% + 2px)))}}
 @keyframes rowBurst{0%{opacity:0;transform:translate(0,0) rotate(0)}15%{opacity:1}100%{opacity:0;transform:translate(var(--dx),var(--dy)) rotate(var(--r))}}
@@ -69,3 +69,26 @@ nav{flex-wrap:wrap}#turn{font-size:clamp(17px,2vw,26px);text-align:center;flex:1
  .dock{padding:16px}.dock h1{font-size:23px;margin:8px 0 12px}.dock .answers{gap:7px}.dock .answers button{padding:9px 12px;font-size:14px}
 }
 @media(min-width:900px) and (max-height:650px){.dock .answers{grid-template-columns:repeat(2,minmax(0,1fr))}.dock h1{font-size:21px}.dock .eyebrow{font-size:10px;margin-bottom:8px}}
+
+/* Shared smartboard: bring the playing team and its controls forward. */
+@media(min-width:900px){
+ body.board-game #arena:is([data-stage=choose],[data-stage=placing]){position:relative;isolation:isolate;grid-template-columns:minmax(260px,38%) minmax(0,1fr)}
+ body.board-game #arena:is([data-stage=choose],[data-stage=placing]) .tower.active{grid-column:1;grid-row:2;z-index:2;justify-self:center;width:100%;max-width:420px;height:max(310px,calc(100dvh - 230px));border-color:#a5fff0;box-shadow:0 0 34px #53e2c838,0 18px 50px #0009}
+ body.board-game #arena:is([data-stage=choose],[data-stage=placing]) .tower:not(.active){position:absolute;grid-column:auto;grid-row:auto;right:190px;top:4px;z-index:0;width:140px;height:210px;padding:7px;opacity:.45;pointer-events:none;transform:perspective(700px) rotateY(-7deg)}
+ body.board-game #arena:is([data-stage=choose],[data-stage=placing]) .tower:not(.active) .tower-top{flex-basis:65px;min-height:65px}body.board-game #arena:is([data-stage=choose],[data-stage=placing]) .tower:not(.active) h2{font-size:14px}body.board-game #arena:is([data-stage=choose],[data-stage=placing]) .tower:not(.active) small{font-size:10px}body.board-game #arena:is([data-stage=choose],[data-stage=placing]) .tower:not(.active) .rocket-build{display:none}
+ body.board-game #arena:is([data-stage=choose],[data-stage=placing]) .dock{grid-column:2;grid-row:2;position:relative;z-index:3;align-self:end}
+ body.board-game #arena[data-stage=choose] #placement{display:grid;grid-template-columns:1fr 1.2fr 1fr;gap:10px}body.board-game #arena[data-stage=choose] #place{grid-column:1/-1;min-height:50px;font-size:18px}body.board-game #arena[data-stage=choose] .piece{flex:1;min-height:80px}
+}
+@media(min-width:900px) and (max-height:650px){body.board-game #arena:is([data-stage=choose],[data-stage=placing]) .tower.active{height:max(280px,calc(100dvh - 180px))}body.board-game #arena:is([data-stage=choose],[data-stage=placing]) .tower:not(.active){right:120px;width:100px;height:145px}body.board-game #arena[data-stage=choose] .piece{min-height:62px}body.board-game #arena[data-stage=choose] #place{min-height:40px}}
+@media(max-width:899px){
+ body.board-game #arena:is([data-stage=choose],[data-stage=placing]){position:relative;display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+ body.board-game #arena:is([data-stage=choose],[data-stage=placing]) .round{grid-column:1;grid-row:1}
+ body.board-game #arena:is([data-stage=choose],[data-stage=placing]) .boards{display:contents}
+ body.board-game #arena:is([data-stage=choose],[data-stage=placing]) .tower.active{grid-column:1;grid-row:2;width:65%;height:330px;display:flex;flex-direction:column;position:relative;z-index:2}
+ body.board-game #arena:is([data-stage=choose],[data-stage=placing]) .tower.active .grid{flex:1;min-height:0;grid-template-rows:repeat(10,minmax(0,1fr))}body.board-game #arena:is([data-stage=choose],[data-stage=placing]) .tower.active .cell{aspect-ratio:auto;min-height:0}
+ body.board-game #arena:is([data-stage=choose],[data-stage=placing]) .tower:not(.active){position:absolute;top:130px;right:0;width:28%;opacity:.45;pointer-events:none}
+ body.board-game #arena:is([data-stage=choose],[data-stage=placing]) .tower:not(.active) .rocket-build{display:none}
+ body.board-game #arena:is([data-stage=choose],[data-stage=placing]) .dock{grid-column:1;grid-row:3;margin:0}
+}
+body.board-game #arena:is([data-stage=choose],[data-stage=placing]) #mission{display:none}
+body.board-game #arena:is([data-stage=choose],[data-stage=placing]) .tower.active h2::before{content:'PLAYING TEAM';display:block;font-size:10px;letter-spacing:1.4px;color:#a9fff2;margin-bottom:5px}

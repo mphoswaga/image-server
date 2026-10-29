@@ -17,3 +17,10 @@ body[data-world="Ember city"] .tower{--team-rgb:255,178,81}body[data-world="Embe
 body[data-world="Stardust"] .tower{--team-rgb:150,173,255}body[data-world="Stardust"] .tower:nth-child(2){--team-rgb:221,151,255}
 .world-gentle .tower::after{opacity:.22!important}.world-gentle .clear-ring,.world-gentle .row-party{display:none}.world-gentle .cell,.world-gentle .clear-beam,.world-gentle .clear-award{animation:none!important}.world-gentle .clear-award{opacity:1}.world-gentle .cell.clearing{opacity:0}
 @media(max-width:600px){.world-controls summary{font-size:12px;padding:7px}.world-controls>div{right:0;width:220px}.tower-top{padding:2px}.tower,.tower.active{border-radius:10px}}
+
+/* Keep one composited piece while the server sends its authoritative position. */
+.moving-block.smooth-piece{right:auto;bottom:auto;width:calc(100% - 10px);height:calc(100% - 10px);will-change:transform}
+.tower{transition:border-color .45s ease,box-shadow .45s ease}
+.cell.falling{animation-timing-function:cubic-bezier(.2,.65,.3,1)}
+.cell.settling,.cell.falling.settling:not(.clearing){animation-timing-function:cubic-bezier(.2,.65,.3,1)}
+@media(prefers-reduced-motion:reduce){.moving-block.smooth-piece{will-change:auto}}

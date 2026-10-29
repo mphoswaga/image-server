@@ -105,8 +105,8 @@ test('teacher can test both smartboard teams without changing the real game',asy
 });
 
 test('BlockQuest controls use versioned assets and bypass stale browser caches',async({request})=>{
- const html=await request.get('/blockquest.html');expect(html.headers()['cache-control']).toContain('no-store');const body=await html.text();expect(body).toContain('/blockquest.js?v=7');expect(body).toContain('/blockquest.css?v=7');
- for(const path of ['/blockquest-world.js?v=1','/blockquest-world.css?v=1','/blockquest.js?v=7','/blockquest-core.js?v=7','/blockquest-audio.js?v=7','/blockquest.css?v=7','/blockquest-neon.css?v=7','/games-hub.js?v=4']){const response=await request.get(path);expect(response.ok()).toBe(true);expect(response.headers()['cache-control']).toContain('no-store');expect(response.headers()['cloudflare-cdn-cache-control']).toBe('no-store');}
+ const html=await request.get('/blockquest.html');expect(html.headers()['cache-control']).toContain('no-store');const body=await html.text();expect(body).toContain('/blockquest.js?v=8');expect(body).toContain('/blockquest.css?v=8');
+ for(const path of ['/blockquest-motion.js?v=1','/blockquest-world.js?v=2','/blockquest-world.css?v=2','/blockquest.js?v=8','/blockquest-core.js?v=8','/blockquest-audio.js?v=8','/blockquest.css?v=8','/blockquest-neon.css?v=8','/games-hub.js?v=4']){const response=await request.get(path);expect(response.ok()).toBe(true);expect(response.headers()['cache-control']).toContain('no-store');expect(response.headers()['cloudflare-cdn-cache-control']).toBe('no-store');}
 });
 
 function pulsingSoundtrack(){

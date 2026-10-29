@@ -32,18 +32,19 @@ window.BlockQuestAudio=class {
  syncPulse(){
   if(!this.pulseAllowed()){this.stopPulse();return;}
   if(this.pulseFrame)return;
-  document.documentElement.dataset.musicPulse='on';let last=0;
+  document.documentElement.dataset.musicPulse='on';let last=0,target=0,sampleAt=0;
   const frame=now=>{
    if(!this.pulseAllowed()){this.stopPulse();return;}
-   if(now-last>=50){
-    last=now;this.analyser.getFloatTimeDomainData(this.wave);this.analyser.getByteFrequencyData(this.spectrum);
+   const dt=last?Math.min(100,now-last):16.7;last=now;
+   if(now-sampleAt>=50){
+    sampleAt=now;this.analyser.getFloatTimeDomainData(this.wave);this.analyser.getByteFrequencyData(this.spectrum);
     let energy=0;for(const sample of this.wave)energy+=sample*sample;
     const rms=Math.sqrt(energy/this.wave.length),binHz=this.context.sampleRate/this.analyser.fftSize;
     let bass=0,count=0;for(let i=Math.max(1,Math.floor(45/binHz));i<=Math.min(this.spectrum.length-1,Math.ceil(220/binHz));i++){bass+=this.spectrum[i]/255;count++;}
-    const target=rms<.002?0:Math.min(.9,Math.max(0,(rms-.008)*3.2+(count?bass/count:0)*.35));
-    this.pulseLevel+=(target-this.pulseLevel)*(target>this.pulseLevel?.45:.14);
-    document.documentElement.style.setProperty('--music-pulse',this.pulseLevel.toFixed(3));
+    target=rms<.002?0:Math.min(.9,Math.max(0,(rms-.008)*3.2+(count?bass/count:0)*.35));
    }
+   this.pulseLevel+=(target-this.pulseLevel)*(1-Math.exp(-dt/(target>this.pulseLevel?85:300)));
+   document.documentElement.style.setProperty('--music-pulse',this.pulseLevel.toFixed(3));
    this.pulseFrame=requestAnimationFrame(frame);
   };
   this.pulseFrame=requestAnimationFrame(frame);
