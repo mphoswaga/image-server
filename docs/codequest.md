@@ -101,3 +101,15 @@ The teacher control room shows a live countdown, human learners ready/total, lea
 ## Celebration music
 
 Round results and the final winners screen switch to an original locally hosted 12.8-second upbeat treasure celebration, with melody, harmony, bass and percussion. It loops while results are displayed, uses the Music control, respects hidden tabs and page exit, and stops when the next coding round begins. Polling and moving from round results to the final podium do not restart it. Reconnecting to a result screen starts its celebration normally. The regular soundtrack remains silent underneath. Browser tests decode and play the actual WAV on desktop and mobile, including finish, mute/retry and the next round.
+
+## Embedded coding variations and curriculum evidence
+
+New competitions created from the updated interface enable small duel variations. In each eight-round cycle, round 2 asks for an ending-square prediction before a private test, round 4 supplies a longer correct program to shorten, and round 6 asks learners to mark reach/collect/return boundaries (reach/collect for collect-only goals). Other rounds keep normal duels. All paired learners receive the same challenge. Existing saved competitions retain their original rules.
+
+Predictions are program-specific, recorded before evaluation, immutable for that program, bounded to 50 per learner/round, and hidden from opponents. Edited programs require a new prediction before testing. Ready cannot bypass a prediction or required grouping. A supplied simplification program is a visible reference, with the normal authored-block allowance still enforced for submitted code. Section choices persist with code and are verified against actual successful execution for report evidence.
+
+Reports and CSV export now include supporting evidence by objective, with round references. Saved evidence includes predictions, chosen squares/correctness, supplied reference code and section boundaries. Successful shortened code supports 3CT.02/3P.01; correctly grouped completed voyages support 3CT.06. Prediction evidence is labelled cautiously for 3CT.05 because endpoint prediction does not alone establish prediction of a specific edit. Logical reasoning, everyday-task repetition and inputs/outputs are not automatically declared mastered; report notes identify the required direct teacher checks. Gameplay wins and assessment marks are unchanged. Practice does not collect these challenge responses.
+
+## Test a selected round
+
+In the teacher’s sample game (`test=1`), Test a specific round lists all 20 rounds with their variation labels and a collect-only/return goal selector. Load selected round prepares a fresh isolated sample competition at that round; Play selected round opens the sample learner against the explicitly labelled computer pirate. It does not require playing through earlier rounds. Replacing an active sample requires confirmation. The server restricts round selection to the owning teacher in preview mode, validates round and goal, and preserves the real class session and class map history. Sample learners and real-class requests cannot use this control.
