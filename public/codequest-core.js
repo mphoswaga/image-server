@@ -2,7 +2,7 @@
 (function(root,factory){if(typeof module==='object')module.exports=factory();else root.CodeQuest=factory();})(typeof globalThis!=='undefined'?globalThis:this,()=>{
  'use strict';
  const missions=[
- {title:'First treasure',hint:'Sailor faces east. Reach the chest, collect it, then return to the ship.',size:6,start:[0,4,1],chest:[3,4],rocks:[[2,2],[3,2],[4,2]],water:[[0,0],[1,0],[5,0],[5,1]],blocks:['move','left','right','collect','repeat']},
+ {title:'First treasure',hint:'Your pirate starts facing right (→). Reach the chest, collect it, then return to the ship.',size:6,start:[0,4,1],chest:[3,4],rocks:[[2,2],[3,2],[4,2]],water:[[0,0],[1,0],[5,0],[5,1]],blocks:['move','left','right','collect','repeat']},
  {title:'Around the reef',hint:'The reef blocks the direct route. Find a safe path to the chest and home.',size:6,start:[0,4,1],chest:[4,3],rocks:[[2,4],[2,3],[2,2]],water:[[0,0],[1,0],[5,0],[5,1]],blocks:['move','left','right','collect','repeat']},
  {title:'Hidden lagoon',hint:'Cross the island without stepping into the lagoon. Bring the treasure home.',size:6,start:[0,5,0],chest:[4,1],rocks:[[2,1],[2,2],[2,3],[4,4]],water:[[0,0],[1,0],[3,3],[4,3]],blocks:['move','left','right','collect','repeat']},
  {title:'Smuggler’s bend',hint:'Plan each turn carefully. A shorter successful voyage wins the duel.',size:6,start:[0,5,1],chest:[5,1],rocks:[[1,4],[2,4],[3,2],[3,1]],water:[[0,0],[1,0],[4,4]],blocks:['move','left','right','collect','repeat']},
