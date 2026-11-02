@@ -43,3 +43,11 @@ A bounded search is followed by independently generated, transformed fallback va
 The last 100 layout fingerprints are stored per teacher and class under DATA_DIR/codequest/map-history, shared across new competitions and source activities. Histories are merged before every round to handle overlapping lobbies. Preview history is separate and cannot replace classroom history.
 
 QA includes 5,000 deterministic layouts across all levels, solution variety, 550 fallback/history cases, malformed-map rejection, shared-map checks for 25 learners, restart preservation, real route persistence and desktop/mobile play against generated puzzles. A 15-map visual review sheet is available under output/codequest-maps during development.
+
+## Music and pirate identities
+
+The shared countdown screens now show two named, inward-facing pirate portraits: a crimson captain and a teal navigator with a different hat, skin tone, feather and earrings. Pair side assigns the colour/outfit consistently across both learners’ screens, their own island and the duel replay. The roster’s normalized gender independently selects a male or female pirate, including during practice; missing/unrecognized gender uses a neutral model without guessing from names. Same-gender opponents still have different colours. Existing saved games refresh the appearance from the current roster without resetting code, marks, maps or timing. The portraits do not add another wait or click; they occupy the existing coordinated countdown and launch stages.
+
+CodeQuest streams the existing locally hosted ColonyQuest soundtrack (Toys Are Us, Blue Deer Studio; shared player can fall back to Ghibli Station, The Mini Vandals). Music is quieter during practice/coding and louder during the showdown. Music and effects have separate toggles. Playback respects user activation, explicit mute, teacher pause, hidden tabs, page exit and the end of the competition. A blocked autoplay attempt offers Play music, and one tap retries rather than inadvertently muting. Music failure does not block coding. Polling does not reset the track.
+
+Tests verify real browser MP3 decoding/playback, mute/retry behavior, pause/resume, hidden-tab suspension, distinct portraits matching playing/replay avatars, responsive layout, and all four facing directions on desktop and mobile.
