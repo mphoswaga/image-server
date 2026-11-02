@@ -12,8 +12,26 @@ window.CodeQuestMusic=class {
   this.player.media.addEventListener('error',()=>this.updateButton());this.updateButton();
  }
  updateButton(){this.button.textContent=this.enabled?(this.player.blocked?'Play music':'Music on'):'Music off';this.button.setAttribute('aria-pressed',String(this.enabled));}
- sync(state,practice=false){this.state=state;this.practice=practice;const phase=state?.phase,active=this.enabled&&!!state&&(practice||['countdown','build','launch','replay','results'].includes(phase))&&phase!=='paused';
+ sync(state,practice=false){this.state=state;this.practice=practice;const phase=state?.phase,active=this.enabled&&!!state&&(practice||['build','replay','results'].includes(phase))&&phase!=='paused';
   this.player.setActive(active);this.player.setVolume(practice?.1:phase==='build'?.14:['countdown','launch'].includes(phase)?.23:.19);this.updateButton();
  }
  toggle(){if(this.retryRequested||this.enabled&&this.player.blocked){this.retryRequested=false;this.player.blocked=false;}else this.enabled=!this.enabled;this.sync(this.state,this.practice);return this.enabled;}
+};
+
+/* Two local, metallic bell strikes for each new opponent announcement. */
+window.CodeQuestBell=class {
+ constructor(){this.context=null;this.nodes=new Set();this.handled=new Set();this.enabled=true;
+  const unlock=()=>{if(this.enabled)this.unlock();};document.addEventListener('pointerdown',unlock);document.addEventListener('keydown',unlock);
+  document.addEventListener('visibilitychange',()=>this.sync(this.state,this.enabled));window.addEventListener('pagehide',()=>this.cancel());
+ }
+ unlock(){try{if(!this.context){const Context=window.AudioContext||window.webkitAudioContext;if(!Context)return null;this.context=new Context();this.master=this.context.createGain();this.master.gain.value=.7;const limiter=this.context.createDynamicsCompressor();limiter.threshold.value=-8;limiter.ratio.value=8;this.master.connect(limiter);limiter.connect(this.context.destination);}this.context.resume().then(()=>this.sync(this.state,this.enabled)).catch(()=>{});return this.context;}catch{return null;}}
+ cancel(){for(const o of this.nodes){try{o.stop();}catch{}}this.nodes.clear();}
+ sync(state,enabled=true){if(this.snapshot!==state){this.snapshot=state;this.receivedAt=Date.now();}this.state=state;this.enabled=enabled;if(this.session!==state?.id){this.session=state?.id;this.handled.clear();this.cancel();}
+  if(!enabled||document.hidden||state?.phase!=='countdown'){this.cancel();return;}
+  const key=state.id+':'+state.round,remaining=(state.buildAt-state.serverNow-(Date.now()-this.receivedAt))/1000;
+  if(this.handled.has(key))return;if(remaining<1.6){this.handled.add(key);return;}
+  if(!this.context||this.context.state!=='running')return;
+  this.handled.add(key);const start=this.context.currentTime+.04;for(const delay of [0,.8])this.strike(start+delay);
+ }
+ strike(at){const c=this.context;for(const [ratio,volume]of [[1,.2],[2.01,.08],[2.76,.045],[4.07,.025]]){const o=c.createOscillator(),gain=c.createGain();o.type='sine';o.frequency.setValueAtTime(660*ratio,at);gain.gain.setValueAtTime(.001,at);gain.gain.exponentialRampToValueAtTime(volume,at+.008);gain.gain.exponentialRampToValueAtTime(.001,at+1.05);o.connect(gain);gain.connect(this.master);this.nodes.add(o);o.onended=()=>{this.nodes.delete(o);o.disconnect();gain.disconnect();};o.start(at);o.stop(at+1.1);}}
 };

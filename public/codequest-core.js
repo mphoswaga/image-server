@@ -14,17 +14,22 @@
   return walk(program,0);
  }
  function expand(program){const out=[];normalize(program).forEach((b,i)=>{if(b.op==='repeat')for(let n=0;n<b.count;n++)b.body.forEach(c=>out.push({op:c.op,block:i}));else out.push({op:b.op,block:i});});if(out.length>64)throw Error('Your program can run up to 64 actions.');return out;}
- function run(m,program){const ops=expand(program);let [x,y,d]=m.start,carrying=false,reason='Return the treasure to your ship.',success=false;const frames=[{x,y,d,carrying,block:-1,event:'start'}];
+ // Count authored blocks, including the Repeat container and each child once.
+ function blockCount(program){return normalize(program).reduce((n,b)=>n+1+(b.op==='repeat'?b.body.length:0),0);}
+ function checkBudget(m,program){const count=blockCount(program);if(m.blockLimit!==undefined){if(!Number.isInteger(m.blockLimit)||m.blockLimit<1||m.blockLimit>40)throw Error('Invalid island block limit.');if(count>m.blockLimit)throw Error('Use up to '+m.blockLimit+' blocks on this island. Use Repeat to shorten your code.');}return count;}
+ // Single-action loops match the controls available to young learners.
+ function compact(program){const plain=expand(program).map(b=>({op:b.op})),out=[];for(let i=0;i<plain.length;){let end=i+1;while(end<plain.length&&plain[end].op===plain[i].op)end++;let remaining=end-i;while(remaining){const count=Math.min(5,remaining);if(count>=3&&plain[i].op!=='collect')out.push({op:'repeat',count,body:[{op:plain[i].op}]});else for(let j=0;j<count;j++)out.push({op:plain[i].op});remaining-=count;}i=end;}return out;}
+ function run(m,program){checkBudget(m,program);const ops=expand(program);let [x,y,d]=m.start,carrying=false,reason=m.requireReturn===false?'Reach the treasure and use Collect.':'Return the treasure to your ship.',success=false;const frames=[{x,y,d,carrying,block:-1,event:'start'}];
   for(const step of ops){let event=step.op;if(step.op==='left')d=(d+3)%4;else if(step.op==='right')d=(d+1)%4;else if(step.op==='collect'){if(at([m.chest],x,y)&&!carrying)carrying=true;else{reason='Collect only when you are standing on the chest.';event='miss';}}
    else {const [dx,dy]=[[0,-1],[1,0],[0,1],[-1,0]][d],nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=m.size||ny>=m.size||at(m.rocks,nx,ny)||at(m.water,nx,ny)){reason='Your pirate met an obstacle. Change the route and try again.';frames.push({x,y,d,carrying,block:step.block,event:'blocked'});break;}x=nx;y=ny;}
-   frames.push({x,y,d,carrying,block:step.block,event});if(carrying&&x===m.start[0]&&y===m.start[1]){success=true;reason='Treasure safely aboard!';break;}
+   frames.push({x,y,d,carrying,block:step.block,event});if(carrying&&(m.requireReturn===false||x===m.start[0]&&y===m.start[1])){success=true;reason=m.requireReturn===false?'Treasure collected!':'Treasure safely aboard!';break;}
   }
   return {success,carrying,steps:frames.length-1,reason,frames};
  }
  function compare(a,b){if(a.success!==b.success)return a.success?1:-1;if(a.success&&a.steps!==b.steps)return a.steps<b.steps?1:-1;return 0;}
- // Shortest-action route is used only by the clearly labelled practice pirate.
- function solve(m){const q=[{x:m.start[0],y:m.start[1],d:m.start[2],c:false,p:[]}],seen=new Set();for(let i=0;i<q.length;i++){const n=q[i],key=[n.x,n.y,n.d,n.c].join();if(seen.has(key))continue;seen.add(key);if(n.c&&n.x===m.start[0]&&n.y===m.start[1])return n.p;
+ // Shortest-action route for map validation and labelled computer pirates.
+ function solve(m){const q=[{x:m.start[0],y:m.start[1],d:m.start[2],c:false,p:[]}],seen=new Set();for(let i=0;i<q.length;i++){const n=q[i],key=[n.x,n.y,n.d,n.c].join();if(seen.has(key))continue;seen.add(key);if(n.c&&(m.requireReturn===false||n.x===m.start[0]&&n.y===m.start[1]))return m.blockLimit===undefined?n.p:compact(n.p);
   for(const op of ['move','left','right','collect']){const v={...n,p:[...n.p,{op}]};if(op==='left')v.d=(v.d+3)%4;else if(op==='right')v.d=(v.d+1)%4;else if(op==='collect'){if(n.c||!at([m.chest],n.x,n.y))continue;v.c=true;}else{const z=[[0,-1],[1,0],[0,1],[-1,0]][n.d];v.x+=z[0];v.y+=z[1];if(v.x<0||v.y<0||v.x>=m.size||v.y>=m.size||at(m.rocks,v.x,v.y)||at(m.water,v.x,v.y))continue;}q.push(v);}}
  return [];}
- return {missions,normalize,expand,run,compare,solve,at};
+ return {missions,normalize,expand,run,compare,solve,at,blockCount,checkBudget,compact};
 });
