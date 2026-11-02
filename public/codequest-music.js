@@ -1,21 +1,23 @@
 /* Reuse the locally hosted, credited ColonyQuest soundtrack. Music never blocks play. */
 window.CodeQuestMusic=class {
  constructor(button){
-  this.button=button;this.enabled=true;this.player=new ColonyMusic(track=>{button.title=track.title+' — '+track.artist;});
+  this.button=button;this.enabled=true;this.player=new ColonyMusic(track=>{this.trackTitle=track.title+' — '+track.artist;button.title=this.trackTitle;});
   // Preserve the button’s retry intent before the shared gesture handler unblocks media.
-  this.retryRequested=false;button.addEventListener('pointerdown',()=>{this.retryRequested=this.enabled&&this.player.blocked;});button.addEventListener('keydown',event=>{if(['Enter',' '].includes(event.key))this.retryRequested=this.enabled&&this.player.blocked;});
+  this.celebration=new ColonyMusic(()=>{});this.celebration.media.src='/assets/codequest/celebration.wav';this.celebration.media.loop=true;this.celebration.media.dataset.codequestCelebration='true';this.celebration.setVolume(.3);this.celebrationKey='';
+  this.retryRequested=false;button.addEventListener('pointerdown',()=>{this.retryRequested=this.enabled&&this.audiblePlayer().blocked;});button.addEventListener('keydown',event=>{if(['Enter',' '].includes(event.key))this.retryRequested=this.enabled&&this.audiblePlayer().blocked;});
   this.player.index=1;this.player.selectTrack();this.player.media.loop=true;this.player.media.dataset.codequestMusic='true';this.player.setVolume(.14);
-  const unlock=event=>{if(event.target?.closest?.('#music'))return;if(this.enabled){this.player.blocked=false;this.sync(this.state,this.practice);}};
+  const unlock=event=>{if(event.target?.closest?.('#music'))return;if(this.enabled){this.player.blocked=false;this.celebration.blocked=false;this.sync(this.state,this.practice);}};
   document.addEventListener('pointerdown',unlock);document.addEventListener('keydown',unlock);
   document.addEventListener('visibilitychange',()=>this.sync(this.state,this.practice));
-  window.addEventListener('pagehide',()=>this.player.setActive(false));
+  window.addEventListener('pagehide',()=>{this.player.setActive(false);this.celebration.setActive(false);});
   this.player.media.addEventListener('error',()=>this.updateButton());this.updateButton();
  }
- updateButton(){this.button.textContent=this.enabled?(this.player.blocked?'Play music':'Music on'):'Music off';this.button.setAttribute('aria-pressed',String(this.enabled));}
+ audiblePlayer(){return this.celebrating?this.celebration:this.player;}
+ updateButton(){this.button.textContent=this.enabled?(this.audiblePlayer().blocked?'Play music':'Music on'):'Music off';this.button.setAttribute('aria-pressed',String(this.enabled));}
  sync(state,practice=false){this.state=state;this.practice=practice;const phase=state?.phase,active=this.enabled&&!!state&&(practice||['build','replay','results'].includes(phase))&&phase!=='paused';
-  this.player.setActive(active);const urgent=phase==='build'&&state.deadline-state.serverNow<=6000;this.player.setVolume(practice?.1:urgent?.035:phase==='build'?.14:['countdown','launch'].includes(phase)?.23:.19);this.updateButton();
+  this.celebrating=!practice&&(phase==='results'||phase==='ended'&&state.round>0);const key=state?.id+':'+state?.round;if(this.celebrating&&this.celebrationKey!==key){this.celebrationKey=key;this.celebration.media.currentTime=0;}this.celebration.setActive(this.enabled&&this.celebrating);this.player.setActive(active&&!this.celebrating);this.button.title=this.celebrating?'Original CodeQuest treasure celebration':this.trackTitle||'CodeQuest soundtrack';const urgent=phase==='build'&&state.deadline-state.serverNow<=6000;this.player.setVolume(practice?.1:urgent?.035:phase==='build'?.14:['countdown','launch'].includes(phase)?.23:.19);this.updateButton();
  }
- toggle(){if(this.retryRequested||this.enabled&&this.player.blocked){this.retryRequested=false;this.player.blocked=false;}else this.enabled=!this.enabled;this.sync(this.state,this.practice);return this.enabled;}
+ toggle(){if(this.retryRequested||this.enabled&&this.audiblePlayer().blocked){this.retryRequested=false;this.player.blocked=false;this.celebration.blocked=false;}else this.enabled=!this.enabled;this.sync(this.state,this.practice);return this.enabled;}
 };
 
 /* Two local, metallic bell strikes for each new opponent announcement. */
