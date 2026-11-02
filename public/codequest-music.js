@@ -13,7 +13,7 @@ window.CodeQuestMusic=class {
  }
  updateButton(){this.button.textContent=this.enabled?(this.player.blocked?'Play music':'Music on'):'Music off';this.button.setAttribute('aria-pressed',String(this.enabled));}
  sync(state,practice=false){this.state=state;this.practice=practice;const phase=state?.phase,active=this.enabled&&!!state&&(practice||['build','replay','results'].includes(phase))&&phase!=='paused';
-  this.player.setActive(active);this.player.setVolume(practice?.1:phase==='build'?.14:['countdown','launch'].includes(phase)?.23:.19);this.updateButton();
+  this.player.setActive(active);const urgent=phase==='build'&&state.deadline-state.serverNow<=6000;this.player.setVolume(practice?.1:urgent?.035:phase==='build'?.14:['countdown','launch'].includes(phase)?.23:.19);this.updateButton();
  }
  toggle(){if(this.retryRequested||this.enabled&&this.player.blocked){this.retryRequested=false;this.player.blocked=false;}else this.enabled=!this.enabled;this.sync(this.state,this.practice);return this.enabled;}
 };
