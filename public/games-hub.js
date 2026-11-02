@@ -1,6 +1,7 @@
 /* Teacher game selection. Content remains in the existing stores and launchers. */
 window.GamesHub = (() => {
   const catalog = [
+    {id:'codequest',name:'CodeQuest',icon:'🏴‍☠️',text:'Code your pirate’s route. Two learners, one treasure challenge, a shared reveal.',modes:[['Treasure duels · learner devices','/codequest.html?game=']]},
     {id:'moonquest',name:'MoonQuest',icon:'🌙',text:'Rabbit teams, diagram duels and a moonlit festival.',modes:[['Learner devices','/moonquest?game=']]},
     {id:'blockquest',name:'BlockQuest',icon:'▦',text:'Answer, choose a block and build. Clear rows together.',modes:[['Live duels · learner devices','/blockquest-live.html?game='],['Smartboard · two teams','/blockquest.html?game='],['Single-player mission','/blockquest.html?mode=solo&game=']]},
     {id:'fishquest',name:'FishQuest',icon:'🐠',text:'Feed your fish and grow an ocean of classroom heroes.',modes:[['Live multiplayer · learner devices','/fishquest/'],['Smartboard','/fishquest-board.html?game='],['Independent practice','/fishquest-play/']]},
@@ -49,7 +50,7 @@ window.GamesHub = (() => {
           }
           for(const [label,path] of item.modes)actions.append(link(label+' →',path+encodeURIComponent(selected.id)));
           const preview=item.id==='moonquest'?'/moonquest?game='+encodeURIComponent(selected.id)+'&action=test':item.id==='colonyquest'?'/colonyquest/'+encodeURIComponent(selected.id)+'?test=1':item.id==='fishquest'?'/fishquest-play/'+encodeURIComponent(selected.id)+'?test=1':'/play/'+encodeURIComponent(selected.id)+'?test=1';
-          if(item.id==='blockquest'){for(const [label,mode] of [['Test smartboard · two teams',''],['Test single-player','&mode=solo']]){const test=link(label,'/blockquest.html?game='+encodeURIComponent(selected.id)+'&test=1'+mode);test.target='_blank';test.rel='noopener';actions.append(test);}const duelTest=link('Test live duels · sample class','/blockquest-live.html?game='+encodeURIComponent(selected.id)+'&test=1');duelTest.target='_blank';duelTest.rel='noopener';actions.append(duelTest);}else{const test=link('Try without saving scores',preview);test.target='_blank';test.rel='noopener';actions.append(test);}
+          if(item.id==='codequest'){const test=link('Test treasure duels · sample pirate','/codequest.html?game='+encodeURIComponent(selected.id)+'&test=1');test.target='_blank';test.rel='noopener';actions.append(test);}else if(item.id==='blockquest'){for(const [label,mode] of [['Test smartboard · two teams',''],['Test single-player','&mode=solo']]){const test=link(label,'/blockquest.html?game='+encodeURIComponent(selected.id)+'&test=1'+mode);test.target='_blank';test.rel='noopener';actions.append(test);}const duelTest=link('Test live duels · sample class','/blockquest-live.html?game='+encodeURIComponent(selected.id)+'&test=1');duelTest.target='_blank';duelTest.rel='noopener';actions.append(duelTest);}else{const test=link('Try without saving scores',preview);test.target='_blank';test.rel='noopener';actions.append(test);}
           actions.append(node('small',item.id==='moonquest'?'Choose duel, cooperative or battle royale in class setup.':'Live formats open teacher setup. Independent practice opens the learner activity.'));
         };select.onchange=render;render();card.append(formats);
       }
