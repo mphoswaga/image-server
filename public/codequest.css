@@ -4,3 +4,5 @@
 .island{grid-template-rows:repeat(6,minmax(0,1fr))}.tile{min-height:0;min-width:0}#rosterStatus{margin:12px 0}#rosterStatus p{font-size:14px}.roundbar h1{font-size:32px}@media(min-width:1000px){#workspace .island{max-width:min(480px,calc(100dvh - 340px))}.roundbar p{margin:6px 0}.roundbar h1{margin:6px 0}#program{max-height:180px}.islandPanel{padding:20px}}
 /* Keep the shared reveal visible on a classroom laptop/projector. */
 body.revealing #game>.roundbar,body.revealing #versus{display:none}@media(min-width:850px){body.revealing header{padding-top:10px;padding-bottom:10px}body.revealing main{padding-top:14px;padding-bottom:20px}#replay{padding:18px}#replay .island{max-width:max(260px,min(440px,calc(100dvh - 480px)))}.replayCard h3{margin:8px 0}.replayCode{max-height:50px;margin-top:8px}.replayCard>p{margin:8px 0;font-size:14px}#winner{margin:12px 0;font-size:23px}}
+
+.replayCode{position:relative}@media(min-width:850px){.replayCode{max-height:72px}}
