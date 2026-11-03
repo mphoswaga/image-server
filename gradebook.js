@@ -60,7 +60,24 @@ function isAssessmentOnRecord(record) {
 
 // Return one canonical score for a submission, or null while any assessment
 // item still needs a teacher decision. Assessment totals are rebuilt from the
-// item grades rather than trusting a possibly stale submission total.
+// item grades rather than trusting a possibly stale submission total, except
+// for historical totals already released under the legacy quiz rules.
+// Legacy quizzes allowed teachers to release their stored totals without
+// rewriting every AI item as teacher-confirmed. Preserve that prior approval
+// when shared assessment controls are added; never grandfather newer work.
+function historicalReleasedQuizResult(record,sub){
+  const migration=record.legacyQuiz,original=migration?.original;
+  if(original?.type!=='quiz')return null;
+  const upgradedAt=Date.parse(migration.upgradedAt),submittedAt=Date.parse(sub.submittedAt),cutoff=Date.parse(original.cutoffAt);
+  if(!Number.isFinite(upgradedAt)||!Number.isFinite(submittedAt)||submittedAt>upgradedAt)return null;
+  if(!original.resultsReleased&&!(Number.isFinite(cutoff)&&cutoff<=upgradedAt))return null;
+  const before=original.content?.questions||[],after=record.content?.questions||[];
+  if(!before.length||before.length!==after.length||before.some((q,i)=>q.id!==after[i].id||Number(q.marks)!==Number(after[i].marks)))return null;
+  const mark=Number(sub.totalMarks),max=Number(sub.maxMarks),total=before.reduce((sum,q)=>sum+Number(q.marks),0);
+  if(sub.totalMarks==null||sub.maxMarks==null||!Number.isFinite(mark)||!Number.isFinite(max)||max<=0||mark<0||mark>max||max!==total||Number(record.totalMarks)!==total)return null;
+  return {mark,max};
+}
+
 function teacherSubmissionResult(record, sub) {
   if (!record || !sub || assignments.isAbsent(record,sub.studentId)) return null;
   if (record.type !== 'assessment') {
@@ -79,8 +96,8 @@ function teacherSubmissionResult(record, sub) {
     const grade = (sub.grades || {})[question.id];
     const awarded = Number(grade && grade.marksAwarded);
     const available = Number(question.marks);
-    if (!grade || !FINAL_ASSESSMENT_GRADE_SOURCES.has(grade.source)
-      || grade.marksAwarded == null || grade.marksAwarded === ''
+    if (!grade || !FINAL_ASSESSMENT_GRADE_SOURCES.has(grade.source))return historicalReleasedQuizResult(record,sub);
+    if (grade.marksAwarded == null || grade.marksAwarded === ''
       || !Number.isFinite(awarded) || !Number.isFinite(available)
       || available <= 0 || awarded < 0 || awarded > available) return null;
     mark += awarded;
