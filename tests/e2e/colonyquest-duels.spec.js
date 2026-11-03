@@ -199,3 +199,12 @@ test("teacher can choose five-minute duels and roster teams before opening the r
       rosterIds: ["c1"],
     });
 });
+
+test('teacher can skip the opening story straight into the duel announcement',async({page})=>{
+ const m=new ColonyMatch(game,{duels:true,now:Date.now()});m.join({studentId:'a',name:'Mia'},Date.now());m.join({studentId:'b',name:'Leo'},Date.now());m.start(Date.now());
+ const data=()=>({title:'Habitats',classes:[],rosterIds:[],history:[],attendance:[],match:m.snapshot(null,true,Date.now())});
+ await page.route('**/colonyquest-live/duel-browser',r=>r.fulfill({path:path.join(__dirname,'../../public/colonyquest-live.html'),contentType:'text/html'}));
+ await page.route('**/api/game/duel-browser/colonyquest-live',r=>r.fulfill({json:data()}));
+ await page.route('**/api/game/duel-browser/colonyquest-live/skipStory',r=>{m.skipStory(Date.now());return r.fulfill({json:data()});});
+ await page.goto('/colonyquest-live/duel-browser');await expect(page.locator('#skipStory')).toBeVisible();await page.locator('#skipStory').click();await expect(page.locator('#skipStory')).toBeHidden();await expect(page.locator('.colony-duel-announcement')).toContainText('Meet your colony rival!');expect(m.state.story).toBeNull();
+});

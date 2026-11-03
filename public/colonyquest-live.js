@@ -393,6 +393,7 @@
           'Protect each other',
         ][chapter];
         storyReader.attach($('instruction'),'colony-'+chapter);
+        if(s.preview){const button=document.createElement('button');button.textContent='Skip story · start playing';button.onclick=()=>submit({type:'skipStory'});$('choices').append(button);}
         return;
       }
       const result = beat.results.find((r) => r.playerId === p.id);
@@ -731,6 +732,7 @@
     $('hostCount').textContent =
       s.pacing === 'individual' ? `${s.players.length} colonies · ${s.players.filter(p=>p.connected).length} connected · ${s.finishedCount || 0}/${s.players.length} finished` : `${s.players.length} colonies · ${s.players.filter((p) => p.connected).length} connected · ${s.players.filter((p) => p.answered).length}/${s.players.length} answered`;
     $('start').hidden = s.phase !== 'lobby';
+    $('skipStory').hidden = !(s.phase==='story'&&s.story?.key==='intro');
     $('pause').hidden = !['answer', 'upgrade', 'reveal', 'story'].includes(s.phase);
     $('resume').hidden = s.phase !== 'paused';
     $('end').hidden = s.phase === 'ended';
@@ -792,7 +794,7 @@
         error('Copy the selected learner link.');
       }
     };
-    for (const cmd of ['open', 'start', 'pause', 'resume', 'end'])
+    for (const cmd of ['open', 'start', 'skipStory', 'pause', 'resume', 'end'])
       $(cmd).onclick = async () => {
         if (hostBusy) return;
         if (cmd === 'end' && !confirm('End this multiplayer game and save the results?')) return;

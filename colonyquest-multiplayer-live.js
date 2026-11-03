@@ -282,7 +282,7 @@ function createColonyQuestMultiplayer({
       res.json(payload(g, getMatch(g.id)));
     } catch (e) { res.status(409).json({error:e.message}); }
   });
-  for (const command of ['start', 'pause', 'resume', 'end'])
+  for (const command of ['start', 'skipStory', 'pause', 'resume', 'end'])
     app.post(route + '/' + command, requireAuth, async (req, res) => {
       const g = owner(req, res);
       if (!g) return;
@@ -469,7 +469,7 @@ function createColonyQuestMultiplayer({
           send(ws, { type: 'pong' });
           return;
         }
-        if (!['answer', 'upgrade', 'watch'].includes(message.type)) return;
+        if (!['answer', 'upgrade', 'watch', 'skipStory'].includes(message.type)) return;
         if (!ws.commandWindow || receivedAt - ws.commandWindow > 1000) {
           ws.commandWindow = receivedAt;
           ws.commandCount = 0;
@@ -495,7 +495,10 @@ function createColonyQuestMultiplayer({
           await mutateChoice(ws.key, (match) => {
             if (ws.replaced || message.matchId !== match.state.id)
               throw Error('This room has changed. Join again.');
-            if (message.type === 'answer')
+            if(message.type === 'skipStory') {
+              if(!ws.identity.preview || !match.state.preview)throw Error('Only the teacher can skip the class opening story.');
+              match.skipStory(receivedAt);
+            } else if (message.type === 'answer')
               match.answer(ws.playerId, message.round, message.choice, receivedAt);
             else match.upgrade(ws.playerId, message.round, message.key, message.target, receivedAt);
           });

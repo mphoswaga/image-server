@@ -118,6 +118,12 @@ class ColonyMatch {
     } else if (this.state.pacing === 'individual') this.startIndividual(now);
     else this.setPhase('answer', this.state.questionSeconds, now);
   }
+  skipStory(now = Date.now()) {
+    if(this.state.phase !== 'story' || this.state.story?.key !== 'intro')
+      throw Error('Only the opening story can be skipped.');
+    this.event('Teacher skipped the opening story', {kind:'intro-skipped'}, now);
+    this.advanceStory(now);
+  }
   beginStory(key, now) {
     const beat = story.beats[key];
     const results = story.apply(this, key);

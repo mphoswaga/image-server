@@ -179,3 +179,12 @@ test('odd class gets one labelled computer rival and manual finish scores only o
  assert.equal(report.duels.players.length,3);
  assert.ok(report.duels.players.every(p=>!p.studentId.startsWith('duel-computer')));
 });
+
+test('teacher can skip opening story into duels once without skipping later events',()=>{
+ const m=new ColonyMatch(game,{duels:true,now:0});
+ m.join({studentId:'a',name:'A'},0);m.join({studentId:'b',name:'B'},0);m.start(0);
+ assert.equal(m.state.phase,'story');assert.equal(m.state.story.key,'intro');
+ m.skipStory(1000);assert.equal(m.state.story,null);assert.equal(m.state.duels.stage,'intro');
+ assert.throws(()=>m.skipStory(1001),/Only the opening story/);
+ m.tick(6000);assert.equal(m.active()[0].phase,'answer');assert.equal(m.active()[0].answers.length,0);
+});
