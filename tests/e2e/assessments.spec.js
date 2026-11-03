@@ -117,9 +117,12 @@ test('teacher builds a marked assessment and a learner sees practical criteria s
   try{
     const sharedPinEntry=await sharedPinContext.request.post(`/api/assignment/${classCopy.assessmentId}/enter`,{data:{handle:copyJoin.students[0].handle,pin:'4826'}});
     expect(sharedPinEntry.ok(),await sharedPinEntry.text()).toBeTruthy();
-    const reusedClassPin=await sharedPinContext.request.post(`/api/assignment/${classCopy.assessmentId}/enter`,{data:{handle:copyJoin.students[0].handle,pin:'4826'}});
-    expect(reusedClassPin.status()).toBe(409);
-    expect((await reusedClassPin.json()).error).toMatch(/temporary class PIN has expired or was already used/i);
+    const existingSession=await sharedPinContext.request.post(`/api/assignment/${classCopy.assessmentId}/enter`,{data:{handle:copyJoin.students[0].handle,pin:'4826'}});
+    expect(existingSession.status()).toBe(200); // Authenticated learners can re-enter without a second PIN challenge.
+    const freshContext=await browser.newContext();
+    try{const reusedClassPin=await freshContext.request.post(`/api/assignment/${classCopy.assessmentId}/enter`,{data:{handle:copyJoin.students[0].handle,pin:'4826'}});
+      expect(reusedClassPin.status()).toBe(409);expect((await reusedClassPin.json()).error).toMatch(/temporary class PIN has expired or was already used/i);
+    }finally{await freshContext.close();}
   }finally{
     await sharedPinContext.close();
   }

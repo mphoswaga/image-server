@@ -2364,6 +2364,17 @@ app.post('/api/pack/:type/publish', requireAuth, (req, res) => {
   }
 });
 
+app.post('/api/assignment/:id/assessment-controls',requireAuth,(req,res)=>{
+  const a=assignments.getAssignment(req.params.id);
+  if(!a||a.teacherId!==req.userId)return res.status(404).json({error:'Quiz not found.'});
+  try{
+    const current=a.rosterId?roster.getRoster(req.userId,a.rosterId):null;
+    const upgraded=assignments.enableQuizAssessmentControls(a.id,req.userId,current?.students||[]);
+    if(a.type==='quiz')audit.log('quiz.assessment_controls_enabled',{userId:req.userId,assignmentId:a.id,ip:req.ip});
+    res.json({ok:true,assessmentId:upgraded.id});
+  }catch(error){res.status(400).json({error:error.message});}
+});
+
 app.get('/api/assignments', requireAuth, (req, res) => res.json({ assignments: assignments.listTeacherAssignments(req.userId) }));
 
 // Teacher-built, subject-neutral tests and projects. These publish into the

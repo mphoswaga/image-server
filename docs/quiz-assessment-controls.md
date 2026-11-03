@@ -1,0 +1,7 @@
+# Shared quiz assessment controls
+
+When an owning teacher opens Test or project, legacy quiz summaries are upgraded through an authenticated POST to `/api/assignment/:id/assessment-controls`. The upgrade is idempotent and owner-only. It retains the assignment ID, room code, question IDs, prompts, answers, marks, instructions and original self-paced delivery. Existing submissions and drafts are separate files and are never rewritten by the upgrade. The original quiz record is retained under `legacyQuiz.original` for traceability. Existing released/overdue visibility is preserved. The current roster plus learners with historical work form the cohort snapshot.
+
+The quiz then uses the shared assessment controls: marking, attendance, learner admission, presentation/narration, class assignment and separate class copies. Class changes and question edits retain existing assessment locks after learner work starts. A copy has its own roster, code, submissions and release state and stays private until reviewed and published. Teachers can choose live or self-paced delivery for the new copy. Quiz labels remain Quiz. Imported objective references are remapped to the builder's text-derived IDs so a copied quiz can be published without losing its objective links.
+
+If an individual legacy quiz cannot be upgraded, other assignments remain usable and the teacher sees the error. Normal tests/projects and non-quiz legacy assignments retain their existing paths.

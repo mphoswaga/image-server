@@ -67,7 +67,7 @@ function normalizeContent(data, type) {
   return { title: data.title, instructions: data.instructions || '', questions: [...mcq, ...shortAnswer] };
 }
 
-const ASSESSMENT_TYPES = new Set(['test', 'project', 'practical', 'performance', 'oral', 'portfolio', 'custom']);
+const ASSESSMENT_TYPES = new Set(['quiz', 'test', 'project', 'practical', 'performance', 'oral', 'portfolio', 'custom']);
 const SECTION_TYPES = new Set(['mcq', 'short-answer', 'extended-response', 'practical']);
 
 function cleanText(value, max = 500) {
@@ -308,6 +308,34 @@ function createAssignment({ teacherId, teacherName, type, subject, topic, grade,
   rooms[roomCode] = id;
   saveRooms(rooms);
   return rec;
+}
+
+// Opt-in owner migration of legacy quizzes onto the shared assessment runtime.
+// Keep all identity keys and learner-work files intact, including in-progress answers.
+function enableQuizAssessmentControls(id, teacherId, rosterSnapshot=[]) {
+  const rec=getAssignment(id);
+  if(!rec||rec.teacherId!==teacherId)throw assessmentStateError('Quiz not found.','quiz_not_owned');
+  if(rec.type==='assessment')return rec;
+  if(rec.type!=='quiz')throw assessmentStateError('Only quizzes support this upgrade.','quiz_controls_unsupported');
+  const original=JSON.parse(JSON.stringify(rec));
+  const questions=rec.content?.questions||[];
+  if(!questions.length)throw assessmentStateError('This quiz has no questions.','quiz_empty');
+  const objective={id:'quiz-objective',text:'Demonstrate understanding of '+(rec.topic||rec.title||'the quiz topic')};
+  const sections=[];
+  // Keep original question order even when old quizzes mix question types.
+  for(const q of questions){
+    const type=q.kind==='mcq'?'mcq':'short-answer';let section=sections.at(-1);
+    if(!section||section.type!==type){section={id:'quiz-section-'+sections.length,title:type==='mcq'?'Multiple choice':'Written answers',type,instructions:'',objectiveIds:[objective.id],marks:0,items:[]};sections.push(section);}
+    section.items.push({id:q.id,prompt:q.question,marks:q.marks,objectiveIds:[objective.id],...(type==='mcq'?{options:q.options,correctIndex:q.correctIndex}:{answerKey:q.answerKey||''})});section.marks+=Number(q.marks);
+    Object.assign(q,{sectionId:section.id,sectionTitle:section.title,sectionInstructions:'',sectionType:type,objectiveIds:[objective.id]});
+  }
+  const snapshot=normalizeRosterSnapshot(rec.rosterSnapshot||rosterSnapshot);
+  const known=new Set(snapshot.map(s=>normalizeStudentId(s.id)));
+  for(const sub of [...loadSubmissions(id),...loadDrafts(id)])if(!known.has(normalizeStudentId(sub.studentId))){snapshot.push({id:normalizeStudentId(sub.studentId),name:sub.name||sub.studentId});known.add(normalizeStudentId(sub.studentId));}
+  const released=isReleased(rec),at=new Date().toISOString();
+  Object.assign(rec,{type:'assessment',assessmentType:'quiz',totalMarks:questions.reduce((sum,q)=>sum+Number(q.marks),0),objectives:[objective],sections,version:rec.version||1,status:released?'finalised':'published',rosterSnapshot:snapshot,delivery:deliveryState(rec),resultsReleased:released,teacherMarked:!!rec.teacherMarked||released,legacyQuiz:{upgradedAt:at,original}});
+  if(released)rec.finalisedAt=rec.finalisedAt||at;
+  writeJsonAtomic(recPath(id),rec);return rec;
 }
 
 function getAssignment(id) {
@@ -877,14 +905,15 @@ function safeProjectPresentationLines(value) {
 
 function presentationSlides(record) {
   if (!record || record.type !== 'assessment') throw new Error('Assessment not found.');
-  const isTest = record.assessmentType === 'test';
+  const isTest = ['test','quiz'].includes(record.assessmentType);
+  const assessmentLabel=record.assessmentType==='quiz'?'quiz':'test';
   const slides = [{
-    kind: 'title', title: isTest ? `${record.subject || 'Assessment'} test` : sanitizeProjectPresentationText(record.title),
+    kind: 'title', title: isTest ? `${record.subject || 'Assessment'} ${assessmentLabel}` : sanitizeProjectPresentationText(record.title),
     subtitle: `${record.subject || ''}${record.grade ? ` · ${record.grade}` : ''} · ${record.totalMarks || 0} marks`,
     bullets: [],
   }];
   slides.push({
-    kind: 'overview', title: isTest ? 'Test overview' : 'Project overview',
+    kind: 'overview', title: isTest ? (assessmentLabel==='quiz'?'Quiz overview':'Test overview') : 'Project overview',
     subtitle: isTest ? 'Listen for instructions before you begin.' : 'Follow each stage and check your progress.',
     bullets: (record.sections || []).map((section, index) => {
       const title = !isTest && section.type === 'practical'
@@ -1115,6 +1144,7 @@ function listTeacherAssignments(teacherId) {
     .map(f => { try { return JSON.parse(fs.readFileSync(path.join(DIR, f), 'utf8')); } catch { return null; } })
     .filter(a => a && a.teacherId === teacherId)
     .map(a => ({
+      needsAssessmentControls:a.type==='quiz',
       id: a.id, type: a.type, title: a.title, subject: a.subject, topic: a.topic, grade: a.grade,
       assessmentType: a.assessmentType || null, totalMarks: a.totalMarks || null,
       sectionCount: Array.isArray(a.sections) ? a.sections.length : null,
@@ -1173,7 +1203,7 @@ function renameAssessmentStudent(teacherId, rosterId, studentId, name) {
 
 module.exports = {
   isAbsent, setAttendance, addAssessmentLearners,
-  legacyContentEditable, updateLegacyContent, createAssignment, createAssessment, copyAssessmentToRoster, normalizeAssessment, getAssignment, updateAssignmentCutoff, updateAssessmentRoster, updateAssessmentContent, assessmentContentEditable, getRoomCode,
+  enableQuizAssessmentControls, legacyContentEditable, updateLegacyContent, createAssignment, createAssessment, copyAssessmentToRoster, normalizeAssessment, getAssignment, updateAssignmentCutoff, updateAssessmentRoster, updateAssessmentContent, assessmentContentEditable, getRoomCode,
   publishedAssessmentGenerationContext,
   releaseResults, setTeacherMarked, isReleased,
   assessmentIsFinalised, saveSubmission, saveNewSubmission, getSubmissions, getSubmission, reassignRoster,

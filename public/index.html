@@ -3505,7 +3505,7 @@
           <button type="button" class="btn ghost assessment-mini" data-assessment-preset="theory-practical">50 marks: theory + practical</button>
         </div>
         <div class="assessment-grid">
-          <div><label for="assessmentKind">Assessment type</label><select id="assessmentKind"><option value="test">Test</option><option value="project">Project</option><option value="practical">Practical</option><option value="performance">Performance</option><option value="oral">Oral</option><option value="portfolio">Portfolio</option><option value="custom">Custom</option></select></div>
+          <div><label for="assessmentKind">Assessment type</label><select id="assessmentKind"><option value="test">Test</option><option value="quiz">Quiz</option><option value="project">Project</option><option value="practical">Practical</option><option value="performance">Performance</option><option value="oral">Oral</option><option value="portfolio">Portfolio</option><option value="custom">Custom</option></select></div>
           <div><label for="assessmentTotal">Total marks</label><input id="assessmentTotal" type="number" min="1" max="1000" step="1" value="50"></div>
           <div><label for="assessmentDelivery">Delivery</label><select id="assessmentDelivery"><option value="live">Live classroom — teacher controls sections</option><option value="self-paced">Self-paced — students see all sections</option></select></div>
           <div></div>
@@ -8370,6 +8370,14 @@
       };
       panel.scrollIntoView({behavior:'smooth',block:'start'});
     }
+    function importedAssessmentSections(draft){
+      const objectives=assessmentObjectives();
+      const ids=new Map((draft.objectives||[]).map((objective,i)=>[objective.id,objectives[i]?.id]));
+      const sections=JSON.parse(JSON.stringify(draft.sections||[]));
+      const refs=values=>(values||[]).map(id=>ids.get(id)||id).filter(id=>objectives.some(o=>o.id===id));
+      for(const section of sections){section.objectiveIds=refs(section.objectiveIds);for(const item of section.items||[])item.objectiveIds=refs(item.objectiveIds||section.objectiveIds);}
+      return sections;
+    }
     async function openExistingAssessmentEditor(assessmentId){
       assessmentFromTopic=false;
       const response=await fetch('/api/assignment/'+encodeURIComponent(assessmentId)+'/edit');
@@ -8381,7 +8389,7 @@
       editingAssessmentId=data.assessmentId;
       openAssignments('plan');
       $('assessmentBuilder').style.display='block';
-      $('assessmentKind').value=draft.assessmentType==='project'?'project':'test';
+      $('assessmentKind').value=['quiz','test','project','practical','performance','oral','portfolio','custom'].includes(draft.assessmentType)?draft.assessmentType:'test';
       $('assessmentTotal').value=String(draft.totalMarks||50);
       $('assessmentDelivery').value=draft.deliveryMode==='self-paced'?'self-paced':'live';
       $('assessmentTitle').value=draft.title||'';
@@ -8391,7 +8399,7 @@
       $('assessmentInstructions').value=draft.instructions||'';
       $('assessmentCutoff').value=data.cutoffAt?String(data.cutoffAt).slice(0,16):'';
       $('assessmentPublishResult').innerHTML='<div class="assessment-result"><b>Editing this class run</b><p style="margin:6px 0">Students cannot enter a duplicated draft until you save and publish it. Once a learner starts, its questions lock.</p></div>';
-      assessmentSectionsState=JSON.parse(JSON.stringify(draft.sections||[]));
+      assessmentSectionsState=importedAssessmentSections(draft);
       renderAssessmentSections();
       await loadRosters(true);
       $('assessmentRoster').value=data.rosterId||'';
@@ -8407,7 +8415,7 @@
       editingAssessmentId=null;
       openAssignments('plan');
       $('assessmentBuilder').style.display='block';
-      $('assessmentKind').value=draft.assessmentType==='project'?'project':'test';
+      $('assessmentKind').value=['quiz','test','project','practical','performance','oral','portfolio','custom'].includes(draft.assessmentType)?draft.assessmentType:'test';
       $('assessmentTotal').value=String(draft.totalMarks||50);
       $('assessmentDelivery').value=draft.deliveryMode==='self-paced'?'self-paced':'live';
       $('assessmentTitle').value=draft.title||'';
@@ -8416,7 +8424,7 @@
       $('assessmentObjectives').value=(draft.objectives||[]).map(objective=>objective.text||objective).filter(Boolean).join('\n');
       $('assessmentInstructions').value=draft.instructions||'';
       $('assessmentPublishResult').innerHTML='';
-      assessmentSectionsState=JSON.parse(JSON.stringify(draft.sections||[]));
+      assessmentSectionsState=importedAssessmentSections(draft);
       renderAssessmentSections();
       $('publishAssessmentBtn').disabled=false;
       $('publishAssessmentBtn').innerHTML='Publish assessment';
@@ -8472,7 +8480,8 @@
     $('assessmentGenerate').onclick=async()=>{
       const status=$('assessmentGenerateStatus'), button=$('assessmentGenerate');
       if(editingAssessmentId){status.textContent='Create a new assessment to generate a new draft.';return;}
-      const body={subject:$('assessmentSubject').value,grade:$('assessmentGrade').value,objectives:$('assessmentObjectives').value,kind:$('assessmentKind').value,totalMarks:Number($('assessmentTotal').value),title:$('assessmentTitle').value,deliveryMode:$('assessmentDelivery').value,brief:$('assessmentGenerateBrief').value};
+      const quizKind=$('assessmentKind').value==='quiz';
+      const body={subject:$('assessmentSubject').value,grade:$('assessmentGrade').value,objectives:$('assessmentObjectives').value,kind:quizKind?'test':$('assessmentKind').value,totalMarks:Number($('assessmentTotal').value),title:$('assessmentTitle').value,deliveryMode:$('assessmentDelivery').value,brief:$('assessmentGenerateBrief').value};
       body.format=$('assessmentGenerateFormat').value;
       body.mcqCount=Number($('assessmentGenerateMcqCount').value);
       body.practicalCount=Number($('assessmentGeneratePracticalCount').value);
@@ -8491,6 +8500,7 @@
       try{
         const response=await fetch('/api/assessment-generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
         const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not generate the assessment.');
+        if(quizKind)data.assessment.assessmentType='quiz';
         openGeneratedAssessmentDraft(data.assessment);
         editingGeneratedAssessmentDraft=false;editingAssessmentId=null;assessmentFromTopic=true;
         await loadRosters(true);$('assessmentRoster').value=roster;$('assessmentCutoff').value=cutoff;
@@ -8589,7 +8599,14 @@
           fetch('/api/rosters').then(response=>response.json()),
         ]);
         assessmentClassRosters=rosterData.rosters||[];
-        const list=d.assignments||[];
+        let list=d.assignments||[];
+        const legacyQuizzes=list.filter(a=>a.needsAssessmentControls);
+        if(legacyQuizzes.length){
+          const failures=[];
+          for(const quiz of legacyQuizzes){try{const response=await fetch('/api/assignment/'+encodeURIComponent(quiz.id)+'/assessment-controls',{method:'POST'});const result=await response.json();if(!response.ok)throw Error(result.error||'Could not enable quiz controls.');}catch(error){failures.push(quiz.title+': '+error.message);}}
+          if(failures.length)toast(failures.join(' · '));
+          const refreshed=await fetch('/api/assignments');const result=await refreshed.json();if(!refreshed.ok)throw Error(result.error||'Could not refresh quiz controls.');list=result.assignments||[];
+        }
         if(!list.length){
           wrap.innerHTML='<div class="empty-state"><svg class="ic" aria-hidden="true" style="width:36px;height:36px;opacity:.3"><use href="#i-clipboard"/></svg><p>No assessments yet</p><p style="font-size:13px;color:var(--muted)">Create a test or project above, or publish a worksheet, exit ticket, or quiz from a lesson pack.</p></div>';
           return;

@@ -60,14 +60,14 @@ test('automatic assessment publication and every deck request are bound to the s
   const publish = html.slice(publishStart, publishEnd);
   assert.match(publish, /const workspaceSaved=await saveWorkspaceNow\(\)/);
   assert.match(publish, /if\(!workspaceSaved\|\|!currentWorkspaceId\) throw new Error\('This lesson could not be saved/);
-  assert.match(publish, /assessment\.lessonWorkspaceId=currentWorkspaceId\|\|null/);
+  assert.match(publish, /assessment\.lessonWorkspaceId=(?:assessmentFromTopic\?null:)?currentWorkspaceId\|\|null/);
   assert.match(publish, /ctx\.assessmentPublishedId=data\.assessmentId/);
   assert.ok(publish.indexOf('await saveWorkspaceNow()') < publish.indexOf("fetch('/api/assessment'"), 'the workspace is saved before the assessment is published');
 
   const sequenceDeckStart = html.indexOf('async function generateSequenceDeck');
   const sequenceDeckEnd = html.indexOf("$('sequenceSlidesTabs').addEventListener", sequenceDeckStart);
   const sequenceDeck = html.slice(sequenceDeckStart, sequenceDeckEnd);
-  assert.match(sequenceDeck, /const body=\{\.\.\.ctx,lessonWorkspaceId:currentWorkspaceId\|\|undefined,sequenceEnabled:false/);
+  assert.match(sequenceDeck, /const body=\{\.\.\.ctx,[\s\S]*?lessonWorkspaceId:currentWorkspaceId\|\|undefined,sequenceEnabled:false/);
 
   const finalDeckStart = html.indexOf("$('acceptBtn').addEventListener");
   const finalDeckEnd = html.indexOf('const KICKER=', finalDeckStart);
