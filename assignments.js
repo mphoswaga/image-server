@@ -688,7 +688,7 @@ function saveNewSubmission(id, sub) {
 function getSubmissions(id) { return loadSubmissions(id); }
 function pendingAIMarks(record, submissions) {
   const questions=new Map((record.content?.questions||[]).map(q=>[q.id,q]));
-  const cohort=record.rosterSnapshot?.length?new Set(record.rosterSnapshot.map(s=>normalizeStudentId(s.id))):null;
+  const cohort=record.rosterId&&record.rosterSnapshot?.length?new Set(record.rosterSnapshot.map(s=>normalizeStudentId(s.id))):null;
   const entries=[];
   for(const sub of submissions){
     if(sub.draftOnly||isAbsent(record,sub.studentId)||(cohort&&!cohort.has(normalizeStudentId(sub.studentId))))continue;

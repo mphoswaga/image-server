@@ -117,3 +117,9 @@ test("invalid or unresolved AI suggestions require individual review", () => {
   assert.equal(a.acceptAllAIMarks(r.id, "t").updated, 0);
   assert.equal(a.getSubmission(r.id, "S1").grades.q1.source, "ai");
 });
+
+test('unrostered quizzes include newly submitted learners when accepting AI marks',()=>{
+ const rec=setup(),file=path.join(process.env.DATA_DIR,'assignments',rec.id+'.json'),record=a.getAssignment(rec.id);record.rosterId=null;fs.writeFileSync(file,JSON.stringify(record));
+ const newLearner={...a.getSubmission(rec.id,'S1'),studentId:'S3'};a.saveSubmission(rec.id,newLearner);
+ assert.deepEqual(a.acceptAllAIMarks(rec.id,'t'),{updated:2,learners:2});assert.equal(a.getSubmission(rec.id,'S3').grades.q1.source,'teacher');
+});
