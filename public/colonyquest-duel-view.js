@@ -66,6 +66,7 @@ window.ColonyDuelView = class {
       this.rival.append(heading, this.rivalStats, canvas);
       stage.append(this.own, this.rival);
       this.rivalScene = new ColonyScene(canvas);
+      this.rivalScene.isRival=true;
     }
   }
   el(selector) {

@@ -474,3 +474,14 @@ test('opening story skip is teacher-controlled and broadcasts fresh question clo
  await until(()=>ws.states.at(-1)?.phase==='answer');assert.equal(m.state.story,null);assert.equal(m.active()[0].answers.length,0);assert.ok(m.active()[0].deadline>Date.now()+20000);
  r=await fetch(f.api+'/skipStory',{method:'POST'});assert.equal(r.status,409);
 });
+
+test('thirty paired-duel learners can answer together with durable acknowledgements',{timeout:20000},async t=>{
+ const f=await fixture(t,'duel-classroom-burst',{individual:true});const m=await f.live.openMatch(f.game,{rosterIds:['classA'],duels:true});
+ const sockets=await Promise.all(Array.from({length:30},(_,i)=>f.join('S'+i)));await until(()=>sockets.every(ws=>ws.states.length));
+ await f.live.mutate(f.game.id,match=>{match.state.storyVersion=0;match.start(Date.now()-5001);match.tick(Date.now());});
+ const start=Date.now();sockets.forEach((ws,i)=>ws.send(JSON.stringify({type:'answer',matchId:m.state.id,round:0,choice:0,commandId:'duel-burst-'+i})));
+ await until(()=>sockets.every((ws,i)=>ws.messages.some(msg=>msg.type==='ack'&&msg.commandId==='duel-burst-'+i&&msg.accepted)));
+ t.diagnostic('30 paired-duel answer acknowledgements: '+(Date.now()-start)+' ms');
+ assert.equal(m.state.duels.pairs.length,15);assert.ok(m.active().every(p=>p.answers.length===1&&p.answers[0].correct));
+ const saved=JSON.parse(fs.readFileSync(path.join(temp,'colonyquest-multiplayer',f.game.id+'.'+m.state.id+'.json'),'utf8'));assert.ok(saved.players.every(p=>p.answers.length===1));
+});

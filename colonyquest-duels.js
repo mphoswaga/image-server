@@ -465,6 +465,26 @@ module.exports = function install(ColonyMatch) {
     const pair = pairFor(this, id),
       me = this.player(id),
       rival = pair && this.player(pair.ids.find((other) => other !== id));
+    // A broadcast shares one player-summary array across all recipients.
+    // Build class rankings once for that batch, rather than once per learner.
+    let leaderboard;
+    if (sharedPlayers && this.duelRankingCache?.players === sharedPlayers)
+      leaderboard = this.duelRankingCache.leaderboard;
+    else {
+      leaderboard = this.active()
+        .filter((p) => !p.npc)
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          team: p.duelTeam,
+          wins: p.duelWins || 0,
+          points:
+            (p.duelPoints || 0) + (d.scored === d.round ? 0 : points(this, p)),
+        }))
+        .sort((a, b) => b.wins - a.wins || b.points - a.points);
+      if (sharedPlayers)
+        this.duelRankingCache = { players: sharedPlayers, leaderboard };
+    }
     out.duel = {
       round: d.round,
       stage: d.stage,
@@ -476,17 +496,7 @@ module.exports = function install(ColonyMatch) {
       stageUntil: d.stageUntil,
       teams: d.teams,
       history: d.history.slice(-1),
-      leaderboard: this.active()
-        .filter((p) => !p.npc)
-        .map((p) => ({
-          id: p.id,
-          name: p.name,
-          team: p.duelTeam,
-          wins: p.duelWins || 0,
-          points:
-            (p.duelPoints || 0) + (d.scored === d.round ? 0 : points(this, p)),
-        }))
-        .sort((a, b) => b.wins - a.wins || b.points - a.points),
+      leaderboard,
       ...(teacher
         ? {
             pairs: d.pairs.map((p) => ({

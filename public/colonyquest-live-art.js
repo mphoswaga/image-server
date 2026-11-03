@@ -71,6 +71,7 @@
       this.paintCost = 0;
       this.renderScale = 1.5;
       this.backgroundBuilds = 0;
+      this.roomDefinitions = new WeakMap();
       this.spriteCache = new Map();
       this.spriteBuilds = 0;
       this.spritePixels = 0;
@@ -134,7 +135,7 @@
           if (outcome && (outcome.food < 0 || outcome.pointsLost > 0))
             this.cue('repair', { hazard: old.story.key });
         }
-        const overtake = window.ColonyQuestCore.overtakeEvidence(old.players, state.players, state.me.id);
+        const overtake = !this.isRival && window.ColonyQuestCore.overtakeEvidence(old.players, state.players, state.me.id);
         if (overtake) this.cue('overtake', { ...overtake, duration: 4500 });
         if (old.story && old.story.id !== state.story?.id) {
           const outcome = old.story.results?.find((result) => result.playerId === state.me.id);
@@ -154,8 +155,9 @@
         const oldTrips = (before.forageTrips || []).reduce((a, b) => a + b, 0);
         const trips = (own.forageTrips || []).reduce((a, b) => a + b, 0);
         if (trips > oldTrips) this.cue('delivery', { count: trips - oldTrips, duration: 1800 });
+        const beforeRoomIds=new Set(this.rooms(before).map(room=>room.id));
         for (const room of this.rooms(own)) {
-          if (!this.rooms(before).some((r) => r.id === room.id)) this.roomBirths.set(room.id, this.clock);
+          if (!beforeRoomIds.has(room.id)) this.roomBirths.set(room.id, this.clock);
         }
         for (const event of state.events || []) {
           if (this.seen.has(event.id)) continue;
@@ -173,7 +175,10 @@
       this.needsPaint = true;
     }
     rooms(colony) {
-      return window.ColonyQuestCore.colonyRooms(colony);
+      const key=[colony.pantryBuilt,colony.barracksBuilt,colony.barracksAnnexes,colony.workerLodges,colony.expansionRooms,colony.territory].join(':');
+      const cached=this.roomDefinitions.get(colony);
+      if(cached?.key===key)return cached.rooms;
+      const rooms=window.ColonyQuestCore.colonyRooms(colony);this.roomDefinitions.set(colony,{key,rooms});return rooms;
     }
     raster(image, width, height, frame = -1) {
       // Quantised sizes prevent animated scale changes creating unbounded bitmaps.
@@ -1451,7 +1456,12 @@
       this.raf = requestAnimationFrame((time) => this.draw(time));
       if (document.hidden) { this.last = t; return; }
       // Keep game clocks time-based while capping decorative painting at 30fps.
-      const interval = this.reduced ? 100 : 1000 / 30;
+      const duelProfile=!!this.state?.duel;
+      const activeMoment=this.effects.some(e=>e.kind!=='income'&&this.clock-e.start<e.duration)||!!this.state?.story;
+      const fps=duelProfile&&this.isRival&&!activeMoment?20:30;
+      const interval = this.reduced ? 100 : 1000 / fps;
+      if(duelProfile&&this.renderScale>1){this.renderScale=1;this.canvas.dataset.renderQuality='classroom';}
+      this.canvas.dataset.targetFps=String(this.reduced?10:fps);
       if (t - this.lastPaint < interval - 1) return;
       this.lastPaint = t;
       const dt = clamp(t - this.last, 0, 100);
@@ -1471,6 +1481,7 @@
       const running =
         this.state &&
         !['paused', 'ended', 'lobby'].includes(this.state.phase) &&
+        !['intro','results'].includes(this.state.duel?.stage) &&
         !document.body.classList.contains('offline');
       if (running) this.clock += dt;
       // Static states need a refresh for newly loaded assets, not continuous animation.

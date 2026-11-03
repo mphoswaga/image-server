@@ -235,3 +235,39 @@ test("overall game duration rejects invalid values", () => {
   for (const gameMinutes of [0, -1, 121, "15", NaN])
     assert.throws(() => room({ gameMinutes }));
 });
+
+test("classroom broadcasts reuse rankings without rescanning every answer for every recipient", () => {
+  const m = new ColonyMatch(game, { duels: true, storyEnabled: false, now: 0 });
+  for (let i = 0; i < 30; i++)
+    m.join({ studentId: "load" + i, name: "Learner " + i }, 0);
+  m.start(0);
+  m.tick(5000);
+  let scans = 0;
+  for (const p of m.active()) {
+    p.answers = Array.from({ length: 40 }, (_, round) => ({
+      round,
+      choice: 0,
+      correct: true,
+    }));
+    p.answers.filter = function (...args) {
+      scans++;
+      return Array.prototype.filter.apply(this, args);
+    };
+  }
+  const players = m.playerSummaries(false);
+  scans = 0;
+  const views = m.active().map((p) => m.snapshot(p.id, false, 6000, players));
+  assert.ok(
+    scans <= 120,
+    "Expected linear class-wide answer scans, got " + scans,
+  );
+  assert.ok(views.every((v) => v.duel.leaderboard.length === 30));
+  m.active()[0].duelWins = 9;
+  const next = m.snapshot(
+    m.active()[0].id,
+    false,
+    7000,
+    m.playerSummaries(false),
+  );
+  assert.equal(next.duel.leaderboard[0].wins, 9);
+});
