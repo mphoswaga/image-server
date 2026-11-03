@@ -5,3 +5,8 @@ test('team evidence is labelled and unanswered questions are not incorrect',()=>
 test('teacher reports escape names and question text',()=>{const html=R.html(R.game({lessonTitle:'<img onerror=alert(1)>',results:[{name:'<script>x</script>',score:1,total:2}],questionStats:[{question:'<svg onload=x>',answered:2,correct:1}]}));assert.ok(!html.includes('<script>'));assert.ok(!html.includes('<svg'));assert.match(html,/&lt;svg/);});
 
 test('practice accuracy requires recorded input evidence',()=>{assert.equal(R.practiceAccuracy({}),null);assert.equal(R.practiceAccuracy({accuracyPercent:0}),0);assert.equal(R.practiceAccuracy({checkpoints:[{correctInputs:3,mistakes:1}]}),75);});
+
+test('gradebook fractions become readable percentages with missing evidence and zero kept distinct',()=>{
+ const input={assessments:[{title:'Project',average:.9158333333333334},{title:'MoonQuest',average:.7384259259259259,kind:'game',excluded:true},{title:'Files',average:.6704861111111111,kind:'game',excluded:true},{title:'Robots',average:null},{title:'Quiz',average:.46376811594202894}]};const before=JSON.stringify(input),m=R.gradebook(input);assert.deepEqual(m.rows.map(r=>r.value),[92,74,67,null,46]);const html=R.html(m);assert.match(html,/>70%<\/b>/);assert.match(html,/width:92%/);assert.match(html,/Quiz · 46%/);assert.doesNotMatch(html,/0\.9158/);assert.equal(JSON.stringify(input),before);
+ const edge=R.gradebook({assessments:[{title:'Zero',average:0},{title:'All',average:1},{title:'Missing',average:null}]});assert.deepEqual(edge.rows.map(r=>r.value),[0,100,null]);assert.equal(R.scores('percent',[{name:'Already a percentage',value:50}],'').rows[0].value,50);
+});

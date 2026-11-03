@@ -2507,7 +2507,7 @@
     }
 </style>
   <link rel="stylesheet" href="/byte-feedback.css" />
-<link rel="stylesheet" href="/learning-report.css?v=1"><script src="/learning-report.js?v=1"></script><link rel="stylesheet" href="/ui-language.css?v=1"><script src="/locales/vi.js?v=2"></script><script defer src="/ui-language.js?v=1"></script></head>
+<link rel="stylesheet" href="/learning-report.css?v=1"><script src="/learning-report.js?v=2"></script><link rel="stylesheet" href="/ui-language.css?v=1"><script src="/locales/vi.js?v=2"></script><script defer src="/ui-language.js?v=1"></script></head>
 <body data-byte-ui="teacher">
   <!-- SPLASH (plays once per visit, then fades to reveal the app) -->
   <div id="splash">
@@ -8169,7 +8169,7 @@
         <td class="avg">${r.average!=null?`<span class="gb-cell ${pctClass(r.average)}">${pctTxt(r.average)}</span>`:'<span class="gb-none">—</span>'}</td>
       </tr>`).join('');
       const foot=`<tr><td class="sticky">Class average</td>${g.assessments.map(a=>`<td>${pctTxt(a.average)}</td>`).join('')}<td>${pctTxt(g.classAverage)}</td></tr>`;
-      $('marksBody').innerHTML=summary+LearningReport.html(LearningReport.scores('Assessment overview',g.assessments.map(a=>({name:a.title,value:a.average,detail:(a.excluded?'Excluded from weighted average · ':'')+(a.kind==='game'?'Game':'Assessment')})),'Each bar is the recorded assessment average. This unweighted overview does not change the weighted class average shown above.'))+`<div class="gb-scroll"><table class="gb"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>
+      $('marksBody').innerHTML=summary+LearningReport.html(LearningReport.gradebook(g))+`<div class="gb-scroll"><table class="gb"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>
         <p class="hint" style="margin-top:10px;font-size:12px">Marks combine assignments and games for this class. Weight controls how much each task counts in the average: 1 is normal, 0.5 is half, and 0 excludes it.</p>`;
       $('marksBody').querySelectorAll('.gb-weight-input').forEach(input=>input.addEventListener('change',async()=>{
         const weights={};
