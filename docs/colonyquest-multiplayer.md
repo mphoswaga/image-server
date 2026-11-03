@@ -200,3 +200,11 @@ ColonyScene caches the painted meadow/soil background, invalidating it for viewp
 - Final focused server run: 34 passed. Full repository run: 749 passed, one existing
   guest-practice markup assertion failed; the same failure was reproduced on the
   unchanged baseline commit. Syntax checks passed.
+
+## Paired colony duels
+
+In the multiplayer teacher lobby, choose **Paired colony duels**, select a three- or five-minute duel, and choose balanced teams (with editable names) or boys versus girls. Gender grouping uses saved roster data; learners without a recorded gender remain unassigned. An odd learner receives a clearly labelled computer opponent. Teacher preview offers a separate practice duel without saving marks.
+
+Learners answer and choose upgrades independently while viewing their rival's live colony. Raids target only that rival. A queued raid waits for the rival's current answer and upgrade/feedback to finish, then both devices watch the same raid before question timers resume. Pausing or disconnecting either opponent holds the pair. Teachers retain pause and finish controls.
+
+At the time limit, current turns and raids finish before results appear. New pairings begin after the result announcement, with equal fresh colony resources. Question progress and recorded answers continue through the original question bank; questions are not repeated to inflate marks. Duel points reward correct answers and colony growth, team totals count human duel wins, and the saved teacher report includes pairing outcomes. Existing question marks remain separate from arcade points. Finishing the room also saves a partial duel result.

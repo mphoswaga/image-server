@@ -20,7 +20,7 @@ const LABELS = {
 class ColonyMatch {
   constructor(
     game,
-    { state, preview = false, rosterIds = [], storyEnabled = true, pacing = 'synchronised', now = Date.now() } = {},
+    { state, preview = false, rosterIds = [], storyEnabled = true, pacing = 'synchronised', duels=false, duelMinutes=3, teamMode='balanced', teamNames=['Sun colony','Moon colony'], now = Date.now() } = {},
   ) {
     this.state = state || {
       version: 1,
@@ -45,7 +45,7 @@ class ColonyMatch {
       questionSeconds: 25,
       upgradeSeconds: 12,
     };
-    this.lastTick = now;
+    if(!state&&duels){if(![3,5].includes(duelMinutes)||!['balanced','gender'].includes(teamMode)||!Array.isArray(teamNames)||teamNames.length!==2||teamNames.some(n=>typeof n!=='string'||!n.trim()||n.length>30)||teamNames[0]?.trim()===teamNames[1]?.trim())throw Error('Choose 3 or 5 minutes and valid team names.');this.state.pacing='individual';this.state.duels={minutes:duelMinutes,teamMode,teamNames:teamNames.map(n=>n.trim()),round:0,stage:'lobby',pairs:[],history:[],teams:Object.create(null)};}this.lastTick = now;
   }
   player(id) {
     return this.state.players.find((p) => p.id === id);
@@ -81,7 +81,7 @@ class ColonyMatch {
         studentId: identity.studentId,
         name: identity.name,
         rosterId: identity.rosterId || null,
-        npc: !!identity.npc,
+        npc: !!identity.npc,gender:require('./roster').normalizeGender(identity.gender),
         connected: true,
         removed: false,
         answers: [],
@@ -601,4 +601,5 @@ class ColonyMatch {
   }
 }
 Object.assign(ColonyMatch.prototype, require('./colonyquest-individual'));
+require('./colonyquest-duels')(ColonyMatch);
 module.exports = { ColonyMatch, ACTIVE };

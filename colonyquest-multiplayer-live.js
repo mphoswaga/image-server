@@ -138,12 +138,12 @@ function createColonyQuestMultiplayer({
     }
     return result;
   }
-  async function openMatch(game, { rosterIds = [], preview = false, key = game.id, pacing = 'individual', soloStudentId = null } = {}) {
+  async function openMatch(game, { rosterIds = [], preview = false, key = game.id, pacing = 'individual', soloStudentId = null, duels=false, duelMinutes=3, teamMode='balanced', teamNames=['Sun colony','Moon colony'] } = {}) {
     return enqueue(key, async () => {
       const old = getMatch(key, game.id);
       if (old && old.state.phase !== 'ended') return old;
       if (old) await finalize(key, old);
-      const match = new ColonyMatch(game, { preview, rosterIds, pacing });
+      const match = new ColonyMatch(game, { preview, rosterIds, pacing,duels,duelMinutes,teamMode,teamNames });
       if (soloStudentId) match.state.soloStudentId = soloStudentId;
       await save(key, match);
       matches.set(key, match);
@@ -266,7 +266,7 @@ function createColonyQuestMultiplayer({
         ids = Array.isArray(req.body?.rosterIds) ? [...new Set(req.body.rosterIds.map(String))] : assigned;
       if (assigned.length && !ids.length) throw Error('Choose a class for this game.');
       if (ids.some((id) => !assigned.includes(id))) throw Error('Choose a class assigned to this game.');
-      res.json(payload(g, await openMatch(g, { rosterIds: ids })));
+      res.json(payload(g, await openMatch(g, { rosterIds: ids,duels:req.body.duels===true,duelMinutes:req.body.duelMinutes??3,teamMode:req.body.teamMode||'balanced',teamNames:req.body.teamNames||['Sun colony','Moon colony'] })));
     } catch (e) {
       res.status(409).json({ error: e.message });
     }
@@ -317,12 +317,12 @@ function createColonyQuestMultiplayer({
     identity.studentId = games.normalizeStudentId(identity.studentId);
     try {
       const key = preview
-        ? `${g.id}.preview.npc10.${crypto.createHash('sha256').update(req.userId).digest('hex').slice(0, 12)}`
+        ? `${g.id}.preview.${req.body?.duels===true?'duels'+(req.body.duelMinutes===5?'5':'3'):'npc10'}.${crypto.createHash('sha256').update(req.userId).digest('hex').slice(0, 12)}`
         : solo ? `${g.id}.solo.${crypto.createHash('sha256').update(identity.studentId).digest('hex').slice(0, 24)}` : g.id;
       // A learner can create only their own assigned, private match, never a class lobby.
       if (solo && !eligible(g, {state:{rosterIds:games.getRosterIds(g).map(String)}}, identity))
         return res.status(403).json({ error: 'This game is not assigned to you.' });
-      const m = preview ? await openMatch(g, { key, preview: true }) : solo
+      const m = preview ? await openMatch(g, { key, preview: true,duels:req.body?.duels===true,duelMinutes:req.body?.duelMinutes??3,teamMode:'balanced' }) : solo
         ? await openMatch(g, { key, rosterIds:games.getRosterIds(g).map(String), soloStudentId:identity.studentId }) : getMatch(key);
       if (
         !m ||
@@ -432,13 +432,13 @@ function createColonyQuestMultiplayer({
               if (match.state.id !== claim.matchId) throw Error('Room changed');
               const existing = match.state.players.find((p) => p.studentId === claim.studentId);
               if (existing && existing.removed) existing.removed = false; // fresh eligibility above confirms the teacher added them back
-              const p = match.join(claim);
+              const pupil=classes(g).flatMap(c=>c.students).find(p=>games.normalizeStudentId(p.id)===claim.studentId);const p = match.join({...claim,gender:pupil?.gender});
               ws.key = claim.key;
               ws.gameId = g.id;
               ws.playerId = p.id;
               ws.identity = claim;
               if ((claim.preview || claim.solo) && match.state.phase === 'lobby') {
-                (claim.solo ? ['Computer colony'] : ['Fern', 'Clover', 'Acorn', 'Willow', 'Moss', 'Maple', 'Hazel', 'Bramble', 'Poppy', 'Oak']).forEach((name, i) =>
+                (claim.solo||match.state.duels ? ['Computer colony'] : ['Fern', 'Clover', 'Acorn', 'Willow', 'Moss', 'Maple', 'Hazel', 'Bramble', 'Poppy', 'Oak']).forEach((name, i) =>
                   match.join({ studentId: `npc-${i}`, name, npc: true }),
                 );
                 match.start();

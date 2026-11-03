@@ -29,7 +29,7 @@
     lastReceived = Date.now(),
     lastBeep = '',
     actionCue = null,
-    watchingId = null;
+    watchingId = null,duelView=null;
   const soundtrack = new ColonyMusic((track) => {
     $('musicTrackLabel').textContent = `${track.title} — ${track.artist}`;
   });
@@ -49,7 +49,7 @@
       duration,
     );
   };
-  function syncMusic() {
+  function syncMusic() {duelView?.configure(sound,Number($('musicVolume').value)/100);
     eventAudio.configure(
       sound &&
         !!state &&
@@ -62,6 +62,7 @@
       sound &&
         !!state &&
         !['paused', 'ended'].includes(state.phase) &&
+        !['intro','results'].includes(state.duel?.stage) &&
         !document.body.classList.contains('offline'),
     );
   }
@@ -144,12 +145,12 @@
   }
   function clock() {
     if (!state) return;
-    const paused = state.phase === 'paused';
+    duelView?.clock(Date.now()+offset);const paused = state.phase === 'paused';
     const sec = paused
       ? Math.ceil((state.remaining || 0) / 1000)
       : Math.max(0, Math.ceil((state.deadline - (Date.now() + offset)) / 1000));
     const el = $(host ? 'hostTimer' : 'timer');
-    el.textContent = paused ? 'Ⅱ' : ['lobby', 'ended', 'story', 'spectating'].includes(state.phase) || (host && state.pacing === 'individual') ? '🐜' : sec;
+    el.textContent = paused ? 'Ⅱ' : ['lobby', 'ended', 'story', 'spectating', 'duelIntro', 'duelResults', 'duelWait', 'duelRaid'].includes(state.phase) || (host && state.pacing === 'individual') ? '🐜' : sec;
     el.classList.toggle('urgent', sec <= 5 && !paused && state.phase === 'answer' && !(host && state.pacing === 'individual'));
     if (
       !host &&
@@ -200,7 +201,7 @@
   };
   function updateScene(next) {
     const watch = next.phase === 'spectating' && next.watching?.id === watchingId ? next.watching : null;
-    const viewedId = watch?.id || next.me?.id;
+    const viewedId = (watch?.id || next.me?.id)+(next.duel?':duel:'+next.duel.round:'');
     if(scene && scene.viewedPlayerId !== viewedId) {scene.update(null);scene.viewedPlayerId = viewedId;}
     if (watch) {
       // Watch colony artwork only: never copy another learner's questions or answers.
@@ -214,7 +215,7 @@
     if(prior&&next.me?.lastUpgrade&&JSON.stringify(next.me.lastUpgrade)!==JSON.stringify(prior.me?.lastUpgrade))actionVoice.play(next.me.lastUpgrade.key);
     if(next.phase==='story'&&next.story?.key==='intro'){const chapter=openingChapter(next.story.elapsed);openingVoice.sync(openingChapters[chapter.index].src,next.id+':intro:'+chapter.index,chapter.position);}else openingVoice.stop();
     offset = next.serverNow - Date.now();
-    updateScene(next);
+    if(next.duel){duelView ||= new ColonyDuelView(host);duelView.sync(next,sound,Number($('musicVolume').value)/100);}else duelView?.hide();updateScene(next);
     syncMusic();
     clock();
     eventAudio.update(next, prior, host);
@@ -347,6 +348,7 @@
     }
     const key = JSON.stringify([
       s.phase,
+      s.duel?.stage,s.duel?.round,s.duel?.waiting,s.duel?.raid?.startedAt,
       s.round,
       s.story?.id,
       s.story?.key === 'intro' ? openingChapter(s.story.elapsed).index : 0,
@@ -375,6 +377,7 @@
     $('choices').className = 'choices';
     $('choices').innerHTML = '';
     $('finished').hidden = true;
+    if(['duelIntro','duelResults','duelWait','duelRaid'].includes(s.phase)){const raid=s.duel?.raid;$('question').textContent=raid?'Raid in progress':s.phase==='duelWait'?'Hold your supplies':s.phase==='duelResults'?'Duel complete!':'Meet your rival';$('instruction').textContent=raid?'Both colonies are watching the same attack. Your question timer is held.':s.phase==='duelWait'?'Waiting for the current turn to finish. No unanswered question is interrupted.':'Watch the opponent announcement. Your next question starts automatically.';return;}
     if (s.phase === 'story' && s.story) {
       const beat = s.story;
       $('roundLabel').textContent = 'THE MOONROOT MEADOW ADVENTURE';
@@ -425,6 +428,7 @@
       };
       return;
     }
+    if(s.phase==='ended'&&s.duel){$('question').textContent='Our colony duel champions';const own=s.players.find(x=>x.id===p.id);$('instruction').textContent=(own?.score||0)+' correct answers · '+(own?.answeredCount||0)+' answered. Duel wins and learning marks are separate.';$('finished').hidden=false;$('finished').innerHTML='<h2>Top colony rivals</h2>'+s.duel.leaderboard.slice(0,10).map((x,i)=>'<p><strong>'+ (i+1)+'. '+esc(x.name)+'</strong> · '+x.wins+' wins · '+x.points+' duel points</p>').join('');return;}
     if (s.phase === 'ended') {
       $('question').textContent = 'Your colony made it through!';
       const own = s.players.find((x) => x.id === p.id);
@@ -517,7 +521,7 @@
     document.body.classList.add('offline');
     syncMusic();
     try {
-      const ticket = await request('/ticket', {solo: !host && new URLSearchParams(location.search).get('solo') === '1'});
+      const ticket = await request('/ticket', {duels:new URLSearchParams(location.search).get('duels')==='1',duelMinutes:Number(new URLSearchParams(location.search).get('minutes')||3),solo: !host && new URLSearchParams(location.search).get('solo') === '1'});
       if (stopped) return;
       socket = new WebSocket(
         (location.protocol === 'https:' ? 'wss://' : 'ws://') +
@@ -531,7 +535,7 @@
         if (msg.type === 'state') {
           const wasOffline = document.body.classList.contains('offline');
           document.body.classList.remove('offline');
-          $('connection').textContent = msg.state.preview ? 'Practice vs 10 computer colonies' : msg.state.solo ? 'You vs Computer colony' : 'Connected';
+          $('connection').textContent = msg.state.preview ? (msg.state.duel?'Practice duel vs computer':'Practice vs 10 computer colonies') : msg.state.solo ? 'You vs Computer colony' : 'Connected';
           error('');
           retries = 0;
           setState(msg.state);
@@ -589,7 +593,7 @@
     try {
       const r = await request('/report?match=' + encodeURIComponent(id));
       const model = {
-        title: r.title + ' · Individual colonies',
+        title: r.title + (r.duels?' · Colony duels':' · Individual colonies'),
         note: 'Each learner answers independently. Percentages use submitted answers; unanswered questions are shown separately. Colony strength and raids do not change learning marks.',
         metricLabel: 'Question accuracy',
         rows: r.questions.map((q, i) => ({
@@ -620,6 +624,7 @@
               `<tr><td>${esc(p.name)}</td><td>${p.strength}</td><td>${p.correct}</td><td>${r.total - p.answered}</td></tr>`,
           )
           .join('')}</tbody></table></div></details>`;
+      if(r.duels){const summary=document.createElement('section');summary.className='panel';const h=document.createElement('h2');h.textContent='Saved duel competition';summary.append(h);const teams=document.createElement('p');teams.textContent=Object.entries(r.duels.teams).map(([name,wins])=>name+': '+wins+' wins').join(' · ');summary.append(teams);for(const duel of r.duels.history){const detail=document.createElement('details'),title=document.createElement('summary');title.textContent='Duel '+duel.round+(duel.partial?' · finished early':'');detail.append(title);for(const pair of duel.results){const p=document.createElement('p');p.textContent=pair.names.join(' vs ')+' · '+pair.scores.join(' – ')+' · '+(pair.winner?pair.names[pair.ids.indexOf(pair.winner)]+' wins':'Draw');detail.append(p);}summary.append(detail);}$('report').prepend(summary);}
       $('answersCsv').onclick = () => {
         const cell = (v) =>
           '"' +
@@ -773,7 +778,7 @@
     practice.target = '_blank';
     practice.rel = 'noopener';
     practice.textContent = 'Test against 10 computer colonies';
-    $('setup').append(practice);
+    $('setup').append(practice);const duelPractice=document.createElement('a');duelPractice.className='button';duelPractice.textContent='Test a duel against the computer';duelPractice.target='_blank';duelPractice.rel='noopener';const duelPracticeLink=()=>{duelPractice.href='/colonyquest-live-play/'+encodeURIComponent(gameId)+'?duels=1&minutes='+$('duelMinutes').value;};duelPracticeLink();$('duelMinutes').addEventListener('change',duelPracticeLink);$('setup').append(duelPractice);
     const join =
       location.origin + '/play/' + encodeURIComponent(gameId) + '?activity=colonyquest-live';
     $('joinLink').value = join;
@@ -798,7 +803,7 @@
           const body =
             cmd === 'open'
               ? {
-                  rosterIds: [...$('classes').querySelectorAll('input:checked')].map(
+                  duels:$('colonyMode').value==='duels',duelMinutes:Number($('duelMinutes').value),teamMode:$('duelTeamMode').value,teamNames:[$('duelTeamA').value,$('duelTeamB').value],rosterIds: [...$('classes').querySelectorAll('input:checked')].map(
                     (i) => i.value,
                   ),
                 }

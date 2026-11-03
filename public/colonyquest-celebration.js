@@ -20,7 +20,7 @@
       stage.setAttribute('aria-modal', 'true');
       stage.setAttribute('aria-label', 'ColonyQuest champions');
       const previous = document.activeElement;
-      stage.innerHTML = `<div class="cq-sparks" aria-hidden="true">${Array.from({length:32},(_,i)=>`<i style="--x:${i*3.17}%;--delay:${i%9*.24}s;--hue:${i*47}"></i>`).join('')}</div><div class="cq-celebration-content"><p class="cq-kicker">THE ANCIENT ACORN AWARDS</p><h1>${winners.length ? winners.length > 1 ? 'Shared champions!' : `${esc(winners[0].name)} wins!` : 'Thank you, meadow explorers!'}</h1><p>Strong colonies. Brilliant teamwork. A meadow worth celebrating.</p><div class="cq-winners">${winners.flatMap(e => e.members?.length ? e.members.map(m=>m.name) : [e.name]).map((name,i)=>ant(name,i)).join('')}</div><div class="cq-podium">${top.map(e=>`<article class="cq-place cq-rank-${e.rank}">${ant(e.name,e.rank,true)}<div class="cq-plinth"><b>${e.rank === 1 ? '🏆' : e.rank === 2 ? '🥈' : '🥉'} ${e.rank}</b><strong>${esc(e.name)}</strong><span>${esc(e.score)} colony points</span></div></article>`).join('')}</div><button type="button" class="cq-results">View results</button></div>`;
+      stage.innerHTML = `<div class="cq-sparks" aria-hidden="true">${Array.from({length:32},(_,i)=>`<i style="--x:${i*3.17}%;--delay:${i%9*.24}s;--hue:${i*47}"></i>`).join('')}</div><div class="cq-celebration-content"><p class="cq-kicker">THE ANCIENT ACORN AWARDS</p><h1>${winners.length ? winners.length > 1 ? 'Shared champions!' : `${esc(winners[0].name)} wins!` : 'Thank you, meadow explorers!'}</h1><p>Strong colonies. Brilliant teamwork. A meadow worth celebrating.</p><div class="cq-winners">${winners.flatMap(e => e.members?.length ? e.members.map(m=>m.name) : [e.name]).map((name,i)=>ant(name,i)).join('')}</div><div class="cq-podium">${top.map(e=>`<article class="cq-place cq-rank-${e.rank}">${ant(e.name,e.rank,true)}<div class="cq-plinth"><b>${e.rank === 1 ? '🏆' : e.rank === 2 ? '🥈' : '🥉'} ${e.rank}</b><strong>${esc(e.name)}</strong><span>${esc(e.score)} ${esc(e.scoreLabel||'colony points')}</span></div></article>`).join('')}</div><button type="button" class="cq-results">View results</button></div>`;
       document.body.append(stage);
       const button = stage.querySelector('.cq-results');
       const motionButton = document.createElement('button');
@@ -41,7 +41,7 @@
       stage.onkeydown = event => { if (event.key === 'Escape') close(); if(event.key === 'Tab') { event.preventDefault(); (document.activeElement === button ? motionButton : button).focus(); } };
       button.focus({preventScroll:true});
     },
-    multiplayer(s) {
+    multiplayer(s) {if(s.duel){let rank=0,last='';const entries=s.duel.leaderboard.map((p,i)=>{const key=p.wins+':'+p.points;if(key!==last)rank=i+1;last=key;return {name:p.name,score:p.points,scoreLabel:'duel points · '+p.wins+' wins',rank};});return this.show('duels:'+s.id,entries);}
       let rank = 0, last;
       const entries = [...s.players].sort((a,b)=>b.strength-a.strength).map((p,i)=>{
         if(p.strength !== last) rank = i+1;
