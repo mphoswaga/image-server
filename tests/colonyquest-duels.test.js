@@ -89,7 +89,7 @@ test("pause and resume preserve duel deadline, results are persisted, fresh duel
   assert.equal(m.state.duels.stage, "results");
   assert.equal(m.state.duels.history.length, 1);
   const points = a.duelPoints;
-  m.tick(22000);
+  m.tick(m.state.duels.stageUntil);
   assert.equal(m.state.duels.round, 2);
   assert.equal(a.colony.food, b.colony.food);
   assert.equal(a.colony.soldiers, b.colony.soldiers);
@@ -150,7 +150,7 @@ test("duel expiry finishes current questions before results and re-pairing does 
   assert.equal(m.state.duels.stage, "results");
   assert.equal(a.answers.length, 1);
   assert.equal(m.report().learners.find((p) => p.studentId === "a").correct, 1);
-  m.tick(deadline + 9000);
+  m.tick(m.state.duels.stageUntil);
   assert.equal(m.state.duels.round, 2);
   assert.equal(a.answers.length, 1);
   assert.ok(a.round >= 2);
@@ -166,25 +166,72 @@ test("removing a rival does not trap a duel indefinitely", () => {
   assert.equal(a.connected, true);
 });
 
-test('odd class gets one labelled computer rival and manual finish scores only once',()=>{
- const m=new ColonyMatch(game,{duels:true,storyEnabled:false,now:0});
- for(let i=0;i<3;i++)m.join({studentId:'odd'+i,name:'Learner '+i},0);
- m.start(0);m.tick(5000);
- assert.equal(m.state.duels.pairs.length,2);
- const computers=m.active().filter(p=>p.npc);
- assert.equal(computers.length,1);assert.match(computers[0].name,/computer/);
- m.tick(12000);assert.ok(computers[0].answers.length>0);
- m.end(13000);const report=m.report();m.end(14000);
- assert.equal(m.state.duels.history.length,1);
- assert.equal(report.duels.players.length,3);
- assert.ok(report.duels.players.every(p=>!p.studentId.startsWith('duel-computer')));
+test("odd class gets one labelled computer rival and manual finish scores only once", () => {
+  const m = new ColonyMatch(game, { duels: true, storyEnabled: false, now: 0 });
+  for (let i = 0; i < 3; i++)
+    m.join({ studentId: "odd" + i, name: "Learner " + i }, 0);
+  m.start(0);
+  m.tick(5000);
+  assert.equal(m.state.duels.pairs.length, 2);
+  const computers = m.active().filter((p) => p.npc);
+  assert.equal(computers.length, 1);
+  assert.match(computers[0].name, /computer/);
+  m.tick(12000);
+  assert.ok(computers[0].answers.length > 0);
+  m.end(13000);
+  const report = m.report();
+  m.end(14000);
+  assert.equal(m.state.duels.history.length, 1);
+  assert.equal(report.duels.players.length, 3);
+  assert.ok(
+    report.duels.players.every((p) => !p.studentId.startsWith("duel-computer")),
+  );
 });
 
-test('teacher can skip opening story into duels once without skipping later events',()=>{
- const m=new ColonyMatch(game,{duels:true,now:0});
- m.join({studentId:'a',name:'A'},0);m.join({studentId:'b',name:'B'},0);m.start(0);
- assert.equal(m.state.phase,'story');assert.equal(m.state.story.key,'intro');
- m.skipStory(1000);assert.equal(m.state.story,null);assert.equal(m.state.duels.stage,'intro');
- assert.throws(()=>m.skipStory(1001),/Only the opening story/);
- m.tick(6000);assert.equal(m.active()[0].phase,'answer');assert.equal(m.active()[0].answers.length,0);
+test("teacher can skip opening story into duels once without skipping later events", () => {
+  const m = new ColonyMatch(game, { duels: true, now: 0 });
+  m.join({ studentId: "a", name: "A" }, 0);
+  m.join({ studentId: "b", name: "B" }, 0);
+  m.start(0);
+  assert.equal(m.state.phase, "story");
+  assert.equal(m.state.story.key, "intro");
+  m.skipStory(1000);
+  assert.equal(m.state.story, null);
+  assert.equal(m.state.duels.stage, "intro");
+  assert.throws(() => m.skipStory(1001), /Only the opening story/);
+  m.tick(6000);
+  assert.equal(m.active()[0].phase, "answer");
+  assert.equal(m.active()[0].answers.length, 0);
+});
+
+test("overall game timer pauses for announcements and teacher pauses, then finishes before another match", () => {
+  const { m, a, b } = room({ gameMinutes: 1, duelMinutes: 3 });
+  assert.equal(m.snapshot(a.id, false, 5000).duel.gameRemainingMs, 60000);
+  m.tick(15000);
+  assert.equal(m.state.duels.gameRemainingMs, 50000);
+  m.pause(15000);
+  m.resume(35000);
+  m.tick(45000);
+  assert.equal(m.state.duels.gameRemainingMs, 40000);
+  m.tick(85000);
+  assert.equal(m.state.duels.stage, "closing");
+  assert.equal(m.state.duels.gameExpired, true);
+  for (const p of [a, b]) {
+    p.phase = "duelWait";
+    p.deadline = null;
+  }
+  m.tick(86000);
+  assert.equal(m.state.duels.stage, "results");
+  const until = m.state.duels.stageUntil;
+  m.tick(until - 1);
+  assert.equal(m.state.phase, "answer");
+  m.tick(until);
+  assert.equal(m.state.phase, "ended");
+  assert.equal(m.state.duels.round, 1);
+  assert.equal(m.state.duels.history.length, 1);
+  assert.equal(m.report().duels.gameMinutes, 1);
+});
+test("overall game duration rejects invalid values", () => {
+  for (const gameMinutes of [0, -1, 121, "15", NaN])
+    assert.throws(() => room({ gameMinutes }));
 });

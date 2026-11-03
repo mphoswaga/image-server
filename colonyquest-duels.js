@@ -285,10 +285,24 @@ module.exports = function install(ColonyMatch) {
     if (!d) return base.tickIndividual.call(this, now);
     const delta = Math.max(0, now - (d.lastTick || now));
     d.lastTick = now;
+    const playing = d.stage === "playing" || d.stage === "closing";
+    if (playing) {
+      d.gameRemainingMs = Math.max(
+        0,
+        (d.gameRemainingMs ?? (d.gameMinutes || 15) * 60000) - delta,
+      );
+      if (d.gameRemainingMs === 0) {
+        d.gameExpired = true;
+        d.stage = "closing";
+        for (const pair of d.pairs)
+          pair.deadline = Math.min(pair.deadline, now);
+      }
+    }
     if (d.stage === "intro" || d.stage === "results") {
       this.lastTick = now;
       if (now >= d.stageUntil) {
-        if (d.stage === "results") return begin(this, now);
+        if (d.stage === "results")
+          return d.gameExpired ? this.end(now) : begin(this, now);
         d.stage = "playing";
         for (const pair of d.pairs)
           for (const id of pair.ids) {
@@ -409,7 +423,9 @@ module.exports = function install(ColonyMatch) {
     ) {
       score(this, now);
       d.stage = "results";
-      d.stageUntil = now + 5000;
+      d.stageUntil =
+        now +
+        Math.min(20, Math.max(8, Math.ceil(d.pairs.length / 4) * 3)) * 1000;
     }
   };
   P.snapshot = function (id, teacher, now, sharedPlayers, watchId) {
@@ -453,6 +469,9 @@ module.exports = function install(ColonyMatch) {
       round: d.round,
       stage: d.stage,
       minutes: d.minutes,
+      gameMinutes: d.gameMinutes || 15,
+      gameRemainingMs: d.gameRemainingMs ?? (d.gameMinutes || 15) * 60000,
+      gameExpired: !!d.gameExpired,
       deadline: pair?.deadline || d.deadline,
       stageUntil: d.stageUntil,
       teams: d.teams,
@@ -550,6 +569,8 @@ module.exports = function install(ColonyMatch) {
     const report = base.report.call(this);
     if (this.state.duels)
       report.duels = {
+        gameMinutes: this.state.duels.gameMinutes || 15,
+        gameRemainingMs: this.state.duels.gameRemainingMs,
         teams: this.state.duels.teams,
         history: this.state.duels.history,
         players: this.active()

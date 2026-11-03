@@ -12,7 +12,7 @@ window.ColonyDuelView = class {
     this.panel.id = "colonyDuelPanel";
     this.panel.className = "colony-duel-panel";
     this.panel.innerHTML =
-      '<div class="duel-heading"><strong data-title></strong><b data-clock role="timer"></b></div><div data-teams></div><div class="duel-tug" aria-label="Duel progress"><span data-a></span><span data-b></span></div><p data-status role="status"></p><div data-pairs></div><details><summary>Duel leaderboard · top 10</summary><ol data-leaders></ol></details>';
+      '<div class="duel-heading"><strong data-title></strong><span class="duel-clocks"><b data-clock role="timer"></b><small data-game-clock role="timer"></small></span></div><div data-teams></div><div class="duel-tug" aria-label="Duel progress"><span data-a></span><span data-b></span></div><p data-status role="status"></p><p data-raid-result hidden role="status"></p><div data-pairs></div><details><summary>Duel leaderboard · top 10</summary><ol data-leaders></ol></details>';
     document.getElementById(host ? "hostRoom" : "learner").prepend(this.panel);
     this.announcement = document.createElement("section");
     this.announcement.className = "colony-duel-announcement";
@@ -257,7 +257,30 @@ window.ColonyDuelView = class {
         h.textContent =
           d.stage === "intro" ? "Meet your colony rival!" : "Duel results";
         this.announcement.append(h);
-        if (this.host) {
+        if (d.stage === "results") {
+          const grid = document.createElement("div");
+          grid.className = "duel-results-grid";
+          for (const result of d.history.at(-1)?.results || []) {
+            const card = document.createElement("article"),
+              winner = document.createElement("strong"),
+              details = document.createElement("p");
+            winner.textContent = result.winner
+              ? "🏆 " +
+                result.names[result.ids.indexOf(result.winner)] +
+                " won!"
+              : "🤝 Draw";
+            details.textContent =
+              result.names.join(" vs ") + " · " + result.scores.join(" – ");
+            card.append(winner, details);
+            grid.append(card);
+          }
+          this.announcement.append(grid);
+          const next = document.createElement("p");
+          next.textContent = d.gameExpired
+            ? "Game complete · final celebration next"
+            : "Next opponents appear after this celebration";
+          this.announcement.append(next);
+        } else if (this.host) {
           const p = document.createElement("p");
           p.textContent = (d.pairs || [])
             .map((p) => p.names.join(" vs "))
@@ -323,6 +346,39 @@ window.ColonyDuelView = class {
         : Math.floor(seconds / 60) +
           ":" +
           String(seconds % 60).padStart(2, "0");
+    const gameSeconds = Math.max(0, Math.ceil((d.gameRemainingMs || 0) / 1000));
+    this.el("[data-game-clock]").textContent =
+      "Game " +
+      Math.floor(gameSeconds / 60) +
+      ":" +
+      String(gameSeconds % 60).padStart(2, "0");
+    const result = this.el("[data-raid-result]");
+    const raids = (
+      this.host ? (d.pairs || []).map((p) => p.raid) : [d.raid]
+    ).filter(
+      (raid) =>
+        raid && now - raid.startedAt >= (raid.until - raid.startedAt) * 0.6,
+    );
+    result.hidden = !raids.length;
+    if (raids.length)
+      result.textContent = raids
+        .map((raid) => {
+          const e = raid.event;
+          return e.success
+            ? "🏆 " +
+                e.attackerName +
+                " wins the raid! " +
+                e.stolen +
+                " food taken from " +
+                e.targetName +
+                "."
+            : "🛡 " +
+                e.targetName +
+                " wins the defence! " +
+                e.attackerName +
+                " was held back.";
+        })
+        .join(" · ");
     const timer = this.announcement.querySelector("[data-announcement-clock]");
     if (timer) timer.textContent = paused ? "Paused" : seconds;
   }

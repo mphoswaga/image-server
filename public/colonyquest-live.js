@@ -522,7 +522,7 @@
     document.body.classList.add('offline');
     syncMusic();
     try {
-      const ticket = await request('/ticket', {duels:new URLSearchParams(location.search).get('duels')==='1',duelMinutes:Number(new URLSearchParams(location.search).get('minutes')||3),solo: !host && new URLSearchParams(location.search).get('solo') === '1'});
+      const ticket = await request('/ticket', {duels:new URLSearchParams(location.search).get('duels')==='1',duelMinutes:Number(new URLSearchParams(location.search).get('minutes')||3),gameMinutes:Number(new URLSearchParams(location.search).get('gameMinutes')||15),solo: !host && new URLSearchParams(location.search).get('solo') === '1'});
       if (stopped) return;
       socket = new WebSocket(
         (location.protocol === 'https:' ? 'wss://' : 'ws://') +
@@ -780,7 +780,7 @@
     practice.target = '_blank';
     practice.rel = 'noopener';
     practice.textContent = 'Test against 10 computer colonies';
-    $('setup').append(practice);const duelPractice=document.createElement('a');duelPractice.className='button';duelPractice.textContent='Test a duel against the computer';duelPractice.target='_blank';duelPractice.rel='noopener';const duelPracticeLink=()=>{duelPractice.href='/colonyquest-live-play/'+encodeURIComponent(gameId)+'?duels=1&minutes='+$('duelMinutes').value;};duelPracticeLink();$('duelMinutes').addEventListener('change',duelPracticeLink);$('setup').append(duelPractice);
+    $('setup').append(practice);const duelPractice=document.createElement('a');duelPractice.className='button';duelPractice.textContent='Test a duel against the computer';duelPractice.target='_blank';duelPractice.rel='noopener';const duelPracticeLink=()=>{duelPractice.href='/colonyquest-live-play/'+encodeURIComponent(gameId)+'?duels=1&minutes='+$('duelMinutes').value+'&gameMinutes='+$('duelGameMinutes').value;};duelPracticeLink();$('duelMinutes').addEventListener('change',duelPracticeLink);$('duelGameMinutes').addEventListener('change',duelPracticeLink);$('setup').append(duelPractice);
     const join =
       location.origin + '/play/' + encodeURIComponent(gameId) + '?activity=colonyquest-live';
     $('joinLink').value = join;
@@ -805,7 +805,7 @@
           const body =
             cmd === 'open'
               ? {
-                  duels:$('colonyMode').value==='duels',duelMinutes:Number($('duelMinutes').value),teamMode:$('duelTeamMode').value,teamNames:[$('duelTeamA').value,$('duelTeamB').value],rosterIds: [...$('classes').querySelectorAll('input:checked')].map(
+                  duels:$('colonyMode').value==='duels',duelMinutes:Number($('duelMinutes').value),gameMinutes:Number($('duelGameMinutes').value),teamMode:$('duelTeamMode').value,teamNames:[$('duelTeamA').value,$('duelTeamB').value],rosterIds: [...$('classes').querySelectorAll('input:checked')].map(
                     (i) => i.value,
                   ),
                 }

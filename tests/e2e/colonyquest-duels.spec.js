@@ -106,9 +106,17 @@ test("two learner devices see live rival colonies, independent answers and one s
       await expect(page.locator("#rivalColonyCanvas")).toBeVisible();
     }
     const [pa, pb] = await Promise.all(contexts.map((c) => c.pages()[0]));
-    await expect(pa.locator('#colonyCanvas')).toHaveAttribute('data-habitat-view','smartboard');
-    await pageShot(pa,info.outputPath('smartboard-question.png'));
-    if(info.project.name==='windows-100')expect(await pa.locator('#choices').evaluate(el=>el.getBoundingClientRect().bottom)).toBeLessThanOrEqual(768);
+    await expect(pa.locator("#colonyCanvas")).toHaveAttribute(
+      "data-habitat-view",
+      "smartboard",
+    );
+    await pageShot(pa, info.outputPath("smartboard-question.png"));
+    if (info.project.name === "windows-100")
+      expect(
+        await pa
+          .locator("#choices")
+          .evaluate((el) => el.getBoundingClientRect().bottom),
+      ).toBeLessThanOrEqual(768);
 
     await pa.bringToFront();
     await pa.locator('#choices [data-choice="0"]').click();
@@ -142,6 +150,10 @@ test("two learner devices see live rival colonies, independent answers and one s
     );
     await expect(pb.locator("body")).toHaveClass(/colony-duel-raid/);
     await pageShot(pb, info.outputPath("shared-raid.png"));
+    await expect(pb.locator("[data-raid-result]")).toBeVisible({
+      timeout: 6000,
+    });
+    await expect(pb.locator("[data-raid-result]")).toContainText("wins");
     await expect
       .poll(() => !m.state.duels.pairs[0].raid, { timeout: 10000 })
       .toBe(true);
@@ -185,6 +197,7 @@ test("teacher can choose five-minute duels and roster teams before opening the r
   await page.goto("/colonyquest-live/duel-browser");
   await page.locator("#colonyMode").selectOption("duels");
   await page.locator("#duelMinutes").selectOption("5");
+  await page.locator("#duelGameMinutes").selectOption("20");
   await page.locator("#duelTeamMode").selectOption("gender");
   await expect(
     page.getByRole("link", { name: "Test a duel against the computer" }),
@@ -195,16 +208,123 @@ test("teacher can choose five-minute duels and roster teams before opening the r
     .toMatchObject({
       duels: true,
       duelMinutes: 5,
+      gameMinutes: 20,
       teamMode: "gender",
       rosterIds: ["c1"],
     });
 });
 
-test('teacher can skip the opening story straight into the duel announcement',async({page})=>{
- const m=new ColonyMatch(game,{duels:true,now:Date.now()});m.join({studentId:'a',name:'Mia'},Date.now());m.join({studentId:'b',name:'Leo'},Date.now());m.start(Date.now());
- const data=()=>({title:'Habitats',classes:[],rosterIds:[],history:[],attendance:[],match:m.snapshot(null,true,Date.now())});
- await page.route('**/colonyquest-live/duel-browser',r=>r.fulfill({path:path.join(__dirname,'../../public/colonyquest-live.html'),contentType:'text/html'}));
- await page.route('**/api/game/duel-browser/colonyquest-live',r=>r.fulfill({json:data()}));
- await page.route('**/api/game/duel-browser/colonyquest-live/skipStory',r=>{m.skipStory(Date.now());return r.fulfill({json:data()});});
- await page.goto('/colonyquest-live/duel-browser');await expect(page.locator('#skipStory')).toBeVisible();await page.locator('#skipStory').click();await expect(page.locator('#skipStory')).toBeHidden();await expect(page.locator('.colony-duel-announcement')).toContainText('Meet your colony rival!');expect(m.state.story).toBeNull();
+test("teacher can skip the opening story straight into the duel announcement", async ({
+  page,
+}) => {
+  const m = new ColonyMatch(game, { duels: true, now: Date.now() });
+  m.join({ studentId: "a", name: "Mia" }, Date.now());
+  m.join({ studentId: "b", name: "Leo" }, Date.now());
+  m.start(Date.now());
+  const data = () => ({
+    title: "Habitats",
+    classes: [],
+    rosterIds: [],
+    history: [],
+    attendance: [],
+    match: m.snapshot(null, true, Date.now()),
+  });
+  await page.route("**/colonyquest-live/duel-browser", (r) =>
+    r.fulfill({
+      path: path.join(__dirname, "../../public/colonyquest-live.html"),
+      contentType: "text/html",
+    }),
+  );
+  await page.route("**/api/game/duel-browser/colonyquest-live", (r) =>
+    r.fulfill({ json: data() }),
+  );
+  await page.route(
+    "**/api/game/duel-browser/colonyquest-live/skipStory",
+    (r) => {
+      m.skipStory(Date.now());
+      return r.fulfill({ json: data() });
+    },
+  );
+  await page.goto("/colonyquest-live/duel-browser");
+  await expect(page.locator("#skipStory")).toBeVisible();
+  await page.locator("#skipStory").click();
+  await expect(page.locator("#skipStory")).toBeHidden();
+  await expect(page.locator(".colony-duel-announcement")).toContainText(
+    "Meet your colony rival!",
+  );
+  expect(m.state.story).toBeNull();
+});
+
+test("every learner and teacher receives all duel winners before the next match", async ({
+  page,
+}) => {
+  const m = new ColonyMatch(game, {
+    duels: true,
+    storyEnabled: false,
+    now: Date.now(),
+  });
+  for (const name of ["Mia", "Leo", "Ava", "Noah"])
+    m.join({ studentId: name, name }, Date.now());
+  m.start(Date.now() - 5001);
+  m.tick(Date.now());
+  for (const p of m.active()) {
+    p.phase = "duelWait";
+    p.duelHold = { phase: "answer", remaining: 25000 };
+  }
+  m.state.duels.stage = "closing";
+  m.state.duels.pairs.forEach((pair, i) => {
+    m.player(pair.ids[0]).colony.food = 90 + i;
+  });
+  m.tick(Date.now());
+  const results = m.state.duels.history.at(-1).results;
+  expect(results.length).toBe(2);
+  const learner = m.active()[0];
+  await page.route("**/colonyquest-live-play/duel-browser", (r) =>
+    r.fulfill({
+      path: path.join(__dirname, "../../public/colonyquest-live.html"),
+      contentType: "text/html",
+    }),
+  );
+  await page.route("**/api/game/duel-browser/colonyquest-live/ticket", (r) =>
+    r.fulfill({ json: { token: "sample" } }),
+  );
+  await page.routeWebSocket("**/ws/colonyquest-live", (ws) =>
+    ws.onMessage((raw) => {
+      if (JSON.parse(raw).type === "auth")
+        ws.send(
+          JSON.stringify({
+            type: "state",
+            state: m.snapshot(learner.id, false, Date.now()),
+          }),
+        );
+    }),
+  );
+  await page.goto("/colonyquest-live-play/duel-browser");
+  await expect(page.locator(".duel-results-grid article")).toHaveCount(2);
+  for (const result of results) {
+    await expect(page.locator(".duel-results-grid")).toContainText(
+      result.names[result.ids.indexOf(result.winner)] + " won!",
+    );
+  }
+  await expect(page.locator("[data-game-clock]")).toContainText("Game 15:");
+  await page.route("**/colonyquest-live/duel-browser", (r) =>
+    r.fulfill({
+      path: path.join(__dirname, "../../public/colonyquest-live.html"),
+      contentType: "text/html",
+    }),
+  );
+  await page.route("**/api/game/duel-browser/colonyquest-live", (r) =>
+    r.fulfill({
+      json: {
+        title: "Habitats",
+        classes: [],
+        rosterIds: [],
+        history: [],
+        attendance: [],
+        match: m.snapshot(null, true, Date.now()),
+      },
+    }),
+  );
+  await page.goto("/colonyquest-live/duel-browser");
+  await expect(page.locator(".duel-results-grid article")).toHaveCount(2);
 });
