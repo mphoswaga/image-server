@@ -6239,6 +6239,12 @@
     // both the fresh-publish panel (#packSection) and the persistent
     // "My assignments" tab, since both render the same results markup.
     async function handleAssignmentPanelClick(e){
+      const acceptAI=e.target.closest('.accept-all-ai');
+      if(acceptAI){const {assignId,wrapId}=acceptAI.dataset;if($(wrapId)?.querySelector('[data-teacher-edited="1"]')){toast('Save your edited marks before accepting all AI suggestions.');return;}acceptAI.disabled=true;
+        try{const response=await fetch('/api/assignment/'+encodeURIComponent(assignId)+'/grades/accept-ai',{method:'POST'});const data=await response.json();if(!response.ok)throw Error(data.error||'Could not accept AI marks.');toast(data.updated+' AI marks accepted. Results remain private.','ok');await loadAssignmentResults(assignId,wrapId||'assignSubmissions');}
+        catch(error){toast(error.message);acceptAI.disabled=false;}return;
+      }
+
       const bulkApply=e.target.closest('.bulk-grade-apply');
       if(bulkApply){
         const {assignId,wrapId,questionId}=bulkApply.dataset,wrap=$(wrapId);
@@ -6523,6 +6529,8 @@
         ${!d.resultsReleased?`<button type="button" class="release-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" ${d.assessmentType&&!d.releaseReady?'disabled title="'+esc(d.releaseReason||'Finish marking first')+'"':''} style="font-size:12.5px;font-weight:600;padding:6px 12px;border:1px solid var(--primary);border-radius:8px;background:#fff;color:var(--primary);cursor:pointer">${d.assessmentType&&!d.releaseReady?esc(d.missingStudents?`${d.missingStudents} submissions missing`:d.pendingGrades?`${d.pendingGrades} grades pending`:'No submissions yet'):'Release results'}</button>`
           :`<button type="button" class="unrelease-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" style="font-size:12.5px;font-weight:600;padding:6px 12px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--muted);cursor:pointer">Recall from learners</button>`}
       </div>`;
+      const aiCount=Number(d.pendingAIGrades)||0;
+      const acceptAIBar=!d.effectivelyReleased?(aiCount?`<div class="ai-acceptance-bar" style="padding:12px;margin-bottom:12px;border:1px solid var(--border);border-radius:10px"><button type="button" class="btn accent accept-all-ai" data-assign-id="${assignId}" data-wrap-id="${wrapId}" style="width:auto">Accept all AI marks (${aiCount})</button><p class="hint">Confirms the AI suggestions shown below. Practical marks still need your marking; results stay private until you release them.</p></div>`:(d.questions||[]).every(q=>q.kind==='mcq')?'<p class="hint ai-acceptance-bar">Multiple-choice marks are already confirmed automatically. No AI marks need accepting.</p>':''):'';
       const completedDrafts=Number(d.completedDraftsCount)||0,incompleteDrafts=Number(d.incompleteDraftsCount)||0;
       const submitDraftsBar=d.assessmentType&&!d.resultsReleased&&(completedDrafts||incompleteDrafts)?`<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px;padding:11px 12px;border:1px solid #b8d5c7;border-radius:9px;background:#f5fcf8">
         <div><b style="font-size:13px;color:#145c3c">Saved learner attempts</b><div style="font-size:12px;color:var(--muted);margin-top:2px">${completedDrafts} complete and ready to submit${incompleteDrafts?` · ${incompleteDrafts} still incomplete and will remain open`:''}.</div></div>
@@ -6530,8 +6538,8 @@
       </div>`:'';
       const tabBtn=(v,label)=>`<button type="button" class="view-tab-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-view="${v}" style="font-size:12.5px;font-weight:600;padding:6px 14px;border:1px solid ${view===v?'var(--primary)':'var(--border)'};border-radius:8px;background:${view===v?'var(--primary)':'#fff'};color:${view===v?'#fff':'var(--ink)'};cursor:pointer">${label}</button>`;
       const tabs=`<div style="display:flex;gap:8px;margin-bottom:10px">${tabBtn('student','By student')}${tabBtn('question','By question')}</div>`;
-      if(!d.submissions||!d.submissions.length){ wrap.innerHTML=liveBar+submitDraftsBar+releaseBar+tabs+'<p class="hint" style="margin-top:8px">No students have submitted yet.</p>'; return; }
-      wrap.innerHTML=liveBar+submitDraftsBar+releaseBar+assignmentSummary(d)+tabs+(view==='question'?renderByQuestion(d,assignId,wrapId):renderByStudent(d,assignId,wrapId));
+      if(!d.submissions||!d.submissions.length){ wrap.innerHTML=liveBar+submitDraftsBar+releaseBar+acceptAIBar+tabs+'<p class="hint" style="margin-top:8px">No students have submitted yet.</p>'; return; }
+      wrap.innerHTML=liveBar+submitDraftsBar+releaseBar+acceptAIBar+assignmentSummary(d)+tabs+(view==='question'?renderByQuestion(d,assignId,wrapId):renderByStudent(d,assignId,wrapId));
       wrap.querySelectorAll('.learning-report details').forEach(el=>{if(reportOpen.has(detailKey(el)))el.open=reportOpen.get(detailKey(el));});
       const nextSearch=wrap.querySelector('[data-lr-search]');
       if(nextSearch&&searchState){

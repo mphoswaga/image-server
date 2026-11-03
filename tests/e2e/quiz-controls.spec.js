@@ -57,6 +57,9 @@ test("legacy quiz gains test controls and copies to another class without moving
   await expect(
     card.getByRole("link", { name: "Present", exact: true }),
   ).toHaveAttribute("href", "/assessment/" + q.assignmentId + "/present");
+  await card.getByRole('button',{name:'Run classroom / mark',exact:true}).click();
+  await expect(card).toContainText('No AI marks need accepting.');
+  await expect(card.locator('.accept-all-ai')).toHaveCount(0);
   const presentation = await page.request.get(
     "/api/assignment/" + q.assignmentId + "/presentation",
   );

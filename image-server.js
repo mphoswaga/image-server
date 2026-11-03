@@ -3961,7 +3961,7 @@ app.get('/api/assignment/:id/results', requireAuth, (req, res) => {
   });
   const completedDraftsCount = pendingDraftStatus.filter(status => status.complete).length;
   const incompleteDraftsCount = pendingDraftStatus.filter(status => status.hasAnswers && !status.complete).length;
-  res.json({ absentLearners: (a.rosterSnapshot||[]).filter(s=>assignments.isAbsent(a,s.id)).map(s=>({id:s.id,name:s.name})), questions: a.content.questions, sections: a.sections || null, objectives: a.objectives || null, assessmentType: a.assessmentType || null, totalMarks: a.totalMarks || null, delivery, liveProgress, rosterSize, submittedCount, submissions, completedDraftsCount, incompleteDraftsCount, resultsReleased: a.resultsReleased, teacherMarked: !!a.teacherMarked, teacherMarkedAt: a.teacherMarkedAt || null, cutoffAt: a.cutoffAt, effectivelyReleased: assignments.isReleased(a), releaseReady: readiness.ready, pendingGrades: readiness.pendingGrades, missingStudents: readiness.missingStudents || 0, releaseReason: readiness.reason || '' });
+  res.json({ absentLearners: (a.rosterSnapshot||[]).filter(s=>assignments.isAbsent(a,s.id)).map(s=>({id:s.id,name:s.name})), questions: a.content.questions, sections: a.sections || null, objectives: a.objectives || null, assessmentType: a.assessmentType || null, totalMarks: a.totalMarks || null, delivery, liveProgress, rosterSize, submittedCount, submissions, completedDraftsCount, incompleteDraftsCount, resultsReleased: a.resultsReleased, teacherMarked: !!a.teacherMarked, teacherMarkedAt: a.teacherMarkedAt || null, cutoffAt: a.cutoffAt, effectivelyReleased: assignments.isReleased(a), releaseReady: readiness.ready, pendingGrades: readiness.pendingGrades, pendingAIGrades:assignments.pendingAIMarks(a,submissions).length, missingStudents: readiness.missingStudents || 0, releaseReason: readiness.reason || '' });
 });
 
 // Teacher: override a student's grade for one question. This both corrects
@@ -4002,6 +4002,13 @@ app.patch('/api/assignment/:id/grade', requireAuth, (req, res) => {
 // Teacher: award one question mark to a selected set of learners. Validate the
 // entire selection before writing anything so a bad learner ID cannot leave a
 // partially applied classroom mark.
+app.post('/api/assignment/:id/grades/accept-ai',requireAuth,(req,res)=>{
+  const record=assignments.getAssignment(req.params.id);
+  if(!record||record.teacherId!==req.userId)return res.status(404).json({error:'Assessment not found.'});
+  try{const result=assignments.acceptAllAIMarks(record.id,req.userId);audit.log('assessment.ai_marks_accepted',{userId:req.userId,assignmentId:record.id,...result,ip:req.ip});res.json({ok:true,...result});}
+  catch(error){res.status(error.status||400).json({error:error.message,code:error.code});}
+});
+
 app.patch('/api/assignment/:id/grade/bulk', requireAuth, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });

@@ -686,6 +686,34 @@ function saveNewSubmission(id, sub) {
   return saveSubmission(id, sub);
 }
 function getSubmissions(id) { return loadSubmissions(id); }
+function pendingAIMarks(record, submissions) {
+  const questions=new Map((record.content?.questions||[]).map(q=>[q.id,q]));
+  const cohort=record.rosterSnapshot?.length?new Set(record.rosterSnapshot.map(s=>normalizeStudentId(s.id))):null;
+  const entries=[];
+  for(const sub of submissions){
+    if(sub.draftOnly||isAbsent(record,sub.studentId)||(cohort&&!cohort.has(normalizeStudentId(sub.studentId))))continue;
+    for(const [questionId,grade] of Object.entries(sub.grades||{})){
+      const q=questions.get(questionId),marks=grade?.marksAwarded;
+      if(q&&['text','extended'].includes(q.kind)&&grade?.source==='ai'&&['correct','partial','incorrect'].includes(grade.verdict)&&typeof marks==='number'&&Number.isFinite(marks)&&marks>=0&&marks<=Number(q.marks))entries.push({sub,questionId,grade,answerText:sub.answers?.[questionId]});
+    }
+  }
+  return entries;
+}
+function acceptAllAIMarks(id, teacherId) {
+  const record=getAssignment(id);
+  if(!record||record.teacherId!==teacherId)throw assessmentStateError('Assessment not found.','assessment_not_owned');
+  assertAssessmentMutable(record);
+  if(isReleased(record))throw assessmentStateError('Recall results before accepting AI marks.','assessment_finalised');
+  const submissions=loadSubmissions(id),entries=pendingAIMarks(record,submissions),at=new Date().toISOString();
+  for(const entry of entries){
+    const grade={...entry.grade,source:'teacher',confirmedAt:at,acceptedFromAI:true};
+    recordVerdict(id,entry.questionId,{answerText:entry.answerText,...grade,confirmed:true});
+    entry.sub.grades[entry.questionId]=grade;
+  }
+  if(entries.length)writeJsonAtomic(subsPath(id),submissions);
+  return {updated:entries.length,learners:new Set(entries.map(e=>e.sub.studentId)).size};
+}
+
 function getSubmission(id, studentId) {
   const target = normalizeStudentId(studentId);
   return loadSubmissions(id).find(s => normalizeStudentId(s.studentId) === target) || null;
@@ -1206,7 +1234,7 @@ module.exports = {
   enableQuizAssessmentControls, legacyContentEditable, updateLegacyContent, createAssignment, createAssessment, copyAssessmentToRoster, normalizeAssessment, getAssignment, updateAssignmentCutoff, updateAssessmentRoster, updateAssessmentContent, assessmentContentEditable, getRoomCode,
   publishedAssessmentGenerationContext,
   releaseResults, setTeacherMarked, isReleased,
-  assessmentIsFinalised, saveSubmission, saveNewSubmission, getSubmissions, getSubmission, reassignRoster,
+  pendingAIMarks, acceptAllAIMarks, assessmentIsFinalised, saveSubmission, saveNewSubmission, getSubmissions, getSubmission, reassignRoster,
   assessmentReleaseReadiness, assessmentMarkingSummary, loadDrafts, getDraft, saveDraft, saveDraftGrade, deliveryState, learnerSectionProgress, learnerQuestionProgress, questionAnswerProgress, updateDelivery, draftProgress, presentationSlides,
   sanitizeLearnerAnswers, incompleteAssessmentAnswers, filterAssignmentEvidenceForRoster,
   findConfirmedVerdict, recordVerdict, normalizeAnswer, normalizeStudentId, renameAssessmentStudent,
