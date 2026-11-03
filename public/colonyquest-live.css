@@ -1226,3 +1226,4 @@ h2 {
  .colony-duel-raid #learner .play-layout{grid-template-rows:minmax(0,1fr)}
 }
 .duel-clocks{display:flex;align-items:flex-end;flex-direction:column;white-space:nowrap}.duel-clocks small{font-size:13px;color:#e0edc9}.colony-duel-panel [data-raid-result]{padding:10px;background:#fff1bb;color:#193c2e;border:2px solid #e8bd56;border-radius:10px;font-size:clamp(18px,2vw,26px);font-weight:900;text-align:center}.duel-results-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;max-height:55vh;overflow:auto;text-align:left}.duel-results-grid article{padding:12px;background:#ffffffb8;border:1px solid #6b9580;border-radius:12px}.duel-results-grid strong{font-size:clamp(18px,2vw,25px);color:#184e35}.duel-results-grid p{margin:6px 0;font-size:14px}
+@media(min-width:900px){.colony-duel-mode #learner .decision:has(.raid-picker){overflow:auto;justify-content:flex-start;max-height:45vh}}

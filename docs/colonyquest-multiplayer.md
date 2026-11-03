@@ -214,3 +214,7 @@ Paired views share smartboard chamber dimensions and positions through `colony-h
 Teachers can set the overall duel competition to 5, 10, 15, 20, 30, 45 or 60 minutes independently of the three/five-minute matchup length. The overall timer counts active competition, pauses for opening/opponent/result announcements and teacher pauses, and stops new matches at zero. Current turns and raids finish, all pair results are shown for 8–20 seconds (depending on class size), then the final celebration begins. The question bank may also finish the game earlier. Existing saved rooms use a 15-minute default.
 
 Every learner and teacher sees all pairing winners and scores during the shared results interval. Raid outcome text names the successful attacker or defending winner and the stolen food after the attack reaches its resolution, before normal questions resume.
+
+## Classroom audio
+
+The teacher's **Class audio** control plays the background soundtrack, opponent bells and duel/final celebration music. Learner screens never play those music tracks. Their **Effects** control starts enabled and plays feedback, upgrade sounds and the same bundled action voice clips used by the smartboard (including Build, Guards ready, Food collected and Raiding). Effects respect each learner's volume, mute and pause state. Browsers may require the learner's first click to unlock audio. Opening narration stays on the teacher's computer; the isolated teacher preview can also narrate its opening. The learner's effects volume does not change class music.

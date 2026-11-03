@@ -20,7 +20,7 @@
     offset = 0,
     scene = null,
     audio = null,
-    sound = false,
+    sound = !host,
     renderKey = '',
     pending = null,
     socket = null,
@@ -37,7 +37,7 @@
   const openingChapters=Array.from({length:4},(_,i)=>OpeningNarrationData.clips['colony-'+i]);
   function openingChapter(elapsed){let start=0;for(let i=0;i<4;i++){const end=start+(openingChapters[i].seconds+1)*1000;if(elapsed<end||i===3)return {index:i,position:Math.max(0,(elapsed-start)/1000)};start=end;}}
   const storyReader=new ColonyStoryText(openingVoice);
-  const actionVoice=new ColonyActionVoice(()=>sound&&!openingVoice.active&&!['paused','ended'].includes(state?.phase)&&!state?.me?.teacherPaused,speaking=>{soundtrack.media.muted=speaking;});
+  const actionVoice=new ColonyActionVoice(()=>!host&&sound&&!openingVoice.active&&!['paused','ended'].includes(state?.phase)&&!state?.me?.teacherPaused,speaking=>{soundtrack.media.muted=speaking;},()=>Number($('musicVolume').value)/100);
   const eventAudio = new ColonyEventAudio();
   eventAudio.voice=actionVoice;
   let duckTimer;
@@ -59,13 +59,15 @@
       Number($('musicVolume').value) / 100,
     );
     soundtrack.setActive(
-      sound &&
+      host && sound &&
         !!state &&
         !['paused', 'ended'].includes(state.phase) &&
         !['intro','results'].includes(state.duel?.stage) &&
         !document.body.classList.contains('offline'),
     );
   }
+  $('sound').textContent=host?'Class audio off':'Effects on';
+  if(!host){document.querySelector('.music-settings summary').textContent='Effects';document.querySelector('label[for=musicVolume]').textContent='Effects volume';$('musicTrackLabel').hidden=true;}
   $('musicVolume').oninput = () => {
     soundtrack.setVolume(Number($('musicVolume').value) / 200);
     syncMusic();
@@ -123,7 +125,7 @@
   $('sound').onclick = () => {
     sound = !sound;
     if(!sound)actionVoice.stop();
-    $('sound').textContent = sound ? 'Sound on' : 'Sound off';
+    $('sound').textContent = host ? (sound?'Class audio on':'Class audio off') : (sound?'Effects on':'Effects off');
     if (sound) chime();
     syncMusic();
   };
@@ -212,8 +214,10 @@
     const prior = state;
     state = next;
     if(next.phase==='paused'||next.phase==='ended'||(next.phase==='story'&&next.story?.key==='intro'))actionVoice.stop();
-    if(prior&&next.me?.lastUpgrade&&JSON.stringify(next.me.lastUpgrade)!==JSON.stringify(prior.me?.lastUpgrade))actionVoice.play(next.me.lastUpgrade.key);
-    if(next.phase==='story'&&next.story?.key==='intro'){const chapter=openingChapter(next.story.elapsed);openingVoice.sync(openingChapters[chapter.index].src,next.id+':intro:'+chapter.index,chapter.position);}else openingVoice.stop();
+    if(!host&&prior&&next.me?.lastUpgrade&&JSON.stringify(next.me.lastUpgrade)!==JSON.stringify(prior.me?.lastUpgrade)){actionVoice.play(next.me.lastUpgrade.key);if(next.me.lastUpgrade.key!=='raid')chime(740);}
+    if((host||next.preview)&&next.phase==='story'&&next.story?.key==='intro'){const chapter=openingChapter(next.story.elapsed);openingVoice.sync(openingChapters[chapter.index].src,next.id+':intro:'+chapter.index,chapter.position);}else openingVoice.stop();
+    $('openingVoice').hidden=!host&&!next.preview;
+    document.querySelector('.top-actions > small').hidden=!host&&!next.preview;
     offset = next.serverNow - Date.now();
     if(next.duel){duelView ||= new ColonyDuelView(host);duelView.sync(next,sound,Number($('musicVolume').value)/100);}else duelView?.hide();updateScene(next);
     syncMusic();

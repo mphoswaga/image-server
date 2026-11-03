@@ -79,7 +79,7 @@ window.ColonyDuelView = class {
     this.nodes = [];
   }
   bell() {
-    if (!this.enabled || document.hidden) return;
+    if (!this.host || !this.enabled || document.hidden) return;
     try {
       this.context ||= new (window.AudioContext || window.webkitAudioContext)();
       this.context.resume();
@@ -114,7 +114,7 @@ window.ColonyDuelView = class {
       return;
     }
     const d = this.state?.duel,
-      celebrate = d && (d.stage === "results" || this.state.phase === "ended");
+      celebrate = this.host && d && (d.stage === "results" || this.state.phase === "ended");
     if (celebrate) {
       const key =
         this.state.id +
