@@ -331,6 +331,9 @@
           ry: Math.min(floorHeight * 0.36, w * 0.16),
         };
       });
+      const smartboard = this.state?.duel && window.ColonyHabitatLayout?.fit(visible,w,h);
+      if(smartboard)rooms.splice(0,rooms.length,...smartboard.rooms);
+      this.canvas.dataset.habitatView=smartboard?'smartboard':'individual';
       const signature = w + ':' + h + ':' + visible.map((room) => room.id).join(',');
       if (this.layoutTransition?.signature !== signature) {
         this.layoutTransition = {
@@ -351,12 +354,12 @@
       return {
         w,
         h,
-        surface,
-        depth,
+        surface:smartboard?smartboard.surface:surface,
+        depth:smartboard?smartboard.depth:depth,
         rooms,
         home: rooms[0],
         pantry: rooms.find((r) => r.kind === 'food') || rooms[0],
-        size: clamp(Math.min(w / 15, depth / 5), 19, 64),
+        size: smartboard?smartboard.size:clamp(Math.min(w / 15, depth / 5), 19, 64),
       };
     }
     tunnel(path, width, progress = 1) {
@@ -547,7 +550,7 @@
           art.queen,
           0,
           ry * 0.02 + (this.reduced ? 0 : Math.sin(this.clock / 900) * 1.3),
-          Math.min(rx * 0.88, ry * 2.3),
+          this.state?.duel ? Math.min(55+(colony.queenLevel||0)*4,rx*1.3) : Math.min(rx * 0.88, ry * 2.3),
         );
       } else if (room.kind === 'food') {
         this.leaf(rx * 0.35, -ry * 0.55, Math.min(14, rx * 0.2));
@@ -1490,7 +1493,7 @@
         const incoming = raidCamera.event.target === this.state.me.id;
         const travel = p < .15 ? 0 : p < .5 ? smooth((p - .15) / .35) : p < .68 ? 1 : 1 - smooth((p - .68) / .32);
         const envelope = p < .15 ? smooth(p / .15) : p > .88 ? 1 - smooth((p - .88) / .12) : 1;
-        zoom = 1 + envelope * (p >= .5 && p < .68 ? 1.6 : 1.25);
+        zoom = 1 + envelope * (this.state?.duel ? .18 : (p >= .5 && p < .68 ? 1.6 : 1.25));
         // Ease zoom transitions and keep the viewport entirely within the scene.
         this.raidZoom = (this.raidZoom || 1) + (zoom - (this.raidZoom || 1)) * (1 - Math.exp(-dt / 110));
         zoom = this.raidZoom;

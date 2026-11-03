@@ -1195,3 +1195,33 @@ h2 {
 /* Both colonies share the full stage during a paired raid. */
 .colony-duel-raid #learner .play-layout{grid-template-columns:minmax(0,1fr)}
 .colony-duel-mode .colony-raid-moment{display:none!important}
+/* Smartboard framing: two complete habitats above the question controls. */
+@media(min-width:900px){
+ .colony-duel-mode #learner .play-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(260px,1fr) auto;height:calc(100dvh - 220px);min-height:540px}
+ .colony-duel-mode #learner .colony-stage{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr);min-height:260px}
+ .colony-duel-mode .duel-rival{border-top:0;border-left:2px solid #dd98b8}
+ .colony-duel-mode .duel-own-stage{display:grid;grid-template-rows:50px minmax(0,1fr)}
+ .colony-duel-mode #colonyCanvas{grid-row:2;min-height:0}
+ .colony-duel-mode #resources{grid-row:1;position:static;gap:4px;padding:5px;align-items:center;background:#193e35}
+ .colony-duel-mode #resources span{padding:3px 6px;border:0;min-width:0;font-size:13px}
+ .colony-duel-mode #resources i{font-size:15px}
+ .colony-duel-mode #resources small{font-size:8px}
+ .colony-duel-mode .duel-rival{grid-template-rows:28px 22px minmax(0,1fr)}
+ .colony-duel-mode #learner .decision{padding:12px 24px;overflow:visible;gap:6px;min-height:0}
+ .colony-duel-mode #learner .decision h1{font-size:clamp(18px,2vw,25px);margin:3px 0}
+ .colony-duel-mode #learner .choices{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+ .colony-duel-mode .play-status{padding:7px 20px;min-height:0}
+ .colony-duel-mode .play-status #chapter{display:none}
+ .colony-duel-mode .colony-duel-panel{padding:8px 16px;margin:4px 10px}
+ .colony-duel-raid #learner .play-layout{grid-template-rows:minmax(0,1fr)}
+ .colony-duel-mode #learner .colony-stage.inspect-rival{grid-template-columns:minmax(0,1fr) minmax(0,2fr)}
+}
+@media(min-width:900px){
+ .colony-duel-mode #learner:not([hidden]){display:flex;flex-direction:column;height:calc(100dvh - 72px)}
+ .colony-duel-mode #learner>.colony-duel-panel,.colony-duel-mode #learner>.play-status{flex-shrink:0}
+ .colony-duel-mode #learner .play-layout{flex:1;height:auto;min-height:0;grid-template-rows:minmax(180px,1fr) auto}
+ .colony-duel-mode #learner .colony-stage{min-height:180px}
+ .colony-duel-mode #learner .decision #instruction{font-size:14px;margin:2px 0;min-height:0}
+ .colony-duel-mode #learner .choices button{min-height:48px;padding:9px 14px;font-size:17px}
+ .colony-duel-raid #learner .play-layout{grid-template-rows:minmax(0,1fr)}
+}

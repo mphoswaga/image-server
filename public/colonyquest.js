@@ -98,12 +98,7 @@
     'lost-ant': { action: 'Guide the ant home', resultTitle: 'The lost scout is home!', speaker: 'Pip', speech: 'Follow our scent trail. You are nearly home!', site: 'entrance', result: 'The lost scout reached the colony and shared a map to five seeds.' },
     'new-territory': { action: 'Explore the soft soil', resultTitle: 'A safe new path is open!', speaker: 'Dot', speech: 'This soil is safe to dig. Let us explore!', site: 'expansion', result: 'The workers opened a safe path beneath the hidden root.' },
   });
-  const COLONY_LAYOUT = Object.freeze({
-    gap: 14,
-    minimumWidth: 205,
-    roomStep: 142,
-    baseHeight: 218,
-  });
+  const COLONY_LAYOUT = ColonyHabitatLayout.constants;
   const MAX_MOVING_ANTS_PER_ROLE = 24;
 
   function esc(value) {
@@ -2294,13 +2289,8 @@
     const cx = zone.x + zone.w / 2;
     const entrance = { x: cx, y: zone.y + 50 };
     const active = teamIndex === session.currentTeamIndex && session.phase !== 'ended';
-    const roomWidth = Math.min(186, zone.w * .44);
-    const roomHeight = 94;
-    const rooms = core.colonyRooms(team).map((room, index) => ({
-      ...room,
-      x: index === 0 ? cx : zone.x + zone.w * ((index - 1) % 2 ? .75 : .25),
-      y: zone.y + 136 + Math.ceil(index / 2) * COLONY_LAYOUT.roomStep,
-    }));
+    const habitat = ColonyHabitatLayout.board(core.colonyRooms(team), zone);
+    const {roomWidth,roomHeight,rooms}=habitat;
     const nursery = rooms[0];
     const preservePositions = previous && previous.zone.x === zone.x && previous.zone.y === zone.y && previous.zone.w === zone.w && previous.roomCount === rooms.length;
     const food = rooms.find(room => room.kind === 'food') || nursery;

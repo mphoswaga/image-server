@@ -106,6 +106,10 @@ test("two learner devices see live rival colonies, independent answers and one s
       await expect(page.locator("#rivalColonyCanvas")).toBeVisible();
     }
     const [pa, pb] = await Promise.all(contexts.map((c) => c.pages()[0]));
+    await expect(pa.locator('#colonyCanvas')).toHaveAttribute('data-habitat-view','smartboard');
+    await pageShot(pa,info.outputPath('smartboard-question.png'));
+    if(info.project.name==='windows-100')expect(await pa.locator('#choices').evaluate(el=>el.getBoundingClientRect().bottom)).toBeLessThanOrEqual(768);
+
     await pa.bringToFront();
     await pa.locator('#choices [data-choice="0"]').click();
     await expect(pa.locator("#question")).toHaveText(
