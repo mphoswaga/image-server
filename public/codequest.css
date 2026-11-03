@@ -38,3 +38,4 @@ body{background:radial-gradient(ellipse at 15% 5%,#bce8dc 0,transparent 45%),rad
 .pirate{left:0;top:0;translate:calc(var(--x)*100%) calc(var(--y)*100%);transition:translate .48s cubic-bezier(.22,.61,.36,1);will-change:translate}.pirate.portrait{translate:none;will-change:auto}@media(prefers-reduced-motion:reduce){.pirate{transition:none;will-change:auto}}
 /* Decorative pirates must not intercept taps on prediction squares beneath them. */
 .island .pirate{pointer-events:none}
+.prediction-mode #program .codeStep:disabled{opacity:1;color:#17384a;cursor:default}
