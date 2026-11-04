@@ -1,3 +1,4 @@
+const activityTasks = require('./lesson-activity-slides');
 const { addOutcomeSlide, cleanOutcome } = require('./lesson-learning');
 const lessonDesign = require('./lesson-design');
 // The "brain" — turns a topic into a structured, grade-appropriate lesson.
@@ -280,6 +281,7 @@ Rules:
 - Every section needs an imageQuery: 2-4 concrete keywords for the ideal photo (e.g. "pizza slices fractions", not "math concept").
 - Pitch vocabulary and depth at the ${grade} level. Keep a ${tone} tone throughout.
 - Make the content build logically from objectives → ideas → practice → recap.
+${lessonPurpose === 'lesson' ? activityTasks.guidance : ''}
 ${finalAssessmentRules}`;
 }
 
@@ -857,7 +859,7 @@ function flattenDeck(data, teachingModelId = 'standard', lessonPurpose = 'lesson
     // On a vocabulary slide, the term–definition lines ARE the teaching content,
     // so they become the bullets (rendered by the existing layout). The example
     // and speaker notes still carry extra explanation for the teacher.
-    const bullets = (vocab.length ? vocab.map(v => `${v.term} — ${v.definition}`) : s.bullets).map(b => truncateBullet(b));
+    const bullets = (vocab.length ? vocab.map(v => `${v.term} — ${v.definition}`) : s.bullets).map(b => s.learnerTask?.required ? String(b) : truncateBullet(b));
     const shortcuts = purpose === 'lesson' && Array.isArray(s.shortcuts) ? s.shortcuts.filter(x => x && x.action && x.keys) : [];
     const worked = purpose === 'lesson' && s.worked && s.worked.task && Array.isArray(s.worked.steps) && s.worked.steps.length ? s.worked : null;
     const modelStage = purpose === 'lesson' ? (schedule[i] || teachingModel.stages[0].id) : (s.stageId || `${purpose}_stage_${i + 1}`);
@@ -865,7 +867,7 @@ function flattenDeck(data, teachingModelId = 'standard', lessonPurpose = 'lesson
       ? `Phase ${Number(s.assessmentPhaseIndex) + 1}: ${ASSESSMENT_TYPE_LABELS[s.assessmentPhaseType]}`
       : purpose === 'project' ? 'Project stage' : purpose === 'test' ? 'Test instructions' : stageLabel(teachingModel, modelStage);
     slides.push({
-      type: 'content', title: s.title, bullets, example: purpose === 'lesson' ? s.example : '',
+      type: 'content', title: s.title, bullets, learnerTask:purpose==='lesson'?s.learnerTask:undefined, example: purpose === 'lesson' ? s.example : '',
       speakerNotes: s.speakerNotes, imageQuery: s.imageQuery, visual: s.visual, vocab, shortcuts, worked,
       modelLabel: deckLabel,
       modelStage,
@@ -899,7 +901,7 @@ function flattenDeck(data, teachingModelId = 'standard', lessonPurpose = 'lesson
     const safeActivityBullets = purpose === 'project' ? actBullets.map(replacesShortcutKeys) : actBullets;
     if (purpose === 'project' && !safeActivityBullets.some(bullet => /\?\s*$/.test(bullet))) safeActivityBullets.push('Have you completed and checked the current stage?');
     const activitySlide = {
-      type: 'activity', title: purpose === 'project' ? 'Project work' : (act.title || 'Your Turn'), bullets: safeActivityBullets,
+      type: 'activity', title: purpose === 'project' ? 'Project work' : (act.title || 'Your Turn'), bullets: safeActivityBullets, learnerTask:purpose==='lesson'?act.learnerTask:undefined,
       speakerNotes: purpose === 'project' ? 'Display the current stage while students work. Circulate, observe and record evidence.' : actNotes,
       imageQuery: act.imageQuery, differentiation: purpose === 'lesson' ? diff : null,
       modelStage: purpose === 'project' ? 'project_work' : activityStage.id,
@@ -997,7 +999,8 @@ async function generateContent(subject, topic, slideCount, grade = 'middle schoo
     assessmentOptions,
     assessmentManifest,
     assessmentDeckPolicyVersion: 4,
-    lessonAlignmentVersion: aligned ? 1 : 0,
+    activityQuestionPolicyVersion: 1,
+    lessonAlignmentVersion: aligned ? 2 : 0,
     regenerate: !!(extras && extras.regenerate),
   }, async () => {
     if (aligned) return addOutcomeSlide(await require('./lesson-deck-alignment').generateAlignedDeck({ callModel, slideSchema: DECK_SCHEMA.properties.slides.items, subject, topic, grade, tone, focus, extras, slideCount }), extras.learningOutcome, lessonPurpose);
@@ -1009,15 +1012,19 @@ async function generateContent(subject, topic, slideCount, grade = 'middle schoo
     let bestScore = Number.POSITIVE_INFINITY;
     let correction = '';
     for (let attempt = 1; attempt <= 3; attempt++) {
-      const data = await callModel(DECK_SCHEMA, 'lesson_deck', [{ role: 'user', content: prompt + correction }], 12000);
+      const schema=lessonPurpose==='lesson'?{...DECK_SCHEMA,properties:{...DECK_SCHEMA.properties,slides:{...DECK_SCHEMA.properties.slides,items:activityTasks.withTaskSchema(DECK_SCHEMA.properties.slides.items)},activity:activityTasks.withTaskSchema(DECK_SCHEMA.properties.activity)}}:DECK_SCHEMA;
+      let data = await callModel(schema, 'lesson_deck', [{ role: 'user', content: prompt + correction }], 12000);
+      if(lessonPurpose==='lesson')data={...data,...await activityTasks.repairTasks({callModel,slides:data.slides,activity:data.activity,plan:extras.lessonPlanText,grade})};
       const issues = assessmentDeckIssues(data, lessonPurpose, extras);
+      if(lessonPurpose==='lesson'){data.slides.forEach((s,i)=>issues.push(...activityTasks.taskIssues(s).map(issue=>'Slide '+(i+1)+': '+issue)));issues.push(...activityTasks.taskIssues(data.activity,null,true).map(issue=>'Activity: '+issue));}
       const missingSlides = Math.max(0, slideCount - data.slides.length);
       const score = (issues.length * 100) + missingSlides;
       if (!best || score < bestScore) { best = data; bestScore = score; }
       if (!issues.length && data.slides.length >= slideCount) break;
-      correction = `\n\nYour previous draft failed these required checks: ${[...issues, ...(missingSlides ? [`only ${data.slides.length} of ${slideCount} content slides were returned`] : [])].join('; ')}. Return a corrected complete deck that follows every FINAL project/test rule.`;
-      console.log(`Deck response needs repair (${correction.slice(2)}), retrying (${attempt}/3)…`);
+      correction = `\n\nYour previous draft failed these required checks: ${[...issues, ...(missingSlides ? [`only ${data.slides.length} of ${slideCount} content slides were returned`] : [])].join('; ')}. Return a corrected complete deck that ${lessonPurpose === 'lesson' ? 'includes actual learner questions, problem data and private answer guidance' : 'follows every FINAL project/test rule'}.\nRepair this previous draft, retaining correct task details and examples: ${JSON.stringify(data)}`;
+      console.log(`Deck response needs repair (${issues.join('; ')}${missingSlides ? '; missing content slides' : ''}), retrying (${attempt}/3)…`);
     }
+    if(lessonPurpose==='lesson'){const issues=[...best.slides.flatMap(s=>activityTasks.taskIssues(s)),...activityTasks.taskIssues(best.activity,null,true)];if(issues.length)throw new Error('The slides are missing usable activity questions. Please try again. '+[...new Set(issues)].join('; '));best.slides=best.slides.map(activityTasks.materializeTask);best.activity=activityTasks.materializeTask(best.activity);if(best.activity.bullets)best.activity.instructions=best.activity.bullets;}
     const requiredCount = lessonPurpose === 'lesson' ? slideCount : Math.max(slideCount, assessmentManifest.length);
     best.slides = best.slides.slice(0, requiredCount);
     best = ensureAssessmentDeckCoverage(best, lessonPurpose, extras, topic);
@@ -1056,8 +1063,8 @@ async function generateOneSlide({ subject, topic, grade, tone = 'clear and engag
   const p = gradeProfile(grade).content;
   const pretty = topic.replace(/-/g, ' ');
   const avoid = avoidTitles.length ? `\nDo NOT repeat these existing slide titles: ${avoidTitles.join('; ')}.` : '';
-  const approvedPlan = purpose === 'project' && lessonPlanText
-    ? `\nUse this approved project plan to keep the replacement slide in context:\n${compactPlanForDeck(lessonPlanText).slice(0, 6000)}\n`
+  const approvedPlan = ['lesson','project'].includes(purpose) && lessonPlanText
+    ? `\nUse this approved lesson plan to keep the replacement slide in context:\n${compactPlanForDeck(lessonPlanText).slice(0, 6000)}\n`
     : '';
   const purposeRule = purpose === 'test'
     ? '\nThis is a test administration slide. Include no test question, answer, hint, worked example, formula, assessed procedure, rubric, marking criterion, vocabulary teaching, or keyboard shortcut. Show only neutral timing, conduct, permitted materials, progress or submission directions.'
@@ -1066,9 +1073,10 @@ async function generateOneSlide({ subject, topic, grade, tone = 'clear and engag
   const prompt = `Write ONE fresh content slide for a ${grade} lesson on "${pretty}" (${subject}). ${tone} tone.${focus ? ' Focus: ' + focus + '.' : ''}
 ${modelPromptBlock(teachingModel)}
 ${purposeRule}${approvedPlan}
+${purpose === 'lesson' ? activityTasks.guidance : ''}
 The slide must use stageId "${preferredStage || teachingModel.stages[0].id}" so it fits the existing lesson sequence.
 Give a clear title, ${p.bullets} bullets (${p.wordsPerBullet}), a concrete real-world example sentence, speaker notes (${p.notes}), and a 2-4 keyword imageQuery. If the slide introduces vocabulary/key terms, fill "vocab" with each term and a short clear definition a ${grade} student understands; otherwise "vocab" is []. If it teaches keyboard shortcuts / tool buttons / key combos, fill "shortcuts" with each action and its EXACT keys (e.g. {"action":"Undo","keys":"Ctrl + Z"}); otherwise "shortcuts" is []. If it teaches how to DO/perform a method, calculation or technique, fill "worked" with a task + the actual ordered steps (real values); otherwise "worked" is {"task":"","steps":[]}. ${p.depth}${avoid}`;
-  const s = await callModel(ONE_SLIDE_SCHEMA, 'one_slide', [{ role: 'user', content: prompt }], 1800);
+  let s,taskFeedback='';for(let attempt=0;attempt<3;attempt++){s=await callModel(purpose==='lesson'?activityTasks.withTaskSchema(ONE_SLIDE_SCHEMA):ONE_SLIDE_SCHEMA,'one_slide',[{role:'user',content:prompt+taskFeedback}],2600);if(purpose==='lesson')s=(await activityTasks.repairTasks({callModel,slides:[s],plan:lessonPlanText,grade})).slides[0];const issues=purpose==='lesson'?activityTasks.taskIssues(s):[];if(!issues.length)break;taskFeedback='\nRepair the previous draft: '+issues.join('; ');if(attempt===2)throw new Error('The replacement needs an actual activity question. '+issues.join('; '));}if(purpose==='lesson')s=activityTasks.materializeTask(s);
   if (purpose === 'test') {
     const safe = testAdministrationSlide(0, topic);
     safe.stageId = preferredStage || safe.stageId;

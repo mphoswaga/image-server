@@ -29,7 +29,7 @@ function deckResponse(overrides = {}) {
     slides: [contentSlide()],
     check: { question: 'Have you completed this stage?', answer: [], imageQuery: 'student checklist' },
     activity: {
-      title: 'Project work', goal: 'Complete the current stage', materials: [],
+      title: 'Project work', goal: 'Complete the current stage', materials: [], learnerTask:{required:true,question:'Create a document inviting your class to a school event.',stimulus:[],answer:'Check audience, event details and saved work.'},
       instructions: ['Work independently.', 'Save your work.'],
       speakerNotes: 'Observe without completing the work for students.', imageQuery: 'student project',
     },

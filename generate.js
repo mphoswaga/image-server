@@ -353,6 +353,7 @@ function textLength(value) {
 // the TIGHTEST box that layout can use — splitting on the worst case is safe.
 // `cols` marks layouts that spread bullets across two boxes.
 const BULLET_BOX = {
+  task:      { w: 9, h: 3.9 },
   classic:   { w: 4.15, h: 2.6 },        // the alternating half-bleed variant
   split:     { w: 4.15, h: 2.6 },
   twocol:    { w: 4.15, h: 3.6, cols: 2 },
@@ -422,6 +423,10 @@ function paginateSlides(slides, t, preset) {
     if (slide.table?.rows?.length) {
       out.push({ ...slide, _layout: layoutForSlide(slide, position++, rhythm), _sourceIndex: sourceIndex });
       return;
+    }
+    if(slide.learnerTask?.required){
+      if(chunkBulletsForSlide(slide,t,'task').length>1)throw new Error('An activity question and its problem data need too much space. Shorten this task before exporting; it will not be split across slides.');
+      out.push({...slide,_layout:'task',_sourceIndex:sourceIndex});return;
     }
     if (slide.type === 'video') {
       out.push({ ...slide, _layout: layoutForSlide(slide, position, rhythm), _sourceIndex: sourceIndex });
@@ -694,6 +699,11 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
     slide.addImage({ ...imgSource, ...rest });
   };
 
+  if(slideData.learnerTask?.required){
+    addTitle(slide,slideData.title,{x:0.5,y:0.3,w:9,h:0.85,fontFace:thm.font,fontSize:t.titleSize,bold:true,color:thm.primary});
+    addBullets(slide,slideData.bullets,t,thm,multicolor,{x:0.5,y:1.3,w:9,h:3.9,fontFace:thm.font,fontSize:t.bulletSize,valign:'top',paraSpaceAfter:t.paraSpaceAfter});
+    return;
+  }
   switch (slideData.type) {
     case 'video': {
       slide.background = { color: 'FFF7F7' };
@@ -992,7 +1002,7 @@ async function buildDeck({ subject, topic, slideCount = 4, grade = 'middle schoo
   const slides = await generateContent(subject, topic, slideCount, grade, tone, focus, { objectives, lessonPlanText, sourceMaterialText, teachingModelId, ...extras });
   const safeSlides = paginateSlides(slides, profile.theme, preset).map(({ _sourceIndex, ...slide }) => slide);
   const images = await selectImages(safeSlides, subject, topic, sourceImages);
-  const aligned = safeSlides.some(s => s.alignment);
+  const aligned = safeSlides.some(s => s.alignment || s.learnerTask?.required);
   if (skipAssemble && !aligned) return { slides: safeSlides, images, band: profile.band, preset };
   const pptx = assembleDeck(safeSlides, images, profile.theme, preset);
   if (aligned) require('./lesson-deck-export').validateAlignedExport(await pptx.write({outputType:'nodebuffer'}), {slides:safeSlides,images,grade,presetId});

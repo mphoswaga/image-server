@@ -13,7 +13,7 @@ test('AI slide generation carries assessment settings through the cache and appr
   const response = {
     titleSlide: { title: 'Document project' }, objectives: { items: ['Create a letter'] },
     slides: [{ title: 'Prepare your document', bullets: ['Open your document.'], stageId: 'launch' }],
-    activity: { instructions: ['Save your work.'] }, recap: { points: ['Submit your work.'] },
+    activity: { instructions: ['Save your work.'], learnerTask:{required:true,question:'Create a letter inviting a friend to your birthday party.',stimulus:[],answer:'Check the greeting, invitation details and saved document.'} }, recap: { points: ['Submit your work.'] },
   };
   const moduleObject = { exports: {} };
   vm.runInNewContext(fs.readFileSync(filename, 'utf8'), {

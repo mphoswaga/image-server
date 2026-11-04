@@ -24,7 +24,7 @@ function requiredText(slide) {
 // Check the actual delivered ZIP after animation, including native table cells
 // and notes. This is a structural/content gate, not a claim of visual rendering.
 function validateAlignedExport(buffer, deck) {
-  if (!deck.slides.some(s => s.alignment || s.lessonReview)) return;
+  if (!deck.slides.some(s => s.alignment || s.lessonReview || s.learnerTask?.required)) return;
   const pages = paginateSlides(deck.slides, gradeProfile(deck.grade).theme, getPreset(deck.presetId));
   const zip = new PizZip(buffer);
   const count = Object.keys(zip.files).filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n)).length;
