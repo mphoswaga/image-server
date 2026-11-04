@@ -204,7 +204,7 @@ test('guest practice is public but never writes recorded student evidence', () =
   assert.match(player, /\/student\/practice\/guest\?session=\$\{encodeURIComponent\(code\)\}&world=g3&continue=1/);
   assert.match(player, /continuingFoundationRoom=requestedContinue&&requestedWorld==='g3'/);
   assert.match(player, /body:JSON\.stringify\(\{\.\.\.payload,arcadeScore:performanceSummary\(\)\.score,activityId:ACTIVITY_ID,activityVersion:attempt\.activityVersion\|\|campaign\.version\}\)/);
-  assert.match(start, /href="\/student\/practice\/guest">Practise without signing in/);
+  assert.match(start, /href="\/student\/practice\/guest"[^>]*>Practise without signing in/);
   assert.match(teacherLogin, /href="\/student\/practice\/guest">Student guest practice/);
   assert.match(teacherLogin, /if\(\$\('authGuestPractice'\)\) \$\('authGuestPractice'\)\.style\.display=d\.enabled\?'block':'none'/);
 });

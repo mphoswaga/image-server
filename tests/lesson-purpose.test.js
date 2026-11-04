@@ -106,8 +106,10 @@ test('assessment settings keep teacher-selected item types and counts', () => {
 
 test('assessment schema is added only for project and test generation', () => {
   const model = getTeachingModel('standard');
-  assert.deepEqual(planSchema(model).required, ['successCriteria', 'sections']);
-  assert.deepEqual(planSchema(model, null, false, true).required, ['successCriteria', 'sections', 'assessmentDraft']);
+  assert.deepEqual(planSchema(model).required, ['learningOutcome', 'successCriteria', 'sections']);
+  assert.equal(planSchema(model).properties.assessmentDraft, undefined);
+  assert.equal(planSchema(model).properties.learningOutcome.type, 'string');
+  assert.deepEqual(planSchema(model, null, false, true).required, ['learningOutcome', 'successCriteria', 'sections', 'assessmentDraft']);
 });
 
 test('purpose prompts change the teacher role while preserving the school template', () => {

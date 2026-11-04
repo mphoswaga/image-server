@@ -1,0 +1,8 @@
+const {test,expect}=require('@playwright/test'),E=require('../../codequest-engine');
+test('supported Grade 2 round highlights three moves and accepts a working longer program',async({page},info)=>{
+ const s=E.create({students:[{id:'a',name:'Mia'},{id:'b',name:'Leo'}],preview:true,staged:false,requireReturn:false,grade:'Grade 2B1',challengeMode:'supported',seconds:60,rounds:5},Date.now());s.round=3;E.start(s,Date.now());
+ await page.route('**/api/game/easy/codequest**',route=>{if(route.request().method()==='POST'){try{E.action(s,'a',route.request().postDataJSON(),Date.now());}catch(e){return route.fulfill({status:400,json:{error:e.message}});}}return route.fulfill({json:{teacher:false,preview:true,state:E.view(s,'a',false)}});});
+ page.on('dialog',dialog=>dialog.accept());await page.goto('/codequest.html?game=easy');await expect(page.locator('#challengeTitle')).toHaveText('Three moves, one Repeat');await expect(page.locator('#program .repeatHint')).toHaveCount(3);await expect(page.locator('#repeatCount')).toHaveValue('3');await expect(page.locator('#repeatOp')).toHaveValue('move');await expect(page.locator('#addRepeat')).toBeVisible();await expect(page.locator('#codeCount')).not.toContainText('blocks ·');
+ await page.locator('#test').click();await expect(page.locator('#testResult')).toContainText('Your route works!');await expect(page.locator('#testResult')).toContainText('optional bonus');
+ await page.screenshot({path:info.outputPath('supported-repeat.png'),fullPage:true});await page.locator('#ready').click();await expect.poll(()=>s.players.a.ready).toBe(true);expect(s.players.a.program).toEqual(s.challenge.reference);
+});

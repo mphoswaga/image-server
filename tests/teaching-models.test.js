@@ -175,9 +175,10 @@ test('school success criteria retain wording while missing-objective criteria ar
   assert.deepEqual(plan.successCriteria, [...supplied,'I can identify hardware parts.']);
 });
 
-test('lesson-plan schema requires success criteria alongside sections', () => {
+test('lesson-plan schema requires learning outcome and success criteria alongside sections', () => {
   const schema = planSchema(getTeachingModel('gradual_release'));
-  assert.deepEqual(schema.required, ['successCriteria', 'sections']);
+  assert.deepEqual(schema.required, ['learningOutcome', 'successCriteria', 'sections']);
+  assert.equal(schema.properties.learningOutcome.type, 'string');
   assert.equal(schema.properties.successCriteria.items.type, 'string');
 });
 

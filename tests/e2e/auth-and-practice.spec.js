@@ -132,3 +132,8 @@ test('Typing Academy punctuation lesson remains usable on a phone-sized screen',
   expect(await page.locator('.game-hud').evaluate((hud) => getComputedStyle(hud).gridTemplateColumns.split(' ').length)).toBe(3);
   await expectNoPageOverflow(page);
 });
+
+test('student start page guest link works with translation attributes and never creates a saved attempt',async({page})=>{
+ const recordedWrites=[];page.on('request',request=>{if(request.method()==='POST'&&/\/api\/practice\/attempts(?:\/|$)/.test(new URL(request.url()).pathname))recordedWrites.push(request.url());});
+ await page.goto('/start');const link=page.getByRole('link',{name:'Practise without signing in'});await expect(link).toBeVisible();await expect(link).toHaveAttribute('href','/student/practice/guest');await link.click();await expect(page).toHaveURL(/\/student\/practice\/guest/);await page.getByRole('button',{name:'Play on my own'}).click();await page.getByRole('button',{name:'Begin the rescue'}).click();await expect(page.locator('#intro')).toBeHidden();expect(recordedWrites).toEqual([]);
+});
