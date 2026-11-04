@@ -1227,3 +1227,20 @@ h2 {
 }
 .duel-clocks{display:flex;align-items:flex-end;flex-direction:column;white-space:nowrap}.duel-clocks small{font-size:13px;color:#e0edc9}.colony-duel-panel [data-raid-result]{padding:10px;background:#fff1bb;color:#193c2e;border:2px solid #e8bd56;border-radius:10px;font-size:clamp(18px,2vw,26px);font-weight:900;text-align:center}.duel-results-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;max-height:55vh;overflow:auto;text-align:left}.duel-results-grid article{padding:12px;background:#ffffffb8;border:1px solid #6b9580;border-radius:12px}.duel-results-grid strong{font-size:clamp(18px,2vw,25px);color:#184e35}.duel-results-grid p{margin:6px 0;font-size:14px}
 @media(min-width:900px){.colony-duel-mode #learner .decision:has(.raid-picker){overflow:auto;justify-content:flex-start;max-height:45vh}}
+/* Compact duel habitats; question, timer and control typography stays full size. */
+@media(min-width:900px){
+ .colony-duel-mode #learner .play-layout{grid-template-rows:clamp(220px,30dvh,280px) minmax(0,1fr)}
+ .colony-duel-mode #learner .colony-stage{width:min(100%,1040px);height:100%;min-height:0;justify-self:center;border-radius:12px;border:1px solid #688a70;box-sizing:border-box}
+ .colony-duel-raid #learner .play-layout{grid-template-rows:minmax(0,1fr)}
+ .colony-duel-raid #learner .colony-stage{height:clamp(240px,36dvh,340px);max-height:100%;align-self:center}
+}
+@media(min-width:621px) and (max-width:899px){
+ .colony-duel-mode #learner .play-layout{height:auto;min-height:0;grid-template-columns:minmax(0,1fr);grid-template-rows:280px auto}
+ .colony-duel-mode #learner .colony-stage{width:min(100%,760px);height:280px;min-height:0;justify-self:center;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:minmax(0,1fr);border-radius:12px}
+ .colony-duel-mode .duel-rival{border-top:0;border-left:2px solid #dd98b8}
+ .colony-duel-mode #learner .colony-stage.inspect-rival{grid-template-columns:minmax(0,1fr) minmax(0,2fr)}
+}
+@media(max-width:620px){
+ .colony-duel-mode #learner .colony-stage{height:300px;min-height:300px}
+ .colony-duel-raid #learner .colony-stage{height:clamp(260px,45dvh,360px);min-height:260px}
+}

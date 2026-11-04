@@ -250,7 +250,12 @@
       ]) {
         if (!image.complete || !image.naturalWidth) continue;
         c.globalAlpha = alpha;
-        c.drawImage(image, 0, 0, image.width, image.height * 0.5, 0, 0, w, surface + 12);
+        if(this.state?.duel){
+          // Crop the meadow to the compact panel without squeezing its trees and birds.
+          const sw=image.naturalWidth,sh=image.naturalHeight*.32,scale=Math.max(w/sw,(surface+12)/sh);
+          const cropW=w/scale,cropH=(surface+12)/scale;
+          c.drawImage(image,(sw-cropW)/2,sh-cropH,cropW,cropH,0,0,w,surface+12);
+        }else c.drawImage(image, 0, 0, image.width, image.height * 0.5, 0, 0, w, surface + 12);
       }
       c.globalAlpha = 1;
       const earth = c.createLinearGradient(0, surface, 0, h);
@@ -293,7 +298,7 @@
     }
     background(w, h, surface) {
       const c = this.ctx;
-      const key = [w,h,surface,Math.round(this.dryFade*24),art.meadow.naturalWidth,art.dry.naturalWidth,art.soil.naturalWidth].join(':');
+      const key = [w,h,surface,!!this.state?.duel,Math.round(this.dryFade*24),art.meadow.naturalWidth,art.dry.naturalWidth,art.soil.naturalWidth].join(':');
       if (key !== this.backgroundKey) {
         this.backgroundLayer ||= document.createElement('canvas');
         this.backgroundLayer.width = Math.ceil(w);

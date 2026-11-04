@@ -110,6 +110,16 @@ test("two learner devices see live rival colonies, independent answers and one s
       "data-habitat-view",
       "smartboard",
     );
+    if(info.project.name==='windows-100'){
+      const textSizes=()=>pa.locator('#question').evaluate(el=>({question:getComputedStyle(el).fontSize,answer:getComputedStyle(document.querySelector('#choices button')).fontSize}));
+      const sizes=await textSizes();
+      for(const viewport of [{width:1920,height:1080},{width:1366,height:768}]){
+        await pa.setViewportSize(viewport);
+        const stage=await pa.locator('.colony-stage').boundingBox();expect(stage.width).toBeLessThanOrEqual(1040);expect(stage.height).toBeLessThanOrEqual(281);expect(stage.height).toBeGreaterThanOrEqual(220);
+        expect(await textSizes()).toEqual(sizes);
+        await pageShot(pa,info.outputPath('compact-'+viewport.width+'.png'));
+      }
+    }
     await pageShot(pa, info.outputPath("smartboard-question.png"));
     if (info.project.name === "windows-100")
       expect(
