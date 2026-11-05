@@ -39,10 +39,14 @@ test('AI slide generation carries assessment settings through the cache and appr
   for (const lessonPurpose of ['lesson', 'project', 'test']) {
     const slides = await moduleObject.exports.generateContent('ICT', 'documents', 1, 'Grade 2', 'clear', '', {
       learningOutcome: 'By the end of this lesson, you will be able to create and save a letter.',
+      successCriteria:['I can write a greeting.','I can save my letter.'],
       lessonPurpose, lessonPlanText: 'Approved plan: students create and submit a letter.',
       assessmentTotalMarks: 80, assessmentQuestionTypes: ['mcq', 'practical'], assessmentMcqCount: 20,
     });
     assert.equal(slides.filter(s=>s.title==='Lesson outcome').length,1);
+    assert.deepEqual(Array.from(cacheInputs.at(-1).successCriteria),['I can write a greeting.','I can save my letter.']);
+    const criteria=slides.filter(s=>s.modelStage==='success_criteria');
+    if(lessonPurpose==='lesson')assert.deepEqual(Array.from(criteria[0].bullets),['I can write a greeting.','I can save my letter.']);else assert.equal(criteria.length,0);
     assert.equal(slides.find(s=>s.title==='Lesson outcome').bullets[0],cacheInputs.at(-1).learningOutcome);
     const expectedContentSlides = { lesson: 1, project: 2, test: 4 }[lessonPurpose];
     assert.equal(slides.filter(slide => slide.type === 'content').length, expectedContentSlides,

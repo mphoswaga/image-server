@@ -424,7 +424,7 @@ function paginateSlides(slides, t, preset) {
       out.push({ ...slide, _layout: layoutForSlide(slide, position++, rhythm), _sourceIndex: sourceIndex });
       return;
     }
-    if(slide.learnerTask?.required){
+    if(slide.learnerTask?.required||slide.modelStage==='success_criteria'){
       if(chunkBulletsForSlide(slide,t,'task').length>1)throw new Error('An activity question and its problem data need too much space. Shorten this task before exporting; it will not be split across slides.');
       out.push({...slide,_layout:'task',_sourceIndex:sourceIndex});return;
     }
@@ -699,8 +699,8 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
     slide.addImage({ ...imgSource, ...rest });
   };
 
-  if(slideData.learnerTask?.required){
-    addTitle(slide,slideData.title,{x:0.5,y:0.3,w:9,h:0.85,fontFace:thm.font,fontSize:t.titleSize,bold:true,color:thm.primary});
+  if(slideData.learnerTask?.required||slideData.modelStage==='success_criteria'){
+    addTitle(slide,slideData.modelStage==='success_criteria'?slideData.title.toUpperCase():slideData.title,{x:0.5,y:0.3,w:9,h:0.85,fontFace:thm.font,fontSize:t.titleSize,bold:true,color:thm.primary});
     addBullets(slide,slideData.bullets,t,thm,multicolor,{x:0.5,y:1.3,w:9,h:3.9,fontFace:thm.font,fontSize:t.bulletSize,valign:'top',paraSpaceAfter:t.paraSpaceAfter});
     return;
   }

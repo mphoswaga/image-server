@@ -1,5 +1,7 @@
 const activityTasks = require('./lesson-activity-slides');
 const { addOutcomeSlide, cleanOutcome } = require('./lesson-learning');
+const { addSuccessCriteriaSlides } = require('./lesson-success-slides');
+const finishLessonDeck=(slides,extras,purpose)=>addSuccessCriteriaSlides(addOutcomeSlide(slides,extras.learningOutcome,purpose),extras,purpose);
 const lessonDesign = require('./lesson-design');
 // The "brain" — turns a topic into a structured, grade-appropriate lesson.
 //
@@ -975,7 +977,7 @@ async function generateContent(subject, topic, slideCount, grade = 'middle schoo
   if (aligned && !process.env.OPENAI_API_KEY) throw new Error('AI slide generation is unavailable. Your approved lesson remains saved.');
   if (!process.env.OPENAI_API_KEY) {
     console.log('No OPENAI_API_KEY set — using placeholder text. Add a key to .env for AI-written slides.');
-    return addOutcomeSlide(placeholderDeck(subject, topic, slideCount, teachingModelId, lessonPurpose, extras), extras.learningOutcome, lessonPurpose);
+    return finishLessonDeck(placeholderDeck(subject, topic, slideCount, teachingModelId, lessonPurpose, extras),extras,lessonPurpose);
   }
   const { wrap } = require('./cache');
   return wrap('content', {
@@ -1000,10 +1002,12 @@ async function generateContent(subject, topic, slideCount, grade = 'middle schoo
     assessmentManifest,
     assessmentDeckPolicyVersion: 4,
     activityQuestionPolicyVersion: 1,
+    successCriteriaSlideVersion: 1,
+    successCriteria: extras.successCriteria || [],
     lessonAlignmentVersion: aligned ? 2 : 0,
     regenerate: !!(extras && extras.regenerate),
   }, async () => {
-    if (aligned) return addOutcomeSlide(await require('./lesson-deck-alignment').generateAlignedDeck({ callModel, slideSchema: DECK_SCHEMA.properties.slides.items, subject, topic, grade, tone, focus, extras, slideCount }), extras.learningOutcome, lessonPurpose);
+    if (aligned) return finishLessonDeck(await require('./lesson-deck-alignment').generateAlignedDeck({ callModel, slideSchema: DECK_SCHEMA.properties.slides.items, subject, topic, grade, tone, focus, extras, slideCount }),extras,lessonPurpose);
     const prompt = buildPrompt(subject, topic, grade, slideCount, tone, focus, extras);
     // Structured outputs enforce shape, but not the number of slides or the
     // assessment contract. Retry a weak response, then apply a deterministic
@@ -1029,7 +1033,7 @@ async function generateContent(subject, topic, slideCount, grade = 'middle schoo
     best.slides = best.slides.slice(0, requiredCount);
     best = ensureAssessmentDeckCoverage(best, lessonPurpose, extras, topic);
     if (lessonPurpose === 'lesson') best.slides = lessonDesign.applyGameSlide(best.slides, extras.lessonSettings);
-    return addOutcomeSlide(flattenDeck(best, teachingModelId, lessonPurpose), extras.learningOutcome, lessonPurpose);
+    return finishLessonDeck(flattenDeck(best, teachingModelId, lessonPurpose),extras,lessonPurpose);
   });
 }
 

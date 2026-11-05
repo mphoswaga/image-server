@@ -4336,6 +4336,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
     const built = await buildDeck({ subject, topic, slideCount, grade, tone, focus, objectives, lessonPlanText, sourceMaterialText: materialText, sourceImages: materialImages, teachingModelId, extras: {
       regenerate: !!regenerate, lessonSequence, lessonPurpose, lessonSettings,
       learningOutcome: lessonLearning.cleanOutcome(req.body.lessonPlan?.learningOutcome ?? req.body.learningOutcome),
+      successCriteria: Array.isArray(req.body.lessonPlan?.successCriteria)&&req.body.lessonPlan.successCriteria.length?req.body.lessonPlan.successCriteria:(Array.isArray(req.body.successCriteria)?req.body.successCriteria:[]),
       ...generationAssessment,
     }, skipAssemble: true, presetId: presetId || null });
     const id = crypto.randomUUID();
@@ -4356,7 +4357,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
       presetId: presetId || null,
       templateId: req.body.templateId || null,
       planningFrameworkId: req.body.planningFrameworkId || null,
-      successCriteria: Array.isArray(req.body.successCriteria) ? req.body.successCriteria : [],
+      successCriteria: built.slides.filter(s=>s.modelStage==='success_criteria').flatMap(s=>s.bullets||[]).length?built.slides.filter(s=>s.modelStage==='success_criteria').flatMap(s=>s.bullets||[]):(Array.isArray(req.body.successCriteria)?req.body.successCriteria:[]),
       resources: Array.isArray(req.body.resources) ? req.body.resources : [],
       unitId: req.body.unitId || null,
       unitName: req.body.unitName || '',
