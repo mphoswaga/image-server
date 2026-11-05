@@ -2507,7 +2507,8 @@
     }
 </style>
   <link rel="stylesheet" href="/byte-feedback.css" />
-<link rel="stylesheet" href="/learning-report.css?v=1"><script src="/learning-report.js?v=2"></script><link rel="stylesheet" href="/ui-language.css?v=1"><script src="/locales/vi.js?v=2"></script><script defer src="/ui-language.js?v=1"></script></head>
+<link rel="stylesheet" href="/learning-report.css?v=1"><script src="/learning-report.js?v=2"></script><link rel="stylesheet" href="/ui-language.css?v=1"><script src="/locales/vi.js?v=2"></script><script defer src="/ui-language.js?v=1"></script><style>html:not([data-payment-plans="visible"]) [data-payment-plans]{display:none!important}</style><script defer src="/suite-plans.js?v=1"></script>
+</head>
 <body data-byte-ui="teacher">
   <!-- SPLASH (plays once per visit, then fades to reveal the app) -->
   <div id="splash">
@@ -3568,13 +3569,13 @@
         <button class="back-btn" id="creditsBackTop"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back</button>
         <div class="phd-icon" style="background:var(--accent-soft);color:var(--accent)"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg></div>
         <div>
-          <h2>Plan &amp; usage</h2>
-          <p class="page-sub">Your EducScope plan and monthly AI usage are shared across LessonScope and TeacherScope.</p>
+          <h2>Account &amp; usage</h2>
+          <p class="page-sub">Your EducScope account and AI usage are shared across LessonScope and TeacherScope.</p>
         </div>
       </div>
       <div id="creditsBalanceCard" class="credits-balance"></div>
       <div id="creditsTopup" style="margin:0 0 18px"></div>
-      <div id="lessonCreditEstimator" class="credit-estimator">
+      <div data-payment-plans id="lessonCreditEstimator" class="credit-estimator">
         <div>
           <h4>Find your monthly plan</h4>
           <p>Use your teaching rhythm to find the smallest EducScope plan that fits.</p>
@@ -7866,6 +7867,8 @@
 
     // ── Credits (shared wallet) ──────────────────────────────────────────────
     let creditsState=null, pricesState=null;
+    function paymentPlansVisible(){return window.EducScopePlans?.visible===true;}
+    window.addEventListener('educscope:plans',()=>{if(creditsState)renderCredits();});
     const SUBSCRIPTION_PLANS=[
       {name:'Teacher',credits:250,price:19},
       {name:'Teacher Plus',credits:400,price:29},
@@ -7990,8 +7993,8 @@
       const acct=(pricesState&&pricesState.accountUrl)||d.accountUrl||'';
       // Not signed into EducScope (shared account) → sign-in prompt, nothing else.
       if(d.needLogin){
-        $('creditsBalanceCard').innerHTML=`<div style="max-width:420px"><div class="lbl">EducScope account</div><div style="font-size:14px;margin-top:6px;color:rgba(238,247,255,.78)">Sign in to see your subscription and shared credit balance.</div></div>`;
-        $('creditsTopup').innerHTML=`<div class="topup"><h4>Sign in to EducScope</h4><p>One account manages your plan and usage across LessonScope and TeacherScope.</p><button class="btn primary" type="button" data-educscope-credits="login">Sign in to EducScope</button></div>`;
+        $('creditsBalanceCard').innerHTML=`<div style="max-width:420px"><div class="lbl">EducScope account</div><div style="font-size:14px;margin-top:6px;color:rgba(238,247,255,.78)">Sign in to see your account and shared usage balance.</div></div>`;
+        $('creditsTopup').innerHTML=`<div class="topup"><h4>Sign in to EducScope</h4><p>One account manages your access and usage across LessonScope and TeacherScope.</p><button class="btn primary" type="button" data-educscope-credits="login">Sign in to EducScope</button></div>`;
         $('creditsPacks').innerHTML=''; $('creditsHistoryWrap').innerHTML=''; return;
       }
       // EducScope wallet temporarily unreachable.
@@ -8007,9 +8010,9 @@
           ? `<div><div class="big">${d.available||0}</div><div class="lbl">credits available</div></div>
              <div style="font-size:13px;color:rgba(238,247,255,.72);max-width:400px"><b>${esc(subscription.planName)} subscription</b><br>${subscription.remaining} of ${subscription.monthlyAllowance} subscription credits remain${subscription.periodEndsAt?` until ${new Date(subscription.periodEndsAt).toLocaleDateString()}`:''}. Extra credits: ${d.purchased?.available||0}.</div>`
           : `<div><div class="big">${d.available??d.balance??0}</div><div class="lbl">credits available</div></div>
-             <div style="font-size:13px;color:rgba(238,247,255,.72);max-width:360px">${d.billingEnabled?'Choose a monthly plan in EducScope, or use available trial and extra usage.'+(remote?' This balance is shared across both apps.':''):`Billing is off right now — generating is free. You start with ${d.freeCredits} trial units.`}</div>`;
+             <div style="font-size:13px;color:rgba(238,247,255,.72);max-width:360px">${d.billingEnabled?'Your available usage is shared across EducScope apps.'+(remote?' This balance is shared across both apps.':''):`Billing is off right now — generating is free. You start with ${d.freeCredits} trial units.`}</div>`;
       // EducScope owns subscriptions and extra usage.
-      $('creditsTopup').innerHTML = (d.billingEnabled && !d.unlimited)
+      $('creditsTopup').innerHTML = (paymentPlansVisible() && d.billingEnabled && !d.unlimited)
         ? `<div class="topup"><h4>${subscription&&subscription.hasAccess?'Manage your plan':'Choose an EducScope plan'}</h4><p>Subscriptions include every tool. One-time extra usage remains available when you need it.</p><button class="btn primary" type="button" data-educscope-credits="wallet">Open plan &amp; usage</button></div>`
         : '';
       // EducScope owns all purchasing; LessonScope only displays the shared balance.
@@ -8045,7 +8048,7 @@
     // `info` (from the 402 body) carries the needed cost + current balance.
     function outOfCredits(info){
       const cost=info&&info.cost;
-      toast(`Your included usage is finished${cost?` — this action needs ${cost} unit${cost>1?'s':''}`:''}. Upgrade or add extra usage to keep generating.`);
+      toast(`Your included usage is finished${cost?` — this action needs ${cost} unit${cost>1?'s':''}`:''}. ${paymentPlansVisible()?'Upgrade or add extra usage to keep generating.':'Please contact your administrator for help.'}`);
       openCredits();
     }
     // Handle the return from the payment page — verify the transaction, then
