@@ -6201,13 +6201,13 @@ app.get('/api/v1/roster/:id/students', requireApiAccess, requireScope('rosters:r
   let found = null, foundTeacherId = null;
   const teacherIds = req.oauthTeacherId ? [req.oauthTeacherId] : listAllUserIds();
   for (const tid of teacherIds) {
-    const r = roster.getRoster(tid, req.params.id);
+    const r = roster.getRosterOrMerged(tid, req.params.id);
     if (r) { found = r; foundTeacherId = tid; break; }
   }
   if (!found) return res.status(404).json({ error: 'Roster not found.' });
   res.json({
     roster: { id: found.id, name: found.name, teacherId: foundTeacherId, createdAt: found.createdAt },
-    students: found.students.map(s => ({ id: s.id, name: s.name, ...(s.gender ? { gender: s.gender } : {}) })),
+    students: rosterSharing.studentsWithSharedGender(foundTeacherId, found).map(s => ({ id: s.id, name: s.name, ...(s.gender ? { gender: s.gender } : {}) })),
   });
 });
 

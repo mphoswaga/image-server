@@ -16,3 +16,39 @@ test('roster invitations restrict recipients and copy only class identity fields
  const j=sharing.create(owner,{recipientEmail:'next@school.edu',rosterIds:['class1']});sharing.revoke(owner,j.id);assert.throws(()=>sharing.accept({id:'next',email:'next@school.edu'},j.id),/withdrawn/);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
+
+test('an accepted roster copy exports newly recorded gender only for its shared learners', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'roster-share-gender-'));
+  const source = { id: 'class1', name: '2B2', students: [{ id: 'S1', name: 'Learner' }, { id: 'S2', name: 'Other' }] };
+  let copy;
+  const roster = {
+    getRoster: (owner, id) => owner === 'owner' && id === source.id ? source : null,
+    getRosterOrMerged: (owner, id) => owner === 'owner' && id === source.id ? source : null,
+    normalizeStudentId: id => id.toUpperCase(),
+    saveRoster: (owner, data) => (copy = { ...data, id: 'copy1' })
+  };
+  const sharing = createSharing({ roster, dir });
+  const owner = { id: 'owner', email: 'owner@school.edu' };
+  const recipient = { id: 'recipient', email: 'recipient@school.edu' };
+  try {
+    const invite = sharing.create(owner, { recipientEmail: recipient.email, rosterIds: [source.id] });
+    sharing.accept(recipient, invite.id);
+    copy.mergedRosterIds = [copy.id];
+    copy.id = 'merged';
+    source.students[0].gender = 'female';
+    source.students[0].marks = [10];
+    source.students[1].gender = 'male';
+    copy.students[0].id = 's1';
+    copy.students[1].gender = 'female';
+    copy.students.push({ id: 'S3', name: 'New learner' });
+    assert.deepEqual(sharing.studentsWithSharedGender(recipient.id, copy), [
+      { id: 's1', name: 'Learner', gender: 'female' },
+      { id: 'S2', name: 'Other', gender: 'female' },
+      { id: 'S3', name: 'New learner' }
+    ]);
+    assert.equal(copy.students[0].gender, undefined);
+    assert.deepEqual(sharing.studentsWithSharedGender('another-teacher', copy), copy.students);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

@@ -186,6 +186,16 @@ function getRoster(teacherId, id) {
   catch { return null; }
 }
 
+function getRosterOrMerged(teacherId, id) {
+  const direct = getRoster(teacherId, id);
+  if (direct) return direct;
+  for (const entry of listRosters(teacherId)) {
+    const record = getRoster(teacherId, entry.id);
+    if (record?.mergedRosterIds?.includes(id)) return record;
+  }
+  return null;
+}
+
 function removeStudent(teacherId, rosterId, studentId) {
   if (typeof rosterId !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(rosterId)) throw new Error('Class not found.');
   const record = getRoster(teacherId, rosterId);
@@ -506,7 +516,7 @@ function buildStudentsFromMapping(rows, idCol, nameCol, genderCol) {
 
 module.exports = {
   transferHistory, removeStudent, moveStudent, displayNameFrom, normalizeGender, setStudentGenders, renameRoster, renameStudent, setGradebookExcludedIds, setGradebookWeights, assignOrganization, reconcileOrganizationStudentNames,
-  saveRoster, getRoster, listRosters, deleteRoster,
+  saveRoster, getRoster, getRosterOrMerged, listRosters, deleteRoster,
   findStudent, findStudentInRoster, findStudentAcrossAllTeachers, parseCSV,
   parseRosterFile, buildStudentsFromMapping, buildRosterTemplateWorkbook, normalizeStudentId,
 };

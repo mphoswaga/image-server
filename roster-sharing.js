@@ -37,6 +37,31 @@ function createSharing({roster,dir=path.join(DATA_DIR,'roster-invitations')}){
     i.status='accepted';i.acceptedAt=new Date().toISOString();writeJsonAtomic(file(i.id),i);return {rosterIds:Object.values(i.copies)};
   }
   function revoke(user,id){const i=read(id);if(i.ownerId!==user.id)throw Error('Only the sender can withdraw this invitation.');if(i.status==='accepted')throw Error('The teacher already accepted their independent roster copies.');i.status='revoked';writeJsonAtomic(file(id),i);}
-  return {create,visible,accept,revoke};
+  function studentsWithSharedGender(teacherId, copy) {
+    if (copy.students.every(student => student.gender)) return copy.students;
+    const copyIds = new Set([copy.id, ...(copy.mergedRosterIds || [])]);
+    const sourceGenders = new Map();
+    for (const invitation of list()) {
+      if (invitation.status !== 'accepted' || String(invitation.acceptedBy) !== String(teacherId)) continue;
+      for (const [sourceId, copyId] of Object.entries(invitation.copies || {})) {
+        if (!copyIds.has(copyId)) continue;
+        const source = roster.getRosterOrMerged(invitation.ownerId, sourceId);
+        for (const student of source?.students || []) {
+          if (!student.gender) continue;
+          const id = roster.normalizeStudentId(student.id);
+          if (!id) continue;
+          const recorded = sourceGenders.get(id) || new Set();
+          recorded.add(student.gender);
+          sourceGenders.set(id, recorded);
+        }
+      }
+    }
+    return copy.students.map(student => {
+      const recorded = sourceGenders.get(roster.normalizeStudentId(student.id));
+      if (student.gender || recorded?.size !== 1) return student;
+      return { ...student, gender: [...recorded][0] };
+    });
+  }
+  return {create,visible,accept,revoke,studentsWithSharedGender};
 }
 module.exports={createSharing};
