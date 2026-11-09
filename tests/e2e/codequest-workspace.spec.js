@@ -6,3 +6,18 @@ async function visibleSteps(page){return page.locator('#program>li').evaluateAll
 test('code is left and larger, island is right and fully visible, test controls remain reachable',async({page},info)=>{await open(page,Array.from({length:12},(_,i)=>({op:i%4===3?'left':'move'})));await expectNoPageOverflow(page);const editor=await rect(page,'editor'),stage=await rect(page,'island'),testButton=await rect(page,'test');if(page.viewportSize().width>=720){expect(editor.x+editor.width).toBeLessThan(stage.x);expect(editor.width).toBeGreaterThan(stage.width);expect(stage.width).toBeGreaterThan(page.viewportSize().width>=1300?430:page.viewportSize().width>=1000?290:210);expect(stage.y+stage.height).toBeLessThanOrEqual(page.viewportSize().height);expect(testButton.y+testButton.height).toBeLessThanOrEqual(page.viewportSize().height);}await page.screenshot({path:info.outputPath('coding-workspace.png'),fullPage:true});});
 test('32 steps and an eight-action repeat are all visible in Fit all code',async({page},info)=>{const program=Array.from({length:32},()=>({op:'move'}));program[9]={op:'repeat',count:2,body:Array.from({length:8},(_,i)=>({op:i%2?'right':'move'}))};C.expand(program);await open(page,program);await expect(page.locator('#program li')).toHaveCount(32);await expect(page.locator('.repeatBody .repeatChild')).toHaveCount(8);await page.locator('#fitCode').click();await expect(page.locator('#fitCode')).toHaveAttribute('aria-pressed','true');await expect(page.locator('#palette')).toBeHidden();await expect(page.locator('#fitClock')).toContainText('s');await expectNoPageOverflow(page);if(page.viewportSize().width>=720){await expect.poll(async()=> (await visibleSteps(page)).filter(p=>!p.inside)).toEqual([]);const stage=await rect(page,'island'),controls=await rect(page,'ready');expect(stage.y+stage.height).toBeLessThanOrEqual(page.viewportSize().height);expect(controls.y+controls.height).toBeLessThanOrEqual(page.viewportSize().height);}await page.screenshot({path:info.outputPath('whole-program.png'),fullPage:true});await page.locator('#program>li').last().getByRole('button').click();await expect(page.locator('#stepEditor')).toBeVisible();await page.locator('#stepChoices button').nth(1).click();await expect(page.locator('#program>li').last()).toContainText('Left');await page.locator('#fitCode').click();await expect(page.locator('#palette')).toBeVisible();});
 test('instruction highlighting follows the code without moving the stage',async({page})=>{const s=await open(page,[{op:'left'},{op:'right'}]);await page.locator('#test').scrollIntoViewIfNeeded();const before=await rect(page,'island');await page.locator('#test').click();await expect(page.locator('#program li.active')).toHaveCount(1);const after=await rect(page,'island');expect(Math.abs(before.x-after.x)).toBeLessThan(1);expect(Math.abs(before.y-after.y)).toBeLessThan(1);expect(s.players.a.program).toEqual([{op:'left'},{op:'right'}]);});
+test('inline Times converts an action to a repeat and back without opening the dialog',async({page})=>{
+ const s=await open(page,[{op:'move'}]);
+ s.map.blocks=['move','left','right','collect','repeat'];
+ await page.reload();
+ const count=page.getByRole('spinbutton',{name:'Times for step 1',exact:true});
+ await expect(count).toBeEnabled();
+ await count.fill('3');await count.press('Tab');
+ await expect(page.locator('#program>li').first()).toContainText('Repeat 3 times');
+ await expect(page.locator('#stepEditor')).not.toBeVisible();
+ await count.fill('1');await count.press('Tab');
+ await expect(page.locator('#program>li').first()).toHaveClass('block-move');
+ await count.fill('6');await count.press('Tab');
+ await expect(count).toHaveValue('1');
+ await expect(page.locator('#status')).toContainText('whole number');
+});
