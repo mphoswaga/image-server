@@ -21,3 +21,30 @@ test('inline Times converts an action to a repeat and back without opening the d
  await expect(count).toHaveValue('1');
  await expect(page.locator('#status')).toContainText('whole number');
 });
+test('drag inserts a palette block, reorders a step and removes it outside code',async({page})=>{
+ await open(page,[{op:'move'},{op:'left'},{op:'collect'}]);
+ const drag=async(source,target,after=false)=>{await source.scrollIntoViewIfNeeded();const a=await source.boundingBox(),b=await target.boundingBox();await page.mouse.move(a.x+a.width/2,a.y+a.height/2);await page.mouse.down();await page.mouse.move(b.x+70,b.y+(after?b.height-8:8),{steps:12});await page.mouse.up();};
+ await drag(page.locator('#palette [data-op="right"]'),page.locator('#program>li').nth(1));
+ await expect(page.locator('#program>li')).toHaveCount(4);
+ await expect(page.locator('#program>li').nth(1)).toHaveClass(/block-right/);
+ await drag(page.locator('#program>li').nth(3).locator('button'),page.locator('#program>li').first());
+ await expect(page.locator('#program>li').first()).toHaveClass(/block-collect/);
+ const a=await page.locator('#program>li').first().locator('button').boundingBox();await page.mouse.move(a.x+20,a.y+15);await page.mouse.down();await page.mouse.move(5,5,{steps:12});await page.mouse.up();
+ await expect(page.locator('#program>li')).toHaveCount(3);
+ await expect(page.locator('#stepEditor')).not.toBeVisible();
+});
+test('Start stays separate from executable blocks and accepts insertion at the beginning',async({page},info)=>{
+ await open(page,[{op:'repeat',count:3,body:[{op:'move'}]},{op:'left'},{op:'repeat',count:2,body:[{op:'move'}]},{op:'right'},{op:'collect'}]);
+ await expect(page.locator('#codeStart')).toBeVisible();await expect(page.locator('#codeCount')).toContainText('5 steps');
+ await page.locator('#codeStart').scrollIntoViewIfNeeded();
+ const first=await page.locator('#codeStart').boundingBox(),last=await page.locator('#program>li').last().boundingBox();
+ if(info.project.name==='windows-100')await page.screenshot({path:'/Users/mphogiftmokoena/Documents/Codex/2026-11-09/whe/outputs/physical-codequest-blocks.png',clip:{x:first.x-2,y:first.y,width:240,height:last.y+last.height-first.y+4}});
+ const source=page.locator('#palette [data-op="right"]');await source.scrollIntoViewIfNeeded();const a=await source.boundingBox(),b=await page.locator('#codeStart').boundingBox();await page.mouse.move(a.x+a.width/2,a.y+a.height/2);await page.mouse.down();await page.mouse.move(b.x+70,b.y+20,{steps:12});await page.mouse.up();
+ await expect(page.locator('#program>li').first()).toHaveClass(/block-right/);await expect(page.locator('#program>li')).toHaveCount(6);await expect(page.locator('#codeStart')).toHaveCount(1);
+});
+test('round briefing explains Repeat before revealing rivals',async({page})=>{
+ const s=await open(page,[]);s.phase='countdown';s.buildAt=Date.now()+6000;s.map.blocks=['move','left','right','collect'];
+ await page.reload();await expect(page.locator('#stageTitle')).toHaveText('No Repeat this round');await expect(page.locator('#versusFaces')).toBeHidden();
+ await expect(page.locator('#versusFaces')).toBeVisible({timeout:8000});
+ s.buildAt=Date.now()+6000;s.map.blocks.push('repeat');await page.reload();await expect(page.locator('#stageTitle')).toHaveText('Repeat is available this round');await expect(page.locator('#versusFaces')).toBeHidden();
+});

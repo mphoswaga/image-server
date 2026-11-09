@@ -49,3 +49,52 @@ body{background:radial-gradient(ellipse at 15% 5%,#bce8dc 0,transparent 45%),rad
 .workspace-mode #program .inlineRepeat input{width:54px;min-height:32px;padding:3px 5px;border:1px solid #91b9b2;border-radius:7px;background:white;color:#17384a;font:inherit}
 .workspace-mode #program .inlineRepeat input:disabled{opacity:.55}
 .workspace-mode.fit-code #program .inlineRepeat{padding-bottom:3px;font-size:11px}
+
+/* Action and repeat count share one compact row. */
+.workspace-mode #program li{display:flex;align-items:center;gap:3px;margin-bottom:4px}
+.workspace-mode #program .codeStep{flex:1;min-width:0;width:auto;padding:5px 3px}
+.workspace-mode #program .inlineRepeat{flex:0 0 auto;flex-direction:row;gap:3px;padding:2px 5px 2px 0;margin:0;font-size:13px}
+.workspace-mode #program .inlineRepeat input{min-width:0;width:44px;min-height:30px;padding:2px 3px}
+.workspace-mode #program .singleRepeat .repeatHeading{display:none}
+.workspace-mode #program .singleRepeat .repeatBody{border:0;padding:0;margin:0;gap:0}
+.workspace-mode #program .singleRepeat .repeatChild{font-size:13px;font-weight:800}
+.workspace-mode #program .repeatHeading{margin:0 0 2px}
+.workspace-mode #program .repeatBody{gap:1px;padding:1px 2px 2px 5px;margin-bottom:0}
+.workspace-mode.fit-code #program li{margin-bottom:3px}
+.workspace-mode.fit-code #program .inlineRepeat{padding:1px 3px 1px 0}
+
+.workspace-mode #program li{width:100%;max-width:230px}
+
+/* Compact interlocking coding bricks: top socket and bottom connector. */
+.workspace-mode #program li{border-radius:4px!important;margin-bottom:2px;padding-top:3px;padding-bottom:5px;clip-path:polygon(0 0,27px 0,31px 5px,49px 5px,53px 0,100% 0,100% calc(100% - 5px),53px calc(100% - 5px),49px 100%,31px 100%,27px calc(100% - 5px),0 calc(100% - 5px))}
+.workspace-mode #program li.block-move{background:#dff2ff}.workspace-mode #program li.block-left,.workspace-mode #program li.block-right{background:#eee4ff}
+#palette .command{border-radius:5px!important;clip-path:polygon(0 0,24px 0,28px 5px,44px 5px,48px 0,100% 0,100% calc(100% - 5px),48px calc(100% - 5px),44px 100%,28px 100%,24px calc(100% - 5px),0 calc(100% - 5px))}
+#palette .command,#program .codeStep{touch-action:none;user-select:none;cursor:grab}
+.draggingCode,.draggingCode *{cursor:grabbing!important;user-select:none}
+.blockDragGhost{position:fixed;z-index:100;pointer-events:none;max-width:230px;padding:10px 14px;border:2px solid #198b6d;border-radius:5px;background:#e1f5e9;box-shadow:0 7px 20px #123c4940;font-weight:800}
+.dragSource{opacity:.4}.workspace-mode #program li.dropBefore{box-shadow:inset 0 4px #df8500}.workspace-mode #program li.dropAfter{box-shadow:inset 0 -7px #df8500}
+#codeCanvas.dropEnd{box-shadow:inset 0 -4px #df8500}
+#blockTrash{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:90;padding:10px 18px;background:#fff0de;border:2px dashed #b55525;border-radius:10px;font-weight:800;pointer-events:none}
+
+/* Photographic moulded-plastic shell; labels and counters remain live controls. */
+.workspace-mode #program li,#palette .command,#codeStart{position:relative;isolation:isolate;clip-path:none;border:0!important;border-radius:5px!important;background:transparent!important;box-shadow:none;overflow:visible}
+.workspace-mode #program li{padding:9px 7px 3px 23px;min-height:46px;margin-bottom:1px}
+.brickSurface{position:absolute;inset:0;z-index:-1;pointer-events:none;background:url('/assets/codequest/plastic-brick.png') center/100% 100% no-repeat;filter:sepia(.45) saturate(2) hue-rotate(110deg)}
+.block-left>.brickSurface,.block-right>.brickSurface{filter:sepia(.45) saturate(2.5) hue-rotate(205deg)}
+.block-collect>.brickSurface{filter:sepia(.8) saturate(3)}
+.block-repeat>.brickSurface,#codeStart>.brickSurface{filter:sepia(.5) saturate(2.5) hue-rotate(75deg)}
+.workspace-mode #program li:before{top:17px}
+.workspace-mode #program .codeStep{min-height:30px;padding:3px 1px;text-shadow:0 1px #ffffff90}
+.workspace-mode #program .inlineRepeat{padding:1px 1px 1px 0}
+.workspace-mode #program .inlineRepeat input{min-height:27px;width:40px;background:#ffffffb0;border-color:#ffffff60;box-shadow:inset 0 1px 3px #17364730}
+#codeStart{width:230px;max-width:100%;min-height:46px;padding:17px 13px 8px;margin:0 2px 1px;display:flex;align-items:center;gap:12px;font-size:14px}
+#codeStart small{font-size:10px;color:#365950}
+#palette .command{padding-top:13px}
+.workspace-mode #program li.dropBefore{outline:3px solid #df8500;outline-offset:0}
+.workspace-mode #program li.dropAfter{outline:3px solid #df8500;outline-offset:0}
+.workspace-mode #program li.active{outline:3px solid #e4b13c}
+.workspace-mode.fit-code #program li{min-height:41px;padding-top:7px;margin-bottom:1px}
+
+/* Start is a closed cap: no studs or socket above it. */
+#codeStart{border-radius:22px 22px 5px 5px!important;background:linear-gradient(170deg,#d5ffd1 0%,#91e58c 45%,#64bd68 100%)!important;border:1px solid #79bd76!important;box-shadow:inset 0 3px 3px #ffffffb0,inset 0 -3px 3px #327c3650,0 2px 3px #17364725;padding-top:13px}
+#codeStart>.brickSurface{display:none}
