@@ -100,3 +100,18 @@ body{background:radial-gradient(ellipse at 15% 5%,#bce8dc 0,transparent 45%),rad
 #codeStart>.brickSurface{display:none}
 
 .playerChoices{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin:12px 0}.playerChoices label{flex-direction:row;align-items:center;flex-wrap:wrap;padding:8px;background:#eef6f2;border-radius:8px}.playerChoices input{width:20px;min-width:20px}.playerChoices small{font-weight:400}
+/* Let the winner own the screen while keeping the teacher's next-duel controls accessible. */
+#duelVictory{position:relative;inset:auto;max-width:none;max-height:none;min-height:min(570px,75dvh);margin:0;box-shadow:0 0 40px #ffd16644;overflow:hidden}
+#duelVictory #victoryTitle{color:#ffe397;letter-spacing:.06em;margin:10px 0;text-shadow:0 4px 0 #67461e}
+#victoryPirates{margin:12px 0}.captainTreasure{position:relative;padding:0 36px 15px;isolation:isolate}.celebrationGold{position:absolute;right:0;bottom:0;font-size:clamp(32px,5vw,64px);z-index:4;filter:drop-shadow(0 5px 3px #0004)}
+#final{position:relative;overflow:hidden;text-align:center;color:#fff3c5;border:3px solid #e9c56c;background:radial-gradient(ellipse at 50% 20%,#286c6c,#102d43 75%)}#final>.eyebrow{color:#ffe397}#final h1{color:#ffe397;font-size:clamp(30px,5vw,60px)}#final:before{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle,#ffde77 0 2px,transparent 3px) 0 0/73px 89px;opacity:.3;animation:victoryConfetti 4s linear infinite}#final>*{position:relative}
+#podium{display:flex;justify-content:center;align-items:flex-end;gap:clamp(10px,3vw,44px);padding:30px 0 15px}#podium .victoryCaptain{flex:1;max-width:300px;gap:12px;padding:15px 8px;border-radius:22px;background:linear-gradient(0deg,#e4b34040,transparent 70%)}#podium [data-rank="1"]{order:2;padding-bottom:65px}#podium [data-rank="2"]{order:1;padding-bottom:35px}#podium [data-rank="3"]{order:3}#podium .podiumMedal{font-size:40px}#podium .victoryCaptain strong{font-size:clamp(17px,2.6vw,32px)}#podium .pirate.portrait{width:clamp(65px,13vw,170px);height:clamp(85px,16vw,195px);animation:podiumJump .85s ease-in-out infinite}#podium [data-rank="2"] .pirate{animation-delay:.18s}#podium [data-rank="3"] .pirate{animation-delay:.36s}#final details{text-align:left;background:#ffffff12;border-radius:14px;padding:16px}#final summary{cursor:pointer;font-weight:800}.leader{flex-wrap:wrap;overflow-wrap:anywhere}
+@keyframes podiumJump{0%,100%{transform:translateY(0) rotate(-3deg)}45%{transform:translateY(-25px) rotate(4deg)}75%{transform:translateY(0) scale(1.05,.95)}}
+@media(max-width:550px){#podium{gap:5px}#podium .captainTreasure{padding:0 9px 20px}#podium .celebrationGold{font-size:28px}#podium .victoryCaptain{padding-left:3px;padding-right:3px}#podium .victoryCaptain>span:last-child{font-size:12px}#duelVictory{padding:18px 10px}}
+@media(prefers-reduced-motion:reduce){#podium .pirate.portrait,#final:before{animation:none!important}}
+
+.captainTreasure .pirate.portrait{background:none;border:0;border-radius:0;overflow:visible}.captainTreasure .portrait svg{width:100%;height:100%}
+
+.celebrationGold:after{content:'';display:inline-block;width:.65em;height:.22em;margin-left:-.12em;border:2px solid #a86911;border-radius:50%;background:radial-gradient(ellipse,#fff0a6,#f1b927);box-shadow:0 5px 0 #c38b1c,0 8px 0 #ffe17c,0 11px 0 #a96e15;transform:rotate(-12deg)}
+
+#livesStatus{padding:12px 18px;background:#fff3d4;border:1px solid #e9c56c;border-radius:14px;font-weight:800;color:#75411f}#eliminated{text-align:center;background:#fff8e7;border:2px solid #e9c56c}.playerChoices input:disabled+small{opacity:.65}
