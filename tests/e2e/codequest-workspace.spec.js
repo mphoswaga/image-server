@@ -48,3 +48,11 @@ test('round briefing explains Repeat before revealing rivals',async({page})=>{
  await expect(page.locator('#versusFaces')).toBeVisible({timeout:8000});
  s.buildAt=Date.now()+6000;s.map.blocks.push('repeat');await page.reload();await expect(page.locator('#stageTitle')).toHaveText('Repeat is available this round');await expect(page.locator('#versusFaces')).toBeHidden();
 });
+test('teacher can choose next duel players using the class checklist',async({page})=>{
+ const s=E.create({students:[{id:'a',name:'Mia'},{id:'b',name:'Leo'},{id:'c',name:'Bao'}],preview:true},Date.now());
+ await page.route('**/api/game/selection/codequest*',r=>{if(r.request().method()==='POST'){const b=r.request().postDataJSON();if(b.action==='participants')E.selectPlayers(s,b.studentIds);}return r.fulfill({json:{teacher:true,preview:true,joinUrl:'/play/selection',state:E.view(s,null,true)}});});
+ await page.goto('/codequest.html?game=selection');await expect(page.locator('#playerSelection')).toBeVisible();
+ await page.locator('#playerSelection input[value="c"]').uncheck();await expect.poll(()=>s.players.c.selected).toBe(false);
+ await page.locator('#playerSelection input[value="c"]').check();await expect.poll(()=>s.players.c.selected).toBe(true);
+ await page.getByRole('button',{name:'Clear selection',exact:true}).click();await expect(page.locator('#start')).toBeDisabled();
+});

@@ -98,3 +98,5 @@ body{background:radial-gradient(ellipse at 15% 5%,#bce8dc 0,transparent 45%),rad
 /* Start is a closed cap: no studs or socket above it. */
 #codeStart{border-radius:22px 22px 5px 5px!important;background:linear-gradient(170deg,#d5ffd1 0%,#91e58c 45%,#64bd68 100%)!important;border:1px solid #79bd76!important;box-shadow:inset 0 3px 3px #ffffffb0,inset 0 -3px 3px #327c3650,0 2px 3px #17364725;padding-top:13px}
 #codeStart>.brickSurface{display:none}
+
+.playerChoices{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin:12px 0}.playerChoices label{flex-direction:row;align-items:center;flex-wrap:wrap;padding:8px;background:#eef6f2;border-radius:8px}.playerChoices input{width:20px;min-width:20px}.playerChoices small{font-weight:400}
