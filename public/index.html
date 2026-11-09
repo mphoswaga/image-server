@@ -2448,6 +2448,7 @@
     .bulk-mark-field>span:first-child { display:block;font-weight:700;margin-bottom:4px; }
     .bulk-mark-field>span:last-child { display:flex;align-items:center;gap:5px;color:var(--muted);font-size:12px; }
     .bulk-mark-field input { width:76px;padding:7px 8px; }
+    [data-assignment-status-card][hidden] { display:none !important; }
     [data-marking-student][hidden] { display:none !important; }
     .bulk-grade-toolbar .bulk-grade-apply { width:auto;min-height:38px;padding:8px 13px; }
     .question-marking-list { margin-top:12px;border:1px solid var(--border);border-radius:11px;overflow:hidden;background:#fff; }
@@ -3544,6 +3545,19 @@
         <div id="assessmentError" class="field-err" role="alert"></div>
         <button id="publishAssessmentBtn" type="button" class="btn accent" style="margin-top:14px">Publish assessment</button>
         <div id="assessmentPublishResult"></div>
+      </div>
+      <div id="assignmentFilters" style="margin:18px 0">
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <label style="flex:1;min-width:200px">Find a test<input id="assignmentSearch" type="search" placeholder="Search title, subject or grade"></label>
+          <label style="flex:1;min-width:200px">Class<select id="assignmentClassFilter" aria-label="Class"><option value="">All classes</option></select></label>
+        </div>
+        <div id="assignmentStatusTabs" aria-label="Assessment status" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+          <button type="button" class="btn ghost" style="width:auto" data-assignment-status="pending">To be marked <span></span></button>
+          <button type="button" class="btn ghost" style="width:auto" data-assignment-status="marked">Marked by teacher <span></span></button>
+          <button type="button" class="btn ghost" style="width:auto" data-assignment-status="captured">Captured on school system <span></span></button>
+        </div>
+        <p class="hint">School-system capture is your manual confirmation that you entered the marks there.</p>
+        <p id="assignmentFilterStatus" class="hint" role="status"></p>
       </div>
       <div id="assignmentsList"></div>
       <div style="margin-top:28px;padding-top:18px;border-top:1px solid var(--border)"><button id="assignmentsBack" class="back-btn"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back to lesson planner</button></div>
@@ -8628,6 +8642,37 @@
     $('assessmentPublishResult').addEventListener('click',e=>{ const button=e.target.closest('.assessment-copy'); if(button)copyLink(button.dataset.url); });
 
     let assessmentClassRosters=[];
+    let assignmentStatusFilter='pending';
+    function filterAssignmentCards(){
+      const normalize=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[đĐ]/g,'d').toLowerCase();
+      const query=normalize($('assignmentSearch').value).trim(),rosterId=$('assignmentClassFilter').value;
+      const counts={pending:0,marked:0,captured:0};
+      let shown=0;
+      $('assignmentsList').querySelectorAll('[data-assignment-status-card]').forEach(card=>{
+        const matches=(!rosterId||card.dataset.rosterId===rosterId)&&normalize(card.dataset.search).includes(query);
+        const status=card.dataset.assignmentStatusCard;
+        if(matches)counts[status]++;
+        card.hidden=!matches||status!==assignmentStatusFilter;
+        const detailId='adet-'+card.dataset.assignmentId,wrapId='ares-'+card.dataset.assignmentId;
+        if(!card.hidden){
+          shown++;
+          if($(detailId)?.style.display==='block'&&!assignmentResultsPollers.has(detailId))startAssignmentResultsPolling(card.dataset.assignmentId,wrapId,detailId);
+        }else stopAssignmentResultsPolling(detailId);
+      });
+      $('assignmentStatusTabs').querySelectorAll('button').forEach(button=>{
+        const active=button.dataset.assignmentStatus===assignmentStatusFilter;
+        button.setAttribute('aria-pressed',String(active));
+        button.classList.toggle('accent',active);button.classList.toggle('ghost',!active);
+        button.querySelector('span').textContent=`(${counts[button.dataset.assignmentStatus]})`;
+      });
+      $('assignmentFilterStatus').textContent=shown?`${shown} assessment${shown===1?'':'s'} shown`:'No assessments match this tab and your filters.';
+    }
+    $('assignmentSearch').addEventListener('input',filterAssignmentCards);
+    $('assignmentClassFilter').addEventListener('change',filterAssignmentCards);
+    $('assignmentStatusTabs').addEventListener('click',e=>{
+      const button=e.target.closest('[data-assignment-status]');if(!button)return;
+      assignmentStatusFilter=button.dataset.assignmentStatus;filterAssignmentCards();
+    });
     async function loadMyAssignments(){
       stopAssignmentResultsPolling();
       const wrap=$('assignmentsList');
@@ -8638,6 +8683,9 @@
           fetch('/api/rosters').then(response=>response.json()),
         ]);
         assessmentClassRosters=rosterData.rosters||[];
+        const selectedClassFilter=$('assignmentClassFilter').value;
+        $('assignmentClassFilter').innerHTML='<option value="">All classes</option>'+assessmentClassRosters.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('')+'<option value="unassigned">No class assigned</option>';
+        $('assignmentClassFilter').value=selectedClassFilter;
         let list=d.assignments||[];
         const legacyQuizzes=list.filter(a=>a.needsAssessmentControls);
         if(legacyQuizzes.length){
@@ -8648,6 +8696,7 @@
         }
         if(!list.length){
           wrap.innerHTML='<div class="empty-state"><svg class="ic" aria-hidden="true" style="width:36px;height:36px;opacity:.3"><use href="#i-clipboard"/></svg><p>No assessments yet</p><p style="font-size:13px;color:var(--muted)">Create a test or project above, or publish a worksheet, exit ticket, or quiz from a lesson pack.</p></div>';
+          filterAssignmentCards();
           return;
         }
         const typeLabel={worksheet:'Worksheet','exit-ticket':'Exit ticket',quiz:'Quiz',assessment:'Assessment'};
@@ -8669,12 +8718,13 @@
           const markingBadge=marking?`<span class="gc-marking-status ${esc(markingState)}${a.teacherMarked?' teacher-confirmed':''}">${esc(marking.label||'Marking')}</span>`:'';
           const markingDetail=marking&&marking.detail?`<span>${esc(marking.detail)}</span>`:'';
           const teacherMarked=a.type==='assessment'&&!isDraft?`<label class="gc-teacher-marked" title="Add completed marks to Marks, Rosters and connected TeacherScope records"><input type="checkbox" class="a-marked-toggle" data-id="${esc(a.id)}" ${a.teacherMarked?'checked':''}> Marked by teacher</label>`:'';
-          return `<div class="game-card${a.teacherMarked?' teacher-confirmed-card':''}" data-assignment-id="${esc(a.id)}">
+          const captured=a.type==='assessment'&&!isDraft?`<label class="gc-teacher-marked" title="Confirm you entered these marks in the school system"><input type="checkbox" class="a-captured-toggle" data-id="${esc(a.id)}" ${a.schoolSystemCaptured?'checked':''} ${!a.teacherMarked?'disabled':''}> Captured on school system</label>`:'';
+          return `<div data-assignment-status-card="${a.schoolSystemCaptured?'captured':a.teacherMarked?'marked':'pending'}" data-roster-id="${esc(a.rosterId||'unassigned')}" data-search="${esc([a.title,a.subject,a.grade,selectedClass?.name].filter(Boolean).join(' '))}" class="game-card${a.teacherMarked?' teacher-confirmed-card':''}" data-assignment-id="${esc(a.id)}">
             <div class="gc-head">
               <div class="gc-top">
                 <div>
                   <div class="gc-title">${esc(a.title)}</div>
-                  <div class="gc-meta"><span class="gc-chip">${esc(a.type==='assessment'?(a.assessmentType||'Assessment'):typeLabel[a.type]||a.type)}</span>${a.subject?`<span class="gc-chip">${esc(a.subject)}</span>`:''}${a.grade?`<span class="gc-chip">${esc(a.grade)}</span>`:''}${a.totalMarks?`<span class="gc-chip">${a.totalMarks} marks</span>`:''}${classChip}${isDraft?'<span class="gc-chip">Draft · edit before learners enter</span>':a.delivery&&a.delivery.mode==='live'?`<span class="gc-chip">Live · ${esc(a.delivery.phase)}</span>`:''}<span class="gc-chip">${a.submissions} submitted</span>${markingBadge}${teacherMarked}</div>
+                  <div class="gc-meta"><span class="gc-chip">${esc(a.type==='assessment'?(a.assessmentType||'Assessment'):typeLabel[a.type]||a.type)}</span>${a.subject?`<span class="gc-chip">${esc(a.subject)}</span>`:''}${a.grade?`<span class="gc-chip">${esc(a.grade)}</span>`:''}${a.totalMarks?`<span class="gc-chip">${a.totalMarks} marks</span>`:''}${classChip}${isDraft?'<span class="gc-chip">Draft · edit before learners enter</span>':a.delivery&&a.delivery.mode==='live'?`<span class="gc-chip">Live · ${esc(a.delivery.phase)}</span>`:''}<span class="gc-chip">${a.submissions} submitted</span>${markingBadge}${teacherMarked}${captured}</div>
                   <div class="gc-dates"><span>Created ${fmtDate(a.createdAt)}</span>${a.cutoffAt?`<span>Due ${fmtDateTime(a.cutoffAt)}</span>`:'<span>No due date</span>'}${markingDetail}${a.resultsReleased?'<span class="gc-status-live">Visible to learners</span>':'<span class="gc-status-closed">Hidden from learners</span>'}</div>
                 </div>
                 ${a.roomCode&&!isDraft?`<div style="text-align:right"><span class="room-label">Room code</span><div class="room-code">${esc(a.roomCode)}</div></div>`:''}
@@ -8698,6 +8748,7 @@
             </div>
           </div>`;
         }).join('');
+        filterAssignmentCards();
       }catch{ wrap.innerHTML='<p class="hint">Could not load assignments.</p>'; }
     }
 
@@ -8772,6 +8823,18 @@
     });
 
     $('assignmentsList').addEventListener('change', async e=>{
+      const captured=e.target.closest('.a-captured-toggle');
+      if(captured){
+        const checked=captured.checked;captured.disabled=true;
+        try{
+          const response=await fetch('/api/assignment/'+encodeURIComponent(captured.dataset.id)+'/school-captured',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({captured:checked})});
+          const data=await response.json();if(!response.ok)throw Error(data.error||'Could not save capture status.');
+          toast(checked?'Moved to Captured on school system.':'Moved back to Marked by teacher.','ok');
+          await loadMyAssignments();
+        }catch(error){captured.checked=!checked;toast(error.message);}
+        finally{captured.disabled=false;}
+        return;
+      }
       const toggle=e.target.closest('.a-marked-toggle');
       if(!toggle) return;
       const requestedMarked=toggle.checked;

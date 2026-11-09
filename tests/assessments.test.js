@@ -894,3 +894,24 @@ test('assignment evidence remains scoped to its selected roster when a learner i
   const serverSource = fs.readFileSync(path.join(__dirname, '..', 'image-server.js'), 'utf8');
   assert.match(serverSource, /filterAssignmentEvidenceForRoster\(gradebook\.assignmentResultRows\(foundTeacherId\), foundRoster\.id\)/);
 });
+
+test('school capture persists independently of release and resets when marking is cleared', () => {
+  const teacherId = 'school-capture-toggle';
+  const savedRoster = roster.saveRoster(teacherId, { name: 'Grade 3A', students: [{ id: 'learner-1', name: 'Learner One' }] });
+  const record = assignments.createAssessment({ teacherId, rosterId: savedRoster.id, data: validAssessment() });
+  assert.throws(() => assignments.setSchoolSystemCaptured(record.id, true), /Marked by teacher/);
+  assignments.setTeacherMarked(record.id, true);
+  assignments.setSchoolSystemCaptured(record.id, true);
+  let row = assignments.listTeacherAssignments(teacherId)[0];
+  assert.equal(row.schoolSystemCaptured, true);
+  assert.ok(row.schoolSystemCapturedAt);
+  assert.equal(row.resultsReleased, false);
+  assignments.setSchoolSystemCaptured(record.id, false);
+  assert.equal(assignments.getAssignment(record.id).teacherMarked, true);
+  assert.equal(assignments.getAssignment(record.id).schoolSystemCapturedAt, null);
+  assignments.setSchoolSystemCaptured(record.id, true);
+  assignments.setTeacherMarked(record.id, false);
+  row = assignments.listTeacherAssignments(teacherId)[0];
+  assert.equal(row.schoolSystemCaptured, false);
+  assert.equal(row.schoolSystemCapturedAt, null);
+});

@@ -648,6 +648,20 @@ function setTeacherMarked(id, marked) {
   if (!rec || rec.type !== 'assessment') return null;
   rec.teacherMarked = !!marked;
   rec.teacherMarkedAt = rec.teacherMarked ? new Date().toISOString() : null;
+  if (!rec.teacherMarked) { rec.schoolSystemCaptured = false; rec.schoolSystemCapturedAt = null; }
+  writeJsonAtomic(recPath(id), rec);
+  return rec;
+}
+
+// A manual record of the teacher entering marks in their school's system.
+function setSchoolSystemCaptured(id, captured) {
+  const rec = getAssignment(id);
+  if (!rec || rec.type !== 'assessment') throw new Error('Only tests and projects can be captured here.');
+  if (captured && (!rec.teacherMarked && !isReleased(rec) || rec.status === 'draft')) {
+    throw new Error('Tick Marked by teacher before confirming school-system capture.');
+  }
+  rec.schoolSystemCaptured = !!captured;
+  rec.schoolSystemCapturedAt = captured ? (rec.schoolSystemCapturedAt || new Date().toISOString()) : null;
   writeJsonAtomic(recPath(id), rec);
   return rec;
 }
@@ -1185,6 +1199,8 @@ function listTeacherAssignments(teacherId) {
       resultsReleased: isReleased(a),
       teacherMarked: !!a.teacherMarked || (a.type === 'assessment' && isReleased(a)),
       teacherMarkedAt: a.teacherMarkedAt || a.finalisedAt || null,
+      schoolSystemCaptured: !!a.schoolSystemCaptured,
+      schoolSystemCapturedAt: a.schoolSystemCapturedAt || null,
       submissions: loadSubmissions(a.id).filter(sub=>!isAbsent(a,sub.studentId)).length,
       marking: assessmentMarkingSummary(a),
       contentEditable: assessmentContentEditable(a) || legacyContentEditable(a),
@@ -1230,6 +1246,7 @@ function renameAssessmentStudent(teacherId, rosterId, studentId, name) {
 }
 
 module.exports = {
+  setSchoolSystemCaptured,
   isAbsent, setAttendance, addAssessmentLearners,
   enableQuizAssessmentControls, legacyContentEditable, updateLegacyContent, createAssignment, createAssessment, copyAssessmentToRoster, normalizeAssessment, getAssignment, updateAssignmentCutoff, updateAssessmentRoster, updateAssessmentContent, assessmentContentEditable, getRoomCode,
   publishedAssessmentGenerationContext,

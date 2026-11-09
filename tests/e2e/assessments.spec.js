@@ -605,4 +605,26 @@ test('one bulk question mark updates every selected learner and rejects a mixed 
   const results = await (await page.request.get(`/api/assignment/${assessment.assessmentId}/results`)).json();
   expect(results.submissions).toHaveLength(2);
   expect(results.submissions.map(student => student.grades.criterion.marksAwarded)).toEqual([3, 3]);
+  await expect(card.locator('.a-captured-toggle')).toBeDisabled();
+  await page.getByLabel('Find a test', {exact:true}).fill('Bulk practical');
+  await page.getByLabel('Class', {exact:true}).selectOption(classRoster.id);
+  await card.locator('.a-marked-toggle').check();
+  await expect(card).toBeHidden();
+  await page.getByRole('button',{name:/^Marked by teacher \(/}).click();
+  await expect(card).toBeVisible();
+  await card.locator('.a-captured-toggle').check();
+  await expect(card).toBeHidden();
+  await page.getByRole('button',{name:/^Captured on school system \(/}).click();
+  await expect(card.locator('.a-captured-toggle')).toBeChecked();
+  await page.reload();
+  await page.locator('#assignmentsBtn').click();
+  await page.getByRole('button',{name:/^Captured on school system \(/}).click();
+  await expect(card.locator('.a-captured-toggle')).toBeChecked();
+  await card.locator('.a-captured-toggle').uncheck();
+  await expect(card).toBeHidden();
+  await page.getByRole('button',{name:/^Marked by teacher \(/}).click();
+  await expect(card.locator('.a-marked-toggle')).toBeChecked();
+  const saved = await (await page.request.get('/api/assignments')).json();
+  expect(saved.assignments.find(a=>a.id===assessment.assessmentId)).toMatchObject({schoolSystemCaptured:false,teacherMarked:true,resultsReleased:false});
+
 });

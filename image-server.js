@@ -2540,6 +2540,18 @@ app.patch('/api/assignment/:id/marked', requireAuth, (req, res) => {
   });
 });
 
+app.patch('/api/assignment/:id/school-captured', requireAuth, (req, res) => {
+  const assessment = assignments.getAssignment(req.params.id);
+  if (!assessment) return res.status(404).json({ error: 'Assessment not found.' });
+  if (assessment.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assessment.' });
+  if (typeof req.body?.captured !== 'boolean') return res.status(400).json({ error: 'Provide a captured checkbox value.' });
+  try {
+    const updated = assignments.setSchoolSystemCaptured(assessment.id, req.body.captured);
+    audit.log('assessment.school_captured', { userId: req.userId, assessmentId: updated.id, captured: updated.schoolSystemCaptured, ip: req.ip });
+    res.json({ ok: true, schoolSystemCaptured: updated.schoolSystemCaptured, schoolSystemCapturedAt: updated.schoolSystemCapturedAt });
+  } catch (error) { res.status(400).json({ error: error.message }); }
+});
+
 // Teachers may attach an older open assessment to a saved class, or correct
 // the selected class, until learner work begins. The room code and assessment
 // content stay unchanged; the selected roster is snapshotted at this point.
