@@ -2448,6 +2448,7 @@
     .bulk-mark-field>span:first-child { display:block;font-weight:700;margin-bottom:4px; }
     .bulk-mark-field>span:last-child { display:flex;align-items:center;gap:5px;color:var(--muted);font-size:12px; }
     .bulk-mark-field input { width:76px;padding:7px 8px; }
+    [data-marking-student][hidden] { display:none !important; }
     .bulk-grade-toolbar .bulk-grade-apply { width:auto;min-height:38px;padding:8px 13px; }
     .question-marking-list { margin-top:12px;border:1px solid var(--border);border-radius:11px;overflow:hidden;background:#fff; }
     .question-marking-title { display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 14px;background:#f7f9fc;font-size:14px;font-weight:700;border-bottom:1px solid var(--border); }
@@ -6332,16 +6333,17 @@
         assessmentBulkSelections.set(key,selected);
         const wrap=$(wrapId),apply=wrap?.querySelector('.bulk-grade-apply'),all=wrap?.querySelector('.bulk-grade-all');
         if(apply){apply.disabled=!selected.size;apply.textContent=`Apply to ${selected.size} selected`;}
-        if(all){const boxes=[...wrap.querySelectorAll('.bulk-grade-student')];all.checked=!!boxes.length&&boxes.every(input=>input.checked);}
+        filterAssessmentStudents(wrap);
         return;
       }
       const allPicker=e.target.closest('.bulk-grade-all');
       if(allPicker){
         const {assignId,wrapId,questionId}=allPicker.dataset,wrap=$(wrapId);
-        const selected=new Set();
-        wrap?.querySelectorAll('.bulk-grade-student').forEach(input=>{
+        const selected=assessmentBulkSelections.get(`${assignId}\u001f${questionId}`)||new Set();
+        wrap?.querySelectorAll('.grade-row:not([hidden]) .bulk-grade-student').forEach(input=>{
           input.checked=allPicker.checked;
           if(allPicker.checked)selected.add(String(input.dataset.studentId));
+          else selected.delete(String(input.dataset.studentId));
         });
         assessmentBulkSelections.set(`${assignId}\u001f${questionId}`,selected);
         const apply=wrap?.querySelector('.bulk-grade-apply');
@@ -6358,6 +6360,8 @@
     });
 
     document.addEventListener('input',e=>{
+      const search=e.target.closest('.assessment-student-search');
+      if(search){const wrap=$(search.dataset.wrapId);wrap.dataset.studentSearch=search.value;filterAssessmentStudents(wrap);}
       const input=e.target.closest('.bulk-grade-mark');
       if(input)assessmentBulkMarks.set(`${input.dataset.assignId}\u001f${input.dataset.questionId}`,input.value);
     });
@@ -6441,7 +6445,7 @@
     function gradeRowHTML(q, s, assignId, wrapId, headingText, selectable=false){
       const g=(s.grades||{})[q.id]||{}; const ans=(s.answers||{})[q.id];
       const ansText=q.kind==='practical' ? 'Teacher observation' : q.kind==='mcq' ? (q.options&&q.options[ans]!=null?q.options[ans]:'(no answer)') : (ans||'(no answer)');
-      if(s.draftOnly&&q.kind!=='practical') return `<div class="grade-row" style="padding:10px 0;border-top:1px solid var(--border)"><div style="font-size:13px;font-weight:600">${esc(headingText)}</div><div style="font-size:12.5px;color:var(--muted);margin-top:4px">Available after this student submits.</div></div>`;
+      if(s.draftOnly&&q.kind!=='practical') return `<div class="grade-row" ${selectable?`data-marking-student="${esc(s.name)} ${esc(s.studentId)}"`:""} style="padding:10px 0;border-top:1px solid var(--border)"><div style="font-size:13px;font-weight:600">${esc(headingText)}</div><div style="font-size:12.5px;color:var(--muted);margin-top:4px">Available after this student submits.</div></div>`;
       const autoMarked=q.kind==='mcq'&&g.source==='auto';
       const confirmed=autoMarked||g.source==='teacher'||g.source==='ai-confirmed';
       // MCQ is deterministically auto-graded, so show that it is already
@@ -6461,7 +6465,7 @@
             ${badge}
           </div>`;
       const feedback=q.kind==='mcq'?'':`<details class="grade-feedback" ${g.rationale?'open':''}><summary>${g.rationale?'Edit feedback':'Add feedback (optional)'}</summary><textarea class="grade-rationale-input" rows="2" placeholder="Feedback shown to the student after release">${esc(g.rationale||'')}</textarea></details>`;
-      return `<div class="grade-row ${selectable?'grade-row-compact':''} ${autoMarked?'grade-row-auto':''}">
+      return `<div ${selectable?`data-marking-student="${esc(s.name)} ${esc(s.studentId)}"`:""} class="grade-row ${selectable?'grade-row-compact':''} ${autoMarked?'grade-row-auto':''}">
         <div class="grade-learner">${picker}${s.draftOnly?' <small>working</small>':''}</div>
         <div class="grade-answer"><b>Answer</b><span>${esc(String(ansText))}</span></div>
         ${markControl}
@@ -6470,10 +6474,28 @@
     }
     const stripMarksText=t=>String(t||'').replace(/\s*\(\d+\s*marks?\)\s*$/i,'');
 
+    function filterAssessmentStudents(wrap){
+      if(!wrap)return;
+      const normalize=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[đĐ]/g,'d').toLowerCase();
+      const query=normalize(wrap.dataset.studentSearch).trim();
+      const entries=[...wrap.querySelectorAll('[data-marking-student]')];
+      entries.forEach(entry=>{entry.hidden=!normalize(entry.dataset.markingStudent).includes(query);});
+      const visible=entries.filter(entry=>!entry.hidden);
+      const status=wrap.querySelector('.assessment-search-status');
+      if(status)status.textContent=visible.length?`${visible.length} of ${entries.length} students shown`:'No matching students.';
+      const all=wrap.querySelector('.bulk-grade-all');
+      if(all){
+        const boxes=[...wrap.querySelectorAll('.grade-row:not([hidden]) .bulk-grade-student')];
+        all.checked=!!boxes.length&&boxes.every(input=>input.checked);
+        all.indeterminate=boxes.some(input=>input.checked)&&!all.checked;
+        all.disabled=!boxes.length;
+      }
+    }
+
     function renderByStudent(d, assignId, wrapId){
       return d.submissions.map(s=>{
         const rows=d.questions.map(q=>gradeRowHTML(q, s, assignId, wrapId, (q.sectionTitle?`${q.sectionTitle} · `:'')+stripMarksText(q.question))).join('');
-        return `<div style="margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:10px">
+        return `<div data-marking-student="${esc(s.name)} ${esc(s.studentId)}" style="margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:10px">
           <div style="display:flex;justify-content:space-between;font-weight:700;font-size:14px"><span>${esc(s.name)}${s.draftOnly?' <small style="color:var(--muted);font-weight:500">working</small>':''}</span><span>${s.totalMarks}/${s.maxMarks}</span></div>
           ${rows}
         </div>`;
@@ -6503,7 +6525,8 @@
         </div>
         <div class="bulk-grade-toolbar">
           ${q.kind==='mcq'?'<div class="mcq-auto-note"><b>Multiple choice is complete.</b> LessonScope has marked and confirmed every submitted answer automatically. Use the controls below only to correct or override a mark.</div>':''}
-          <label class="bulk-select-all"><input type="checkbox" class="bulk-grade-all" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-id="${esc(q.id)}" ${markable.length&&selected.size===markable.length?'checked':''}> Select all learners</label>
+          <label class="bulk-select-all"><input type="checkbox" class="bulk-grade-all" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-id="${esc(q.id)}" ${markable.length&&selected.size===markable.length?'checked':''}> Select matching learners</label>
+          <p class="hint" style="margin:0">Selections stay selected when you search for another student.</p>
           <label class="bulk-mark-field"><span>${q.kind==='mcq'?'Override mark':'Mark for selected learners'}</span><span><input type="number" class="bulk-grade-mark" data-assign-id="${assignId}" data-question-id="${esc(q.id)}" min="0" max="${q.marks}" step="0.5" value="${esc(bulkMark)}" aria-label="Mark for selected learners"> / ${q.marks}</span></label>
           <button type="button" class="btn accent bulk-grade-apply" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-id="${esc(q.id)}" ${selected.size?'':'disabled'}>Apply to ${selected.size} selected</button>
         </div>
@@ -6523,6 +6546,8 @@
       const reportOpen=new Map([...report?.querySelectorAll('details')||[]].map(el=>[detailKey(el),el.open]));
       const search=report?.querySelector('[data-lr-search]');
       const searchState=search?{value:search.value,focused:document.activeElement===search,start:search.selectionStart,end:search.selectionEnd}:null;
+      const markingSearch=wrap.querySelector('.assessment-student-search');
+      const markingFocus=markingSearch&&document.activeElement===markingSearch?{start:markingSearch.selectionStart,end:markingSearch.selectionEnd}:null;
       wrap.dataset.view=view;
       const liveBar=assessmentLiveControls(d,assignId,wrapId)+((d.absentLearners||[]).length?`<p class="hint"><strong>Absent (${d.absentLearners.length}):</strong> ${d.absentLearners.map(s=>esc(s.name)).join(', ')} · excluded from expected submissions and averages</p>`:'');
       const releaseBar=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:${d.effectivelyReleased||d.teacherMarked?'#eafaf0':'#fdf6ea'}">
@@ -6540,7 +6565,10 @@
       const tabBtn=(v,label)=>`<button type="button" class="view-tab-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-view="${v}" style="font-size:12.5px;font-weight:600;padding:6px 14px;border:1px solid ${view===v?'var(--primary)':'var(--border)'};border-radius:8px;background:${view===v?'var(--primary)':'#fff'};color:${view===v?'#fff':'var(--ink)'};cursor:pointer">${label}</button>`;
       const tabs=`<div style="display:flex;gap:8px;margin-bottom:10px">${tabBtn('student','By student')}${tabBtn('question','By question')}</div>`;
       if(!d.submissions||!d.submissions.length){ wrap.innerHTML=liveBar+submitDraftsBar+releaseBar+acceptAIBar+tabs+'<p class="hint" style="margin-top:8px">No students have submitted yet.</p>'; return; }
-      wrap.innerHTML=liveBar+submitDraftsBar+releaseBar+acceptAIBar+assignmentSummary(d)+tabs+(view==='question'?renderByQuestion(d,assignId,wrapId):renderByStudent(d,assignId,wrapId));
+      const studentSearch=`<div style="margin:10px 0"><label for="student-search-${wrapId}">Search students</label><input id="student-search-${wrapId}" class="assessment-student-search" data-wrap-id="${wrapId}" type="search" placeholder="Student name or ID" value="${esc(wrap.dataset.studentSearch||'')}" style="display:block;width:100%;margin-top:5px;padding:9px;border:1px solid var(--border);border-radius:8px"><p class="hint assessment-search-status" role="status"></p></div>`;
+      wrap.innerHTML=liveBar+submitDraftsBar+releaseBar+acceptAIBar+assignmentSummary(d)+tabs+studentSearch+(view==='question'?renderByQuestion(d,assignId,wrapId):renderByStudent(d,assignId,wrapId));
+      filterAssessmentStudents(wrap);
+      if(markingFocus){const field=wrap.querySelector('.assessment-student-search');field.focus({preventScroll:true});field.setSelectionRange(markingFocus.start,markingFocus.end);}
       wrap.querySelectorAll('.learning-report details').forEach(el=>{if(reportOpen.has(detailKey(el)))el.open=reportOpen.get(detailKey(el));});
       const nextSearch=wrap.querySelector('[data-lr-search]');
       if(nextSearch&&searchState){

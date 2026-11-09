@@ -573,11 +573,36 @@ test('one bulk question mark updates every selected learner and rejects a mixed 
   expect(applied.ok(), await applied.text()).toBeTruthy();
   expect((await applied.json()).updated).toBe(2);
 
+  await page.locator('#assignmentsBtn').click();
+  const card=page.locator(`[data-assignment-id="${assessment.assessmentId}"]`);
+  await card.getByRole('button', { name: 'Run classroom / mark', exact: true }).click();
+  const search=card.getByLabel('Search students', { exact: true });
+  await search.fill('Amina');
+  await expect(card.locator('[data-marking-student]:visible')).toHaveCount(1);
+  await expect(card.locator('[data-marking-student]:visible')).toContainText('Creates the document');
+  await card.getByRole('button', {name:'By question',exact:true}).click();
+  await expect(search).toHaveValue('Amina');
+  await card.locator('.bulk-grade-student:visible').check();
+  await search.fill('Bao');
+  await card.getByLabel('Select matching learners').check();
+  await expect(card.getByRole('button',{name:'Apply to 2 selected',exact:true})).toBeEnabled();
+  await card.getByLabel('Select matching learners').uncheck();
+  await expect(card.getByRole('button',{name:'Apply to 1 selected',exact:true})).toBeEnabled();
+  await card.locator('.bulk-grade-student:visible').check();
+  await search.fill('Nobody');
+  await expect(card.locator('.assessment-search-status')).toHaveText('No matching students.');
+  await expect(card.getByLabel('Select matching learners')).toBeDisabled();
+  await search.fill('Bao');
+  await card.getByLabel('Mark for selected learners').fill('3');
+  await card.getByRole('button',{name:'Apply to 2 selected',exact:true}).click();
+  await expect(page.locator('#toastWrap')).toContainText('Mark applied to 2 learners');
+  await expect(search).toHaveValue('Bao');
+
   const rejected = await page.request.patch(`/api/assignment/${assessment.assessmentId}/grade/bulk`, {
     data: { questionId: 'criterion', studentIds: ['BULK-1', 'NOT-IN-CLASS'], marksAwarded: 1 },
   });
   expect(rejected.status()).toBe(404);
   const results = await (await page.request.get(`/api/assignment/${assessment.assessmentId}/results`)).json();
   expect(results.submissions).toHaveLength(2);
-  expect(results.submissions.map(student => student.grades.criterion.marksAwarded)).toEqual([4, 4]);
+  expect(results.submissions.map(student => student.grades.criterion.marksAwarded)).toEqual([3, 3]);
 });
