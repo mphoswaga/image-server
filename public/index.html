@@ -2509,7 +2509,7 @@
     }
 </style>
   <link rel="stylesheet" href="/byte-feedback.css" />
-<link rel="stylesheet" href="/learning-report.css?v=1"><script src="/learning-report.js?v=2"></script><link rel="stylesheet" href="/ui-language.css?v=1"><script src="/locales/vi.js?v=2"></script><script defer src="/ui-language.js?v=1"></script><style>html:not([data-payment-plans="visible"]) [data-payment-plans]{display:none!important}</style><script defer src="/suite-plans.js?v=1"></script>
+<link rel="stylesheet" href="/learning-report.css?v=1"><script src="/learning-report.js?v=2"></script><script src="/marked-exam-print.js?v=1"></script><link rel="stylesheet" href="/ui-language.css?v=1"><script src="/locales/vi.js?v=2"></script><script defer src="/ui-language.js?v=1"></script><style>html:not([data-payment-plans="visible"]) [data-payment-plans]{display:none!important}</style><script defer src="/suite-plans.js?v=1"></script>
 </head>
 <body data-byte-ui="teacher">
   <!-- SPLASH (plays once per visit, then fades to reveal the app) -->
@@ -6506,11 +6506,18 @@
       }
     }
 
+    document.addEventListener('click',async event=>{
+      const button=event.target.closest('.print-marked-exam');if(!button)return;
+      const wrap=$(button.dataset.wrapId);
+      if(wrap?.querySelector('[data-teacher-edited="1"]')){toast('Save your edited marks and feedback before printing.');return;}
+      try{await MarkedExamPrint.open(button.dataset.assignId,button.dataset.studentId);}catch(error){toast(error.message);}
+    });
     function renderByStudent(d, assignId, wrapId){
       return d.submissions.map(s=>{
         const rows=d.questions.map(q=>gradeRowHTML(q, s, assignId, wrapId, (q.sectionTitle?`${q.sectionTitle} · `:'')+stripMarksText(q.question))).join('');
         return `<div data-marking-student="${esc(s.name)} ${esc(s.studentId)}" style="margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:10px">
           <div style="display:flex;justify-content:space-between;font-weight:700;font-size:14px"><span>${esc(s.name)}${s.draftOnly?' <small style="color:var(--muted);font-weight:500">working</small>':''}</span><span>${s.totalMarks}/${s.maxMarks}</span></div>
+          ${!s.draftOnly?`<button type="button" class="btn ghost print-marked-exam" data-assign-id="${esc(assignId)}" data-student-id="${esc(s.studentId)}" data-wrap-id="${esc(wrapId)}" style="width:auto;margin-top:10px">Print marked exam / PDF</button>`:''}
           ${rows}
         </div>`;
       }).join('');
