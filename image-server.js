@@ -3979,6 +3979,20 @@ app.get('/api/assignment/:id/results', requireAuth, (req, res) => {
 // Teacher: override a student's grade for one question. This both corrects
 // that submission AND promotes/overwrites the verdict cache entry for that
 // exact answer text — the only way an AI verdict becomes reusable.
+// Feedback is reviewed separately from marks and never changes grade provenance.
+for(const method of ['post','patch'])app[method]('/api/assignment/:id/feedback',requireAuth,async(req,res)=>{
+  const a=assignments.getAssignment(req.params.id);
+  if(!a||a.teacherId!==req.userId)return res.status(404).json({error:'Assessment not found.'});
+  if(assignments.assessmentIsFinalised(a))return res.status(409).json({error:'Recall the results before changing feedback.'});
+  const studentId=roster.normalizeStudentId(req.body?.studentId),s=studentId&&assignments.getSubmission(a.id,studentId);
+  if(!s)return res.status(404).json({error:'Submitted exam not found.'});
+  const feedback=require('./assessment-feedback');
+  try{
+    if(method==='post')return res.json(await feedback.generate(a,s));
+    const next=feedback.apply(a,s,req.body);assignments.saveSubmission(a.id,next);res.json({ok:true,updated:req.body.suggestions.length});
+  }catch(error){res.status(400).json({error:method==='post'?'Could not generate complete feedback. Please try again.':error.message});}
+});
+
 app.patch('/api/assignment/:id/grade', requireAuth, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });

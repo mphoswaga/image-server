@@ -23,5 +23,23 @@
   try{const r=await fetch('/api/assignment/'+encodeURIComponent(assignId)+'/results',{cache:'no-store'}),d=await r.json();if(!r.ok)throw Error(d.error||'Could not load the marked exam.');popup.document.open();popup.document.write(html(d,studentId));popup.document.close();popup.document.getElementById('printExam').addEventListener('click',()=>popup.print());popup.focus();}
   catch(e){popup.close();throw e;}
  }
- const api={html,open};if(typeof module==='object'&&module.exports)module.exports=api;else root.MarkedExamPrint=api;
+ async function feedback(assignId,studentId){
+  if(document.getElementById('examFeedbackReview'))return;
+  const dialog=document.createElement('dialog');dialog.id='examFeedbackReview';dialog.style.cssText='width:min(760px,94vw);max-height:90vh;overflow:auto;border:1px solid #b9c3c9;border-radius:16px;padding:24px';
+  dialog.innerHTML='<h2>Review feedback for lost marks</h2><p>Check and edit each suggestion. Saving replaces the feedback for these questions only. Marks stay unchanged.</p><p role="status">Writing feedback…</p><div class="feedback-suggestions"></div><button type="button" data-save disabled>Save feedback</button> <button type="button" data-close>Cancel</button>';
+  document.body.append(dialog);dialog.showModal();
+  const closed=new Promise(resolve=>dialog.addEventListener('close',()=>{dialog.remove();resolve();},{once:true}));
+  dialog.querySelector('[data-close]').onclick=()=>dialog.close();
+  const status=dialog.querySelector('[role=status]'),save=dialog.querySelector('[data-save]');
+  try{
+   const r=await fetch('/api/assignment/'+encodeURIComponent(assignId)+'/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({studentId})}),d=await r.json();if(!r.ok)throw Error(d.error||'Could not generate feedback.');
+   if(!dialog.isConnected)return;
+   if(!d.suggestions.length){status.textContent='No marked questions have lost marks.';return await closed;}
+   const fields=d.suggestions.map(item=>{const label=document.createElement('label');label.style.cssText='display:block;margin:18px 0';const title=document.createElement('strong');title.textContent=item.question;const field=document.createElement('textarea');field.value=item.feedback;field.maxLength=3000;field.rows=4;field.style.cssText='display:block;width:100%;margin-top:8px;font:inherit';label.append(title,field);dialog.querySelector('.feedback-suggestions').append(label);return {questionId:item.questionId,field};});
+   status.textContent=d.suggestions.length+' suggestions ready to review.';save.disabled=false;
+   save.onclick=async()=>{save.disabled=true;status.textContent='Saving feedback…';try{const response=await fetch('/api/assignment/'+encodeURIComponent(assignId)+'/feedback',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({studentId,version:d.version,suggestions:fields.map(x=>({questionId:x.questionId,feedback:x.field.value}))})});const result=await response.json();if(!response.ok)throw Error(result.error||'Could not save feedback.');dialog.close();}catch(e){status.textContent=e.message;save.disabled=false;}};
+  }catch(e){status.textContent=e.message;}
+  return closed;
+ }
+ const api={html,open,feedback};if(typeof module==='object'&&module.exports)module.exports=api;else root.MarkedExamPrint=api;
 })(typeof window==='undefined'?globalThis:window);
