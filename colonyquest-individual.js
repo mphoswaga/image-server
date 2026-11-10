@@ -21,7 +21,7 @@ module.exports = {
   },
   finishPersonalQuestion(p,now) {
     core.applyUpkeep([p.colony]);
-    if(p.round+1>=this.state.questions.length) {
+    if(p.round+1>=this.state.questions.length && !this.state.continuePlaying) {
       this.setPersonalPhase(p,'spectating',null,now);p.finishedAt=now;
     } else {p.round++;this.setPersonalPhase(p,'answer',this.state.questionSeconds,now);}
   },
@@ -51,7 +51,7 @@ module.exports = {
       }
       if(p.personalRemaining!==undefined) {p.deadline=now+p.personalRemaining;delete p.personalRemaining;}
       if(p.npc && p.phase==='answer' && now-p.phaseStartedAt>=5000+(s.players.indexOf(p)%3)*1500 && now<p.deadline) {
-        const q=s.questions[p.round];this.answer(p.id,p.round,p.round%4===3?(q.correctIndex+1)%q.options.length:q.correctIndex,now);
+        const q=this.questionForRound(p.round);this.answer(p.id,p.round,p.round%4===3?(q.correctIndex+1)%q.options.length:q.correctIndex,now);
       }
       if(p.npc && p.phase==='upgrade' && now-p.phaseStartedAt>=1000 && now<p.deadline) {
         const options=this.options(p),preferred=['expansion','soldiers','defense','workers','supplies','food'];
@@ -78,7 +78,8 @@ module.exports = {
     out.individuallyPaused=!!p.teacherPaused;
     out.phase=(s.phase==='paused' || (p.teacherPaused && s.phase!=='ended'))?'paused':phase;
     out.round=p.round||0;out.deadline=p.deadline;out.remaining=p.personalRemaining??Math.max(0,(p.deadline||now)-now);
-    const q=s.questions[out.round],answer=p.answers.find(a=>a.round===out.round);
+    out.practice=out.round>=s.questions.length;out.questionNumber=out.round%s.questions.length+1;
+    const q=this.questionForRound(out.round),answer=p.answers.find(a=>a.round===out.round);
     const revealed=phase!=='answer';
     out.question=q?{question:q.question,options:q.options,...(revealed?{correctIndex:q.correctIndex,explanation:q.explanation}:{})}:null;
     out.me={...out.me,choice:answer?.choice??null,upgraded:p.upgrades.some(u=>u.round===out.round),upgrades:out.phase==='upgrade'?this.options(p):[]};

@@ -144,7 +144,10 @@ function createColonyQuestMultiplayer({
       if (old && old.state.phase !== 'ended') return old;
       if (old) await finalize(key, old);
       const match = new ColonyMatch(game, { preview, rosterIds, pacing,duels,duelMinutes,gameMinutes,teamMode,teamNames });
-      if (soloStudentId) match.state.soloStudentId = soloStudentId;
+      if (soloStudentId) {
+        match.state.soloStudentId = soloStudentId;
+        if (!duels) match.state.continuePlaying = false;
+      }
       await save(key, match);
       matches.set(key, match);
       return match;
@@ -236,7 +239,7 @@ function createColonyQuestMultiplayer({
           studentId: p.studentId,
           name: p.name,
           rosterId: p.rosterId,
-          score: p.answers.filter((a) => a.correct).length,
+          score: p.answers.filter((a) => a.round < s.questions.length && a.correct).length,
           total: s.questions.length,
           answers: s.questions.map((_, i) => p.answers.find((a) => a.round === i)?.choice ?? -1),
           gameType: s.soloStudentId ? 'colonyquest-solo' : 'colonyquest-live',

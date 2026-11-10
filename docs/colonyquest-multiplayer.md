@@ -34,10 +34,10 @@ computer opponents. It never records learner marks or alters a smartboard game.
   2.5-second consequence scene; raids have 5.6 seconds for approach and return.
   The next question then opens automatically. Incorrect or unanswered questions
   show the correct answer and explanation for three seconds before continuing.
-- Finished learners choose a colony to watch, without further upgrades or answers.
+- In legacy saved rooms, finished learners choose a colony to watch, without further upgrades or answers. New rooms continue into practice.
   Only that colony's visual state and relevant raid events are sent; rival answers
-  stay private. The match ends after all active human learners finish, or when
-  the teacher ends it. The teacher can pause everyone's questions and world time.
+  stay private. Legacy rooms end after all active human learners finish. New individual rooms end when
+  the teacher ends them; new paired games use the overall game timer. The teacher can pause everyone's questions and world time.
 - Personal question time freezes on disconnection and resumes on reconnect.
   Existing saved matches retain their original synchronized pacing. Start a new
   multiplayer match to use individual pacing; smartboard pacing is unchanged.
@@ -237,3 +237,13 @@ the teacher device. Learner action recordings and event effects start enabled,
 with their media element and audio context unlocked on a tap or key press.
 A blocked recording exposes a Tap to enable effects button instead of silently
 claiming audio is playing. Device volume and browser permissions still apply.
+
+## Continuous practice
+
+New individual multiplayer games cycle through the question set until the teacher
+ends the room; paired duels cycle until the overall game timer ends. Students
+continue earning colony rewards during practice. The original attempt at each
+question, including missing answers, is the only attempt used for assessment
+scores, reports and saved learner results. Practice turns have unique turn IDs
+so retries cannot earn duplicate rewards. Existing saved rooms retain their
+previous finish rule; open a new room to enable continuous practice.

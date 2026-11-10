@@ -387,7 +387,7 @@
     $('learner').classList.toggle('story-playing', s.phase === 'story' && s.story?.key !== 'intro');
     $('roundLabel').textContent = s.preview
       ? 'PRACTICE · NO LEARNER MARKS SAVED'
-      : `${s.solo ? 'VS COMPUTER · ' : ''}QUESTION ${s.round + 1} OF ${s.total}`;
+      : `${s.solo ? 'VS COMPUTER · ' : ''}${s.practice ? 'PRACTICE · ' : ''}QUESTION ${s.questionNumber || s.round + 1} OF ${s.total}${s.practice ? ' · Original marks saved' : ''}`;
     $('explanation').textContent = '';
     if(s.phase!=='story'||s.story?.key!=='intro')$('instruction').classList.remove('spoken-story');
     $('choices').className = 'choices';
@@ -768,7 +768,7 @@
       s.players
         .map(
           (p, i) =>
-            `<article class="colony-card ${p.answered ? 'answered' : ''}"><strong>${i + 1}. ${esc(p.name)}</strong><div class="mini-ants">🐜 ${'🏡'.repeat(Math.min(4, p.rooms))}</div><b>${p.strength}</b> colony points<small>🌾 ${p.food} · 🐜 ${p.workers} · 🛡 ${p.soldiers}</small><small>${p.teacherPaused ? 'Paused by teacher' : s.phase === 'story' ? 'Meadow adventure' : !p.connected ? 'Reconnecting…' : s.pacing === 'individual' ? p.finished ? '✓ Finished · watching' : `Question ${p.questionNumber}/${s.total} · ${p.stage === 'upgrade' ? 'Choosing upgrade' : p.stage === 'reveal' ? 'Colony in action' : 'Answering'}` : p.answered ? '✓ Answer saved' : 'Thinking…'}</small>${s.pacing === 'individual' && ['answer','paused'].includes(s.phase) && !p.npc && !p.finished ? `<button type="button" data-player-pause="${esc(p.id)}" data-paused="${!p.teacherPaused}">${p.teacherPaused ? 'Resume learner' : 'Pause learner'}</button>` : ''}</article>`,
+            `<article class="colony-card ${p.answered ? 'answered' : ''}"><strong>${i + 1}. ${esc(p.name)}</strong><div class="mini-ants">🐜 ${'🏡'.repeat(Math.min(4, p.rooms))}</div><b>${p.strength}</b> colony points<small>🌾 ${p.food} · 🐜 ${p.workers} · 🛡 ${p.soldiers}</small><small>${p.teacherPaused ? 'Paused by teacher' : s.phase === 'story' ? 'Meadow adventure' : !p.connected ? 'Reconnecting…' : s.pacing === 'individual' ? p.finished ? '✓ Finished · watching' : `${p.practice ? 'Practice' : 'Question'} ${p.questionNumber}/${s.total} · ${p.stage === 'upgrade' ? 'Choosing upgrade' : p.stage === 'reveal' ? 'Colony in action' : 'Answering'}` : p.answered ? '✓ Answer saved' : 'Thinking…'}</small>${s.pacing === 'individual' && ['answer','paused'].includes(s.phase) && !p.npc && !p.finished ? `<button type="button" data-player-pause="${esc(p.id)}" data-paused="${!p.teacherPaused}">${p.teacherPaused ? 'Resume learner' : 'Pause learner'}</button>` : ''}</article>`,
         )
         .join('') ||
       '<article class="colony-card"><strong>Waiting for your learners</strong><p>Share the learner link above.</p></article>';

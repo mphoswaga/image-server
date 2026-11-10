@@ -386,7 +386,7 @@ test('individual socket flow advances one learner, persists feedback and reconne
  assert.equal(saved.players.find(p=>p.studentId==='S1').answers.length,0);
 });
 
-test('individual classroom burst persists personal feedback and restricts spectator access', async t => {
+test('individual classroom burst persists feedback and continues into practice without changing marks', async t => {
   const f = await fixture(t, 'individual-classroom', {individual:true});
   const m = await f.live.openMatch(f.game, {rosterIds:['classA']});
   const clients = await Promise.all(Array.from({length:30}, (_,i)=>f.join('S'+i)));
@@ -411,16 +411,18 @@ test('individual classroom burst persists personal feedback and restricts specta
     match.upgrade(spectator.id,1,'food',null,now);
     match.finishPersonalQuestion(spectator,now);
   });
-  clients[0].send(JSON.stringify({type:'watch',matchId:m.state.id,target}));
-  await until(()=>clients[0].states.at(-1)?.watching?.id===target);
+  await until(()=>clients[0].states.at(-1)?.practice===true);
   const view=clients[0].states.at(-1);
-  assert.equal(view.spectators.length,29);
-  assert.ok(view.spectators.every(p=>p.colony===undefined && p.answers===undefined));
-  assert.equal(view.watching.answers,undefined);
-  assert.equal(view.watching.question,undefined);
-  clients[0].send(JSON.stringify({type:'watch',matchId:m.state.id,target:'outside-room',commandId:'invalid-watch'}));
-  await until(()=>clients[0].messages.some(msg=>msg.commandId==='invalid-watch'));
-  assert.equal(clients[0].messages.find(msg=>msg.commandId==='invalid-watch').accepted,false);
+  assert.equal(view.phase,'answer');assert.equal(view.questionNumber,1);
+  assert.equal(view.question.correctIndex,undefined);
+  clients[0].send(JSON.stringify({type:'answer',matchId:m.state.id,round:2,choice:0,commandId:'practice-answer'}));
+  await until(()=>clients[0].messages.some(msg=>msg.commandId==='practice-answer'&&msg.accepted));
+  const persisted=JSON.parse(fs.readFileSync(path.join(temp,'colonyquest-multiplayer',`individual-classroom.${m.state.id}.json`)));
+  assert.equal(persisted.players.find(p=>p.id===spectator.id).answers.length,3);
+  assert.equal(m.report().learners.find(p=>p.studentId===spectator.studentId).correct,2);
+  clients[0].send(JSON.stringify({type:'watch',matchId:m.state.id,target,commandId:'practice-watch'}));
+  await until(()=>clients[0].messages.some(msg=>msg.commandId==='practice-watch'));
+  assert.equal(clients[0].messages.find(msg=>msg.commandId==='practice-watch').accepted,false);
 });
 test('only owning teacher can pause a learner in the current match',async t=>{
  const f=await fixture(t,'teacher-pause',{individual:true});const m=await f.live.openMatch(f.game,{rosterIds:['classA'],storyEnabled:false});

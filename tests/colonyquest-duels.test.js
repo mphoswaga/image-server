@@ -271,3 +271,19 @@ test("classroom broadcasts reuse rankings without rescanning every answer for ev
   );
   assert.equal(next.duel.leaderboard[0].wins, 9);
 });
+
+test('short question sets repeat in duels until the game timer ends',()=>{
+ const m=new ColonyMatch({...game,questions:game.questions.slice(0,1)},{duels:true,storyEnabled:false,gameMinutes:1,now:0});
+ const a=m.join({studentId:'a',name:'A'},0),b=m.join({studentId:'b',name:'B'},0);
+ m.start(0);m.tick(5000);
+ for(const p of [a,b]){m.answer(p.id,0,0,5100);m.upgrade(p.id,0,'food',null,5200);}
+ m.tick(8300);
+ assert.equal(m.state.phase,'answer');assert.equal(a.round,1);assert.equal(b.phase,'answer');
+ assert.equal(m.snapshot(a.id,false,8300).practice,true);
+ for(const p of [a,b]){m.answer(p.id,1,0,8400);m.upgrade(p.id,1,'food',null,8500);}
+ m.tick(11600);
+ assert.equal(m.report().learners[0].correct,1);
+ m.tick(70000);m.tick(74000);m.tick(78000);m.tick(100000);
+ assert.equal(m.state.phase,'ended');
+ assert.equal(m.report().learners[0].correct,1);
+});

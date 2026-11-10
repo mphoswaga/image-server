@@ -45,8 +45,16 @@ class ColonyMatch {
       questionSeconds: 25,
       upgradeSeconds: 20,
       competitiveStart: true,
+      continuePlaying: true,
     };
     if(!state&&duels){if(!Number.isInteger(gameMinutes)||gameMinutes<1||gameMinutes>120||![3,5].includes(duelMinutes)||!['balanced','gender'].includes(teamMode)||!Array.isArray(teamNames)||teamNames.length!==2||teamNames.some(n=>typeof n!=='string'||!n.trim()||n.length>30)||teamNames[0]?.trim()===teamNames[1]?.trim())throw Error('Choose 3 or 5 minutes per duel, 1–120 minutes for the game, and valid team names.');this.state.pacing='individual';this.state.duels={minutes:duelMinutes,gameMinutes,gameRemainingMs:gameMinutes*60000,teamMode,teamNames:teamNames.map(n=>n.trim()),round:0,stage:'lobby',pairs:[],history:[],teams:Object.create(null)};}this.lastTick = now;
+  }
+  questionForRound(round) {
+    const questions = this.state.questions;
+    return questions[this.state.continuePlaying && this.state.pacing === "individual" ? round % questions.length : round];
+  }
+  assessmentAnswers(p) {
+    return p.answers.filter(a => a.round < this.state.questions.length);
   }
   startingColony(input, index) {
     const colony = core.createTeam(input, index);
@@ -241,7 +249,7 @@ class ColonyMatch {
     if (previous) return previous; // retries must never earn a second upgrade
     if (s.phase !== 'answer' || (individual && p.phase !== 'answer') || now >= (individual ? p.deadline : s.deadline))
       throw Error('Answers are closed for this question.');
-    const q = s.questions[round];
+    const q = this.questionForRound(round);
     if (!Number.isInteger(choice) || choice < 0 || choice >= q.options.length)
       throw Error('Choose one of the answers.');
     const a = { round, choice, correct: choice === q.correctIndex, at: now };
@@ -486,11 +494,11 @@ class ColonyMatch {
         rooms: p.colony.territory,
         color: p.colony.colorIndex,
         answered: p.answers.some((a) => a.round === (s.pacing === 'individual' ? p.round : s.round)),
-        ...(s.pacing === 'individual' ? {questionNumber: Math.min(s.questions.length, (p.round || 0) + 1), finished: p.phase === 'spectating', stage: p.phase || 'lobby'} : {}),
+        ...(s.pacing === 'individual' ? {questionNumber: (p.round || 0) % s.questions.length + 1, practice: (p.round || 0) >= s.questions.length, finished: p.phase === 'spectating', stage: p.phase || 'lobby'} : {}),
         ...(teacher || s.phase === 'ended'
           ? {
-              score: p.answers.filter((a) => a.correct).length,
-              answeredCount: p.answers.length,
+              score: this.assessmentAnswers(p).filter((a) => a.correct).length,
+              answeredCount: this.assessmentAnswers(p).length,
             }
           : {}),
       }))
@@ -602,10 +610,10 @@ class ColonyMatch {
         studentId: p.studentId,
         rosterId: p.rosterId,
         removed: p.removed,
-        correct: p.answers.filter((a) => a.correct).length,
-        answered: p.answers.length,
+        correct: this.assessmentAnswers(p).filter((a) => a.correct).length,
+        answered: this.assessmentAnswers(p).length,
         strength: core.colonyStrength(p.colony),
-        answers: p.answers,
+        answers: this.assessmentAnswers(p),
       })),
       questions: s.questions.map((q, i) => ({
         question: q.question,

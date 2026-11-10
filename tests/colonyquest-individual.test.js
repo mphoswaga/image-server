@@ -37,8 +37,8 @@ test('disconnection freezes a personal question without blocking connected peers
  m.answer(a.id,0,0,9000);assert.equal(a.phase,'upgrade');
  m.answer(b.id,0,0,10000);assert.equal(b.phase,'upgrade');
 });
-test('finishing exposes colonies to watch, never rival answers or extra upgrades',()=>{
- const {m,a,b}=room();let time=100;
+test('legacy saved rooms still expose private spectator views',()=>{
+ const {m,a,b}=room();delete m.state.continuePlaying;let time=100;
  for(let round=0;round<3;round++){m.answer(a.id,round,0,time);m.upgrade(a.id,round,'food',null,time+1);m.tick(time+3001);time+=3100;}
  const s=m.snapshot(a.id,false,time);assert.equal(s.phase,'spectating');assert.equal(s.spectators[0].id,b.id);
  assert.equal(s.spectators[0].colony,undefined);
@@ -50,13 +50,13 @@ test('finishing exposes colonies to watch, never rival answers or extra upgrades
  assert.equal(m.snapshot(b.id,false,time).spectators,undefined);
  const workers=a.colony.workers;m.upgrade(a.id,2,'workers',null,time);assert.equal(a.colony.workers,workers);assert.equal(a.upgrades.length,3);
 });
-test('all original questions complete before automatic finish; teacher finish preserves blanks',()=>{
+test('all original questions complete before practice; teacher finish preserves blanks',()=>{
  const {m,a,b}=room();let time=100;
  for(let round=0;round<3;round++){
   for(const p of [a,b]){m.answer(p.id,round,0,time);m.upgrade(p.id,round,'food',null,time+1);}
   m.tick(time+3001);time+=3100;
  }
- assert.equal(m.state.phase,'ended');assert.equal(m.report().learners[0].answered,3);
+ assert.equal(m.state.phase,'answer');assert.equal(a.round,3);assert.equal(b.round,3);assert.equal(m.report().learners[0].answered,3);
  const other=room();other.m.answer(other.a.id,0,0,100);other.m.end(101);assert.equal(other.m.report().learners[1].answered,0);
 });
 test('shared threats use active world time, not the fastest learners round',()=>{
@@ -122,4 +122,25 @@ for(const key of ['expansion','defense','raid'])test(`${key} finishes its cinema
  assert.equal(a.deadline,200+duration+400);
  m.tick(200+duration-1);assert.equal(a.phase,'reveal');assert.equal(a.round,0);
  m.tick(200+duration+400);assert.equal(a.phase,'answer');assert.equal(a.round,1);
+});
+
+test('practice repeats without exposing answers or inflating assessment and survives reload',()=>{
+ const {m,a,b}=room();let now=100;
+ for(let round=0;round<7;round++){
+  const before=m.snapshot(a.id,false,now);
+  assert.equal(before.question.question,'Q'+round%3);
+  assert.equal(before.question.correctIndex,undefined);
+  assert.equal(before.practice,round>=3);
+  m.answer(a.id,round,round===0?1:0,now);
+  if(round!==0){m.upgrade(a.id,round,'food',null,now+1);m.upgrade(a.id,round,'food',null,now+2);}
+  m.tick(now+3001);now+=3100;
+ }
+ assert.equal(a.upgrades.length,6);
+ assert.equal(a.phase,'answer');assert.equal(a.round,7);
+ const report=m.report().learners.find(p=>p.studentId===a.studentId);
+ assert.equal(report.correct,2);assert.equal(report.answered,3);assert.equal(report.answers.length,3);
+ const restored=new ColonyMatch(game,{state:structuredClone(m.state),now});
+ assert.equal(restored.snapshot(a.id,false,now).question.question,'Q1');
+ restored.end(now+1);
+ assert.equal(restored.report().learners.find(p=>p.studentId===a.studentId).correct,2);
 });
