@@ -152,7 +152,7 @@ module.exports = function install(ColonyMatch) {
     }
     for (const p of players) {
       const color = p.colony.colorIndex;
-      p.colony = core.createTeam(
+      p.colony = m.startingColony(
         { id: p.id, name: p.name, colorIndex: color },
         color,
       );

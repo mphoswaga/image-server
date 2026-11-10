@@ -29,7 +29,7 @@ computer opponents. It never records learner marks or alters a smartboard game.
   receives every original question, in order, with a personal 25-second limit.
   A choice locks only after a durable server save. Correct answers immediately
   open that learner's upgrade choices; nobody waits for the class to answer.
-- A correct answer earns one upgrade or eligible raid. Learners have up to 12
+- A correct answer earns one upgrade or eligible raid. Learners have up to 20
   seconds to choose; an unused choice becomes food. A normal upgrade has a
   2.5-second consequence scene; raids have 5.6 seconds for approach and return.
   The next question then opens automatically. Incorrect or unanswered questions
@@ -222,3 +222,18 @@ The teacher's **Class audio** control plays the background soundtrack, opponent 
 ## Duel performance
 
 Paired habitats use a one-device-pixel drawing scale to avoid rendering two enlarged Retina canvases. The learner's habitat keeps its 30fps drawing budget; an idle rival uses 20fps and returns to 30fps for construction, raids and story events. These drawing budgets do not change question timers, event durations or game outcomes. Intro/result backgrounds use static-state rendering rather than continuously animating behind announcements. Shared room definitions are cached with upgrade/removal invalidation, and rival previews skip duplicate overtake calculations. Server broadcasts calculate one shared class leaderboard per batch instead of rescanning every learner's answer history for every recipient. Existing durable answer acknowledgements and connection backpressure protection remain in place.
+
+## Competitive starts and classroom audio
+
+New multiplayer rooms (individual and paired duels) give every colony the same
+pantry, barracks, one guard, and materials for a further room. A first correct
+answer can therefore fund a raid, construction or defense. Paired duels restore
+this equal starting base each duel. Existing saved rooms retain their rules.
+Raid choices appear first, and standings remain visible while answering.
+Learning marks remain based on answers alone.
+
+Teacher class audio starts enabled; soundtrack and celebration music stay on
+the teacher device. Learner action recordings and event effects start enabled,
+with their media element and audio context unlocked on a tap or key press.
+A blocked recording exposes a Tap to enable effects button instead of silently
+claiming audio is playing. Device volume and browser permissions still apply.

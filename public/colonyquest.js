@@ -20,7 +20,7 @@
   let saveChain = Promise.resolve();
   let toastTimer = null;
   let clockTimer = null;
-  let answerClock = { key: '', remaining: 10000, last: 0 };
+  let answerClock = { key: '', remaining: 60000, last: 0 };
 
   function updateAnswerClock() {
     const now = performance.now();
@@ -29,13 +29,14 @@
     const active = session?.phase === 'question' && !answerLocked &&
       !$('questionOverlay').classList.contains('hidden') &&
       !$('gameScreen').classList.contains('threat-spotlight');
-    if (active) answerClock.remaining = Math.max(0, answerClock.remaining - elapsed);
+    const timed = config?.answerSeconds !== 0;
+    if (active && timed) answerClock.remaining = Math.max(0, answerClock.remaining - elapsed);
     const display = $('answerCountdown');
     if (display) {
-      display.textContent = `${Math.ceil(answerClock.remaining / 1000)}s`;
-      display.classList.toggle('urgent', answerClock.remaining <= 3000);
+      display.textContent = timed ? `${Math.ceil(answerClock.remaining / 1000)}s` : 'No timer';
+      display.classList.toggle('urgent', timed && answerClock.remaining <= 3000);
     }
-    if (active && answerClock.remaining === 0) {
+    if (active && timed && answerClock.remaining === 0) {
       handleOutcome(null, false);
       $('feedbackText').textContent = `Time is up. The right answer is ${questionAtCursor().options[questionAtCursor().correctIndex]}.`;
     }
@@ -286,6 +287,7 @@
       matchType,
       rounds: Number($('rounds').value),
       durationMinutes: Number($('duration').value),
+      answerSeconds: Number($('answerSeconds').value),
       sound: $('soundEnabled').checked,
       teams: collectTeams(),
       questions,
@@ -339,6 +341,7 @@
     $('teamCount').value = String(config.teamCount || 4);
     $('rounds').value = String(config.rounds || 5);
     $('duration').value = String(config.durationMinutes || 15);
+    $('answerSeconds').value = String(config.answerSeconds ?? 60);
     $('soundEnabled').checked = config.sound !== false;
     setMatchType(config.matchType);
     renderTeamEditor();
@@ -421,7 +424,7 @@
   });
 
   async function startNewMatch() {
-    answerClock = { key: '', remaining: 10000, last: 0 };
+    answerClock = { key: '', remaining: 60000, last: 0 };
     if (startingMatch) return;
     startingMatch = true;
     showNotice('');
@@ -813,7 +816,7 @@
     transitionLocked = false;
     pendingOutcome = null;
     const clockKey = `${session.turnIndex}:${session.questionCursor}`;
-    if (answerClock.key !== clockKey) answerClock = { key: clockKey, remaining: 10000, last: performance.now() };
+    if (answerClock.key !== clockKey) answerClock = { key: clockKey, remaining: (config.answerSeconds ?? 60) * 1000, last: performance.now() };
     answerClock.last = performance.now();
     const team = currentTeam();
     const savedMember = session.selectedTurn === session.turnIndex && team.members.find(m => m.id === session.selectedLearnerId);

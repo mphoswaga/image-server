@@ -59,6 +59,7 @@
         <div class="field"><label>Finish after</label><div class="segmented" id="matchType"><button type="button" class="active" data-type="rounds">Rounds</button><button type="button" data-type="time">Time</button></div></div>
         <div class="field" id="roundsField"><label for="rounds">Rounds per team</label><select id="rounds"><option>3</option><option selected>5</option><option>7</option><option>9</option><option>12</option></select></div>
         <div class="field hidden" id="timeField"><label for="duration">Minutes</label><select id="duration"><option>5</option><option>10</option><option selected>15</option><option>20</option><option>30</option><option>45</option></select></div>
+        <div class="field"><label for="answerSeconds">Time per answer</label><select id="answerSeconds"><option value="30">30 seconds</option><option value="60" selected>60 seconds</option><option value="90">90 seconds</option><option value="120">2 minutes</option><option value="0">No timer · class discussion</option></select><small>The match time limit still applies in timed matches.</small></div>
         <label class="check"><input id="soundEnabled" type="checkbox" checked> Game sound and music</label>
       </div>
 
@@ -128,7 +129,7 @@
     </section>
 
     <section id="questionOverlay" class="overlay question-overlay hidden" aria-label="Question">
-      <div class="dialog question-dialog"><div class="question-heading"><div class="dialog-kicker" id="questionKicker">Team turn</div><span id="answerCountdown" role="timer" aria-label="Time remaining to answer">10s</span></div><div class="guide-line"><img src="/assets/colonyquest/pip-worker.webp" alt=""><span id="guideLine">Get the right answer to win one upgrade.</span></div><h2 id="questionText"></h2><div id="answers" class="answers"></div><div id="feedback" class="feedback"><span id="feedbackText"></span><button id="feedbackNext" class="btn primary" type="button">Next</button></div><div class="question-foot"><span id="questionProgress"></span><button id="revealBtn" type="button">Show answer</button></div></div>
+      <div class="dialog question-dialog"><div class="question-heading"><div class="dialog-kicker" id="questionKicker">Team turn</div><span id="answerCountdown" role="timer" aria-label="Time remaining to answer">60s</span></div><div class="guide-line"><img src="/assets/colonyquest/pip-worker.webp" alt=""><span id="guideLine">Get the right answer to win one upgrade.</span></div><h2 id="questionText"></h2><div id="answers" class="answers"></div><div id="feedback" class="feedback"><span id="feedbackText"></span><button id="feedbackNext" class="btn primary" type="button">Next</button></div><div class="question-foot"><span id="questionProgress"></span><button id="revealBtn" type="button">Show answer</button></div></div>
     </section>
 
     <section id="rewardOverlay" class="overlay choice-overlay hidden" aria-label="Choose a colony upgrade"><div class="dialog choice-dialog"><div class="dialog-kicker">One right answer gives your team one upgrade.</div><h2 id="rewardTitle">What should your ants do?</h2><div class="reward-guide"><img src="/assets/colonyquest/pip-worker.webp" alt=""><span>Pick one. You will see the colony change.</span></div><div id="rewardGrid" class="reward-grid"></div></div></section>
@@ -165,14 +166,14 @@
   </div>
 
   <script src="/vendor/phaser.min.js"></script>
-  <script src="/colonyquest-core.js?v=20"></script>
+  <script src="/colonyquest-core.js?v=20261110-timer"></script>
   <script src="/colonyquest-music.js?v=1"></script>
   <script src="/opening-narration-data.js?v=1"></script>
 <script src="/opening-narration.js?v=1"></script><script src="/colony-voice-data.js?v=1"></script><script src="/colony-voices.js?v=1"></script>
 <script src="/colony-presentation.js?v=1"></script>
 <script src="/colonyquest-event-audio.js?v=3"></script>
 <script src="/colony-habitat-layout.js?v=1"></script>
-<script src="/colonyquest.js?v=46"></script>
+<script src="/colonyquest.js?v=20261110-timer"></script>
 <script>document.getElementById('multiplayerLink').href='/colonyquest-live/'+encodeURIComponent(location.pathname.split('/').filter(Boolean).pop());</script>
 </body>
 </html>

@@ -106,6 +106,7 @@ test('ColonyQuest starts as a balanced, child-readable colony simulation', () =>
     matchType: 'rounds',
     rounds: 5,
     durationMinutes: 15,
+    answerSeconds: 60,
     sound: true,
   });
 });
@@ -841,4 +842,13 @@ test('teacher deductions lower colony rankings, survive saves and never alter an
  assert.throws(()=>core.deductTeamPoints(session,team.id,1.5),/whole number/);
  assert.throws(()=>core.deductTeamPoints(session,team.id,-1),/whole number/);
  session.phase='ended';assert.throws(()=>core.deductTeamPoints(session,team.id,1),/Start a game/);
+});
+
+test('answer time survives normalization and old games receive sixty seconds', () => {
+  for (const answerSeconds of [0, 30, 60, 90, 120]) {
+    assert.equal(core.normalizeConfig({ answerSeconds }).answerSeconds, answerSeconds);
+  }
+  for (const answerSeconds of [undefined, null, -1, 10, 'bad']) {
+    assert.equal(core.normalizeConfig({ answerSeconds }).answerSeconds, 60);
+  }
 });

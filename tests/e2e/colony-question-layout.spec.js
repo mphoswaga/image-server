@@ -12,3 +12,8 @@ for(const viewport of [{width:1366,height:768},{width:1093,height:614},{width:19
  });for(const box of boxes)expect(box).toEqual({overflowX:false,overflowY:false,inside:true});
  await page.screenshot({path:`/tmp/colony-question-${viewport.width}.png`});
 });
+for(const seconds of [30,0])test(`smartboard respects saved answer time ${seconds}`,async({page})=>{
+ const teams=[core.createTeam({name:'Boys'},0),core.createTeam({name:'Girls'},1)],session=core.normalizeSession({phase:'question',introSeen:true,teams});
+ await page.route(/\/api\/game\/cq-timer\/colonyquest(?:\/session)?$/,r=>r.fulfill({json:r.request().method()==='PUT'?{ok:true}:{game:{id:'cq-timer',questions:[{question:'Choose one',options:['A','B'],correctIndex:0}],colonyquest:{teamCount:2,answerSeconds:seconds,sound:false,teams}},session}}));
+ await page.goto('/colonyquest/cq-timer');await expect(page.locator('#answerSeconds')).toHaveValue(String(seconds));await page.locator('#resumeBtn').click();await expect(page.locator('#answerCountdown')).toHaveText(seconds?/(30|29|28)s/:'No timer');await expect(page.locator('#answers .answer').first()).toBeEnabled();
+});

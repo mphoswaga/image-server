@@ -20,7 +20,7 @@
     offset = 0,
     scene = null,
     audio = null,
-    sound = !host,
+    sound = true,
     renderKey = '',
     pending = null,
     socket = null,
@@ -38,6 +38,7 @@
   function openingChapter(elapsed){let start=0;for(let i=0;i<4;i++){const end=start+(openingChapters[i].seconds+1)*1000;if(elapsed<end||i===3)return {index:i,position:Math.max(0,(elapsed-start)/1000)};start=end;}}
   const storyReader=new ColonyStoryText(openingVoice);
   const actionVoice=new ColonyActionVoice(()=>!host&&sound&&!openingVoice.active&&!['paused','ended'].includes(state?.phase)&&!state?.me?.teacherPaused,speaking=>{soundtrack.media.muted=speaking;},()=>Number($('musicVolume').value)/100);
+  actionVoice.onBlocked = () => { if (!host && sound) $('sound').textContent = 'Tap to enable effects'; };
   const eventAudio = new ColonyEventAudio();
   eventAudio.voice=actionVoice;
   let duckTimer;
@@ -51,7 +52,7 @@
   };
   function syncMusic() {duelView?.configure(sound,Number($('musicVolume').value)/100);
     eventAudio.configure(
-      sound &&
+      !host && sound &&
         !!state &&
         !['paused', 'ended'].includes(state.phase) &&
         !document.hidden &&
@@ -66,7 +67,17 @@
         !document.body.classList.contains('offline'),
     );
   }
-  $('sound').textContent=host?'Class audio off':'Effects on';
+  $('sound').textContent=host?'Class audio on':'Effects on';
+  const unlockAudio = () => {
+    if (!sound) return;
+    if (!host) actionVoice.unlock();
+    if (!host) {
+      try { eventAudio.context ||= new (window.AudioContext || window.webkitAudioContext)(); eventAudio.context.resume().catch(()=>{}); } catch {}
+    }
+    syncMusic();
+  };
+  document.addEventListener('pointerdown', unlockAudio);
+  document.addEventListener('keydown', unlockAudio);
   if(!host){document.querySelector('.music-settings summary').textContent='Effects';document.querySelector('label[for=musicVolume]').textContent='Effects volume';$('musicTrackLabel').hidden=true;}
   $('musicVolume').oninput = () => {
     soundtrack.setVolume(Number($('musicVolume').value) / 200);
@@ -123,10 +134,11 @@
     } catch {}
   }
   $('sound').onclick = () => {
-    sound = !sound;
+    sound = !host && actionVoice.blocked ? true : !sound;
+    if (actionVoice.blocked) actionVoice.unlocked = false;
     if(!sound)actionVoice.stop();
     $('sound').textContent = host ? (sound?'Class audio on':'Class audio off') : (sound?'Effects on':'Effects off');
-    if (sound) chime();
+    if (sound) { unlockAudio(); chime(); }
     syncMusic();
   };
   $('fullscreen').onclick = () => {
@@ -331,7 +343,7 @@
     // Only show explanatory banners during the gap between questions.
     $('survival').hidden = s.phase !== 'upgrade';
     $('event').hidden = s.phase !== 'reveal';
-    $('rivals').hidden = !['upgrade', 'reveal', 'ended'].includes(s.phase);
+    $('rivals').hidden = !['answer', 'upgrade', 'reveal', 'ended'].includes(s.phase);
     const recent = s.events.at(-1);
     const activeCue = actionCue && scene.clock < actionCue.until;
     $('event').classList.toggle('action-cue', !!activeCue);
@@ -483,7 +495,7 @@
       $('question').textContent = 'Correct! Grow your colony.';
       $('instruction').textContent = pending
         ? 'Saving your upgrade…'
-        : 'Choose one upgrade. Raids run automatically.';
+        : 'Build, defend or raid — choose your next move!';
       $('explanation').textContent =
         'Correct answer: ' + s.question.options[s.question.correctIndex];
       $('choices').classList.add('upgrades');
@@ -494,8 +506,8 @@
       // Keep a few actionable rivals in view; every other colony stays reachable.
       const ordered=[...raidOptions.filter(({u})=>u.allowed),...raidOptions.filter(({u})=>!u.allowed)];
       $('choices').innerHTML =
-        p.upgrades.map((u, i) => (u.key === 'raid' ? '' : upgradeCard(u, i))).join('') +
-        `<section class="raid-picker"><h3>Or raid a rival</h3><p>Choose a colony. Your guards go on this turn.</p><div class="raid-targets">${ordered.slice(0,4).map(raidButton).join('') || '<p>No rival colonies yet.</p>'}</div>${ordered.length>4?`<details class="more-rivals"><summary>All other colonies (${ordered.length-4})</summary><div class="raid-targets">${ordered.slice(4).map(raidButton).join('')}</div></details>`:''}</section>`;
+        `<section class="raid-picker"><h3>Challenge a rival</h3><p>Choose a colony. Your guards go on this turn.</p><div class="raid-targets">${ordered.slice(0,4).map(raidButton).join('') || '<p>No rival colonies yet.</p>'}</div>${ordered.length>4?`<details class="more-rivals"><summary>All other colonies (${ordered.length-4})</summary><div class="raid-targets">${ordered.slice(4).map(raidButton).join('')}</div></details>`:''}</section>` +
+        p.upgrades.map((u, i) => (u.key === 'raid' ? '' : upgradeCard(u, i))).join('');
       $('choices')
         .querySelectorAll('[data-upgrade]')
         .forEach(

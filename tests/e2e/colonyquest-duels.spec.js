@@ -405,12 +405,12 @@ test("class music stays on the teacher computer and learner upgrades use smartbo
   await page.goto("/colonyquest-live-play/duel-browser");
   await expect(page.locator("#sound")).toHaveText("Effects on");
   await page.locator('#choices [data-choice="0"]').click();
-  const food = m.options(learner).findIndex((o) => o.key === "food");
+  const food = m.options(learner).findIndex((o) => o.key === "expansion");
   await page.locator('#choices [data-upgrade="' + food + '"]').click();
   await expect
     .poll(() =>
       page.evaluate(() =>
-        window.audioPlays.some((src) => src.endsWith("/action-food.mp3")),
+        window.audioPlays.some((src) => src.endsWith("/action-build.mp3")),
       ),
     )
     .toBe(true);
@@ -456,7 +456,8 @@ test("class music stays on the teacher computer and learner upgrades use smartbo
     r.fulfill({ json: hostData() }),
   );
   await page.goto("/colonyquest-live/duel-browser");
-  await page.locator("#sound").click();
+  await expect(page.locator("#sound")).toHaveText("Class audio on");
+  await page.locator(".music-settings summary").click();
   await expect
     .poll(() =>
       page.evaluate(() =>

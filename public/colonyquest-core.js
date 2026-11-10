@@ -620,6 +620,7 @@
       matchType: source.matchType === 'time' ? 'time' : 'rounds',
       rounds: Math.floor(clamp(source.rounds == null ? 5 : source.rounds, 2, 12)),
       durationMinutes: Math.floor(clamp(source.durationMinutes == null ? 15 : source.durationMinutes, 5, 45)),
+      answerSeconds: [0,30,60,90,120].includes(Number(source.answerSeconds)) && source.answerSeconds != null ? Number(source.answerSeconds) : 60,
       sound: source.sound !== false,
     };
   }

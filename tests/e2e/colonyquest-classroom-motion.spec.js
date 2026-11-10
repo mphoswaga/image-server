@@ -14,9 +14,10 @@ async function open(page,extra={}) {
  await expect(page.locator('#gameScreen')).not.toHaveAttribute('inert','');
 }
 test('visible answer countdown expires once and pauses with the teacher',async({page})=>{
+  test.setTimeout(90000);
   await open(page,{phase:'question'});
   await expect(page.locator('#answerCountdown')).toBeVisible();
-  await expect(page.locator('#answerCountdown')).toHaveText(/(?:10|9)s/);
+  await expect(page.locator('#answerCountdown')).toHaveText(/(?:60|59|58)s/);
   await page.locator('#pauseBtn').click();
   const paused=await page.locator('#answerCountdown').textContent();
   await page.waitForTimeout(1200);

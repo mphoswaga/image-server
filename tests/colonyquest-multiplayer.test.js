@@ -23,9 +23,9 @@ function next(m, answer = 0) {
   for (const p of m.active()) m.answer(p.id, m.state.round, answer, now + 100);
   m.tick(now + 4000);
   assert.equal(m.state.phase, 'upgrade');
-  m.tick(now + 16000);
+  m.tick(now + 4000 + m.state.upgradeSeconds * 1000);
   assert.equal(m.state.phase, 'reveal');
-  m.tick(now + 20000);
+  m.tick(now + 8000 + m.state.upgradeSeconds * 1000);
 }
 test('30 individual colonies use simultaneous questions without the six-team board limit', () => {
   const m = room(30);
@@ -84,7 +84,7 @@ test('correct learner receives food automatically if no upgrade chosen', () => {
     p = m.active()[0];
   m.answer(p.id, 0, 0, 10);
   m.tick(25000);
-  m.tick(37000);
+  m.tick(25000 + m.state.upgradeSeconds * 1000);
   assert.equal(p.upgrades[0].key, 'food');
   assert.equal(p.colony.upgrades, 1);
 });
@@ -109,11 +109,13 @@ test('walls and rooms require collected materials', () => {
     p = m.active()[0];
   m.answer(p.id, 0, 0, 10);
   m.tick(25000);
+  const territory = p.colony.territory;
+  p.colony.sticks = 0; p.colony.leaves = 0;
   assert.throws(() => m.upgrade(p.id, 0, 'expansion', null, 25100), /Need/);
   p.colony.sticks = 3;
   p.colony.leaves = 2;
   m.upgrade(p.id, 0, 'expansion', null, 25100);
-  assert.equal(p.colony.territory, 2);
+  assert.equal(p.colony.territory, territory + 1);
   assert.equal(p.colony.sticks, 0);
 });
 test('dry season and rain are shared and never remove a learner', () => {
@@ -236,4 +238,18 @@ test('shared classroom summaries preserve personal answers and never expose riva
   assert.equal(own.me.choice,0);
   assert.equal(m.snapshot(b.id,false,200,shared).me.choice,1);
   assert.ok(shared.every(p=>!('choice' in p)&&!('score' in p)&&!('answers' in p)));
+});
+
+test('new multiplayer colonies start equally ready to build or raid and old saves retain their rules', () => {
+ const m = room(); const [a,b] = m.active();
+ assert.equal(a.colony.soldiers,1);
+ assert.equal(a.colony.barracksBuilt,true);
+ assert.equal(core.colonyStrength(a.colony),core.colonyStrength(b.colony));
+ assert.equal(m.raidAllowed(a,b).allowed,true);
+ assert.equal(m.options(a).find(x=>x.key==='expansion').allowed,true);
+ assert.equal(a.answers.length,0);
+ const saved=structuredClone(m.state);delete saved.competitiveStart;saved.upgradeSeconds=12;
+ const old=new ColonyMatch(game,{state:saved});
+ assert.equal(old.state.upgradeSeconds,12);
+ assert.equal(old.startingColony({name:'Legacy'},0).soldiers,0);
 });

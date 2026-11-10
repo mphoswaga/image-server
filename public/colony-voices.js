@@ -3,12 +3,20 @@
  'use strict';
  root.ColonyActionVoice=class {
   constructor(allowed,onSpeaking=()=>{},volume=()=>.75){this.volume=volume;this.allowed=allowed;this.onSpeaking=onSpeaking;this.audio=new Audio();this.audio.preload='none';this.last=0;this.audio.onended=()=>onSpeaking(false);this.audio.onerror=()=>onSpeaking(false);document.addEventListener('visibilitychange',()=>{if(document.hidden)this.stop();});}
+  unlock(){
+   if(this.unlocked||this.unlocking||!this.allowed())return;
+   this.unlocking=true;
+   // Unlock this same media element during a real gesture, before socket replies.
+   this.audio.src='data:audio/wav;base64,UklGRiUAAABXQVZFZm10IBAAAAABAAEARKwAAESsAAABAAgAZGF0YQEAAACA';
+   const source=this.audio.src;
+   this.audio.play().then(()=>{this.unlocked=true;this.blocked=false;if(this.audio.src===source)this.audio.pause();}).catch(()=>{}).finally(()=>{this.unlocking=false;});
+  }
   stop(){this.audio.pause();this.onSpeaking(false);clearTimeout(this.captionTimer);this.caption?.remove();}
   play(key){const aliases={predator:'spider','heavy-rain':'rain','birds-warning':'birds','footsteps-warning':'stomp',footsteps:'stomp',expansion:'build',defense:'build',soldiers:'guard',supplies:'food'};key=aliases[key]||key;
    if(!['raid','spider','build','rain','birds','stomp','guard','food'].includes(key)||!this.allowed()||document.hidden||Date.now()-this.last<1800)return;
    this.last=Date.now();this.stop();this.audio.src='/assets/game-narration/action-'+key+'.mp3';this.audio.volume=Math.max(0,Math.min(1,this.volume()));
    this.caption=document.createElement('div');this.caption.className='colony-voice-caption';this.caption.textContent={raid:'RAIDING!',spider:'SPIDERS INCOMING!',build:'BUILD!',rain:'RAIN INCOMING!',birds:'BIRDS OVERHEAD!',stomp:'GIANT FOOTSTEPS!',guard:'GUARDS READY!',food:'FOOD COLLECTED!'}[key];document.body.append(this.caption);this.captionTimer=setTimeout(()=>this.caption?.remove(),1800);
-   this.audio.play().then(()=>{if(!this.allowed()||document.hidden){this.stop();return;}this.onSpeaking(true);}).catch(()=>this.onSpeaking(false));
+   this.audio.play().then(()=>{if(!this.allowed()||document.hidden){this.stop();return;}this.onSpeaking(true);}).catch(()=>{this.blocked=true;this.onBlocked?.();this.onSpeaking(false);});
   }
  };
  root.ColonyStoryText=class {
