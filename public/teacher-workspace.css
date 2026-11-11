@@ -132,3 +132,22 @@ body[data-byte-ui="teacher"] {
 .wrap .back-btn { color:#21654d; }
 .wrap .btn.ghost:hover:not(:disabled) { background:#eef3ed; border-color:#98afa0; }
 .wrap input:focus,.wrap select:focus,.wrap textarea:focus { border-color:#21654d; box-shadow:0 0 0 3px #21654d20; }
+.student-preview-link { display:inline-flex;align-items:center;padding:7px 11px;border:1px solid #b9cebf;border-radius:5px;background:#edf3ed;color:#183e35;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap; }
+.student-preview-link:hover { background:#dfeadd; }
+#studentProfileMatches .learner-directory-row { gap:12px; flex-wrap:wrap; padding:14px 0; border-radius:0; background:transparent; border:0; border-bottom:1px solid var(--border); }
+#studentProfileMatches .learner-directory-row>a:first-child { min-width:160px;color:var(--ink); }
+#studentProfileMatches .learner-directory-row>button { border:0;background:transparent;color:var(--muted);font:inherit;font-size:12px;cursor:pointer; }
+#rostersPanel>details>summary { cursor:pointer;font-weight:600; }
+body:has(#rostersPanel[style*="display: block"]) .wrap>.hero { display:none; }
+.pin-student-row { display:block!important; padding:14px 0!important; }
+.student-row-overview { display:flex;justify-content:space-between;align-items:center;gap:12px; }
+.student-row-overview a { color:var(--ink);text-decoration:none; }
+.student-row-overview small { display:block;color:var(--muted);font-size:11px;margin-top:3px; }
+.student-management { margin-top:8px; }
+.student-management summary { width:fit-content;cursor:pointer;color:var(--muted);font-size:12px;padding:4px 0; }
+.student-management[open] { padding:12px;background:#f5f7f3;border:1px solid var(--border);border-radius:6px; }
+.student-management select { width:auto;max-width:100%;padding:7px 10px;font-size:13px; }
+.student-management>div { margin-top:12px; }
+.roster-pins-panel input[type="checkbox"] { width:16px;height:16px;padding:0;flex:none;vertical-align:middle; }
+.student-selection { display:inline-flex;align-items:center;gap:6px;margin:0 8px 8px 0; }
+.roster-pins-panel .btn-progress { background:#fff;color:#183e35;border:1px solid var(--border);box-shadow:none; }

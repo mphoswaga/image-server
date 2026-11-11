@@ -5775,6 +5775,13 @@ app.get('/api/student-profiles/:id/preview/:part', requireAuth, (req, res) => {
   res.set('Cache-Control', 'no-store');
   if (req.params.part === 'me') return res.json({ studentId: student.id, name: student.name });
   if (req.params.part === 'my-work') return res.json({ name: student.name, work: gatherWork(student.id, false, req.userId).work });
+  if (req.params.part === 'result') {
+    if(req.query.kind === 'game') { const g=games.getGame(req.query.id);if(!g||g.teacherId!==req.userId||!student.classes.some(c=>games.hasRoster(g,c.id)))return res.status(404).json({error:'Activity not found.'});const r=games.getResults(g.id).find(r=>roster.normalizeStudentId(r.studentId)===student.id);if(!r)return res.status(404).json({error:'No result found.'});return res.json({title:g.lessonTitle+' · '+r.score+' / '+r.total,released:true,questions:[]}); }
+    const a=assignments.getAssignment(req.query.id);
+    if(!a||a.teacherId!==req.userId||!student.classes.some(c=>c.id===a.rosterId))return res.status(404).json({error:'Activity not found.'});
+    const sub=assignments.getSubmission(a.id,student.id);if(!sub)return res.status(404).json({error:'No submission found.'});
+    return res.json({title:a.title,released:assignments.isReleased(a),questions:a.content.questions.map(q=>({id:q.id,question:q.question})),answers:sub.answers});
+  }
   if (req.params.part === 'activities') return res.json(require('./student-activities').discover(student.id, {
     roster: { ...roster, findStudentAcrossAllTeachers: id => roster.findStudentAcrossAllTeachers(id).filter(m => m.teacherId === req.userId) },
     games, assignments, moonquest: moonquestStore, fish: fishQuestLive, colony: colonyQuestMultiplayer,

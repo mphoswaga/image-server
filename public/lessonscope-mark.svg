@@ -1,0 +1,20 @@
+<svg class="ls-icon" viewBox="0 0 210 210" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+<defs><linearGradient id="ls-ring" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#1a3a6b"/><stop offset="100%" stop-color="#3ec96e"/>
+      </linearGradient><linearGradient id="ls-b1" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#3060c8"/><stop offset="100%" stop-color="#1a3a6b"/>
+      </linearGradient><linearGradient id="ls-b2" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#27b87e"/><stop offset="100%" stop-color="#1a7a5a"/>
+      </linearGradient><linearGradient id="ls-b3" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#3ec96e"/><stop offset="100%" stop-color="#22a858"/>
+      </linearGradient></defs>
+          <circle cx="105" cy="105" r="95" fill="none" stroke="url(#ls-ring)" stroke-width="12" stroke-linecap="round"/>
+          <path d="M 30 105 A 75 75 0 0 1 180 105" fill="none" stroke="#dde4f2" stroke-width="5.5" stroke-linecap="round"/>
+          <path d="M 43 105 A 62 62 0 0 1 167 105" fill="none" stroke="#dde4f2" stroke-width="4.5" stroke-linecap="round"/>
+          <path d="M 56 105 A 49 49 0 0 1 154 105" fill="none" stroke="#dde4f2" stroke-width="3.5" stroke-linecap="round"/>
+          <line x1="105" y1="105" x2="63" y2="47" stroke="#1a3a6b" stroke-width="3.5" stroke-linecap="round"/>
+          <circle cx="105" cy="105" r="7" fill="#27b87e" stroke="white" stroke-width="2.5"/>
+          <rect x="74" y="114" width="18" height="30" rx="3" fill="url(#ls-b1)"/>
+          <rect x="96" y="100" width="18" height="44" rx="3" fill="url(#ls-b2)"/>
+          <rect x="118" y="83"  width="18" height="61" rx="3" fill="url(#ls-b3)"/>
+        </svg>

@@ -10,8 +10,9 @@
   async function json(url) { const r=await fetch(url); const d=await r.json(); if(!r.ok)throw Error(d.error||'Could not load student records.'); return d; }
   function renderMatches() {
     const query=fold(search.value.trim());
+    if(!query){matches.innerHTML='<p class="hint">Enter a student’s name or ID, then choose <strong>View as student</strong>.</p>';return;}
     const found=students.filter(s=>!query||fold(s.name+' '+s.id+' '+s.classes.map(c=>c.name).join(' ')).includes(query));
-    matches.innerHTML=found.length?found.map(s=>`<div class="learner-directory-row"><a target="_blank" rel="noopener" href="/start?previewStudent=${encodeURIComponent(s.id)}" title="View as student"><strong>${esc(s.name)}</strong></a><span>${esc(s.id)} · ${esc(s.classes.map(c=>c.name).join(', '))}</span><button type="button" data-student-profile="${esc(s.id)}">View profile →</button></div>`).join(''):'<p>No students match your search.</p>';
+    matches.innerHTML=found.length?found.map(s=>`<div class="learner-directory-row"><a target="_blank" rel="noopener" href="/start?previewStudent=${encodeURIComponent(s.id)}" title="View as student"><strong>${esc(s.name)}</strong></a><span>${esc(s.id)} · ${esc(s.classes.map(c=>c.name).join(', '))}</span><a class="student-preview-link" target="_blank" rel="noopener" href="/start?previewStudent=${encodeURIComponent(s.id)}">View as student ↗</a><button type="button" data-student-profile="${esc(s.id)}">View profile →</button></div>`).join(''):'<p>No students match your search.</p>';
   }
   async function load() { if(loaded)return; matches.textContent='Loading students…';try { students=(await json('/api/student-profiles')).students;loaded=true;renderMatches(); }catch(e){matches.textContent=e.message;} }
   document.getElementById('rostersBtn').addEventListener('click',load);

@@ -60,18 +60,9 @@
   .activity-section{background:#f0f9ff;border:1px solid #cfe5ef;border-radius:20px;padding:18px;margin:20px 0}.activity-section h2{font-size:22px;margin:0 0 12px}.activity-section .work-card{background:white;margin-top:12px}.activity-join{margin-top:12px;background:#167a69!important}.activity-empty{padding:14px;color:#526579;line-height:1.5}.activity-section:has(#liveList){background:#effbf5;border-color:#bce9d2}
 </style>
   <link rel="stylesheet" href="/byte-feedback.css" />
-<link rel="stylesheet" href="/ui-language.css?v=1"><script src="/locales/vi.js?v=1"></script><script defer src="/ui-language.js?v=1"></script></head>
+<link rel="stylesheet" href="/ui-language.css?v=1"><script src="/locales/vi.js?v=1"></script><script defer src="/ui-language.js?v=1"></script><link rel="stylesheet" href="/student-dashboard.css?v=1"></head>
 <body data-byte-ui="student">
-  <div class="logo">
-    <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect width="40" height="40" rx="10" fill="#1a56a0"/>
-      <rect x="10" y="10" width="8" height="8" rx="2" fill="white"/>
-      <rect x="22" y="10" width="8" height="8" rx="2" fill="white" opacity=".7"/>
-      <rect x="10" y="22" width="8" height="8" rx="2" fill="white" opacity=".7"/>
-      <rect x="22" y="22" width="8" height="8" rx="2" fill="#e8833a"/>
-    </svg>
-    <span>Lesson<span class="cope">Scope</span></span>
-  </div>
+  <header class="student-header"><a class="logo" href="/start"><img src="/lessonscope-mark.svg" alt=""><span class="student-wordmark">Lesson<span>Scope</span></span></a><span>My learning space</span></header>
 
   <div class="wrap">
     <div id="loading" class="card" style="text-align:center;margin:0 auto" data-ui-i18n>Loading…</div>
@@ -151,9 +142,9 @@
     const studentEndpoint = part => previewStudent ? '/api/student-profiles/'+encodeURIComponent(previewStudent)+'/preview/'+part : '/api/student/'+part;
     if (previewStudent) {
       const banner=document.createElement('aside');banner.id='previewBanner';banner.style.cssText='padding:16px;background:#183e35;color:white;text-align:center';
-      banner.textContent='Student view · Read-only · Your classes only';document.body.prepend(banner);
-      document.addEventListener('click',event=>{if(event.target.closest('#dashboard button,#dashboard a')){event.preventDefault();event.stopImmediatePropagation();}},true);
-      document.addEventListener('submit',event=>{event.preventDefault();event.stopImmediatePropagation();},true);
+      banner.textContent='Student preview · Explore tasks without saving student work';document.body.prepend(banner);
+
+
     }
     const returnTo = nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//') && !/[\\\r\n]/.test(nextParam) ? nextParam : '';
     const googleLinkMode = new URLSearchParams(location.search).get('google') === 'link';
@@ -182,11 +173,19 @@
             </div>
             ${scoreHTML}
           </div>
-          <a class="wc-link" href="${esc(w.path)}">Open →</a>
+          <a class="wc-link" href="${esc(w.path)}" ${previewStudent?`data-preview-result="${esc(w.id)}" data-preview-kind="${esc(w.kind)}"`:""}>Open →</a>
         </div>`;
       }).join('');
     }
 
+    document.addEventListener('click',async event=>{
+      const link=event.target.closest('[data-preview-result]');if(!link||!previewStudent)return;
+      event.preventDefault();
+      const dialog=document.createElement('dialog');dialog.className='result-preview';
+      dialog.innerHTML='<button class="btn ghost" type="button">Close results</button><div role="status">Loading results…</div>';
+      dialog.querySelector('button').onclick=()=>{dialog.close();dialog.remove();};document.body.append(dialog);dialog.showModal();
+      try{const response=await fetch(studentEndpoint('result')+'?id='+encodeURIComponent(link.dataset.previewResult)+'&kind='+encodeURIComponent(link.dataset.previewKind));const d=await response.json();if(!response.ok)throw Error(d.error);dialog.querySelector('div').innerHTML='<h2>'+esc(d.title)+'</h2><p>'+esc(d.released?'Results released':'Pending review — marks are hidden from the student.')+'</p>'+d.questions.map(q=>'<article><h3>'+esc(q.question)+'</h3><p>'+esc(d.answers?.[q.id]??'No answer recorded')+'</p></article>').join('');}catch(e){dialog.querySelector('div').textContent=e.message;}
+    });
     let activityBusy=false,activityTimer=null,activitySignature='';
     async function refreshActivities(){
       if(activityBusy||document.hidden)return;
@@ -199,7 +198,7 @@
           for(const [key,id,empty] of [['live','liveList','No live game yet. This page updates by itself.'],['todo','todoList','You’re all caught up! New tasks will appear here.']]){
             const list=d[key]||[];$(id).replaceChildren();
             if(!list.length){const p=document.createElement('p');p.className='activity-empty';p.textContent=empty;$(id).append(p);}
-            for(const item of list){const card=document.createElement('div');card.className='work-card';const title=document.createElement('strong');title.textContent=item.title;const meta=document.createElement('p');meta.textContent=item.subject||'Class activity';const button=document.createElement('button');button.className='btn activity-join';button.textContent=key==='live'?'Join now →':'Open task →';button.onclick=async()=>{button.disabled=true;try{const response=await fetch('/api/student/join-room',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:item.code})});const result=await response.json();if(!response.ok)throw Error(result.error);if(result.type==='moonquest'&&result.token)sessionStorage.setItem('moonquest:'+result.id,result.token);location.href=item.activity==='colony'?'/colonyquest-live-play/'+encodeURIComponent(result.id):item.activity==='fish'?'/fishquest-play/'+encodeURIComponent(result.id):result.path;}catch(e){$('activityStatus').textContent=e.message;button.disabled=false;}};card.append(title,meta,button);$(id).append(card);}
+            for(const item of list){const card=document.createElement('div');card.className='work-card';const title=document.createElement('strong');title.textContent=item.title;const meta=document.createElement('p');meta.textContent=item.subject||'Class activity';const button=document.createElement('button');button.className='btn activity-join';button.textContent=key==='live'?'Join now →':'Open task →';button.onclick=async()=>{if(previewStudent){location.href='/'+(item.kind==='assignment'?'assignment/':item.kind==='moonquest'?'moonquest?session=':'play/')+encodeURIComponent(item.id);return;}button.disabled=true;try{const response=await fetch('/api/student/join-room',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:item.code})});const result=await response.json();if(!response.ok)throw Error(result.error);if(result.type==='moonquest'&&result.token)sessionStorage.setItem('moonquest:'+result.id,result.token);location.href=item.activity==='colony'?'/colonyquest-live-play/'+encodeURIComponent(result.id):item.activity==='fish'?'/fishquest-play/'+encodeURIComponent(result.id):result.path;}catch(e){$('activityStatus').textContent=e.message;button.disabled=false;}};card.append(title,meta,button);$(id).append(card);}
           }
         }
         $('activityStatus').textContent='Updates automatically · You can keep this page open.';
@@ -213,7 +212,8 @@
       if (!window.LessonScopeI18n) await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, {once:true}));
       LessonScopeI18n.bind($('greet'), 'Hi {name}!', {name});
       $('dashboard').style.display = 'block';
-      if(previewStudent){$('previewBanner').textContent='Viewing as '+name+' · Read-only · Your classes only';$('logoutLink').hidden=true;}
+      if(previewStudent){$('previewBanner').textContent='Viewing as '+name+' · Teacher preview';$('logoutLink').hidden=true;}
+      if(previewStudent){$('practiceCard').querySelector('a').href='/practice/preview';$('joinBtn').textContent='Find activity';}
       refreshActivities();if(!activityTimer)activityTimer=setInterval(refreshActivities,15000);
       fetch('/api/practice/status').then(r => r.json()).then(d => { if (d.enabled) $('practiceCard').style.display = 'block'; }).catch(() => {});
       try {
@@ -274,6 +274,7 @@
     $('joinBtn').addEventListener('click', async () => {
       const btn = $('joinBtn'); btn.disabled = true; $('joinErr').textContent = '';
       const code = $('roomCode').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if(previewStudent){try{const d=await(await fetch(studentEndpoint('activities'))).json();const item=[...d.live,...d.todo].find(i=>i.code===code);if(item)location.href='/'+(item.kind==='assignment'?'assignment/':item.kind==='moonquest'?'moonquest?session=':'play/')+encodeURIComponent(item.id);else $('joinErr').textContent='Enter a code for an activity assigned to this student.';}catch{$('joinErr').textContent='Could not find this activity. Try again.';}btn.disabled=false;return;}
       if (!code) { $('joinErr').textContent = 'Enter a Room Code.'; btn.disabled = false; return; }
       try {
         const r = await fetch('/api/student/join-room', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) });
