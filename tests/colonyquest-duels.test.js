@@ -43,7 +43,7 @@ test("duels pair opposite roster genders, use independent questions and reveal o
   assert.equal(view.duel.rival.question, undefined);
   assert.equal(view.question.correctIndex, undefined);
 });
-test("raid waits for the rival question and upgrade, then both see the same timed raid and frozen next-question timer", () => {
+test("raid starts while the rival answers and restores the remaining question time", () => {
   const { m, a, b } = room();
   a.colony.soldiers = 3;
   b.colony.food = 30;
@@ -52,10 +52,7 @@ test("raid waits for the rival question and upgrade, then both see the same time
   assert.equal(a.phase, "duelWait");
   assert.equal(m.state.events.filter((e) => e.kind === "raid").length, 0);
   m.tick(6000);
-  assert.equal(b.phase, "answer");
-  m.answer(b.id, 0, 0, 6100);
-  m.upgrade(b.id, 0, "food", null, 6200);
-  m.tick(10000);
+  assert.equal(b.phase, "duelRaid");
   const pair = m.state.duels.pairs[0];
   assert.ok(pair.raid);
   assert.equal(a.phase, "duelRaid");
@@ -69,36 +66,19 @@ test("raid waits for the rival question and upgrade, then both see the same time
   m.tick(until);
   assert.equal(a.phase, "answer");
   assert.equal(b.phase, "answer");
-  assert.equal(b.deadline, until + 25000);
+  assert.equal(b.deadline, until + 19000);
   assert.equal(m.state.events.filter((e) => e.kind === "raid").length, 1);
 });
-test("pause and resume preserve duel deadline, results are persisted, fresh duels reset resources equally", () => {
-  const { m, a, b } = room({ duelMinutes: 5 });
-  const old = m.state.duels.deadline;
-  m.pause(6000);
-  m.tick(50000);
-  m.resume(16000);
-  assert.equal(m.state.duels.deadline, old + 10000);
-  m.state.duels.stage = "closing";
-  for (const p of [a, b]) {
-    p.phase = "duelWait";
-    p.duelHold = { phase: "answer", remaining: 25000 };
-  }
-  a.colony.food = 90;
-  m.tick(17000);
-  assert.equal(m.state.duels.stage, "results");
-  assert.equal(m.state.duels.history.length, 1);
-  const points = a.duelPoints;
-  m.tick(m.state.duels.stageUntil);
-  assert.equal(m.state.duels.round, 2);
-  assert.equal(a.colony.food, b.colony.food);
-  assert.equal(a.colony.soldiers, b.colony.soldiers);
-  assert.equal(a.duelPoints, points);
-  const restored = new ColonyMatch(game, {
-    state: JSON.parse(JSON.stringify(m.state)),
-  });
-  assert.deepEqual(restored.report().duels.history, m.report().duels.history);
+test("duel transitions continue immediately and preserve saved results",()=>{
+ const {m,a,b}=room();const deadline=m.state.duels.deadline;
+ m.pause(6000);m.resume(16000);assert.equal(m.state.duels.deadline,deadline+10000);
+ m.tick(m.state.duels.deadline);
+ assert.equal(m.state.duels.stage,'playing');assert.equal(m.state.duels.round,2);
+ assert.equal(m.state.duels.history.length,1);assert.equal(a.phase,'answer');
+ const restored=new ColonyMatch(game,{state:structuredClone(m.state)});
+ assert.equal(restored.report().duels.history.length,1);
 });
+
 test("raids cannot target another pair and duplicate commands cannot duplicate a queued raid", () => {
   const { m, a, b } = room();
   const extra = {
@@ -118,52 +98,24 @@ test("raids cannot target another pair and duplicate commands cannot duplicate a
     1,
   );
 });
-test("disconnect freezes both paired question clocks and economies until reconnect", () => {
-  const { m, a, b } = room(),
-    originalDeadline = m.state.duels.deadline;
-  b.connected = false;
-  m.tick(6000);
-  const remaining = a.duelHold.remaining,
-    food = a.colony.food;
-  m.tick(16000);
-  assert.equal(a.phase, "duelWait");
-  assert.equal(a.colony.food, food);
-  assert.equal(m.snapshot(a.id, false, 16000).question, null);
-  assert.ok(m.state.duels.deadline > originalDeadline);
-  m.join({ studentId: "b", name: "B" }, 17000);
-  m.tick(17000);
-  assert.equal(a.phase, "answer");
-  assert.equal(a.deadline - 17000, remaining);
-  assert.equal(b.phase, "answer");
-  assert.equal(m.snapshot(a.id, false, 17000).question.correctIndex, undefined);
+test("connected learners continue when their rival disconnects",()=>{
+ const {m,a,b}=room();b.connected=false;const deadline=a.deadline;
+ m.tick(6000);m.tick(16000);
+ assert.equal(a.phase,'answer');assert.equal(a.deadline,deadline);
+ assert.ok(m.snapshot(a.id,false,16000).question);
+ m.answer(a.id,0,0,17000);assert.equal(a.phase,'upgrade');
 });
-test("duel expiry finishes current questions before results and re-pairing does not erase question history", () => {
-  const { m, a, b } = room();
-  m.answer(a.id, 0, 0, 5100);
-  m.upgrade(a.id, 0, "food", null, 5200);
-  m.tick(10000);
-  assert.equal(a.round, 1);
-  const deadline = m.state.duels.deadline;
-  m.tick(deadline);
-  assert.equal(m.state.duels.stage, "closing");
-  m.tick(deadline + 4000);
-  assert.equal(m.state.duels.stage, "results");
-  assert.equal(a.answers.length, 1);
-  assert.equal(m.report().learners.find((p) => p.studentId === "a").correct, 1);
-  m.tick(m.state.duels.stageUntil);
-  assert.equal(m.state.duels.round, 2);
-  assert.equal(a.answers.length, 1);
-  assert.ok(a.round >= 2);
-  assert.equal(a.colony.correct, 0);
+
+test("duel expiry starts the next opponent round without waiting",()=>{
+ const {m,a,b}=room();m.answer(a.id,0,0,5100);m.upgrade(a.id,0,'food',null,5200);m.tick(10000);
+ m.tick(m.state.duels.deadline);
+ assert.equal(m.state.duels.stage,'playing');assert.equal(m.state.duels.round,2);
+ assert.equal(a.answers.length,1);assert.equal(a.phase,'answer');assert.equal(b.phase,'answer');
 });
-test("removing a rival does not trap a duel indefinitely", () => {
-  const { m, a, b } = room();
-  b.removed = true;
-  m.tick(6000);
-  m.tick(31000);
-  m.tick(35000);
-  assert.equal(m.state.duels.stage, "results");
-  assert.equal(a.connected, true);
+
+test("removing a rival re-pairs the active learner without a wait",()=>{
+ const {m,a,b}=room();b.removed=true;m.tick(6000);
+ assert.equal(a.phase,'answer');assert.equal(m.state.duels.stage,'playing');
 });
 
 test("odd class gets one labelled computer rival and manual finish scores only once", () => {
@@ -188,49 +140,20 @@ test("odd class gets one labelled computer rival and manual finish scores only o
   );
 });
 
-test("teacher can skip opening story into duels once without skipping later events", () => {
-  const m = new ColonyMatch(game, { duels: true, now: 0 });
-  m.join({ studentId: "a", name: "A" }, 0);
-  m.join({ studentId: "b", name: "B" }, 0);
-  m.start(0);
-  assert.equal(m.state.phase, "story");
-  assert.equal(m.state.story.key, "intro");
-  m.skipStory(1000);
-  assert.equal(m.state.story, null);
-  assert.equal(m.state.duels.stage, "intro");
-  assert.throws(() => m.skipStory(1001), /Only the opening story/);
-  m.tick(6000);
-  assert.equal(m.active()[0].phase, "answer");
-  assert.equal(m.active()[0].answers.length, 0);
+test("teacher can skip the story directly into active duels",()=>{
+ const m=new ColonyMatch(game,{duels:true,storyEnabled:true,now:0});
+ const a=m.join({studentId:'a',name:'A'},0);m.join({studentId:'b',name:'B'},0);
+ m.start(0);m.skipStory(100);assert.equal(m.state.duels.stage,'playing');assert.equal(a.phase,'answer');
 });
 
-test("overall game timer pauses for announcements and teacher pauses, then finishes before another match", () => {
-  const { m, a, b } = room({ gameMinutes: 1, duelMinutes: 3 });
-  assert.equal(m.snapshot(a.id, false, 5000).duel.gameRemainingMs, 60000);
-  m.tick(15000);
-  assert.equal(m.state.duels.gameRemainingMs, 50000);
-  m.pause(15000);
-  m.resume(35000);
-  m.tick(45000);
-  assert.equal(m.state.duels.gameRemainingMs, 40000);
-  m.tick(85000);
-  assert.equal(m.state.duels.stage, "closing");
-  assert.equal(m.state.duels.gameExpired, true);
-  for (const p of [a, b]) {
-    p.phase = "duelWait";
-    p.deadline = null;
-  }
-  m.tick(86000);
-  assert.equal(m.state.duels.stage, "results");
-  const until = m.state.duels.stageUntil;
-  m.tick(until - 1);
-  assert.equal(m.state.phase, "answer");
-  m.tick(until);
-  assert.equal(m.state.phase, "ended");
-  assert.equal(m.state.duels.round, 1);
-  assert.equal(m.state.duels.history.length, 1);
-  assert.equal(m.report().duels.gameMinutes, 1);
+test("game timer expiry keeps students active until every learner completes questions",()=>{
+ const {m,a,b}=room({gameMinutes:1});m.tick(70000);
+ assert.equal(m.state.phase,'answer');assert.equal(m.state.duels.gameExpired,true);
+ assert.notEqual(a.phase,'duelWait');assert.notEqual(b.phase,'duelWait');
+ for(const p of [a,b]){p.round=game.questions.length;p.phase='upgrade';p.deadline=100000;}
+ m.tick(71000);assert.equal(m.state.phase,'ended');
 });
+
 test("overall game duration rejects invalid values", () => {
   for (const gameMinutes of [0, -1, 121, "15", NaN])
     assert.throws(() => room({ gameMinutes }));

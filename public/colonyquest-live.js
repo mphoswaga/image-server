@@ -33,11 +33,11 @@
   const soundtrack = new ColonyMusic((track) => {
     $('musicTrackLabel').textContent = `${track.title} — ${track.artist}`;
   });
-  const openingVoice=new OpeningNarration($('openingVoice'),speaking=>{soundtrack.media.muted=speaking;});
+  const openingVoice=new OpeningNarration($('openingVoice'),speaking=>{soundtrack.media.volume=speaking?0.08:Number($('musicVolume').value)/200;});
   const openingChapters=Array.from({length:4},(_,i)=>OpeningNarrationData.clips['colony-'+i]);
   function openingChapter(elapsed){let start=0;for(let i=0;i<4;i++){const end=start+(openingChapters[i].seconds+1)*1000;if(elapsed<end||i===3)return {index:i,position:Math.max(0,(elapsed-start)/1000)};start=end;}}
   const storyReader=new ColonyStoryText(openingVoice);
-  const actionVoice=new ColonyActionVoice(()=>!host&&sound&&!openingVoice.active&&!['paused','ended'].includes(state?.phase)&&!state?.me?.teacherPaused,speaking=>{soundtrack.media.muted=speaking;},()=>Number($('musicVolume').value)/100);
+  const actionVoice=new ColonyActionVoice(()=>!host&&sound&&!openingVoice.active&&!['paused','ended'].includes(state?.phase)&&!state?.me?.teacherPaused,speaking=>{soundtrack.media.volume=speaking?0.08:Number($('musicVolume').value)/200;},()=>Number($('musicVolume').value)/100);
   actionVoice.onBlocked = () => { if (!host && sound) $('sound').textContent = 'Tap to enable effects'; };
   const eventAudio = new ColonyEventAudio();
   eventAudio.voice=actionVoice;
@@ -62,9 +62,7 @@
     soundtrack.setActive(
       host && sound &&
         !!state &&
-        !['paused', 'ended'].includes(state.phase) &&
-        !['intro','results'].includes(state.duel?.stage) &&
-        !document.body.classList.contains('offline'),
+        !['paused', 'ended'].includes(state.phase),
     );
   }
   $('sound').textContent=host?'Class audio on':'Effects on';
@@ -402,7 +400,7 @@
       $('instruction').textContent = result ? 'Your colony continues shortly.' : 'Watch the attack!';
       return;
     }
-    if(['duelIntro','duelResults','duelWait','duelRaid'].includes(s.phase)){const raid=s.duel?.raid;$('question').textContent=raid?'Raid in progress':s.phase==='duelWait'?'Hold your supplies':s.phase==='duelResults'?'Duel complete!':'Meet your rival';$('instruction').textContent=raid?'Both colonies are watching the same attack. Your question timer is held.':s.phase==='duelWait'?'Waiting for the current turn to finish. No unanswered question is interrupted.':'Watch the opponent announcement. Your next question starts automatically.';return;}
+    if(['duelIntro','duelResults','duelWait','duelRaid'].includes(s.phase)){const raid=s.duel?.raid;$('question').textContent=raid?'Raid in progress':s.phase==='duelWait'?'Preparing the next event':s.phase==='duelResults'?'Duel complete!':'Meet your rival';$('instruction').textContent=raid?'Both colonies are watching the same attack. Your question timer is held.':s.phase==='duelWait'?(s.duel?.stage==='closing'?'This duel is ending. Results are coming next.':s.duel?.waiting?'The raid is starting.':s.duel?.rival?.paused?'Your rival is paused by the teacher.':'Your rival is reconnecting or paused. Play resumes automatically.'):'Watch the opponent announcement. Your next question starts automatically.';return;}
     if (s.phase === 'story' && s.story) {
       const beat = s.story;
       $('roundLabel').textContent = 'THE MOONROOT MEADOW ADVENTURE';

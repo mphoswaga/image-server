@@ -127,8 +127,8 @@ module.exports = function install(ColonyMatch) {
       players.push(p);
     }
     d.round++;
-    d.stage = "intro";
-    d.stageUntil = now + 5000;
+    d.stage = "playing";
+    d.stageUntil = now;
     d.deadline = d.stageUntil + d.minutes * 60000;
     d.pairs = [];
     const pool = mix(players);
@@ -164,7 +164,7 @@ module.exports = function install(ColonyMatch) {
       delete p.duelHold;
       const building = s.continuePlaying && p.round >= s.questions.length;
       m.setPersonalPhase(p, building ? "upgrade" : "answer", building ? s.upgradeSeconds : s.questionSeconds, now);
-      hold(p, "duelIntro", now);
+
     }
     m.event(
       "Duel " + d.round + " · new opponents",
@@ -202,17 +202,7 @@ module.exports = function install(ColonyMatch) {
   };
   P.finishPersonalQuestion = function (p, now) {
     base.finishPersonalQuestion.call(this, p, now);
-    const d = this.state.duels,
-      pair = pairFor(this, p.id);
-    if (
-      d &&
-      p.phase !== "spectating" &&
-      (d.stage === "closing" ||
-        now >= pair?.deadline ||
-        pair?.queue ||
-        pair?.raid)
-    )
-      hold(p, "duelWait", now);
+
   };
   P.raidAllowed = function (p, target) {
     const d = this.state.duels;
@@ -294,12 +284,12 @@ module.exports = function install(ColonyMatch) {
       );
       if (d.gameRemainingMs === 0) {
         d.gameExpired = true;
-        d.stage = "closing";
         for (const pair of d.pairs)
           pair.deadline = Math.min(pair.deadline, now);
       }
     }
     if (d.stage === "intro" || d.stage === "results") {
+      d.stageUntil = now;
       this.lastTick = now;
       if (now >= d.stageUntil) {
         if (d.stage === "results")
@@ -331,10 +321,7 @@ module.exports = function install(ColonyMatch) {
       if (unavailable) {
         pair.deadline += delta;
         if (pair.raid) pair.raid.until += delta;
-        for (const p of members)
-          if (!p.teacherPaused && !p.removed && p.connected)
-            hold(p, "duelWait", now);
-        continue;
+        if (pair.raid) continue;
       }
       if (!pair.queue && !pair.raid && now < pair.deadline)
         for (const p of members)
@@ -361,9 +348,7 @@ module.exports = function install(ColonyMatch) {
       if (pair.queue) {
         const target = this.player(pair.queue.target);
         if (
-          target.phase !== "answer" &&
-          target.phase !== "upgrade" &&
-          (target.phase !== "reveal" || now >= target.deadline)
+target && !target.removed
         ) {
           const q = pair.queue,
             attacker = this.player(q.attacker);
@@ -417,16 +402,17 @@ module.exports = function install(ColonyMatch) {
         (pair) =>
           !pair.queue &&
           !pair.raid &&
-          pair.ids.every((id) =>
-            ["duelWait", "spectating"].includes(this.player(id).phase),
-          ),
+          pair.ids.every((id) => !this.player(id).removed || this.player(id).phase === "spectating"),
       )
     ) {
       score(this, now);
-      d.stage = "results";
-      d.stageUntil =
-        now +
-        Math.min(20, Math.max(8, Math.ceil(d.pairs.length / 4) * 3)) * 1000;
+      const humans = this.active().filter(player => !player.npc);
+      const everyoneFinished = humans.length && humans.every(player => player.round >= s.questions.length);
+      if (d.gameExpired && everyoneFinished) return this.end(now);
+      if (d.gameExpired) {
+        d.stage = "playing";
+        for (const pair of d.pairs) pair.deadline = now + 1000;
+      } else begin(this, now);
     }
   };
   P.snapshot = function (id, teacher, now, sharedPlayers, watchId) {
@@ -525,18 +511,7 @@ module.exports = function install(ColonyMatch) {
     return out;
   };
   P.teams = function () {
-    if (!this.state.duels || this.state.phase === "ended")
-      return base.teams.call(this);
-    return base.teams.call(this).filter((colony) => {
-      const pair = pairFor(this, colony.id);
-      return (
-        !pair ||
-        !pair.ids.some((id) => {
-          const p = this.player(id);
-          return !p.removed && (p.teacherPaused || !p.connected);
-        })
-      );
-    });
+    return base.teams.call(this);
   };
   P.settleAnswers = function () {
     base.settleAnswers.call(this);
