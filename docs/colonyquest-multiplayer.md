@@ -36,7 +36,7 @@ computer opponents. It never records learner marks or alters a smartboard game.
   show the correct answer and explanation for three seconds before continuing.
 - In legacy saved rooms, finished learners choose a colony to watch, without further upgrades or answers. New rooms continue into practice.
   Only that colony's visual state and relevant raid events are sent; rival answers
-  stay private. Legacy rooms end after all active human learners finish. New individual rooms end when
+  stay private. Legacy rooms end after all active human learners finish. New individual rooms finish together after every active learner completes the original questions, or when
   the teacher ends them; new paired games use the overall game timer. The teacher can pause everyone's questions and world time.
 - Personal question time freezes on disconnection and resumes on reconnect.
   Existing saved matches retain their original synchronized pacing. Start a new
@@ -240,10 +240,10 @@ claiming audio is playing. Device volume and browser permissions still apply.
 
 ## Continuous practice
 
-New individual multiplayer games cycle through the question set until the teacher
-ends the room; paired duels cycle until the overall game timer ends. Students
+Individual multiplayer early finishers cycle through practice until every active
+learner completes the original question set, when the class finishes together; paired duels cycle until the overall game timer ends. Students
 continue earning colony rewards during practice. The original attempt at each
 question, including missing answers, is the only attempt used for assessment
 scores, reports and saved learner results. Practice turns have unique turn IDs
-so retries cannot earn duplicate rewards. Existing saved rooms retain their
-previous finish rule; open a new room to enable continuous practice.
+so retries cannot earn duplicate rewards. Active saved classroom rooms also restore students who had been sent to watch
+into practice. Completed rooms retain their saved results.

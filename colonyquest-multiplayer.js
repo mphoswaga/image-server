@@ -47,7 +47,19 @@ class ColonyMatch {
       competitiveStart: true,
       continuePlaying: true,
     };
-    if(!state&&duels){if(!Number.isInteger(gameMinutes)||gameMinutes<1||gameMinutes>120||![3,5].includes(duelMinutes)||!['balanced','gender'].includes(teamMode)||!Array.isArray(teamNames)||teamNames.length!==2||teamNames.some(n=>typeof n!=='string'||!n.trim()||n.length>30)||teamNames[0]?.trim()===teamNames[1]?.trim())throw Error('Choose 3 or 5 minutes per duel, 1–120 minutes for the game, and valid team names.');this.state.pacing='individual';this.state.duels={minutes:duelMinutes,gameMinutes,gameRemainingMs:gameMinutes*60000,teamMode,teamNames:teamNames.map(n=>n.trim()),round:0,stage:'lobby',pairs:[],history:[],teams:Object.create(null)};}this.lastTick = now;
+    if(!state&&duels){if(!Number.isInteger(gameMinutes)||gameMinutes<1||gameMinutes>120||![3,5].includes(duelMinutes)||!['balanced','gender'].includes(teamMode)||!Array.isArray(teamNames)||teamNames.length!==2||teamNames.some(n=>typeof n!=='string'||!n.trim()||n.length>30)||teamNames[0]?.trim()===teamNames[1]?.trim())throw Error('Choose 3 or 5 minutes per duel, 1–120 minutes for the game, and valid team names.');this.state.pacing='individual';this.state.duels={minutes:duelMinutes,gameMinutes,gameRemainingMs:gameMinutes*60000,teamMode,teamNames:teamNames.map(n=>n.trim()),round:0,stage:'lobby',pairs:[],history:[],teams:Object.create(null)};}
+    if (state && state.pacing === 'individual' && !state.soloStudentId && state.phase !== 'ended') {
+      state.continuePlaying = true;
+      for (const player of state.players) {
+        if (player.removed || player.phase !== 'spectating') continue;
+        player.round = Math.max(state.questions.length, (player.round || 0) + 1);
+        player.phase = 'answer';
+        player.deadline = now + state.questionSeconds * 1000;
+        player.personalRemaining = state.questionSeconds * 1000;
+        delete player.finishedAt;
+      }
+    }
+    this.lastTick = now;
   }
   questionForRound(round) {
     const questions = this.state.questions;

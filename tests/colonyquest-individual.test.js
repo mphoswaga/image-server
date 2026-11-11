@@ -50,13 +50,13 @@ test('legacy saved rooms still expose private spectator views',()=>{
  assert.equal(m.snapshot(b.id,false,time).spectators,undefined);
  const workers=a.colony.workers;m.upgrade(a.id,2,'workers',null,time);assert.equal(a.colony.workers,workers);assert.equal(a.upgrades.length,3);
 });
-test('all original questions complete before practice; teacher finish preserves blanks',()=>{
+test('class finishes together after every learner completes originals; teacher finish preserves blanks',()=>{
  const {m,a,b}=room();let time=100;
  for(let round=0;round<3;round++){
   for(const p of [a,b]){m.answer(p.id,round,0,time);m.upgrade(p.id,round,'food',null,time+1);}
   m.tick(time+3001);time+=3100;
  }
- assert.equal(m.state.phase,'answer');assert.equal(a.round,3);assert.equal(b.round,3);assert.equal(m.report().learners[0].answered,3);
+ assert.equal(m.state.phase,'ended');assert.equal(a.round,3);assert.equal(b.round,3);assert.equal(m.report().learners[0].answered,3);
  const other=room();other.m.answer(other.a.id,0,0,100);other.m.end(101);assert.equal(other.m.report().learners[1].answered,0);
 });
 test('shared threats use active world time, not the fastest learners round',()=>{
@@ -143,4 +143,15 @@ test('practice repeats without exposing answers or inflating assessment and surv
  assert.equal(restored.snapshot(a.id,false,now).question.question,'Q1');
  restored.end(now+1);
  assert.equal(restored.report().learners.find(p=>p.studentId===a.studentId).correct,2);
+});
+
+test('older active classroom saves restore finished learners into practice',()=>{
+ const {m,a}=room();delete m.state.continuePlaying;
+ a.round=2;a.phase='spectating';a.finishedAt=100;
+ const restored=new ColonyMatch(game,{state:structuredClone(m.state),now:1000});
+ const player=restored.player(a.id);
+ assert.equal(player.phase,'answer');assert.equal(player.round,3);
+ assert.equal(restored.snapshot(a.id,false,1000).question.question,'Q0');
+ assert.equal(restored.snapshot(a.id,false,1000).question.correctIndex,undefined);
+ assert.equal(player.finishedAt,undefined);
 });

@@ -64,7 +64,9 @@ module.exports = {
       else if(p.phase==='reveal')this.finishPersonalQuestion(p,now);
     }
     const humans=this.active().filter(p=>!p.npc);
-    if(humans.length && humans.every(p=>p.phase==='spectating'))this.end(now);
+    const everyoneCompleted = humans.length && humans.every(p => (p.round || 0) >= s.questions.length);
+    if (!s.duels && !s.soloStudentId && everyoneCompleted) this.end(now);
+    else if(humans.length && humans.every(p=>p.phase==='spectating'))this.end(now);
     s.updatedAt=now;
   },
   individualSnapshot(out,p,teacher,now,watchId) {
