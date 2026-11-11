@@ -74,6 +74,7 @@ test('raid protection uses shared seconds rather than different personal questio
  m.answer(a.id,0,0,100);assert.equal(m.raidAllowed(a,b).allowed,true);
  m.upgrade(a.id,0,'raid',b.id,101);
  assert.equal(b.protectedUntilMs,20000);
+ m.state.elapsedMs=8500;m.tick(8600);
  m.state.elapsedMs=19999;assert.equal(m.raidAllowed(a,b).allowed,false);
  m.state.elapsedMs=30000;a.colony.raidAway=0;a.colony.raidReturnMs=0;
  assert.equal(m.raidAllowed(a,b).allowed,false);
@@ -88,6 +89,7 @@ test('NPC colonies can still defend raids after their questions end, while real 
  m.answer(a.id,0,0,100);m.upgrade(a.id,0,'raid',b.id,101);
  assert.equal(m.state.events.at(-1).kind,'raid');
  assert.ok(a.colony.raidAway>0);
+ m.state.elapsedMs=8500;m.tick(8600);
  assert.match(m.raidAllowed(a,b).reason,/returning:.*s left/);
  a.colony.raidAway=0;a.colony.raidReturnMs=0;
  assert.match(m.raidAllowed(a,b).reason,/recovering:.*s left/);
@@ -118,40 +120,44 @@ test('individual pause is validated and restored from saved match',()=>{
 for(const key of ['expansion','defense','raid'])test(`${key} finishes its cinematic before advancing the personal question`,()=>{
  const {m,a,b}=room();Object.assign(a.colony,{sticks:30,leaves:30,soldiers:5,barracksBuilt:true});
  m.answer(a.id,0,0,100);m.upgrade(a.id,0,key,key==='raid'?b.id:null,200);
+ if(key==='raid'){
+  assert.equal(a.phase,'raidWatching');assert.equal(b.phase,'raidWatching');
+  assert.equal(m.snapshot(b.id,false,200).question.correctIndex,undefined);
+  const saved=b.raidHold.remaining;
+  m.state.elapsedMs=a.raidHold.until;m.tick(9000);
+  assert.equal(a.phase,'answer');assert.equal(b.phase,'answer');
+  assert.equal(b.deadline,9000+saved);assert.equal(a.round,1);return;
+ }
  const duration=require('../public/colony-presentation').actionDuration(key,true);
  assert.equal(a.deadline,200+duration+400);
  m.tick(200+duration-1);assert.equal(a.phase,'reveal');assert.equal(a.round,0);
  m.tick(200+duration+400);assert.equal(a.phase,'answer');assert.equal(a.round,1);
 });
 
-test('practice repeats without exposing answers or inflating assessment and survives reload',()=>{
- const {m,a,b}=room();let now=100;
- for(let round=0;round<7;round++){
-  const before=m.snapshot(a.id,false,now);
-  assert.equal(before.question.question,'Q'+round%3);
-  assert.equal(before.question.correctIndex,undefined);
-  assert.equal(before.practice,round>=3);
-  m.answer(a.id,round,round===0?1:0,now);
-  if(round!==0){m.upgrade(a.id,round,'food',null,now+1);m.upgrade(a.id,round,'food',null,now+2);}
+test('early finishers keep building without more answers or changed assessment marks',()=>{
+ const {m,a}=room();let now=100;
+ for(let round=0;round<3;round++){
+  m.answer(a.id,round,0,now);m.upgrade(a.id,round,'food',null,now+1);
   m.tick(now+3001);now+=3100;
  }
- assert.equal(a.upgrades.length,6);
- assert.equal(a.phase,'answer');assert.equal(a.round,7);
- const report=m.report().learners.find(p=>p.studentId===a.studentId);
- assert.equal(report.correct,2);assert.equal(report.answered,3);assert.equal(report.answers.length,3);
- const restored=new ColonyMatch(game,{state:structuredClone(m.state),now});
- assert.equal(restored.snapshot(a.id,false,now).question.question,'Q1');
- restored.end(now+1);
- assert.equal(restored.report().learners.find(p=>p.studentId===a.studentId).correct,2);
+ assert.equal(a.phase,'upgrade');
+ for(let round=3;round<7;round++){
+  const snapshot=m.snapshot(a.id,false,now);
+  assert.equal(snapshot.freeBuild,true);assert.equal(snapshot.me.correct,true);
+  assert.throws(()=>m.answer(a.id,round,0,now),/closed|complete/);
+  m.upgrade(a.id,round,'food',null,now+1);m.tick(now+3001);now+=3100;
+ }
+ assert.equal(a.answers.length,3);assert.equal(a.upgrades.length,7);
+ assert.equal(m.report().learners[0].correct,3);
+ assert.equal(a.phase,'upgrade');
 });
-
 test('older active classroom saves restore finished learners into practice',()=>{
  const {m,a}=room();delete m.state.continuePlaying;
  a.round=2;a.phase='spectating';a.finishedAt=100;
  const restored=new ColonyMatch(game,{state:structuredClone(m.state),now:1000});
  const player=restored.player(a.id);
- assert.equal(player.phase,'answer');assert.equal(player.round,3);
- assert.equal(restored.snapshot(a.id,false,1000).question.question,'Q0');
+ assert.equal(player.phase,'upgrade');assert.equal(player.round,3);
+ assert.equal(restored.snapshot(a.id,false,1000).freeBuild,true);
  assert.equal(restored.snapshot(a.id,false,1000).question.correctIndex,undefined);
  assert.equal(player.finishedAt,undefined);
 });

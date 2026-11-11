@@ -247,3 +247,11 @@ question, including missing answers, is the only attempt used for assessment
 scores, reports and saved learner results. Practice turns have unique turn IDs
 so retries cannot earn duplicate rewards. Active saved classroom rooms also restore students who had been sent to watch
 into practice. Completed rooms retain their saved results.
+
+## Building after questions
+
+After their original questions, students keep choosing colony actions without
+further questions. They can gather resources, build, defend and raid using the
+normal action windows and resource rules. Individual classrooms finish together
+when all active learners complete their questions. Duels continue to the shared
+game deadline. Active saved games restore waiting learners into building turns.

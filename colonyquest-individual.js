@@ -23,7 +23,11 @@ module.exports = {
     core.applyUpkeep([p.colony]);
     if(p.round+1>=this.state.questions.length && !this.state.continuePlaying) {
       this.setPersonalPhase(p,'spectating',null,now);p.finishedAt=now;
-    } else {p.round++;this.setPersonalPhase(p,'answer',this.state.questionSeconds,now);}
+    } else {
+      p.round++;
+      const building = p.round >= this.state.questions.length;
+      this.setPersonalPhase(p, building ? 'upgrade' : 'answer', building ? this.state.upgradeSeconds : this.state.questionSeconds, now);
+    }
   },
   tickIndividual(now) {
     const s=this.state,dt=Math.min(1000,Math.max(0,now-this.lastTick));
@@ -45,6 +49,14 @@ module.exports = {
     }
     for(const p of this.active()) {
       if(p.phase==='spectating' || p.teacherPaused)continue;
+      if (p.raidHold) {
+        if (s.elapsedMs < p.raidHold.until) continue;
+        const held = p.raidHold;
+        delete p.raidHold;
+        if (held.attacker) this.finishPersonalQuestion(p, now);
+        else this.setPersonalPhase(p, held.phase, held.remaining / 1000, now);
+        continue;
+      }
       if(!p.connected) {
         if(p.personalRemaining===undefined)p.personalRemaining=Math.max(0,p.deadline-now);
         continue;
@@ -80,13 +92,14 @@ module.exports = {
     out.individuallyPaused=!!p.teacherPaused;
     out.phase=(s.phase==='paused' || (p.teacherPaused && s.phase!=='ended'))?'paused':phase;
     out.round=p.round||0;out.deadline=p.deadline;out.remaining=p.personalRemaining??Math.max(0,(p.deadline||now)-now);
-    out.practice=out.round>=s.questions.length;out.questionNumber=out.round%s.questions.length+1;
+    out.freeBuild=out.round>=s.questions.length;out.questionNumber=out.round%s.questions.length+1;
     const q=this.questionForRound(out.round),answer=p.answers.find(a=>a.round===out.round);
-    const revealed=phase!=='answer';
-    out.question=q?{question:q.question,options:q.options,...(revealed?{correctIndex:q.correctIndex,explanation:q.explanation}:{})}:null;
+    out.raid = p.raidHold ? {event:p.raidHold.event,remaining:Math.max(0,p.raidHold.until-s.elapsedMs)} : null;
+    const revealed=phase!=='answer' && phase!=='raidWatching';
+    out.question=out.freeBuild ? {question:'Keep growing your colony',options:[]} : q?{question:q.question,options:q.options,...(revealed?{correctIndex:q.correctIndex,explanation:q.explanation}:{})}:null;
     out.me={...out.me,choice:answer?.choice??null,upgraded:p.upgrades.some(u=>u.round===out.round),upgrades:out.phase==='upgrade'?this.options(p):[]};
     delete out.me.correct;
-    if(revealed)out.me.correct=!!answer?.correct;
+    if(revealed)out.me.correct=out.freeBuild || !!answer?.correct;
     if(p.phase==='spectating' && s.phase!=='ended') {
       out.spectators=this.active().filter(other=>other.id!==p.id).map(other=>({id:other.id,name:other.name,round:other.round||0,finished:other.phase==='spectating'}));
       const watched=this.active().find(other=>other.id===watchId && other.id!==p.id);

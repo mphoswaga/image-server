@@ -411,14 +411,14 @@ test('individual classroom burst persists feedback and continues into practice w
     match.upgrade(spectator.id,1,'food',null,now);
     match.finishPersonalQuestion(spectator,now);
   });
-  await until(()=>clients[0].states.at(-1)?.practice===true);
+  await until(()=>clients[0].states.at(-1)?.freeBuild===true);
   const view=clients[0].states.at(-1);
-  assert.equal(view.phase,'answer');assert.equal(view.questionNumber,1);
+  assert.equal(view.phase,'upgrade');assert.equal(view.freeBuild,true);
   assert.equal(view.question.correctIndex,undefined);
-  clients[0].send(JSON.stringify({type:'answer',matchId:m.state.id,round:2,choice:0,commandId:'practice-answer'}));
+  clients[0].send(JSON.stringify({type:'upgrade',matchId:m.state.id,round:2,key:'food',commandId:'practice-answer'}));
   await until(()=>clients[0].messages.some(msg=>msg.commandId==='practice-answer'&&msg.accepted));
   const persisted=JSON.parse(fs.readFileSync(path.join(temp,'colonyquest-multiplayer',`individual-classroom.${m.state.id}.json`)));
-  assert.equal(persisted.players.find(p=>p.id===spectator.id).answers.length,3);
+  assert.equal(persisted.players.find(p=>p.id===spectator.id).answers.length,2);
   assert.equal(m.report().learners.find(p=>p.studentId===spectator.studentId).correct,2);
   clients[0].send(JSON.stringify({type:'watch',matchId:m.state.id,target,commandId:'practice-watch'}));
   await until(()=>clients[0].messages.some(msg=>msg.commandId==='practice-watch'));

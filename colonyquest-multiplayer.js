@@ -51,9 +51,12 @@ class ColonyMatch {
     if (state && state.pacing === 'individual' && !state.soloStudentId && state.phase !== 'ended') {
       state.continuePlaying = true;
       for (const player of state.players) {
-        if (player.removed || player.phase !== 'spectating') continue;
-        player.round = Math.max(state.questions.length, (player.round || 0) + 1);
-        player.phase = 'answer';
+        if (player.removed) continue;
+        const finished = player.phase === 'spectating';
+        const practiceQuestion = player.phase === 'answer' && player.round >= state.questions.length;
+        if (!finished && !practiceQuestion) continue;
+        if (finished) player.round = Math.max(state.questions.length, (player.round || 0) + 1);
+        player.phase = 'upgrade';
         player.deadline = now + state.questionSeconds * 1000;
         player.personalRemaining = state.questionSeconds * 1000;
         delete player.finishedAt;
@@ -261,6 +264,7 @@ class ColonyMatch {
     if (previous) return previous; // retries must never earn a second upgrade
     if (s.phase !== 'answer' || (individual && p.phase !== 'answer') || now >= (individual ? p.deadline : s.deadline))
       throw Error('Answers are closed for this question.');
+    if (individual && round >= s.questions.length) throw Error('Your questions are complete. Choose a colony action.');
     const q = this.questionForRound(round);
     if (!Number.isInteger(choice) || choice < 0 || choice >= q.options.length)
       throw Error('Choose one of the answers.');
@@ -274,6 +278,7 @@ class ColonyMatch {
     if (!target || target.removed || target.id === p.id)
       return { allowed: false, reason: 'Choose a rival colony.' };
     if (p.teacherPaused || target.teacherPaused) return {allowed:false, reason:'This learner’s game is paused.'};
+    if (p.raidHold || target.raidHold) return {allowed:false, reason:'This colony is watching a raid.'};
     const guards = core.rewardAvailability(p.colony, 'raid');
     if (!guards.allowed) return guards;
     if (!target.connected) return { allowed: false, reason: 'This colony is reconnecting.' };
@@ -334,7 +339,7 @@ class ColonyMatch {
     if (p.upgrades.some((u) => u.round === round)) return;
     if ((individual ? s.phase !== 'answer' || p.phase !== 'upgrade' : s.phase !== 'upgrade') || now >= (individual ? p.deadline : s.deadline))
       throw Error('Upgrades are closed for this question.');
-    if (!p.answers.some((a) => a.round === round && a.correct))
+    if (!(individual && s.continuePlaying && round >= s.questions.length) && !p.answers.some((a) => a.round === round && a.correct))
       throw Error('Answer correctly to earn an upgrade.');
     if (key === 'raid') {
       const target = this.player(targetId),
@@ -377,6 +382,14 @@ class ColonyMatch {
     }
     p.upgrades.push({ round, key, target: targetId || null });
     if(individual) this.setPersonalPhase(p, 'reveal', (presentation.actionDuration(key, true) + 400) / 1000, now);
+    if (individual && !s.duels && key === 'raid') {
+      const event = s.events.at(-1);
+      const until = (s.elapsedMs || 0) + presentation.raidDuration(true) + 2000;
+      for (const player of [p, this.player(targetId)]) {
+        player.raidHold = { phase: player.phase, remaining: Math.max(0, player.deadline - now), until, attacker: player.id === p.id, event };
+        this.setPersonalPhase(player, 'raidWatching', null, now);
+      }
+    }
     s.updatedAt = now;
   }
   tick(now = Date.now()) {

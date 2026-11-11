@@ -26,7 +26,7 @@
   const attacker=event.attackerName||'Raiding colony',defender=event.targetName||'Defending colony';
   const stolen=Math.max(0,Number(event.stolen)||0);
   return {attacker,defender,winner:event.success?attacker:defender,
-   title:event.success?'Raid successful!':'Raid defended!',
+   title:(event.success?attacker:defender)+' wins the raid!',
    detail:event.success?`${stolen} food carried home`:`Food protected${event.targetFoodChange>0?' · +'+event.targetFoodChange+' food':''}`};
  }
  class RaidMoment {

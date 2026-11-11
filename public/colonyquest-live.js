@@ -364,6 +364,7 @@
     }
     const key = JSON.stringify([
       s.phase,
+      s.raid?.event?.id, s.raid ? s.raid.remaining <= 2000 : false,
       s.duel?.stage,s.duel?.round,s.duel?.waiting,s.duel?.raid?.startedAt,
       s.round,
       s.story?.id,
@@ -385,14 +386,22 @@
     renderKey = key;
     $('learner').classList.toggle('preview', s.preview);
     $('learner').classList.toggle('story-playing', s.phase === 'story' && s.story?.key !== 'intro');
-    $('roundLabel').textContent = s.preview
+    $('roundLabel').textContent = s.freeBuild ? 'KEEP BUILDING · QUESTIONS COMPLETE' : s.preview
       ? 'PRACTICE · NO LEARNER MARKS SAVED'
-      : `${s.solo ? 'VS COMPUTER · ' : ''}${s.practice ? 'PRACTICE · ' : ''}QUESTION ${s.questionNumber || s.round + 1} OF ${s.total}${s.practice ? ' · Original marks saved' : ''}`;
+      : `${s.solo ? 'VS COMPUTER · ' : ''}${s.freeBuild ? 'BUILDING · ' : ''}QUESTION ${s.questionNumber || s.round + 1} OF ${s.total}${s.practice ? ' · Original marks saved' : ''}`;
     $('explanation').textContent = '';
     if(s.phase!=='story'||s.story?.key!=='intro')$('instruction').classList.remove('spoken-story');
     $('choices').className = 'choices';
     $('choices').innerHTML = '';
     $('finished').hidden = true;
+    if (s.phase === 'raidWatching') {
+      const event = s.raid.event;
+      const winner = event.success ? event.attackerName : event.targetName;
+      const result = s.raid.remaining <= 2000;
+      $('question').textContent = result ? winner + ' wins the raid!' : event.attackerName + ' raids ' + event.targetName;
+      $('instruction').textContent = result ? 'Your colony continues shortly.' : 'Watch the attack!';
+      return;
+    }
     if(['duelIntro','duelResults','duelWait','duelRaid'].includes(s.phase)){const raid=s.duel?.raid;$('question').textContent=raid?'Raid in progress':s.phase==='duelWait'?'Hold your supplies':s.phase==='duelResults'?'Duel complete!':'Meet your rival';$('instruction').textContent=raid?'Both colonies are watching the same attack. Your question timer is held.':s.phase==='duelWait'?'Waiting for the current turn to finish. No unanswered question is interrupted.':'Watch the opponent announcement. Your next question starts automatically.';return;}
     if (s.phase === 'story' && s.story) {
       const beat = s.story;
@@ -492,12 +501,12 @@
               })),
         );
     } else if (s.phase === 'upgrade' && p.correct && !p.upgraded) {
-      $('question').textContent = 'Correct! Grow your colony.';
+      $('question').textContent = s.freeBuild ? 'Keep growing your colony' : 'Correct! Grow your colony.';
       $('instruction').textContent = pending
         ? 'Saving your upgrade…'
         : 'Build, defend or raid — choose your next move!';
       $('explanation').textContent =
-        'Correct answer: ' + s.question.options[s.question.correctIndex];
+        s.freeBuild ? '' : 'Correct answer: ' + s.question.options[s.question.correctIndex];
       $('choices').classList.add('upgrades');
       const upgradeCard = (u, i) =>
         `<button data-upgrade="${i}" ${!u.allowed || pending || disconnected ? 'disabled' : ''}><span class="symbol" aria-hidden="true"><img src="/assets/colonyquest/${u.key === 'queen' ? 'queen' : ['defense', 'soldiers', 'raid'].includes(u.key) ? 'guardian' : 'pip-worker'}.webp" alt=""><i>${symbols[u.key]}</i></span>${esc(u.label)}<small>${esc(!u.allowed ? u.reason : u.cost?.sticks ? `${u.cost.sticks} sticks + ${u.cost.leaves} leaves` : u.key === 'workers' ? 'Collects food and materials automatically' : u.key === 'supplies' ? '+3 sticks · +2 leaves' : u.key === 'food' ? '+5 food' : u.key === 'queen' ? 'Hatches after two rounds' : 'Protects your colony')}</small></button>`;

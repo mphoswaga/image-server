@@ -278,9 +278,9 @@ test('short question sets repeat in duels until the game timer ends',()=>{
  m.start(0);m.tick(5000);
  for(const p of [a,b]){m.answer(p.id,0,0,5100);m.upgrade(p.id,0,'food',null,5200);}
  m.tick(8300);
- assert.equal(m.state.phase,'answer');assert.equal(a.round,1);assert.equal(b.phase,'answer');
- assert.equal(m.snapshot(a.id,false,8300).practice,true);
- for(const p of [a,b]){m.answer(p.id,1,0,8400);m.upgrade(p.id,1,'food',null,8500);}
+ assert.equal(m.state.phase,'answer');assert.equal(a.round,1);assert.equal(b.phase,'upgrade');
+ assert.equal(m.snapshot(a.id,false,8300).freeBuild,true);
+ for(const p of [a,b]){m.upgrade(p.id,1,'food',null,8500);}
  m.tick(11600);
  assert.equal(m.report().learners[0].correct,1);
  m.tick(70000);m.tick(74000);m.tick(78000);m.tick(100000);

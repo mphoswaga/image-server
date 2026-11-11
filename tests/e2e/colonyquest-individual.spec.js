@@ -23,9 +23,13 @@ test('personal feedback, next question and a private colony watch view',async({p
  await expect(page.locator('#instruction')).toContainText('ants are on the move');
  await page.evaluate(()=>{nextState.round=1;nextState.phase='answer';nextState.question={question:'What do ants collect?',options:['Food','Cars']};nextState.me.choice=null;nextState.me.upgraded=false;delete nextState.me.correct;pushState(structuredClone(nextState));});
  await expect(page.locator('#question')).toHaveText('What do ants collect?');
- await page.evaluate(()=>{nextState.round=3;nextState.practice=true;nextState.questionNumber=1;pushState(structuredClone(nextState));});
- await expect(page.locator('#roundLabel')).toContainText('PRACTICE · QUESTION 1 OF 3');
+ await page.evaluate(()=>{nextState.round=3;nextState.freeBuild=true;nextState.questionNumber=1;pushState(structuredClone(nextState));});
+ await expect(page.locator('#roundLabel')).toContainText('KEEP BUILDING · QUESTIONS COMPLETE');
  await expect(page.locator('#choices [data-choice]').first()).toBeEnabled();
+ await page.evaluate(()=>{nextState.phase='raidWatching';nextState.raid={event:{id:'raid-test',attackerName:'Mia',targetName:'Noah',success:true},remaining:8000};pushState(structuredClone(nextState));});
+ await expect(page.locator('#question')).toHaveText('Mia raids Noah');
+ await page.evaluate(()=>{nextState.raid.remaining=1000;pushState(structuredClone(nextState));});
+ await expect(page.locator('#question')).toHaveText('Mia wins the raid!');
  await page.evaluate(()=>{nextState.phase='spectating';nextState.spectators=[{id:'b',name:'Noah',round:1,finished:false}];pushState(structuredClone(nextState));});
  await expect(page.locator('#question')).toHaveText('Your questions are complete!');
  await page.locator('#watchColony').selectOption('b');

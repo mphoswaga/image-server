@@ -162,7 +162,8 @@ module.exports = function install(ColonyMatch) {
       p.duelCorrectBaseline = p.answers.filter((a) => a.correct).length;
       p.duelBaseline = core.colonyStrength(p.colony);
       delete p.duelHold;
-      m.setPersonalPhase(p, "answer", s.questionSeconds, now);
+      const building = s.continuePlaying && p.round >= s.questions.length;
+      m.setPersonalPhase(p, building ? "upgrade" : "answer", building ? s.upgradeSeconds : s.questionSeconds, now);
       hold(p, "duelIntro", now);
     }
     m.event(
@@ -260,7 +261,7 @@ module.exports = function install(ColonyMatch) {
       p.phase !== "upgrade" ||
       round !== p.round ||
       now >= p.deadline ||
-      !p.answers.some((a) => a.round === round && a.correct)
+      !(this.state.continuePlaying && round >= this.state.questions.length) && !p.answers.some((a) => a.round === round && a.correct)
     )
       throw Error(
         "Answer correctly and choose your raid during the upgrade turn.",
