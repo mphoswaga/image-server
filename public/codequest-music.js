@@ -5,7 +5,7 @@ window.CodeQuestMusic=class {
   // Preserve the button’s retry intent before the shared gesture handler unblocks media.
   this.celebration=new ColonyMusic(()=>{});this.celebration.media.src='/assets/codequest/celebration.wav';this.celebration.media.loop=true;this.celebration.media.dataset.codequestCelebration='true';this.celebration.setVolume(.3);this.celebrationKey='';
   this.retryRequested=false;button.addEventListener('pointerdown',()=>{this.retryRequested=this.enabled&&this.audiblePlayer().blocked;});button.addEventListener('keydown',event=>{if(['Enter',' '].includes(event.key))this.retryRequested=this.enabled&&this.audiblePlayer().blocked;});
-  this.player.index=1;this.player.selectTrack();this.player.media.loop=true;this.player.media.dataset.codequestMusic='true';this.player.setVolume(.14);
+  this.player.index=1;this.player.selectTrack();this.player.media.loop=true;this.player.media.preload='auto';this.player.media.dataset.codequestMusic='true';this.player.setVolume(.14);
   const unlock=event=>{if(event.target?.closest?.('#music'))return;if(this.enabled){this.player.blocked=false;this.celebration.blocked=false;this.sync(this.state,this.practice);}};
   document.addEventListener('pointerdown',unlock);document.addEventListener('keydown',unlock);
   document.addEventListener('visibilitychange',()=>this.sync(this.state,this.practice));
@@ -14,7 +14,7 @@ window.CodeQuestMusic=class {
  }
  audiblePlayer(){return this.celebrating?this.celebration:this.player;}
  updateButton(){this.button.textContent=this.enabled?(this.audiblePlayer().blocked?'Play music':'Music on'):'Music off';this.button.setAttribute('aria-pressed',String(this.enabled));}
- sync(state,practice=false){this.state=state;this.practice=practice;const phase=state?.phase,active=this.enabled&&!!state&&(practice||['build','replay','results'].includes(phase))&&phase!=='paused';
+ sync(state,practice=false){this.state=state;this.practice=practice;const phase=state?.phase,active=this.enabled&&!!state&&(practice||['countdown','build','launch','replay','results'].includes(phase))&&phase!=='paused';
   this.celebrating=!practice&&(phase==='replay'&&state.serverNow>=state.replayEnd-6000||phase==='results'||phase==='ended'&&state.round>0);const key=state?.id+':'+state?.round;if(this.celebrating&&this.celebrationKey!==key){this.celebrationKey=key;this.celebration.media.currentTime=0;}this.celebration.setActive(this.enabled&&this.celebrating);this.player.setActive(active&&!this.celebrating);this.button.title=this.celebrating?'Original CodeQuest treasure celebration':this.trackTitle||'CodeQuest soundtrack';const urgent=phase==='build'&&state.deadline-state.serverNow<=6000;this.player.setVolume(practice?.1:urgent?.035:phase==='build'?.14:['countdown','launch'].includes(phase)?.23:.19);this.updateButton();
  }
  toggle(){if(this.retryRequested||this.enabled&&this.audiblePlayer().blocked){this.retryRequested=false;this.player.blocked=false;this.celebration.blocked=false;}else this.enabled=!this.enabled;this.sync(this.state,this.practice);return this.enabled;}

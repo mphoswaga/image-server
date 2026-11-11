@@ -2807,9 +2807,9 @@ app.get('/api/join', (req, res) => {
 // Pure data gather, no auth/response concerns — shared by the legacy
 // query-string endpoint and the session-based /api/student/my-work so
 // they can never drift out of sync.
-function gatherWork(studentId, includeFreeform) {
+function gatherWork(studentId, includeFreeform, teacherScope = null) {
   studentId = roster.normalizeStudentId(studentId);
-  const matches = roster.findStudentAcrossAllTeachers(studentId);
+  const matches = roster.findStudentAcrossAllTeachers(studentId).filter(m => !teacherScope || m.teacherId === teacherScope);
   const work = [];
   const verifiedGames = new Set();
   let name = null;
@@ -5769,6 +5769,19 @@ app.delete('/api/roster/:id', requireAuth, async (req, res) => {
 // labelled pending and never contributes a provisional percentage.
 const studentProfiles = require('./student-profiles').createProfiles({ roster, assignments, games, gradebook, practice });
 app.get('/api/student-profiles', requireAuth, (req, res) => res.json({ students: studentProfiles.directory(req.userId) }));
+app.get('/api/student-profiles/:id/preview/:part', requireAuth, (req, res) => {
+  const student = studentProfiles.directory(req.userId).find(s => s.id === roster.normalizeStudentId(req.params.id) && s.classes.length);
+  if (!student) return res.status(404).json({ error: 'Student not found in your current classes.' });
+  res.set('Cache-Control', 'no-store');
+  if (req.params.part === 'me') return res.json({ studentId: student.id, name: student.name });
+  if (req.params.part === 'my-work') return res.json({ name: student.name, work: gatherWork(student.id, false, req.userId).work });
+  if (req.params.part === 'activities') return res.json(require('./student-activities').discover(student.id, {
+    roster: { ...roster, findStudentAcrossAllTeachers: id => roster.findStudentAcrossAllTeachers(id).filter(m => m.teacherId === req.userId) },
+    games, assignments, moonquest: moonquestStore, fish: fishQuestLive, colony: colonyQuestMultiplayer,
+  }));
+  return res.status(404).json({ error: 'Unknown preview.' });
+});
+
 app.get('/api/student-profiles/:id', requireAuth, (req, res) => {
   const profile = studentProfiles.profile(req.userId, req.params.id);
   if (!profile) return res.status(404).json({ error: 'Student not found.' });

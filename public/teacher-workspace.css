@@ -1,0 +1,134 @@
+/* Teacher workspace: restrained surfaces, legible hierarchy and action rows.
+   Kept separate from learner games and their visual identities. */
+body[data-byte-ui="teacher"] {
+  --bg:#f7f7f4;
+  --border:#dce1dd;
+  --border-soft:#e9ece7;
+  --muted:#59675f;
+  --primary:#183e35;
+  --primary-soft:#f0f5f1;
+  --accent:#16704e;
+  background:var(--bg);
+}
+.wrap .hero { margin-bottom:28px; }
+.wrap .hero .greeting {
+  font-family:'Fraunces',Georgia,serif;
+  font-size:clamp(30px,3.1vw,44px);
+  font-weight:500;
+  letter-spacing:-1.2px;
+  line-height:1.18;
+}
+.wrap .hero .greeting .hi { color:#21654d; }
+.wrap .hero .tagline { color:#526158; font-size:15px; max-width:760px; }
+.wrap .steps { padding:14px 0; margin-bottom:0; border-bottom:0; gap:0; }
+.wrap .steps .st .ic { background:transparent; box-shadow:none; border-radius:0; }
+.wrap .steps .st.active .ic { color:#16704e; background:transparent; box-shadow:none; }
+.wrap .steps .st.active { color:#183e35; }
+.wrap #modeSelect {
+  display:grid;
+  grid-template-columns:1fr;
+  gap:0;
+  border-top:2px solid #244c3e;
+  border-bottom:1px solid #ccd5ce;
+  counter-reset:starting-point;
+  margin-bottom:32px;
+}
+.wrap #modeSelect .mode-card {
+  counter-increment:starting-point;
+  display:grid;
+  grid-template-columns:40px 30px minmax(0,1fr) 36px;
+  grid-template-rows:auto auto;
+  column-gap:18px;
+  row-gap:7px;
+  align-items:center;
+  min-height:134px;
+  padding:25px 22px;
+  border:0;
+  border-bottom:1px solid #dce1dd;
+  border-radius:0;
+  box-shadow:none;
+  background:transparent;
+  transform:none;
+  color:#183e35;
+}
+.wrap #modeSelect .mode-card:last-child { border-bottom:0; }
+.wrap #modeSelect .mode-card::before {
+  content:'0' counter(starting-point);
+  grid-column:1;
+  grid-row:1 / 3;
+  align-self:start;
+  padding-top:2px;
+  color:#7a897f;
+  font-size:13px;
+  font-weight:500;
+  font-variant-numeric:tabular-nums;
+}
+.wrap #modeSelect .mode-card::after {
+  content:'→';
+  grid-column:4;
+  grid-row:1 / 3;
+  font-size:24px;
+  font-weight:400;
+  justify-self:end;
+}
+.wrap #modeSelect .mode-card .ic {
+  grid-column:2;
+  grid-row:1;
+  width:23px;
+  height:23px;
+  padding:0;
+  border-radius:0;
+  background:transparent;
+  color:#21654d;
+  transform:none;
+}
+.wrap #modeSelect .mc-title { grid-column:3; grid-row:1; margin:0; font-size:18px; font-weight:700; letter-spacing:-.35px; }
+.wrap #modeSelect .mc-sub { grid-column:3; grid-row:2; max-width:700px; font-size:13px; line-height:1.65; color:#59675f; }
+.wrap #modeSelect .mode-card.active { background:#edf3ed; box-shadow:inset 3px 0 #21654d; }
+.wrap #modeSelect .mode-card:hover { background:#e5eee6; box-shadow:inset 3px 0 #21654d; }
+.wrap #modeSelect .mode-card:focus-visible { outline:3px solid #21654d; outline-offset:-3px; }
+.wrap .card { box-shadow:none; border-radius:6px; }
+.wrap .btn.primary { background:#183e35; box-shadow:none; }
+.wrap .btn.primary:hover:not(:disabled) { background:#102e26; box-shadow:none; }
+.wrap .btn.accent { background:#16704e; box-shadow:none; }
+.wrap .btn.accent:hover:not(:disabled) { background:#105539; box-shadow:none; }
+.app-menu .nav-link.nav-active { background:#e6eee6; color:#183e35; border-color:transparent; box-shadow:inset 3px 0 #21654d; }
+.app-menu .nav-group-label { color:#65756a; font-size:10px; letter-spacing:.1em; }
+@media(min-width:1101px) {
+  .app-menu,.app-menu:hover,.app-menu:focus-within {
+    left:0;
+    width:232px;
+    bottom:0;
+    border:0;
+    border-right:1px solid #dce1dd;
+    border-radius:0;
+    box-shadow:none;
+    background:#f0f2ed;
+    padding:14px 18px;
+  }
+  .app-menu .nav-link,.app-menu:not(:hover):not(:focus-within) .nav-link { font-weight:600; border-radius:4px; }
+  .wrap { margin-left:232px; padding:40px clamp(28px,4vw,72px) 80px; }
+  .wrap .hero,.wrap .steps,.wrap #modeSelect { max-width:1040px; margin-left:0; margin-right:0; }
+}
+@media(max-width:600px) {
+  .wrap .hero { margin-bottom:20px; }
+  .wrap .hero .greeting { letter-spacing:-.7px; }
+  .wrap #modeSelect .mode-card { grid-template-columns:24px minmax(0,1fr) 20px; column-gap:12px; padding:22px 12px; }
+  .wrap #modeSelect .mode-card .ic { display:none; }
+  .wrap #modeSelect .mc-title,.wrap #modeSelect .mc-sub { grid-column:2; }
+  .wrap #modeSelect .mc-title { font-size:16px; }
+  .wrap #modeSelect .mode-card::after { grid-column:3; font-size:20px; }
+}
+/* Shared library, assessment and roster surfaces. Status colours stay semantic. */
+.wrap .page-hd h2 { font-family:'Fraunces',Georgia,serif; font-size:28px; font-weight:500; letter-spacing:-.6px; }
+.wrap .phd-icon { border-radius:4px; box-shadow:none; }
+.wrap .game-card,.wrap .roster-row,.wrap .credit-pack,.wrap .plan-section { border-radius:6px; box-shadow:none; }
+.wrap .game-card:hover,.wrap .roster-row:hover,.wrap .plan-section:hover { box-shadow:none; border-color:#98afa0; }
+.wrap .game-card:not(.teacher-confirmed-card) .gc-head { background:#f3f5f1; }
+.wrap .game-card.teacher-confirmed-card .gc-head { background:#eaf3eb; }
+.wrap .tpl,.wrap .tpl-row { border-radius:6px; background:#fff; }
+.wrap .tpl-row.sel { border-color:#21654d; background:#f0f5ef; box-shadow:none; }
+.wrap .tpl .ficon,.wrap .tpl-row .ficon { border-radius:4px; background:#eef3ed; }
+.wrap .back-btn { color:#21654d; }
+.wrap .btn.ghost:hover:not(:disabled) { background:#eef3ed; border-color:#98afa0; }
+.wrap input:focus,.wrap select:focus,.wrap textarea:focus { border-color:#21654d; box-shadow:0 0 0 3px #21654d20; }

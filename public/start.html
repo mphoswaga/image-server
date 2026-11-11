@@ -147,6 +147,14 @@
   <script>
     const $ = id => document.getElementById(id);
     const nextParam = new URLSearchParams(location.search).get('next');
+    const previewStudent = new URLSearchParams(location.search).get('previewStudent');
+    const studentEndpoint = part => previewStudent ? '/api/student-profiles/'+encodeURIComponent(previewStudent)+'/preview/'+part : '/api/student/'+part;
+    if (previewStudent) {
+      const banner=document.createElement('aside');banner.id='previewBanner';banner.style.cssText='padding:16px;background:#183e35;color:white;text-align:center';
+      banner.textContent='Student view · Read-only · Your classes only';document.body.prepend(banner);
+      document.addEventListener('click',event=>{if(event.target.closest('#dashboard button,#dashboard a')){event.preventDefault();event.stopImmediatePropagation();}},true);
+      document.addEventListener('submit',event=>{event.preventDefault();event.stopImmediatePropagation();},true);
+    }
     const returnTo = nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//') && !/[\\\r\n]/.test(nextParam) ? nextParam : '';
     const googleLinkMode = new URLSearchParams(location.search).get('google') === 'link';
     const googleError = new URLSearchParams(location.search).get('googleError') || '';
@@ -184,7 +192,7 @@
       if(activityBusy||document.hidden)return;
       activityBusy=true;
       try{
-        const r=await fetch('/api/student/activities');if(r.status===401){clearInterval(activityTimer);$('activityStatus').textContent='Please sign in again to see your activities.';return;}
+        const r=await fetch(studentEndpoint('activities'));if(r.status===401){clearInterval(activityTimer);$('activityStatus').textContent='Please sign in again to see your activities.';return;}
         if(!r.ok)throw Error();const d=await r.json();const signature=JSON.stringify(d);
         if(signature!==activitySignature){
           activitySignature=signature;
@@ -205,10 +213,11 @@
       if (!window.LessonScopeI18n) await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, {once:true}));
       LessonScopeI18n.bind($('greet'), 'Hi {name}!', {name});
       $('dashboard').style.display = 'block';
+      if(previewStudent){$('previewBanner').textContent='Viewing as '+name+' · Read-only · Your classes only';$('logoutLink').hidden=true;}
       refreshActivities();if(!activityTimer)activityTimer=setInterval(refreshActivities,15000);
       fetch('/api/practice/status').then(r => r.json()).then(d => { if (d.enabled) $('practiceCard').style.display = 'block'; }).catch(() => {});
       try {
-        const r = await fetch('/api/student/my-work');
+        const r = await fetch(studentEndpoint('my-work'));
         const d = await r.json();
         renderWork(r.ok ? d.work : []);
       } catch { renderWork([]); }
@@ -292,10 +301,11 @@
         .then(d => { if (d.enabled) $('guestPractice').style.display = 'block'; })
         .catch(() => {});
       try {
-        const r = await fetch('/api/student/me');
+        const r = await fetch(studentEndpoint('me'));
         if (r.ok && !googleLinkMode) { const d = await r.json(); await showDashboard(d.name); return; }
       } catch {}
       $('loading').style.display = 'none';
+      if(previewStudent){$('previewBanner').textContent='Preview unavailable. Sign in as the teacher and select a student from your current class.';return;}
       $('authCard').style.display = 'block';
       if (googleLinkMode) {
         try {

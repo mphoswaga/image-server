@@ -1112,3 +1112,14 @@ body[data-newsletter-role="translator"] .paper-symbol {
 body[data-newsletter-role] .layout{grid-template-columns:220px minmax(0,1fr)}
 body[data-newsletter-role] .layout>aside{display:block}
 @media(max-width:760px){body[data-newsletter-role] .layout{grid-template-columns:minmax(0,1fr)}}
+
+/* Match the main teacher workspace without changing newsletter content layouts. */
+:root { color:#16223a; background:#f7f7f4; }
+body { background:#f7f7f4; }
+button,.button { border-radius:6px; box-shadow:none; background:#183e35; }
+button.secondary,.button.secondary { background:#fff; color:#183e35; border-color:#dce1dd; }
+input,select,textarea { border-radius:6px; border-color:#dce1dd; }
+input:focus,select:focus,textarea:focus { outline:2px solid #21654d; outline-offset:2px; }
+#newsletterNav button { border-radius:4px; color:#344c40; }
+#newsletterNav button:hover { background:#edf3ed; }
+#newsletterNav button[aria-current="page"] { background:#183e35; border-color:#183e35; }

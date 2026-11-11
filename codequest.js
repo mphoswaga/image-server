@@ -11,6 +11,17 @@ function register({app,games,roster,requireGameAccess,gameSessionCanAccess}){
 
  const storyAudio=require('./assessment-narration').createNarration({directory:path.join(DATA_DIR,'codequest-story-audio-v1'),synthesize:async text=>{const OpenAI=require('openai'),ai=new OpenAI({maxRetries:1,timeout:45000});return Buffer.from(await(await ai.audio.speech.create({model:'gpt-4o-mini-tts',voice:'marin',response_format:'mp3',speed:.95,input:text,instructions:'Speak as a warm theatrical pirate captain telling a treasure adventure to primary school children. Natural expressive voice, playful nautical character, clear English and gentle dramatic pauses. Read exactly the supplied words. No added words, music or sound effects. Do not imitate any actor or film character.'})).arrayBuffer());}});
  app.get('/api/game/:id/codequest/story-audio',requireGameAccess,async(req,res)=>{try{const c=context(req);if(!c.teacher)return res.status(403).json({error:'Only the teacher can play the opening story.'});const s=current(c);if(!s)throw Error('Open a class lobby first.');const part=String(req.query.part||'');if(!/^[0-3]$/.test(part))throw Error('Story part not found.');const lines=require('./public/codequest-story-text')(s.requireReturn!==false),audio=await storyAudio(c.game.teacherId,lines[Number(part)]);res.set('Cache-Control','private, no-store').type('audio/mpeg').send(audio);}catch(e){res.status(503).json({error:'The pirate voice is unavailable. You can read the story or start the game.'});}});
+ app.get('/api/game/:id/codequest/level-audio',requireGameAccess,async(req,res)=>{
+  try {
+   const c=context(req);
+   if(!c.teacher)return res.status(403).json({error:'Teacher only.'});
+   const s=current(c);
+   if(!s || Number(req.query.round)!==s.round)return res.status(409).json({error:'Level has changed.'});
+   const text=require('./public/codequest-briefing')(E.view(s,null,true)).text;
+   const audio=await storyAudio(c.game.teacherId,text);
+   res.set('Cache-Control','private, max-age=3600').type('audio/mpeg').send(audio);
+  } catch(error) {res.status(503).json({error:'Level voice unavailable. Tap to retry.'});}
+ });
  function classes(c){return c.preview?[{id:'sample',name:'Sample class'}]:games.getRosterIds(c.game).map(id=>roster.getRoster(c.game.teacherId,id)).filter(Boolean).map(r=>({id:r.id,name:r.name}));}
  function selected(c,id){if(c.preview)return {id:'sample',name:'Sample class',students:[{id:'demo-1',name:'You · sample pirate',gender:'female'},{id:'demo-2',name:'Sample classmate',gender:'male',bot:true}]};if(!games.getRosterIds(c.game).map(String).includes(String(id)))throw Error('Select a class assigned to this activity.');const r=roster.getRoster(c.game.teacherId,id);if(!r)throw Error('Class not found.');return r;}
  function current(c){const s=load(c);if(s){const phase=s.phase,r=c.preview?selected(c,'sample'):roster.getRoster(c.game.teacherId,s.rosterId),changed=E.syncRosterAvatars(s,r?.students||[]);E.tick(s);if(changed||phase!==s.phase)save(c,s);}return s;}
