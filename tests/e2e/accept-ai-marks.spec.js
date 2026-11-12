@@ -81,7 +81,7 @@ test("teacher accepts all AI suggestions and separately releases the quiz marks"
     ]),
   );
   await card
-    .getByRole("button", { name: "Run classroom / mark", exact: true })
+    .locator('.a-toggle-btn')
     .click();
   const accept = card.getByRole("button", {
     name: "Accept all AI marks (1)",

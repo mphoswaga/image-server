@@ -190,7 +190,7 @@ test('Plan automatically creates an editable project assessment draft', async ({
   expect(publishedAssessmentPayload.assessment.sections.map(section => section.title)).toEqual(['Knowledge check', 'Document performance']);
   expect(publishedAssessmentPayload.assessment.totalMarks).toBe(60);
   expect(publishedAssessmentPayload.rosterId).toBe('grade-2-class');
-  await page.locator('#assignmentsBackTop').click();
+  await page.locator('#homeBtn').click();
   await page.locator('#acceptBtn').click();
   await expect(page.locator('#results')).toBeVisible();
   await expect(page.locator('#automaticAssessmentResult')).toBeVisible();

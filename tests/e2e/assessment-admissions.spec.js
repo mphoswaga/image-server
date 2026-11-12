@@ -1,3 +1,4 @@
+const {revealAssessmentActions}=require('./helpers');
 const {test,expect}=require('@playwright/test');
 const {signInDisposableTeacher}=require('./helpers');
 test('admit a late learner to a running test then remove class membership without changing the test cohort',async({page,browser})=>{
@@ -9,6 +10,7 @@ test('admit a late learner to a running test then remove class membership withou
  const started=await page.request.patch(`/api/assignment/${a.assessmentId}/live-state`,{data:{action:'start'}});expect(started.ok(),await started.text()).toBeTruthy();
  expect((await page.request.post(`/api/roster/${source.id}/student/LATE/move`,{data:{targetRosterId:target.id}})).ok()).toBeTruthy();
  await page.locator('#assignmentsBtn').click();
+ await revealAssessmentActions(page.locator('[data-assignment-id]'));
  await page.getByRole('button',{name:'Add learners to test',exact:true}).click();
  await expect(page.locator('dialog .admit-learner')).toHaveCount(1);await page.locator('.admit-learner').check();
  await page.getByRole('button',{name:'Add selected learners',exact:true}).click();await expect(page.locator('.admit-learner')).toHaveCount(0);
@@ -29,6 +31,7 @@ test('admit a late learner to a running test then remove class membership withou
  await page.locator('#rostersBtn').click();const row=page.locator('.roster-row').filter({has:page.locator('.roster-name',{hasText:'Admissions class'})});
  await row.getByRole('button',{name:'Student access',exact:true}).click();
  page.once('dialog',dialog=>dialog.accept());
+ await row.locator('.pin-student-row').filter({hasText:'Learner LATE'}).locator('.student-management summary').click();
  await row.locator('.student-remove-btn[data-student-id="LATE"]').click();
  await expect(row).toContainText('1 students');
  const saved=await(await page.request.get('/api/roster/'+target.id)).json();expect(saved.students.map(s=>s.id)).toEqual(['ORIGINAL']);

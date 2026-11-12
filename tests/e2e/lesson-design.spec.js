@@ -38,7 +38,7 @@ test('saved-plan rebuild reuses settings, persists replacement and preserves it 
  });
  await setup(page);await page.locator('#lessonMinutes').fill('70');await page.locator('#plannedGame').selectOption('moonquest');await page.locator('#plannedGameStart').fill('15');await page.locator('#planBtn').click();await expect(page.locator('#planStage')).toBeVisible();
  await page.evaluate(()=>saveWorkspaceNow());const id=await page.evaluate(()=>currentWorkspaceId);
- await page.reload();await page.locator('#lessonsBtn').click();await page.locator(`[data-workspace-rebuild="${id}"]`).click();
+ await page.reload();await page.locator('#lessonsBtn').click();await page.locator(`[data-workspace-id="${id}"] .library-action-menu>summary`).click();await page.locator(`[data-workspace-rebuild="${id}"]`).click();
  await expect(page.locator('#status')).toContainText('Updated plan saved');
  expect(request.regenerate).toBe(true);expect(request.objectives).toContain('Identify senses');expect(request.lessonSettings.durationMinutes).toBe(70);expect(request.lessonSettings.game.mode).toBe('moonquest');
  await page.reload();await page.evaluate(id=>resumeLessonWorkspace(id),id);await expect(page.locator('textarea.content').first()).toHaveValue('Rebuilt objective-aligned lesson.');

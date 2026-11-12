@@ -1,3 +1,4 @@
+const {revealAssessmentActions}=require('./helpers');
 const { test, expect } = require('@playwright/test');
 const { expectNoPageOverflow, signInDisposableTeacher } = require('./helpers');
 
@@ -51,7 +52,7 @@ test('teacher builds a marked assessment and a learner sees practical criteria s
   expect(classPinResult.students.map(student=>student.pin)).toEqual(['4826','4826']);
 
   await page.locator('#assignmentsBtn').click();
-  await expect(page.getByRole('heading', { name: 'Test or project' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Tests & projects/ })).toBeVisible();
   await page.locator('#newAssessmentBtn').click();
   await page.locator('#assessmentTitle').fill('Document creation project');
   await page.locator('#assessmentSubject').fill('Computing');
@@ -74,6 +75,7 @@ test('teacher builds a marked assessment and a learner sees practical criteria s
   await expect(page.locator('#assessmentPublishResult')).toContainText('Assessment published');
   await expect(page.locator('#assignmentsList')).toContainText('Document creation project');
   const assessmentCard=page.locator('#assignmentsList .game-card').filter({hasText:'Document creation project'});
+  await revealAssessmentActions(assessmentCard);
   await assessmentCard.getByRole('button',{name:'Change class'}).click();
   await assessmentCard.locator('.a-class-picker').selectOption(replacementRoster.id);
   const classUpdate=page.waitForResponse(result=>result.url().endsWith(`/api/assignment/${assessment.assessmentId}/class`)&&result.request().method()==='PATCH');
@@ -81,6 +83,7 @@ test('teacher builds a marked assessment and a learner sees practical criteria s
   expect((await classUpdate).ok()).toBeTruthy();
   await expect(page.locator('#assignmentsList .game-card').filter({hasText:'Document creation project'})).toContainText('Grade 2 ICT B');
   const changedAssessmentCard=page.locator('#assignmentsList .game-card').filter({hasText:'Grade 2 ICT B'});
+  await revealAssessmentActions(changedAssessmentCard);
   await changedAssessmentCard.getByRole('button',{name:'Give to another class'}).click();
   await changedAssessmentCard.locator('.a-class-copy-picker').selectOption(anotherRoster.id);
   const classCopyResponse=page.waitForResponse(result=>result.url().endsWith(`/api/assignment/${assessment.assessmentId}/class-copy`)&&result.request().method()==='POST');
@@ -226,7 +229,7 @@ test('an open My assignments panel updates learner readiness without being reope
   const card = page.locator('#assignmentsList .game-card').filter({ hasText: 'Live document project' });
   await expect(card).toBeVisible();
   const toggle = card.locator('.a-toggle-btn');
-  await expect(toggle).toHaveText('Run classroom / mark');
+  await expect(toggle).toHaveText(/Run classroom|Mark work/);
   await toggle.click();
   const results = card.locator(`#ares-${assessment.assessmentId}`);
   await expect(results).toContainText('Live classroom lobby');
@@ -297,7 +300,7 @@ test('an open My assignments panel updates learner readiness without being reope
     await learnerContext.close();
   }
 
-  await page.locator('#assignmentsBackTop').click();
+  await page.locator('#homeBtn').click();
   await page.waitForTimeout(100);
   const requestsAfterClose = resultsRequests;
   await page.waitForTimeout(1600);
@@ -524,6 +527,7 @@ test('multiple-choice answers are visibly auto-confirmed without per-learner sav
     const card = page.locator('#assignmentsList .game-card').filter({ hasText: 'Plant knowledge test' });
     await expect(card).toHaveClass(/teacher-confirmed-card/);
     await expect(card.locator('.a-marked-toggle')).toBeChecked();
+    await page.locator('[data-assignment-status="marked"]').click();
     await card.locator('.a-toggle-btn').click();
     const results = card.locator(`#ares-${assessment.assessmentId}`);
     await results.getByRole('button', { name: 'By question' }).click();
@@ -575,7 +579,7 @@ test('one bulk question mark updates every selected learner and rejects a mixed 
 
   await page.locator('#assignmentsBtn').click();
   const card=page.locator(`[data-assignment-id="${assessment.assessmentId}"]`);
-  await card.getByRole('button', { name: 'Run classroom / mark', exact: true }).click();
+  await card.locator('.a-toggle-btn').click();
   const search=card.getByLabel('Search students', { exact: true });
   await search.fill('Amina');
   await expect(card.locator('[data-marking-student]:visible')).toHaveCount(1);
@@ -608,21 +612,23 @@ test('one bulk question mark updates every selected learner and rejects a mixed 
   await expect(card.locator('.a-captured-toggle')).toBeDisabled();
   await page.getByLabel('Find a test', {exact:true}).fill('Bulk practical');
   await page.getByLabel('Class', {exact:true}).selectOption(classRoster.id);
+  await revealAssessmentActions(card);
   await card.locator('.a-marked-toggle').check();
   await expect(card).toBeHidden();
-  await page.getByRole('button',{name:/^Marked by teacher \(/}).click();
+  await page.getByRole('button',{name:/^Marked by teacher /}).click();
   await expect(card).toBeVisible();
   await card.locator('.a-captured-toggle').check();
   await expect(card).toBeHidden();
-  await page.getByRole('button',{name:/^Captured on school system \(/}).click();
+  await page.getByRole('button',{name:/^Captured on school system /}).click();
   await expect(card.locator('.a-captured-toggle')).toBeChecked();
   await page.reload();
   await page.locator('#assignmentsBtn').click();
-  await page.getByRole('button',{name:/^Captured on school system \(/}).click();
+  await page.getByRole('button',{name:/^Captured on school system /}).click();
   await expect(card.locator('.a-captured-toggle')).toBeChecked();
+  await revealAssessmentActions(card);
   await card.locator('.a-captured-toggle').uncheck();
   await expect(card).toBeHidden();
-  await page.getByRole('button',{name:/^Marked by teacher \(/}).click();
+  await page.getByRole('button',{name:/^Marked by teacher /}).click();
   await expect(card.locator('.a-marked-toggle')).toBeChecked();
   const saved = await (await page.request.get('/api/assignments')).json();
   expect(saved.assignments.find(a=>a.id===assessment.assessmentId)).toMatchObject({schoolSystemCaptured:false,teacherMarked:true,resultsReleased:false});

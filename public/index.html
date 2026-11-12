@@ -2510,7 +2510,7 @@
 </style>
   <link rel="stylesheet" href="/byte-feedback.css" />
 <link rel="stylesheet" href="/learning-report.css?v=1"><script src="/learning-report.js?v=2"></script><script src="/marked-exam-print.js?v=2"></script><link rel="stylesheet" href="/ui-language.css?v=1"><script src="/locales/vi.js?v=2"></script><script defer src="/ui-language.js?v=1"></script><style>html:not([data-payment-plans="visible"]) [data-payment-plans]{display:none!important}</style><script defer src="/suite-plans.js?v=1"></script>
-  <link rel="stylesheet" href="/teacher-workspace.css?v=2">
+  <link rel="stylesheet" href="/teacher-workspace.css?v=5">
 </head>
 <body data-byte-ui="teacher">
   <!-- SPLASH (plays once per visit, then fades to reveal the app) -->
@@ -3402,20 +3402,11 @@
 
     <!-- MY LESSONS -->
     <section id="lessonsPanel" class="card wide" style="display:none">
-      <div class="page-hd">
-        <button class="back-btn" id="lessonsBackTop"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back</button>
-        <div class="phd-icon" style="background:var(--primary-soft);color:var(--primary)"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg></div>
-        <div>
-          <h2>My lessons</h2>
-          <p class="page-sub">Reopen a lesson with its approved plan, editable slides, resources, assignments, and games together.</p>
-        </div>
-      </div>
-      <div class="lessons-toolbar">
-        <input id="lessonsSearch" type="search" placeholder="Search lessons by topic, subject, or grade" autocomplete="off" />
-        <button id="newLessonBtn" class="btn accent" type="button" style="width:auto"><svg class="ic" aria-hidden="true"><use href="#i-notebook"/></svg> New lesson</button>
-      </div>
-      <div id="lessonsList" class="lesson-workspace-list"></div>
-      <div style="margin-top:28px;padding-top:18px;border-top:1px solid var(--border)"><button id="lessonsBack" class="back-btn"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back to lesson planner</button></div>
+      <div class="library-heading"><div><p class="library-eyebrow">TEACHING WORKSPACE</p><h2>My lessons <span id="lessonsSavedCount">0 saved</span></h2><p>Your plans, slides and classroom activities, together.</p></div><button id="newLessonBtn" class="btn accent" type="button">New lesson</button></div>
+      <div class="library-filters"><label class="library-search"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg><input id="lessonsSearch" type="search" aria-label="Search lessons" placeholder="Search your lessons" autocomplete="off"></label><select id="lessonsGrade" aria-label="Filter lessons by grade"><option value="">All grades</option></select><select id="lessonsSubject" aria-label="Filter lessons by subject"><option value="">All subjects</option></select><select id="lessonsSort" aria-label="Sort lessons"><option value="recent">Recently edited</option><option value="oldest">Oldest first</option><option value="title">Title A–Z</option></select></div>
+      <div id="lessonsList" class="library-list lesson-workspace-list"></div>
+      <footer id="lessonsPagination" class="library-footer" aria-label="Lesson pages"></footer>
+      <button id="lessonsBackTop" type="button" hidden>Back</button><button id="lessonsBack" type="button" hidden>Back to lesson planner</button>
     </section>
 
     <!-- MY GAMES -->
@@ -3486,16 +3477,8 @@
 
     <!-- MY ASSIGNMENTS -->
     <section id="assignmentsPanel" class="card wide" style="display:none">
-      <div class="page-hd">
-        <button class="back-btn" id="assignmentsBackTop"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back</button>
-        <div class="phd-icon" style="background:var(--accent-soft);color:var(--accent)"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg></div>
-        <div>
-          <h2>Test or project</h2>
-          <p class="page-sub">Build a flexible assessment for any subject or grade, run it with your class, and mark everything in LessonScope.</p>
-        </div>
-      </div>
-      <button id="newAssessmentBtn" type="button" class="btn accent" style="width:auto;margin-bottom:16px"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"/></svg> Create test or project</button>
-      <button id="topicMcqOpen" type="button" class="btn ghost" style="width:auto;margin-bottom:16px">Generate multiple-choice questions</button>
+      <div class="assessment-library-heading"><div><p class="assessment-eyebrow">ASSESSMENT WORKSPACE</p><h2>Tests &amp; projects <span id="assessmentSavedCount">0 saved</span></h2><p>Run assessments, mark work, and track school capture.</p></div><div><button id="newAssessmentBtn" type="button" class="btn accent">Create test or project</button><details class="assessment-create-menu"><summary aria-label="More creation options">⋯</summary><button id="topicMcqOpen" type="button">Generate multiple-choice questions</button></details></div></div>
+      <button id="assignmentsBackTop" type="button" hidden>Back</button>
       <section id="topicMcqPanel" class="assessment-builder" hidden>
         <h3>Questions from a published topic</h3>
         <label for="topicMcqSource">Published topic</label><select id="topicMcqSource"></select>
@@ -3551,21 +3534,18 @@
         <button id="publishAssessmentBtn" type="button" class="btn accent" style="margin-top:14px">Publish assessment</button>
         <div id="assessmentPublishResult"></div>
       </div>
-      <div id="assignmentFilters" style="margin:18px 0">
-        <div style="display:flex;gap:12px;flex-wrap:wrap">
-          <label style="flex:1;min-width:200px">Find a test<input id="assignmentSearch" type="search" placeholder="Search title, subject or grade"></label>
-          <label style="flex:1;min-width:200px">Class<select id="assignmentClassFilter" aria-label="Class"><option value="">All classes</option></select></label>
+      <div id="assignmentFilters">
+        <div id="assignmentStatusTabs" class="assessment-tabs" aria-label="Assessment status">
+          <button type="button" data-assignment-status="pending">To be marked <span></span></button>
+          <button type="button" data-assignment-status="marked">Marked by teacher <span></span></button>
+          <button type="button" data-assignment-status="captured">Captured on school system <span></span></button>
         </div>
-        <div id="assignmentStatusTabs" aria-label="Assessment status" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
-          <button type="button" class="btn ghost" style="width:auto" data-assignment-status="pending">To be marked <span></span></button>
-          <button type="button" class="btn ghost" style="width:auto" data-assignment-status="marked">Marked by teacher <span></span></button>
-          <button type="button" class="btn ghost" style="width:auto" data-assignment-status="captured">Captured on school system <span></span></button>
-        </div>
-        <p class="hint">School-system capture is your manual confirmation that you entered the marks there.</p>
-        <p id="assignmentFilterStatus" class="hint" role="status"></p>
+        <div class="assessment-library-filters"><label class="assessment-search"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg><input id="assignmentSearch" type="search" aria-label="Find a test" placeholder="Find a test, project or topic"></label><select id="assignmentClassFilter" aria-label="Class"><option value="">All classes</option></select><select id="assignmentTypeFilter" aria-label="Assessment type"><option value="">All types</option></select><select id="assignmentSort" aria-label="Sort assessments"><option value="recent">Recently created</option><option value="oldest">Oldest first</option><option value="title">Title A–Z</option></select></div>
       </div>
-      <div id="assignmentsList"></div>
-      <div style="margin-top:28px;padding-top:18px;border-top:1px solid var(--border)"><button id="assignmentsBack" class="back-btn"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back to lesson planner</button></div>
+      <div id="assignmentsList" class="assessment-library-list"></div>
+      <footer class="assessment-library-footer"><span id="assignmentFilterStatus" role="status"></span><div id="assignmentPagination"></div></footer>
+      <p class="assessment-capture-note">Marked work moves to its own tab. Confirm school capture after entering the marks in your school system.</p>
+      <button id="assignmentsBack" type="button" hidden>Back to lesson planner</button>
     </section>
 
     <!-- MARKS / GRADEBOOK -->
@@ -3575,7 +3555,7 @@
         <div class="phd-icon" style="background:var(--accent-soft);color:var(--accent)"><svg class="ic" aria-hidden="true"><use href="#i-results"/></svg></div>
         <div>
           <h2>Marks</h2>
-          <p class="page-sub">Every class's marks in one place — assignments and games together, with class and student averages. Export to Excel for your school's system.</p>
+          <p class="page-sub">Review class results, check progress, and export marks for your school.</p>
         </div>
       </div>
       <div id="marksClassBar" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px"></div>
@@ -7539,7 +7519,8 @@
 
     // ---- Persistent "My lessons" workspaces ----
     const WORKSPACE_STAGE_LABELS={draft:'Getting started',plan:'Plan ready',slides:'Slides ready',resources:'Resources ready',assigned:'Shared with learners'};
-    let lessonWorkspaceList=[];
+    let lessonWorkspaceList=[],lessonLibraryPage=1;
+    const LESSON_LIBRARY_PAGE_SIZE=7;
 
     function setWorkspaceSaveStatus(state,text){
       const box=$('workspaceSaveStatus');
@@ -7813,35 +7794,34 @@
 
     function renderLessonWorkspaces(){
       const wrap=$('lessonsList');
-      const query=$('lessonsSearch').value.trim().toLowerCase();
-      const lessons=lessonWorkspaceList.filter(lesson=>[lesson.title,lesson.subject,lesson.topic,lesson.grade].join(' ').toLowerCase().includes(query));
+      const fold=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').replace(/Đ/g,'D').toLocaleLowerCase();
+      const query=fold($('lessonsSearch').value.trim()),grade=$('lessonsGrade').value,subject=$('lessonsSubject').value;
+      const lessons=lessonWorkspaceList.filter(lesson=>(!grade||lesson.grade===grade)&&(!subject||lesson.subject===subject)&&fold([lesson.title,lesson.subject,lesson.topic,lesson.grade].join(' ')).includes(query));
+      const edited=lesson=>Date.parse(lesson.updatedAt)||0;
+      lessons.sort((a,b)=>$('lessonsSort').value==='title'?(a.topic||a.title||'').localeCompare(b.topic||b.title||'',undefined,{numeric:true}):$('lessonsSort').value==='oldest'?edited(a)-edited(b):edited(b)-edited(a));
+      const pages=Math.max(1,Math.ceil(lessons.length/LESSON_LIBRARY_PAGE_SIZE));lessonLibraryPage=Math.min(pages,Math.max(1,lessonLibraryPage));
+      $('lessonsSavedCount').textContent=lessonWorkspaceList.length+' saved';
       if(!lessons.length){
-        wrap.innerHTML=`<div class="empty-state"><svg class="ic" aria-hidden="true" style="width:36px;height:36px;opacity:.3"><use href="#i-doc"/></svg><p>${query?'No lessons match that search.':'No saved lessons yet.'}</p><p class="hint-action">${query?'Try another subject, topic, or grade.':'Generate your first lesson plan and it will save here automatically.'}</p></div>`;
-        return;
+        wrap.innerHTML=`<div class="empty-state"><p>${lessonWorkspaceList.length?'No lessons match these filters.':'No saved lessons yet.'}</p><p class="hint-action">${lessonWorkspaceList.length?'Try another search, grade or subject.':'Create a lesson and it will save here automatically.'}</p></div>`;
+        $('lessonsPagination').replaceChildren();return;
       }
-      wrap.innerHTML=lessons.map(lesson=>{
-        const progress=[
-          lesson.hasPlan?'<span class="ready">Plan</span>':'',
-          lesson.deckCount?`<span class="ready">${lesson.deckCount} slide deck${lesson.deckCount===1?'':'s'}</span>`:'',
-          lesson.resourceCount?`<span class="ready">${lesson.resourceCount} resource${lesson.resourceCount===1?'':'s'}</span>`:'',
-          lesson.assignmentCount?`<span class="ready">${lesson.assignmentCount} assignment${lesson.assignmentCount===1?'':'s'}</span>`:'',
-          lesson.gameCount?`<span class="ready">${lesson.gameCount} game${lesson.gameCount===1?'':'s'}</span>`:'',
-        ].filter(Boolean).join('');
-        return `<article class="lesson-workspace-card" data-workspace-id="${esc(lesson.id)}">
-          <div>
-            <h3 class="lesson-workspace-title">${esc(lesson.topic||lesson.title)}</h3>
-            <div class="lesson-workspace-meta"><span class="gc-chip">${esc(lesson.subject||'Lesson')}</span>${lesson.grade?`<span class="gc-chip">${esc(lesson.grade)}</span>`:''}<span>${esc(WORKSPACE_STAGE_LABELS[lesson.stage]||'In progress')}</span><span>Edited ${esc(fmtDateTime(lesson.updatedAt))}</span></div>
-            <div class="lesson-workspace-progress">${progress||'<span>Set-up saved</span>'}</div>
-          </div>
-          <div class="lesson-workspace-actions">
-            ${lesson.assignmentCount?`<button type="button" class="btn ghost" data-workspace-assignments="${esc(lesson.id)}">Assignments</button>`:''}
-            ${lesson.gameCount?`<button type="button" class="btn ghost" data-workspace-games="${esc(lesson.id)}">Games</button>`:''}
-            ${lesson.hasPlan?`<button type="button" class="btn ghost" data-workspace-rebuild="${esc(lesson.id)}" title="Reuse saved settings and regenerate with objective coverage checks">Rebuild from learning objectives</button>`:''}
-            <button type="button" class="btn primary" data-workspace-resume="${esc(lesson.id)}">Resume lesson</button>
-            <button type="button" class="btn ghost archive-lesson" data-workspace-archive="${esc(lesson.id)}" title="Archive lesson" aria-label="Archive ${esc(lesson.topic||lesson.title)}">${ICON('i-trash')}</button>
-          </div>
-        </article>`;
+      const start=(lessonLibraryPage-1)*LESSON_LIBRARY_PAGE_SIZE;
+      wrap.innerHTML='<div class="library-column-head" aria-hidden="true"><span>LESSON</span><span>STATUS</span><span>LAST EDITED</span><span></span></div>'+lessons.slice(start,start+LESSON_LIBRARY_PAGE_SIZE).map(lesson=>{
+        const title=lesson.topic||lesson.title||'Untitled lesson',numbered=title.match(/^(\d+)\s+(.+)$/s);
+        const resources=[lesson.hasPlan?'Plan':'',lesson.deckCount?lesson.deckCount+' deck'+(lesson.deckCount===1?'':'s'):'',lesson.resourceCount?lesson.resourceCount+' resource'+(lesson.resourceCount===1?'':'s'):'',lesson.assignmentCount?lesson.assignmentCount+' assignment'+(lesson.assignmentCount===1?'':'s'):'',lesson.gameCount?lesson.gameCount+' game'+(lesson.gameCount===1?'':'s'):''].filter(Boolean).join(' · ');
+        const date=edited(lesson)?new Date(lesson.updatedAt).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}):'Not recorded';
+        return `<article class="library-row lesson-workspace-card" data-workspace-id="${esc(lesson.id)}"><div class="library-lesson"><span class="library-unit" aria-hidden="true">${numbered?esc(numbered[1]):ICON('i-doc')}</span><div><h3 title="${esc(title)}">${esc(numbered?numbered[2]:title)}</h3><p>${esc(lesson.subject||'Lesson')}${lesson.grade?' <span>/</span> '+esc(lesson.grade):''}</p><small>${esc(resources||'Set-up saved')}</small></div></div><div class="library-state ${lesson.stage==='assigned'?'shared':''}"><i aria-hidden="true"></i>${esc(WORKSPACE_STAGE_LABELS[lesson.stage]||'In progress')}</div><time ${edited(lesson)?'datetime="'+esc(lesson.updatedAt)+'"':''} title="${esc(fmtDateTime(lesson.updatedAt))}">${esc(date)}</time><div class="library-actions"><button type="button" class="library-open" data-workspace-resume="${esc(lesson.id)}">Open lesson <span aria-hidden="true">↗</span></button><details class="library-action-menu"><summary aria-label="Actions for ${esc(title)}">⋯</summary><div class="library-menu-items">${lesson.assignmentCount?`<button type="button" data-workspace-assignments="${esc(lesson.id)}">Assignments</button>`:''}${lesson.gameCount?`<button type="button" data-workspace-games="${esc(lesson.id)}">Games</button>`:''}${lesson.hasPlan?`<button type="button" data-workspace-rebuild="${esc(lesson.id)}">Rebuild from learning objectives</button>`:''}<button type="button" class="library-archive" data-workspace-archive="${esc(lesson.id)}">Archive lesson</button></div></details></div></article>`;
       }).join('');
+      const pageNumbers=[...new Set([1,lessonLibraryPage-1,lessonLibraryPage,lessonLibraryPage+1,pages].filter(p=>p>0&&p<=pages))].sort((a,b)=>a-b);
+      $('lessonsPagination').innerHTML=`<span role="status">Showing ${start+1}–${Math.min(start+LESSON_LIBRARY_PAGE_SIZE,lessons.length)} of ${lessons.length} lessons</span><div><button type="button" data-lesson-page="${lessonLibraryPage-1}" ${lessonLibraryPage===1?'disabled':''}>← Previous</button>${pageNumbers.map((n,i)=>(i&&n>pageNumbers[i-1]+1?'<span aria-hidden="true">…</span>':'')+`<button type="button" data-lesson-page="${n}" aria-label="Page ${n}" ${n===lessonLibraryPage?'class="current" aria-current="page"':''}>${n}</button>`).join('')}<button type="button" data-lesson-page="${lessonLibraryPage+1}" ${lessonLibraryPage===pages?'disabled':''}>Next →</button></div>`;
+    }
+    function refreshLessonFilters(){
+      for(const [id,key,label]of [['lessonsGrade','grade','All grades'],['lessonsSubject','subject','All subjects']]){
+        const select=$(id),selected=select.value;
+        const values=[...new Set(lessonWorkspaceList.map(l=>l[key]).filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+        select.innerHTML='<option value="">'+label+'</option>'+values.map(value=>`<option value="${esc(value)}">${esc(value)}</option>`).join('');
+        select.value=values.includes(selected)?selected:'';
+      }
     }
 
     async function loadLessonWorkspaces(){
@@ -7851,7 +7831,7 @@
         const d=await r.json();
         if(!r.ok) throw new Error(d.error||'Could not load saved lessons.');
         lessonWorkspaceList=d.lessons||[];
-        renderLessonWorkspaces();
+        refreshLessonFilters();renderLessonWorkspaces();
       }catch(err){ $('lessonsList').innerHTML=`<p class="hint err">${esc(err.message)}</p>`; }
     }
 
@@ -7865,7 +7845,13 @@
     }
 
     $('lessonsBtn').onclick=openLessons;
-    $('lessonsSearch').addEventListener('input',renderLessonWorkspaces);
+    const filterLessons=()=>{lessonLibraryPage=1;renderLessonWorkspaces();};
+    $('lessonsSearch').addEventListener('input',filterLessons);
+    for(const id of ['lessonsGrade','lessonsSubject','lessonsSort'])$(id).addEventListener('change',filterLessons);
+    $('lessonsPagination').addEventListener('click',event=>{const button=event.target.closest('[data-lesson-page]');if(!button||button.disabled)return;lessonLibraryPage=Number(button.dataset.lessonPage);renderLessonWorkspaces();$('lessonsList').scrollIntoView({block:'start'});});
+    $('lessonsList').addEventListener('toggle',event=>{if(event.target.matches('.library-action-menu')&&event.target.open)$('lessonsList').querySelectorAll('.library-action-menu[open]').forEach(menu=>{if(menu!==event.target)menu.open=false;});},true);
+    document.addEventListener('click',event=>$('lessonsList').querySelectorAll('.library-action-menu[open]').forEach(menu=>{if(!menu.contains(event.target)||event.target.closest('button'))menu.open=false;}));
+    document.addEventListener('keydown',event=>{if(event.key==='Escape')$('lessonsList').querySelectorAll('.library-action-menu[open]').forEach(menu=>{menu.open=false;menu.querySelector('summary').focus();});});
     $('lessonsList').addEventListener('click',async e=>{
       const rebuild=e.target.closest('[data-workspace-rebuild]');
       if(rebuild){
@@ -7885,7 +7871,7 @@
       const r=await fetch(`/api/lesson-workspaces/${encodeURIComponent(archive.dataset.workspaceArchive)}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({archived:true})});
       if(!r.ok){ const d=await r.json().catch(()=>({})); toast(d.error||'Could not archive that lesson.'); return; }
       lessonWorkspaceList=lessonWorkspaceList.filter(item=>item.id!==archive.dataset.workspaceArchive);
-      renderLessonWorkspaces();
+      refreshLessonFilters();renderLessonWorkspaces();
       toast('Lesson archived.','ok');
     });
 
@@ -8136,11 +8122,11 @@
     }
     function renderClassBar(){
       const bar=$('marksClassBar');
-      const chips=gbClasses.map(c=>`<button type="button" class="btn ghost gb-class-btn" data-rid="${esc(c.rosterId)}" style="font-size:13px;padding:8px 14px;${c.rosterId===gbSelected?'border-color:var(--primary);color:var(--primary);font-weight:700':''}">${esc(c.name)} <span style="color:var(--muted);font-weight:400">· ${c.assignments+c.games} assessment${c.assignments+c.games===1?'':'s'}</span></button>`).join('');
+      const chips=`<div class="marks-class-picker"><label for="marksClassSelect">Class</label><select id="marksClassSelect">${[...gbClasses].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(c=>`<option value="${esc(c.rosterId)}" ${c.rosterId===gbSelected?'selected':''}>${esc(c.name)} · ${c.assignments+c.games} assessments</option>`).join('')}</select></div>`;
       const sel=gbClasses.find(c=>c.rosterId===gbSelected);
-      const exportBtn=sel?`<div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><a href="/api/gradebook/${esc(gbSelected)}/export" class="btn accent" style="font-size:13px;padding:8px 16px;text-decoration:none"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Export to Excel</a><button type="button" class="btn ghost" id="schoolMarksTemplateBtn" style="font-size:13px;padding:8px 16px;width:auto"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg> Download assignment marks</button><input type="file" id="schoolMarksTemplateFile" accept=".xlsx" style="display:none"></div>`:'';
+      const exportBtn=sel?`<div class="marks-export-actions" style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><a href="/api/gradebook/${esc(gbSelected)}/export" class="btn accent" style="font-size:13px;padding:8px 16px;text-decoration:none"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Export to Excel</a><button type="button" class="btn ghost" id="schoolMarksTemplateBtn" style="font-size:13px;padding:8px 16px;width:auto"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg> Download assignment marks</button><input type="file" id="schoolMarksTemplateFile" accept=".xlsx" style="display:none"></div>`:'';
       bar.innerHTML=chips+exportBtn;
-      bar.querySelectorAll('.gb-class-btn').forEach(b=>b.onclick=()=>{ gbSelected=b.dataset.rid; renderClassBar(); loadGradebook(gbSelected); });
+      $('marksClassSelect').onchange=event=>{gbSelected=event.target.value;renderClassBar();loadGradebook(gbSelected);};
       $('schoolMarksTemplateFile')?.setAttribute('accept','.xlsx');
       $('schoolMarksTemplateBtn')?.addEventListener('click',async()=>{
         if($('schoolTemplateOptions')){$('schoolTemplateOptions').remove();return;}
@@ -8206,28 +8192,38 @@
     async function loadGradebook(rosterId){
       $('marksBody').innerHTML='<span class="status"><span class="spinner"></span>Loading marks…</span>';
       try{
-        const g=await (await fetch('/api/gradebook/'+rosterId)).json();
+        const response=await fetch('/api/gradebook/'+encodeURIComponent(rosterId));
+        if(!response.ok)throw Error('Could not load this class.');
+        const g=await response.json();
+        if(rosterId!==gbSelected)return;
         renderGradebook(g);
-      }catch{ $('marksBody').innerHTML='<p class="hint">Could not load this class.</p>'; }
+      }catch{ if(rosterId===gbSelected)$('marksBody').innerHTML='<p class="hint">Could not load this class. Choose the class again to retry.</p>'; }
     }
     function renderGradebook(g){
+      $('marksBody').classList.remove('show-weights');
       if(!g.assessments.length){ $('marksBody').innerHTML='<div class="empty-state"><p>No recorded assessments for this class yet</p><p style="font-size:13px;color:var(--muted)">Tick “Marked by teacher” on a completed test or project. Games appear here automatically.</p></div>'; return; }
       const doneCount=g.rows.filter(r=>r.done>0).length;
       const summary=`<div class="gb-summary">
-        <div class="gb-stat"><div class="v">${pctTxt(g.classAverage)}</div><div class="l">Class average</div></div>
+        <div class="gb-stat"><div class="v">${pctTxt(g.classAverage)}</div><div class="l">Weighted class average</div></div>
         <div class="gb-stat"><div class="v">${g.assessments.length}</div><div class="l">Assessment${g.assessments.length===1?'':'s'}</div></div>
         <div class="gb-stat"><div class="v">${g.students.length}</div><div class="l">Students</div></div>
-        <div class="gb-stat"><div class="v">${doneCount}/${g.students.length}</div><div class="l">Have taken part</div></div>
+        <div class="gb-stat"><div class="v">${doneCount}/${g.students.length}</div><div class="l">Students with results</div></div>
       </div>`;
-      const head=`<tr><th class="sticky">Student</th>${g.assessments.map(a=>`<th title="${esc(a.title)}"><label style="display:flex;flex-direction:column;gap:4px;align-items:center"><span class="gb-th-type">${a.kind==='game'?'🎮 Game':'📝 '+esc(a.type||'Task')}${a.learnerVisible===false?(a.teacherMarked?' · On record, hidden from learners':' · Saved, awaiting teacher confirmation'):''}</span><span>${esc(a.title.length>18?a.title.slice(0,17)+'…':a.title)}</span><span style="font-size:11px;font-weight:700;color:var(--muted)">Weight <input type="number" class="gb-weight-input" data-assessment-id="${esc(a.id)}" value="${Number(a.weight??1)}" min="0" max="10" step="0.25" style="width:58px;padding:3px 5px;border:1px solid var(--border);border-radius:6px;text-align:center;font:inherit"> ${a.excluded?'<em style="color:#b45309;font-style:normal">excluded</em>':''}</span></label></th>`).join('')}<th>Average</th></tr>`;
-      const body=g.rows.map(r=>`<tr>
+      const head=`<tr><th class="sticky">Student</th>${g.assessments.map(a=>`<th title="${esc(a.title)}"><label style="display:flex;flex-direction:column;gap:4px;align-items:center"><span class="gb-th-type">${a.kind==='game'?'Game':esc(a.type||'Assessment')}${a.learnerVisible===false?(a.teacherMarked?' · On record, hidden from learners':' · Saved, awaiting teacher confirmation'):''}</span><span>${esc(a.title)}</span><span class="marks-weight-setting" style="font-size:11px;font-weight:700;color:var(--muted)">Weight <input type="number" class="gb-weight-input" data-assessment-id="${esc(a.id)}" value="${Number(a.weight??1)}" min="0" max="10" step="0.25" style="width:58px;padding:3px 5px;border:1px solid var(--border);border-radius:6px;text-align:center;font:inherit"> ${a.excluded?'<em style="color:#b45309;font-style:normal">excluded</em>':''}</span></label></th>`).join('')}<th>Average</th></tr>`;
+      const body=g.rows.map(r=>`<tr data-marks-student="${esc(r.name)}">
         <td class="sticky">${esc(r.name)}</td>
         ${g.assessments.map(a=>{ const c=r.cells[a.id]; return `<td>${c?`<span class="gb-cell ${pctClass(c.pct)}">${c.mark}/${c.max}</span>`:'<span class="gb-none">—</span>'}</td>`; }).join('')}
         <td class="avg">${r.average!=null?`<span class="gb-cell ${pctClass(r.average)}">${pctTxt(r.average)}</span>`:'<span class="gb-none">—</span>'}</td>
       </tr>`).join('');
       const foot=`<tr><td class="sticky">Class average</td>${g.assessments.map(a=>`<td>${pctTxt(a.average)}</td>`).join('')}<td>${pctTxt(g.classAverage)}</td></tr>`;
-      $('marksBody').innerHTML=summary+LearningReport.html(LearningReport.gradebook(g))+`<div class="gb-scroll"><table class="gb"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>
-        <p class="hint" style="margin-top:10px;font-size:12px">Marks combine assignments and games for this class. Weight controls how much each task counts in the average: 1 is normal, 0.5 is half, and 0 excludes it.</p>`;
+      $('marksBody').innerHTML=summary+`<div class="marks-sheet-tools"><div><h3>Class mark sheet</h3><p>— means no mark recorded. Scroll across for all assessments.</p></div><label class="marks-search">Find a student<input id="marksStudentSearch" type="search" placeholder="Search by name"></label></div><details class="marks-average-settings"><summary>Average settings</summary><p>Weight 1 counts normally, 0.5 counts half, and 0 excludes an assessment from the weighted average.</p></details><div class="gb-scroll" tabindex="0" role="region" aria-label="Class mark sheet"><table class="gb" style="--marks-sheet-width:${190+132*g.assessments.length+95}px"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div><p id="marksSearchEmpty" class="hint" hidden>No students match this name.</p><details class="marks-overview"><summary><span>Assessment overview</span><small>Compare results and identify areas to revisit</small></summary>${LearningReport.html(LearningReport.gradebook(g))}</details>`;
+      $('marksStudentSearch').oninput=event=>{
+        const fold=value=>String(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').replace(/Đ/g,'D').toLocaleLowerCase();
+        const query=fold(event.target.value.trim());let found=0;
+        $('marksBody').querySelectorAll('[data-marks-student]').forEach(row=>{row.hidden=!fold(row.dataset.marksStudent).includes(query);if(!row.hidden)found++;});
+        $('marksSearchEmpty').hidden=found>0;
+      };
+      $('marksBody').querySelector('.marks-average-settings').addEventListener('toggle',event=>$('marksBody').classList.toggle('show-weights',event.target.open));
       $('marksBody').querySelectorAll('.gb-weight-input').forEach(input=>input.addEventListener('change',async()=>{
         const weights={};
         $('marksBody').querySelectorAll('.gb-weight-input').forEach(item=>{
@@ -8654,50 +8650,54 @@
     $('assessmentPublishResult').addEventListener('click',e=>{ const button=e.target.closest('.assessment-copy'); if(button)copyLink(button.dataset.url); });
 
     let assessmentClassRosters=[];
-    let assignmentStatusFilter='pending';
+    let assignmentStatusFilter='pending',assignmentLibraryPage=1;
+    const assignmentManagementOpen=new Set();
     function filterAssignmentCards(){
       const normalize=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[đĐ]/g,'d').toLowerCase();
-      const query=normalize($('assignmentSearch').value).trim(),rosterId=$('assignmentClassFilter').value;
-      const counts={pending:0,marked:0,captured:0};
-      let shown=0;
-      $('assignmentsList').querySelectorAll('[data-assignment-status-card]').forEach(card=>{
-        const matches=(!rosterId||card.dataset.rosterId===rosterId)&&normalize(card.dataset.search).includes(query);
-        const status=card.dataset.assignmentStatusCard;
-        if(matches)counts[status]++;
-        card.hidden=!matches||status!==assignmentStatusFilter;
+      const query=normalize($('assignmentSearch').value).trim(),rosterId=$('assignmentClassFilter').value,type=$('assignmentTypeFilter').value;
+      const counts={pending:0,marked:0,captured:0},cards=[...$('assignmentsList').querySelectorAll('[data-assignment-status-card]')];
+      cards.sort((a,b)=>$('assignmentSort').value==='title'?a.dataset.title.localeCompare(b.dataset.title,undefined,{numeric:true}):$('assignmentSort').value==='oldest'?Number(a.dataset.created)-Number(b.dataset.created):Number(b.dataset.created)-Number(a.dataset.created));
+      const matches=[];
+      for(const card of cards){
+        $('assignmentsList').append(card);
+        const included=(!rosterId||card.dataset.rosterId===rosterId)&&(!type||card.dataset.assessmentType===type)&&normalize(card.dataset.search).includes(query);
+        if(included){counts[card.dataset.assignmentStatusCard]++;if(card.dataset.assignmentStatusCard===assignmentStatusFilter)matches.push(card);}
+      }
+      const pages=Math.max(1,Math.ceil(matches.length/7));assignmentLibraryPage=Math.min(pages,Math.max(1,assignmentLibraryPage));
+      const start=(assignmentLibraryPage-1)*7,visible=new Set(matches.slice(start,start+7));
+      for(const card of cards){
+        card.hidden=!visible.has(card);
         const detailId='adet-'+card.dataset.assignmentId,wrapId='ares-'+card.dataset.assignmentId;
-        if(!card.hidden){
-          shown++;
-          if($(detailId)?.style.display==='block'&&!assignmentResultsPollers.has(detailId))startAssignmentResultsPolling(card.dataset.assignmentId,wrapId,detailId);
-        }else stopAssignmentResultsPolling(detailId);
-      });
+        if(!card.hidden&&$(detailId)?.style.display==='block'){if(!assignmentResultsPollers.has(detailId))startAssignmentResultsPolling(card.dataset.assignmentId,wrapId,detailId);}
+        else stopAssignmentResultsPolling(detailId);
+      }
+      $('assessmentSavedCount').textContent=cards.length+' saved';
       $('assignmentStatusTabs').querySelectorAll('button').forEach(button=>{
-        const active=button.dataset.assignmentStatus===assignmentStatusFilter;
-        button.setAttribute('aria-pressed',String(active));
-        button.classList.toggle('accent',active);button.classList.toggle('ghost',!active);
-        button.querySelector('span').textContent=`(${counts[button.dataset.assignmentStatus]})`;
+        const active=button.dataset.assignmentStatus===assignmentStatusFilter;button.setAttribute('aria-pressed',String(active));button.classList.toggle('active',active);button.querySelector('span').textContent=counts[button.dataset.assignmentStatus];
       });
-      $('assignmentFilterStatus').textContent=shown?`${shown} assessment${shown===1?'':'s'} shown`:'No assessments match this tab and your filters.';
+      $('assignmentsList').querySelector('.assessment-column-head')?.toggleAttribute('hidden',!matches.length);
+      $('assignmentFilterStatus').textContent=matches.length?`Showing ${start+1}–${Math.min(start+7,matches.length)} of ${matches.length} assessments`:'No assessments match this tab and your filters.';
+      $('assignmentPagination').innerHTML=matches.length?`<button type="button" data-assessment-page="${assignmentLibraryPage-1}" ${assignmentLibraryPage===1?'disabled':''}>← Previous</button><span>Page ${assignmentLibraryPage} of ${pages}</span><button type="button" data-assessment-page="${assignmentLibraryPage+1}" ${assignmentLibraryPage===pages?'disabled':''}>Next →</button>`:'';
     }
-    $('assignmentSearch').addEventListener('input',filterAssignmentCards);
-    $('assignmentClassFilter').addEventListener('change',filterAssignmentCards);
-    $('assignmentStatusTabs').addEventListener('click',e=>{
-      const button=e.target.closest('[data-assignment-status]');if(!button)return;
-      assignmentStatusFilter=button.dataset.assignmentStatus;filterAssignmentCards();
-    });
+    const resetAssignmentFilters=()=>{assignmentLibraryPage=1;filterAssignmentCards();};
+    $('assignmentSearch').addEventListener('input',resetAssignmentFilters);
+    for(const id of ['assignmentClassFilter','assignmentTypeFilter','assignmentSort'])$(id).addEventListener('change',resetAssignmentFilters);
+    $('assignmentStatusTabs').addEventListener('click',e=>{const button=e.target.closest('[data-assignment-status]');if(button){assignmentStatusFilter=button.dataset.assignmentStatus;resetAssignmentFilters();}});
+    $('assignmentPagination').addEventListener('click',event=>{const button=event.target.closest('[data-assessment-page]');if(!button||button.disabled)return;assignmentLibraryPage=Number(button.dataset.assessmentPage);filterAssignmentCards();$('assignmentFilters').scrollIntoView({block:'start'});});
     async function loadMyAssignments(){
       stopAssignmentResultsPolling();
       const wrap=$('assignmentsList');
       wrap.innerHTML='<span class="status">Loading…</span>';
+      $('assignmentPagination').replaceChildren();$('assignmentFilterStatus').textContent='Loading assessments…';
       try{
         const [d,rosterData]=await Promise.all([
-          fetch('/api/assignments').then(response=>response.json()),
-          fetch('/api/rosters').then(response=>response.json()),
+          fetch('/api/assignments').then(async response=>{const data=await response.json();if(!response.ok)throw Error(data.error||'Could not load assessments.');return data;}),
+          fetch('/api/rosters').then(async response=>{const data=await response.json();if(!response.ok)throw Error(data.error||'Could not load classes.');return data;}),
         ]);
         assessmentClassRosters=rosterData.rosters||[];
         const selectedClassFilter=$('assignmentClassFilter').value;
         $('assignmentClassFilter').innerHTML='<option value="">All classes</option>'+assessmentClassRosters.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('')+'<option value="unassigned">No class assigned</option>';
-        $('assignmentClassFilter').value=selectedClassFilter;
+        $('assignmentClassFilter').value=[...$('assignmentClassFilter').options].some(o=>o.value===selectedClassFilter)?selectedClassFilter:'';
         let list=d.assignments||[];
         const legacyQuizzes=list.filter(a=>a.needsAssessmentControls);
         if(legacyQuizzes.length){
@@ -8706,13 +8706,17 @@
           if(failures.length)toast(failures.join(' · '));
           const refreshed=await fetch('/api/assignments');const result=await refreshed.json();if(!refreshed.ok)throw Error(result.error||'Could not refresh quiz controls.');list=result.assignments||[];
         }
+        const selectedType=$('assignmentTypeFilter').value;
+        const types=[...new Set(list.map(a=>a.assessmentType||a.type))].sort();
+        $('assignmentTypeFilter').innerHTML='<option value="">All types</option>'+types.map(type=>`<option value="${esc(type)}">${esc(type.charAt(0).toUpperCase()+type.slice(1))}</option>`).join('');
+        $('assignmentTypeFilter').value=types.includes(selectedType)?selectedType:'';
         if(!list.length){
           wrap.innerHTML='<div class="empty-state"><svg class="ic" aria-hidden="true" style="width:36px;height:36px;opacity:.3"><use href="#i-clipboard"/></svg><p>No assessments yet</p><p style="font-size:13px;color:var(--muted)">Create a test or project above, or publish a worksheet, exit ticket, or quiz from a lesson pack.</p></div>';
           filterAssignmentCards();
           return;
         }
         const typeLabel={worksheet:'Worksheet','exit-ticket':'Exit ticket',quiz:'Quiz',assessment:'Assessment'};
-        wrap.innerHTML=list.map(a=>{
+        wrap.innerHTML='<div class="assessment-column-head" aria-hidden="true"><span>ASSESSMENT</span><span>CLASS</span><span>SUBMISSIONS</span><span>STATUS</span><span>ROOM CODE</span><span></span></div>'+list.map(a=>{
           const wrapId='ares-'+a.id;
           const detailId='adet-'+a.id;
           const classRowId='aclass-'+a.id;
@@ -8731,7 +8735,10 @@
           const markingDetail=marking&&marking.detail?`<span>${esc(marking.detail)}</span>`:'';
           const teacherMarked=a.type==='assessment'&&!isDraft?`<label class="gc-teacher-marked" title="Add completed marks to Marks, Rosters and connected TeacherScope records"><input type="checkbox" class="a-marked-toggle" data-id="${esc(a.id)}" ${a.teacherMarked?'checked':''}> Marked by teacher</label>`:'';
           const captured=a.type==='assessment'&&!isDraft?`<label class="gc-teacher-marked" title="Confirm you entered these marks in the school system"><input type="checkbox" class="a-captured-toggle" data-id="${esc(a.id)}" ${a.schoolSystemCaptured?'checked':''} ${!a.teacherMarked?'disabled':''}> Captured on school system</label>`:'';
-          return `<div data-assignment-status-card="${a.schoolSystemCaptured?'captured':a.teacherMarked?'marked':'pending'}" data-roster-id="${esc(a.rosterId||'unassigned')}" data-search="${esc([a.title,a.subject,a.grade,selectedClass?.name].filter(Boolean).join(' '))}" class="game-card${a.teacherMarked?' teacher-confirmed-card':''}" data-assignment-id="${esc(a.id)}">
+          return `<div data-assessment-type="${esc(a.assessmentType||a.type)}" data-title="${esc(a.title)}" data-created="${Date.parse(a.createdAt)||0}" data-assignment-status-card="${a.schoolSystemCaptured?'captured':a.teacherMarked?'marked':'pending'}" data-roster-id="${esc(a.rosterId||'unassigned')}" data-search="${esc([a.title,a.subject,a.grade,selectedClass?.name].filter(Boolean).join(' '))}" class="game-card${a.teacherMarked?' teacher-confirmed-card':''}" data-assignment-id="${esc(a.id)}">
+            <div class="assessment-library-row"><div><h3>${esc(a.title)}</h3><p>${esc([a.type==='assessment'?(a.assessmentType||'Assessment'):typeLabel[a.type]||a.type,a.subject,a.grade].filter(Boolean).join(' · '))}</p></div><strong class="assessment-class">${esc(selectedClass?.name||'No class assigned')}</strong><div class="assessment-submitted"><b>${isDraft?'—':Number(a.submissions)||0}${!isDraft&&marking?.expected?' / '+marking.expected:''}</b><small>${isDraft?'Not published':marking?.expected?(Math.max(0,marking.expected-(Number(a.submissions)||0))?Math.max(0,marking.expected-(Number(a.submissions)||0))+' not submitted':'All submitted'):'Submissions'}</small></div><div class="assessment-state ${markingState==='needs-marking'?'needs':''}"><i aria-hidden="true"></i>${esc(isDraft?'Draft':marking?.label||'Collecting work')}</div><button type="button" class="assessment-room acopy" data-url="${esc(a.roomCode||'')}" aria-label="Copy room code ${esc(a.roomCode||'')}" ${!a.roomCode||isDraft?'disabled':''}>${esc(!isDraft&&a.roomCode||'—')}</button><div class="assessment-row-actions">${isDraft?`<button type="button" class="assessment-open a-edit-btn" data-id="${esc(a.id)}">Continue editing</button>`:`<button type="button" class="assessment-open a-toggle-btn" aria-expanded="false" aria-controls="${detailId}" data-assign-id="${esc(a.id)}" data-wrap-id="${wrapId}" data-detail-id="${detailId}" data-closed-label="${a.type==='assessment'&&a.delivery?.mode==='live'&&['lobby','open','paused'].includes(a.delivery.phase)?'Run classroom':'Mark work'}">${a.type==='assessment'&&a.delivery?.mode==='live'&&['lobby','open','paused'].includes(a.delivery.phase)?'Run classroom':'Mark work'}</button>`}<button type="button" class="assessment-more" data-assessment-manage="${esc(a.id)}" aria-label="Details and actions for ${esc(a.title)}" aria-controls="amanage-${esc(a.id)}" aria-expanded="${assignmentManagementOpen.has(a.id)}">⋯</button></div></div>
+            <div id="amanage-${esc(a.id)}" class="assessment-management" ${assignmentManagementOpen.has(a.id)?'':'hidden'}>
+
             <div class="gc-head">
               <div class="gc-top">
                 <div>
@@ -8746,22 +8753,23 @@
             <div class="gc-body">
               ${!isDraft?`<div class="game-link"><input readonly value="${esc(location.origin+'/assignment/'+a.id)}"><button type="button" class="btn ghost acopy" data-url="${esc(location.origin+'/assignment/'+a.id)}" style="width:auto;padding:9px 13px">${ICON('i-doc')} Copy</button></div>`:''}
               <div class="gc-actions" style="margin-top:10px">
-                ${!isDraft?`<button type="button" class="btn ghost a-toggle-btn" data-assign-id="${esc(a.id)}" data-wrap-id="${wrapId}" data-detail-id="${detailId}" data-closed-label="${a.type==='assessment'?'Run classroom / mark':'Review submissions'}" style="font-size:12px;padding:6px 12px;width:auto">${a.type==='assessment'?'Run classroom / mark':'Review submissions'}</button>`:''}
+
                 ${a.type==='assessment'&&!isDraft?`<button type="button" class="btn ghost a-attendance" data-id="${esc(a.id)}">Attendance</button>`:''}
                 ${a.type==='assessment'&&!isDraft?`<button type="button" class="btn ghost a-add-learners" data-id="${esc(a.id)}" ${a.resultsReleased?'disabled':''}>Add learners to test</button>`:''}
                 ${a.type==='assessment'&&!isDraft?`<a class="btn ghost" href="/assessment/${esc(a.id)}/present" target="_blank" rel="noopener" style="font-size:12px;padding:6px 12px;width:auto;text-decoration:none">Present</a>`:''}
-                ${a.contentEditable?`<button type="button" class="btn accent a-edit-btn" data-id="${esc(a.id)}" style="font-size:12px;padding:6px 12px;width:auto">${isDraft?'Edit questions and publish':'Edit questions'}</button>`:''}
+                ${a.contentEditable&&!isDraft?`<button type="button" class="btn accent a-edit-btn" data-id="${esc(a.id)}" style="font-size:12px;padding:6px 12px;width:auto">${isDraft?'Edit questions and publish':'Edit questions'}</button>`:''}
                 ${a.type==='assessment'?`<button type="button" class="btn ghost a-class-btn" data-row="${classRowId}" ${a.resultsReleased?'disabled title="Hide the released results before changing the class."':''} style="font-size:12px;padding:6px 12px;width:auto">${a.rosterId?'Change class':'Assign class'}</button>`:''}
                 ${a.type==='assessment'&&!isDraft?`<button type="button" class="btn ghost a-class-copy-btn" data-row="${copyClassRowId}" ${availableCopyClasses.length?'':'disabled title="This assessment has already been given to every saved class."'} style="font-size:12px;padding:6px 12px;width:auto">Give to another class</button>`:''}
               </div>
               ${a.type==='assessment'?`<div class="gc-class-row" id="${classRowId}"><label style="display:grid;gap:5px;min-width:min(360px,100%)"><span style="font-size:12px;font-weight:700;color:var(--muted)">Class for this ${esc(a.assessmentType||'assessment')}</span><select class="a-class-picker">${classOptions}</select></label><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="gc-class-save a-class-save" data-id="${esc(a.id)}" data-row="${classRowId}">Save class</button><button type="button" class="gc-class-cancel a-class-cancel" data-row="${classRowId}">Cancel</button><small style="color:var(--muted)">You can change the class until the first learner starts.</small></div></div>`:''}
               ${a.type==='assessment'&&!isDraft?`<div class="gc-class-row" id="${copyClassRowId}"><label style="display:grid;gap:5px;min-width:min(360px,100%)"><span style="font-size:12px;font-weight:700;color:var(--muted)">Duplicate this ${esc(a.assessmentType||'assessment')} for another class</span><select class="a-class-copy-picker">${copyClassOptions}</select></label><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="gc-class-save a-class-copy-save" data-id="${esc(a.id)}" data-row="${copyClassRowId}">Duplicate and edit</button><button type="button" class="gc-class-cancel a-class-copy-cancel" data-row="${copyClassRowId}">Cancel</button><small style="color:var(--muted)">A private copy opens so you can change its questions before publishing it for the new class.</small></div></div>`:''}
-              <div id="${detailId}" style="display:none;margin-top:10px"><div id="${wrapId}"></div></div>
+
             </div>
+            </div><div id="${detailId}" class="assessment-results" style="display:none"><div id="${wrapId}"></div></div>
           </div>`;
         }).join('');
         filterAssignmentCards();
-      }catch{ wrap.innerHTML='<p class="hint">Could not load assignments.</p>'; }
+      }catch{ wrap.innerHTML='<p class="hint" role="alert">Could not load assessments. Open Tests &amp; projects again to retry.</p>';$('assignmentFilterStatus').textContent='';$('assessmentSavedCount').textContent=''; }
     }
 
     async function openAssessmentAttendance(id){
@@ -8799,7 +8807,12 @@
       };
     }
 
+    document.addEventListener('click',event=>{const menu=document.querySelector('.assessment-create-menu');if(menu&&(!menu.contains(event.target)||event.target.closest('button')))menu.open=false;});
+    document.addEventListener('keydown',event=>{if(event.key==='Escape'){const menu=document.querySelector('.assessment-create-menu');if(menu?.open){menu.open=false;menu.querySelector('summary').focus();}}});
     $('assignmentsList').addEventListener('click', e=>{
+      const manage=e.target.closest('[data-assessment-manage]');
+      if(manage){const id=manage.dataset.assessmentManage,panel=$('amanage-'+id);panel.hidden=!panel.hidden;manage.setAttribute('aria-expanded',String(!panel.hidden));if(panel.hidden)assignmentManagementOpen.delete(id);else assignmentManagementOpen.add(id);return;}
+
       const copyBtn=e.target.closest('.acopy');
       if(copyBtn){ copyLink(copyBtn.dataset.url); return; }
       const attendance=e.target.closest('.a-attendance');
@@ -8827,6 +8840,7 @@
         const detail=$(detailId);
         const opening=detail.style.display==='none';
         detail.style.display=opening?'block':'none';
+        toggle.setAttribute('aria-expanded',String(opening));
         toggle.textContent=opening?'Hide controls':toggle.dataset.closedLabel;
         if(opening){loadAssignmentResults(assignId,wrapId);startAssignmentResultsPolling(assignId,wrapId,detailId);}
         else stopAssignmentResultsPolling(detailId);

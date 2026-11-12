@@ -36,3 +36,8 @@ async function expectNoOverlap(first, second) {
 }
 
 module.exports = { expectNoOverlap, expectNoPageOverflow, signInDisposableTeacher };
+
+async function revealAssessmentActions(card) {
+  if (await card.locator('.assessment-management').isHidden()) await card.locator('[data-assessment-manage]').click();
+}
+module.exports.revealAssessmentActions = revealAssessmentActions;

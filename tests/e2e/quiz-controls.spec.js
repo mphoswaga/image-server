@@ -1,3 +1,4 @@
+const {revealAssessmentActions}=require('./helpers');
 const { test, expect } = require("@playwright/test");
 const { signInDisposableTeacher } = require("./helpers");
 test("legacy quiz gains test controls and copies to another class without moving its original", async ({
@@ -46,8 +47,9 @@ test("legacy quiz gains test controls and copies to another class without moving
   await page.locator("#assignmentsBtn").click();
   const card = page.locator('[data-assignment-id="' + q.assignmentId + '"]');
   await expect(card).toContainText("Quiz class A");
+  await revealAssessmentActions(card);
+  await expect(card.locator('.a-toggle-btn')).toBeVisible();
   for (const name of [
-    "Run classroom / mark",
     "Attendance",
     "Add learners to test",
     "Change class",
@@ -57,7 +59,7 @@ test("legacy quiz gains test controls and copies to another class without moving
   await expect(
     card.getByRole("link", { name: "Present", exact: true }),
   ).toHaveAttribute("href", "/assessment/" + q.assignmentId + "/present");
-  await card.getByRole('button',{name:'Run classroom / mark',exact:true}).click();
+  await card.locator('.a-toggle-btn').click();
   await expect(card).toContainText('No AI marks need accepting.');
   await expect(card.locator('.accept-all-ai')).toHaveCount(0);
   const presentation = await page.request.get(

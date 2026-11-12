@@ -114,7 +114,7 @@ test('teacher can reopen and keep editing a saved lesson workspace', async ({ pa
   await expect(page.locator('#lessonsPanel')).toBeVisible();
   await expect(page.locator('#lessonsList')).toContainText('Create folders');
   await expectNoPageOverflow(page);
-  await page.getByRole('button', { name: 'Resume lesson' }).click();
+  await page.getByRole('button', { name: 'Open lesson' }).click();
   await expect(page.locator('#planStage')).toBeVisible();
   await expect(page.locator('#planSections textarea.content')).toHaveValue('Create and name a folder.');
 
@@ -148,7 +148,7 @@ test('saved lesson restores its working view and editable deck without regenerat
   expect(created.ok()).toBeTruthy();
 
   await page.locator('#lessonsBtn').click();
-  await page.getByRole('button', { name: 'Resume lesson' }).click();
+  await page.getByRole('button', { name: 'Open lesson' }).click();
   await expect(page.locator('#planStage')).toBeVisible();
   await expect(page.locator('#planSections')).toContainText('Identify what plants need.');
   await page.locator('#acceptBtn').click();
