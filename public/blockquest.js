@@ -8,12 +8,12 @@ const sounds=new BlockQuestAudio(endpoint,text=>{$('voiceStatus').textContent=te
 const world=new BlockQuestWorld(sounds);
 const motion=new BlockQuestMotion($('boards'),gameNow);
 function apply(next){
- const before=s,oldKey=before&&[before.id,before.revision,before.phase,before.turn].join(':');s=next;
+ const before=s,oldKey=before&&[before.id,before.revision,before.phase,before.turn].join(':');s=next;steering.reconcile(s);
  if(Number.isFinite(s.serverNow))serverOffset=s.serverNow-Date.now();
  if(s.falling){shape=s.falling.shape;rotation=s.falling.rotation;column=s.falling.column;}
  else if(s.phase==='choose'&&before?.phase!=='choose'){shape=s.choices[0];rotation=0;column=2;}
  const key=[s.id,s.revision,s.phase,s.turn].join(':');
- if(key!==oldKey){
+ if(key!==oldKey&&!(s.phase==='choose'&&before?.phase==='choose')){
   if(s.timed&&s.phase==='choose'&&before?.phase==='answer')sounds.cue('correct');
   if(s.phase==='feedback'&&before?.phase==='answer')sounds.cue('wrong');
   if(s.phase==='placing'&&before?.phase!=='placing')sounds.cue(s.lastPlacement?.length?'clear':'build');
@@ -22,10 +22,14 @@ function apply(next){
  }else if(s.phase==='choose')renderBoards();
  sounds.sync(s);updateClock();
 }
-async function poll(){if(busy||polling||!s||s.phase==='ended'||!$('setup').hidden||document.hidden)return;polling=true;const version=++requestVersion;
+async function poll(){if(busy||polling||steering.sending||!s||s.phase==='ended'||!$('setup').hidden||document.hidden)return;polling=true;const version=++requestVersion;
  try{const next=await json(endpoint);if(version===requestVersion&&!busy&&next.state)apply(next.state);}catch(error){$('status').textContent='Reconnecting… progress is saved. '+error.message;}finally{polling=false;}
 }
-async function act(action,extra={}){if(busy)return;busy=true;++requestVersion;render();$('status').textContent='';sounds.unlock();try{const next=await json(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,revision:s?.revision,...extra})});apply(next);}catch(error){$('status').textContent=error.message;try{const next=await json(endpoint);if(next.state)apply(next.state);}catch{}}finally{busy=false;render();sounds.sync(s);updateClock();}}
+const steering=new BlockQuestInput(()=>s,(action,extra)=>rawInputAction(action,extra),()=>{shape=s.falling.shape;rotation=s.falling.rotation;column=s.falling.column;renderBoards();});
+steering.bind($('boards'));
+for(const id of ['left','right']){let delay,repeat;const stop=()=>{clearTimeout(delay);clearInterval(repeat);};$(id).addEventListener('pointerdown',()=>{stop();delay=setTimeout(()=>{repeat=setInterval(() => $(id).click(),90);},300);});addEventListener('pointerup',stop);addEventListener('pointercancel',stop);addEventListener('blur',stop);}
+function act(action,extra={}){if(action==='move')return steering.move(extra);if(action==='place')return steering.place(extra);return rawInputAction(action,extra);}
+async function rawInputAction(action,extra={}){if(busy)return;const moving=action==='move';if(!moving)busy=true;++requestVersion;if(!moving)render();$('status').textContent='';sounds.unlock();try{const next=await json(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,revision:s?.revision,...extra})});apply(next);}catch(error){$('status').textContent=error.message;try{const next=await json(endpoint);if(next.state)apply(next.state);}catch{}}finally{busy=false;if(!moving)render();sounds.sync(s);updateClock();}}
 function updateClock(){
  if(!s)return;const remainingTurns=Math.max(0,s.total-s.turn),finishTurns=Math.min(4,Math.max(1,Math.ceil(s.total/4))),energy=s.phase==='paused'||s.phase==='ended'?0:Math.max(s.mode==='solo'&&s.teams[0].lines>=2?.8:0,remainingTurns<=finishTurns?1-(remainingTurns-1)/finishTurns:0);sounds.setEnergy(energy,gameNow());const active=s.timed&&['answer','choose','paused'].includes(s.phase),phase=s.phase==='paused'?s.beforePause:s.phase;
  $('countdown').hidden=!active||!['answer','choose'].includes(phase);if($('countdown').hidden)return;
@@ -74,6 +78,6 @@ $('boards').onclick=e=>{const grid=e.target.closest('.grid');if(!grid||s.phase!=
 $('left').onclick=()=>{if(s.timed)act('move',{column:Math.max(0,column-1)});else{column=Math.max(0,column-1);render();}};$('right').onclick=()=>{if(s.timed)act('move',{column:Math.min(7,column+1)});else{column=Math.min(7,column+1);render();}};$('rotate').onclick=()=>{if(s.timed)act('move',{rotation:(rotation+1)%4});else{rotation=(rotation+1)%4;render();}};$('place').onclick=()=>act('place',{shape,rotation,column});$('next').onclick=()=>act('next');$('pause').onclick=()=>act('pause');$('finish').onclick=()=>{if(confirm('Finish now and celebrate the builders?'))act('finish');};$('sound').onclick=()=>{sound=!sound;sounds.enabled=sound;$('sound').textContent='Sound '+(sound?'on':'off');};$('fullscreen').onclick=()=>{if(document.fullscreenElement)document.exitFullscreen();else if(document.documentElement.requestFullscreen)document.documentElement.requestFullscreen().catch(()=>{});};$('start').onclick=()=>act('start',{studentIds:[...document.querySelectorAll('[data-learner]:checked')].map(el=>el.value)});$('resume').onclick=()=>{shape=s.falling?.shape||s.choices?.[0]||null;rotation=s.falling?.rotation||0;column=s.falling?.column??2;sounds.unlock();render();sounds.sync(s);updateClock();poll();};$('again').onclick=()=>act('start');$('restart').onclick=()=>{if(confirm('Restart from question 1? This clears this unfinished game’s answers, points and towers. Results from completed games are kept.'))act('restart',{run:s.id,studentIds:[...document.querySelectorAll('[data-learner]:checked')].map(el=>el.value)});};
 $('voice').onclick=()=>{$('voice').textContent='Voice '+(sounds.toggleVoice()?'on':'off');};$('music').onclick=()=>{$('music').textContent='Music '+(sounds.toggleMusic()?'on':'off');};
 setInterval(updateClock,100);setInterval(poll,500);
-addEventListener('keydown',e=>{if(s?.phase!=='choose'||e.target.matches('input,button,select')||busy)return;if(e.key==='ArrowLeft')$('left').click();else if(e.key==='ArrowRight')$('right').click();else if(e.key==='ArrowUp')$('rotate').click();else if(e.key==='Enter')$('place').click();else return;e.preventDefault();});
+addEventListener('keydown',e=>{if(s?.phase!=='choose'||e.target.matches('input,select,textarea')||busy)return;if(e.key==='ArrowLeft')$('left').click();else if(e.key==='ArrowRight')$('right').click();else if(e.key==='ArrowUp')$('rotate').click();else if(e.key==='Enter')$('place').click();else return;e.preventDefault();});
 (async()=>{try{data=await json(endpoint);s=data.state;if(Number.isFinite(s?.serverNow))serverOffset=s.serverNow-Date.now();$('topic').textContent=data.title;$('setupHint').textContent=data.board?'Two teams · 20 seconds to answer · 15 seconds to build · matching block choices':'Single player · 20 seconds to answer · 15 seconds to build · clear three rows';if(data.test){$('setupHint').textContent='Test game · sample learners · no learner marks saved. '+$('setupHint').textContent;}if(data.teacher&&!data.test){$('testBoard').hidden=false;$('testBoard').href='/blockquest.html?game='+encodeURIComponent(id)+'&test=1';}if(data.board&&data.learners?.length)$('roster').innerHTML=`<details><summary>Choose learners (${data.learners.length})</summary><div class="roster-list">${data.learners.map(p=>`<label><input type="checkbox" data-learner value="${esc(p.id)}" checked> ${esc(p.name)}</label>`).join('')}</div></details>`;if(s&&s.phase!=='ended'){$('start').hidden=true;$('resume').hidden=false;$('restart').hidden=!data.teacher;} }catch(error){$('status').textContent=error.message;$('start').disabled=true;}})();
 })();

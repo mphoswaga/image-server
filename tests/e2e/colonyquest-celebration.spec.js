@@ -61,3 +61,13 @@ test('a whole winning team keeps readable names alongside the podium',async({pag
  expect(await page.locator('#cqCelebration').evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
  await page.screenshot({path:info.outputPath('winning-team.png')});
 });
+
+test('small dance groups do not create an inner scrollbar',async({page})=>{
+ await page.setViewportSize({width:1366,height:768});
+ await page.route('**/colonyquest-live.js*',route=>route.fulfill({contentType:'application/javascript',body:''}));
+ await page.goto('/colonyquest-live.html');
+ await page.evaluate(()=>ColonyCelebration.show('small-dance',[{name:'Team 2',rank:1,score:687,members:[]},{name:'Team 1',rank:2,score:676}]));
+ await expect(page.locator('.cq-winners')).toHaveCSS('overflow-y','visible');
+ await expect(page.locator('.cq-winners')).toHaveCSS('scrollbar-width','none');
+ await expect(page.getByRole('button',{name:'View results',exact:true})).toBeInViewport();
+});

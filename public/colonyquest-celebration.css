@@ -66,3 +66,9 @@
 .cq-celebration[data-motion="full"] .cq-sparks i{animation:cq-confetti 4s linear var(--delay) 3!important}
 .cq-motion-toggle{grid-column:1/-1;justify-self:center;margin:0 0 12px;border:1px solid #e1ce83;border-radius:12px;background:#163c35;color:#fff7d8;padding:9px 18px;font:inherit;cursor:pointer}
 .cq-motion-toggle:focus-visible{outline:3px solid white;outline-offset:3px}
+
+/* A short winner list needs room for the dance, not an inner scroll panel.
+   Large teams remain scrollable with touch, wheel and keyboard. */
+.cq-winners{scrollbar-width:none}
+.cq-winners::-webkit-scrollbar{display:none}
+.cq-winners:not(:has(.cq-champion:nth-child(9))){max-height:none;overflow:visible}

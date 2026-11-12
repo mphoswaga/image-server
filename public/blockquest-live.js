@@ -1,16 +1,20 @@
 (()=>{'use strict';
 const $=id=>document.getElementById(id),params=new URLSearchParams(location.search),game=params.get('game'),query=new URLSearchParams();for(const key of ['test','as'])if(params.has(key))query.set(key,params.get(key));
 const endpoint='/api/game/'+encodeURIComponent(game)+'/blockquest-live'+(query.size?'?'+query:'');
-let meta,state,roster,profile,teamNames=['Sun Builders','Moon Builders'],busy=false,polling=false,offset=0,lastRender='',lastWarning='',lastAudio='',lastPhase='',lastRun='',editing=false,enteredSession=null,lastResult='';
+let meta,state,roster,profile,teamNames=['Sun Builders','Moon Builders'],busy=false,polling=false,offset=0,lastRender='',lastWarning='',lastAudio='',lastPhase='',lastRun='',editing=false,enteredSession=null,lastResult='',requestVersion=0;
 const now=()=>Date.now()+offset,esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const audio=new BlockQuestAudio(endpoint,text=>{$('voiceStatus').textContent=text;});
 const world=new BlockQuestWorld(audio);
 const motion=new BlockQuestMotion($('boards'),now);
 async function json(url,opts){const r=await fetch(url,opts),d=await r.json();if(!r.ok)throw Error(d.error||'Please try again.');return d;}
 function url(path='',values={}){const q=new URLSearchParams(query);for(const [key,value]of Object.entries(values))q.set(key,value);return '/api/game/'+encodeURIComponent(game)+'/blockquest-live'+path+(q.size?'?'+q:'');}
-async function command(action,extra={}){if(busy)return;busy=true;audio.unlock();$('status').textContent='';try{const d=await json(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,session:state?.id,run:state?.run?.id,revision:state?.run?.revision,...extra})});apply(d);}catch(e){$('status').textContent=e.message;try{apply(await json(endpoint));}catch{}}finally{busy=false;updateButtons();}}
-function apply(d){meta=d;state=d.state;if(state)offset=state.serverNow-Date.now();render();}
-async function poll(){if(polling||busy||document.hidden||editing)return;polling=true;try{apply(await json(endpoint));}catch(e){$('status').textContent='Reconnecting… '+e.message;}finally{polling=false;}}
+const steering=new BlockQuestInput(()=>state?.run,(action,extra)=>rawInputAction(action,extra),()=>{renderBoards();updateButtons();});
+steering.bind($('boards'));
+for(const id of ['left','right']){let delay,repeat;const stop=()=>{clearTimeout(delay);clearInterval(repeat);};$(id).addEventListener('pointerdown',()=>{stop();delay=setTimeout(()=>{repeat=setInterval(() => $(id).click(),90);},300);});addEventListener('pointerup',stop);addEventListener('pointercancel',stop);addEventListener('blur',stop);}
+function command(action,extra={}){if(action==='move')return steering.move(extra);if(action==='place')return steering.place(extra);return rawInputAction(action,extra);}
+async function rawInputAction(action,extra={}){if(busy)return;++requestVersion;const moving=action==='move';if(!moving)busy=true;audio.unlock();$('status').textContent='';try{const d=await json(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,session:state?.id,run:state?.run?.id,revision:state?.run?.revision,...extra})});apply(d);}catch(e){$('status').textContent=e.message;try{apply(await json(endpoint));}catch{}}finally{busy=false;updateButtons();}}
+function apply(d){meta=d;state=d.state;steering.reconcile(state?.run);if(state)offset=state.serverNow-Date.now();render();}
+async function poll(){if(polling||busy||steering.sending||document.hidden||editing)return;polling=true;const version=requestVersion;try{const d=await json(endpoint);if(version===requestVersion&&!busy)apply(d);}catch(e){$('status').textContent='Reconnecting… '+e.message;}finally{polling=false;}}
 function resetTeams(names){teamNames=names;$('teamCount').value=names.length;$('teamNames').innerHTML=names.map((name,i)=>`<label>Team ${i+1}<input data-team-name="${i}" value="${esc(name)}" maxlength="60"></label>`).join('');
  $('assignments').innerHTML=(roster?.students||[]).map((p,i)=>`<label>${esc(p.name)}<select data-student="${esc(p.id)}"><option value="">Not playing</option>${names.map((name,j)=>`<option value="${j}" ${j===i%names.length?'selected':''}>${esc(name)}</option>`).join('')}</select></label>`).join('');assignmentCount();}
 function assignmentCount(){const assigned=[...$('assignments').querySelectorAll('select')].filter(el=>el.value!=='').length;$('assignmentCount').textContent=assigned+' of '+(roster?.students.length||0)+' learners selected. Review names and teams before opening the lobby.';}
@@ -58,7 +62,7 @@ function renderPlayer(){
   const key=state.id+':'+state.roundNumber;if(lastAudio!==key){lastAudio=key;audio.cue('correct');}return;}
  if(state.phase!=='running'||!r){$('waiting').hidden=false;$('waitTitle').textContent=state.phase==='ended'?'Brilliant building, '+state.me.name+'!':state.phase==='paused'?'Paused — listen to your teacher':state.phase==='lobby'?'Ready, '+state.me.name+'?':'You’re in for the next round';$('waitMessage').textContent=state.phase==='lobby'?teamName(state.me.team)+(state.me.joined?' · You’re ready. Your teacher will start the duels.':' · Join, then wait for your teacher to start.'):state.phase==='ended'?'See your class top 10 below.':'Your next duel will appear automatically.';$('join').hidden=state.phase!=='lobby'||state.me.joined&&enteredSession===state.id;$('join').textContent=state.me.joined?'Enter arena':'Join class duels';return;}
  renderVersus();$('arena').hidden=false;$('arena').dataset.stage=r.phase;$('arena').className=r.phase==='placing'?'placing'+(r.lastPlacement?.length?' row-celebration':''):'';$('turn').textContent='Your turn · '+state.me.name;$('mission').textContent='VS '+state.opponent.name;$('progress').textContent='Question '+Math.max(1,r.answers.length+(r.phase==='answer'?1:0));
- const key=[state.id,state.roundNumber,r.id,r.revision,r.phase].join(':');
+ const key=[state.id,state.roundNumber,r.id,r.phase].join(':');
  if(lastRender!==key){
   const previous=lastRender;lastRender=key;
   const changedPhase=lastPhase!==r.phase||lastRun!==r.id;lastPhase=r.phase;lastRun=r.id;
@@ -67,7 +71,7 @@ function renderPlayer(){
   $('explanation').textContent=r.feedback?r.feedback.answer+(r.feedback.explanation?' — '+r.feedback.explanation:''):r.rescued&&r.phase==='choose'?'Rescue! Space cleared so you can keep building.':'';
   $('answers').replaceChildren();if(r.question)r.question.options.forEach((text,choice)=>{const b=document.createElement('button');b.textContent=text;b.onclick=()=>command('answer',{choice});$('answers').append(b);});
   $('pieces').replaceChildren();if(r.phase==='choose')r.choices.forEach(shape=>{const b=document.createElement('button');b.dataset.shape=shape;b.className='piece';b.setAttribute('aria-label','Choose '+shape+' block');b.innerHTML='<span class="shape" aria-hidden="true">'+BlockQuest.cells(shape).map(([x,y])=>`<i class="mini ${shape}" style="grid-column:${x+1};grid-row:${y+1}"></i>`).join('')+'</span>';b.onclick=()=>command('move',{shape,rotation:0});$('pieces').append(b);});
-  $('placement').hidden=r.phase!=='choose';$('buildHint').hidden=r.phase!=='choose';$('buildHint').textContent=r.mechanics===2&&!r.teams[0].builds?'Try the long block in the glowing gap for your first clear.':'Choose a block, then move it into a gap.';
+  $('placement').hidden=r.phase!=='choose';$('buildHint').hidden=r.phase!=='choose';$('buildHint').textContent=r.mechanics===2&&!r.teams[0].builds?'Try the long block in the glowing gap for your first clear.':'Drag your block into a gap and release to drop. Tap Rotate to turn it.';
  }
  renderBoards();
 }
@@ -93,7 +97,7 @@ $('create').onclick=()=>{const teams=[...$('teamNames').querySelectorAll('input'
 $('start').onclick=()=>command('start');$('pause').onclick=()=>command('pause');$('finish').onclick=()=>{if(confirm('Finish this class competition and show the top 10?'))command('finish');};$('new').onclick=()=>{editing=true;$('settings').hidden=false;$('settings').scrollIntoView({behavior:'smooth'});};$('join').onclick=()=>{enteredSession=state.id;command('join');};$('copy').onclick=()=>navigator.clipboard.writeText($('joinLink').value).then(()=>{$('copy').textContent='Link copied';}).catch(()=>{$('joinLink').select();});
 $('left').onclick=()=>command('move',{column:state.run.falling.column-1});$('right').onclick=()=>command('move',{column:state.run.falling.column+1});$('rotate').onclick=()=>command('move',{rotation:(state.run.falling.rotation+1)%4});$('place').onclick=()=>command('place');$('boards').onclick=e=>{const grid=e.target.closest('[data-own]');if(!grid||state.run?.phase!=='choose')return;const rect=grid.getBoundingClientRect();command('move',{column:Math.max(0,Math.min(7,Math.floor((e.clientX-rect.left)/rect.width*8)))});};
 $('sound').onclick=()=>{$('sound').textContent='Sound '+((audio.enabled=!audio.enabled)?'on':'off');};$('voice').onclick=()=>{$('voice').textContent='Voice '+(audio.toggleVoice()?'on':'off');};$('music').onclick=()=>{$('music').textContent='Music '+(audio.toggleMusic()?'on':'off');};$('fullscreen').onclick=()=>{if(document.fullscreenElement)document.exitFullscreen();else document.documentElement.requestFullscreen?.().catch(()=>{});};
-addEventListener('keydown',e=>{if(state?.run?.phase!=='choose'||e.target.matches('input,select,button')||busy)return;const keys={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'rotate',Enter:'place'};if(keys[e.key]){e.preventDefault();$(keys[e.key]).click();}});
+addEventListener('keydown',e=>{if(state?.run?.phase!=='choose'||e.target.matches('input,select,textarea')||busy)return;const keys={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'rotate',Enter:'place'};if(keys[e.key]){e.preventDefault();$(keys[e.key]).click();}});
 setInterval(poll,1000);setInterval(updateClock,100);
 (async()=>{try{apply(await json(endpoint));if(meta.teacher){$('classSelect').innerHTML=meta.classes.map(c=>`<option value="${esc(c.id)}">${esc(c.name)} · ${c.count} learners</option>`).join('');if(state)$('classSelect').value=state.rosterId;$('sample').href='/blockquest-live.html?game='+encodeURIComponent(game)+'&test=1';await loadRoster();}}catch(e){$('status').textContent=e.message;}})();
 })();
