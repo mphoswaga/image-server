@@ -2510,7 +2510,7 @@
 </style>
   <link rel="stylesheet" href="/byte-feedback.css" />
 <link rel="stylesheet" href="/learning-report.css?v=1"><script src="/learning-report.js?v=2"></script><script src="/marked-exam-print.js?v=2"></script><link rel="stylesheet" href="/ui-language.css?v=1"><script src="/locales/vi.js?v=2"></script><script defer src="/ui-language.js?v=1"></script><style>html:not([data-payment-plans="visible"]) [data-payment-plans]{display:none!important}</style><script defer src="/suite-plans.js?v=1"></script>
-  <link rel="stylesheet" href="/teacher-workspace.css?v=5">
+  <link rel="stylesheet" href="/teacher-workspace.css?v=6">
 </head>
 <body data-byte-ui="teacher">
   <!-- SPLASH (plays once per visit, then fades to reveal the app) -->
@@ -3411,16 +3411,8 @@
 
     <!-- MY GAMES -->
     <section id="gamesPanel" class="card wide" style="display:none">
-      <div class="page-hd">
-        <button class="back-btn" id="gamesBackTop"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back</button>
-        <div class="phd-icon" style="background:var(--accent-soft);color:var(--accent)"><svg class="ic" aria-hidden="true"><use href="#i-gamepad"/></svg></div>
-        <div>
-          <h2 data-ui-i18n>My games</h2>
-          <p class="page-sub" data-ui-i18n>Your saved lesson content. Choose a game, check your class, then play.</p>
-        </div>
-      </div>
-
-      <div class="games-hub-toolbar"><button type="button" class="btn accent" onclick="GamesHub.open()" data-ui-i18n>Browse games</button><span class="hint">1. Choose content &nbsp; → &nbsp; 2. Choose a game &nbsp; → &nbsp; 3. Set up your class</span></div>
+      <div class="library-heading"><div><p class="library-eyebrow">CLASSROOM PLAY</p><h2><span data-ui-i18n>My games</span> <span id="gamesSavedCount">0 question sets</span></h2><p>Choose your content, pick a game, and set up your class.</p></div><div class="game-library-heading-actions"><button type="button" class="btn ghost" onclick="GamesHub.open()" data-ui-i18n>Browse games</button><button id="createGameContentBtn" type="button" class="btn accent" data-ui-i18n>Create lesson content</button></div></div>
+      <button id="gamesBackTop" type="button" hidden>Back</button>
       <details id="fromPptxDetails" class="panel-add" style="margin-bottom:20px">
         <summary data-ui-i18n>Create lesson content</summary>
         <p class="hint">For clickable diagrams, <a href="/moonquest">create diagram content</a>. For multiple-choice questions, upload a lesson below.</p>
@@ -3460,19 +3452,11 @@
         </div><!-- .add-body -->
       </details>
 
-      <div class="games-filter">
-        <input id="gamesSearch" type="text" placeholder="Search by topic…" autocomplete="off"  data-ui-placeholder/>
-        <select id="gamesClassFilter" aria-label="Filter games by class">
-          <option value="all" data-ui-i18n>All classes</option>
-        </select>
-        <select id="gamesStatusFilter" aria-label="Filter games by status">
-          <option value="all" data-ui-i18n>All games</option>
-          <option value="live" data-ui-i18n>Open for learners</option>
-          <option value="closed" data-ui-i18n>Closed</option>
-        </select>
-      </div>
-      <div id="gamesList"></div>
-      <div style="margin-top:28px;padding-top:18px;border-top:1px solid var(--border)"><button id="gamesBack" class="back-btn"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back to lesson planner</button></div>
+      <div class="games-filter library-filters"><label class="library-search"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg><input id="gamesSearch" type="search" placeholder="Find content by topic or subject" aria-label="Search game content" autocomplete="off"></label><select id="gamesClassFilter" aria-label="Filter games by class"><option value="all">All classes</option></select><select id="gamesStatusFilter" aria-label="Filter games by access"><option value="all">All access states</option><option value="live">Open for learners</option><option value="closed">Closed</option><option value="whole">Whole class</option><option value="diagram">Diagram content</option></select><select id="gamesSort" aria-label="Sort game content"><option value="recent">Recently created</option><option value="oldest">Oldest first</option><option value="title">Title A–Z</option></select></div>
+      <div id="gamesList" class="game-library-list"></div>
+      <footer class="library-footer"><span id="gamesLibraryStatus" role="status"></span><div id="gamesPagination"></div></footer>
+      <p class="game-library-note">Each question set can be used with different games. Sharing links, QR cards, results and class settings are available under ⋯.</p>
+      <button id="gamesBack" type="button" hidden>Back to lesson planner</button>
     </section>
 
     <!-- MY ASSIGNMENTS -->
@@ -3774,7 +3758,7 @@
 
   <link rel="stylesheet" href="/games-welcome.css?v=1">
   <script src="/games-welcome.js?v=3"></script>
-  <script src="/games-hub.js?v=5"></script>
+  <script src="/games-hub.js?v=6"></script>
   <link rel="stylesheet" href="/games-hub.css">
   <script src="/lesson-design.js"></script>
   <script src="/slide-upload-batch.js?v=1"></script>
@@ -8912,28 +8896,45 @@
     function fmtDateTime(iso){if(!iso)return'';const d=new Date(iso);return d.toLocaleString(undefined,{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}
     function gameLive(cutoffAt){return!cutoffAt||new Date(cutoffAt)>new Date();}
 
-    let allGames=[], gameClassRosters=[];
+    let allGames=[], gameClassRosters=[],gameLibraryPage=1;
+    function gameAccessState(g){return g.mode==='colonyquest'?'whole':g.mode==='moonquest'?'diagram':gameLive(g.cutoffAt)?'live':'closed';}
 
     function gameRosterIds(game){return Array.isArray(game.rosterIds)?game.rosterIds:(game.rosterId?[game.rosterId]:[])}
     function gameClassNames(game){const ids=new Set(gameRosterIds(game));return gameClassRosters.filter(r=>ids.has(r.id)).map(r=>r.name)}
 
     function filterGames(games,search,status,classId){
       return games.filter(g=>{
-        const matchText=!search||(g.topic||'').toLowerCase().includes(search)||(g.lessonTitle||'').toLowerCase().includes(search)||(g.subject||'').toLowerCase().includes(search);
-        const live=gameLive(g.cutoffAt);
-        const matchStatus=status==='all'||(status==='live'&&live)||(status==='closed'&&!live);
+        const fold=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[đĐ]/g,'d').toLowerCase();
+        const matchText=fold([g.topic,g.lessonTitle,g.subject,g.grade,...gameClassNames(g)].join(' ')).includes(fold(search));
+        const matchStatus=status==='all'||gameAccessState(g)===status;
         const rosterIds=gameRosterIds(g);
         const matchClass=classId==='all'||(classId==='none'&&!rosterIds.length)||rosterIds.includes(classId);
         return matchText&&matchStatus&&matchClass;
       });
     }
     function getFilters(){ return {search:$('gamesSearch').value.toLowerCase(), status:$('gamesStatusFilter').value, classId:$('gamesClassFilter').value}; }
-    function applyFilters(){ const f=getFilters(); renderGamesList(filterGames(allGames,f.search,f.status,f.classId)); }
+    function sortedGameContent(games){return [...games].sort((a,b)=>$('gamesSort').value==='title'?(a.lessonTitle||'').localeCompare(b.lessonTitle||'',undefined,{numeric:true}):$('gamesSort').value==='oldest'?(Date.parse(a.createdAt)||0)-(Date.parse(b.createdAt)||0):(Date.parse(b.createdAt)||0)-(Date.parse(a.createdAt)||0));}
+    function applyFilters(){ const f=getFilters(); renderGamesList(sortedGameContent(filterGames(allGames,f.search,f.status,f.classId))); }
+    function revealGameContent(id){
+      $('gamesSearch').value='';$('gamesClassFilter').value='all';$('gamesStatusFilter').value='all';
+      const ordered=sortedGameContent(allGames),index=ordered.findIndex(g=>g.id===id);if(index<0)return;
+      gameLibraryPage=Math.floor(index/7)+1;renderGamesList(ordered);
+      const card=[...$('gamesList').querySelectorAll('[data-game-content]')].find(el=>el.dataset.gameContent===id);
+      const toggle=card?.querySelector('.game-manage-toggle');if(toggle?.getAttribute('aria-expanded')==='false')toggle.click();return card;
+    }
+    $('createGameContentBtn').onclick=()=>{ $('fromPptxDetails').open=true;$('fromPptxDetails').scrollIntoView({behavior:'smooth',block:'start'}); };
+    $('gamesPagination').addEventListener('click',event=>{const button=event.target.closest('[data-game-page]');if(!button||button.disabled)return;gameLibraryPage=Number(button.dataset.gamePage);applyFilters();document.querySelector('#gamesPanel .games-filter').scrollIntoView({block:'start'});});
+
 
     function renderGamesList(games){
       const wrap=$('gamesList');
-      if(!games||!games.length){
-        wrap.innerHTML='<div class="empty-state"><p>Your games will live here</p><p style="font-size:13px;color:var(--muted)">Upload a lesson above to create your first game. Return here to play again or view results.</p></div>';
+      $('gamesSavedCount').textContent=allGames.length+' question sets';
+      const count=games?.length||0,pages=Math.max(1,Math.ceil(count/7));gameLibraryPage=Math.min(pages,Math.max(1,gameLibraryPage));const start=(gameLibraryPage-1)*7;
+      $('gamesLibraryStatus').textContent=count?`Showing ${start+1}–${Math.min(start+7,count)} of ${count} question sets`:allGames.length?'No content matches these filters.':'';
+      $('gamesPagination').innerHTML=count?`<button type="button" data-game-page="${gameLibraryPage-1}" ${gameLibraryPage===1?'disabled':''}>← Previous</button><span>Page ${gameLibraryPage} of ${pages}</span><button type="button" data-game-page="${gameLibraryPage+1}" ${gameLibraryPage===pages?'disabled':''}>Next →</button>`:'';
+      games=(games||[]).slice(start,start+7);
+      if(!games.length){
+        wrap.innerHTML=allGames.length?'<div class="empty-state"><p>No content matches these filters.</p><p class="hint">Try another topic, class or access state.</p></div>':'<div class="empty-state"><p>Your games will live here</p><p class="hint">Create lesson content to get started.</p></div>';
         GamesHub.decorate(wrap,[],allGames,gameClassNames);
         return;
       }
@@ -8995,7 +8996,7 @@
           </div>
         </div>`;
       }).join('');
-      wrap.innerHTML=html;
+      wrap.innerHTML='<div class="game-library-columns" aria-hidden="true"><span>CONTENT</span><span>CLASS</span><span>PLAYED</span><span>ACCESS</span><span></span></div>'+html;
       GamesHub.decorate(wrap,games,allGames,gameClassNames);
       wrap.querySelectorAll('.gcopy').forEach(b=>b.addEventListener('click',()=>copyLink(b.dataset.url)));
       wrap.querySelectorAll('.gc-results-btn').forEach(b=>b.addEventListener('click',async()=>{
@@ -9159,7 +9160,7 @@
         gd.games=[...(gd.games||[]),...(md.games||[]).map(g=>{const missions=(md.sessions||[]).filter(s=>s.gameId===g.id&&!s.test);return {...g,mode:'moonquest',lessonTitle:g.title,topic:g.title,questionCount:g.questions,rosterIds:[...new Set(missions.map(m=>m.rosterId).filter(Boolean))],missions};})];
         const rosters = rd.rosters || [];
         gameClassRosters=rosters;
-        if(!gd.games||!gd.games.length){ allGames=[]; wrap.innerHTML='<div class="empty-state"><p>Your games will live here</p><p style="font-size:13px;color:var(--muted)">Upload a lesson above to create your first game. Return here to play again or view results.</p></div>'; return; }
+        if(!gd.games||!gd.games.length){allGames=[];renderGamesList([]);return;}
         allGames=gd.games;
         // Build class dropdown — only rosters referenced by at least one game + "No class" if any game has no roster
         const usedRosterIds=new Set(allGames.flatMap(gameRosterIds));
@@ -9169,12 +9170,13 @@
         classEl.innerHTML='<option value="all">All classes</option>'
           +(hasNoRoster?'<option value="none">No class</option>':'')
           +rosters.filter(r=>usedRosterIds.has(r.id)).map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');
-        if(curClass&&classEl.querySelector(`option[value="${curClass}"]`)) classEl.value=curClass;
+        if([...classEl.options].some(option=>option.value===curClass))classEl.value=curClass;
         applyFilters();
         const searchEl=$('gamesSearch'); const filterEl=$('gamesStatusFilter');
         if(!searchEl.dataset.wired){
           searchEl.dataset.wired='1'; filterEl.dataset.wired='1'; classEl.dataset.wired='1';
-          searchEl.addEventListener('input',applyFilters); filterEl.addEventListener('change',applyFilters); classEl.addEventListener('change',applyFilters);
+          const reset=()=>{gameLibraryPage=1;applyFilters();};
+          searchEl.addEventListener('input',reset);filterEl.addEventListener('change',reset);classEl.addEventListener('change',reset);$('gamesSort').addEventListener('change',reset);
         }
       }catch{ wrap.innerHTML='<span class="status err">Could not load games.</span>'; }
     }

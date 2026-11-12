@@ -42,6 +42,7 @@ test('invited teacher gets games workspace, can return, and keeps account on upg
   await page.screenshot({path:testInfo.outputPath('workspace.png'),fullPage:true});
   await page.reload();await expect(page.locator('#gamesWelcome')).toBeVisible();
   const card=page.locator('#gamesList .game-card').first();
+  await card.locator('.game-manage-toggle').click();
   await card.getByRole('button',{name:'Share with learners',exact:true}).click();
   await expect(card.getByRole('button',{name:'Copy learner link',exact:true})).toBeVisible();
   await expect(card.locator('.game-link input')).toHaveValue(new RegExp('/play/'+created.gameId+'\\?activity=colonyquest-live$'));
@@ -74,6 +75,7 @@ test('MoonQuest learner links survive game-card decoration',async({page})=>{
   await page.setContent('<div id="cards"><div class="game-card"><div class="gc-body"><div class="gc-actions"><button class="gcopy" data-url="/moonquest/join?code=ABC123">Copy Grade 3 learner link</button></div></div></div></div>');
   await page.addScriptTag({url:'/games-hub.js'});
   await page.evaluate(()=>GamesHub.decorate(document.getElementById('cards'),[{id:'moon',mode:'moonquest'}],[],()=>[]));
+  await page.locator('.game-manage-toggle').first().click();
   await page.getByRole('button',{name:'Share with learners'}).click();
   await expect(page.getByRole('button',{name:'Copy Grade 3 learner link'})).toBeVisible();
   await expect(page.locator('.gcopy')).toHaveAttribute('data-url','/moonquest/join?code=ABC123');

@@ -372,3 +372,43 @@ body:has(#marksPanel[style*="display: block"]) .wrap:not(#progressWrap) { paddin
 .assessment-library-row>div:first-child { min-width:0; }
 .assessment-class,.assessment-library-row p { overflow-wrap:anywhere; }
 @media(max-width:600px){.assessment-open,.assessment-more,.assessment-room{min-height:44px}.assessment-more{min-width:36px}}
+
+/* Game content library */
+body:has(#gamesPanel[style*="display: block"]) .wrap>.hero{display:none}
+@media(min-width:1101px){body:has(#gamesPanel[style*="display: block"]) .wrap{padding:30px 44px 70px;margin-left:232px}}
+#gamesPanel.card{max-width:none;padding:0;border:0;background:transparent}
+.game-library-heading-actions{display:flex;gap:10px;flex-wrap:wrap}
+#gamesPanel .games-filter{display:flex;gap:10px;flex-wrap:wrap}
+#gamesPanel .games-filter>label{flex:1;min-width:240px}
+#gamesPanel .games-filter>select{flex:0 0 145px;width:145px;font-size:12px;min-width:0}
+.game-library-list{border:1px solid #d7dfd1;border-radius:8px;background:white}
+#gamesList>.game-card{border:0;border-radius:0;box-shadow:none;margin:0;padding:0;background:transparent;overflow:visible}
+.game-library-columns,.game-library-row{display:grid;gap:16px;align-items:center;padding:0 22px}
+.game-library-columns{font-size:9px;font-weight:700;letter-spacing:.09em;color:#75816e;background:#f0f3ec;height:40px}
+.game-library-row{border-top:1px solid #e8ece4}
+.game-library-row:hover{background:#f7faf5}
+.game-library-class{overflow-wrap:anywhere}
+.game-manage-toggle{min-width:32px;min-height:36px;border:0;background:transparent;color:#687b61;font:inherit;font-size:22px;cursor:pointer}
+.game-management{padding:18px;border-top:1px solid #dce5d7;background:#f7faf5}
+.game-management[hidden]{display:none!important}
+.game-management .gc-head,.game-management .gc-body{padding:0;background:transparent!important;border:0}
+.game-management .game-settings-more{border:0;padding:0;background:transparent;display:flex;gap:8px;flex-wrap:wrap;flex-basis:100%}
+.game-management .game-settings-more>summary{display:none}
+.game-management .game-settings-more[open]>:not(summary){display:inline-flex;margin:0}
+#gamesPagination{display:flex;align-items:center;gap:10px}
+#gamesPagination>span{white-space:nowrap}
+ .game-library-columns,.game-library-row{grid-template-columns:minmax(300px,1fr) 115px 65px 155px 180px}
+ .game-library-list .library-unit .ic{width:18px;height:18px}
+ .game-library-list .library-lesson p{margin:0;color:#7a8772}
+ .game-library-class{font-size:12px;color:#53694b}.game-library-plays{font-size:13px;color:#53694b;font-variant-numeric:tabular-nums}
+ .game-library-list .game-library-row{min-height:86px}
+ .game-library-note{font-size:11px;color:#7c8974;border-top:1px solid #e0e5da;padding-top:20px;margin-top:24px}
+
+@media(max-width:1250px){.game-library-columns,.game-library-row{grid-template-columns:minmax(210px,1fr) 100px 50px 130px 150px;gap:12px;padding-inline:16px}#gamesPanel .games-filter>label{flex-basis:100%}#gamesPanel .games-filter>select{flex:1}}
+@media(max-width:980px){.game-library-columns{display:none}.game-library-row{grid-template-columns:minmax(0,1fr) auto;gap:10px 16px;padding:16px}.game-library-row>.library-lesson{grid-column:1/-1;grid-row:1}.game-library-class{grid-column:1;grid-row:2;padding-left:50px}.game-library-plays{grid-column:1;grid-row:4;padding-left:50px}.game-library-row>.library-state{grid-column:1;grid-row:3;padding-left:50px}.game-library-row>.library-actions{grid-column:2;grid-row:2/5}.game-library-plays::before{content:'Played: '}.game-management{padding:14px}}
+@media(max-width:600px){.game-library-heading-actions{width:100%}.game-library-heading-actions .btn{flex:1;min-height:44px;font-size:11px}#gamesPanel .games-filter>label{min-width:0}#gamesPanel .games-filter>select{flex:1 1 calc(50% - 10px);width:auto}#gamesPanel .games-filter>#gamesSort{flex-basis:100%}.game-library-row>.library-actions{gap:4px;flex-wrap:wrap;max-width:140px}.game-library-row .library-open,.game-manage-toggle{min-height:44px}.game-library-row .library-open{font-size:11px;padding:8px}.game-library-row .library-state{font-size:10px}.game-library-row .game-library-class{font-size:11px}.game-library-note{line-height:1.6}}
+#gamesPanel #fromPptxDetails:not([open]){display:none}
+.game-library-row>.library-lesson>div{min-width:0}
+.game-library-row .library-lesson h3,.game-library-row .library-lesson p{overflow-wrap:anywhere}
+
+#gamesPanel .library-heading h2>span[data-ui-i18n]{font:inherit;letter-spacing:inherit;background:none;color:inherit;padding:0;margin:0;border-radius:0}

@@ -93,7 +93,7 @@ test('a published game can add and remove several classes from My games', async 
   const catalog=page.getByRole('dialog');
   await expect(catalog.getByRole('heading',{name:'MoonQuest',exact:true})).toBeVisible();
   await expect(catalog).toContainText('Needs a diagram mission');
-  await expect(catalog.locator('.games-option')).toHaveCount(4);
+  await expect(catalog.locator('.games-option')).toHaveCount(6);
   await page.screenshot({path:'/tmp/games-hub-'+testInfo.project.name+'.png',fullPage:true});
   await catalog.locator('.games-option').filter({has:page.getByRole('heading',{name:'Arcade games',exact:true})}).locator('summary').click();
   await catalog.locator('.games-option').filter({has:page.getByRole('heading',{name:'Arcade games',exact:true})}).getByRole('link',{name:'Try without saving scores'}).click();
@@ -103,7 +103,7 @@ test('a published game can add and remove several classes from My games', async 
   await catalog.locator('.games-option').filter({has:page.getByRole('heading',{name:'Arcade games',exact:true})}).getByRole('button',{name:'Review assigned classes'}).click();
   await expect(card.locator('.gc-class-row')).toBeVisible();
   await card.getByRole('button',{name:'Cancel',exact:true}).click();
-  await card.locator('summary').filter({hasText:'More options'}).click();
+  // Management controls are already expanded after reviewing assigned classes.
   await page.screenshot({path:'/tmp/games-cards-'+testInfo.project.name+'.png',fullPage:true});
   const results = card.locator(`#res-${created.gameId}`);
   await expect(results).toBeHidden();
@@ -112,7 +112,7 @@ test('a published game can add and remove several classes from My games', async 
   await expect(results).toContainText('No students have played yet.');
   await card.getByRole('button', { name: 'Hide results' }).click();
   await expect(results).toBeHidden();
-  await card.locator('summary').filter({hasText:'More options'}).click();
+  if(await card.locator('.game-management').isHidden())await card.locator('.game-manage-toggle').click();
   await card.getByRole('button', { name: 'Manage classes' }).click();
   const picker = card.locator('.gc-class-row .class-picker');
   await picker.getByText('Grade 3A', { exact: false }).click();

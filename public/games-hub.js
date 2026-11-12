@@ -9,6 +9,7 @@ window.GamesHub = (() => {
     {id:'arcade',name:'Arcade games',icon:'🎮',text:'Car Dodge, Space Blaster, Answer Runner and Target Shot.',modes:[['Independent practice · learner chooses a game','/play/']]},
   ];
   let games=[], classes=()=>[], dialog;
+  const managed=new Set();
   const node=(tag,text,cls)=>{const el=document.createElement(tag);if(text)el.textContent=text;if(cls)el.className=cls;if(['button','summary','small'].includes(tag))el.setAttribute('data-ui-i18n','');return el;};
   function link(text,url){const a=node('a',text,'btn ghost');a.href=url;a.setAttribute('data-ui-i18n','');return a;}
   function open(game){
@@ -42,10 +43,9 @@ window.GamesHub = (() => {
           if(item.id!=='moonquest'){
             const review=node('button','Review assigned classes','btn ghost');
             review.onclick=()=>{
-              dialog.close();
+              dialog.close();window.revealGameContent?.(selected.id);
               const button=[...document.querySelectorAll('.gc-class-btn')].find(el=>el.dataset.id===selected.id);
-              if(button){button.closest('details').open=true;button.click();button.scrollIntoView({behavior:'smooth',block:'center'});}
-              else {document.getElementById('gamesSearch').value='';document.getElementById('gamesClassFilter').value='all';document.getElementById('gamesStatusFilter').value='all';document.getElementById('gamesSearch').dispatchEvent(new Event('input'));const found=[...document.querySelectorAll('.gc-class-btn')].find(el=>el.dataset.id===selected.id);if(found){found.closest('details').open=true;found.click();found.scrollIntoView({behavior:'smooth',block:'center'});}}
+              if(button){const details=button.closest('details');if(details)details.open=true;button.click();button.scrollIntoView({behavior:'smooth',block:'center'});}
             };actions.append(review);
           }
           for(const [label,path] of item.modes)actions.append(link(label+' →',path+encodeURIComponent(selected.id)));
@@ -65,7 +65,7 @@ window.GamesHub = (() => {
       const body=card.querySelector('.gc-body'),actions=body.querySelector('.gc-actions');
       const choose=node('button','Choose a game','btn accent');choose.onclick=()=>open(game);
       const primary=node('div',null,'gc-actions');primary.append(choose);
-      const more=node('details',null,'games-more');more.append(node('summary','More options'));
+      const more=node('details',null,'games-more game-settings-more');more.open=true;more.append(node('summary','More options'));
       let sharing=body.querySelector('.games-share');
       if(!sharing){
         sharing=node('details',null,'games-share');sharing.append(node('summary','Learner links'));
@@ -84,7 +84,7 @@ window.GamesHub = (() => {
       primary.append(share);
 
       if(game.mode==='moonquest'){
-        const results=node('details',null,'games-more');results.append(node('summary','Results'));
+        const results=node('details',null,'games-more game-session-results');results.append(node('summary','Results'));
         for(const a of [...actions.querySelectorAll('a')]){
           if(a.href.includes('?report='))results.append(a);
           else if(a.textContent.startsWith('Resume'))primary.append(a);
@@ -99,6 +99,20 @@ window.GamesHub = (() => {
         }
       }
       actions.remove();body.prepend(primary);primary.append(more);
+      const heading=card.querySelector('.gc-head'),management=node('div',null,'game-management');management.id='game-management-'+game.id;management.hidden=!managed.has(game.id);
+      const row=node('div',null,'game-library-row'),content=node('div',null,'library-lesson'),symbol=node('span',null,'library-unit');
+      symbol.setAttribute('aria-hidden','true');symbol.textContent=game.mode==='moonquest'?'◇':'▤';
+      const info=node('div');info.append(node('h3',game.lessonTitle));info.append(node('p',[game.subject,game.grade,game.questionCount+' questions'].filter(Boolean).join(' · ')));content.append(symbol,info);row.append(content);
+      row.append(node('span',classes(game).join(', ')||'No class assigned','game-library-class'));
+      const plays=['colonyquest','moonquest'].includes(game.mode)?'—':String(game.plays??0);
+      row.append(node('span',plays,'game-library-plays'));
+      const access=game.mode==='colonyquest'?'Whole class':game.mode==='moonquest'?'Diagram content':!game.cutoffAt||new Date(game.cutoffAt)>new Date()?'Open for learners':'Closed';
+      const status=node('div',null,'library-state'+(access==='Open for learners'?' shared':'')),dot=node('i');dot.setAttribute('aria-hidden','true');status.append(dot,document.createTextNode(access));row.append(status);
+      choose.className='library-open';
+      const buttons=node('div',null,'library-actions'),toggle=node('button','⋯','game-manage-toggle');toggle.type='button';toggle.setAttribute('aria-label','Details and actions for '+game.lessonTitle);toggle.setAttribute('aria-expanded',String(!management.hidden));toggle.setAttribute('aria-controls',management.id);
+      toggle.onclick=()=>{management.hidden=!management.hidden;toggle.setAttribute('aria-expanded',String(!management.hidden));if(management.hidden)managed.delete(game.id);else managed.add(game.id);};buttons.append(choose,toggle);row.append(buttons);
+      management.append(heading,body);card.replaceChildren(row,management);card.dataset.gameContent=game.id;
+
     }
   }
   return {open,decorate};
