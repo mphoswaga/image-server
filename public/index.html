@@ -3260,6 +3260,7 @@
       <div class="bar">
         <div class="meta"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Your deck is ready — <b id="deckTitle"></b> <span id="deckCount" style="color:var(--muted)"></span></div>
         <div class="result-actions">
+          <button id="regenerateSlidesBtn" class="btn ghost"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg> Regenerate slides</button>
           <button id="downloadBtn" class="btn accent"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg> Download .pptx</button>
           <button id="driveExportBtn" class="btn ghost"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg> Save to Google Drive</button>
           <button id="slidesExportBtn" class="btn ghost"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg> Save to Google Slides</button>
@@ -5593,7 +5594,7 @@
       saveActiveSequenceDeck(); activeSequenceDeckIndex=index;
       currentDeckId=sequenceDecks[index].deckId; renderDeck(sequenceDecks[index]); renderSequenceSlidesFlow();
     }
-    async function generateSequenceDeck(index,button){
+    async function generateSequenceDeck(index,button,regenerate=false){
       const plan=sequencePlans[index]; if(!plan) throw new Error(`Lesson plan ${index+1} is not ready yet.`);
       const total=Number(ctx.sequenceLessonCount)||3;
       const original=button&&button.innerHTML; if(button){ button.disabled=true; button.innerHTML='<span class="spinner"></span>Generating slides for lesson '+(index+1)+'…'; }
@@ -5601,7 +5602,7 @@
       try{
         await ensureSlideWorkspace();
         const periodSettings=ctx.lessonSettings?{...ctx.lessonSettings,game:ctx.lessonSettings.game?.lesson===index+1?{...ctx.lessonSettings.game,lesson:1}:null}:null;
-        const body={...ctx,objectives:plan.objectives||ctx.objectives,successCriteria:plan.successCriteria||ctx.successCriteria,lessonWorkspaceId:currentWorkspaceId||undefined,sequenceEnabled:false,lessonSettings:periodSettings,slideCount:periodSettings&&periodSettings.slideCountMode!=='manual'?LessonDesign.recommendation(periodSettings,plan.sections):ctx.slideCount,teachingModelId:plan.teachingModelId||ctx.teachingModelId,learningOutcome:plan.learningOutcome||'',lessonPlan:{sections:plan.sections,learningOutcome:plan.learningOutcome||''},presetId:selectedPresetId,
+        const body={...ctx,regenerate,objectives:plan.objectives||ctx.objectives,successCriteria:plan.successCriteria||ctx.successCriteria,lessonWorkspaceId:currentWorkspaceId||undefined,sequenceEnabled:false,lessonSettings:periodSettings,slideCount:periodSettings&&periodSettings.slideCountMode!=='manual'?LessonDesign.recommendation(periodSettings,plan.sections):ctx.slideCount,teachingModelId:plan.teachingModelId||ctx.teachingModelId,learningOutcome:plan.learningOutcome||'',lessonPlan:{sections:plan.sections,learningOutcome:plan.learningOutcome||''},presetId:selectedPresetId,
           lessonNumber:Number.isFinite(sequenceStartLessonNumber)?sequenceStartLessonNumber+index:undefined,
           focus:[ctx.focus,`This is lesson ${index+1} of ${total}. Build slides only for this lesson plan.`].filter(Boolean).join(' ')};
         const {response:r,data:d}=await SlideGeneration.generate(body,slideGenerationProgress);
@@ -5662,6 +5663,28 @@
         }
       }catch(err){ statusEl.className='status err'; statusEl.textContent=err.message; }
       $('acceptBtn').disabled=false;
+    });
+
+    $('regenerateSlidesBtn').addEventListener('click',async()=>{
+      if(!currentDeckId) return;
+      if(deckImported){ toast('Open or create a lesson plan first to generate a new deck from these slides.'); return; }
+      if(!confirm('Regenerate this slide deck from your lesson plan? This replaces the current slides and slide edits.')) return;
+      const button=$('regenerateSlidesBtn'),original=button.innerHTML;
+      button.disabled=true;
+      try{
+        if(sequenceMode()){
+          await generateSequenceDeck(activeSequenceDeckIndex,button,true);
+        }else{
+          button.innerHTML='<span class="spinner"></span>Regenerating slides…';
+          await ensureSlideWorkspace();
+          const {response:r,data:d}=await SlideGeneration.generate({...ctx,lessonWorkspaceId:currentWorkspaceId||undefined,lessonPlan:collectPlan(),presetId:selectedPresetId,regenerate:true},slideGenerationProgress);
+          if(creditBlocked(r,d)){ statusEl.innerHTML=''; return; }
+          if(!r.ok) throw new Error(d.error||'Could not regenerate slides.');
+          currentDeckId=d.deckId; renderDeck(d); statusEl.innerHTML=''; refreshCredits();
+        }
+        scheduleWorkspaceSave();
+      }catch(err){ statusEl.className='status err'; statusEl.textContent=err.message; }
+      finally{ button.disabled=false; button.innerHTML=original; }
     });
 
     const KICKER={ title:['title','i-pencil','Title slide'], objectives:['objectives','i-target','Learning Objectives'], check:['activity','i-target','Quick Check'], activity:['activity','i-spark','Your Turn'], recap:['recap','i-check','Recap'] };
