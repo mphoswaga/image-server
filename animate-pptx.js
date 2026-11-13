@@ -120,7 +120,7 @@ function animateBuffer(buffer, band) {
   for (const f of files) {
     let xml = f.asText();
     if (xml.includes('<p:transition') || xml.includes('<p:timing')) continue; // already animated
-    const inject = buildTimingAndTransition(xml, { entrance });
+    const inject = primaryTiming(xml) || buildTimingAndTransition(xml, { entrance });
     xml = xml.replace('</p:sld>', inject + '</p:sld>');
     zip.file(f.name, xml);
   }
@@ -128,3 +128,22 @@ function animateBuffer(buffer, band) {
 }
 
 module.exports = { animateBuffer };
+
+// Primary themes name the actual answer/step shapes. Never infer reveals from
+// the longest textbox: objectives and task instructions must be visible at once.
+function primaryTiming(xml) {
+  const doc=new DOMParser().parseFromString(xml,'text/xml');
+  const nodes=Array.from(doc.getElementsByTagName('p:cNvPr'));
+  if(!nodes.some(n=>n.getAttribute('name')==='ls-primary-design'))return null;
+  const groups=new Map();
+  nodes.forEach(n=>{const m=(n.getAttribute('name')||'').match(/^ls-reveal-(\d+)-/);if(m){const key=Number(m[1]);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(n.getAttribute('id'));}});
+  let id=10;
+  const steps=[...groups].sort((a,b)=>a[0]-b[0]).map(([,ids])=>{
+    const outer=id++;const inner=id++;
+    const effects=ids.map((spid,i)=>{const n=id;id+=3;return autoEntrance(n,spid,'fade').replace('nodeType="afterEffect"',`nodeType="${i?'withEffect':'clickEffect'}"`).replace('dur="500"','dur="280"');}).join('');
+    return `<p:par><p:cTn id="${outer}" fill="hold"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst><p:childTnLst><p:par><p:cTn id="${inner}" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>${effects}</p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par>`;
+  }).join('');
+  const transition='<p:transition spd="fast" advClick="1"><p:fade/></p:transition>';
+  if(!steps)return transition;
+  return transition+`<p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst><p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>${steps}</p:childTnLst></p:cTn><p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst><p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst></p:seq></p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>`;
+}

@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 // Exercise the same edit functions used by download and persistent workspaces
 // without starting the HTTP server or loading real teacher data.
 const source=fs.readFileSync(path.join(__dirname,'../image-server.js'),'utf8');
-const context=vm.createContext({clip:(s,n)=>String(s||'').slice(0,n)});
+const context=vm.createContext({require:id=>require(path.join(__dirname,'..',id)),clip:(s,n)=>String(s||'').slice(0,n)});
 vm.runInContext(source.slice(source.indexOf('function editedLessonTable('),source.indexOf('async function deckPptxBuffer(')),context);
 vm.runInContext(source.slice(source.indexOf('function applyWorkspaceDeckEdits('),source.indexOf('function workspaceDeckSnapshots(')),context);
 function deck(){return {slides:[{title:'Examples',bullets:[],alignment:{version:1,id:'example'},table:{headers:['File','Size'],rows:[['Video','10 MB']],caption:'Illustrative sizes'}}]};}
@@ -21,7 +21,7 @@ test('workspace table edits cannot change protected assessment phases',()=>{
 });
 test('a failed aligned export leaves saved slide edits untouched',async()=>{
  let fail=true;
- const isolated=vm.createContext({cloneWorkspaceValue:structuredClone,safeAnimate:b=>b,rebuildDeck:()=>({write:async()=>Buffer.from('export')}),require:()=>({validateAlignedExport:()=>{if(fail)throw new Error('export rejected');}})});
+ const isolated=vm.createContext({cloneWorkspaceValue:structuredClone,safeAnimate:b=>b,rebuildDeck:()=>({write:async()=>Buffer.from('export')}),require:id=>id==='./primary-slide-design'?require('../primary-slide-design'):({validateAlignedExport:()=>{if(fail)throw new Error('export rejected');}})});
  vm.runInContext(source.slice(source.indexOf('function editedLessonTable('),source.indexOf('function deckFilename(')),isolated);
  const d=deck();await assert.rejects(()=>isolated.deckPptxBuffer(d,[edit]),/export rejected/);
  assert.equal(d.slides[0].table.rows[0][1],'10 MB');assert.equal(d.slides[0].alignment.teacherEdited,undefined);

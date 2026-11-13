@@ -12,7 +12,8 @@ function readXml(zip, name) {
 function textIn(doc) {
   return normal(Array.from(doc.getElementsByTagName('a:t')).map(n => n.textContent).join(' '));
 }
-function requiredText(slide) {
+function requiredText(slide, preset) {
+  if (slide.modelStage === 'success_criteria') return [preset?.design === 'primary' ? slide.title : String(slide.title || '').toUpperCase(), ...(slide.bullets || [])];
   if (slide.type==='objectives') return [String(slide.title || 'Learning objectives').toUpperCase(),...(slide.bullets || [])];
   if (slide.table?.rows?.length) return [slide.title, ...slide.table.headers, ...slide.table.rows.flat(), slide.table.caption, ...(slide.bullets || [])];
   if (slide.worked?.steps?.length) return [slide.title, slide.worked.task, ...slide.worked.steps];
@@ -31,7 +32,7 @@ function validateAlignedExport(buffer, deck) {
   if (count !== pages.length) throw new Error('PowerPoint export changed the expected slide count.');
   for (let i = 0; i < pages.length; i++) {
     const slide = pages[i], doc = readXml(zip, `ppt/slides/slide${i+1}.xml`), text = textIn(doc);
-    for (const value of requiredText(slide).filter(Boolean)) {
+    for (const value of requiredText(slide, getPreset(deck.presetId)).filter(Boolean)) {
       if (!text.includes(normal(value))) throw new Error(`Slide ${i+1} lost teaching content during export. Please regenerate that slide before downloading.`);
     }
     if (slide.table?.rows?.length && !doc.getElementsByTagName('a:tbl').length) throw new Error(`Slide ${i+1} lost its editable table.`);

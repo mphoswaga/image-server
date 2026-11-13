@@ -9,9 +9,9 @@ function wrappedLines(value, capacity) {
   }
   return lines;
 }
-function tableLayout(table) {
+function tableLayout(table, {height=3.1}={}) {
   if(!Array.isArray(table?.headers)||table.headers.length<2||table.headers.length>4||!Array.isArray(table.rows)||!table.rows.length||table.rows.length>8||table.rows.some(r=>!Array.isArray(r)||r.length!==table.headers.length)) throw new Error('Use 2–4 table columns and 1–8 matching rows.');
-  const rows=[table.headers,...table.rows], height=3.1;
+  const rows=[table.headers,...table.rows];
   for(let fontSize=18;fontSize>=14;fontSize--) {
     const capacity=Math.floor(((9/table.headers.length)*72-12)/(fontSize*.56));
     const rowH=rows.map(row=>(Math.max(...row.map(cell=>wrappedLines(cell,capacity)))*fontSize*1.18+6)/72);

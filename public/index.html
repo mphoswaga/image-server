@@ -533,6 +533,17 @@
     .model-flow .stage { display:inline-flex; align-items:center; padding:5px 8px; border:1px solid #dbe8f5; border-radius:999px; background:#f7fbff; color:var(--primary); font-weight:700; }
     .model-flow .arrow { color:#9aa9b8; font-size:12px; }
     .plan-section textarea.content { border:1px solid var(--border); margin-top:8px; min-height:64px; font-size:14px; border-radius:10px; }
+    .deck-design-bar { display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 0;border-bottom:1px solid var(--border);margin-bottom:16px; }
+    .deck-design-bar label { margin:0;font-weight:700; }
+    .deck-design-bar select { width:auto;max-width:100%;min-width:190px; }
+    .deck-design-bar .btn { width:auto; }
+    .deck-design-bar p { width:100%;margin:0;font-size:13px;color:var(--muted); }
+    .deck-design-bar [role=status] { font-size:13px;color:var(--primary); }
+    .table-focus { display:block;margin:10px 0;font-size:12px; }
+    .table-focus select { width:auto;max-width:100%;margin-left:6px; }
+    .slide[data-design=primary] { background:var(--slide-bg); }
+    .slide[data-design=primary] h3 { font-family:'Arial Rounded MT Bold',Arial,sans-serif;color:var(--slide-ink); }
+    .slide[data-design=primary] .thumb-empty { background:var(--slide-soft); }
     .plan-actions, .result-actions { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
     .plan-actions .btn, .result-actions .btn { flex:1 1 190px; }
     .plan-actions {
@@ -3260,6 +3271,13 @@
         <div id="sequenceSlidesTabs" class="sequence-tabs"></div>
         <button id="nextSequenceSlidesBtn" type="button" class="btn accent sequence-next"></button>
       </div>
+      <div class="deck-design-bar">
+        <label for="deckDesignSelect">Slide design</label>
+        <select id="deckDesignSelect" aria-describedby="deckDesignHint"><option value="ocean-classic">Ocean classic</option></select>
+        <button type="button" id="applyDeckDesign" class="btn ghost">Apply design</button>
+        <span id="deckDesignStatus" role="status" aria-live="polite"></span>
+        <p id="deckDesignHint">Try a Primary classroom design for rounded headings, quieter picture use and answer reveals. Your lesson content stays editable.</p>
+      </div>
       <p class="edit-tip"><svg class="ic" aria-hidden="true" style="color:var(--accent)"><use href="#i-pencil"/></svg> Click any text to <b>edit it</b> · use <b>Replace</b> to search images · <b>Regenerate</b> before downloading.</p>
       <p id="driveExportStatus" class="edit-tip" style="display:none"></p>
       <div id="quotaPill" class="quota-pill" style="display:none"></div>
@@ -5658,9 +5676,20 @@
       }
       return `<svg viewBox="0 0 100 100" style="width:62%;height:62%">${p}</svg>`;
     }
+    function updateSlideMedia(index, patch){
+      const saved=applyEditsToDeck(lastDeckPreview,collectEdits());
+      if(!saved?.slides[index]) return;
+      saved.slides[index]={...saved.slides[index],...patch};
+      lastDeckPreview=saved;
+      const card=deckEl.querySelector(`.slide[data-index="${index}"]`);
+      if(card)card.outerHTML=cardHTML(saved.slides[index],index);
+      saveActiveSequenceDeck();scheduleWorkspaceSave();updateAiButtons();
+    }
     function cardHTML(s,i){
       const bm=badgeMeta(s.imageSource);
       const assessmentProtected=!!s.assessmentProtected||!!s.assessmentPhaseType;
+      const primary=s.design==='primary';
+      const aiAction=!assessmentProtected&&!s.table?.rows?.length&&!s.worked&&!s.shortcuts&&!s.fraction&&!s.labelled?`<button data-action="ai" data-i="${i}" title="Generate an illustration — ${costWords('lessonscope.generate_ai_image')}">${AI_HTML}${costPill('lessonscope.generate_ai_image')}</button>`:'';
       let thumb;
       if(s.table?.rows?.length){
         thumb='<div class="thumb" style="display:grid;place-items:center;background:#edf7f2;color:#135b4e">Editable teaching table</div>';
@@ -5685,15 +5714,15 @@
         // no way to add one — the only entry point was Replace, which only
         // appears once a picture already exists.
         thumb=s.image
-          ? `<div class="thumb"><img src="${esc(s.image)}" loading="lazy">${badge}<div class="thumb-actions">${gifBtn}<button class="swap-btn" data-action="swap" data-i="${i}">${SWAP_HTML}</button></div></div>`
-          : `<div class="thumb thumb-empty"><div class="thumb-actions">${gifBtn}<button class="swap-btn" data-action="swap" data-i="${i}">${ICON('i-image')}Add a picture</button></div></div>`;
+          ? `<div class="thumb"><img src="${esc(s.image)}" loading="lazy">${badge}<div class="thumb-actions">${!assessmentProtected&&s.imageSource!=='svg-diagram'?`<button class="swap-btn" data-action="hide-picture" data-i="${i}">No picture</button>`:''}${gifBtn}<button class="swap-btn" data-action="swap" data-i="${i}">${SWAP_HTML}</button></div></div>`
+          : `<div class="thumb thumb-empty">${primary?'<span class="hint">Text-led slide</span>':''}<div class="thumb-actions">${s.pictureMode==='hide'?`<button class="swap-btn" data-action="restore-picture" data-i="${i}">Restore picture</button>`:''}${gifBtn}<button class="swap-btn" data-action="swap" data-i="${i}">${ICON('i-image')}Add a picture</button></div></div>`;
       }
       const k=s.type==='objectives'?['objectives','i-target',s.title||'Learning Objectives']:KICKER[s.type]; const kicker=k?`<span class="kicker ${k[0]}">${ICON(k[1])}${k[2]}${s.modelStage?`<span class="model-stage">${esc(s.modelStageLabel||modelStageLabel(s.modelStage))}</span>`:''}</span>`:'';
       const stageKicker=!k&&s.modelStage?`<span class="kicker"><span class="model-stage">${esc(s.modelStageLabel||modelStageLabel(s.modelStage))}</span></span>`:'';
       let body;
       if(s.type==='title'){
         const editable=assessmentProtected?'':' contenteditable';
-        const actions=assessmentProtected?'<span class="hint">Assessment administration slide</span>':`<button type="button" data-assistant-slide="${i}">${ICON('i-spark')}Edit with Assistant</button>`;
+        const actions=assessmentProtected?'<span class="hint">Assessment administration slide</span>':`<button type="button" data-assistant-slide="${i}">${ICON('i-spark')}Edit with Assistant</button>${aiAction}`;
         body=`${kicker}<h3${editable} data-field="title">${esc(s.title)}</h3><p class="sub"${editable} data-field="subtitle">${esc(s.subtitle)}</p><div class="card-actions">${actions}</div>`;
       }
       else if(s.type==='video'&&s.youtube){
@@ -5701,10 +5730,11 @@
       }
       else{
         const editable=assessmentProtected?'':' contenteditable';
-        const bl=`<ul>${s.bullets.map(b=>`<li${editable} data-field="bullet">${esc(b)}</li>`).join('')}</ul>`;
+        let bl=`<ul>${s.bullets.map(b=>`<li${editable} data-field="bullet">${esc(b)}</li>`).join('')}</ul>`;
+        if(primary&&s.type==='check'&&s.bullets.length)bl='<details><summary>Answers · click to reveal during the slideshow</summary>'+bl+'</details>';
         const ex=s.example?`<div class="example"><div class="box"><b>${ICON('i-spark')}Example</b><span${editable} data-field="example">${esc(s.example)}</span></div></div>`:'';
         // Example/task slides can get an accurate AI-generated illustration.
-        const aiBtn=!assessmentProtected&&(s.type==='content'||s.type==='activity')?`<button data-action="ai" data-i="${i}" title="Generate an accurate AI illustration — ${costWords('lessonscope.generate_ai_image')}">${AI_HTML}${costPill('lessonscope.generate_ai_image')}</button>`:'';
+        const aiBtn=['content','activity','recap'].includes(s.type)?aiAction:'';
         const regenBtn=s.type==='content'&&!assessmentProtected?`<button data-action="regen" data-i="${i}" title="${billingLive()?`First ${pricesState.fairUse.freeRegensPerLesson} regenerations per lesson are free, then 1 usage unit`:'Regenerate this slide'}">${REGEN_HTML}</button>`:'';
         // a photo content slide can be turned into a labelled diagram
         const diaBtn=(s.type==='content'&&!assessmentProtected&&!s.fraction&&!s.visual&&!s.labelled)?`<button data-action="diagram" data-i="${i}" title="Turn this into a labelled diagram — ${costWords('lessonscope.generate_diagram')}">${DIA_HTML}${costPill('lessonscope.generate_diagram')}</button>`:'';
@@ -5716,14 +5746,16 @@
         const diff=s.differentiation?`<div class="diff"><div><b style="color:#15824b">Support</b> ${esc(s.differentiation.support)}</div><div><b style="color:#1f4e79">Stretch</b> ${esc(s.differentiation.stretch)}</div></div>`:'';
         const sc=(s.shortcuts&&s.shortcuts.length)?`<div class="shortcuts">${s.shortcuts.map(x=>`<div class="sc-row"><span class="sc-act">${esc(x.action)}</span><span class="sc-keys">${String(x.keys).split('+').map(k=>k.trim()).filter(Boolean).map((k,n)=>(n>0?'<span class="sc-plus">+</span>':'')+'<kbd class="keycap">'+esc(k)+'</kbd>').join('')}</span></div>`).join('')}</div>`:'';
         const wk=(s.worked&&s.worked.steps&&s.worked.steps.length)?`<div class="worked">${s.worked.task?`<div class="wtask">${esc(s.worked.task)}</div>`:''}<ol>${s.worked.steps.map(st=>`<li>${esc(st)}</li>`).join('')}</ol></div>`:'';
-        const table=s.table?.rows?.length?`<table class="lesson-data-table" style="width:100%;border-collapse:collapse"><thead><tr>${s.table.headers.map(h=>`<th contenteditable data-table-header style="border:1px solid #ccc;padding:6px">${esc(h)}</th>`).join('')}</tr></thead><tbody>${s.table.rows.map(row=>`<tr>${row.map(cell=>`<td contenteditable data-table-cell style="border:1px solid #ccc;padding:6px">${esc(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table><p>${esc(s.table.caption||'')}</p>`:'';
-        body=`${kicker||stageKicker}<h3${editable} data-field="title">${esc(s.title)}</h3>${table}${bl}${sc}${wk}${ex}${diff}${yt}${actions}`;
+        const table=s.table?.rows?.length?`<table class="lesson-data-table" style="width:100%;border-collapse:collapse"><thead><tr>${s.table.headers.map(h=>`<th${editable} data-table-header style="border:1px solid #ccc;padding:6px">${esc(h)}</th>`).join('')}</tr></thead><tbody>${s.table.rows.map((row,r)=>`<tr>${row.map((cell,c)=>`<td${editable} data-table-cell style="border:1px solid #ccc;padding:6px;${primary&&s.table.focus&&(s.table.focus.kind==='row'?r===s.table.focus.index:c===s.table.focus.index)?'background:#F8D68A':''}">${esc(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table><p>${esc(s.table.caption||'')}</p>`:'';
+        const focus=s.table?.rows?.length&&primary&&!assessmentProtected?`<label class="table-focus">Highlight <select data-table-focus aria-label="Highlight table row or column"><option value="">None</option>${['column','row'].flatMap(kind=>(kind==='column'?s.table.headers:s.table.rows).map((_,n)=>`<option value="${kind}:${n}"${s.table.focus?.kind===kind&&s.table.focus.index===n?' selected':''}>${kind==='column'?'Column':'Row'} ${n+1}</option>`)).join('')}</select></label>`:'';
+        body=`${kicker||stageKicker}<h3${editable} data-field="title">${esc(s.title)}</h3>${focus}${table}${bl}${sc}${wk}${ex}${diff}${yt}${actions}`;
       }
-      return `<div class="slide" data-index="${i}" data-slide-type="${esc(s.type||'')}" data-assessment-phase-type="${esc(s.assessmentPhaseType||'')}" data-assessment-protected="${assessmentProtected?'true':'false'}">${thumb}<div class="body">${body}</div></div>`;
+      return `<div class="slide" data-design="${primary?'primary':'classic'}" data-index="${i}" data-slide-type="${esc(s.type||'')}" data-assessment-phase-type="${esc(s.assessmentPhaseType||'')}" data-assessment-protected="${assessmentProtected?'true':'false'}">${thumb}<div class="body">${body}</div></div>`;
     }
     const BAND={ early:'Early grades · big colourful text', middle:'Middle grades · balanced', senior:'Senior grades · detailed' };
-    function renderDeck(d){
+    function renderDeck(d,{preserveResources=false}={}){
       lastDeckPreview=d;
+      syncDeckDesign(d);
       const purpose=d.lessonPurpose||(ctx&&ctx.lessonPurpose)||'lesson';
       if(sequenceMode()&&sequenceDecks.length){
         const index=sequenceDecks.findIndex(deck=>deck&&(deck.deckId===d.deckId||deck.deckId===currentDeckId));
@@ -5759,8 +5791,7 @@
       document.getElementById('lessonDeckReview')?.remove();
       const review=d.slides.find(s=>s.lessonReview)?.lessonReview;
       if(review){const panel=document.createElement('details');panel.id='lessonDeckReview';panel.className='info';panel.innerHTML='<summary>Lesson alignment and preparation</summary><p>'+esc(review.validation)+'</p><p>Timing allocations are proposed. Review pacing before teaching. Edits made after generation have not received the same AI review.</p><ul>'+[...(review.warnings||[]),...(review.externalResources||[]).map(r=>'Prepare: '+r)].map(t=>'<li>'+esc(t)+'</li>').join('')+'</ul><ol>'+review.outline.map(step=>'<li>'+esc(step.startMinute+'–'+step.endMinute+' min · '+step.title)+'</li>').join('')+'</ol>';deckEl.before(panel);}
-      $('packPreview').innerHTML=''; // reset lesson-pack for the new deck
-      resetGameSection(); // reset the student-game box for the new deck
+      if(!preserveResources){ $('packPreview').innerHTML=''; resetGameSection(); }
       loadQuota(); // show remaining AI-visual budget + gate the AI buttons
       applyCostBadges(); // credit pills + cost note (only when billing is live)
       renderSequenceSlidesFlow();
@@ -5792,12 +5823,16 @@
         try{ const r=await fetch(`/api/slide/${currentDeckId}/youtube`,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})}); const d=await r.json(); if(!r.ok) throw new Error(d.error); renderDeck(d); }
         catch(err){ toast(err.message); b.disabled=false; }
         return;
+      } else if(['hide-picture','restore-picture'].includes(b.dataset.action)){
+        b.disabled=true;
+        try{const r=await fetch(`/api/slide/${currentDeckId}/picture-mode`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i,mode:b.dataset.action==='hide-picture'?'hide':'show'})});const d=await r.json();if(!r.ok)throw new Error(d.error);updateSlideMedia(i,{image:d.slide.image,pictureMode:d.slide.pictureMode});}
+        catch(err){toast(err.message);b.disabled=false;}
       } else if(b.dataset.action==='ai'){ b.disabled=true; b.innerHTML='<span class="spinner"></span>Generating…';
         try{ const r=await fetch(`/api/slide/${currentDeckId}/ai-image`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})}); const d=await r.json();
           if(creditBlocked(r,d)){}
           else if(r.status===403&&d.limitReached){ quotaReached(); toast(d.error); }
           else if(!r.ok){ throw new Error(d.error); }
-          else { card.querySelector('.thumb img').src=d.image; setBadge('ai-generated'); applyQuota(d); refreshCredits(); }
+          else { updateSlideMedia(i,{image:d.image,imageSource:'ai-generated',pictureMode:'show',visual:null}); applyQuota(d); refreshCredits(); }
         }catch(err){ toast(err.message); } b.disabled=false; b.innerHTML=AI_HTML+costPill('lessonscope.generate_ai_image'); updateAiButtons();
       } else if(b.dataset.action==='diagram'){ b.disabled=true; b.innerHTML='<span class="spinner"></span>Drawing diagram…';
         try{ const r=await fetch(`/api/slide/${currentDeckId}/diagram`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i})}); const d=await r.json();
@@ -5821,6 +5856,7 @@
     function collectEdits(){ return [...deckEl.querySelectorAll('.slide[data-index]')].map(card=>{
       const e={index:+card.dataset.index};
       const table=card.querySelector('.lesson-data-table');if(table)e.table={headers:[...table.querySelectorAll('th')].map(c=>c.innerText.trim()),rows:[...table.querySelectorAll('tbody tr')].map(row=>[...row.querySelectorAll('td')].map(c=>c.innerText.trim()))};
+      const focus=card.querySelector('[data-table-focus]');if(e.table&&focus){const [kind,index]=focus.value.split(':');e.table.focus=kind?{kind,index:Number(index)}:null;}
       const t=card.querySelector('[data-field=title]'); if(t)e.title=t.innerText.trim();
       const su=card.querySelector('[data-field=subtitle]'); if(su)e.subtitle=su.innerText.trim();
       const ex=card.querySelector('[data-field=example]'); if(ex)e.example=ex.innerText.trim();
@@ -6004,8 +6040,7 @@
     async function pickImage(relpath){
       try{ const r=await fetch(`/api/slide/${currentDeckId}/set-image`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:pickerIndex,relpath})}); const d=await r.json(); if(!r.ok) throw new Error(d.error);
         const card=deckEl.querySelector(`.slide[data-index="${pickerIndex}"]`);
-        const img=card&&card.querySelector('.thumb img'); if(img) img.src=d.image;
-        const bd=card&&card.querySelector('.badge'); if(bd){ const m=badgeMeta(d.imageSource); bd.innerHTML=ICON('i-image')+m.label; bd.className='badge '+m.cls; }
+        updateSlideMedia(pickerIndex,{image:d.image,imageSource:d.imageSource,pictureMode:'show',visual:null});
         closePicker();
       }catch(err){ toast(err.message); }
     }
@@ -6955,6 +6990,7 @@
     function makeSlideThumb(p, type) {
       const bg=p.bg, pr=p.primary, ac=p.accent, sf=p.soft, tx=p.text, ly=p.layout;
       const w=76, h=43;
+      if(p.design==='primary')return `<svg viewBox="0 0 76 43" width="76" height="43" xmlns="http://www.w3.org/2000/svg"><rect width="76" height="43" fill="#${type==='title'?bg:sf}"/><rect x="5" y="5" width="15" height="1.3" rx=".5" fill="#${pr}"/><rect x="5" y="12" width="${type==='title'?28:56}" height="4" rx="1.5" fill="#${pr}"/><rect x="5" y="19" width="${type==='title'?24:44}" height="3" rx="1" fill="#${pr}" opacity=".8"/><rect x="5" y="31" width="26" height="2" rx=".6" fill="#${ac}"/>${type==='title'?`<rect x="41" y="4" width="31" height="34" rx="3" fill="#${sf}"/><circle cx="56" cy="18" r="8" fill="#${ac}" opacity=".35"/>`:''}</svg>`;
       if (type === 'title') {
         return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
           <rect width="${w}" height="${h}" fill="#b8cde0"/>
@@ -7058,18 +7094,44 @@
       </svg>`;
     }
 
+    let slideDesignPresets=[];
+    function syncDeckDesign(deck){
+      const id=deck?.presetId||deck?.context?.presetId||'ocean-classic';
+      $('deckDesignSelect').value=id;
+      const p=slideDesignPresets.find(p=>p.id===id);
+      if(p){deckEl.style.setProperty('--slide-bg','#'+p.bg);deckEl.style.setProperty('--slide-soft','#'+p.soft);deckEl.style.setProperty('--slide-ink','#'+p.primary);}
+    }
+    $('applyDeckDesign').addEventListener('click',async()=>{
+      if(!currentDeckId)return;
+      const btn=$('applyDeckDesign'),status=$('deckDesignStatus');btn.disabled=true;status.textContent='Applying design…';
+      const id=currentDeckId;
+      try{
+        const r=await fetch(`/api/deck/${id}/design`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({presetId:$('deckDesignSelect').value,edits:collectEdits()})});
+        const d=await r.json();if(!r.ok)throw new Error(d.error);
+        if(id===currentDeckId){if(ctx)ctx.presetId=d.presetId;selectedPresetId=d.presetId;$('presetSelect').value=d.presetId;renderDeck(d,{preserveResources:true});status.textContent='Design applied. Lesson content preserved.';}
+      }catch(err){status.textContent=err.message;syncDeckDesign(lastDeckPreview);}
+      finally{btn.disabled=false;}
+    });
+    deckEl.addEventListener('change',e=>{
+      if(!e.target.matches('[data-table-focus]'))return;
+      const card=e.target.closest('.slide'),[kind,index]=e.target.value.split(':');
+      card.querySelectorAll('tbody tr').forEach((row,r)=>row.querySelectorAll('td').forEach((cell,c)=>{cell.style.background=(kind==='row'&&r===Number(index))||(kind==='column'&&c===Number(index))?'#F8D68A':'';}));
+      scheduleWorkspaceSave();
+    });
     function renderPresetsSelect(presets) {
       const sel = $('presetSelect');
       const groups = {};
       presets.forEach(p => { (groups[p.group] = groups[p.group] || []).push(p); });
-      const ORDER = ['Classic', 'Split', 'Banner', 'Dark', 'Minimal', 'Full-bleed', 'Two-column', 'Sidebar', 'Splash', 'Playful'];
+      const ORDER = ['Primary classroom', 'Classic', 'Split', 'Banner', 'Dark', 'Minimal', 'Full-bleed', 'Two-column', 'Sidebar', 'Splash', 'Playful'];
       sel.innerHTML = ORDER.filter(g => groups[g]).map(g => {
         const emoji = g === 'Playful' ? ' 🎨' : '';
         const opts = groups[g].map(p =>
-          `<option value="${p.id}"${p.id === selectedPresetId ? ' selected' : ''}>${p.name} · ${p.layout}</option>`
+          `<option value="${p.id}"${p.id === selectedPresetId ? ' selected' : ''}>${p.name}${p.design==='primary'?'':' · '+p.layout}</option>`
         ).join('');
         return `<optgroup label="${g}${emoji}">${opts}</optgroup>`;
       }).join('');
+      $('deckDesignSelect').innerHTML=sel.innerHTML;
+      slideDesignPresets=presets;syncDeckDesign(lastDeckPreview);
       sel.addEventListener('change', () => {
         selectedPresetId = sel.value;
         $('presetGallery').querySelectorAll('.preset-card').forEach(c =>
@@ -7082,7 +7144,7 @@
         <div class="preset-card${p.id === selectedPresetId ? ' selected' : ''}" data-pid="${p.id}" title="${p.name} · ${p.layout}">
           <div class="preset-thumbs">${makeSlideThumb(p,'title')}${makeSlideThumb(p,'content')}</div>
           <div class="preset-name">${p.name}</div>
-          <div class="preset-layout-tag">${p.layout}</div>
+          <div class="preset-layout-tag">${p.design==='primary'?'Primary classroom':p.layout}</div>
         </div>`).join('');
       gallery.querySelectorAll('.preset-card').forEach(card => {
         card.addEventListener('click', () => {

@@ -17,6 +17,7 @@ const { rewriteImageQuery } = require('./query-rewrite');
 const { gradeProfile } = require('./grade');
 const { parseFraction, drawFractionPizza, drawStepsDiagram, drawStepsHorizontal, drawNumberLine, detectLabelledDiagram, drawLabelledDiagram } = require('./concept-diagram');
 const { getPreset, rhythmFor } = require('./slide-presets');
+const primaryDesign = require('./primary-slide-design');
 
 // Draw an animated concept diagram in the image area when one fits; otherwise
 // place the photo. Returns true if a diagram was drawn.
@@ -210,7 +211,9 @@ function persistNewImage(entry) {
 
 // Pick one image per slide. Uses a content match when strong enough; otherwise
 // fetches a fresh Unsplash photo, caches it into the library, and uses that.
-async function selectImages(slides, subject, topic, sourceImages = []) {
+async function selectImages(slides, subject, topic, sourceImages = [], preset = null) {
+  const primary = primaryDesign.isPrimary(preset);
+  const needsPictures = slides.some(s => primaryDesign.wantsPicture(s, preset));
   let pool = LIBRARY.images.filter(img => img.subject === subject && img.topic === topic);
   const uploadedImages = (Array.isArray(sourceImages) ? sourceImages : [])
     .filter(img => img && img.relpath)
@@ -231,7 +234,7 @@ async function selectImages(slides, subject, topic, sourceImages = []) {
   // Wikimedia is intentionally excluded here: its unfiltered corpus returns
   // buildings, trams, portraits and other off-topic photos at generation time.
   // Teachers can still pull Wikimedia images via the picker ("Search the web").
-  if (!pool.length) {
+  if (!pool.length && needsPictures && !primary) {
     const { addImages } = require('./admin-images');
     try {
       const count = Math.min(15, Math.max(8, slides.length + 2));
@@ -242,7 +245,7 @@ async function selectImages(slides, subject, topic, sourceImages = []) {
         pool = LIBRARY.images.filter(img => img.subject === subject && img.topic === topic);
       }
     } catch (err) {
-      throw new Error(`Couldn't fetch images for "${subject} / ${topic}": ${err.message}`);
+      if (!primary) throw new Error(`Couldn't fetch images for "${subject} / ${topic}": ${err.message}`);
     }
   }
   // If the specific topic returned nothing (e.g. Unsplash had no results or all
@@ -252,7 +255,7 @@ async function selectImages(slides, subject, topic, sourceImages = []) {
     pool = LIBRARY.images.filter(img => img.subject === subject);
     if (pool.length) console.log(`No images for "${topic}" — falling back to ${pool.length} images from subject "${subject}".`);
   }
-  if (!pool.length) throw new Error(`No images available for "${subject} / ${topic}". Try a different topic.`);
+  if (!pool.length && !primary) throw new Error(`No images available for "${subject} / ${topic}". Try a different topic.`);
 
   const used = new Set();
   const chosen = [];
@@ -276,10 +279,11 @@ async function selectImages(slides, subject, topic, sourceImages = []) {
       }
     }
 
+    if (!primaryDesign.wantsPicture(slide, preset)) { chosen.push({relpath:'',source:'text-only'}); continue; }
     const queryTokens = tokenize(slide.imageQuery);
     const { best, bestScore } = bestLibraryMatch(pool, queryTokens, used);
 
-    if (best && bestScore >= MATCH_THRESHOLD) {
+    if (best && bestScore >= (primary && best.source !== 'teacher-upload' ? 3 : MATCH_THRESHOLD)) {
       used.add(best.relpath);
       chosen.push(best);
       continue;
@@ -300,6 +304,7 @@ async function selectImages(slides, subject, topic, sourceImages = []) {
       chosen.push(fetched);
     } else {
       // No key, no result, or no query → fall back to the best/round-robin pick.
+      if (primary) { chosen.push({relpath:'',source:'text-only'}); continue; }
       const pick = best || roundRobinPick(pool, used);
       used.add(pick.relpath);
       chosen.push(pick);
@@ -354,6 +359,10 @@ function textLength(value) {
 // `cols` marks layouts that spread bullets across two boxes.
 const BULLET_BOX = {
   task:      { w: 9, h: 3.9 },
+  'primary-task': {w:9,h:3.35},
+  'primary-text': {w:9,h:2.6},
+  'primary-photo': {w:4.7,h:2.6},
+  'primary-worked': {w:8.3,h:2.6},
   classic:   { w: 4.15, h: 2.6 },        // the alternating half-bleed variant
   split:     { w: 4.15, h: 2.6 },
   twocol:    { w: 4.15, h: 3.6, cols: 2 },
@@ -417,6 +426,7 @@ function layoutForSlide(slide, position, rhythm) {
 
 function paginateSlides(slides, t, preset) {
   const rhythm = rhythmFor(preset);
+  const primary = primaryDesign.isPrimary(preset);
   let position = 0;
   const out = [];
   (slides || []).forEach((slide, sourceIndex) => {
@@ -425,14 +435,14 @@ function paginateSlides(slides, t, preset) {
       return;
     }
     if(slide.learnerTask?.required||slide.modelStage==='success_criteria'){
-      if(chunkBulletsForSlide(slide,t,'task').length>1)throw new Error('An activity question and its problem data need too much space. Shorten this task before exporting; it will not be split across slides.');
+      if(chunkBulletsForSlide(slide,primary?{...t,playful:false,bulletSize:26,paraSpaceAfter:8}:t,primary?'primary-task':'task').length>1)throw new Error('An activity question and its problem data need too much space. Shorten this task before exporting; it will not be split across slides.');
       out.push({...slide,_layout:'task',_sourceIndex:sourceIndex});return;
     }
     if (slide.type === 'video') {
       out.push({ ...slide, _layout: layoutForSlide(slide, position, rhythm), _sourceIndex: sourceIndex });
       return;
     }
-    let layout = layoutForSlide(slide, position, rhythm);
+    let layout = primary ? primaryDesign.primaryLayout(slide) : layoutForSlide(slide, position, rhythm);
     if (usesLayout(slide)) position++;
     const bullets = Array.isArray(slide.bullets) ? slide.bullets : [];
     const canSplit = ['content', 'objectives', 'activity', 'recap', 'check'].includes(slide.type || 'content') && bullets.length > 1;
@@ -671,6 +681,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
   const slide = pptx.addSlide();
   slide.background = { color: thm.bg };
   const accent = t.accent;
+  if (primaryDesign.isPrimary(preset) && primaryDesign.renderPrimarySlide({pptx,slide,s:slideData,imgPath,preset,index:idx,fitTitleSize,fitBulletSize,bulletsHeightIn,theme:t})) return;
   if (slideData.table?.rows?.length) {
     slide.addNotes(slideData.speakerNotes || '');
     const table = slideData.table;
@@ -980,7 +991,7 @@ function assembleDeck(slides, images, gradeTheme, preset) {
   const pages = paginateSlides(slides, gradeTheme, preset);
   pages.forEach((slideData, idx) => {
     const img = images[slideData._sourceIndex != null ? slideData._sourceIndex : idx];
-    renderSlide(pptx, slideData, img ? resolveMedia(img.relpath) : null, gradeTheme, idx, state, preset);
+    renderSlide(pptx, slideData, img && (slideData.visual?.type === 'diagram' || primaryDesign.wantsPicture(slideData, preset)) ? resolveMedia(img.relpath) : null, gradeTheme, idx, state, preset);
   });
   return pptx;
 }
@@ -999,9 +1010,9 @@ async function buildDeck({ subject, topic, slideCount = 4, grade = 'middle schoo
 
   const preset = getPreset(presetId);
   const profile = gradeProfile(grade);
-  const slides = await generateContent(subject, topic, slideCount, grade, tone, focus, { objectives, lessonPlanText, sourceMaterialText, teachingModelId, ...extras });
+  const slides = await generateContent(subject, topic, slideCount, grade, tone, focus, { objectives, lessonPlanText, sourceMaterialText, teachingModelId, ...extras, presentationStyle:primaryDesign.isPrimary(preset)?'primary':undefined });
   const safeSlides = paginateSlides(slides, profile.theme, preset).map(({ _sourceIndex, ...slide }) => slide);
-  const images = await selectImages(safeSlides, subject, topic, sourceImages);
+  const images = await selectImages(safeSlides, subject, topic, sourceImages, preset);
   const aligned = safeSlides.some(s => s.alignment || s.learnerTask?.required);
   if (skipAssemble && !aligned) return { slides: safeSlides, images, band: profile.band, preset };
   const pptx = assembleDeck(safeSlides, images, profile.theme, preset);
@@ -1049,7 +1060,7 @@ function rebuildDeck({ slides, images, grade, presetId = null }) {
 // Find an existing saved image good enough to reuse for a concept (so we don't
 // re-fetch or re-generate something we already have). Optionally restrict to a
 // source (e.g. only reuse a prior 'ai-generated' image for an AI request).
-function findReusableImage({ subject, topic, query, minScore = 3, source = null, exclude = [] }) {
+function findReusableImage({ subject, topic, query, minScore = 3, source = null, exclude = [], illustrationStyle = null }) {
   const ex = new Set(exclude);
   const qt = tokenize(query);
   if (!qt.size) return null;
@@ -1057,6 +1068,7 @@ function findReusableImage({ subject, topic, query, minScore = 3, source = null,
   for (const img of LIBRARY.images) {
     if (img.subject !== subject || img.topic !== topic) continue;
     if (source && img.source !== source) continue;
+    if (illustrationStyle && img.illustrationStyle !== illustrationStyle) continue;
     if (ex.has(img.relpath)) continue;
     const s = scoreImage(img, qt);
     if (s > bestScore) { best = img; bestScore = s; }

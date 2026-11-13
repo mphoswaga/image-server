@@ -1173,7 +1173,7 @@ app.get('/api/config/apps', requireAuth, (req, res) => {
 
 app.get('/api/presets', requireAuth, (req, res) => {
   const { PRESETS } = require('./slide-presets');
-  res.json({ presets: PRESETS.map(p => ({ id: p.id, name: p.name, group: p.group, layout: p.layout, dark: p.dark, bg: p.bg, primary: p.primary, accent: p.accent, soft: p.soft, text: p.text })) });
+  res.json({ presets: PRESETS.map(p => ({ id: p.id, name: p.name, group: p.group, layout: p.layout, dark: p.dark, bg: p.bg, primary: p.primary, accent: p.accent, soft: p.soft, text: p.text, headingFont: p.headingFont || p.font, design: p.design || 'classic' })) });
 });
 
 app.get('/api/teaching-models', requireAuth, (req, res) => {
@@ -1227,8 +1227,12 @@ setInterval(purgeOldDecks, 12 * 60 * 1000).unref();
 setInterval(persistDecks, 30 * 1000).unref();
 
 // Build a preview entry the frontend can render + edit.
-function previewEntry(slide, image) {
+function previewEntry(slide, image, presetId) {
+  const preset = require('./slide-presets').getPreset(presetId);
+  const showPicture = slide.visual?.type === 'diagram' || require('./primary-slide-design').wantsPicture(slide, preset);
   return {
+    pictureMode: slide.pictureMode || 'auto',
+    design: preset.design || 'classic',
     type: slide.type,
     modelStage: slide.modelStage || null,
     modelStageLabel: slide.modelStageLabel || null,
@@ -1241,7 +1245,7 @@ function previewEntry(slide, image) {
     bullets: slide.bullets || [],
     example: slide.example || null,
     imageQuery: slide.imageQuery || null,
-    image: image?.relpath ? '/' + image.relpath : null,
+    image: showPicture && image?.relpath ? '/' + image.relpath : null,
     imageSource: image ? (image.source || 'library') : null,
     // an animated concept diagram replaces the photo for fraction slides
     fraction: parseFraction(slide.example) || parseFraction(slide.title) || parseFraction(slide.imageQuery) || null,
@@ -1321,6 +1325,7 @@ function deckContextPayload(deck) {
 function deckPreviewPayload(id, deck) {
   return {
     deckId: id,
+    presetId: deck.presetId || 'ocean-classic',
     filename: deckFilename(deck),
     band: deck.band || null,
     slideCount: deck.slides.length,
@@ -1329,7 +1334,7 @@ function deckPreviewPayload(id, deck) {
     context: deckContextPayload(deck),
     sourceText: deck.lessonPlanText || deck.sourceText || '',
     slides: deck.slides.map((s, i) => ({
-      ...previewEntry(s, deck.images[i]),
+      ...previewEntry(s, deck.images[i], deck.presetId),
       assessmentProtected: deck.lessonPurpose === 'test' || !!s.assessmentProtected || !!s.assessmentPhaseType,
     })),
   };
@@ -2185,8 +2190,8 @@ app.post('/api/import/lesson-plan', requireAuth, upload.single('file'), requireU
     await capture(req, reservation, 'lessonscope.import_plan_to_slides', id);
     const filename = `${subject}-${topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
     res.json({
-      deckId: id, filename, band: built.band, slideCount: built.slides.length, teachingModelId, sourceText: groundedPlanText,
-      slides: built.slides.map((s, i) => previewEntry(s, built.images[i])),
+      deckId: id, filename, presetId: presetId || 'ocean-classic', band: built.band, slideCount: built.slides.length, teachingModelId, sourceText: groundedPlanText,
+      slides: built.slides.map((s, i) => previewEntry(s, built.images[i], presetId)),
     });
   } catch (err) {
     await release(req, reservation, 'lessonscope.import_plan_to_slides', err.message);
@@ -4405,9 +4410,9 @@ app.post('/api/generate', requireAuth, async (req, res) => {
 
     const filename = `${subject}-${topic}.pptx`.replace(/[^a-z0-9.\-]/gi, '_');
     res.json({
-      deckId: id, filename, band: built.band, slideCount: built.slides.length, teachingModelId, lessonPurpose, lessonSequence,
+      deckId: id, filename, presetId: presetId || 'ocean-classic', band: built.band, slideCount: built.slides.length, teachingModelId, lessonPurpose, lessonSequence,
       weekPlanner: weekPlannerResult,
-      slides: built.slides.map((s, i) => previewEntry(s, built.images[i])),
+      slides: built.slides.map((s, i) => previewEntry(s, built.images[i], presetId)),
     });
   } catch (err) {
     await release(req, reservation, 'lessonscope.generate_slide_deck', err.message);
@@ -4590,21 +4595,23 @@ app.post('/api/gifs/pick', requireAuth, async (req, res) => {
 // Set a chosen library image onto a slide (from the picker).
 app.post('/api/slide/:id/set-image', requireAuth, (req, res) => {
   const deck = decks.get(req.params.id);
-  if (!deck) return res.status(404).json({ error: 'Deck expired — generate again.' });
+  if (!deck || (deck.ownerId && deck.ownerId !== req.userId)) return res.status(404).json({ error: 'Deck expired — generate again.' });
   const i = Number(req.body.index);
   if (!Number.isInteger(i) || i < 0 || i >= deck.slides.length) return res.status(400).json({ error: 'bad index' });
   if (rejectProtectedAssessmentSlideMutation(res, deck, i)) return;
   const entry = getLibraryImage(String(req.body.relpath || ''));
   if (!entry) return res.status(404).json({ error: 'Image not found.' });
   deck.images[i] = entry;
-  if (deck.slides[i].visual) deck.slides[i].visual = { type: 'none', items: [] }; // a chosen photo replaces any diagram/visual
+  deck.slides[i].pictureMode = 'show';
+  if (deck.slides[i].visual) deck.slides[i].visual = { type: 'none', items: [] };
+  persistDecks();
   res.json({ image: '/' + entry.relpath, imageSource: entry.source || 'library' });
 });
 
 // Generate an accurate AI illustration for a slide's example/task.
 app.post('/api/slide/:id/ai-image', requireAuth, async (req, res) => {
   const deck = decks.get(req.params.id);
-  if (!deck) return res.status(404).json({ error: 'Deck expired — generate again.' });
+  if (!deck || (deck.ownerId && deck.ownerId !== req.userId)) return res.status(404).json({ error: 'Deck expired — generate again.' });
   const i = Number(req.body.index);
   if (!Number.isInteger(i) || i < 0 || i >= deck.slides.length) return res.status(400).json({ error: 'bad index' });
   if (rejectProtectedAssessmentSlideMutation(res, deck, i)) return;
@@ -4618,10 +4625,14 @@ app.post('/api/slide/:id/ai-image', requireAuth, async (req, res) => {
     const reuse = findReusableImage({
       subject: deck.subject, topic: deck.topic, query: concept,
       minScore: 3, source: 'ai-generated',
+      illustrationStyle: require('./slide-presets').getPreset(deck.presetId).design === 'primary' ? deck.presetId : null,
       exclude: [deck.images[i] && deck.images[i].relpath].filter(Boolean),
     });
     if (reuse) {
       deck.images[i] = reuse;
+      slide.pictureMode = 'show';
+      slide.visual = { type: 'none', items: [] };
+      persistDecks();
       return res.json({ image: '/' + reuse.relpath, imageSource: 'ai-generated', reused: true });
     }
     // Paid generation — enforce the monthly AI-visual cap (abuse guard, admins
@@ -4635,9 +4646,12 @@ app.post('/api/slide/:id/ai-image', requireAuth, async (req, res) => {
     const r = await reserve(req, 'lessonscope.generate_ai_image');
     if (r.block) return res.status(402).json(r.block);
     reservation = r.reservation;
-    const entry = await generateImage({ subject: deck.subject, topic: deck.topic, concept, grade: deck.grade });
+    const entry = await generateImage({ subject: deck.subject, topic: deck.topic, concept, grade: deck.grade, presetId: deck.presetId });
     addLibraryImages([entry]);   // cache for reuse + matching
     deck.images[i] = entry;
+    slide.pictureMode = 'show';
+    slide.visual = { type: 'none', items: [] };
+    persistDecks();
     quota.consume(req.userId);
     await capture(req, reservation, 'lessonscope.generate_ai_image', entry.relpath);
     const after = quota.status(req.userId, isAdmin);
@@ -4736,7 +4750,7 @@ app.post('/api/slide/:id/regenerate', requireAuth, async (req, res) => {
     if (alt) deck.images[i] = alt;
     deck.regenCount = used + 1;
     await capture(req, reservation, 'lessonscope.regenerate_slide', `${req.params.id}:${i}`);
-    res.json({ slide: previewEntry(deck.slides[i], deck.images[i]), regensUsed: deck.regenCount, freeRegens: prices.FREE_REGENS, charged: cost });
+    res.json({ slide: previewEntry(deck.slides[i], deck.images[i], deck.presetId), regensUsed: deck.regenCount, freeRegens: prices.FREE_REGENS, charged: cost });
   } catch (err) {
     await release(req, reservation, 'lessonscope.regenerate_slide', err.message);
     console.error('Regenerate failed:', err.message);
@@ -4746,7 +4760,7 @@ app.post('/api/slide/:id/regenerate', requireAuth, async (req, res) => {
 
 function editedLessonTable(current, edit) {
   if (!Array.isArray(edit.headers) || !Array.isArray(edit.rows) || edit.headers.length !== current.headers.length || edit.rows.length !== current.rows.length || !edit.rows.every(row => Array.isArray(row) && row.length === edit.headers.length) || ![edit.headers, ...edit.rows].flat().every(cell => typeof cell === 'string' && cell.length <= 60)) throw new Error('Keep the teaching table dimensions unchanged and each cell within 60 characters.');
-  return { ...current, headers: edit.headers.slice(), rows: edit.rows.map(row => row.slice()) };
+  return { ...current, headers: edit.headers.slice(), rows: edit.rows.map(row => row.slice()), ...(edit.focus !== undefined || current.focus !== undefined ? {focus: require('./primary-slide-design').normalizeFocus(edit.focus === undefined ? current.focus : edit.focus, current)} : {}) };
 }
 
 function applyDeckEdits(deck, edits) {
@@ -4795,6 +4809,37 @@ app.post('/api/download/:id', requireAuth, async (req, res) => {
     console.error('Download/rebuild failed:', err.message);
     res.status(400).json({ error: err.message });
   }
+});
+
+app.post('/api/deck/:id/design', requireAuth, async (req, res) => {
+  const deck = decks.get(req.params.id);
+  if (!deck || (deck.ownerId && deck.ownerId !== req.userId)) return res.status(404).json({ error: 'Deck not found.' });
+  const preset = require('./slide-presets').PRESETS.find(p => p.id === req.body.presetId);
+  if (!preset) return res.status(400).json({ error: 'Choose an available slide design.' });
+  try {
+    const candidate = cloneWorkspaceValue(deck);
+    candidate.presetId = preset.id;
+    applyDeckEdits(candidate, req.body.edits);
+    candidate.slides.forEach(s => { delete s._layout; });
+    const pages = require('./generate').paginateSlides(candidate.slides, require('./grade').gradeProfile(candidate.grade).theme, preset);
+    candidate.images = pages.map(s => candidate.images[s._sourceIndex] || null);
+    candidate.slides = pages.map(({_sourceIndex, ...s}) => s);
+    await deckPptxBuffer(candidate);
+    candidate.touchedAt = Date.now();
+    decks.set(req.params.id, candidate);
+    persistDecks();
+    res.json(deckPreviewPayload(req.params.id, candidate));
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+app.post('/api/slide/:id/picture-mode', requireAuth, (req, res) => {
+  const deck = decks.get(req.params.id), i = Number(req.body.index);
+  if (!deck || (deck.ownerId && deck.ownerId !== req.userId)) return res.status(404).json({ error: 'Deck not found.' });
+  if (!Number.isInteger(i) || !deck.slides[i] || !['auto','hide','show'].includes(req.body.mode)) return res.status(400).json({ error: 'Choose a valid slide and picture option.' });
+  if (rejectProtectedAssessmentSlideMutation(res, deck, i)) return;
+  deck.slides[i].pictureMode = req.body.mode;
+  persistDecks();
+  res.json({ slide: previewEntry(deck.slides[i], deck.images[i], deck.presetId) });
 });
 
 app.get('/api/deck/:id', requireAuth, (req, res) => {

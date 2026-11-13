@@ -71,6 +71,13 @@ const PRESETS = [
   { id: 'aqua-split',         name: 'Aqua',       group: 'Playful', bg: 'ECFEFF', primary: '0E7490', accent: '22D3EE', soft: 'CFFAFE', text: '083344', font: 'Arial', layout: 'split',   dark: false, multicolor: true },
 ];
 
+// Opt-in: saved themes retain their original appearance.
+PRESETS.push(...[
+  {id:'primary-discovery',name:'Discovery',bg:'FFF8ED',primary:'173F38',accent:'B44F35',soft:'E5EEDC',highlight:'F8D68A',text:'173F38'},
+  {id:'primary-sunshine',name:'Sunshine classroom',bg:'FFFCF2',primary:'573D26',accent:'AB481F',soft:'FFF0C4',highlight:'F7D584',text:'453524'},
+  {id:'primary-ocean',name:'Ocean explorers',bg:'F6FBFF',primary:'193F5B',accent:'8B491F',soft:'E2F1F4',highlight:'F7D58B',text:'193F5B'},
+].map(p=>({...p,group:'Primary classroom',design:'primary',font:'Arial',headingFont:'Arial Rounded MT Bold',layout:'classic',dark:false,multicolor:false})));
+
 const DEFAULT_PRESET_ID = 'ocean-classic';
 
 // ── Layout rhythm ───────────────────────────────────────────────────────────
