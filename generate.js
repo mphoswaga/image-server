@@ -471,8 +471,12 @@ function paginateSlides(slides, t, preset) {
       out.push({ ...slide, _layout: layoutForSlide(slide, position++, rhythm), _sourceIndex: sourceIndex });
       return;
     }
-    if(slide.learnerTask?.required||slide.modelStage==='success_criteria'){
-      if(chunkBulletsForSlide(slide,primary?{...t,playful:false,bulletSize:26,paraSpaceAfter:8}:t,primary?'primary-task':'task').length>1)throw new Error('An activity question and its problem data need too much space. Shorten this task before exporting; it will not be split across slides.');
+    if(slide.modelStage==='success_criteria'){
+      const chunks=chunkBulletsForSlide(slide,{...t,playful:false,bulletSize:26,paraSpaceAfter:8},primary?'primary-task':'task');
+      chunks.forEach((bullets,i)=>out.push({...slide,bullets,title:slide.title+(i?' (continued)':''),_layout:'task',_sourceIndex:sourceIndex}));return;
+    }
+    if(slide.learnerTask?.required){
+      if(chunkBulletsForSlide(slide,{...t,playful:false,bulletSize:26,paraSpaceAfter:8},primary?'primary-task':'task').length>1)throw new Error('An activity question and its problem data need too much space. Shorten this task before exporting; it will not be split across slides.');
       out.push({...slide,_layout:'task',_sourceIndex:sourceIndex});return;
     }
     if (slide.type === 'video') {
@@ -749,7 +753,7 @@ function renderSlide(pptx, slideData, imgPath, t, idx = 0, state = { photoN: 0 }
 
   if(slideData.learnerTask?.required||slideData.modelStage==='success_criteria'){
     addTitle(slide,slideData.modelStage==='success_criteria'?slideData.title.toUpperCase():slideData.title,{x:0.5,y:0.3,w:9,h:0.85,fontFace:thm.font,fontSize:t.titleSize,bold:true,color:thm.primary});
-    addBullets(slide,slideData.bullets,t,thm,multicolor,{x:0.5,y:1.3,w:9,h:3.9,fontFace:thm.font,fontSize:t.bulletSize,valign:'top',paraSpaceAfter:t.paraSpaceAfter});
+    addBullets(slide,slideData.bullets,{...t,playful:false,bulletSize:26,paraSpaceAfter:8},thm,multicolor,{x:0.5,y:1.3,w:9,h:3.9,fontFace:thm.font,fontSize:26,valign:'top',paraSpaceAfter:8});
     return;
   }
   switch (slideData.type) {
