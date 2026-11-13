@@ -307,21 +307,28 @@
     try { localStorage.removeItem(localKey); } catch {}
   }
 
+  let pendingSave = null, savingState = false;
   function saveState() {
     if (!session) return Promise.resolve(false);
     saveLocal();
-    const snapshot = JSON.parse(JSON.stringify(session));
+    pendingSave = JSON.parse(JSON.stringify(session));
     $('saveIndicator').textContent = 'Saving...';
-    saveChain = saveChain.catch(() => {}).then(async () => {
+    if (savingState) return saveChain;
+    savingState = true;
+    saveChain = (async () => {
+      let saved = false;
       try {
-        await request('/session', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session: snapshot }) });
-        $('saveIndicator').textContent = 'Saved';
-        return true;
-      } catch {
-        $('saveIndicator').textContent = 'Saved on this computer';
-        return false;
-      }
-    });
+        while (pendingSave) {
+          const snapshot = pendingSave; pendingSave = null;
+          try {
+            await request('/session', {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({session:snapshot})});
+            saved = true;
+          } catch { saved = false; }
+        }
+        $('saveIndicator').textContent = saved ? 'Saved' : 'Saved on this computer';
+        return saved;
+      } finally { savingState = false; }
+    })();
     return saveChain;
   }
 
@@ -1057,7 +1064,7 @@
     updateWorld();
     showRaidStory(event, true);
     updateHUD();
-    await saveState();
+    saveState();
   }
 
   function eventForTurn() {
@@ -1327,7 +1334,7 @@
       const event = { key: 'round-supplies', chapterBefore: previousChapter, reports, reportIndex: 0, at: new Date().toISOString() };
       session.events.push(event);
       updateWorld();
-      await saveState();
+      saveState();
       // Food collection and hatching remain visible in each colony, but the
       // game no longer pauses once per colony to narrate them.
       reports.filter(report => report.hatched).forEach(report => celebrate(report.teamId, 'workers', '+1 worker'));
@@ -1335,7 +1342,7 @@
     await beginTurn(previousChapter);
     if (season === 'rain') playWorldEvent('heavy-rain');
     if (!session.seasonRules && !session.rainOccurred && session.teams.every(team => team.attempts >= 1) && turnProgress() >= .5) {
-      core.applyRain(session); updateHUD(); playWorldEvent('heavy-rain'); await saveState();
+      core.applyRain(session); updateHUD(); playWorldEvent('heavy-rain'); saveState();
     }
   }
 
@@ -1356,7 +1363,7 @@
       if ((event.reportIndex || 0) < event.reports.length - 1) {
         event.reportIndex = (event.reportIndex || 0) + 1;
         updateWorld();
-        await saveState();
+        saveState();
         showRoundStory(event);
       } else await beginTurn(event.chapterBefore);
     });
@@ -1372,7 +1379,7 @@
       session.warsActive = true;
       session.events.push({ key: 'colony-wars', at: new Date().toISOString() });
       updateWorld();
-      await saveState();
+      saveState();
       playTone('wars');
     }
     const nextChapter = storyChapter();
@@ -1380,7 +1387,7 @@
       const chapter = chapterEvent(chapterKey(nextChapter));
       session.events.push({ key: chapterKey(nextChapter), at: new Date().toISOString() });
       updateWorld();
-      await saveState();
+      saveState();
       playTone('upgrade');
     }
     if (shouldShowEvent() && !session.events.some(event => event.automatic && event.turnIndex === session.turnIndex)) {
@@ -1390,12 +1397,12 @@
       const event = { ...core.applyEvent(session.teams, eventKey, {swarm:true}), ...(beforeTeams ? {beforeTeams} : {}), automatic: true, turnIndex: session.turnIndex, effects: worldEventEffects(before), at: new Date().toISOString() };
       session.events.push(event);
       session.phase = 'event';
-      await saveState();
+      saveState();
       return playAutomaticEncounter(event);
     }
     session.phase = 'question';
     updateWorld();
-    await saveState();
+    saveState();
     presentQuestion();
   }
 
@@ -1431,7 +1438,7 @@
     session.phase = 'question';
     session.eventAction = null;
     updateWorld();
-    await saveState();
+    saveState();
     presentQuestion();
   }
 
