@@ -17,7 +17,7 @@
     constructor(onTrack = () => {}) {
       this.media = document.createElement('audio');
       this.media.hidden = true;
-      this.media.preload = 'none';
+      this.media.preload = 'auto';
       this.media.dataset.colonyMusic = 'true';
       this.media.volume = 0.3;
       document.body.appendChild(this.media);
@@ -47,7 +47,24 @@
       };
       document.addEventListener('pointerdown', unlock);
       document.addEventListener('keydown', unlock);
-      window.addEventListener('pagehide', () => this.media.pause());
+      let lastPosition = 0, stalledSince = 0;
+      const recovery = setInterval(() => {
+        if (!this.shouldPlay() || this.blocked) { stalledSince = 0; return; }
+        const position = this.media.currentTime;
+        if (position !== lastPosition) { lastPosition = position; stalledSince = 0; return; }
+        if (!stalledSince) stalledSince = Date.now();
+        if (Date.now() - stalledSince < 15000) return;
+        stalledSince = Date.now();
+        this.pending = false;
+        this.media.load();
+        this.sync();
+      }, 3000);
+      window.addEventListener('online', () => {
+        this.blocked = false; this.failed.clear();
+        if (this.media.error) this.media.load();
+        this.sync();
+      });
+      window.addEventListener('pagehide', () => { clearInterval(recovery); this.media.pause(); });
     }
     selectTrack() {
       const track = tracks[this.index];

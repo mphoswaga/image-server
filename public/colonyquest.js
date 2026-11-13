@@ -888,7 +888,8 @@
     });
     if (outcome.correct) {
       session.phase = 'reward';
-      await saveState();
+      // Local persistence happens immediately; network storage must not hold the reward screen.
+      saveState();
       showRewards();
     } else {
       await nextTurn();
@@ -1035,7 +1036,7 @@
     updateWorld();
     playTone('upgrade');
     updateHUD();
-    await saveState();
+    saveState();
     transitionLocked = false;
     await showGrowth(event);
   }

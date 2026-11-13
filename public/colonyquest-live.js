@@ -552,7 +552,15 @@
           location.host +
           '/ws/colonyquest-live',
       );
-      socket.onopen = () => socket.send(JSON.stringify({ type: 'auth', token: ticket.token }));
+      const openingSocket = socket;
+      const openingTimeout = setTimeout(() => {
+        if (openingSocket.readyState === WebSocket.CONNECTING) openingSocket.close();
+      }, 15000);
+      socket.onopen = () => {
+        clearTimeout(openingTimeout);
+        lastReceived = Date.now();
+        openingSocket.send(JSON.stringify({ type: 'auth', token: ticket.token }));
+      };
       socket.onmessage = (event) => {
         lastReceived = Date.now();
         const msg = JSON.parse(event.data);
@@ -574,6 +582,7 @@
         }
       };
       socket.onclose = (e) => {
+        clearTimeout(openingTimeout);
         document.body.classList.add('offline');
         syncMusic();
         renderKey = '';
