@@ -1243,6 +1243,8 @@ function previewEntry(slide, image, presetId) {
     title: slide.title,
     subtitle: slide.subtitle || null,
     bullets: slide.bullets || [],
+    reveal: require('./classroom-visuals').revealText(slide),
+    classroomVisual: preset.design==='primary'?require('./classroom-visuals').displayVisual(slide):null,
     example: slide.example || null,
     imageQuery: slide.imageQuery || null,
     image: showPicture && image?.relpath ? '/' + image.relpath : null,
@@ -4768,14 +4770,19 @@ app.post('/api/slide/:id/regenerate', requireAuth, async (req, res) => {
       lessonPurpose: deck.lessonPurpose,
       lessonPlanText: deck.lessonPlanText,
       assessmentDraft: deck.assessmentDraft,
+      presentationStyle: require('./slide-presets').getPreset(deck.presetId).design,
       preferredStage: deck.slides[i].modelStage,
       alignment: deck.slides[i].alignment,
       lessonSettings: deck.lessonSettings,
       avoidTitles,
     });
     fresh.side = deck.slides[i].side; // keep the image side for layout rhythm
+    const preset = require('./slide-presets').getPreset(deck.presetId);
+    const alt = preset.design === 'primary'
+      ? (await require('./generate').selectImages([fresh],deck.subject,deck.topic,[],preset,{grade:deck.grade}))[0]
+      : alternativeImage({ subject: deck.subject, topic: deck.topic, imageQuery: fresh.imageQuery, exclude: deck.images.map(im => im.relpath) });
+    // Commit the replacement only after its illustration has succeeded.
     deck.slides[i] = fresh;
-    const alt = alternativeImage({ subject: deck.subject, topic: deck.topic, imageQuery: fresh.imageQuery, exclude: deck.images.map(im => im.relpath) });
     if (alt) deck.images[i] = alt;
     deck.regenCount = used + 1;
     await capture(req, reservation, 'lessonscope.regenerate_slide', `${req.params.id}:${i}`);
@@ -4800,13 +4807,14 @@ function applyDeckEdits(deck, edits) {
     // stale or forged browser edits so item counts, marks and safe wording
     // cannot drift between preview and export.
     if (deck.lessonPurpose === 'test' || s.assessmentProtected || s.assessmentPhaseType) continue;
-    const before = JSON.stringify({ title:s.title, bullets:s.bullets, example:s.example, subtitle:s.subtitle, table:s.table });
+    const before = JSON.stringify({ title:s.title, bullets:s.bullets, example:s.example, subtitle:s.subtitle, table:s.table, reveal:s.reveal });
     if (s.table?.rows?.length && edit.table) s.table = editedLessonTable(s.table, edit.table);
     if (typeof edit.title === 'string') s.title = edit.title;
     if (Array.isArray(edit.bullets)) s.bullets = edit.bullets.filter(b => b.trim());
     if (typeof edit.example === 'string') s.example = edit.example;
     if (typeof edit.subtitle === 'string') s.subtitle = edit.subtitle;
-    if (s.alignment && before !== JSON.stringify({ title:s.title, bullets:s.bullets, example:s.example, subtitle:s.subtitle, table:s.table })) s.alignment.teacherEdited = true;
+    if (Array.isArray(edit.reveal)) s.reveal = require('./classroom-visuals').revealText({reveal:edit.reveal});
+    if (s.alignment && before !== JSON.stringify({ title:s.title, bullets:s.bullets, example:s.example, subtitle:s.subtitle, table:s.table, reveal:s.reveal })) s.alignment.teacherEdited = true;
   }
 }
 
@@ -4896,6 +4904,7 @@ function applyWorkspaceDeckEdits(deck, edits) {
     if (edit.title !== undefined) updated.title = clip(edit.title, 500);
     if (edit.subtitle !== undefined) updated.subtitle = clip(edit.subtitle, 1000);
     if (edit.example !== undefined) updated.example = clip(edit.example, 2000);
+    if (Array.isArray(edit.reveal)) updated.reveal = require('./classroom-visuals').revealText({reveal:edit.reveal});
     if (Array.isArray(edit.bullets)) updated.bullets = edit.bullets.slice(0, 20).map(item => clip(item, 1000));
     if (slide.alignment && JSON.stringify(updated) !== JSON.stringify(slide)) updated.alignment = { ...slide.alignment, teacherEdited: true };
     return updated;

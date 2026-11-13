@@ -6,56 +6,87 @@
 // PowerPoint animation lives in <p:transition> and <p:timing> nodes inside each
 // slideN.xml. We find the shape ids pptxgenjs assigned, then splice the XML in
 // just before </p:sld> (schema order: cSld, clrMapOvr, transition, timing).
-const PizZip = require('pizzip');
-const { DOMParser } = require('@xmldom/xmldom');
+const PizZip = require("pizzip");
+const { DOMParser } = require("@xmldom/xmldom");
 
 // Identify shapes on a slide: the bullets box (text shape with the most
 // paragraphs), the title (first/short text shape), and the picture.
 function findShapes(xml) {
-  const doc = new DOMParser().parseFromString(xml, 'text/xml');
-  const sps = doc.getElementsByTagName('p:sp');
-  let bulletsId = null, bulletsMax = 1, titleId = null;
+  const doc = new DOMParser().parseFromString(xml, "text/xml");
+  const sps = doc.getElementsByTagName("p:sp");
+  let bulletsId = null,
+    bulletsMax = 1,
+    titleId = null;
   for (let i = 0; i < sps.length; i++) {
     const sp = sps[i];
-    const idEl = sp.getElementsByTagName('p:cNvPr')[0];
+    const idEl = sp.getElementsByTagName("p:cNvPr")[0];
     if (!idEl) continue;
-    const id = idEl.getAttribute('id');
-    const pCount = sp.getElementsByTagName('a:p').length;
-    if (pCount > bulletsMax) { bulletsMax = pCount; bulletsId = id; }
+    const id = idEl.getAttribute("id");
+    const pCount = sp.getElementsByTagName("a:p").length;
+    if (pCount > bulletsMax) {
+      bulletsMax = pCount;
+      bulletsId = id;
+    }
     if (titleId === null) titleId = id; // first text shape ≈ title
   }
   // Concept-diagram slices to fill in sequentially (objectName lc-anim-fill-<i>).
   const fills = [];
   for (let i = 0; i < sps.length; i++) {
-    const idEl = sps[i].getElementsByTagName('p:cNvPr')[0];
+    const idEl = sps[i].getElementsByTagName("p:cNvPr")[0];
     if (!idEl) continue;
-    const mm = (idEl.getAttribute('name') || '').match(/lc-anim-fill-(\d+)/);
-    if (mm) fills.push({ spid: idEl.getAttribute('id'), idx: parseInt(mm[1], 10) });
+    const mm = (idEl.getAttribute("name") || "").match(/lc-anim-fill-(\d+)/);
+    if (mm)
+      fills.push({ spid: idEl.getAttribute("id"), idx: parseInt(mm[1], 10) });
   }
   fills.sort((a, b) => a.idx - b.idx);
 
-  const pics = doc.getElementsByTagName('p:pic');
+  const pics = doc.getElementsByTagName("p:pic");
   let picId = null;
-  if (pics.length) { const idEl = pics[0].getElementsByTagName('p:cNvPr')[0]; if (idEl) picId = idEl.getAttribute('id'); }
+  if (pics.length) {
+    const idEl = pics[0].getElementsByTagName("p:cNvPr")[0];
+    if (idEl) picId = idEl.getAttribute("id");
+  }
   // bulletsMax is the paragraph count of the shape we picked as the bullets box
   // — one paragraph per bullet, so it's how many reveal steps to emit.
-  return { bulletsId, titleId, picId, fills, bulletParas: bulletsId ? bulletsMax : 0 };
+  return {
+    bulletsId,
+    titleId,
+    picId,
+    fills,
+    bulletParas: bulletsId ? bulletsMax : 0,
+  };
 }
 
 // Auto-playing entrance (after the previous step) — used to fill diagram slices.
 function fillEntrance(cId, spid, delay) {
-  return `<p:par><p:cTn id="${cId}" presetID="10" presetClass="entr" presetSubtype="0" fill="hold" grpId="0" nodeType="afterEffect"><p:stCondLst><p:cond delay="${delay}"/></p:stCondLst><p:childTnLst>`
-    + `<p:animEffect transition="in" filter="fade"><p:cBhvr><p:cTn id="${cId + 1}" dur="400"/><p:tgtEl><p:spTgt spid="${spid}"/></p:tgtEl></p:cBhvr></p:animEffect>`
-    + `<p:set><p:cBhvr><p:cTn id="${cId + 2}" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn><p:tgtEl><p:spTgt spid="${spid}"/></p:tgtEl><p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst></p:cBhvr><p:to><p:strVal val="visible"/></p:to></p:set>`
-    + `</p:childTnLst></p:cTn></p:par>`;
+  return (
+    `<p:par><p:cTn id="${cId}" presetID="10" presetClass="entr" presetSubtype="0" fill="hold" grpId="0" nodeType="afterEffect"><p:stCondLst><p:cond delay="${delay}"/></p:stCondLst><p:childTnLst>` +
+    `<p:animEffect transition="in" filter="fade"><p:cBhvr><p:cTn id="${cId + 1}" dur="400"/><p:tgtEl><p:spTgt spid="${spid}"/></p:tgtEl></p:cBhvr></p:animEffect>` +
+    `<p:set><p:cBhvr><p:cTn id="${cId + 2}" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn><p:tgtEl><p:spTgt spid="${spid}"/></p:tgtEl><p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst></p:cBhvr><p:to><p:strVal val="visible"/></p:to></p:set>` +
+    `</p:childTnLst></p:cTn></p:par>`
+  );
 }
 
 // One automatic (with-slide) fade/zoom entrance effect block.
 function autoEntrance(cId, spid, filter) {
-  return `<p:par><p:cTn id="${cId}" presetID="${filter === 'zoom' ? 23 : 10}" presetClass="entr" presetSubtype="0" fill="hold" grpId="0" nodeType="afterEffect"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>`
-    + `<p:animEffect transition="in" filter="${filter}"><p:cBhvr><p:cTn id="${cId + 1}" dur="500"/><p:tgtEl><p:spTgt spid="${spid}"/></p:tgtEl></p:cBhvr></p:animEffect>`
-    + `<p:set><p:cBhvr><p:cTn id="${cId + 2}" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn><p:tgtEl><p:spTgt spid="${spid}"/></p:tgtEl><p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst></p:cBhvr><p:to><p:strVal val="visible"/></p:to></p:set>`
-    + `</p:childTnLst></p:cTn></p:par>`;
+  return (
+    `<p:par><p:cTn id="${cId}" presetID="${filter === "zoom" ? 23 : 10}" presetClass="entr" presetSubtype="0" fill="hold" grpId="0" nodeType="afterEffect"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>` +
+    `<p:animEffect transition="in" filter="${filter}"><p:cBhvr><p:cTn id="${cId + 1}" dur="500"/><p:tgtEl><p:spTgt spid="${spid}"/></p:tgtEl></p:cBhvr></p:animEffect>` +
+    `<p:set><p:cBhvr><p:cTn id="${cId + 2}" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn><p:tgtEl><p:spTgt spid="${spid}"/></p:tgtEl><p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst></p:cBhvr><p:to><p:strVal val="visible"/></p:to></p:set>` +
+    `</p:childTnLst></p:cTn></p:par>`
+  );
+}
+
+// Match PowerPoint's native entrance order: set visibility, then animate it.
+// Keep each click group wrapped separately so importers do not start it on load.
+function primaryEntrance(cId, spid, nodeType) {
+  const target = `<p:tgtEl><p:spTgt spid="${spid}"/></p:tgtEl>`;
+  return (
+    `<p:par><p:cTn id="${cId}" presetID="10" presetClass="entr" presetSubtype="0" fill="hold" grpId="0" nodeType="${nodeType}"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>` +
+    `<p:set><p:cBhvr><p:cTn id="${cId + 1}" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn>${target}<p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst></p:cBhvr><p:to><p:strVal val="visible"/></p:to></p:set>` +
+    `<p:animEffect transition="in" filter="fade"><p:cBhvr><p:cTn id="${cId + 2}" dur="280"/>${target}</p:cBhvr></p:animEffect>` +
+    `</p:childTnLst></p:cTn></p:par>`
+  );
 }
 
 // One on-click fade entrance for a SINGLE paragraph of the bullets shape.
@@ -68,82 +99,121 @@ function autoEntrance(cId, spid, filter) {
 // own "by paragraph" animation.
 function clickParagraph(cId, spid, paraIndex) {
   const target = `<p:tgtEl><p:spTgt spid="${spid}"><p:txEl><p:pRg st="${paraIndex}" end="${paraIndex}"/></p:txEl></p:spTgt></p:tgtEl>`;
-  return `<p:par><p:cTn id="${cId}" fill="hold"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst><p:childTnLst>`
-    + `<p:par><p:cTn id="${cId + 1}" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>`
-    + `<p:par><p:cTn id="${cId + 2}" presetID="10" presetClass="entr" presetSubtype="0" fill="hold" grpId="0" nodeType="clickEffect"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>`
+  return (
+    `<p:par><p:cTn id="${cId}" fill="hold"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst><p:childTnLst>` +
+    `<p:par><p:cTn id="${cId + 1}" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>` +
+    `<p:par><p:cTn id="${cId + 2}" presetID="10" presetClass="entr" presetSubtype="0" fill="hold" grpId="0" nodeType="clickEffect"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>` +
     // p:set before p:animEffect, the order PowerPoint itself writes.
-    + `<p:set><p:cBhvr><p:cTn id="${cId + 3}" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn>${target}<p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst></p:cBhvr><p:to><p:strVal val="visible"/></p:to></p:set>`
-    + `<p:animEffect transition="in" filter="fade"><p:cBhvr><p:cTn id="${cId + 4}" dur="500"/>${target}</p:cBhvr></p:animEffect>`
-    + `</p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par>`;
+    `<p:set><p:cBhvr><p:cTn id="${cId + 3}" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn>${target}<p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst></p:cBhvr><p:to><p:strVal val="visible"/></p:to></p:set>` +
+    `<p:animEffect transition="in" filter="fade"><p:cBhvr><p:cTn id="${cId + 4}" dur="500"/>${target}</p:cBhvr></p:animEffect>` +
+    `</p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par>`
+  );
 }
 
 function buildTimingAndTransition(xml, { entrance }) {
   const { bulletsId, titleId, picId, fills, bulletParas } = findShapes(xml);
   const transition = `<p:transition spd="slow"><p:fade/></p:transition>`;
-  if (!bulletsId && !fills.length && !(entrance && (picId || titleId))) return transition; // transition only
+  if (!bulletsId && !fills.length && !(entrance && (picId || titleId)))
+    return transition; // transition only
 
   let id = 20; // start ids high to avoid colliding with shape ids
   const autoBlocks = [];
   // Concept-diagram slices fill in one-by-one on slide load (all grades).
-  fills.forEach(f => { autoBlocks.push(fillEntrance(id, f.spid, 350)); id += 3; });
-  if (entrance && picId) { autoBlocks.push(autoEntrance(id, picId, 'zoom')); id += 3; }
-  if (entrance && titleId && titleId !== bulletsId) { autoBlocks.push(autoEntrance(id, titleId, 'fade')); id += 3; }
+  fills.forEach((f) => {
+    autoBlocks.push(fillEntrance(id, f.spid, 350));
+    id += 3;
+  });
+  if (entrance && picId) {
+    autoBlocks.push(autoEntrance(id, picId, "zoom"));
+    id += 3;
+  }
+  if (entrance && titleId && titleId !== bulletsId) {
+    autoBlocks.push(autoEntrance(id, titleId, "fade"));
+    id += 3;
+  }
 
   // One click step per bullet, so the class sees exactly the point being taught.
   const clickBlocks = [];
   const bld = [];
   if (bulletsId) {
-    for (let p = 0; p < Math.max(1, bulletParas); p++) { clickBlocks.push(clickParagraph(id, bulletsId, p)); id += 5; }
+    for (let p = 0; p < Math.max(1, bulletParas); p++) {
+      clickBlocks.push(clickParagraph(id, bulletsId, p));
+      id += 5;
+    }
     bld.push(`<p:bldP spid="${bulletsId}" grpId="0" build="p"/>`);
   }
 
-  const mainSeqChildren = autoBlocks.join('') + clickBlocks.join('');
+  const mainSeqChildren = autoBlocks.join("") + clickBlocks.join("");
   const timing =
-    `<p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst>`
-    + `<p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>`
-    + mainSeqChildren
-    + `</p:childTnLst></p:cTn>`
-    + `<p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst>`
-    + `<p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst>`
-    + `</p:seq></p:childTnLst></p:cTn></p:par></p:tnLst>`
-    + (bld.length ? `<p:bldLst>${bld.join('')}</p:bldLst>` : '')
-    + `</p:timing>`;
+    `<p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst>` +
+    `<p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>` +
+    mainSeqChildren +
+    `</p:childTnLst></p:cTn>` +
+    `<p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst>` +
+    `<p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst>` +
+    `</p:seq></p:childTnLst></p:cTn></p:par></p:tnLst>` +
+    (bld.length ? `<p:bldLst>${bld.join("")}</p:bldLst>` : "") +
+    `</p:timing>`;
 
   return transition + timing;
 }
 
 // band: 'early' | 'middle' | 'senior'. Early grades get the full entrance set.
 function animateBuffer(buffer, band) {
-  const entrance = band === 'early';
+  const entrance = band === "early";
   const zip = new PizZip(buffer);
   const files = zip.file(/ppt\/slides\/slide\d+\.xml$/);
   for (const f of files) {
     let xml = f.asText();
-    if (xml.includes('<p:transition') || xml.includes('<p:timing')) continue; // already animated
-    const inject = primaryTiming(xml) || buildTimingAndTransition(xml, { entrance });
-    xml = xml.replace('</p:sld>', inject + '</p:sld>');
+    if (xml.includes("<p:transition") || xml.includes("<p:timing")) continue; // already animated
+    const inject =
+      primaryTiming(xml) || buildTimingAndTransition(xml, { entrance });
+    xml = xml.replace("</p:sld>", inject + "</p:sld>");
     zip.file(f.name, xml);
   }
-  return zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
+  return zip.generate({ type: "nodebuffer", compression: "DEFLATE" });
 }
 
 module.exports = { animateBuffer };
 
 // Primary themes name the actual answer/step shapes. Never infer reveals from
-// the longest textbox: objectives and task instructions must be visible at once.
+// the longest textbox: each named teaching group gets one deliberate click.
 function primaryTiming(xml) {
-  const doc=new DOMParser().parseFromString(xml,'text/xml');
-  const nodes=Array.from(doc.getElementsByTagName('p:cNvPr'));
-  if(!nodes.some(n=>n.getAttribute('name')==='ls-primary-design'))return null;
-  const groups=new Map();
-  nodes.forEach(n=>{const m=(n.getAttribute('name')||'').match(/^ls-reveal-(\d+)-/);if(m){const key=Number(m[1]);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(n.getAttribute('id'));}});
-  let id=10;
-  const steps=[...groups].sort((a,b)=>a[0]-b[0]).map(([,ids])=>{
-    const outer=id++;const inner=id++;
-    const effects=ids.map((spid,i)=>{const n=id;id+=3;return autoEntrance(n,spid,'fade').replace('nodeType="afterEffect"',`nodeType="${i?'withEffect':'clickEffect'}"`).replace('dur="500"','dur="280"');}).join('');
-    return `<p:par><p:cTn id="${outer}" fill="hold"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst><p:childTnLst><p:par><p:cTn id="${inner}" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>${effects}</p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par>`;
-  }).join('');
-  const transition='<p:transition spd="fast" advClick="1"><p:fade/></p:transition>';
-  if(!steps)return transition;
-  return transition+`<p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst><p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>${steps}</p:childTnLst></p:cTn><p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst><p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst></p:seq></p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>`;
+  const doc = new DOMParser().parseFromString(xml, "text/xml");
+  const nodes = Array.from(doc.getElementsByTagName("p:cNvPr"));
+  if (!nodes.some((n) => n.getAttribute("name") === "ls-primary-design"))
+    return null;
+  const groups = new Map();
+  nodes.forEach((n) => {
+    const m = (n.getAttribute("name") || "").match(/^ls-reveal-(\d+)-/);
+    if (m) {
+      const key = Number(m[1]);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(n.getAttribute("id"));
+    }
+  });
+  let id = 10;
+  // The heading is visible on arrival. The question is the first teacher click.
+  const steps = [...groups]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, ids]) => {
+      const outer = id++;
+      const inner = id++;
+      const effects = ids
+        .map((spid, i) => {
+          const n = id;
+          id += 3;
+          return primaryEntrance(n, spid, i ? "withEffect" : "clickEffect");
+        })
+        .join("");
+      return `<p:par><p:cTn id="${outer}" fill="hold"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst><p:childTnLst><p:par><p:cTn id="${inner}" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>${effects}</p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par>`;
+    })
+    .join("");
+  const transition =
+    '<p:transition spd="fast" advClick="1"><p:fade/></p:transition>';
+  if (!steps) return transition;
+  return (
+    transition +
+    `<p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst><p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>${steps}</p:childTnLst></p:cTn><p:prevCondLst><p:cond evt="onPrev"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst><p:nextCondLst><p:cond evt="onNext"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst></p:seq></p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>`
+  );
 }

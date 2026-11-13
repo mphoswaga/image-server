@@ -211,7 +211,7 @@ function persistNewImage(entry) {
 
 // Pick one image per slide. Uses a content match when strong enough; otherwise
 // fetches a fresh Unsplash photo, caches it into the library, and uses that.
-async function selectImages(slides, subject, topic, sourceImages = [], preset = null) {
+async function selectImages(slides, subject, topic, sourceImages = [], preset = null, {grade='primary school'} = {}) {
   const primary = primaryDesign.isPrimary(preset);
   const needsPictures = slides.some(s => primaryDesign.wantsPicture(s, preset));
   let pool = LIBRARY.images.filter(img => img.subject === subject && img.topic === topic);
@@ -259,8 +259,29 @@ async function selectImages(slides, subject, topic, sourceImages = [], preset = 
 
   const used = new Set();
   const chosen = [];
+  // Purposeful art is part of primary generation. Exact prompt/style caching
+  // avoids buying the same illustration when a connection has to reconnect.
+  const artwork=new Map();
+  if(primary && process.env.OPENAI_API_KEY){
+    const targets=slides.map((slide,index)=>({slide,index})).filter(({slide})=>primaryDesign.wantsPicture(slide,preset)&&(slide.type==='title'||slide.visual?.type==='illustration')).slice(0,3);
+    const make=async ({slide,index})=>{
+      const concept=slide.visual?.type==='illustration'?(slide.visual.items||[]).join(' '):slide.imageQuery;
+      if(!concept)return;
+      const supplied=bestLibraryMatch(uploadedImages,tokenize(concept),new Set());
+      if(supplied.bestScore>=MATCH_THRESHOLD&&resolveMedia(supplied.best.relpath)){artwork.set(index,supplied.best);return;}
+      const key=require('crypto').createHash('sha256').update(JSON.stringify([preset.id,grade,concept])).digest('hex');
+      const existing=LIBRARY.images.find(img=>img.illustrationKey===key&&resolveMedia(img.relpath));
+      if(existing){artwork.set(index,existing);return;}
+      try{
+        const entry=await require('./ai-image').generateImage({subject,topic,concept,grade,presetId:preset.id});
+        entry.illustrationKey=key;addLibraryImages([entry]);artwork.set(index,entry);
+      }catch(error){throw new Error('A lesson illustration could not be created. Your plan is saved; please try again. '+error.message);}
+    };
+    for(let i=0;i<targets.length;i+=2)await Promise.all(targets.slice(i,i+2).map(make));
+  }
 
-  for (const slide of slides) {
+  for (const [slideIndex,slide] of slides.entries()) {
+    if(artwork.has(slideIndex)){const art=artwork.get(slideIndex);used.add(art.relpath);chosen.push(art);continue;}
     if (slide.table?.rows?.length) { chosen.push({ relpath: '', source: 'native-table' }); continue; }
     // LLM asked for a labelled diagram, and it's not one of the curated ones →
     // generate (or reuse) an SVG diagram for any subject.
@@ -430,6 +451,22 @@ function paginateSlides(slides, t, preset) {
   let position = 0;
   const out = [];
   (slides || []).forEach((slide, sourceIndex) => {
+    const teachingVisual=primary&&require('./classroom-visuals').displayVisual(slide);
+    if(teachingVisual&&!teachingVisual.task&&teachingVisual.prompt.length>300){
+      // Keep long explanations readable before the diagram, rather than
+      // shrinking them or rejecting an otherwise valid generated lesson.
+      const {youtube,...base}=slide;
+      const explanation={...base,visual:{type:'none',items:[]},reveal:[],_layout:'primary-text'};
+      out.push(...paginateSlides([explanation],t,preset).map(page=>({...page,_sourceIndex:sourceIndex})));
+      out.push({...base,title:base.title+' — diagram',bullets:[],example:'',_layout:'primary-diagram',_sourceIndex:sourceIndex});
+      if(youtube)out.push({type:'video',title:youtube.title||'Lesson video',bullets:[],youtube,modelStage:slide.modelStage,modelStageLabel:slide.modelStageLabel,_sourceIndex:sourceIndex});
+      return;
+    }
+    if(primary && (teachingVisual||slide.visual?.type==='illustration')){
+      const {youtube,...base}=slide;out.push({...base,_layout:primaryDesign.primaryLayout(slide),_sourceIndex:sourceIndex});
+      if(youtube)out.push({type:'video',title:youtube.title||'Lesson video',bullets:[],youtube,modelStage:slide.modelStage,modelStageLabel:slide.modelStageLabel,speakerNotes:`Teacher-reviewed video for: ${slide.title}`,_sourceIndex:sourceIndex});
+      return;
+    }
     if (slide.table?.rows?.length) {
       out.push({ ...slide, _layout: layoutForSlide(slide, position++, rhythm), _sourceIndex: sourceIndex });
       return;
@@ -1012,7 +1049,7 @@ async function buildDeck({ subject, topic, slideCount = 4, grade = 'middle schoo
   const profile = gradeProfile(grade);
   const slides = await generateContent(subject, topic, slideCount, grade, tone, focus, { objectives, lessonPlanText, sourceMaterialText, teachingModelId, ...extras, presentationStyle:primaryDesign.isPrimary(preset)?'primary':undefined });
   const safeSlides = paginateSlides(slides, profile.theme, preset).map(({ _sourceIndex, ...slide }) => slide);
-  const images = await selectImages(safeSlides, subject, topic, sourceImages, preset);
+  const images = await selectImages(safeSlides, subject, topic, sourceImages, preset, {grade});
   const aligned = safeSlides.some(s => s.alignment || s.learnerTask?.required);
   if (skipAssemble && !aligned) return { slides: safeSlides, images, band: profile.band, preset };
   const pptx = assembleDeck(safeSlides, images, profile.theme, preset);

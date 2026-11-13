@@ -151,3 +151,26 @@ test("adding an AI picture to an empty slide preserves edits and supports hide/r
   ).toBe("hide");
   await expectNoPageOverflow(page);
 });
+
+test('answer edits survive saving, reopening and the animated PowerPoint download', async ({page})=>{
+  await signInDisposableTeacher(page,'-reveal');
+  const d=await importLesson(page);
+  const styled=await page.request.post(`/api/deck/${d.deckId}/design`,{data:{presetId:'primary-discovery',edits:[{index:2,title:'Read the record',bullets:['Who has no pets?'],reveal:['Ben has no pets.']}]}});
+  expect(styled.ok()).toBeTruthy();
+  await openDeck(page,await (await page.request.get(`/api/deck/${d.deckId}`)).json());
+  const card=page.locator('.slide').nth(2);
+  await card.locator('.slide-reveals summary').click();
+  await card.locator('[data-field=reveal]').fill('Ben has zero pets.');
+  await page.evaluate(()=>saveWorkspaceNow());
+  const workspace=await page.evaluate(()=>currentWorkspaceId);
+  await page.reload();
+  await page.evaluate(id=>resumeLessonWorkspace(id),workspace);
+  await page.locator('.slide').nth(2).locator('.slide-reveals summary').click();
+  await expect(page.locator('.slide').nth(2).locator('[data-field=reveal]')).toHaveText('Ben has zero pets.');
+  const id=await page.evaluate(()=>currentDeckId);
+  const download=await page.request.post(`/api/download/${id}`,{data:{edits:[]}});
+  expect(download.ok()).toBeTruthy();
+  const xml=new PizZip(await download.body()).file('ppt/slides/slide3.xml').asText();
+  expect(xml).toContain('Ben has zero pets.');
+  expect((xml.match(/nodeType="clickEffect"/g)||[]).length).toBe(2);
+});

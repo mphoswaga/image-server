@@ -138,17 +138,17 @@ test("all primary designs export the full lesson, editable data and teacher guid
   }
 });
 
-test("only actual answers and worked steps reveal, and all animation targets exist", async () => {
+test("headings open first and teaching points, questions and answers reveal in order", async () => {
   const zip = await exportDeck("primary-discovery");
   for (const [index, expected] of [
-    [1, 0],
-    [2, 0],
-    [3, 0],
-    [4, 0],
-    [5, 3],
-    [6, 0],
+    [1, 1],
+    [2, 2],
+    [3, 2],
+    [4, 2],
+    [5, 4],
+    [6, 3],
     [7, 2],
-    [8, 0],
+    [8, 1],
   ]) {
     const xml = zip.file(`ppt/slides/slide${index}.xml`).asText();
     const doc = new DOMParser().parseFromString(xml, "text/xml");

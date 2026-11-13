@@ -6,7 +6,10 @@ const fs = require('fs');
 const path = require('path');
 
 const { mediaWriteDir } = require('./media');
-const MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1';
+// Retired models cannot serve new images. Keep current explicit overrides.
+const DEFAULT_MODEL = 'gpt-image-2.5-flare';
+const configuredModel = process.env.OPENAI_IMAGE_MODEL;
+const MODEL = !configuredModel || ['gpt-image-1','dall-e-2','dall-e-3'].includes(configuredModel) ? DEFAULT_MODEL : configuredModel;
 const QUALITY = process.env.OPENAI_IMAGE_QUALITY || 'medium';
 const slug = s => String(s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
@@ -21,15 +24,12 @@ function buildPrompt({ concept, subject, grade, presetId }) {
     + `NO text, words, letters, numbers, or labels anywhere in the image.`;
 }
 
-// Returns base64 PNG. Tries the configured model, falls back to dall-e-3 (which
-// is available on more accounts) if the primary errors.
+// GPT Image returns base64 directly; response_format belongs to retired DALL-E.
 async function genB64(client, model, prompt) {
-  if (model === 'gpt-image-1') {
-    const r = await client.images.generate({ model, prompt, size: '1536x1024', quality: QUALITY, n: 1 });
-    return r.data[0].b64_json;
-  }
-  const r = await client.images.generate({ model: 'dall-e-3', prompt, size: '1792x1024', response_format: 'b64_json', n: 1 });
-  return r.data[0].b64_json;
+  const r = await client.images.generate({ model, prompt, size: '1536x1024', quality: QUALITY, output_format:'png', n: 1 });
+  const b64=r.data?.[0]?.b64_json;
+  if(!b64)throw new Error('The illustration service returned no image. Please try again.');
+  return b64;
 }
 
 async function generateImage({ subject, topic, concept, grade = 'middle school', presetId }) {
@@ -38,17 +38,7 @@ async function generateImage({ subject, topic, concept, grade = 'middle school',
   const client = aiClient();
   const prompt = buildPrompt({ concept, subject, grade, presetId });
 
-  let b64;
-  try {
-    b64 = await genB64(client, MODEL, prompt);
-  } catch (err) {
-    if (MODEL !== 'dall-e-3') {
-      console.log(`Image model ${MODEL} failed (${err.message}); falling back to dall-e-3.`);
-      b64 = await genB64(client, 'dall-e-3', prompt);
-    } else {
-      throw err;
-    }
-  }
+  const b64 = await genB64(client, MODEL, prompt);
 
   const subj = slug(subject), top = slug(topic);
   const folder = mediaWriteDir(subj, top);
@@ -66,4 +56,4 @@ async function generateImage({ subject, topic, concept, grade = 'middle school',
   };
 }
 
-module.exports = { generateImage, buildPrompt };
+module.exports = { generateImage, buildPrompt, model:MODEL };

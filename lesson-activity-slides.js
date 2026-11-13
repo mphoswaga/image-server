@@ -7,8 +7,12 @@ function isGameTask(slide,step){return step?.kind==='game'||/\b(?:FishQuest|Colo
 function needsTask(slide,step){
  if(isGameTask(slide,step))return false;
  if(['guided','practice','independent','check'].includes(step?.kind))return true;
- const text=[slide.title,...(slide.bullets||[])].join(' ');
- return /\b(?:highlight|reorder|unjumble|debug|correct the|sort (?:these|the)|solve|predict|which steps|what would you change|your turn)\b/i.test(text);
+ const lines=[slide.title,...(slide.bullets||[])].filter(Boolean);
+ // A definition such as "algorithms help solve a problem" is teaching, not
+ // an exercise to replace. Detect actual pupil directions and questions.
+ return lines.some(text=>/\b(?:which steps|what would you change|your turn)\b/i.test(text)
+   || /(?:^|[:.!?]\s+)(?:highlight|reorder|unjumble|debug|correct the|sort (?:these|the)|solve|predict)\b/i.test(text)
+   || /\b(?:can you|try to|now)\s+(?:highlight|reorder|unjumble|debug|sort|solve|predict)\b/i.test(text));
 }
 function taskIssues(slide,step,force=false){
  if(isGameTask(slide,step))return [];
@@ -29,7 +33,7 @@ function taskIssues(slide,step,force=false){
 function materializeTask(slide){
  const t=slide.learnerTask;if(isGameTask(slide))return t?.required?{...slide,learnerTask:undefined}:slide;if(!t?.required)return slide;
  const table=!!slide.table?.rows?.length;
- return {...slide,bullets:[t.question,...(table?[]:t.stimulus||[])],example:'',vocab:[],shortcuts:[],visual:{type:'none',items:[]},worked:{task:'',steps:[]},layoutHint:'TEXT_HEAVY',speakerNotes:[slide.speakerNotes,'Private task guidance: '+t.answer].filter(Boolean).join('\n\n')};
+ return {...slide,bullets:[t.question,...(table?[]:t.stimulus||[])],example:'',vocab:[],shortcuts:[],visual:slide.visual?.type==='illustration'?slide.visual:{type:'none',items:[]},worked:{task:'',steps:[]},layoutHint:'TEXT_HEAVY',speakerNotes:[slide.speakerNotes,'Private task guidance: '+t.answer].filter(Boolean).join('\n\n')};
 }
 module.exports={taskSchema,guidance,withTaskSchema,needsTask,taskIssues,materializeTask};
 

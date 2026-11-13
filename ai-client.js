@@ -100,7 +100,7 @@ function client() {
       try {
         const n = (res && res.data && res.data.length) || (args && args.n) || 1;
         const model = (args && args.model) || 'gpt-image-1';
-        const cost = usage.record({ userId: currentUser(), model, images: n });
+        const cost = usage.record({ userId: currentUser(), model, images: n, imageUsage:res.usage });
         accrue(model, cost, 0, 0, n);
       } catch {}
       return res;

@@ -5708,6 +5708,8 @@
       } else if(s.labelled){
         const nm=s.labelled.replace(/-/g,' ');
         thumb=`<div class="thumb" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#f0faf4;color:#2f9e44">${ICON('i-target')}<b style="text-transform:capitalize;font-size:14px">${esc(nm)} diagram</b><span class="badge ai">animated labels</span></div>`;
+      } else if(s.classroomVisual){
+        const v=s.classroomVisual;thumb=`<div class="thumb" style="display:grid;align-content:center;gap:6px;padding:14px;background:#edf7f2">${v.items.map((value,n)=>`<div style="padding:7px;background:white;border-left:3px solid #167452;font-size:12px">${v.type==='steps'?`${n+1}. `:''}${esc(value)}</div>`).join('')}<span class="badge ai">Editable ${esc(v.type==='steps'?'sequence':v.type==='concept'?'concept map':v.type)}</span></div>`;
       } else if(s.visual){
         const steps=s.visual.items.slice(0,5).map((it,n)=>`<div style="display:flex;align-items:center;gap:7px;background:#fff6e9;border:1px solid #ec7f3b;border-radius:8px;padding:5px 9px;font-size:12px"><b style="color:#ec7f3b">${s.visual.type==='cycle'?'↻':n+1}</b><span>${esc(it)}</span></div>`).join('<div style="text-align:center;color:#ec7f3b;font-size:10px;line-height:1">▼</div>');
         thumb=`<div class="thumb" style="background:#fffdf9;display:flex;flex-direction:column;justify-content:center;gap:4px;padding:12px;aspect-ratio:16/9;overflow:hidden">${steps}<span class="badge ai">animated · ${esc(s.visual.type)}</span></div>`;
@@ -5754,7 +5756,8 @@
         const wk=(s.worked&&s.worked.steps&&s.worked.steps.length)?`<div class="worked">${s.worked.task?`<div class="wtask">${esc(s.worked.task)}</div>`:''}<ol>${s.worked.steps.map(st=>`<li>${esc(st)}</li>`).join('')}</ol></div>`:'';
         const table=s.table?.rows?.length?`<table class="lesson-data-table" style="width:100%;border-collapse:collapse"><thead><tr>${s.table.headers.map(h=>`<th${editable} data-table-header style="border:1px solid #ccc;padding:6px">${esc(h)}</th>`).join('')}</tr></thead><tbody>${s.table.rows.map((row,r)=>`<tr>${row.map((cell,c)=>`<td${editable} data-table-cell style="border:1px solid #ccc;padding:6px;${primary&&s.table.focus&&(s.table.focus.kind==='row'?r===s.table.focus.index:c===s.table.focus.index)?'background:#F8D68A':''}">${esc(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table><p>${esc(s.table.caption||'')}</p>`:'';
         const focus=s.table?.rows?.length&&primary&&!assessmentProtected?`<label class="table-focus">Highlight <select data-table-focus aria-label="Highlight table row or column"><option value="">None</option>${['column','row'].flatMap(kind=>(kind==='column'?s.table.headers:s.table.rows).map((_,n)=>`<option value="${kind}:${n}"${s.table.focus?.kind===kind&&s.table.focus.index===n?' selected':''}>${kind==='column'?'Column':'Row'} ${n+1}</option>`)).join('')}</select></label>`:'';
-        body=`${kicker||stageKicker}<h3${editable} data-field="title">${esc(s.title)}</h3>${focus}${table}${bl}${sc}${wk}${ex}${diff}${yt}${actions}`;
+        const reveal=primary&&!assessmentProtected&&s.reveal?.length?`<details class="slide-reveals"><summary>Reveal after the question</summary><p class="hint">Shown on a later click during the slideshow. Edit the answer here.</p>${s.reveal.map(value=>`<p contenteditable data-field="reveal">${esc(value)}</p>`).join('')}</details>`:'';
+        body=`${kicker||stageKicker}<h3${editable} data-field="title">${esc(s.title)}</h3>${focus}${table}${bl}${sc}${wk}${ex}${reveal}${diff}${yt}${actions}`;
       }
       return `<div class="slide" data-design="${primary?'primary':'classic'}" data-index="${i}" data-slide-type="${esc(s.type||'')}" data-assessment-phase-type="${esc(s.assessmentPhaseType||'')}" data-assessment-protected="${assessmentProtected?'true':'false'}">${thumb}<div class="body">${body}</div></div>`;
     }
@@ -5867,6 +5870,7 @@
       const su=card.querySelector('[data-field=subtitle]'); if(su)e.subtitle=su.innerText.trim();
       const ex=card.querySelector('[data-field=example]'); if(ex)e.example=ex.innerText.trim();
       const bl=[...card.querySelectorAll('[data-field=bullet]')].map(x=>x.innerText.trim()).filter(Boolean); if(bl.length)e.bullets=bl;
+      if(card.querySelector('.slide-reveals'))e.reveal=[...card.querySelectorAll('[data-field=reveal]')].map(x=>x.innerText.trim()).filter(Boolean);
       return e; }); }
     $('downloadBtn').addEventListener('click', async ()=>{
       if(!currentDeckId) return; const dl=$('downloadBtn'); dl.disabled=true; const orig=dl.innerHTML; dl.innerHTML='<span class="spinner"></span>Preparing…';
@@ -7634,6 +7638,7 @@
         title:slide.title||'',
         subtitle:slide.subtitle||'',
         example:slide.example||'',
+        ...(Array.isArray(slide.reveal)?{reveal:slide.reveal}:{}),
         bullets:Array.isArray(slide.bullets)?slide.bullets:[],
         ...(slide.table?.rows?.length?{table:slide.table}:{}),
       }));

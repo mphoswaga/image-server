@@ -11,6 +11,13 @@ test('vague task cues and independent steps require an actual learner question',
  assert.deepEqual(taskIssues({title:'What is an algorithm?',bullets:['An algorithm is a sequence of instructions.']}),[]);
  assert.deepEqual(taskIssues({title:'Game joining',bullets:['Choose your name.']},{kind:'game'}),[]);
 });
+test('definitions about solving problems survive task repair unchanged',async()=>{
+ const s={title:'What is an algorithm?',bullets:['A set of clear, ordered instructions.','Helps you solve a problem step by step.'],learnerTask:{required:false,question:'',stimulus:[],answer:''}};
+ assert.deepEqual(taskIssues(s),[]);
+ const result=await require('../lesson-activity-slides').repairTasks({slides:[s],callModel:()=>{throw new Error('An explanation must not be replaced with an exercise.');}});
+ assert.equal(result.slides[0],s);
+ assert.ok(taskIssues({title:'Your challenge',bullets:['Solve the problem below.']}).length);
+});
 test('referenced problem data cannot be left in notes or an unspecified worksheet',()=>{
  const s=fixture();s.learnerTask.stimulus=[];s.speakerNotes+=' '+sequence;assert.ok(taskIssues(s).length);
  s.learnerTask.stimulus=[sequence];assert.deepEqual(taskIssues(s),[]);

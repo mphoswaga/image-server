@@ -16,7 +16,7 @@ function parseFraction(text) {
 
 // Draw the fraction pizza into a square region. Shaded slices get objectName
 // "lc-anim-fill-<i>" so animate-pptx can reveal them sequentially.
-function drawFractionPizza(pptx, slide, { num, den, x, y, w, accent }) {
+function drawFractionPizza(pptx, slide, { num, den, x, y, w, accent, dividerColor, labelSlash='⁄' }) {
   const step = 360 / den;
   const box = { x, y, w, h: w }; // square
   // The whole pizza, cut into `den` equal slices (light, outlined).
@@ -30,12 +30,12 @@ function drawFractionPizza(pptx, slide, { num, den, x, y, w, accent }) {
   for (let i = 0; i < num; i++) {
     slide.addShape(pptx.ShapeType.pie, {
       ...box, angleRange: [i * step, (i + 1) * step],
-      fill: { color: accent }, line: { color: accent, width: 2 }, objectName: `lc-anim-fill-${i}`,
+      fill: { color: accent }, line: { color: dividerColor||accent, width: 2 }, objectName: `lc-anim-fill-${i}`,
     });
   }
   // Fraction label below the pizza.
   slide.addText(
-    [{ text: `${num}`, options: { color: accent } }, { text: '⁄', options: { color: '666666' } }, { text: `${den}`, options: { color: '1F4E79' } }],
+    [{ text: `${num}`, options: { color: accent } }, { text: labelSlash, options: { color: '666666' } }, { text: `${den}`, options: { color: '1F4E79' } }],
     { x, y: y + w + 0.08, w, h: 0.7, align: 'center', fontFace: 'Arial', fontSize: 30, bold: true }
   );
 }

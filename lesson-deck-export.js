@@ -13,14 +13,16 @@ function textIn(doc) {
   return normal(Array.from(doc.getElementsByTagName('a:t')).map(n => n.textContent).join(' '));
 }
 function requiredText(slide, preset) {
+  const visual=preset?.design==='primary'&&require('./classroom-visuals').displayVisual(slide);
+  if(visual)return [slide.title,visual.prompt,...visual.items,...require('./classroom-visuals').revealText(slide)];
   if (slide.modelStage === 'success_criteria') return [preset?.design === 'primary' ? slide.title : String(slide.title || '').toUpperCase(), ...(slide.bullets || [])];
   if (slide.type==='objectives') return [String(slide.title || 'Learning objectives').toUpperCase(),...(slide.bullets || [])];
-  if (slide.table?.rows?.length) return [slide.title, ...slide.table.headers, ...slide.table.rows.flat(), slide.table.caption, ...(slide.bullets || [])];
-  if (slide.worked?.steps?.length) return [slide.title, slide.worked.task, ...slide.worked.steps];
+  if (slide.table?.rows?.length) return [slide.title, ...slide.table.headers, ...slide.table.rows.flat(), slide.table.caption, ...(slide.bullets || []),...require('./classroom-visuals').revealText(slide)];
+  if (slide.worked?.steps?.length) return [slide.title, slide.worked.task, ...slide.worked.steps,...require('./classroom-visuals').revealText(slide)];
   if (slide.shortcuts?.length) return [slide.title, slide.example, ...slide.shortcuts.flatMap(s => [s.action, s.keys])];
   if (slide.visual?.type === 'diagram') return [slide.title]; // Diagram labels are embedded in SVG; visual review checks them.
-  if (['steps','cycle','numberline'].includes(slide.visual?.type)) return [slide.title, slide.example, ...(slide.visual.type === 'numberline' ? [] : slide.visual.items)];
-  return [slide.title, slide.subtitle, ...(slide.bullets || []), slide.example];
+  if (['steps','cycle','numberline'].includes(slide.visual?.type)) return [slide.title, slide.example, ...(slide.visual.type === 'numberline' ? (preset?.design==='primary'?slide.bullets||[]:[]) : slide.visual.items),...require('./classroom-visuals').revealText(slide)];
+  return [slide.title, slide.subtitle, ...(slide.bullets || []), slide.example,...require('./classroom-visuals').revealText(slide)];
 }
 // Check the actual delivered ZIP after animation, including native table cells
 // and notes. This is a structural/content gate, not a claim of visual rendering.

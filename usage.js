@@ -17,6 +17,9 @@ const USAGE_PATH = path.join(DATA_DIR, 'usage.json');
 const PRICING = {
   'gpt-4o-mini': { inPerM: numEnv('PRICE_GPT_4O_MINI_IN', 0.15), outPerM: numEnv('PRICE_GPT_4O_MINI_OUT', 0.60) },
   'gpt-4o':      { inPerM: numEnv('PRICE_GPT_4O_IN', 2.50), outPerM: numEnv('PRICE_GPT_4O_OUT', 10.00) },
+  'gpt-4.1':     { inPerM: numEnv('PRICE_GPT_41_IN', 2.00), outPerM: numEnv('PRICE_GPT_41_OUT', 8.00) },
+  // GPT Image 2.5 Flare: official token prices, with an explicit estimate when usage is absent.
+  'gpt-image-2.5-flare': { textInPerM:5, imageInPerM:8, imageOutPerM:30, perImage:numEnv('PRICE_GPT_IMAGE_25_FLARE',0.04) },
   'gpt-image-1': { perImage: numEnv('PRICE_GPT_IMAGE_1', 0.04) },
   'dall-e-3':    { perImage: numEnv('PRICE_DALL_E_3', 0.04) },
 };
@@ -24,8 +27,9 @@ const FALLBACK = { inPerM: 0.15, outPerM: 0.60 }; // unknown chat model → assu
 
 function numEnv(name, dflt) { const v = parseFloat(process.env[name]); return Number.isFinite(v) ? v : dflt; }
 
-function costFor(model, { promptTokens = 0, completionTokens = 0, images = 0 } = {}) {
+function costFor(model, { promptTokens = 0, completionTokens = 0, images = 0, imageUsage = null } = {}) {
   const p = PRICING[model];
+  if(p?.imageOutPerM!=null&&imageUsage?.output_tokens!=null){const details=imageUsage.input_tokens_details||{};return ((details.text_tokens||0)*p.textInPerM+(details.image_tokens||0)*p.imageInPerM+imageUsage.output_tokens*p.imageOutPerM)/1e6;}
   if (p && p.perImage != null) return images * p.perImage;
   const rate = (p && p.inPerM != null) ? p : FALLBACK;
   return (promptTokens / 1e6) * rate.inPerM + (completionTokens / 1e6) * rate.outPerM;
@@ -44,9 +48,9 @@ function load() {
 
 // Record one AI call. Read-modify-write with an atomic save (fine at MVP
 // concurrency; move to a DB if many calls land in the same instant).
-function record({ userId, model, promptTokens = 0, completionTokens = 0, images = 0 } = {}) {
+function record({ userId, model, promptTokens = 0, completionTokens = 0, images = 0, imageUsage = null } = {}) {
   if (!model) return 0;
-  const cost = costFor(model, { promptTokens, completionTokens, images });
+  const cost = costFor(model, { promptTokens, completionTokens, images, imageUsage });
   const u = load();
   bump(u.totals, promptTokens, completionTokens, images, cost);
   const uid = userId || 'system';
