@@ -46,14 +46,21 @@
       this.stopButton.style.display=this.busy?'':'none';this.stopButton.disabled=this.stopRequested;
     }
     async json(url,options){
-      let response;
-      try { response=await fetch(url,options); }
-      catch { throw new Error('The connection was interrupted. Keep this page open and retry. Any completed uploads and saved lessons are kept.'); }
-      const data=await response.json().catch(()=>null);
-      if(!data)throw new Error(response.status===504||response.status===502?'The server did not return the result in time. Your saved slides are kept; please retry shortly.':'The server returned an unreadable response. Please retry; saved lessons are kept.');
-      if(!response.ok){const error=new Error(data.error||`Request failed (${response.status}). Please retry this file.`);error.status=response.status;throw error;}
-      return data;
+      const controller=new AbortController();
+      const timeout=setTimeout(()=>controller.abort(),url==='/api/lesson-plan'?300000:120000);
+      try {
+        const response=await fetch(url,{...options,signal:controller.signal});
+        const data=await response.json().catch(error=>{if(controller.signal.aborted)throw error;return null;});
+        if(!data)throw new Error(response.status===504||response.status===502?'The server did not return the result in time. Please retry; completed lessons are kept.':'The server returned an unreadable response. Please retry; saved lessons are kept.');
+        if(!response.ok){const error=new Error(data.error||`Request failed (${response.status}). Please retry this file.`);error.status=response.status;throw error;}
+        return data;
+      } catch(error) {
+        if(controller.signal.aborted)throw new Error('This step took too long and was stopped. Select Upload again to retry this file. Completed lessons are kept.');
+        if(error instanceof TypeError)throw new Error('The connection was interrupted. Keep this page open and retry. Completed lessons are kept.');
+        throw error;
+      } finally {clearTimeout(timeout);}
     }
+
     post(url,body,method='POST'){return this.json(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});}
     async run(withPlan,settings){
       if(this.busy)return;
