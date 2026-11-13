@@ -306,7 +306,7 @@ const uploadLimiter = createRateLimiter({ name: 'upload', windowMs: 5 * 60_000, 
 app.use(['/api/signup', '/api/student/signup', '/api/login', '/api/password-reset/request', '/api/password-reset/confirm', '/api/webauthn/login/options', '/api/webauthn/login/verify'], authLimiter);
 app.use(['/api/student/login', '/api/student/google/link', '/api/student/join-room', '/api/student/pin/reset-request', '/api/practice/live-sessions/:code/join', '/api/assignment/:id/enter', '/api/assignment/:id/pin/reset-request', '/api/game/:id/enter', '/api/game/:id/pin/reset-request'], joinLimiter);
 app.use('/api/practice/live-sessions/:code/checkpoints', checkpointLimiter);
-app.use(['/api/assistant', '/api/lesson-plan', '/api/generate', '/api/pack', '/api/slide'], generationLimiter);
+app.use(['/api/assistant', '/api/lesson-plan', '/api/pack', '/api/slide'], generationLimiter);
 app.use(['/api/templates', '/api/planning-frameworks', '/api/units', '/api/planning-sources', '/api/source-materials', '/api/import', '/api/game/from-pptx', '/api/roster/preview'], uploadLimiter);
 
 // Attribute every AI call in this request to the signed-in user (for cost
@@ -4305,8 +4305,36 @@ async function addLessonToWeekPlanner(req, { subject, topic, objectives, lessonP
   }
 }
 
-// Generate a deck; store state; return preview metadata + download id.
-app.post('/api/generate', requireAuth, async (req, res) => {
+const slideGenerationJobs = require('./slide-generation-jobs').createSlideGenerationJobs({ file: path.join(DATA_DIR, 'slide-generation-jobs.json') });
+
+// The browser gets a receipt immediately; short polling requests survive the
+// gateway's connection timeout while the same generator and billing run once.
+app.post('/api/generate', requireAuth, generationLimiter, async (req, res, next) => {
+  if (req.body.background !== true) {
+    try { return await generateDeckRequest(req, res); } catch (error) { return next(error); }
+  }
+  try {
+    const job = slideGenerationJobs.start(req.userId, req.body, async () => {
+      let reply;
+      const output = { code: 200, status(code) { this.code = code; return this; }, json(result) { reply = {httpStatus:this.code,result}; return this; } };
+      await generateDeckRequest(req, output);
+      return reply;
+    });
+    res.status(job.status === 'running' ? 202 : 200).json(job);
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.status ? error.message : 'Slide generation could not start. Your lesson plan is unchanged. Please try again.' });
+  }
+});
+app.get('/api/generate/jobs/:id', requireAuth, (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const job = slideGenerationJobs.get(req.userId, req.params.id);
+  if (!job) return res.status(404).json({ error: 'This slide request is no longer available. Your lesson plan is unchanged. Please create the slides again.' });
+  res.json(job);
+});
+
+// Shared with the legacy synchronous API. Validation, assessment protections,
+// credit reservation/capture, and week filing use the same path.
+async function generateDeckRequest(req, res) {
   let lessonSettings;
   try { lessonSettings = validatedLessonSettings(req); } catch (err) { return res.status(400).json({ error: err.message }); }
   const { slideCount, grade, tone, lessonPlan, unitId, lessonIndex, regenerate, presetId } = req.body || {};
@@ -4397,6 +4425,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
       useWeekPlanner: !!req.body.useWeekPlanner,
       weekPlannerId: req.body.weekPlannerId || null,
     });
+    persistDecks();
     await capture(req, reservation, 'lessonscope.generate_slide_deck', id);   // 1 credit per lesson (no-op unless billing on)
 
     // If this teacher keeps a week-by-week workbook, file the lesson into it.
@@ -4419,7 +4448,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
     console.error('Generate failed:', err.message);
     res.status(400).json({ error: err.message });
   }
-});
+}
 
 function rejectProtectedAssessmentSlideMutation(res, deck, index) {
   const slide = deck && deck.slides && deck.slides[index];

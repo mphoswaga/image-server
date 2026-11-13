@@ -3780,6 +3780,7 @@
   <link rel="stylesheet" href="/games-hub.css">
   <script src="/lesson-design.js"></script>
   <script src="/slide-upload-batch.js?v=1"></script>
+  <script src="/slide-generation.js?v=1"></script>
   <script>
     const $=id=>document.getElementById(id);
     const cap=s=>s.replace(/\b\w/g,c=>c.toUpperCase());
@@ -5555,7 +5556,14 @@
     }
     $('regenPlanBtn').addEventListener('click',regenerateSavedPlan);
 
-    const STEPS=['Turning the plan into slides…','Finding & matching images (new topics are fetched + captioned)…','Assembling your deck…'];
+    function slideGenerationProgress(message){ statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>'+esc(message); }
+    async function ensureSlideWorkspace(){
+      // Keep the request tied to the same saved lesson before its first send.
+      // Otherwise autosave can add an ID during an outage and change a retry.
+      if(currentWorkspaceId) return;
+      await saveWorkspaceNow();
+      if(!currentWorkspaceId) throw new Error('Your lesson could not be saved. Check your connection, then try creating the slides again.');
+    }
     function applyEditsToDeck(deck,edits){
       if(!deck||!Array.isArray(deck.slides)) return deck;
       const byIndex=new Map((edits||[]).map(edit=>[edit.index,edit]));
@@ -5589,22 +5597,21 @@
       const plan=sequencePlans[index]; if(!plan) throw new Error(`Lesson plan ${index+1} is not ready yet.`);
       const total=Number(ctx.sequenceLessonCount)||3;
       const original=button&&button.innerHTML; if(button){ button.disabled=true; button.innerHTML='<span class="spinner"></span>Generating slides for lesson '+(index+1)+'…'; }
-      let i=0; statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>'+STEPS[0];
-      const tmr=setInterval(()=>{ i=Math.min(i+1,STEPS.length-1); statusEl.innerHTML='<span class="spinner"></span>'+STEPS[i]; },1900);
+      slideGenerationProgress('Preparing your slides…');
       try{
+        await ensureSlideWorkspace();
         const periodSettings=ctx.lessonSettings?{...ctx.lessonSettings,game:ctx.lessonSettings.game?.lesson===index+1?{...ctx.lessonSettings.game,lesson:1}:null}:null;
         const body={...ctx,objectives:plan.objectives||ctx.objectives,successCriteria:plan.successCriteria||ctx.successCriteria,lessonWorkspaceId:currentWorkspaceId||undefined,sequenceEnabled:false,lessonSettings:periodSettings,slideCount:periodSettings&&periodSettings.slideCountMode!=='manual'?LessonDesign.recommendation(periodSettings,plan.sections):ctx.slideCount,teachingModelId:plan.teachingModelId||ctx.teachingModelId,learningOutcome:plan.learningOutcome||'',lessonPlan:{sections:plan.sections,learningOutcome:plan.learningOutcome||''},presetId:selectedPresetId,
           lessonNumber:Number.isFinite(sequenceStartLessonNumber)?sequenceStartLessonNumber+index:undefined,
           focus:[ctx.focus,`This is lesson ${index+1} of ${total}. Build slides only for this lesson plan.`].filter(Boolean).join(' ')};
-        const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-        const d=await r.json();
+        const {response:r,data:d}=await SlideGeneration.generate(body,slideGenerationProgress);
         if(creditBlocked(r,d)){ statusEl.innerHTML=''; return false; }
         if(!r.ok) throw new Error(d.error);
         sequenceDecks[index]=d; activeSequenceDeckIndex=index; currentDeckId=d.deckId;
         statusEl.innerHTML=''; renderDeck(d); renderSequenceSlidesFlow(); show('slides'); setStep(3); results.scrollIntoView({behavior:'smooth'}); refreshCredits();
         if(d.weekPlanner&&d.weekPlanner.ok) loadWeekPlanner();
         return true;
-      } finally { clearInterval(tmr); if(button){ button.disabled=false; if(original) button.innerHTML=original; } renderSequenceSlidesFlow(); }
+      } finally { if(button){ button.disabled=false; if(original) button.innerHTML=original; } renderSequenceSlidesFlow(); }
     }
     $('sequenceSlidesTabs').addEventListener('click',e=>{ const tab=e.target.closest('[data-deck-index]'); if(tab&&!tab.disabled) showSequenceDeck(Number(tab.dataset.deckIndex)); });
     $('nextSequenceSlidesBtn').addEventListener('click',async()=>{
@@ -5636,14 +5643,13 @@
         catch(err){ statusEl.className='status err'; statusEl.textContent=err.message; }
         return;
       }
-      $('acceptBtn').disabled=true; let i=0; statusEl.className='status'; statusEl.innerHTML='<span class="spinner"></span>'+STEPS[0];
-      const tmr=setInterval(()=>{ i=Math.min(i+1,STEPS.length-1); statusEl.innerHTML='<span class="spinner"></span>'+STEPS[i]; },1900);
+      $('acceptBtn').disabled=true; slideGenerationProgress('Preparing your slides…');
       try{
-        const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...ctx,lessonWorkspaceId:currentWorkspaceId||undefined,lessonPlan,presetId:selectedPresetId})});
-        const d=await r.json();
-        if(creditBlocked(r,d)){ clearInterval(tmr); statusEl.innerHTML=''; $('acceptBtn').disabled=false; return; }
+        await ensureSlideWorkspace();
+        const {response:r,data:d}=await SlideGeneration.generate({...ctx,lessonWorkspaceId:currentWorkspaceId||undefined,lessonPlan,presetId:selectedPresetId},slideGenerationProgress);
+        if(creditBlocked(r,d)){ statusEl.innerHTML=''; $('acceptBtn').disabled=false; return; }
         if(!r.ok) throw new Error(d.error);
-        currentDeckId=d.deckId; clearInterval(tmr); statusEl.innerHTML=''; renderDeck(d); show('slides'); setStep(3); results.scrollIntoView({behavior:'smooth'}); refreshCredits();
+        currentDeckId=d.deckId; statusEl.innerHTML=''; renderDeck(d); show('slides'); setStep(3); results.scrollIntoView({behavior:'smooth'}); refreshCredits();
         // Say what happened to the week-by-week plan, rather than silently
         // filing the lesson (or silently not filing it).
         if(d.weekPlanner){
@@ -5654,7 +5660,7 @@
           else toast('Could not add this lesson to your week-by-week plan.');
           loadWeekPlanner();
         }
-      }catch(err){ clearInterval(tmr); statusEl.className='status err'; statusEl.textContent=err.message; }
+      }catch(err){ statusEl.className='status err'; statusEl.textContent=err.message; }
       $('acceptBtn').disabled=false;
     });
 

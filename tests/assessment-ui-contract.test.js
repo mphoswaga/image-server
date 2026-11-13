@@ -11,7 +11,7 @@ test('publishing keeps the exact assessment snapshot available to later slide ge
   assert.match(html, /ctx\.assessmentPublishedId=data\.assessmentId/);
   assert.doesNotMatch(html, /if\(ctx\)ctx\.assessmentDraft=null/);
   assert.match(html, /saved\.assessmentDraft&&!saved\.assessmentPublishedId\?JSON\.parse/);
-  assert.match(html, /JSON\.stringify\(\{\.\.\.ctx,lessonWorkspaceId:currentWorkspaceId\|\|undefined,lessonPlan,presetId:selectedPresetId\}\)/);
+  assert.match(html, /SlideGeneration\.generate\(\{\.\.\.ctx,lessonWorkspaceId:currentWorkspaceId\|\|undefined,lessonPlan,presetId:selectedPresetId\},slideGenerationProgress\)/);
 });
 
 test('a published automatic assessment stays visible beside its generated deck without reopening the publisher', () => {
@@ -72,7 +72,7 @@ test('automatic assessment publication and every deck request are bound to the s
   const finalDeckStart = html.indexOf("$('acceptBtn').addEventListener");
   const finalDeckEnd = html.indexOf('const KICKER=', finalDeckStart);
   const finalDeck = html.slice(finalDeckStart, finalDeckEnd);
-  assert.match(finalDeck, /JSON\.stringify\(\{\.\.\.ctx,lessonWorkspaceId:currentWorkspaceId\|\|undefined,lessonPlan,presetId:selectedPresetId\}\)/);
+  assert.match(finalDeck, /SlideGeneration\.generate\(\{\.\.\.ctx,lessonWorkspaceId:currentWorkspaceId\|\|undefined,lessonPlan,presetId:selectedPresetId\},slideGenerationProgress\)/);
   assert.match(html, /published\.lessonWorkspaceId===currentWorkspaceId/);
 });
 
