@@ -127,8 +127,8 @@ module.exports = function install(ColonyMatch) {
       players.push(p);
     }
     d.round++;
-    d.stage = "playing";
-    d.stageUntil = now;
+    d.stage = "intro";
+    d.stageUntil = now + 5000;
     d.deadline = d.stageUntil + d.minutes * 60000;
     d.pairs = [];
     const pool = mix(players);
@@ -164,6 +164,7 @@ module.exports = function install(ColonyMatch) {
       delete p.duelHold;
       const building = s.continuePlaying && p.round >= s.questions.length;
       m.setPersonalPhase(p, building ? "upgrade" : "answer", building ? s.upgradeSeconds : s.questionSeconds, now);
+      hold(p, "duelIntro", now);
 
     }
     m.event(
@@ -289,7 +290,6 @@ module.exports = function install(ColonyMatch) {
       }
     }
     if (d.stage === "intro" || d.stage === "results") {
-      d.stageUntil = now;
       this.lastTick = now;
       if (now >= d.stageUntil) {
         if (d.stage === "results")

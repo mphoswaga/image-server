@@ -249,6 +249,7 @@ window.ColonyDuelView = class {
     }
     const show = ["intro", "results"].includes(d.stage) && s.phase !== "ended";
     this.announcement.hidden = !show;
+    this.announcement.classList.toggle("duel-versus",d.stage === "intro");
     if (show) {
       const k = s.id + ":" + d.round + ":" + d.stage;
       if (this.announcement.dataset.key !== k) {
@@ -300,6 +301,7 @@ window.ColonyDuelView = class {
             caption.textContent = p.name;
             figure.append(img, caption);
             this.announcement.append(figure);
+            if(i===0){const vs=document.createElement("strong");vs.className="duel-vs-label";vs.textContent="VS";this.announcement.append(vs);}
           }
           if (d.stage === "results") {
             const result = d.history
