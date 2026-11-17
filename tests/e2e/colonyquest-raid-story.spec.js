@@ -20,3 +20,27 @@ test('defence result uses server values and paused raids do not advance',async({
 test('rejoining a duel goes straight to its current story beat and reduced motion disables movement',async({page})=>{
  await page.emulateMedia({reducedMotion:'reduce'});await open(page);const now=Date.now();await page.evaluate(s=>story.sync(s),{phase:'duelRaid',me:{id:'a'},serverNow:now,duel:{raid:{event,startedAt:now-5000,until:now+1800}}});await expect(page.locator('.raid-story')).toHaveAttribute('data-phase','victory');expect(await page.locator('.raid-story-art').evaluate(el=>getComputedStyle(el).animationName)).toBe('none');
 });
+test('raid soundtrack advances, does not restart on snapshots, and stops on mute and exit',async({page})=>{
+ await open(page);await page.evaluate(s=>{story.configure(true,.5);window.raidState=s;const b=document.createElement('button');b.textContent='Play raid';b.onclick=()=>story.sync(raidState);document.body.append(b);},state('a'));
+ await page.getByRole('button',{name:'Play raid'}).click();
+ await expect.poll(()=>page.evaluate(()=>story.audio.currentTime)).toBeGreaterThan(.2);
+ const before=await page.evaluate(()=>story.audio.currentTime);
+ await page.evaluate(s=>story.sync(s),state('a',7800));
+ expect(await page.evaluate(()=>story.audio.currentTime)).toBeGreaterThanOrEqual(before-.1);
+ await page.evaluate(()=>story.configure(false,.5));expect(await page.evaluate(()=>story.audio.paused)).toBe(true);
+ await page.evaluate(()=>story.hide());expect(await page.evaluate(()=>story.audio.paused)).toBe(true);
+});
+test('actual engine raid snapshot opens story on the complete student page',async({page})=>{
+ const {ColonyMatch}=require('../../colonyquest-multiplayer');const now=Date.now();
+ const m=new ColonyMatch({id:'raid-real',lessonTitle:'Raid',questions:Array.from({length:4},()=>({question:'Pick',options:['Yes','No'],correctIndex:0}))},{pacing:'individual',storyEnabled:false,now});
+ const a=m.join({studentId:'a',name:'Mia'},now),b=m.join({studentId:'b',name:'Leo'},now);m.start(now);
+ Object.assign(a.colony,{soldiers:5,food:20,barracksBuilt:true});Object.assign(b.colony,{soldiers:1,food:20,barracksBuilt:true});
+ m.answer(a.id,0,0,now+10);m.upgrade(a.id,0,'raid',b.id,now+20);
+ const snapshot=m.snapshot(a.id,false,now+30);
+ await page.route('**/colonyquest-live/ticket',r=>r.fulfill({json:{token:'test'}}));
+ await page.addInitScript(()=>{class Socket{static OPEN=1;constructor(){this.readyState=1;window.testSocket=this;setTimeout(()=>this.onopen?.(),0);}send(){}close(){}}window.WebSocket=Socket;});
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/colonyquest-live-play/raid-real');await page.waitForFunction(()=>window.testSocket?.onmessage);
+ await page.evaluate(s=>testSocket.onmessage({data:JSON.stringify({type:'state',state:s})}),snapshot);
+ await expect(page.locator('.raid-story')).toBeVisible();await expect(page.locator('.raid-story')).toHaveAttribute('data-phase','approach');expect(errors).toEqual([]);
+});

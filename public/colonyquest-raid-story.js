@@ -6,8 +6,12 @@
    this.node=document.createElement('section');this.node.className='raid-story';this.node.hidden=true;this.node.setAttribute('aria-label','Colony raid');
    this.node.innerHTML='<div class="raid-story-art"></div><div class="raid-story-shade"></div><div class="raid-story-top"><span>COLONY QUEST</span><span data-role>RAID</span></div><div class="raid-story-names"><strong data-attacker></strong><strong data-defender></strong></div><div class="raid-story-title"><span data-stage></span><h1></h1><p data-reward></p></div><div class="raid-story-caption" role="status"><strong></strong><small></small><div class="raid-story-progress"><i></i></div></div>';
    document.body.append(this.node);this.images={};
+   this.audio=new Audio(assets+'raid-drums-and-shields.wav');this.audio.preload='auto';this.enabled=false;this.volume=.5;
+   document.addEventListener('visibilitychange',()=>this.clock());
+   window.addEventListener('pagehide',()=>this.audio.pause());
    for(const name of ['approach','clash','victory','defence']){const img=new Image();img.decoding='async';img.fetchPriority='low';img.src=assets+name+'.webp';this.images[name]=img;}
   }
+  configure(enabled,volume){this.enabled=!!enabled;this.volume=Math.max(0,Math.min(1,Number(volume)||0));this.audio.volume=this.volume*.65;if(!this.enabled||!this.volume)this.audio.pause();}
   sync(state){
    this.state=state;const raid=state?.raid||state?.duel?.raid;
    if(!raid?.event||!state.me||!['raidWatching','duelRaid','paused'].includes(state.phase)){this.hide();return;}
@@ -42,8 +46,15 @@
    this.node.querySelector('.raid-story-caption small').textContent=held?'Paused - your raid will resume with the game.':remaining===0?'Returning to your colony…':'Both colonies return to play automatically.';
    this.node.style.setProperty('--raid-progress',progress);
    this.node.classList.toggle('is-paused',held);
+   if(held||document.hidden||!this.enabled||!this.volume||remaining===0){this.audio.pause();return;}
+   // Follow shared raid progress, without restarting on repeated snapshots.
+   const position=progress*8.4;
+   if(Number.isFinite(this.audio.duration)&&Math.abs(this.audio.currentTime-position)>.8)this.audio.currentTime=Math.min(position,this.audio.duration);
+   this.audio.playbackRate=8.4/(this.duration/1000);
+   if(this.audio.paused&&!this.audio.ended&&!this.playPending){this.playPending=true;this.audio.play().catch(()=>{}).finally(()=>{this.playPending=false;if(this.node.hidden||!this.enabled||document.hidden)this.audio.pause();});}
+
   }
-  hide(){this.node.hidden=true;this.phase=null;this.eventId=null;document.body.classList.remove('raid-story-active');}
+  hide(){this.audio.pause();this.audio.currentTime=0;this.node.hidden=true;this.phase=null;this.eventId=null;document.body.classList.remove('raid-story-active');}
  }
  root.ColonyRaidStory=ColonyRaidStory;
 })(window);

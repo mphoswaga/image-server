@@ -51,7 +51,7 @@
       duration,
     );
   };
-  function syncMusic() {duelView?.configure(sound,Number($('musicVolume').value)/100);
+  function syncMusic() {raidStory?.configure(sound,Number($('musicVolume').value)/100);duelView?.configure(sound,Number($('musicVolume').value)/100);
     eventAudio.configure(
       !host && sound &&
         !!state &&
