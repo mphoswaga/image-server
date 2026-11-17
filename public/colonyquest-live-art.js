@@ -1489,6 +1489,8 @@
         !['intro','results'].includes(this.state.duel?.stage) &&
         !document.body.classList.contains('offline');
       if (running) this.clock += dt;
+      // The fullscreen raid story covers the habitats; keep their clocks but skip hidden painting.
+      if (!this.overview && document.body.classList.contains('raid-story-active')) { this.raidMoment?.clear(); this.needsPaint = true; return; }
       // Static states need a refresh for newly loaded assets, not continuous animation.
       if (!running && !this.needsPaint && t - (this.lastStaticPaint || 0) < 500) return;
       this.lastStaticPaint = t;

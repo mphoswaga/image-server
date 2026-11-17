@@ -26,11 +26,13 @@ test('personal feedback, next question and a private colony watch view',async({p
  await page.evaluate(()=>{nextState.round=3;nextState.freeBuild=true;nextState.questionNumber=1;pushState(structuredClone(nextState));});
  await expect(page.locator('#roundLabel')).toContainText('KEEP BUILDING · QUESTIONS COMPLETE');
  await expect(page.locator('#choices [data-choice]').first()).toBeEnabled();
- await page.evaluate(()=>{nextState.phase='raidWatching';nextState.raid={event:{id:'raid-test',attackerName:'Mia',targetName:'Noah',success:true},remaining:8000};pushState(structuredClone(nextState));});
+ await page.evaluate(()=>{nextState.phase='raidWatching';nextState.raid={event:{id:'raid-test',attacker:'a',target:'b',attackerName:'Mia',targetName:'Noah',success:true},remaining:8000};pushState(structuredClone(nextState));});
  await expect(page.locator('#question')).toHaveText('Mia raids Noah');
+ await expect(page.locator('.raid-story')).toBeVisible();
  await page.evaluate(()=>{nextState.raid.remaining=1000;pushState(structuredClone(nextState));});
  await expect(page.locator('#question')).toHaveText('Mia wins the raid!');
  await page.evaluate(()=>{nextState.phase='spectating';nextState.spectators=[{id:'b',name:'Noah',round:1,finished:false}];pushState(structuredClone(nextState));});
+ await expect(page.locator('.raid-story')).toBeHidden();
  await expect(page.locator('#question')).toHaveText('Your questions are complete!');
  await page.locator('#watchColony').selectOption('b');
  expect(await page.evaluate(()=>window.lastCommand)).toMatchObject({type:'watch',target:'b',matchId:'match'});

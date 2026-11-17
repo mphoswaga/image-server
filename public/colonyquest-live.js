@@ -30,6 +30,7 @@
     lastBeep = '',
     actionCue = null,
     watchingId = null,duelView=null;
+  const raidStory = host ? null : new ColonyRaidStory();
   const soundtrack = new ColonyMusic((track) => {
     $('musicTrackLabel').textContent = `${track.title} — ${track.artist}`;
   });
@@ -157,7 +158,7 @@
   }
   function clock() {
     if (!state) return;
-    duelView?.clock(Date.now()+offset);const paused = state.phase === 'paused';
+    raidStory?.clock();duelView?.clock(Date.now()+offset);const paused = state.phase === 'paused';
     const sec = paused
       ? Math.ceil((state.remaining || 0) / 1000)
       : Math.max(0, Math.ceil((state.deadline - (Date.now() + offset)) / 1000));
@@ -223,6 +224,7 @@
   function setState(next) {
     const prior = state;
     state = next;
+    raidStory?.sync(next);
     if(next.phase==='paused'||next.phase==='ended'||(next.phase==='story'&&next.story?.key==='intro'))actionVoice.stop();
     if(!host&&prior&&next.me?.lastUpgrade&&JSON.stringify(next.me.lastUpgrade)!==JSON.stringify(prior.me?.lastUpgrade)){actionVoice.play(next.me.lastUpgrade.key);if(next.me.lastUpgrade.key!=='raid')chime(740);}
     if((host||next.preview)&&next.phase==='story'&&next.story?.key==='intro'){const chapter=openingChapter(next.story.elapsed);openingVoice.sync(openingChapters[chapter.index].src,next.id+':intro:'+chapter.index,chapter.position);}else openingVoice.stop();
