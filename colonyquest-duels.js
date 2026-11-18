@@ -320,8 +320,10 @@ module.exports = function install(ColonyMatch) {
       );
       if (unavailable) {
         pair.deadline += delta;
-        if (pair.raid) pair.raid.until += delta;
-        if (pair.raid) continue;
+        if (pair.raid && members.some((p) => !p.removed && p.teacherPaused)) {
+          pair.raid.until += delta;
+          continue;
+        }
       }
       if (!pair.queue && !pair.raid && now < pair.deadline)
         for (const p of members)

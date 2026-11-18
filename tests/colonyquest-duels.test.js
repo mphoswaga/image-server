@@ -51,6 +51,7 @@ test("raid starts while the rival answers and restores the remaining question ti
   m.upgrade(a.id, 0, "raid", b.id, 5200);
   assert.equal(a.phase, "duelWait");
   assert.equal(m.state.events.filter((e) => e.kind === "raid").length, 0);
+  const remaining = b.deadline - 6000;
   m.tick(6000);
   assert.equal(b.phase, "duelRaid");
   const pair = m.state.duels.pairs[0];
@@ -66,7 +67,7 @@ test("raid starts while the rival answers and restores the remaining question ti
   m.tick(until);
   assert.equal(a.phase, "answer");
   assert.equal(b.phase, "answer");
-  assert.equal(b.deadline, until + 19000);
+  assert.equal(b.deadline, until + remaining);
   assert.equal(m.state.events.filter((e) => e.kind === "raid").length, 1);
 });
 test("duel transitions continue immediately and preserve saved results",()=>{
@@ -104,6 +105,27 @@ test("connected learners continue when their rival disconnects",()=>{
  assert.equal(a.phase,'answer');assert.equal(a.deadline,deadline);
  assert.ok(m.snapshot(a.id,false,16000).question);
  m.answer(a.id,0,0,17000);assert.equal(a.phase,'upgrade');
+});
+
+test("a rival disconnecting during a raid does not block question eleven", () => {
+  const { m, a, b } = room();
+  a.round = 9;
+  a.colony.soldiers = 3;
+  b.colony.food = 30;
+  m.answer(a.id, 9, 0, 5100);
+  m.upgrade(a.id, 9, "raid", b.id, 5200);
+  m.tick(6000);
+  const pair = m.state.duels.pairs[0];
+  const until = pair.raid.until;
+  b.connected = false;
+  m.tick(7000);
+  m.tick(until);
+  const view = m.snapshot(a.id, false, until);
+  assert.equal(view.phase, "answer");
+  assert.equal(view.round, 10);
+  assert.equal(view.question.question, "Q10");
+  m.answer(a.id, 10, 0, until + 100);
+  assert.equal(a.phase, "upgrade");
 });
 
 test("duel expiry starts the next opponent round without waiting",()=>{

@@ -156,9 +156,27 @@
     if (w.dryOccurred) return 'Dry season · feed your workers';
     return 'Gathering season · store 12 food for the drought';
   }
+  const reportedPresentationErrors = new Set();
+  function present(part, update, recover) {
+    try {
+      update();
+    } catch (cause) {
+      if (!reportedPresentationErrors.has(part)) {
+        reportedPresentationErrors.add(part);
+        console.warn('Colony Quest presentation: ' + part, cause);
+      }
+      recover?.();
+    }
+  }
+  function hideRaidStory() {
+    if (raidStory) raidStory.node.hidden = true;
+    document.body.classList.remove('raid-story-active');
+  }
   function clock() {
     if (!state) return;
-    raidStory?.clock();duelView?.clock(Date.now()+offset);const paused = state.phase === 'paused';
+    present('raid story', () => raidStory?.clock(), hideRaidStory);
+    present('duel clock', () => duelView?.clock(Date.now() + offset));
+    const paused = state.phase === 'paused';
     const sec = paused
       ? Math.ceil((state.remaining || 0) / 1000)
       : Math.max(0, Math.ceil((state.deadline - (Date.now() + offset)) / 1000));
@@ -175,7 +193,7 @@
       const key = state.id + ':' + state.round + ':' + sec;
       if (key !== lastBeep) {
         lastBeep = key;
-        chime(450 + sec * 100);
+        present('timer sound', () => chime(450 + sec * 100));
       }
     }
   }
@@ -224,28 +242,32 @@
   function setState(next) {
     const prior = state;
     state = next;
-    raidStory?.sync(next);
-    if(next.phase==='paused'||next.phase==='ended'||(next.phase==='story'&&next.story?.key==='intro'))actionVoice.stop();
-    if(!host&&prior&&next.me?.lastUpgrade&&JSON.stringify(next.me.lastUpgrade)!==JSON.stringify(prior.me?.lastUpgrade)){actionVoice.play(next.me.lastUpgrade.key);if(next.me.lastUpgrade.key!=='raid')chime(740);}
-    if((host||next.preview)&&next.phase==='story'&&next.story?.key==='intro'){const chapter=openingChapter(next.story.elapsed);openingVoice.sync(openingChapters[chapter.index].src,next.id+':intro:'+chapter.index,chapter.position);}else openingVoice.stop();
+    offset = next.serverNow - Date.now();
+    if (!host) renderLearner();
+    present('raid story', () => raidStory?.sync(next), hideRaidStory);
+    present('duel view', () => {
+      if(next.duel){duelView ||= new ColonyDuelView(host);duelView.sync(next,sound,Number($('musicVolume').value)/100);}else duelView?.hide();
+    }, () => present('duel cleanup', () => duelView?.hide()));
+    present('colony scene', () => updateScene(next));
+    clock();
     $('openingVoice').hidden=!host&&!next.preview;
     document.querySelector('.top-actions > small').hidden=!host&&!next.preview;
-    offset = next.serverNow - Date.now();
-    if(next.duel){duelView ||= new ColonyDuelView(host);duelView.sync(next,sound,Number($('musicVolume').value)/100);}else duelView?.hide();updateScene(next);
-    syncMusic();
-    clock();
-    eventAudio.update(next, prior, host);
+    present('game audio', () => {
+      if(next.phase==='paused'||next.phase==='ended'||(next.phase==='story'&&next.story?.key==='intro'))actionVoice.stop();
+      if(!host&&prior&&next.me?.lastUpgrade&&JSON.stringify(next.me.lastUpgrade)!==JSON.stringify(prior.me?.lastUpgrade)){actionVoice.play(next.me.lastUpgrade.key);if(next.me.lastUpgrade.key!=='raid')chime(740);}
+      if((host||next.preview)&&next.phase==='story'&&next.story?.key==='intro'){const chapter=openingChapter(next.story.elapsed);openingVoice.sync(openingChapters[chapter.index].src,next.id+':intro:'+chapter.index,chapter.position);}else openingVoice.stop();
+      syncMusic();
+      eventAudio.update(next, prior, host);
+      if (!host && prior?.phase === 'answer' && ['upgrade','reveal'].includes(next.phase)) chime(next.me?.correct ? 880 : 330);
+    });
     if (next.phase === 'ended') {
-      window.ColonyCelebration?.multiplayer(next);
+      present('celebration', () => window.ColonyCelebration?.multiplayer(next));
       if (prior?.phase !== 'ended') {
         chime(660);
         setTimeout(() => chime(880), 180);
         setTimeout(() => chime(1100), 360);
       }
     }
-    if (host) return;
-    if (prior?.phase === 'answer' && ['upgrade','reveal'].includes(next.phase)) chime(next.me?.correct ? 880 : 330);
-    renderLearner();
   }
   function submit(message) {
     if (
@@ -261,6 +283,7 @@
       round: state.round,
       commandId: crypto.randomUUID(),
     };
+    pending.sentAt = Date.now();
     socket.send(JSON.stringify(pending));
     renderKey = '';
     renderLearner();
@@ -863,6 +886,11 @@
     setInterval(() => {
       if (socket?.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({ type: 'ping' }));
+        // Retry the same idempotent choice if its acknowledgement was lost.
+        if (pending && Date.now() - pending.sentAt >= 5000) {
+          pending.sentAt = Date.now();
+          socket.send(JSON.stringify(pending));
+        }
         if (Date.now() - lastReceived > 18000) socket.close();
       }
     }, 5000);
