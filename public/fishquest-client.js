@@ -375,13 +375,17 @@
       }
     }
     for(const [index,b] of bubbles.entries()) {
-      b.sprite.setVisible(!lightEffects||index<18);
       if(lightEffects&&index>=18)continue;
       b.y-=b.speed*dt;
       if(b.y < -12) b.y=1612;
-      b.sprite.setPosition(b.x+Math.sin(t*.55+b.phase)*15,b.y);
+      const visible=inView(b.x,b.y);
+      b.sprite.setVisible(visible);
+      if(visible)b.sprite.setPosition(b.x+Math.sin(t*.55+b.phase)*15,b.y);
     }
-    for(const [id,f] of foods) if(f.visible && inView(f.foodX,f.foodY)) {
+    for(const [id,f] of foods) {
+      const visible=f.available&&inView(f.foodX,f.foodY);
+      f.setVisible(visible);
+      if(!visible||lightEffects)continue;
       const phase=t*1.8+Number(id)*2.3;
       f.rotation=Math.sin(phase)*.16;
       f.setPosition(f.foodX+Math.sin(phase*.7)*2,f.foodY+Math.sin(phase)*3);
@@ -415,9 +419,9 @@
     for (const [id, e] of entities) if (!seen.has(id)) { e.sprite.destroy(); e.label.destroy(); entities.delete(id); }
     const incremental=state.foodDelta&&foods.size>0;
     const foodSeen = new Set();
-    for (const [id, x, y] of (incremental?state.foodDelta.upsert:state.food)) { foodSeen.add(id); let f = foods.get(id); if (!f) { f = scene.add.image(x,y,planktonTexture(id%3)).setScale(.34); foods.set(id,f); } f.foodX=x; f.foodY=y; f.setVisible(true); }
-    if(incremental){for(const id of state.foodDelta.remove)foods.get(id)?.setVisible(false);}
-    else for (const [id,f] of foods) if (!foodSeen.has(id)) f.setVisible(false);
+    for (const [id, x, y] of (incremental?state.foodDelta.upsert:state.food)) { foodSeen.add(id); let f = foods.get(id); if (!f) { f = scene.add.image(x,y,planktonTexture(id%3)).setScale(.34); foods.set(id,f); } f.foodX=x; f.foodY=y; f.available=true; f.setPosition(x,y).setVisible(inView(x,y)); }
+    if(incremental){for(const id of state.foodDelta.remove){const f=foods.get(id);if(f){f.available=false;f.setVisible(false);}}}
+    else for (const [id,f] of foods) if (!foodSeen.has(id)){f.available=false;f.setVisible(false);}
     const labelPlayers=[...entities.values()].map(e=>({id:e.id,npc:e.npc,x:e.tx,y:e.ty,connected:e.connected,respawning:e.respawning}));
     const visibleLabels=FishQuestMotion.visibleLabels(labelPlayers,state.me,innerWidth<600?3:6,innerWidth<600?2:3);
     for(const e of entities.values()) {
@@ -433,17 +437,24 @@
     const t=oceanTime;
     if(dt>0&&!document.hidden){
       if(scene.game.loop.delta>28){slowSeconds+=dt;fastSeconds=0;}else{fastSeconds+=dt;slowSeconds=Math.max(0,slowSeconds-dt);}
-      if(slowSeconds>2)lightEffects=true;if(fastSeconds>10)lightEffects=false;
+      if(slowSeconds>2&&!lightEffects){
+        lightEffects=true;
+        for(const [index,b] of bubbles.entries())if(index>=18)b.sprite.setVisible(false);
+        for(const f of foods.values())f.setPosition(f.foodX,f.foodY).setRotation(0).setScale(.34);
+      }
+      if(fastSeconds>10)lightEffects=false;
     }
     decorationElapsed+=dt;
-    if(!lightEffects||decorationElapsed>=1/24){animateOcean(decorationElapsed,t);decorationElapsed=0;}
+    if(!bubbles.length||decorationElapsed>=(lightEffects?1/15:1/30)){animateOcean(decorationElapsed,t);decorationElapsed=0;}
+    const frameTime=performance.now(),sampleTime=movementClock.render(frameTime);
     for (const e of entities.values()) {
       const visible=inView(e.sprite.x,e.sprite.y,200)||e.id===state.me;
+      e.sprite.setVisible(visible);
       if(!visible){e.sprite.setPosition(e.tx,e.ty);e.label.setPosition(e.tx,e.ty-e.labelOffset*e.scale);continue;}
       e.halo.setAlpha(reducedMotion?.8:.65+Math.sin(t*2.5)*.2);
-      const bite=Math.max(0,(e.biteUntil-performance.now())/650);
+      const bite=Math.max(0,((e.biteUntil||0)-frameTime)/650);
       e.mouth.setVisible(bite>0).setScale(1,Math.max(.1,Math.sin(bite*Math.PI))).setX(65*FISH_STAGE_STYLE[e.stage].body);
-      const target=e.locked?{x:e.tx,y:e.ty}:FishQuestMotion.sample(e.samples,movementClock.render(performance.now())) || {x:e.tx,y:e.ty};
+      const target=e.locked?{x:e.tx,y:e.ty}:FishQuestMotion.sample(e.samples,sampleTime) || {x:e.tx,y:e.ty};
       const dx=target.x-e.sprite.x,dy=target.y-e.sprite.y,speed=Math.min(1,Math.hypot(dx,dy)/16);
       if(Math.abs(dx)>.8) e.facing=dx>0?1:-1;
       e.sprite.x+=dx*follow; e.sprite.y+=dy*follow;

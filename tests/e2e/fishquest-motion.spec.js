@@ -39,6 +39,13 @@ for(const solo of [false,true]) test(`a ${solo?'single-player':'class'} ocean re
   });
   expect(labelCounts.own).toBe(1);
   expect(labelCounts.visible).toBeLessThanOrEqual(7);
+  const plankton = await page.evaluate(() => {
+    const pellets=motionGame.scene.scenes[0].children.list.filter(object=>object.texture?.key?.startsWith('plankton-'));
+    return {total:pellets.length,visible:pellets.filter(object=>object.visible).length};
+  });
+  expect(plankton.total).toBe(871);
+  expect(plankton.visible).toBeGreaterThan(0);
+  expect(plankton.visible).toBeLessThan(plankton.total);
   const before = await canvas.screenshot();
   const stats = await sharp(before).stats();
   expect(stats.channels.some(channel => channel.stdev > 15)).toBeTruthy();
