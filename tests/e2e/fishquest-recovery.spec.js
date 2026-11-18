@@ -22,7 +22,8 @@ test('FishQuest updates paused questions and recovers a silent connection withou
     window.testState={matchId:'match',phase:'running',me:'me',now:Date.now(),endsAt:Date.now()+600000,
       players:[{id:'me',name:'Learner',mass:100,score:0,variant:0}],food:[],world:{width:2400,height:1600},
       question:{id:'question',prompt:'Choose yes',options:['Yes','No'],expiresAt:Date.now()+30000}};
-    window.testSockets[0].receive(window.testState);
+    const {players,...state}=window.testState;
+    window.testSockets[0].receive({...state,playerRows:FishQuestPlayerPacket.pack(players)});
   });
   await expect(page.locator('#prompt')).toHaveText('Choose yes');
   await expect(page.locator('#rivalry')).toBeHidden();

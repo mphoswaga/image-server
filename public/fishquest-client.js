@@ -215,13 +215,13 @@
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const current = socket = new WebSocket(`${protocol}//${location.host}/ws/fishquest`);
     lastStateAt = Date.now();
-    current.onopen = () => { if (socket === current) current.send(JSON.stringify({ type: 'auth', token: ticket, foodDeltas: true })); };
+    current.onopen = () => { if (socket === current) current.send(JSON.stringify({ type: 'auth', token: ticket, foodDeltas: true, compactPlayers: 1 })); };
     current.onerror = () => { if (socket === current) current.close(); };
     current.onmessage = event => {
       if (socket !== current) return;
       let m; try { m = JSON.parse(event.data); } catch { return; }
       if (!m || typeof m !== 'object') return;
-      if (m.type === 'state' && m.state && Array.isArray(m.state.players)) {
+      if (m.type === 'state' && m.state && (Array.isArray(m.state.players) || Array.isArray(m.state.playerRows))) {
         lastStateAt = Date.now(); reconnects = 0;
         serverOffset = Number.isFinite(m.state.now) ? m.state.now - Date.now() : 0;
         apply(m.state);
@@ -241,11 +241,16 @@
     };
   }
   function apply(next) {
+    if(Array.isArray(next.playerRows))next.players=FishQuestPlayerPacket.unpack(next.playerRows);
     if(next.foodDelta){
-      const food=new Map((state?.food||[]).map(row=>[row[0],row]));
-      for(const id of next.foodDelta.remove)food.delete(id);
-      for(const row of next.foodDelta.upsert)food.set(row[0],row);
-      next.food=[...food.values()];
+      const {remove,upsert}=next.foodDelta;
+      if(!remove.length&&!upsert.length)next.food=state?.food||[];
+      else {
+        const food=new Map((state?.food||[]).map(row=>[row[0],row]));
+        for(const id of remove)food.delete(id);
+        for(const row of upsert)food.set(row[0],row);
+        next.food=[...food.values()];
+      }
     }
     const previousMe = state && me ? { id: me.id, mass: Number(me.mass) || 0, score: Number(me.score) || 0 } : null;
     const previousPhase = state && state.phase;

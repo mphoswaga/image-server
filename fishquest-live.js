@@ -1,4 +1,5 @@
 const foodDelta = require('./fishquest-food-delta');
+const playerPacket = require('./public/fishquest-player-packet');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -137,7 +138,12 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
   }
   function sendState(ws,state){
     const packet=foodDelta.prepare(ws,state);
-    if(send(ws,{type:'state',state:packet.state}))packet.commit();
+    let payload=packet.state;
+    if(ws.compactPlayers){
+      const {players,...rest}=payload;
+      payload={...rest,playerRows:playerPacket.pack(players)};
+    }
+    if(send(ws,{type:'state',state:payload}))packet.commit();
   }
   function broadcast(matchKey) {
     const match = matches.get(matchKey) || getMatch(matchKey);
@@ -270,6 +276,7 @@ function createFishQuestLive({ app, games, roster, requireAuth, requireGameAcces
             clients.get(matchKey).add(ws);
             for (const old of clients.get(matchKey)) if (old !== ws && old.playerId === p.id) { old.replaced = true; old.close(4002, 'Opened on another device'); }
             ws.foodDeltas = message.foodDeltas === true;
+            ws.compactPlayers = message.compactPlayers === 1;
             sendState(ws, match.snapshot(p.id));
           } catch { ws.close(4003, 'Join the room again'); }
           return;

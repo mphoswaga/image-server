@@ -11,6 +11,7 @@ const WebSocket = require('ws');
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'fq-transport-'));
 process.env.DATA_DIR = temp;
 const { createFishQuestLive } = require('../fishquest-live');
+const playerPacket = require('../public/fishquest-player-packet');
 
 test('30 real connections survive invalid messages, replacement, pause and resume', { timeout:40000 }, async t => {
   const game={id:'live-test',teacherId:'owner',fishquest:{durationMinutes:10,lateJoin:true},questions:[{question:'Yes?',options:['Yes','No'],correctIndex:0}]};
@@ -27,15 +28,18 @@ test('30 real connections survive invalid messages, replacement, pause and resum
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   const match=live.openMatch(game),url=`ws://127.0.0.1:${server.address().port}/ws/fishquest`;
-  async function join(studentId){
+  async function join(studentId,compactPlayers=1){
     const ws=new WebSocket(url);sockets.push(ws);ws.states=[];
-    ws.on('message',raw=>{const m=JSON.parse(raw);if(m.type==='state')ws.states.push(m.state);});
+    ws.on('message',raw=>{const m=JSON.parse(raw);if(m.type==='state'){
+      if(m.state.playerRows)m.state.players=playerPacket.unpack(m.state.playerRows);
+      ws.states.push(m.state);
+    }});
     await once(ws,'open');
     const first=once(ws,'message');
-    ws.send(JSON.stringify({type:'auth',token:jwt.sign({type:'fishquest',gameId:game.id,studentId,name:studentId},'test-secret')}));
+    ws.send(JSON.stringify({type:'auth',compactPlayers,foodDeltas:compactPlayers===1,token:jwt.sign({type:'fishquest',gameId:game.id,studentId,name:studentId},'test-secret')}));
     await first;return ws;
   }
-  const learners=await Promise.all(Array.from({length:30},(_,i)=>join(`S${i}`)));
+  const learners=await Promise.all(Array.from({length:30},(_,i)=>join(`S${i}`,i===29?0:1)));
   match.start();
   for(const [i,ws] of learners.entries()){
     ws.send('null');ws.send('[]');ws.send('{broken');
@@ -43,6 +47,12 @@ test('30 real connections survive invalid messages, replacement, pause and resum
   }
   await new Promise(resolve=>setTimeout(resolve,350));
   for(const ws of learners){assert.equal(ws.readyState,WebSocket.OPEN);assert.equal(ws.states.at(-1).phase,'running');assert.equal(ws.states.at(-1).players.length,30);}
+  const compact=learners[0].states.at(-1);
+  const legacy=learners[29].states.at(-1);
+  assert.ok(compact.playerRows);
+  assert.equal(legacy.playerRows,undefined);
+  assert.deepEqual(compact.players.map(p=>p.id),legacy.players.map(p=>p.id));
+  assert.ok(Buffer.byteLength(JSON.stringify(compact.playerRows))<Buffer.byteLength(JSON.stringify(legacy.players))*.4);
   const closed=once(learners[0],'close'),replacement=await join('S0');
   assert.equal((await closed)[0],4002);
   await new Promise(resolve=>setTimeout(resolve,150));
