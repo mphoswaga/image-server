@@ -1,4 +1,6 @@
-# FishQuest multiplayer: ongoing challenges
+# FishQuest: race to Whale and ocean challenges
+
+In a live class match, the first learner to reach Whale (800 size) ends the game for everyone. The winner takes first place; the remaining fish are ranked by final size, with points breaking size ties. The results show the top three, and More reveals every learner's final fish level. The timer and teacher end still apply if nobody reaches Whale.
 
 Whales begin at 800 size and keep that form (hunger never takes a whale below 800). Two connected, unoccupied whales within 150 world units receive the same question. Each submits independently, receives 75 game points for a correct answer, and returns to swimming immediately. Both can win; speed is not scored. An answered challenge starts a 15-second challenge cooldown. The crown marks whales with the highest positive count of correct whale/pearl challenges, including ties.
 

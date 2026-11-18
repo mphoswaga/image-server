@@ -27,6 +27,60 @@ test('shared broadcast work preserves private questions and personal results', (
   assert.ok(a.question);assert.equal(b.question.canAnswer,false);assert.equal(shared.question,undefined);
 });
 
+test('the first learner to reach Whale by feeding or answering wins immediately', () => {
+  const growth = require('../public/fishquest-growth');
+  for(const method of ['plankton','swallow','pearl']){
+    const {match,a,b,c}=fixture();
+    a.mass=method==='swallow'?740:799;
+    b.mass=method==='swallow'?250:799.9;
+    b.score=1000;
+    Object.assign(a,{x:500,y:500});
+    Object.assign(b,{x:2500,y:1200});
+    c.x=2000;
+    c.nextPearlAt=0;
+    match.state.food=[];
+    match.tick();
+    const pending=match.state.interactions.find(item=>item.attacker===c.id);
+    assert.ok(pending);
+    if(method==='plankton'){
+      match.state.food=[{id:0,x:a.x,y:a.y,readyAt:0},{id:1,x:a.x,y:a.y,readyAt:0}];
+      match.tick();
+      assert.equal(a.collections,1);
+      assert.equal(match.state.food[1].readyAt,0);
+    }else if(method==='swallow'){
+      Object.assign(b,{x:a.x,y:a.y});
+      const meal=match.claim(a,b);
+      assert.ok(meal);
+      match.answer(a.id,{interactionId:meal.id,choice:1});
+    }else{
+      a.nextPearlAt=0;
+      match.tick();
+      const pearl=match.snapshot(a.id).question;
+      assert.equal(pearl.kind,'pearl');
+      match.answer(a.id,{interactionId:pearl.id,choice:1});
+    }
+    assert.equal(match.state.reason,'whale');
+    assert.equal(pending.answers[c.id].outcome,'cancelled');
+    assert.equal(match.education(c).answered,0);
+    for(const view of [match.snapshot(a.id),match.snapshot(b.id),match.snapshot(null,true)]){
+      assert.equal(view.phase,'ended');
+      assert.equal(view.winnerId,a.id);
+      assert.equal(view.question,undefined);
+      assert.equal(growth.standings(view)[0].id,a.id);
+    }
+  }
+});
+
+test('solo play can reach Whale and continue', () => {
+  const {match,a}=fixture();
+  match.state.solo=true;
+  a.mass=799;
+  match.state.food=[{id:0,x:a.x,y:a.y,readyAt:0}];
+  match.tick();
+  assert.ok(a.mass>=800);
+  assert.equal(match.state.phase,'running');
+});
+
 test('hunger shrinks size after two active minutes, pauses during questions and resets on eating', () => {
   const f=fixture(); for(const p of f.match.state.players)p.nextPearlAt=Infinity; f.match.state.food=[]; f.a.mass=850;f.a.x=100;f.b.x=1000;f.c.x=2000;
   for(let i=0;i<1199;i++){f.advance(100);f.match.tick();}
@@ -125,6 +179,7 @@ test('larger prey gives a visibly larger growth reward', () => {
 
 test('timeout, disconnect and teacher end cannot leave a learner locked', () => {
   const f=fixture();f.a.mass=200;f.b.mass=100;f.a.x=f.b.x=900;f.a.y=f.b.y=700;
+  f.match.state.food=[];
   let interaction=f.match.claim(f.a,f.b);f.advance(CONFIG.questionMs+1);f.match.tick();
   assert.equal(interaction.status,'timeout');assert.equal(f.a.lock,null);assert.equal(f.b.lock,null);
   f.advance(CONFIG.cooldownMs+CONFIG.escapeMs+1);interaction=f.match.claim(f.a,f.b);assert.ok(interaction);
@@ -266,7 +321,7 @@ test('FishQuest teacher computer has optional upbeat music and bubble event soun
   const client = fs.readFileSync(path.join(__dirname, '..', 'public', 'fishquest-teacher.js'), 'utf8');
   assert.match(page, /id="teacherMusic"/);
   assert.match(page, /id="teacherBubbles"/);
-  assert.match(page, /fishquest-teacher\.js\?v=3/);
+  assert.match(page, /fishquest-teacher\.js\?v=\d+/);
   assert.match(client, /ls-fishquest-teacher-audio-v1/);
   assert.match(client, /function scheduleMusic/);
   assert.match(client, /function playWinnerCelebration/);

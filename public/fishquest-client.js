@@ -254,6 +254,9 @@
     optionalEffect('rivalry', () => FishQuestRivalry.update(state,me));
     if (!scene && !rendererStarting) startRenderer();
     setLabel('mass',me.mass);setLabel('score',me.score);setLabel('fishForm',fishEvolutionName(fishEvolution(me.mass)));setLabel('connection',state.solo?'Homework ocean · computer fish':'Live with your class');
+    const hint=document.querySelector('.growth-hint');
+    const growthHint=state.solo?'Pearls help you grow · Whales can duel.':'Pearls help you grow · First to Whale wins!';
+    if(hint.textContent!==growthHint)hint.textContent=growthHint;
     $('teacherWait').hidden = state.phase !== 'lobby'; $('teacherPause').hidden = state.phase !== 'paused';
     if (state.phase === 'ended') {
       syncMusic();
@@ -506,12 +509,14 @@
     $('resultSaveStatus').textContent = state.resultsSaved ? 'Your learning results have been saved.' : 'Saving your learning results. Please keep this page open.';
     if (state.resultsSaved && socket && socket.readyState === WebSocket.OPEN) socket.close();
     show('ended');
-    const order=[...state.players].sort((a,b)=>b.score-a.score||b.mass-a.mass||String(a.name).localeCompare(String(b.name)));
-    const place=order.findIndex(p=>p.id===state.me)+1, winner=order[0], p=state.personal||{};
-    const tiedWinners=winner?order.filter(item=>item.score===winner.score&&item.mass===winner.mass):[];
+    const order=FishQuestGrowth.standings(state);
+    const place=order.find(p=>p.id===state.me)?.place, winner=order[0], p=state.personal||{};
+    const tiedWinners=order.filter(item=>item.place===1);
     const meWon=tiedWinners.some(item=>item.id===state.me);
     $('endTitle').textContent=meWon?'You won FishQuest!':'Ocean game finished!';
-    if(tiedWinners.length>1){
+    if(state.winnerId&&winner){
+      $('winnerLine').textContent=meWon?'You reached Whale first!':`${winner.name} reached Whale first and won!`;
+    }else if(tiedWinners.length>1){
       $('winnerLine').textContent=meWon?'You share first place!':`${tiedWinners.map(item=>item.name).join(' and ')} share first place.`;
     }else if(winner){
       $('winnerLine').textContent=winner.id===state.me?'You are the winner!':`${winner.name} won this game.`;

@@ -1,6 +1,7 @@
 // Independent answers: neither speed nor an opponent's answer changes a learner's mark.
 const crypto=require('crypto');
-const WHALE=800, COOLDOWN=15000, PEARL_INTERVAL=45000;
+const {WHALE}=require('./public/fishquest-growth');
+const COOLDOWN=15000, PEARL_INTERVAL=45000;
 function available(p,t){return !p.npc&&p.connected&&!p.removed&&!p.lock&&!p.respawnAt&&(p.challengeUntil||0)<=t;}
 function start(match,players,kind){
  const t=match.now(),questionIndex=match.question(players[0]);
@@ -23,6 +24,7 @@ function settle(match,i,id,outcome,choice=-1){
   }
  }
  if(i.participants.every(id=>i.answers[id])){i.status='complete';i.finishedAt=t;}
+ if(p&&outcome==='correct'&&i.kind==='pearl'&&match.checkWhaleWin(p))return;
  match.save();
 }
 function resolve(match,i,outcome){for(const id of i.participants)settle(match,i,id,outcome);}

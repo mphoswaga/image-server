@@ -7,20 +7,33 @@ const FISH_STAGE_STYLE={
     orca:{body:.56,tail:.35,fin:.32,tailX:-30,finX:0,finY:12,label:46},
     whale:{body:.60,tail:.38,fin:.34,tailX:-32,finX:0,finY:12,label:48},
   };
+  const WHALE=800;
   function fishEvolution(mass) {
     const size=Number(mass)||100;
-    return size>=800?'whale':size>=650?'orca':size>=450?'shark':size>=280?'hunter':size>=160?'reef':'minnow';
+    return size>=WHALE?'whale':size>=650?'orca':size>=450?'shark':size>=280?'hunter':size>=160?'reef':'minnow';
   }
   function fishEvolutionName(stage) {
     return ({minnow:'quick minnow',reef:'reef fish',hunter:'ocean hunter',shark:'shark',orca:'orca',whale:'whale'})[stage]||'fish';
   }
 function fishScale(mass){return Math.min(1.85,Math.pow(Math.max(100,Number(mass)||100)/100,.28));}
-  const thresholds=[100,160,280,450,650,800];
+  const thresholds=[100,160,280,450,650,WHALE];
   function progress(mass){
     const n=Math.max(100,Number(mass)||100),next=thresholds.find(x=>x>n);
     if(!next)return {fraction:1,next:null};
     const previous=thresholds[thresholds.indexOf(next)-1];
     return {fraction:(n-previous)/(next-previous),next};
   }
-  return {style:FISH_STAGE_STYLE,evolution:fishEvolution,name:fishEvolutionName,scale:fishScale,progress};
+  function standings(state){
+    const winner=state.winnerId;
+    const compare=(a,b)=>winner
+      ? Number(b.id===winner)-Number(a.id===winner)||b.mass-a.mass||b.score-a.score
+      : b.score-a.score||b.mass-a.mass;
+    const order=[...(state.standings||state.players)].sort((a,b)=>compare(a,b)||String(a.name).localeCompare(String(b.name)));
+    let place=0;
+    return order.map((p,index)=>{
+      if(!index||compare(order[index-1],p)!==0)place=index+1;
+      return {...p,place};
+    });
+  }
+  return {WHALE,style:FISH_STAGE_STYLE,evolution:fishEvolution,name:fishEvolutionName,scale:fishScale,progress,standings};
 });

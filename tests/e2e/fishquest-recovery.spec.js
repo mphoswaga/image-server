@@ -88,7 +88,47 @@ test('FishQuest names the winner while showing only the learner own result', asy
   await expect(page.locator('#endFacts')).toContainText('3/4');
   await expect(page.locator('#endFacts')).toContainText('17');
   await expect(page.locator('#ended')).not.toContainText('200 points');
+  await page.evaluate(() => {
+    window.testSockets[0].receive({
+      matchId:'whale-match',phase:'ended',resultsSaved:true,me:'me',now:Date.now(),
+      winnerId:'winner',food:[],world:{width:2400,height:1600},
+      players:[
+        {id:'me',name:'Lebo',mass:180,score:125},
+        {id:'winner',name:'Amina',mass:800,score:200},
+        {id:'third',name:'Ben',mass:500,score:300},
+        {id:'second',name:'Cara',mass:700,score:400},
+      ],
+    });
+  });
+  await expect(page.locator('#winnerLine')).toHaveText('Amina reached Whale first and won!');
+  await expect(page.locator('#oceanPodium .podium-fish strong')).toHaveText(['Amina','Cara','Ben']);
+  await expect(page.locator('#oceanStandings')).toBeHidden();
+  await page.getByText('More · Everyone’s level').click();
+  await expect(page.locator('#oceanStandings li')).toHaveText([
+    '#1 Amina · whale · size 800','#2 Cara · orca · size 700',
+    '#3 Ben · shark · size 500','#4 Lebo · reef fish · size 180',
+  ]);
   await page.screenshot({ path: `/tmp/fishquest-ending-${testInfo.project.name}.png` });
+});
+
+test('teacher sees the Whale winner, top three and expandable class levels', async ({page}) => {
+  await page.route('**/fishquest/whale-race', route => route.fulfill({
+    path:require('node:path').join(__dirname,'../../public/fishquest-teacher.html'),
+  }));
+  await page.route('**/api/game/whale-race/fishquest', route => route.fulfill({json:{
+    game:{id:'whale-race',lessonTitle:'Whale race',roomCode:'WHALE',fishquest:{durationMinutes:5},questions:[]},
+    attendance:[],match:{phase:'ended',winnerId:'a',resultsSaved:true,education:[],players:[
+      {id:'a',name:'Amina',mass:800,score:10},{id:'b',name:'Ben',mass:650,score:20},
+      {id:'c',name:'Cara',mass:450,score:30},{id:'d',name:'Dara',mass:160,score:40},
+    ]},
+  }}));
+  await page.goto('/fishquest/whale-race');
+  await expect(page.locator('#winnerCallout')).toHaveText('Amina reached Whale first and won!');
+  await expect(page.locator('#leaderboard .fish span > b')).toHaveText(['Amina','Ben','Cara']);
+  await expect(page.locator('#allStandings')).toBeHidden();
+  await page.getByText('More · Everyone’s level').click();
+  await expect(page.locator('#allStandings .fish')).toHaveCount(4);
+  await expect(page.locator('#allStandings .fish').last()).toContainText('reef fish');
 });
 
 test('defender sees the shared question read-only and the respawn countdown', async ({ page }, testInfo) => {

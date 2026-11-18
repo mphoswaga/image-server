@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const challenges = require('./fishquest-challenges');
+const growth = require('./public/fishquest-growth');
 
 const CONFIG = Object.freeze({ width:2400, height:1600, initialMass:100, maxMass:900, eatRatio:1.18,
   foodCount:320, foodGrowth:4, fishGrowthRatio:.3, minimumFishGrowth:14, maximumFishGrowth:150, foodRespawnMs:4000, questionMs:30000, cooldownMs:4000,
@@ -76,6 +77,12 @@ class FishMatch {
     for(const p of this.state.players){p.dx=0;p.dy=0;}
     this.save();this.log('end',{reason});
   }
+  checkWhaleWin(player){
+    if(this.state.phase!=='running'||this.state.solo||player.npc||player.removed||player.mass<growth.WHALE)return false;
+    this.state.winnerId=player.id;
+    this.end('whale');
+    return true;
+  }
   disconnect(id){const p=this.player(id);if(!p)return;
     for(const i of this.state.interactions.filter(i=>i.status==='pending'&&(i.attacker===id||i.victim===id)))this.resolve(i,'cancelled');
     p.connected=false;p.dx=0;p.dy=0;this.save();this.log('disconnect',{playerId:id});
@@ -127,7 +134,8 @@ class FishMatch {
       a.mass=Math.min(CONFIG.maxMass,a.mass+fishGrowth);a.hungryMs=0;a.score+=75;a.swallows++;
       b.mass=b.npc?b.baseMass:Math.max(CONFIG.initialMass,b.mass*.6);b.respawnAt=t+CONFIG.respawnMs;b.dx=0;b.dy=0;
     }
-    this.save();this.log('swallow_resolved',{interactionId:i.id,outcome});
+    if(outcome!=='correct'||!this.checkWhaleWin(a))this.save();
+    this.log('swallow_resolved',{interactionId:i.id,outcome});
   }
   spawn(p){
     let best=this.point(),clearance=-Infinity;
@@ -173,6 +181,7 @@ class FishMatch {
       p.x=clamp(p.x+p.vx*dt,r,this.world.width-r);p.y=clamp(p.y+p.vy*dt,r,this.world.height-r);
       for(const f of this.state.food)if(f.readyAt<=t&&distance(p,f)<r+6){
         f.readyAt=t+CONFIG.foodRespawnMs;Object.assign(f,this.point());p.mass=Math.min(CONFIG.maxMass,p.mass+CONFIG.foodGrowth/Math.sqrt(p.mass/100));p.hungryMs=0;p.score++;p.collections++;
+        if(this.checkWhaleWin(p))return;
       }
     }
     for(const npc of this.state.players.filter(p=>p.npc&&!p.respawnAt))for(const p of this.state.players.filter(p=>!p.npc&&p.connected&&!p.respawnAt&&!p.lock)){
@@ -188,7 +197,11 @@ class FishMatch {
       protected:p.protectedUntil>t,respawning:!!p.respawnAt,locked:!!p.lock,biteAt:p.biteAt||0,hungry:(p.hungryMs||0)>=CONFIG.hungerWarningMs}));
     const result={matchId:this.state.id,phase:this.state.phase,solo:!!this.state.solo,endsAt:this.state.endsAt,pausedAt:this.state.pausedAt,now:t,players,world:this.world,eatRatio:CONFIG.eatRatio,
       food:shared ? shared.food : this.state.food.filter(f=>f.readyAt<=t).map(f=>[f.id,Math.round(f.x),Math.round(f.y)])};
-    if(this.state.phase==='ended')result.resultsSaved=!!this.state.resultsSavedAt;
+    if(this.state.phase==='ended'){
+      result.resultsSaved=!!this.state.resultsSavedAt;
+      result.winnerId=this.state.winnerId||null;
+      result.standings=this.state.players.filter(p=>!p.removed&&(!p.npc||this.state.solo)).map(p=>({id:p.id,name:p.name,score:p.score,mass:p.mass}));
+    }
     if(me){
       const interaction=this.state.interactions.find(i=>i.id===me.lock&&(i.attacker===id||i.victim===id)&&i.status==='pending');
       result.me=id;

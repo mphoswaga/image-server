@@ -29,15 +29,22 @@
     $('rivalry').hidden=state.phase!=='running'||!!state.question;
     if(state.phase==='ended'){
       const podium=$('oceanPodium');
-      if(podium.dataset.signature===next)return;
-      podium.dataset.signature=next;
-      podium.replaceChildren(...order.slice(0,3).map(p=>{
-        const place=1+order.filter(other=>other.score>p.score||(other.score===p.score&&other.mass>p.mass)).length;
+      const standings=FishQuestGrowth.standings(state);
+      const finalSignature=JSON.stringify(standings);
+      if(podium.dataset.signature===finalSignature)return;
+      podium.dataset.signature=finalSignature;
+      podium.replaceChildren(...standings.slice(0,3).map(p=>{
+        const place=p.place;
         const card=document.createElement('div');card.className='podium-fish';card.dataset.place=place;
         const name=document.createElement('strong');name.textContent=p.name;
-        const fish=document.createElement('span');fish.className='prize-fish';fish.textContent='🐠';fish.setAttribute('aria-hidden','true');
+        const fish=document.createElement('span');fish.className='prize-fish';fish.textContent=p.id===state.winnerId?'🐋':'🐠';fish.setAttribute('aria-hidden','true');
         const medal=document.createElement('b');medal.textContent=`#${place}`;
         card.append(name,fish,medal);return card;
+      }));
+      $('oceanStandings').replaceChildren(...standings.map(p=>{
+        const row=document.createElement('li');
+        row.textContent=`#${p.place} ${p.name} · ${FishQuestGrowth.name(FishQuestGrowth.evolution(p.mass))} · size ${Math.floor(p.mass)}`;
+        return row;
       }));
     }
   }
