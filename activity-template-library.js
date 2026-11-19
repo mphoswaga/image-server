@@ -6,6 +6,7 @@ const { normalizeAssessment } = require('./assignments');
 
 const presets = [
   { id: 'starter-codequest', versions: [require('./activity-templates/codequest-first-project')], starter: true },
+  { id: 'starter-codequest-stages', versions: [require('./activity-templates/codequest-stages')], starter: true },
   { id: 'starter-data', versions: [require('./activity-templates/data-handling-first-project'), require('./activity-templates/data-everyday-project')], starter: true },
 ];
 const directory = path.join(DATA_DIR, 'activity-templates');

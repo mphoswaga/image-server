@@ -9,7 +9,7 @@ function capture(previous, questions, answers, runs) {
     try {
       const result = code.grade(task.activity, run.program);
       const entry = evidence[task.id] ||= { tests: [] };
-      const key = JSON.stringify(code.answer(run.program));
+      const key = JSON.stringify(code.answer(run.program, task.activity));
       if (entry.tests.some(test => test.key === key) || entry.tests.length >= 30) continue;
       entry.tests.push({ key, success: result.execution.success, blocks: result.execution.blocks, reason: result.execution.reason });
     } catch {}

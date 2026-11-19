@@ -198,6 +198,36 @@
     $('learnerPreview').hidden = true;
     renderEditor();
   }
+  function renderStageChoices(group, section) {
+    const preset = records.find(item => item.id === 'starter-codequest-stages');
+    const available = preset?.versions.at(-1).sections[0].items || [];
+    const picker = element('fieldset');
+    picker.append(element('legend', 'Stages in this test'));
+    for (const stage of available) {
+      const label = element('label');
+      const input = element('input');
+      input.type = 'checkbox';
+      input.checked = section.items.some(task => task.id === stage.id);
+      input.setAttribute('aria-label', stage.prompt);
+      input.disabled = input.checked && section.items.length === 1;
+      input.onchange = () => {
+        if (input.checked) {
+          section.items.push(structuredClone(stage));
+          section.items.sort((a, b) => a.id.localeCompare(b.id));
+        } else {
+          section.items = section.items.filter(task => task.id !== stage.id);
+        }
+        dirty = true;
+        renderEditor(section.id);
+        $('editor').querySelectorAll('input[type="checkbox"]').forEach(control => {
+          if (control.getAttribute('aria-label') === stage.prompt) control.focus();
+        });
+      };
+      label.append(input, document.createTextNode(stage.prompt));
+      picker.append(label);
+    }
+    group.append(picker);
+  }
   function renderEditor(expandedSection) {
     $('editor').replaceChildren();
     for (const [key,label] of [['title','Title'],['subject','Subject'],['grade','Grade'],['instructions','Learner instructions']]) {
@@ -205,8 +235,10 @@
     }
     for (const section of draft.sections) {
       const group = element('details');
-      group.open = section.id === expandedSection;
+      const stageSection = section.id === 'codequest-stages';
+      group.open = section.id === expandedSection || stageSection;
       group.append(element('summary', section.title));
+      if (stageSection) renderStageChoices(group, section);
       field(group, 'Section title', section.title, value => section.title = value);
       field(group, 'Section instructions', section.instructions, value => section.instructions = value, 'textarea');
       for (const [index, task] of section.items.entries()) {
@@ -228,7 +260,7 @@
         remove.type = 'button';
         remove.disabled = section.items.length === 1;
         remove.onclick = () => { section.items.splice(index,1); dirty = true; renderEditor(section.id); };
-        rubric.append(duplicate, remove);
+        if (!stageSection) rubric.append(duplicate, remove);
         group.append(rubric);
       }
       $('editor').append(group);

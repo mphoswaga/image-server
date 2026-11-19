@@ -69,18 +69,18 @@ test('CodeQuest assignment restores blocks and marks the final program against i
     expect(enter.ok(), await enter.text()).toBeTruthy();
     const learner = await context.newPage();
     await learner.goto('/assignment/' + assessment.assessmentId);
-    const task = learner.locator('[data-code-task]');
-    await task.getByRole('button', { name: 'Move forward', exact:true }).click();
-    await task.getByRole('button', { name: 'Move forward', exact:true }).click();
+    const task = learner.frameLocator('[data-code-task] iframe');
+    await task.getByRole('button', { name: '↑ Move 1 square', exact:true }).click();
+    await task.getByRole('button', { name: '↑ Move 1 square', exact:true }).click();
     const saved = learner.waitForResponse(response => response.url().endsWith(api + '/draft') && response.ok());
-    await task.getByRole('button', { name: 'Collect', exact: true }).click();
+    await task.getByRole('button', { name: '💰 Collect', exact: true }).click();
     await saved;
     await learner.reload();
-    await expect(task.locator('ol li > span')).toHaveText(['Move forward', 'Move forward', 'Collect']);
-    await task.getByRole('button', { name: 'Run code' }).click();
-    await expect(task.getByRole('status')).toHaveText('Treasure collected!');
-    await task.getByRole('button', { name: 'Edit step 3: Collect' }).click();
-    await task.getByRole('button', { name: 'Remove' }).last().click();
+    await expect(task.locator('#program .longLabel')).toHaveText(['↑ Move 1 square', '↑ Move 1 square', '💰 Collect']);
+    await task.getByRole('button', { name: 'Test my code' }).click();
+    await expect(task.locator('#testResult')).toHaveText('Code tested — treasure collected!');
+    await task.getByRole('button', { name: /Step 3: .*Collect/ }).click();
+    await task.getByRole('button', { name: 'Remove step' }).click();
     const submitted = learner.waitForResponse(response => response.url().endsWith(api + '/submit') && response.ok());
     await learner.locator('#submitBtn').click();
     await submitted;
@@ -164,7 +164,7 @@ test('teacher previews, versions and assigns an activity without exposing class 
   await page.goto('/activity-templates');
   await page.getByRole('combobox', {name:'Activity',exact:true}).selectOption('starter-codequest');
   await page.getByRole('button', {name:'Preview as learner'}).click();
-  await expect(page.locator('#learnerPreview').getByRole('button', {name:'Run code'})).toHaveCount(1);
+  await expect(page.locator('#learnerPreview .preview-task:visible').frameLocator('iframe').getByRole('button', {name:'Test my code'})).toHaveCount(1);
   await expect(page.locator('#learnerPreview')).toContainText('Task 1 of 5');
   await page.getByLabel('Title', {exact:true}).fill('My coding project');
   const firstSave = page.waitForResponse(response => response.url().endsWith('/api/activity-templates') && response.status() === 201);
@@ -210,6 +210,46 @@ test('teacher previews, versions and assigns an activity without exposing class 
     const library = await (await otherTeacher.request.get('/api/activity-templates')).json();
     expect(library.templates.every(item=>item.starter)).toBeTruthy();
   } finally { await outsider.close(); }
+});
+
+test('teacher can assign selected native CodeQuest stages with their original Repeat rules', async ({page, browser}, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100');
+  await signInDisposableTeacher(page, '-activity-codequest-stages');
+  const roster = await createRoster(page, 'Stage choice class', [{ID:'STAGE-1',Name:'Sample Learner'}]);
+  await page.goto('/activity-templates');
+  await page.getByRole('combobox', {name:'Activity',exact:true}).selectOption('starter-codequest-stages');
+  for (const number of [2, 4, 5]) await page.getByRole('checkbox', {name:new RegExp('Stage ' + number)}).uncheck();
+  await expect(page.locator('#total')).toContainText('20 marks');
+  await page.getByRole('button', {name:'Save as template'}).click();
+  await expect(page.locator('#notice')).toHaveText('Saved version 1.');
+  await page.getByRole('combobox',{name:'Class',exact:true}).selectOption(roster.id);
+  const pending = page.waitForResponse(response => response.url().endsWith('/api/activity-templates/assign') && response.status() === 201);
+  await page.getByRole('button', {name:'Create class draft'}).click();
+  const { assessmentId } = await (await pending).json();
+  const api = '/api/assignment/' + assessmentId;
+  const opened = await page.request.post('/api/activity-templates/lessons/' + assessmentId, {data:{action:'open',minutes:30}});
+  expect(opened.ok(), await opened.text()).toBeTruthy();
+  const join = await (await page.request.get(api + '/join')).json();
+  const context = await browser.newContext();
+  try {
+    await context.request.post(api + '/enter', {data:{handle:join.students[0].handle,pin:'4826'}});
+    const take = await (await context.request.get(api + '/take')).json();
+    expect(take.questions.map(q => q.id)).toEqual(['codequest-stage-1','codequest-stage-3']);
+    const learner = await context.newPage();
+    await learner.goto('/assignment/' + assessmentId);
+    const current = learner.frameLocator('[data-practical-page]:visible iframe');
+    await expect(current.locator('#hint')).toHaveText('No Repeat');
+    await learner.getByRole('button',{name:'Next task'}).click();
+    await expect(current.locator('#hint')).toContainText('Use Repeat');
+    const stage = take.questions[1];
+    const solution = require('../../public/codequest-core').solve(stage.mission);
+    const saved = await context.request.post(api + '/draft', { data:{answers:{[stage.id]:solution}} });
+    expect(saved.ok(), await saved.text()).toBeTruthy();
+    const reopened = await (await context.request.get(api + '/take')).json();
+    expect(reopened.draftAnswers[stage.id]).toEqual(solution);
+  } finally {
+    await context.close();
+  }
 });
 
 test('one lesson restores saved work but replacements admit only learners who never started', async ({page, browser}, testInfo) => {

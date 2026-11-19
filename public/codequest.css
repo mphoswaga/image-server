@@ -115,3 +115,12 @@ body{background:radial-gradient(ellipse at 15% 5%,#bce8dc 0,transparent 45%),rad
 .celebrationGold:after{content:'';display:inline-block;width:.65em;height:.22em;margin-left:-.12em;border:2px solid #a86911;border-radius:50%;background:radial-gradient(ellipse,#fff0a6,#f1b927);box-shadow:0 5px 0 #c38b1c,0 8px 0 #ffe17c,0 11px 0 #a96e15;transform:rotate(-12deg)}
 
 #livesStatus{padding:12px 18px;background:#fff3d4;border:1px solid #e9c56c;border-radius:14px;font-weight:800;color:#75411f}#eliminated{text-align:center;background:#fff8e7;border:2px solid #e9c56c}.playerChoices input:disabled+small{opacity:.65}
+
+
+.assessment-workspace .assessment-flag {
+  font-size: 1.5em;
+  color: #163c55;
+  text-shadow: 0 0 3px white;
+}
+.assessment-workspace #hint { margin: 0; font-weight: 800; }
+.assessment-workspace #clock, .assessment-workspace #fitClock { display: none; }

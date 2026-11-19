@@ -1096,7 +1096,7 @@ function sanitizeLearnerAnswers(questions, rawAnswers) {
     if (!Object.prototype.hasOwnProperty.call(raw, question.id) || question.kind === 'practical') continue;
     const value = raw[question.id];
     if (question.kind === 'codequest') {
-      try { safe[question.id] = assessmentCodeQuest.answer(value); } catch {}
+      try { safe[question.id] = assessmentCodeQuest.answer(value, question.activity); } catch {}
     } else if (question.kind === 'data-table') {
       try { safe[question.id] = assessmentDataTable.answer(question.activity, value); } catch {}
     } else if (question.kind === 'mcq') {

@@ -42,3 +42,19 @@ test('debug earns credit for the corrected segment and optimise counts every aut
   assert.equal(routeWithUnusedTail.marksAwarded, 10);
   assert.equal(code.grade(optimise, commands('move move collect')).marksAwarded, 0);
 });
+
+test('game stages have a full-credit solution and enforce the game block rules', () => {
+  const { questions } = assessment.normalizeAssessment(require('../activity-templates/codequest-stages'));
+  const game = require('../public/codequest-core');
+  for (const [index, question] of questions.entries()) {
+    const { activity } = question;
+    const solution = game.solve(activity.mission);
+    assert.equal(code.grade(activity, solution).marksAwarded, question.marks);
+    if (index >= 2) {
+      assert.ok(solution.some(block => block.op === 'repeat'));
+      const expanded = game.expand(solution).map(({ op }) => ({ op }));
+      assert.throws(() => code.answer(expanded, activity), /Use up to/);
+    }
+  }
+  assert.throws(() => code.answer(game.solve(questions[2].activity.mission), questions[0].activity), /Repeat is not available/);
+});

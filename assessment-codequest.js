@@ -6,7 +6,7 @@ function normalize(activity, marks) {
     value.every(n => Number.isInteger(n) && n >= 0 && n < size);
   const { kind } = activity;
   if (!['codequest-build', 'codequest-debug', 'codequest-optimise'].includes(kind) ||
-      (activity.version !== undefined && activity.version !== 1) ||
+      (activity.version !== undefined && ![1, 2].includes(activity.version)) ||
       !Number.isInteger(size) || size < 3 || size > 8 ||
       !Array.isArray(start) || start.length !== 3 || !cell(start.slice(0, 2)) ||
       ![0, 1, 2, 3].includes(start[2]) || !cell(chest) ||
@@ -14,10 +14,23 @@ function normalize(activity, marks) {
     throw new Error('Choose a valid CodeQuest build map.');
   }
   const mission = { size, start, chest, rocks, water, requireReturn: false };
+  const version = activity.version || 1;
+  if (version === 2) {
+    if (kind !== 'codequest-build') throw new Error('Choose a CodeQuest build stage.');
+    const { blocks, blockLimit, repeatRequired } = activity.mission;
+    mission.blocks = ['move', 'left', 'right', 'collect'];
+    if (blocks?.includes('repeat')) mission.blocks.push('repeat');
+    if (blockLimit !== undefined) {
+      CodeQuest.checkBudget({ blockLimit }, []);
+      mission.blockLimit = blockLimit;
+    }
+    if (repeatRequired && !mission.blocks.includes('repeat')) throw new Error('Enable Repeat for this stage.');
+    mission.repeatRequired = !!repeatRequired;
+  }
   const obstacles = [...rocks, ...water];
   const solution = CodeQuest.solve(mission);
   if ([start.slice(0, 2), chest].some(([x, y]) => CodeQuest.at(obstacles, x, y)) ||
-      !solution.length || solution.length > 32) throw new Error('The CodeQuest treasure must be reachable.');
+      !solution.length || solution.length > 32 || !CodeQuest.run(mission, solution).success) throw new Error('The CodeQuest treasure must be reachable.');
   const { reach, collect, checkpoint, improvement } = activity.rubric || {};
   const points = [collect];
   const rubric = { collect };
@@ -57,7 +70,7 @@ function normalize(activity, marks) {
       collect + (rubric.reach || 0) + (rubric.checkpoint?.marks || 0) + (rubric.improvement?.muchShorter.marks || 0) !== marks) {
     throw new Error('CodeQuest rubric points must add up to the task marks.');
   }
-  return { kind, version: 1, mission, starter, rubric };
+  return { kind, version, mission, starter, rubric };
 }
 
 function visited(result, [x, y]) {
@@ -72,15 +85,17 @@ function solutionVia(mission, position) {
   return last.length > 0 && first.length - 1 + last.length <= 32;
 }
 
-function answer(program) {
+function answer(program, activity) {
   const normalized = CodeQuest.normalize(program);
-  if (normalized.some(block => block.op === 'repeat')) throw new Error('Repeat is not available for this task.');
+  if (!activity?.mission.blocks?.includes('repeat') && normalized.some(block => block.op === 'repeat')) throw new Error('Repeat is not available for this task.');
+  CodeQuest.checkBudget(activity?.mission || {}, normalized);
+  CodeQuest.expand(normalized);
   return normalized;
 }
 
 function grade(activity, program) {
-  if (activity.version !== 1) throw new Error('Unsupported CodeQuest scoring version.');
-  const final = answer(program);
+  if (![1, 2].includes(activity.version)) throw new Error('Unsupported CodeQuest scoring version.');
+  const final = answer(program, activity);
   const result = CodeQuest.run(activity.mission, final);
   const { rubric } = activity;
   const criteria = [];

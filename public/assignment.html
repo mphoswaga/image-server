@@ -9,6 +9,7 @@
     *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
     body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:var(--bg); min-height:100vh; color:var(--ink); padding:20px; }
     .wrap { max-width:640px; margin:0 auto; }
+    .wrap.codequest-assignment { max-width:1120px; }
     .card { background:#fff; border-radius:16px; box-shadow:var(--sh); padding:28px; margin-bottom:20px; }
     h1 { font-size:22px; font-weight:800; margin-bottom:6px; }
     .sub { color:var(--muted); font-size:14px; }
@@ -137,8 +138,8 @@
     .project-data-response{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0}
   </style>
   <script src="/codequest-core.js"></script>
-  <link rel="stylesheet" href="/practical-activities.css?v=1">
-  <script src="/assessment-codequest.js?v=4"></script>
+  <link rel="stylesheet" href="/practical-activities.css?v=2">
+  <script src="/assessment-codequest.js?v=5"></script>
   <script src="/assessment-data-table.js?v=1"></script>
   <script src="/practical-task-pager.js"></script>
   <script>
@@ -253,6 +254,7 @@
     }
 
     function renderQuestions() {
+      document.querySelector('.wrap').classList.toggle('codequest-assignment', questions.some(q => q.kind === 'codequest'));
       let previousSection = null;
       $('questions').innerHTML = questions.map((q, i) => {
         const sectionHead=q.sectionTitle&&q.sectionTitle!==previousSection?`<div class="section-head">${esc(q.sectionTitle)}${q.sectionInstructions?`<div class="section-instructions">${esc(q.sectionInstructions)}</div>`:''}</div>`:'';
