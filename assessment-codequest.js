@@ -82,7 +82,41 @@ function solutionVia(mission, position) {
   if (!first.length || first.length > 32) return false;
   const end = CodeQuest.run({ ...mission, chest: position }, first).frames.at(-1);
   const last = CodeQuest.solve({ ...mission, start: [end.x, end.y, end.d] });
-  return last.length > 0 && first.length - 1 + last.length <= 32;
+  return last.length > 0 && first.length - 1 + last.length <= 32 && first.slice(0, -1).concat(last);
+}
+
+function treasureChoices(raw, marks) {
+  const activity = normalize(raw, marks);
+  const { mission, kind, rubric } = activity;
+  const choices = [];
+  for (let y = 0; y < mission.size; y++) for (let x = 0; x < mission.size; x++) {
+    if (CodeQuest.at([mission.start, mission.chest, ...mission.water, ...mission.rocks], x, y)) continue;
+    const map = { ...mission, chest: [x, y] };
+    const next = { ...activity, mission: map, rubric: structuredClone(rubric) };
+    try {
+      const route = CodeQuest.solve({ ...map, blockLimit: undefined });
+      if (!route.length) continue;
+      if (map.repeatRequired) {
+        const cost = CodeQuest.blockCount(CodeQuest.compact(route));
+        if (cost >= route.length) continue;
+        map.blockLimit = Math.min(cost + 1, route.length - 1);
+      }
+      if (kind === 'codequest-optimise') {
+        const { shorter, muchShorter } = next.rubric.improvement;
+        muchShorter.maxBlocks = route.length;
+        shorter.maxBlocks = route.length + 2;
+        next.starter = ['left','right','left','right'].map(op => ({op})).concat(route);
+      }
+      if (kind === 'codequest-debug') {
+        const via = solutionVia(map, rubric.checkpoint.cell);
+        if (!via) continue;
+        next.starter = [{ op: via[0].op === 'left' ? 'right' : 'left' }, ...via.slice(1)];
+      }
+      normalize(next, marks);
+      choices.push({ chest: map.chest, blockLimit: map.blockLimit, starter: next.starter, improvement: next.rubric.improvement });
+    } catch { /* This square cannot meet the current task rules. */ }
+  }
+  return choices;
 }
 
 function answer(program, activity) {
@@ -120,4 +154,4 @@ function grade(activity, program) {
   };
 }
 
-module.exports = { normalize, answer, grade };
+module.exports = { normalize, answer, grade, treasureChoices };

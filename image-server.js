@@ -2452,6 +2452,10 @@ app.post('/api/assessment-generate', requireAuth, async (req, res) => {
 
 app.get('/activity-templates', requireAuth, (_req, res) => res.sendFile(path.join(__dirname, 'public', 'activity-templates.html')));
 app.get('/api/activity-templates', requireAuth, (req, res) => res.json({ templates: activityTemplates.list(req.userId) }));
+app.post('/api/activity-templates/treasure-choices', requireAuth, (req, res) => {
+  try { res.json({ choices: assessmentCodeQuest.treasureChoices(req.body.activity, req.body.marks) }); }
+  catch (error) { res.status(400).json({ error: error.message }); }
+});
 app.post('/api/activity-templates/preview', requireAuth, (req, res) => {
   try {
     const assessment = assignments.normalizeAssessment(req.body?.assessment);

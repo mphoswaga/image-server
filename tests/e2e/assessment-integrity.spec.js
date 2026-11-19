@@ -166,6 +166,7 @@ test('teacher previews, versions and assigns an activity without exposing class 
   await page.getByRole('button', {name:'Preview as learner'}).click();
   await expect(page.locator('#learnerPreview .preview-task:visible').frameLocator('iframe').getByRole('button', {name:'Test my code'})).toHaveCount(1);
   await expect(page.locator('#learnerPreview')).toContainText('Task 1 of 5');
+  await page.getByText('Customise tasks and marking',{exact:true}).click();
   await page.getByLabel('Title', {exact:true}).fill('My coding project');
   const firstSave = page.waitForResponse(response => response.url().endsWith('/api/activity-templates') && response.status() === 201);
   await page.getByRole('button', {name:'Save as template'}).click();
@@ -179,7 +180,7 @@ test('teacher previews, versions and assigns an activity without exposing class 
   await page.locator('#editor summary').getByText('Build routes', {exact:true}).click();
   await page.getByLabel('Reach treasure square points').first().fill('3');
   await expect(page.locator('#total')).toContainText('51 marks');
-  await expect(page.getByRole('button', {name:'Create class draft'})).toBeDisabled();
+  await expect(page.getByRole('button', {name:'Save copy and create class draft'})).toBeEnabled();
   await page.getByRole('button', {name:'Save new version'}).click();
   await expect(page.getByRole('status')).toHaveText('Saved version 2.');
   await page.getByRole('combobox', {name:'Class',exact:true}).selectOption(second.id);
@@ -220,11 +221,14 @@ test('teacher can assign selected native CodeQuest stages with their original Re
   await page.getByRole('combobox', {name:'Activity',exact:true}).selectOption('starter-codequest-stages');
   for (const number of [2, 4, 5]) await page.getByRole('checkbox', {name:new RegExp('Stage ' + number)}).uncheck();
   await expect(page.locator('#total')).toContainText('20 marks');
-  await page.getByRole('button', {name:'Save as template'}).click();
-  await expect(page.locator('#notice')).toHaveText('Saved version 1.');
+  await expect(page.locator('#editor')).toBeHidden();
   await page.getByRole('combobox',{name:'Class',exact:true}).selectOption(roster.id);
+  await page.getByText('Choose treasure location',{exact:true}).click();
+  await page.locator('#shuffleTreasure').click();
+  await page.locator('#treasureBoard button:enabled').first().click();
+  const chestLabel = await page.locator('#treasureBoard button', {hasText:'💰'}).getAttribute('aria-label');
   const pending = page.waitForResponse(response => response.url().endsWith('/api/activity-templates/assign') && response.status() === 201);
-  await page.getByRole('button', {name:'Create class draft'}).click();
+  await page.getByRole('button', {name:'Save copy and create class draft'}).click();
   const { assessmentId } = await (await pending).json();
   const api = '/api/assignment/' + assessmentId;
   const opened = await page.request.post('/api/activity-templates/lessons/' + assessmentId, {data:{action:'open',minutes:30}});
@@ -235,6 +239,8 @@ test('teacher can assign selected native CodeQuest stages with their original Re
     await context.request.post(api + '/enter', {data:{handle:join.students[0].handle,pin:'4826'}});
     const take = await (await context.request.get(api + '/take')).json();
     expect(take.questions.map(q => q.id)).toEqual(['codequest-stage-1','codequest-stage-3']);
+    const [x,y] = take.questions[0].mission.chest;
+    expect(chestLabel).toContain('Row ' + (y+1) + ', column ' + (x+1));
     const learner = await context.newPage();
     await learner.goto('/assignment/' + assessmentId);
     const current = learner.frameLocator('[data-practical-page]:visible iframe');

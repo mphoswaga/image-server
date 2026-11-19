@@ -31,31 +31,46 @@
     #preview,#assign,#openLesson,#preparePlan{background:#14684e;color:white;border-color:#14684e;font-weight:700}
     #total{font-weight:800;color:#14684e}
     .preview-task{background:#fbfdfb;border:1px solid #d4e4da;padding:14px;border-radius:12px}
+    .setup-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:16px}
+    .setup-fields label{display:grid;font-weight:650}.setup-fields select{width:100%}
+    #stageChoices fieldset{display:flex;gap:6px 18px;flex-wrap:wrap}
+    #stageChoices label{margin:3px 0}#customise{border-top:1px solid #d6e3d9;padding-top:14px}
+    #treasureBoard{display:grid;gap:3px;max-width:320px}
+    #treasureBoard button{aspect-ratio:1;padding:0;background:#fff3c8;font-size:1.15rem}
+    #treasureBoard button:disabled{opacity:1;background:#e4eae7}
   </style>
 </head>
 <body><main>
   <a href="/">Back to LessonScope</a>
-  <h1>Practical activity templates</h1>
-  <p>Choose a starting activity or reopen a saved version. Preview it as a learner before preparing a class draft.</p>
-  <p>Unmarked practice: <a href="/practical-practice.html?activity=codequest">CodeQuest skills</a> · <a href="/practical-practice.html?activity=data">Table skills</a></p>
-  <section>
-    <label>Activity <select id="template"></select></label>
-    <label>Version <select id="version"></select></label>
-    <div id="editor"></div>
+  <h1>Set up a practical assessment</h1>
+  <section id="quickSetup">
+    <div class="setup-fields">
+      <label>Activity <select id="template"></select></label>
+      <label>Class <select id="roster"><option value="">Choose a class</option></select></label>
+    </div>
+    <div id="stageChoices"></div>
+    <details id="treasurePicker" hidden><summary>Choose treasure location</summary>
+      <label>Task <select id="treasureTask"></select></label>
+      <button id="shuffleTreasure" type="button" disabled>Let the computer choose</button>
+      <p id="treasureHint"></p><div id="treasureBoard"></div>
+    </details>
     <p id="total"></p>
     <div class="controls">
+      <button id="assign" type="button">Create class draft</button>
       <button id="preview" type="button">Preview as learner</button>
-      <button id="save" type="button">Save as template</button>
-      <button id="duplicate" type="button">Save a separate copy</button>
     </div>
+    <p>A draft stays private until you open the lesson.</p>
+    <details id="customise"><summary>Customise tasks and marking</summary>
+      <label>Version <select id="version"></select></label>
+      <div id="editor"></div>
+      <div class="controls">
+        <button id="save" type="button">Save as template</button>
+        <button id="duplicate" type="button">Save a separate copy</button>
+      </div>
+    </details>
   </section>
+  <p id="notice" role="status"></p>
   <section id="learnerPreview" hidden></section>
-  <section>
-    <h2>Prepare a class draft</h2>
-    <p>The selected version is locked to this class draft. Learners cannot open it.</p>
-    <label>Class <select id="roster"><option value="">Choose a class</option></select></label>
-    <button id="assign" type="button">Create class draft</button>
-  </section>
   <section>
     <h2>Run a scheduled lesson</h2>
     <label>Class assessment <select id="lesson"></select></label>
@@ -86,7 +101,7 @@
     <p>Review the 14 planned lessons. Preparing drafts does not open them to learners.</p>
     <details id="classPlan"><summary>View planned classes</summary><ul id="planRows"></ul><button id="preparePlan" type="button" disabled>Prepare the 14 class drafts</button></details>
   </section>
-  <p id="notice" role="status"></p>
+  <p>Unmarked practice · <a href="/practical-practice.html?activity=codequest">CodeQuest skills</a> · <a href="/practical-practice.html?activity=data">Table skills</a></p>
 </main>
 <script src="/codequest-core.js"></script>
 <link rel="stylesheet" href="/practical-activities.css?v=2">
@@ -94,5 +109,5 @@
 <script src="/assessment-data-table.js?v=1"></script>
 <script src="/assessment-narration.js"></script>
 <script src="/practical-task-pager.js"></script>
-<script src="/activity-templates.js?v=6"></script>
+<script src="/activity-templates.js?v=8"></script>
 </body></html>

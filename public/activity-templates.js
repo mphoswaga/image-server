@@ -18,7 +18,8 @@
   function controls() {
     for (const id of ['preview','save','duplicate']) $(id).disabled = busy || !draft;
     $('template').disabled = $('version').disabled = !!busy;
-    $('assign').disabled = busy || !draft || dirty || !$('roster').value;
+    $('assign').disabled = busy || !draft || !$('roster').value;
+    $('assign').textContent = dirty ? 'Save copy and create class draft' : 'Create class draft';
     lessonControls();
   }
   const selectedLesson = () => lessons.find(lesson => lesson.id === $('lesson').value);
@@ -219,7 +220,7 @@
         }
         dirty = true;
         renderEditor(section.id);
-        $('editor').querySelectorAll('input[type="checkbox"]').forEach(control => {
+        $('stageChoices').querySelectorAll('input[type="checkbox"]').forEach(control => {
           if (control.getAttribute('aria-label') === stage.prompt) control.focus();
         });
       };
@@ -228,8 +229,62 @@
     }
     group.append(picker);
   }
+  let treasureRequest = 0;
+  function updateTreasureTasks() {
+    const items = tasks().filter(item => item.activity.mission);
+    const selected = $('treasureTask').value;
+    $('treasurePicker').hidden = !items.length;
+    $('treasureTask').replaceChildren(...items.map(item => new Option(item.prompt, item.id)));
+    if (items.some(item => item.id === selected)) $('treasureTask').value = selected;
+    loadTreasureBoard();
+  }
+  async function loadTreasureBoard() {
+    const serial = ++treasureRequest;
+    const task = tasks().find(item => item.id === $('treasureTask').value);
+    const board = $('treasureBoard');
+    board.replaceChildren();
+    $('shuffleTreasure').disabled = true;
+    if (!task || !$('treasurePicker').open) return;
+    $('treasureHint').textContent = 'Checking playable squares…';
+    const snapshot = JSON.stringify(task);
+    try {
+      const {choices} = await request('/api/activity-templates/treasure-choices', {activity: task.activity, marks: task.marks});
+      if (serial !== treasureRequest) return;
+      function place(choice) {
+        if (snapshot !== JSON.stringify(task)) return loadTreasureBoard();
+        task.activity.mission.chest = choice.chest;
+        if (choice.blockLimit) task.activity.mission.blockLimit = choice.blockLimit;
+        if (choice.starter?.length) task.activity.starter = choice.starter;
+        if (choice.improvement) task.activity.rubric.improvement = choice.improvement;
+        dirty = true;
+        $('learnerPreview').hidden = true;
+        renderEditor();
+      }
+      $('shuffleTreasure').disabled = !choices.length;
+      $('shuffleTreasure').onclick = () => place(choices[Math.floor(Math.random() * choices.length)]);
+      $('treasureHint').textContent = choices.length ? 'Tap a sand square to move the treasure.' : 'Only the current treasure square fits this task.';
+      const m = task.activity.mission;
+      board.style.gridTemplateColumns = 'repeat(' + m.size + ', 1fr)';
+      for (let y = 0; y < m.size; y++) for (let x = 0; x < m.size; x++) {
+        const here = cell => cell?.[0] === x && cell[1] === y;
+        const choice = choices.find(option => here(option.chest));
+        const icon = here(m.chest) ? '💰' : here(m.start) ? '⛵' : here(task.activity.rubric.checkpoint?.cell) ? '⚑' :
+          m.rocks?.some(here) ? '🪨' : m.water?.some(here) ? '🌊' : '';
+        const square = element('button',icon);
+        square.type = 'button';
+        square.disabled = !choice;
+        square.setAttribute('aria-label', 'Row ' + (y+1) + ', column ' + (x+1) + (icon ? ' ' + icon : ''));
+        square.onclick = () => place(choice);
+        board.append(square);
+      }
+    } catch (error) { if (serial === treasureRequest) $('treasureHint').textContent = error.message; }
+  }
+  $('treasurePicker').ontoggle = () => { if (draft) loadTreasureBoard(); };
+  $('treasureTask').onchange = loadTreasureBoard;
   function renderEditor(expandedSection) {
     $('editor').replaceChildren();
+    $('stageChoices').replaceChildren();
+    updateTreasureTasks();
     for (const [key,label] of [['title','Title'],['subject','Subject'],['grade','Grade'],['instructions','Learner instructions']]) {
       field($('editor'), label, draft[key], value => draft[key] = value, key === 'instructions' ? 'textarea' : 'text');
     }
@@ -238,7 +293,7 @@
       const stageSection = section.id === 'codequest-stages';
       group.open = section.id === expandedSection || stageSection;
       group.append(element('summary', section.title));
-      if (stageSection) renderStageChoices(group, section);
+      if (stageSection) renderStageChoices($('stageChoices'), section);
       field(group, 'Section title', section.title, value => section.title = value);
       field(group, 'Section instructions', section.instructions, value => section.instructions = value, 'textarea');
       for (const [index, task] of section.items.entries()) {
@@ -303,7 +358,12 @@
   $('save').onclick = () => save(false);
   $('duplicate').onclick = () => save(true);
   $('assign').onclick = () => action(async () => {
-    const result = await request('/api/activity-templates/assign', { templateId: record.id, version, rosterId: $('roster').value });
+    const rosterId = $('roster').value;
+    if (dirty) {
+      const copy = await request('/api/activity-templates', { sourceId: record.id, baseVersion: version, assessment: draft, duplicate: true });
+      await refresh(copy.id, copy.version);
+    }
+    const result = await request('/api/activity-templates/assign', { templateId: record.id, version, rosterId });
     $('notice').textContent = `Class draft created · ${result.totalMarks} marks. You’ll find it under Tests & projects.`;
     await refreshLessons(result.assessmentId);
   });
@@ -344,7 +404,7 @@
     panel.scrollIntoView();
   });
   action(async () => {
-    const [{ rosters }] = await Promise.all([request('/api/rosters'), refresh()]);
+    const [{ rosters }] = await Promise.all([request('/api/rosters'), refresh('starter-codequest-stages')]);
     classes = rosters;
     for (const roster of rosters) $('roster').add(new Option(roster.name, roster.id));
     await refreshLessons();
