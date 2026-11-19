@@ -195,7 +195,22 @@ test('teacher previews, versions and assigns an activity without exposing class 
   await expect(page.getByRole('status')).toHaveText('Saved version 1.');
   expect(await page.locator('#template').inputValue()).not.toBe(template.id);
   await page.getByRole('combobox',{name:'Activity',exact:true}).selectOption('starter-data');
-  await expect(page.getByRole('combobox',{name:'Version',exact:true})).toHaveValue('3');
+  await expect(page.getByRole('combobox',{name:'Version',exact:true})).toHaveValue('6');
+  await page.getByRole('combobox',{name:'Version',exact:true}).selectOption('5');
+  const registration = page.locator('#editor > details').first();
+  await registration.locator(':scope > summary').click();
+  await registration.locator('.task-settings > summary').click();
+  await registration.getByText('Task setup',{exact:true}).click();
+  await registration.getByRole('combobox',{name:'Age answer method'}).selectOption('list');
+  await registration.getByLabel('Age choices (separate with ;)').fill('8; 9');
+  const customSave = page.waitForResponse(response => response.url().endsWith('/api/activity-templates') && response.status() === 201);
+  await page.getByRole('button',{name:'Save as template'}).click();
+  const fairCopy = await (await customSave).json();
+  await expect(page.locator('#template')).toHaveValue(fairCopy.id);
+  await page.getByRole('button',{name:'Preview as learner'}).click();
+  await expect(page.locator('#learnerPreview').getByRole('combobox',{name:'Age',exact:true})).toBeVisible();
+  await expect(page.locator('#learnerPreview').getByRole('textbox',{name:'Phone',exact:true})).toBeVisible();
+  await page.getByRole('combobox',{name:'Activity',exact:true}).selectOption('starter-data');
   await page.getByRole('combobox',{name:'Version',exact:true}).selectOption('2');
   await page.getByRole('button',{name:'Preview as learner'}).click();
   const preview = page.locator('#learnerPreview');
@@ -232,6 +247,7 @@ test('teacher can assign selected native CodeQuest stages with their original Re
   await expect(selector.locator('#program li')).toHaveCount(1);
   for (const number of [2, 4, 5]) await selector.getByRole('checkbox', {name:new RegExp('Stage ' + number)}).uncheck();
   await expect(page.locator('#total')).toContainText('20 marks');
+  await expect(selector.locator('.island-count')).toHaveText('2 selected · 20 marks');
   await expect(page.locator('#editor')).toBeHidden();
   await page.getByRole('combobox',{name:'Class',exact:true}).selectOption(roster.id);
   await selector.getByRole('button',{name:/Stage 1 ·/}).click();
@@ -650,13 +666,13 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
   const roster = await createRoster(page, 'School fair class', [{ID:'FAIR-1', Name:'Sample Learner'}]);
   await page.goto('/activity-templates');
   await page.getByRole('combobox',{name:'Activity',exact:true}).selectOption('starter-data');
-  await expect(page.locator('.station-directory button')).toHaveCount(5);
+  await expect(page.locator('.station-directory button')).toHaveCount(7);
   await page.getByRole('combobox',{name:'Class',exact:true}).selectOption(roster.id);
   const assigned = page.waitForResponse(r => r.url().endsWith('/api/activity-templates/assign') && r.ok());
   await page.getByRole('button',{name:'Create class draft'}).click();
   const {assessmentId} = await (await assigned).json();
   const api = '/api/assignment/' + assessmentId;
-  const opened = await page.request.post('/api/activity-templates/lessons/' + assessmentId, {data:{action:'open',minutes:30}});
+  const opened = await page.request.post('/api/activity-templates/lessons/' + assessmentId, {data:{action:'open',minutes:60}});
   expect(opened.ok(), await opened.text()).toBeTruthy();
   const join = await (await page.request.get(api + '/join')).json();
   const context = await browser.newContext({viewport:page.viewportSize(),isMobile:testInfo.project.name==='mobile'});
@@ -667,43 +683,160 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
     expect(take.questions.flatMap(q => q.tableActivity.inputs).every(input => !('accepted' in input))).toBeTruthy();
     const learner = await context.newPage();
     await learner.goto('/assignment/' + assessmentId);
-    const template = require('../../activity-templates/data-school-fair');
+    const template = require('../../activity-templates/data-school-fair-mission');
     const current = learner.locator('[data-practical-page]:visible');
     await expect(learner.locator('#submitBtn')).toBeHidden();
+    await expect(current.getByRole('textbox')).toHaveCount(12);
+    await current.screenshot({path:testInfo.outputPath('Registration desk.png')});
     // A lost save must recover even if the child stops interacting with the page.
     await learner.route('**' + api + '/draft', route => route.abort('connectionreset'), {times:1});
-    await current.getByLabel('Mia’s age',{exact:true}).selectOption('9');
+    await current.getByRole('textbox',{name:'Helper 1 · Age',exact:true}).fill('9');
     await expect(learner.locator('#saveState')).toContainText('Trying again');
     await expect(learner.locator('#saveState')).toHaveText('Your work is saved.');
     await learner.reload();
-    await expect(current.getByLabel('Mia’s age',{exact:true})).toHaveValue('9');
+    await expect(current.getByRole('textbox',{name:'Helper 1 · Age',exact:true})).toHaveValue('9');
     for (const [index, section] of template.sections.entries()) {
       const task = section.items[0];
       if (index) await learner.getByRole('button',{name:'Next task'}).click();
       await expect(current).toContainText(task.prompt);
+      if (task.activity.presentation === 'order') {
+        const list = current.locator('ol.unit-order');
+        const handles = list.locator('.unit-handle');
+        await list.scrollIntoViewIfNeeded();
+        const start = await handles.nth(2).boundingBox();
+        const end = await handles.first().boundingBox();
+        const x = start.x + 12, y1 = start.y + start.height / 2, y2 = end.y + end.height / 2;
+        if (testInfo.project.name === 'mobile') {
+          const touch = await context.newCDPSession(learner);
+          for (const [type, touchPoints] of [['touchStart',[{x,y:y1}]],['touchMove',[{x,y:y2}]],['touchEnd',[]]]) {
+            await touch.send('Input.dispatchTouchEvent',{type,touchPoints});
+          }
+          await touch.detach();
+        } else {
+          await learner.mouse.move(x,y1);
+          await learner.mouse.down();
+          await learner.mouse.move(x,y2,{steps:8});
+          await learner.mouse.up();
+        }
+        await expect(handles.first()).toHaveText('Byte (B)');
+        for (const [position, field] of task.activity.inputs.entries()) {
+          const unit = field.accepted[0];
+          let index = (await handles.allTextContents()).indexOf(unit);
+          while (index-- > position) await list.getByRole('button',{name:'Move ' + unit + ' up',exact:true}).press('Enter');
+        }
+        if (testInfo.project.name === 'mobile') await list.getByRole('button',{name:'Move Kilobyte (KB) down'}).click();
+        const placed = await handles.allTextContents();
+        await expect.poll(async () => (await (await context.request.get(api+'/take')).json()).draftAnswers?.[task.id]).toEqual(placed);
+        await learner.reload();
+        for (let i = 0; i < index; i++) await learner.getByRole('button',{name:'Next task'}).click();
+        await expect(handles).toHaveText(placed);
+        await current.screenshot({path:testInfo.outputPath('File-size ladder.png')});
+        continue;
+      }
+      if (task.activity.presentation === 'ballots') {
+        await expect(current.locator('.project-data-source li')).toHaveCount(12);
+        await expect.poll(() => current.locator('.ballot-scene').evaluate(img => img.naturalWidth)).toBe(1050);
+        if (task.id === 'count-task') await current.screenshot({path:testInfo.outputPath('Vote tally.png')});
+      }
       for (const input of task.activity.inputs) {
-        if (input.row !== undefined) await current.getByLabel(input.label,{exact:true}).selectOption(input.accepted[0]);
+        if (input.entry === 'text') {
+          const value = testInfo.project.name === 'mobile' && input.label === 'Helper 1 · Phone' ? '1' : input.accepted[0];
+          await current.getByRole('textbox',{name:input.label,exact:true}).fill(value);
+        } else if (input.row !== undefined) await current.getByLabel(input.label,{exact:true}).selectOption(input.accepted[0]);
         else await current.getByRole('group',{name:input.label,exact:true}).getByRole('radio',{name:input.accepted[0],exact:true}).check();
       }
       if (task.activity.presentation === 'files') {
+        await expect(current.frameLocator('iframe[title="Welcome note text file"]').locator('body')).toContainText('Pick up a map');
+        await expect.poll(() => current.getByRole('img',{name:'Open the full school fair art poster'}).evaluate(img => img.naturalWidth)).toBe(640);
+        const movie = current.locator('video');
+        await movie.scrollIntoViewIfNeeded();
+        await movie.evaluate(video => { video.muted = true; return video.play(); });
+        await expect.poll(() => movie.evaluate(video => video.currentTime)).toBeGreaterThan(0);
+        await movie.evaluate(video => video.pause());
+        await expect(current.getByRole('radio',{name:'Art poster.png',exact:true}).first()).toBeChecked();
         await current.scrollIntoViewIfNeeded();
         await current.screenshot({path:testInfo.outputPath('School Fair Data Lab.png')});
       }
     }
     await expect.poll(async () => {
       const data = await (await context.request.get(api + '/take')).json();
-      return data.draftAnswers?.['votes-task']?.[3];
-    }).toBe(template.sections[4].items[0].activity.inputs[3].accepted[0]);
+      return data.draftAnswers?.['decision-task']?.[3];
+    }).toBe(template.sections.at(-1).items[0].activity.inputs[3].accepted[0]);
     await learner.reload();
-    await expect(current.getByLabel('Mia’s age')).toHaveValue('9');
+    await expect(current.getByRole('textbox',{name:'Helper 1 · Age',exact:true})).toHaveValue('9');
     for (let i = 1; i < template.sections.length; i++) await learner.getByRole('button',{name:'Next task'}).click();
-    await expect(current.getByRole('radio',{name:'Give Games more space next year'})).toBeChecked();
+    await expect(current.getByRole('radio',{name:'The visitor did not choose a booth.'})).toBeChecked();
     const submitted = learner.waitForResponse(r => r.url().endsWith(api+'/submit') && r.ok());
     await learner.locator('#submitBtn').click();
     await submitted;
     const results = await (await page.request.get(api+'/results')).json();
-    expect(results.submissions[0]).toMatchObject({totalMarks:50,maxMarks:50});
-    for (const {items:[task]} of template.sections) expect(results.submissions[0].grades[task.id].marksAwarded).toBe(task.marks);
+    const deductions = testInfo.project.name === 'mobile' ? {'desk-task':1,'order-units':2} : {};
+    const missed = Object.values(deductions).reduce((sum, n) => sum + n, 0);
+    expect(results.submissions[0]).toMatchObject({totalMarks:50-missed,maxMarks:50});
+    for (const {items:[task]} of template.sections) expect(results.submissions[0].grades[task.id].marksAwarded).toBe(task.marks - (deductions[task.id] || 0));
+    expect((await page.request.patch(api+'/marked',{data:{marked:true}})).ok()).toBeTruthy();
+    const progress = await (await page.request.get('/api/roster/'+roster.id+'/progress')).json();
+    expect(progress.students[0].results).toContainEqual(expect.objectContaining({assignmentId:assessmentId,score:50-missed,total:50}));
+  } finally { await context.close(); }
+});
+
+test('the two-flag voyage restores programs, runs both flags and records the fifty-mark rubric', async ({page,browser}, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100');
+  test.slow();
+  const game = require('../../public/codequest-core');
+  await signInDisposableTeacher(page,'-two-flags');
+  const roster = await createRoster(page,'Two-flag class',[{ID:'CAP-1',Name:'Sample Captain'}]);
+  const assigned = await page.request.post('/api/activity-templates/assign',{data:{templateId:'starter-codequest',version:2,rosterId:roster.id}});
+  expect(assigned.ok(),await assigned.text()).toBeTruthy();
+  const {assessmentId} = await assigned.json();
+  const api = '/api/assignment/'+assessmentId;
+  await page.goto('/activity-templates');
+  await page.locator('#classTab').click();
+  await page.locator('#lesson').selectOption(assessmentId);
+  await expect(page.locator('#lessonMinutes')).toHaveValue('60');
+  await page.locator('#openLesson').click();
+  await expect(page.locator('#learnerLink')).toBeVisible();
+  const context = await browser.newContext();
+  try {
+    const join = await (await context.request.get(api+'/join')).json();
+    const enter = await context.request.post(api+'/enter',{data:{handle:join.students[0].handle,pin:'5628'}});
+    expect(enter.ok(),await enter.text()).toBeTruthy();
+    const {questions} = await (await context.request.get(api+'/take')).json();
+    const answers = {};
+    for (const task of questions) {
+      const {mission} = task;
+      let start = mission.start;
+      const program = [];
+      for (const chest of [task.checkpoint,task.secondCheckpoint].filter(Boolean)) {
+        const leg = {...mission,start,chest};
+        const steps = game.solve(leg).slice(0,-1);
+        const end = game.run(leg,steps).frames.at(-1);
+        program.push(...steps);
+        start = [end.x,end.y,end.d];
+      }
+      program.push(...game.solve({...mission,start}));
+      answers[task.id] = mission.repeatRequired ? game.compact(program) : program;
+    }
+    const saved = await context.request.post(api+'/draft',{data:{answers}});
+    expect(saved.ok(),await saved.text()).toBeTruthy();
+    const learner = await context.newPage();
+    await learner.goto('/assignment/'+assessmentId);
+    const current = learner.locator('[data-practical-page]:visible');
+    const frame = current.frameLocator('iframe');
+    for (let i=0;i<3;i++) await learner.getByRole('button',{name:'Next task'}).click();
+    await frame.getByRole('button',{name:'Test my code'}).click();
+    await expect(frame.locator('#testResult')).toContainText('You saved 8 blocks!',{timeout:10000});
+    await learner.getByRole('button',{name:'Next task'}).click();
+    await expect(frame.locator('#island .assessment-flag')).toHaveText(['1','2']);
+    await frame.locator('#island').screenshot({path:testInfo.outputPath('Lookout island.png')});
+    await frame.getByRole('button',{name:'Test my code'}).click();
+    await expect(frame.locator('#testResult')).toContainText('2 of 2 flags visited.',{timeout:20000});
+    await expect(frame.locator('#island .flag-visited')).toHaveCount(2);
+    const submission = learner.waitForResponse(r => r.url().endsWith(api+'/submit') && r.ok());
+    await learner.locator('#submitBtn').click();
+    await submission;
+    const results = await (await page.request.get(api+'/results')).json();
+    expect(results.submissions[0]).toMatchObject({totalMarks:50,maxMarks:50,grades:{'two-flags':{marksAwarded:15}}});
     expect((await page.request.patch(api+'/marked',{data:{marked:true}})).ok()).toBeTruthy();
     const progress = await (await page.request.get('/api/roster/'+roster.id+'/progress')).json();
     expect(progress.students[0].results).toContainEqual(expect.objectContaining({assignmentId:assessmentId,score:50,total:50}));

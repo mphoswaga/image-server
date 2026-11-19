@@ -97,7 +97,13 @@
   }
   $('guide').onclick = () => guideClass(false);
   $('releaseGuide').onclick = () => guideClass(true);
+  let timeForLesson;
   function chooseLesson() {
+    const lesson = selectedLesson();
+    if (lesson?.id !== timeForLesson) {
+      $('lessonMinutes').value = lesson?.suggestedMinutes || 40;
+      timeForLesson = lesson?.id;
+    }
     reader?.stop();
     $('lessonDesk').hidden = true;
     refreshDesk().catch(error => { $('notice').textContent = error.message; });
@@ -143,6 +149,7 @@
     });
     line.append(control);
     parent.append(line);
+    return line;
   }
   function rubricItems(task) {
     const { rubric, inputs } = task.activity;
@@ -150,6 +157,7 @@
     const criteria = [['Collect treasure', rubric, 'collect']];
     if (rubric.reach) criteria.unshift(['Reach treasure square', rubric, 'reach']);
     if (rubric.checkpoint) criteria.unshift(['Reach route checkpoint', rubric.checkpoint, 'marks']);
+    if (rubric.secondCheckpoint) criteria.push(['Reach second lookout flag', rubric.secondCheckpoint, 'marks']);
     if (rubric.improvement) {
       const { shorter, muchShorter } = rubric.improvement;
       criteria.push([`Working route in ${shorter.maxBlocks} blocks or fewer (partial)`, shorter, 'marks', true],
@@ -180,6 +188,7 @@
       field(setup, 'Treasure column and row (1-based)', formatCells([mission.chest]), value => mission.chest = cells(value)[0] || []);
       field(setup, 'Rock squares (column,row; column,row)', formatCells(mission.rocks || []), value => mission.rocks = cells(value));
       if (activity.rubric.checkpoint) field(setup, 'Flag column and row (1-based)', formatCells([activity.rubric.checkpoint.cell]), value => activity.rubric.checkpoint.cell = cells(value)[0] || []);
+      if (activity.rubric.secondCheckpoint) field(setup, 'Second flag column and row (1-based)', formatCells([activity.rubric.secondCheckpoint.cell]), value => activity.rubric.secondCheckpoint.cell = cells(value)[0] || []);
       if (activity.starter?.length) {
         field(setup, 'Starting blocks (move; left; right; collect)', activity.starter.map(block=>block.op).join('; '),
           value => activity.starter = choices(value).map(op=>({op})));
@@ -192,7 +201,29 @@
       }
       for (const input of activity.inputs) {
         field(setup, 'Response label', input.label, value => input.label = value);
-        field(setup, input.label + ' choices (separate with ;)', input.options.join('; '), value => input.options = choices(value));
+        if (activity.presentation === 'order') {
+          field(setup, input.label + ' correct box', input.accepted[0], value => input.accepted = [value]);
+          continue;
+        }
+        const choicesLine = field(setup, input.label + ' choices (separate with ;)', (input.options || []).join('; '), value => input.options = choices(value));
+        if (activity.kind === 'data-organise') {
+          const label = element('label', input.label + ' answer method ');
+          const method = element('select');
+          method.add(new Option('Choose from a list', 'list'));
+          method.add(new Option('Type an answer', 'text'));
+          method.value = input.entry === 'text' ? 'text' : 'list';
+          choicesLine.hidden = method.value === 'text';
+          method.onchange = () => {
+            if (method.value === 'text') input.entry = 'text';
+            else delete input.entry;
+            choicesLine.hidden = method.value === 'text';
+            dirty = true;
+            $('learnerPreview').hidden = true;
+            controls();
+          };
+          label.append(method);
+          choicesLine.before(label);
+        }
         field(setup, input.label + ' accepted values (separate with ;)', input.accepted.join('; '), value => input.accepted = choices(value));
         if (activity.kind === 'data-correct') field(setup, input.label + ' starting value', input.initial, value => input.initial = value);
       }
@@ -231,6 +262,10 @@
       nav.setAttribute('aria-label','Assessment islands');
       const title = doc.createElement('h2');
       title.textContent = 'Choose your islands';
+      const count = doc.createElement('span');
+      count.className = 'island-count';
+      count.setAttribute('aria-live', 'polite');
+      title.append(count);
       nav.append(title);
       const strip = doc.createElement('div');
       nav.append(strip);
@@ -290,6 +325,8 @@
       }
       function browse(stage) {
         activeIsland = stage.id;
+        const marks = section.items.reduce((total, item) => total + item.marks, 0);
+        count.textContent = selected.size + ' selected · ' + marks + ' marks';
         if (selected.has(stage.id) && $('treasureTask').value !== stage.id) {
           $('treasureTask').value = stage.id;
           loadTreasureBoard();
@@ -373,7 +410,7 @@
       for (let y = 0; y < m.size; y++) for (let x = 0; x < m.size; x++) {
         const here = cell => cell?.[0] === x && cell[1] === y;
         const choice = choices.find(option => here(option.chest));
-        const icon = here(m.chest) ? '💰' : here(m.start) ? '⛵' : here(task.activity.rubric.checkpoint?.cell) ? '⚑' :
+        const icon = here(m.chest) ? '💰' : here(m.start) ? '⛵' : (here(task.activity.rubric.checkpoint?.cell) || here(task.activity.rubric.secondCheckpoint?.cell)) ? '⚑' :
           m.rocks?.some(here) ? '🪨' : m.water?.some(here) ? '🌊' : '';
         const square = element('button',icon);
         square.type = 'button';
@@ -389,11 +426,13 @@
   function renderEditor(expandedSection, keepGame = false) {
     $('editor').replaceChildren();
     if (!keepGame) $('stageChoices').replaceChildren();
+    $('projectPacing').hidden = draft.suggestedMinutes !== 60;
+    $('projectPacing').textContent = '60-minute lesson · 5 min to introduce, 30 min for the first tasks, 15 min for the independent mission and 10 min to review and submit.';
     updateTreasureTasks();
     for (const [key,label] of [['title','Title'],['subject','Subject'],['grade','Grade'],['instructions','Learner instructions']]) {
       field($('editor'), label, draft[key], value => draft[key] = value, key === 'instructions' ? 'textarea' : 'text');
     }
-    if (tasks().every(task => task.activity.table)) {
+    if (!draft.sections.some(section => section.id === 'codequest-stages')) {
       const stations = element('div');
       stations.className = 'station-directory';
       for (const [index, task] of tasks().entries()) {
@@ -535,7 +574,7 @@
         page.append(element('h3', section.title), element('p', section.instructions), element('h4', `${task.prompt} · ${task.marks} marks`), root);
         if (activity.mission) AssessmentCodeQuest.mount(root, {
           mission: { rocks: [], water: [], ...activity.mission, requireReturn: false },
-          starter: activity.starter, checkpoint: activity.rubric.checkpoint?.cell,
+          starter: activity.starter, checkpoint: activity.rubric.checkpoint?.cell, secondCheckpoint: activity.rubric.secondCheckpoint?.cell, targetBlocks: activity.rubric.improvement?.muchShorter.maxBlocks,
         }, null, () => {});
         else AssessmentDataTable.mount(root, { source: [], ...activity }, null, () => {});
       }
@@ -545,7 +584,7 @@
     panel.scrollIntoView();
   }); }
   action(async () => {
-    const [{ rosters }] = await Promise.all([request('/api/rosters'), refresh('starter-codequest-stages')]);
+    const [{ rosters }] = await Promise.all([request('/api/rosters'), refresh('starter-codequest')]);
     classes = rosters;
     for (const roster of rosters) $('roster').add(new Option(roster.name, roster.id));
     await refreshLessons();

@@ -13,13 +13,24 @@ function normalize(activity, marks) {
       !Array.isArray(table[0]) || !table[0].length || table[0].length > 8 ||
       !table.every(row => Array.isArray(row) && row.length === table[0].length) ||
       !Array.isArray(inputs) || !inputs.length || inputs.length > 24) throw new Error('Provide a small rectangular table and at least one response.');
-  const editable = ['data-organise', 'data-correct'].includes(activity.kind);
+  const ordering = activity.presentation === 'order';
+  const editable = !ordering && ['data-organise', 'data-correct'].includes(activity.kind);
+  const tiles = ordering ? table.slice(1).map(row => text(row[0])) : [];
+  if (ordering && (activity.kind !== 'data-organise' || table[0].length !== 1 || tiles.length < 2 ||
+      inputs.length !== tiles.length || new Set(tiles.map(equivalent)).size !== tiles.length)) {
+    throw new Error('Give every box a unique name and a matching position.');
+  }
   const positions = new Set();
   const fields = inputs.map(input => {
-    const { row, column, marks, options, accepted, initial } = input;
+    const { row, column, marks, accepted, initial } = input;
+    const options = ordering ? tiles : input.options;
     const position = row + ':' + column;
     if (editable && (!Number.isInteger(row) || !Number.isInteger(column) || table[row]?.[column] === undefined || positions.has(position))) throw new Error('Each editable response needs a different table cell.');
     positions.add(position);
+    if (input.entry === 'text') {
+      if (activity.kind !== 'data-organise' || !Number.isInteger(marks) || marks < 1 || !Array.isArray(accepted) || !accepted.length || accepted.length > 30) throw new Error('A written table field needs accepted values and points.');
+      return { label: text(input.label), marks, row, column, entry: 'text', accepted: accepted.map(value => equivalent(text(value))) };
+    }
     if (!Number.isInteger(marks) || marks <= 0 || !Array.isArray(options) || options.length < 2 || options.length > 12 || !Array.isArray(accepted) || !accepted.length) throw new Error('Each response needs choices, a correct answer, and points.');
     const choices = options.map(text);
     const normalized = choices.map(equivalent);
@@ -29,9 +40,12 @@ function normalize(activity, marks) {
     return { label: text(input.label), marks, options: choices, accepted: keys,
       ...(editable ? { row, column } : {}), ...(activity.kind === 'data-correct' ? { initial: choices[normalized.indexOf(equivalent(initial))] } : {}) };
   });
+  if (ordering && (fields.some(field => field.accepted.length !== 1) || new Set(fields.map(field => field.accepted[0])).size !== fields.length)) {
+    throw new Error('Use each box once in the correct order.');
+  }
   if (fields.reduce((sum, input) => sum + input.marks, 0) !== marks) throw new Error('Table rubric points must add up to the task marks.');
   if (source !== undefined && (!Array.isArray(source) || source.length > 12)) throw new Error('Provide at most twelve source cards.');
-  const presentation = ['records','files','types','survey'].includes(activity.presentation) ? activity.presentation : null;
+  const presentation = ['records','files','types','survey','order','ballots'].includes(activity.presentation) ? activity.presentation : null;
   return { kind: activity.kind, version: 1, ...(presentation ? {presentation} : {}), table: table.map((row, index) => row.map((value, column) =>
     editable && positions.has(index + ':' + column) ? '' : text(value))),
     source: (source || []).map(text), inputs: fields };
@@ -43,12 +57,19 @@ function learnerView({ kind, table, source, inputs, presentation }) {
 
 function answer(activity, responses) {
   if (!Array.isArray(responses) || responses.length !== activity.inputs.length) throw new Error('Invalid table response.');
-  return responses.map((value, index) => {
+  const values = responses.map((value, index) => {
     if (value === null || value === '') return null;
+    if (activity.inputs[index].entry === 'text') {
+      if (typeof value !== 'string' || value.length > 300) throw new Error('Enter up to 300 characters in each field.');
+      return value.trim() || null;
+    }
     const choice = activity.inputs[index].options.find(option => equivalent(option) === equivalent(text(value)));
     if (choice === undefined) throw new Error('Choose a supplied table value.');
     return choice;
   });
+  if (activity.presentation === 'order' && values.some(value => value !== null) &&
+      (values.includes(null) || new Set(values).size !== values.length)) throw new Error('Place each box once.');
+  return values;
 }
 
 function grade(activity, responses) {

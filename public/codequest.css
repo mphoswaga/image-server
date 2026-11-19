@@ -79,7 +79,7 @@ body{background:radial-gradient(ellipse at 15% 5%,#bce8dc 0,transparent 45%),rad
 /* Photographic moulded-plastic shell; labels and counters remain live controls. */
 .workspace-mode #program li,#palette .command,#codeStart{position:relative;isolation:isolate;clip-path:none;border:0!important;border-radius:5px!important;background:transparent!important;box-shadow:none;overflow:visible}
 .workspace-mode #program li{padding:9px 7px 3px 23px;min-height:46px;margin-bottom:1px}
-.brickSurface{position:absolute;inset:0;z-index:-1;pointer-events:none;background:url('/assets/codequest/plastic-brick.png') center/100% 100% no-repeat;filter:sepia(.45) saturate(2) hue-rotate(110deg)}
+.brickSurface{position:absolute;inset:0;z-index:-1;pointer-events:none;background:url('/assets/codequest/plastic-brick.webp') center/100% 100% no-repeat;filter:sepia(.45) saturate(2) hue-rotate(110deg)}
 .block-left>.brickSurface,.block-right>.brickSurface{filter:sepia(.45) saturate(2.5) hue-rotate(205deg)}
 .block-collect>.brickSurface{filter:sepia(.8) saturate(3)}
 .block-repeat>.brickSurface,#codeStart>.brickSurface{filter:sepia(.5) saturate(2.5) hue-rotate(75deg)}
@@ -144,3 +144,9 @@ body{background:radial-gradient(ellipse at 15% 5%,#bce8dc 0,transparent 45%),rad
 .assessment-workspace .tile:has(.treasure-target){position:relative}
 .assessment-workspace .tile .treasure-target{position:absolute;inset:0;width:100%;height:100%;min-height:0;min-width:0;border:2px dashed #146c58;border-radius:inherit;padding:0;background:#fff5;z-index:2}
 .assessment-workspace .tile .treasure-target:is(:hover,:focus-visible){background:#82e2bcaa;outline:2px solid #104f48;outline-offset:-3px}
+
+.island-count{display:inline-block;margin-left:12px;font-size:14px;font-weight:500;color:#dfefe8}
+
+.assessment-workspace .assessment-flag{display:grid;place-items:center;position:absolute;left:28%;top:13%;width:45%;height:45%;padding-bottom:4%;border-left:3px solid #50341e;color:#fff;background:#a83822;clip-path:polygon(0 0,100% 5%,79% 42%,100% 73%,10% 75%,10% 100%,0 100%);font:800 clamp(13px,2.3vw,22px)/1 system-ui;text-shadow:none}
+.assessment-workspace .flag-visited .assessment-flag{background:#176050}
+.assessment-workspace .tile.flag-visited:after{content:'✓';position:absolute;bottom:2%;right:4%;border-radius:50%;width:1.4em;height:1.4em;background:#fff4b9;color:#145a43;font:800 clamp(10px,1.2vw,15px)/1.4 system-ui;text-align:center}

@@ -191,6 +191,7 @@ function normalizeAssessment(data) {
   if (allocatedMarks !== totalMarks) throw new Error(`Allocated marks (${allocatedMarks}) must equal the assessment total (${totalMarks}).`);
   return {
     title, subject, grade, assessmentType, deliveryMode, totalMarks, objectives, sections, questions,
+    ...(Number.isInteger(data.suggestedMinutes) && data.suggestedMinutes >= 5 && data.suggestedMinutes <= 120 ? {suggestedMinutes:data.suggestedMinutes} : {}),
     instructions: cleanText(data.instructions, 2000),
     lessonWorkspaceId: cleanText(data.lessonWorkspaceId, 120) || null,
     unitId: cleanText(data.unitId, 120) || null,
@@ -222,7 +223,7 @@ function createAssessment({ teacherId, teacherName, data, rosterId, rosterSnapsh
     totalMarks: normalized.totalMarks, objectives: normalized.objectives,
     sections: normalized.sections, version: 1, status: activityTemplate ? 'draft' : 'published',
     ...(activityTemplate ? { activityTemplate } : {}),
-    ...(oneLesson ? { lessonPolicy: { mode: 'one-lesson', windows: [], attempts: [], ...(lessonPlan ? { plan: lessonPlan } : {}) } } : {}),
+    ...(oneLesson ? { lessonPolicy: { mode: 'one-lesson', windows: [], attempts: [], ...(normalized.suggestedMinutes ? {suggestedMinutes:normalized.suggestedMinutes} : {}), ...(lessonPlan ? { plan: lessonPlan } : {}) } } : {}),
     lessonWorkspaceId: normalized.lessonWorkspaceId,
     unitId: normalized.unitId,
     unitName: normalized.unitName,

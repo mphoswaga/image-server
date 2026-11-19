@@ -6,7 +6,7 @@ function normalize(activity, marks) {
     value.every(n => Number.isInteger(n) && n >= 0 && n < size);
   const { kind } = activity;
   if (!['codequest-build', 'codequest-debug', 'codequest-optimise'].includes(kind) ||
-      (activity.version !== undefined && ![1, 2].includes(activity.version)) ||
+      (activity.version !== undefined && ![1, 2, 3].includes(activity.version)) ||
       !Number.isInteger(size) || size < 3 || size > 8 ||
       !Array.isArray(start) || start.length !== 3 || !cell(start.slice(0, 2)) ||
       ![0, 1, 2, 3].includes(start[2]) || !cell(chest) ||
@@ -15,8 +15,8 @@ function normalize(activity, marks) {
   }
   const mission = { size, start, chest, rocks, water, requireReturn: false };
   const version = activity.version || 1;
-  if (version === 2) {
-    if (kind !== 'codequest-build') throw new Error('Choose a CodeQuest build stage.');
+  if (version >= 2) {
+    if (version === 2 && kind !== 'codequest-build') throw new Error('Choose a CodeQuest build stage.');
     const { blocks, blockLimit, repeatRequired } = activity.mission;
     mission.blocks = ['move', 'left', 'right', 'collect'];
     if (blocks?.includes('repeat')) mission.blocks.push('repeat');
@@ -31,19 +31,25 @@ function normalize(activity, marks) {
   const solution = CodeQuest.solve(mission);
   if ([start.slice(0, 2), chest].some(([x, y]) => CodeQuest.at(obstacles, x, y)) ||
       !solution.length || solution.length > 32 || !CodeQuest.run(mission, solution).success) throw new Error('The CodeQuest treasure must be reachable.');
-  const { reach, collect, checkpoint, improvement } = activity.rubric || {};
+  const { reach, collect, checkpoint, secondCheckpoint, improvement } = activity.rubric || {};
   const points = [collect];
   const rubric = { collect };
   const starter = kind === 'codequest-build' ? [] : answer(activity.starter);
   const initial = CodeQuest.run(mission, starter);
+  if (secondCheckpoint && (version !== 3 || kind !== 'codequest-build' || !checkpoint)) {
+    throw new Error('Add a first flag before placing a second flag on a build mission.');
+  }
   if (kind === 'codequest-debug' && (!starter.length || initial.success)) {
     throw new Error('Debug must start with code that does not collect the treasure.');
   }
   if (kind === 'codequest-optimise') {
     const { shorter, muchShorter } = improvement || {};
+    const compact = mission.repeatRequired ? CodeQuest.compact(solution) : solution;
+    const targetCost = CodeQuest.blockCount(compact);
     if (!initial.success || !shorter || !muchShorter ||
+        (mission.repeatRequired && !compact.some(block => block.op === 'repeat')) ||
         ![shorter.maxBlocks, muchShorter.maxBlocks].every(Number.isInteger) ||
-        muchShorter.maxBlocks < solution.length || muchShorter.maxBlocks >= shorter.maxBlocks ||
+        muchShorter.maxBlocks < targetCost || muchShorter.maxBlocks >= shorter.maxBlocks ||
         shorter.maxBlocks >= starter.length || muchShorter.marks <= shorter.marks) {
       throw new Error('Optimise needs working starter code and two achievable, shorter code limits.');
     }
@@ -64,10 +70,19 @@ function normalize(activity, marks) {
       }
       points.push(checkpoint.marks);
       rubric.checkpoint = { cell: position, marks: checkpoint.marks };
+      if (secondCheckpoint) {
+        const next = secondCheckpoint.cell;
+        if (!cell(next) || CodeQuest.at([...obstacles, start, chest, position], ...next) ||
+            !(solutionVia(mission, position, next) || solutionVia(mission, next, position))) {
+          throw new Error('Place two different flags on a route to the treasure.');
+        }
+        points.push(secondCheckpoint.marks);
+        rubric.secondCheckpoint = {cell:next, marks:secondCheckpoint.marks};
+      }
     }
   }
   if (!points.every(n => Number.isInteger(n) && n > 0) ||
-      collect + (rubric.reach || 0) + (rubric.checkpoint?.marks || 0) + (rubric.improvement?.muchShorter.marks || 0) !== marks) {
+      collect + (rubric.reach || 0) + (rubric.checkpoint?.marks || 0) + (rubric.secondCheckpoint?.marks || 0) + (rubric.improvement?.muchShorter.marks || 0) !== marks) {
     throw new Error('CodeQuest rubric points must add up to the task marks.');
   }
   return { kind, version, mission, starter, rubric };
@@ -77,12 +92,13 @@ function visited(result, [x, y]) {
   return result.frames.some(frame => frame.x === x && frame.y === y);
 }
 
-function solutionVia(mission, position) {
+function solutionVia(mission, position, next) {
   const first = CodeQuest.solve({ ...mission, rocks: [...mission.rocks, mission.chest], chest: position });
   if (!first.length || first.length > 32) return false;
   const end = CodeQuest.run({ ...mission, chest: position }, first).frames.at(-1);
-  const last = CodeQuest.solve({ ...mission, start: [end.x, end.y, end.d] });
-  return last.length > 0 && first.length - 1 + last.length <= 32 && first.slice(0, -1).concat(last);
+  const rest = { ...mission, start: [end.x, end.y, end.d] };
+  const last = next ? solutionVia(rest, next) : CodeQuest.solve(rest);
+  return last && last.length > 0 && first.length - 1 + last.length <= 32 && first.slice(0, -1).concat(last);
 }
 
 function treasureChoices(raw, marks) {
@@ -96,14 +112,15 @@ function treasureChoices(raw, marks) {
     try {
       const route = CodeQuest.solve({ ...map, blockLimit: undefined });
       if (!route.length) continue;
-      if (map.repeatRequired) {
+      if (map.repeatRequired && kind !== 'codequest-optimise') {
         const cost = CodeQuest.blockCount(CodeQuest.compact(route));
         if (cost >= route.length) continue;
         map.blockLimit = Math.min(cost + 1, route.length - 1);
       }
       if (kind === 'codequest-optimise') {
         const { shorter, muchShorter } = next.rubric.improvement;
-        muchShorter.maxBlocks = route.length;
+        if (map.repeatRequired && !CodeQuest.compact(route).some(block => block.op === 'repeat')) continue;
+        muchShorter.maxBlocks = map.repeatRequired ? CodeQuest.blockCount(CodeQuest.compact(route)) : route.length;
         shorter.maxBlocks = route.length + 2;
         next.starter = ['left','right','left','right'].map(op => ({op})).concat(route);
       }
@@ -128,7 +145,7 @@ function answer(program, activity) {
 }
 
 function grade(activity, program) {
-  if (![1, 2].includes(activity.version)) throw new Error('Unsupported CodeQuest scoring version.');
+  if (![1, 2, 3].includes(activity.version)) throw new Error('Unsupported CodeQuest scoring version.');
   const final = answer(program, activity);
   const result = CodeQuest.run(activity.mission, final);
   const { rubric } = activity;
@@ -138,18 +155,24 @@ function grade(activity, program) {
     add('Reached the marked route checkpoint', rubric.checkpoint.marks,
       visited(result, rubric.checkpoint.cell) ? rubric.checkpoint.marks : 0);
   }
+  if (rubric.secondCheckpoint) {
+    add('Reached the second lookout flag', rubric.secondCheckpoint.marks,
+      visited(result, rubric.secondCheckpoint.cell) ? rubric.secondCheckpoint.marks : 0);
+  }
+  const blocks = activity.version === 3 ? CodeQuest.blockCount(final) : final.length;
   if (rubric.reach) add('Reached the treasure square', rubric.reach, visited(result, activity.mission.chest) ? rubric.reach : 0);
   add('Collected the treasure', rubric.collect, result.success ? rubric.collect : 0);
   if (rubric.improvement) {
     const { shorter, muchShorter } = rubric.improvement;
-    const earned = !result.success ? 0 : final.length <= muchShorter.maxBlocks ? muchShorter.marks :
-      final.length <= shorter.maxBlocks ? shorter.marks : 0;
+    const usedRepeat = result.frames.some(frame => final[frame.block]?.op === 'repeat');
+    const earned = !result.success ? 0 : blocks <= muchShorter.maxBlocks && (!activity.mission.repeatRequired || usedRepeat) ? muchShorter.marks :
+      blocks <= shorter.maxBlocks ? shorter.marks : 0;
     add('Shortened the working program', muchShorter.marks, earned);
   }
   const marksAwarded = criteria.reduce((total, item) => total + item.awarded, 0);
   return {
     marksAwarded, source: 'auto', verdict: criteria.every(item => item.met) ? 'correct' : marksAwarded ? 'partial' : 'incorrect',
-    criteria, execution: { success: result.success, reason: result.reason, steps: result.steps, blocks: final.length, starterBlocks: activity.starter?.length || 0 },
+    criteria, execution: { success: result.success, reason: result.reason, steps: result.steps, blocks, starterBlocks: CodeQuest.blockCount(activity.starter || []) },
     rationale: criteria.map(item => item.label + ': ' + item.awarded + '/' + item.max).join(' · '),
   };
 }

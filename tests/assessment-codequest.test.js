@@ -58,3 +58,33 @@ test('game stages have a full-credit solution and enforce the game block rules',
   }
   assert.throws(() => code.answer(game.solve(questions[2].activity.mission), questions[0].activity), /Repeat is not available/);
 });
+
+test('the 60-minute voyage grades a working loop and two independently visited flags', () => {
+  const game = require('../public/codequest-core');
+  const {questions,sections,totalMarks} = assessment.normalizeAssessment(require('../activity-templates/codequest-voyage'));
+  assert.equal(totalMarks,50);
+  assert.deepEqual(sections.map(s => s.marks), [12,11,12,15]);
+  const shorten = questions.find(q => q.id === 'shorten').activity;
+  const linear = game.solve(shorten.mission);
+  assert.equal(code.grade(shorten,shorten.starter).marksAwarded,4);
+  assert.equal(code.grade(shorten,linear).marksAwarded,8);
+  const optimised = code.grade(shorten,game.compact(linear));
+  assert.equal(optimised.marksAwarded,12);
+  assert.equal(optimised.execution.blocks,3);
+  const task = questions.at(-1).activity;
+  const {mission,rubric} = task;
+  for (const cells of [[rubric.checkpoint.cell,rubric.secondCheckpoint.cell],[rubric.secondCheckpoint.cell,rubric.checkpoint.cell]]) {
+    let program = [], start = mission.start;
+    for (const chest of cells) {
+      const leg = {...mission,start,chest};
+      const segment = game.solve(leg).slice(0,-1);
+      program.push(...segment);
+      const end = game.run(leg,segment).frames.at(-1);
+      start = [end.x,end.y,end.d];
+    }
+    program.push(...game.solve({...mission,start}));
+    assert.equal(code.grade(task,program).marksAwarded,15);
+  }
+  assert.ok(code.grade(task,game.solve(mission)).marksAwarded < 15);
+  assert.throws(() => code.normalize({...task,rubric:{...rubric,secondCheckpoint:rubric.checkpoint}},15), /different flags/);
+});

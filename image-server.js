@@ -2519,7 +2519,7 @@ app.post('/api/activity-templates/assign', requireAuth, (req, res) => {
 });
 function activityLessonStatus(record) {
   return { id: record.id, title: record.title, rosterId: record.rosterId, status: record.status,
-    active: assignments.currentLessonWindow(record), hasOpened: !!record.lessonPolicy.windows.length,
+    suggestedMinutes: record.lessonPolicy.suggestedMinutes || 40, active: assignments.currentLessonWindow(record), hasOpened: !!record.lessonPolicy.windows.length,
     eligible: assignments.lessonEligible(record), attempts: record.lessonPolicy.attempts.length, plan: record.lessonPolicy.plan || null };
 }
 app.get('/api/activity-templates/lessons/:id', requireAuth, (req, res) => {
@@ -3800,7 +3800,7 @@ app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
     questions: visibleQuestions.map(q => ({
       id: q.id, question: q.question, kind: q.kind, options: q.options || null, marks: q.marks,
       sectionId: q.sectionId || null, sectionTitle: q.sectionTitle || null, sectionInstructions: q.sectionInstructions || '', sectionType: q.sectionType || null,
-      ...(q.kind === 'codequest' ? { mission: q.activity.mission, starter: q.activity.starter || [], checkpoint: q.activity.rubric.checkpoint?.cell || null } : {}),
+      ...(q.kind === 'codequest' ? { mission: q.activity.mission, starter: q.activity.starter || [], checkpoint: q.activity.rubric.checkpoint?.cell || null, secondCheckpoint: q.activity.rubric.secondCheckpoint?.cell || null, targetBlocks: q.activity.rubric.improvement?.muchShorter.maxBlocks } : {}),
       ...(q.kind === 'data-table' ? { tableActivity: assessmentDataTable.learnerView(q.activity) } : {}),
     })),
     delivery, activeSection: activeSection ? { id: activeSection.id, title: activeSection.title, index: delivery.activeSectionIndex, total: a.sections.length } : null,
