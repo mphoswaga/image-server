@@ -19,6 +19,18 @@
     .project-data-scroll{overflow:auto}
     table{border-collapse:collapse}th,td{padding:6px;border:1px solid #c8ded5}
     [role=status]{min-height:1.5em}
+    [hidden]{display:none!important}
+    h1,h2,h3{line-height:1.15}
+    main>section{box-shadow:0 3px 14px #18382e09}
+    #editor>details{border:1px solid #d6e3d9;border-radius:9px;margin:8px 0;padding:10px;background:#f8fbf8}
+    summary{cursor:pointer;font-weight:650}
+    fieldset{border:1px solid #cbdacf;border-radius:9px;margin:10px 0;background:white}
+    button,select,input,textarea{color:#18382e;border:1px solid #afc7ba;border-radius:8px;background:#fff}
+    button:not(:disabled){cursor:pointer}
+    button:disabled{opacity:.48}
+    #preview,#assign,#openLesson,#preparePlan{background:#14684e;color:white;border-color:#14684e;font-weight:700}
+    #total{font-weight:800;color:#14684e}
+    .preview-task{background:#fbfdfb;border:1px solid #d4e4da;padding:14px;border-radius:12px}
   </style>
 </head>
 <body><main>
@@ -56,6 +68,18 @@
       <button id="closeLesson" type="button">Close lesson now</button>
       <a id="learnerLink" hidden>Open learner link</a>
     </div>
+    <div id="lessonDesk" hidden>
+      <h3>Guide the class</h3>
+      <label>Question <select id="guideTask"></select></label>
+      <div class="controls">
+        <button id="guide" type="button">Sync class to this question</button>
+        <button id="releaseGuide" type="button">Let students work at their own pace</button>
+        <button id="readPrompt" type="button">Read question aloud</button>
+        <button id="readDirections" type="button">Read instructions aloud</button>
+      </div>
+      <p id="guideState"></p><p id="readingStatus"></p>
+      <details><summary id="submissionCount">Live submissions</summary><ul id="learnerProgress"></ul></details>
+    </div>
   </section>
   <section>
     <h2>First ICT project class plan</h2>
@@ -65,7 +89,10 @@
   <p id="notice" role="status"></p>
 </main>
 <script src="/codequest-core.js"></script>
-<script src="/assessment-codequest.js?v=2"></script>
+<link rel="stylesheet" href="/practical-activities.css?v=1">
+<script src="/assessment-codequest.js?v=4"></script>
 <script src="/assessment-data-table.js?v=1"></script>
-<script src="/activity-templates.js"></script>
+<script src="/assessment-narration.js"></script>
+<script src="/practical-task-pager.js"></script>
+<script src="/activity-templates.js?v=2"></script>
 </body></html>

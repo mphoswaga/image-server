@@ -17,5 +17,5 @@ module.exports = {
     ['3B5','starter-data','2026-11-26','14:05','15:20','2026-12-10'],
     ['3B6','starter-data','2026-11-27','08:00','09:15','2026-12-04'],
     ['3B7','starter-data','2026-11-27','12:30','13:45','2026-12-04'],
-  ].map(([className,templateId,date,start,end,replacement]) => ({ className,templateId,version:1,date,start,end,replacement })),
+  ].map(([className,templateId,date,start,end,replacement]) => ({ className,templateId,version:templateId === 'starter-data' ? 2 : 1,date,start,end,replacement })),
 };

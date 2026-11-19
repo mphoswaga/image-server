@@ -598,6 +598,16 @@ function manageLesson(id, action, minutes, studentIds, now = Date.now()) {
   return record;
 }
 
+function setLessonTask(id, windowId, questionId) {
+  const record = getAssignment(id);
+  const active = currentLessonWindow(record);
+  if (!active || active.id !== windowId) throw new Error('This lesson window has closed.');
+  if (questionId !== null && !record.content.questions.some(q => q.id === questionId)) throw new Error('Choose a task in this assessment.');
+  active.questionId = questionId;
+  writeJsonAtomic(recPath(id), record);
+  return record;
+}
+
 function checkLessonAccess(record, studentId, start = false, now = Date.now()) {
   if (!record.lessonPolicy) return;
   const student = normalizeStudentId(studentId);
@@ -1323,7 +1333,7 @@ module.exports = {
   setSchoolSystemCaptured,
   isAbsent, setAttendance, addAssessmentLearners,
   enableQuizAssessmentControls, legacyContentEditable, updateLegacyContent, createAssignment, createAssessment, copyAssessmentToRoster, normalizeAssessment, getAssignment, updateAssignmentCutoff, updateAssessmentRoster, updateAssessmentContent, assessmentContentEditable, getRoomCode,
-  publishedAssessmentGenerationContext, currentLessonWindow, lessonEligible, manageLesson, checkLessonAccess,
+  publishedAssessmentGenerationContext, currentLessonWindow, lessonEligible, manageLesson, setLessonTask, checkLessonAccess,
   releaseResults, setTeacherMarked, isReleased,
   pendingAIMarks, acceptAllAIMarks, assessmentIsFinalised, saveSubmission, saveNewSubmission, getSubmissions, getSubmission, reassignRoster,
   assessmentReleaseReadiness, assessmentMarkingSummary, loadDrafts, getDraft, saveDraft, saveDraftGrade, deliveryState, learnerSectionProgress, learnerQuestionProgress, questionAnswerProgress, updateDelivery, draftProgress, presentationSlides,

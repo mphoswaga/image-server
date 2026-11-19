@@ -137,8 +137,10 @@
     .project-data-response{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0}
   </style>
   <script src="/codequest-core.js"></script>
-  <script src="/assessment-codequest.js?v=3"></script>
+  <link rel="stylesheet" href="/practical-activities.css?v=1">
+  <script src="/assessment-codequest.js?v=4"></script>
   <script src="/assessment-data-table.js?v=1"></script>
+  <script src="/practical-task-pager.js"></script>
   <script>
     const $ = id => document.getElementById(id);
     const assignmentId = location.pathname.split('/').pop();
@@ -155,7 +157,9 @@
     let livePollBusy = false;
     let questionSyncActive = false;
     let activeQuestion = null;
-    let lessonTimer, lessonPoll, lessonEnds;
+    let lessonTimer, lessonPoll, lessonEnds, lessonTask = null, lessonNumber = null, checkingLesson = false;
+    const practicalView = {};
+    const editedTasks = new Set();
     function closeLessonView() {
       clearTimeout(serverDraftTimer);
       clearInterval(lessonTimer);
@@ -164,6 +168,8 @@
     }
     function startLessonClock(clock) {
       if (!clock.endsAt) return closeLessonView();
+      lessonTask = clock.questionId;
+      lessonNumber = clock.number;
       lessonEnds = performance.now() + Math.max(0, clock.endsAt - clock.serverNow);
       const tick = () => {
         const seconds = Math.max(0, Math.ceil((lessonEnds - performance.now()) / 1000));
@@ -175,11 +181,28 @@
       clearInterval(lessonPoll);
       lessonTimer = setInterval(tick, 1000);
       lessonPoll = setInterval(async () => {
+        if (checkingLesson || $('form').style.display === 'none') return;
+        checkingLesson = true;
         try {
           const response = await fetch('/api/assignment/' + assignmentId + '/lesson-clock');
           if (response.status === 409 && $('form').style.display !== 'none') closeLessonView();
-        } catch {}
-      }, 8000);
+          if (!response.ok) return;
+          const state = await response.json();
+          if (state.questionId === lessonTask) return;
+          const taken = await fetch('/api/assignment/' + assignmentId + '/take');
+          if (!taken.ok) return;
+          const take = await taken.json();
+          if (!take.lessonClock || $('form').style.display === 'none') return;
+          lessonTask = take.lessonClock.questionId;
+          lessonNumber = take.lessonClock.number;
+          questions = take.questions;
+          for (const [id, answer] of Object.entries(take.draftAnswers)) {
+            if (!editedTasks.has(id)) answers[id] = answer;
+          }
+          renderQuestions();
+          if (questions.some(q => editedTasks.has(q.id))) saveDraft();
+        } catch {} finally { checkingLesson = false; }
+      }, 2500);
       tick();
     }
 
@@ -202,7 +225,7 @@
 
     async function saveServerDraft(complete) {
       clearTimeout(serverDraftTimer);
-      const pendingRuns = codeRuns.slice(0, 16);
+      const pendingRuns = codeRuns.filter(run => !lessonTask || run.id === lessonTask).slice(0, 16);
       const response = await fetch('/api/assignment/' + assignmentId + '/draft', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ answers, complete: !!complete, codeRuns: pendingRuns }),
@@ -234,8 +257,7 @@
       $('questions').innerHTML = questions.map((q, i) => {
         const sectionHead=q.sectionTitle&&q.sectionTitle!==previousSection?`<div class="section-head">${esc(q.sectionTitle)}${q.sectionInstructions?`<div class="section-instructions">${esc(q.sectionInstructions)}</div>`:''}</div>`:'';
         if(q.sectionTitle)previousSection=q.sectionTitle;
-        if(q.kind==='codequest')return `${sectionHead}<div class="q"><div class="qtext">${i+1}. ${esc(q.question)} <span class="marks">(${q.marks} marks)</span></div><div data-code-task="${esc(q.id)}"></div></div>`;
-        if(q.kind==='data-table')return `${sectionHead}<div class="q"><div class="qtext">${i+1}. ${esc(q.question)} <span class="marks">(${q.marks} marks)</span></div><div data-table-task="${esc(q.id)}"></div></div>`;
+        if(['codequest','data-table'].includes(q.kind))return `<div class="q" data-practical-page><div class="section-head">${esc(q.sectionTitle||'Practical task')}${q.sectionInstructions?`<div class="section-instructions">${esc(q.sectionInstructions)}</div>`:''}</div><div class="qtext">${lessonNumber || i+1}. ${esc(q.question)} <span class="marks">(${q.marks} marks)</span></div><div ${q.kind==='codequest'?'data-code-task':'data-table-task'}="${esc(q.id)}"></div></div>`;
         if (q.kind === 'practical') {
           return `${sectionHead}<div class="q">
             <div class="qtext">${activeQuestion ? activeQuestion.number : i + 1}. ${esc(stripMarks(q.question))} <span class="marks">(${q.marks} mark${q.marks !== 1 ? 's' : ''})</span></div>
@@ -260,6 +282,7 @@
       $('questions').querySelectorAll('[data-code-task]').forEach(node => {
         const question = questions.find(q => q.id === node.dataset.codeTask);
         AssessmentCodeQuest.mount(node, question, answers[question.id], program => {
+          editedTasks.add(question.id);
           answers[question.id] = program;
           saveDraft();
         }, program => { if (codeRuns.length < 16) codeRuns.push({ id: question.id, program }); });
@@ -267,10 +290,19 @@
       $('questions').querySelectorAll('[data-table-task]').forEach(node => {
         const question = questions.find(q => q.id === node.dataset.tableTask);
         AssessmentDataTable.mount(node, question.tableActivity, answers[question.id], responses => {
+          editedTasks.add(question.id);
           answers[question.id] = responses;
           saveDraft();
         });
       });
+      if (questions.every(q => ['codequest','data-table'].includes(q.kind))) {
+        if (lessonTask) {
+          const guidance = document.createElement('p');
+          guidance.className = 'project-task-nav';
+          guidance.textContent = 'Your teacher is guiding the class · Task ' + lessonNumber;
+          $('questions').prepend(guidance);
+        } else practicalTaskPager($('questions'), [...$('questions').querySelectorAll('[data-practical-page]')], practicalView);
+      }
 
       $('questions').querySelectorAll('.opts').forEach(box => {
         box.addEventListener('click', e => {
@@ -447,6 +479,8 @@
           clearInterval(livePollTimer);
           livePollTimer = setInterval(refreshLiveTake, 2500);
         } else {
+          lessonNumber = take.lessonClock?.number;
+          lessonTask = take.lessonClock?.questionId;
           renderQuestions();
           $('form').style.display = 'block';
           if (take.lessonClock) startLessonClock(take.lessonClock);
@@ -581,6 +615,7 @@
         const d = await r.json();
         if (!r.ok) throw new Error(d.error);
         clearDraft();
+        if (lessonTask) { await init(); return; }
         renderResults(d, answers);
       } catch (err) {
         $('submitErr').textContent = err.message;

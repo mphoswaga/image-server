@@ -2513,6 +2513,22 @@ function activityLessonStatus(record) {
     active: assignments.currentLessonWindow(record), hasOpened: !!record.lessonPolicy.windows.length,
     eligible: assignments.lessonEligible(record), attempts: record.lessonPolicy.attempts.length, plan: record.lessonPolicy.plan || null };
 }
+app.get('/api/activity-templates/lessons/:id', requireAuth, (req, res) => {
+  const record = assignments.getAssignment(req.params.id);
+  if (!record?.lessonPolicy || record.teacherId !== req.userId) return res.sendStatus(404);
+  const drafts = new Map(assignments.loadDrafts(record.id).map(d => [assignments.normalizeStudentId(d.studentId), d]));
+  const submitted = new Set(assignments.getSubmissions(record.id).map(s => assignments.normalizeStudentId(s.studentId)));
+  const started = new Set(record.lessonPolicy.attempts.map(a => a.studentId));
+  const questions = record.content.questions;
+  res.json({ active: assignments.currentLessonWindow(record),
+    tasks: questions.map(q => ({ id: q.id, title: q.question, instructions: q.sectionInstructions || '' })),
+    learners: record.rosterSnapshot.map(student => {
+      const id = assignments.normalizeStudentId(student.id);
+      const draft = drafts.get(id);
+      return { name: student.name, started: started.has(id), submitted: submitted.has(id),
+        answered: submitted.has(id) ? questions.length : questions.length - assignments.incompleteAssessmentAnswers(questions, draft?.answers || {}).length };
+    }) });
+});
 app.get('/api/activity-templates/lessons', requireAuth, (req, res) => {
   const lessons = assignments.listTeacherAssignments(req.userId).filter(item => item.lessonPolicy)
     .map(item => activityLessonStatus(assignments.getAssignment(item.id)));
@@ -2523,7 +2539,10 @@ app.post('/api/activity-templates/lessons/:id', requireAuth, (req, res) => {
   if (!record || record.teacherId !== req.userId || !record.lessonPolicy) return res.status(404).json({ error: 'Lesson assessment not found.' });
   try {
     const { action, minutes, studentIds } = req.body || {};
-    res.json(activityLessonStatus(assignments.manageLesson(record.id, action, minutes, studentIds)));
+    const updated = action === 'guide'
+      ? assignments.setLessonTask(record.id, req.body.windowId, req.body.questionId)
+      : assignments.manageLesson(record.id, action, minutes, studentIds);
+    res.json(activityLessonStatus(updated));
   } catch (error) { res.status(409).json({ error: error.message }); }
 });
 
@@ -2647,7 +2666,7 @@ app.get('/api/assignment/:id/presentation-audio',requireAuth,async(req,res)=>{
   const record=assignments.getAssignment(req.params.id);
   if(!record || record.teacherId!==req.userId || record.type!=='assessment')return res.status(404).json({error:'Assessment not found.'});
   let text;
-  try{text=require('./assessment-narration').narrationText(record,req.query.questionId,req.query.choice,req.query.slideIndex,req.query.bulletIndex);}
+  try{text=require('./assessment-narration').narrationText(record,req.query.questionId,req.query.choice,req.query.slideIndex,req.query.bulletIndex,req.query.part);}
   catch(error){return res.status(400).json({error:error.message});}
   try{const audio=await assessmentNarration(req.userId,text);res.set('Cache-Control','private, no-store').type('audio/mpeg').send(audio);}
   catch(error){console.error('Assessment narration failed:',error.code||error.status||'unavailable');res.status(503).json({error:'The natural voice is unavailable right now. Please try again.'});}
@@ -3699,7 +3718,8 @@ app.get('/api/assignment/:id/lesson-clock', requireAssignmentAccess, (req, res) 
   const session = assignmentStudentSession(req, res, record);
   if (!session) return res.status(401).json({ error: 'Rejoin the lesson.' });
   if (!allowAssessmentLesson(req, res, record, session.studentId)) return;
-  res.json({ endsAt: assignments.currentLessonWindow(record)?.endsAt || null, serverNow: Date.now() });
+  const window = assignments.currentLessonWindow(record);
+  res.json({ endsAt: window?.endsAt || null, questionId: window?.questionId || null, serverNow: Date.now() });
 });
 app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
@@ -3762,6 +3782,8 @@ app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
       }
     }
   }
+  const lessonTask = !already && session && assignments.currentLessonWindow(a)?.questionId;
+  if (lessonTask) visibleQuestions = a.content.questions.filter(q => q.id === lessonTask);
   const visibleIds = new Set(visibleQuestions.map(q => q.id));
   const draftAnswers = Object.fromEntries(Object.entries(draft && draft.answers || {}).filter(([id]) => visibleIds.has(id)));
   res.json({
@@ -3775,7 +3797,7 @@ app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
     delivery, activeSection: activeSection ? { id: activeSection.id, title: activeSection.title, index: delivery.activeSectionIndex, total: a.sections.length } : null,
     draftAnswers, sectionCompleted, activeQuestion, questionSyncActive,
     alreadySubmitted: !!already,
-    ...(session && !already && a.lessonPolicy ? { lessonClock: { endsAt: assignments.currentLessonWindow(a)?.endsAt || null, serverNow: Date.now() } } : {}),
+    ...(session && !already && a.lessonPolicy ? { lessonClock: { questionId: lessonTask || null, number: lessonTask ? a.content.questions.findIndex(q => q.id === lessonTask) + 1 : null, total: a.content.questions.length, endsAt: assignments.currentLessonWindow(a)?.endsAt || null, serverNow: Date.now() } } : {}),
   });
 });
 
@@ -3805,7 +3827,8 @@ app.post('/api/assignment/:id/draft', requireAssignmentAccess, (req, res) => {
   const questionProgress = delivery.mode === 'live' && delivery.questionSyncEnabled
     ? assignments.learnerQuestionProgress(a, existing, learnerProgress)
     : null;
-  const allowedQuestions = questionProgress && questionProgress.question
+  const guidedTask = assignments.currentLessonWindow(a)?.questionId;
+  const allowedQuestions = guidedTask ? sectionQuestions.filter(q => q.id === guidedTask) : questionProgress && questionProgress.question
     ? [questionProgress.question]
     : sectionQuestions;
   const safeAnswers = assignments.sanitizeLearnerAnswers(allowedQuestions, req.body && req.body.answers);
@@ -3901,7 +3924,10 @@ app.post('/api/assignment/:id/submit', requireAssignmentAccess, async (req, res)
   const delivery = assignments.deliveryState(a);
   if (a.type === 'assessment' && delivery.mode === 'live' && delivery.phase !== 'marking') return res.status(409).json({ error: delivery.phase === 'closed' ? 'This assessment is closed.' : 'Wait for your teacher to finish all sections before submitting.' });
   const storedDraft = assignments.getDraft(a.id, session.studentId);
-  const browserAnswers = (req.body && req.body.answers) || {};
+  const guidedTask = assignments.currentLessonWindow(a)?.questionId;
+  const browserAnswers = guidedTask
+    ? assignments.sanitizeLearnerAnswers(a.content.questions.filter(q => q.id === guidedTask), req.body?.answers)
+    : (req.body?.answers || {});
   const submittedAnswers = a.type === 'assessment' && delivery.mode === 'live'
     ? (storedDraft && storedDraft.answers || {})
     : { ...(storedDraft && storedDraft.answers || {}), ...browserAnswers };

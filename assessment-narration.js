@@ -1,7 +1,7 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const {DATA_DIR,writeFileAtomic}=require('./storage');
 const settings={model:'gpt-4o-mini-tts',voice:'marin',response_format:'mp3',speed:1,instructions:'Warm, natural conversational voice with clear friendly British English for primary-school children. Read this assessment text calmly at a steady pace. Neutral emphasis for all answer choices. Read only the supplied text exactly. Do not explain, solve, hint, add words or identify a correct answer. No music or sound effects.'};
-function narrationText(record,questionId,choice,slideIndex,bulletIndex){
+function narrationText(record,questionId,choice,slideIndex,bulletIndex,part){
  if(slideIndex!==undefined){
   if(!/^\d+$/.test(String(slideIndex)))throw Error('Stage not found.');
   const slide=require('./assignments').presentationSlides(record)[Number(slideIndex)];
@@ -12,7 +12,7 @@ function narrationText(record,questionId,choice,slideIndex,bulletIndex){
 
  const q=record.content?.questions?.find(q=>q.id===questionId);
  if(!q)throw Error('Question not found.');
- let text=q.question;
+ let text=part==='instructions'?q.sectionInstructions:q.question;
  if(choice!==undefined){
   if(!/^\d+$/.test(String(choice)) || !Number.isSafeInteger(Number(choice)) || !q.options?.[Number(choice)])throw Error('Answer choice not found.');
   text=q.options[Number(choice)];

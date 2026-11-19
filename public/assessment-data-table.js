@@ -22,7 +22,12 @@ window.AssessmentDataTable = (() => {
     if (source.length) {
       const cards = element('ul');
       cards.className = 'project-data-source';
-      source.forEach(card => cards.append(element('li', card)));
+      source.forEach((card,index) => {
+        const item = element('li');
+        item.append(element('strong', 'Card ' + (index + 1)));
+        card.split(' · ').forEach(line => item.append(element('div', line)));
+        cards.append(item);
+      });
       root.append(element('strong', 'Source cards'), cards);
     }
     const wrap = element('div');

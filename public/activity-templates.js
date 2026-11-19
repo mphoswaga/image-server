@@ -35,7 +35,59 @@
       ? `Open until ${new Date(lesson.active.endsAt).toLocaleTimeString()} · ${lesson.attempts} started.`
       : lesson.hasOpened ? `Closed · ${lesson.attempts} started.` : 'Private draft. Opening the lesson lets the class start.';
   }
+  let deskRequest = 0, desk = null, reader;
+  function readingControls() {
+    const task = desk?.tasks.find(t => t.id === $('guideTask').value);
+    if (!task) return;
+    reader.id = selectedLesson().id;
+    reader.select(reader.id + '/' + task.id);
+    $('readDirections').disabled = !task.instructions;
+    for (const [id, label, part] of [['readPrompt','question','question'], ['readDirections','instructions','instructions']]) {
+      const button = $(id);
+      button.dataset.read = new URLSearchParams({questionId: task.id, part}).toString();
+      button.dataset.label = label + ' aloud';
+    }
+    reader.sync();
+  }
+  async function refreshDesk() {
+    const serial = ++deskRequest;
+    const lesson = selectedLesson();
+    if (!lesson?.hasOpened) { $('lessonDesk').hidden = true; return; }
+    const detail = await request('/api/activity-templates/lessons/' + encodeURIComponent(lesson.id));
+    if (serial !== deskRequest || selectedLesson()?.id !== lesson.id) return;
+    const first = !desk || desk.id !== lesson.id;
+    desk = {...detail, id: lesson.id};
+    if (first) {
+      $('guideTask').replaceChildren(...detail.tasks.map((task,i) => new Option((i+1) + '. ' + task.title, task.id)));
+      if (detail.active?.questionId) $('guideTask').value = detail.active.questionId;
+    }
+    $('lessonDesk').hidden = false;
+    $('guide').disabled = !detail.active;
+    $('releaseGuide').disabled = !detail.active?.questionId;
+    const guided = detail.tasks.findIndex(task => task.id === detail.active?.questionId);
+    $('guideState').textContent = !detail.active ? 'Lesson closed.' : guided < 0 ? 'Students are working at their own pace.' : 'Everyone is on question ' + (guided + 1) + '.';
+    $('submissionCount').textContent = 'Live submissions · ' + detail.learners.filter(l => l.submitted).length + ' of ' + detail.learners.length + ' submitted';
+    $('learnerProgress').replaceChildren(...detail.learners.map(l => element('li', l.name + ' · ' + (l.submitted ? 'Submitted' : l.started ? l.answered + ' of ' + detail.tasks.length + ' tasks with saved work' : 'Yet to start'))));
+    if (!reader) reader = new AssessmentReader(lesson.id);
+    readingControls();
+  }
+  $('guideTask').onchange = readingControls;
+  function guideClass(release) {
+    const lesson = selectedLesson();
+    if (!desk?.active || desk.id !== lesson?.id) return;
+    action(async () => {
+      await request('/api/activity-templates/lessons/' + encodeURIComponent(lesson.id), {
+        action: 'guide', windowId: desk.active.id, questionId: release ? null : $('guideTask').value
+      });
+      await refreshDesk();
+    });
+  }
+  $('guide').onclick = () => guideClass(false);
+  $('releaseGuide').onclick = () => guideClass(true);
   function chooseLesson() {
+    reader?.stop();
+    $('lessonDesk').hidden = true;
+    refreshDesk().catch(error => { $('notice').textContent = error.message; });
     $('replacement').replaceChildren(...(selectedLesson()?.eligible || []).map(student => new Option(student.name, student.id)));
     lessonControls();
   }
@@ -106,6 +158,12 @@
         const point = cells(value)[0] || [];
         mission.start = [point[0], point[1], mission.start[2]];
       });
+      const facing = element('label','Pirate starts facing ');
+      const directions = element('select');
+      ['Up','Right','Down','Left'].forEach((direction,index)=>directions.add(new Option(direction,index)));
+      directions.value = mission.start[2];
+      directions.onchange = () => { mission.start[2] = Number(directions.value); dirty = true; recalculate(); controls(); };
+      facing.append(directions); setup.append(facing);
       field(setup, 'Treasure column and row (1-based)', formatCells([mission.chest]), value => mission.chest = cells(value)[0] || []);
       field(setup, 'Rock squares (column,row; column,row)', formatCells(mission.rocks || []), value => mission.rocks = cells(value));
       if (activity.rubric.checkpoint) field(setup, 'Flag column and row (1-based)', formatCells([activity.rubric.checkpoint.cell]), value => activity.rubric.checkpoint.cell = cells(value)[0] || []);
@@ -138,12 +196,16 @@
     draft = structuredClone(record.versions[version - 1]);
     dirty = false;
     $('learnerPreview').hidden = true;
+    renderEditor();
+  }
+  function renderEditor(expandedSection) {
     $('editor').replaceChildren();
     for (const [key,label] of [['title','Title'],['subject','Subject'],['grade','Grade'],['instructions','Learner instructions']]) {
       field($('editor'), label, draft[key], value => draft[key] = value, key === 'instructions' ? 'textarea' : 'text');
     }
     for (const section of draft.sections) {
       const group = element('details');
+      group.open = section.id === expandedSection;
       group.append(element('summary', section.title));
       field(group, 'Section title', section.title, value => section.title = value);
       field(group, 'Section instructions', section.instructions, value => section.instructions = value, 'textarea');
@@ -153,6 +215,20 @@
         field(rubric, 'Task instructions', task.prompt, value => task.prompt = value, 'textarea');
         for (const [label, target, key] of rubricItems(task)) field(rubric, label + ' points', target[key], value => target[key] = value, 'number');
         taskSetup(task, rubric);
+        const duplicate = element('button','Duplicate task');
+        duplicate.type = 'button';
+        duplicate.onclick = () => {
+          const copy = structuredClone(task);
+          copy.id = 'task-' + crypto.randomUUID();
+          copy.prompt = task.prompt.slice(0, 1960) + ' (copy)';
+          section.items.splice(index + 1,0,copy);
+          dirty = true; renderEditor(section.id);
+        };
+        const remove = element('button','Remove task');
+        remove.type = 'button';
+        remove.disabled = section.items.length === 1;
+        remove.onclick = () => { section.items.splice(index,1); dirty = true; renderEditor(section.id); };
+        rubric.append(duplicate, remove);
         group.append(rubric);
       }
       $('editor').append(group);
@@ -214,12 +290,16 @@
     const {assessment} = await request('/api/activity-templates/preview', {assessment:draft});
     const panel = $('learnerPreview');
     panel.replaceChildren(element('h2', 'Learner preview'), element('p', assessment.instructions));
+    const deck = element('div');
+    const pages = [];
+    panel.append(deck);
     for (const section of assessment.sections) {
-      panel.append(element('h3', section.title), element('p', section.instructions));
       for (const task of section.items) {
+        const page = element('article'); page.className = 'preview-task';
+        pages.push(page); deck.append(page);
         const root = element('div');
         const activity = task.activity;
-        panel.append(element('h4', `${task.prompt} · ${task.marks} marks`), root);
+        page.append(element('h3', section.title), element('p', section.instructions), element('h4', `${task.prompt} · ${task.marks} marks`), root);
         if (activity.mission) AssessmentCodeQuest.mount(root, {
           mission: { rocks: [], water: [], ...activity.mission, requireReturn: false },
           starter: activity.starter, checkpoint: activity.rubric.checkpoint?.cell,
@@ -227,6 +307,7 @@
         else AssessmentDataTable.mount(root, { source: [], ...activity }, null, () => {});
       }
     }
+    practicalTaskPager(deck,pages);
     panel.hidden = false;
     panel.scrollIntoView();
   });
@@ -236,5 +317,5 @@
     for (const roster of rosters) $('roster').add(new Option(roster.name, roster.id));
     await refreshLessons();
   });
-  setInterval(() => { const lesson = selectedLesson(); if (!busy && lesson?.active && lesson.active.endsAt <= Date.now()) refreshLessons().catch(() => {}); }, 5000);
+  setInterval(() => { const lesson = selectedLesson(); if (!busy && lesson?.active && !document.hidden) { if (lesson.active.endsAt <= Date.now()) refreshLessons().catch(() => {}); else refreshDesk().catch(() => { $('submissionCount').textContent = 'Live submissions · reconnecting…'; }); } }, 5000);
 })();

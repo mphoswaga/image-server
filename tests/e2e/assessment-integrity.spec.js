@@ -70,8 +70,8 @@ test('CodeQuest assignment restores blocks and marks the final program against i
     const learner = await context.newPage();
     await learner.goto('/assignment/' + assessment.assessmentId);
     const task = learner.locator('[data-code-task]');
-    await task.getByRole('button', { name: 'Move forward' }).click();
-    await task.getByRole('button', { name: 'Move forward' }).click();
+    await task.getByRole('button', { name: 'Move forward', exact:true }).click();
+    await task.getByRole('button', { name: 'Move forward', exact:true }).click();
     const saved = learner.waitForResponse(response => response.url().endsWith(api + '/draft') && response.ok());
     await task.getByRole('button', { name: 'Collect', exact: true }).click();
     await saved;
@@ -79,6 +79,7 @@ test('CodeQuest assignment restores blocks and marks the final program against i
     await expect(task.locator('ol li > span')).toHaveText(['Move forward', 'Move forward', 'Collect']);
     await task.getByRole('button', { name: 'Run code' }).click();
     await expect(task.getByRole('status')).toHaveText('Treasure collected!');
+    await task.getByRole('button', { name: 'Edit step 3: Collect' }).click();
     await task.getByRole('button', { name: 'Remove' }).last().click();
     const submitted = learner.waitForResponse(response => response.url().endsWith(api + '/submit') && response.ok());
     await learner.locator('#submitBtn').click();
@@ -119,15 +120,21 @@ test('data project saves table work and gives independent criterion marks', asyn
     await learner.goto('/assignment/' + assessmentId);
     await learner.getByLabel('Field for a crew job').selectOption('Role');
     await learner.getByLabel('Field for the number of packs').selectOption('Name');
+    await learner.getByRole('button',{name:'Next task'}).click();
     await expect(learner.getByLabel('Correct Mia’s role')).toHaveValue('4');
     await learner.getByLabel('Correct Mia’s role').selectOption('Pilot');
+    await learner.getByRole('button',{name:'Next task'}).click();
     await learner.getByLabel('Select the scientist’s record').selectOption('Nia');
     await learner.getByLabel('How many packs does Mia have?').selectOption('4');
+    await learner.getByRole('button',{name:'Next task'}).click();
     const saved = learner.waitForResponse(response => response.url().endsWith(api + '/draft') && response.ok());
     await learner.getByLabel('Who has the most packs to share?').selectOption('Leo');
     await saved;
     await learner.reload();
+    await learner.getByRole('button',{name:'Next task'}).click();
     await expect(learner.getByLabel('Correct Mia’s role')).toHaveValue('Pilot');
+    await learner.getByRole('button',{name:'Next task'}).click();
+    await learner.getByRole('button',{name:'Next task'}).click();
     await expect(learner.getByLabel('Who has the most packs to share?')).toHaveValue('Leo');
     const submitted = learner.waitForResponse(response => response.url().endsWith(api + '/submit') && response.ok());
     await learner.locator('#submitBtn').click();
@@ -157,7 +164,8 @@ test('teacher previews, versions and assigns an activity without exposing class 
   await page.goto('/activity-templates');
   await page.getByRole('combobox', {name:'Activity',exact:true}).selectOption('starter-codequest');
   await page.getByRole('button', {name:'Preview as learner'}).click();
-  await expect(page.locator('#learnerPreview').getByRole('button', {name:'Run code'})).toHaveCount(5);
+  await expect(page.locator('#learnerPreview').getByRole('button', {name:'Run code'})).toHaveCount(1);
+  await expect(page.locator('#learnerPreview')).toContainText('Task 1 of 5');
   await page.getByLabel('Title', {exact:true}).fill('My coding project');
   const firstSave = page.waitForResponse(response => response.url().endsWith('/api/activity-templates') && response.status() === 201);
   await page.getByRole('button', {name:'Save as template'}).click();
@@ -184,6 +192,13 @@ test('teacher previews, versions and assigns an activity without exposing class 
   await page.getByRole('button', {name:'Save a separate copy'}).click();
   await expect(page.getByRole('status')).toHaveText('Saved version 1.');
   expect(await page.locator('#template').inputValue()).not.toBe(template.id);
+  await page.getByRole('combobox',{name:'Activity',exact:true}).selectOption('starter-data');
+  await expect(page.getByRole('combobox',{name:'Version',exact:true})).toHaveValue('2');
+  await page.getByRole('button',{name:'Preview as learner'}).click();
+  const preview = page.locator('#learnerPreview');
+  await expect(preview.locator('article:not([hidden])').getByText('Cellphone number: 000 000 0001',{exact:true})).toBeVisible();
+  await preview.getByRole('button',{name:'Next task'}).click();
+  await expect(preview.getByLabel('Fix Mia’s age')).toHaveValue('Ten');
   const outsider = await browser.newContext();
   try {
     const join = await outsider.request.get(`/api/assignment/${draftA.assessmentId}/join`);
@@ -231,6 +246,26 @@ test('one lesson restores saved work but replacements admit only learners who ne
     const restored = await (await original.request.get(api + '/take')).json();
     expect(restored.draftAnswers.near).toEqual([{op:'move'}]);
     expect(restored.lessonClock.endsAt).toBeGreaterThan(restored.lessonClock.serverNow);
+    const learnerPage = await original.newPage();
+    await learnerPage.goto('/assignment/' + assessmentId);
+    await learnerPage.getByRole('button', {name:'Show all tasks'}).click();
+    await expect(learnerPage.locator('[data-practical-page]:visible')).toHaveCount(restored.questions.length);
+    await page.goto('/activity-templates');
+    await page.locator('#lesson').selectOption(assessmentId);
+    await page.locator('#guideTask').selectOption(restored.questions[1].id);
+    await page.locator('#guide').click();
+    await expect(learnerPage.locator('[data-practical-page]')).toHaveCount(1);
+    await expect(learnerPage.locator('[data-practical-page]')).toContainText(restored.questions[1].question);
+    await expect(page.locator('#readDirections')).toBeEnabled();
+    await expect(learnerPage.getByRole('button',{name:'Show all tasks'})).toHaveCount(0);
+    await learnerPage.reload();
+    await expect(learnerPage.locator('[data-practical-page]')).toHaveCount(1);
+    await original.request.post(api + '/draft', {data:{answers:{near:[]}}});
+    await page.locator('#releaseGuide').click();
+    await expect(learnerPage.getByRole('button',{name:'Next task'})).toBeVisible();
+    await expect(learnerPage.locator('[data-practical-page]:visible')).toHaveCount(1);
+    expect((await (await original.request.get(api + '/take')).json()).draftAnswers.near).toEqual([{op:'move'}]);
+    await expect(page.locator('#learnerProgress')).toContainText('Original Learner · 1 of 5');
     const closed = await manage('close');
     expect(closed.ok(), await closed.text()).toBeTruthy();
     expect((await closed.json()).eligible.map(student=>student.id)).toEqual(['LES-2','LES-3']);
@@ -241,6 +276,10 @@ test('one lesson restores saved work but replacements admit only learners who ne
     expect((await original.request.get(api + '/take')).status()).toBe(409);
     expect((await other.request.get(api + '/take')).status()).toBe(409);
     expect((await replacement.request.get(api + '/take')).ok()).toBeTruthy();
+    const final = await replacement.request.post(api + '/submit', {data:{answers:
+      Object.fromEntries(restored.questions.map(q => [q.id,[{op:'move'}]]))}});
+    expect(final.ok(), await final.text()).toBeTruthy();
+    await expect(page.locator('#submissionCount')).toContainText('1 of 3 submitted');
     expect((await manage('close')).ok()).toBeTruthy();
     expect((await manage('replacement', ['LES-2'])).status()).toBe(409);
   } finally {
