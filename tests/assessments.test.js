@@ -8,6 +8,23 @@ process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ls-assessments-'))
 const assignments = require('../assignments');
 const gradebook = require('../gradebook');
 
+test('one-lesson access expires at the server deadline and cannot carry into a replacement', () => {
+  const data = require('../activity-templates/codequest-first-project');
+  const record = assignments.createAssessment({
+    teacherId:'lesson-owner', data, rosterId:'lesson-class', rosterSnapshot:[{id:'STARTED',name:'Started'},{id:'MISSED',name:'Missed'}],
+    activityTemplate:{id:'starter-codequest',version:1}, oneLesson:true,
+  });
+  const start = Date.UTC(2026, 0, 1, 8);
+  const open = assignments.manageLesson(record.id, 'open', 5, [], start);
+  const end = open.lessonPolicy.windows[0].endsAt;
+  assignments.checkLessonAccess(open, 'STARTED', true, start);
+  assert.doesNotThrow(() => assignments.checkLessonAccess(assignments.getAssignment(record.id), 'STARTED', false, end - 1));
+  assert.throws(() => assignments.checkLessonAccess(assignments.getAssignment(record.id), 'STARTED', false, end), {code:'assessment_lesson_unavailable'});
+  const replacement = assignments.manageLesson(record.id, 'replacement', 5, ['MISSED'], end);
+  assert.throws(() => assignments.checkLessonAccess(replacement, 'STARTED', true, end), {code:'assessment_lesson_unavailable'});
+  assert.doesNotThrow(() => assignments.checkLessonAccess(replacement, 'MISSED', true, end));
+});
+
 test('question evidence preserves marked assessment items without learner identity', () => {
   const evidence = gradebook.questionEvidenceForSubmission({
     type: 'assessment', finalisedAt: '2026-09-14T10:00:00Z',

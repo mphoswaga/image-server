@@ -99,6 +99,7 @@
       <div class="card">
         <h1 id="title"></h1>
         <p class="sub" id="instructions"></p>
+        <p id="lessonClock" hidden></p>
       </div>
       <div class="card" id="questions"></div>
       <div class="card" id="submitActions">
@@ -120,11 +121,30 @@
     </div>
   </div>
 
+  <style>
+    .project-codeboard{display:grid;gap:3px;width:min(100%,270px);margin:12px 0}
+    .project-codeboard span{display:grid;place-items:center;aspect-ratio:1;background:#e3f3ec;border-radius:4px;font-size:1.1rem}
+    .project-code-controls{display:flex;flex-wrap:wrap;gap:6px}
+    [data-code-task] button{padding:6px 9px;margin:2px 3px;cursor:pointer}
+    [data-code-task] li span{display:inline-block;min-width:7rem}
+    .project-data-scroll{overflow:auto;margin:12px 0}
+    .project-data-scroll table{border-collapse:collapse;width:100%;text-align:left}
+    .project-data-scroll caption{text-align:left;font-weight:600;margin-bottom:6px}
+    .project-data-scroll td,.project-data-scroll th{border:1px solid #c8ded5;padding:8px}
+    .project-data-scroll th{background:#e3f3ec}
+    [data-table-task] select{font:inherit;padding:6px;max-width:100%}
+    .project-data-source{padding-left:1.25em}
+    .project-data-response{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0}
+  </style>
+  <script src="/codequest-core.js"></script>
+  <script src="/assessment-codequest.js?v=3"></script>
+  <script src="/assessment-data-table.js?v=1"></script>
   <script>
     const $ = id => document.getElementById(id);
     const assignmentId = location.pathname.split('/').pop();
     let questions = [];
     const answers = {};
+    let codeRuns = [];
     const draftKeyBase = 'lessonscope_assignment_draft_' + assignmentId;
     let draftKey = null;
     let assignmentType = '';
@@ -135,6 +155,33 @@
     let livePollBusy = false;
     let questionSyncActive = false;
     let activeQuestion = null;
+    let lessonTimer, lessonPoll, lessonEnds;
+    function closeLessonView() {
+      clearTimeout(serverDraftTimer);
+      clearInterval(lessonTimer);
+      clearInterval(lessonPoll);
+      showLiveStatus('Lesson closed', 'Your teacher can review work that was saved before the lesson closed.');
+    }
+    function startLessonClock(clock) {
+      if (!clock.endsAt) return closeLessonView();
+      lessonEnds = performance.now() + Math.max(0, clock.endsAt - clock.serverNow);
+      const tick = () => {
+        const seconds = Math.max(0, Math.ceil((lessonEnds - performance.now()) / 1000));
+        if (!seconds) return closeLessonView();
+        $('lessonClock').hidden = false;
+        $('lessonClock').textContent = `Lesson time left: ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2,'0')}`;
+      };
+      clearInterval(lessonTimer);
+      clearInterval(lessonPoll);
+      lessonTimer = setInterval(tick, 1000);
+      lessonPoll = setInterval(async () => {
+        try {
+          const response = await fetch('/api/assignment/' + assignmentId + '/lesson-clock');
+          if (response.status === 409 && $('form').style.display !== 'none') closeLessonView();
+        } catch {}
+      }, 8000);
+      tick();
+    }
 
     function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
     // The generator sometimes bakes "(N marks)" into the question text itself;
@@ -155,12 +202,14 @@
 
     async function saveServerDraft(complete) {
       clearTimeout(serverDraftTimer);
+      const pendingRuns = codeRuns.slice(0, 16);
       const response = await fetch('/api/assignment/' + assignmentId + '/draft', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answers, complete: !!complete }),
+        body: JSON.stringify({ answers, complete: !!complete, codeRuns: pendingRuns }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Could not save your work.');
+      codeRuns = codeRuns.filter(run => !pendingRuns.includes(run));
       return data;
     }
     function restoreDraft() {
@@ -185,6 +234,8 @@
       $('questions').innerHTML = questions.map((q, i) => {
         const sectionHead=q.sectionTitle&&q.sectionTitle!==previousSection?`<div class="section-head">${esc(q.sectionTitle)}${q.sectionInstructions?`<div class="section-instructions">${esc(q.sectionInstructions)}</div>`:''}</div>`:'';
         if(q.sectionTitle)previousSection=q.sectionTitle;
+        if(q.kind==='codequest')return `${sectionHead}<div class="q"><div class="qtext">${i+1}. ${esc(q.question)} <span class="marks">(${q.marks} marks)</span></div><div data-code-task="${esc(q.id)}"></div></div>`;
+        if(q.kind==='data-table')return `${sectionHead}<div class="q"><div class="qtext">${i+1}. ${esc(q.question)} <span class="marks">(${q.marks} marks)</span></div><div data-table-task="${esc(q.id)}"></div></div>`;
         if (q.kind === 'practical') {
           return `${sectionHead}<div class="q">
             <div class="qtext">${activeQuestion ? activeQuestion.number : i + 1}. ${esc(stripMarks(q.question))} <span class="marks">(${q.marks} mark${q.marks !== 1 ? 's' : ''})</span></div>
@@ -205,6 +256,21 @@
           <textarea data-qid="${q.id}" placeholder="Type your answer…">${esc(answers[q.id] || '')}</textarea>
         </div>`;
       }).join('');
+
+      $('questions').querySelectorAll('[data-code-task]').forEach(node => {
+        const question = questions.find(q => q.id === node.dataset.codeTask);
+        AssessmentCodeQuest.mount(node, question, answers[question.id], program => {
+          answers[question.id] = program;
+          saveDraft();
+        }, program => { if (codeRuns.length < 16) codeRuns.push({ id: question.id, program }); });
+      });
+      $('questions').querySelectorAll('[data-table-task]').forEach(node => {
+        const question = questions.find(q => q.id === node.dataset.tableTask);
+        AssessmentDataTable.mount(node, question.tableActivity, answers[question.id], responses => {
+          answers[question.id] = responses;
+          saveDraft();
+        });
+      });
 
       $('questions').querySelectorAll('.opts').forEach(box => {
         box.addEventListener('click', e => {
@@ -227,6 +293,8 @@
     // null from the server in that case, so `g` stays undefined and no
     // verdict badge is shown, just the plain answer.
     function renderResults(d, givenAnswers) {
+      clearInterval(lessonTimer);
+      clearInterval(lessonPoll);
       if (assignmentType !== 'assessment') clearInterval(livePollTimer);
       $('liveStatus').style.display = 'none';
       $('form').style.display = 'none';
@@ -235,7 +303,7 @@
       if (d.released) { $('scoreVal').textContent = d.totalMarks; $('scoreMax').textContent = d.maxMarks; }
       $('gradeBreakdown').innerHTML = questions.map((q, i) => {
         const given = givenAnswers ? givenAnswers[q.id] : undefined;
-        const answerText = q.kind === 'practical' ? 'Observed and marked by your teacher' : q.kind === 'mcq' ? (q.options && given != null ? q.options[given] : '(no answer)') : (given || '(no answer)');
+        const answerText = q.kind === 'data-table' ? AssessmentDataTable.describe(q.tableActivity, given) : q.kind === 'codequest' ? AssessmentCodeQuest.describe(given) : q.kind === 'practical' ? 'Observed and marked by your teacher' : q.kind === 'mcq' ? (q.options && given != null ? q.options[given] : '(no answer)') : (given || '(no answer)');
         const g = d.released && d.grades ? (d.grades[q.id] || {}) : null;
         return `<div class="result-grade">
           <div style="flex:1">
@@ -381,6 +449,7 @@
         } else {
           renderQuestions();
           $('form').style.display = 'block';
+          if (take.lessonClock) startLessonClock(take.lessonClock);
         }
       } catch (err) {
         $('loading').style.display = 'block';
@@ -504,6 +573,7 @@
       }
       btn.innerHTML = '<span class="spinner"></span>Submitting…';
       try {
+        if (codeRuns.length && delivery.mode !== 'live') await saveServerDraft(false);
         const r = await fetch('/api/assignment/' + assignmentId + '/submit', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ answers }),

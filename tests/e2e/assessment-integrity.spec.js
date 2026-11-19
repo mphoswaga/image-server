@@ -49,6 +49,231 @@ async function createWorkspace(page, topic = 'Grade 2 ICT project') {
   return (await response.json()).workspace;
 }
 
+test('CodeQuest assignment restores blocks and marks the final program against its rubric', async ({ page, browser }, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100');
+  await signInDisposableTeacher(page, '-codequest-assessment');
+  const roster = await createRoster(page, 'CodeQuest sample class', [{ ID: 'CQ-1', Name: 'Sample Learner' }]);
+  const assessment = await publishAssessment(page, roster.id, assessmentData({
+    title: 'CodeQuest · First treasure', deliveryMode: 'self-paced', totalMarks: 5,
+    sections: [{
+      id: 'build', type: 'practical', title: 'Build a route', objectiveIds: ['document'],
+      items: [{ id: 'treasure', prompt: 'Move to the treasure and collect it.', marks: 5,
+        activity: { kind: 'codequest-build', mission: { size: 4, start: [0, 2, 1], chest: [2, 2] }, rubric: { reach: 2, collect: 3 } } }],
+    }],
+  }));
+  const api = '/api/assignment/' + assessment.assessmentId;
+  const join = await (await page.request.get(api + '/join')).json();
+  const context = await browser.newContext();
+  try {
+    const enter = await context.request.post(api + '/enter', { data: { handle: join.students[0].handle, pin: '4826' } });
+    expect(enter.ok(), await enter.text()).toBeTruthy();
+    const learner = await context.newPage();
+    await learner.goto('/assignment/' + assessment.assessmentId);
+    const task = learner.locator('[data-code-task]');
+    await task.getByRole('button', { name: 'Move forward' }).click();
+    await task.getByRole('button', { name: 'Move forward' }).click();
+    const saved = learner.waitForResponse(response => response.url().endsWith(api + '/draft') && response.ok());
+    await task.getByRole('button', { name: 'Collect', exact: true }).click();
+    await saved;
+    await learner.reload();
+    await expect(task.locator('ol li > span')).toHaveText(['Move forward', 'Move forward', 'Collect']);
+    await task.getByRole('button', { name: 'Run code' }).click();
+    await expect(task.getByRole('status')).toHaveText('Treasure collected!');
+    await task.getByRole('button', { name: 'Remove' }).last().click();
+    const submitted = learner.waitForResponse(response => response.url().endsWith(api + '/submit') && response.ok());
+    await learner.locator('#submitBtn').click();
+    await submitted;
+    const results = await (await page.request.get(api + '/results')).json();
+    expect(results.submissions).toHaveLength(1);
+    expect(results.submissions[0]).toMatchObject({
+      totalMarks: 2, maxMarks: 5, answers: { treasure: [{op:'move'}, {op:'move'}] },
+      grades: { treasure: { source: 'auto', processEvidence: ['Tested 1 distinct block sequences.'], criteria: [{awarded:2,max:2},{awarded:0,max:3}] } },
+    });
+    const marked = await page.request.patch(api + '/marked', { data: { marked: true } });
+    expect(marked.ok(), await marked.text()).toBeTruthy();
+    const progress = await (await page.request.get(`/api/roster/${roster.id}/progress`)).json();
+    expect(progress.students[0].results).toEqual(expect.arrayContaining([
+      expect.objectContaining({ assignmentId: assessment.assessmentId, score: 2, total: 5 }),
+    ]));
+    expect((await context.request.post(api + '/submit', { data: { answers: {} } })).status()).toBe(409);
+  } finally {
+    await context.close();
+  }
+});
+
+test('data project saves table work and gives independent criterion marks', async ({ page, browser }, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100');
+  await signInDisposableTeacher(page, '-data-table-assessment');
+  const roster = await createRoster(page, 'Data project sample class', [{ ID: 'DATA-1', Name: 'Sample Learner' }]);
+  const template = require('../../activity-templates/data-handling-first-project');
+  const { assessmentId } = await publishAssessment(page, roster.id, { ...template, deliveryMode: 'self-paced' });
+  const api = '/api/assignment/' + assessmentId;
+  const join = await (await page.request.get(api + '/join')).json();
+  const context = await browser.newContext();
+  try {
+    const enter = await context.request.post(api + '/enter', { data: { handle: join.students[0].handle, pin: '4826' } });
+    expect(enter.ok(), await enter.text()).toBeTruthy();
+    const take = await (await context.request.get(api + '/take')).json();
+    expect(take.questions.flatMap(q => q.tableActivity.inputs).every(input => !('accepted' in input))).toBeTruthy();
+    const learner = await context.newPage();
+    await learner.goto('/assignment/' + assessmentId);
+    await learner.getByLabel('Field for a crew job').selectOption('Role');
+    await learner.getByLabel('Field for the number of packs').selectOption('Name');
+    await expect(learner.getByLabel('Correct Mia’s role')).toHaveValue('4');
+    await learner.getByLabel('Correct Mia’s role').selectOption('Pilot');
+    await learner.getByLabel('Select the scientist’s record').selectOption('Nia');
+    await learner.getByLabel('How many packs does Mia have?').selectOption('4');
+    const saved = learner.waitForResponse(response => response.url().endsWith(api + '/draft') && response.ok());
+    await learner.getByLabel('Who has the most packs to share?').selectOption('Leo');
+    await saved;
+    await learner.reload();
+    await expect(learner.getByLabel('Correct Mia’s role')).toHaveValue('Pilot');
+    await expect(learner.getByLabel('Who has the most packs to share?')).toHaveValue('Leo');
+    const submitted = learner.waitForResponse(response => response.url().endsWith(api + '/submit') && response.ok());
+    await learner.locator('#submitBtn').click();
+    await submitted;
+    const results = await (await page.request.get(api + '/results')).json();
+    expect(results.submissions[0]).toMatchObject({ totalMarks: 22, maxMarks: 50, grades: {
+      arrange: { marksAwarded: 2 },
+      repair: { marksAwarded: 5, processEvidence: ['Changed incorrect values to accepted values for: Correct Mia’s role.'], criteria: [{response:'Pilot',awarded:5},{response:'4',awarded:0},{response:'Many',awarded:0}] },
+      find: { marksAwarded: 10 },
+      interpret: { marksAwarded: 5 },
+    } });
+    expect((await page.request.patch(api + '/marked', { data: { marked: true } })).ok()).toBeTruthy();
+    const progress = await (await page.request.get(`/api/roster/${roster.id}/progress`)).json();
+    expect(progress.students[0].results).toEqual(expect.arrayContaining([
+      expect.objectContaining({ assignmentId: assessmentId, score: 22, total: 50 }),
+    ]));
+  } finally {
+    await context.close();
+  }
+});
+
+test('teacher previews, versions and assigns an activity without exposing class drafts', async ({page, browser}, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100');
+  await signInDisposableTeacher(page, '-activity-library');
+  const first = await createRoster(page, 'Activity class A', [{ID:'CA-1',Name:'Sample A'}]);
+  const second = await createRoster(page, 'Activity class B', [{ID:'CB-1',Name:'Sample B'}]);
+  await page.goto('/activity-templates');
+  await page.getByRole('combobox', {name:'Activity',exact:true}).selectOption('starter-codequest');
+  await page.getByRole('button', {name:'Preview as learner'}).click();
+  await expect(page.locator('#learnerPreview').getByRole('button', {name:'Run code'})).toHaveCount(5);
+  await page.getByLabel('Title', {exact:true}).fill('My coding project');
+  const firstSave = page.waitForResponse(response => response.url().endsWith('/api/activity-templates') && response.status() === 201);
+  await page.getByRole('button', {name:'Save as template'}).click();
+  const template = await (await firstSave).json();
+  await expect(page.getByRole('status')).toHaveText('Saved version 1.');
+  await page.getByRole('combobox', {name:'Class',exact:true}).selectOption(first.id);
+  const firstAssign = page.waitForResponse(response => response.url().endsWith('/api/activity-templates/assign') && response.status() === 201);
+  await page.getByRole('button', {name:'Create class draft'}).click();
+  const draftA = await (await firstAssign).json();
+  expect(draftA).toMatchObject({status:'draft',totalMarks:50});
+  await page.locator('#editor summary').getByText('Build routes', {exact:true}).click();
+  await page.getByLabel('Reach treasure square points').first().fill('3');
+  await expect(page.locator('#total')).toContainText('51 marks');
+  await expect(page.getByRole('button', {name:'Create class draft'})).toBeDisabled();
+  await page.getByRole('button', {name:'Save new version'}).click();
+  await expect(page.getByRole('status')).toHaveText('Saved version 2.');
+  await page.getByRole('combobox', {name:'Class',exact:true}).selectOption(second.id);
+  const secondAssign = page.waitForResponse(response => response.url().endsWith('/api/activity-templates/assign') && response.status() === 201);
+  await page.getByRole('button', {name:'Create class draft'}).click();
+  const draftB = await (await secondAssign).json();
+  expect(draftB).toMatchObject({status:'draft',totalMarks:51});
+  const original = await (await page.request.get(`/api/assignment/${draftA.assessmentId}/results`)).json();
+  expect(original).toMatchObject({totalMarks:50,rosterName:'Activity class A'});
+  await page.getByRole('button', {name:'Save a separate copy'}).click();
+  await expect(page.getByRole('status')).toHaveText('Saved version 1.');
+  expect(await page.locator('#template').inputValue()).not.toBe(template.id);
+  const outsider = await browser.newContext();
+  try {
+    const join = await outsider.request.get(`/api/assignment/${draftA.assessmentId}/join`);
+    expect(join.status()).toBe(409);
+    const otherTeacher = await outsider.newPage();
+    await signInDisposableTeacher(otherTeacher, '-activity-library-other');
+    const blocked = await otherTeacher.request.post('/api/activity-templates/assign', { data: {templateId:template.id,version:1,rosterId:first.id} });
+    expect(blocked.status()).toBe(400);
+    const library = await (await otherTeacher.request.get('/api/activity-templates')).json();
+    expect(library.templates.every(item=>item.starter)).toBeTruthy();
+  } finally { await outsider.close(); }
+});
+
+test('one lesson restores saved work but replacements admit only learners who never started', async ({page, browser}, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100');
+  await signInDisposableTeacher(page, '-activity-lesson');
+  const roster = await createRoster(page, 'Lesson access class', [
+    { ID:'LES-1', Name:'Original Learner' }, { ID:'LES-2', Name:'Replacement Learner' },
+    { ID:'LES-3', Name:'Other Learner' },
+  ]);
+  const draft = await page.request.post('/api/activity-templates/assign', {
+    data: {templateId:'starter-codequest',version:1,rosterId:roster.id},
+  });
+  expect(draft.status()).toBe(201);
+  const { assessmentId } = await draft.json();
+  const api = '/api/assignment/' + assessmentId;
+  const consoleApi = '/api/activity-templates/lessons/' + assessmentId;
+  const manage = (action, studentIds = []) => page.request.post(consoleApi, {data:{action,minutes:30,studentIds}});
+  const original = await browser.newContext();
+  const replacement = await browser.newContext();
+  const other = await browser.newContext();
+  try {
+    expect((await original.request.get(api + '/join')).status()).toBe(409);
+    const opened = await manage('open');
+    expect(opened.ok(), await opened.text()).toBeTruthy();
+    const join = await (await original.request.get(api + '/join')).json();
+    for (const [context, label] of [[original, 'Original'],[replacement, 'Replacement'],[other, 'Other']]) {
+      const learner = join.students.find(student => student.label.startsWith(label));
+      const entered = await context.request.post(api + '/enter', {data:{handle:learner.handle,pin:'4826'}});
+      expect(entered.ok(), await entered.text()).toBeTruthy();
+    }
+    expect((await original.request.get(api + '/take')).ok()).toBeTruthy();
+    const saved = await original.request.post(api + '/draft', {data:{answers:{near:[{op:'move'}]}}});
+    expect(saved.ok(), await saved.text()).toBeTruthy();
+    const restored = await (await original.request.get(api + '/take')).json();
+    expect(restored.draftAnswers.near).toEqual([{op:'move'}]);
+    expect(restored.lessonClock.endsAt).toBeGreaterThan(restored.lessonClock.serverNow);
+    const closed = await manage('close');
+    expect(closed.ok(), await closed.text()).toBeTruthy();
+    expect((await closed.json()).eligible.map(student=>student.id)).toEqual(['LES-2','LES-3']);
+    expect((await original.request.post(api + '/draft', {data:{answers:{near:[]}}})).status()).toBe(409);
+    expect((await original.request.get(api + '/lesson-clock')).status()).toBe(409);
+    expect((await manage('replacement', ['LES-1'])).status()).toBe(409);
+    expect((await manage('replacement', ['LES-2'])).ok()).toBeTruthy();
+    expect((await original.request.get(api + '/take')).status()).toBe(409);
+    expect((await other.request.get(api + '/take')).status()).toBe(409);
+    expect((await replacement.request.get(api + '/take')).ok()).toBeTruthy();
+    expect((await manage('close')).ok()).toBeTruthy();
+    expect((await manage('replacement', ['LES-2'])).status()).toBe(409);
+  } finally {
+    await Promise.all([original.close(), replacement.close(), other.close()]);
+  }
+});
+
+test('class plan prepares fourteen private drafts once, and practice creates no results', async ({page, browser}, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100');
+  await signInDisposableTeacher(page, '-unit-three-plan');
+  const plan = require('../../activity-templates/unit-3-class-plan');
+  for (const slot of plan.classes) await createRoster(page, 'Grade ' + slot.className, [{ID:'PLAN-'+slot.className,Name:'Test Learner'}]);
+  const prepare = () => page.request.post('/api/activity-templates/class-plan', {data:{}});
+  expect(await (await prepare()).json()).toEqual({created:14,alreadyPrepared:0});
+  expect(await (await prepare()).json()).toEqual({created:0,alreadyPrepared:14});
+  const { lessons } = await (await page.request.get('/api/activity-templates/lessons')).json();
+  expect(lessons).toHaveLength(14);
+  expect(lessons.every(lesson=>lesson.status==='draft'&&!lesson.hasOpened&&lesson.plan.date)).toBeTruthy();
+  const learner = await browser.newContext();
+  try {
+    const practice = await learner.newPage();
+    const writes = [];
+    practice.on('request', request => { if (request.method() !== 'GET') writes.push(request.url()); });
+    await practice.goto('/practical-practice.html?activity=data');
+    await practice.getByLabel('Field for the plant type').selectOption('Type');
+    await practice.getByLabel('Correct the number of Tulip pots').selectOption('3');
+    await practice.getByRole('button',{name:'Check my work'}).first().click();
+    await expect(practice.getByRole('status').first()).toHaveText('That matches the data.');
+    expect(writes).toEqual([]);
+    expect((await learner.request.get('/api/assignment/'+lessons[0].id+'/join')).status()).toBe(409);
+  } finally { await learner.close(); }
+});
+
 test('automatic assessments and decks resolve the saved workspace under the signed-in teacher', async ({ page, browser }, testInfo) => {
   test.skip(testInfo.project.name !== 'windows-100', 'One browser covers workspace ownership at both server boundaries.');
   await signInDisposableTeacher(page, '-assessment-workspace-owner');

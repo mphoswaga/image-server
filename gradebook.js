@@ -151,6 +151,8 @@ function answerDisplay(question, answer) {
       return boundedText(question.options[selectedIndex], 500);
     }
   }
+  if (question.kind === 'codequest' && Array.isArray(answer)) return boundedText(answer.map(block => block.op).join(' → '), 500);
+  if (question.kind === 'data-table' && Array.isArray(answer)) return boundedText(question.activity.inputs.map((input, index) => input.label + ': ' + (answer[index] ?? 'No response')).join('; '), 500);
   return boundedText(answer, 500);
 }
 
@@ -206,6 +208,7 @@ function questionEvidenceForSubmission(record, sub) {
       automaticallyMarked,
       source: source || 'submitted',
       rationale: boundedText(grade.rationale, 500),
+      ...(Array.isArray(grade.processEvidence) && grade.processEvidence.length ? { processEvidence: grade.processEvidence.slice(0, 4).map(note => boundedText(note, 250)) } : {}),
       at: record.finalisedAt || sub.submittedAt || record.createdAt,
     };
   }).filter(item => item.item);

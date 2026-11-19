@@ -10,6 +10,9 @@ const crypto = require('crypto');
 const { DATA_DIR, writeJsonAtomic } = require('./storage');
 const { repairMathQuestion } = require('./math-question-validator');
 const { assessmentDraftContentIssues } = require('./assessment-draft');
+const assessmentCodeQuest = require('./assessment-codequest');
+const assessmentDataTable = require('./assessment-data-table');
+const practicalEvidence = require('./assessment-practical-evidence');
 
 const DIR = path.join(DATA_DIR, 'assignments');
 const ROOMS_PATH = path.join(DIR, '_rooms.json');
@@ -157,7 +160,11 @@ function normalizeAssessment(data) {
         Object.assign(item, { options, correctIndex: checked.question.correctIndex });
         Object.assign(question, { kind: 'mcq', options, correctIndex: checked.question.correctIndex });
       } else if (type === 'practical') {
-        question.kind = 'practical';
+        if (rawItem.activity) {
+          const isTable = assessmentDataTable.isTable(rawItem.activity);
+          item.activity = (isTable ? assessmentDataTable : assessmentCodeQuest).normalize(rawItem.activity, marks);
+          Object.assign(question, { kind: isTable ? 'data-table' : 'codequest', activity: item.activity });
+        } else question.kind = 'practical';
       } else {
         const answerKey = cleanText(rawItem.answerKey, 4000);
         if (!answerKey) throw new Error(`${title}, item ${itemIndex + 1}: add marking guidance or an answer key.`);
@@ -203,7 +210,7 @@ function normalizeRosterSnapshot(students) {
   return snapshot;
 }
 
-function createAssessment({ teacherId, teacherName, data, rosterId, rosterSnapshot, cutoffAt }) {
+function createAssessment({ teacherId, teacherName, data, rosterId, rosterSnapshot, cutoffAt, activityTemplate, oneLesson = false, lessonPlan = null }) {
   fs.mkdirSync(DIR, { recursive: true });
   const normalized = normalizeAssessment(data);
   const id = crypto.randomUUID().slice(0, 8);
@@ -213,7 +220,9 @@ function createAssessment({ teacherId, teacherName, data, rosterId, rosterSnapsh
     assessmentType: normalized.assessmentType, title: normalized.title,
     subject: normalized.subject, topic: normalized.title, grade: normalized.grade,
     totalMarks: normalized.totalMarks, objectives: normalized.objectives,
-    sections: normalized.sections, version: 1, status: 'published',
+    sections: normalized.sections, version: 1, status: activityTemplate ? 'draft' : 'published',
+    ...(activityTemplate ? { activityTemplate } : {}),
+    ...(oneLesson ? { lessonPolicy: { mode: 'one-lesson', windows: [], attempts: [], ...(lessonPlan ? { plan: lessonPlan } : {}) } } : {}),
     lessonWorkspaceId: normalized.lessonWorkspaceId,
     unitId: normalized.unitId,
     unitName: normalized.unitName,
@@ -543,9 +552,66 @@ function assertAssessmentMutable(record) {
 
 function assessmentContentEditable(record) {
   if (!record || record.type !== 'assessment' || assessmentIsFinalised(record)) return false;
+  if (record.activityTemplate) return false;
   if (loadSubmissions(record.id).length || loadDrafts(record.id).length) return false;
   const delivery = deliveryState(record);
   return delivery.mode !== 'live' || delivery.phase === 'lobby';
+}
+
+function currentLessonWindow(record, now = Date.now()) {
+  const window = record.lessonPolicy?.windows.at(-1);
+  return window && !window.closedAt && now < window.endsAt ? window : null;
+}
+
+function lessonEligible(record, now = Date.now()) {
+  const original = record.lessonPolicy?.windows[0];
+  if (!original || (!original.closedAt && now < original.endsAt)) return [];
+  const used = new Set([
+    ...record.lessonPolicy.attempts.map(attempt => attempt.studentId),
+    ...loadDrafts(record.id).map(draft => normalizeStudentId(draft.studentId)),
+    ...loadSubmissions(record.id).map(sub => normalizeStudentId(sub.studentId)),
+  ]);
+  return (record.rosterSnapshot || []).filter(student => !used.has(normalizeStudentId(student.id)));
+}
+
+function manageLesson(id, action, minutes, studentIds, now = Date.now()) {
+  const record = getAssignment(id);
+  const policy = record?.lessonPolicy;
+  if (!policy || (action !== 'close' && (assessmentIsFinalised(record) || record.teacherMarked))) throw new Error('This assessment cannot open another lesson.');
+  const active = currentLessonWindow(record, now);
+  if (action === 'close') {
+    if (!active) throw new Error('There is no open lesson.');
+    active.closedAt = now;
+  } else if (action === 'open' || action === 'replacement') {
+    if (active) throw new Error('Close the current lesson first.');
+    if (!Number.isInteger(minutes) || minutes < 5 || minutes > 120) throw new Error('Choose 5 to 120 minutes of working time.');
+    if (action === 'open' && policy.windows.length) throw new Error('The original lesson has already been used.');
+    const selected = action === 'replacement' && Array.isArray(studentIds) ? [...new Set(studentIds.map(normalizeStudentId))] : [];
+    if (action === 'replacement') {
+      const eligible = new Set(lessonEligible(record, now).map(student => normalizeStudentId(student.id)));
+      if (!selected.length || selected.some(studentId => !eligible.has(studentId))) throw new Error('Select only learners who missed the original assessment and have not started.');
+    }
+    policy.windows.push({ id: crypto.randomUUID(), kind: action, openedAt: now, endsAt: now + minutes * 60000, studentIds: selected });
+    record.status = 'published';
+  } else throw new Error('Choose a lesson action.');
+  writeJsonAtomic(recPath(id), record);
+  return record;
+}
+
+function checkLessonAccess(record, studentId, start = false, now = Date.now()) {
+  if (!record.lessonPolicy) return;
+  const student = normalizeStudentId(studentId);
+  const window = currentLessonWindow(record, now);
+  const attempt = record.lessonPolicy.attempts.find(item => item.studentId === student);
+  if (!window || (window.kind === 'replacement' && !window.studentIds.includes(student)) ||
+      (attempt && attempt.windowId !== window.id)) {
+    throw assessmentStateError('Your assessment lesson is closed or is not open for you.', 'assessment_lesson_unavailable');
+  }
+  if (!attempt) {
+    if (!start) throw assessmentStateError('Open the assessment before saving or submitting.', 'assessment_lesson_not_started');
+    record.lessonPolicy.attempts.push({ studentId: student, windowId: window.id, startedAt: now });
+    writeJsonAtomic(recPath(record.id), record);
+  }
 }
 
 function legacyContentEditable(record) {
@@ -740,7 +806,7 @@ function getDraft(id, studentId) {
   const target = normalizeStudentId(studentId);
   return loadDrafts(id).find(draft => normalizeStudentId(draft.studentId) === target) || null;
 }
-function saveDraft(id, { studentId, name, answers, completedSectionId }) {
+function saveDraft(id, { studentId, name, answers, completedSectionId, practicalTasks = [], codeRuns }) {
   assertAssessmentMutable(getAssignment(id));
   const sid = normalizeStudentId(studentId);
   const drafts = loadDrafts(id);
@@ -752,6 +818,7 @@ function saveDraft(id, { studentId, name, answers, completedSectionId }) {
     completedSectionIds: [...new Set([...(previous.completedSectionIds || []), ...(completedSectionId ? [completedSectionId] : [])])],
     updatedAt: new Date().toISOString(),
   };
+  if (practicalTasks.length) next.practicalEvidence = practicalEvidence.capture(previous, practicalTasks, answers || {}, codeRuns);
   if (index >= 0) drafts[index] = next; else drafts.push(next);
   writeJsonAtomic(draftsPath(id), drafts);
   return next;
@@ -1018,7 +1085,11 @@ function sanitizeLearnerAnswers(questions, rawAnswers) {
   for (const question of (questions || [])) {
     if (!Object.prototype.hasOwnProperty.call(raw, question.id) || question.kind === 'practical') continue;
     const value = raw[question.id];
-    if (question.kind === 'mcq') {
+    if (question.kind === 'codequest') {
+      try { safe[question.id] = assessmentCodeQuest.answer(value); } catch {}
+    } else if (question.kind === 'data-table') {
+      try { safe[question.id] = assessmentDataTable.answer(question.activity, value); } catch {}
+    } else if (question.kind === 'mcq') {
       const number = typeof value === 'number'
         ? value
         : typeof value === 'string' && /^\d+$/.test(value.trim()) ? Number(value.trim()) : NaN;
@@ -1035,6 +1106,7 @@ function incompleteAssessmentAnswers(questions, answers) {
   return (questions || []).filter(question => {
     if (question.kind === 'practical') return false;
     const value = supplied[question.id];
+    if (['codequest','data-table'].includes(question.kind)) return !Array.isArray(value);
     if (question.kind === 'mcq') {
       return !Number.isInteger(value) || value < 0 || value >= (question.options || []).length;
     }
@@ -1191,6 +1263,8 @@ function listTeacherAssignments(teacherId) {
       assessmentType: a.assessmentType || null, totalMarks: a.totalMarks || null,
       sectionCount: Array.isArray(a.sections) ? a.sections.length : null,
       version: a.version || null, status: a.status || null, finalisedAt: a.finalisedAt || null,
+      ...(a.activityTemplate ? { activityTemplate: a.activityTemplate } : {}),
+      ...(a.lessonPolicy ? { lessonPolicy: a.lessonPolicy.mode } : {}),
       assessmentSeriesId: a.assessmentSeriesId || null, copiedFromAssessmentId: a.copiedFromAssessmentId || null,
       copyNeedsReview: !!a.copyNeedsReview,
       lessonWorkspaceId: a.lessonWorkspaceId || null, unitId: a.unitId || null, unitName: a.unitName || null,
@@ -1249,7 +1323,7 @@ module.exports = {
   setSchoolSystemCaptured,
   isAbsent, setAttendance, addAssessmentLearners,
   enableQuizAssessmentControls, legacyContentEditable, updateLegacyContent, createAssignment, createAssessment, copyAssessmentToRoster, normalizeAssessment, getAssignment, updateAssignmentCutoff, updateAssessmentRoster, updateAssessmentContent, assessmentContentEditable, getRoomCode,
-  publishedAssessmentGenerationContext,
+  publishedAssessmentGenerationContext, currentLessonWindow, lessonEligible, manageLesson, checkLessonAccess,
   releaseResults, setTeacherMarked, isReleased,
   pendingAIMarks, acceptAllAIMarks, assessmentIsFinalised, saveSubmission, saveNewSubmission, getSubmissions, getSubmission, reassignRoster,
   assessmentReleaseReadiness, assessmentMarkingSummary, loadDrafts, getDraft, saveDraft, saveDraftGrade, deliveryState, learnerSectionProgress, learnerQuestionProgress, questionAnswerProgress, updateDelivery, draftProgress, presentationSlides,

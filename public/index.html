@@ -3481,6 +3481,7 @@
     <!-- MY ASSIGNMENTS -->
     <section id="assignmentsPanel" class="card wide" style="display:none">
       <div class="assessment-library-heading"><div><p class="assessment-eyebrow">ASSESSMENT WORKSPACE</p><h2>Tests &amp; projects <span id="assessmentSavedCount">0 saved</span></h2><p>Run assessments, mark work, and track school capture.</p></div><div><button id="newAssessmentBtn" type="button" class="btn accent">Create test or project</button><details class="assessment-create-menu"><summary aria-label="More creation options">⋯</summary><button id="topicMcqOpen" type="button">Generate multiple-choice questions</button></details></div></div>
+      <p><a class="btn ghost" href="/activity-templates">Practical activity templates</a></p>
       <button id="assignmentsBackTop" type="button" hidden>Back</button>
       <section id="topicMcqPanel" class="assessment-builder" hidden>
         <h3>Questions from a published topic</h3>
@@ -6495,10 +6496,10 @@
     // answers to one question). Same fields, different grouping.
     function gradeRowHTML(q, s, assignId, wrapId, headingText, selectable=false){
       const g=(s.grades||{})[q.id]||{}; const ans=(s.answers||{})[q.id];
-      const ansText=q.kind==='practical' ? 'Teacher observation' : q.kind==='mcq' ? (q.options&&q.options[ans]!=null?q.options[ans]:'(no answer)') : (ans||'(no answer)');
+      const ansText=q.kind==='data-table' ? (q.activity?.inputs||[]).map((item,index)=>item.label+': '+(ans?.[index]??'No response')).join(' · ') : q.kind==='codequest' ? (Array.isArray(ans)&&ans.map(block=>({move:'Move',left:'Turn left',right:'Turn right',collect:'Collect'})[block.op]).join(' → ')||'(empty program)') : q.kind==='practical' ? 'Teacher observation' : q.kind==='mcq' ? (q.options&&q.options[ans]!=null?q.options[ans]:'(no answer)') : (ans||'(no answer)');
       if(s.draftOnly&&q.kind!=='practical') return `<div class="grade-row" ${selectable?`data-marking-student="${esc(s.name)} ${esc(s.studentId)}"`:""} style="padding:10px 0;border-top:1px solid var(--border)"><div style="font-size:13px;font-weight:600">${esc(headingText)}</div><div style="font-size:12.5px;color:var(--muted);margin-top:4px">Available after this student submits.</div></div>`;
       const autoMarked=q.kind==='mcq'&&g.source==='auto';
-      const confirmed=autoMarked||g.source==='teacher'||g.source==='ai-confirmed';
+      const confirmed=g.source==='auto'||g.source==='teacher'||g.source==='ai-confirmed';
       // MCQ is deterministically auto-graded, so show that it is already
       // confirmed and remove the per-learner Save action.
       const badge = autoMarked ? '<span class="auto-marked-badge">Automatically marked &amp; confirmed</span>' : q.kind==='practical'&&(!g.source||g.source==='teacher-required')
@@ -6519,6 +6520,8 @@
       return `<div ${selectable?`data-marking-student="${esc(s.name)} ${esc(s.studentId)}"`:""} class="grade-row ${selectable?'grade-row-compact':''} ${autoMarked?'grade-row-auto':''}">
         <div class="grade-learner">${picker}${s.draftOnly?' <small>working</small>':''}</div>
         <div class="grade-answer"><b>Answer</b><span>${esc(String(ansText))}</span></div>
+        ${Array.isArray(g.criteria)?`<div class="grade-answer"><b>Rubric evidence</b><span>${esc(g.criteria.map(c=>c.label+': '+c.awarded+'/'+c.max).join(' · '))}</span></div>`:''}
+        ${g.processEvidence?.length?`<div class="grade-answer"><b>Work observed</b><span>${esc(g.processEvidence.join(' '))}</span></div>`:''}
         ${markControl}
         ${feedback}
       </div>`;
@@ -6624,7 +6627,8 @@
       const tabs=`<div style="display:flex;gap:8px;margin-bottom:10px">${tabBtn('student','By student')}${tabBtn('question','By question')}</div>`;
       if(!d.submissions||!d.submissions.length){ wrap.innerHTML=liveBar+submitDraftsBar+releaseBar+acceptAIBar+tabs+'<p class="hint" style="margin-top:8px">No students have submitted yet.</p>'; return; }
       const studentSearch=`<div style="margin:10px 0"><label for="student-search-${wrapId}">Search students</label><input id="student-search-${wrapId}" class="assessment-student-search" data-wrap-id="${wrapId}" type="search" placeholder="Student name or ID" value="${esc(wrap.dataset.studentSearch||'')}" style="display:block;width:100%;margin-top:5px;padding:9px;border:1px solid var(--border);border-radius:8px"><p class="hint assessment-search-status" role="status"></p></div>`;
-      wrap.innerHTML=liveBar+submitDraftsBar+releaseBar+acceptAIBar+assignmentSummary(d)+tabs+studentSearch+(view==='question'?renderByQuestion(d,assignId,wrapId):renderByStudent(d,assignId,wrapId));
+      const comments=d.teacherMarked&&d.questions.some(q=>['codequest','data-table'].includes(q.kind))?`<p class="hint">Practical evidence is on record. <a href="${esc($('teacherScopeLink').href)}">Open TeacherScope comments</a> and choose this class in the connected evidence workflow.</p>`:'';
+      wrap.innerHTML=liveBar+submitDraftsBar+releaseBar+acceptAIBar+comments+assignmentSummary(d)+tabs+studentSearch+(view==='question'?renderByQuestion(d,assignId,wrapId):renderByStudent(d,assignId,wrapId));
       filterAssessmentStudents(wrap);
       if(markingFocus){const field=wrap.querySelector('.assessment-student-search');field.focus({preventScroll:true});field.setSelectionRange(markingFocus.start,markingFocus.end);}
       wrap.querySelectorAll('.learning-report details').forEach(el=>{if(reportOpen.has(detailKey(el)))el.open=reportOpen.get(detailKey(el));});

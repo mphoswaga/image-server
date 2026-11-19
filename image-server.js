@@ -1,4 +1,7 @@
 const lessonLearning = require('./lesson-learning');
+const assessmentCodeQuest = require('./assessment-codequest');
+const assessmentDataTable = require('./assessment-data-table');
+const activityTemplates = require('./activity-template-library');
 require('dotenv').config();
 const crypto = require('crypto');
 const fs = require('fs');
@@ -2447,6 +2450,83 @@ app.post('/api/assessment-generate', requireAuth, async (req, res) => {
   }
 });
 
+app.get('/activity-templates', requireAuth, (_req, res) => res.sendFile(path.join(__dirname, 'public', 'activity-templates.html')));
+app.get('/api/activity-templates', requireAuth, (req, res) => res.json({ templates: activityTemplates.list(req.userId) }));
+app.post('/api/activity-templates/preview', requireAuth, (req, res) => {
+  try {
+    const assessment = assignments.normalizeAssessment(req.body?.assessment);
+    if (assessment.questions.some(question => !['codequest','data-table'].includes(question.kind))) throw new Error('Choose practical activity tasks.');
+    res.json({assessment});
+  } catch (error) { res.status(400).json({error:error.message}); }
+});
+function unitProjectRows(teacherId) {
+  const plan = require('./activity-templates/unit-3-class-plan');
+  const classes = roster.listRosters(teacherId);
+  const existing = assignments.listTeacherAssignments(teacherId);
+  return plan.classes.map(slot => {
+    const matching = classes.filter(item => String(item.name).toUpperCase().replace(/^GRADE\s*/, '').replace(/\s/g, '') === slot.className);
+    const selected = matching.length === 1 ? roster.getRoster(teacherId, matching[0].id) : null;
+    const saved = selected && existing.find(item => item.rosterId === selected.id && item.activityTemplate?.id === slot.templateId && item.activityTemplate.version === slot.version);
+    return { slot, selected: selected?.students?.length ? selected : null, saved };
+  });
+}
+app.get('/api/activity-templates/class-plan', requireAuth, (req, res) => {
+  res.json({ rows: unitProjectRows(req.userId).map(({slot,selected,saved}) => ({...slot, matched: !!selected, prepared: !!saved})) });
+});
+app.post('/api/activity-templates/class-plan', requireAuth, (req, res) => {
+  const rows = unitProjectRows(req.userId);
+  if (rows.some(row => !row.selected)) return res.status(409).json({error:'Each planned class must match exactly one of your saved rosters with learners.'});
+  const created = [];
+  for (const {slot,selected,saved} of rows) {
+    if (saved) continue;
+    const data = activityTemplates.get(req.userId, slot.templateId, slot.version);
+    const draft = assignments.createAssessment({
+      teacherId:req.userId, teacherName:req.user.name, rosterId:selected.id, rosterSnapshot:selected.students,
+      data:{...data,deliveryMode:'self-paced'}, activityTemplate:{id:slot.templateId,version:slot.version},
+      oneLesson:true, lessonPlan:slot,
+    });
+    created.push(draft.id);
+  }
+  res.status(201).json({created:created.length,alreadyPrepared:rows.length-created.length});
+});
+app.post('/api/activity-templates', requireAuth, (req, res) => {
+  try {
+    const { sourceId, baseVersion, assessment, duplicate } = req.body || {};
+    res.status(201).json(activityTemplates.save(req.userId, sourceId, baseVersion, assessment, duplicate === true));
+  } catch (error) { res.status(400).json({ error: error.message }); }
+});
+app.post('/api/activity-templates/assign', requireAuth, (req, res) => {
+  try {
+    const { templateId, version, rosterId } = req.body || {};
+    const selected = roster.getRoster(req.userId, String(rosterId || ''));
+    if (!selected?.students?.length) return res.status(400).json({ error: 'Choose one of your classes with learners.' });
+    const data = activityTemplates.get(req.userId, templateId, version);
+    const record = assignments.createAssessment({
+      teacherId: req.userId, teacherName: req.user.name, rosterId: selected.id, rosterSnapshot: selected.students,
+      data: { ...data, deliveryMode: 'self-paced' }, activityTemplate: { id: templateId, version: Number(version) }, oneLesson: true,
+    });
+    res.status(201).json({ assessmentId: record.id, status: record.status, totalMarks: record.totalMarks });
+  } catch (error) { res.status(400).json({ error: error.message }); }
+});
+function activityLessonStatus(record) {
+  return { id: record.id, title: record.title, rosterId: record.rosterId, status: record.status,
+    active: assignments.currentLessonWindow(record), hasOpened: !!record.lessonPolicy.windows.length,
+    eligible: assignments.lessonEligible(record), attempts: record.lessonPolicy.attempts.length, plan: record.lessonPolicy.plan || null };
+}
+app.get('/api/activity-templates/lessons', requireAuth, (req, res) => {
+  const lessons = assignments.listTeacherAssignments(req.userId).filter(item => item.lessonPolicy)
+    .map(item => activityLessonStatus(assignments.getAssignment(item.id)));
+  res.json({ lessons });
+});
+app.post('/api/activity-templates/lessons/:id', requireAuth, (req, res) => {
+  const record = assignments.getAssignment(req.params.id);
+  if (!record || record.teacherId !== req.userId || !record.lessonPolicy) return res.status(404).json({ error: 'Lesson assessment not found.' });
+  try {
+    const { action, minutes, studentIds } = req.body || {};
+    res.json(activityLessonStatus(assignments.manageLesson(record.id, action, minutes, studentIds)));
+  } catch (error) { res.status(409).json({ error: error.message }); }
+});
+
 app.post('/api/assessment', requireAuth, (req, res) => {
   const { assessment, rosterId, cutoffAt } = req.body || {};
   try {
@@ -3606,6 +3686,21 @@ app.get('/api/assignment/:id', requireAssignmentAccess, (req, res) => {
 });
 
 // Student: the questions, WITHOUT answer keys/correctIndex.
+function allowAssessmentLesson(req, res, record, studentId, start = false) {
+  try { assignments.checkLessonAccess(record, studentId, start); return true; }
+  catch (error) {
+    res.status(error.status || 409).json({ code: error.code || 'assessment_lesson_unavailable', error: error.message });
+    return false;
+  }
+}
+app.get('/api/assignment/:id/lesson-clock', requireAssignmentAccess, (req, res) => {
+  const record = assignments.getAssignment(req.params.id);
+  if (!record?.lessonPolicy) return res.status(404).json({ error: 'Lesson not found.' });
+  const session = assignmentStudentSession(req, res, record);
+  if (!session) return res.status(401).json({ error: 'Rejoin the lesson.' });
+  if (!allowAssessmentLesson(req, res, record, session.studentId)) return;
+  res.json({ endsAt: assignments.currentLessonWindow(record)?.endsAt || null, serverNow: Date.now() });
+});
 app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
@@ -3614,6 +3709,7 @@ app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
   if (!viewer) return;
   const session = viewer.session;
   const already = session && assignments.getSubmission(a.id, session.studentId);
+  if (session && !already && !allowAssessmentLesson(req, res, a, session.studentId, true)) return;
   const classDelivery = assignments.deliveryState(a);
   let delivery = classDelivery;
   let visibleQuestions = a.content.questions;
@@ -3670,10 +3766,16 @@ app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
   const draftAnswers = Object.fromEntries(Object.entries(draft && draft.answers || {}).filter(([id]) => visibleIds.has(id)));
   res.json({
     title: a.title, instructions: a.content.instructions,
-    questions: visibleQuestions.map(q => ({ id: q.id, question: q.question, kind: q.kind, options: q.options || null, marks: q.marks, sectionId: q.sectionId || null, sectionTitle: q.sectionTitle || null, sectionInstructions: q.sectionInstructions || '', sectionType: q.sectionType || null })),
+    questions: visibleQuestions.map(q => ({
+      id: q.id, question: q.question, kind: q.kind, options: q.options || null, marks: q.marks,
+      sectionId: q.sectionId || null, sectionTitle: q.sectionTitle || null, sectionInstructions: q.sectionInstructions || '', sectionType: q.sectionType || null,
+      ...(q.kind === 'codequest' ? { mission: q.activity.mission, starter: q.activity.starter || [], checkpoint: q.activity.rubric.checkpoint?.cell || null } : {}),
+      ...(q.kind === 'data-table' ? { tableActivity: assessmentDataTable.learnerView(q.activity) } : {}),
+    })),
     delivery, activeSection: activeSection ? { id: activeSection.id, title: activeSection.title, index: delivery.activeSectionIndex, total: a.sections.length } : null,
     draftAnswers, sectionCompleted, activeQuestion, questionSyncActive,
     alreadySubmitted: !!already,
+    ...(session && !already && a.lessonPolicy ? { lessonClock: { endsAt: assignments.currentLessonWindow(a)?.endsAt || null, serverNow: Date.now() } } : {}),
   });
 });
 
@@ -3690,6 +3792,7 @@ app.post('/api/assignment/:id/draft', requireAssignmentAccess, (req, res) => {
   if (a.type === 'assessment' && assignments.getSubmission(a.id, session.studentId)) {
     return res.status(409).json({ code: 'assessment_already_submitted', error: 'This assessment has already been submitted.' });
   }
+  if (!allowAssessmentLesson(req, res, a, session.studentId)) return;
   const delivery = assignments.deliveryState(a);
   if (a.type === 'assessment' && delivery.mode === 'live' && !['open', 'marking'].includes(delivery.phase)) return res.status(409).json({ error: delivery.phase === 'paused' ? 'Your teacher paused the assessment.' : 'This section is not open.' });
   const existing = assignments.getDraft(a.id, session.studentId);
@@ -3716,7 +3819,11 @@ app.post('/api/assignment/:id/draft', requireAssignmentAccess, (req, res) => {
       return res.status(400).json({ code: 'assessment_section_incomplete', error: `Answer every question in this section before continuing (${missing.length} remaining).`, missingQuestionIds: missing.map(question => question.id) });
     }
   }
-  const saved = assignments.saveDraft(a.id, { studentId: session.studentId, name: session.name, answers: safeAnswers, completedSectionId: complete && activeSection ? activeSection.id : null });
+  const saved = assignments.saveDraft(a.id, { studentId: session.studentId, name: session.name, answers: safeAnswers,
+    completedSectionId: complete && activeSection ? activeSection.id : null,
+    practicalTasks: allowedQuestions.filter(q => ['codequest','data-table'].includes(q.kind)),
+    codeRuns: req.body?.codeRuns,
+  });
   res.json({ ok: true, savedAt: saved.updatedAt, sectionCompleted: !!(activeSection && saved.completedSectionIds.includes(activeSection.id)) });
 });
 
@@ -3729,6 +3836,10 @@ async function buildAssessmentSubmission(a, { studentId, name, answers, storedDr
     if (q.kind === 'mcq') {
       const correct = Number.isInteger(given) && given === q.correctIndex;
       grades[q.id] = { marksAwarded: correct ? q.marks : 0, verdict: correct ? 'correct' : 'incorrect', rationale: correct ? 'Correct option selected.' : 'Not the correct option.', source: 'auto' };
+    } else if (q.kind === 'codequest') {
+      grades[q.id] = assessmentCodeQuest.grade(q.activity, given);
+    } else if (q.kind === 'data-table') {
+      grades[q.id] = assessmentDataTable.grade(q.activity, given);
     } else if (q.kind === 'practical') {
       const observed = storedDraft && storedDraft.observationGrades && storedDraft.observationGrades[q.id];
       grades[q.id] = observed
@@ -3746,6 +3857,10 @@ async function buildAssessmentSubmission(a, { studentId, name, answers, storedDr
     }
     totalMarks += grades[q.id].marksAwarded;
   }
+  const practicalTasks = a.content.questions.filter(q => ['codequest','data-table'].includes(q.kind));
+  const practical = require('./assessment-practical-evidence');
+  const process = practical.capture(storedDraft || {}, practicalTasks, answers);
+  for (const task of practicalTasks) grades[task.id].processEvidence = practical.describe(task, process[task.id], grades[task.id]);
   return { studentId, name: name || studentId, answers, grades, totalMarks, maxMarks, submittedAt: new Date().toISOString() };
 }
 
@@ -3782,6 +3897,7 @@ app.post('/api/assignment/:id/submit', requireAssignmentAccess, async (req, res)
   if (a.type === 'assessment' && assignments.getSubmission(a.id, session.studentId)) {
     return res.status(409).json({ code: 'assessment_already_submitted', error: 'This assessment has already been submitted.' });
   }
+  if (!allowAssessmentLesson(req, res, a, session.studentId)) return;
   const delivery = assignments.deliveryState(a);
   if (a.type === 'assessment' && delivery.mode === 'live' && delivery.phase !== 'marking') return res.status(409).json({ error: delivery.phase === 'closed' ? 'This assessment is closed.' : 'Wait for your teacher to finish all sections before submitting.' });
   const storedDraft = assignments.getDraft(a.id, session.studentId);
@@ -3810,6 +3926,7 @@ app.post('/api/assignment/:id/submit', requireAssignmentAccess, async (req, res)
   }
 
   try {
+    if (!allowAssessmentLesson(req, res, assignments.getAssignment(a.id), studentId)) return;
     assignments.saveNewSubmission(a.id, submission);
     notifyRecordedAssessmentSubmission(a, submission);
   } catch (error) {
@@ -4024,9 +4141,9 @@ app.patch('/api/assignment/:id/grade', requireAuth, (req, res) => {
   }
   const answerText = sub.answers[questionId];
 
-  if (q.kind !== 'practical') assignments.recordVerdict(a.id, questionId, { answerText, marksAwarded: marks, verdict: v, rationale: rationale || (sub.grades[questionId] || {}).rationale || '', confirmed: true, source: 'teacher' });
+  if (!['practical', 'codequest', 'data-table'].includes(q.kind)) assignments.recordVerdict(a.id, questionId, { answerText, marksAwarded: marks, verdict: v, rationale: rationale || (sub.grades[questionId] || {}).rationale || '', confirmed: true, source: 'teacher' });
 
-  sub.grades[questionId] = { marksAwarded: marks, verdict: v, rationale: rationale || (sub.grades[questionId] || {}).rationale || '', source: 'teacher' };
+  sub.grades[questionId] = { ...sub.grades[questionId], marksAwarded: marks, verdict: v, rationale: rationale || (sub.grades[questionId] || {}).rationale || '', source: 'teacher' };
   sub.totalMarks = Object.values(sub.grades).reduce((s, g) => s + g.marksAwarded, 0);
   assignments.saveSubmission(a.id, sub);
   res.json({ ok: true, submission: sub });
@@ -4085,10 +4202,10 @@ app.patch('/api/assignment/:id/grade/bulk', requireAuth, (req, res) => {
     }
     const previous = target.submission.grades[questionId] || {};
     grade.rationale = grade.rationale || previous.rationale || '';
-    if (q.kind !== 'practical') assignments.recordVerdict(a.id, questionId, {
+    if (!['practical', 'codequest', 'data-table'].includes(q.kind)) assignments.recordVerdict(a.id, questionId, {
       answerText: target.submission.answers[questionId], ...grade, confirmed: true,
     });
-    target.submission.grades[questionId] = grade;
+    target.submission.grades[questionId] = { ...previous, ...grade };
     target.submission.totalMarks = Object.values(target.submission.grades).reduce((sum, item) => sum + Number(item.marksAwarded || 0), 0);
     assignments.saveSubmission(a.id, target.submission);
   }
