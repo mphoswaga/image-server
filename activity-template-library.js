@@ -7,7 +7,7 @@ const { normalizeAssessment } = require('./assignments');
 const presets = [
   { id: 'starter-codequest', versions: [require('./activity-templates/codequest-first-project')], starter: true },
   { id: 'starter-codequest-stages', versions: [require('./activity-templates/codequest-stages')], starter: true },
-  { id: 'starter-data', versions: [require('./activity-templates/data-handling-first-project'), require('./activity-templates/data-everyday-project')], starter: true },
+  { id: 'starter-data', versions: [require('./activity-templates/data-handling-first-project'), require('./activity-templates/data-everyday-project'), require('./activity-templates/data-school-fair')], starter: true },
 ];
 const directory = path.join(DATA_DIR, 'activity-templates');
 const file = teacherId => path.join(directory, crypto.createHash('sha256').update(String(teacherId)).digest('hex') + '.json');

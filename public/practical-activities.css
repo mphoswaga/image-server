@@ -22,3 +22,55 @@
 @media (max-width: 800px) {
   .project-codequest-frame { height: 660px; }
 }
+
+body.practical-studio{background:#f5f4ef;color:#193635;font-family:system-ui,sans-serif}
+.practical-studio main{max-width:1160px;margin:auto;padding:clamp(16px,3vw,44px)}
+.practical-studio h1{font:600 clamp(32px,4vw,50px)/1.08 Georgia,serif;letter-spacing:-.045em;margin:6px 0 22px}
+.studio-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px max(16px,calc((100% - 1160px)/2));background:#103e3d;color:white}
+.studio-bar a{color:white;text-decoration:none;font:700 23px Georgia,serif}.studio-bar a span{color:#ade9cf}
+.studio-bar nav{display:flex;gap:4px}.studio-bar button{background:transparent;color:white;border:0;padding:9px 12px;font-weight:650}
+.studio-bar button[aria-pressed=true]{background:#d8eee2;color:#113f39}
+.practical-studio main>section{border:1px solid #cbd9d2;border-radius:16px;padding:clamp(14px,2vw,28px);box-shadow:0 6px 22px #153d3510}
+.practical-studio .setup-fields{margin-bottom:14px}.setup-fields select{padding:11px;background:#f9fbf8}
+.practical-studio #assign,.practical-studio #openDraftDesk{background:#075a4f;color:white;padding:12px 18px;font-weight:700}
+.practical-studio #preview{background:white;color:#075a4f}
+.stage-console{height:clamp(550px,74vh,760px);border-color:#285957}
+.practical-studio #treasurePicker{margin:12px 0}
+.task-settings{margin:8px 0;padding:10px;border-top:1px solid #d3ded6}
+.data-lab{--ink:#123d49;--accent:#09675c;color:var(--ink)}
+.lab-exhibits,.data-lab .project-data-source{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(145px,100%),1fr));padding:0;gap:10px;list-style:none}
+.lab-exhibits li,.data-lab .project-data-source li{padding:14px;border-radius:10px;background:#e6f2ea;border:1px solid #c2d9cd;border-top:4px solid #35816d;display:grid;align-content:start;gap:6px;overflow-wrap:anywhere}
+.lab-files .lab-exhibits li{background:#fff4de;border-color:#ead29d;border-top-color:#bf7620}
+.lab-files small{border:1px solid #b07a29;color:#794c10;border-radius:4px;padding:4px;width:max-content;font:bold 12px monospace}
+.lab-survey .lab-exhibits li{background:#edf0fb;border-color:#cbd2e9;border-top-color:#6076ab}
+.lab-exhibits meter{width:100%}.lab-exhibits span{font-size:.92em}
+.lab-choices{border:0;border-top:1px solid #d3ded9;padding:10px 0 8px;margin:16px 0 0}
+.lab-choices legend{font-weight:700;padding-right:8px}
+.lab-choices label{display:inline-flex;align-items:center;gap:7px;min-height:40px;margin:4px 5px 0 0;padding:5px 12px;border:1px solid #b7cec7;border-radius:7px;cursor:pointer;background:#fff}
+.lab-choices input[type=radio]{width:16px;height:16px;margin:0;accent-color:#09675c}
+.lab-choices label:has(:checked){background:#dbefe3;border-color:#147564;color:#124c43}
+.wrap:has(.data-lab){max-width:900px}
+.wrap:has(.data-lab) #form>.card:first-child{background:#153f44;color:white;border-radius:16px}
+.wrap:has(.data-lab) #title{color:#fff;font-family:Georgia,serif}.wrap:has(.data-lab) #instructions{color:#e2eee8}
+@media(max-width:710px){.stage-console{height:720px}.studio-bar{flex-wrap:wrap}.project-data-scroll td:first-child,.project-data-scroll th:first-child{position:sticky;left:0;background:#f3f8f4}.lab-choices label{box-sizing:border-box}}
+
+.station-directory{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(170px,100%),1fr));gap:9px;margin:20px 0}
+.station-directory button{display:grid;text-align:left;align-content:space-between;gap:10px;padding:14px;background:#edf5ef;border:1px solid #c5d8cb;border-top:4px solid #40765a}
+.station-directory button:nth-child(4){background:#fff3dd;border-top-color:#b27a32}
+.station-directory button:nth-child(5){background:#edf0fb;border-top-color:#5268a2}
+.station-directory strong{font:600 1.2em Georgia,serif}.station-directory span{color:#435859;font-size:.9em}.station-directory small{font-weight:bold}
+
+.file-picker.lab-choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr));gap:10px}
+.file-picker.lab-choices label{position:relative;display:grid;justify-items:start;align-content:start;gap:7px;margin:0;padding:14px;background:#fff9e9;border:1px solid #d9c89c;overflow-wrap:anywhere}
+.file-picker.lab-choices label:has(:checked){background:#eef8ed;outline:2px solid #227563;outline-offset:-2px}
+.file-picker input{position:absolute;right:12px;top:12px}
+.file-picker small{font-weight:700;color:#475d59}
+.file-symbol{display:grid;place-items:end start;box-sizing:border-box;width:52px;height:60px;padding:6px;color:#fff;background:linear-gradient(135deg,transparent 76%,#ffffff2e 76%) top right/18px 18px no-repeat,#486d8b;clip-path:polygon(0 0,74% 0,100% 25%,100% 100%,0 100%);font:bold 12px ui-monospace,monospace;letter-spacing:.05em}
+.picture-file{background-color:#a45631}.video-file{background-color:#715d93}
+#questions .q:has(.data-lab) .section-head{font:600 clamp(22px,3vw,30px)/1.2 Georgia,serif;color:#183f43;border-bottom:1px solid #cadbd3;padding-bottom:12px}
+#questions .q:has(.data-lab) .section-instructions{font:400 15px/1.5 system-ui,sans-serif;color:#45605e;margin-top:5px}
+#questions .q:has(.data-lab) .qtext{margin:12px 0;font-size:17px}
+
+.project-task-next{margin:14px 0 0;text-align:right}
+.project-task-next[hidden],#submitActions[hidden]{display:none!important}
+.project-task-next button{background:#075a4f;color:white;border:0;border-radius:8px;padding:10px 17px;font:inherit;font-weight:700;cursor:pointer}

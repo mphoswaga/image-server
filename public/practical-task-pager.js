@@ -1,4 +1,4 @@
-window.practicalTaskPager = (root, panels, view = {}) => {
+window.practicalTaskPager = (root, panels, view = {}, onPageChange) => {
   if (panels.length < 2) return;
   let index = Math.min(view.index || 0, panels.length - 1);
   const nav = document.createElement('nav');
@@ -13,7 +13,11 @@ window.practicalTaskPager = (root, panels, view = {}) => {
   const toggle = document.createElement('button');
   toggle.type = 'button';
   toggle.onclick = () => { view.all = !view.all; show(); };
-  nav.append(previous, status, next, toggle);
+  nav.append(previous, status, toggle);
+  const footer = document.createElement('div');
+  footer.className = 'project-task-next';
+  footer.append(next);
+  root.append(footer);
   root.prepend(nav);
   function show() {
     panels.forEach((panel, position) => panel.hidden = !view.all && index !== position);
@@ -23,8 +27,17 @@ window.practicalTaskPager = (root, panels, view = {}) => {
     status.textContent = view.all ? `All ${panels.length} tasks` : `Task ${index + 1} of ${panels.length}`;
     previous.disabled = index === 0;
     next.disabled = index === panels.length - 1;
+    footer.hidden = !!view.all || next.disabled;
+    onPageChange?.(!!view.all || next.disabled);
   }
-  previous.onclick = () => { if (index > 0) { index--; show(); } };
-  next.onclick = () => { if (index < panels.length - 1) { index++; show(); } };
+  function move(step) {
+    index += step;
+    show();
+    panels[index].tabIndex = -1;
+    panels[index].focus({preventScroll:true});
+    nav.scrollIntoView({block:'start'});
+  }
+  previous.onclick = () => move(-1);
+  next.onclick = () => move(1);
   show();
 };

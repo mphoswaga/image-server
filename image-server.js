@@ -2470,7 +2470,12 @@ function unitProjectRows(teacherId) {
   return plan.classes.map(slot => {
     const matching = classes.filter(item => String(item.name).toUpperCase().replace(/^GRADE\s*/, '').replace(/\s/g, '') === slot.className);
     const selected = matching.length === 1 ? roster.getRoster(teacherId, matching[0].id) : null;
-    const saved = selected && existing.find(item => item.rosterId === selected.id && item.activityTemplate?.id === slot.templateId && item.activityTemplate.version === slot.version);
+    const saved = selected && existing.find(item => {
+      if (item.rosterId !== selected.id || item.activityTemplate?.id !== slot.templateId) return false;
+      if (item.activityTemplate.version === slot.version) return true;
+      const previous = assignments.getAssignment(item.id)?.lessonPolicy?.plan;
+      return previous?.className === slot.className && previous.date === slot.date;
+    });
     return { slot, selected: selected?.students?.length ? selected : null, saved };
   });
 }
@@ -3851,7 +3856,7 @@ app.post('/api/assignment/:id/draft', requireAssignmentAccess, (req, res) => {
     practicalTasks: allowedQuestions.filter(q => ['codequest','data-table'].includes(q.kind)),
     codeRuns: req.body?.codeRuns,
   });
-  res.json({ ok: true, savedAt: saved.updatedAt, sectionCompleted: !!(activeSection && saved.completedSectionIds.includes(activeSection.id)) });
+  res.json({ ok: true, savedAt: saved.updatedAt, savedQuestionIds: Object.keys(safeAnswers), sectionCompleted: !!(activeSection && saved.completedSectionIds.includes(activeSection.id)) });
 });
 
 async function buildAssessmentSubmission(a, { studentId, name, answers, storedDraft }) {

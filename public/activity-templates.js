@@ -15,6 +15,18 @@
     if (!response.ok) throw new Error(data.error || 'Could not complete that action.');
     return data;
   }
+  function showWorkspace(classroom) {
+    $('setupTab').setAttribute('aria-pressed', String(!classroom));
+    $('classTab').setAttribute('aria-pressed', String(classroom));
+    $('workspaceTitle').textContent = classroom ? 'Assessment classroom' : 'Practical assessments';
+    $('classWorkspace').hidden = $('scheduleWorkspace').hidden = !classroom;
+    $('quickSetup').hidden = classroom;
+    $('learnerPreview').hidden = true;
+    $('openDraftDesk').hidden = true;
+    window.scrollTo(0,0);
+  }
+  $('setupTab').onclick = () => showWorkspace(false);
+  $('classTab').onclick = $('openDraftDesk').onclick = () => showWorkspace(true);
   function controls() {
     for (const id of ['preview','save','duplicate']) $(id).disabled = busy || !draft;
     $('template').disabled = $('version').disabled = !!busy;
@@ -193,50 +205,149 @@
     $('total').textContent = `Total: ${draft.totalMarks} marks${dirty ? ' · Unsaved changes' : ''}`;
   }
   function editVersion() {
+    activeIsland = null; stagedTasks = new Map();
     version = Number($('version').value);
     draft = structuredClone(record.versions[version - 1]);
     dirty = false;
     $('learnerPreview').hidden = true;
     renderEditor();
   }
+  let activeIsland, stagedTasks = new Map();
   function renderStageChoices(group, section) {
-    const preset = records.find(item => item.id === 'starter-codequest-stages');
-    const available = preset?.versions.at(-1).sections[0].items || [];
-    const picker = element('fieldset');
-    picker.append(element('legend', 'Stages in this test'));
-    for (const stage of available) {
-      const label = element('label');
-      const input = element('input');
-      input.type = 'checkbox';
-      input.checked = section.items.some(task => task.id === stage.id);
-      input.setAttribute('aria-label', stage.prompt);
-      input.disabled = input.checked && section.items.length === 1;
-      input.onchange = () => {
-        if (input.checked) {
-          section.items.push(structuredClone(stage));
-          section.items.sort((a, b) => a.id.localeCompare(b.id));
-        } else {
-          section.items = section.items.filter(task => task.id !== stage.id);
+    const catalog = records.find(item => item.id === 'starter-codequest-stages').versions[0].sections[0].items;
+    for (const task of section.items) stagedTasks.set(task.id, task);
+    const stages = catalog.map(stage => stagedTasks.get(stage.id) || structuredClone(stage));
+    const selected = new Set(section.items.map(item => item.id));
+    if (!stages.some(stage => stage.id === activeIsland)) activeIsland = section.items[0].id;
+    const frame = document.createElement('iframe');
+    frame.title = 'Select and play CodeQuest stages';
+    frame.className = 'project-codequest-frame stage-console';
+    frame.src = '/codequest.html?assessment=1';
+    frame.onload = () => {
+      const win = frame.contentWindow, doc = frame.contentDocument;
+      if (!win.mountAssessmentStage) return;
+      const nav = doc.createElement('nav');
+      nav.className = 'island-selector';
+      nav.setAttribute('aria-label','Assessment islands');
+      const title = doc.createElement('h2');
+      title.textContent = 'Choose your islands';
+      nav.append(title);
+      const strip = doc.createElement('div');
+      nav.append(strip);
+      doc.querySelector('#game').prepend(nav);
+      const controls = [];
+      const previewPrograms = new Map();
+      const tools = doc.createElement('div');
+      tools.className = 'treasure-tools';
+      doc.getElementById('island').after(tools);
+      let placementRequest = 0;
+      function treasureControls(stage) {
+        ++placementRequest;
+        tools.replaceChildren();
+        if (!selected.has(stage.id)) return;
+        const edit = doc.createElement('button');
+        edit.type = 'button';
+        edit.textContent = 'Move treasure';
+        tools.append(edit);
+        edit.onclick = async () => {
+          const requestId = ++placementRequest;
+          edit.disabled = true;
+          const status = doc.createElement('span');
+          status.setAttribute('role','status');
+          status.textContent = 'Checking squares…';
+          tools.append(status);
+          try {
+            const { choices } = await request('/api/activity-templates/treasure-choices', { activity:stage.activity, marks:stage.marks });
+            if (!frame.isConnected || requestId !== placementRequest) return;
+            edit.textContent = 'Cancel';
+            edit.disabled = false;
+            edit.onclick = () => browse(stage);
+            status.textContent = choices.length ? 'Choose a highlighted square.' : 'Only the current square fits.';
+            if (!choices.length) return;
+            const random = doc.createElement('button');
+            random.type = 'button';
+            random.textContent = 'Choose for me';
+            random.onclick = () => placeTreasure(stage, choices[Math.floor(Math.random() * choices.length)]);
+            edit.after(random);
+            const tiles = doc.getElementById('island').querySelectorAll('.tile');
+            for (const choice of choices) {
+              const [x,y] = choice.chest;
+              const square = doc.createElement('button');
+              square.type = 'button';
+              square.className = 'treasure-target';
+              square.setAttribute('aria-label', 'Place treasure at row ' + (y+1) + ', column ' + (x+1));
+              square.onclick = () => placeTreasure(stage, choice);
+              tiles[y * stage.activity.mission.size + x].append(square);
+            }
+          } catch (error) {
+            if (requestId !== placementRequest) return;
+            status.textContent = error.message;
+            edit.disabled = false;
+            edit.onclick = () => browse(stage);
+            edit.textContent = 'Back to island';
+          }
+        };
+      }
+      function browse(stage) {
+        activeIsland = stage.id;
+        if (selected.has(stage.id) && $('treasureTask').value !== stage.id) {
+          $('treasureTask').value = stage.id;
+          loadTreasureBoard();
         }
-        dirty = true;
-        renderEditor(section.id);
-        $('stageChoices').querySelectorAll('input[type="checkbox"]').forEach(control => {
-          if (control.getAttribute('aria-label') === stage.prompt) control.focus();
-        });
-      };
-      label.append(input, document.createTextNode(stage.prompt));
-      picker.append(label);
-    }
-    group.append(picker);
+        win.mountAssessmentStage({
+          mission:stage.activity.mission, starter:stage.activity.starter, checkpoint:stage.activity.rubric.checkpoint?.cell,
+        }, previewPrograms.get(stage.id), program => previewPrograms.set(stage.id, structuredClone(program)), () => {});
+        doc.getElementById('ownName').textContent = stage.prompt;
+        treasureControls(stage);
+        for (const row of controls) {
+          row.button.setAttribute('aria-pressed', String(row.id === activeIsland));
+          row.check.disabled = selected.size === 1 && selected.has(row.id);
+        }
+      }
+      for (const stage of stages) {
+        const card = doc.createElement('div');
+        const button = doc.createElement('button');
+        button.type = 'button';
+        button.textContent = stage.prompt;
+        button.onclick = () => browse(stage);
+        const label = doc.createElement('label'), check = doc.createElement('input');
+        check.type = 'checkbox';
+        check.checked = selected.has(stage.id);
+        check.setAttribute('aria-label', 'Include ' + stage.prompt);
+        check.onchange = () => {
+          if (check.checked) selected.add(stage.id); else selected.delete(stage.id);
+          section.items = stages.filter(item => selected.has(item.id));
+          stagedTasks.set(stage.id, stage);
+          dirty = true;
+          $('learnerPreview').hidden = true;
+          renderEditor(undefined, true);
+          browse(stage);
+        };
+        label.append(check, doc.createTextNode('Include · ' + stage.marks + ' marks'));
+        card.append(button,label); strip.append(card);
+        controls.push({ id: stage.id, button, check });
+      }
+      browse(stages.find(item => item.id === activeIsland));
+    };
+    group.append(frame);
   }
   let treasureRequest = 0;
   function updateTreasureTasks() {
     const items = tasks().filter(item => item.activity.mission);
     const selected = $('treasureTask').value;
-    $('treasurePicker').hidden = !items.length;
+    $('treasurePicker').hidden = !items.length || draft.sections.every(section => section.id === 'codequest-stages');
     $('treasureTask').replaceChildren(...items.map(item => new Option(item.prompt, item.id)));
     if (items.some(item => item.id === selected)) $('treasureTask').value = selected;
     loadTreasureBoard();
+  }
+  function placeTreasure(task, choice) {
+    task.activity.mission.chest = choice.chest;
+    if (choice.blockLimit) task.activity.mission.blockLimit = choice.blockLimit;
+    if (choice.starter?.length) task.activity.starter = choice.starter;
+    if (choice.improvement) task.activity.rubric.improvement = choice.improvement;
+    dirty = true;
+    $('learnerPreview').hidden = true;
+    renderEditor();
   }
   async function loadTreasureBoard() {
     const serial = ++treasureRequest;
@@ -252,13 +363,7 @@
       if (serial !== treasureRequest) return;
       function place(choice) {
         if (snapshot !== JSON.stringify(task)) return loadTreasureBoard();
-        task.activity.mission.chest = choice.chest;
-        if (choice.blockLimit) task.activity.mission.blockLimit = choice.blockLimit;
-        if (choice.starter?.length) task.activity.starter = choice.starter;
-        if (choice.improvement) task.activity.rubric.improvement = choice.improvement;
-        dirty = true;
-        $('learnerPreview').hidden = true;
-        renderEditor();
+        placeTreasure(task, choice);
       }
       $('shuffleTreasure').disabled = !choices.length;
       $('shuffleTreasure').onclick = () => place(choices[Math.floor(Math.random() * choices.length)]);
@@ -281,19 +386,32 @@
   }
   $('treasurePicker').ontoggle = () => { if (draft) loadTreasureBoard(); };
   $('treasureTask').onchange = loadTreasureBoard;
-  function renderEditor(expandedSection) {
+  function renderEditor(expandedSection, keepGame = false) {
     $('editor').replaceChildren();
-    $('stageChoices').replaceChildren();
+    if (!keepGame) $('stageChoices').replaceChildren();
     updateTreasureTasks();
     for (const [key,label] of [['title','Title'],['subject','Subject'],['grade','Grade'],['instructions','Learner instructions']]) {
       field($('editor'), label, draft[key], value => draft[key] = value, key === 'instructions' ? 'textarea' : 'text');
     }
+    if (tasks().every(task => task.activity.table)) {
+      const stations = element('div');
+      stations.className = 'station-directory';
+      for (const [index, task] of tasks().entries()) {
+        const section = draft.sections.find(section => section.items.includes(task));
+        const button = element('button');
+        button.type = 'button';
+        button.append(element('strong',section.title), element('span',task.prompt), element('small',task.marks + ' marks · Preview →'));
+        button.onclick = () => preview(index);
+        stations.append(button);
+      }
+      $('stageChoices').replaceChildren(stations);
+    }
     for (const section of draft.sections) {
       const group = element('details');
       const stageSection = section.id === 'codequest-stages';
-      group.open = section.id === expandedSection || stageSection;
+      group.open = section.id === expandedSection;
       group.append(element('summary', section.title));
-      if (stageSection) renderStageChoices($('stageChoices'), section);
+      if (stageSection && !keepGame) renderStageChoices($('stageChoices'), section);
       field(group, 'Section title', section.title, value => section.title = value);
       field(group, 'Section instructions', section.instructions, value => section.instructions = value, 'textarea');
       for (const [index, task] of section.items.entries()) {
@@ -316,7 +434,10 @@
         remove.disabled = section.items.length === 1;
         remove.onclick = () => { section.items.splice(index,1); dirty = true; renderEditor(section.id); };
         if (!stageSection) rubric.append(duplicate, remove);
-        group.append(rubric);
+        const settings = element('details');
+        settings.className = 'task-settings';
+        settings.append(element('summary', task.prompt + ' · ' + task.marks + ' marks'), rubric);
+        group.append(settings);
       }
       $('editor').append(group);
     }
@@ -352,6 +473,24 @@
       $('notice').textContent = `Saved version ${saved.version}.`;
     });
   }
+  $('editor').addEventListener('input', () => {
+    const items = tasks();
+    const summaries = $('editor').querySelectorAll('.task-settings > summary');
+    const stations = $('stageChoices').querySelectorAll('.station-directory button');
+    items.forEach((task, index) => {
+      summaries[index].textContent = task.prompt + ' · ' + task.marks + ' marks';
+      if (stations[index]) {
+        const section = draft.sections.find(section => section.items.includes(task));
+        stations[index].querySelector('strong').textContent = section.title;
+        stations[index].querySelector('span').textContent = task.prompt;
+        stations[index].querySelector('small').textContent = task.marks + ' marks · Preview →';
+      }
+    });
+    $('learnerPreview').hidden = true;
+  });
+  $('customise').ontoggle = () => {
+    if (draft && dirty && !$('customise').open) renderEditor();
+  };
   $('template').onchange = () => choose();
   $('version').onchange = editVersion;
   $('roster').onchange = controls;
@@ -366,6 +505,7 @@
     const result = await request('/api/activity-templates/assign', { templateId: record.id, version, rosterId });
     $('notice').textContent = `Class draft created · ${result.totalMarks} marks. You’ll find it under Tests & projects.`;
     await refreshLessons(result.assessmentId);
+    $('openDraftDesk').hidden = false;
   });
   $('lesson').onchange = chooseLesson;
   $('classPlan').ontoggle = () => { if ($('classPlan').open) action(loadPlan); };
@@ -378,7 +518,8 @@
   $('openLesson').onclick = () => manageLesson('open');
   $('replacementLesson').onclick = () => manageLesson('replacement');
   $('closeLesson').onclick = () => manageLesson('close');
-  $('preview').onclick = () => action(async () => {
+  $('preview').onclick = () => preview(0);
+  function preview(index) { return action(async () => {
     const {assessment} = await request('/api/activity-templates/preview', {assessment:draft});
     const panel = $('learnerPreview');
     panel.replaceChildren(element('h2', 'Learner preview'), element('p', assessment.instructions));
@@ -399,10 +540,10 @@
         else AssessmentDataTable.mount(root, { source: [], ...activity }, null, () => {});
       }
     }
-    practicalTaskPager(deck,pages);
+    practicalTaskPager(deck,pages,{index});
     panel.hidden = false;
     panel.scrollIntoView();
-  });
+  }); }
   action(async () => {
     const [{ rosters }] = await Promise.all([request('/api/rosters'), refresh('starter-codequest-stages')]);
     classes = rosters;

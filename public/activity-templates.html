@@ -40,9 +40,11 @@
     #treasureBoard button:disabled{opacity:1;background:#e4eae7}
   </style>
 </head>
-<body><main>
-  <a href="/">Back to LessonScope</a>
-  <h1>Set up a practical assessment</h1>
+<body class="practical-studio">
+<header class="studio-bar"><a href="/">Lesson<span>Scope</span></a><nav aria-label="Assessment workspace">
+<button type="button" id="setupTab" aria-pressed="true">Assessment setup</button>
+<button type="button" id="classTab" aria-pressed="false">Classroom</button></nav></header><main>
+  <h1 id="workspaceTitle">Practical assessments</h1>
   <section id="quickSetup">
     <div class="setup-fields">
       <label>Activity <select id="template"></select></label>
@@ -70,8 +72,9 @@
     </details>
   </section>
   <p id="notice" role="status"></p>
+  <button id="openDraftDesk" type="button" hidden>Go to this class draft →</button>
   <section id="learnerPreview" hidden></section>
-  <section>
+  <section id="classWorkspace" hidden>
     <h2>Run a scheduled lesson</h2>
     <label>Class assessment <select id="lesson"></select></label>
     <p id="lessonStatus"></p>
@@ -96,7 +99,7 @@
       <details><summary id="submissionCount">Live submissions</summary><ul id="learnerProgress"></ul></details>
     </div>
   </section>
-  <section>
+  <section id="scheduleWorkspace" hidden>
     <h2>First ICT project class plan</h2>
     <p>Review the 14 planned lessons. Preparing drafts does not open them to learners.</p>
     <details id="classPlan"><summary>View planned classes</summary><ul id="planRows"></ul><button id="preparePlan" type="button" disabled>Prepare the 14 class drafts</button></details>
@@ -104,10 +107,10 @@
   <p>Unmarked practice · <a href="/practical-practice.html?activity=codequest">CodeQuest skills</a> · <a href="/practical-practice.html?activity=data">Table skills</a></p>
 </main>
 <script src="/codequest-core.js"></script>
-<link rel="stylesheet" href="/practical-activities.css?v=2">
+<link rel="stylesheet" href="/practical-activities.css?v=4">
 <script src="/assessment-codequest.js?v=5"></script>
-<script src="/assessment-data-table.js?v=1"></script>
+<script src="/assessment-data-table.js?v=2"></script>
 <script src="/assessment-narration.js"></script>
-<script src="/practical-task-pager.js"></script>
-<script src="/activity-templates.js?v=8"></script>
+<script src="/practical-task-pager.js?v=2"></script>
+<script src="/activity-templates.js?v=10"></script>
 </body></html>

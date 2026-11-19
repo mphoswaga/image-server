@@ -31,13 +31,14 @@ function normalize(activity, marks) {
   });
   if (fields.reduce((sum, input) => sum + input.marks, 0) !== marks) throw new Error('Table rubric points must add up to the task marks.');
   if (source !== undefined && (!Array.isArray(source) || source.length > 12)) throw new Error('Provide at most twelve source cards.');
-  return { kind: activity.kind, version: 1, table: table.map((row, index) => row.map((value, column) =>
+  const presentation = ['records','files','types','survey'].includes(activity.presentation) ? activity.presentation : null;
+  return { kind: activity.kind, version: 1, ...(presentation ? {presentation} : {}), table: table.map((row, index) => row.map((value, column) =>
     editable && positions.has(index + ':' + column) ? '' : text(value))),
     source: (source || []).map(text), inputs: fields };
 }
 
-function learnerView({ kind, table, source, inputs }) {
-  return { kind, table, source, inputs: inputs.map(({ accepted, ...input }) => input) };
+function learnerView({ kind, table, source, inputs, presentation }) {
+  return { kind, table, source, ...(presentation ? {presentation} : {}), inputs: inputs.map(({ accepted, ...input }) => input) };
 }
 
 function answer(activity, responses) {

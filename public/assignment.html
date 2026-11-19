@@ -101,6 +101,7 @@
         <h1 id="title"></h1>
         <p class="sub" id="instructions"></p>
         <p id="lessonClock" hidden></p>
+        <p id="saveState" role="status" hidden></p>
       </div>
       <div class="card" id="questions"></div>
       <div class="card" id="submitActions">
@@ -138,10 +139,10 @@
     .project-data-response{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0}
   </style>
   <script src="/codequest-core.js"></script>
-  <link rel="stylesheet" href="/practical-activities.css?v=2">
+  <link rel="stylesheet" href="/practical-activities.css?v=4">
   <script src="/assessment-codequest.js?v=5"></script>
-  <script src="/assessment-data-table.js?v=1"></script>
-  <script src="/practical-task-pager.js"></script>
+  <script src="/assessment-data-table.js?v=2"></script>
+  <script src="/practical-task-pager.js?v=2"></script>
   <script>
     const $ = id => document.getElementById(id);
     const assignmentId = location.pathname.split('/').pop();
@@ -161,7 +162,67 @@
     let lessonTimer, lessonPoll, lessonEnds, lessonTask = null, lessonNumber = null, checkingLesson = false;
     const practicalView = {};
     const editedTasks = new Set();
+    let practicalSaving = false, practicalWrite = null, retryDelay = 1000;
+    const pendingPractical = new Map();
+    function saveStatus(message) {
+      $('saveState').hidden = !message;
+      $('saveState').textContent = message;
+    }
+    function stopPracticalSaving() {
+      practicalSaving = false;
+      clearTimeout(serverDraftTimer);
+      pendingPractical.clear();
+      saveStatus('');
+    }
+    function schedulePracticalSave(delay = 650) {
+      clearTimeout(serverDraftTimer);
+      if (!practicalSaving || !pendingPractical.size) return;
+      serverDraftTimer = setTimeout(() => flushPracticalSave().catch(() => {}), delay);
+    }
+    function practicalChanged(id) {
+      editedTasks.add(id);
+      if (!practicalSaving) return saveDraft();
+      pendingPractical.set(id, (pendingPractical.get(id) || 0) + 1);
+      saveStatus('Saving your work…');
+      schedulePracticalSave();
+    }
+    async function flushPracticalSave() {
+      while (practicalWrite) await practicalWrite;
+      if (!practicalSaving || !pendingPractical.size) return;
+      clearTimeout(serverDraftTimer);
+      const batch = [...pendingPractical].filter(([id]) => !lessonTask || lessonTask === id);
+      if (!batch.length) {
+        saveStatus('A previous task is waiting to save. Keep this page open.');
+        return;
+      }
+      const changed = Object.fromEntries(batch.map(([id]) => [id, answers[id]]));
+      practicalWrite = saveServerDraft(false, changed).then(data => {
+        if (!practicalSaving) return;
+        for (const [id, revision] of batch) {
+          if (data.savedQuestionIds.includes(id) && pendingPractical.get(id) === revision) pendingPractical.delete(id);
+        }
+        retryDelay = 1000;
+        if (!pendingPractical.size) saveStatus('Your work is saved.');
+        else {
+          saveStatus('Some work is still waiting to save. Keep this page open.');
+          schedulePracticalSave(2000);
+        }
+      }).catch(error => {
+        if (practicalSaving) {
+          const retry = !error.status || error.status >= 500 || error.status === 429 || error.status === 408;
+          saveStatus(retry ? 'Your work hasn’t saved yet. Keep this page open. Trying again…' : error.message);
+          if (retry) {
+            schedulePracticalSave(retryDelay);
+            retryDelay = Math.min(10000, retryDelay * 2);
+          }
+        }
+        throw error;
+      }).finally(() => { practicalWrite = null; });
+      return practicalWrite;
+    }
+    window.addEventListener('online', () => { if (practicalSaving) schedulePracticalSave(0); });
     function closeLessonView() {
+      stopPracticalSaving();
       clearTimeout(serverDraftTimer);
       clearInterval(lessonTimer);
       clearInterval(lessonPoll);
@@ -201,7 +262,8 @@
             if (!editedTasks.has(id)) answers[id] = answer;
           }
           renderQuestions();
-          if (questions.some(q => editedTasks.has(q.id))) saveDraft();
+          if (practicalSaving) schedulePracticalSave(0);
+          else if (questions.some(q => editedTasks.has(q.id))) saveDraft();
         } catch {} finally { checkingLesson = false; }
       }, 2500);
       tick();
@@ -224,16 +286,16 @@
       }
     }
 
-    async function saveServerDraft(complete) {
+    async function saveServerDraft(complete, payload = answers) {
       clearTimeout(serverDraftTimer);
       const pendingRuns = codeRuns.filter(run => !lessonTask || run.id === lessonTask).slice(0, 16);
       const response = await fetch('/api/assignment/' + assignmentId + '/draft', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answers, complete: !!complete, codeRuns: pendingRuns }),
+        body: JSON.stringify({ answers: payload, complete: !!complete, codeRuns: pendingRuns }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Could not save your work.');
-      codeRuns = codeRuns.filter(run => !pendingRuns.includes(run));
+      if (!response.ok) throw Object.assign(new Error(data.error || 'Could not save your work.'), {status: response.status});
+      codeRuns = codeRuns.filter(run => !pendingRuns.includes(run) || (practicalSaving && !data.savedQuestionIds.includes(run.id)));
       return data;
     }
     function restoreDraft() {
@@ -254,6 +316,7 @@
     }
 
     function renderQuestions() {
+      $('submitActions').hidden = false;
       document.querySelector('.wrap').classList.toggle('codequest-assignment', questions.some(q => q.kind === 'codequest'));
       let previousSection = null;
       $('questions').innerHTML = questions.map((q, i) => {
@@ -284,17 +347,21 @@
       $('questions').querySelectorAll('[data-code-task]').forEach(node => {
         const question = questions.find(q => q.id === node.dataset.codeTask);
         AssessmentCodeQuest.mount(node, question, answers[question.id], program => {
-          editedTasks.add(question.id);
           answers[question.id] = program;
-          saveDraft();
-        }, program => { if (codeRuns.length < 16) codeRuns.push({ id: question.id, program }); });
+          practicalChanged(question.id);
+        }, program => {
+          if (codeRuns.length < 16) codeRuns.push({ id: question.id, program });
+          if (practicalSaving) {
+            answers[question.id] = program;
+            practicalChanged(question.id);
+          }
+        });
       });
       $('questions').querySelectorAll('[data-table-task]').forEach(node => {
         const question = questions.find(q => q.id === node.dataset.tableTask);
         AssessmentDataTable.mount(node, question.tableActivity, answers[question.id], responses => {
-          editedTasks.add(question.id);
           answers[question.id] = responses;
-          saveDraft();
+          practicalChanged(question.id);
         });
       });
       if (questions.every(q => ['codequest','data-table'].includes(q.kind))) {
@@ -303,7 +370,9 @@
           guidance.className = 'project-task-nav';
           guidance.textContent = 'Your teacher is guiding the class · Task ' + lessonNumber;
           $('questions').prepend(guidance);
-        } else practicalTaskPager($('questions'), [...$('questions').querySelectorAll('[data-practical-page]')], practicalView);
+        } else practicalTaskPager($('questions'), [...$('questions').querySelectorAll('[data-practical-page]')], practicalView, atEnd => {
+          if (practicalSaving) $('submitActions').hidden = !atEnd;
+        });
       }
 
       $('questions').querySelectorAll('.opts').forEach(box => {
@@ -327,6 +396,7 @@
     // null from the server in that case, so `g` stays undefined and no
     // verdict badge is shown, just the plain answer.
     function renderResults(d, givenAnswers) {
+      stopPracticalSaving();
       clearInterval(lessonTimer);
       clearInterval(lessonPoll);
       if (assignmentType !== 'assessment') clearInterval(livePollTimer);
@@ -481,6 +551,7 @@
           clearInterval(livePollTimer);
           livePollTimer = setInterval(refreshLiveTake, 2500);
         } else {
+          practicalSaving = assignmentType === 'assessment' && questions.length > 0 && questions.every(q => ['codequest','data-table'].includes(q.kind));
           lessonNumber = take.lessonClock?.number;
           lessonTask = take.lessonClock?.questionId;
           renderQuestions();
@@ -609,7 +680,8 @@
       }
       btn.innerHTML = '<span class="spinner"></span>Submitting…';
       try {
-        if (codeRuns.length && delivery.mode !== 'live') await saveServerDraft(false);
+        if (practicalSaving) await flushPracticalSave();
+        else if (codeRuns.length && delivery.mode !== 'live') await saveServerDraft(false);
         const r = await fetch('/api/assignment/' + assignmentId + '/submit', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ answers }),

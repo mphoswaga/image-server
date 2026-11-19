@@ -221,6 +221,11 @@ async function poll(){if(busy||polling||document.hidden)return;polling=true;try{
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});document.addEventListener('visibilitychange',()=>{if(!document.hidden && !assessmentMode)poll();});async function refreshLoop(){await poll();setTimeout(refreshLoop,['countdown','launch'].includes(state?.phase)?400:1500);}let animationHandle=0,lastAnimationAt=0;function animationLoop(time){if(!document.hidden&&time-lastAnimationAt>=90){lastAnimationAt=time;animate();}animationHandle=requestAnimationFrame(animationLoop);}animationHandle=requestAnimationFrame(animationLoop);window.addEventListener('pagehide',()=>cancelAnimationFrame(animationHandle));window.addEventListener('pageshow',()=>{cancelAnimationFrame(animationHandle);animationHandle=requestAnimationFrame(animationLoop);});
 if (assessmentMode) {
   window.mountAssessmentStage = (task, saved, onChange, onRun) => {
+    testRun = null; debugStep = -1; selectedStep = -1; version++;
+    if ($('stepEditor').open) $('stepEditor').close();
+    $('restoreAssessmentCode')?.remove();
+    levelBriefing.panel.hidden = true;
+    $('testResult').textContent = '';
     assessment = { checkpoint: task.checkpoint, onChange, onRun };
     const map = task.mission;
     meta = { teacher: false };
@@ -237,6 +242,7 @@ if (assessmentMode) {
       : state.mission.blocks.includes('repeat') ? 'Repeat is available' : 'No Repeat';
     if (task.starter?.length) {
       const restore = document.createElement('button');
+      restore.id = 'restoreAssessmentCode';
       restore.textContent = 'Restore starting code';
       restore.onclick = () => { program = structuredClone(task.starter); changed(); };
       $('test').parentElement.append(restore);
@@ -246,5 +252,11 @@ if (assessmentMode) {
     drawOwn();
     renderProgram();
   };
-} else refreshLoop();
+ } else {
+  const assessmentLink = document.createElement('a');
+  assessmentLink.href = '/activity-templates';
+  assessmentLink.textContent = 'Choose stages for an assessment';
+  $('setup').append(assessmentLink);
+  refreshLoop();
+}
 })();
