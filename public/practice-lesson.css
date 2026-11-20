@@ -33,3 +33,5 @@
 .demo-caption{min-height:1.6em;color:#173f35}.demo-actions{display:flex;gap:6px;flex-wrap:wrap}.demo-actions button{min-height:40px}.demo-start{background:#155d4c;color:white}.demo-reading{margin-top:8px}.demo-reading summary{padding:8px 0}
 @media(prefers-reduced-motion:reduce){.demo-pointer{transition:none}}
 .demo-island img{width:25px;height:25px;vertical-align:middle}
+
+.topic-tutorial video{display:block;width:100%;max-height:65vh;background:#102c29;border-radius:8px;margin:0 0 12px}

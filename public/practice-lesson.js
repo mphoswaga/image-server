@@ -43,7 +43,6 @@
   const miniGrid = '<table class="demo-grid"><tr><th></th><th>A</th><th data-key="col">B</th></tr><tr><th>1</th><td>Name</td><td>Room</td></tr><tr><th data-key="row">2</th><td>Mai</td><td data-key="cell">A03</td></tr></table>';
   const record = row(item('card','Pupil card · Mai · Room A03'))+row(item('name','Name · Mai'),item('room','Room · ____'));
   const demos = {
-    'Make a record':[0,record,[change('card','Read Mai’s room on her pupil card.'),change('room','Click the empty Room cell and type A03.','Room · A03')]],
     'Correct a record':[4,record.replace('Room · ____','Room · A30'),[change('card','Read the room on the source card.'),change('room','The digits are swapped. Select the wrong entry and replace it.','Room · A03')]],
     'Choose data types':[3,row(item('field','Room number · 007'))+row(item('number','○ Number'),item('type','○ Text')),[change('field','Read the field and its example.'),change('type','Choose Text to keep this room code exactly as written.','● Text')]],
     'Explore file sizes':[7,row(item('map','Map.png · 2 MB'),item('note','Note.txt · 50 KB'))+row(item('answer','Smaller file · ____')),[change('map','Convert 2 MB to 2,000 KB.','Map.png · 2,000 KB'),change('note','Compare 50 KB with 2,000 KB.'),change('answer','Choose the file that uses less space.','Smaller file · Note.txt')]],
@@ -71,13 +70,24 @@
   const tutorials = [];
   for (const panel of document.querySelectorAll('.practice-card')) {
     const title = panel.querySelector('h2').textContent;
-    const [lesson,scene,steps] = demos[title];
     const box = document.createElement('details');
     box.className = 'topic-tutorial';
+    if (title === 'Make a record') {
+      box.innerHTML = '<summary>Watch how to fill in one row · 38 seconds</summary><div class="tutorial-body"><video controls playsinline preload="metadata" aria-label="How to copy a pupil card into the register" poster="/assets/data-lab/make-a-record.jpg"><source src="/assets/data-lab/make-a-record.mp4" type="video/mp4"><track kind="captions" srclang="en" label="English" src="/assets/data-lab/make-a-record.vtt"></video><button type="button" class="demo-start">Start practice</button></div>';
+      panel.querySelector('.instructions').after(box);
+      const video = box.querySelector('video');
+      const stop = () => video.pause();
+      let visited = false;
+      box.ontoggle = () => { if (box.open) visited = true; else stop(); };
+      box.querySelector('button').onclick = () => { box.open = false; box.querySelector('summary').focus(); };
+      tutorials.push({panel,box,stop,seen:()=>visited});
+      continue;
+    }
+    const [lesson,scene,steps] = demos[title];
     box.innerHTML = '<summary>Watch tutorial · '+title+'</summary><div class="tutorial-body"><div class="demo-stage"><div class="demo-scene"></div><i class="demo-pointer" aria-hidden="true"></i></div><p class="demo-caption" role="status"></p><div class="demo-actions"><button type="button" class="demo-play"></button><button type="button" class="demo-next">Step forward</button><button type="button" class="demo-start">Start practice</button></div><details class="demo-reading"><summary>Read the example</summary></details></div>';
     panel.querySelector('.instructions').after(box);
     const reading = box.querySelector('.demo-reading');
-    const readings = title==='Make a record'?[0,2]:title==='Rows, columns and cells'?[1,2]:title==='Use Repeat'?[3,4]:title==='Explore file sizes'?[6,7]:[lesson];
+    const readings = title==='Rows, columns and cells'?[1,2]:title==='Use Repeat'?[3,4]:title==='Explore file sizes'?[6,7]:[lesson];
     for (const idx of readings) {
       const [heading,intro,visual,note]=slides[idx];
       reading.insertAdjacentHTML('beforeend','<h3>'+heading+'</h3><p>'+intro+'</p>'+visual+'<p>'+note+'</p>');
