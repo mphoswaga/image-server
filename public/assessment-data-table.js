@@ -38,21 +38,22 @@ window.AssessmentDataTable = (() => {
           const row = element('li');
           const handle = element('span', tile);
           handle.className = 'unit-handle';
-          handle.onpointerdown = event => {
-            if (!event.isPrimary || event.button !== 0) return;
-            handle.setPointerCapture(event.pointerId);
+          row.onpointerdown = event => {
+            if (!event.isPrimary || event.button !== 0 || event.target.closest('button')) return;
+            row.setPointerCapture(event.pointerId);
             drag = index;
             row.classList.add('moving');
           };
-          handle.onpointermove = event => {
-            if (drag !== index || !handle.hasPointerCapture(event.pointerId)) return;
+          row.onpointermove = event => {
+            if (drag !== index || !row.hasPointerCapture(event.pointerId)) return;
             Array.from(list.children).forEach((item, i) => item.classList.toggle('destination', i === target(event.clientY)));
           };
-          handle.onpointerup = event => {
-            if (drag !== index || !handle.hasPointerCapture(event.pointerId)) return;
+          row.onpointerup = event => {
+            if (drag !== index || !row.hasPointerCapture(event.pointerId)) return;
+            drag = undefined;
             move(index, target(event.clientY));
           };
-          handle.onlostpointercapture = () => {
+          row.onlostpointercapture = () => {
             drag = undefined;
             Array.from(list.children).forEach(item => item.classList.remove('moving', 'destination'));
           };
@@ -114,7 +115,7 @@ window.AssessmentDataTable = (() => {
       source.forEach((card,index) => {
         const item = element('li');
         const lines = card.split(' · ');
-        item.append(element('strong', writtenRecord || ballotDesk ? lines.shift() : 'Card ' + (index + 1)));
+        item.append(element('strong', writtenRecord || ballotDesk || activity.namedBadges ? lines.shift() : 'Card ' + (index + 1)));
         lines.forEach(line => item.append(element('div', line)));
         cards.append(item);
       });

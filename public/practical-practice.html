@@ -16,6 +16,25 @@ button:disabled{opacity:.45;cursor:default}.check{background:#17664e;color:white
 .project-task-nav{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px}.project-task-nav span{font-weight:700}
 .project-codequest-frame{width:100%;height:720px;border:0;border-radius:12px}
 .grade-links{display:flex;gap:12px;flex-wrap:wrap}.grade-links a{background:#17664e;color:white;padding:13px 18px;border-radius:8px;text-decoration:none;font-weight:700}
+
+.practice-card>strong:first-child{color:#21645b;font-size:.88rem}
+.practice-card .lab-records .project-data-source{display:flex;flex-wrap:wrap;gap:16px}
+.practice-card .lab-records .project-data-source li{position:relative;box-sizing:border-box;width:min(100%,330px);border-radius:15px;border:1px solid #a8c9c0;background:linear-gradient(115deg,#fdfaf1,#e7f3ef);padding:52px 18px 16px 74px;box-shadow:0 3px 8px #174a3c20}
+.practice-card .lab-records .project-data-source li:before{content:'SCHOOL HELPER';position:absolute;inset:0 0 auto;background:#155d56;color:white;padding:9px 16px;font:bold 12px system-ui;letter-spacing:.13em;border-radius:14px 14px 0 0}
+.practice-card .lab-records .project-data-source li:after{content:'🎓';position:absolute;top:52px;left:12px;background:#d4e7dc;border-radius:50%;padding:8px;font-size:24px}
+.practice-card .lab-types .lab-exhibits li:before{content:'▦';font-size:24px;color:#247966}
+.practice-card .lab-survey meter{height:22px}
+.practice-card .unit-order li{background:linear-gradient(110deg,#e7f1ef,#f5f9fc);border-left:5px solid #39798a}
+.practice-card .unit-handle{padding:14px 5px}
+.practice-card .unit-handle:before{content:'⠿ ';font-size:1.3em}
+
+.practice-card .unit-order li{touch-action:none;cursor:grab}
+.practice-card:has(.unit-order) .instructions,.practice-card:has(.lab-types) .instructions,.practice-card:has(.lab-survey) .instructions{padding:14px 12px 14px 84px;min-height:58px;background:#eff6f4 left 10px center/62px auto no-repeat;border-radius:9px}
+.practice-card:has(.unit-order) .instructions{background-image:url('/assets/practice/sprites-g3/file-folder-open.webp')}
+.practice-card:has(.lab-types) .instructions{background-image:url('/assets/practice/sprites-g3/school-document.webp')}
+.practice-card:has(.lab-survey) .instructions{background-image:url('/assets/practice/sprites-g3/rapid-relay.webp')}
+.practice-card .lab-survey .lab-exhibits li{border-top-color:#725e99}.practice-card .lab-survey meter{accent-color:#67599a}
+.practice-card .lab-records .project-data-source li:before{background:radial-gradient(ellipse 13px 3px at 50% 7px,#e2eae5 90%,transparent),linear-gradient(105deg,#11534d,#2c7772);padding-top:15px}
 </style>
 <link rel="stylesheet" href="/practical-activities.css?v=8">
 </head>
@@ -23,5 +42,5 @@ button:disabled{opacity:.45;cursor:default}.check{background:#17664e;color:white
 <h1 id="title">Project practice</h1><p class="intro" id="intro">Choose your practice adventure.</p>
 <div id="practiceTasks"></div></main>
 <script src="/codequest-core.js"></script><script src="/assessment-codequest.js?v=5"></script>
-<script src="/assessment-data-table.js?v=6"></script><script src="/practical-task-pager.js?v=2"></script><script src="/practical-practice.js?v=2"></script>
+<script src="/assessment-data-table.js?v=7"></script><script src="/practical-task-pager.js?v=2"></script><script src="/data-practice-levels.js?v=1"></script><script src="/practical-practice.js?v=3"></script>
 </body></html>

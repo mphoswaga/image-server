@@ -40,33 +40,60 @@
     document.getElementById('intro').textContent = 'Practise organising, checking and using data. You can check your answers and try again. Your practice is not marked.';
     function exercise(title,instructions,activity,keys) {
       const panel = card(title,instructions);
+      const levels = [{instructions,activity,keys}, ...dataPracticeLevels(title)];
+      const levelNames = ['Easy','Moderate','Complicated'];
+      const levelLabel = element('strong');
+      panel.prepend(levelLabel);
       const area = element('div');
-      panel.append(area);
-      let responses = activity.inputs.map(input => input.initial ?? null);
-      AssessmentDataTable.mount(area,{source:[],...activity},null,next => { responses = next; });
       const button = element('button','Check my work');
-      button.type = 'button'; button.className = 'check';
+      button.className = 'check';
+      const next = element('button');
       const result = element('p'); result.className = 'feedback'; result.setAttribute('role','status');
-      button.onclick = () => {
-        const matches = keys.filter((answers,index) => answers.some(answer => String(responses[index] ?? '').trim().replace(/\s+/g,' ').toLowerCase() === answer.toLowerCase())).length;
-        result.textContent = matches === keys.length ? 'Well done! All answers match.' : matches + ' of ' + keys.length + ' correct. Look again and try the others.';
-      };
-      panel.append(button,result);
+      panel.append(area,button,result,next);
+      function show(index) {
+        const level = levels[index];
+        levelLabel.textContent = levelNames[index] + ' · ' + (index+1) + ' of 3';
+        panel.querySelector('.instructions').textContent = level.instructions;
+        const task = structuredClone(level.activity);
+        for (const field of task.inputs) {
+          if (!field.options) continue;
+          for (let i=field.options.length-1;i>0;i--) {
+            const j=Math.floor(Math.random()*(i+1));
+            [field.options[i],field.options[j]]=[field.options[j],field.options[i]];
+          }
+        }
+        let responses = task.inputs.map(field=>field.initial ?? '');
+        area.className = ''; area.replaceChildren();
+        next.hidden = true; result.textContent = '';
+        AssessmentDataTable.mount(area,{source:[],namedBadges:task.presentation==='records',...task},null,values=>{
+          responses = values; next.hidden = true; result.textContent = '';
+        });
+        const normal = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().replace(/\s+/g,' ').toLowerCase();
+        button.onclick = () => {
+          const missed = task.inputs.filter((field,i)=>!level.keys[i].some(key=>normal(key)===normal(responses[i])));
+          result.textContent = missed.length ? 'Check again: ' + missed.map(f=>f.label).join(', ') + '.' :
+            index===2 ? 'Well done! You completed all three levels.' : 'Well done! All answers match.';
+          next.hidden = missed.length>0 || index===2;
+        };
+        next.textContent = 'Continue to ' + (levelNames[index+1] || '');
+        next.onclick = () => {show(index+1); panel.scrollIntoView({block:'start'});button.blur();};
+      }
+      show(0);
     }
     const input = (label,row,column) => ({label,row,column,entry:'text'});
     const choice = (label,options) => ({label,options});
     exercise('Make a record','Read the badge and type each detail into the correct field. Keep the zeroes at the start of the phone number.',{
-      presentation:'records',source:['Linh Vo · Age 8 · Born 3 June 2018 · Phone 000 000 0012'],
+      presentation:'records',source:['Võ Khánh Linh · Age 8 · Born 3 June 2018 · Phone 000 000 0012'],
       table:[['Name','Age','Date of birth','Phone'],['','','','']],
       inputs:[input('Name',1,0),input('Age',1,1),input('Date of birth',1,2),input('Phone',1,3)]
-    },[['Linh Vo'],['8'],['3 June 2018','03/06/2018','3/6/2018','2018-06-03'],['000 000 0012','0000000012']]);
+    },[['Võ Khánh Linh'],['8'],['3 June 2018','03/06/2018','3/6/2018','2018-06-03'],['000 000 0012','0000000012']]);
     exercise('Choose data types','Pick the best data type for each field.',{
-      presentation:'types',table:[['Field','Example'],['Name','Linh'],['Age','8'],['Birthday','3 June'],['Has a library card?','Yes']],
+      presentation:'types',table:[['Field','Example'],['Name','Khánh Linh'],['Age','8'],['Birthday','3 June'],['Has a library card?','Yes']],
       inputs:['Name','Age','Birthday','Has a library card?'].map(label => choice(label,['Text','Number','Date','Yes / No']))
     },[['Text'],['Number'],['Date'],['Yes / No']]);
     exercise('Correct a record','Compare the record with the badge. Choose the correct details.',{
-      presentation:'records',source:['Sam · Age 9 · Phone 000 000 0013'],
-      table:[['Name','Age','Phone'],['Sam','','']],
+      presentation:'records',source:['Lê Minh Đức · Age 9 · Phone 000 000 0013'],
+      table:[['Name','Age','Phone'],['Lê Minh Đức','','']],
       inputs:[{...choice('Age',['8','9','10']),row:1,column:1,initial:'8'},{...choice('Phone',['13','000 000 0013','000 000 0031']),row:1,column:2,initial:'13'}]
     },[['9'],['000 000 0013']]);
     exercise('Explore file sizes','Look at the examples and use the sizes shown in the task.',{
