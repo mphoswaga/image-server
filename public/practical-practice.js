@@ -138,6 +138,7 @@
       presentation:'survey',table:[['Activity','Votes'],['Reading','7'],['Drawing','4'],['Puzzles','5']],
       inputs:[choice('Which activity received the most votes?',['Reading','Drawing','Puzzles']),choice('How many more votes did Reading get than Drawing?',['3','7','11']),choice('Which sentence is information you can use?',['Reading was the most popular activity.','7','4'])]
     },[['Reading'],['3'],['Reading was the most popular activity.']]);
+    mountDatabasePractice(card('Paper records and digital records', ''));
   } else {
     const links = element('div'); links.className = 'grade-links';
     for (const [label,activity] of [['Grade 2 · CodeQuest','codequest'],['Grade 3 · Data practice','data']]) {

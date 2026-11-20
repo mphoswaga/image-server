@@ -1,0 +1,20 @@
+.db-work {display:grid;gap:1rem;color:#193e38}
+.db-work > button {justify-self:start}
+.db-tray,.db-tabs,.db-homes,.db-cards {display:flex;flex-wrap:wrap;gap:.7rem}
+.db-bin {display:grid;align-content:start;gap:.5rem;flex:1 1 13rem;min-height:7rem;padding:1rem;border:2px dashed #87a9a1;border-radius:12px;background:#eff7f4}
+.db-item[aria-pressed=true] {outline:3px solid #177c6d}
+.db-item {cursor:grab}
+.db-drawer {border:1px solid #b9a077;border-bottom:5px solid #98794c;border-radius:8px;background:#f5ead5;padding:1rem}
+.db-drawer summary {cursor:pointer;font-weight:700}
+.db-tabs,.db-paper-slot {margin-top:.7rem}
+.db-card {flex:1 1 12rem;max-width:22rem;border:1px solid #cbbd9d;border-top:5px solid #ad7731;border-radius:5px;padding:.8rem 1rem;background:repeating-linear-gradient(#fffaf0 0 24px,#e9e1cf 25px);line-height:25px;color:#453c2c}
+.db-card h3 {margin:.2rem 0}
+.db-screen {border:1px solid #98b4ad;background:#eff7f5;border-radius:10px;padding:1rem;min-width:0}
+.db-screen h3 {margin:0 0 .75rem}
+.db-screen label {display:block;margin:.5rem 0}
+.db-screen fieldset {display:flex;align-items:end;flex-wrap:wrap;gap:.6rem;min-width:0;border:1px solid #b6cdc7;margin:.75rem 0}
+.db-screen fieldset label {flex:1 1 9rem}
+.db-screen input:not([type=checkbox]),.db-screen select {box-sizing:border-box;display:block;width:100%;max-width:22rem;font:inherit;padding:.5rem;border:1px solid #88a69d;border-radius:5px}
+.db-item small {display:block;margin:.5rem 0 0;padding:.4rem .55rem;font-weight:500;border-radius:3px}
+.db-paper small {color:#5b4a31;background:repeating-linear-gradient(#fff8e7 0 16px,#e4d7ba 17px);border-left:3px solid #b38755}
+.db-device small {color:#defff2;background:#25483f;border:2px solid #4e665e;font-family:monospace}
