@@ -98,6 +98,10 @@
           const missed = task.inputs.filter((field,i)=>!level.keys[i].some(key=>normal(key)===normal(responses[i])));
           result.textContent = missed.length ? 'Check again: ' + missed.map(f=>f.label).join(', ') + '.' :
             index===2 ? 'Well done! You completed all three levels.' : 'Well done! All answers match.';
+          if (title === 'Choose data types' && index === 0 &&
+              responses[4] && responses[5]) {
+            result.textContent += ' Cellphone and house numbers use Text here because they identify a phone or house. We do not use them to calculate a quantity. Text also keeps the first zero in a phone number.';
+          }
           next.hidden = missed.length>0 || index===2;
         };
         next.textContent = 'Continue to ' + (levelNames[index+1] || '');
@@ -113,9 +117,9 @@
       inputs:[input('Name',1,0),input('Age',1,1),input('Date of birth',1,2),input('Phone',1,3)]
     },[['Võ Khánh Linh'],['8'],['3 June 2018','03/06/2018','3/6/2018','2018-06-03'],['000 000 0012','0000000012']]);
     exercise('Choose data types','Pick the best data type for each field.',{
-      presentation:'types',table:[['Field','Example'],['Name','Khánh Linh'],['Age','8'],['Birthday','3 June'],['Has a library card?','Yes']],
-      inputs:['Name','Age','Birthday','Has a library card?'].map(label => choice(label,['Text','Number','Date','Yes / No']))
-    },[['Text'],['Number'],['Date'],['Yes / No']]);
+      presentation:'types',table:[['Field','Example'],['Name','Khánh Linh'],['Age','8'],['Birthday','3 June'],['Has a library card?','Yes'],['Cellphone number','0901234567'],['House number','24']],
+      inputs:['Name','Age','Birthday','Has a library card?','Cellphone number','House number'].map(label => choice(label,['Text','Number','Date','Yes / No']))
+    },[['Text'],['Number'],['Date'],['Yes / No'],['Text'],['Text']]);
     exercise('Correct a record','Compare the record with the badge. Choose the correct details.',{
       presentation:'records',source:['Lê Minh Đức · Age 9 · Phone 000 000 0013'],
       table:[['Name','Age','Phone'],['Lê Minh Đức','','']],
