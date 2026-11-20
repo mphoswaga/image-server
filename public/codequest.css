@@ -63,7 +63,7 @@ body{background:radial-gradient(ellipse at 15% 5%,#bce8dc 0,transparent 45%),rad
 .workspace-mode.fit-code #program li{margin-bottom:3px}
 .workspace-mode.fit-code #program .inlineRepeat{padding:1px 3px 1px 0}
 
-.workspace-mode #program li{width:100%;max-width:230px}
+.workspace-mode #program li{width:100%;max-width:172px}
 
 /* Compact interlocking coding bricks: top socket and bottom connector. */
 .workspace-mode #program li{border-radius:4px!important;margin-bottom:2px;padding-top:3px;padding-bottom:5px;clip-path:polygon(0 0,27px 0,31px 5px,49px 5px,53px 0,100% 0,100% calc(100% - 5px),53px calc(100% - 5px),49px 100%,31px 100%,27px calc(100% - 5px),0 calc(100% - 5px))}
@@ -78,25 +78,25 @@ body{background:radial-gradient(ellipse at 15% 5%,#bce8dc 0,transparent 45%),rad
 
 /* Photographic moulded-plastic shell; labels and counters remain live controls. */
 .workspace-mode #program li,#palette .command,#codeStart{position:relative;isolation:isolate;clip-path:none;border:0!important;border-radius:5px!important;background:transparent!important;box-shadow:none;overflow:visible}
-.workspace-mode #program li{padding:9px 7px 3px 23px;min-height:46px;margin-bottom:1px}
+.workspace-mode #program li{padding:6px 4px 2px 20px;min-height:34px;margin-bottom:1px}
 .brickSurface{position:absolute;inset:0;z-index:-1;pointer-events:none;background:url('/assets/codequest/plastic-brick.webp') center/100% 100% no-repeat;filter:sepia(.45) saturate(2) hue-rotate(110deg)}
 .block-left>.brickSurface,.block-right>.brickSurface{filter:sepia(.45) saturate(2.5) hue-rotate(205deg)}
 .block-collect>.brickSurface{filter:sepia(.8) saturate(3)}
 .block-repeat>.brickSurface,#codeStart>.brickSurface{filter:sepia(.5) saturate(2.5) hue-rotate(75deg)}
-.workspace-mode #program li:before{top:17px}
-.workspace-mode #program .codeStep{min-height:30px;padding:3px 1px;text-shadow:0 1px #ffffff90}
+.workspace-mode #program li:before{top:11px}
+.workspace-mode #program .codeStep{min-height:25px;padding:1px;text-shadow:0 1px #ffffff90}
 .workspace-mode #program .inlineRepeat{padding:1px 1px 1px 0}
-.workspace-mode #program .inlineRepeat input{min-height:27px;width:40px;background:#ffffffb0;border-color:#ffffff60;box-shadow:inset 0 1px 3px #17364730}
-#codeStart{width:230px;max-width:100%;min-height:46px;padding:17px 13px 8px;margin:0 2px 1px;display:flex;align-items:center;gap:12px;font-size:14px}
+.workspace-mode #program .inlineRepeat input{min-height:24px;width:34px;background:#ffffffb0;border-color:#ffffff60;box-shadow:inset 0 1px 3px #17364730}
+#codeStart{width:172px;max-width:100%;min-height:34px;padding:5px 10px;margin:0 2px 1px;display:flex;align-items:center;gap:12px;font-size:14px}
 #codeStart small{font-size:10px;color:#365950}
 #palette .command{padding-top:13px}
 .workspace-mode #program li.dropBefore{outline:3px solid #df8500;outline-offset:0}
 .workspace-mode #program li.dropAfter{outline:3px solid #df8500;outline-offset:0}
 .workspace-mode #program li.active{outline:3px solid #e4b13c}
-.workspace-mode.fit-code #program li{min-height:41px;padding-top:7px;margin-bottom:1px}
+.workspace-mode.fit-code #program li{min-height:30px;padding:5px 3px 1px 19px;margin-bottom:1px}
 
 /* Start is a closed cap: no studs or socket above it. */
-#codeStart{border-radius:22px 22px 5px 5px!important;background:linear-gradient(170deg,#d5ffd1 0%,#91e58c 45%,#64bd68 100%)!important;border:1px solid #79bd76!important;box-shadow:inset 0 3px 3px #ffffffb0,inset 0 -3px 3px #327c3650,0 2px 3px #17364725;padding-top:13px}
+#codeStart{border-radius:22px 22px 5px 5px!important;background:linear-gradient(170deg,#d5ffd1 0%,#91e58c 45%,#64bd68 100%)!important;border:1px solid #79bd76!important;box-shadow:inset 0 3px 3px #ffffffb0,inset 0 -3px 3px #327c3650,0 2px 3px #17364725;padding-top:6px}
 #codeStart>.brickSurface{display:none}
 
 .playerChoices{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin:12px 0}.playerChoices label{flex-direction:row;align-items:center;flex-wrap:wrap;padding:8px;background:#eef6f2;border-radius:8px}.playerChoices input{width:20px;min-width:20px}.playerChoices small{font-weight:400}
@@ -157,4 +157,13 @@ body{background:radial-gradient(ellipse at 15% 5%,#bce8dc 0,transparent 45%),rad
   height: auto;
   translate: none;
   transition: none;
+}
+
+/* The code stack uses the same bricks in the game, practice and assessments. */
+.workspace-mode #program li:not(.block-repeat) .inlineRepeat:has(input:disabled){display:none}
+.workspace-mode.fit-code #program .codeStep{min-height:24px;padding:1px}
+.workspace-mode.fit-code #program li:before{top:9px}
+@media(pointer:coarse){
+  .workspace-mode #program li{min-height:38px}
+  .workspace-mode #program .codeStep,.workspace-mode #program .inlineRepeat input{min-height:30px}
 }
