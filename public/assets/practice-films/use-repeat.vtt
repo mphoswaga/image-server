@@ -1,0 +1,10 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:06.083
+The chest is two squares ahead. Our code has one Move block and one Collect block.
+
+00:00:06.083 --> 00:00:12.272
+Click the little number on Move and change it to two. Now the same action runs twice.
+
+00:00:12.272 --> 00:00:20.160
+Test the code. Watch two moves, then Collect. Repeat and the Move inside it count as two written blocks.

@@ -1,0 +1,13 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:05.266
+A rock blocks the way ahead. The chest is one square below the pirate.
+
+00:00:05.266 --> 00:00:11.131
+Click Turn right. Facing right, a right turn points the pirate down.
+
+00:00:11.131 --> 00:00:17.575
+Now add Move and Collect. The turn changes direction. Move changes squares.
+
+00:00:17.575 --> 00:00:23.025
+Test the code. The pirate takes the clear path and leaves the rock alone.

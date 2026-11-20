@@ -1,0 +1,13 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:05.830
+Trace this example route. Both flags are on the straight path to the chest.
+
+00:00:05.830 --> 00:00:12.819
+The starter code moves twice. Add one more Move to reach the chest after crossing both flags.
+
+00:00:12.819 --> 00:00:15.603
+Add Collect at the end of the route.
+
+00:00:15.603 --> 00:00:22.446
+Test it. Watch each flag change as the pirate visits it, then watch the pirate collect.

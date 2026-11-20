@@ -23,15 +23,7 @@
 @media(max-width:520px){.practice-lesson{padding:16px}.lesson-examples{grid-template-columns:1fr}.lesson-sheet{font-size:13px}.lesson-sheet td,.lesson-sheet th{padding:8px}}
 .topic-tutorial{margin:12px 0 18px;border:1px solid #a7c9ba;border-radius:12px;background:#f6faf7;overflow:hidden}
 .topic-tutorial summary{cursor:pointer;padding:12px 16px;color:#145241;font-weight:700}
-.tutorial-body{padding:0 14px 14px}.demo-stage{position:relative;overflow:hidden;padding:16px;border:1px solid #c0d7ce;background:white;border-radius:10px}
-.demo-row,.demo-island{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.demo-item{display:inline-block;border:1px solid #a9c4ba;border-radius:6px;background:#f2f7f4;padding:6px 10px;font-weight:650}
-.demo-ladder{display:grid;gap:5px;max-width:240px}.demo-island .demo-item{background:#fff0bf;min-width:44px;text-align:center}.demo-island:has([data-key=tile1]:last-child){flex-wrap:nowrap}
-.demo-stage:has([data-key=turn]) .demo-island{display:grid;grid-template-columns:repeat(2,48px)}
-.demo-on{outline:2px solid #168260;outline-offset:-2px;background:#daf1e3!important}
-.demo-grid{max-width:400px}.demo-grid th{background:#e4eee8}.demo-grid td{text-align:center}
-.demo-pointer{position:absolute;left:0;top:0;width:20px;height:25px;background:#153a50;clip-path:polygon(0 0,95% 58%,55% 60%,72% 95%,52% 100%,35% 69%,8% 92%);pointer-events:none;transition:transform .42s ease;z-index:2}
-.demo-caption{min-height:1.6em;color:#173f35}.demo-actions{display:flex;gap:6px;flex-wrap:wrap}.demo-actions button{min-height:40px}.demo-start{background:#155d4c;color:white}.demo-reading{margin-top:8px}.demo-reading summary{padding:8px 0}
-@media(prefers-reduced-motion:reduce){.demo-pointer{transition:none}}
-.demo-island img{width:25px;height:25px;vertical-align:middle}
-
+.tutorial-body{padding:0 14px 14px}
+.demo-start{background:#155d4c;color:white}
+.demo-reading{margin-top:8px}.demo-reading summary{padding:8px 0}
 .topic-tutorial video{display:block;width:100%;max-height:65vh;background:#102c29;border-radius:8px;margin:0 0 12px}
