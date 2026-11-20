@@ -3,7 +3,7 @@ const {test,expect} = require('@playwright/test');
 test('home practice works without sign-in for both grades', async ({page}, testInfo) => {
   test.skip(!['windows-100','mobile'].includes(testInfo.project.name));
   await page.goto('/practical-practice.html?activity=codequest');
-  await page.getByRole('button',{name:'Go to practice',exact:true}).click();
+  await page.getByRole('button',{name:'Start practice',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Grade 2 · CodeQuest practice'})).toBeVisible();
   const game = page.locator('.practice-card:visible').frameLocator('iframe');
   await game.getByRole('button',{name:'Move 1 square'}).click();
@@ -19,7 +19,7 @@ test('home practice works without sign-in for both grades', async ({page}, testI
   await expect(page.locator('.practice-card:visible').frameLocator('iframe').locator('.assessment-flag')).toHaveCount(2);
 
   await page.goto('/practical-practice.html?activity=data');
-  await page.getByRole('button',{name:'Go to practice',exact:true}).click();
+  await page.getByRole('button',{name:'Start practice',exact:true}).click();
   const current = page.locator('.practice-card:visible');
   await current.getByLabel('Name',{exact:true}).fill('Võ Khánh Linh');
   await current.getByLabel('Age',{exact:true}).fill('8');
