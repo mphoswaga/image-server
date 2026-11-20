@@ -1,0 +1,72 @@
+(() => {
+  const mode = new URLSearchParams(location.search).get('activity');
+  if (!['data','codequest'].includes(mode)) return;
+  const sheet = '<div class="lesson-sheet"><table><thead><tr><th></th><th>A</th><th>B</th><th>C</th></tr></thead><tbody><tr><th>1</th><td>Name</td><td>Room</td><td>Books borrowed</td></tr><tr><th>2</th><td>Khánh Linh</td><td>B04</td><td>2</td></tr><tr><th>3</th><td>Gia Bảo</td><td>B02</td><td>3</td></tr></tbody></table></div>';
+  const chips = values => '<div class="lesson-chips">'+values.map(v=>'<span>'+v+'</span>').join('')+'</div>';
+  const slides = mode==='data' ? [
+    ['Meet your class register', 'A database is an organised collection of records. In this practice, you will use pretend pupil details to organise, check and find information.', sheet,
+      'Khánh Linh and Gia Bảo each have their own record. All details in these activities are made up.'],
+    ['Rows go across. Columns go down.', 'Rows have numbers. Columns have letters. A cell is one box where a row and a column meet.', sheet.replace('<td>B04</td>','<td class="lesson-cell">B04</td>'),
+      'The highlighted cell is B2. It is in column B and row 2. It contains B04, Khánh Linh’s room.'],
+    ['Fields and records', 'A field is a category of detail, such as Name or Room. A record holds the details about one pupil.', sheet,
+      'Name, Room and Books borrowed are field names in row 1. Khánh Linh’s complete record is in row 2. B04 is one value in the Room field.'],
+    ['Choose the right data type', 'Choose a data type that suits the purpose of the detail.', '<div class="lesson-examples"><article><b>Text</b><p>Name · Khánh Linh<br>Room · B04<br>House number · 24<br>Family phone · 090 000 0018</p></article><article><b>Number</b><p>Age · 8<br>Books borrowed · 2</p></article><article><b>Date</b><p>Date of birth<br>3 June 2018</p></article><article><b>Yes / No</b><p>Has a library card?<br>Yes</p></article></div>',
+      'We store phone and house numbers as Text here because they identify something. We add up quantities, such as books. Text also keeps the first zero of a phone number.'],
+    ['Copy carefully. Check the source.', 'Read the pupil card and copy each detail into the correct column. If a detail is missing, leave it empty and flag it when the task asks.', '<div class="lesson-example"><b>Pupil card</b><p>Gia Bảo · Room B02 · Family phone 090 000 0015</p><hr><b>Register before checking</b><p>Gia Bảo · Room B20 · Family phone 090 000 0015</p></div>',
+      'Change B20 to B02. Keep the accurate phone number. When two cards have the same card ID, enter that pupil once.'],
+    ['Paper and digital databases', 'A physical database keeps records on paper. A digital database keeps records electronically.', '<div class="lesson-examples"><article><b>Paper filing drawer</b><p>Open the drawer. Look through the pupil cards. Find the matching card ID.</p></article><article><b>Digital register</b><p>Type a name or card ID into Search. Find the record, then update the correct detail.</p></article></div>',
+      'When Minh Anh changes rooms, read the new room on her paper card and update her digital record to match.'],
+    ['Put file sizes in order', 'From smallest unit to largest unit, use this order.', chips(['Byte (B)','Kilobyte (KB)','Megabyte (MB)','Gigabyte (GB)','Terabyte (TB)']),
+      'A short text note usually takes less space than a picture or video. Always compare the sizes shown in the task.'],
+    ['Convert before comparing', 'For these activities, use 1 MB = 1,000 KB and 1 GB = 1,000 MB.', '<div class="lesson-examples"><article><b>Compare two files</b><p>Photo · 2 MB = 2,000 KB<br>Map · 800 KB<br>The map is smaller.</p></article><article><b>Find the space left</b><p>5 MB free − 3 MB picture = 2 MB<br>2 MB = 2,000 KB left</p></article></div>',
+      'In the ladder tasks, drag a box or use its up and down arrows. Compare quantities after putting them in the same unit.'],
+    ['Turn data into information', 'Data are the recorded details. Information gives those details meaning so you can answer a question or make a decision.', '<div class="lesson-examples"><article><b>Class votes</b><p>Reading · 6<br>Drawing · 4<br>Puzzles · 3</p></article><article><b>What the data tell us</b><p>Reading received the most votes.<br>Reading received 2 more votes than Drawing.</p></article></div>',
+      'If two more children vote for Puzzles, update its total to 5 before comparing. Check what changed and what the question asks.'],
+    ['You are ready to practise', 'Choose a topic from Your topics. Start with Easy, check your work and continue to Moderate and Complicated.', chips(['Read the task','Use the example or source','Try it','Check and improve']),
+      'You can revisit any topic. Reopen this lesson with Quick lesson whenever you need a reminder.']
+  ] : [
+    ['Give your pirate clear instructions', 'An algorithm is an ordered set of instructions. Your pirate reads the blocks from top to bottom, then down the next column.', '<div class="lesson-example"><img class="lesson-pirate" src="/assets/codequest/assessment-pirate.svg" alt="Your pirate"><b>Start → Move → Move → Collect</b><p>This code reaches a chest two squares straight ahead and collects it.</p></div>',
+      'Move goes one square in the direction the pirate is facing. Collect works when the pirate is standing on the chest.'],
+    ['Turn first. Then move.', 'Turn left and Turn right change the direction the pirate faces. A turn stays on the same square.', chips(['Facing up ↑','Turn right ↱','Now facing right →','Move one square →']),
+      'Plan from the pirate’s point of view. When the pirate faces right, turning left points it up.'],
+    ['Test, find the mistake, improve', 'Debugging means finding and fixing mistakes in code. Use Test my code and watch each highlighted step.', chips(['Plan a route','Test my code','Find the wrong step','Edit and test again']),
+      'Tap a block to edit it. Drag blocks to change their order. Drag a block out of the code area to remove it. Avoid rocks and water, and visit any flags before collecting.'],
+    ['Repeat saves repeated instructions', 'When Repeat is available, set the × number on a block to run that action several times.', '<div class="lesson-example"><b>Move · Move · Move · Move · Collect</b><p>becomes</p><b>Repeat ×4 [Move] · Collect</b></div>',
+      'No Repeat means use single actions. Use Repeat means your working route must run a Repeat block. Repeat optional means you choose.'],
+    ['Read the block limit', 'Some challenges ask you to reach the treasure using a maximum number of blocks. Count the Repeat container and the blocks inside it.', '<div class="lesson-example"><b>Repeat ×4 [Move] · Collect</b><p>Repeat container = 1<br>Move inside Repeat = 1<br>Collect = 1<br><strong>Total = 3 blocks</strong></p></div>',
+      'The × number tells the pirate how many times to act. It does not add extra written blocks. Test a route, then shorten it while keeping it correct.'],
+    ['Choose an island and start', 'Use Your topics to choose a skill. Each topic has Easy, Moderate and Complicated voyages.', chips(['Read the rules','Build your code','Test the route','Improve and continue']),
+      'You can test as often as you like. Use Fit all code for a long program. Reopen this lesson with Quick lesson whenever you need a reminder.']
+  ];
+  const launcher = document.createElement('button');
+  launcher.type = 'button';
+  launcher.className = 'lesson-launcher';
+  launcher.textContent = 'Quick lesson';
+  document.querySelector('.practice-hero').append(launcher);
+  const dialog = document.createElement('dialog');
+  dialog.className = 'practice-lesson';
+  dialog.setAttribute('aria-labelledby','lesson-title');
+  dialog.innerHTML = '<div class="lesson-top"><span></span><button type="button" class="lesson-close" aria-label="Close quick lesson">×</button></div><h2 id="lesson-title"></h2><p class="lesson-intro"></p><div class="lesson-visual"></div><p class="lesson-note"></p><div class="lesson-controls"><button type="button" class="lesson-back">Previous slide</button><button type="button" class="lesson-forward check">Next slide</button></div><button type="button" class="lesson-start">Start practice</button>';
+  document.body.append(dialog);
+  let index = 0;
+  function render() {
+    const [title,intro,visual,note] = slides[index];
+    dialog.querySelector('.lesson-top span').textContent = 'Quick lesson · Slide '+(index+1)+' of '+slides.length;
+    dialog.querySelector('h2').textContent = title;
+    dialog.querySelector('.lesson-intro').textContent = intro;
+    dialog.querySelector('.lesson-visual').innerHTML = visual;
+    dialog.querySelector('.lesson-note').textContent = note;
+    dialog.querySelector('.lesson-back').disabled = index===0;
+    dialog.querySelector('.lesson-forward').hidden = index===slides.length-1;
+    dialog.querySelector('.lesson-start').textContent = index===slides.length-1 ? 'Start practice' : 'Go to practice';
+    dialog.scrollTop = 0;
+  }
+  function open() { render(); dialog.showModal(); }
+  dialog.querySelector('.lesson-back').onclick = () => { index--; render(); };
+  dialog.querySelector('.lesson-forward').onclick = () => { index++; render(); };
+  dialog.querySelector('.lesson-start').onclick = () => dialog.close();
+  dialog.querySelector('.lesson-close').onclick = () => dialog.close();
+  dialog.addEventListener('close', () => launcher.focus({preventScroll:true}));
+  launcher.onclick = open;
+  open();
+})();

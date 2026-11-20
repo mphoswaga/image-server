@@ -1,0 +1,23 @@
+.lesson-launcher{margin-top:16px;background:#fff;color:#164f43;font-weight:700}
+.practice-lesson{width:min(790px,calc(100% - 24px));max-height:calc(100dvh - 28px);overflow:auto;padding:clamp(18px,4vw,36px);border:1px solid #afc9bd;border-radius:20px;color:#183f38;background:#fbfcf8;box-shadow:0 20px 90px #092c3555}
+.practice-lesson::backdrop{background:#082d39c9}
+.lesson-top{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.86rem;font-weight:700;color:#3f6659}
+.lesson-close{font-size:24px;line-height:24px;min-width:42px;padding:8px}
+.practice-lesson h2{font:700 clamp(25px,4vw,35px)/1.2 Georgia,serif;margin:14px 0}
+.lesson-intro,.lesson-note{line-height:1.6}
+.lesson-visual{margin:20px 0}
+.lesson-examples{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:12px}
+.lesson-examples article,.lesson-example{border:1px solid #c5d9cc;border-radius:12px;background:#eaf3ec;padding:18px}
+.lesson-examples p,.lesson-example p{line-height:1.7;margin:8px 0 0}
+.lesson-sheet{overflow:auto;border-radius:8px;border:1px solid #9dbba9}
+.lesson-sheet th{background:#e0e9e1}.lesson-sheet td{background:white}.lesson-sheet td.lesson-cell{background:#cfecd7;box-shadow:inset 0 0 0 3px #20754e}
+.lesson-sheet td,.lesson-sheet th{padding:10px;white-space:nowrap}
+.lesson-chips{display:flex;flex-wrap:wrap;gap:10px}
+.lesson-chips span{background:#e0f0e7;border:1px solid #afd0bf;border-radius:10px;padding:12px;font-weight:700}
+.lesson-note{border-left:4px solid #d59c3b;background:#fff6e2;padding:12px 16px;border-radius:0 8px 8px 0}
+.lesson-controls{display:flex;justify-content:space-between;gap:12px;margin-top:18px}
+.lesson-controls .check{margin:0}
+.lesson-start{display:block;margin:14px 0 0 auto;color:#176047}
+.lesson-pirate{float:right;width:64px;height:74px;object-fit:contain}
+.practice-lesson button{min-height:44px}
+@media(max-width:520px){.practice-lesson{padding:16px}.lesson-examples{grid-template-columns:1fr}.lesson-sheet{font-size:13px}.lesson-sheet td,.lesson-sheet th{padding:8px}}
