@@ -45,10 +45,10 @@ function framePracticeSheet(table, choose) {
 
 function mountRowColumnPractice(panel) {
   const data = [
-    ['Name','Room','Books'],
-    ['Khánh Linh','B03','2'],
-    ['Gia Bảo','B01','3'],
-    ['Minh Anh','B02','1']
+    ['Name','Room','Books borrowed'],
+    ['Khánh Linh','B04','2'],
+    ['Gia Bảo','B02','3'],
+    ['Minh Anh','B04','1']
   ];
   const tasks = [
     ['Easy','Select row 3. Use a number on the left edge.','Row 3'],

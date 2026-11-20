@@ -12,10 +12,10 @@ function mountDatabasePractice(panel) {
   panel.append(area, status, next);
 
   const learners = [
-    {id:'L12', name:'Trần Minh Anh', room:'B04', phone:'0000000012', borrowed:'Yes'},
+    {id:'L12', name:'Trần Minh Anh', room:'B04', phone:'0900000012', borrowed:'Yes'},
     {id:'L15', name:'Lê Gia Bảo', room:'B02', phone:'', borrowed:'Yes'},
-    {id:'L18', name:'Võ Khánh Linh', room:'B04', phone:'0000000018', borrowed:'Yes'},
-    {id:'L21', name:'Nguyễn An Bình', room:'B04', phone:'0000000021', borrowed:'No'}
+    {id:'L18', name:'Võ Khánh Linh', room:'B04', phone:'0900000018', borrowed:'Yes'},
+    {id:'L21', name:'Nguyễn An Bình', room:'B04', phone:'0900000021', borrowed:'No'}
   ];
   function button(text, action) {
     const b = document.createElement('button');
@@ -40,7 +40,7 @@ function mountDatabasePractice(panel) {
     const card = document.createElement('article');
     card.className = 'db-card';
     card.innerHTML = '<small>LIBRARY REGISTER · '+person.id+'</small><h3>'+person.name+
-      '</h3><div>Room '+person.room+'</div><div>Cellphone '+(person.phone || '________')+
+      '</h3><div>Room '+person.room+'</div><div>Family phone '+(person.phone || '________')+
       '</div><div>Borrowed a book? '+person.borrowed+'</div>';
     return card;
   }
@@ -70,7 +70,7 @@ function mountDatabasePractice(panel) {
       groups.push(group);
     }
     const collections = [
-      ['📇','Box of library cards',0,'L12 · Minh Anh | L15 · Gia Bảo'],['📱','Contacts on a phone',1,'Minh Anh | 0000000012'],
+      ['📇','Box of library cards',0,'L12 · Minh Anh | L15 · Gia Bảo'],['📱','Contacts on a phone',1,'Minh Anh’s family | 0900000012'],
       ['💻','Class spreadsheet',1,'Name | Room | Age'],['📖','Paper attendance register',0,'Mon ✓ | Tue ✓ | Wed ✓']
     ];
     const items = collections.map(([icon,name,home,sample]) => {
@@ -138,14 +138,14 @@ function mountDatabasePractice(panel) {
     }));
   }
   function complicated() {
-    start('Complicated · 3 of 3', 'Transfer these registration cards to the digital register. Enter each ID once. Flag any missing phone for follow-up.');
+    start('Complicated · 3 of 3', 'Transfer these registration cards to the digital register. Enter each ID once. Flag any missing family phone number for follow-up.');
     const cards = document.createElement('div');
     cards.className = 'db-cards';
     for (const i of [0,1,0,2]) cards.append(paper(learners[i]));
     const register = document.createElement('div');
     register.className = 'db-screen';
     register.innerHTML = '<h3>Digital register</h3>';
-    const fields = [['id','Card ID'],['name','Name'],['room','Room'],['phone','Cellphone'],['borrowed','Borrowed a book?']];
+    const fields = [['id','Card ID'],['name','Name'],['room','Room'],['phone','Family phone'],['borrowed','Borrowed a book?']];
     const rows = [];
     for (let i=0;i<3;i++) {
       const row = document.createElement('fieldset');
@@ -176,7 +176,8 @@ function mountDatabasePractice(panel) {
         if (!p || seen.has(p.id)) { status.textContent = prefix+'check the card ID. Each person needs one record.'; return; }
         seen.add(p.id);
         for (const [key,title] of fields) {
-          if (norm(row[key].value)!==norm(p[key])) { status.textContent = prefix+'check '+title+' against the paper card.'; return; }
+          const entered = key === 'phone' ? row[key].value.replace(/\s/g,'') : row[key].value;
+          if (norm(entered)!==norm(p[key])) { status.textContent = prefix+'check '+title+' against the paper card.'; return; }
         }
         if (row.flag.checked !== !p.phone) { status.textContent = prefix+'check whether the cellphone is missing.'; return; }
       }

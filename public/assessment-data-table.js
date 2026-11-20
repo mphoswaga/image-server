@@ -119,7 +119,7 @@ window.AssessmentDataTable = (() => {
         lines.forEach(line => item.append(element('div', line)));
         cards.append(item);
       });
-      root.append(element('strong', activity.presentation === 'records' ? (source.length === 1 ? 'Helper badge' : 'Helper badges') : ballotDesk ? 'Voting slips' : 'Source cards'), cards);
+      root.append(element('strong', activity.recordSourceTitle || (activity.presentation === 'records' ? (source.length === 1 ? 'Helper badge' : 'Helper badges') : ballotDesk ? 'Voting slips' : 'Source cards')), cards);
     }
     const wrap = element('div');
     wrap.className = 'project-data-scroll';

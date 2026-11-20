@@ -22,7 +22,7 @@ test('home practice works without sign-in for both grades', async ({page}, testI
   await current.getByLabel('Name',{exact:true}).fill('Võ Khánh Linh');
   await current.getByLabel('Age',{exact:true}).fill('8');
   await current.getByLabel('Date of birth',{exact:true}).fill('3 June 2018');
-  await current.getByLabel('Phone',{exact:true}).fill('000 000 0012');
+  await current.getByLabel('Family phone',{exact:true}).fill('090 000 0018');
   await current.getByRole('button',{name:'Check my work'}).click();
   await expect(current.getByRole('status').last()).toContainText('All answers match');
   await current.getByRole('button',{name:'Continue to Moderate'}).click();

@@ -91,13 +91,16 @@
         let responses = task.inputs.map(field=>field.initial ?? '');
         area.className = ''; area.replaceChildren();
         next.hidden = true; result.textContent = '';
-        AssessmentDataTable.mount(area,{source:[],namedBadges:task.presentation==='records',...task},null,values=>{
+        AssessmentDataTable.mount(area,{source:[],recordSourceTitle:task.presentation==='records' ? (task.source.length===1?'Pupil registration card':'Pupil registration cards') : undefined,namedBadges:task.presentation==='records',...task},null,values=>{
           responses = values; next.hidden = true; result.textContent = '';
         });
         area.querySelectorAll('.project-data-scroll table').forEach(table => framePracticeSheet(table));
         const normal = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().replace(/\s+/g,' ').toLowerCase();
         button.onclick = () => {
-          const missed = task.inputs.filter((field,i)=>!level.keys[i].some(key=>normal(key)===normal(responses[i])));
+          const missed = task.inputs.filter((field,i) => {
+            const clean = value => field.entry === 'text' && /phone/i.test(field.label) ? normal(value).replace(/\s/g,'') : normal(value);
+            return !level.keys[i].some(key => clean(key) === clean(responses[i]));
+          });
           result.textContent = missed.length ? 'Check again: ' + missed.map(f=>f.label).join(', ') + '.' :
             index===2 ? 'Well done! You completed all three levels.' : 'Well done! All answers match.';
           if (title === 'Choose data types' && index === 0 &&
@@ -113,32 +116,32 @@
     }
     const input = (label,row,column) => ({label,row,column,entry:'text'});
     const choice = (label,options) => ({label,options});
-    exercise('Make a record','Read the badge and type each detail into the correct field. Keep the zeroes at the start of the phone number.',{
-      presentation:'records',source:['Võ Khánh Linh · Age 8 · Born 3 June 2018 · Phone 000 000 0012'],
-      table:[['Name','Age','Date of birth','Phone'],['','','','']],
-      inputs:[input('Name',1,0),input('Age',1,1),input('Date of birth',1,2),input('Phone',1,3)]
-    },[['Võ Khánh Linh'],['8'],['3 June 2018','03/06/2018','3/6/2018','2018-06-03'],['000 000 0012','0000000012']]);
+    exercise('Make a record','Copy the pupil’s details from this pretend registration card into the class register. Keep the first zero in the family phone number.',{
+      presentation:'records',source:['Võ Khánh Linh · Age on 1 September 2026: 8 · Born 3 June 2018 · Family phone 090 000 0018'],
+      table:[['Name','Age','Date of birth','Family phone'],['','','','']],
+      inputs:[input('Name',1,0),input('Age',1,1),input('Date of birth',1,2),input('Family phone',1,3)]
+    },[['Võ Khánh Linh'],['8'],['3 June 2018','03/06/2018','3/6/2018','2018-06-03'],['090 000 0018','0900000018']]);
     exercise('Choose data types','Pick the best data type for each field.',{
-      presentation:'types',table:[['Field','Example'],['Name','Khánh Linh'],['Age','8'],['Birthday','3 June'],['Has a library card?','Yes'],['Cellphone number','0901234567'],['House number','24']],
-      inputs:['Name','Age','Birthday','Has a library card?','Cellphone number','House number'].map(label => choice(label,['Text','Number','Date','Yes / No']))
+      presentation:'types',table:[['Field','Example'],['Name','Khánh Linh'],['Age','8'],['Birthday','3 June'],['Has a library card?','Yes'],['Family cellphone number','0900000018'],['House number','24']],
+      inputs:['Name','Age','Birthday','Has a library card?','Family cellphone number','House number'].map(label => choice(label,['Text','Number','Date','Yes / No']))
     },[['Text'],['Number'],['Date'],['Yes / No'],['Text'],['Text']]);
-    exercise('Correct a record','Compare the record with the badge. Choose the correct details.',{
-      presentation:'records',source:['Lê Minh Đức · Age 9 · Phone 000 000 0013'],
-      table:[['Name','Age','Phone'],['Lê Minh Đức','','']],
-      inputs:[{...choice('Age',['8','9','10']),row:1,column:1,initial:'8'},{...choice('Phone',['13','000 000 0013','000 000 0031']),row:1,column:2,initial:'13'}]
-    },[['9'],['000 000 0013']]);
+    exercise('Correct a record','Compare the register with the pupil’s registration card. Choose the correct details.',{
+      presentation:'records',source:['Lê Minh Đức · Age 9 · Family phone 090 000 0013'],
+      table:[['Name','Age','Family phone'],['Lê Minh Đức','','']],
+      inputs:[{...choice('Age',['8','9','10']),row:1,column:1,initial:'8'},{...choice('Family phone',['090 000 0103','090 000 0013','090 000 0031']),row:1,column:2,initial:'090 000 0031'}]
+    },[['9'],['090 000 0013']]);
     exercise('Explore file sizes','Look at the examples and use the sizes shown in the task.',{
       presentation:'files',table:[['File','Size'],['Welcome note.txt','2 KB'],['Art poster.png','4 MB'],['Fair video.mp4','20 MB']],
-      inputs:[choice('Which file is smallest?',['Welcome note.txt','Art poster.png','Fair video.mp4']),choice('A poster must be under 6 MB. How much space remains after a 4 MB poster?',['2 MB','10 MB','2 KB'])]
+      inputs:[choice('Which file is smallest?',['Welcome note.txt','Art poster.png','Fair video.mp4']),choice('You have 6 MB of free space. You save the 4 MB poster. How much space is left?',['2 MB','10 MB','2 KB'])]
     },[['Welcome note.txt'],['2 MB']]);
     const units = ['Byte (B)','Kilobyte (KB)','Megabyte (MB)','Gigabyte (GB)','Terabyte (TB)'];
     exercise('File-size ladder','Drag the boxes or use the arrows. Put the smallest unit at the top.',{
       presentation:'order',table:[['Unit'],...[units[3],units[0],units[4],units[2],units[1]].map(unit=>[unit])],
       inputs:units.map((_,index)=>({label:'Position '+(index+1)}))
     },units.map(unit=>[unit]));
-    exercise('Turn data into information','Read the votes and help the library decide which activity needs more space.',{
+    exercise('Turn data into information','Read the class votes to find the most popular library activity.',{
       presentation:'survey',table:[['Activity','Votes'],['Reading','7'],['Drawing','4'],['Puzzles','5']],
-      inputs:[choice('Which activity received the most votes?',['Reading','Drawing','Puzzles']),choice('How many more votes did Reading get than Drawing?',['3','7','11']),choice('Which sentence is information you can use?',['Reading was the most popular activity.','7','4'])]
+      inputs:[choice('Which activity received the most votes?',['Reading','Drawing','Puzzles']),choice('How many more votes did Reading get than Drawing?',['3','7','11']),choice('Which sentence is information you can use?',['Reading was the most popular activity.','Drawing received the most votes.','Puzzles and Reading tied.'])]
     },[['Reading'],['3'],['Reading was the most popular activity.']]);
     mountDatabasePractice(card('Paper records and digital records', ''));
     mountRowColumnPractice(card('Rows, columns and cells', ''));
