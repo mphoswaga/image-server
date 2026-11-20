@@ -1,6 +1,7 @@
 (() => {
   const root = document.getElementById('practiceTasks');
   const mode = new URLSearchParams(location.search).get('activity');
+  document.body.dataset.activity = mode === "data" || mode === "codequest" ? mode : "home";
   const panels = [];
   const element = (tag, text) => {
     const node = document.createElement(tag);
@@ -145,7 +146,39 @@
       const link = element('a',label); link.href = '?activity='+activity; links.append(link);
     }
     root.append(links);
+    document.querySelector('.practice-brand a:last-child').hidden = true;
     return;
   }
-  practicalTaskPager(root,panels,{});
+  const topics = element('aside');
+  topics.className = 'practice-topics';
+  topics.setAttribute('aria-label', 'Practice topics');
+  const heading = element('h2', 'Your topics');
+  const select = element('select');
+  select.setAttribute('aria-label', 'Choose a practice topic');
+  const list = element('div');
+  const view = {};
+  const buttons = panels.map((panel, i) => {
+    const title = panel.querySelector('h2').textContent;
+    select.add(new Option((i + 1) + '. ' + title, i));
+    const button = element('button');
+    button.type = 'button';
+    button.append(element('span', String(i + 1)), element('b', title));
+    button.onclick = () => goTo(i);
+    list.append(button);
+    return button;
+  });
+  topics.append(heading, select, list);
+  root.before(topics);
+  const goTo = practicalTaskPager(root, panels, view, () => {
+    select.value = view.all ? '' : String(view.index);
+    for (const [i,button] of buttons.entries()) {
+      if (!view.all && i === view.index) button.setAttribute('aria-current','step');
+      else button.removeAttribute('aria-current');
+    }
+  });
+  const allOption = new Option('All topics', '');
+  allOption.disabled = true;
+  select.prepend(allOption);
+  select.value = String(view.index);
+  select.onchange = () => goTo(Number(select.value));
 })();

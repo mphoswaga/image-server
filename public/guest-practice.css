@@ -1,0 +1,49 @@
+body{--ink:#153a36;--accent:#146954;--tint:#e1f2e8;color:var(--ink);background:#f6f7f2;font-family:"Trebuchet MS",system-ui,sans-serif}
+body[data-activity=codequest]{--ink:#183b50;--accent:#15637a;--tint:#dff2f5;background:#f2f6f6}
+.practice-brand{background:white;color:var(--ink);display:flex;align-items:center;justify-content:space-between;padding:13px max(5vw,18px);border-bottom:1px solid #dce5df}
+.practice-brand a:first-child{color:#172f47;font:700 1.45rem Georgia,serif;letter-spacing:-.055em}
+.practice-brand a:first-child span{color:#127149}
+.practice-brand a:last-child{color:var(--accent);font-size:.9rem}
+main{max-width:1360px;padding:20px clamp(12px,3vw,44px) 56px}
+.practice-hero{isolation:isolate;position:relative;overflow:hidden;padding:clamp(20px,3vw,38px);background:#174c43;color:white;border-radius:18px;margin-bottom:20px}
+.practice-hero:after{content:"";position:absolute;z-index:-1;inset:0 0 0 40%;background:linear-gradient(90deg,#174c43,transparent 70%),url('/assets/data-lab/fair-ballot-booths.webp') center/cover}
+.practice-hero h1{font-family:Georgia,serif;font-size:clamp(26px,3.6vw,46px);margin:0;letter-spacing:-.035em}
+.practice-hero .intro{max-width:min(56%,52ch);color:#f1fbf5;margin:8px 0 0;line-height:1.5}
+[data-activity=codequest] .practice-hero{background:#14485d}
+[data-activity=codequest] .practice-hero:after{background:url('/assets/codequest/ship.svg') 82% center/auto 88% no-repeat,linear-gradient(95deg,#14485d 5%,#23798a 68%,#7dc7be)}
+.practice-layout:has(.practice-topics){display:grid;grid-template-columns:clamp(180px,19vw,244px) minmax(0,1fr);gap:clamp(14px,2vw,28px);align-items:start}
+.practice-topics{position:sticky;top:12px;background:#fff;border:1px solid #d6e1db;border-radius:15px;padding:14px}
+.practice-topics h2{font:700 1rem system-ui,sans-serif;margin:3px 6px 12px}
+.practice-topics button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;border-radius:8px;padding:9px 6px;margin:2px 0;color:var(--ink)}
+.practice-topics button span{background:#edf1ed;border-radius:50%;min-width:28px;line-height:28px;text-align:center;font:700 .85rem/28px system-ui}
+.practice-topics button b{font-size:.94rem}
+.practice-topics button[aria-current],.practice-topics button:hover{background:var(--tint)}
+.practice-topics button[aria-current] span,.project-task-next button,.check{background:var(--accent);color:white}
+.practice-topics select{display:none}
+.practice-card{min-width:0;padding:clamp(14px,2.2vw,30px);border-radius:16px;border-color:#d4e0d9;box-shadow:0 4px 16px #183f3510}
+.practice-card+.practice-card:not([hidden]){margin-top:12px}
+.practice-card[hidden]+.practice-card:not([hidden]){margin-top:0}
+.practice-card>strong:first-child{display:inline-block;background:var(--tint);color:var(--accent);padding:4px 11px;border-radius:6px;margin-bottom:9px;font-weight:750}
+.practice-card h2{font-size:clamp(24px,2.3vw,33px);line-height:1.15;color:var(--ink)}
+.project-task-nav{margin:0 0 12px;gap:8px}
+.project-task-nav button,.project-task-next button,.practice-topics select{min-height:44px}
+.project-task-nav button:last-child{margin-left:auto}
+.practice-card button:focus-visible,.practice-topics :focus-visible,.project-task-nav :focus-visible,.project-task-next :focus-visible{outline:3px solid #b66a0c;outline-offset:2px}
+.grade-links{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,235px),1fr))}
+.grade-links a{padding:28px;border-radius:14px;background:#14485d url('/assets/codequest/ship.svg') right 16px center/55px no-repeat}
+.grade-links a:last-child{background:#215a47 url('/assets/practice/sprites-g3/file-folder-open.webp') right 16px center/55px no-repeat}
+@media(max-width:850px){
+.practice-layout:has(.practice-topics){display:block}
+.practice-topics{position:static;display:flex;align-items:center;gap:10px;margin-bottom:12px;padding:8px 12px}
+.practice-topics h2{margin:0;white-space:nowrap}
+.practice-topics div{display:none}.practice-topics select{display:block;min-width:0;width:100%;border:1px solid #98b5a8;background:white;border-radius:8px;color:var(--ink);padding:6px}
+}
+@media(max-width:600px){
+.practice-hero{padding:18px 16px;margin-bottom:12px}
+.practice-hero .intro{max-width:100%}
+.practice-hero:after{opacity:.15;inset:0 0 0 25%}
+.project-task-nav{justify-content:space-between;gap:4px}
+.project-task-nav button{font-size:.86rem;padding:7px}
+.project-task-nav span{font-size:.88rem}
+.project-task-nav button:last-child{margin-left:0}
+}

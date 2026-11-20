@@ -30,14 +30,16 @@ window.practicalTaskPager = (root, panels, view = {}, onPageChange) => {
     footer.hidden = !!view.all || next.disabled;
     onPageChange?.(!!view.all || next.disabled);
   }
-  function move(step) {
-    index += step;
+  function goTo(position) {
+    index = position;
+    view.all = false;
     show();
     panels[index].tabIndex = -1;
     panels[index].focus({preventScroll:true});
     nav.scrollIntoView({block:'start'});
   }
-  previous.onclick = () => move(-1);
-  next.onclick = () => move(1);
+  previous.onclick = () => goTo(index - 1);
+  next.onclick = () => goTo(index + 1);
   show();
+  return goTo;
 };
