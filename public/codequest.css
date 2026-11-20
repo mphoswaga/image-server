@@ -150,3 +150,11 @@ body{background:radial-gradient(ellipse at 15% 5%,#bce8dc 0,transparent 45%),rad
 .assessment-workspace .assessment-flag{display:grid;place-items:center;position:absolute;left:28%;top:13%;width:45%;height:45%;padding-bottom:4%;border-left:3px solid #50341e;color:#fff;background:#a83822;clip-path:polygon(0 0,100% 5%,79% 42%,100% 73%,10% 75%,10% 100%,0 100%);font:800 clamp(13px,2.3vw,22px)/1 system-ui;text-shadow:none}
 .assessment-workspace .flag-visited .assessment-flag{background:#176050}
 .assessment-workspace .tile.flag-visited:after{content:'✓';position:absolute;bottom:2%;right:4%;border-radius:50%;width:1.4em;height:1.4em;background:#fff4b9;color:#145a43;font:800 clamp(10px,1.2vw,15px)/1.4 system-ui;text-align:center}
+/* Anchor the character to the same grid tracks as the island tiles. */
+.island > .pirate {
+  inset: 0;
+  width: auto;
+  height: auto;
+  translate: none;
+  transition: none;
+}
