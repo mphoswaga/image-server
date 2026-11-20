@@ -94,6 +94,7 @@
         AssessmentDataTable.mount(area,{source:[],namedBadges:task.presentation==='records',...task},null,values=>{
           responses = values; next.hidden = true; result.textContent = '';
         });
+        area.querySelectorAll('.project-data-scroll table').forEach(table => framePracticeSheet(table));
         const normal = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().replace(/\s+/g,' ').toLowerCase();
         button.onclick = () => {
           const missed = task.inputs.filter((field,i)=>!level.keys[i].some(key=>normal(key)===normal(responses[i])));
@@ -140,6 +141,7 @@
       inputs:[choice('Which activity received the most votes?',['Reading','Drawing','Puzzles']),choice('How many more votes did Reading get than Drawing?',['3','7','11']),choice('Which sentence is information you can use?',['Reading was the most popular activity.','7','4'])]
     },[['Reading'],['3'],['Reading was the most popular activity.']]);
     mountDatabasePractice(card('Paper records and digital records', ''));
+    mountRowColumnPractice(card('Rows, columns and cells', ''));
   } else {
     const links = element('div'); links.className = 'grade-links';
     for (const [label,activity] of [['Grade 2 · CodeQuest','codequest'],['Grade 3 · Data practice','data']]) {

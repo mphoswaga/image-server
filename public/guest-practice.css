@@ -47,3 +47,16 @@ main{max-width:1360px;padding:20px clamp(12px,3vw,44px) 56px}
 .project-task-nav span{font-size:.88rem}
 .project-task-nav button:last-child{margin-left:0}
 }
+
+/* Keep the row and column headings visible when a wide register scrolls. */
+.practice-sheet{overflow:auto;max-width:100%;margin:12px 0;border:1px solid #a5b6ac;border-radius:9px;background:#fff}
+.practice-sheet table{border-collapse:separate;border-spacing:0;min-width:100%;font-variant-numeric:tabular-nums}
+.practice-sheet caption{position:sticky;left:0;background:#196847;color:white;text-align:left;padding:9px 13px;font-weight:700}
+.practice-sheet :is(td,th){border:0;border-right:1px solid #c8d5cd;border-bottom:1px solid #c8d5cd;padding:6px 9px;background:#fff}
+.practice-sheet .sheet-axis,.practice-sheet thead td{background:#e8eee9;color:#334f42;text-align:center;font-weight:600}
+.practice-sheet tbody .sheet-axis{position:sticky;left:0;min-width:34px;z-index:1}
+.practice-sheet td:focus-within,.practice-sheet .sheet-selection{background:#ddf2e5;box-shadow:inset 0 0 0 2px #258452}
+.practice-sheet :is(th,td):has(>button){padding:0}
+.practice-sheet button{display:block;width:100%;border:0;border-radius:0;background:transparent;color:inherit;font:inherit;padding:8px;min-height:40px}
+.practice-sheet button:focus-visible{outline-offset:-3px}
+.practice-sheet + form input{border:1px solid #7da191;border-radius:5px;padding:7px;max-width:11em}
