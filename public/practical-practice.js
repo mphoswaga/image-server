@@ -17,22 +17,47 @@
     panels.push(section);
     return section;
   }
-  const blocks = (...ops) => ops.map(op => ({op}));
   if (mode === 'codequest') {
     document.title = 'Grade 2 CodeQuest practice · LessonScope';
     document.getElementById('title').textContent = 'Grade 2 · CodeQuest practice';
     document.getElementById('intro').textContent = 'Build, debug and use Repeat. Test your code as often as you like. Your practice is not marked.';
-    const tools = ['move','left','right','collect','repeat'];
-    const missions = [
-      {title:'First steps', instructions:'Build a route to the treasure. Press Test my code to watch your pirate.', mission:{size:6,start:[0,4,1],chest:[3,4],rocks:[],water:[],blocks:tools}},
-      {title:'Around the rock', instructions:'Visit the flag, then go around the rock to reach the treasure.', mission:{size:6,start:[0,4,1],chest:[3,3],rocks:[[3,4]],water:[],blocks:tools}, checkpoint:[2,4]},
-      {title:'Fix the route', instructions:'Test the starting code. Change the wrong turn so the pirate visits the flag and collects the treasure.', mission:{size:6,start:[0,4,1],chest:[2,2],rocks:[],water:[],blocks:tools}, checkpoint:[2,3], starter:blocks('move','move','right','move','move','collect')},
-      {title:'Use Repeat', instructions:'Test the long code. Then use the × control on a Move block to make it shorter.', mission:{size:6,start:[0,5,1],chest:[4,5],rocks:[],water:[],blocks:tools,repeatRequired:true}, starter:blocks('left','right','move','move','move','move','collect'),targetBlocks:3},
-      {title:'Two lookout flags', instructions:'Plan your own route. Visit both flags in either order, then collect the treasure.', mission:{size:6,start:[0,5,0],chest:[5,1],rocks:[[2,2],[2,3],[2,4]],water:[[0,0],[4,4]],blocks:tools}, checkpoint:[1,2], secondCheckpoint:[4,3]},
-    ];
-    for (const task of missions) {
-      const panel = card(task.title,task.instructions);
-      AssessmentCodeQuest.mount(panel,{...task,mission:{...task.mission,requireReturn:false}},null,() => {});
+    const names = ['Easy','Moderate','Complicated'];
+    for (const [title,levels] of codePracticeTopics) {
+      const panel = card(title,'');
+      const label = element('strong');
+      const rules = element('div'); rules.className = 'voyage-rules';
+      const board = element('div');
+      const result = element('p'); result.className = 'feedback'; result.setAttribute('role','status');
+      const next = element('button'); next.className = 'check';
+      panel.prepend(label);
+      panel.append(rules,board,result,next);
+      function show(index) {
+        const task = levels[index];
+        label.textContent = names[index] + ' · ' + task.name;
+        panel.querySelector('.instructions').textContent = task.instructions;
+        rules.replaceChildren(element('strong',task.repeat));
+        const budget = element('strong');
+        if (task.limit) {
+          rules.append(element('strong',task.limit+' blocks maximum'),budget,element('small',task.repeat==='No Repeat' ? 'Count every Move, turn and Collect.' : 'Count turns and Collect. Repeat ×4 Move counts as two blocks.'));
+        }
+        board.replaceChildren();
+        function reset(program) {
+          next.hidden = true; result.textContent = '';
+          if (task.limit) {
+            const count = CodeQuest.blockCount(program);
+            budget.textContent = count + ' used' + (count > task.limit ? ' · over limit' : '');
+          }
+        }
+        reset(task.starter);
+        AssessmentCodeQuest.mount(board,{...task,targetBlocks:task.limit},null,reset,program=>{
+          const outcome = checkPracticeVoyage(task,program);
+          result.textContent = outcome.message + (outcome.complete && index===2 ? ' All three levels complete.' : '');
+          next.hidden = !outcome.complete || index===2;
+        });
+        next.textContent = 'Continue to '+(names[index+1] || '');
+        next.onclick = () => {show(index+1);panel.scrollIntoView({block:'start'});};
+      }
+      show(0);
     }
   } else if (mode === 'data') {
     document.title = 'Grade 3 data practice · LessonScope';

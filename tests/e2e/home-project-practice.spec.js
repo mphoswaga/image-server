@@ -8,6 +8,12 @@ test('home practice works without sign-in for both grades', async ({page}, testI
   await game.getByRole('button',{name:'Move 1 square'}).click();
   await game.getByRole('button',{name:'Test my code'}).click();
   await expect(game.locator('#testResult')).toContainText('Testing');
+  const first = page.locator('.practice-card:visible');
+  await expect(first.getByRole('button',{name:'Continue to Moderate'})).toBeHidden();
+  for (const name of ['Move 1 square','Move 1 square','Collect']) await game.getByRole('button',{name,exact:false}).first().click();
+  await game.getByRole('button',{name:'Test my code'}).click();
+  await first.getByRole('button',{name:'Continue to Moderate'}).click();
+  await expect(first).toContainText('Moderate · Harbour bend');
   for (let i=0;i<4;i++) await page.getByRole('button',{name:'Next task'}).click();
   await expect(page.locator('.practice-card:visible').frameLocator('iframe').locator('.assessment-flag')).toHaveCount(2);
 
