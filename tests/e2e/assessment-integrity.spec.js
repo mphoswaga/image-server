@@ -165,7 +165,7 @@ test('teacher previews, versions and assigns an activity without exposing class 
   await page.getByRole('combobox', {name:'Activity',exact:true}).selectOption('starter-codequest');
   await page.getByRole('button', {name:'Preview as learner'}).click();
   await expect(page.locator('#learnerPreview .preview-task:visible').frameLocator('iframe').getByRole('button', {name:'Test my code'})).toHaveCount(1);
-  await expect(page.locator('#learnerPreview')).toContainText('Task 1 of 5');
+  await expect(page.locator('#learnerPreview')).toContainText('Task 1 of 8');
   await page.getByText('Customise tasks and marking',{exact:true}).click();
   await page.getByLabel('Title', {exact:true}).fill('My coding project');
   const firstSave = page.waitForResponse(response => response.url().endsWith('/api/activity-templates') && response.status() === 201);
@@ -179,7 +179,7 @@ test('teacher previews, versions and assigns an activity without exposing class 
   expect(draftA).toMatchObject({status:'draft',totalMarks:50});
   await page.locator('#editor summary').getByText('Build routes', {exact:true}).click();
   await page.locator('#editor .task-settings summary').first().click();
-  await page.getByLabel('Reach treasure square points').first().fill('3');
+  await page.getByLabel('Reach treasure square points').first().fill('2');
   await expect(page.locator('#total')).toContainText('51 marks');
   await expect(page.getByRole('button', {name:'Save copy and create class draft'})).toBeEnabled();
   await page.getByRole('button', {name:'Save new version'}).click();
@@ -195,7 +195,7 @@ test('teacher previews, versions and assigns an activity without exposing class 
   await expect(page.getByRole('status')).toHaveText('Saved version 1.');
   expect(await page.locator('#template').inputValue()).not.toBe(template.id);
   await page.getByRole('combobox',{name:'Activity',exact:true}).selectOption('starter-data');
-  await expect(page.getByRole('combobox',{name:'Version',exact:true})).toHaveValue('6');
+  await expect(page.getByRole('combobox',{name:'Version',exact:true})).toHaveValue('7');
   await page.getByRole('combobox',{name:'Version',exact:true}).selectOption('5');
   const registration = page.locator('#editor > details').first();
   await registration.locator(':scope > summary').click();
@@ -374,6 +374,12 @@ test('class plan prepares fourteen private drafts once, and practice creates no 
   expect(await (await prepare()).json()).toEqual({created:0,alreadyPrepared:14});
   const { lessons } = await (await page.request.get('/api/activity-templates/lessons')).json();
   expect(lessons).toHaveLength(14);
+  for (const lesson of lessons) {
+    const taskCount = lesson.plan.templateId === 'starter-data' ? 10 : 8;
+    const details = await (await page.request.get('/api/activity-templates/lessons/' + lesson.id)).json();
+    expect(details.tasks).toHaveLength(taskCount);
+    expect(lesson.suggestedMinutes).toBe(60);
+  }
   expect(lessons.every(lesson=>lesson.status==='draft'&&!lesson.hasOpened&&lesson.plan.date)).toBeTruthy();
   const learner = await browser.newContext();
   try {
@@ -381,10 +387,12 @@ test('class plan prepares fourteen private drafts once, and practice creates no 
     const writes = [];
     practice.on('request', request => { if (request.method() !== 'GET') writes.push(request.url()); });
     await practice.goto('/practical-practice.html?activity=data');
-    await practice.getByLabel('Field for the plant type').selectOption('Type');
-    await practice.getByLabel('Correct the number of Tulip pots').selectOption('3');
+    await practice.getByRole('textbox',{name:'Name',exact:true}).fill('Võ Khánh Linh');
+    await practice.getByRole('textbox',{name:'Age',exact:true}).fill('8');
+    await practice.getByLabel('Date of birth',{exact:true}).fill('3 June 2018');
+    await practice.getByRole('textbox',{name:'Family phone',exact:true}).fill('0900000018');
     await practice.getByRole('button',{name:'Check my work'}).first().click();
-    await expect(practice.getByRole('status').first()).toHaveText('That matches the data.');
+    await expect(practice.getByText('Well done! All answers match.')).toBeVisible();
     expect(writes).toEqual([]);
     expect((await learner.request.get('/api/assignment/'+lessons[0].id+'/join')).status()).toBe(409);
   } finally { await learner.close(); }
@@ -666,7 +674,7 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
   const roster = await createRoster(page, 'School fair class', [{ID:'FAIR-1', Name:'Sample Learner'}]);
   await page.goto('/activity-templates');
   await page.getByRole('combobox',{name:'Activity',exact:true}).selectOption('starter-data');
-  await expect(page.locator('.station-directory button')).toHaveCount(7);
+  await expect(page.locator('.station-directory button')).toHaveCount(10);
   await page.getByRole('combobox',{name:'Class',exact:true}).selectOption(roster.id);
   const assigned = page.waitForResponse(r => r.url().endsWith('/api/activity-templates/assign') && r.ok());
   await page.getByRole('button',{name:'Create class draft'}).click();
@@ -683,7 +691,7 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
     expect(take.questions.flatMap(q => q.tableActivity.inputs).every(input => !('accepted' in input))).toBeTruthy();
     const learner = await context.newPage();
     await learner.goto('/assignment/' + assessmentId);
-    const template = require('../../activity-templates/data-school-fair-mission');
+    const template = require('../../activity-templates/data-class-investigation');
     const current = learner.locator('[data-practical-page]:visible');
     await expect(learner.locator('#submitBtn')).toBeHidden();
     await expect(current.getByRole('textbox')).toHaveCount(12);
@@ -732,6 +740,9 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
         await expect(handles).toHaveText(placed);
         await current.screenshot({path:testInfo.outputPath('File-size ladder.png')});
         continue;
+      }
+      if (task.activity.presentation === 'worksheet') {
+        await expect(current.locator('[data-address="D2"] input')).toHaveAccessibleName('D2 · Art kits left');
       }
       if (task.activity.presentation === 'ballots') {
         await expect(current.locator('.project-data-source li')).toHaveCount(12);
@@ -786,7 +797,7 @@ test('the two-flag voyage restores programs, runs both flags and records the fif
   const game = require('../../public/codequest-core');
   await signInDisposableTeacher(page,'-two-flags');
   const roster = await createRoster(page,'Two-flag class',[{ID:'CAP-1',Name:'Sample Captain'}]);
-  const assigned = await page.request.post('/api/activity-templates/assign',{data:{templateId:'starter-codequest',version:2,rosterId:roster.id}});
+  const assigned = await page.request.post('/api/activity-templates/assign',{data:{templateId:'starter-codequest',version:3,rosterId:roster.id}});
   expect(assigned.ok(),await assigned.text()).toBeTruthy();
   const {assessmentId} = await assigned.json();
   const api = '/api/assignment/'+assessmentId;
@@ -820,13 +831,18 @@ test('the two-flag voyage restores programs, runs both flags and records the fif
     const saved = await context.request.post(api+'/draft',{data:{answers}});
     expect(saved.ok(),await saved.text()).toBeTruthy();
     const learner = await context.newPage();
+    const musicDownloads = [];
+    learner.on('request', request => { if (/\.(mp3|wav)(\?|$)/i.test(request.url())) musicDownloads.push(request.url()); });
     await learner.goto('/assignment/'+assessmentId);
     const current = learner.locator('[data-practical-page]:visible');
     const frame = current.frameLocator('iframe');
-    for (let i=0;i<3;i++) await learner.getByRole('button',{name:'Next task'}).click();
+    for (let i=0;i<5;i++) await learner.getByRole('button',{name:'Next task'}).click();
     await frame.getByRole('button',{name:'Test my code'}).click();
     await expect(frame.locator('#testResult')).toContainText('You saved 8 blocks!',{timeout:10000});
     await learner.getByRole('button',{name:'Next task'}).click();
+    await expect(current).toContainText('Corner crossing');
+    await learner.getByRole('button',{name:'Next task'}).click();
+    await expect(current).toContainText('both lookout flags');
     await expect(frame.locator('#island .assessment-flag')).toHaveText(['1','2']);
     await frame.locator('#island').screenshot({path:testInfo.outputPath('Lookout island.png')});
     await frame.getByRole('button',{name:'Test my code'}).click();
@@ -835,8 +851,9 @@ test('the two-flag voyage restores programs, runs both flags and records the fif
     const submission = learner.waitForResponse(r => r.url().endsWith(api+'/submit') && r.ok());
     await learner.locator('#submitBtn').click();
     await submission;
+    expect(musicDownloads).toEqual([]);
     const results = await (await page.request.get(api+'/results')).json();
-    expect(results.submissions[0]).toMatchObject({totalMarks:50,maxMarks:50,grades:{'two-flags':{marksAwarded:15}}});
+    expect(results.submissions[0]).toMatchObject({totalMarks:50,maxMarks:50,grades:{'two-flags':{marksAwarded:12}}});
     expect((await page.request.patch(api+'/marked',{data:{marked:true}})).ok()).toBeTruthy();
     const progress = await (await page.request.get('/api/roster/'+roster.id+'/progress')).json();
     expect(progress.students[0].results).toContainEqual(expect.objectContaining({assignmentId:assessmentId,score:50,total:50}));

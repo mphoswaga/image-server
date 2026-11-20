@@ -6,7 +6,7 @@ const levelBriefing=new CodeQuestBriefing();
 const opening=new PirateOpening(()=>state,()=>command('start'));let lastBuildSecond=null,previousCodingPhase='';
 const shortLabels={move:'↑ Move',left:'↶ Left',right:'↷ Right',collect:'💰 Collect'};
 const labels={move:'↑ Move 1 square',left:'↶ Turn left',right:'↷ Turn right',collect:'💰 Collect',repeat:'↻ Repeat'},esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),now=()=>Date.now()+offset;
-const soundtrack=(()=>{try{if(typeof CodeQuestMusic==='function'&&typeof ColonyMusic==='function')return new CodeQuestMusic($('music'));}catch{}$('music').textContent='Music unavailable';$('music').disabled=true;return {sync(){},toggle(){}};})();
+const soundtrack=(()=>{if(assessmentMode)return {sync(){},toggle(){}};try{if(typeof CodeQuestMusic==='function'&&typeof ColonyMusic==='function')return new CodeQuestMusic($('music'));}catch{}$('music').textContent='Music unavailable';$('music').disabled=true;return {sync(){},toggle(){}};})();
 const attention=typeof CodeQuestBell==='function'?new CodeQuestBell():{sync(){},unlock(){return null;}};
 const practiceMission={...C.missions[0],title:'Practice voyage',hint:'Collect the treasure, then bring it home. Take your time.',chest:[1,4],rocks:[[2,4]],water:[]};
 const mission=()=>training?{...practiceMission,requireReturn:state?.requireReturn!==false,hint:state?.requireReturn===false?'Reach the chest and Collect. Take your time.':practiceMission.hint}:state?.mission;
@@ -269,6 +269,7 @@ if (assessmentMode) {
     drawOwn();
     renderProgram();
   };
+  window.frameElement?.dispatchEvent(new Event('codequest-ready'));
  } else {
   const assessmentLink = document.createElement('a');
   assessmentLink.href = '/activity-templates';

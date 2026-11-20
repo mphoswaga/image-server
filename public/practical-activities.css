@@ -109,3 +109,6 @@ body.practical-studio{background:#f5f4ef;color:#193635;font-family:system-ui,san
 .lab-records .project-data-source li{background:linear-gradient(105deg,#f9fcfa,#e4f3ef);border-top-color:#245f63}
 .lab-records .project-data-source li strong{font-size:1.1em}
 @media(max-width:650px){.record-entry tbody tr+tr{padding:.55em 0;border-top:2px solid #c2d9cd}.record-entry td:first-child{position:static}}
+
+.lab-worksheet .sheet-axis, .lab-worksheet thead td { background:#e2efe8; color:#285543; text-align:center; font-weight:700; }
+.lab-worksheet td:focus-within { outline:2px solid #23805e; outline-offset:-2px; }

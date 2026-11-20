@@ -119,7 +119,7 @@
   }
   async function loadPlan() {
     const {rows} = await request('/api/activity-templates/class-plan');
-    $('planRows').replaceChildren(...rows.map(row => element('li', `${row.className} · ${row.date} ${row.start}–${row.end} · Replacement: ${row.replacement || 'to arrange'} · ${row.prepared ? 'Draft prepared' : row.matched ? 'Roster matched' : 'Roster not matched'}`)));
+    $('planRows').replaceChildren(...rows.map(row => element('li', `${row.className} · ${row.date} ${row.start}–${row.end} · Replacement: ${row.replacement || 'to arrange'} · ${row.prepared && row.preparedVersion !== row.version ? 'Earlier edition prepared. To use the longer project, choose the latest template above and create a separate class draft.' : row.prepared ? 'Draft prepared' : row.matched ? 'Roster matched' : 'Roster not matched'}`)));
     $('preparePlan').disabled = rows.some(row => !row.matched) || rows.every(row => row.prepared);
   }
   function manageLesson(command) {
@@ -427,7 +427,7 @@
     $('editor').replaceChildren();
     if (!keepGame) $('stageChoices').replaceChildren();
     $('projectPacing').hidden = draft.suggestedMinutes !== 60;
-    $('projectPacing').textContent = '60-minute lesson · 5 min to introduce, 30 min for the first tasks, 15 min for the independent mission and 10 min to review and submit.';
+    $('projectPacing').textContent = '60-minute lesson · 3 min to get ready, about 52 min for the tasks and 5 min to check and submit. Adjust the working time for your class.';
     updateTreasureTasks();
     for (const [key,label] of [['title','Title'],['subject','Subject'],['grade','Grade'],['instructions','Learner instructions']]) {
       field($('editor'), label, draft[key], value => draft[key] = value, key === 'instructions' ? 'textarea' : 'text');

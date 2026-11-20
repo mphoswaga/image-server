@@ -2480,7 +2480,7 @@ function unitProjectRows(teacherId) {
   });
 }
 app.get('/api/activity-templates/class-plan', requireAuth, (req, res) => {
-  res.json({ rows: unitProjectRows(req.userId).map(({slot,selected,saved}) => ({...slot, matched: !!selected, prepared: !!saved})) });
+  res.json({ rows: unitProjectRows(req.userId).map(({slot,selected,saved}) => ({...slot, matched: !!selected, prepared: !!saved, preparedVersion: saved?.activityTemplate?.version || null})) });
 });
 app.post('/api/activity-templates/class-plan', requireAuth, (req, res) => {
   const rows = unitProjectRows(req.userId);

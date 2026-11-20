@@ -5,9 +5,9 @@ const { DATA_DIR, writeJsonAtomic } = require('./storage');
 const { normalizeAssessment } = require('./assignments');
 
 const presets = [
-  { id: 'starter-codequest', versions: [require('./activity-templates/codequest-first-project'), require('./activity-templates/codequest-voyage')], starter: true },
+  { id: 'starter-codequest', versions: [require('./activity-templates/codequest-first-project'), require('./activity-templates/codequest-voyage'), require('./activity-templates/codequest-class-expedition')], starter: true },
   { id: 'starter-codequest-stages', versions: [require('./activity-templates/codequest-stages')], starter: true },
-  { id: 'starter-data', versions: [require('./activity-templates/data-handling-first-project'), require('./activity-templates/data-everyday-project'), require('./activity-templates/data-school-fair'), require('./activity-templates/data-school-fair-entry'), require('./activity-templates/data-school-fair-order'), require('./activity-templates/data-school-fair-mission')], starter: true },
+  { id: 'starter-data', versions: [require('./activity-templates/data-handling-first-project'), require('./activity-templates/data-everyday-project'), require('./activity-templates/data-school-fair'), require('./activity-templates/data-school-fair-entry'), require('./activity-templates/data-school-fair-order'), require('./activity-templates/data-school-fair-mission'), require('./activity-templates/data-class-investigation')], starter: true },
 ];
 const directory = path.join(DATA_DIR, 'activity-templates');
 const file = teacherId => path.join(directory, crypto.createHash('sha256').update(String(teacherId)).digest('hex') + '.json');

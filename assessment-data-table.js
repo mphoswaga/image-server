@@ -45,7 +45,7 @@ function normalize(activity, marks) {
   }
   if (fields.reduce((sum, input) => sum + input.marks, 0) !== marks) throw new Error('Table rubric points must add up to the task marks.');
   if (source !== undefined && (!Array.isArray(source) || source.length > 12)) throw new Error('Provide at most twelve source cards.');
-  const presentation = ['records','files','types','survey','order','ballots'].includes(activity.presentation) ? activity.presentation : null;
+  const presentation = ['records','files','types','survey','order','ballots','worksheet'].includes(activity.presentation) ? activity.presentation : null;
   return { kind: activity.kind, version: 1, ...(presentation ? {presentation} : {}), table: table.map((row, index) => row.map((value, column) =>
     editable && positions.has(index + ':' + column) ? '' : text(value))),
     source: (source || []).map(text), inputs: fields };

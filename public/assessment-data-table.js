@@ -141,6 +141,7 @@ window.AssessmentDataTable = (() => {
       for (const row of Array.from(grid.rows).slice(1)) Array.from(row.cells).forEach((cell, col) => { cell.dataset.heading = table[0][col]; });
     }
     wrap.append(grid);
+    if (activity.presentation === 'worksheet') framePracticeSheet(grid);
     // When the first prompt asks for a file, the files themselves are the answer controls.
     const files = activity.presentation === 'files' ? table.slice(1) : [];
     const fileQuestion = files.length && inputs.find(input => input.row === undefined &&
