@@ -84,6 +84,23 @@
     if (!reader) reader = new AssessmentReader(lesson.id);
     readingControls();
   }
+  $('viewClassMarks').onclick = () => action(async () => {
+    const id = selectedLesson().id;
+    const {submissions} = await request('/api/assignment/'+encodeURIComponent(id)+'/results');
+    if (selectedLesson()?.id !== id) return;
+    const panel = $('classMarks');
+    panel.replaceChildren(element('h3','Class results'));
+    if (!submissions.length) panel.append(element('p','Results appear here when a student submits their project.'));
+    for (const student of submissions) {
+      const row = element('details');
+      row.append(element('summary',student.name + ' · ' + student.totalMarks + '/' + student.maxMarks));
+      for (const task of desk.tasks) {
+        const grade = student.grades?.[task.id];
+        if (grade) row.append(element('p',task.title + ' · ' + grade.rationale));
+      }
+      panel.append(row);
+    }
+  });
   $('guideTask').onchange = readingControls;
   function guideClass(release) {
     const lesson = selectedLesson();
@@ -99,6 +116,7 @@
   $('releaseGuide').onclick = () => guideClass(true);
   let timeForLesson;
   function chooseLesson() {
+    $('classMarks').replaceChildren();
     const lesson = selectedLesson();
     if (lesson?.id !== timeForLesson) {
       $('lessonMinutes').value = lesson?.suggestedMinutes || 40;
@@ -559,12 +577,50 @@
   $('closeLesson').onclick = () => manageLesson('close');
   $('preview').onclick = () => preview(0);
   function preview(index) { return action(async () => {
-    const {assessment} = await request('/api/activity-templates/preview', {assessment:draft});
+    const snapshot = structuredClone(draft);
+    const {assessment,previewKey} = await request('/api/activity-templates/preview', {assessment:snapshot});
+    const key = 'lesson-practical-preview-' + previewKey;
+    let answers = {};
+    try { answers = JSON.parse(sessionStorage.getItem(key)) || {}; } catch {}
     const panel = $('learnerPreview');
     panel.replaceChildren(element('h2', 'Learner preview'), element('p', assessment.instructions));
     const deck = element('div');
     const pages = [];
-    panel.append(deck);
+    const status = element('p');
+    status.setAttribute('role','status');
+    status.textContent = Object.keys(answers).length ? 'Preview answers restored in this tab.' : 'Try a task, then submit the preview to see its marks.';
+    const results = element('section');
+    const mark = element('button','Submit preview and see marks');
+    mark.type = 'button';
+    const save = (id,value) => {
+      answers[id] = value;
+      results.replaceChildren();
+      try {
+        sessionStorage.setItem(key,JSON.stringify(answers));
+        status.textContent = 'Preview autosaved in this tab.';
+      } catch { status.textContent = 'Keep this tab open. Browser storage is unavailable.'; }
+    };
+    mark.onclick = async () => {
+      mark.disabled = true;
+      deck.inert = true;
+      try {
+        const data = await request('/api/activity-templates/preview-results',{assessment:snapshot,answers});
+        results.replaceChildren(element('h3','Preview result · ' + data.totalMarks + ' / ' + data.maxMarks));
+        results.append(element('p','Teacher preview only. Class marks are separate.'));
+        for (const q of assessment.questions) {
+          const grade = data.grades[q.id];
+          const details = element('details');
+          details.append(element('summary',q.question + ' · ' + grade.marksAwarded + '/' + q.marks + (data.unanswered.includes(q.id) ? ' · Unanswered' : '')));
+          for (const criterion of grade.criteria) details.append(element('p',criterion.label + ' · ' + criterion.awarded + '/' + criterion.max));
+          results.append(details);
+        }
+        results.tabIndex = -1;
+        results.focus();
+        results.scrollIntoView({block:'start'});
+      } catch (error) { status.textContent = error.message; }
+      finally { mark.disabled = false; deck.inert = false; }
+    };
+    panel.append(deck,status,mark,results);
     for (const section of assessment.sections) {
       for (const task of section.items) {
         const page = element('article'); page.className = 'preview-task';
@@ -575,8 +631,8 @@
         if (activity.mission) AssessmentCodeQuest.mount(root, {
           mission: { rocks: [], water: [], ...activity.mission, requireReturn: false },
           starter: activity.starter, checkpoint: activity.rubric.checkpoint?.cell, secondCheckpoint: activity.rubric.secondCheckpoint?.cell, targetBlocks: activity.rubric.improvement?.muchShorter.maxBlocks,
-        }, null, () => {});
-        else AssessmentDataTable.mount(root, { source: [], ...activity }, null, () => {});
+        }, answers[task.id], value => save(task.id,value), value => save(task.id,value), value => save(task.id,value));
+        else AssessmentDataTable.mount(root, { source: [], ...activity }, answers[task.id], value => save(task.id,value));
       }
     }
     practicalTaskPager(deck,pages,{index});

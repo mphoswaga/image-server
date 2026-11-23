@@ -139,8 +139,8 @@
     .project-data-response{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0}
   </style>
   <script src="/codequest-core.js"></script>
-  <link rel="stylesheet" href="/practical-activities.css?v=9">
-  <script src="/assessment-codequest.js?v=10"></script>
+  <link rel="stylesheet" href="/practical-activities.css?v=10">
+  <script src="/assessment-codequest.js?v=11"></script>
   <script src="/practice-spreadsheet.js?v=2"></script>
   <script src="/assessment-data-table.js?v=9"></script>
   <script src="/practical-task-pager.js?v=2"></script>
@@ -165,6 +165,45 @@
     const editedTasks = new Set();
     let practicalSaving = false, practicalWrite = null, retryDelay = 1000;
     const pendingPractical = new Map();
+    let recoveryKey = null;
+    let sendingAnswers = {};
+    const acknowledged = {};
+    const confirmedCode = new Set();
+    function keepPendingDraft() {
+      if (!recoveryKey) return;
+      try {
+        const edits = [...pendingPractical.keys()].map(id => ({
+          id, base:acknowledged[id], sending:sendingAnswers[id], value:answers[id],
+          confirmed:confirmedCode.has(id), runs:codeRuns.filter(run => run.id === id)
+        }));
+        if (edits.length) sessionStorage.setItem(recoveryKey, JSON.stringify(edits));
+        else sessionStorage.removeItem(recoveryKey);
+      } catch {}
+    }
+    function recoverPendingDraft(take) {
+      recoveryKey = draftKey && draftKey + '_pending_' + (take.lessonClock?.endsAt || 'assignment');
+      Object.assign(acknowledged, take.draftAnswers);
+      if (!recoveryKey) return;
+      try {
+        for (const {id,base,sending,value,confirmed,runs} of JSON.parse(sessionStorage.getItem(recoveryKey) || '[]')) {
+          const visible = questions.some(q => q.id === id);
+          if (!visible && !lessonTask) continue;
+          // A request may have reached the server just before the tab refreshed.
+          const remote = JSON.stringify(acknowledged[id]);
+          const matchesDraft = remote === JSON.stringify(base) || remote === JSON.stringify(value) ||
+            (sending !== undefined && remote === JSON.stringify(sending));
+          if (visible && !matchesDraft) continue;
+          if (Array.isArray(runs)) codeRuns.push(...runs.slice(0,16-codeRuns.length));
+          answers[id] = value;
+          if (confirmed) confirmedCode.add(id); else confirmedCode.delete(id);
+          editedTasks.add(id);
+          pendingPractical.set(id,1);
+          if (!visible) acknowledged[id] = base;
+        }
+        keepPendingDraft();
+        if (pendingPractical.size) { saveStatus('Restored your work. Saving…'); schedulePracticalSave(0); }
+      } catch {}
+    }
     function saveStatus(message) {
       $('saveState').hidden = !message;
       $('saveState').textContent = message;
@@ -184,6 +223,7 @@
       editedTasks.add(id);
       if (!practicalSaving) return saveDraft();
       pendingPractical.set(id, (pendingPractical.get(id) || 0) + 1);
+      keepPendingDraft();
       saveStatus('Saving your work…');
       schedulePracticalSave();
     }
@@ -197,11 +237,16 @@
         return;
       }
       const changed = Object.fromEntries(batch.map(([id]) => [id, answers[id]]));
+      sendingAnswers = changed;
+      keepPendingDraft();
       practicalWrite = saveServerDraft(false, changed).then(data => {
         if (!practicalSaving) return;
         for (const [id, revision] of batch) {
-          if (data.savedQuestionIds.includes(id) && pendingPractical.get(id) === revision) pendingPractical.delete(id);
+          if (!data.savedQuestionIds.includes(id)) continue;
+          acknowledged[id] = changed[id];
+          if (pendingPractical.get(id) === revision) pendingPractical.delete(id);
         }
+        keepPendingDraft();
         retryDelay = 1000;
         if (!pendingPractical.size) saveStatus('Your work is saved.');
         else {
@@ -259,8 +304,11 @@
           lessonTask = take.lessonClock.questionId;
           lessonNumber = take.lessonClock.number;
           questions = take.questions;
-          for (const [id, answer] of Object.entries(take.draftAnswers)) {
-            if (!editedTasks.has(id)) answers[id] = answer;
+          for (const {id} of questions) {
+            if (pendingPractical.has(id) || (!practicalSaving && editedTasks.has(id))) continue;
+            acknowledged[id] = take.draftAnswers[id];
+            if (Object.hasOwn(take.draftAnswers,id)) answers[id] = take.draftAnswers[id];
+            if (take.confirmedCode?.includes(id)) confirmedCode.add(id); else confirmedCode.delete(id);
           }
           renderQuestions();
           if (practicalSaving) schedulePracticalSave(0);
@@ -292,7 +340,7 @@
       const pendingRuns = codeRuns.filter(run => !lessonTask || run.id === lessonTask).slice(0, 16);
       const response = await fetch('/api/assignment/' + assignmentId + '/draft', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answers: payload, complete: !!complete, codeRuns: pendingRuns }),
+        body: JSON.stringify({ answers: payload, complete: !!complete, codeRuns: pendingRuns, confirmedCode:[...confirmedCode].filter(id => Object.hasOwn(payload,id)) }),
       });
       const data = await response.json();
       if (!response.ok) throw Object.assign(new Error(data.error || 'Could not save your work.'), {status: response.status});
@@ -348,6 +396,7 @@
       $('questions').querySelectorAll('[data-code-task]').forEach(node => {
         const question = questions.find(q => q.id === node.dataset.codeTask);
         AssessmentCodeQuest.mount(node, question, answers[question.id], program => {
+          if (JSON.stringify(answers[question.id]) !== JSON.stringify(program)) confirmedCode.delete(question.id);
           answers[question.id] = program;
           practicalChanged(question.id);
         }, program => {
@@ -356,7 +405,13 @@
             answers[question.id] = program;
             practicalChanged(question.id);
           }
-        });
+        }, practicalSaving ? async program => {
+          confirmedCode.add(question.id);
+          answers[question.id] = program;
+          practicalChanged(question.id);
+          await flushPracticalSave();
+          if (pendingPractical.has(question.id)) throw new Error('This island is waiting to save. Please try again.');
+        } : undefined, confirmedCode.has(question.id));
       });
       $('questions').querySelectorAll('[data-table-task]').forEach(node => {
         const question = questions.find(q => q.id === node.dataset.tableTask);
@@ -555,6 +610,12 @@
           practicalSaving = assignmentType === 'assessment' && questions.length > 0 && questions.every(q => ['codequest','data-table'].includes(q.kind));
           lessonNumber = take.lessonClock?.number;
           lessonTask = take.lessonClock?.questionId;
+          if (practicalSaving) {
+            confirmedCode.clear();
+            for (const id of take.confirmedCode || []) confirmedCode.add(id);
+            recoverPendingDraft(take);
+            $('submitBtn').textContent = 'Submit project';
+          }
           renderQuestions();
           $('form').style.display = 'block';
           if (take.lessonClock) startLessonClock(take.lessonClock);
@@ -679,6 +740,11 @@
         catch (err) { $('submitErr').textContent = err.message; btn.disabled = false; btn.textContent = 'I’m ready for the next section'; }
         return;
       }
+      if (practicalSaving && !window.confirm('Submit your whole project for marking? You cannot change it after you submit.')) {
+        btn.disabled = false;
+        return;
+      }
+      if (practicalSaving) $('questions').inert = true;
       btn.innerHTML = '<span class="spinner"></span>Submitting…';
       try {
         if (practicalSaving) await flushPracticalSave();
@@ -690,11 +756,13 @@
         const d = await r.json();
         if (!r.ok) throw new Error(d.error);
         clearDraft();
+        if (recoveryKey) { try { sessionStorage.removeItem(recoveryKey); } catch {} }
         if (lessonTask) { await init(); return; }
         renderResults(d, answers);
       } catch (err) {
         $('submitErr').textContent = err.message;
-        btn.disabled = false; btn.textContent = 'Submit';
+        $('questions').inert = false;
+        btn.disabled = false; btn.textContent = practicalSaving ? 'Submit project' : 'Submit';
       }
     });
 

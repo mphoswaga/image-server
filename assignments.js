@@ -817,7 +817,7 @@ function getDraft(id, studentId) {
   const target = normalizeStudentId(studentId);
   return loadDrafts(id).find(draft => normalizeStudentId(draft.studentId) === target) || null;
 }
-function saveDraft(id, { studentId, name, answers, completedSectionId, practicalTasks = [], codeRuns }) {
+function saveDraft(id, { studentId, name, answers, completedSectionId, practicalTasks = [], codeRuns, confirmedCode = [] }) {
   assertAssessmentMutable(getAssignment(id));
   const sid = normalizeStudentId(studentId);
   const drafts = loadDrafts(id);
@@ -829,6 +829,13 @@ function saveDraft(id, { studentId, name, answers, completedSectionId, practical
     completedSectionIds: [...new Set([...(previous.completedSectionIds || []), ...(completedSectionId ? [completedSectionId] : [])])],
     updatedAt: new Date().toISOString(),
   };
+  const confirmed = new Set(previous.confirmedCode || []);
+  for (const task of practicalTasks) {
+    if (task.kind !== 'codequest' || !Object.hasOwn(answers || {},task.id)) continue;
+    if (Array.isArray(confirmedCode) && confirmedCode.includes(task.id)) confirmed.add(task.id);
+    else if (JSON.stringify(previous.answers?.[task.id]) !== JSON.stringify(answers[task.id])) confirmed.delete(task.id);
+  }
+  if (confirmed.size || previous.confirmedCode) next.confirmedCode = [...confirmed];
   if (practicalTasks.length) next.practicalEvidence = practicalEvidence.capture(previous, practicalTasks, answers || {}, codeRuns);
   if (index >= 0) drafts[index] = next; else drafts.push(next);
   writeJsonAtomic(draftsPath(id), drafts);

@@ -112,3 +112,7 @@ body.practical-studio{background:#f5f4ef;color:#193635;font-family:system-ui,san
 
 .lab-worksheet .sheet-axis, .lab-worksheet thead td { background:#e2efe8; color:#285543; text-align:center; font-weight:700; }
 .lab-worksheet td:focus-within { outline:2px solid #23805e; outline-offset:-2px; }
+
+.project-code-confirm{padding:12px 16px;border:1px solid #a3d3c0;border-radius:10px;background:#eef8f2}
+.project-code-confirm strong{flex:1 1 240px}
+.project-code-confirm button:first-of-type{background:#12614e;color:#fff;border-color:#12614e}

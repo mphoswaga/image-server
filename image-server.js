@@ -2460,7 +2460,21 @@ app.post('/api/activity-templates/preview', requireAuth, (req, res) => {
   try {
     const assessment = assignments.normalizeAssessment(req.body?.assessment);
     if (assessment.questions.some(question => !['codequest','data-table'].includes(question.kind))) throw new Error('Choose practical activity tasks.');
-    res.json({assessment});
+    const previewKey = crypto.createHash('sha256').update(JSON.stringify([req.userId,assessment])).digest('hex');
+    res.json({assessment,previewKey});
+  } catch (error) { res.status(400).json({error:error.message}); }
+});
+app.post('/api/activity-templates/preview-results', requireAuth, async (req, res) => {
+  try {
+    const {questions} = assignments.normalizeAssessment(req.body?.assessment);
+    if (questions.some(q => !['codequest','data-table'].includes(q.kind))) throw new Error('Choose practical activity tasks.');
+    const answers = assignments.sanitizeLearnerAnswers(questions,req.body.answers);
+    const unanswered = assignments.incompleteAssessmentAnswers(questions,answers).map(q => q.id);
+    for (const q of questions) {
+      if (unanswered.includes(q.id)) answers[q.id] = q.kind === 'codequest' ? [] : q.activity.inputs.map(() => null);
+    }
+    const {grades,totalMarks,maxMarks} = await buildAssessmentSubmission({content:{questions}}, {answers});
+    res.json({grades,totalMarks,maxMarks,unanswered});
   } catch (error) { res.status(400).json({error:error.message}); }
 });
 function unitProjectRows(teacherId) {
@@ -3804,7 +3818,7 @@ app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
       ...(q.kind === 'data-table' ? { tableActivity: assessmentDataTable.learnerView(q.activity) } : {}),
     })),
     delivery, activeSection: activeSection ? { id: activeSection.id, title: activeSection.title, index: delivery.activeSectionIndex, total: a.sections.length } : null,
-    draftAnswers, sectionCompleted, activeQuestion, questionSyncActive,
+    draftAnswers, confirmedCode:(draft?.confirmedCode || []).filter(id => visibleIds.has(id)), sectionCompleted, activeQuestion, questionSyncActive,
     alreadySubmitted: !!already,
     ...(session && !already && a.lessonPolicy ? { lessonClock: { questionId: lessonTask || null, number: lessonTask ? a.content.questions.findIndex(q => q.id === lessonTask) + 1 : null, total: a.content.questions.length, endsAt: assignments.currentLessonWindow(a)?.endsAt || null, serverNow: Date.now() } } : {}),
   });
@@ -3854,7 +3868,7 @@ app.post('/api/assignment/:id/draft', requireAssignmentAccess, (req, res) => {
   const saved = assignments.saveDraft(a.id, { studentId: session.studentId, name: session.name, answers: safeAnswers,
     completedSectionId: complete && activeSection ? activeSection.id : null,
     practicalTasks: allowedQuestions.filter(q => ['codequest','data-table'].includes(q.kind)),
-    codeRuns: req.body?.codeRuns,
+    codeRuns: req.body?.codeRuns, confirmedCode:req.body?.confirmedCode,
   });
   res.json({ ok: true, savedAt: saved.updatedAt, savedQuestionIds: Object.keys(safeAnswers), sectionCompleted: !!(activeSection && saved.completedSectionIds.includes(activeSection.id)) });
 });
