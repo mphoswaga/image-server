@@ -2549,9 +2549,62 @@ app.get('/api/activity-templates/lessons/:id', requireAuth, (req, res) => {
     learners: record.rosterSnapshot.map(student => {
       const id = assignments.normalizeStudentId(student.id);
       const draft = drafts.get(id);
-      return { name: student.name, started: started.has(id), submitted: submitted.has(id),
+      return { id, name: student.name, hasDraft: !!Object.keys(draft?.answers || {}).length, started: started.has(id), submitted: submitted.has(id),
         answered: submitted.has(id) ? questions.length : questions.length - assignments.incompleteAssessmentAnswers(questions, draft?.answers || {}).length };
     }) });
+});
+function classroomLearnerDraft(req, res) {
+  const record = assignments.getAssignment(req.params.id);
+  if (!record?.lessonPolicy || record.teacherId !== req.userId ||
+      !record.content.questions.every(q => ['codequest','data-table'].includes(q.kind))) {
+    res.status(404).json({error:'Practical assessment not found.'});
+    return null;
+  }
+  const studentId = assignments.normalizeStudentId(req.params.studentId);
+  const learner = record.rosterSnapshot.find(student => assignments.normalizeStudentId(student.id) === studentId);
+  const draft = learner && assignments.getDraft(record.id, studentId);
+  if (!draft || assignments.isAbsent(record,studentId) || assignments.getSubmission(record.id,studentId)) {
+    res.status(409).json({error:'There is no unsubmitted work to review for this student.'});
+    return null;
+  }
+  const answers = assignments.sanitizeLearnerAnswers(record.content.questions, draft.answers);
+  if (!Object.keys(answers).length) {
+    res.status(409).json({error:'This student has no saved work.'});
+    return null;
+  }
+  return {record, studentId, learner, draft, answers};
+}
+app.get('/api/activity-templates/lessons/:id/work/:studentId', requireAuth, (req, res) => {
+  const work = classroomLearnerDraft(req,res);
+  if (!work) return;
+  const {record, learner, draft, answers} = work;
+  const questions = record.content.questions;
+  res.json({ name:learner.name, answers, updatedAt:draft.updatedAt,
+    canSubmit:!assignments.assessmentIsFinalised(record),
+    tasks:questions.map(q => ({id:q.id, title:q.question, kind:q.kind,
+      inputs:q.kind === 'data-table' ? q.activity.inputs.map(input => ({label:input.label})) : undefined})) });
+});
+app.post('/api/activity-templates/lessons/:id/work/:studentId', requireAuth, async (req, res) => {
+  const work = classroomLearnerDraft(req,res);
+  if (!work) return;
+  const {record, studentId, learner, draft, answers} = work;
+  const unchanged = () => assignments.getDraft(record.id,studentId)?.updatedAt === req.body?.updatedAt;
+  if (assignments.assessmentIsFinalised(record) || !req.body?.updatedAt || !unchanged()) {
+    return res.status(409).json({error:'The saved work changed or the assessment is finalised. Open the student’s work again.'});
+  }
+  try {
+    const unanswered = new Set(assignments.incompleteAssessmentAnswers(record.content.questions,answers).map(q => q.id));
+    const submission = await buildAssessmentSubmission(record, {
+      studentId, name:learner.name, answers, storedDraft:draft, unanswered
+    });
+    if (!unchanged()) return res.status(409).json({error:'The student saved more work. Open their work again before submitting.'});
+    assignments.saveNewSubmission(record.id, submission);
+    notifyRecordedAssessmentSubmission(record, submission);
+    audit.log('assessment.teacher_submitted_practical', { userId:req.userId, assessmentId:record.id, studentId, unanswered:unanswered.size, ip:req.ip });
+    res.json({ok:true, totalMarks:submission.totalMarks, maxMarks:submission.maxMarks});
+  } catch (error) {
+    res.status(error.status || 409).json({error:error.message});
+  }
 });
 app.get('/api/activity-templates/lessons', requireAuth, (req, res) => {
   const lessons = assignments.listTeacherAssignments(req.userId).filter(item => item.lessonPolicy)
@@ -3741,6 +3794,7 @@ app.get('/api/assignment/:id/lesson-clock', requireAssignmentAccess, (req, res) 
   if (!record?.lessonPolicy) return res.status(404).json({ error: 'Lesson not found.' });
   const session = assignmentStudentSession(req, res, record);
   if (!session) return res.status(401).json({ error: 'Rejoin the lesson.' });
+  if (assignments.getSubmission(record.id,session.studentId)) return res.json({alreadySubmitted:true});
   if (!allowAssessmentLesson(req, res, record, session.studentId)) return;
   const window = assignments.currentLessonWindow(record);
   res.json({ endsAt: window?.endsAt || null, questionId: window?.questionId || null, serverNow: Date.now() });
@@ -3875,13 +3929,15 @@ app.post('/api/assignment/:id/draft', requireAssignmentAccess, (req, res) => {
   res.json({ ok: true, savedAt: saved.updatedAt, savedQuestionIds: Object.keys(safeAnswers), sectionCompleted: !!(activeSection && saved.completedSectionIds.includes(activeSection.id)) });
 });
 
-async function buildAssessmentSubmission(a, { studentId, name, answers, storedDraft }) {
+async function buildAssessmentSubmission(a, { studentId, name, answers, storedDraft, unanswered }) {
   const grades = {};
   let totalMarks = 0, maxMarks = 0;
   for (const q of a.content.questions) {
     maxMarks += q.marks;
     const given = answers[q.id];
-    if (q.kind === 'mcq') {
+    if (unanswered?.has(q.id)) {
+      grades[q.id] = { marksAwarded:0, verdict:'incorrect', rationale:'No saved answer', source:'auto' };
+    } else if (q.kind === 'mcq') {
       const correct = Number.isInteger(given) && given === q.correctIndex;
       grades[q.id] = { marksAwarded: correct ? q.marks : 0, verdict: correct ? 'correct' : 'incorrect', rationale: correct ? 'Correct option selected.' : 'Not the correct option.', source: 'auto' };
     } else if (q.kind === 'codequest') {

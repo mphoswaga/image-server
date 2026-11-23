@@ -82,9 +82,52 @@
     const guided = detail.tasks.findIndex(task => task.id === detail.active?.questionId);
     $('guideState').textContent = !detail.active ? 'Lesson closed.' : guided < 0 ? 'Students are working at their own pace.' : 'Everyone is on question ' + (guided + 1) + '.';
     $('submissionCount').textContent = 'Live submissions · ' + detail.learners.filter(l => l.submitted).length + ' of ' + detail.learners.length + ' submitted';
-    $('learnerProgress').replaceChildren(...detail.learners.map(l => element('li', l.name + ' · ' + (l.submitted ? 'Submitted' : l.started ? l.answered + ' of ' + detail.tasks.length + ' tasks with saved work' : 'Yet to start'))));
+    $('learnerProgress').replaceChildren(...detail.learners.map(learner => {
+      const status = learner.submitted ? 'Submitted' : learner.started
+        ? learner.answered + ' of ' + detail.tasks.length + ' tasks with saved work' : 'Yet to start';
+      const row = element('li', learner.name + ' · ' + status);
+      if (learner.hasDraft && !learner.submitted) {
+        const review = element('button','Review saved work');
+        review.type = 'button';
+        review.setAttribute('aria-label','Review saved work for ' + learner.name);
+        review.onclick = () => reviewLearnerWork(lesson.id,learner.id);
+        row.append(' ',review);
+      }
+      return row;
+    }));
     if (!reader) reader = new AssessmentReader(lesson.id);
     readingControls();
+  }
+  function reviewLearnerWork(lessonId, studentId) {
+    return action(async () => {
+      const url = '/api/activity-templates/lessons/' + encodeURIComponent(lessonId) + '/work/' + encodeURIComponent(studentId);
+      const work = await request(url);
+      if (selectedLesson()?.id !== lessonId) return;
+      const panel = $('classMarks');
+      panel.replaceChildren(element('h3',work.name + ' · Saved work'));
+      for (const task of work.tasks) {
+        const value = work.answers[task.id];
+        const answer = !Array.isArray(value) ? 'No saved answer' : task.kind === 'codequest'
+          ? AssessmentCodeQuest.describe(value) : AssessmentDataTable.describe(task,value);
+        const row = element('p');
+        row.append(element('strong',task.title),document.createElement('br'),document.createTextNode(answer));
+        panel.append(row);
+      }
+      if (work.canSubmit) {
+        const submit = element('button','Submit saved work for this student');
+        submit.type = 'button';
+        submit.onclick = () => {
+          if (!window.confirm('Submit ' + work.name + '’s saved work? Unanswered tasks earn zero and the student cannot keep editing.')) return;
+          action(async () => {
+            const result = await request(url,{updatedAt:work.updatedAt});
+            panel.replaceChildren(element('h3',work.name + ' · Submitted'),element('p',result.totalMarks + '/' + result.maxMarks));
+            await refreshDesk();
+          });
+        };
+        panel.append(submit);
+      }
+      panel.focus();
+    });
   }
   $('viewClassMarks').onclick = () => action(async () => {
     const id = selectedLesson().id;

@@ -296,6 +296,7 @@
           if (response.status === 409 && $('form').style.display !== 'none') closeLessonView();
           if (!response.ok) return;
           const state = await response.json();
+          if (state.alreadySubmitted) { await init(); return; }
           if (state.questionId === lessonTask) return;
           const taken = await fetch('/api/assignment/' + assignmentId + '/take');
           if (!taken.ok) return;

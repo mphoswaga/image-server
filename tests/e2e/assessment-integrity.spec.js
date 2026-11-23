@@ -818,6 +818,45 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
   } finally { await context.close(); }
 });
 
+test('classroom submits one reviewed incomplete practical without making up answers', async ({page,browser}, testInfo) => {
+  test.skip(testInfo.project.name !== 'windows-100');
+  await signInDisposableTeacher(page,'-submit-practical-draft');
+  const roster = await createRoster(page,'Recovery class',[{ID:'RE-1',Name:'Sample Captain'}]);
+  const assignment = await page.request.post('/api/activity-templates/assign',{
+    data:{templateId:'starter-codequest',version:3,rosterId:roster.id}
+  });
+  expect(assignment.ok(),await assignment.text()).toBeTruthy();
+  const {assessmentId} = await assignment.json();
+  const desk = '/api/activity-templates/lessons/'+assessmentId;
+  const api = '/api/assignment/'+assessmentId;
+  expect((await page.request.post(desk,{data:{action:'open',minutes:60}})).ok()).toBeTruthy();
+  const context = await browser.newContext();
+  try {
+    const join = await (await context.request.get(api+'/join')).json();
+    expect((await context.request.post(api+'/enter',{data:{handle:join.students[0].handle,pin:'5628'}})).ok()).toBeTruthy();
+    expect((await context.request.get(api+'/take')).ok()).toBeTruthy();
+    const saved = await context.request.post(api+'/draft',{
+      data:{answers:{near:[{op:'move'},{op:'move'},{op:'collect'}]}}
+    });
+    expect(saved.ok(),await saved.text()).toBeTruthy();
+    expect((await page.request.post(desk,{data:{action:'close'}})).ok()).toBeTruthy();
+    await page.goto('/activity-templates');
+    await page.locator('#classTab').click();
+    await page.locator('#lesson').selectOption(assessmentId);
+    await page.getByText(/Live submissions/).click();
+    await page.getByRole('button',{name:'Review saved work for Sample Captain'}).click();
+    await expect(page.locator('#classMarks')).toContainText('Move forward → Move forward → Collect');
+    await expect(page.locator('#classMarks')).toContainText('No saved answer');
+    page.once('dialog',dialog => dialog.accept());
+    await page.getByRole('button',{name:'Submit saved work for this student'}).click();
+    await expect(page.locator('#classMarks')).toContainText('Sample Captain · Submitted');
+    const {submissions} = await (await page.request.get(api+'/results')).json();
+    expect(submissions).toHaveLength(1);
+    expect(submissions[0]).toMatchObject({totalMarks:3,maxMarks:50,grades:{'two-flags':{marksAwarded:0}}});
+    expect(Object.keys(submissions[0].answers)).toEqual(['near']);
+  } finally { await context.close(); }
+});
+
 test('the two-flag voyage restores programs, runs both flags and records the fifty-mark rubric', async ({page,browser}, testInfo) => {
   test.skip(testInfo.project.name !== 'windows-100');
   test.slow();
