@@ -358,6 +358,14 @@ test('one lesson restores saved work but replacements admit only learners who ne
     await page.goto('/activity-templates');
     await page.locator('#classTab').click();
     await page.locator('#lesson').selectOption(assessmentId);
+    await page.getByRole('button',{name:'Pause timer'}).click();
+    await expect(learnerPage.locator('#lessonClock')).toContainText('Lesson timer paused');
+    const pausedText = await learnerPage.locator('#lessonClock').textContent();
+    await learnerPage.reload();
+    await expect(learnerPage.locator('#lessonClock')).toHaveText(pausedText);
+    await expect(page.locator('#lessonClockDisplay')).toContainText('Paused');
+    await page.getByRole('button',{name:'Resume timer'}).click();
+    await expect(learnerPage.locator('#lessonClock')).toContainText('Lesson time left');
     await page.locator('#guideTask').selectOption(restored.questions[1].id);
     await page.locator('#guide').click();
     await expect(learnerPage.locator('[data-practical-page]')).toHaveCount(1);

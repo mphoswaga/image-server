@@ -278,12 +278,16 @@
       if (!clock.endsAt) return closeLessonView();
       lessonTask = clock.questionId;
       lessonNumber = clock.number;
-      lessonEnds = performance.now() + Math.max(0, clock.endsAt - clock.serverNow);
+      let pausedRemainingMs;
+      const updateTime = state => {
+        pausedRemainingMs = state.pausedRemainingMs;
+        lessonEnds = performance.now() + Math.max(0, state.endsAt - state.serverNow);
+      };
+      updateTime(clock);
       const tick = () => {
-        const seconds = Math.max(0, Math.ceil((lessonEnds - performance.now()) / 1000));
-        if (!seconds) return closeLessonView();
+        const seconds = Math.max(0, Math.ceil((pausedRemainingMs ?? (lessonEnds - performance.now())) / 1000));
         $('lessonClock').hidden = false;
-        $('lessonClock').textContent = `Lesson time left: ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2,'0')}`;
+        $('lessonClock').textContent = `${pausedRemainingMs != null ? 'Lesson timer paused' : 'Lesson time left'}: ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2,'0')}`;
       };
       clearInterval(lessonTimer);
       clearInterval(lessonPoll);
@@ -297,6 +301,8 @@
           if (!response.ok) return;
           const state = await response.json();
           if (state.alreadySubmitted) { await init(); return; }
+          updateTime(state);
+          tick();
           if (state.questionId === lessonTask) return;
           const taken = await fetch('/api/assignment/' + assignmentId + '/take');
           if (!taken.ok) return;

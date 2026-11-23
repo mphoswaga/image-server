@@ -37,7 +37,11 @@
   const selectedLesson = () => lessons.find(lesson => lesson.id === $('lesson').value);
   function lessonControls() {
     const lesson = selectedLesson();
-    const active = lesson?.active && lesson.active.endsAt > Date.now();
+    const paused = lesson?.active?.pausedRemainingMs != null;
+    const active = lesson?.active && (paused || lesson.active.endsAt > Date.now());
+    $('pauseClock').hidden = !active;
+    $('pauseClock').disabled = !!busy;
+    $('pauseClock').textContent = paused ? 'Resume timer' : 'Pause timer';
     $('openLesson').disabled = busy || !lesson || lesson.hasOpened;
     $('openLesson').hidden = !lesson || lesson.hasOpened;
     $('closeLesson').hidden = !active;
@@ -53,7 +57,7 @@
     $('learnerLink').hidden = !active;
     if (active) $('learnerLink').href = '/assignment/' + encodeURIComponent(lesson.id);
     $('lessonStatus').textContent = !lesson ? 'No class drafts yet.' : active
-      ? `Open until ${new Date(lesson.active.endsAt).toLocaleTimeString()} · ${lesson.attempts} started.`
+      ? paused ? `Timer paused · ${lesson.attempts} started.` : `Open until ${new Date(lesson.active.endsAt).toLocaleTimeString()} · ${lesson.attempts} started.`
       : lesson.hasOpened ? `Closed · ${lesson.attempts} started.` : 'Private draft. Opening the lesson lets the class start.';
   }
   let deskRequest = 0, desk = null, reader;
@@ -79,6 +83,7 @@
     const first = !desk || desk.id !== lesson.id;
     if (first || !!desk.active !== !!detail.active) $('guidePanel').open = !!detail.active;
     if (!!lesson.active !== !!detail.active) { await refreshLessons(lesson.id); return; }
+    lesson.active = detail.active;
     lesson.attempts = detail.learners.filter(student => student.started).length;
     lessonControls();
     desk = {...detail, id: lesson.id};
@@ -155,12 +160,13 @@
   };
   $('studentSearch').oninput = renderProgress;
   function updateClock() {
-    const endsAt = selectedLesson()?.active?.endsAt;
-    const seconds = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+    const active = selectedLesson()?.active;
+    const paused = active?.pausedRemainingMs;
+    const seconds = Math.max(0, Math.ceil((paused ?? (active?.endsAt - Date.now())) / 1000));
     const clock = $('lessonClockDisplay');
     clock.hidden = !seconds;
     clock.classList.toggle('ending', seconds > 0 && seconds <= 60);
-    if (seconds) clock.textContent = Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0') + ' left';
+    if (seconds) clock.textContent = Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0') + (paused != null ? ' · Paused' : ' left');
   }
   setInterval(updateClock, 1000);
   function reviewLearnerWork(lessonId, studentId) {
@@ -688,6 +694,17 @@
   });
   $('replacement').onchange = lessonControls;
   $('openLesson').onclick = () => manageLesson('open');
+  $('pauseClock').onclick = () => action(async () => {
+    const lesson = selectedLesson();
+    if (!lesson?.active) return;
+    const command = lesson.active.pausedRemainingMs != null ? 'resume-clock' : 'pause-clock';
+    const updated = await request('/api/activity-templates/lessons/' + encodeURIComponent(lesson.id), {action:command});
+    lesson.active = updated.active;
+    if (selectedLesson()?.id === lesson.id) {
+      lessonControls();
+      updateClock();
+    }
+  });
   $('resumeLesson').onclick = () => manageLesson('resume');
   $('replacementLesson').onclick = () => manageLesson('replacement');
   $('closeLesson').onclick = () => manageLesson('close');
@@ -766,5 +783,5 @@
     for (const roster of rosters) $('roster').add(new Option(roster.name, roster.id));
     await refreshLessons();
   });
-  setInterval(() => { const lesson = selectedLesson(); if (!busy && lesson?.active && !document.hidden) { if (lesson.active.endsAt <= Date.now()) refreshLessons().catch(() => {}); else refreshDesk().catch(() => { $('deskFreshness').textContent = 'Reconnecting…'; }); } }, 5000);
+  setInterval(() => { const lesson = selectedLesson(); if (!busy && lesson?.active && !document.hidden) { if (lesson.active.pausedRemainingMs == null && lesson.active.endsAt <= Date.now()) refreshLessons().catch(() => {}); else refreshDesk().catch(() => { $('deskFreshness').textContent = 'Reconnecting…'; }); } }, 5000);
 })();

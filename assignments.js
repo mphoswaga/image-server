@@ -561,12 +561,12 @@ function assessmentContentEditable(record) {
 
 function currentLessonWindow(record, now = Date.now()) {
   const window = record.lessonPolicy?.windows.at(-1);
-  return window && !window.closedAt && now < window.endsAt ? window : null;
+  return window && !window.closedAt && (window.pausedRemainingMs != null || now < window.endsAt) ? window : null;
 }
 
 function lessonEligible(record, now = Date.now()) {
   const original = record.lessonPolicy?.windows[0];
-  if (!original || (!original.closedAt && now < original.endsAt)) return [];
+  if (!original || (!original.closedAt && (original.pausedRemainingMs != null || now < original.endsAt))) return [];
   const used = new Set([
     ...record.lessonPolicy.attempts.map(attempt => attempt.studentId),
     ...loadDrafts(record.id).map(draft => normalizeStudentId(draft.studentId)),
@@ -583,6 +583,16 @@ function manageLesson(id, action, minutes, studentIds, now = Date.now()) {
   if (action === 'close') {
     if (!active) throw new Error('There is no open lesson.');
     active.closedAt = now;
+    delete active.pausedRemainingMs;
+  } else if (action === 'pause-clock' || action === 'resume-clock') {
+    if (!active) throw new Error('There is no open lesson.');
+    if (action === 'pause-clock' && active.pausedRemainingMs == null) {
+      active.firstEndsAt ??= active.endsAt;
+      active.pausedRemainingMs = active.endsAt - now;
+    } else if (action === 'resume-clock' && active.pausedRemainingMs != null) {
+      active.endsAt = now + active.pausedRemainingMs;
+      delete active.pausedRemainingMs;
+    }
   } else if (['open', 'replacement', 'resume'].includes(action)) {
     if (active) throw new Error('Close the current lesson first.');
     if (!Number.isInteger(minutes) || minutes < 5 || minutes > 120) throw new Error('Choose 5 to 120 minutes of working time.');

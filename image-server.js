@@ -3797,7 +3797,7 @@ app.get('/api/assignment/:id/lesson-clock', requireAssignmentAccess, (req, res) 
   if (assignments.getSubmission(record.id,session.studentId)) return res.json({alreadySubmitted:true});
   if (!allowAssessmentLesson(req, res, record, session.studentId)) return;
   const window = assignments.currentLessonWindow(record);
-  res.json({ endsAt: window?.endsAt || null, questionId: window?.questionId || null, serverNow: Date.now() });
+  res.json({ endsAt: window?.endsAt || null, pausedRemainingMs: window?.pausedRemainingMs ?? null, questionId: window?.questionId || null, serverNow: Date.now() });
 });
 app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
@@ -3876,7 +3876,7 @@ app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
     delivery, activeSection: activeSection ? { id: activeSection.id, title: activeSection.title, index: delivery.activeSectionIndex, total: a.sections.length } : null,
     draftAnswers, confirmedCode:(draft?.confirmedCode || []).filter(id => visibleIds.has(id)), sectionCompleted, activeQuestion, questionSyncActive,
     alreadySubmitted: !!already,
-    ...(session && !already && a.lessonPolicy ? { lessonClock: { questionId: lessonTask || null, number: lessonTask ? a.content.questions.findIndex(q => q.id === lessonTask) + 1 : null, total: a.content.questions.length, endsAt: lessonWindow?.endsAt || null, firstEndsAt: lessonWindow?.firstEndsAt, serverNow: Date.now() } } : {}),
+    ...(session && !already && a.lessonPolicy ? { lessonClock: { questionId: lessonTask || null, number: lessonTask ? a.content.questions.findIndex(q => q.id === lessonTask) + 1 : null, total: a.content.questions.length, endsAt: lessonWindow?.endsAt || null, firstEndsAt: lessonWindow?.firstEndsAt, pausedRemainingMs: lessonWindow?.pausedRemainingMs ?? null, serverNow: Date.now() } } : {}),
   });
 });
 
