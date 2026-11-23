@@ -36,7 +36,25 @@ window.AssessmentCodeQuest = (() => {
         const test = doc.getElementById('test');
         submit = doc.createElement('button');
         submit.type = 'button';
-        submit.textContent = 'Submit code';
+        const labelAction = (button, label, path) => {
+          const icon = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          icon.setAttribute('viewBox', '0 0 24 24');
+          icon.setAttribute('width', '20');
+          icon.setAttribute('height', '20');
+          icon.setAttribute('aria-hidden', 'true');
+          icon.style.verticalAlign = 'middle';
+          const lines = doc.createElementNS(icon.namespaceURI, 'path');
+          lines.setAttribute('d', path);
+          lines.setAttribute('fill', 'none');
+          lines.setAttribute('stroke', 'currentColor');
+          lines.setAttribute('stroke-width', '2');
+          lines.setAttribute('stroke-linecap', 'round');
+          lines.setAttribute('stroke-linejoin', 'round');
+          icon.append(lines);
+          button.replaceChildren(icon, ' ' + label);
+        };
+        const sendIcon = 'M22 2 9 15 M22 2l-7 20-6-7-7-6Z';
+        labelAction(submit, 'Submit code', sendIcon);
         submit.disabled = !latest.length;
         submit.style.background = '#10634e';
         submit.style.color = '#fff';
@@ -53,11 +71,11 @@ window.AssessmentCodeQuest = (() => {
         const actions = doc.createElement('div');
         actions.className = 'toolbar';
         const confirm = submit.cloneNode();
-        confirm.textContent = 'Yes, submit code';
+        labelAction(confirm, 'Yes, submit code', sendIcon);
         confirm.disabled = false;
         const edit = doc.createElement('button');
         edit.type = 'button';
-        edit.textContent = 'Keep editing';
+        labelAction(edit, 'Keep editing', 'm4 16-1 5 5-1L21 7l-4-4Z M14 6l4 4');
         actions.append(confirm, edit);
         confirmation.append(question, actions);
         toolbar.after(confirmation, stageStatus);
@@ -84,7 +102,15 @@ window.AssessmentCodeQuest = (() => {
             await onSubmit(submitted);
             if (!root.isConnected || JSON.stringify(submitted) !== JSON.stringify(latest)) return;
             stageStatus.textContent = 'Code submitted for this island.';
-            afterSubmit?.();
+            const plane = submit.querySelector('svg');
+            if (plane?.animate && !frame.contentWindow.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+              const flight = plane.animate([
+                { transform: 'translate(0, 0)' },
+                { transform: 'translate(8px, -7px)', opacity: 0 },
+              ], { duration: 240, easing: 'ease-out' });
+              await flight.finished.catch(() => {});
+            }
+            if (root.isConnected && JSON.stringify(submitted) === JSON.stringify(latest)) afterSubmit?.();
           } catch (error) { stageStatus.textContent = error.message; }
           finally { submitting = false; submit.disabled = !latest.length; }
         };
