@@ -79,10 +79,10 @@ test('CodeQuest assignment restores blocks and marks the final program against i
     await expect(task.locator('#program .longLabel')).toHaveText(['↑ Move 1 square', '↑ Move 1 square', '💰 Collect']);
     await task.getByRole('button', { name: 'Test my code' }).click();
     await expect(task.locator('#testResult')).toHaveText('Treasure collected!');
-    learner.once('dialog', dialog => dialog.dismiss());
     await task.getByRole('button',{name:'Submit code',exact:true}).click();
-    learner.once('dialog', dialog => dialog.accept());
+    await task.getByRole('button',{name:'Keep editing'}).click();
     await task.getByRole('button',{name:'Submit code',exact:true}).click();
+    await task.getByRole('button',{name:'Yes, submit code',exact:true}).click();
     await expect.poll(async () => (await (await context.request.get(api+'/take')).json()).confirmedCode).toEqual(['treasure']);
     await task.getByRole('button', { name: /Step 3: .*Collect/ }).click();
     await task.getByRole('button', { name: 'Remove step' }).click();
@@ -179,8 +179,8 @@ test('teacher previews, versions and assigns an activity without exposing class 
   await move.click();
   await island.getByRole('button',{name:'💰 Collect',exact:true}).click();
   await island.getByRole('button',{name:'Test my code'}).click();
-  page.once('dialog', dialog => dialog.accept());
   await island.getByRole('button',{name:'Submit code',exact:true}).click();
+  await island.getByRole('button',{name:'Yes, submit code',exact:true}).click();
   await expect(page.locator('#learnerPreview')).toContainText('Task 2 of 8');
   await page.reload();
   await page.locator('#template').selectOption('starter-codequest');
@@ -302,8 +302,8 @@ test('teacher can assign selected native CodeQuest stages with their original Re
     const current = learner.frameLocator('[data-practical-page]:visible iframe');
     await expect(current.locator('#hint')).toHaveText('No Repeat');
     await current.getByRole('button',{name:'↑ Move 1 square',exact:true}).click();
-    learner.once('dialog', dialog => dialog.accept());
     await current.getByRole('button',{name:'Submit code',exact:true}).click();
+    await current.getByRole('button',{name:'Yes, submit code',exact:true}).click();
     await expect(current.locator('#hint')).toContainText('Use Repeat');
     const stage = take.questions[1];
     const solution = require('../../public/codequest-core').solve(stage.mission);
@@ -909,8 +909,8 @@ test('the two-flag voyage restores programs, runs both flags and records the fif
     const current = learner.locator('[data-practical-page]:visible');
     const frame = current.frameLocator('iframe');
     const submitIsland = async () => {
-      learner.once('dialog', dialog => dialog.accept());
       await frame.getByRole('button',{name:'Submit code',exact:true}).click();
+      await frame.getByRole('button',{name:'Yes, submit code',exact:true}).click();
     };
     for (let i=0;i<5;i++) {
       await submitIsland();

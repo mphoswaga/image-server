@@ -15,10 +15,16 @@ window.AssessmentCodeQuest = (() => {
     let latest = saved ?? task.starter ?? [];
     let submit;
     let stageStatus;
+    let closeConfirmation;
+    let submitting = false;
     const changed = program => {
       const edited = JSON.stringify(latest) !== JSON.stringify(program);
       latest = program;
-      if (edited && submit) { submit.disabled = !program.length; stageStatus.textContent = ''; }
+      if (edited && submit) {
+        closeConfirmation();
+        submit.disabled = submitting || !program.length;
+        stageStatus.textContent = '';
+      }
       onChange(program);
     };
     let mountedDocument;
@@ -39,9 +45,39 @@ window.AssessmentCodeQuest = (() => {
         stageStatus = doc.createElement('p');
         stageStatus.setAttribute('role','status');
         if (confirmed) stageStatus.textContent = 'Code submitted for this island.';
-        test.parentElement.after(stageStatus);
-        submit.onclick = async () => {
-          if (!window.confirm('Submit your code for this island?')) return;
+        const toolbar = test.parentElement;
+        const confirmation = doc.createElement('div');
+        confirmation.hidden = true;
+        const question = doc.createElement('p');
+        question.textContent = 'Ready to turn in your code for this island?';
+        const actions = doc.createElement('div');
+        actions.className = 'toolbar';
+        const confirm = submit.cloneNode();
+        confirm.textContent = 'Yes, submit code';
+        confirm.disabled = false;
+        const edit = doc.createElement('button');
+        edit.type = 'button';
+        edit.textContent = 'Keep editing';
+        actions.append(confirm, edit);
+        confirmation.append(question, actions);
+        toolbar.after(confirmation, stageStatus);
+        closeConfirmation = () => {
+          confirmation.hidden = true;
+          toolbar.hidden = false;
+        };
+        submit.onclick = () => {
+          toolbar.hidden = true;
+          confirmation.hidden = false;
+          confirm.focus();
+        };
+        edit.onclick = () => {
+          closeConfirmation();
+          submit.focus();
+        };
+        confirm.onclick = async () => {
+          closeConfirmation();
+          submitting = true;
+          stageStatus.textContent = 'Saving your code…';
           submit.disabled = true;
           const submitted = structuredClone(latest);
           try {
@@ -50,7 +86,7 @@ window.AssessmentCodeQuest = (() => {
             stageStatus.textContent = 'Code submitted for this island.';
             afterSubmit?.();
           } catch (error) { stageStatus.textContent = error.message; }
-          finally { submit.disabled = !latest.length; }
+          finally { submitting = false; submit.disabled = !latest.length; }
         };
       }
       mountedDocument = frame.contentDocument;
