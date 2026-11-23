@@ -583,9 +583,19 @@ function manageLesson(id, action, minutes, studentIds, now = Date.now()) {
   if (action === 'close') {
     if (!active) throw new Error('There is no open lesson.');
     active.closedAt = now;
-  } else if (action === 'open' || action === 'replacement') {
+  } else if (['open', 'replacement', 'resume'].includes(action)) {
     if (active) throw new Error('Close the current lesson first.');
     if (!Number.isInteger(minutes) || minutes < 5 || minutes > 120) throw new Error('Choose 5 to 120 minutes of working time.');
+    if (action === 'resume') {
+      const window = policy.windows.at(-1);
+      if (!window) throw new Error('Open the original lesson first.');
+      window.firstEndsAt ??= window.endsAt;
+      window.endsAt = now + minutes * 60000;
+      delete window.closedAt;
+      window.questionId = null;
+      writeJsonAtomic(recPath(id), record);
+      return record;
+    }
     if (action === 'open' && policy.windows.length) throw new Error('The original lesson has already been used.');
     const selected = action === 'replacement' && Array.isArray(studentIds) ? [...new Set(studentIds.map(normalizeStudentId))] : [];
     if (action === 'replacement') {

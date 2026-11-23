@@ -40,6 +40,8 @@
     const active = lesson?.active && lesson.active.endsAt > Date.now();
     $('openLesson').disabled = busy || !lesson || lesson.hasOpened;
     $('closeLesson').disabled = busy || !active;
+    $('resumeLesson').hidden = !lesson?.canResume || !!active;
+    $('resumeLesson').disabled = !!busy;
     $('replacementLesson').disabled = busy || !lesson?.hasOpened || !!active || !$('replacement').selectedOptions.length;
     $('replacementLabel').hidden = !lesson?.hasOpened || !!active || !lesson.eligible.length;
     $('learnerLink').hidden = !active;
@@ -150,7 +152,8 @@
         studentIds: [...$('replacement').selectedOptions].map(option => option.value),
       });
       await refreshLessons(lesson.id);
-      $('notice').textContent = command === 'close' ? 'Lesson closed.' : 'Lesson open for the selected learners.';
+      $('notice').textContent = command === 'close' ? 'Lesson closed.' : command === 'resume'
+        ? 'Lesson resumed. Students can refresh their current tab to continue.' : 'Lesson open for the selected learners.';
     });
   }
   function field(parent, label, value, change, type = 'text') {
@@ -573,6 +576,7 @@
   });
   $('replacement').onchange = lessonControls;
   $('openLesson').onclick = () => manageLesson('open');
+  $('resumeLesson').onclick = () => manageLesson('resume');
   $('replacementLesson').onclick = () => manageLesson('replacement');
   $('closeLesson').onclick = () => manageLesson('close');
   $('preview').onclick = () => preview(0);

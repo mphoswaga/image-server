@@ -25,6 +25,31 @@ test('one-lesson access expires at the server deadline and cannot carry into a r
   assert.doesNotThrow(() => assignments.checkLessonAccess(replacement, 'MISSED', true, end));
 });
 
+test('resuming a closed practical keeps the same attempts, drafts and assignment', () => {
+  const record = assignments.createAssessment({
+    teacherId:'resume-owner', data:require('../activity-templates/codequest-first-project'), rosterId:'resume-class',
+    rosterSnapshot:[{id:'STARTED',name:'Started'}], oneLesson:true,
+  });
+  const now = Date.now();
+  const opened = assignments.manageLesson(record.id, 'open', 5, [], now);
+  const original = opened.lessonPolicy.windows[0];
+  assignments.checkLessonAccess(opened, 'STARTED', true, now);
+  assignments.saveDraft(record.id, {studentId:'STARTED', answers:{near:[{op:'move'}]}});
+  assignments.setLessonTask(record.id, original.id, record.content.questions[0].id);
+  assignments.manageLesson(record.id, 'close', 0, [], now + 1000);
+  assert.throws(() => assignments.checkLessonAccess(assignments.getAssignment(record.id), 'STARTED', false, now + 1500));
+  const resumed = assignments.manageLesson(record.id, 'resume', 10, [], now + 2000);
+  assert.equal(resumed.lessonPolicy.windows.length, 1);
+  const window = assignments.currentLessonWindow(resumed, now + 2000);
+  assert.equal(window.id, original.id);
+  assert.equal(window.firstEndsAt, original.endsAt);
+  assert.equal(window.endsAt, now + 602000);
+  assert.equal(window.questionId, null);
+  assert.doesNotThrow(() => assignments.checkLessonAccess(resumed, 'STARTED', false, now + 3000));
+  assert.deepEqual(assignments.getDraft(record.id, 'STARTED').answers, {near:[{op:'move'}]});
+  assert.throws(() => assignments.manageLesson(record.id, 'resume', 10, [], now + 3000), /Close the current lesson/);
+});
+
 test('question evidence preserves marked assessment items without learner identity', () => {
   const evidence = gradebook.questionEvidenceForSubmission({
     type: 'assessment', finalisedAt: '2026-09-14T10:00:00Z',

@@ -2534,6 +2534,7 @@ app.post('/api/activity-templates/assign', requireAuth, (req, res) => {
 function activityLessonStatus(record) {
   return { id: record.id, title: record.title, rosterId: record.rosterId, status: record.status,
     suggestedMinutes: record.lessonPolicy.suggestedMinutes || 40, active: assignments.currentLessonWindow(record), hasOpened: !!record.lessonPolicy.windows.length,
+    canResume: !!record.lessonPolicy.windows.length && !record.teacherMarked && !assignments.assessmentIsFinalised(record),
     eligible: assignments.lessonEligible(record), attempts: record.lessonPolicy.attempts.length, plan: record.lessonPolicy.plan || null };
 }
 app.get('/api/activity-templates/lessons/:id', requireAuth, (req, res) => {
@@ -3752,6 +3753,7 @@ app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
   if (!viewer) return;
   const session = viewer.session;
   const already = session && assignments.getSubmission(a.id, session.studentId);
+  const lessonWindow = a.lessonPolicy && assignments.currentLessonWindow(a);
   if (session && !already && !allowAssessmentLesson(req, res, a, session.studentId, true)) return;
   const classDelivery = assignments.deliveryState(a);
   let delivery = classDelivery;
@@ -3820,7 +3822,7 @@ app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
     delivery, activeSection: activeSection ? { id: activeSection.id, title: activeSection.title, index: delivery.activeSectionIndex, total: a.sections.length } : null,
     draftAnswers, confirmedCode:(draft?.confirmedCode || []).filter(id => visibleIds.has(id)), sectionCompleted, activeQuestion, questionSyncActive,
     alreadySubmitted: !!already,
-    ...(session && !already && a.lessonPolicy ? { lessonClock: { questionId: lessonTask || null, number: lessonTask ? a.content.questions.findIndex(q => q.id === lessonTask) + 1 : null, total: a.content.questions.length, endsAt: assignments.currentLessonWindow(a)?.endsAt || null, serverNow: Date.now() } } : {}),
+    ...(session && !already && a.lessonPolicy ? { lessonClock: { questionId: lessonTask || null, number: lessonTask ? a.content.questions.findIndex(q => q.id === lessonTask) + 1 : null, total: a.content.questions.length, endsAt: lessonWindow?.endsAt || null, firstEndsAt: lessonWindow?.firstEndsAt, serverNow: Date.now() } } : {}),
   });
 });
 

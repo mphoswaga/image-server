@@ -181,7 +181,7 @@
       } catch {}
     }
     function recoverPendingDraft(take) {
-      recoveryKey = draftKey && draftKey + '_pending_' + (take.lessonClock?.endsAt || 'assignment');
+      recoveryKey = draftKey && draftKey + '_pending_' + (take.lessonClock?.firstEndsAt || take.lessonClock?.endsAt || 'assignment');
       Object.assign(acknowledged, take.draftAnswers);
       if (!recoveryKey) return;
       try {
