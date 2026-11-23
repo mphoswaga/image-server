@@ -140,10 +140,10 @@
   </style>
   <script src="/codequest-core.js"></script>
   <link rel="stylesheet" href="/practical-activities.css?v=10">
-  <script src="/assessment-codequest.js?v=11"></script>
+  <script src="/assessment-codequest.js?v=12"></script>
   <script src="/practice-spreadsheet.js?v=2"></script>
   <script src="/assessment-data-table.js?v=9"></script>
-  <script src="/practical-task-pager.js?v=2"></script>
+  <script src="/practical-task-pager.js?v=3"></script>
   <script>
     const $ = id => document.getElementById(id);
     const assignmentId = location.pathname.split('/').pop();
@@ -394,6 +394,7 @@
         </div>`;
       }).join('');
 
+      let goToTask;
       $('questions').querySelectorAll('[data-code-task]').forEach(node => {
         const question = questions.find(q => q.id === node.dataset.codeTask);
         AssessmentCodeQuest.mount(node, question, answers[question.id], program => {
@@ -412,7 +413,12 @@
           practicalChanged(question.id);
           await flushPracticalSave();
           if (pendingPractical.has(question.id)) throw new Error('This island is waiting to save. Please try again.');
-        } : undefined, confirmedCode.has(question.id));
+        } : undefined, confirmedCode.has(question.id), () => {
+          if (lessonTask) return;
+          const position = questions.indexOf(question);
+          if (position + 1 < questions.length) goToTask?.(position + 1);
+          else $('submitBtn').focus();
+        });
       });
       $('questions').querySelectorAll('[data-table-task]').forEach(node => {
         const question = questions.find(q => q.id === node.dataset.tableTask);
@@ -427,9 +433,9 @@
           guidance.className = 'project-task-nav';
           guidance.textContent = 'Your teacher is guiding the class · Task ' + lessonNumber;
           $('questions').prepend(guidance);
-        } else practicalTaskPager($('questions'), [...$('questions').querySelectorAll('[data-practical-page]')], practicalView, atEnd => {
+        } else goToTask = practicalTaskPager($('questions'), [...$('questions').querySelectorAll('[data-practical-page]')], practicalView, atEnd => {
           if (practicalSaving) $('submitActions').hidden = !atEnd;
-        });
+        }, questions.map(q => practicalSaving && q.kind === 'codequest'));
       }
 
       $('questions').querySelectorAll('.opts').forEach(box => {

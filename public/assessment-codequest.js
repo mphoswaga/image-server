@@ -4,7 +4,7 @@ window.AssessmentCodeQuest = (() => {
     ? 'Repeat ' + block.count + ' × (' + block.body.map(child => labels[child.op]).join(', ') + ')'
     : labels[block.op]).join(' → ') : 'No blocks';
 
-  function mount(root, task, saved, onChange, onRun = () => {}, onSubmit, confirmed = false) {
+  function mount(root, task, saved, onChange, onRun = () => {}, onSubmit, confirmed = false, afterSubmit) {
     const frame = document.createElement('iframe');
     frame.className = 'project-codequest-frame';
     frame.title = 'CodeQuest coding workspace';
@@ -13,23 +13,46 @@ window.AssessmentCodeQuest = (() => {
     loading.textContent = 'Loading your island…';
     frame.style.visibility = 'hidden';
     let latest = saved ?? task.starter ?? [];
-    let prompt;
+    let submit;
     let stageStatus;
     const changed = program => {
       const edited = JSON.stringify(latest) !== JSON.stringify(program);
       latest = program;
-      if (edited && prompt) { prompt.hidden = true; stageStatus.textContent = ''; }
+      if (edited && submit) { submit.disabled = !program.length; stageStatus.textContent = ''; }
       onChange(program);
     };
     let mountedDocument;
     function mountStage() {
       if (!frame.contentWindow.mountAssessmentStage || frame.contentDocument === mountedDocument) return;
-      frame.contentWindow.mountAssessmentStage(task, latest, changed, onRun, () => {
-        if (prompt && frame.getClientRects().length) {
-          prompt.hidden = false;
-          if (document.activeElement === frame) prompt.querySelector('button').focus();
-        }
-      });
+      frame.contentWindow.mountAssessmentStage(task, latest, changed, onRun);
+      if (onSubmit) {
+        const doc = frame.contentDocument;
+        const test = doc.getElementById('test');
+        submit = doc.createElement('button');
+        submit.type = 'button';
+        submit.textContent = 'Submit code';
+        submit.disabled = !latest.length;
+        submit.style.background = '#10634e';
+        submit.style.color = '#fff';
+        test.after(submit);
+        doc.getElementById('controlHint').textContent = 'Build your code. Test it as often as you like. When you are ready, choose Submit code.';
+        stageStatus = doc.createElement('p');
+        stageStatus.setAttribute('role','status');
+        if (confirmed) stageStatus.textContent = 'Code submitted for this island.';
+        test.parentElement.after(stageStatus);
+        submit.onclick = async () => {
+          if (!window.confirm('Submit your code for this island?')) return;
+          submit.disabled = true;
+          const submitted = structuredClone(latest);
+          try {
+            await onSubmit(submitted);
+            if (!root.isConnected || JSON.stringify(submitted) !== JSON.stringify(latest)) return;
+            stageStatus.textContent = 'Code submitted for this island.';
+            afterSubmit?.();
+          } catch (error) { stageStatus.textContent = error.message; }
+          finally { submit.disabled = !latest.length; }
+        };
+      }
       mountedDocument = frame.contentDocument;
       frame.style.visibility = '';
       loading.remove();
@@ -37,35 +60,6 @@ window.AssessmentCodeQuest = (() => {
     frame.addEventListener('codequest-ready', mountStage);
     frame.addEventListener('load', mountStage);
     root.append(loading, frame);
-    if (onSubmit) {
-      const button = text => Object.assign(document.createElement('button'), {type:'button', textContent:text});
-      const submit = button('Submit this code');
-      prompt = document.createElement('div');
-      prompt.className = 'project-task-nav project-code-confirm';
-      prompt.hidden = true;
-      const question = document.createElement('strong');
-      question.textContent = 'Ready to submit this code for this island?';
-      const yes = button('Yes, submit code');
-      const no = button('Keep editing');
-      stageStatus = document.createElement('p');
-      stageStatus.setAttribute('role','status');
-      if (confirmed) stageStatus.textContent = 'Code submitted for this island.';
-      submit.onclick = () => { prompt.hidden = false; yes.focus(); };
-      no.onclick = () => { prompt.hidden = true; submit.focus(); };
-      yes.onclick = async () => {
-        yes.disabled = true;
-        try {
-          const submitted = structuredClone(latest);
-          await onSubmit(submitted);
-          if (JSON.stringify(submitted) !== JSON.stringify(latest)) return;
-          prompt.hidden = true;
-          stageStatus.textContent = 'Code submitted for this island. You can revise it before submitting your project.';
-        } catch (error) { stageStatus.textContent = error.message; }
-        finally { yes.disabled = false; }
-      };
-      prompt.append(question,yes,no);
-      root.append(submit,prompt,stageStatus);
-    }
     // Hidden questions have no width. Start the game as soon as its page opens.
     const size = new ResizeObserver(() => {
       if (!frame.clientWidth) return;

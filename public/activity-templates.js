@@ -633,6 +633,7 @@
     panel.replaceChildren(element('h2', 'Learner preview'), element('p', assessment.instructions));
     const deck = element('div');
     const pages = [];
+    let goToTask;
     const status = element('p');
     status.setAttribute('role','status');
     status.textContent = Object.keys(answers).length ? 'Preview answers restored in this tab.' : 'Try a task, then submit the preview to see its marks.';
@@ -678,11 +679,15 @@
         if (activity.mission) AssessmentCodeQuest.mount(root, {
           mission: { rocks: [], water: [], ...activity.mission, requireReturn: false },
           starter: activity.starter, checkpoint: activity.rubric.checkpoint?.cell, secondCheckpoint: activity.rubric.secondCheckpoint?.cell, targetBlocks: activity.rubric.improvement?.muchShorter.maxBlocks,
-        }, answers[task.id], value => save(task.id,value), value => save(task.id,value), value => save(task.id,value));
+        }, answers[task.id], value => save(task.id,value), value => save(task.id,value), value => save(task.id,value), false, () => {
+          const next = pages.indexOf(page) + 1;
+          if (next < pages.length) goToTask(next);
+          else mark.focus();
+        });
         else AssessmentDataTable.mount(root, { source: [], ...activity }, answers[task.id], value => save(task.id,value));
       }
     }
-    practicalTaskPager(deck,pages,{index});
+    goToTask = practicalTaskPager(deck,pages,{index},undefined,pages.map(page => !!page.querySelector('iframe')));
     panel.hidden = false;
     panel.scrollIntoView();
   }); }
