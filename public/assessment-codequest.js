@@ -47,7 +47,7 @@ window.AssessmentCodeQuest = (() => {
     };
     function animateIcon(button, frames, duration = 300) {
       if (frame.contentWindow.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-      return button.querySelector('svg')?.animate?.(frames, { duration, easing: 'ease-out' });
+      return button.querySelector('svg')?.animate?.(frames, { duration, easing: 'cubic-bezier(.33,0,.22,1)' });
     }
     let mountedDocument;
     function mountStage() {
@@ -58,10 +58,11 @@ window.AssessmentCodeQuest = (() => {
       labelAction(test, 'Test my code', 'M9 3h6 M10 3v7l-5 8a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-8V3 M8 15h8');
       test.addEventListener('click', () => animateIcon(test, [
         { transform: 'rotate(0)' },
-        { transform: 'rotate(-22deg)' },
-        { transform: 'rotate(18deg)' },
+        { offset: .24, transform: 'translate(-2px,-1px) rotate(-18deg)' },
+        { offset: .52, transform: 'translate(2px,-3px) rotate(16deg)' },
+        { offset: .77, transform: 'translate(-1px,0) rotate(-6deg)' },
         { transform: 'rotate(0)' },
-      ], 420));
+      ], 480));
       if (onSubmit) {
         submit = doc.createElement('button');
         submit.type = 'button';
@@ -100,7 +101,8 @@ window.AssessmentCodeQuest = (() => {
           confirmation.hidden = false;
           confirm.focus();
           animateIcon(confirm, [
-            { transform: 'translate(-4px, 3px)' },
+            { transform: 'translate(-5px, 3px) rotate(-12deg)', opacity: .65 },
+            { offset: .72, transform: 'translate(1px, -1px) rotate(3deg)' },
             { transform: 'translate(0, 0)' },
           ]);
         };
@@ -120,8 +122,10 @@ window.AssessmentCodeQuest = (() => {
             stageStatus.textContent = 'Code submitted for this island.';
             const flight = animateIcon(submit, [
               { transform: 'translate(0, 0)' },
-              { transform: 'translate(8px, -7px)', opacity: 0 },
-            ], 240);
+              { offset: .32, transform: 'translate(-3px, 2px) rotate(-12deg)' },
+              { offset: .72, transform: 'translate(6px, -3px) rotate(5deg)', opacity: 1 },
+              { transform: 'translate(15px, -12px) rotate(-6deg)', opacity: 0 },
+            ], 360);
             if (flight) await flight.finished.catch(() => {});
             if (root.isConnected && JSON.stringify(submitted) === JSON.stringify(latest)) afterSubmit?.();
           } catch (error) { stageStatus.textContent = error.message; }
