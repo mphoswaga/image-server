@@ -39,6 +39,7 @@
     #treasureBoard button{aspect-ratio:1;padding:0;background:#fff3c8;font-size:1.15rem}
     #treasureBoard button:disabled{opacity:1;background:#e4eae7}
   </style>
+<link rel="stylesheet" href="/assessment-classroom.css?v=1">
 </head>
 <body class="practical-studio">
 <header class="studio-bar"><a href="/">Lesson<span>Scope</span></a><nav aria-label="Assessment workspace">
@@ -76,31 +77,51 @@
   <button id="openDraftDesk" type="button" hidden>Go to this class draft →</button>
   <section id="learnerPreview" hidden></section>
   <section id="classWorkspace" hidden>
-    <h2>Run a scheduled lesson</h2>
-    <label>Class assessment <select id="lesson"></select></label>
-    <p id="lessonStatus"></p>
-    <label>Working time in minutes <input id="lessonMinutes" type="number" min="5" max="120" value="40"></label>
-    <label id="replacementLabel" hidden>Replacement learners <select id="replacement" multiple size="5"></select></label>
-    <div class="controls">
-      <button id="openLesson" type="button">Open original lesson</button>
-      <button id="resumeLesson" type="button" class="primary" hidden>Resume closed lesson</button>
-      <button id="replacementLesson" type="button">Open replacement lesson</button>
-      <button id="closeLesson" type="button">Close lesson now</button>
-      <a id="learnerLink" hidden>Open learner link</a>
+    <div class="desk-banner">
+      <div><label for="lesson">Class assessment</label><select id="lesson"></select><p id="lessonStatus" role="status"></p></div>
+      <strong id="lessonClockDisplay" hidden></strong>
     </div>
-    <div id="lessonDesk" hidden>
-      <h3>Guide the class</h3>
-      <label>Question <select id="guideTask"></select></label>
-      <div class="controls">
-        <button id="guide" type="button">Sync class to this question</button>
-        <button id="releaseGuide" type="button">Let students work at their own pace</button>
-        <button id="readPrompt" type="button">Read question aloud</button>
-        <button id="readDirections" type="button">Read instructions aloud</button>
+    <div class="desk-body">
+      <div class="desk-session">
+        <label id="lessonDuration">Working time in minutes <input id="lessonMinutes" type="number" min="5" max="120" value="40"></label>
+        <button id="openLesson" type="button">Open original lesson</button>
+        <button id="resumeLesson" type="button" hidden>Resume closed lesson</button>
+        <a id="learnerLink" hidden>Open learner link ↗</a>
+        <button id="closeLesson" type="button">Close lesson now</button>
+        <details id="replacementSettings"><summary>Replacement lesson</summary>
+          <label id="replacementLabel" hidden>Replacement students <select id="replacement" multiple size="4"></select></label>
+          <button id="replacementLesson" type="button">Open replacement lesson</button>
+        </details>
       </div>
-      <p id="guideState"></p><p id="readingStatus"></p>
-      <button id="viewClassMarks" type="button">View class results</button>
-      <div id="classMarks" tabindex="-1"></div>
-      <details><summary id="submissionCount">Live submissions</summary><ul id="learnerProgress"></ul></details>
+      <div id="lessonDesk" class="desk-grid" hidden>
+        <div class="desk-card desk-progress">
+          <div class="desk-heading"><h2>Student progress</h2><span id="deskFreshness"></span></div>
+          <div id="submissionFilter" role="group" aria-label="Show students">
+            <button type="button" data-filter="all" aria-pressed="true"><b>0</b>All students</button>
+            <button type="button" data-filter="pending" aria-pressed="false"><b>0</b>Still to submit</button>
+            <button type="button" data-filter="submitted" aria-pressed="false"><b>0</b>Submitted</button>
+          </div>
+          <progress id="submissionMeter" aria-label="Projects submitted" max="1" value="0"></progress>
+          <div class="desk-tools"><input type="search" id="studentSearch" aria-label="Find a student" placeholder="Find a student"><button id="viewClassMarks" type="button">View class results</button></div>
+          <p id="submissionCount"></p>
+          <ul id="learnerProgress"></ul>
+        </div>
+        <details class="desk-card desk-guide" id="guidePanel">
+          <summary>Guide the class</summary>
+          <p id="guideState" role="status"></p>
+          <label>Question <select id="guideTask"></select></label>
+          <div class="controls">
+            <button id="guide" type="button">Sync class to this question</button>
+            <button id="releaseGuide" type="button">Let students work at their own pace</button>
+          </div>
+          <h3>Read aloud</h3>
+          <div class="controls">
+            <button id="readPrompt" type="button">Read question aloud</button>
+            <button id="readDirections" type="button">Read instructions aloud</button>
+          </div><p id="readingStatus"></p>
+        </details>
+        <div id="classMarks" class="desk-card desk-results" tabindex="-1"></div>
+      </div>
     </div>
   </section>
   <section id="scheduleWorkspace" hidden>
@@ -117,5 +138,5 @@
 <script src="/assessment-data-table.js?v=9"></script>
 <script src="/assessment-narration.js"></script>
 <script src="/practical-task-pager.js?v=3"></script>
-<script src="/activity-templates.js?v=19"></script>
+<script src="/activity-templates.js?v=21"></script>
 </body></html>

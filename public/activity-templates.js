@@ -39,11 +39,17 @@
     const lesson = selectedLesson();
     const active = lesson?.active && lesson.active.endsAt > Date.now();
     $('openLesson').disabled = busy || !lesson || lesson.hasOpened;
+    $('openLesson').hidden = !lesson || lesson.hasOpened;
+    $('closeLesson').hidden = !active;
+    $('lessonDuration').hidden = !lesson || !!active;
+    $('replacementLesson').hidden = !lesson?.hasOpened || !!active || !lesson.eligible.length;
     $('closeLesson').disabled = busy || !active;
     $('resumeLesson').hidden = !lesson?.canResume || !!active;
     $('resumeLesson').disabled = !!busy;
     $('replacementLesson').disabled = busy || !lesson?.hasOpened || !!active || !$('replacement').selectedOptions.length;
     $('replacementLabel').hidden = !lesson?.hasOpened || !!active || !lesson.eligible.length;
+    $('replacementSettings').hidden = $('replacementLabel').hidden;
+    $('classWorkspace').dataset.live = String(!!active);
     $('learnerLink').hidden = !active;
     if (active) $('learnerLink').href = '/assignment/' + encodeURIComponent(lesson.id);
     $('lessonStatus').textContent = !lesson ? 'No class drafts yet.' : active
@@ -71,6 +77,10 @@
     const detail = await request('/api/activity-templates/lessons/' + encodeURIComponent(lesson.id));
     if (serial !== deskRequest || selectedLesson()?.id !== lesson.id) return;
     const first = !desk || desk.id !== lesson.id;
+    if (first || !!desk.active !== !!detail.active) $('guidePanel').open = !!detail.active;
+    if (!!lesson.active !== !!detail.active) { await refreshLessons(lesson.id); return; }
+    lesson.attempts = detail.learners.filter(student => student.started).length;
+    lessonControls();
     desk = {...detail, id: lesson.id};
     if (first) {
       $('guideTask').replaceChildren(...detail.tasks.map((task,i) => new Option((i+1) + '. ' + task.title, task.id)));
@@ -81,23 +91,78 @@
     $('releaseGuide').disabled = !detail.active?.questionId;
     const guided = detail.tasks.findIndex(task => task.id === detail.active?.questionId);
     $('guideState').textContent = !detail.active ? 'Lesson closed.' : guided < 0 ? 'Students are working at their own pace.' : 'Everyone is on question ' + (guided + 1) + '.';
-    $('submissionCount').textContent = 'Live submissions · ' + detail.learners.filter(l => l.submitted).length + ' of ' + detail.learners.length + ' submitted';
-    $('learnerProgress').replaceChildren(...detail.learners.map(learner => {
-      const status = learner.submitted ? 'Submitted' : learner.started
-        ? learner.answered + ' of ' + detail.tasks.length + ' tasks with saved work' : 'Yet to start';
-      const row = element('li', learner.name + ' · ' + status);
-      if (learner.hasDraft && !learner.submitted) {
-        const review = element('button','Review saved work');
-        review.type = 'button';
-        review.setAttribute('aria-label','Review saved work for ' + learner.name);
-        review.onclick = () => reviewLearnerWork(lesson.id,learner.id);
-        row.append(' ',review);
-      }
-      return row;
-    }));
+    $('deskFreshness').textContent = detail.active ? 'Live' : 'Lesson closed';
+    $('deskFreshness').title = 'Updated ' + new Date().toLocaleTimeString();
+    renderProgress();
     if (!reader) reader = new AssessmentReader(lesson.id);
     readingControls();
   }
+  let progressKey, progressFilter = 'all';
+  const searchName = value => value.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/đ/g, 'd');
+  function renderProgress() {
+    if (!desk) return;
+    const {learners, tasks} = desk;
+    const submitted = learners.filter(learner => learner.submitted).length;
+    const title = 'Live submissions · ' + submitted + ' of ' + learners.length + ' submitted';
+    if ($('submissionCount').textContent !== title) $('submissionCount').textContent = title;
+    $('submissionMeter').max = learners.length || 1;
+    $('submissionMeter').value = submitted;
+    const counts = {all: learners.length, submitted, pending: learners.length - submitted};
+    for (const button of $('submissionFilter').querySelectorAll('button')) {
+      button.firstElementChild.textContent = counts[button.dataset.filter];
+      button.setAttribute('aria-pressed', String(progressFilter === button.dataset.filter));
+    }
+    const query = searchName($('studentSearch').value.trim());
+    const visible = learners.filter(learner =>
+      (progressFilter === 'all' || !!learner.submitted === (progressFilter === 'submitted')) &&
+      searchName(learner.name).includes(query));
+    const key = JSON.stringify([desk.id, tasks.length, visible]);
+    if (progressKey === key) return;
+    progressKey = key;
+    const list = $('learnerProgress');
+    const scroll = list.scrollTop;
+    const focus = list.contains(document.activeElement) ? document.activeElement.dataset.studentId : null;
+    list.replaceChildren(...visible.map(learner => {
+      const status = learner.submitted ? 'Submitted' : learner.started
+        ? learner.answered + ' of ' + tasks.length + ' tasks with saved work' : 'Yet to start';
+      const row = element('li');
+      row.dataset.submitted = String(!!learner.submitted);
+      const initials = learner.name.trim().split(/\s+/).slice(-2).map(word => word[0]).join('');
+      const avatar = element('i', initials);
+      avatar.setAttribute('aria-hidden','true');
+      const info = element('div');
+      info.append(element('strong', learner.name), element('span', status));
+      row.append(avatar, info);
+      if (learner.hasDraft && !learner.submitted) {
+        const review = element('button', 'Review saved work');
+        review.type = 'button';
+        review.dataset.studentId = learner.id;
+        review.setAttribute('aria-label', 'Review saved work for ' + learner.name);
+        review.onclick = () => reviewLearnerWork(desk.id, learner.id);
+        row.append(review);
+      }
+      return row;
+    }));
+    if (!visible.length) list.append(element('li', 'No students in this view.'));
+    if (focus) [...list.querySelectorAll('button')].find(button => button.dataset.studentId === focus)?.focus({preventScroll:true});
+    list.scrollTop = scroll;
+  }
+  $('submissionFilter').onclick = event => {
+    const button = event.target.closest('button[data-filter]');
+    if (!button) return;
+    progressFilter = button.dataset.filter;
+    renderProgress();
+  };
+  $('studentSearch').oninput = renderProgress;
+  function updateClock() {
+    const endsAt = selectedLesson()?.active?.endsAt;
+    const seconds = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+    const clock = $('lessonClockDisplay');
+    clock.hidden = !seconds;
+    clock.classList.toggle('ending', seconds > 0 && seconds <= 60);
+    if (seconds) clock.textContent = Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0') + ' left';
+  }
+  setInterval(updateClock, 1000);
   function reviewLearnerWork(lessonId, studentId) {
     return action(async () => {
       const url = '/api/activity-templates/lessons/' + encodeURIComponent(lessonId) + '/work/' + encodeURIComponent(studentId);
@@ -145,6 +210,7 @@
       }
       panel.append(row);
     }
+    panel.focus();
   });
   $('guideTask').onchange = readingControls;
   function guideClass(release) {
@@ -164,6 +230,8 @@
     $('classMarks').replaceChildren();
     const lesson = selectedLesson();
     if (lesson?.id !== timeForLesson) {
+      progressFilter = 'all';
+      $('studentSearch').value = '';
       $('lessonMinutes').value = lesson?.suggestedMinutes || 40;
       timeForLesson = lesson?.id;
     }
@@ -172,6 +240,7 @@
     refreshDesk().catch(error => { $('notice').textContent = error.message; });
     $('replacement').replaceChildren(...(selectedLesson()?.eligible || []).map(student => new Option(student.name, student.id)));
     lessonControls();
+    updateClock();
   }
   async function refreshLessons(id = $('lesson').value) {
     lessons = (await request('/api/activity-templates/lessons')).lessons;
@@ -697,5 +766,5 @@
     for (const roster of rosters) $('roster').add(new Option(roster.name, roster.id));
     await refreshLessons();
   });
-  setInterval(() => { const lesson = selectedLesson(); if (!busy && lesson?.active && !document.hidden) { if (lesson.active.endsAt <= Date.now()) refreshLessons().catch(() => {}); else refreshDesk().catch(() => { $('submissionCount').textContent = 'Live submissions · reconnecting…'; }); } }, 5000);
+  setInterval(() => { const lesson = selectedLesson(); if (!busy && lesson?.active && !document.hidden) { if (lesson.active.endsAt <= Date.now()) refreshLessons().catch(() => {}); else refreshDesk().catch(() => { $('deskFreshness').textContent = 'Reconnecting…'; }); } }, 5000);
 })();
