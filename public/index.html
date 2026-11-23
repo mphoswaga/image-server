@@ -1312,6 +1312,10 @@
     .gb-a { background:#e6f7ec; color:#1a7a45; } .gb-b { background:#eaf6ff; color:#1f6fb0; }
     .gb-c { background:#fff5e6; color:#b26a00; } .gb-d { background:#fdecec; color:#c0392b; }
     .gb-none { color:var(--muted); opacity:.6; }
+    .gb-review-test { background:none;border:0;padding:0;color:var(--primary);font:inherit;text-decoration:underline;text-underline-offset:3px;cursor:pointer; }
+    #marksSubmissionDialog { width:min(900px,calc(100% - 24px));max-height:90vh;overflow:auto;padding:20px;border:1px solid var(--border);border-radius:14px;background:white;color:inherit; }
+    #marksSubmissionDialog::backdrop { background:#172b2866; }
+    .marks-review-heading { display:flex;align-items:start;justify-content:space-between;gap:12px;margin-bottom:16px; }
     .gb-th-type { font-size:10px; font-weight:600; opacity:.7; display:block; text-transform:uppercase; letter-spacing:.3px; }
     .qstat-row { display:flex; align-items:center; gap:10px; padding:8px 0; border-top:1px solid var(--border); font-size:13px; }
     .qstat-bar { flex:1; height:8px; border-radius:5px; background:#eee; overflow:hidden; }
@@ -3564,6 +3568,13 @@
       </div>
       <div id="marksClassBar" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px"></div>
       <div id="marksBody"></div>
+      <dialog id="marksSubmissionDialog" aria-labelledby="marksSubmissionTitle">
+        <div class="marks-review-heading">
+          <h2 id="marksSubmissionTitle"></h2>
+          <form method="dialog"><button type="submit" class="back-btn" autofocus>Close</button></form>
+        </div>
+        <div id="marksSubmissionResults"></div>
+      </dialog>
       <div style="margin-top:28px;padding-top:18px;border-top:1px solid var(--border)"><button id="marksBack" class="back-btn"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg> Back to lesson planner</button></div>
     </section>
 
@@ -6494,9 +6505,16 @@
     // One grade row's markup — shared by both view modes below (by-student
     // shows all of one student's questions; by-question shows all students'
     // answers to one question). Same fields, different grouping.
+    function submittedCodeText(program){
+      const labels={move:'Move',left:'Turn left',right:'Turn right',collect:'Collect'};
+      if(!Array.isArray(program)||!program.length)return '(empty program)';
+      return program.map(block=>block.op==='repeat'
+        ? 'Repeat '+block.count+' × ('+submittedCodeText(block.body)+')'
+        : labels[block.op]||block.op).join(' → ');
+    }
     function gradeRowHTML(q, s, assignId, wrapId, headingText, selectable=false){
       const g=(s.grades||{})[q.id]||{}; const ans=(s.answers||{})[q.id];
-      const ansText=q.kind==='data-table' ? (q.activity?.inputs||[]).map((item,index)=>item.label+': '+(ans?.[index]??'No response')).join(' · ') : q.kind==='codequest' ? (Array.isArray(ans)&&ans.map(block=>({move:'Move',left:'Turn left',right:'Turn right',collect:'Collect'})[block.op]).join(' → ')||'(empty program)') : q.kind==='practical' ? 'Teacher observation' : q.kind==='mcq' ? (q.options&&q.options[ans]!=null?q.options[ans]:'(no answer)') : (ans||'(no answer)');
+      const ansText=q.kind==='data-table' ? (q.activity?.inputs||[]).map((item,index)=>item.label+': '+(ans?.[index]??'No response')).join(' · ') : q.kind==='codequest' ? submittedCodeText(ans) : q.kind==='practical' ? 'Teacher observation' : q.kind==='mcq' ? (q.options&&q.options[ans]!=null?q.options[ans]:'(no answer)') : (ans||'(no answer)');
       if(s.draftOnly&&q.kind!=='practical') return `<div class="grade-row" ${selectable?`data-marking-student="${esc(s.name)} ${esc(s.studentId)}"`:""} style="padding:10px 0;border-top:1px solid var(--border)"><div style="font-size:13px;font-weight:600">${esc(headingText)}</div><div style="font-size:12.5px;color:var(--muted);margin-top:4px">Available after this student submits.</div></div>`;
       const autoMarked=q.kind==='mcq'&&g.source==='auto';
       const confirmed=g.source==='auto'||g.source==='teacher'||g.source==='ai-confirmed';
@@ -8283,6 +8301,21 @@
         renderGradebook(g);
       }catch{ if(rosterId===gbSelected)$('marksBody').innerHTML='<p class="hint">Could not load this class. Choose the class again to retry.</p>'; }
     }
+    $('marksBody').addEventListener('click',event=>{
+      const button=event.target.closest('.gb-review-test');
+      if(!button)return;
+      const dialog=$('marksSubmissionDialog'), wrap=$('marksSubmissionResults');
+      $('marksSubmissionTitle').textContent=button.textContent;
+      // A new container prevents an earlier request from rendering after closing
+      // and reopening the dialog for another assessment.
+      const fresh=wrap.cloneNode(false);
+      wrap.replaceWith(fresh);
+      dialog.showModal();
+      loadAssignmentResults(button.dataset.assignmentId,fresh.id,'student');
+    });
+    $('marksSubmissionResults').parentElement.addEventListener('click',event=>{
+      if(event.target.closest('#marksSubmissionResults'))handleAssignmentPanelClick(event);
+    });
     function renderGradebook(g){
       $('marksBody').classList.remove('show-weights');
       if(!g.assessments.length){ $('marksBody').innerHTML='<div class="empty-state"><p>No recorded assessments for this class yet</p><p style="font-size:13px;color:var(--muted)">Tick “Marked by teacher” on a completed test or project. Games appear here automatically.</p></div>'; return; }
@@ -8293,14 +8326,14 @@
         <div class="gb-stat"><div class="v">${g.students.length}</div><div class="l">Students</div></div>
         <div class="gb-stat"><div class="v">${doneCount}/${g.students.length}</div><div class="l">Students with results</div></div>
       </div>`;
-      const head=`<tr><th class="sticky">Student</th>${g.assessments.map(a=>`<th title="${esc(a.title)}"><label style="display:flex;flex-direction:column;gap:4px;align-items:center"><span class="gb-th-type">${a.kind==='game'?'Game':esc(a.type||'Assessment')}${a.learnerVisible===false?(a.teacherMarked?' · On record, hidden from learners':' · Saved, awaiting teacher confirmation'):''}</span><span>${esc(a.title)}</span><span class="marks-weight-setting" style="font-size:11px;font-weight:700;color:var(--muted)">Weight <input type="number" class="gb-weight-input" data-assessment-id="${esc(a.id)}" value="${Number(a.weight??1)}" min="0" max="10" step="0.25" style="width:58px;padding:3px 5px;border:1px solid var(--border);border-radius:6px;text-align:center;font:inherit"> ${a.excluded?'<em style="color:#b45309;font-style:normal">excluded</em>':''}</span></label></th>`).join('')}<th>Average</th></tr>`;
+      const head=`<tr><th class="sticky">Student</th>${g.assessments.map(a=>`<th title="${esc(a.title)}"><div style="display:flex;flex-direction:column;gap:4px;align-items:center"><span class="gb-th-type">${a.kind==='game'?'Game':esc(a.type||'Assessment')}${a.learnerVisible===false?(a.teacherMarked?' · On record, hidden from learners':' · Saved, awaiting teacher confirmation'):''}</span>${a.kind==='assignment'?`<button type="button" class="gb-review-test" data-assignment-id="${esc(a.id)}">${esc(a.title)}</button>`:`<span>${esc(a.title)}</span>`}<label class="marks-weight-setting" style="font-size:11px;font-weight:700;color:var(--muted)">Weight <input type="number" class="gb-weight-input" data-assessment-id="${esc(a.id)}" value="${Number(a.weight??1)}" min="0" max="10" step="0.25" style="width:58px;padding:3px 5px;border:1px solid var(--border);border-radius:6px;text-align:center;font:inherit"> ${a.excluded?'<em style="color:#b45309;font-style:normal">excluded</em>':''}</label></div></th>`).join('')}<th>Average</th></tr>`;
       const body=g.rows.map(r=>`<tr data-marks-student="${esc(r.name)}">
         <td class="sticky">${esc(r.name)}</td>
         ${g.assessments.map(a=>{ const c=r.cells[a.id]; return `<td>${c?`<span class="gb-cell ${pctClass(c.pct)}">${c.mark}/${c.max}</span>`:'<span class="gb-none">—</span>'}</td>`; }).join('')}
         <td class="avg">${r.average!=null?`<span class="gb-cell ${pctClass(r.average)}">${pctTxt(r.average)}</span>`:'<span class="gb-none">—</span>'}</td>
       </tr>`).join('');
       const foot=`<tr><td class="sticky">Class average</td>${g.assessments.map(a=>`<td>${pctTxt(a.average)}</td>`).join('')}<td>${pctTxt(g.classAverage)}</td></tr>`;
-      $('marksBody').innerHTML=summary+`<div class="marks-sheet-tools"><div><h3>Class mark sheet</h3><p>— means no mark recorded. Scroll across for all assessments.</p></div><label class="marks-search">Find a student<input id="marksStudentSearch" type="search" placeholder="Search by name"></label></div><details class="marks-average-settings"><summary>Average settings</summary><p>Weight 1 counts normally, 0.5 counts half, and 0 excludes an assessment from the weighted average.</p></details><div class="gb-scroll" tabindex="0" role="region" aria-label="Class mark sheet"><table class="gb" style="--marks-sheet-width:${190+132*g.assessments.length+95}px"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div><p id="marksSearchEmpty" class="hint" hidden>No students match this name.</p><details class="marks-overview"><summary><span>Assessment overview</span><small>Compare results and identify areas to revisit</small></summary>${LearningReport.html(LearningReport.gradebook(g))}</details>`;
+      $('marksBody').innerHTML=summary+`<div class="marks-sheet-tools"><div><h3>Class mark sheet</h3><p>— means no mark recorded. Select a test or project title to review submitted work. Scroll across for all assessments.</p></div><label class="marks-search">Find a student<input id="marksStudentSearch" type="search" placeholder="Search by name"></label></div><details class="marks-average-settings"><summary>Average settings</summary><p>Weight 1 counts normally, 0.5 counts half, and 0 excludes an assessment from the weighted average.</p></details><div class="gb-scroll" tabindex="0" role="region" aria-label="Class mark sheet"><table class="gb" style="--marks-sheet-width:${190+132*g.assessments.length+95}px"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div><p id="marksSearchEmpty" class="hint" hidden>No students match this name.</p><details class="marks-overview"><summary><span>Assessment overview</span><small>Compare results and identify areas to revisit</small></summary>${LearningReport.html(LearningReport.gradebook(g))}</details>`;
       $('marksStudentSearch').oninput=event=>{
         const fold=value=>String(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').replace(/Đ/g,'D').toLocaleLowerCase();
         const query=fold(event.target.value.trim());let found=0;

@@ -11,6 +11,21 @@ test('Marks sheet supports search, weighting, class switching and export options
   gbClasses=['Grade 2B1','Grade 2B2','Grade 2B3','Grade 2B4','Grade 2B5','Grade 2B6','Grade 2B7','Grade 3B1','Grade 3B2','Grade 3B3','Grade 3B4','Grade 3B5','Grade 3B6','Grade 3B7'].map((name,i)=>({rosterId:name==='Grade 3B7'?'class3':'sample-class-'+i,name,assignments:3,games:3}));gbSelected='class3';renderClassBar();renderGradebook(mockMarks);
  });
  await expect(page.locator('.gb')).toBeVisible();await expectNoPageOverflow(page);
+ await page.route('**/api/assignment/project/results',route=>route.fulfill({json:{
+  title:'ICT Project Assessment: Presenting Information on Screen',teacherMarked:true,
+  questions:[{id:'code',kind:'codequest',question:'Collect the treasure',marks:5}],
+  submissions:[{name:'Amina Nguyen',studentId:'s0',totalMarks:5,maxMarks:5,
+   answers:{code:[{op:'repeat',count:2,body:[{op:'move'}]},{op:'collect'}]},
+   grades:{code:{source:'auto',marksAwarded:5,criteria:[{label:'Collected the treasure',awarded:5,max:5}]}}}]
+ }}));
+ await page.getByRole('button',{name:'ICT Project Assessment: Presenting Information on Screen',exact:true}).click();
+ const review=page.getByRole('dialog');
+ await expect(review).toContainText('Amina Nguyen');
+ await expect(review).toContainText('Repeat 2 × (Move) → Collect');
+ await expect(review).toContainText('Collected the treasure: 5/5');
+ await review.getByRole('button',{name:'Close',exact:true}).click();
+ await expect(review).toBeHidden();
+ await expect(page.getByRole('columnheader',{name:/Exploring Output Devices/}).getByRole('button')).toHaveCount(0);
  await expect(page.locator('.marks-overview')).not.toHaveAttribute('open','');
  await expect(page.locator('.gb-weight-input').first()).toBeHidden();
  await page.getByRole('searchbox',{name:'Find a student'}).fill('Hana');
@@ -23,7 +38,7 @@ test('Marks sheet supports search, weighting, class switching and export options
  await page.screenshot({path:'/tmp/marks-preview-'+info.project.name+'.png',fullPage:true});
  const sheet=page.locator('.gb-scroll');
  await sheet.evaluate(el=>{el.scrollLeft=el.scrollWidth;el.scrollTop=200;});
- const bounds=await sheet.boundingBox(),name=await page.locator('thead th.sticky').boundingBox(),average=await page.locator('thead th').last().boundingBox();
+ const bounds=await sheet.boundingBox(),name=await sheet.locator('thead th.sticky').boundingBox(),average=await sheet.locator('thead th').last().boundingBox();
  expect(name.x).toBeGreaterThanOrEqual(bounds.x);
  expect(name.x).toBeLessThanOrEqual(bounds.x+2);
  expect(average.x+average.width).toBeLessThanOrEqual(bounds.x+bounds.width+1);
