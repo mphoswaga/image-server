@@ -148,10 +148,12 @@
   <link rel="stylesheet" href="/practical-activities.css?v=11">
   <script src="/assessment-codequest.js?v=17"></script>
   <script src="/practice-spreadsheet.js?v=2"></script>
-  <script src="/practice-films.js?v=1"></script>
-<script src="/assessment-data-stations.js?v=1"></script>
-<script src="/assessment-data-table.js?v=9"></script>
-  <script src="/practical-task-pager.js?v=4"></script>
+  <script src="/data-station-topic.js?v=1"></script>
+<link rel="stylesheet" href="/data-station-studio.css?v=1">
+<script src="/station-tutorial.js?v=1"></script>
+<script src="/assessment-data-stations.js?v=2"></script>
+<script src="/assessment-data-table.js?v=10"></script>
+  <script src="/practical-task-pager.js?v=5"></script>
   <script>
     const $ = id => document.getElementById(id);
     const assignmentId = location.pathname.split('/').pop();
@@ -394,7 +396,8 @@
       $('questions').innerHTML = questions.map((q, i) => {
         const sectionHead=q.sectionTitle&&q.sectionTitle!==previousSection?`<div class="section-head">${esc(q.sectionTitle)}${q.sectionInstructions?`<div class="section-instructions">${esc(q.sectionInstructions)}</div>`:''}</div>`:'';
         if(q.sectionTitle)previousSection=q.sectionTitle;
-        if(['codequest','data-table'].includes(q.kind))return `<div class="q" data-practical-page><div class="section-head">${esc(q.sectionTitle||'Practical task')}${q.sectionInstructions?`<div class="section-instructions">${esc(q.sectionInstructions)}</div>`:''}</div><div class="qtext">${lessonNumber || i+1}. ${esc(q.question)} <span class="marks">(${q.marks} marks)</span></div><div ${q.kind==='codequest'?'data-code-task':'data-table-task'}="${esc(q.id)}"></div></div>`;
+        if(q.kind==='data-table')return `<div class="q" data-practical-page><div data-table-task="${esc(q.id)}"></div></div>`;
+        if(q.kind==='codequest')return `<div class="q" data-practical-page><div class="section-head">${esc(q.sectionTitle||'Practical task')}${q.sectionInstructions?`<div class="section-instructions">${esc(q.sectionInstructions)}</div>`:''}</div><div class="qtext">${lessonNumber || i+1}. ${esc(q.question)} <span class="marks">(${q.marks} marks)</span></div><div data-code-task="${esc(q.id)}"></div></div>`;
         if (q.kind === 'practical') {
           return `${sectionHead}<div class="q">
             <div class="qtext">${activeQuestion ? activeQuestion.number : i + 1}. ${esc(stripMarks(q.question))} <span class="marks">(${q.marks} mark${q.marks !== 1 ? 's' : ''})</span></div>
@@ -447,7 +450,7 @@
         DataStation.mount(node, question.tableActivity, answers[question.id], responses => {
           answers[question.id] = responses;
           practicalChanged(question.id);
-        });
+        }, { key: (recoveryKey || draftKey || assignmentId) + ':' + question.id, title: question.sectionTitle || 'Practical task', directions: question.sectionInstructions, prompt: question.question, marks: question.marks });
       });
       if (questions.every(q => ['codequest','data-table'].includes(q.kind))) {
         if (lessonTask) {
@@ -462,6 +465,7 @@
             practicalView.all = false;
           }
           $('questions').prepend(guidance);
+          StationTutorial.activate($('questions'));
         } else goToTask = practicalTaskPager($('questions'), [...$('questions').querySelectorAll('[data-practical-page]')], practicalView, atEnd => {
           if (practicalSaving) $('submitActions').hidden = !atEnd;
           if (recoveryKey && lessonTotal && questions.every(q => q.kind === 'data-table')) {
@@ -611,7 +615,7 @@
         }
         if (!metaRes.ok) throw new Error(meta.error || 'Could not load this assignment.');
         $('title').textContent = meta.title || 'Assignment';
-        $('instructions').textContent = meta.instructions || '';
+        $('instructions').textContent = DataStation.instructions(meta.instructions);
         assignmentType = meta.type || '';
         draftKey = meta.draftScope ? `${draftKeyBase}_${meta.draftScope}` : null;
         replaceAnswers({});

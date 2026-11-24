@@ -1,29 +1,44 @@
 // These are examples of the controls and skills. Assessed answers come only from the teacher's task.
 window.DataStation = (() => {
-  const examples = {
-    register: ['Make a record', 'Read one card. Type its details across one row. Use the cards in the order shown unless the table gives you an ID to match.', 'For example, if the first card says Mai, type Mai under Name in the first empty row.'],
-    repair: ['Correct a record', 'Read the source card. Open each list in the register and choose the detail that matches.', 'If a card says Room A12 and the register says A21, open the Room list and choose A12.'],
-    types: ['Choose data types', 'Look at each example. Choose one answer for each question below it.', 'A shelf code such as 04 is a label. Think about what the value is used for.'],
-    paper: ['Make a record', 'Match the number on a slip to the number in the table. Fill the empty boxes in that row.', 'Slip 014 belongs in the row marked 014, even if another slip comes first.'],
-    stock: ['Rows, columns and cells', 'Work across each row first. For the restock decision, enter the booth name and the address of the box that proves your choice.', 'If a stall packs 9 kits and uses 2, it has 7 left. A value in column E, row 6 has the address E6.'],
-    files: ['Explore file sizes', 'Read the file names and sizes. Select your file using the circle beside its name. Then answer the questions below.', 'With 9 MB free, saving a 2 MB picture leaves 7 MB.'],
-    order: ['File-size ladder', 'Drag a box to its place, or tap its up or down arrow. Read your list from top to bottom.', 'To move the bottom box up one place, tap its up arrow once.'],
-    storage: ['Explore file sizes', 'Read the sizes on the cards. Put them in the same unit before you add, subtract or compare them.', 'If a folder has 12 MB free, a 3,000 KB recording takes 3 MB and leaves 9 MB.'],
-    tally: ['Turn data into information', 'Count one group at a time. Tap a slip to tick it as you count. Type each total in the matching row.', 'If three slips say Dance, Drawing and Dance, the Dance tally is 2.'],
-    decision: ['Turn data into information', 'Read the rule and compare the votes. Choose the answer you can support with the numbers.', 'If Dance has 6 votes and Drawing has 4, the counts support giving Dance more space.'],
-    table: [null, 'Read the headings. Follow the station instructions and fill in each answer.', 'Follow a row across to read the details for one record.'],
+  const samples = {
+    register: 'Copy one card across one row. If the card says Room D03, type D03 under Room.',
+    types: 'Books borrowed tells us how many books someone has borrowed. It is a number.',
+    paper: 'Find the slip number in the register. Slip 014 goes in row 014, even if another slip comes first.',
+    repair: 'If the card says A12 and the register says A21, open the list and choose A12.',
+    stock: 'If a booth packs 9 kits and uses 2, type 7 under Left.',
+    files: 'Read the file name, then press Choose this file below the preview.',
+    order: 'Tap an up arrow to move that tile one place towards the top.',
+    storage: 'A 3,000 KB photo uses 3 MB. Saving it in a folder with 12 MB free leaves 9 MB.',
+    tally: 'Tick the slips for one booth. Write how many you ticked beside its name.',
+    decision: 'If Books has 2 votes and Dance has 1, the votes support giving Books the extra chair.',
   };
-  function exampleKey(activity) {
-    switch (activity.presentation) {
-      case 'records': return activity.kind === 'data-correct' ? 'repair' : activity.inputs.every(input => input.entry === 'text') ? 'register' : 'table';
-      case 'types': return activity.table[0].includes('Size') ? 'storage' : 'types';
-      case 'worksheet': return activity.table[0].includes('Packed') ? 'stock' : 'table';
-      case 'files': return 'files';
-      case 'order': return 'order';
-      case 'survey': return 'decision';
-      case 'ballots': return activity.inputs.some(input => input.entry === 'text') ? 'tally' : 'decision';
-      default: return activity.table[0][0] === 'Slip' ? 'paper' : 'table';
+  const illustrations = {register:'badge', repair:'badge', types:'tickets', stock:'kits', storage:'folder', order:'folder'};
+  function heading(root, key, context) {
+    const banner = document.createElement('header');
+    banner.className = 'station-brief';
+    const illustration = illustrations[key];
+    if (illustration) {
+      const image = document.createElement('img');
+      image.src = '/assets/data-lab/' + illustration + '.webp';
+      image.alt = '';
+      banner.append(image);
     }
+    const words = document.createElement('div');
+    const title = document.createElement('h3');
+    title.textContent = context.title;
+    words.append(title);
+    if (context.directions) {
+      const directions = document.createElement('p');
+      directions.textContent = context.directions;
+      words.append(directions);
+    }
+    banner.append(words);
+    const task = document.createElement('p');
+    task.className = 'station-prompt';
+    const marks = document.createElement('small');
+    marks.textContent = context.marks + (context.marks === 1 ? ' mark' : ' marks');
+    task.append(document.createTextNode(context.prompt), marks);
+    root.before(banner, task);
   }
   function count(activity, values) {
     return activity.inputs.filter((input, index) => {
@@ -31,44 +46,16 @@ window.DataStation = (() => {
       return value != null && String(value).trim() !== '' && value !== input.initial;
     }).length;
   }
-  function mount(root, activity, saved, onChange) {
-    const key = exampleKey(activity);
-    const [topic, directions, sample] = examples[key];
-    const help = document.createElement('aside');
-    help.className = 'station-guide';
-    const action = document.createElement('strong');
-    action.textContent = 'What to do';
-    const steps = document.createElement('p');
-    steps.textContent = directions;
-    const demo = document.createElement('details');
-    const toggle = document.createElement('summary');
-    toggle.textContent = 'See an example';
-    const words = document.createElement('p');
-    words.textContent = sample;
-    demo.append(toggle, words);
-    if (topic) {
-      const film = practiceFilms[topic];
-      demo.ontoggle = () => {
-        let video = demo.querySelector('video');
-        if (!demo.open) { video?.pause(); return; }
-        if (video) return;
-        video = document.createElement('video');
-        video.controls = video.playsInline = true;
-        video.preload = 'none';
-        video.setAttribute('aria-label', topic + ' practice example');
-        video.poster = film.path + '.jpg';
-        video.src = film.path + '.mp4';
-        const captions = document.createElement('track');
-        captions.kind = 'captions'; captions.srclang = 'en'; captions.label = 'English';
-        captions.src = film.path + '.vtt';
-        video.append(captions);
-        const caption = document.createElement('p');
-        caption.textContent = 'Practice example · ' + film.seconds + ' seconds. Try your own task below.';
-        demo.append(caption, video);
-      };
-    }
-    help.append(action, steps, demo);
+  function instructions(text) {
+    return (text || '').replace('Open “See an example” if you need help.', 'Each station starts with a short video. Tap the robot to watch again.');
+  }
+  function mount(root, activity, saved, onChange, context) {
+    const key = dataStationTopic(activity);
+    const sample = samples[key];
+    if (context) heading(root, key, context);
     const work = document.createElement('div');
+    work.className = 'station-work';
+    root.dataset.station = key;
     const progress = document.createElement('p');
     progress.className = 'station-progress';
     function update(values) {
@@ -79,8 +66,29 @@ window.DataStation = (() => {
         : key === 'repair' ? n + ' of ' + total + ' entries changed' : n + ' of ' + total + ' answers entered';
     }
     root.classList.add('assessment-station');
-    root.append(help, work, progress);
-    AssessmentDataTable.mount(work, activity, saved, values => { update(values); onChange(values); });
+    root.append(work, progress);
+    if (sample && context) StationTutorial.attach(root, {
+      path: '/assets/data-lab/stations/' + key, sample, key: 'station-film:' + context.key, title: context.title || 'Station example',
+    });
+    AssessmentDataTable.mount(work, activity, saved, values => { update(values); onChange(values); }, key);
+    if (key === 'paper') {
+      const source = work.querySelector('.project-data-source');
+      if (source) {
+        const shelf = document.createElement('section');
+        shelf.className = 'station-card-drawer';
+        const art = document.createElement('img');
+        art.src = '/assets/data-lab/library-card-drawer.webp';
+        art.alt = 'A wooden library drawer holds paper borrowing slips in order behind coloured dividers.';
+        const slips = document.createElement('div');
+        const title = source.previousElementSibling;
+        title.textContent = 'Paper database';
+        source.before(shelf);
+        shelf.append(art, slips);
+        slips.append(title, source);
+        const caption = work.querySelector('caption');
+        if (caption) caption.textContent = 'Digital borrowing register';
+      }
+    }
     if (key === 'register' && activity.source.length === activity.table.length - 1) {
       work.classList.add('numbered-records');
       work.querySelectorAll('.project-data-source li').forEach((card, i) => {
@@ -95,6 +103,13 @@ window.DataStation = (() => {
         cards.forEach((card, i) => card.classList.toggle('active-record', row.rowIndex === i + 1));
       });
     }
+    const grid = work.querySelector('.project-data-scroll table');
+    if (grid && ['paper','repair'].includes(key)) {
+      grid.parentElement.classList.add('station-row-cards');
+      for (const row of Array.from(grid.rows).slice(1)) {
+        Array.from(row.cells).forEach((cell, column) => { cell.dataset.heading = activity.table[0][column]; });
+      }
+    }
     if (key === 'tally') {
       for (const slip of work.querySelectorAll('.project-data-source li')) {
         const label = document.createElement('label');
@@ -107,5 +122,5 @@ window.DataStation = (() => {
     }
     update(saved);
   }
-  return {mount, count};
+  return {mount, count, instructions};
 })();

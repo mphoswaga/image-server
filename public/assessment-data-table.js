@@ -1,5 +1,5 @@
 window.AssessmentDataTable = (() => {
-  function mount(root, activity, saved, onChange) {
+  function mount(root, activity, saved, onChange, station) {
     const { table, source, inputs } = activity;
     const responses = Array.isArray(saved) ? [...saved] : inputs.map(input => input.initial ?? null);
     const element = (tag, text) => {
@@ -98,6 +98,12 @@ window.AssessmentDataTable = (() => {
       });
       return control;
     }
+    const fieldExamples = new Map();
+    if (station === 'types') {
+      for (const row of table.slice(1)) {
+        if (inputs.some(input => input.label === row[0]) && !fieldExamples.has(row[0])) fieldExamples.set(row[0], row);
+      }
+    }
     if (activity.presentation) root.classList.add('data-lab', 'lab-' + activity.presentation);
     const writtenRecord = inputs.some(input => input.entry === 'text');
     const ballotDesk = activity.presentation === 'ballots';
@@ -193,6 +199,7 @@ window.AssessmentDataTable = (() => {
       const rows = table.slice(1);
       const largest = Math.max(1, ...rows.map(row => Number(row[1]) || 0));
       for (const row of rows) {
+        if (fieldExamples.get(row[0]) === row) continue;
         const exhibit = element('li');
         if (activity.presentation === 'files') {
           if (!fileQuestion) exhibit.append(filePreview(row[0]));
@@ -207,7 +214,7 @@ window.AssessmentDataTable = (() => {
         }
         list.append(exhibit);
       }
-      if (!fileQuestion) root.append(list);
+      if (!fileQuestion && list.children.length) root.append(list);
     } else root.append(wrap);
     inputs.forEach((input, index) => {
       if (input.row !== undefined) return;
@@ -215,6 +222,13 @@ window.AssessmentDataTable = (() => {
         const group = element('fieldset');
         group.className = 'lab-choices';
         group.append(element('legend', input.label));
+        const example = fieldExamples.get(input.label);
+        if (example) {
+          const ticket = element('div');
+          ticket.className = 'field-example';
+          ticket.append(element('span', table[0][1]), element('strong', example.slice(1).join(' · ')));
+          group.append(ticket);
+        }
         const name = 'lab-' + crypto.randomUUID();
         const filePicker = input === fileQuestion;
         if (filePicker) group.classList.add('file-picker');
@@ -232,6 +246,13 @@ window.AssessmentDataTable = (() => {
             card.className = 'lab-file-card';
             label.append(element('strong', option), element('small', 'Task size · ' + row.slice(1).join(' · ')));
             radio.setAttribute('aria-label', option);
+            if (station === 'files') {
+              const choose = element('span', 'Choose this file');
+              choose.className = 'file-action';
+              const selected = element('span', '✓ Selected');
+              selected.className = 'file-selected';
+              label.append(choose, selected);
+            }
             card.append(filePreview(option), label);
             group.append(card);
             continue;

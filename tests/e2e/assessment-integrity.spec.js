@@ -126,21 +126,21 @@ test('data project saves table work and gives independent criterion marks', asyn
     await learner.goto('/assignment/' + assessmentId);
     await learner.getByLabel('Field for a crew job').selectOption('Role');
     await learner.getByLabel('Field for the number of packs').selectOption('Name');
-    await learner.getByRole('button',{name:'Next task'}).click();
+    await learner.getByRole('button',{name:'Next station'}).click();
     await expect(learner.getByLabel('Correct Mia’s role')).toHaveValue('4');
     await learner.getByLabel('Correct Mia’s role').selectOption('Pilot');
-    await learner.getByRole('button',{name:'Next task'}).click();
+    await learner.getByRole('button',{name:'Next station'}).click();
     await learner.getByLabel('Select the scientist’s record').selectOption('Nia');
     await learner.getByLabel('How many packs does Mia have?').selectOption('4');
-    await learner.getByRole('button',{name:'Next task'}).click();
+    await learner.getByRole('button',{name:'Next station'}).click();
     const saved = learner.waitForResponse(response => response.url().endsWith(api + '/draft') && response.ok());
     await learner.getByLabel('Who has the most packs to share?').selectOption('Leo');
     await saved;
     await learner.reload();
-    await learner.getByRole('button',{name:'Next task'}).click();
+    await learner.getByRole('button',{name:'Next station'}).click();
     await expect(learner.getByLabel('Correct Mia’s role')).toHaveValue('Pilot');
-    await learner.getByRole('button',{name:'Next task'}).click();
-    await learner.getByRole('button',{name:'Next task'}).click();
+    await learner.getByRole('button',{name:'Next station'}).click();
+    await learner.getByRole('button',{name:'Next station'}).click();
     await expect(learner.getByLabel('Who has the most packs to share?')).toHaveValue('Leo');
     const submitted = learner.waitForResponse(response => response.url().endsWith(api + '/submit') && response.ok());
     await learner.locator('#submitBtn').click();
@@ -243,7 +243,7 @@ test('teacher previews, versions and assigns an activity without exposing class 
   await page.getByRole('button',{name:'Preview as learner'}).click();
   const preview = page.locator('#learnerPreview');
   await expect(preview.locator('article:not([hidden])').getByText('Cellphone number: 000 000 0001',{exact:true})).toBeVisible();
-  await preview.getByRole('button',{name:'Next task'}).click();
+  await preview.getByRole('button',{name:'Next station'}).click();
   await expect(preview.getByLabel('Fix Mia’s age')).toHaveValue('Ten');
   const outsider = await browser.newContext();
   try {
@@ -709,7 +709,7 @@ test('a shared device never carries one assessment learner answers into another 
 
 test('School Fair Data Lab saves each station and exports its rubric score to class marks', async ({page, browser}, testInfo) => {
   test.setTimeout(90000);
-  test.skip(!['windows-100','mobile'].includes(testInfo.project.name));
+  test.skip(!['windows-100','mobile','desktop-safari'].includes(testInfo.project.name));
   await signInDisposableTeacher(page, '-fair-' + testInfo.project.name);
   const roster = await createRoster(page, 'School fair class', [{ID:'FAIR-1', Name:'Sample Learner'}]);
   await page.goto('/activity-templates');
@@ -718,7 +718,10 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
   await page.locator('.station-directory button').filter({hasText:'Media desk'}).click();
   const preview = page.locator('#learnerPreview');
   await expect(preview.locator('.station-navigation')).toContainText('Station 6 of 10');
-  await preview.getByRole('button',{name:'Next task'}).click();
+  const ready = view => view.getByRole('button',{name:'I’m ready to try'});
+  await ready(preview).click();
+  await preview.getByRole('button',{name:'Next station'}).click();
+  await ready(preview).click();
   await expect(preview.locator('article:visible')).toContainText('File-size ladder');
   await page.getByRole('combobox',{name:'Class',exact:true}).selectOption(roster.id);
   const assigned = page.waitForResponse(r => r.url().endsWith('/api/activity-templates/assign') && r.ok());
@@ -739,6 +742,11 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
     const template = require('../../activity-templates/data-class-investigation');
     const current = learner.locator('[data-practical-page]:visible');
     await expect(learner.locator('#submitBtn')).toBeHidden();
+    const tutorial = learner.getByRole('dialog');
+    await expect(tutorial).toHaveAccessibleName('Registration desk');
+    await expect.poll(() => tutorial.locator('video').evaluate(v => v.currentTime)).toBeGreaterThan(0);
+    await tutorial.screenshot({path:testInfo.outputPath('Opening video.png')});
+    await ready(learner).click();
     await expect(current.getByRole('textbox')).toHaveCount(12);
     await current.screenshot({path:testInfo.outputPath('Registration desk.png')});
     // A lost save must recover even if the child stops interacting with the page.
@@ -751,27 +759,52 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
     await expect(learner.locator('#saveState')).toHaveText('Your work is saved.');
     await learner.reload();
     await expect(current.getByRole('textbox',{name:'Helper 1 · Age',exact:true})).toHaveValue('9');
-    await current.getByText('See an example',{exact:true}).click();
-    const example = current.locator('.station-guide video');
-    await example.evaluate(v => { v.muted = true; return v.play(); });
-    await expect.poll(() => example.evaluate(v => v.currentTime)).toBeGreaterThan(0);
-    await current.getByText('See an example',{exact:true}).click();
+    await expect(tutorial).toHaveCount(0);
+    await current.getByRole('button',{name:'Click me to watch the video again'}).click();
+    await expect.poll(() => tutorial.locator('video').evaluate(v => v.currentTime)).toBeGreaterThan(0);
+    await learner.keyboard.press('Escape');
+    await expect(current.getByRole('textbox',{name:'Helper 1 · Age',exact:true})).toHaveValue('9');
     await page.reload();
     await page.locator('#classTab').click();
     await page.locator('#lesson').selectOption(assessmentId);
     await expect(page.locator('#stationSaved')).toContainText('1 of 1');
+    await page.getByRole('button',{name:'Preview station video'}).click();
+    await expect(page.getByRole('dialog')).toHaveAccessibleName('Registration desk');
+    await expect(learner.locator('.station-navigation')).toContainText('Station 1 of 10');
+    await page.getByRole('button',{name:'Back to console'}).click();
     await page.locator('#guide').click();
     await expect(learner.locator('.project-task-nav')).toContainText('guiding station 1 of 10');
     await expect(learner.locator('#submitBtn')).toBeHidden();
     await page.locator('#nextStation').click();
     await expect(learner.locator('.project-task-nav')).toContainText('guiding station 2 of 10');
+    await expect(tutorial).toHaveAccessibleName('Field designer');
     await page.locator('#previousStation').click();
     await expect(learner.locator('.project-task-nav')).toContainText('guiding station 1 of 10');
     await page.locator('#releaseGuide').click();
     await expect(learner.locator('.station-navigation')).toContainText('Station 1 of 10');
+    const topics = ['register','types','paper','repair','stock','files','order','storage','tally','decision'];
     for (const [index, section] of template.sections.entries()) {
       const task = section.items[0];
-      if (index) await learner.getByRole('button',{name:'Next task'}).click();
+      if (index) {
+        await learner.getByRole('button',{name:'Next station'}).click();
+        await expect(tutorial).toHaveAccessibleName(section.title);
+        await expect(tutorial.locator('video')).toHaveAttribute('src','/assets/data-lab/stations/'+topics[index]+'.mp4');
+        await expect.poll(() => tutorial.locator('video').evaluate(v => v.currentTime)).toBeGreaterThan(0);
+        await ready(learner).click();
+      }
+      if (index === 1) {
+        const name = current.getByRole('group',{name:'Name',exact:true});
+        await expect(name.locator('.field-example')).toContainText('Mia');
+        await name.getByRole('radio',{name:'Date',exact:true}).check();
+        await expect(name.getByRole('radio',{name:'Date',exact:true})).toBeChecked();
+        await name.getByRole('radio',{name:'Text',exact:true}).check();
+        await expect(name.getByRole('radio',{name:'Date',exact:true})).not.toBeChecked();
+      }
+      if (index === 2 && testInfo.project.name === 'mobile') {
+        const paper = current.locator('.station-row-cards');
+        expect(await paper.evaluate(node => node.scrollWidth <= node.clientWidth+1)).toBeTruthy();
+      }
+      if (index === 1 || index === 2) await current.screenshot({path:testInfo.outputPath(section.title + '.png')});
       await expect(current).toContainText(task.prompt);
       if (task.activity.presentation === 'order') {
         const list = current.locator('ol.unit-order');

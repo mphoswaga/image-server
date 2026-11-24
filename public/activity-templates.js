@@ -70,7 +70,14 @@
     $('guide').textContent = dataDesk ? 'Guide class to selected station' : 'Sync class to this question';
     if (dataDesk) {
       $('stationDirections').textContent = task.title + ' ' + task.instructions;
+      const filmButton = $('previewStationFilm');
+      filmButton.hidden = !task.topic || task.topic === 'table';
+      filmButton.onclick = () => StationTutorial.show($('stationControls'), {
+        path: '/assets/data-lab/stations/' + task.topic, title: task.station, teacher: true,
+      }, () => filmButton.focus());
       $('stationSaved').textContent = task.withWork + ' of ' + desk.learners.length + ' students have recorded work at this station.';
+      $('stationSavedMeter').max = Math.max(1, desk.learners.length);
+      $('stationSavedMeter').value = task.withWork;
       const guided = desk.tasks.findIndex(item => item.id === desk.active?.questionId);
       $('previousStation').disabled = guided <= 0;
       $('nextStation').disabled = guided < 0 || guided >= desk.tasks.length - 1;
@@ -599,6 +606,15 @@
         const section = draft.sections.find(section => section.items.includes(task));
         const button = element('button');
         button.type = 'button';
+        const example = !task.activity.mission && task.activity.table && dataStationTopic(task.activity);
+        if (example && example !== 'table') {
+          const poster = element('img');
+          poster.className = 'station-thumbnail';
+          poster.alt = '';
+          poster.loading = 'lazy';
+          poster.src = '/assets/data-lab/stations/' + example + '.jpg';
+          button.append(poster);
+        }
         button.append(element('strong',section.title), element('span',task.prompt), element('small',task.marks + ' marks · Preview →'));
         button.onclick = () => preview(index);
         stations.append(button);
@@ -737,7 +753,7 @@
     let answers = {};
     try { answers = JSON.parse(sessionStorage.getItem(key)) || {}; } catch {}
     const panel = $('learnerPreview');
-    panel.replaceChildren(element('h2', 'Learner preview'), element('p', assessment.instructions));
+    panel.replaceChildren(element('h2', 'Learner preview'), element('p', DataStation.instructions(assessment.instructions)));
     const deck = element('div');
     const pages = [];
     let goToTask;
@@ -775,14 +791,21 @@
       } catch (error) { status.textContent = error.message; }
       finally { mark.disabled = false; deck.inert = false; }
     };
-    panel.append(deck,status,mark,results);
+    const teacherTools = element('details');
+    const dataPreview = assessment.questions.every(q => q.kind === 'data-table');
+    if (dataPreview) {
+      teacherTools.className = 'station-preview-tools';
+      teacherTools.append(element('summary','Teacher preview marking'),status,mark,results);
+      panel.append(deck,teacherTools);
+    } else panel.append(deck,status,mark,results);
     for (const section of assessment.sections) {
       for (const task of section.items) {
         const page = element('article'); page.className = 'preview-task';
         pages.push(page); deck.append(page);
         const root = element('div');
         const activity = task.activity;
-        page.append(element('h3', section.title), element('p', section.instructions), element('h4', `${task.prompt} · ${task.marks} marks`), root);
+        if (activity.mission) page.append(element('h3', section.title), element('p', section.instructions), element('h4', `${task.prompt} · ${task.marks} marks`));
+        page.append(root);
         if (activity.mission) AssessmentCodeQuest.mount(root, {
           mission: { rocks: [], water: [], ...activity.mission, requireReturn: false },
           starter: activity.starter, checkpoint: activity.rubric.checkpoint?.cell, secondCheckpoint: activity.rubric.secondCheckpoint?.cell, targetBlocks: activity.rubric.improvement?.muchShorter.maxBlocks,
@@ -791,13 +814,13 @@
           if (next < pages.length) goToTask(next);
           else mark.focus();
         });
-        else DataStation.mount(root, { source: [], ...activity }, answers[task.id], value => save(task.id,value));
+        else DataStation.mount(root, { source: [], ...activity }, answers[task.id], value => save(task.id,value), {key: key + ':' + task.id, title:section.title, directions:section.instructions, prompt:task.prompt, marks:task.marks});
       }
     }
     const codePages = assessment.questions.map(q => q.kind === 'codequest');
     const stationNames = assessment.questions.every(q => q.kind === 'data-table')
       ? assessment.questions.map(q => q.sectionTitle || q.question) : [];
-    goToTask = practicalTaskPager(deck,pages,{index},undefined,codePages,stationNames);
+    goToTask = practicalTaskPager(deck,pages,{index},dataPreview ? atEnd => { teacherTools.open = atEnd; } : undefined,codePages,stationNames);
     panel.hidden = false;
     panel.scrollIntoView();
   }); }

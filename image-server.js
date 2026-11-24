@@ -1,6 +1,7 @@
 const lessonLearning = require('./lesson-learning');
 const assessmentCodeQuest = require('./assessment-codequest');
 const assessmentDataTable = require('./assessment-data-table');
+const dataStationTopic = require('./public/data-station-topic');
 const activityTemplates = require('./activity-template-library');
 require('dotenv').config();
 const crypto = require('crypto');
@@ -2550,7 +2551,7 @@ app.get('/api/activity-templates/lessons/:id', requireAuth, (req, res) => {
   });
   res.json({ active: assignments.currentLessonWindow(record),
     tasks: questions.map(q => ({ id: q.id, title: q.question, instructions: q.sectionInstructions || '',
-      ...(q.kind === 'data-table' ? {station: q.sectionTitle || q.question,
+      ...(q.kind === 'data-table' ? {station: q.sectionTitle || q.question, topic: dataStationTopic(q.activity),
         withWork: savedWork.filter(answers => answers[q.id]?.some((value,i) =>
           value != null && value !== '' && value !== q.activity.inputs[i]?.initial)).length} : {}) })),
     learners: record.rosterSnapshot.map(student => {
