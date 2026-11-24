@@ -116,3 +116,31 @@ body.practical-studio{background:#f5f4ef;color:#193635;font-family:system-ui,san
 .project-code-confirm{padding:12px 16px;border:1px solid #a3d3c0;border-radius:10px;background:#eef8f2}
 .project-code-confirm strong{flex:1 1 240px}
 .project-code-confirm button:first-of-type{background:#12614e;color:#fff;border-color:#12614e}
+
+.station-guide{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 1rem;padding:12px 16px;margin:12px 0 18px;border-left:4px solid #247663;border-radius:8px;background:#eaf4ee;color:#193b32}
+.station-guide>strong,.station-guide>p{grid-column:1;margin:0}
+.station-guide p{line-height:1.5}
+.station-guide details{grid-column:2;grid-row:1 / 3;align-self:center}
+.station-guide details[open]{grid-column:1 / -1;grid-row:auto;margin-top:6px}
+.station-guide summary,.station-navigation summary{cursor:pointer;color:#125648;font-weight:700;padding:6px 0}
+.station-guide video{display:block;width:min(100%,580px);border-radius:8px}
+.station-progress{color:#244e45;font-weight:650;padding-top:12px;border-top:1px solid #c8dbd1}
+.assessment-station input:focus-visible,.assessment-station select:focus-visible,.station-navigation :focus-visible{outline:3px solid #176caa;outline-offset:2px}
+.assessment-station tr:focus-within td{background:#fff8df}
+.station-navigation{justify-content:space-between;border-bottom:1px solid #c8dbd1;padding:4px 0 10px}
+.station-navigation>span{font-weight:750;color:#164e43}
+.station-navigation details[open]{width:100%}
+.station-navigation select,.station-navigation button,.station-review button{font:inherit;max-width:100%;padding:8px 12px;border-radius:8px;margin:3px;border:1px solid #a8c5b8}
+.station-review p{line-height:1.5}
+.wrap:has(.data-lab) #saveState,.wrap:has(.data-lab) #lessonClock{color:#fff}
+@media(max-width:640px){.station-guide{display:block}.station-guide summary{margin-top:4px}.station-guide p{margin:.3em 0}}
+.numbered-records .project-data-source li small{font-weight:750;letter-spacing:.04em;color:#21564f}
+.numbered-records .project-data-source li.active-record{outline:2px solid #247663;outline-offset:1px;background:#eff9ed}
+
+.assessment-station .lab-ballots .project-data-source label{display:grid;gap:5px;margin:0;cursor:pointer}
+.assessment-station .lab-ballots .project-data-source input{width:19px;height:19px;accent-color:#146749}
+.assessment-station .lab-ballots li:has(:checked){background:#e6f2e9;border-color:#578668}
+.numbered-records .project-data-source li{position:relative;padding-top:22px;border-radius:12px}
+.numbered-records .project-data-source li::before{content:"";position:absolute;top:7px;left:calc(50% - 10px);width:20px;height:4px;border-radius:3px;background:#a6c6b9}
+#stationDirections{padding:.8em 1em;background:#f1f6f2;border-left:3px solid #368069;line-height:1.5}
+#stationSaved{color:#24564a;font-weight:650}

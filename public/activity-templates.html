@@ -110,10 +110,18 @@
         <details class="desk-card desk-guide" id="guidePanel">
           <summary>Guide the class</summary>
           <p id="guideState" role="status"></p>
-          <label>Question <select id="guideTask"></select></label>
+          <label><span id="guideLabel">Question</span> <select id="guideTask"></select></label>
           <div class="controls">
             <button id="guide" type="button">Sync class to this question</button>
             <button id="releaseGuide" type="button">Let students work at their own pace</button>
+          </div>
+          <div id="stationControls" hidden>
+            <p id="stationDirections"></p>
+            <p id="stationSaved"></p>
+            <div class="controls">
+              <button type="button" id="previousStation">← Guide previous station</button>
+              <button type="button" id="nextStation">Guide next station →</button>
+            </div>
           </div>
           <h3>Read aloud</h3>
           <div class="controls">
@@ -133,11 +141,13 @@
   <p>Unmarked practice · <a href="/practical-practice.html?activity=codequest">CodeQuest skills</a> · <a href="/practical-practice.html?activity=data">Table skills</a></p>
 </main>
 <script src="/codequest-core.js"></script>
-<link rel="stylesheet" href="/practical-activities.css?v=10">
+<link rel="stylesheet" href="/practical-activities.css?v=11">
 <script src="/assessment-codequest.js?v=17"></script>
 <script src="/practice-spreadsheet.js?v=2"></script>
+<script src="/practice-films.js?v=1"></script>
+<script src="/assessment-data-stations.js?v=1"></script>
 <script src="/assessment-data-table.js?v=9"></script>
 <script src="/assessment-narration.js"></script>
-<script src="/practical-task-pager.js?v=3"></script>
-<script src="/activity-templates.js?v=22"></script>
+<script src="/practical-task-pager.js?v=4"></script>
+<script src="/activity-templates.js?v=23"></script>
 </body></html>

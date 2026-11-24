@@ -64,6 +64,17 @@
   function readingControls() {
     const task = desk?.tasks.find(t => t.id === $('guideTask').value);
     if (!task) return;
+    const dataDesk = desk.tasks.every(item => item.station);
+    $('stationControls').hidden = !dataDesk;
+    $('guideLabel').textContent = dataDesk ? 'Choose a station' : 'Question';
+    $('guide').textContent = dataDesk ? 'Guide class to selected station' : 'Sync class to this question';
+    if (dataDesk) {
+      $('stationDirections').textContent = task.title + ' ' + task.instructions;
+      $('stationSaved').textContent = task.withWork + ' of ' + desk.learners.length + ' students have recorded work at this station.';
+      const guided = desk.tasks.findIndex(item => item.id === desk.active?.questionId);
+      $('previousStation').disabled = guided <= 0;
+      $('nextStation').disabled = guided < 0 || guided >= desk.tasks.length - 1;
+    }
     reader.id = selectedLesson().id;
     reader.select(reader.id + '/' + task.id);
     $('readDirections').disabled = !task.instructions;
@@ -86,16 +97,19 @@
     lesson.active = detail.active;
     lesson.attempts = detail.learners.filter(student => student.started).length;
     lessonControls();
+    const moved = desk?.active?.questionId !== detail.active?.questionId;
     desk = {...detail, id: lesson.id};
     if (first) {
-      $('guideTask').replaceChildren(...detail.tasks.map((task,i) => new Option((i+1) + '. ' + task.title, task.id)));
-      if (detail.active?.questionId) $('guideTask').value = detail.active.questionId;
+      $('guideTask').replaceChildren(...detail.tasks.map((task,i) => new Option((i+1) + '. ' + (task.station || task.title), task.id)));
     }
+    if ((first || moved) && detail.active?.questionId) $('guideTask').value = detail.active.questionId;
     $('lessonDesk').hidden = false;
     $('guide').disabled = !detail.active;
     $('releaseGuide').disabled = !detail.active?.questionId;
     const guided = detail.tasks.findIndex(task => task.id === detail.active?.questionId);
-    $('guideState').textContent = !detail.active ? 'Lesson closed.' : guided < 0 ? 'Students are working at their own pace.' : 'Everyone is on question ' + (guided + 1) + '.';
+    $('guideState').textContent = !detail.active ? 'Lesson closed.' : guided < 0 ? 'Students are working at their own pace.' : detail.tasks[guided].station
+      ? 'Class guided to station ' + (guided + 1) + ' of ' + detail.tasks.length + ' · ' + detail.tasks[guided].station
+      : 'Everyone is on question ' + (guided + 1) + '.';
     $('deskFreshness').textContent = detail.active ? 'Live' : 'Lesson closed';
     $('deskFreshness').title = 'Updated ' + new Date().toLocaleTimeString();
     renderProgress();
@@ -219,12 +233,19 @@
     panel.focus();
   });
   $('guideTask').onchange = readingControls;
-  function guideClass(release) {
+  function stepStation(offset) {
+    const index = desk?.tasks.findIndex(task => task.id === desk.active?.questionId);
+    if (index == null || index < 0 || !desk.tasks[index + offset] || busy) return;
+    guideClass(false, desk.tasks[index + offset].id);
+  }
+  $('previousStation').onclick = () => stepStation(-1);
+  $('nextStation').onclick = () => stepStation(1);
+  function guideClass(release, taskId = $('guideTask').value) {
     const lesson = selectedLesson();
     if (!desk?.active || desk.id !== lesson?.id) return;
     action(async () => {
       await request('/api/activity-templates/lessons/' + encodeURIComponent(lesson.id), {
-        action: 'guide', windowId: desk.active.id, questionId: release ? null : $('guideTask').value
+        action: 'guide', windowId: desk.active.id, questionId: release ? null : taskId
       });
       await refreshDesk();
     });
@@ -257,7 +278,7 @@
   }
   async function loadPlan() {
     const {rows} = await request('/api/activity-templates/class-plan');
-    $('planRows').replaceChildren(...rows.map(row => element('li', `${row.className} · ${row.date} ${row.start}–${row.end} · Replacement: ${row.replacement || 'to arrange'} · ${row.prepared && row.preparedVersion !== row.version ? 'Earlier edition prepared. To use the longer project, choose the latest template above and create a separate class draft.' : row.prepared ? 'Draft prepared' : row.matched ? 'Roster matched' : 'Roster not matched'}`)));
+    $('planRows').replaceChildren(...rows.map(row => element('li', `${row.className} · ${row.date} ${row.start}–${row.end} · Replacement: ${row.replacement || 'to arrange'} · ${row.prepared && row.preparedVersion !== row.version ? 'Earlier edition prepared. To use the newest edition, choose the latest template above and create a separate class draft.' : row.prepared ? 'Draft prepared' : row.matched ? 'Roster matched' : 'Roster not matched'}`)));
     $('preparePlan').disabled = rows.some(row => !row.matched) || rows.every(row => row.prepared);
   }
   function manageLesson(command) {
@@ -770,10 +791,13 @@
           if (next < pages.length) goToTask(next);
           else mark.focus();
         });
-        else AssessmentDataTable.mount(root, { source: [], ...activity }, answers[task.id], value => save(task.id,value));
+        else DataStation.mount(root, { source: [], ...activity }, answers[task.id], value => save(task.id,value));
       }
     }
-    goToTask = practicalTaskPager(deck,pages,{index},undefined,pages.map(page => !!page.querySelector('iframe')));
+    const codePages = assessment.questions.map(q => q.kind === 'codequest');
+    const stationNames = assessment.questions.every(q => q.kind === 'data-table')
+      ? assessment.questions.map(q => q.sectionTitle || q.question) : [];
+    goToTask = practicalTaskPager(deck,pages,{index},undefined,codePages,stationNames);
     panel.hidden = false;
     panel.scrollIntoView();
   }); }

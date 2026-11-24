@@ -106,6 +106,12 @@
       <div class="card" id="questions"></div>
       <div class="card" id="submitActions">
         <button class="btn" id="submitBtn" data-ui-i18n>Submit</button>
+        <div id="dataSubmitReview" class="station-review" hidden>
+          <strong>Ready to hand in your project?</strong><p id="dataReviewText"></p>
+          <button type="button" id="reviewStation" hidden></button>
+          <button class="btn" type="button" id="confirmDataSubmit">Yes, submit project</button>
+          <button type="button" id="backToData">Keep working</button>
+        </div>
         <div class="err" id="submitErr"></div>
       </div>
     </div>
@@ -139,11 +145,13 @@
     .project-data-response{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0}
   </style>
   <script src="/codequest-core.js"></script>
-  <link rel="stylesheet" href="/practical-activities.css?v=10">
+  <link rel="stylesheet" href="/practical-activities.css?v=11">
   <script src="/assessment-codequest.js?v=17"></script>
   <script src="/practice-spreadsheet.js?v=2"></script>
-  <script src="/assessment-data-table.js?v=9"></script>
-  <script src="/practical-task-pager.js?v=3"></script>
+  <script src="/practice-films.js?v=1"></script>
+<script src="/assessment-data-stations.js?v=1"></script>
+<script src="/assessment-data-table.js?v=9"></script>
+  <script src="/practical-task-pager.js?v=4"></script>
   <script>
     const $ = id => document.getElementById(id);
     const assignmentId = location.pathname.split('/').pop();
@@ -160,8 +168,9 @@
     let livePollBusy = false;
     let questionSyncActive = false;
     let activeQuestion = null;
-    let lessonTimer, lessonPoll, lessonEnds, lessonTask = null, lessonNumber = null, checkingLesson = false;
+    let lessonTimer, lessonPoll, lessonEnds, lessonTask = null, lessonNumber = null, lessonTotal = null, checkingLesson = false;
     const practicalView = {};
+    let jumpToStation;
     const editedTasks = new Set();
     let practicalSaving = false, practicalWrite = null, retryDelay = 1000;
     const pendingPractical = new Map();
@@ -220,6 +229,10 @@
       serverDraftTimer = setTimeout(() => flushPracticalSave().catch(() => {}), delay);
     }
     function practicalChanged(id) {
+      if (!$('dataSubmitReview').hidden) {
+        $('dataSubmitReview').hidden = true;
+        $('submitBtn').hidden = false;
+      }
       editedTasks.add(id);
       if (!practicalSaving) return saveDraft();
       pendingPractical.set(id, (pendingPractical.get(id) || 0) + 1);
@@ -372,6 +385,9 @@
     }
 
     function renderQuestions() {
+      jumpToStation = null;
+      $('dataSubmitReview').hidden = true;
+      $('submitBtn').hidden = false;
       $('submitActions').hidden = false;
       document.querySelector('.wrap').classList.toggle('codequest-assignment', questions.some(q => q.kind === 'codequest'));
       let previousSection = null;
@@ -428,7 +444,7 @@
       });
       $('questions').querySelectorAll('[data-table-task]').forEach(node => {
         const question = questions.find(q => q.id === node.dataset.tableTask);
-        AssessmentDataTable.mount(node, question.tableActivity, answers[question.id], responses => {
+        DataStation.mount(node, question.tableActivity, answers[question.id], responses => {
           answers[question.id] = responses;
           practicalChanged(question.id);
         });
@@ -438,11 +454,25 @@
           const guidance = document.createElement('p');
           guidance.className = 'project-task-nav';
           guidance.textContent = 'Your teacher is guiding the class · Task ' + lessonNumber;
+          if (questions[0]?.kind === 'data-table') {
+            guidance.textContent = 'Your teacher is guiding station ' + lessonNumber + ' of ' + lessonTotal +
+              '. Your teacher will choose when the class moves on.';
+            $('submitActions').hidden = lessonNumber !== lessonTotal;
+            practicalView.index = lessonNumber - 1;
+            practicalView.all = false;
+          }
           $('questions').prepend(guidance);
         } else goToTask = practicalTaskPager($('questions'), [...$('questions').querySelectorAll('[data-practical-page]')], practicalView, atEnd => {
           if (practicalSaving) $('submitActions').hidden = !atEnd;
-        }, questions.map(q => practicalSaving && q.kind === 'codequest'));
+          if (recoveryKey && lessonTotal && questions.every(q => q.kind === 'data-table')) {
+            try { sessionStorage.setItem(recoveryKey + '_station', questions[practicalView.index].id); } catch {}
+          }
+          $('dataSubmitReview').hidden = true;
+          $('submitBtn').hidden = false;
+        }, questions.map(q => practicalSaving && q.kind === 'codequest'), questions.every(q => q.kind === 'data-table') ? questions.map(q => q.sectionTitle || q.question) : []);
       }
+
+      if (!lessonTask && questions.every(q => q.kind === 'data-table')) jumpToStation = goToTask;
 
       $('questions').querySelectorAll('.opts').forEach(box => {
         box.addEventListener('click', e => {
@@ -622,11 +652,18 @@
         } else {
           practicalSaving = assignmentType === 'assessment' && questions.length > 0 && questions.every(q => ['codequest','data-table'].includes(q.kind));
           lessonNumber = take.lessonClock?.number;
+          lessonTotal = take.lessonClock?.total;
           lessonTask = take.lessonClock?.questionId;
           if (practicalSaving) {
             confirmedCode.clear();
             for (const id of take.confirmedCode || []) confirmedCode.add(id);
             recoverPendingDraft(take);
+            if (recoveryKey && lessonTotal && !lessonTask && questions.every(q => q.kind === 'data-table')) {
+              try {
+                const last = sessionStorage.getItem(recoveryKey + '_station');
+                practicalView.index = Math.max(0, questions.findIndex(q => q.id === last));
+              } catch {}
+            }
             $('submitBtn').textContent = 'Submit project';
           }
           renderQuestions();
@@ -745,7 +782,14 @@
       btn.disabled = false;
     });
 
-    $('submitBtn').addEventListener('click', async () => {
+    $('backToData').onclick = () => {
+      $('dataSubmitReview').hidden = true;
+      $('submitBtn').hidden = false;
+      $('submitBtn').focus();
+    };
+    $('confirmDataSubmit').onclick = () => submitProject(true);
+    $('submitBtn').addEventListener('click', () => submitProject(false));
+    async function submitProject(confirmed) {
       const btn = $('submitBtn'); btn.disabled = true; $('submitErr').textContent = '';
       if (btn.dataset.mode === 'section') {
         btn.innerHTML = '<span class="spinner"></span>Saving…';
@@ -753,7 +797,27 @@
         catch (err) { $('submitErr').textContent = err.message; btn.disabled = false; btn.textContent = 'I’m ready for the next section'; }
         return;
       }
-      if (practicalSaving && !window.confirm('Submit your whole project for marking? You cannot change it after you submit.')) {
+      const dataProject = practicalSaving && questions.every(q => q.kind === 'data-table');
+      if (dataProject && !confirmed) {
+        const unfinished = questions.filter(q => DataStation.count(q.tableActivity, answers[q.id]) < q.tableActivity.inputs.length);
+        const first = unfinished[0];
+        $('reviewStation').hidden = !first || !jumpToStation;
+        if (first && jumpToStation) {
+          $('reviewStation').textContent = 'Go to ' + (first.sectionTitle || first.question);
+          $('reviewStation').onclick = () => jumpToStation(questions.indexOf(first));
+        }
+        const names = unfinished.map(q => q.sectionTitle || q.question).join(', ');
+        $('dataReviewText').textContent = (names ? 'Still to check: ' + names + '. ' : '') +
+          'Submitting sends the whole project to your teacher and finishes your turn.';
+        btn.disabled = false;
+        btn.hidden = true;
+        $('dataSubmitReview').hidden = false;
+        $('backToData').focus();
+        return;
+      }
+      $('dataSubmitReview').hidden = true;
+      btn.hidden = false;
+      if (practicalSaving && !dataProject && !window.confirm('Submit your whole project for marking? You cannot change it after you submit.')) {
         btn.disabled = false;
         return;
       }
@@ -777,7 +841,7 @@
         $('questions').inert = false;
         btn.disabled = false; btn.textContent = practicalSaving ? 'Submit project' : 'Submit';
       }
-    });
+    }
 
     init();
   </script>

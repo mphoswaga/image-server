@@ -1,4 +1,4 @@
-window.practicalTaskPager = (root, panels, view = {}, onPageChange, codePages = []) => {
+window.practicalTaskPager = (root, panels, view = {}, onPageChange, codePages = [], stationNames = []) => {
   if (panels.length < 2) return;
   let index = Math.min(view.index || 0, panels.length - 1);
   const nav = document.createElement('nav');
@@ -13,11 +13,19 @@ window.practicalTaskPager = (root, panels, view = {}, onPageChange, codePages = 
   const toggle = document.createElement('button');
   toggle.type = 'button';
   toggle.onclick = () => { view.all = !view.all; show(); };
-  if (codePages.some(Boolean)) {
+  if (codePages.some(Boolean) || stationNames.length) {
     const options = document.createElement('details');
     const label = document.createElement('summary');
-    label.textContent = 'Task options';
+    label.textContent = stationNames.length ? 'Station menu' : 'Task options';
     options.append(label, previous, toggle);
+    if (stationNames.length) {
+      const select = document.createElement('select');
+      select.setAttribute('aria-label', 'Jump to station');
+      stationNames.forEach((name, i) => select.add(new Option((i + 1) + '. ' + name, i)));
+      select.onchange = () => goTo(Number(select.value));
+      options.append(select);
+      nav.classList.add('station-navigation');
+    }
     nav.append(status, options);
   } else nav.append(previous, status, toggle);
   const footer = document.createElement('div');
@@ -27,10 +35,15 @@ window.practicalTaskPager = (root, panels, view = {}, onPageChange, codePages = 
   root.prepend(nav);
   function show() {
     panels.forEach((panel, position) => panel.hidden = !view.all && index !== position);
+    for (const panel of panels) {
+      if (panel.hidden) panel.querySelectorAll('video').forEach(video => video.pause());
+    }
+    if (stationNames.length) nav.querySelector('select').value = index;
     view.index = index;
     toggle.textContent = view.all ? 'Show one task at a time' : 'Show all tasks';
     previous.hidden = next.hidden = !!view.all;
     status.textContent = view.all ? `All ${panels.length} tasks` : `Task ${index + 1} of ${panels.length}`;
+    if (stationNames.length && !view.all) status.textContent = 'Station ' + (index + 1) + ' of ' + panels.length;
     previous.disabled = index === 0;
     next.disabled = index === panels.length - 1;
     footer.hidden = !!view.all || next.disabled || codePages[index];

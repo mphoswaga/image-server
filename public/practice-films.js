@@ -1,0 +1,15 @@
+window.practiceFilms = {
+    'Make a record': {path:'/assets/data-lab/make-a-record', seconds:38, reading:[0, 2]},
+    'Choose data types': {path:'/assets/practice-films/data-types', seconds:19, reading:[3]},
+    'Correct a record': {path:'/assets/practice-films/correct-record', seconds:18, reading:[4]},
+    'Explore file sizes': {path:'/assets/practice-films/file-sizes', seconds:21, reading:[6, 7]},
+    'File-size ladder': {path:'/assets/practice-films/size-ladder', seconds:19, reading:[6]},
+    'Turn data into information': {path:'/assets/practice-films/information', seconds:19, reading:[8]},
+    'Paper records and digital records': {path:'/assets/practice-films/databases', seconds:17, reading:[5]},
+    'Rows, columns and cells': {path:'/assets/practice-films/rows-columns', seconds:16, reading:[1, 2]},
+    'First steps': {path:'/assets/practice-films/first-steps', seconds:22, reading:[0]},
+    'Around the rock': {path:'/assets/practice-films/around-rock', seconds:23, reading:[1]},
+    'Fix the route': {path:'/assets/practice-films/fix-route', seconds:21, reading:[2]},
+    'Use Repeat': {path:'/assets/practice-films/use-repeat', seconds:20, reading:[3, 4]},
+    'Two lookout flags': {path:'/assets/practice-films/two-flags', seconds:22, reading:[2]},
+  };

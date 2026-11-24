@@ -2541,11 +2541,18 @@ app.get('/api/activity-templates/lessons/:id', requireAuth, (req, res) => {
   const record = assignments.getAssignment(req.params.id);
   if (!record?.lessonPolicy || record.teacherId !== req.userId) return res.sendStatus(404);
   const drafts = new Map(assignments.loadDrafts(record.id).map(d => [assignments.normalizeStudentId(d.studentId), d]));
-  const submitted = new Set(assignments.getSubmissions(record.id).map(s => assignments.normalizeStudentId(s.studentId)));
+  const submitted = new Map(assignments.getSubmissions(record.id).map(s => [assignments.normalizeStudentId(s.studentId), s]));
   const started = new Set(record.lessonPolicy.attempts.map(a => a.studentId));
   const questions = record.content.questions;
+  const savedWork = record.rosterSnapshot.map(student => {
+    const id = assignments.normalizeStudentId(student.id);
+    return (submitted.get(id) || drafts.get(id))?.answers || {};
+  });
   res.json({ active: assignments.currentLessonWindow(record),
-    tasks: questions.map(q => ({ id: q.id, title: q.question, instructions: q.sectionInstructions || '' })),
+    tasks: questions.map(q => ({ id: q.id, title: q.question, instructions: q.sectionInstructions || '',
+      ...(q.kind === 'data-table' ? {station: q.sectionTitle || q.question,
+        withWork: savedWork.filter(answers => answers[q.id]?.some((value,i) =>
+          value != null && value !== '' && value !== q.activity.inputs[i]?.initial)).length} : {}) })),
     learners: record.rosterSnapshot.map(student => {
       const id = assignments.normalizeStudentId(student.id);
       const draft = drafts.get(id);
