@@ -1,7 +1,7 @@
 window.AssessmentDataTable = (() => {
   function mount(root, activity, saved, onChange, station) {
     const { table, source, inputs } = activity;
-    const responses = Array.isArray(saved) ? [...saved] : inputs.map(input => input.initial ?? null);
+    const responses = Array.isArray(saved) ? [...saved] : inputs.map(input => activity.requireEveryAnswer ? null : input.initial ?? null);
     const element = (tag, text) => {
       const node = document.createElement(tag);
       if (text) node.textContent = text;
@@ -89,7 +89,8 @@ window.AssessmentDataTable = (() => {
       }
       const control = element('select');
       control.setAttribute('aria-label', input.label);
-      control.add(new Option('Choose…', ''));
+      const original = activity.requireEveryAnswer && input.initial;
+      control.add(new Option(original ? 'Recorded: ' + original : 'Choose…', ''));
       for (const option of input.options) control.add(new Option(option, option));
       control.value = responses[index] ?? '';
       control.addEventListener('change', () => {
@@ -232,7 +233,7 @@ window.AssessmentDataTable = (() => {
         const name = 'lab-' + crypto.randomUUID();
         const filePicker = input === fileQuestion;
         if (filePicker) group.classList.add('file-picker');
-        const options = filePicker ? files.map(row => row[0]) : input.options;
+        const options = input.options;
         for (const option of options) {
           const label = element('label');
           const radio = element('input');

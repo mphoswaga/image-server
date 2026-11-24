@@ -3797,6 +3797,20 @@ function allowAssessmentLesson(req, res, record, studentId, start = false) {
     return false;
   }
 }
+function isSchoolFairProject(record) {
+  const questions = record.content.questions;
+  return questions.every(question => question.kind === 'data-table') &&
+    questions.some(question => question.id === 'paper-register-task') &&
+    questions.some(question => question.id === 'storage-task');
+}
+
+function guidedLessonQuestions(record, questions, taskId) {
+  const position = record.content.questions.findIndex(question => question.id === taskId);
+  if (!isSchoolFairProject(record) || position < 0) return questions.filter(question => question.id === taskId);
+  const available = new Set(record.content.questions.slice(0, position + 1).map(question => question.id));
+  return questions.filter(question => available.has(question.id));
+}
+
 app.get('/api/assignment/:id/lesson-clock', requireAssignmentAccess, (req, res) => {
   const record = assignments.getAssignment(req.params.id);
   if (!record?.lessonPolicy) return res.status(404).json({ error: 'Lesson not found.' });
@@ -3870,16 +3884,20 @@ app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
     }
   }
   const lessonTask = !already && session && assignments.currentLessonWindow(a)?.questionId;
-  if (lessonTask) visibleQuestions = a.content.questions.filter(q => q.id === lessonTask);
+  if (lessonTask) visibleQuestions = guidedLessonQuestions(a, a.content.questions, lessonTask);
+  const schoolFair = isSchoolFairProject(a);
   const visibleIds = new Set(visibleQuestions.map(q => q.id));
   const draftAnswers = Object.fromEntries(Object.entries(draft && draft.answers || {}).filter(([id]) => visibleIds.has(id)));
   res.json({
-    title: a.title, instructions: a.content.instructions,
+    title: a.title, instructions: a.content.instructions, schoolFair,
     questions: visibleQuestions.map(q => ({
       id: q.id, question: q.question, kind: q.kind, options: q.options || null, marks: q.marks,
       sectionId: q.sectionId || null, sectionTitle: q.sectionTitle || null, sectionInstructions: q.sectionInstructions || '', sectionType: q.sectionType || null,
       ...(q.kind === 'codequest' ? { mission: q.activity.mission, starter: q.activity.starter || [], checkpoint: q.activity.rubric.checkpoint?.cell || null, secondCheckpoint: q.activity.rubric.secondCheckpoint?.cell || null, targetBlocks: q.activity.rubric.improvement?.muchShorter.maxBlocks } : {}),
-      ...(q.kind === 'data-table' ? { tableActivity: assessmentDataTable.learnerView(q.activity) } : {}),
+      ...(q.kind === 'data-table' ? { tableActivity: {
+        ...assessmentDataTable.learnerView(q.activity, schoolFair && session ? studentHandle(a.id, session.studentId) + ':' + q.id : null),
+        ...(schoolFair ? { requireEveryAnswer: true } : {}),
+      } } : {}),
     })),
     delivery, activeSection: activeSection ? { id: activeSection.id, title: activeSection.title, index: delivery.activeSectionIndex, total: a.sections.length } : null,
     draftAnswers, confirmedCode:(draft?.confirmedCode || []).filter(id => visibleIds.has(id)), sectionCompleted, activeQuestion, questionSyncActive,
@@ -3915,7 +3933,7 @@ app.post('/api/assignment/:id/draft', requireAssignmentAccess, (req, res) => {
     ? assignments.learnerQuestionProgress(a, existing, learnerProgress)
     : null;
   const guidedTask = assignments.currentLessonWindow(a)?.questionId;
-  const allowedQuestions = guidedTask ? sectionQuestions.filter(q => q.id === guidedTask) : questionProgress && questionProgress.question
+  const allowedQuestions = guidedTask ? guidedLessonQuestions(a, sectionQuestions, guidedTask) : questionProgress && questionProgress.question
     ? [questionProgress.question]
     : sectionQuestions;
   const safeAnswers = assignments.sanitizeLearnerAnswers(allowedQuestions, req.body && req.body.answers);
@@ -4015,7 +4033,7 @@ app.post('/api/assignment/:id/submit', requireAssignmentAccess, async (req, res)
   const storedDraft = assignments.getDraft(a.id, session.studentId);
   const guidedTask = assignments.currentLessonWindow(a)?.questionId;
   const browserAnswers = guidedTask
-    ? assignments.sanitizeLearnerAnswers(a.content.questions.filter(q => q.id === guidedTask), req.body?.answers)
+    ? assignments.sanitizeLearnerAnswers(guidedLessonQuestions(a, a.content.questions, guidedTask), req.body?.answers)
     : (req.body?.answers || {});
   const submittedAnswers = a.type === 'assessment' && delivery.mode === 'live'
     ? (storedDraft && storedDraft.answers || {})
@@ -4025,6 +4043,11 @@ app.post('/api/assignment/:id/submit', requireAssignmentAccess, async (req, res)
     : submittedAnswers;
   if (a.type === 'assessment') {
     const missing = assignments.incompleteAssessmentAnswers(a.content.questions || [], answers);
+    if (isSchoolFairProject(a)) {
+      for (const question of a.content.questions) {
+        if (!missing.includes(question) && !answers[question.id].every(value => value !== null)) missing.push(question);
+      }
+    }
     if (missing.length) {
       return res.status(400).json({ code: 'assessment_incomplete', error: `Answer every question before submitting (${missing.length} remaining).`, missingQuestionIds: missing.map(question => question.id) });
     }

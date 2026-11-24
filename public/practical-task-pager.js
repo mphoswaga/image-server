@@ -1,9 +1,15 @@
-window.practicalTaskPager = (root, panels, view = {}, onPageChange, codePages = [], stationNames = []) => {
+window.practicalTaskPager = (root, panels, view = {}, onPageChange, codePages = [], stationNames = [], gate = null) => {
   if (panels.length < 2) {
     if (stationNames.length) window.StationTutorial?.activate(panels[0]);
     return;
   }
   let index = Math.min(view.index || 0, panels.length - 1);
+  const furthest = () => {
+    if (!gate) return panels.length - 1;
+    const firstUnanswered = panels.findIndex((_, position) => !gate(position));
+    return firstUnanswered < 0 ? panels.length - 1 : firstUnanswered;
+  };
+  index = Math.min(index, furthest());
   const nav = document.createElement('nav');
   nav.className = 'project-task-nav';
   nav.setAttribute('aria-label', 'Activity tasks');
@@ -41,6 +47,12 @@ window.practicalTaskPager = (root, panels, view = {}, onPageChange, codePages = 
     footer.append(previous);
   }
   footer.append(next);
+  const nudge = document.createElement('p');
+  if (gate) {
+    nudge.className = 'station-progress';
+    nudge.setAttribute('role', 'status');
+    root.append(nudge);
+  }
   root.append(footer);
   root.prepend(nav);
   function show() {
@@ -62,10 +74,26 @@ window.practicalTaskPager = (root, panels, view = {}, onPageChange, codePages = 
     }
     previous.disabled = index === 0;
     next.disabled = index === panels.length - 1;
-    footer.hidden = !!view.all || (!stationNames.length && next.disabled) || codePages[index];
-    onPageChange?.(!!view.all || next.disabled);
+    updateGate();
+    footer.hidden = !!view.all || (!stationNames.length && index === panels.length - 1) || codePages[index];
+    onPageChange?.(!!view.all || index === panels.length - 1);
+  }
+  function updateGate() {
+    if (!gate) return;
+    const lastAllowed = furthest();
+    next.disabled = index === panels.length - 1 || index >= lastAllowed;
+    for (const option of nav.querySelector('select').options) {
+      option.disabled = Number(option.value) > lastAllowed;
+    }
+    const message = gate(index) ? '' : 'Answer every question on this station to continue.';
+    if (nudge.textContent !== message) nudge.textContent = message;
+    nudge.hidden = !message;
   }
   function goTo(position) {
+    if (gate && position > furthest()) {
+      nav.querySelector('select').value = index;
+      return;
+    }
     nav.querySelector('details')?.removeAttribute('open');
     index = position;
     view.all = false;
@@ -77,5 +105,6 @@ window.practicalTaskPager = (root, panels, view = {}, onPageChange, codePages = 
   previous.onclick = () => goTo(index - 1);
   next.onclick = () => goTo(index + 1);
   show();
+  goTo.refreshAvailability = updateGate;
   return goTo;
 };

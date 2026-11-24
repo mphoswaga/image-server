@@ -43,7 +43,7 @@ window.DataStation = (() => {
   function count(activity, values) {
     return activity.inputs.filter((input, index) => {
       const value = values?.[index];
-      return value != null && String(value).trim() !== '' && value !== input.initial;
+      return value != null && String(value).trim() !== '' && (activity.requireEveryAnswer || value !== input.initial);
     }).length;
   }
   function instructions(text) {
@@ -63,7 +63,7 @@ window.DataStation = (() => {
       const total = activity.inputs.length;
       progress.textContent = key === 'order'
         ? (n ? 'Order recorded. You can still move the boxes.' : 'Move a box to record your order.')
-        : key === 'repair' ? n + ' of ' + total + ' entries changed' : n + ' of ' + total + ' answers entered';
+        : key === 'repair' && !activity.requireEveryAnswer ? n + ' of ' + total + ' entries changed' : n + ' of ' + total + ' answers entered';
     }
     root.classList.add('assessment-station');
     root.append(work, progress);

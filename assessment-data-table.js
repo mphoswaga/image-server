@@ -1,3 +1,4 @@
+const { createHash } = require('node:crypto');
 const kinds = ['data-organise', 'data-correct', 'data-find', 'data-interpret'];
 const text = value => {
   if (typeof value !== 'string' || !value.trim() || value.length > 300) throw new Error('Use short, non-empty table labels and values.');
@@ -51,8 +52,24 @@ function normalize(activity, marks) {
     source: (source || []).map(text), inputs: fields };
 }
 
-function learnerView({ kind, table, source, inputs, presentation }) {
-  return { kind, table, source, ...(presentation ? {presentation} : {}), inputs: inputs.map(({ accepted, ...input }) => input) };
+function shuffled(values, seed) {
+  return values.map(value => ({
+    value, rank: createHash('sha256').update(JSON.stringify([seed, value])).digest('hex'),
+  })).sort((a, b) => a.rank.localeCompare(b.rank)).map(item => item.value);
+}
+
+function learnerView({ kind, table, source, inputs, presentation }, seed) {
+  if (seed && presentation === 'order') {
+    const rows = shuffled(table.slice(1), seed);
+    if (rows.every((row, index) => inputs[index].accepted.includes(equivalent(row[0])))) {
+      rows.push(rows.shift());
+    }
+    table = [table[0], ...rows];
+  }
+  return { kind, table, source, ...(presentation ? {presentation} : {}), inputs: inputs.map(({ accepted, ...input }, index) => {
+    if (!seed || !input.options || presentation === 'order') return input;
+    return { ...input, options: shuffled(input.options, [seed, index]) };
+  }) };
 }
 
 function answer(activity, responses) {

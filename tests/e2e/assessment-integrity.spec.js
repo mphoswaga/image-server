@@ -711,7 +711,7 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
   test.setTimeout(90000);
   test.skip(!['windows-100','mobile','desktop-safari'].includes(testInfo.project.name));
   await signInDisposableTeacher(page, '-fair-' + testInfo.project.name);
-  const roster = await createRoster(page, 'School fair class', [{ID:'FAIR-1', Name:'Sample Learner'}]);
+  const roster = await createRoster(page, 'School fair class', [{ID:'FAIR-1', Name:'Sample Learner'}, {ID:'FAIR-2', Name:'Second Learner'}]);
   await page.goto('/activity-templates');
   await page.getByRole('combobox',{name:'Activity',exact:true}).selectOption('starter-data');
   await expect(page.locator('.station-directory button')).toHaveCount(10);
@@ -737,6 +737,15 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
     expect(enter.ok(),await enter.text()).toBeTruthy();
     const take = await (await context.request.get(api + '/take')).json();
     expect(take.questions.flatMap(q => q.tableActivity.inputs).every(input => !('accepted' in input))).toBeTruthy();
+    const other = await browser.newContext();
+    try {
+      const joined = await other.request.post(api + '/enter', {data:{handle:join.students[1].handle,pin:'4826'}});
+      expect(joined.ok()).toBeTruthy();
+      const anotherTake = await (await other.request.get(api + '/take')).json();
+      const options = data => data.questions.flatMap(q => q.tableActivity.inputs.map(input => input.options));
+      expect(options(anotherTake)).not.toEqual(options(take));
+      expect(options(await (await context.request.get(api + '/take')).json())).toEqual(options(take));
+    } finally { await other.close(); }
     const learner = await context.newPage();
     await learner.goto('/assignment/' + assessmentId);
     const template = require('../../activity-templates/data-class-investigation');
@@ -748,6 +757,10 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
     await tutorial.screenshot({path:testInfo.outputPath('Opening video.png')});
     await ready(learner).click();
     await expect(current.getByRole('textbox')).toHaveCount(12);
+    await expect(learner.getByRole('button',{name:'Next station'})).toBeDisabled();
+    await learner.getByText('Station menu',{exact:true}).click();
+    await expect(learner.getByLabel('Jump to station').locator('option[value="1"]')).toBeDisabled();
+    await learner.getByText('Station menu',{exact:true}).click();
     await current.screenshot({path:testInfo.outputPath('Registration desk.png')});
     // A lost save must recover even if the child stops interacting with the page.
     await learner.route('**' + api + '/draft', route => route.abort('connectionreset'));
@@ -767,19 +780,29 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
     await page.reload();
     await page.locator('#classTab').click();
     await page.locator('#lesson').selectOption(assessmentId);
-    await expect(page.locator('#stationSaved')).toContainText('1 of 1');
+    await expect(page.locator('#stationSaved')).toContainText('1 of 2');
     await page.getByRole('button',{name:'Preview station video'}).click();
     await expect(page.getByRole('dialog')).toHaveAccessibleName('Registration desk');
     await expect(learner.locator('.station-navigation')).toContainText('Station 1 of 10');
     await page.getByRole('button',{name:'Back to console'}).click();
     await page.locator('#guide').click();
-    await expect(learner.locator('.project-task-nav')).toContainText('guiding station 1 of 10');
+    await expect(learner.locator('#questions')).toContainText('opened 1 of 10 stations');
     await expect(learner.locator('#submitBtn')).toBeHidden();
     await page.locator('#nextStation').click();
-    await expect(learner.locator('.project-task-nav')).toContainText('guiding station 2 of 10');
-    await expect(tutorial).toHaveAccessibleName('Field designer');
+    await expect(learner.locator('#questions')).toContainText('opened 2 of 10 stations');
+    await expect(current).toContainText('Registration desk');
+    await expect(learner.getByRole('button',{name:'Next station'})).toBeDisabled();
+    const registration = template.sections[0].items[0];
+    for (const input of registration.activity.inputs) {
+      await current.getByRole('textbox',{name:input.label,exact:true}).fill(input.accepted[0]);
+    }
+    await expect(learner.getByRole('button',{name:'Next station'})).toBeEnabled();
+    await expect.poll(async () => {
+      const data = await (await context.request.get(api + '/take')).json();
+      return data.draftAnswers?.[registration.id]?.every(Boolean);
+    }).toBe(true);
     await page.locator('#previousStation').click();
-    await expect(learner.locator('.project-task-nav')).toContainText('guiding station 1 of 10');
+    await expect(learner.locator('#questions')).toContainText('opened 1 of 10 stations');
     await page.locator('#releaseGuide').click();
     await expect(learner.locator('.station-navigation')).toContainText('Station 1 of 10');
     const topics = ['register','types','paper','repair','stock','files','order','storage','tally','decision'];
@@ -810,6 +833,7 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
         const list = current.locator('ol.unit-order');
         const handles = list.locator('.unit-handle');
         await list.scrollIntoViewIfNeeded();
+        const moving = await handles.nth(2).innerText();
         const start = await handles.nth(2).boundingBox();
         const end = await handles.first().boundingBox();
         const x = start.x + 12, y1 = start.y + start.height / 2, y2 = end.y + end.height / 2;
@@ -825,7 +849,7 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
           await learner.mouse.move(x,y2,{steps:8});
           await learner.mouse.up();
         }
-        await expect(handles.first()).toHaveText('Byte (B)');
+        await expect(handles.first()).toHaveText(moving);
         for (const [position, field] of task.activity.inputs.entries()) {
           const unit = field.accepted[0];
           let index = (await handles.allTextContents()).indexOf(unit);
@@ -884,12 +908,18 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
     await learner.getByText('Station menu',{exact:true}).click();
     await learner.getByLabel('Jump to station').selectOption(String(template.sections.length-1));
     await expect(current.getByRole('radio',{name:'The visitor did not choose a booth.'})).toBeChecked();
+    const incomplete = await context.request.post(api + '/submit',{data:{answers:{'desk-task':Array(12).fill(null)}}});
+    expect(incomplete.status()).toBe(400);
+    expect((await incomplete.json()).missingQuestionIds).toContain('desk-task');
     const submitted = learner.waitForResponse(r => r.url().endsWith(api+'/submit') && r.ok());
     await learner.locator('#submitBtn').click();
     await learner.getByRole('button',{name:'Keep working'}).click();
     await learner.locator('#submitBtn').click();
     await learner.getByRole('button',{name:'Yes, submit project'}).click();
     await submitted;
+    await expect(learner).toHaveURL(/practical-practice\.html\?activity=codequest/);
+    await expect(learner.getByRole('heading',{name:/CodeQuest practice/})).toBeVisible();
+    await expect(learner.locator('.practice-card:visible').frameLocator('iframe').getByRole('button',{name:'Test my code'})).toBeVisible();
     const results = await (await page.request.get(api+'/results')).json();
     const deductions = testInfo.project.name === 'mobile' ? {'desk-task':1,'order-units':2} : {};
     const missed = Object.values(deductions).reduce((sum, n) => sum + n, 0);

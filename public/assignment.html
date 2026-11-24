@@ -149,11 +149,11 @@
   <script src="/assessment-codequest.js?v=17"></script>
   <script src="/practice-spreadsheet.js?v=2"></script>
   <script src="/data-station-topic.js?v=1"></script>
-<link rel="stylesheet" href="/data-station-studio.css?v=1">
+<link rel="stylesheet" href="/data-station-studio.css?v=2">
 <script src="/station-tutorial.js?v=1"></script>
-<script src="/assessment-data-stations.js?v=2"></script>
-<script src="/assessment-data-table.js?v=10"></script>
-  <script src="/practical-task-pager.js?v=5"></script>
+<script src="/assessment-data-stations.js?v=3"></script>
+<script src="/assessment-data-table.js?v=11"></script>
+  <script src="/practical-task-pager.js?v=6"></script>
   <script>
     const $ = id => document.getElementById(id);
     const assignmentId = location.pathname.split('/').pop();
@@ -170,6 +170,8 @@
     let livePollBusy = false;
     let questionSyncActive = false;
     let activeQuestion = null;
+    let schoolFair = false;
+    const codeQuestPlay = '/practical-practice.html?activity=codequest';
     let lessonTimer, lessonPoll, lessonEnds, lessonTask = null, lessonNumber = null, lessonTotal = null, checkingLesson = false;
     const practicalView = {};
     let jumpToStation;
@@ -246,7 +248,9 @@
       while (practicalWrite) await practicalWrite;
       if (!practicalSaving || !pendingPractical.size) return;
       clearTimeout(serverDraftTimer);
-      const batch = [...pendingPractical].filter(([id]) => !lessonTask || lessonTask === id);
+      const available = new Set(questions.map(question => question.id));
+      const batch = [...pendingPractical].filter(([id]) => !lessonTask ||
+        (schoolFair ? available.has(id) : lessonTask === id));
       if (!batch.length) {
         saveStatus('A previous task is waiting to save. Keep this page open.');
         return;
@@ -326,6 +330,7 @@
           lessonTask = take.lessonClock.questionId;
           lessonNumber = take.lessonClock.number;
           questions = take.questions;
+          if (schoolFair && lessonTask) practicalView.index = lessonNumber - 1;
           for (const {id} of questions) {
             if (pendingPractical.has(id) || (!practicalSaving && editedTasks.has(id))) continue;
             acknowledged[id] = take.draftAnswers[id];
@@ -384,6 +389,18 @@
     function replaceAnswers(next) {
       for (const id of Object.keys(answers)) delete answers[id];
       Object.assign(answers, next && typeof next === 'object' ? next : {});
+    }
+
+    function stationAnswered(position) {
+      const question = questions[position];
+      return DataStation.count(question.tableActivity, answers[question.id]) === question.tableActivity.inputs.length;
+    }
+
+    function updateSchoolFairSubmit() {
+      if (!schoolFair) return;
+      $('submitActions').hidden = (lessonTotal && questions.length < lessonTotal) ||
+        practicalView.index !== questions.length - 1;
+      $('submitBtn').disabled = !questions.every((_, position) => stationAnswered(position));
     }
 
     function renderQuestions() {
@@ -450,10 +467,18 @@
         DataStation.mount(node, question.tableActivity, answers[question.id], responses => {
           answers[question.id] = responses;
           practicalChanged(question.id);
+          goToTask?.refreshAvailability();
+          updateSchoolFairSubmit();
         }, { key: (recoveryKey || draftKey || assignmentId) + ':' + question.id, title: question.sectionTitle || 'Practical task', directions: question.sectionInstructions, prompt: question.question, marks: question.marks });
       });
+      if (schoolFair && lessonTask) {
+        const guidance = document.createElement('p');
+        guidance.textContent = 'Your teacher has opened ' + lessonNumber + ' of ' + lessonTotal + ' stations.';
+        guidance.className = 'station-progress';
+        $('questions').prepend(guidance);
+      }
       if (questions.every(q => ['codequest','data-table'].includes(q.kind))) {
-        if (lessonTask) {
+        if (lessonTask && !schoolFair) {
           const guidance = document.createElement('p');
           guidance.className = 'project-task-nav';
           guidance.textContent = 'Your teacher is guiding the class · Task ' + lessonNumber;
@@ -468,15 +493,17 @@
           StationTutorial.activate($('questions'));
         } else goToTask = practicalTaskPager($('questions'), [...$('questions').querySelectorAll('[data-practical-page]')], practicalView, atEnd => {
           if (practicalSaving) $('submitActions').hidden = !atEnd;
+          updateSchoolFairSubmit();
           if (recoveryKey && lessonTotal && questions.every(q => q.kind === 'data-table')) {
             try { sessionStorage.setItem(recoveryKey + '_station', questions[practicalView.index].id); } catch {}
           }
           $('dataSubmitReview').hidden = true;
           $('submitBtn').hidden = false;
-        }, questions.map(q => practicalSaving && q.kind === 'codequest'), questions.every(q => q.kind === 'data-table') ? questions.map(q => q.sectionTitle || q.question) : []);
+        }, questions.map(q => practicalSaving && q.kind === 'codequest'), questions.every(q => q.kind === 'data-table') ? questions.map(q => q.sectionTitle || q.question) : [], schoolFair ? stationAnswered : null);
       }
 
-      if (!lessonTask && questions.every(q => q.kind === 'data-table')) jumpToStation = goToTask;
+      if ((schoolFair || !lessonTask) && questions.every(q => q.kind === 'data-table')) jumpToStation = goToTask;
+      updateSchoolFairSubmit();
 
       $('questions').querySelectorAll('.opts').forEach(box => {
         box.addEventListener('click', e => {
@@ -655,9 +682,11 @@
           livePollTimer = setInterval(refreshLiveTake, 2500);
         } else {
           practicalSaving = assignmentType === 'assessment' && questions.length > 0 && questions.every(q => ['codequest','data-table'].includes(q.kind));
+          schoolFair = !!take.schoolFair;
           lessonNumber = take.lessonClock?.number;
           lessonTotal = take.lessonClock?.total;
           lessonTask = take.lessonClock?.questionId;
+          if (schoolFair && lessonTask) practicalView.index = lessonNumber - 1;
           if (practicalSaving) {
             confirmedCode.clear();
             for (const id of take.confirmedCode || []) confirmedCode.add(id);
@@ -802,6 +831,12 @@
         return;
       }
       const dataProject = practicalSaving && questions.every(q => q.kind === 'data-table');
+      if (schoolFair && (!questions.every((_, position) => stationAnswered(position)) ||
+          (lessonTotal && questions.length < lessonTotal))) {
+        $('submitErr').textContent = 'Answer every question before submitting.';
+        updateSchoolFairSubmit();
+        return;
+      }
       if (dataProject && !confirmed) {
         const unfinished = questions.filter(q => DataStation.count(q.tableActivity, answers[q.id]) < q.tableActivity.inputs.length);
         const first = unfinished[0];
@@ -835,9 +870,10 @@
           body: JSON.stringify({ answers }),
         });
         const d = await r.json();
-        if (!r.ok) throw new Error(d.error);
+        if (!r.ok && !(schoolFair && d.code === 'assessment_already_submitted')) throw new Error(d.error);
         clearDraft();
         if (recoveryKey) { try { sessionStorage.removeItem(recoveryKey); } catch {} }
+        if (schoolFair) { location.href = codeQuestPlay; return; }
         if (lessonTask) { await init(); return; }
         renderResults(d, answers);
       } catch (err) {
