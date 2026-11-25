@@ -2462,7 +2462,7 @@ app.post('/api/activity-templates/preview', requireAuth, (req, res) => {
     const assessment = assignments.normalizeAssessment(req.body?.assessment);
     if (assessment.questions.some(question => !['codequest','data-table'].includes(question.kind))) throw new Error('Choose practical activity tasks.');
     const previewKey = crypto.createHash('sha256').update(JSON.stringify([req.userId,assessment])).digest('hex');
-    res.json({assessment,previewKey});
+    res.json({assessment,previewKey,schoolFair:isSchoolFairProject(assessment.questions)});
   } catch (error) { res.status(400).json({error:error.message}); }
 });
 app.post('/api/activity-templates/preview-results', requireAuth, async (req, res) => {
@@ -2470,7 +2470,10 @@ app.post('/api/activity-templates/preview-results', requireAuth, async (req, res
     const {questions} = assignments.normalizeAssessment(req.body?.assessment);
     if (questions.some(q => !['codequest','data-table'].includes(q.kind))) throw new Error('Choose practical activity tasks.');
     const answers = assignments.sanitizeLearnerAnswers(questions,req.body.answers);
-    const unanswered = assignments.incompleteAssessmentAnswers(questions,answers).map(q => q.id);
+    const unanswered = incompletePracticalAnswers(questions, answers).map(q => q.id);
+    if (isSchoolFairProject(questions) && unanswered.length) {
+      return res.status(400).json({error:'Answer every question before submitting.', missingQuestionIds:unanswered});
+    }
     for (const q of questions) {
       if (unanswered.includes(q.id)) answers[q.id] = q.kind === 'codequest' ? [] : q.activity.inputs.map(() => null);
     }
@@ -3797,16 +3800,23 @@ function allowAssessmentLesson(req, res, record, studentId, start = false) {
     return false;
   }
 }
-function isSchoolFairProject(record) {
-  const questions = record.content.questions;
+function isSchoolFairProject(questions) {
   return questions.every(question => question.kind === 'data-table') &&
     questions.some(question => question.id === 'paper-register-task') &&
     questions.some(question => question.id === 'storage-task');
 }
 
+function incompletePracticalAnswers(questions, answers) {
+  if (!isSchoolFairProject(questions)) return assignments.incompleteAssessmentAnswers(questions, answers);
+  return questions.filter(question => {
+    const values = answers[question.id];
+    return !Array.isArray(values) || values.some(value => value === null);
+  });
+}
+
 function guidedLessonQuestions(record, questions, taskId) {
   const position = record.content.questions.findIndex(question => question.id === taskId);
-  if (!isSchoolFairProject(record) || position < 0) return questions.filter(question => question.id === taskId);
+  if (!isSchoolFairProject(record.content.questions) || position < 0) return questions.filter(question => question.id === taskId);
   const available = new Set(record.content.questions.slice(0, position + 1).map(question => question.id));
   return questions.filter(question => available.has(question.id));
 }
@@ -3885,7 +3895,7 @@ app.get('/api/assignment/:id/take', requireAssignmentAccess, (req, res) => {
   }
   const lessonTask = !already && session && assignments.currentLessonWindow(a)?.questionId;
   if (lessonTask) visibleQuestions = guidedLessonQuestions(a, a.content.questions, lessonTask);
-  const schoolFair = isSchoolFairProject(a);
+  const schoolFair = isSchoolFairProject(a.content.questions);
   const visibleIds = new Set(visibleQuestions.map(q => q.id));
   const draftAnswers = Object.fromEntries(Object.entries(draft && draft.answers || {}).filter(([id]) => visibleIds.has(id)));
   res.json({
@@ -4042,12 +4052,7 @@ app.post('/api/assignment/:id/submit', requireAssignmentAccess, async (req, res)
     ? assignments.sanitizeLearnerAnswers(a.content.questions || [], submittedAnswers)
     : submittedAnswers;
   if (a.type === 'assessment') {
-    const missing = assignments.incompleteAssessmentAnswers(a.content.questions || [], answers);
-    if (isSchoolFairProject(a)) {
-      for (const question of a.content.questions) {
-        if (!missing.includes(question) && !answers[question.id].every(value => value !== null)) missing.push(question);
-      }
-    }
+    const missing = incompletePracticalAnswers(a.content.questions || [], answers);
     if (missing.length) {
       return res.status(400).json({ code: 'assessment_incomplete', error: `Answer every question before submitting (${missing.length} remaining).`, missingQuestionIds: missing.map(question => question.id) });
     }

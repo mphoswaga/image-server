@@ -717,12 +717,42 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
   await expect(page.locator('.station-directory button')).toHaveCount(10);
   await page.locator('.station-directory button').filter({hasText:'Media desk'}).click();
   const preview = page.locator('#learnerPreview');
-  await expect(preview.locator('.station-navigation')).toContainText('Station 6 of 10');
+  await expect(preview.locator('.station-navigation')).toContainText('Station 1 of 10');
   const ready = view => view.getByRole('button',{name:'I’m ready to try'});
   await ready(preview).click();
-  await preview.getByRole('button',{name:'Next station'}).click();
+  const nextPreview = preview.getByRole('button',{name:'Next station'});
+  await expect(nextPreview).toBeDisabled();
+  await preview.getByText('Station menu',{exact:true}).click();
+  await expect(preview.getByLabel('Jump to station').locator('option[value="5"]')).toBeDisabled();
+  await preview.getByText('Station menu',{exact:true}).click();
+  const previewFields = preview.locator('article:visible').getByRole('textbox');
+  await expect(previewFields).toHaveCount(12);
+  for (const field of (await previewFields.all()).slice(0,-1)) await field.fill('example');
+  await expect(nextPreview).toBeDisabled();
+  await previewFields.last().fill('   ');
+  await expect(nextPreview).toBeDisabled();
+  await previewFields.last().fill('example');
+  await nextPreview.click();
   await ready(preview).click();
-  await expect(preview.locator('article:visible')).toContainText('File-size ladder');
+  await expect(preview.locator('article:visible')).toContainText('Field designer');
+
+  const template = require('../../activity-templates/data-class-investigation');
+  const previewAnswers = Object.fromEntries(template.sections.flatMap(section => section.items).map(task =>
+    [task.id, task.activity.inputs.map(input => input.accepted[0])]));
+  previewAnswers['decision-task'][3] = null;
+  await page.evaluate(answers => {
+    const key = Object.keys(sessionStorage).find(name => name.startsWith('lesson-practical-preview-'));
+    sessionStorage.setItem(key, JSON.stringify(answers));
+  }, previewAnswers);
+  await page.locator('.station-directory button').filter({hasText:'Advise the organisers'}).click();
+  await ready(preview).click();
+  const markPreview = preview.getByRole('button',{name:'Submit preview and see marks'});
+  await markPreview.click();
+  const finalPreview = preview.locator('article:visible');
+  await expect(finalPreview.getByRole('status')).toContainText('Fill in every answer');
+  await finalPreview.getByRole('radio',{name:'The visitor did not choose a booth.'}).check();
+  await markPreview.click();
+  await expect(preview.getByRole('heading',{name:'Preview result · 50 / 50'})).toBeVisible();
   await page.getByRole('combobox',{name:'Class',exact:true}).selectOption(roster.id);
   const assigned = page.waitForResponse(r => r.url().endsWith('/api/activity-templates/assign') && r.ok());
   await page.getByRole('button',{name:'Create class draft'}).click();
@@ -748,7 +778,6 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
     } finally { await other.close(); }
     const learner = await context.newPage();
     await learner.goto('/assignment/' + assessmentId);
-    const template = require('../../activity-templates/data-class-investigation');
     const current = learner.locator('[data-practical-page]:visible');
     await expect(learner.locator('#submitBtn')).toBeHidden();
     const tutorial = learner.getByRole('dialog');

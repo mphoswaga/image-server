@@ -12,7 +12,11 @@
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     } : {});
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Could not complete that action.');
+    if (!response.ok) {
+      const error = new Error(data.error || 'Could not complete that action.');
+      error.missingQuestionIds = data.missingQuestionIds;
+      throw error;
+    }
     return data;
   }
   function showWorkspace(classroom) {
@@ -748,7 +752,7 @@
   $('preview').onclick = () => preview(0);
   function preview(index) { return action(async () => {
     const snapshot = structuredClone(draft);
-    const {assessment,previewKey} = await request('/api/activity-templates/preview', {assessment:snapshot});
+    const {assessment,previewKey,schoolFair} = await request('/api/activity-templates/preview', {assessment:snapshot});
     const key = 'lesson-practical-preview-' + previewKey;
     let answers = {};
     try { answers = JSON.parse(sessionStorage.getItem(key)) || {}; } catch {}
@@ -759,12 +763,27 @@
     let goToTask;
     const status = element('p');
     status.setAttribute('role','status');
+    const stationAnswered = position => {
+      const question = assessment.questions[position];
+      const activity = {...question.activity, requireEveryAnswer:true};
+      return DataStation.count(activity, answers[question.id]) === activity.inputs.length;
+    };
+    let reviewing = false;
+    const reviewNotice = element('p', 'Fill in every answer on this station, then choose Submit preview and see marks.');
+    reviewNotice.className = 'practical-note';
+    reviewNotice.setAttribute('role', 'status');
+    function returnToStation(position) {
+      reviewing = true;
+      goToTask(position);
+      pages[position].prepend(reviewNotice);
+    }
     status.textContent = Object.keys(answers).length ? 'Preview answers restored in this tab.' : 'Try a task, then submit the preview to see its marks.';
     const results = element('section');
     const mark = element('button','Submit preview and see marks');
     mark.type = 'button';
     const save = (id,value) => {
       answers[id] = value;
+      goToTask?.refreshAvailability();
       results.replaceChildren();
       try {
         sessionStorage.setItem(key,JSON.stringify(answers));
@@ -772,6 +791,10 @@
       } catch { status.textContent = 'Keep this tab open. Browser storage is unavailable.'; }
     };
     mark.onclick = async () => {
+      if (schoolFair) {
+        const unfinished = assessment.questions.findIndex((_, position) => !stationAnswered(position));
+        if (unfinished >= 0) { returnToStation(unfinished); return; }
+      }
       mark.disabled = true;
       deck.inert = true;
       try {
@@ -788,8 +811,13 @@
         results.tabIndex = -1;
         results.focus();
         results.scrollIntoView({block:'start'});
-      } catch (error) { status.textContent = error.message; }
-      finally { mark.disabled = false; deck.inert = false; }
+      } catch (error) {
+        const unfinished = assessment.questions.findIndex(q => error.missingQuestionIds?.includes(q.id));
+        if (schoolFair && unfinished >= 0) {
+          deck.inert = false;
+          returnToStation(unfinished);
+        } else status.textContent = error.message;
+      } finally { mark.disabled = false; deck.inert = false; }
     };
     const teacherTools = element('details');
     const dataPreview = assessment.questions.every(q => q.kind === 'data-table');
@@ -814,13 +842,14 @@
           if (next < pages.length) goToTask(next);
           else mark.focus();
         });
-        else DataStation.mount(root, { source: [], ...activity }, answers[task.id], value => save(task.id,value), {key: key + ':' + task.id, title:section.title, directions:section.instructions, prompt:task.prompt, marks:task.marks});
+        else DataStation.mount(root, { source: [], ...activity, requireEveryAnswer: schoolFair }, answers[task.id], value => save(task.id,value), {key: key + ':' + task.id, title:section.title, directions:section.instructions, prompt:task.prompt, marks:task.marks});
       }
     }
     const codePages = assessment.questions.map(q => q.kind === 'codequest');
     const stationNames = assessment.questions.every(q => q.kind === 'data-table')
       ? assessment.questions.map(q => q.sectionTitle || q.question) : [];
-    goToTask = practicalTaskPager(deck,pages,{index},dataPreview ? atEnd => { teacherTools.open = atEnd; } : undefined,codePages,stationNames);
+    goToTask = practicalTaskPager(deck,pages,{index},dataPreview ? atEnd => { teacherTools.open = reviewing || atEnd; } : undefined,
+      codePages, stationNames, schoolFair ? stationAnswered : null);
     panel.hidden = false;
     panel.scrollIntoView();
   }); }
