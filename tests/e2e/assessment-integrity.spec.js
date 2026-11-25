@@ -984,6 +984,35 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
     const missed = Object.values(deductions).reduce((sum, n) => sum + n, 0);
     expect(results.submissions[0]).toMatchObject({totalMarks:50-missed,maxMarks:50});
     for (const {items:[task]} of template.sections) expect(results.submissions[0].grades[task.id].marksAwarded).toBe(task.marks - (deductions[task.id] || 0));
+    if (['windows-100','mobile'].includes(testInfo.project.name)) {
+      await page.goto('/');
+      await page.locator('#assignmentsBtn').click();
+      const card = page.locator(`[data-assignment-id="${assessmentId}"]`);
+      await card.locator('.a-toggle-btn').click();
+      const station = card.getByLabel('Station to review', {exact:true});
+      await expect(station).toBeVisible();
+      await station.selectOption('files-task');
+      await expect(card.locator('.data-station-summary')).toContainText('1 of 1 submissions marked');
+      await expect(card.getByRole('table',{name:'Answer breakdown'})).toBeHidden();
+      await card.locator('.data-work summary').filter({hasText:'Sample Learner'}).click();
+      const evidence = card.getByRole('table',{name:'Answer breakdown'});
+      await expect(evidence.getByRole('row').filter({hasText:'Art poster.png'})).toContainText('2 / 2');
+      const review=card.getByText('Class learning review',{exact:true});
+      await expect(card.getByRole('heading',{name:'Class performance by station'})).toBeHidden();
+      await review.click();
+      await expect(card.locator('[data-lr-label="6. Media desk"]')).toBeVisible();
+      await review.click();
+      await expect(card.getByText('Edit feedback',{exact:true})).toBeVisible();
+      await expect(card.locator('.grade-rationale-input')).toBeHidden();
+      const updated = page.waitForResponse(response => response.url().endsWith(api+'/grade') && response.ok());
+      await card.getByRole('button',{name:'Save',exact:true}).click();
+      await updated;
+      await expect(evidence).toBeVisible();
+      await card.getByText('Change marks in bulk',{exact:true}).click();
+      await expect(card.getByLabel('Select matching learners')).toBeVisible();
+      await card.getByRole('button',{name:'By student',exact:true}).click();
+      await expect(card.locator('.data-student summary').first()).toContainText((50-missed)+' / 50');
+    }
     expect((await page.request.patch(api+'/marked',{data:{marked:true}})).ok()).toBeTruthy();
     const progress = await (await page.request.get('/api/roster/'+roster.id+'/progress')).json();
     expect(progress.students[0].results).toContainEqual(expect.objectContaining({assignmentId:assessmentId,score:50-missed,total:50}));

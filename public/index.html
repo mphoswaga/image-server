@@ -2488,6 +2488,36 @@
     .grade-feedback { grid-column:2/-1;font-size:12px; }
     .grade-feedback summary { width:max-content;color:var(--primary);font-weight:600;cursor:pointer; }
     .grade-feedback textarea { margin-top:7px;padding:8px 9px;font-size:12.5px; }
+    .data-marking-section { margin:12px 0;border:1px solid #c7ddd2;border-radius:12px;background:#fff; }
+    .data-marking-section>summary { padding:12px 14px;color:#174f40;font-size:14px;font-weight:700;cursor:pointer; }
+    .data-marking-section .learning-report { margin:0 10px 10px; }
+    .data-grade-row { display:flex;gap:10px;align-items:start;padding:0 12px; }
+    .data-grade-row>.bulk-grade-student { flex:none;margin:17px 0 0; }
+    .data-work { flex:1;min-width:0; }
+    .data-work>summary,.data-student>summary { display:flex;align-items:center;gap:10px;min-height:44px;list-style:none;cursor:pointer; }
+    .data-work>summary::-webkit-details-marker,.data-student>summary::-webkit-details-marker { display:none; }
+    .data-work>summary::before,.data-student>summary::before { content:'›';color:#17644d;font-size:20px;line-height:1; }
+    .data-work[open]>summary::before,.data-student[open]>summary::before { transform:rotate(90deg); }
+    .data-work-title { flex:1;min-width:0;font-size:13px;overflow-wrap:anywhere; }
+    .data-score { flex:none;padding:4px 8px;border-radius:6px;background:#eaf3ee;color:#205a48;font-variant-numeric:tabular-nums;font-size:13px; }
+    .data-work-body { margin:0 0 12px;padding:12px;background:#f5f8f6;border:1px solid #d7e4dc;border-radius:9px; }
+    .data-criteria { width:100%;border-collapse:collapse;font-size:13px;text-align:left;table-layout:fixed; }
+    .data-criteria th,.data-criteria td { border-bottom:1px solid #d7e4dc;padding:8px;overflow-wrap:anywhere; }
+    .data-criteria thead { color:#34594d;background:#e9f1eb; }
+    .data-criteria th[scope=row] { font-weight:650; }
+    .data-criteria th:last-child,.data-criteria td:last-child { width:72px;text-align:right;font-variant-numeric:tabular-nums; }
+    .data-criteria td[data-partial] { color:#944417;font-weight:700; }
+    .data-work-body .grade-mark-control { justify-content:flex-start;margin:12px 0; }
+    .data-bulk { margin-top:9px;font-size:13px; }
+    .data-bulk>summary { color:#205a48;font-weight:650;cursor:pointer; }
+    .data-student { margin:9px 0;padding:0 12px;border:1px solid var(--border);border-radius:9px; }
+    .data-student>.btn { width:auto;margin:0 5px 8px 0; }
+    .data-station-summary { padding:8px 14px;color:#355d50;background:#eff7f2;font-size:13px; }
+    @media(max-width:480px) {
+      .data-work-body { padding:6px; }
+      .data-criteria th,.data-criteria td { padding:5px; }
+      .data-criteria th:last-child,.data-criteria td:last-child { width:43px; }
+    }
     @media(max-width:760px){
       .bulk-grade-toolbar { grid-template-columns:1fr 1fr; }
       .bulk-grade-toolbar .bulk-select-all { grid-column:1/-1; }
@@ -6512,9 +6542,18 @@
         ? 'Repeat '+block.count+' × ('+submittedCodeText(block.body)+')'
         : labels[block.op]||block.op).join(' → ');
     }
+    function dataGradeEvidence(q, answers, grade){
+      const criteria=Array.isArray(grade.criteria)?grade.criteria:[];
+      const rows=(q.activity?.inputs||[]).map((input,index)=>{
+        const criterion=criteria[index], answer=answers?.[index];
+        const points=criterion?criterion.awarded+' / '+criterion.max:'—';
+        return `<tr><th scope="row">${esc(input.label)}</th><td>${esc(answer??'No response')}</td><td ${criterion&&criterion.awarded<criterion.max?'data-partial':''}>${esc(points)}</td></tr>`;
+      }).join('');
+      return `<table class="data-criteria" aria-label="Answer breakdown"><thead><tr><th scope="col">Field or instruction</th><th scope="col">Student answer</th><th scope="col">Marks</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
     function gradeRowHTML(q, s, assignId, wrapId, headingText, selectable=false){
       const g=(s.grades||{})[q.id]||{}; const ans=(s.answers||{})[q.id];
-      const ansText=q.kind==='data-table' ? (q.activity?.inputs||[]).map((item,index)=>item.label+': '+(ans?.[index]??'No response')).join(' · ') : q.kind==='codequest' ? submittedCodeText(ans) : q.kind==='practical' ? 'Teacher observation' : q.kind==='mcq' ? (q.options&&q.options[ans]!=null?q.options[ans]:'(no answer)') : (ans||'(no answer)');
+      const ansText=q.kind==='codequest' ? submittedCodeText(ans) : q.kind==='practical' ? 'Teacher observation' : q.kind==='mcq' ? (q.options&&q.options[ans]!=null?q.options[ans]:'(no answer)') : (ans||'(no answer)');
       if(s.draftOnly&&q.kind!=='practical') return `<div class="grade-row" ${selectable?`data-marking-student="${esc(s.name)} ${esc(s.studentId)}"`:""} style="padding:10px 0;border-top:1px solid var(--border)"><div style="font-size:13px;font-weight:600">${esc(headingText)}</div><div style="font-size:12.5px;color:var(--muted);margin-top:4px">Available after this student submits.</div></div>`;
       const autoMarked=q.kind==='mcq'&&g.source==='auto';
       const confirmed=g.source==='auto'||g.source==='teacher'||g.source==='ai-confirmed';
@@ -6525,7 +6564,8 @@
         ? '<span style="font-size:11.5px;color:var(--ok,#1f9d55);font-weight:600">confirmed</span>'
         : '<span style="font-size:11.5px;color:var(--muted)">AI — unconfirmed</span>');
       const selected=assessmentBulkSelections.get(`${assignId}\u001f${q.id}`)?.has(String(s.studentId))||false;
-      const picker=selectable?`<label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" class="bulk-grade-student" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-id="${esc(q.id)}" data-student-id="${esc(s.studentId)}" ${selected?'checked':''}> <span>${esc(headingText)}</span></label>`:esc(headingText);
+      const checkbox=selectable?`<input type="checkbox" class="bulk-grade-student" aria-label="Select ${esc(headingText)}" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-id="${esc(q.id)}" data-student-id="${esc(s.studentId)}" ${selected?'checked':''}>`:'';
+      const picker=selectable?`<label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer">${checkbox} <span>${esc(headingText)}</span></label>`:esc(headingText);
       const markControl=autoMarked
         ? `<div class="grade-auto-result"><b>${Number(g.marksAwarded)||0}/${q.marks}</b>${badge}</div>`
         : `<div class="grade-mark-control">
@@ -6535,6 +6575,16 @@
             ${badge}
           </div>`;
       const feedback=q.kind==='mcq'?'':`<details class="grade-feedback" ${g.rationale?'open':''}><summary>${g.rationale?'Edit feedback':'Add feedback (optional)'}</summary><textarea class="grade-rationale-input" rows="2" placeholder="Feedback shown to the student after release">${esc(g.rationale||'')}</textarea></details>`;
+      if(q.kind==='data-table'){
+        const marked=confirmed&&Number.isFinite(g.marksAwarded);
+        const process=g.processEvidence?.length?`<p class="hint"><strong>Work observed</strong> ${esc(g.processEvidence.join(' '))}</p>`:'';
+        const dataFeedback=`<details class="grade-feedback" data-marking-detail="feedback:${esc(s.studentId)}:${esc(q.id)}"><summary>Edit feedback</summary><textarea class="grade-rationale-input" rows="2" placeholder="Feedback shown to the student after release">${esc(g.rationale||'')}</textarea></details>`;
+        return `<div ${selectable?`data-marking-student="${esc(s.name)} ${esc(s.studentId)}"`:''} class="grade-row data-grade-row">
+          ${checkbox}<details class="data-work" data-marking-detail="work:${esc(s.studentId)}:${esc(q.id)}">
+            <summary><strong class="data-work-title">${esc(headingText)}</strong><span class="data-score">${marked?g.marksAwarded+' / '+q.marks:'Awaiting mark'}</span></summary>
+            <div class="data-work-body">${dataGradeEvidence(q,ans,g)}${process}${markControl}${dataFeedback}</div>
+          </details></div>`;
+      }
       return `<div ${selectable?`data-marking-student="${esc(s.name)} ${esc(s.studentId)}"`:""} class="grade-row ${selectable?'grade-row-compact':''} ${autoMarked?'grade-row-auto':''}">
         <div class="grade-learner">${picker}${s.draftOnly?' <small>working</small>':''}</div>
         <div class="grade-answer"><b>Answer</b><span>${esc(String(ansText))}</span></div>
@@ -6570,9 +6620,14 @@
       if(wrap?.querySelector('[data-teacher-edited="1"]')){toast('Save your edited marks and feedback before printing.');return;}
       try{if(button.classList.contains('generate-exam-feedback')){await MarkedExamPrint.feedback(button.dataset.assignId,button.dataset.studentId);await loadAssignmentResults(button.dataset.assignId,button.dataset.wrapId);}else await MarkedExamPrint.open(button.dataset.assignId,button.dataset.studentId);}catch(error){toast(error.message);}
     });
+    const isDataMarking=d=>d.questions?.length&&d.questions.every(q=>q.kind==='data-table');
     function renderByStudent(d, assignId, wrapId){
       return d.submissions.map(s=>{
         const rows=d.questions.map(q=>gradeRowHTML(q, s, assignId, wrapId, (q.sectionTitle?`${q.sectionTitle} · `:'')+stripMarksText(q.question))).join('');
+        if(isDataMarking(d)) return `<details class="data-student" data-marking-detail="student:${esc(s.studentId)}" data-marking-student="${esc(s.name)} ${esc(s.studentId)}">
+          <summary><strong class="data-work-title">${esc(s.name)}</strong><span class="data-score">${s.draftOnly?'Still working':s.totalMarks+' / '+s.maxMarks}</span></summary>
+          ${!s.draftOnly?`<button type="button" class="btn ghost print-marked-exam" data-assign-id="${esc(assignId)}" data-student-id="${esc(s.studentId)}" data-wrap-id="${esc(wrapId)}">Print marked exam / PDF</button> <button type="button" class="btn ghost generate-exam-feedback" data-assign-id="${esc(assignId)}" data-student-id="${esc(s.studentId)}" data-wrap-id="${esc(wrapId)}">AI feedback for lost marks</button>`:''}
+          ${rows}</details>`;
         return `<div data-marking-student="${esc(s.name)} ${esc(s.studentId)}" style="margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:10px">
           <div style="display:flex;justify-content:space-between;font-weight:700;font-size:14px"><span>${esc(s.name)}${s.draftOnly?' <small style="color:var(--muted);font-weight:500">working</small>':''}</span><span>${s.totalMarks}/${s.maxMarks}</span></div>
           ${!s.draftOnly?`<button type="button" class="btn ghost print-marked-exam" data-assign-id="${esc(assignId)}" data-student-id="${esc(s.studentId)}" data-wrap-id="${esc(wrapId)}" style="width:auto;margin-top:10px">Print marked exam / PDF</button> <button type="button" class="btn ghost generate-exam-feedback" data-assign-id="${esc(assignId)}" data-student-id="${esc(s.studentId)}" data-wrap-id="${esc(wrapId)}" style="width:auto;margin-top:10px">AI feedback for lost marks</button>`:''}
@@ -6588,20 +6643,24 @@
       if(qi<0)qi=0;
       const q=questions[qi];
       if(wrap)wrap.dataset.questionId=q.id;
-      const label=(item,index)=>`${index+1}. ${stripMarksText(item.question).slice(0,90)} — ${item.marks} mark${Number(item.marks)===1?'':'s'}`;
+      const label=(item,index)=>`${index+1}. ${(item.kind==='data-table'&&item.sectionTitle?item.sectionTitle:stripMarksText(item.question)).slice(0,90)} — ${item.marks} mark${Number(item.marks)===1?'':'s'}`;
       const options=questions.map((item,index)=>`<option value="${esc(item.id)}" ${item.id===q.id?'selected':''}>${esc(label(item,index))}</option>`).join('');
       const selectionKey=`${assignId}\u001f${q.id}`,selected=assessmentBulkSelections.get(selectionKey)||new Set();
       const bulkMark=assessmentBulkMarks.get(selectionKey)||'';
       const markable=d.submissions.filter(s=>!(s.draftOnly&&q.kind!=='practical'));
       const rows=d.submissions.map(s=>gradeRowHTML(q, s, assignId, wrapId, s.name,true)).join('');
+      const station=q.kind==='data-table';
+      const scores=station?markable.map(s=>s.grades?.[q.id]).filter(g=>g&&['auto','teacher','ai-confirmed'].includes(g.source)&&Number.isFinite(g.marksAwarded)):[];
+      const average=scores.length?(scores.reduce((sum,grade)=>sum+grade.marksAwarded,0)/scores.length).toFixed(1):null;
       return `<div class="assessment-question-navigator" style="position:sticky;top:8px;z-index:4;margin:12px 0;padding:11px 12px;border:1px solid #b8d5c7;border-radius:10px;background:#f5fcf8;box-shadow:0 4px 12px rgba(22,67,50,.08)">
-        <label style="display:block;font-size:11.5px;font-weight:700;color:#145c3c;margin-bottom:5px" for="question-select-${wrapId}">Question to mark</label>
+        <label style="display:block;font-size:11.5px;font-weight:700;color:#145c3c;margin-bottom:5px" for="question-select-${wrapId}">${station?'Station to review':'Question to mark'}</label>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <select id="question-select-${wrapId}" class="assessment-question-select" data-assign-id="${assignId}" data-wrap-id="${wrapId}" style="flex:1;min-width:230px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#fff">${options}</select>
           <button type="button" class="btn ghost assessment-question-nav" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-index="${qi-1}" ${qi===0?'disabled':''} style="width:auto;padding:7px 10px">Previous</button>
           <button type="button" class="btn ghost assessment-question-nav" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-index="${qi+1}" ${qi===questions.length-1?'disabled':''} style="width:auto;padding:7px 10px">Next</button>
           <span style="font-size:12px;color:var(--muted);font-weight:600">${qi+1} of ${questions.length}</span>
         </div>
+        ${station?`<details class="data-bulk" data-marking-detail="bulk:${esc(q.id)}"><summary>Change marks in bulk</summary>`:''}
         <div class="bulk-grade-toolbar">
           ${q.kind==='mcq'?'<div class="mcq-auto-note"><b>Multiple choice is complete.</b> LessonScope has marked and confirmed every submitted answer automatically. Use the controls below only to correct or override a mark.</div>':''}
           <label class="bulk-select-all"><input type="checkbox" class="bulk-grade-all" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-id="${esc(q.id)}" ${markable.length&&selected.size===markable.length?'checked':''}> Select matching learners</label>
@@ -6609,9 +6668,11 @@
           <label class="bulk-mark-field"><span>${q.kind==='mcq'?'Override mark':'Mark for selected learners'}</span><span><input type="number" class="bulk-grade-mark" data-assign-id="${assignId}" data-question-id="${esc(q.id)}" min="0" max="${q.marks}" step="0.5" value="${esc(bulkMark)}" aria-label="Mark for selected learners"> / ${q.marks}</span></label>
           <button type="button" class="btn accent bulk-grade-apply" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-id="${esc(q.id)}" ${selected.size?'':'disabled'}>Apply to ${selected.size} selected</button>
         </div>
+        ${station?'</details>':''}
       </div>
       <div class="question-marking-list">
         <div class="question-marking-title">${q.sectionTitle?`<span>${esc(q.sectionTitle)}</span>`:''}${qi+1}. ${esc(stripMarksText(q.question))}<small>${q.marks} mark${Number(q.marks)===1?'':'s'}</small></div>
+        ${station?`<div class="data-station-summary">${scores.length} of ${markable.length} submissions marked${average===null?'':' · Average '+average+' / '+q.marks}</div>`:''}
         ${rows}
       </div>`;
     }
@@ -6620,6 +6681,8 @@
       const wrap=$(wrapId); if(!wrap) return;
       const d=assignResultsCache.get(assignId); if(!d) return;
       // Polling rebuilds the result DOM: preserve the teacher's report navigation.
+      const dataOpened=new Set([...wrap.querySelectorAll('details[data-marking-detail][open]')].map(detail=>detail.dataset.markingDetail));
+      const dataMarking=isDataMarking(d);
       const report=wrap.querySelector('.learning-report');
       const detailKey=el=>el.dataset.lrLabel?'question:'+el.dataset.lrLabel:el.className||el.querySelector('summary')?.textContent.replace(/\d+/g,'#');
       const reportOpen=new Map([...report?.querySelectorAll('details')||[]].map(el=>[detailKey(el),el.open]));
@@ -6642,11 +6705,12 @@
         ${completedDrafts?`<button type="button" class="btn accent submit-completed-drafts" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-count="${completedDrafts}" style="width:auto;padding:8px 12px">Submit ${completedDrafts} completed attempt${completedDrafts===1?'':'s'}</button>`:''}
       </div>`:'';
       const tabBtn=(v,label)=>`<button type="button" class="view-tab-btn" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-view="${v}" style="font-size:12.5px;font-weight:600;padding:6px 14px;border:1px solid ${view===v?'var(--primary)':'var(--border)'};border-radius:8px;background:${view===v?'var(--primary)':'#fff'};color:${view===v?'#fff':'var(--ink)'};cursor:pointer">${label}</button>`;
-      const tabs=`<div style="display:flex;gap:8px;margin-bottom:10px">${tabBtn('student','By student')}${tabBtn('question','By question')}</div>`;
+      const tabs=`<div style="display:flex;gap:8px;margin-bottom:10px">${tabBtn('student','By student')}${tabBtn('question',dataMarking?'By station':'By question')}</div>`;
       if(!d.submissions||!d.submissions.length){ wrap.innerHTML=liveBar+submitDraftsBar+releaseBar+acceptAIBar+tabs+'<p class="hint" style="margin-top:8px">No students have submitted yet.</p>'; return; }
       const studentSearch=`<div style="margin:10px 0"><label for="student-search-${wrapId}">Search students</label><input id="student-search-${wrapId}" class="assessment-student-search" data-wrap-id="${wrapId}" type="search" placeholder="Student name or ID" value="${esc(wrap.dataset.studentSearch||'')}" style="display:block;width:100%;margin-top:5px;padding:9px;border:1px solid var(--border);border-radius:8px"><p class="hint assessment-search-status" role="status"></p></div>`;
       const comments=d.teacherMarked&&d.questions.some(q=>['codequest','data-table'].includes(q.kind))?`<p class="hint">Practical evidence is on record. <a href="${esc($('teacherScopeLink').href)}">Open TeacherScope comments</a> and choose this class in the connected evidence workflow.</p>`:'';
-      wrap.innerHTML=liveBar+submitDraftsBar+releaseBar+acceptAIBar+comments+assignmentSummary(d)+tabs+studentSearch+(view==='question'?renderByQuestion(d,assignId,wrapId):renderByStudent(d,assignId,wrapId));
+      wrap.innerHTML=liveBar+submitDraftsBar+releaseBar+acceptAIBar+comments+(dataMarking?`<details class="data-marking-section" data-marking-detail="report"><summary>Class learning review</summary>${assignmentSummary(d)}</details>`:assignmentSummary(d))+tabs+studentSearch+(view==='question'?renderByQuestion(d,assignId,wrapId):renderByStudent(d,assignId,wrapId));
+      wrap.querySelectorAll('details[data-marking-detail]').forEach(detail=>{detail.open=dataOpened.has(detail.dataset.markingDetail);});
       filterAssessmentStudents(wrap);
       if(markingFocus){const field=wrap.querySelector('.assessment-student-search');field.focus({preventScroll:true});field.setSelectionRange(markingFocus.start,markingFocus.end);}
       wrap.querySelectorAll('.learning-report details').forEach(el=>{if(reportOpen.has(detailKey(el)))el.open=reportOpen.get(detailKey(el));});
@@ -6682,7 +6746,17 @@
     // At-a-glance analytics for one assignment: class average, submission count,
     // and the questions students found hardest — before the row-by-row grading.
     function assignmentSummary(d){
-      return LearningReport.html(LearningReport.assignment(d));
+      const report=LearningReport.assignment(d);
+      if(isDataMarking(d)){
+        report.title='Class performance by station';
+        report.note='Station averages use confirmed marks from submitted work.';
+        report.metricLabel='Average across stations';
+        report.rows.forEach((row,index)=>{
+          const station=d.questions[index].sectionTitle;
+          if(station)row.label=(index+1)+'. '+station;
+        });
+      }
+      return LearningReport.html(report);
     }
 
     async function loadAssignmentResults(assignId, wrapId='assignSubmissions', view,options={}){
@@ -6694,14 +6768,14 @@
         try{await pending;}catch{}
         return loadAssignmentResults(assignId,wrapId,view,options);
       }
-      if(!silent)wrap.innerHTML='<span class="status">Loading…</span>';
+      if(!silent&&!wrap.querySelector('[data-marking-detail]'))wrap.innerHTML='<span class="status">Loading…</span>';
       const request=(async()=>{
         const response=await fetch('/api/assignment/'+assignId+'/results');
         const d=await response.json(); if(!response.ok)throw new Error(d.error||'Could not load submissions.');
         assignResultsCache.set(assignId,d);
         if(!document.body.contains(wrap))return d;
         const editorState=silent?captureAssignmentEditorState(wrap):null;
-        renderAssignmentResults(assignId,wrapId,view||wrap.dataset.view||'student');
+        renderAssignmentResults(assignId,wrapId,view||wrap.dataset.view||(isDataMarking(d)?'question':'student'));
         if(silent)restoreAssignmentEditorState(wrap,editorState);
         return d;
       })();
