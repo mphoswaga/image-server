@@ -170,7 +170,7 @@
     let livePollBusy = false;
     let questionSyncActive = false;
     let activeQuestion = null;
-    let schoolFair = false;
+    let schoolFair = false, reviewingSchoolFair = false;
     const codeQuestPlay = '/practical-practice.html?activity=codequest';
     let lessonTimer, lessonPoll, lessonEnds, lessonTask = null, lessonNumber = null, lessonTotal = null, checkingLesson = false;
     const practicalView = {};
@@ -399,8 +399,31 @@
     function updateSchoolFairSubmit() {
       if (!schoolFair) return;
       $('submitActions').hidden = (lessonTotal && questions.length < lessonTotal) ||
-        practicalView.index !== questions.length - 1;
-      $('submitBtn').disabled = !questions.every((_, position) => stationAnswered(position));
+        (!reviewingSchoolFair && practicalView.index !== questions.length - 1);
+    }
+
+    function returnToUnfinishedStation(position) {
+      reviewingSchoolFair = true;
+      $('questions').inert = false;
+      $('dataSubmitReview').hidden = true;
+      const button = $('submitBtn');
+      button.hidden = button.disabled = false;
+      button.textContent = 'Check and submit project';
+      jumpToStation?.(position);
+      updateSchoolFairSubmit();
+
+      $('questions').querySelector('.unfinished-station')?.remove();
+      const station = $('questions').querySelectorAll('[data-practical-page]')[position];
+      const notice = document.createElement('p');
+      notice.className = 'unfinished-station practical-note';
+      notice.setAttribute('role', 'status');
+      notice.tabIndex = -1;
+      notice.textContent = 'This station needs another look. Fill in every answer here, then choose Check and submit project.';
+      station.prepend(notice);
+      const blank = [...station.querySelectorAll('.station-work input[type="text"], .station-work select, .station-work fieldset')]
+        .find(field => field.matches('fieldset') ? !field.querySelector('input:checked') : !field.value.trim());
+      const target = blank?.matches('fieldset') ? blank.querySelector('input[type="radio"]') : blank;
+      (target || notice).focus();
     }
 
     function renderQuestions() {
@@ -683,6 +706,7 @@
         } else {
           practicalSaving = assignmentType === 'assessment' && questions.length > 0 && questions.every(q => ['codequest','data-table'].includes(q.kind));
           schoolFair = !!take.schoolFair;
+          reviewingSchoolFair = false;
           lessonNumber = take.lessonClock?.number;
           lessonTotal = take.lessonClock?.total;
           lessonTask = take.lessonClock?.questionId;
@@ -831,11 +855,17 @@
         return;
       }
       const dataProject = practicalSaving && questions.every(q => q.kind === 'data-table');
-      if (schoolFair && (!questions.every((_, position) => stationAnswered(position)) ||
-          (lessonTotal && questions.length < lessonTotal))) {
-        $('submitErr').textContent = 'Answer every question before submitting.';
-        updateSchoolFairSubmit();
-        return;
+      if (schoolFair) {
+        if (lessonTotal && questions.length < lessonTotal) {
+          $('submitErr').textContent = 'Wait for your teacher to open the remaining stations.';
+          btn.disabled = false;
+          return;
+        }
+        const unfinished = questions.findIndex((_, position) => !stationAnswered(position));
+        if (unfinished >= 0) {
+          returnToUnfinishedStation(unfinished);
+          return;
+        }
       }
       if (dataProject && !confirmed) {
         const unfinished = questions.filter(q => DataStation.count(q.tableActivity, answers[q.id]) < q.tableActivity.inputs.length);
@@ -870,6 +900,13 @@
           body: JSON.stringify({ answers }),
         });
         const d = await r.json();
+        if (schoolFair && d.code === 'assessment_incomplete' && Array.isArray(d.missingQuestionIds)) {
+          const unfinished = questions.findIndex(question => d.missingQuestionIds.includes(question.id));
+          if (unfinished >= 0) {
+            returnToUnfinishedStation(unfinished);
+            return;
+          }
+        }
         if (!r.ok && !(schoolFair && d.code === 'assessment_already_submitted')) throw new Error(d.error);
         clearDraft();
         if (recoveryKey) { try { sessionStorage.removeItem(recoveryKey); } catch {} }

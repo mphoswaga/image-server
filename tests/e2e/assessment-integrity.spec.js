@@ -877,6 +877,7 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
         }
       }
       for (const input of task.activity.inputs) {
+        if (index === template.sections.length - 1 && input === task.activity.inputs.at(-1)) continue;
         if (input.entry === 'text') {
           const value = testInfo.project.name === 'mobile' && input.label === 'Helper 1 · Phone' ? '1' : input.accepted[0];
           await current.getByRole('textbox',{name:input.label,exact:true}).fill(value);
@@ -896,6 +897,10 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
         await current.screenshot({path:testInfo.outputPath('School Fair Data Lab.png')});
       }
     }
+    await learner.locator('#submitBtn').click();
+    await expect(current.getByRole('status')).toContainText('Fill in every answer here');
+    await expect(learner.getByRole('button',{name:'Yes, submit project'})).toBeHidden();
+    await current.getByRole('radio',{name:'The visitor did not choose a booth.'}).check();
     await expect.poll(async () => {
       const data = await (await context.request.get(api + '/take')).json();
       return data.draftAnswers?.['decision-task']?.[3];
@@ -911,8 +916,18 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
     const incomplete = await context.request.post(api + '/submit',{data:{answers:{'desk-task':Array(12).fill(null)}}});
     expect(incomplete.status()).toBe(400);
     expect((await incomplete.json()).missingQuestionIds).toContain('desk-task');
-    const submitted = learner.waitForResponse(r => r.url().endsWith(api+'/submit') && r.ok());
+    // The final server check can also send the learner back to an earlier station.
+    await learner.route('**' + api + '/submit', route => {
+      const payload = route.request().postDataJSON();
+      payload.answers['desk-task'][0] = null;
+      return route.continue({postData:JSON.stringify(payload)});
+    }, {times:1});
     await learner.locator('#submitBtn').click();
+    await learner.getByRole('button',{name:'Yes, submit project'}).click();
+    await expect(current).toContainText('Registration desk');
+    await expect(current.getByRole('status')).toContainText('Fill in every answer here');
+    const submitted = learner.waitForResponse(r => r.url().endsWith(api+'/submit') && r.ok());
+    await learner.getByRole('button',{name:'Check and submit project'}).click();
     await learner.getByRole('button',{name:'Keep working'}).click();
     await learner.locator('#submitBtn').click();
     await learner.getByRole('button',{name:'Yes, submit project'}).click();
