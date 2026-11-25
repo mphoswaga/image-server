@@ -994,7 +994,7 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
       await station.selectOption('files-task');
       await expect(card.locator('.data-station-summary')).toContainText('1 of 1 submissions marked');
       await expect(card.getByRole('table',{name:'Answer breakdown'})).toBeHidden();
-      await card.locator('.data-work summary').filter({hasText:'Sample Learner'}).click();
+      await card.locator('.data-work summary').filter({hasText:'Sample Learner'}).click({timeout:6000});
       const evidence = card.getByRole('table',{name:'Answer breakdown'});
       await expect(evidence.getByRole('row').filter({hasText:'Art poster.png'})).toContainText('2 / 2');
       const review=card.getByText('Class learning review',{exact:true});
