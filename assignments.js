@@ -575,6 +575,20 @@ function lessonEligible(record, now = Date.now()) {
   return (record.rosterSnapshot || []).filter(student => !used.has(normalizeStudentId(student.id)));
 }
 
+function upgradeUnstartedSchoolFair(record) {
+  const template = record.activityTemplate;
+  if (record.status !== 'draft' || template?.id !== 'starter-data' || ![7, 8].includes(template.version) ||
+      record.lessonPolicy.windows.length || record.lessonPolicy.attempts.length ||
+      loadDrafts(record.id).length || loadSubmissions(record.id).length) return;
+  const fair = normalizeAssessment(require('./activity-templates/data-fair-seven'));
+  record.activityTemplate = { ...template, version: 9 };
+  if (record.lessonPolicy.plan) record.lessonPolicy.plan.version = 9;
+  record.totalMarks = fair.totalMarks;
+  record.sections = fair.sections;
+  record.content = { ...record.content, instructions: fair.instructions, questions: fair.questions };
+  record.version++;
+}
+
 function manageLesson(id, action, minutes, studentIds, now = Date.now()) {
   const record = getAssignment(id);
   const policy = record?.lessonPolicy;
@@ -612,6 +626,7 @@ function manageLesson(id, action, minutes, studentIds, now = Date.now()) {
       const eligible = new Set(lessonEligible(record, now).map(student => normalizeStudentId(student.id)));
       if (!selected.length || selected.some(studentId => !eligible.has(studentId))) throw new Error('Select only learners who missed the original assessment and have not started.');
     }
+    if (action === 'open') upgradeUnstartedSchoolFair(record);
     policy.windows.push({ id: crypto.randomUUID(), kind: action, openedAt: now, endsAt: now + minutes * 60000, studentIds: selected });
     record.status = 'published';
   } else throw new Error('Choose a lesson action.');

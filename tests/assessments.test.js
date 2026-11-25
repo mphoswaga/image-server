@@ -25,6 +25,33 @@ test('one-lesson access expires at the server deadline and cannot carry into a r
   assert.doesNotThrow(() => assignments.checkLessonAccess(replacement, 'MISSED', true, end));
 });
 
+test('opening a prepared School Fair draft keeps its link and upgrades the rubric to seven stations', () => {
+  const oldFair = require('../activity-templates/data-fair-stations');
+  const createDraft = () => assignments.createAssessment({
+    teacherId:'fair-owner', data:oldFair, rosterId:'fair-class',
+    rosterSnapshot:[{id:'FAIR-1',name:'Sample Learner'}],
+    activityTemplate:{id:'starter-data',version:8}, oneLesson:true,
+    lessonPlan:{version:8, className:'3B1'},
+  });
+  const prepared = createDraft();
+  assert.equal(prepared.content.questions.length, 10);
+  const opened = assignments.manageLesson(prepared.id, 'open', 60);
+  const persisted = assignments.getAssignment(prepared.id);
+  assert.equal(opened.roomCode, prepared.roomCode);
+  assert.equal(persisted.activityTemplate.version, 9);
+  assert.equal(persisted.lessonPolicy.plan.version, 9);
+  assert.equal(persisted.totalMarks, 50);
+  assert.deepEqual(persisted.content.questions.map(q => q.marks), [12,8,6,6,7,5,6]);
+  assert.equal(persisted.content.questions.at(-1).id, 'order-units');
+
+  const withWork = createDraft();
+  assignments.saveDraft(withWork.id, {studentId:'FAIR-1', answers:{'decision-task':[null,null,null,null]}});
+  const unchanged = assignments.manageLesson(withWork.id, 'open', 60);
+  assert.equal(unchanged.content.questions.length, 10);
+  assert.equal(unchanged.activityTemplate.version, 8);
+  assert.ok(assignments.getDraft(withWork.id, 'FAIR-1'));
+});
+
 test('resuming a closed practical keeps the same attempts, drafts and assignment', () => {
   const record = assignments.createAssessment({
     teacherId:'resume-owner', data:require('../activity-templates/codequest-first-project'), rosterId:'resume-class',

@@ -223,7 +223,7 @@ test('teacher previews, versions and assigns an activity without exposing class 
   await expect(page.getByRole('status')).toHaveText('Saved version 1.');
   expect(await page.locator('#template').inputValue()).not.toBe(template.id);
   await page.getByRole('combobox',{name:'Activity',exact:true}).selectOption('starter-data');
-  await expect(page.getByRole('combobox',{name:'Version',exact:true})).toHaveValue('8');
+  await expect(page.getByRole('combobox',{name:'Version',exact:true})).toHaveValue('9');
   await page.getByRole('combobox',{name:'Version',exact:true}).selectOption('5');
   const registration = page.locator('#editor > details').first();
   await registration.locator(':scope > summary').click();
@@ -414,7 +414,7 @@ test('class plan prepares fourteen private drafts once, and practice creates no 
   const { lessons } = await (await page.request.get('/api/activity-templates/lessons')).json();
   expect(lessons).toHaveLength(14);
   for (const lesson of lessons) {
-    const taskCount = lesson.plan.templateId === 'starter-data' ? 10 : 8;
+    const taskCount = lesson.plan.templateId === 'starter-data' ? 7 : 8;
     const details = await (await page.request.get('/api/activity-templates/lessons/' + lesson.id)).json();
     expect(details.tasks).toHaveLength(taskCount);
     expect(lesson.suggestedMinutes).toBe(60);
@@ -714,10 +714,10 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
   const roster = await createRoster(page, 'School fair class', [{ID:'FAIR-1', Name:'Sample Learner'}, {ID:'FAIR-2', Name:'Second Learner'}]);
   await page.goto('/activity-templates');
   await page.getByRole('combobox',{name:'Activity',exact:true}).selectOption('starter-data');
-  await expect(page.locator('.station-directory button')).toHaveCount(10);
+  await expect(page.locator('.station-directory button')).toHaveCount(7);
   await page.locator('.station-directory button').filter({hasText:'Media desk'}).click();
   const preview = page.locator('#learnerPreview');
-  await expect(preview.locator('.station-navigation')).toContainText('Station 1 of 10');
+  await expect(preview.locator('.station-navigation')).toContainText('Station 1 of 7');
   const ready = view => view.getByRole('button',{name:'I’m ready to try'});
   await ready(preview).click();
   const nextPreview = preview.getByRole('button',{name:'Next station'});
@@ -747,21 +747,26 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
   for (const options of typeOptions) expect([...options].sort()).toEqual(['Date','Money','Number','Text','Time','Yes / No']);
   expect(new Set(typeOptions.map(options => options.join('|'))).size).toBeGreaterThan(1);
 
-  const template = require('../../activity-templates/data-class-investigation');
+  const template = require('../../activity-templates/data-fair-seven');
   const previewAnswers = Object.fromEntries(template.sections.flatMap(section => section.items).map(task =>
     [task.id, task.activity.inputs.map(input => input.accepted[0])]));
-  previewAnswers['decision-task'][3] = null;
+  const correctOrder = previewAnswers['order-units'];
+  delete previewAnswers['order-units'];
   await page.evaluate(answers => {
     const key = Object.keys(sessionStorage).find(name => name.startsWith('lesson-practical-preview-'));
     sessionStorage.setItem(key, JSON.stringify(answers));
   }, previewAnswers);
-  await page.locator('.station-directory button').filter({hasText:'Advise the organisers'}).click();
+  await page.locator('.station-directory button').filter({hasText:'File-size ladder'}).click();
   await ready(preview).click();
   const markPreview = preview.getByRole('button',{name:'Submit preview and see marks'});
   await markPreview.click();
   const finalPreview = preview.locator('article:visible');
-  await expect(finalPreview.getByRole('status')).toContainText('Fill in every answer');
-  await finalPreview.getByRole('radio',{name:'The visitor did not choose a booth.'}).check();
+  await expect(finalPreview.locator('.practical-note')).toContainText('Fill in every answer');
+  const previewOrder = finalPreview.locator('.unit-handle');
+  for (const [position, unit] of correctOrder.entries()) {
+    let index = (await previewOrder.allTextContents()).indexOf(unit);
+    while (index-- > position) await finalPreview.getByRole('button',{name:'Move ' + unit + ' up',exact:true}).press('Enter');
+  }
   await markPreview.click();
   await expect(preview.getByRole('heading',{name:'Preview result · 50 / 50'})).toBeVisible();
   await page.getByRole('combobox',{name:'Class',exact:true}).selectOption(roster.id);
@@ -823,13 +828,13 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
     await expect(page.locator('#stationSaved')).toContainText('1 of 2');
     await page.getByRole('button',{name:'Preview station video'}).click();
     await expect(page.getByRole('dialog')).toHaveAccessibleName('Registration desk');
-    await expect(learner.locator('.station-navigation')).toContainText('Station 1 of 10');
+    await expect(learner.locator('.station-navigation')).toContainText('Station 1 of 7');
     await page.getByRole('button',{name:'Back to console'}).click();
     await page.locator('#guide').click();
-    await expect(learner.locator('#questions')).toContainText('opened 1 of 10 stations');
+    await expect(learner.locator('#questions')).toContainText('opened 1 of 7 stations');
     await expect(learner.locator('#submitBtn')).toBeHidden();
     await page.locator('#nextStation').click();
-    await expect(learner.locator('#questions')).toContainText('opened 2 of 10 stations');
+    await expect(learner.locator('#questions')).toContainText('opened 2 of 7 stations');
     await expect(current).toContainText('Registration desk');
     await expect(learner.getByRole('button',{name:'Next station'})).toBeDisabled();
     const registration = template.sections[0].items[0];
@@ -842,10 +847,10 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
       return data.draftAnswers?.[registration.id]?.every(Boolean);
     }).toBe(true);
     await page.locator('#previousStation').click();
-    await expect(learner.locator('#questions')).toContainText('opened 1 of 10 stations');
+    await expect(learner.locator('#questions')).toContainText('opened 1 of 7 stations');
     await page.locator('#releaseGuide').click();
-    await expect(learner.locator('.station-navigation')).toContainText('Station 1 of 10');
-    const topics = ['register','types','paper','repair','stock','files','order','storage','tally','decision'];
+    await expect(learner.locator('.station-navigation')).toContainText('Station 1 of 7');
+    const topics = ['register','types','paper','repair','stock','files','order'];
     for (const [index, section] of template.sections.entries()) {
       const task = section.items[0];
       if (index) {
@@ -876,6 +881,9 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
       if (index === 1 || index === 2) await current.screenshot({path:testInfo.outputPath(section.title + '.png')});
       await expect(current).toContainText(task.id === 'stock-sheet-task' ? 'Complete all five answer boxes.' : task.prompt);
       if (task.activity.presentation === 'order') {
+        await learner.locator('#submitBtn').click();
+        await expect(current.locator('.unfinished-station')).toContainText('Fill in every answer here');
+        await expect(learner.getByRole('button',{name:'Yes, submit project'})).toBeHidden();
         const list = current.locator('ol.unit-order');
         const handles = list.locator('.unit-handle');
         await list.scrollIntoViewIfNeeded();
@@ -918,17 +926,7 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
         await expect(current.locator('[data-address="D2"] input')).toHaveAccessibleName('D2 · Art kits left');
         await current.screenshot({path:testInfo.outputPath('Update the stock sheet.png')});
       }
-      if (task.activity.presentation === 'ballots') {
-        await expect(current.locator('.project-data-source li')).toHaveCount(12);
-        await expect.poll(() => current.locator('.ballot-scene').evaluate(img => img.naturalWidth)).toBe(1050);
-        if (task.id === 'count-task') {
-          await current.getByRole('checkbox').first().check();
-          await expect(current.getByRole('textbox').first()).toHaveValue('');
-          await current.screenshot({path:testInfo.outputPath('Vote tally.png')});
-        }
-      }
       for (const input of task.activity.inputs) {
-        if (index === template.sections.length - 1 && input === task.activity.inputs.at(-1)) continue;
         if (input.entry === 'text') {
           const value = testInfo.project.name === 'mobile' && input.label === 'Helper 1 · Phone' ? '1' : input.accepted[0];
           await current.getByRole('textbox',{name:input.label,exact:true}).fill(value);
@@ -952,22 +950,13 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
         await current.screenshot({path:testInfo.outputPath('School Fair Data Lab.png')});
       }
     }
-    await learner.locator('#submitBtn').click();
-    await expect(current.getByRole('status')).toContainText('Fill in every answer here');
-    await expect(learner.getByRole('button',{name:'Yes, submit project'})).toBeHidden();
-    await current.getByRole('radio',{name:'The visitor did not choose a booth.'}).check();
-    await expect.poll(async () => {
-      const data = await (await context.request.get(api + '/take')).json();
-      return data.draftAnswers?.['decision-task']?.[3];
-    }).toBe(template.sections.at(-1).items[0].activity.inputs[3].accepted[0]);
-    await learner.reload();
-    await expect(current).toContainText('Advise the organisers');
+    await expect(current).toContainText('File-size ladder');
     await learner.getByText('Station menu',{exact:true}).click();
     await learner.getByLabel('Jump to station').selectOption('0');
     await expect(current.getByRole('textbox',{name:'Helper 1 · Age',exact:true})).toHaveValue('9');
     await learner.getByText('Station menu',{exact:true}).click();
     await learner.getByLabel('Jump to station').selectOption(String(template.sections.length-1));
-    await expect(current.getByRole('radio',{name:'The visitor did not choose a booth.'})).toBeChecked();
+    await expect(current).toContainText('File-size ladder');
     const incomplete = await context.request.post(api + '/submit',{data:{answers:{'desk-task':Array(12).fill(null)}}});
     expect(incomplete.status()).toBe(400);
     expect((await incomplete.json()).missingQuestionIds).toContain('desk-task');
@@ -991,7 +980,7 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
     await expect(learner.getByRole('heading',{name:/CodeQuest practice/})).toBeVisible();
     await expect(learner.locator('.practice-card:visible').frameLocator('iframe').getByRole('button',{name:'Test my code'})).toBeVisible();
     const results = await (await page.request.get(api+'/results')).json();
-    const deductions = testInfo.project.name === 'mobile' ? {'desk-task':1,'types-task':1,'order-units':2} : {};
+    const deductions = testInfo.project.name === 'mobile' ? {'desk-task':1,'types-task':1,'order-units':3} : {};
     const missed = Object.values(deductions).reduce((sum, n) => sum + n, 0);
     expect(results.submissions[0]).toMatchObject({totalMarks:50-missed,maxMarks:50});
     for (const {items:[task]} of template.sections) expect(results.submissions[0].grades[task.id].marksAwarded).toBe(task.marks - (deductions[task.id] || 0));

@@ -3807,7 +3807,7 @@ function allowAssessmentLesson(req, res, record, studentId, start = false) {
 function isSchoolFairProject(questions) {
   return questions.every(question => question.kind === 'data-table') &&
     questions.some(question => question.id === 'paper-register-task') &&
-    questions.some(question => question.id === 'storage-task');
+    questions.some(question => question.id === 'order-units');
 }
 
 function incompletePracticalAnswers(questions, answers) {
