@@ -58,7 +58,23 @@ function shuffled(values, seed) {
   })).sort((a, b) => a.rank.localeCompare(b.rank)).map(item => item.value);
 }
 
-function learnerView({ kind, table, source, inputs, presentation }, seed) {
+// Keep the extra distractors usable in already-scheduled copies of Field designer.
+const ticketFields = ['Name', 'Tickets bought', 'Visit date', 'Paid?'];
+const baseTypes = ['Text', 'Number', 'Date', 'Yes / No'];
+function choiceOptions(activity, input) {
+  const { options } = input;
+  if (activity.presentation === 'types' && activity.table[0][0] === 'Field' &&
+      ticketFields.every((name, index) => activity.table[index + 1]?.[0] === name) &&
+      ticketFields.includes(input.label) && options?.length === baseTypes.length &&
+      baseTypes.every(type => options.includes(type))) {
+    return [...options, 'Time', 'Money'];
+  }
+  return options;
+}
+
+function learnerView(activity, seed) {
+  const { kind, source, inputs, presentation } = activity;
+  let { table } = activity;
   if (seed && presentation === 'order') {
     const rows = shuffled(table.slice(1), seed);
     if (rows.every((row, index) => inputs[index].accepted.includes(equivalent(row[0])))) {
@@ -67,8 +83,9 @@ function learnerView({ kind, table, source, inputs, presentation }, seed) {
     table = [table[0], ...rows];
   }
   return { kind, table, source, ...(presentation ? {presentation} : {}), inputs: inputs.map(({ accepted, ...input }, index) => {
-    if (!seed || !input.options || presentation === 'order') return input;
-    return { ...input, options: shuffled(input.options, [seed, index]) };
+    const options = choiceOptions(activity, input);
+    if (!options) return input;
+    return { ...input, options: seed && presentation !== 'order' ? shuffled(options, [seed, index]) : options };
   }) };
 }
 
@@ -80,7 +97,8 @@ function answer(activity, responses) {
       if (typeof value !== 'string' || value.length > 300) throw new Error('Enter up to 300 characters in each field.');
       return value.trim() || null;
     }
-    const choice = activity.inputs[index].options.find(option => equivalent(option) === equivalent(text(value)));
+    const normalized = equivalent(text(value));
+    const choice = choiceOptions(activity, activity.inputs[index]).find(option => equivalent(option) === normalized);
     if (choice === undefined) throw new Error('Choose a supplied table value.');
     return choice;
   });

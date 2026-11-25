@@ -738,6 +738,7 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
   await expect(fieldDesigner).toContainText('Field designer');
   const typeOptions = await fieldDesigner.locator('fieldset').evaluateAll(groups =>
     groups.slice(0,4).map(group => [...group.querySelectorAll('input[type=radio]')].map(input => input.value)));
+  for (const options of typeOptions) expect([...options].sort()).toEqual(['Date','Money','Number','Text','Time','Yes / No']);
   expect(new Set(typeOptions.map(options => options.join('|'))).size).toBeGreaterThan(1);
 
   const template = require('../../activity-templates/data-class-investigation');
@@ -920,7 +921,11 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
           const value = testInfo.project.name === 'mobile' && input.label === 'Helper 1 · Phone' ? '1' : input.accepted[0];
           await current.getByRole('textbox',{name:input.label,exact:true}).fill(value);
         } else if (input.row !== undefined) await current.getByLabel(input.label,{exact:true}).selectOption(input.accepted[0]);
-        else await current.getByRole('group',{name:input.label,exact:true}).getByRole('radio',{name:input.accepted[0],exact:true}).check();
+        else {
+          const name = testInfo.project.name === 'mobile' && task.id === 'types-task' && input.label === 'Name'
+            ? 'Money' : input.accepted[0];
+          await current.getByRole('group',{name:input.label,exact:true}).getByRole('radio',{name,exact:true}).check();
+        }
       }
       if (task.activity.presentation === 'files') {
         await expect(current.frameLocator('iframe[title="Welcome note text file"]').locator('body')).toContainText('Pick up a map');
@@ -974,7 +979,7 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
     await expect(learner.getByRole('heading',{name:/CodeQuest practice/})).toBeVisible();
     await expect(learner.locator('.practice-card:visible').frameLocator('iframe').getByRole('button',{name:'Test my code'})).toBeVisible();
     const results = await (await page.request.get(api+'/results')).json();
-    const deductions = testInfo.project.name === 'mobile' ? {'desk-task':1,'order-units':2} : {};
+    const deductions = testInfo.project.name === 'mobile' ? {'desk-task':1,'types-task':1,'order-units':2} : {};
     const missed = Object.values(deductions).reduce((sum, n) => sum + n, 0);
     expect(results.submissions[0]).toMatchObject({totalMarks:50-missed,maxMarks:50});
     for (const {items:[task]} of template.sections) expect(results.submissions[0].grades[task.id].marksAwarded).toBe(task.marks - (deductions[task.id] || 0));
