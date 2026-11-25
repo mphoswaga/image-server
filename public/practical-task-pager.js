@@ -55,7 +55,7 @@ window.practicalTaskPager = (root, panels, view = {}, onPageChange, codePages = 
   }
   root.append(footer);
   root.prepend(nav);
-  function show() {
+  function show(replayTutorial = false) {
     panels.forEach((panel, position) => panel.hidden = !view.all && index !== position);
     for (const panel of panels) {
       if (panel.hidden) panel.querySelectorAll('video').forEach(video => video.pause());
@@ -68,7 +68,7 @@ window.practicalTaskPager = (root, panels, view = {}, onPageChange, codePages = 
       nav.querySelector('select').value = index;
       status.textContent = 'Station ' + (index + 1) + ' of ' + panels.length;
       nav.style.setProperty('--station-complete', (100 * (index + 1) / panels.length) + '%');
-      window.StationTutorial?.activate(panels[index]);
+      if (!replayTutorial) window.StationTutorial?.activate(panels[index]);
       previous.hidden = index === 0;
       next.hidden = index === panels.length - 1;
     }
@@ -89,7 +89,7 @@ window.practicalTaskPager = (root, panels, view = {}, onPageChange, codePages = 
     if (nudge.textContent !== message) nudge.textContent = message;
     nudge.hidden = !message;
   }
-  function goTo(position) {
+  function goTo(position, replayTutorial = false) {
     if (gate && position > furthest()) {
       nav.querySelector('select').value = index;
       return;
@@ -97,13 +97,14 @@ window.practicalTaskPager = (root, panels, view = {}, onPageChange, codePages = 
     nav.querySelector('details')?.removeAttribute('open');
     index = position;
     view.all = false;
-    show();
+    show(replayTutorial);
     panels[index].tabIndex = -1;
     panels[index].focus({preventScroll:true});
     nav.scrollIntoView({block:'start'});
+    if (replayTutorial) window.StationTutorial?.activate(panels[index], true);
   }
   previous.onclick = () => goTo(index - 1);
-  next.onclick = () => goTo(index + 1);
+  next.onclick = () => goTo(index + 1, !!stationNames.length);
   show();
   goTo.refreshAvailability = updateGate;
   return goTo;

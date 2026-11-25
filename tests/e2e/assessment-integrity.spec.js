@@ -736,6 +736,12 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
   await ready(preview).click();
   const fieldDesigner = preview.locator('article:visible');
   await expect(fieldDesigner).toContainText('Field designer');
+  await preview.getByRole('button',{name:'Previous station'}).click();
+  await expect(preview.getByRole('dialog')).toHaveCount(0);
+  await nextPreview.click();
+  const replay = preview.getByRole('dialog',{name:'Field designer'});
+  await expect.poll(() => replay.locator('video').evaluate(video => video.currentTime)).toBeGreaterThan(0);
+  await ready(preview).click();
   const typeOptions = await fieldDesigner.locator('fieldset').evaluateAll(groups =>
     groups.slice(0,4).map(group => [...group.querySelectorAll('input[type=radio]')].map(input => input.value)));
   for (const options of typeOptions) expect([...options].sort()).toEqual(['Date','Money','Number','Text','Time','Yes / No']);
@@ -850,6 +856,12 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
         await ready(learner).click();
       }
       if (index === 1) {
+        await learner.getByRole('button',{name:'Previous station'}).click();
+        await expect(tutorial).toHaveCount(0);
+        await learner.getByRole('button',{name:'Next station'}).click();
+        await expect(tutorial).toHaveAccessibleName(section.title);
+        await expect.poll(() => tutorial.locator('video').evaluate(video => video.currentTime)).toBeGreaterThan(0);
+        await ready(learner).click();
         const name = current.getByRole('group',{name:'Name',exact:true});
         await expect(name.locator('.field-example')).toContainText('Mia');
         await name.getByRole('radio',{name:'Date',exact:true}).check();

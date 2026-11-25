@@ -80,17 +80,20 @@ window.StationTutorial = (() => {
       });
     }
     replay.onclick = () => open(true);
-    tutorials.set(root, () => {
+    tutorials.set(root, force => {
       let seen = dismissed.has(key);
       try { seen ||= sessionStorage.getItem(key) === '1'; } catch {}
-      if (!seen) open();
+      if (force || !seen) open();
     });
   }
-  function activate(panel) {
-    requestAnimationFrame(() => {
+  function activate(panel, force = false) {
+    const play = () => {
       const root = panel?.querySelector('.assessment-station');
-      if (root && root.getClientRects().length) tutorials.get(root)?.();
-    });
+      if (root && root.getClientRects().length) tutorials.get(root)?.(force);
+    };
+    // Use the Next station click to start playback in browsers that require a gesture.
+    if (force) play();
+    else requestAnimationFrame(play);
   }
   return {attach,activate,show};
 })();
