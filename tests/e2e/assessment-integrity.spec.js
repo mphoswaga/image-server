@@ -734,7 +734,11 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
   await previewFields.last().fill('example');
   await nextPreview.click();
   await ready(preview).click();
-  await expect(preview.locator('article:visible')).toContainText('Field designer');
+  const fieldDesigner = preview.locator('article:visible');
+  await expect(fieldDesigner).toContainText('Field designer');
+  const typeOptions = await fieldDesigner.locator('fieldset').evaluateAll(groups =>
+    groups.slice(0,4).map(group => [...group.querySelectorAll('input[type=radio]')].map(input => input.value)));
+  expect(new Set(typeOptions.map(options => options.join('|'))).size).toBeGreaterThan(1);
 
   const template = require('../../activity-templates/data-class-investigation');
   const previewAnswers = Object.fromEntries(template.sections.flatMap(section => section.items).map(task =>
@@ -857,7 +861,7 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
         expect(await paper.evaluate(node => node.scrollWidth <= node.clientWidth+1)).toBeTruthy();
       }
       if (index === 1 || index === 2) await current.screenshot({path:testInfo.outputPath(section.title + '.png')});
-      await expect(current).toContainText(task.prompt);
+      await expect(current).toContainText(task.id === 'stock-sheet-task' ? 'Complete all five answer boxes.' : task.prompt);
       if (task.activity.presentation === 'order') {
         const list = current.locator('ol.unit-order');
         const handles = list.locator('.unit-handle');
@@ -894,7 +898,12 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
         continue;
       }
       if (task.activity.presentation === 'worksheet') {
+        await expect(current.locator('.stock-steps li')).toHaveCount(3);
+        await expect(current.locator('.stock-steps li').last()).toContainText('B2 means column B, row 2');
+        await expect(current.getByRole('table',{name:'Kits at each booth'})).toBeVisible();
+        await expect(current.locator('.stock-decision')).toContainText('Booth needing more kits');
         await expect(current.locator('[data-address="D2"] input')).toHaveAccessibleName('D2 · Art kits left');
+        await current.screenshot({path:testInfo.outputPath('Update the stock sheet.png')});
       }
       if (task.activity.presentation === 'ballots') {
         await expect(current.locator('.project-data-source li')).toHaveCount(12);

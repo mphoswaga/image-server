@@ -177,3 +177,19 @@
 }
 
 .station-turn button:disabled {opacity:.55;cursor:default}
+
+.stock-steps {
+  margin:0 0 14px;padding:12px 14px 12px 36px;border:1px solid #c4dad4;
+  border-radius:10px;background:#f0f7f3;line-height:1.45;
+}
+.stock-steps li+li {margin-top:8px}
+.stock-steps li::marker {font-weight:750;color:#195a50}
+.stock-steps strong {display:block;color:#195a50}
+.assessment-station .practice-sheet .stock-left {background:#e6f4f9}
+.assessment-station .practice-sheet .stock-decision>td {
+  background:#fff4da;white-space:normal;border-top:2px solid #c8ad7b;
+}
+@media(max-width:650px) {
+  .stock-sheet th,.stock-sheet td {padding:4px;white-space:normal}
+  .assessment-station .stock-sheet td input[type=text] {min-width:0;padding-inline:5px}
+}

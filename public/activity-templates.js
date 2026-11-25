@@ -752,7 +752,7 @@
   $('preview').onclick = () => preview(0);
   function preview(index) { return action(async () => {
     const snapshot = structuredClone(draft);
-    const {assessment,previewKey,schoolFair} = await request('/api/activity-templates/preview', {assessment:snapshot});
+    const {assessment,previewKey,schoolFair,previewTables} = await request('/api/activity-templates/preview', {assessment:snapshot});
     const key = 'lesson-practical-preview-' + previewKey;
     let answers = {};
     try { answers = JSON.parse(sessionStorage.getItem(key)) || {}; } catch {}
@@ -842,7 +842,7 @@
           if (next < pages.length) goToTask(next);
           else mark.focus();
         });
-        else DataStation.mount(root, { source: [], ...activity, requireEveryAnswer: schoolFair }, answers[task.id], value => save(task.id,value), {key: key + ':' + task.id, title:section.title, directions:section.instructions, prompt:task.prompt, marks:task.marks});
+        else DataStation.mount(root, { source: [], ...(previewTables?.[task.id] || activity), requireEveryAnswer: schoolFair }, answers[task.id], value => save(task.id,value), {key: key + ':' + task.id, title:section.title, directions:section.instructions, prompt:task.prompt, marks:task.marks});
       }
     }
     const codePages = assessment.questions.map(q => q.kind === 'codequest');

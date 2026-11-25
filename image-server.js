@@ -2462,7 +2462,11 @@ app.post('/api/activity-templates/preview', requireAuth, (req, res) => {
     const assessment = assignments.normalizeAssessment(req.body?.assessment);
     if (assessment.questions.some(question => !['codequest','data-table'].includes(question.kind))) throw new Error('Choose practical activity tasks.');
     const previewKey = crypto.createHash('sha256').update(JSON.stringify([req.userId,assessment])).digest('hex');
-    res.json({assessment,previewKey,schoolFair:isSchoolFairProject(assessment.questions)});
+    const schoolFair = isSchoolFairProject(assessment.questions);
+    const previewTables = schoolFair ? Object.fromEntries(assessment.questions.map(question => [
+      question.id, assessmentDataTable.learnerView(question.activity, previewKey + ':' + question.id),
+    ])) : undefined;
+    res.json({assessment,previewKey,schoolFair,previewTables});
   } catch (error) { res.status(400).json({error:error.message}); }
 });
 app.post('/api/activity-templates/preview-results', requireAuth, async (req, res) => {

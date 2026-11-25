@@ -49,10 +49,55 @@ window.DataStation = (() => {
   function instructions(text) {
     return (text || '').replace('Open “See an example” if you need help.', 'Each station starts with a short video. Tap the robot to watch again.');
   }
+  function guideStockSheet(work) {
+    const sheet = work.querySelector('.practice-sheet');
+    sheet.classList.add('stock-sheet');
+    const table = sheet.querySelector('table');
+    table.caption.textContent = 'Kits at each booth';
+    table.tHead.rows[0].lastElementChild.classList.add('stock-left');
+    for (const cell of table.querySelectorAll('[data-column="Column D"]')) {
+      cell.classList.toggle('stock-left', cell.dataset.row !== 'Row 5');
+    }
+    const decision = table.querySelector('[data-address="A5"]').parentElement;
+    decision.classList.add('stock-decision');
+    decision.querySelector('[data-address="A5"]').textContent = 'Booth needing more kits';
+    decision.querySelector('[data-address="C5"]').textContent = 'Box address';
+    const address = decision.querySelector('[data-address="D5"] input');
+    if (address) address.placeholder = 'Letter + number';
+
+    const steps = document.createElement('ol');
+    steps.className = 'stock-steps';
+    for (const [title, description] of [
+      ['Fill in Left', 'For each booth, take away Used from Packed. Type how many kits are left in column D.'],
+      ['Choose a booth', 'Look down the Left column. In row 5, write the name of the booth with the fewest kits left.'],
+      ['Write the box address', 'Find the box that shows how many kits that booth has left. Write its column letter followed by its row number. For example, B2 means column B, row 2.'],
+    ]) {
+      const step = document.createElement('li');
+      const label = document.createElement('strong');
+      label.textContent = title;
+      step.append(label, document.createTextNode(description));
+      steps.append(step);
+    }
+    const source = work.querySelector('.project-data-source');
+    source.previousElementSibling.remove();
+    source.replaceWith(steps);
+  }
   function mount(root, activity, saved, onChange, context) {
     const key = dataStationTopic(activity);
     const sample = samples[key];
-    if (context) heading(root, key, context);
+    const stockSheet = key === 'stock' && activity.source?.join('|') ===
+      'Stock check · Kits left = kits packed minus kits used.|Restock rule · Send extra kits to the booth with the fewest kits left.' &&
+      activity.table[4]?.[0] === 'Restock booth' && activity.table[4][2] === 'Evidence cell';
+    if (context) {
+      const stockDirections = context.directions === 'For each booth, subtract Used from Packed and type the number under Left. In the last row, enter the booth to restock and the address of the box that supports your choice.' ||
+        context.directions === 'Use the letter at the top and the number on the left to find a cell. Count what is still on each shelf.';
+      heading(root, key, stockSheet ? {
+        ...context,
+        directions: stockDirections ? 'Use the table to work out which fair booth needs more kits.' : context.directions,
+        prompt: context.prompt === 'Finish the stock check and sign off on the booth that needs more kits.' ?
+          'Complete all five answer boxes.' : context.prompt,
+      } : context);
+    }
     const work = document.createElement('div');
     work.className = 'station-work';
     root.dataset.station = key;
@@ -71,6 +116,7 @@ window.DataStation = (() => {
       path: '/assets/data-lab/stations/' + key, sample, key: 'station-film:' + context.key, title: context.title || 'Station example',
     });
     AssessmentDataTable.mount(work, activity, saved, values => { update(values); onChange(values); }, key);
+    if (stockSheet) guideStockSheet(work);
     if (key === 'paper') {
       const source = work.querySelector('.project-data-source');
       if (source) {
