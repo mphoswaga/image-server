@@ -4,6 +4,7 @@ test('objectives generate a reviewable assessment without a lesson workspace', a
   await signInDisposableTeacher(page, '-objective-assessment');
   await page.locator('#assignmentsBtn').click();
   await page.locator('#newAssessmentBtn').click();
+  await page.getByRole('button',{name:'Generate with AI'}).click();
   await page.locator('#assessmentGenerate').click();
   await expect(page.locator('#assessmentGenerateStatus')).toContainText('Enter your subject');
   await page.locator('#assessmentSubject').fill('Science');
@@ -24,6 +25,7 @@ test('teacher chooses an exact MCQ and practical split before generation', async
   await signInDisposableTeacher(page, '-assessment-split');
   await page.locator('#assignmentsBtn').click();
   await page.locator('#newAssessmentBtn').click();
+  await page.getByRole('button',{name:'Generate with AI'}).click();
   await page.locator('[data-generation-split="30"]').click();
   await expect(page.locator('#assessmentTotal')).toHaveValue('50');
   await expect(page.locator('#assessmentGenerateMcqCount')).toHaveValue('30');
@@ -52,6 +54,7 @@ test('teacher describes classwork and reviews a practical draft without entering
   await signInDisposableTeacher(page, '-classwork-assessment');
   await page.locator('#assignmentsBtn').click();
   await page.locator('#newAssessmentBtn').click();
+  await page.getByRole('button',{name:'Generate with AI'}).click();
   await page.getByRole('button', { name: '50 marks: practical only' }).click();
   await page.locator('#assessmentSubject').fill('ICT');
   await page.locator('#assessmentGrade').fill('Grade 2');

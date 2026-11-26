@@ -2441,7 +2441,32 @@
     .assessment-builder { margin-bottom:24px; padding:20px; border:1px solid var(--border); border-radius:16px; background:#fbfdfc; }
     .assessment-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 14px; }
     .assessment-grid .full { grid-column:1/-1; }
-    .manual-marking { display:grid; gap:14px; max-width:720px; }
+    .assessment-methods { display:flex; flex-wrap:wrap; gap:6px; padding:5px; background:#edf4ef; border-radius:12px; margin:16px 0 10px; }
+    .assessment-methods button { flex:1 1 130px; width:auto; min-height:44px; }
+    .assessment-methods button[aria-pressed="true"] { background:#fff; color:var(--accent); border-color:#9ac6b0; box-shadow:0 1px 3px #143c2420; }
+    .assessment-method-panel { padding:14px; border:1px solid var(--border); border-radius:12px; background:#fff; margin:10px 0; }
+    .assessment-method-panel [role="status"]:empty { display:none; }
+    .assessment-builder-footer { display:flex; flex-wrap:wrap; gap:10px; align-items:center; border-top:1px solid var(--border); background:#fbfdfc; padding:10px 0; margin-top:16px; position:sticky; bottom:0; z-index:3; }
+    .assessment-builder-footer .assessment-total { flex:1 1 240px; margin:0; }
+    .assessment-builder-footer button { width:auto; min-height:44px; }
+    .assessment-builder-footer .field-err { width:100%; }
+    .game-card:has(.manual-marking) { overflow:visible; }
+    .manual-marking { display:grid; gap:8px; max-width:840px; margin-inline:auto; }
+    .manual-marking-toolbar,.manual-marking-actions { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; position:sticky; background:#f7fcf9; z-index:2; border:1px solid #d1e5d9; border-radius:10px; padding:8px 12px; }
+    .manual-marking-toolbar { top:64px; }
+    .manual-marking-toolbar label { flex:1 1 210px; }
+    .manual-marking-toolbar p,.manual-marking-actions p { margin:0; }
+    .manual-marking-actions { bottom:0; }
+    .manual-marking-actions [role="status"] { flex:1 0 100%; }
+    .manual-marking-actions [role="status"]:empty { display:none; }
+    .manual-marking-tasks { display:grid; gap:5px; }
+    .manual-marking-row { padding:8px 12px; border:1px solid var(--border); border-radius:9px; background:white; min-width:0; }
+    .manual-marking .manual-marking-score { grid-template-columns:minmax(0,1fr) minmax(95px,128px); align-items:center; margin:0; }
+    .manual-marking-score span { overflow-wrap:anywhere; }
+    .manual-marking-score select { margin:0; }
+    .manual-marking .manual-marking-custom { max-width:150px; margin:6px 0 0 auto; }
+    @media(max-width:480px){ .assessment-builder{padding:12px} .assessment-methods button{flex-basis:100px} .assessment-builder-footer button{flex:1 0 auto} }
+
     .manual-marking label { display:grid; gap:6px; }
     .manual-marking label[hidden] { display:none; }
     .manual-marking input, .manual-marking select, .manual-marking button { min-height:44px; }
@@ -3536,35 +3561,38 @@
         <p id="topicMcqStatus" role="status"></p>
       </section>
       <div id="assessmentBuilder" class="assessment-builder" style="display:none">
-        <div class="assessment-section-head"><div><h3 style="margin:0">Assessment structure</h3><p class="hint" style="margin:3px 0 0">Set the total, then decide exactly how students will earn those marks.</p></div><button id="closeAssessmentBtn" type="button" class="assessment-remove" data-ui-i18n>Close</button></div>
+        <div class="assessment-editor">
+        <div class="assessment-section-head"><div><h3 style="margin:0">Assessment structure</h3></div><button id="closeAssessmentBtn" type="button" class="assessment-remove" data-ui-i18n>Close</button></div>
         <div class="assessment-presets">
           <button type="button" class="btn ghost assessment-mini" data-assessment-preset="blank">Blank</button>
           <button type="button" class="btn ghost assessment-mini" data-assessment-preset="practical-only">50 marks: practical only</button>
           <button type="button" class="btn ghost assessment-mini" data-assessment-preset="theory-practical">50 marks: theory + practical</button>
         </div>
         <div class="assessment-grid">
+          <div class="full"><label for="assessmentTitle">Title</label><input id="assessmentTitle" maxlength="160" placeholder="e.g. Unit 1 Document Creation"></div>
+          <div><label for="assessmentRoster">Class roster <span style="font-weight:400;color:var(--muted)">(required for results and TeacherScope)</span></label><select id="assessmentRoster"><option value="">— Choose a class roster —</option></select></div>
+          <div><label for="assessmentCutoff">Due date <span style="font-weight:400;color:var(--muted)" data-ui-i18n>(optional)</span></label><input id="assessmentCutoff" type="datetime-local"></div>
           <div><label for="assessmentKind">Assessment type</label><select id="assessmentKind"><option value="test">Test</option><option value="quiz">Quiz</option><option value="project">Project</option><option value="practical">Practical</option><option value="performance">Performance</option><option value="oral">Oral</option><option value="portfolio">Portfolio</option><option value="custom">Custom</option></select></div>
           <div><label for="assessmentTotal">Total marks</label><input id="assessmentTotal" type="number" min="1" max="1000" step="1" value="50"></div>
           <div><label for="assessmentDelivery">Delivery</label><select id="assessmentDelivery"><option value="live">Live classroom — teacher controls sections</option><option value="self-paced">Self-paced — students see all sections</option><option value="manual">Teacher marking — paper or in class</option></select></div>
-          <div></div>
-          <div class="full"><label for="assessmentTitle">Title</label><input id="assessmentTitle" maxlength="160" placeholder="e.g. Unit 1 Document Creation"></div>
           <div><label for="assessmentSubject" data-ui-i18n>Subject</label><input id="assessmentSubject" maxlength="100" placeholder="e.g. Computing, English, Science"></div>
           <div><label for="assessmentGrade">Grade or year group</label><input id="assessmentGrade" maxlength="60" placeholder="e.g. Grade 2"></div>
-          <div class="full"><label for="assessmentClasswork">What students did in class <span style="font-weight:400;color:var(--muted)">(optional)</span></label><textarea id="assessmentClasswork" rows="4" maxlength="5000" placeholder="For example: Students typed a short notice, made the title bold and centred, inserted a picture, and saved the file."></textarea></div>
           <div class="full"><label for="assessmentObjectives">Learning objectives or skills <span style="font-weight:400;color:var(--muted)">(one per line)</span></label><textarea id="assessmentObjectives" rows="3" placeholder="I can open Word or Google Docs&#10;I can enter and format text"></textarea></div>
           <div class="full"><label for="assessmentInstructions">Student instructions <span style="font-weight:400;color:var(--muted)" data-ui-i18n>(optional)</span></label><textarea id="assessmentInstructions" rows="2" placeholder="What students need to know before they begin"></textarea></div>
-          <div><label for="assessmentRoster">Class roster <span style="font-weight:400;color:var(--muted)">(required for results and TeacherScope)</span></label><select id="assessmentRoster"><option value="">— Choose a class roster —</option></select></div>
-          <div><label for="assessmentCutoff">Due date <span style="font-weight:400;color:var(--muted)" data-ui-i18n>(optional)</span></label><input id="assessmentCutoff" type="datetime-local"></div>
         </div>
-        <details style="margin:16px 0">
-          <summary>Paste a marking rubric</summary>
+        <div class="assessment-methods" role="group" aria-label="How to create questions">
+          <button type="button" class="btn ghost" data-assessment-method="manual" aria-pressed="true">Enter manually</button>
+          <button type="button" class="btn ghost" data-assessment-method="rubric" aria-pressed="false" aria-controls="assessmentRubricPanel">Paste a marking rubric</button>
+          <button type="button" class="btn ghost" data-assessment-method="ai" aria-pressed="false" aria-controls="assessmentGenerateTools">Generate with AI</button>
+        </div>
+        <div id="assessmentRubricPanel" class="assessment-method-panel" hidden>
           <label for="assessmentRubricPaste">Rubric table with step, task, objective and marks</label>
           <textarea id="assessmentRubricPaste" rows="5" placeholder="Paste your rubric table here"></textarea>
           <button id="assessmentRubricImport" type="button" class="btn ghost assessment-mini">Create criteria from rubric</button>
           <p id="assessmentRubricStatus" role="status"></p>
-        </details>
-        <div id="assessmentGenerateTools" style="margin:16px 0">
-          <h4>Questions and marks</h4>
+        </div>
+        <div id="assessmentGenerateTools" class="assessment-method-panel" hidden>
+          <div class="full"><label for="assessmentClasswork">What students did in class <span style="font-weight:400;color:var(--muted)">(optional)</span></label><textarea id="assessmentClasswork" rows="4" maxlength="5000" placeholder="For example: Students typed a short notice, made the title bold and centred, inserted a picture, and saved the file."></textarea></div>
           <div class="assessment-presets">
             <button type="button" class="btn ghost assessment-mini" data-generation-split="25">25 MCQ + 25 practical marks</button>
             <button type="button" class="btn ghost assessment-mini" data-generation-split="30">30 MCQ + 20 practical marks</button>
@@ -3584,9 +3612,12 @@
         </div>
         <div id="assessmentSections"></div>
         <div style="margin-top:12px"><button id="addAssessmentSection" type="button" class="btn ghost assessment-mini">+ Add section</button></div>
+        <div class="assessment-builder-footer">
         <div id="assessmentTotalStatus" class="assessment-total"><span>Allocated: 0 marks</span><span>Total: 50 marks</span></div>
         <div id="assessmentError" class="field-err" role="alert"></div>
-        <button id="publishAssessmentBtn" type="button" class="btn accent" style="margin-top:14px">Publish assessment</button>
+        <button id="publishAssessmentBtn" type="button" class="btn accent">Publish assessment</button>
+        </div>
+        </div>
         <div id="assessmentPublishResult"></div>
       </div>
       <div id="assignmentFilters">
@@ -6735,7 +6766,7 @@
       const pickerLabel=document.createElement('label');
       pickerLabel.append('Learner',picker);
       const tasks=document.createElement('div');
-      tasks.className='manual-marking';
+      tasks.className='manual-marking-tasks';
       const save=document.createElement('button');
       save.className='btn accent';
       save.textContent='Save marks and go to next learner';
@@ -6771,6 +6802,7 @@
         const grades=marked.get(id)?.grades||{};
         tasks.replaceChildren(...data.questions.map(question=>{
           const label=document.createElement('label');
+          label.className='manual-marking-score';
           const select=document.createElement('select');
           const mark=grades[question.id]?.marksAwarded;
           select.required=true;select.disabled=locked;
@@ -6780,6 +6812,7 @@
           custom.type='number';custom.inputMode='decimal';custom.min='0';custom.max=question.marks;custom.step='any';
           custom.value=Number.isFinite(mark)&&!Number.isInteger(mark)?mark:'';
           const customLabel=document.createElement('label');
+          customLabel.className='manual-marking-custom';
           customLabel.append('Custom mark',custom);
           if(!locked)select.add(new Option('Enter a custom mark','custom'));
           if(locked&&custom.value)select.add(new Option(String(mark),String(mark)));
@@ -6792,8 +6825,11 @@
           }
           select.onchange=showCustom;
           showCustom();
-          label.append(`${question.question} (${question.marks} ${question.marks===1?'mark':'marks'})`,select);
+          const criterion=document.createElement('span');
+          criterion.textContent=`${question.question} (${question.marks} ${question.marks===1?'mark':'marks'})`;
+          label.append(criterion,select);
           const row=document.createElement('div');
+          row.className='manual-marking-row';
           row.append(label,customLabel);
           return row;
         }));
@@ -6824,8 +6860,14 @@
         finally{picker.disabled=save.disabled=false;finish.disabled=!marked.size;}
       };
       if(locked) status.textContent='Clear Marked by teacher to edit these marks.';
-      form.append(progress,pickerLabel,tasks,status);
-      if(!locked)form.append(save,finish);
+      const toolbar=document.createElement('div');
+      toolbar.className='manual-marking-toolbar';
+      toolbar.append(pickerLabel,progress);
+      const actions=document.createElement('div');
+      actions.className='manual-marking-actions';
+      actions.append(status);
+      if(!locked)actions.append(save,finish);
+      form.append(toolbar,tasks,actions);
       wrap.replaceChildren(form);
       renderLearner(learners.find(learner=>!marked.has(learner.id))?.id||learners[0].id);
     }
@@ -8705,6 +8747,13 @@
       renderAssessmentSections();
       updateGenerationAllocation();
     }
+    function selectAssessmentMethod(method){
+      $('assessmentRubricPanel').hidden=method!=='rubric';
+      $('assessmentGenerateTools').hidden=method!=='ai';
+      $('assessmentBuilder').querySelectorAll('[data-assessment-method]').forEach(button=>{
+        button.setAttribute('aria-pressed',String(button.dataset.assessmentMethod===method));
+      });
+    }
     $('assessmentRubricImport').addEventListener('click',()=>{
       const status=$('assessmentRubricStatus');
       try{
@@ -8853,6 +8902,7 @@
       const draft=data.assessment||{};
       editingGeneratedAssessmentDraft=false;
       editingAssessmentId=data.assessmentId;
+      selectAssessmentMethod('manual');
       $('assessmentClasswork').value='';
       openAssignments('plan');
       $('assessmentBuilder').style.display='block';
@@ -8987,6 +9037,7 @@
       assessmentFromTopic=false;
       editingGeneratedAssessmentDraft=false;
       editingAssessmentId=null;
+      selectAssessmentMethod('manual');
       $('assessmentRoster').disabled=false;
       const builder=$('assessmentBuilder'); builder.style.display='block';
       if(!assessmentSectionsState.length) applyAssessmentPreset('blank');
@@ -8994,6 +9045,8 @@
     });
     $('closeAssessmentBtn').addEventListener('click',()=>{ captureGeneratedAssessmentEdits(); editingGeneratedAssessmentDraft=false; editingAssessmentId=null; $('assessmentRoster').disabled=false; $('assessmentBuilder').style.display='none'; });
     $('assessmentBuilder').addEventListener('click',e=>{
+      const method=e.target.closest('[data-assessment-method]');
+      if(method){selectAssessmentMethod(method.dataset.assessmentMethod);return;}
       const preset=e.target.closest('[data-assessment-preset]'); if(preset){ applyAssessmentPreset(preset.dataset.assessmentPreset); return; }
       const setCount=e.target.closest('[data-set-practical-count]');
       if(setCount){
@@ -9074,7 +9127,7 @@
         const url=location.origin+data.path;
         if(assessment.deliveryMode!=='manual') $('assessmentPublishResult').innerHTML=`<div class="assessment-result"><b>${existingAssessmentId?'Changes saved and published':'Assessment published'}</b><p style="margin:6px 0">${data.sectionCount} section${data.sectionCount===1?'':'s'} · ${data.totalMarks} marks</p><div class="room-code" style="display:inline-block">${esc(data.roomCode)}</div><p class="hint" style="margin:7px 0">Students join at <b>${esc(location.origin+'/join')}</b> using this room code.</p><div class="game-link"><input readonly value="${esc(url)}"><button type="button" class="btn ghost assessment-copy" data-url="${esc(url)}" style="width:auto">Copy link</button></div><a class="btn ghost" href="/assessment/${esc(data.assessmentId)}/present" target="_blank" rel="noopener" style="display:inline-flex;width:auto;margin-top:10px;text-decoration:none">Open presentation</a></div>`;
         if(assessment.deliveryMode==='manual'){
-          $('assessmentPublishResult').innerHTML=`<div class="assessment-result"><b>Practical assessment saved</b><p class="hint">Open Mark work to enter marks from the class roster.</p><div id="manual-practical-results"></div></div>`;
+          $('assessmentPublishResult').innerHTML=`<div class="assessment-result"><b>Practical assessment saved</b><div id="manual-practical-results"></div></div>`;
           await loadAssignmentResults(data.assessmentId,'manual-practical-results');
         }
         if(data.assessmentId&&!workspaceAssignmentIds.includes(data.assessmentId))workspaceAssignmentIds.push(data.assessmentId);
