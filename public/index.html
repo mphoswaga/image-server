@@ -2465,7 +2465,10 @@
     .bulk-mark-field input { width:76px;padding:7px 8px; }
     [data-assignment-status-card][hidden] { display:none !important; }
     [data-marking-student][hidden] { display:none !important; }
+    .bulk-grade-actions { grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px; }
+    .bulk-grade-action { display:flex;flex-wrap:wrap;align-items:end;gap:8px;padding:9px 10px;border:1px solid #d4e8de;border-radius:8px;background:#fff; }
     .bulk-grade-toolbar .bulk-grade-apply { width:auto;min-height:38px;padding:8px 13px; }
+    @media(max-width:650px) { .bulk-grade-actions { grid-template-columns:1fr; } }
     .question-marking-list { margin-top:12px;border:1px solid var(--border);border-radius:11px;overflow:hidden;background:#fff; }
     .question-marking-title { display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 14px;background:#f7f9fc;font-size:14px;font-weight:700;border-bottom:1px solid var(--border); }
     .question-marking-title>span { width:100%;font-size:10.5px;text-transform:uppercase;color:var(--muted);letter-spacing:.4px; }
@@ -6342,23 +6345,35 @@
 
       const bulkApply=e.target.closest('.bulk-grade-apply');
       if(bulkApply){
-        const {assignId,wrapId,questionId}=bulkApply.dataset,wrap=$(wrapId);
-        const selected=[...(assessmentBulkSelections.get(`${assignId}\u001f${questionId}`)||new Set())];
-        const input=wrap?.querySelector('.bulk-grade-mark'),marksAwarded=Number(input?.value);
-        const question=assignResultsCache.get(assignId)?.questions?.find(item=>item.id===questionId);
+        const {assignId,wrapId,questionId,mode}=bulkApply.dataset,wrap=$(wrapId);
+        const key=bulkGradeKey(assignId,questionId);
+        if(assessmentBulkPending.has(key))return;
+        const selected=[...(assessmentBulkSelections.get(key)||new Set())];
+        const adding=mode==='add';
+        const input=wrap?.querySelector(`.bulk-grade-mark[data-mode="${mode}"]`);
+        const amount=Number(input?.value);
+        const max=Number(assignResultsCache.get(assignId)?.questions?.find(question=>question.id===questionId)?.marks);
         if(!selected.length){toast('Select at least one learner.');return;}
-        if(!input?.value||!Number.isFinite(marksAwarded)||marksAwarded<0||marksAwarded>Number(question?.marks)){
-          toast(`Enter a mark from 0 to ${question?.marks||0}.`);input?.focus();return;
+        if(!input?.value||!Number.isFinite(amount)||amount<(adding?0.01:0)||(!adding&&amount>max)){
+          toast(adding?'Enter a positive number of marks to add.':`Enter a mark from 0 to ${max}.`);
+          input?.focus();return;
         }
-        bulkApply.disabled=true;bulkApply.textContent='Applying…';
+        assessmentBulkPending.add(key);
+        refreshBulkGradeButtons(wrap);
         try{
-          const r=await fetch(`/api/assignment/${assignId}/grade/bulk`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({questionId,studentIds:selected,marksAwarded})});
+          const body={questionId,studentIds:selected,...(adding?{marksToAdd:amount}:{marksAwarded:amount})};
+          const r=await fetch(`/api/assignment/${assignId}/grade/bulk`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
           const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not apply the mark.');
-          assessmentBulkSelections.delete(`${assignId}\u001f${questionId}`);
-          assessmentBulkMarks.delete(`${assignId}\u001f${questionId}`);
-          toast(`Mark applied to ${d.updated} learner${d.updated===1?'':'s'}.`,'ok');
-          loadAssignmentResults(assignId,wrapId||'assignSubmissions');
-        }catch(err){toast(err.message);bulkApply.disabled=false;bulkApply.textContent=`Apply to ${selected.length} selected`;}
+          assessmentBulkSelections.delete(key);
+          assessmentBulkMarks.delete(key+'|'+mode);
+          const changed=d.updated+' learner'+(d.updated===1?'':'s');
+          const message=adding
+            ? (d.updated?`Marks added for ${changed}.`:'Selected learners already have full marks.')
+            : `Mark applied to ${changed}.`;
+          toast(message,'ok');
+          await loadAssignmentResults(assignId,wrapId||'assignSubmissions');
+        }catch(err){toast(err.message);}
+        finally{assessmentBulkPending.delete(key);refreshBulkGradeButtons(wrap);}
         return;
       }
       const questionNav=e.target.closest('.assessment-question-nav');
@@ -6424,8 +6439,8 @@
         const key=`${assignId}\u001f${questionId}`,selected=assessmentBulkSelections.get(key)||new Set();
         if(studentPicker.checked)selected.add(String(studentId));else selected.delete(String(studentId));
         assessmentBulkSelections.set(key,selected);
-        const wrap=$(wrapId),apply=wrap?.querySelector('.bulk-grade-apply'),all=wrap?.querySelector('.bulk-grade-all');
-        if(apply){apply.disabled=!selected.size;apply.textContent=`Apply to ${selected.size} selected`;}
+        const wrap=$(wrapId);
+        refreshBulkGradeButtons(wrap);
         filterAssessmentStudents(wrap);
         return;
       }
@@ -6439,8 +6454,7 @@
           else selected.delete(String(input.dataset.studentId));
         });
         assessmentBulkSelections.set(`${assignId}\u001f${questionId}`,selected);
-        const apply=wrap?.querySelector('.bulk-grade-apply');
-        if(apply){apply.disabled=!selected.size;apply.textContent=`Apply to ${selected.size} selected`;}
+        refreshBulkGradeButtons(wrap);
         return;
       }
       const select=e.target.closest('.assessment-question-select');
@@ -6456,12 +6470,23 @@
       const search=e.target.closest('.assessment-student-search');
       if(search){const wrap=$(search.dataset.wrapId);wrap.dataset.studentSearch=search.value;filterAssessmentStudents(wrap);}
       const input=e.target.closest('.bulk-grade-mark');
-      if(input)assessmentBulkMarks.set(`${input.dataset.assignId}\u001f${input.dataset.questionId}`,input.value);
+      if(input)assessmentBulkMarks.set(bulkGradeKey(input.dataset.assignId,input.dataset.questionId)+'|'+input.dataset.mode,input.value);
     });
 
     const assignResultsCache=new Map(); // assignId -> last-fetched {questions, submissions, ...}
     const assessmentBulkSelections=new Map(); // assignment/question -> selected Student IDs
-    const assessmentBulkMarks=new Map(); // assignment/question -> draft mark during live refresh
+    const assessmentBulkMarks=new Map();
+    const assessmentBulkPending=new Set();
+    const bulkGradeKey=(assignment,question)=>`${assignment}\u001f${question}`;
+    function refreshBulkGradeButtons(wrap){
+      for(const button of wrap?.querySelectorAll('.bulk-grade-apply')||[]){
+        const key=bulkGradeKey(button.dataset.assignId,button.dataset.questionId);
+        const count=assessmentBulkSelections.get(key)?.size||0;
+        const pending=assessmentBulkPending.has(key);
+        button.disabled=pending||!count;
+        button.textContent=pending?'Applying…':(button.dataset.mode==='add'?'Add to ':'Apply to ')+count+' selected';
+      }
+    }
     const assignmentResultsInFlight=new Map(); // assignId/wrapId -> active fetch promise
     const assignmentResultsPollers=new Map(); // detailId -> one non-overlapping timer
     const ASSIGNMENT_RESULTS_POLL_MS=1200;
@@ -6646,7 +6671,12 @@
       const label=(item,index)=>`${index+1}. ${(item.kind==='data-table'&&item.sectionTitle?item.sectionTitle:stripMarksText(item.question)).slice(0,90)} — ${item.marks} mark${Number(item.marks)===1?'':'s'}`;
       const options=questions.map((item,index)=>`<option value="${esc(item.id)}" ${item.id===q.id?'selected':''}>${esc(label(item,index))}</option>`).join('');
       const selectionKey=`${assignId}\u001f${q.id}`,selected=assessmentBulkSelections.get(selectionKey)||new Set();
-      const bulkMark=assessmentBulkMarks.get(selectionKey)||'';
+      const bulkAction=(mode,label)=>`<div class="bulk-grade-action">
+        <label class="bulk-mark-field"><span>${label}</span><span>
+          <input type="number" class="bulk-grade-mark" data-assign-id="${assignId}" data-question-id="${esc(q.id)}" data-mode="${mode}" min="${mode==='add'?0.01:0}" ${mode==='set'?`max="${q.marks}"`:''} step="0.01" value="${esc(assessmentBulkMarks.get(selectionKey+'|'+mode)||'')}" aria-label="${mode==='add'?'Marks to add':'Mark for selected learners'}"> ${mode==='add'?'Capped at '+q.marks:' / '+q.marks}
+        </span></label>
+        <button type="button" class="btn ${mode==='add'?'ghost':'accent'} bulk-grade-apply" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-id="${esc(q.id)}" data-mode="${mode}" disabled></button>
+      </div>`;
       const markable=d.submissions.filter(s=>!(s.draftOnly&&q.kind!=='practical'));
       const rows=d.submissions.map(s=>gradeRowHTML(q, s, assignId, wrapId, s.name,true)).join('');
       const station=q.kind==='data-table';
@@ -6665,8 +6695,10 @@
           ${q.kind==='mcq'?'<div class="mcq-auto-note"><b>Multiple choice is complete.</b> LessonScope has marked and confirmed every submitted answer automatically. Use the controls below only to correct or override a mark.</div>':''}
           <label class="bulk-select-all"><input type="checkbox" class="bulk-grade-all" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-id="${esc(q.id)}" ${markable.length&&selected.size===markable.length?'checked':''}> Select matching learners</label>
           <p class="hint" style="margin:0">Selections stay selected when you search for another student.</p>
-          <label class="bulk-mark-field"><span>${q.kind==='mcq'?'Override mark':'Mark for selected learners'}</span><span><input type="number" class="bulk-grade-mark" data-assign-id="${assignId}" data-question-id="${esc(q.id)}" min="0" max="${q.marks}" step="0.5" value="${esc(bulkMark)}" aria-label="Mark for selected learners"> / ${q.marks}</span></label>
-          <button type="button" class="btn accent bulk-grade-apply" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-id="${esc(q.id)}" ${selected.size?'':'disabled'}>Apply to ${selected.size} selected</button>
+          <div class="bulk-grade-actions">
+            ${bulkAction('set','Set mark for selected learners')}
+            ${bulkAction('add','Add marks')}
+          </div>
         </div>
         ${station?'</details>':''}
       </div>
@@ -6690,6 +6722,8 @@
       const searchState=search?{value:search.value,focused:document.activeElement===search,start:search.selectionStart,end:search.selectionEnd}:null;
       const markingSearch=wrap.querySelector('.assessment-student-search');
       const markingFocus=markingSearch&&document.activeElement===markingSearch?{start:markingSearch.selectionStart,end:markingSearch.selectionEnd}:null;
+      const focusedBulk=wrap.contains(document.activeElement)&&document.activeElement?.matches('.bulk-grade-mark')
+        ? document.activeElement.dataset : null;
       wrap.dataset.view=view;
       const liveBar=assessmentLiveControls(d,assignId,wrapId)+((d.absentLearners||[]).length?`<p class="hint"><strong>Absent (${d.absentLearners.length}):</strong> ${d.absentLearners.map(s=>esc(s.name)).join(', ')} · excluded from expected submissions and averages</p>`:'');
       const releaseBar=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:${d.effectivelyReleased||d.teacherMarked?'#eafaf0':'#fdf6ea'}">
@@ -6712,6 +6746,11 @@
       wrap.innerHTML=liveBar+submitDraftsBar+releaseBar+acceptAIBar+comments+(dataMarking?`<details class="data-marking-section" data-marking-detail="report"><summary>Class learning review</summary>${assignmentSummary(d)}</details>`:assignmentSummary(d))+tabs+studentSearch+(view==='question'?renderByQuestion(d,assignId,wrapId):renderByStudent(d,assignId,wrapId));
       wrap.querySelectorAll('details[data-marking-detail]').forEach(detail=>{detail.open=dataOpened.has(detail.dataset.markingDetail);});
       filterAssessmentStudents(wrap);
+      refreshBulkGradeButtons(wrap);
+      if(focusedBulk){
+        const input=wrap.querySelector(`.bulk-grade-mark[data-mode="${focusedBulk.mode}"]`);
+        if(input?.dataset.questionId===focusedBulk.questionId)input.focus({preventScroll:true});
+      }
       if(markingFocus){const field=wrap.querySelector('.assessment-student-search');field.focus({preventScroll:true});field.setSelectionRange(markingFocus.start,markingFocus.end);}
       wrap.querySelectorAll('.learning-report details').forEach(el=>{if(reportOpen.has(detailKey(el)))el.open=reportOpen.get(detailKey(el));});
       const nextSearch=wrap.querySelector('[data-lr-search]');

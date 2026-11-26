@@ -1004,12 +1004,19 @@ test('School Fair Data Lab saves each station and exports its rubric score to cl
       await review.click();
       await expect(card.getByText('Edit feedback',{exact:true})).toBeVisible();
       await expect(card.locator('.grade-rationale-input')).toBeHidden();
+      await card.getByLabel('Mark for Sample Learner',{exact:true}).fill('4');
       const updated = page.waitForResponse(response => response.url().endsWith(api+'/grade') && response.ok());
       await card.getByRole('button',{name:'Save',exact:true}).click();
       await updated;
       await expect(evidence).toBeVisible();
       await card.getByText('Change marks in bulk',{exact:true}).click();
       await expect(card.getByLabel('Select matching learners')).toBeVisible();
+      await card.getByLabel('Select matching learners').check();
+      await card.getByLabel('Marks to add').fill('2');
+      await card.getByRole('button',{name:'Add to 1 selected',exact:true}).click();
+      await expect(page.locator('#toastWrap')).toContainText('Marks added for 1 learner');
+      await expect(card.locator('.data-work .data-score')).toHaveText('5 / 5');
+      await expect(evidence).toBeVisible();
       await card.getByRole('button',{name:'By student',exact:true}).click();
       await expect(card.locator('.data-student summary').first()).toContainText((50-missed)+' / 50');
     }

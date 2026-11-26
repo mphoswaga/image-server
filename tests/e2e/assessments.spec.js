@@ -609,6 +609,21 @@ test('one bulk question mark updates every selected learner and rejects a mixed 
   const results = await (await page.request.get(`/api/assignment/${assessment.assessmentId}/results`)).json();
   expect(results.submissions).toHaveLength(2);
   expect(results.submissions.map(student => student.grades.criterion.marksAwarded)).toEqual([3, 3]);
+  const bulkUrl = `/api/assignment/${assessment.assessmentId}/grade/bulk`;
+  expect((await page.request.patch(bulkUrl, {
+    data: {questionId:'criterion', studentIds:['BULK-2'], marksAwarded:1},
+  })).ok()).toBeTruthy();
+  await search.fill('');
+  await card.getByLabel('Select matching learners').check();
+  await card.getByLabel('Marks to add').fill('2');
+  await card.getByRole('button',{name:'Add to 2 selected',exact:true}).click();
+  await expect(page.locator('#toastWrap')).toContainText('Marks added for 2 learners');
+  const bumped = await (await page.request.get(`/api/assignment/${assessment.assessmentId}/results`)).json();
+  expect(bumped.submissions.map(student => student.grades.criterion.marksAwarded)).toEqual([5, 3]);
+  const cap = await page.request.patch(bulkUrl, {data:{questionId:'criterion',studentIds:['BULK-1'],marksToAdd:20}});
+  expect(await cap.json()).toMatchObject({updated:0,alreadyAtFullMarks:1});
+  const badBonus = await page.request.patch(bulkUrl, {data:{questionId:'criterion',studentIds:['BULK-2'],marksToAdd:-1}});
+  expect(badBonus.status()).toBe(400);
   await expect(card.locator('.a-captured-toggle')).toBeDisabled();
   await page.getByLabel('Find a test', {exact:true}).fill('Bulk practical');
   await page.getByLabel('Class', {exact:true}).selectOption(classRoster.id);

@@ -4311,17 +4311,22 @@ app.patch('/api/assignment/:id/grade/bulk', requireAuth, (req, res) => {
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
   if (a.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assignment.' });
   if (assignments.assessmentIsFinalised(a)) return res.status(409).json({ code: 'assessment_finalised', error: 'Unrelease the results before changing assessment marks.' });
-  const { questionId, marksAwarded, rationale } = req.body || {};
+  const { questionId, marksAwarded, marksToAdd, rationale } = req.body || {};
   const q = a.content.questions.find(question => question.id === questionId);
   if (!q) return res.status(404).json({ error: 'Question not found.' });
   const rawIds = Array.isArray(req.body && req.body.studentIds) ? req.body.studentIds : [];
   const studentIds = [...new Set(rawIds.map(roster.normalizeStudentId).filter(Boolean))].slice(0, 500);
   if (!studentIds.length) return res.status(400).json({ error: 'Select at least one learner.' });
-  const numericMarks = Number(marksAwarded);
-  if (!Number.isFinite(numericMarks) || numericMarks < 0 || numericMarks > Number(q.marks)) {
-    return res.status(400).json({ error: `Enter a mark from 0 to ${q.marks}.` });
+  const adding = marksToAdd !== undefined;
+  const max = Number(q.marks);
+  const amount = Number(adding ? marksToAdd : marksAwarded);
+  if (adding && (marksAwarded !== undefined || typeof marksToAdd !== 'number' ||
+      !Number.isFinite(amount) || amount < 0.01)) {
+    return res.status(400).json({ error: 'Enter a positive number of marks to add.' });
   }
-  const marks = Math.round(numericMarks * 100) / 100;
+  if (!adding && (!Number.isFinite(amount) || amount < 0 || amount > max)) {
+    return res.status(400).json({ error: `Enter a mark from 0 to ${max}.` });
+  }
   const cohort = a.rosterId ? assignmentCohortStudents(a).filter(s=>!assignments.isAbsent(a,s.id)) : [];
   const cohortMap = new Map(cohort.map(student => [roster.normalizeStudentId(student.id), student]));
   const targets = studentIds.map(studentId => ({
@@ -4335,28 +4340,39 @@ app.patch('/api/assignment/:id/grade/bulk', requireAuth, (req, res) => {
   ));
   if (invalid) return res.status(404).json({ error: `No markable response was found for ${invalid.studentId}.` });
 
-  const verdict = marks === Number(q.marks) ? 'correct' : marks === 0 ? 'incorrect' : 'partial';
+  const previousGrade = target => (target.submission ? target.submission.grades : target.draft?.observationGrades)?.[questionId] || {};
+  if (adding && targets.some(target => !Number.isFinite(previousGrade(target).marksAwarded))) {
+    return res.status(409).json({ error: 'Set a mark for every selected learner on this question before adding marks.' });
+  }
+
+  let updated = 0;
   for (const target of targets) {
-    const grade = { marksAwarded: marks, verdict, rationale: String(rationale || '').trim(), source: 'teacher' };
+    const previous = previousGrade(target);
+    const proposed = adding ? previous.marksAwarded + amount : amount;
+    const marks = Math.round(Math.min(max, proposed) * 100) / 100;
+    if (adding && marks === previous.marksAwarded) continue;
+    const verdict = marks === max ? 'correct' : marks === 0 ? 'incorrect' : 'partial';
+    const grade = { marksAwarded: marks, verdict, rationale: String(rationale || '').trim() || previous.rationale || '', source: 'teacher' };
+    updated++;
     if (!target.submission) {
       assignments.saveDraftGrade(a.id, {
         studentId: target.studentId,
         name: target.rosterStudent && target.rosterStudent.name || target.draft && target.draft.name || target.studentId,
         questionId,
-        grade,
+        grade: { ...previous, ...grade },
       });
       continue;
     }
-    const previous = target.submission.grades[questionId] || {};
-    grade.rationale = grade.rationale || previous.rationale || '';
-    if (!['practical', 'codequest', 'data-table'].includes(q.kind)) assignments.recordVerdict(a.id, questionId, {
+    if (!adding && !['practical', 'codequest', 'data-table'].includes(q.kind)) assignments.recordVerdict(a.id, questionId, {
       answerText: target.submission.answers[questionId], ...grade, confirmed: true,
     });
     target.submission.grades[questionId] = { ...previous, ...grade };
     target.submission.totalMarks = Object.values(target.submission.grades).reduce((sum, item) => sum + Number(item.marksAwarded || 0), 0);
     assignments.saveSubmission(a.id, target.submission);
   }
-  res.json({ ok: true, updated: targets.length, questionId, marksAwarded: marks });
+  res.json(adding
+    ? { ok: true, updated, alreadyAtFullMarks: targets.length - updated, questionId }
+    : { ok: true, updated, questionId, marksAwarded: Math.round(amount * 100) / 100 });
 });
 
 // Everything a generated (or uploaded) deck already knows about the lesson,
