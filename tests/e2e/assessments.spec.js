@@ -615,7 +615,16 @@ test('one bulk question mark updates every selected learner and rejects a mixed 
   })).ok()).toBeTruthy();
   await search.fill('');
   await card.getByLabel('Select matching learners').check();
-  await card.getByLabel('Marks to add').fill('2');
+  const bonus = card.getByLabel('Marks to add');
+  await bonus.fill('119.84');
+  await bonus.press('ControlOrMeta+a');
+  const isResultsRefresh = response =>
+    response.url().endsWith(`/api/assignment/${assessment.assessmentId}/results`) && response.ok();
+  await page.waitForResponse(isResultsRefresh);
+  await page.waitForResponse(isResultsRefresh);
+  await expect(bonus).toBeFocused();
+  await page.keyboard.type('2');
+  await expect(bonus).toHaveValue('2');
   await card.getByRole('button',{name:'Add to 2 selected',exact:true}).click();
   await expect(page.locator('#toastWrap')).toContainText('Marks added for 2 learners');
   const bumped = await (await page.request.get(`/api/assignment/${assessment.assessmentId}/results`)).json();
