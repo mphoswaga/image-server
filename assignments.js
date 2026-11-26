@@ -142,7 +142,8 @@ function normalizeAssessment(data) {
       questionIds.add(itemId);
       const refs = (Array.isArray(rawItem && rawItem.objectiveIds) ? rawItem.objectiveIds : inheritedObjectives)
         .map(x => cleanText(x, 80)).filter(x => objectiveIds.has(x));
-      const objectiveRefs = refs.length ? [...new Set(refs)] : [...inheritedObjectives];
+      const explicitlyUnaligned = deliveryMode === 'manual' && Array.isArray(rawItem.objectiveIds) && !rawItem.objectiveIds.length;
+      const objectiveRefs = refs.length || explicitlyUnaligned ? [...new Set(refs)] : [...inheritedObjectives];
       const item = { id: itemId, prompt, marks, objectiveIds: objectiveRefs };
       const question = { id: itemId, question: prompt, marks, sectionId: id, sectionTitle: title, sectionInstructions: instructions, sectionType: type, objectiveIds: objectiveRefs };
       if (type === 'mcq') {

@@ -16,8 +16,13 @@ test('teacher builds a 50-mark practical and saves recorded zeros from a tablet'
   await page.locator('#assessmentTitle').fill('Document practical');
   await page.locator('#assessmentSubject').fill('Computing');
   await page.locator('#assessmentGrade').fill('Grade 2');
-  await page.locator('#assessmentObjectives').fill('Create a document');
-  await page.locator('[data-item-prompt]').fill('Formats a heading');
+  await page.getByText('Paste a marking rubric', {exact:true}).click();
+  await page.getByLabel('Rubric table with step, task, objective and marks').fill(
+    'Step\tTask\tLearning Objective Alignment\tMarks\n1\tOpened Chrome\t—\t1\n2\tFormats a heading\tCreate a document\t49'
+  );
+  await page.getByRole('button', {name:'Create criteria from rubric'}).click();
+  await expect(page.locator('#assessmentRubricStatus')).toContainText('2 criteria imported · 50 marks');
+  await expect(page.locator('[data-item-marks]').first()).toHaveValue('1');
   await page.locator('#assessmentRoster').selectOption(roster.id);
   const published = page.waitForResponse(response =>
     response.url().endsWith('/api/assessment') && response.request().method() === 'POST');
@@ -28,13 +33,16 @@ test('teacher builds a 50-mark practical and saves recorded zeros from a tablet'
   expect(roomCode).toBeNull();
   const marking = page.locator('#manual-practical-results form');
   await expect(marking.getByLabel('Learner')).toHaveValue('P1');
-  await expect(marking.getByLabel('Formats a heading (50 marks)')).toHaveValue('');
-  await marking.getByLabel('Formats a heading (50 marks)').fill('0');
+  await expect(marking.getByLabel('Formats a heading (49 marks)')).toHaveValue('');
+  await marking.getByLabel('Opened Chrome (1 mark)').selectOption('0');
+  await marking.getByLabel('Formats a heading (49 marks)').selectOption('0');
   await marking.getByRole('button', { name: 'Save marks and go to next learner' }).click();
   await expect(marking.getByLabel('Learner')).toHaveValue('P2');
-  await expect(marking.getByLabel('Formats a heading (50 marks)')).toHaveValue('');
+  await expect(marking.getByLabel('Formats a heading (49 marks)')).toHaveValue('');
   const result = await (await page.request.get('/api/assignment/' + assessmentId + '/results')).json();
   expect(result.submissions).toHaveLength(1);
+  expect(result.questions[0].objectiveIds).toEqual([]);
+  expect(result.questions[1].objectiveIds).toEqual(['objective-create-a-document']);
   expect(result.submissions[0]).toMatchObject({ studentId: 'P1', totalMarks: 0, maxMarks: 50 });
   const completed = page.waitForResponse(response => response.url().endsWith('/marked') && response.request().method() === 'PATCH');
   await marking.getByRole('button', { name: 'Mark as completed' }).click();

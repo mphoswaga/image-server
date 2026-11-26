@@ -2443,6 +2443,7 @@
     .assessment-grid .full { grid-column:1/-1; }
     .manual-marking { display:grid; gap:14px; max-width:720px; }
     .manual-marking label { display:grid; gap:6px; }
+    .manual-marking label[hidden] { display:none; }
     .manual-marking input, .manual-marking select, .manual-marking button { min-height:44px; }
     .manual-marking button { width:auto; justify-self:start; }
     .assessment-presets { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 2px; }
@@ -3555,6 +3556,13 @@
           <div><label for="assessmentRoster">Class roster <span style="font-weight:400;color:var(--muted)">(required for results and TeacherScope)</span></label><select id="assessmentRoster"><option value="">— Choose a class roster —</option></select></div>
           <div><label for="assessmentCutoff">Due date <span style="font-weight:400;color:var(--muted)" data-ui-i18n>(optional)</span></label><input id="assessmentCutoff" type="datetime-local"></div>
         </div>
+        <details style="margin:16px 0">
+          <summary>Paste a marking rubric</summary>
+          <label for="assessmentRubricPaste">Rubric table with step, task, objective and marks</label>
+          <textarea id="assessmentRubricPaste" rows="5" placeholder="Paste your rubric table here"></textarea>
+          <button id="assessmentRubricImport" type="button" class="btn ghost assessment-mini">Create criteria from rubric</button>
+          <p id="assessmentRubricStatus" role="status"></p>
+        </details>
         <div id="assessmentGenerateTools" style="margin:16px 0">
           <h4>Questions and marks</h4>
           <div class="assessment-presets">
@@ -3833,6 +3841,7 @@
   <script src="/lesson-design.js"></script>
   <script src="/slide-upload-batch.js?v=1"></script>
   <script src="/slide-generation.js?v=1"></script>
+  <script src="/practical-rubric.js?v=1"></script>
   <script>
     const $=id=>document.getElementById(id);
     const cap=s=>s.replace(/\b\w/g,c=>c.toUpperCase());
@@ -6762,12 +6771,31 @@
         const grades=marked.get(id)?.grades||{};
         tasks.replaceChildren(...data.questions.map(question=>{
           const label=document.createElement('label');
-          const input=document.createElement('input');
-          input.type='number';input.inputMode='decimal';input.min='0';input.max=question.marks;
-          input.step='any';input.required=true;input.readOnly=locked;
-          input.value=grades[question.id]?.marksAwarded??'';
-          label.append(`${question.question} (${question.marks} marks)`,input);
-          return label;
+          const select=document.createElement('select');
+          const mark=grades[question.id]?.marksAwarded;
+          select.required=true;select.disabled=locked;
+          select.add(new Option('Select a mark',''));
+          for(let score=0;score<=question.marks;score++)select.add(new Option(String(score),String(score)));
+          const custom=document.createElement('input');
+          custom.type='number';custom.inputMode='decimal';custom.min='0';custom.max=question.marks;custom.step='any';
+          custom.value=Number.isFinite(mark)&&!Number.isInteger(mark)?mark:'';
+          const customLabel=document.createElement('label');
+          customLabel.append('Custom mark',custom);
+          if(!locked)select.add(new Option('Enter a custom mark','custom'));
+          if(locked&&custom.value)select.add(new Option(String(mark),String(mark)));
+          select.value=custom.value&&!locked?'custom':mark??'';
+          function showCustom(){
+            const active=select.value==='custom';
+            customLabel.hidden=!active;
+            custom.disabled=!active;
+            custom.required=active;
+          }
+          select.onchange=showCustom;
+          showCustom();
+          label.append(`${question.question} (${question.marks} ${question.marks===1?'mark':'marks'})`,select);
+          const row=document.createElement('div');
+          row.append(label,customLabel);
+          return row;
         }));
       }
       picker.onchange=()=>{status.textContent='';renderLearner(picker.value);};
@@ -6775,7 +6803,10 @@
         event.preventDefault();
         const studentId=picker.value;
         const previousIndex=learners.findIndex(learner=>learner.id===studentId);
-        const marks=[...tasks.querySelectorAll('input')].map(input=>input.valueAsNumber);
+        const marks=[...tasks.children].map(row=>{
+          const select=row.querySelector('select');
+          return select.value==='custom'?row.querySelector('input').valueAsNumber:Number(select.value);
+        });
         picker.disabled=save.disabled=finish.disabled=true;
         try{
           const response=await fetch('/api/assignment/'+encodeURIComponent(assignId)+'/manual-marks',{
@@ -6787,6 +6818,7 @@
           const next=[...learners.slice(previousIndex+1),...learners.slice(0,previousIndex)]
             .find(learner=>!marked.has(learner.id));
           renderLearner(next?.id||studentId);
+          if(next)picker.scrollIntoView({block:'nearest'});
           status.textContent=`${learners[previousIndex].name}: ${result.submission.totalMarks}/${data.totalMarks} saved.`;
         }catch(error){status.textContent=error.message;}
         finally{picker.disabled=save.disabled=false;finish.disabled=!marked.size;}
@@ -8591,9 +8623,12 @@
         section.type=node.querySelector('[data-section-type]').value;
         section.instructions=node.querySelector('[data-section-instructions]').value.trim();
         section.objectiveIds=[...node.querySelector('[data-section-objectives]').selectedOptions].map(o=>o.value);
+        const previousItems=new Map(section.items.map(item=>[item.id,item]));
         section.items=[...node.querySelectorAll('.assessment-item')].map(item=>{
           const type=section.type;
           const result={id:item.dataset.itemId,prompt:item.querySelector('[data-item-prompt]').value.trim(),marks:Number(item.querySelector('[data-item-marks]').value)||0};
+          const priorRefs=previousItems.get(result.id)?.objectiveIds;
+          if(priorRefs)result.objectiveIds=priorRefs.filter(id=>objectives.some(objective=>objective.id===id));
           if(type==='mcq'){
             result.options=item.querySelector('[data-item-options]').value.split(/\n+/).map(x=>x.trim()).filter(Boolean);
             result.correctIndex=Math.max(0,(Number(item.querySelector('[data-item-correct]').value)||1)-1);
@@ -8608,13 +8643,14 @@
       $('assessmentSections').innerHTML=assessmentSectionsState.map((section,si)=>{
         const objectiveOptions=objectives.map(o=>`<option value="${esc(o.id)}" ${section.objectiveIds.includes(o.id)?'selected':''}>${esc(o.text)}</option>`).join('');
         const items=section.items.map((item,ii)=>{
+          const alignment=item.objectiveIds?.map(id=>objectives.find(objective=>objective.id===id)?.text).filter(Boolean).join(' · ');
           const promptLabel=section.type==='practical'?'Observable criterion or task':'Question';
           const extra=section.type==='mcq'
             ? `<div class="wide"><label>Answer options <span style="font-weight:400;color:var(--muted)">(one per line)</span></label><textarea rows="4" data-item-options placeholder="Option 1&#10;Option 2&#10;Option 3&#10;Option 4">${esc((item.options||[]).join('\n'))}</textarea></div><div><label>Correct option number</label><input data-item-correct type="number" min="1" value="${Number(item.correctIndex||0)+1}"></div>`
             : section.type==='practical' ? '' : `<div class="wide"><label>Answer key or marking guidance</label><textarea rows="2" data-item-key placeholder="What earns the marks?">${esc(item.answerKey||'')}</textarea></div>`;
           return `<div class="assessment-item" data-item-id="${esc(item.id)}">
             <div class="assessment-section-head"><b style="font-size:13px">${section.type==='practical'?'Criterion':'Item'} ${ii+1}</b><div><button type="button" class="assessment-remove" data-move-assessment-item="up" aria-label="Move item up">↑</button><button type="button" class="assessment-remove" data-move-assessment-item="down" aria-label="Move item down">↓</button><button type="button" class="assessment-remove" data-remove-assessment-item="${ii}">Remove</button></div></div>
-            <div class="assessment-item-grid"><div><label>${promptLabel}</label><textarea rows="2" data-item-prompt placeholder="${section.type==='practical'?'What will the teacher observe?':'Enter the question'}">${esc(item.prompt||'')}</textarea></div><div><label>Marks</label><input data-item-marks type="number" min="1" max="1000" step="1" value="${item.marks||1}"></div>${extra}</div>
+            <div class="assessment-item-grid"><div><label>${promptLabel}</label><textarea rows="2" data-item-prompt placeholder="${section.type==='practical'?'What will the teacher observe?':'Enter the question'}">${esc(item.prompt||'')}</textarea>${alignment?'<p class="hint">'+esc(alignment)+'</p>':''}</div><div><label>Marks</label><input data-item-marks type="number" min="1" max="1000" step="1" value="${item.marks||1}"></div>${extra}</div>
           </div>`;
         }).join('');
         return `<div class="assessment-section" data-section-index="${si}">
@@ -8664,6 +8700,33 @@
       renderAssessmentSections();
       updateGenerationAllocation();
     }
+    $('assessmentRubricImport').addEventListener('click',()=>{
+      const status=$('assessmentRubricStatus');
+      try{
+        if(editingAssessmentId)throw new Error('Create a new assessment to import a practical rubric.');
+        const {rows,totalMarks}=parsePracticalRubric($('assessmentRubricPaste').value);
+        syncAssessmentState();
+        if(assessmentSectionsState.some(section=>section.items.some(item=>item.prompt))&&
+           !confirm('Replace the current criteria with the pasted rubric?'))return;
+        const objectiveTexts=[...new Set(rows.map(row=>row.objective).filter(Boolean))];
+        $('assessmentObjectives').value=objectiveTexts.join('\n')||'Complete the practical tasks.';
+        const objectives=assessmentObjectives();
+        const objectiveIds=new Map(objectives.map(objective=>[objective.text,objective.id]));
+        $('assessmentKind').value='practical';
+        $('assessmentDelivery').value='manual';
+        $('assessmentTotal').value=totalMarks;
+        const section=newAssessmentSection('practical','Practical tasks');
+        section.items=rows.map(row=>({
+          ...newAssessmentItem('practical',row.marks),
+          prompt:row.task,
+          objectiveIds:row.objective?[objectiveIds.get(row.objective)]:[]
+        }));
+        assessmentSectionsState=[section];
+        renderAssessmentSections();
+        updateGenerationAllocation();
+        status.textContent=`${rows.length} criteria imported · ${totalMarks} marks. Review before saving.`;
+      }catch(error){status.textContent=error.message;}
+    });
     function collectAssessment(){
       syncAssessmentState();
       return {title:$('assessmentTitle').value.trim(),subject:$('assessmentSubject').value.trim(),grade:$('assessmentGrade').value.trim(),assessmentType:$('assessmentKind').value,deliveryMode:$('assessmentDelivery').value,totalMarks:Number($('assessmentTotal').value),objectives:assessmentObjectives(),instructions:$('assessmentInstructions').value.trim(),sections:assessmentSectionsState};
