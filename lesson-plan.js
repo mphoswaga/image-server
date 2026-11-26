@@ -9,6 +9,7 @@ const { getTeachingModel, normalizeTeachingModelId, modelPromptBlock } = require
 const {
   ASSESSMENT_DRAFT_SCHEMA, normalizeLessonPurpose, normalizeAssessmentOptions,
   normalizeAssessmentDraft, assessmentDraftIssues, fallbackDraft, assessmentPromptBlock, assessmentOnlyPrompt,
+  classworkAssessmentPrompt,
 } = require('./assessment-draft');
 
 // How much of an uploaded template reaches the prompt. Exported so the upload
@@ -717,7 +718,7 @@ Grade level: ${String(context.grade || '').trim()}
 Learning objectives:
 ${String(context.objectives || '').trim()}
 
-Return one different question in every required property (${keys.join(', ')}). Each item is worth 1 mark and needs 2-6 plausible options, one unambiguous correct zero-based correctIndex, and an empty answerKey. Do not repeat or rephrase any existing question below.
+${classworkAssessmentPrompt(context.classwork)}Return one different question in every required property (${keys.join(', ')}). Each item is worth 1 mark and needs 2-6 plausible options, one unambiguous correct zero-based correctIndex, and an empty answerKey. Do not repeat or rephrase any existing question below.
 ${seenPrompts.length ? `Existing questions:\n${seenPrompts.join('\n')}` : ''}
 ${context.sourceMaterialText ? `Relevant source material:\n${String(context.sourceMaterialText).slice(0, 5000)}` : ''}`;
     const response = await client.chat.completions.create({

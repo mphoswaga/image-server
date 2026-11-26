@@ -1,4 +1,4 @@
-const { normalizeAssessmentDraft, ASSESSMENT_DRAFT_SCHEMA } = require('./assessment-draft');
+const { normalizeAssessmentDraft, ASSESSMENT_DRAFT_SCHEMA, classworkAssessmentPrompt } = require('./assessment-draft');
 
 // Generate the missing phase separately so a long MCQ section cannot crowd it out.
 async function completePracticalPhase(client, draft, context, options, model) {
@@ -9,7 +9,7 @@ async function completePracticalPhase(client, draft, context, options, model) {
   const keys = Array.from({ length: options.practicalCount }, (_, i) => `task_${i + 1}`);
   const itemSchema = ASSESSMENT_DRAFT_SCHEMA.properties.sections.items.properties.items.items;
   const response = await client.chat.completions.create({ model, max_tokens: Math.min(12000, 1000 + keys.length * 350),
-    messages: [{ role: 'user', content: `Create the practical section ONLY for this ${context.lessonPurpose}. Return exactly ${keys.length} distinct hands-on tasks in the required task properties, worth ${phases[0].marks} marks altogether. Each task must describe concrete student actions and observable evidence that a teacher can mark, with positive integer marks. Do not write multiple-choice questions or written knowledge questions disguised as practical work. Keep options and answerKey empty, correctIndex 0. Pitch reading, difficulty and independence to the exact grade. Do not reveal solutions in the task wording.\nSubject: ${context.subject}\nGrade: ${context.grade}\nObjectives: ${context.objectives}\nTeacher requirements: ${context.brief || ''}\nExisting assessment for context: ${JSON.stringify(draft)}` }],
+    messages: [{ role: 'user', content: `Create the practical section ONLY for this ${context.lessonPurpose}. Return exactly ${keys.length} distinct hands-on tasks in the required task properties, worth ${phases[0].marks} marks altogether. Each task must describe concrete student actions and observable evidence that a teacher can mark, with positive integer marks. Do not write multiple-choice questions or written knowledge questions disguised as practical work. Keep options and answerKey empty, correctIndex 0. Pitch reading, difficulty and independence to the exact grade. Do not reveal solutions in the task wording.\nSubject: ${context.subject}\nGrade: ${context.grade}\nObjectives: ${context.objectives}\nTeacher requirements: ${context.brief || ''}\n${classworkAssessmentPrompt(context.classwork)}Existing assessment for context: ${JSON.stringify(draft)}` }],
     response_format: { type: 'json_schema', json_schema: { name: 'assessment_practical_completion', strict: true,
       schema: { type: 'object', additionalProperties: false, properties: Object.fromEntries(keys.map(key => [key, itemSchema])), required: keys } } },
   });

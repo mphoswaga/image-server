@@ -47,3 +47,30 @@ test('teacher chooses an exact MCQ and practical split before generation', async
   await expect(page.locator('#assessmentGeneratePracticalCount')).toHaveValue('4');
   await expect(page.locator('#assessmentGenerate')).toBeEnabled();
 });
+
+test('teacher describes classwork and reviews a practical draft without entering objectives', async ({ page }) => {
+  await signInDisposableTeacher(page, '-classwork-assessment');
+  await page.locator('#assignmentsBtn').click();
+  await page.locator('#newAssessmentBtn').click();
+  await page.getByRole('button', { name: '50 marks: practical only' }).click();
+  await page.locator('#assessmentSubject').fill('ICT');
+  await page.locator('#assessmentGrade').fill('Grade 2');
+  await page.locator('#assessmentObjectives').fill('');
+  const classwork = 'Students typed a notice and centred its heading.';
+  await page.getByLabel('What students did in class').fill(classwork);
+  await page.route('**/api/assessment-generate', async route => {
+    expect(route.request().postDataJSON()).toMatchObject({
+      classwork, objectives: '', kind: 'practical', format: 'practical', totalMarks: 50
+    });
+    await route.fulfill({ json: { assessment: {
+      title: 'Notice practical', subject: 'ICT', grade: 'Grade 2', assessmentType: 'practical',
+      totalMarks: 50, deliveryMode: 'manual',
+      objectives: [{ id: 'o1', text: 'Apply the skills practised in class.' }],
+      sections: [{ id: 's1', title: 'Notice', type: 'practical', objectiveIds: ['o1'],
+        items: [{ id: 'i1', prompt: 'Create a notice with a centred heading.', marks: 50 }] }]
+    } } });
+  });
+  await page.getByRole('button', { name: 'Generate assessment' }).click();
+  await expect(page.locator('[data-item-prompt]')).toHaveValue('Create a notice with a centred heading.');
+  await expect(page.getByLabel('What students did in class')).toHaveValue(classwork);
+});

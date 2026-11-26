@@ -3549,6 +3549,7 @@
           <div class="full"><label for="assessmentTitle">Title</label><input id="assessmentTitle" maxlength="160" placeholder="e.g. Unit 1 Document Creation"></div>
           <div><label for="assessmentSubject" data-ui-i18n>Subject</label><input id="assessmentSubject" maxlength="100" placeholder="e.g. Computing, English, Science"></div>
           <div><label for="assessmentGrade">Grade or year group</label><input id="assessmentGrade" maxlength="60" placeholder="e.g. Grade 2"></div>
+          <div class="full"><label for="assessmentClasswork">What students did in class <span style="font-weight:400;color:var(--muted)">(optional)</span></label><textarea id="assessmentClasswork" rows="4" maxlength="5000" placeholder="For example: Students typed a short notice, made the title bold and centred, inserted a picture, and saved the file."></textarea></div>
           <div class="full"><label for="assessmentObjectives">Learning objectives or skills <span style="font-weight:400;color:var(--muted)">(one per line)</span></label><textarea id="assessmentObjectives" rows="3" placeholder="I can open Word or Google Docs&#10;I can enter and format text"></textarea></div>
           <div class="full"><label for="assessmentInstructions">Student instructions <span style="font-weight:400;color:var(--muted)" data-ui-i18n>(optional)</span></label><textarea id="assessmentInstructions" rows="2" placeholder="What students need to know before they begin"></textarea></div>
           <div><label for="assessmentRoster">Class roster <span style="font-weight:400;color:var(--muted)">(required for results and TeacherScope)</span></label><select id="assessmentRoster"><option value="">— Choose a class roster —</option></select></div>
@@ -3569,8 +3570,8 @@
           <p id="assessmentGenerationAllocation" class="hint" aria-live="polite"></p>
           <label for="assessmentGenerateBrief">Extra requirements (optional)</label>
           <textarea id="assessmentGenerateBrief" rows="2" placeholder="For example: Use short questions and familiar classroom examples."></textarea>
-          <p class="hint">Enter your subject, grade and objectives above, then choose Test or Project. LessonScope creates grade-appropriate questions or practical tasks with marks and private marking guidance. Review before publishing.</p>
-          <button id="assessmentGenerate" type="button" class="btn accent">Generate from objectives</button>
+          <p class="hint">Enter the subject and grade, then describe what students did or add learning objectives. Review the generated questions and marks before saving.</p>
+          <button id="assessmentGenerate" type="button" class="btn accent">Generate assessment</button>
           <p id="assessmentGenerateStatus" role="status" aria-live="polite"></p>
         </div>
         <div id="assessmentSections"></div>
@@ -8784,6 +8785,7 @@
       const draft=data.assessment||{};
       editingGeneratedAssessmentDraft=false;
       editingAssessmentId=data.assessmentId;
+      $('assessmentClasswork').value='';
       openAssignments('plan');
       $('assessmentBuilder').style.display='block';
       $('assessmentKind').value=['quiz','test','project','practical','performance','oral','portfolio','custom'].includes(draft.assessmentType)?draft.assessmentType:'test';
@@ -8805,9 +8807,10 @@
       updateGenerationAllocation();
       $('assessmentBuilder').scrollIntoView({behavior:'smooth',block:'start'});
     }
-    function openGeneratedAssessmentDraft(draft){
+    function openGeneratedAssessmentDraft(draft,classwork=''){
       assessmentFromTopic=false;
       if(!draft)return;
+      $('assessmentClasswork').value=classwork;
       editingGeneratedAssessmentDraft=true;
       editingAssessmentId=null;
       openAssignments('plan');
@@ -8886,7 +8889,7 @@
       const status=$('assessmentGenerateStatus'), button=$('assessmentGenerate');
       if(editingAssessmentId){status.textContent='Create a new assessment to generate a new draft.';return;}
       const quizKind=$('assessmentKind').value==='quiz';
-      const body={subject:$('assessmentSubject').value,grade:$('assessmentGrade').value,objectives:$('assessmentObjectives').value,kind:$('assessmentDelivery').value==='manual'?'practical':quizKind?'test':$('assessmentKind').value,totalMarks:Number($('assessmentTotal').value),title:$('assessmentTitle').value,deliveryMode:$('assessmentDelivery').value,brief:$('assessmentGenerateBrief').value};
+      const body={subject:$('assessmentSubject').value,grade:$('assessmentGrade').value,objectives:$('assessmentObjectives').value,classwork:$('assessmentClasswork').value,kind:$('assessmentDelivery').value==='manual'?'practical':quizKind?'test':$('assessmentKind').value,totalMarks:Number($('assessmentTotal').value),title:$('assessmentTitle').value,deliveryMode:$('assessmentDelivery').value,brief:$('assessmentGenerateBrief').value};
       body.format=$('assessmentGenerateFormat').value;
       body.mcqCount=Number($('assessmentGenerateMcqCount').value);
       body.practicalCount=Number($('assessmentGeneratePracticalCount').value);
@@ -8896,7 +8899,7 @@
         const practical=['mixed','practical'].includes(body.format)?body.practicalMarks:0;
         if(mcq+practical!==body.totalMarks){status.textContent='Multiple-choice and practical marks must add up to the total marks.';return;}
       }
-      if(!body.subject.trim()||!body.grade.trim()||!body.objectives.trim()){status.textContent='Enter your subject, grade and learning objectives above.';return;}
+      if(!body.subject.trim()||!body.grade.trim()||(!body.objectives.trim()&&!body.classwork.trim())){status.textContent='Enter your subject and grade, then describe the classwork or add learning objectives.';return;}
       if(!['test','project','practical'].includes(body.kind)){status.textContent='Choose Test, Project, or Practical to generate a draft.';return;}
       syncAssessmentState();
       if(assessmentSectionsState.some(s=>(s.items||[]).some(i=>String(i.prompt||'').trim()))&&!confirm('Replace the current draft with a newly generated assessment?'))return;
@@ -8906,7 +8909,7 @@
         const response=await fetch('/api/assessment-generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
         const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not generate the assessment.');
         if(quizKind)data.assessment.assessmentType='quiz';
-        openGeneratedAssessmentDraft(data.assessment);
+        openGeneratedAssessmentDraft(data.assessment,body.classwork);
         editingGeneratedAssessmentDraft=false;editingAssessmentId=null;assessmentFromTopic=true;
         await loadRosters(true);$('assessmentRoster').value=roster;$('assessmentCutoff').value=cutoff;
         status.textContent='Draft ready. Review the tasks and marks before saving the assessment.';

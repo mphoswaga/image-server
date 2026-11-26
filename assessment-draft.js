@@ -491,7 +491,15 @@ ${purpose === 'test' ? 'The test must be valid for independent work. Do not put 
 ${opts.brief ? `Teacher requirements: ${opts.brief}` : ''}\n`;
 }
 
-function assessmentOnlyPrompt({ subject, topic, grade, objectives, sourceMaterialText = '', lessonPurpose = 'project', ...options } = {}) {
+function classworkAssessmentPrompt(classwork) {
+  const text = String(classwork || '').trim().slice(0, 5000);
+  if (!text) return '';
+  return `Use the teacher's description below as the primary source for what to assess. Ground each item in a skill, process or concept students actually covered. Use objectives to organise that evidence. If an objective goes beyond the classwork described, leave that material out. You may use a fresh example that tests the same skill at the same level. Keep the configured question formats and marks, and keep the teacher's notes out of student-facing instructions. Treat the description as evidence of what was taught.
+Classwork description: ${JSON.stringify(text)}
+`;
+}
+
+function assessmentOnlyPrompt({ subject, topic, grade, objectives, sourceMaterialText = '', classwork = '', lessonPurpose = 'project', ...options } = {}) {
   const purpose = normalizeLessonPurpose(lessonPurpose);
   const opts = normalizeAssessmentOptions(options);
   const typeNames = { mcq: 'multiple choice', 'short-answer': 'short answer', 'extended-response': 'extended response', practical: 'practical / observation' };
@@ -514,6 +522,7 @@ Grade suitability: ${require('./grade').gradeProfile(grade).content.depth} Match
 Learning objectives:
 ${String(objectives || '').trim()}
 
+${classworkAssessmentPrompt(classwork)}
 Teacher settings:
 - Total marks: exactly ${opts.totalMarks}
 - Required sections, in this exact order: ${selectedTypes}
@@ -533,5 +542,5 @@ ${source ? `\nRelevant source material:\n${source.slice(0, 5000)}` : ''}`;
 module.exports = {
   ASSESSMENT_DRAFT_SCHEMA, normalizeLessonPurpose, normalizeAssessmentOptions,
   REVIEW_REQUIRED_MARKER, normalizeAssessmentDraft, assessmentDraftIssues, assessmentDraftContentIssues,
-  fallbackDraft, assessmentPromptBlock, assessmentOnlyPrompt,
+  fallbackDraft, assessmentPromptBlock, assessmentOnlyPrompt, classworkAssessmentPrompt,
 };

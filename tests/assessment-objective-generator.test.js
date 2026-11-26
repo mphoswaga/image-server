@@ -73,3 +73,22 @@ test('practical-only generation allocates every mark to practical tasks and pres
   });
   assert.deepEqual(result, { assessmentType: 'practical', deliveryMode: 'manual', totalMarks: 50 });
 });
+
+test('classwork supplies the assessment scope even when objectives are blank', async () => {
+  const classwork = 'Students used the bold and centre tools to format a notice.';
+  const draft = await generateObjectiveAssessment({
+    ...input, subject: 'ICT', objectives: '', classwork,
+  }, { client: { chat: { completions: { create: async ({ messages }) => {
+    assert.ok(messages[0].content.includes(classwork));
+    assert.match(messages[0].content, /primary source for what to assess/);
+    return { choices: [{ message: { content: JSON.stringify({
+      title: 'Formatting check', instructions: 'Answer in a short sentence.',
+      sections: [{ title: 'Formatting', type: 'short-answer', objectiveIndexes: [0], items: [{
+        prompt: 'Which command makes the heading darker and thicker?', marks: 10,
+        answerKey: 'Accept Bold.', options: [], correctIndex: 0,
+      }] }],
+    }) } }] };
+  } } } } });
+  assert.doesNotThrow(() => require('../assignments').normalizeAssessment(draft));
+  assert.ok(!JSON.stringify(draft).includes(classwork));
+});
