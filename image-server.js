@@ -2699,6 +2699,13 @@ app.patch('/api/assignment/:id/marked', requireAuth, (req, res) => {
   if (!marked && assignments.isReleased(assessment)) {
     return res.status(409).json({ error: 'Recall the learner results before clearing the marked status.' });
   }
+  if (marked && assignments.deliveryState(assessment).mode === 'manual') {
+    const completed = new Set(assignments.getSubmissions(assessment.id).map(submission => submission.studentId));
+    const partial = assignments.loadDrafts(assessment.id).some(draft =>
+      !completed.has(draft.studentId) && !assignments.isAbsent(assessment, draft.studentId) &&
+      Object.keys(draft.observationGrades || {}).length);
+    if (partial) return res.status(409).json({ error: 'Finish entering marks for learners with partially marked practicals before completing this assessment.' });
+  }
   const updated = assignments.setTeacherMarked(assessment.id, marked);
   const submissions = assignments.getSubmissions(updated.id);
   const completeSubmissions = submissions.filter(submission => gradebook.teacherSubmissionResult(updated, submission));
@@ -4103,6 +4110,9 @@ app.post('/api/assignment/:id/submit-completed-drafts', requireAuth, async (req,
   if (delivery.mode === 'live' && delivery.phase !== 'marking') {
     return res.status(409).json({ error: 'Finish all assessment sections before submitting learner attempts.' });
   }
+  if (assignments.deliveryState(a).mode === 'manual') {
+    return res.status(409).json({ error: 'Record marks for this practical in the marking view.' });
+  }
   const cohort = assignmentCohortStudents(a);
   const cohortMap = new Map(cohort.map(student => [roster.normalizeStudentId(student.id), student]));
   const requested = new Set(Array.isArray(req.body && req.body.studentIds)
@@ -4198,6 +4208,27 @@ app.get('/api/assignment/:id/my-results', requireAssignmentAccess, (req, res) =>
 // Teacher: results for one of their assignments (owner only) — per student,
 // per question: their answer, the grade, the AI's rationale, and whether that
 // grading has been teacher-confirmed yet.
+function saveManualSubmission(assessment, student, grades, previous) {
+  const submission = {
+    studentId: student.id, name: student.name, answers: {}, grades,
+    totalMarks: Object.values(grades).reduce((total, grade) => total + grade.marksAwarded, 0),
+    maxMarks: assessment.totalMarks,
+    submittedAt: previous?.submittedAt || new Date().toISOString()
+  };
+  assignments.saveSubmission(assessment.id, submission);
+  return submission;
+}
+
+function saveManualQuestionGrade(assessment, student, questionId, grade, previous) {
+  const prior = previous?.grades || assignments.getDraft(assessment.id, student.id)?.observationGrades;
+  const grades = { ...prior, [questionId]: grade };
+  if (assessment.content.questions.every(question => Number.isFinite(grades[question.id]?.marksAwarded))) {
+    return { submission: saveManualSubmission(assessment, student, grades, previous) };
+  }
+  assignments.saveDraftGrade(assessment.id, { studentId: student.id, name: student.name, questionId, grade });
+  return { draftOnly: true };
+}
+
 app.put('/api/assignment/:id/manual-marks', requireAuth, (req, res) => {
   const a = assignments.getAssignment(req.params.id);
   if (!a || a.teacherId !== req.userId || assignments.deliveryState(a).mode !== 'manual') {
@@ -4223,13 +4254,7 @@ app.put('/api/assignment/:id/manual-marks', requireAuth, (req, res) => {
     source: 'teacher'
   }]));
   const previous = assignments.getSubmission(a.id, student.id);
-  const submission = {
-    studentId: student.id, name: student.name, answers: {}, grades,
-    totalMarks: marks.reduce((sum, mark) => sum + mark, 0), maxMarks: a.totalMarks,
-    submittedAt: previous?.submittedAt || new Date().toISOString()
-  };
-  assignments.saveSubmission(a.id, submission);
-  res.json({ submission });
+  res.json({ submission: saveManualSubmission(a, student, grades, previous) });
 });
 
 app.get('/api/assignment/:id/results', requireAuth, (req, res) => {
@@ -4272,7 +4297,7 @@ app.get('/api/assignment/:id/results', requireAuth, (req, res) => {
   const rosterSize = a.rosterId ? cohort.length : null;
   const submittedIds = new Set(submissions.filter(submission => !submission.draftOnly).map(submission => roster.normalizeStudentId(submission.studentId)));
   const cohortIds = new Set(cohort.map(student => roster.normalizeStudentId(student.id)));
-  const pendingDrafts = a.type === 'assessment' ? assignments.loadDrafts(a.id).filter(draft => {
+  const pendingDrafts = a.type === 'assessment' && delivery.mode !== 'manual' ? assignments.loadDrafts(a.id).filter(draft => {
     const studentId = roster.normalizeStudentId(draft.studentId);
     return studentId && !assignments.isAbsent(a,studentId) && !submittedIds.has(studentId) && (!a.rosterId || cohortIds.has(studentId));
   }) : [];
@@ -4282,7 +4307,10 @@ app.get('/api/assignment/:id/results', requireAuth, (req, res) => {
   });
   const completedDraftsCount = pendingDraftStatus.filter(status => status.complete).length;
   const incompleteDraftsCount = pendingDraftStatus.filter(status => status.hasAnswers && !status.complete).length;
-  res.json({ manualLearners: delivery.mode === 'manual' ? cohort.map(({id,name})=>({id,name})) : undefined, title:a.title,subject:a.subject,grade:a.grade,rosterName:(a.rosterId?roster.getRoster(req.userId,a.rosterId)?.name:'')||'', absentLearners: (a.rosterSnapshot||[]).filter(s=>assignments.isAbsent(a,s.id)).map(s=>({id:s.id,name:s.name})), questions: a.content.questions, sections: a.sections || null, objectives: a.objectives || null, assessmentType: a.assessmentType || null, totalMarks: a.totalMarks || null, delivery, liveProgress, rosterSize, submittedCount, submissions, completedDraftsCount, incompleteDraftsCount, resultsReleased: a.resultsReleased, teacherMarked: !!a.teacherMarked, teacherMarkedAt: a.teacherMarkedAt || null, cutoffAt: a.cutoffAt, effectivelyReleased: assignments.isReleased(a), releaseReady: readiness.ready, pendingGrades: readiness.pendingGrades, pendingAIGrades:assignments.pendingAIMarks(a,submissions).length, missingStudents: readiness.missingStudents || 0, releaseReason: readiness.reason || '' });
+  const manualDraftGrades = delivery.mode === 'manual'
+    ? new Map(assignments.loadDrafts(a.id).map(draft => [draft.studentId, draft.observationGrades]))
+    : null;
+  res.json({ manualLearners: delivery.mode === 'manual' ? cohort.map(({id,name})=>({id:roster.normalizeStudentId(id),name,grades:manualDraftGrades.get(roster.normalizeStudentId(id))||{}})) : undefined, title:a.title,subject:a.subject,grade:a.grade,rosterName:(a.rosterId?roster.getRoster(req.userId,a.rosterId)?.name:'')||'', absentLearners: (a.rosterSnapshot||[]).filter(s=>assignments.isAbsent(a,s.id)).map(s=>({id:s.id,name:s.name})), questions: a.content.questions, sections: a.sections || null, objectives: a.objectives || null, assessmentType: a.assessmentType || null, totalMarks: a.totalMarks || null, delivery, liveProgress, rosterSize, submittedCount, submissions, completedDraftsCount, incompleteDraftsCount, resultsReleased: a.resultsReleased, teacherMarked: !!a.teacherMarked, teacherMarkedAt: a.teacherMarkedAt || null, cutoffAt: a.cutoffAt, effectivelyReleased: assignments.isReleased(a), releaseReady: readiness.ready, pendingGrades: readiness.pendingGrades, pendingAIGrades:assignments.pendingAIMarks(a,submissions).length, missingStudents: readiness.missingStudents || 0, releaseReason: readiness.reason || '' });
 });
 
 // Teacher: override a student's grade for one question. This both corrects
@@ -4313,6 +4341,16 @@ app.patch('/api/assignment/:id/grade', requireAuth, (req, res) => {
   const q = a.content.questions.find(q => q.id === questionId);
   if (!q) return res.status(404).json({ error: 'Question not found.' });
   const sub = assignments.getSubmission(a.id, studentId);
+  if (assignments.deliveryState(a).mode === 'manual') {
+    if (a.teacherMarked) return res.status(409).json({ error: 'Reopen marking before changing these marks.' });
+    const student = assignmentStudentInCohort(a, studentId);
+    if (!student || assignments.isAbsent(a, studentId)) return res.status(404).json({ error: 'This learner is not available for marking.' });
+    if (!Number.isFinite(marksAwarded) || marksAwarded < 0 || marksAwarded > q.marks) {
+      return res.status(400).json({ error: `Enter a mark from 0 to ${q.marks}.` });
+    }
+    const grade = { marksAwarded, verdict: marksAwarded === q.marks ? 'correct' : marksAwarded === 0 ? 'incorrect' : 'partial', source: 'teacher' };
+    return res.json({ ok: true, ...saveManualQuestionGrade(a, student, questionId, grade, sub) });
+  }
   const marks = Math.max(0, Math.min(q.marks, parseInt(marksAwarded, 10) || 0));
   const v = verdict || (marks === q.marks ? 'correct' : marks === 0 ? 'incorrect' : 'partial');
   if (!sub) {
@@ -4349,6 +4387,8 @@ app.patch('/api/assignment/:id/grade/bulk', requireAuth, (req, res) => {
   if (!a) return res.status(404).json({ error: 'Assignment not found.' });
   if (a.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assignment.' });
   if (assignments.assessmentIsFinalised(a)) return res.status(409).json({ code: 'assessment_finalised', error: 'Unrelease the results before changing assessment marks.' });
+  const manual = assignments.deliveryState(a).mode === 'manual';
+  if (manual && a.teacherMarked) return res.status(409).json({ error: 'Reopen marking before changing these marks.' });
   const { questionId, marksAwarded, marksToAdd, rationale } = req.body || {};
   const q = a.content.questions.find(question => question.id === questionId);
   if (!q) return res.status(404).json({ error: 'Question not found.' });
@@ -4362,7 +4402,7 @@ app.patch('/api/assignment/:id/grade/bulk', requireAuth, (req, res) => {
       !Number.isFinite(amount) || amount < 0.01)) {
     return res.status(400).json({ error: 'Enter a positive number of marks to add.' });
   }
-  if (!adding && (!Number.isFinite(amount) || amount < 0 || amount > max)) {
+  if (!adding && ((manual && typeof marksAwarded !== 'number') || !Number.isFinite(amount) || amount < 0 || amount > max)) {
     return res.status(400).json({ error: `Enter a mark from 0 to ${max}.` });
   }
   const cohort = a.rosterId ? assignmentCohortStudents(a).filter(s=>!assignments.isAbsent(a,s.id)) : [];
@@ -4373,9 +4413,9 @@ app.patch('/api/assignment/:id/grade/bulk', requireAuth, (req, res) => {
     rosterStudent: cohortMap.get(studentId),
     draft: assignments.getDraft(a.id, studentId),
   }));
-  const invalid = targets.find(target => !target.submission && (
+  const invalid = targets.find(target => (manual && !target.rosterStudent) || (!target.submission && (
     a.type !== 'assessment' || q.kind !== 'practical' || (a.rosterId && !target.rosterStudent)
-  ));
+  )));
   if (invalid) return res.status(404).json({ error: `No markable response was found for ${invalid.studentId}.` });
 
   const previousGrade = target => (target.submission ? target.submission.grades : target.draft?.observationGrades)?.[questionId] || {};
@@ -4392,6 +4432,10 @@ app.patch('/api/assignment/:id/grade/bulk', requireAuth, (req, res) => {
     const verdict = marks === max ? 'correct' : marks === 0 ? 'incorrect' : 'partial';
     const grade = { marksAwarded: marks, verdict, rationale: String(rationale || '').trim() || previous.rationale || '', source: 'teacher' };
     updated++;
+    if (manual) {
+      saveManualQuestionGrade(a, target.rosterStudent, questionId, { ...previous, ...grade }, target.submission);
+      continue;
+    }
     if (!target.submission) {
       assignments.saveDraftGrade(a.id, {
         studentId: target.studentId,

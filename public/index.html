@@ -2459,6 +2459,9 @@
     .manual-marking-actions { bottom:0; }
     .manual-marking-actions [role="status"] { flex:1 0 100%; }
     .manual-marking-actions [role="status"]:empty { display:none; }
+    .manual-marking-tabs { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 12px; }
+    .manual-marking-tabs button { min-height:44px; width:auto; }
+    .manual-question-view .manual-learner-grade { display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; }
     .manual-marking-tasks { display:grid; gap:5px; }
     .manual-marking-row { padding:8px 12px; border:1px solid var(--border); border-radius:9px; background:white; min-width:0; }
     .manual-marking .manual-marking-score { grid-template-columns:minmax(0,1fr) minmax(95px,128px); align-items:center; margin:0; }
@@ -6458,6 +6461,7 @@
       const override=e.target.closest('.grade-override-btn');
       if(override){ const {assignId,studentId,questionId,wrapId}=override.dataset;
         const row=override.closest('.grade-row'); const input=row.querySelector('.grade-marks-input');
+        if($(wrapId)?.classList.contains('manual-question-view')&&(!input.value.trim()||!input.reportValidity())){input.focus();return;}
         const marksAwarded=Number(input.value),rationale=row.querySelector('.grade-rationale-input')?.value.trim()||''; override.disabled=true;
         try{ const r=await fetch(`/api/assignment/${assignId}/grade`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({studentId,questionId,marksAwarded,rationale})});
           const d=await r.json(); if(!r.ok) throw new Error(d.error);
@@ -6725,20 +6729,31 @@
         <button type="button" class="btn ${mode==='add'?'ghost':'accent'} bulk-grade-apply" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-id="${esc(q.id)}" data-mode="${mode}" disabled></button>
       </div>`;
       const markable=d.submissions.filter(s=>!(s.draftOnly&&q.kind!=='practical'));
-      const rows=d.submissions.map(s=>gradeRowHTML(q, s, assignId, wrapId, s.name,true)).join('');
+      const manual=d.delivery?.mode==='manual';
+      const locked=manual&&(d.teacherMarked||d.resultsReleased);
+      const rows=d.submissions.map(s=>{
+        if(!manual)return gradeRowHTML(q,s,assignId,wrapId,s.name,true);
+        const grade=s.grades?.[q.id]?.marksAwarded;
+        const attrs=`data-assign-id="${esc(assignId)}" data-wrap-id="${esc(wrapId)}" data-question-id="${esc(q.id)}" data-student-id="${esc(s.studentId)}"`;
+        return `<div class="grade-row manual-learner-grade" data-marking-student="${esc(s.name)} ${esc(s.studentId)}">
+          <label>${locked?'':`<input type="checkbox" class="bulk-grade-student" aria-label="Select ${esc(s.name)}" ${attrs} ${selected.has(s.studentId)?'checked':''}>`} ${esc(s.name)}</label>
+          ${locked?`<span>${grade??'Unmarked'}${grade==null?'':' / '+q.marks}</span>`:`<div class="grade-mark-control"><input class="grade-marks-input" aria-label="Mark for ${esc(s.name)}" type="number" min="0" max="${q.marks}" step="any" value="${grade??''}"><span>/ ${q.marks}</span>
+          <button type="button" class="grade-override-btn" ${attrs}>Save</button></div>`}
+        </div>`;
+      }).join('');
       const station=q.kind==='data-table';
       const scores=station?markable.map(s=>s.grades?.[q.id]).filter(g=>g&&['auto','teacher','ai-confirmed'].includes(g.source)&&Number.isFinite(g.marksAwarded)):[];
       const average=scores.length?(scores.reduce((sum,grade)=>sum+grade.marksAwarded,0)/scores.length).toFixed(1):null;
-      return `<div class="assessment-question-navigator" style="position:sticky;top:8px;z-index:4;margin:12px 0;padding:11px 12px;border:1px solid #b8d5c7;border-radius:10px;background:#f5fcf8;box-shadow:0 4px 12px rgba(22,67,50,.08)">
+      return `<div class="assessment-question-navigator" style="${manual?'':'position:sticky;top:8px;z-index:4;'}margin:12px 0;padding:11px 12px;border:1px solid #b8d5c7;border-radius:10px;background:#f5fcf8;box-shadow:0 4px 12px rgba(22,67,50,.08)">
         <label style="display:block;font-size:11.5px;font-weight:700;color:#145c3c;margin-bottom:5px" for="question-select-${wrapId}">${station?'Station to review':'Question to mark'}</label>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <select id="question-select-${wrapId}" class="assessment-question-select" data-assign-id="${assignId}" data-wrap-id="${wrapId}" style="flex:1;min-width:230px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#fff">${options}</select>
+          <select id="question-select-${wrapId}" class="assessment-question-select" data-assign-id="${assignId}" data-wrap-id="${wrapId}" style="flex:1;min-width:${manual?'0':'230px'};padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#fff">${options}</select>
           <button type="button" class="btn ghost assessment-question-nav" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-index="${qi-1}" ${qi===0?'disabled':''} style="width:auto;padding:7px 10px">Previous</button>
           <button type="button" class="btn ghost assessment-question-nav" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-index="${qi+1}" ${qi===questions.length-1?'disabled':''} style="width:auto;padding:7px 10px">Next</button>
           <span style="font-size:12px;color:var(--muted);font-weight:600">${qi+1} of ${questions.length}</span>
         </div>
         ${station?`<details class="data-bulk" data-marking-detail="bulk:${esc(q.id)}"><summary>Change marks in bulk</summary>`:''}
-        <div class="bulk-grade-toolbar">
+        ${locked?'<p class="hint">Clear Marked by teacher to edit these marks.</p>':`<div class="bulk-grade-toolbar">
           ${q.kind==='mcq'?'<div class="mcq-auto-note"><b>Multiple choice is complete.</b> LessonScope has marked and confirmed every submitted answer automatically. Use the controls below only to correct or override a mark.</div>':''}
           <label class="bulk-select-all"><input type="checkbox" class="bulk-grade-all" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-id="${esc(q.id)}" ${markable.length&&selected.size===markable.length?'checked':''}> Select matching learners</label>
           <p class="hint" style="margin:0">Selections stay selected when you search for another student.</p>
@@ -6746,7 +6761,7 @@
             ${bulkAction('set','Set mark for selected learners')}
             ${bulkAction('add','Add marks')}
           </div>
-        </div>
+        </div>`}
         ${station?'</details>':''}
       </div>
       <div class="question-marking-list">
@@ -6799,7 +6814,7 @@
           learner.name+(marked.has(learner.id)?' · marked':''),learner.id)));
         picker.value=id;
         progress.textContent=`${marked.size} of ${learners.length} learners marked`;
-        const grades=marked.get(id)?.grades||{};
+        const grades=marked.get(id)?.grades||learners.find(learner=>learner.id===id)?.grades||{};
         tasks.replaceChildren(...data.questions.map(question=>{
           const label=document.createElement('label');
           label.className='manual-marking-score';
@@ -6851,6 +6866,7 @@
           const result=await response.json();
           if(!response.ok)throw new Error(result.error||'Marks could not be saved.');
           marked.set(studentId,result.submission);
+          data.submissions=[...marked.values()];
           const next=[...learners.slice(previousIndex+1),...learners.slice(0,previousIndex)]
             .find(learner=>!marked.has(learner.id));
           renderLearner(next?.id||studentId);
@@ -6871,10 +6887,40 @@
       wrap.replaceChildren(form);
       renderLearner(learners.find(learner=>!marked.has(learner.id))?.id||learners[0].id);
     }
+    function renderManualAssessment(assignId, wrap, data, view){
+      wrap.dataset.view=view==='question'?'question':'student';
+      wrap.classList.toggle('manual-question-view',wrap.dataset.view==='question');
+      if(wrap.dataset.view==='question'){
+        const grades=new Map(data.submissions.map(student=>[student.studentId,student.grades]));
+        const submissions=(data.manualLearners||[]).map(({id,name,grades:draftGrades})=>({
+          studentId:id,name,grades:grades.get(id)||draftGrades
+        }));
+        wrap.innerHTML=submissions.length
+          ? `<label>Search learners<input class="assessment-student-search" data-wrap-id="${esc(wrap.id)}" type="search" value="${esc(wrap.dataset.studentSearch||'')}" placeholder="Name or ID"></label>`+
+            renderByQuestion({...data,submissions},assignId,wrap.id)
+          : '<p class="hint">No learners are available for marking.</p>';
+        filterAssessmentStudents(wrap);
+        refreshBulkGradeButtons(wrap);
+      }else renderManualPractical(assignId,wrap,data);
+      const tabs=document.createElement('div');
+      tabs.className='manual-marking-tabs';
+      tabs.setAttribute('role','group');
+      tabs.setAttribute('aria-label','Marking view');
+      for(const [value,label] of [['student','By student'],['question','By question']]){
+        const button=document.createElement('button');
+        button.type='button';
+        button.className=`btn ${wrap.dataset.view===value?'accent':'ghost'} view-tab-btn`;
+        Object.assign(button.dataset,{assignId,wrapId:wrap.id,view:value});
+        button.setAttribute('aria-pressed',String(wrap.dataset.view===value));
+        button.textContent=label;
+        tabs.append(button);
+      }
+      wrap.prepend(tabs);
+    }
     function renderAssignmentResults(assignId, wrapId, view){
       const wrap=$(wrapId); if(!wrap) return;
       const d=assignResultsCache.get(assignId); if(!d) return;
-      if(d.delivery?.mode==='manual'){renderManualPractical(assignId,wrap,d);return;}
+      if(d.delivery?.mode==='manual'){renderManualAssessment(assignId,wrap,d,view);return;}
       // Polling rebuilds the result DOM: preserve the teacher's report navigation.
       const dataOpened=new Set([...wrap.querySelectorAll('details[data-marking-detail][open]')].map(detail=>detail.dataset.markingDetail));
       const dataMarking=isDataMarking(d);
@@ -9150,7 +9196,7 @@
       }catch(error){ err.textContent=error.message; err.classList.add('show'); }
       btn.disabled=keepDisabled; btn.innerHTML=keepDisabled?'Assessment published':original;
     });
-    $('assessmentPublishResult').addEventListener('click',e=>{ const button=e.target.closest('.assessment-copy'); if(button)copyLink(button.dataset.url); });
+    $('assessmentPublishResult').addEventListener('click',e=>{ const button=e.target.closest('.assessment-copy'); if(button)copyLink(button.dataset.url);else handleAssignmentPanelClick(e); });
 
     let assessmentClassRosters=[];
     let assignmentStatusFilter='pending',assignmentLibraryPage=1;

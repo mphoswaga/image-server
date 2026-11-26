@@ -35,19 +35,40 @@ test('teacher builds a 50-mark practical and saves recorded zeros from a tablet'
   expect(created.ok(), await created.text()).toBeTruthy();
   const { assessmentId, roomCode } = await created.json();
   expect(roomCode).toBeNull();
-  const marking = page.locator('#manual-practical-results form');
-  await expect(marking.getByLabel('Learner')).toHaveValue('P1');
-  await expect(marking.getByLabel('Formats a heading (49 marks)')).toHaveValue('');
-  await marking.getByLabel('Opened Chrome (1 mark)').selectOption('0');
-  await marking.getByLabel('Formats a heading (49 marks)').selectOption('0');
-  await marking.getByRole('button', { name: 'Save marks and go to next learner' }).click();
-  await expect(marking.getByLabel('Learner')).toHaveValue('P2');
-  await expect(marking.getByLabel('Formats a heading (49 marks)')).toHaveValue('');
-  const result = await (await page.request.get('/api/assignment/' + assessmentId + '/results')).json();
-  expect(result.submissions).toHaveLength(1);
+  const wrap = page.locator('#manual-practical-results');
+  await wrap.getByRole('button', { name: 'By question' }).click();
+  await expect(wrap.getByLabel('Mark for Amina')).toHaveValue('');
+  await wrap.getByLabel('Select Amina').check();
+  await wrap.getByLabel('Mark for selected learners').fill('0');
+  await wrap.getByRole('button', { name: 'Apply to 1 selected' }).click();
+  await expect(wrap.getByLabel('Mark for Amina')).toHaveValue('0');
+  const url = '/api/assignment/' + assessmentId;
+  const partial = await (await page.request.get(url + '/results')).json();
+  expect(partial.submissions).toHaveLength(0);
+  expect((await page.request.patch(url + '/marked', {data:{marked:true}})).status()).toBe(409);
+
+  await wrap.getByLabel('Select Amina').check();
+  await wrap.getByLabel('Marks to add').fill('2');
+  await wrap.getByRole('button', { name: 'Add to 1 selected' }).click();
+  await expect(wrap.getByLabel('Mark for Amina')).toHaveValue('1');
+  await wrap.getByRole('button', { name: 'Next', exact: true }).click();
+  await wrap.getByLabel('Mark for Amina').fill('0');
+  await wrap.locator('.grade-row').filter({hasText:'Amina'}).getByRole('button',{name:'Save',exact:true}).click();
+  await expect.poll(async () => {
+    const current = await (await page.request.get(url + '/results')).json();
+    return current.submissions.length;
+  }).toBe(1);
+
+  const result = await (await page.request.get(url + '/results')).json();
   expect(result.questions[0].objectiveIds).toEqual([]);
   expect(result.questions[1].objectiveIds).toEqual(['objective-create-a-document']);
-  expect(result.submissions[0]).toMatchObject({ studentId: 'P1', totalMarks: 0, maxMarks: 50 });
+  expect(result.submissions[0]).toMatchObject({ studentId: 'P1', totalMarks: 1, maxMarks: 50 });
+  expect(result.submissions[0].grades[result.questions[1].id].marksAwarded).toBe(0);
+
+  await wrap.getByRole('button', { name: 'By student' }).click();
+  const marking = wrap.locator('form');
+  await expect(marking.getByLabel('Learner')).toHaveValue('P2');
+  await expect(marking.getByLabel('Formats a heading (49 marks)')).toHaveValue('');
   const completed = page.waitForResponse(response => response.url().endsWith('/marked') && response.request().method() === 'PATCH');
   await marking.getByRole('button', { name: 'Mark as completed' }).click();
   expect(await (await completed).json()).toMatchObject({ recordedResults: 1 });
