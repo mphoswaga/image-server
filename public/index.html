@@ -2441,6 +2441,10 @@
     .assessment-builder { margin-bottom:24px; padding:20px; border:1px solid var(--border); border-radius:16px; background:#fbfdfc; }
     .assessment-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 14px; }
     .assessment-grid .full { grid-column:1/-1; }
+    .manual-marking { display:grid; gap:14px; max-width:720px; }
+    .manual-marking label { display:grid; gap:6px; }
+    .manual-marking input, .manual-marking select, .manual-marking button { min-height:44px; }
+    .manual-marking button { width:auto; justify-self:start; }
     .assessment-presets { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 2px; }
     .assessment-section { margin-top:14px; padding:16px; border:1px solid #dce8e2; border-radius:14px; background:#fff; }
     .assessment-section-head,.assessment-total { display:flex; align-items:center; justify-content:space-between; gap:12px; }
@@ -3534,12 +3538,13 @@
         <div class="assessment-section-head"><div><h3 style="margin:0">Assessment structure</h3><p class="hint" style="margin:3px 0 0">Set the total, then decide exactly how students will earn those marks.</p></div><button id="closeAssessmentBtn" type="button" class="assessment-remove" data-ui-i18n>Close</button></div>
         <div class="assessment-presets">
           <button type="button" class="btn ghost assessment-mini" data-assessment-preset="blank">Blank</button>
+          <button type="button" class="btn ghost assessment-mini" data-assessment-preset="practical-only">50 marks: practical only</button>
           <button type="button" class="btn ghost assessment-mini" data-assessment-preset="theory-practical">50 marks: theory + practical</button>
         </div>
         <div class="assessment-grid">
           <div><label for="assessmentKind">Assessment type</label><select id="assessmentKind"><option value="test">Test</option><option value="quiz">Quiz</option><option value="project">Project</option><option value="practical">Practical</option><option value="performance">Performance</option><option value="oral">Oral</option><option value="portfolio">Portfolio</option><option value="custom">Custom</option></select></div>
           <div><label for="assessmentTotal">Total marks</label><input id="assessmentTotal" type="number" min="1" max="1000" step="1" value="50"></div>
-          <div><label for="assessmentDelivery">Delivery</label><select id="assessmentDelivery"><option value="live">Live classroom — teacher controls sections</option><option value="self-paced">Self-paced — students see all sections</option></select></div>
+          <div><label for="assessmentDelivery">Delivery</label><select id="assessmentDelivery"><option value="live">Live classroom — teacher controls sections</option><option value="self-paced">Self-paced — students see all sections</option><option value="manual">Teacher marking — paper or in class</option></select></div>
           <div></div>
           <div class="full"><label for="assessmentTitle">Title</label><input id="assessmentTitle" maxlength="160" placeholder="e.g. Unit 1 Document Creation"></div>
           <div><label for="assessmentSubject" data-ui-i18n>Subject</label><input id="assessmentSubject" maxlength="100" placeholder="e.g. Computing, English, Science"></div>
@@ -6710,9 +6715,91 @@
       </div>`;
     }
 
+    function renderManualPractical(assignId, wrap, data){
+      const learners=data.manualLearners||[];
+      const marked=new Map(data.submissions.map(student=>[student.studentId,student]));
+      if(!learners.length){wrap.textContent='No learners are available for marking.';return;}
+      const form=document.createElement('form');
+      form.className='manual-marking';
+      const picker=document.createElement('select');
+      const pickerLabel=document.createElement('label');
+      pickerLabel.append('Learner',picker);
+      const tasks=document.createElement('div');
+      tasks.className='manual-marking';
+      const save=document.createElement('button');
+      save.className='btn accent';
+      save.textContent='Save marks and go to next learner';
+      const status=document.createElement('p');
+      status.setAttribute('role','status');
+      const progress=document.createElement('p');
+      const locked=data.teacherMarked||data.resultsReleased;
+      const finish=document.createElement('button');
+      finish.type='button';finish.className='btn ghost';
+      finish.textContent='Mark as completed';
+      finish.disabled=!marked.size;
+      finish.onclick=async()=>{
+        finish.disabled=save.disabled=picker.disabled=true;
+        try{
+          const response=await fetch('/api/assignment/'+encodeURIComponent(assignId)+'/marked',{
+            method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({marked:true})
+          });
+          const result=await response.json();
+          if(!response.ok)throw new Error(result.error||'Could not complete marking.');
+          await loadAssignmentResults(assignId,wrap.id);
+          loadMyAssignments();
+          toast(`${result.recordedResults} results recorded in Marks and TeacherScope.`,'ok');
+        }catch(error){
+          status.textContent=error.message;
+          finish.disabled=save.disabled=picker.disabled=false;
+        }
+      };
+      function renderLearner(id){
+        picker.replaceChildren(...learners.map(learner=>new Option(
+          learner.name+(marked.has(learner.id)?' · marked':''),learner.id)));
+        picker.value=id;
+        progress.textContent=`${marked.size} of ${learners.length} learners marked`;
+        const grades=marked.get(id)?.grades||{};
+        tasks.replaceChildren(...data.questions.map(question=>{
+          const label=document.createElement('label');
+          const input=document.createElement('input');
+          input.type='number';input.inputMode='decimal';input.min='0';input.max=question.marks;
+          input.step='any';input.required=true;input.readOnly=locked;
+          input.value=grades[question.id]?.marksAwarded??'';
+          label.append(`${question.question} (${question.marks} marks)`,input);
+          return label;
+        }));
+      }
+      picker.onchange=()=>{status.textContent='';renderLearner(picker.value);};
+      form.onsubmit=async event=>{
+        event.preventDefault();
+        const studentId=picker.value;
+        const previousIndex=learners.findIndex(learner=>learner.id===studentId);
+        const marks=[...tasks.querySelectorAll('input')].map(input=>input.valueAsNumber);
+        picker.disabled=save.disabled=finish.disabled=true;
+        try{
+          const response=await fetch('/api/assignment/'+encodeURIComponent(assignId)+'/manual-marks',{
+            method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({studentId,marks})
+          });
+          const result=await response.json();
+          if(!response.ok)throw new Error(result.error||'Marks could not be saved.');
+          marked.set(studentId,result.submission);
+          const next=[...learners.slice(previousIndex+1),...learners.slice(0,previousIndex)]
+            .find(learner=>!marked.has(learner.id));
+          renderLearner(next?.id||studentId);
+          status.textContent=`${learners[previousIndex].name}: ${result.submission.totalMarks}/${data.totalMarks} saved.`;
+        }catch(error){status.textContent=error.message;}
+        finally{picker.disabled=save.disabled=false;finish.disabled=!marked.size;}
+      };
+      if(locked) status.textContent='Clear Marked by teacher to edit these marks.';
+      form.append(progress,pickerLabel,tasks,status);
+      if(!locked)form.append(save,finish);
+      wrap.replaceChildren(form);
+      renderLearner(learners.find(learner=>!marked.has(learner.id))?.id||learners[0].id);
+    }
     function renderAssignmentResults(assignId, wrapId, view){
       const wrap=$(wrapId); if(!wrap) return;
       const d=assignResultsCache.get(assignId); if(!d) return;
+      if(d.delivery?.mode==='manual'){renderManualPractical(assignId,wrap,d);return;}
       // Polling rebuilds the result DOM: preserve the teacher's report navigation.
       const dataOpened=new Set([...wrap.querySelectorAll('details[data-marking-detail][open]')].map(detail=>detail.dataset.markingDetail));
       const dataMarking=isDataMarking(d);
@@ -6821,7 +6908,7 @@
         if(!document.body.contains(wrap))return d;
         // A background update should leave the bulk editor and its selection intact.
         const active=document.activeElement;
-        if(silent&&wrap.contains(active)&&active.matches('.bulk-grade-mark'))return d;
+        if(silent&&(d.delivery?.mode==='manual'||wrap.contains(active)&&active.matches('.bulk-grade-mark')))return d;
         const editorState=silent?captureAssignmentEditorState(wrap):null;
         renderAssignmentResults(assignId,wrapId,view||wrap.dataset.view||(isDataMarking(d)?'question':'student'));
         if(silent)restoreAssignmentEditorState(wrap,editorState);
@@ -8549,7 +8636,15 @@
       status.classList.toggle('valid',allocated===total&&total>0);
     }
     function applyAssessmentPreset(name){
-      if(name==='theory-practical'){
+      if(name==='practical-only'){
+        $('assessmentKind').value='practical'; $('assessmentTotal').value=50;
+        $('assessmentDelivery').value='manual'; $('assessmentGenerateFormat').value='practical';
+        $('assessmentGeneratePracticalCount').value=5;
+        const section=newAssessmentSection('practical','Practical tasks');
+        section.items=[newAssessmentItem('practical',50)];
+        assessmentSectionsState=[section];
+      }else if(name==='theory-practical'){
+        $('assessmentDelivery').value='live'; $('assessmentGenerateFormat').value='auto';
         $('assessmentKind').value='test'; $('assessmentTotal').value=50;
         if(!$('assessmentObjectives').value.trim()) $('assessmentObjectives').value='Knowledge and understanding\nPractical application of skills';
         const presetObjectives=assessmentObjectives();
@@ -8559,12 +8654,14 @@
         practical.objectiveIds=[(presetObjectives[1]||presetObjectives[0]).id]; practical.items=[10,10,10,5].map(m=>newAssessmentItem('practical',m));
         assessmentSectionsState=[theory,practical];
       }else{
+        $('assessmentKind').value='test'; $('assessmentDelivery').value='live'; $('assessmentGenerateFormat').value='auto';
         $('assessmentTotal').value=10;
         if(!$('assessmentObjectives').value.trim()) $('assessmentObjectives').value='Assessed learning objective';
         const section=newAssessmentSection('short-answer','Assessment section'); section.items=[newAssessmentItem('short-answer',10)];
         assessmentSectionsState=[section];
       }
       renderAssessmentSections();
+      updateGenerationAllocation();
     }
     function collectAssessment(){
       syncAssessmentState();
@@ -8691,7 +8788,7 @@
       $('assessmentBuilder').style.display='block';
       $('assessmentKind').value=['quiz','test','project','practical','performance','oral','portfolio','custom'].includes(draft.assessmentType)?draft.assessmentType:'test';
       $('assessmentTotal').value=String(draft.totalMarks||50);
-      $('assessmentDelivery').value=draft.deliveryMode==='self-paced'?'self-paced':'live';
+      $('assessmentDelivery').value=['self-paced','manual'].includes(draft.deliveryMode)?draft.deliveryMode:'live';
       $('assessmentTitle').value=draft.title||'';
       $('assessmentSubject').value=draft.subject||'';
       $('assessmentGrade').value=draft.grade||'';
@@ -8705,7 +8802,7 @@
       $('assessmentRoster').value=data.rosterId||'';
       $('assessmentRoster').disabled=true;
       $('publishAssessmentBtn').disabled=false;
-      $('publishAssessmentBtn').innerHTML='Save and publish changes';
+      updateGenerationAllocation();
       $('assessmentBuilder').scrollIntoView({behavior:'smooth',block:'start'});
     }
     function openGeneratedAssessmentDraft(draft){
@@ -8717,7 +8814,7 @@
       $('assessmentBuilder').style.display='block';
       $('assessmentKind').value=['quiz','test','project','practical','performance','oral','portfolio','custom'].includes(draft.assessmentType)?draft.assessmentType:'test';
       $('assessmentTotal').value=String(draft.totalMarks||50);
-      $('assessmentDelivery').value=draft.deliveryMode==='self-paced'?'self-paced':'live';
+      $('assessmentDelivery').value=['self-paced','manual'].includes(draft.deliveryMode)?draft.deliveryMode:'live';
       $('assessmentTitle').value=draft.title||'';
       $('assessmentSubject').value=draft.subject||(ctx&&ctx.subject)||'';
       $('assessmentGrade').value=draft.grade||(ctx&&ctx.grade)||'';
@@ -8727,7 +8824,7 @@
       assessmentSectionsState=importedAssessmentSections(draft);
       renderAssessmentSections();
       $('publishAssessmentBtn').disabled=false;
-      $('publishAssessmentBtn').innerHTML='Publish assessment';
+      updateGenerationAllocation();
       $('assessmentRoster').disabled=false;
       loadRosters(true);
       $('assessmentBuilder').scrollIntoView({behavior:'smooth',block:'start'});
@@ -8763,15 +8860,23 @@
       }catch(error){$('topicMcqStatus').textContent=error.message;}finally{button.disabled=false;}
     };
     function updateGenerationAllocation(){
+      const manual=$('assessmentDelivery').value==='manual';
+      if(manual) $('assessmentGenerateFormat').value='practical';
+      $('assessmentGenerateFormat').disabled=manual;
+      document.querySelectorAll('[data-generation-split]').forEach(button=>{button.disabled=manual;});
+      $('publishAssessmentBtn').textContent=manual?'Save practical assessment':editingAssessmentId?'Save and publish changes':'Publish assessment';
       const format=$('assessmentGenerateFormat').value;
+      if(format==='practical') $('assessmentGeneratePracticalMarks').value=$('assessmentTotal').value;
+      $('assessmentGeneratePracticalMarks').readOnly=format==='practical';
       $('assessmentMcqSettings').hidden=!['mixed','mcq'].includes(format);
       $('assessmentPracticalSettings').hidden=!['mixed','practical'].includes(format);
       const mcq=['mixed','mcq'].includes(format)?Number($('assessmentGenerateMcqCount').value):0;
       const practical=['mixed','practical'].includes(format)?Number($('assessmentGeneratePracticalMarks').value):0;
       $('assessmentGenerationAllocation').textContent=format==='auto'?'':`${mcq} multiple-choice marks + ${practical} practical marks = ${mcq+practical} / ${$('assessmentTotal').value} total marks`;
     }
-    ['assessmentGenerateFormat','assessmentGenerateMcqCount','assessmentGeneratePracticalCount','assessmentGeneratePracticalMarks','assessmentTotal'].forEach(id=>$(id).addEventListener('input',updateGenerationAllocation));
+    ['assessmentDelivery','assessmentGenerateFormat','assessmentGenerateMcqCount','assessmentGeneratePracticalCount','assessmentGeneratePracticalMarks','assessmentTotal'].forEach(id=>$(id).addEventListener('input',updateGenerationAllocation));
     document.querySelectorAll('[data-generation-split]').forEach(button=>button.onclick=()=>{
+      if($('assessmentDelivery').value==='manual') return;
       const count=Number(button.dataset.generationSplit);
       $('assessmentGenerateFormat').value='mixed';$('assessmentGenerateMcqCount').value=count;
       $('assessmentGeneratePracticalCount').value=5;$('assessmentGeneratePracticalMarks').value=50-count;$('assessmentTotal').value=50;
@@ -8781,7 +8886,7 @@
       const status=$('assessmentGenerateStatus'), button=$('assessmentGenerate');
       if(editingAssessmentId){status.textContent='Create a new assessment to generate a new draft.';return;}
       const quizKind=$('assessmentKind').value==='quiz';
-      const body={subject:$('assessmentSubject').value,grade:$('assessmentGrade').value,objectives:$('assessmentObjectives').value,kind:quizKind?'test':$('assessmentKind').value,totalMarks:Number($('assessmentTotal').value),title:$('assessmentTitle').value,deliveryMode:$('assessmentDelivery').value,brief:$('assessmentGenerateBrief').value};
+      const body={subject:$('assessmentSubject').value,grade:$('assessmentGrade').value,objectives:$('assessmentObjectives').value,kind:$('assessmentDelivery').value==='manual'?'practical':quizKind?'test':$('assessmentKind').value,totalMarks:Number($('assessmentTotal').value),title:$('assessmentTitle').value,deliveryMode:$('assessmentDelivery').value,brief:$('assessmentGenerateBrief').value};
       body.format=$('assessmentGenerateFormat').value;
       body.mcqCount=Number($('assessmentGenerateMcqCount').value);
       body.practicalCount=Number($('assessmentGeneratePracticalCount').value);
@@ -8792,7 +8897,7 @@
         if(mcq+practical!==body.totalMarks){status.textContent='Multiple-choice and practical marks must add up to the total marks.';return;}
       }
       if(!body.subject.trim()||!body.grade.trim()||!body.objectives.trim()){status.textContent='Enter your subject, grade and learning objectives above.';return;}
-      if(!['test','project'].includes(body.kind)){status.textContent='Choose Test or Project to generate a draft.';return;}
+      if(!['test','project','practical'].includes(body.kind)){status.textContent='Choose Test, Project, or Practical to generate a draft.';return;}
       syncAssessmentState();
       if(assessmentSectionsState.some(s=>(s.items||[]).some(i=>String(i.prompt||'').trim()))&&!confirm('Replace the current draft with a newly generated assessment?'))return;
       const roster=$('assessmentRoster').value, cutoff=$('assessmentCutoff').value;
@@ -8804,7 +8909,7 @@
         openGeneratedAssessmentDraft(data.assessment);
         editingGeneratedAssessmentDraft=false;editingAssessmentId=null;assessmentFromTopic=true;
         await loadRosters(true);$('assessmentRoster').value=roster;$('assessmentCutoff').value=cutoff;
-        status.textContent='Draft ready. Review the tasks, answers and marks, then choose a class and publish.';
+        status.textContent='Draft ready. Review the tasks and marks before saving the assessment.';
       }catch(error){status.textContent=error.message;}finally{button.disabled=false;}
     };
     $('newAssessmentBtn').addEventListener('click',()=>{
@@ -8835,11 +8940,18 @@
       queueGeneratedAssessmentCapture();
     });
     $('assessmentObjectives').addEventListener('blur',()=>{
-      syncAssessmentState(); const ids=assessmentObjectives().map(objective=>objective.id);
-      assessmentSectionsState.forEach(section=>{ if(!section.objectiveIds.length)section.objectiveIds=[...ids]; });
-      renderAssessmentSections();
+      syncAssessmentState();
+      const objectives=assessmentObjectives();
+      $('assessmentSections').querySelectorAll('[data-section-objectives]').forEach((select,index)=>{
+        const section=assessmentSectionsState[index];
+        if(!section.objectiveIds.length)section.objectiveIds=objectives.map(objective=>objective.id);
+        select.size=Math.min(4,Math.max(2,objectives.length));
+        select.replaceChildren(...objectives.map(objective=>new Option(
+          objective.text,objective.id,false,section.objectiveIds.includes(objective.id))));
+      });
+      queueGeneratedAssessmentCapture();
     });
-    $('addAssessmentSection').addEventListener('click',()=>{ syncAssessmentState(); assessmentSectionsState.push(newAssessmentSection('mcq')); renderAssessmentSections(); });
+    $('addAssessmentSection').addEventListener('click',()=>{ syncAssessmentState(); assessmentSectionsState.push(newAssessmentSection($('assessmentDelivery').value==='manual'?'practical':'mcq')); renderAssessmentSections(); });
     $('publishAssessmentBtn').addEventListener('click',async()=>{
       const btn=$('publishAssessmentBtn'), err=$('assessmentError'); err.textContent=''; err.classList.remove('show'); btn.disabled=true; const original=btn.innerHTML; btn.innerHTML='<span class="spinner"></span>Publishing…';
       const generatedDraft=editingGeneratedAssessmentDraft;
@@ -8865,7 +8977,11 @@
           :await fetch('/api/assessment',{method:'POST',headers:{'Content-Type':'application/json'},body:requestBody});
         const data=await response.json(); if(!response.ok)throw new Error(data.error||'Could not publish assessment.');
         const url=location.origin+data.path;
-        $('assessmentPublishResult').innerHTML=`<div class="assessment-result"><b>${existingAssessmentId?'Changes saved and published':'Assessment published'}</b><p style="margin:6px 0">${data.sectionCount} section${data.sectionCount===1?'':'s'} · ${data.totalMarks} marks</p><div class="room-code" style="display:inline-block">${esc(data.roomCode)}</div><p class="hint" style="margin:7px 0">Students join at <b>${esc(location.origin+'/join')}</b> using this room code.</p><div class="game-link"><input readonly value="${esc(url)}"><button type="button" class="btn ghost assessment-copy" data-url="${esc(url)}" style="width:auto">Copy link</button></div><a class="btn ghost" href="/assessment/${esc(data.assessmentId)}/present" target="_blank" rel="noopener" style="display:inline-flex;width:auto;margin-top:10px;text-decoration:none">Open presentation</a></div>`;
+        if(assessment.deliveryMode!=='manual') $('assessmentPublishResult').innerHTML=`<div class="assessment-result"><b>${existingAssessmentId?'Changes saved and published':'Assessment published'}</b><p style="margin:6px 0">${data.sectionCount} section${data.sectionCount===1?'':'s'} · ${data.totalMarks} marks</p><div class="room-code" style="display:inline-block">${esc(data.roomCode)}</div><p class="hint" style="margin:7px 0">Students join at <b>${esc(location.origin+'/join')}</b> using this room code.</p><div class="game-link"><input readonly value="${esc(url)}"><button type="button" class="btn ghost assessment-copy" data-url="${esc(url)}" style="width:auto">Copy link</button></div><a class="btn ghost" href="/assessment/${esc(data.assessmentId)}/present" target="_blank" rel="noopener" style="display:inline-flex;width:auto;margin-top:10px;text-decoration:none">Open presentation</a></div>`;
+        if(assessment.deliveryMode==='manual'){
+          $('assessmentPublishResult').innerHTML=`<div class="assessment-result"><b>Practical assessment saved</b><p class="hint">Open Mark work to enter marks from the class roster.</p><div id="manual-practical-results"></div></div>`;
+          await loadAssignmentResults(data.assessmentId,'manual-practical-results');
+        }
         if(data.assessmentId&&!workspaceAssignmentIds.includes(data.assessmentId))workspaceAssignmentIds.push(data.assessmentId);
         if(generatedDraft){
           pendingAssessmentDraft=null;
@@ -8882,7 +8998,7 @@
         editingAssessmentId=null;
         $('assessmentRoster').disabled=false;
         scheduleWorkspaceSave();
-        loadMyAssignments(); toast(existingAssessmentId?'Assessment questions updated.':'Assessment published.','ok');
+        loadMyAssignments(); toast(assessment.deliveryMode==='manual'?'Practical assessment saved.':existingAssessmentId?'Assessment questions updated.':'Assessment published.','ok');
       }catch(error){ err.textContent=error.message; err.classList.add('show'); }
       btn.disabled=keepDisabled; btn.innerHTML=keepDisabled?'Assessment published':original;
     });
@@ -8975,7 +9091,7 @@
           const teacherMarked=a.type==='assessment'&&!isDraft?`<label class="gc-teacher-marked" title="Add completed marks to Marks, Rosters and connected TeacherScope records"><input type="checkbox" class="a-marked-toggle" data-id="${esc(a.id)}" ${a.teacherMarked?'checked':''}> Marked by teacher</label>`:'';
           const captured=a.type==='assessment'&&!isDraft?`<label class="gc-teacher-marked" title="Confirm you entered these marks in the school system"><input type="checkbox" class="a-captured-toggle" data-id="${esc(a.id)}" ${a.schoolSystemCaptured?'checked':''} ${!a.teacherMarked?'disabled':''}> Captured on school system</label>`:'';
           return `<div data-assessment-type="${esc(a.assessmentType||a.type)}" data-title="${esc(a.title)}" data-created="${Date.parse(a.createdAt)||0}" data-assignment-status-card="${a.schoolSystemCaptured?'captured':a.teacherMarked?'marked':'pending'}" data-roster-id="${esc(a.rosterId||'unassigned')}" data-search="${esc([a.title,a.subject,a.grade,selectedClass?.name].filter(Boolean).join(' '))}" class="game-card${a.teacherMarked?' teacher-confirmed-card':''}" data-assignment-id="${esc(a.id)}">
-            <div class="assessment-library-row"><div><h3>${esc(a.title)}</h3><p>${esc([a.type==='assessment'?(a.assessmentType||'Assessment'):typeLabel[a.type]||a.type,a.subject,a.grade].filter(Boolean).join(' · '))}</p></div><strong class="assessment-class">${esc(selectedClass?.name||'No class assigned')}</strong><div class="assessment-submitted"><b>${isDraft?'—':Number(a.submissions)||0}${!isDraft&&marking?.expected?' / '+marking.expected:''}</b><small>${isDraft?'Not published':marking?.expected?(Math.max(0,marking.expected-(Number(a.submissions)||0))?Math.max(0,marking.expected-(Number(a.submissions)||0))+' not submitted':'All submitted'):'Submissions'}</small></div><div class="assessment-state ${markingState==='needs-marking'?'needs':''}"><i aria-hidden="true"></i>${esc(isDraft?'Draft':marking?.label||'Collecting work')}</div><button type="button" class="assessment-room acopy" data-url="${esc(a.roomCode||'')}" aria-label="Copy room code ${esc(a.roomCode||'')}" ${!a.roomCode||isDraft?'disabled':''}>${esc(!isDraft&&a.roomCode||'—')}</button><div class="assessment-row-actions">${isDraft?`<button type="button" class="assessment-open a-edit-btn" data-id="${esc(a.id)}">Continue editing</button>`:`<button type="button" class="assessment-open a-toggle-btn" aria-expanded="false" aria-controls="${detailId}" data-assign-id="${esc(a.id)}" data-wrap-id="${wrapId}" data-detail-id="${detailId}" data-closed-label="${a.type==='assessment'&&a.delivery?.mode==='live'&&['lobby','open','paused'].includes(a.delivery.phase)?'Run classroom':'Mark work'}">${a.type==='assessment'&&a.delivery?.mode==='live'&&['lobby','open','paused'].includes(a.delivery.phase)?'Run classroom':'Mark work'}</button>`}<button type="button" class="assessment-more" data-assessment-manage="${esc(a.id)}" aria-label="Details and actions for ${esc(a.title)}" aria-controls="amanage-${esc(a.id)}" aria-expanded="${assignmentManagementOpen.has(a.id)}">⋯</button></div></div>
+            <div class="assessment-library-row"><div><h3>${esc(a.title)}</h3><p>${esc([a.type==='assessment'?(a.assessmentType||'Assessment'):typeLabel[a.type]||a.type,a.subject,a.grade].filter(Boolean).join(' · '))}</p></div><strong class="assessment-class">${esc(selectedClass?.name||'No class assigned')}</strong><div class="assessment-submitted"><b>${isDraft?'—':Number(a.submissions)||0}${!isDraft&&marking?.expected?' / '+marking.expected:''}</b><small>${isDraft?'Not published':marking?.expected?(Math.max(0,marking.expected-(Number(a.submissions)||0))?Math.max(0,marking.expected-(Number(a.submissions)||0))+(a.delivery?.mode==='manual'?' to mark':' not submitted'):(a.delivery?.mode==='manual'?'All marked':'All submitted')):'Submissions'}</small></div><div class="assessment-state ${markingState==='needs-marking'?'needs':''}"><i aria-hidden="true"></i>${esc(isDraft?'Draft':marking?.label||'Collecting work')}</div><button type="button" class="assessment-room acopy" data-url="${esc(a.roomCode||'')}" aria-label="Copy room code ${esc(a.roomCode||'')}" ${!a.roomCode||isDraft?'disabled':''}>${esc(!isDraft&&a.roomCode||'—')}</button><div class="assessment-row-actions">${isDraft?`<button type="button" class="assessment-open a-edit-btn" data-id="${esc(a.id)}">Continue editing</button>`:`<button type="button" class="assessment-open a-toggle-btn" aria-expanded="false" aria-controls="${detailId}" data-assign-id="${esc(a.id)}" data-wrap-id="${wrapId}" data-detail-id="${detailId}" data-closed-label="${a.type==='assessment'&&a.delivery?.mode==='live'&&['lobby','open','paused'].includes(a.delivery.phase)?'Run classroom':'Mark work'}">${a.type==='assessment'&&a.delivery?.mode==='live'&&['lobby','open','paused'].includes(a.delivery.phase)?'Run classroom':'Mark work'}</button>`}<button type="button" class="assessment-more" data-assessment-manage="${esc(a.id)}" aria-label="Details and actions for ${esc(a.title)}" aria-controls="amanage-${esc(a.id)}" aria-expanded="${assignmentManagementOpen.has(a.id)}">⋯</button></div></div>
             <div id="amanage-${esc(a.id)}" class="assessment-management" ${assignmentManagementOpen.has(a.id)?'':'hidden'}>
 
             <div class="gc-head">
@@ -8990,12 +9106,12 @@
               ${a.roomCode&&!isDraft?`<p class="hint" style="margin:4px 0 0;font-size:12px">Students join at <b>${esc(location.origin+'/join')}</b> and enter this code</p>`:isDraft?'<p class="hint" style="margin:4px 0 0;font-size:12px">Private copy: review and publish the questions before giving it to learners.</p>':''}
             </div>
             <div class="gc-body">
-              ${!isDraft?`<div class="game-link"><input readonly value="${esc(location.origin+'/assignment/'+a.id)}"><button type="button" class="btn ghost acopy" data-url="${esc(location.origin+'/assignment/'+a.id)}" style="width:auto;padding:9px 13px">${ICON('i-doc')} Copy</button></div>`:''}
+              ${!isDraft&&a.delivery?.mode!=='manual'?`<div class="game-link"><input readonly value="${esc(location.origin+'/assignment/'+a.id)}"><button type="button" class="btn ghost acopy" data-url="${esc(location.origin+'/assignment/'+a.id)}" style="width:auto;padding:9px 13px">${ICON('i-doc')} Copy</button></div>`:''}
               <div class="gc-actions" style="margin-top:10px">
 
                 ${a.type==='assessment'&&!isDraft?`<button type="button" class="btn ghost a-attendance" data-id="${esc(a.id)}">Attendance</button>`:''}
                 ${a.type==='assessment'&&!isDraft?`<button type="button" class="btn ghost a-add-learners" data-id="${esc(a.id)}" ${a.resultsReleased?'disabled':''}>Add learners to test</button>`:''}
-                ${a.type==='assessment'&&!isDraft?`<a class="btn ghost" href="/assessment/${esc(a.id)}/present" target="_blank" rel="noopener" style="font-size:12px;padding:6px 12px;width:auto;text-decoration:none">Present</a>`:''}
+                ${a.type==='assessment'&&!isDraft&&a.delivery?.mode!=='manual'?`<a class="btn ghost" href="/assessment/${esc(a.id)}/present" target="_blank" rel="noopener" style="font-size:12px;padding:6px 12px;width:auto;text-decoration:none">Present</a>`:''}
                 ${a.contentEditable&&!isDraft?`<button type="button" class="btn accent a-edit-btn" data-id="${esc(a.id)}" style="font-size:12px;padding:6px 12px;width:auto">${isDraft?'Edit questions and publish':'Edit questions'}</button>`:''}
                 ${a.type==='assessment'?`<button type="button" class="btn ghost a-class-btn" data-row="${classRowId}" ${a.resultsReleased?'disabled title="Hide the released results before changing the class."':''} style="font-size:12px;padding:6px 12px;width:auto">${a.rosterId?'Change class':'Assign class'}</button>`:''}
                 ${a.type==='assessment'&&!isDraft?`<button type="button" class="btn ghost a-class-copy-btn" data-row="${copyClassRowId}" ${availableCopyClasses.length?'':'disabled title="This assessment has already been given to every saved class."'} style="font-size:12px;padding:6px 12px;width:auto">Give to another class</button>`:''}

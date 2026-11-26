@@ -93,7 +93,7 @@ function normalizeAssessment(data) {
   if (!subject) throw new Error('Enter a subject.');
   if (!grade) throw new Error('Enter a grade or year group.');
   if (!ASSESSMENT_TYPES.has(assessmentType)) throw new Error('Choose a valid assessment type.');
-  if (!['live', 'self-paced'].includes(deliveryMode)) throw new Error('Choose live classroom or self-paced delivery.');
+  if (!['live', 'self-paced', 'manual'].includes(deliveryMode)) throw new Error('Choose live classroom, self-paced, or teacher marking.');
   if (!Number.isInteger(totalMarks) || totalMarks < 1 || totalMarks > 1000) throw new Error('Total marks must be a whole number from 1 to 1000.');
 
   const objectives = [];
@@ -117,6 +117,7 @@ function normalizeAssessment(data) {
   if (!rawSections.length) throw new Error('Add at least one assessment section.');
   for (const [sectionIndex, rawSection] of rawSections.entries()) {
     const type = cleanText(rawSection && rawSection.type, 40).toLowerCase();
+    if (deliveryMode === 'manual' && type !== 'practical') throw new Error('Teacher marking requires practical tasks.');
     if (!SECTION_TYPES.has(type)) throw new Error(`Section ${sectionIndex + 1} has an unsupported type.`);
     const title = cleanText(rawSection && rawSection.title, 120) || `Section ${sectionIndex + 1}`;
     const instructions = cleanText(rawSection && rawSection.instructions, 2000);
@@ -160,6 +161,7 @@ function normalizeAssessment(data) {
         Object.assign(item, { options, correctIndex: checked.question.correctIndex });
         Object.assign(question, { kind: 'mcq', options, correctIndex: checked.question.correctIndex });
       } else if (type === 'practical') {
+        if (rawItem.activity && deliveryMode === 'manual') throw new Error('Use observable criteria for teacher marking.');
         if (rawItem.activity) {
           const isTable = assessmentDataTable.isTable(rawItem.activity);
           item.activity = (isTable ? assessmentDataTable : assessmentCodeQuest).normalize(rawItem.activity, marks);
@@ -215,7 +217,7 @@ function createAssessment({ teacherId, teacherName, data, rosterId, rosterSnapsh
   fs.mkdirSync(DIR, { recursive: true });
   const normalized = normalizeAssessment(data);
   const id = crypto.randomUUID().slice(0, 8);
-  const roomCode = genRoomCode();
+  const roomCode = normalized.deliveryMode === 'manual' ? null : genRoomCode();
   const rec = {
     id, teacherId, teacherName: teacherName || '', type: 'assessment',
     assessmentType: normalized.assessmentType, title: normalized.title,
@@ -229,7 +231,7 @@ function createAssessment({ teacherId, teacherName, data, rosterId, rosterSnapsh
     unitName: normalized.unitName,
     delivery: normalized.deliveryMode === 'live'
       ? { mode: 'live', phase: 'lobby', activeSectionIndex: -1, activeQuestionIndex: 0, questionSyncEnabled: false, previousPhase: null, updatedAt: new Date().toISOString() }
-      : { mode: 'self-paced', phase: 'open', activeSectionIndex: null, previousPhase: null, updatedAt: new Date().toISOString() },
+      : { mode: normalized.deliveryMode, phase: 'open', activeSectionIndex: null, previousPhase: null, updatedAt: new Date().toISOString() },
     roomCode, rosterId: rosterId || null, cutoffAt: cutoffAt || null,
     rosterSnapshot: Array.isArray(rosterSnapshot) ? normalizeRosterSnapshot(rosterSnapshot) : null,
     teacherMarked: false,
@@ -238,9 +240,11 @@ function createAssessment({ teacherId, teacherName, data, rosterId, rosterSnapsh
     createdAt: new Date().toISOString(),
   };
   writeJsonAtomic(recPath(id), rec);
-  const rooms = loadRooms();
-  rooms[roomCode] = id;
-  saveRooms(rooms);
+  if (roomCode) {
+    const rooms = loadRooms();
+    rooms[roomCode] = id;
+    saveRooms(rooms);
+  }
   return rec;
 }
 
@@ -645,6 +649,9 @@ function setLessonTask(id, windowId, questionId) {
 }
 
 function checkLessonAccess(record, studentId, start = false, now = Date.now()) {
+  if (deliveryState(record).mode === 'manual') {
+    throw assessmentStateError('This assessment is marked by your teacher.', 'assessment_teacher_only');
+  }
   if (!record.lessonPolicy) return;
   const student = normalizeStudentId(studentId);
   const window = currentLessonWindow(record, now);
@@ -705,6 +712,9 @@ function updateAssessmentContent(id, data, cutoffAt) {
   const rec = getAssignment(id);
   assertAssessmentContentEditable(rec);
   const normalized = normalizeAssessment(data);
+  if ((normalized.deliveryMode === 'manual') !== (deliveryState(rec).mode === 'manual')) {
+    throw new Error('Create a new assessment to switch between teacher marking and online delivery.');
+  }
   rec.assessmentType = normalized.assessmentType;
   rec.title = normalized.title;
   rec.subject = normalized.subject;
@@ -721,7 +731,7 @@ function updateAssessmentContent(id, data, cutoffAt) {
   rec.unitName = rec.unitName || null;
   rec.delivery = normalized.deliveryMode === 'live'
     ? { mode: 'live', phase: 'lobby', activeSectionIndex: -1, activeQuestionIndex: 0, questionSyncEnabled: false, previousPhase: null, updatedAt: new Date().toISOString() }
-    : { mode: 'self-paced', phase: 'open', activeSectionIndex: null, previousPhase: null, updatedAt: new Date().toISOString() };
+    : { mode: normalized.deliveryMode, phase: 'open', activeSectionIndex: null, previousPhase: null, updatedAt: new Date().toISOString() };
   if (cutoffAt !== undefined) rec.cutoffAt = cutoffAt || null;
   rec.version = Number(rec.version || 1) + 1;
   rec.status = 'published';
@@ -1207,6 +1217,11 @@ function assessmentMarkingSummary(record) {
   const submissions = loadSubmissions(record.id).filter(sub=>!isAbsent(record,sub.studentId));
   const readiness = assessmentReleaseReadiness(record, expectedIds);
   const expected = expectedIds.length || submissions.length;
+  if (deliveryState(record).mode === 'manual') {
+    return { state: submissions.length < expected ? 'needs-marking' : 'ready',
+      label: record.teacherMarked ? 'Marked' : 'Teacher marking',
+      detail: `${submissions.length}/${expected} learners marked.`, submissions: submissions.length, expected };
+  }
   if (isReleased(record)) {
     return {
       state: 'released',

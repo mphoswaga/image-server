@@ -57,3 +57,19 @@ test('practical count is validated independently of matching total marks', () =>
   const draft = normalizeAssessmentDraft(raw, context);
   assert.ok(assessmentDraftIssues(draft, context).includes('expected 2 practical tasks but received 1'));
 });
+
+test('practical-only generation allocates every mark to practical tasks and preserves teacher marking', async () => {
+  const result = await generateObjectiveAssessment({
+    ...input, kind: 'practical', deliveryMode: 'manual', totalMarks: 50,
+    practicalCount: 5, practicalMarks: 50
+  }, {
+    client: {},
+    generate: async (_client, _draft, context) => {
+      assert.deepEqual(context.questionTypes, ['practical']);
+      assert.deepEqual(context.phaseRequirements.map(({type,marks})=>[type,marks]), [['practical',50]]);
+      assert.equal(context.practicalCount, 5);
+      return { assessmentType: 'project', deliveryMode: 'live', totalMarks: 50 };
+    }
+  });
+  assert.deepEqual(result, { assessmentType: 'practical', deliveryMode: 'manual', totalMarks: 50 });
+});
