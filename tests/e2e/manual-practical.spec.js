@@ -16,6 +16,10 @@ test('teacher builds a 50-mark practical and saves recorded zeros from a tablet'
   await page.locator('#assessmentTitle').fill('Document practical');
   await page.locator('#assessmentSubject').fill('Computing');
   await page.locator('#assessmentGrade').fill('Grade 2');
+  await page.getByLabel('Number of questions or criteria').fill('15');
+  await page.getByRole('button', {name:'Set number of fields'}).click();
+  await expect(page.locator('[data-item-prompt]')).toHaveCount(15);
+  await expect(page.locator('#assessmentTotalStatus')).toHaveClass(/valid/);
   await page.getByText('Paste a marking rubric', {exact:true}).click();
   await page.getByLabel('Rubric table with step, task, objective and marks').fill(
     'Step\tTask\tLearning Objective Alignment\tMarks\n1\tOpened Chrome\t—\t1\n2\tFormats a heading\tCreate a document\t49'

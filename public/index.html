@@ -8658,6 +8658,11 @@
           <div class="assessment-grid"><div><label>Section title</label><input data-section-title value="${esc(section.title)}"></div><div><label>Section type</label><select data-section-type>${Object.entries(assessmentTypeNames).map(([value,label])=>`<option value="${value}" ${section.type===value?'selected':''}>${label}</option>`).join('')}</select></div>
           <div class="full"><label>Instructions <span style="font-weight:400;color:var(--muted)">(optional)</span></label><textarea rows="2" data-section-instructions>${esc(section.instructions||'')}</textarea></div>
           <div class="full"><label>Objectives assessed in this section</label><select data-section-objectives multiple size="${Math.min(4,Math.max(2,objectives.length))}">${objectiveOptions}</select></div></div>
+          ${section.type==='practical'?`<div class="assessment-presets">
+            <label for="manual-practical-count-${si}">Number of questions or criteria</label>
+            <input id="manual-practical-count-${si}" data-manual-practical-count type="number" required min="1" max="1000" step="1" value="${Math.max(1,section.items.length)}">
+            <button type="button" class="btn ghost assessment-mini" data-set-practical-count>Set number of fields</button>
+          </div>`:''}
           <div>${items}</div><button type="button" class="btn ghost assessment-mini" data-add-assessment-item="${si}" style="margin-top:10px">+ Add ${section.type==='practical'?'criterion':'item'}</button>
         </div>`;
       }).join('');
@@ -8990,6 +8995,30 @@
     $('closeAssessmentBtn').addEventListener('click',()=>{ captureGeneratedAssessmentEdits(); editingGeneratedAssessmentDraft=false; editingAssessmentId=null; $('assessmentRoster').disabled=false; $('assessmentBuilder').style.display='none'; });
     $('assessmentBuilder').addEventListener('click',e=>{
       const preset=e.target.closest('[data-assessment-preset]'); if(preset){ applyAssessmentPreset(preset.dataset.assessmentPreset); return; }
+      const setCount=e.target.closest('[data-set-practical-count]');
+      if(setCount){
+        const node=setCount.closest('.assessment-section');
+        const input=node.querySelector('[data-manual-practical-count]');
+        if(!input.reportValidity())return;
+        syncAssessmentState();
+        const section=assessmentSectionsState[Number(node.dataset.sectionIndex)];
+        const count=input.valueAsNumber;
+        if(count===section.items.length)return;
+        if(count<section.items.length&&section.items.slice(count).some(item=>item.prompt)&&
+          !confirm('Remove the criteria after the new count?'))return;
+        const total=Number($('assessmentTotal').value);
+        const starter=assessmentSectionsState.length===1&&section.items.length===1&&
+          !section.items[0].prompt&&section.items[0].marks===total&&Number.isInteger(total)&&total>=count;
+        if(starter){
+          const base=Math.floor(total/count), remainder=total%count;
+          section.items=Array.from({length:count},(_,index)=>newAssessmentItem('practical',base+(index<remainder?1:0)));
+        }else{
+          section.items=section.items.slice(0,count);
+          while(section.items.length<count)section.items.push(newAssessmentItem('practical'));
+        }
+        renderAssessmentSections();
+        return;
+      }
       const add=e.target.closest('[data-add-assessment-item]'); if(add){ syncAssessmentState(); const s=assessmentSectionsState[Number(add.dataset.addAssessmentItem)]; s.items.push(newAssessmentItem(s.type)); renderAssessmentSections(); return; }
       const moveItem=e.target.closest('[data-move-assessment-item]'); if(moveItem){ const node=moveItem.closest('.assessment-section'),item=moveItem.closest('.assessment-item'); syncAssessmentState(); const si=Number(node.dataset.sectionIndex),ii=[...node.querySelectorAll('.assessment-item')].indexOf(item),to=moveItem.dataset.moveAssessmentItem==='up'?ii-1:ii+1; if(to>=0&&to<assessmentSectionsState[si].items.length){ const [moved]=assessmentSectionsState[si].items.splice(ii,1); assessmentSectionsState[si].items.splice(to,0,moved); } renderAssessmentSections(); return; }
       const removeItem=e.target.closest('[data-remove-assessment-item]'); if(removeItem){ const section=removeItem.closest('.assessment-section'); syncAssessmentState(); const si=Number(section.dataset.sectionIndex); assessmentSectionsState[si].items.splice(Number(removeItem.dataset.removeAssessmentItem),1); renderAssessmentSections(); return; }
