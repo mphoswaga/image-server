@@ -4382,53 +4382,55 @@ app.post('/api/assignment/:id/grades/accept-ai',requireAuth,(req,res)=>{
   catch(error){res.status(error.status||400).json({error:error.message,code:error.code});}
 });
 
-app.patch('/api/assignment/:id/grade/bulk', requireAuth, (req, res) => {
-  const a = assignments.getAssignment(req.params.id);
-  if (!a) return res.status(404).json({ error: 'Assignment not found.' });
-  if (a.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assignment.' });
-  if (assignments.assessmentIsFinalised(a)) return res.status(409).json({ code: 'assessment_finalised', error: 'Unrelease the results before changing assessment marks.' });
-  const manual = assignments.deliveryState(a).mode === 'manual';
-  if (manual && a.teacherMarked) return res.status(409).json({ error: 'Reopen marking before changing these marks.' });
-  const { questionId, marksAwarded, marksToAdd, rationale } = req.body || {};
-  const q = a.content.questions.find(question => question.id === questionId);
-  if (!q) return res.status(404).json({ error: 'Question not found.' });
-  const rawIds = Array.isArray(req.body && req.body.studentIds) ? req.body.studentIds : [];
-  const studentIds = [...new Set(rawIds.map(roster.normalizeStudentId).filter(Boolean))].slice(0, 500);
-  if (!studentIds.length) return res.status(400).json({ error: 'Select at least one learner.' });
-  const adding = marksToAdd !== undefined;
-  const max = Number(q.marks);
-  const amount = Number(adding ? marksToAdd : marksAwarded);
-  if (adding && (marksAwarded !== undefined || typeof marksToAdd !== 'number' ||
-      !Number.isFinite(amount) || amount < 0.01)) {
-    return res.status(400).json({ error: 'Enter a positive number of marks to add.' });
-  }
-  if (!adding && ((manual && typeof marksAwarded !== 'number') || !Number.isFinite(amount) || amount < 0 || amount > max)) {
-    return res.status(400).json({ error: `Enter a mark from 0 to ${max}.` });
-  }
-  const cohort = a.rosterId ? assignmentCohortStudents(a).filter(s=>!assignments.isAbsent(a,s.id)) : [];
+function bulkMarkError(message, status = 400) {
+  return Object.assign(new Error(message), { status });
+}
+
+function bulkMarkLock(record) {
+  if (assignments.assessmentIsFinalised(record)) return 'Unrelease the results before changing assessment marks.';
+  if (assignments.deliveryState(record).mode === 'manual' && record.teacherMarked) return 'Reopen marking before changing these marks.';
+  return '';
+}
+
+function bulkMarkContext(record) {
+  const manual = assignments.deliveryState(record).mode === 'manual';
+  const cohort = record.rosterId ? assignmentCohortStudents(record).filter(student => !assignments.isAbsent(record, student.id)) : [];
   const cohortMap = new Map(cohort.map(student => [roster.normalizeStudentId(student.id), student]));
-  const targets = studentIds.map(studentId => ({
-    studentId,
-    submission: assignments.getSubmission(a.id, studentId),
-    rosterStudent: cohortMap.get(studentId),
-    draft: assignments.getDraft(a.id, studentId),
-  }));
-  const invalid = targets.find(target => (manual && !target.rosterStudent) || (!target.submission && (
-    a.type !== 'assessment' || q.kind !== 'practical' || (a.rosterId && !target.rosterStudent)
-  )));
-  if (invalid) return res.status(404).json({ error: `No markable response was found for ${invalid.studentId}.` });
+  const submissions = new Map(assignments.getSubmissions(record.id).map(sub => [roster.normalizeStudentId(sub.studentId), sub]));
+  const drafts = new Map(assignments.loadDrafts(record.id).map(draft => [roster.normalizeStudentId(draft.studentId), draft]));
+  return { manual, cohortMap, submissions, drafts };
+}
 
-  const previousGrade = target => (target.submission ? target.submission.grades : target.draft?.observationGrades)?.[questionId] || {};
-  if (adding && targets.some(target => !Number.isFinite(previousGrade(target).marksAwarded))) {
-    return res.status(409).json({ error: 'Set a mark for every selected learner on this question before adding marks.' });
+function bulkMarkTarget(context, studentId) {
+  return { studentId, submission: context.submissions.get(studentId), rosterStudent: context.cohortMap.get(studentId), draft: context.drafts.get(studentId) };
+}
+
+function bulkMarkEligible(record, context, question, target) {
+  if (context.manual && !target.rosterStudent) return false;
+  return Boolean(target.submission || record.type === 'assessment' && question.kind === 'practical' && (!record.rosterId || target.rosterStudent));
+}
+
+function bulkPreviousGrade(target, questionId) {
+  return (target.submission ? target.submission.grades : target.draft?.observationGrades)?.[questionId] || {};
+}
+
+function validateBulkAmount(operation, amount, max) {
+  if (!['set', 'add', 'remove'].includes(operation)) throw bulkMarkError('Choose Set, Add, or Remove.');
+  if (!Number.isFinite(amount) || (operation === 'set' ? amount < 0 || amount > max : amount < 0.01)) {
+    throw bulkMarkError(operation === 'set' ? `Enter a mark from 0 to ${max}.` : 'Enter a positive number of marks to adjust.');
   }
+}
 
+function applyBulkMarks(a, q, targets, operation, amount, rationale) {
+  const questionId = q.id, max = Number(q.marks);
+  const manual = assignments.deliveryState(a).mode === 'manual';
+  const previousGrade = target => bulkPreviousGrade(target, questionId);
   let updated = 0;
   for (const target of targets) {
     const previous = previousGrade(target);
-    const proposed = adding ? previous.marksAwarded + amount : amount;
-    const marks = Math.round(Math.min(max, proposed) * 100) / 100;
-    if (adding && marks === previous.marksAwarded) continue;
+    const proposed = operation === 'set' ? amount : previous.marksAwarded + (operation === 'add' ? amount : -amount);
+    const marks = Math.round(Math.max(0, Math.min(max, proposed)) * 100) / 100;
+    if (operation !== 'set' && marks === previous.marksAwarded) continue;
     const verdict = marks === max ? 'correct' : marks === 0 ? 'incorrect' : 'partial';
     const grade = { marksAwarded: marks, verdict, rationale: String(rationale || '').trim() || previous.rationale || '', source: 'teacher' };
     updated++;
@@ -4445,17 +4447,133 @@ app.patch('/api/assignment/:id/grade/bulk', requireAuth, (req, res) => {
       });
       continue;
     }
-    if (!adding && !['practical', 'codequest', 'data-table'].includes(q.kind)) assignments.recordVerdict(a.id, questionId, {
+    if (operation === 'set' && !['practical', 'codequest', 'data-table'].includes(q.kind)) assignments.recordVerdict(a.id, questionId, {
       answerText: target.submission.answers[questionId], ...grade, confirmed: true,
     });
     target.submission.grades[questionId] = { ...previous, ...grade };
     target.submission.totalMarks = Object.values(target.submission.grades).reduce((sum, item) => sum + Number(item.marksAwarded || 0), 0);
     assignments.saveSubmission(a.id, target.submission);
   }
-  res.json(adding
-    ? { ok: true, updated, alreadyAtFullMarks: targets.length - updated, questionId }
-    : { ok: true, updated, questionId, marksAwarded: Math.round(amount * 100) / 100 });
+  return updated;
+}
+
+app.patch('/api/assignment/:id/grade/bulk', requireAuth, (req, res) => {
+  const a = assignments.getAssignment(req.params.id);
+  if (!a) return res.status(404).json({ error: 'Assignment not found.' });
+  if (a.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assignment.' });
+  try {
+    const lock = bulkMarkLock(a);
+    if (lock) return res.status(409).json({ error: lock, ...(assignments.assessmentIsFinalised(a) ? { code: 'assessment_finalised' } : {}) });
+    const { questionId, marksAwarded, marksToAdd, marksToRemove, rationale } = req.body || {};
+    const q = a.content.questions.find(question => question.id === questionId);
+    if (!q) throw bulkMarkError('Question not found.', 404);
+    const context = bulkMarkContext(a);
+    const rawIds = Array.isArray(req.body?.studentIds) ? req.body.studentIds : [];
+    const ids = [...new Set(rawIds.map(roster.normalizeStudentId).filter(Boolean))].slice(0, 500);
+    if (!ids.length) throw bulkMarkError('Select at least one learner.');
+    const operations = [['set',marksAwarded],['add',marksToAdd],['remove',marksToRemove]].filter(([,value]) => value !== undefined);
+    if (operations.length !== 1) throw bulkMarkError('Choose exactly one mark action.');
+    const [operation, value] = operations[0];
+    const amount = operation === 'set' && !context.manual ? Number(value) : value;
+    validateBulkAmount(operation, amount, q.marks);
+    const targets = ids.map(id => bulkMarkTarget(context, id));
+    const invalid = targets.find(target => !bulkMarkEligible(a, context, q, target));
+    if (invalid) throw bulkMarkError(`No markable response was found for ${invalid.studentId}.`, 404);
+    if (operation !== 'set' && targets.some(target => !Number.isFinite(bulkPreviousGrade(target, questionId).marksAwarded))) {
+      throw bulkMarkError(`Set a mark for every selected learner on this question before ${operation==='add'?'adding':'removing'} marks.`, 409);
+    }
+    const updated = applyBulkMarks(a, q, targets, operation, amount, rationale);
+    res.json({ ok: true, updated, questionId, ...(operation === 'set' ? { marksAwarded: Math.round(amount * 100) / 100 }
+      : operation === 'add' ? { alreadyAtFullMarks: targets.length - updated } : { alreadyAtZero: targets.length - updated }) });
+  } catch (error) { res.status(error.status || 500).json({ error: error.status ? error.message : 'Could not save marks.' }); }
 });
+
+function matchingAssessmentClasses(source, teacherId) {
+  const clean = value => String(value || '').normalize('NFC').trim().replace(/\s+/g, ' ').toLowerCase();
+  const topic = record => clean(record.topic || record.title);
+  const expected = assignments.assessmentQuestionSetKey(source);
+  const records = new Map();
+  for (const summary of [source, ...assignments.listTeacherAssignments(teacherId)]) {
+    if (summary.type !== 'assessment' || !summary.rosterId || records.has(summary.rosterId) ||
+        summary.status === 'draft' || topic(summary) !== topic(source) ||
+        clean(summary.grade) !== clean(source.grade) || clean(summary.subject) !== clean(source.subject)) continue;
+    if (summary.id !== source.id && summary.questionSetKey !== expected) continue;
+    const candidate = summary.id === source.id ? source : assignments.getAssignment(summary.id);
+    if (candidate?.teacherId === teacherId && assignments.assessmentQuestionSetKey(candidate) === expected) records.set(candidate.rosterId, candidate);
+  }
+  return [...records.values()];
+}
+
+function questionsInSourceOrder(sourceQuestions, questions) {
+  const byKey = new Map();
+  for (const question of questions) {
+    const key = assignments.assessmentQuestionKey(question);
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(question);
+  }
+  return sourceQuestions.map(question => byKey.get(assignments.assessmentQuestionKey(question)).shift());
+}
+
+function matchingClassTargets(record, context, question) {
+  return [...context.cohortMap.keys()].map(id => bulkMarkTarget(context, id))
+    .filter(target => bulkMarkEligible(record, context, question, target));
+}
+
+for (const method of ['get', 'patch']) {
+  app[method]('/api/assignment/:id/grade/matching-classes', requireAuth, (req, res) => {
+    const source = assignments.getAssignment(req.params.id);
+    if (!source || source.teacherId !== req.userId || source.type !== 'assessment' || source.status === 'draft') {
+      return res.status(404).json({ error: 'Assessment not found.' });
+    }
+    const questions = source.content.questions;
+    const matches = matchingAssessmentClasses(source, req.userId);
+    const className = record => roster.getRoster(req.userId, record.rosterId)?.name || 'Saved class';
+    if (method === 'get') {
+      return res.json({
+        title: source.title, grade: source.grade,
+        questions: questions.map(({ id, question, marks }) => ({ id, question, marks })),
+        classes: matches.map(record => {
+          const context = bulkMarkContext(record);
+          return { id: record.id, name: className(record), locked: Boolean(bulkMarkLock(record)),
+            counts: questionsInSourceOrder(questions, record.content.questions).map(question => {
+              const targets = matchingClassTargets(record, context, question);
+              return { available: targets.length, marked: targets.filter(target =>
+                Number.isFinite(bulkPreviousGrade(target, question.id).marksAwarded)).length };
+            }) };
+        })
+      });
+    }
+
+    const { questionId, classIds, operation, amount } = req.body || {};
+    const index = questions.findIndex(question => question.id === questionId);
+    const ids = [...new Set(Array.isArray(classIds) ? classIds : [])];
+    const byId = new Map(matches.map(record => [record.id, record]));
+    try {
+      if (index < 0) throw bulkMarkError('Question not found.', 404);
+      validateBulkAmount(operation, amount, questions[index].marks);
+      if (!ids.length || ids.some(id => !byId.has(id))) throw bulkMarkError('Select matching classes again. The assessment list may have changed.', 409);
+      const plans = ids.map(id => {
+        const record = byId.get(id);
+        const lock = bulkMarkLock(record);
+        if (lock) throw bulkMarkError(`${className(record)}: ${lock}`, 409);
+        const question = questionsInSourceOrder(questions, record.content.questions)[index];
+        const targets = matchingClassTargets(record, bulkMarkContext(record), question).filter(target =>
+          operation === 'set' || Number.isFinite(bulkPreviousGrade(target, question.id).marksAwarded));
+        return { record, question, targets };
+      });
+      if (!plans.some(plan => plan.targets.length)) throw bulkMarkError('No eligible learners were found for that action.');
+      const classes = [];
+      for (const { record, question, targets } of plans) {
+        try {
+          classes.push({ name: className(record), updated: applyBulkMarks(record, question, targets, operation, amount) });
+        } catch (error) {
+          return res.status(500).json({ error: `Could not finish saving ${className(record)}. Review the saved marks before applying this adjustment again.`, classes });
+        }
+      }
+      res.json({ classes, updated: classes.reduce((total, item) => total + item.updated, 0) });
+    } catch (error) { res.status(error.status || 500).json({ error: error.status ? error.message : 'Could not save marks.' }); }
+  });
+}
 
 // Everything a generated (or uploaded) deck already knows about the lesson,
 // laid out for the plan generator. A deck carries the whole lesson — titles,

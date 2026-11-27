@@ -1320,6 +1320,18 @@ function recordVerdict(id, questionId, { answerText, marksAwarded, verdict, rati
   return entry;
 }
 
+function assessmentQuestionKey(question) {
+  return JSON.stringify([
+    question.kind, String(question.question || '').normalize('NFC').trim().replace(/\s+/g, ' '),
+    question.marks, question.options, question.correctIndex, question.answerKey, question.activity
+  ]);
+}
+
+function assessmentQuestionSetKey(record) {
+  const questions = (record.content?.questions || []).map(assessmentQuestionKey).sort();
+  return crypto.createHash('sha256').update(JSON.stringify(questions)).digest('hex');
+}
+
 function listTeacherAssignments(teacherId) {
   fs.mkdirSync(DIR, { recursive: true });
   return fs.readdirSync(DIR)
@@ -1328,6 +1340,7 @@ function listTeacherAssignments(teacherId) {
     .filter(a => a && a.teacherId === teacherId)
     .map(a => ({
       needsAssessmentControls:a.type==='quiz',
+      ...(a.type === 'assessment' ? { questionSetKey: assessmentQuestionSetKey(a) } : {}),
       id: a.id, type: a.type, title: a.title, subject: a.subject, topic: a.topic, grade: a.grade,
       assessmentType: a.assessmentType || null, totalMarks: a.totalMarks || null,
       sectionCount: Array.isArray(a.sections) ? a.sections.length : null,
@@ -1398,5 +1411,5 @@ module.exports = {
   assessmentReleaseReadiness, assessmentMarkingSummary, loadDrafts, getDraft, saveDraft, saveDraftGrade, deliveryState, learnerSectionProgress, learnerQuestionProgress, questionAnswerProgress, updateDelivery, draftProgress, presentationSlides,
   sanitizeLearnerAnswers, incompleteAssessmentAnswers, filterAssignmentEvidenceForRoster,
   findConfirmedVerdict, recordVerdict, normalizeAnswer, normalizeStudentId, renameAssessmentStudent,
-  listTeacherAssignments,
+  listTeacherAssignments, assessmentQuestionKey, assessmentQuestionSetKey,
 };

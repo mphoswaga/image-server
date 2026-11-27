@@ -2441,6 +2441,13 @@
     .assessment-builder { margin-bottom:24px; padding:20px; border:1px solid var(--border); border-radius:16px; background:#fbfdfc; }
     .assessment-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 14px; }
     .assessment-grid .full { grid-column:1/-1; }
+    .assessment-cross-class { width:min(620px,calc(100% - 24px)); max-height:90dvh; padding:18px; border:1px solid var(--border); border-radius:15px; }
+    .assessment-cross-class::backdrop { background:#142e26a0; }
+    .assessment-cross-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr)); gap:10px; }
+    .assessment-cross-class fieldset { border:1px solid var(--border); border-radius:10px; padding:10px; min-width:0; }
+    .assessment-cross-class fieldset label { display:flex; align-items:center; gap:10px; min-height:44px; margin:0; }
+    .assessment-cross-actions { display:flex; flex-wrap:wrap; gap:8px; }
+    .assessment-cross-actions button { width:auto; min-height:44px; }
     .assessment-methods { display:flex; flex-wrap:wrap; gap:6px; padding:5px; background:#edf4ef; border-radius:12px; margin:16px 0 10px; }
     .assessment-methods button { flex:1 1 130px; width:auto; min-height:44px; }
     .assessment-methods button[aria-pressed="true"] { background:#fff; color:var(--accent); border-color:#9ac6b0; box-shadow:0 1px 3px #143c2420; }
@@ -3551,7 +3558,7 @@
     <!-- MY ASSIGNMENTS -->
     <section id="assignmentsPanel" class="card wide" style="display:none">
       <div class="assessment-library-heading"><div><p class="assessment-eyebrow">ASSESSMENT WORKSPACE</p><h2>Tests &amp; projects <span id="assessmentSavedCount">0 saved</span></h2><p>Run assessments, mark work, and track school capture.</p></div><div><button id="newAssessmentBtn" type="button" class="btn accent">Create test or project</button><details class="assessment-create-menu"><summary aria-label="More creation options">⋯</summary><button id="topicMcqOpen" type="button">Generate multiple-choice questions</button></details></div></div>
-      <p><a class="btn ghost" href="/activity-templates">Practical activity templates</a></p>
+      <p class="assessment-presets"><a class="btn ghost" href="/activity-templates">Practical activity templates</a><button type="button" class="btn ghost" id="assessmentAcrossClasses">Mark across classes</button></p>
       <button id="assignmentsBackTop" type="button" hidden>Back</button>
       <section id="topicMcqPanel" class="assessment-builder" hidden>
         <h3>Questions from a published topic</h3>
@@ -6392,6 +6399,8 @@
         catch(error){toast(error.message);acceptAI.disabled=false;}return;
       }
 
+      const across=e.target.closest('[data-mark-across-classes]');
+      if(across){openAcrossClassMarking(across.dataset.markAcrossClasses,across.dataset.questionId).catch(error=>toast(error.message));return;}
       const bulkApply=e.target.closest('.bulk-grade-apply');
       if(bulkApply){
         const {assignId,wrapId,questionId,mode}=bulkApply.dataset,wrap=$(wrapId);
@@ -6751,6 +6760,7 @@
           <button type="button" class="btn ghost assessment-question-nav" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-index="${qi-1}" ${qi===0?'disabled':''} style="width:auto;padding:7px 10px">Previous</button>
           <button type="button" class="btn ghost assessment-question-nav" data-assign-id="${assignId}" data-wrap-id="${wrapId}" data-question-index="${qi+1}" ${qi===questions.length-1?'disabled':''} style="width:auto;padding:7px 10px">Next</button>
           <span style="font-size:12px;color:var(--muted);font-weight:600">${qi+1} of ${questions.length}</span>
+          ${d.assessmentType?`<button type="button" class="btn ghost assessment-mini" data-mark-across-classes="${esc(assignId)}" data-question-id="${esc(q.id)}">Mark across classes</button>`:''}
         </div>
         ${station?`<details class="data-bulk" data-marking-detail="bulk:${esc(q.id)}"><summary>Change marks in bulk</summary>`:''}
         ${locked?'<p class="hint">Clear Marked by teacher to edit these marks.</p>':`<div class="bulk-grade-toolbar">
@@ -9320,6 +9330,140 @@
         filterAssignmentCards();
       }catch{ wrap.innerHTML='<p class="hint" role="alert">Could not load assessments. Open Tests &amp; projects again to retry.</p>';$('assignmentFilterStatus').textContent='';$('assessmentSavedCount').textContent=''; }
     }
+
+    async function openAcrossClassMarking(initialId='',initialQuestion=''){
+      const response=await fetch('/api/assignments');
+      const listing=await response.json();
+      if(!response.ok)throw new Error(listing.error||'Could not load assessments.');
+      const assessments=(listing.assignments||[]).filter(item=>item.type==='assessment'&&item.rosterId&&item.status!=='draft');
+      const initial=assessments.find(item=>item.id===initialId);
+      const dialog=document.createElement('dialog');
+      dialog.className='assessment-cross-class';
+      dialog.setAttribute('aria-label','Mark across classes');
+      dialog.innerHTML=`<h3>Mark across classes</h3>
+        <div class="assessment-cross-grid">
+          <label>Grade<select data-cross-grade></select></label>
+          <label>Topic<select data-cross-topic></select></label>
+        </div>
+        <label>Question<select data-cross-question></select></label>
+        <fieldset><legend>Classes with matching questions</legend><label><input type="checkbox" data-cross-all> Select all eligible classes</label><div data-cross-classes></div></fieldset>
+        <div class="assessment-cross-grid">
+          <label>Action<select data-cross-operation><option value="set">Set mark</option><option value="add">Add marks</option><option value="remove">Remove marks</option></select></label>
+          <label>Marks<input type="number" data-cross-amount step="0.01" min="0" inputmode="decimal"></label>
+        </div>
+        <p data-cross-status role="status"></p>
+        <div class="assessment-cross-actions"><button type="button" class="btn accent" data-cross-save disabled>Apply to selected classes</button><button type="button" class="btn ghost" data-cross-close>Close</button></div>`;
+      const el=name=>dialog.querySelector(`[data-cross-${name}]`);
+      const grade=el('grade'),topic=el('topic'),question=el('question'),operation=el('operation'),amount=el('amount');
+      const status=el('status'),classes=el('classes'),all=el('all'),save=el('save'),close=el('close');
+      const grades=[...new Set(assessments.map(item=>item.grade))].sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));
+      grade.replaceChildren(...grades.map(value=>new Option(value||'Unspecified grade',value||'')));
+      if(initial)grade.value=initial.grade||'';
+      let matches=null,request=0,busy=false,changed=false;
+      const choices=new Set();
+      function updateApply(){
+        const boxes=[...classes.querySelectorAll('input:not(:disabled)')];
+        const checked=boxes.filter(box=>box.checked);
+        all.checked=Boolean(boxes.length)&&checked.length===boxes.length;
+        all.indeterminate=checked.length>0&&!all.checked;
+        all.disabled=busy||!boxes.length;
+        const learners=checked.reduce((total,box)=>total+Number(box.dataset.count),0);
+        const value=amount.valueAsNumber;
+        save.disabled=busy||!learners||!Number.isFinite(value)||!amount.validity.valid;
+        save.textContent=learners?`Apply to ${learners} learners`:'Apply to selected classes';
+      }
+      function updateClasses(){
+        const index=question.selectedIndex;
+        const maximum=matches?.questions[index]?.marks;
+        amount.min=operation.value==='set'?'0':'0.01';
+        amount.max=operation.value==='set'&&maximum!=null?String(maximum):'';
+        classes.replaceChildren(...(matches?.classes||[]).map(item=>{
+          const count=item.counts[index]?.[operation.value==='set'?'available':'marked']||0;
+          const checkbox=document.createElement('input');
+          checkbox.type='checkbox';checkbox.value=item.id;checkbox.dataset.count=count;
+          checkbox.disabled=item.locked||!count;checkbox.checked=!checkbox.disabled&&choices.has(item.id);
+          const label=document.createElement('label');
+          label.append(checkbox,item.name+` · ${item.locked?'marking closed':count+(count===1?' learner':' learners')}`);
+          return label;
+        }));
+        updateApply();
+      }
+      async function loadMatches(wantedQuestion='',keepClasses=false){
+        const token=++request;
+        matches=null;if(!keepClasses)choices.clear();question.replaceChildren();updateClasses();
+        if(!topic.value){status.textContent='No assessments are available for this grade.';return;}
+        status.textContent='Finding classes with matching questions…';
+        try{
+          const response=await fetch(`/api/assignment/${encodeURIComponent(topic.value)}/grade/matching-classes`);
+          const data=await response.json();
+          if(token!==request||!dialog.open)return;
+          if(!response.ok)throw new Error(data.error||'Could not load matching classes.');
+          matches=data;
+          data.questions.forEach((item,index)=>question.add(new Option(`${index+1}. ${item.question} (${item.marks} marks)`,item.id)));
+          if(data.questions.some(item=>item.id===wantedQuestion))question.value=wantedQuestion;
+          status.textContent='Choose the classes to update. Add and Remove apply to existing marks only.';
+          updateClasses();
+        }catch(error){if(token===request&&dialog.open)status.textContent=error.message;}
+      }
+      function loadTopics(preferred=''){
+        const groups=new Map();
+        for(const item of assessments.filter(item=>(item.grade||'')===grade.value)){
+          const name=[item.title,item.subject].filter(Boolean).join(' · ');
+          if(!groups.has(name))groups.set(name,new Map());
+          const versions=groups.get(name);
+          if(!versions.has(item.questionSetKey)||item.id===preferred)versions.set(item.questionSetKey,item);
+        }
+        topic.replaceChildren(...[...groups].flatMap(([name,versions])=>[...versions.values()].map((item,index)=>{
+          const sourceClass=assessmentClassRosters.find(roster=>roster.id===item.rosterId)?.name||`Question set ${index+1}`;
+          return new Option(versions.size>1?`${name} · ${sourceClass}`:name,item.id);
+        })));
+        if(preferred&&[...topic.options].some(option=>option.value===preferred))topic.value=preferred;
+      }
+      grade.onchange=()=>{loadTopics();loadMatches();};
+      topic.onchange=()=>loadMatches();
+      question.onchange=operation.onchange=updateClasses;
+      amount.oninput=updateApply;
+      classes.onchange=event=>{const box=event.target;if(box.checked)choices.add(box.value);else choices.delete(box.value);updateApply();};
+      all.onchange=()=>{
+        for(const box of classes.querySelectorAll('input:not(:disabled)')){
+          box.checked=all.checked;
+          if(all.checked)choices.add(box.value);else choices.delete(box.value);
+        }
+        updateApply();
+      };
+      close.onclick=()=>dialog.close();
+      dialog.oncancel=event=>{if(busy)event.preventDefault();};
+      dialog.onclose=()=>{++request;dialog.remove();if(changed)loadMyAssignments();};
+      save.onclick=async()=>{
+        const classIds=[...classes.querySelectorAll('input:checked:not(:disabled)')].map(box=>box.value);
+        const body={classIds,questionId:question.value,operation:operation.value,amount:amount.valueAsNumber};
+        busy=true;
+        for(const field of dialog.querySelectorAll('select,input,button'))field.disabled=true;
+        status.textContent='Saving marks…';
+        try{
+          const response=await fetch(`/api/assignment/${encodeURIComponent(topic.value)}/grade/matching-classes`,{
+            method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)
+          });
+          const result=await response.json();
+          if(!response.ok){
+            if(response.status>=500)changed=true;
+            throw new Error((result.error||'Could not update marks.')+(result.classes?.length?' Saved: '+result.classes.map(item=>item.name+': '+item.updated).join(' · '):''));
+          }
+          changed=true;amount.value='';
+          await loadMatches(body.questionId,true);
+          status.textContent=`${result.updated} learners updated. ${result.classes.map(item=>item.name+': '+item.updated).join(' · ')}`;
+        }catch(error){status.textContent=error.message;}
+        finally{
+          busy=false;
+          for(const field of [grade,topic,question,operation,amount,close])field.disabled=false;
+          updateClasses();
+        }
+      };
+      document.body.append(dialog);
+      dialog.showModal();
+      loadTopics(initialId);await loadMatches(initialQuestion);
+    }
+    $('assessmentAcrossClasses').onclick=()=>openAcrossClassMarking().catch(error=>toast(error.message));
 
     async function openAssessmentAttendance(id){
       const response=await fetch(`/api/assignment/${encodeURIComponent(id)}/attendance`),data=await response.json();
