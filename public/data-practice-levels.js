@@ -14,7 +14,7 @@ function dataPracticeLevels(topic) {
       inputs:sorted.map((_,i)=>({label:'Position '+(i+1)}))},keys:sorted.map(v=>[v])};
   }
   const badges=['Trần Minh Anh · Age 8 · Room B04 · Family phone 090 000 0012','Lê Gia Bảo · Age 9 · Room B02 · Family phone 090 000 0015'];
-  const files=[['File','Size'],['Welcome note.txt','2 KB'],['Small art poster.png','2 MB'],['Full school fair video.mp4','750 MB']];
+  const files=[['File','Size'],['Library hours.txt','6 KB'],['Reading map.png','7 MB'],['Full book tour.mp4','625 MB']];
   const guide='Use 1 MB = 1,000 KB and 1 GB = 1,000 MB.';
   const types=[['Field','Example'],['Room number','B04'],['Number of chairs','24'],['Booked?','No']];
   const votes=[['Club','Votes'],['Chess','9'],['Music','7'],['Art','5']];
@@ -29,8 +29,8 @@ function dataPracticeLevels(topic) {
       records('Two rooms were swapped and one family phone number was copied twice. Use the pupil cards to fix all three mistakes.',badges,['Name','Room','Family phone'],[['Trần Minh Anh','',''],['Lê Gia Bảo','','090 000 0015']],[[1,1,'B04','B02'],[1,2,'090 000 0012','090 000 0015'],[2,1,'B02','B04']]),
       records('Check every editable cell. Keep accurate details. If the card gives no age, clear the guessed age and leave the cell empty.',[badges[0],'Lê Gia Bảo · Age not given · Room B02 · Family phone 090 000 0015'],['Name','Age','Room','Family phone'],[['Lê Gia Bảo','','',''],['Trần Minh Anh','','','']],[[1,1,'','8'],[1,2,'B02','B20'],[1,3,'090 000 0015','090 000 0012'],[2,1,'8','8'],[2,2,'B04','B40'],[2,3,'090 000 0012','090 000 0012']])];
     case 'Explore file sizes': return [
-      quiz(guide,'files',files,[['How large is the poster in KB?','2,000 KB','200 KB','20,000 KB'],['You have 3 MB free. After saving the 2 MB poster, how many KB are left?','1,000 KB','100 KB','5,000 KB']]),
-      quiz(guide,'files',files,[['Four copies of the video use how many GB?','3 GB','0.75 GB','4 GB'],['You have 1 GB free. You save the 750 MB fair video. How many MB are left?','250 MB','25 MB','750 MB']])];
+      quiz(guide,'files',files,[['How large is the map in KB?','7,000 KB','700 KB','70,000 KB'],['You have 9 MB free. After saving the 7 MB map, how many KB are left?','2,000 KB','200 KB','16,000 KB']]),
+      quiz(guide,'files',files,[['Four copies of the video use how many GB?','2.5 GB','0.625 GB','4 GB'],['You have 1 GB free. You save the 625 MB book tour. How many MB are left?','375 MB','37.5 MB','625 MB']])];
     case 'File-size ladder': return [
       ladder('Drag the files from smallest to largest. '+guide,['Note · 20 KB','Map · 800 KB','Song · 3 MB','Film · 1 GB']),
       ladder('Convert before comparing. Drag the smallest file to the top. '+guide,['Photo · 1 MB','Poster · 1,200 KB','Movie · 1 GB','Backup · 1,100 MB'])];

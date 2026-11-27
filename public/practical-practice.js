@@ -131,12 +131,12 @@
       inputs:[{...choice('Age',['8','9','10']),row:1,column:1,initial:'8'},{...choice('Family phone',['090 000 0103','090 000 0013','090 000 0031']),row:1,column:2,initial:'090 000 0031'}]
     },[['9'],['090 000 0013']]);
     exercise('Explore file sizes','Look at the examples and use the sizes shown in the task.',{
-      presentation:'files',table:[['File','Size'],['Welcome note.txt','2 KB'],['Art poster.png','4 MB'],['Fair video.mp4','20 MB']],
-      inputs:[choice('Which file is smallest?',['Welcome note.txt','Art poster.png','Fair video.mp4']),choice('You have 6 MB of free space. You save the 4 MB poster. How much space is left?',['2 MB','10 MB','2 KB'])]
-    },[['Welcome note.txt'],['2 MB']]);
+      presentation:'files',table:[['File','Size'],['Library hours.txt','6 KB'],['Reading map.png','7 MB'],['Book tour.mp4','32 MB']],
+      inputs:[choice('Which file is smallest?',['Library hours.txt','Reading map.png','Book tour.mp4']),choice('You have 12 MB of free space. You save the 7 MB map. How much space is left?',['5 MB','19 MB','5 KB'])]
+    },[['Library hours.txt'],['5 MB']]);
     const units = ['Byte (B)','Kilobyte (KB)','Megabyte (MB)','Gigabyte (GB)','Terabyte (TB)'];
     exercise('File-size ladder','Drag the boxes or use the arrows. Put the smallest unit at the top.',{
-      presentation:'order',table:[['Unit'],...[units[3],units[0],units[4],units[2],units[1]].map(unit=>[unit])],
+      presentation:'order',table:[['Unit'],...[units[4],units[1],units[3],units[0],units[2]].map(unit=>[unit])],
       inputs:units.map((_,index)=>({label:'Position '+(index+1)}))
     },units.map(unit=>[unit]));
     exercise('Turn data into information','Read the class votes to find the most popular library activity.',{
