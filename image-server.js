@@ -4529,36 +4529,54 @@ for (const method of ['get', 'patch']) {
     const matches = matchingAssessmentClasses(source, req.userId);
     const className = record => roster.getRoster(req.userId, record.rosterId)?.name || 'Saved class';
     if (method === 'get') {
+      const index = req.query.questionId ? questions.findIndex(question => question.id === req.query.questionId) : 0;
+      if (!questions[index]) return res.status(404).json({ error: 'Question not found.' });
       return res.json({
-        title: source.title, grade: source.grade,
+        title: source.title, grade: source.grade, questionId: questions[index].id,
         questions: questions.map(({ id, question, marks }) => ({ id, question, marks })),
         classes: matches.map(record => {
           const context = bulkMarkContext(record);
-          return { id: record.id, name: className(record), locked: Boolean(bulkMarkLock(record)),
-            counts: questionsInSourceOrder(questions, record.content.questions).map(question => {
-              const targets = matchingClassTargets(record, context, question);
-              return { available: targets.length, marked: targets.filter(target =>
-                Number.isFinite(bulkPreviousGrade(target, question.id).marksAwarded)).length };
-            }) };
+          const question = questionsInSourceOrder(questions, record.content.questions)[index];
+          const learners = matchingClassTargets(record, context, question).map(target => ({
+            id: target.studentId, name: target.rosterStudent.name,
+            mark: bulkPreviousGrade(target, question.id).marksAwarded ?? null
+          })).sort((a, b) => a.name.localeCompare(b.name));
+          return { id: record.id, name: className(record), locked: Boolean(bulkMarkLock(record)), learners };
         })
       });
     }
 
-    const { questionId, classIds, operation, amount } = req.body || {};
+    const { questionId, classIds, selections, operation, amount } = req.body || {};
     const index = questions.findIndex(question => question.id === questionId);
-    const ids = [...new Set(Array.isArray(classIds) ? classIds : [])];
+    const explicit = selections !== undefined;
+    const ids = [...new Set(explicit && Array.isArray(selections) ? selections.map(item => item?.classId) :
+      !explicit && Array.isArray(classIds) ? classIds : [])];
     const byId = new Map(matches.map(record => [record.id, record]));
     try {
       if (index < 0) throw bulkMarkError('Question not found.', 404);
       validateBulkAmount(operation, amount, questions[index].marks);
       if (!ids.length || ids.some(id => !byId.has(id))) throw bulkMarkError('Select matching classes again. The assessment list may have changed.', 409);
+      const selectedLearners = new Map();
+      if (explicit) {
+        for (const item of selections) {
+          if (!Array.isArray(item.studentIds) || !item.studentIds.length || selectedLearners.has(item.classId)) {
+            throw bulkMarkError('Select at least one learner in each selected class.');
+          }
+          selectedLearners.set(item.classId, new Set(item.studentIds.map(roster.normalizeStudentId).filter(Boolean)));
+        }
+      }
       const plans = ids.map(id => {
         const record = byId.get(id);
         const lock = bulkMarkLock(record);
         if (lock) throw bulkMarkError(`${className(record)}: ${lock}`, 409);
         const question = questionsInSourceOrder(questions, record.content.questions)[index];
-        const targets = matchingClassTargets(record, bulkMarkContext(record), question).filter(target =>
-          operation === 'set' || Number.isFinite(bulkPreviousGrade(target, question.id).marksAwarded));
+        const eligible = matchingClassTargets(record, bulkMarkContext(record), question);
+        const selected = selectedLearners.get(id);
+        const targets = eligible.filter(target => (!selected || selected.has(target.studentId)) &&
+          (operation === 'set' || Number.isFinite(bulkPreviousGrade(target, question.id).marksAwarded)));
+        if (selected && (!selected.size || selected.size !== targets.length)) {
+          throw bulkMarkError(`${className(record)}: the selected learners or marks changed. Reopen this question and select again.`, 409);
+        }
         return { record, question, targets };
       });
       if (!plans.some(plan => plan.targets.length)) throw bulkMarkError('No eligible learners were found for that action.');

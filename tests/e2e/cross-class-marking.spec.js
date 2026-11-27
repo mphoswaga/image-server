@@ -44,14 +44,21 @@ test('sets, adds and removes marks on one matching question across classes', asy
   await card.getByRole('button', {name:'By question'}).click();
   await card.getByRole('button', {name:'Mark across classes'}).click();
   await expect(dialog.getByRole('combobox',{name:'Question',exact:true})).toHaveValue('first');
-  await expect(dialog.getByText('Grade 2A · 1 learner')).toBeVisible();
-  await expect(dialog.getByText('Grade 2B · 1 learner')).toBeVisible();
-  await expect(dialog.getByRole('group', {name:'Classes with matching questions'}).getByText('Grade 2C', {exact:false})).toHaveCount(0);
+  await expect(dialog.getByRole('group', {name:'Grade 2A'}).getByRole('checkbox', {name:'Grade 2A learner'})).toBeVisible();
+  await expect(dialog.getByRole('group', {name:'Grade 2B'}).getByRole('checkbox', {name:'Grade 2B learner'})).toBeVisible();
+  await expect(dialog.getByRole('group', {name:'Grade 2C'})).toHaveCount(0);
+
+  const firstClass = dialog.getByRole('group', {name:'Grade 2A'});
+  await firstClass.getByRole('spinbutton', {name:'Mark for Grade 2A learner'}).fill('1');
+  await firstClass.getByRole('button', {name:'Save',exact:true}).click();
+  await expect(dialog.getByRole('status')).toContainText('1 learner updated');
+  const other = await (await page.request.get('/api/assignment/' + b + '/results')).json();
+  expect(other.manualLearners[0].grades).toEqual({});
 
   for (const [operation, amount, expected] of [['set','1',1],['add','3',2],['remove','4',0]]) {
     await dialog.getByRole('combobox',{name:'Action',exact:true}).selectOption(operation);
-    await dialog.getByLabel('Select all eligible classes').check();
-    await dialog.getByLabel('Marks',{exact:true}).fill(amount);
+    await dialog.getByLabel('Select all matching learners').check();
+    await dialog.getByRole('spinbutton',{name:'Marks',exact:true}).fill(amount);
     await dialog.getByRole('button',{name:'Apply to 2 learners'}).click();
     await expect(dialog.getByRole('status')).toContainText('2 learners updated');
     for (const [id, question] of [[a,'first'],[b,'local-id']]) {
@@ -61,6 +68,20 @@ test('sets, adds and removes marks on one matching question across classes', asy
       expect(result.submissions).toHaveLength(0);
     }
   }
+
+  await dialog.getByRole('button',{name:'Next question'}).click();
+  await expect(dialog.getByRole('combobox',{name:'Question',exact:true})).toHaveValue('second');
+  await dialog.getByRole('combobox',{name:'Action',exact:true}).selectOption('set');
+  await dialog.getByLabel('Select all matching learners').check();
+  await dialog.getByRole('spinbutton',{name:'Marks',exact:true}).fill('3');
+  await dialog.getByRole('button',{name:'Apply to 2 learners'}).click();
+  await expect(dialog.getByRole('status')).toContainText('2 learners updated');
+  for (const [id, question] of [[a,'first'],[b,'local-id']]) {
+    const result = await (await page.request.get('/api/assignment/' + id + '/results')).json();
+    expect(result.submissions[0].grades[question].marksAwarded).toBe(0);
+    expect(result.submissions[0].grades.second.marksAwarded).toBe(3);
+  }
+
   for (const id of [different, otherGrade]) {
     const result = await (await page.request.get('/api/assignment/' + id + '/results')).json();
     expect(result.manualLearners[0].grades).toEqual({});
