@@ -6108,6 +6108,7 @@ app.patch('/api/gradebook/:rosterId/adjustment', requireAuth, (req, res) => {
   if (!roster.setGradebookAdjustment(req.userId, record.rosterId, assessmentId, studentId, adjustment)) {
     return res.status(404).json({ error: 'Class not found.' });
   }
+  notifyRecordedAssessmentSubmission(record, assignments.getSubmission(assessmentId, studentId));
   res.json({ ok: true });
 });
 
@@ -6911,6 +6912,7 @@ app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:r
 
   const inRoster = id => foundRoster.students.find(s => roster.normalizeStudentId(s.id) === roster.normalizeStudentId(id));
   const currentGradebook = gradebook.buildGradebook(foundTeacherId, foundRoster.id);
+  const gradebookRows = new Map((currentGradebook?.rows || []).map(row => [row.studentId, row]));
   const activitySettings = new Map((currentGradebook && currentGradebook.assessments || []).map(activity => [String(activity.id), activity]));
   const settingFor = id => activitySettings.get(String(id)) || { weight: 1, excluded: false };
   const byStudent = new Map();
@@ -6945,9 +6947,13 @@ app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:r
     if (!inRoster(a.studentId)) continue;
     const activitySetting = settingFor(a.assignmentId);
     if (activitySetting.excluded || Number(activitySetting.weight) <= 0) continue;
+    const cell = gradebookRows.get(roster.normalizeStudentId(a.studentId))?.cells[a.assignmentId];
+    const official = cell?.adjustment ? { officialScore: cell.mark, officialTotal: cell.max } : {};
     push(a.studentId, { kind: 'assignment', type: a.type, assignmentId: a.assignmentId, topic: a.topic, subject: a.subject,
       title: a.title, mode: a.type === 'homework' ? 'homework' : 'classwork', activityId: `assignment:${a.assignmentId}`,
-      score: a.score, total: a.total, percentage: a.percentage,
+      score: a.score, total: a.total,
+      percentage: official.officialTotal ? 100 * official.officialScore / official.officialTotal : a.percentage,
+      ...official,
       activityWeight: Number(activitySetting.weight) || 1, excludedFromAverage: false,
       assessmentType: a.assessmentType, version: a.version, finalisedAt: a.finalisedAt,
       teacherMarked: !!a.teacherMarked, officialRecordedAt: a.officialRecordedAt || null,
