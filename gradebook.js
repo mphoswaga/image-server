@@ -160,6 +160,25 @@ function answerDisplay(question, answer) {
 // every covered item survives the LessonScope -> TeacherScope sync, even when
 // a teacher did not map that item to a tracker objective. Unmarked responses
 // remain coverage-only evidence and therefore cannot inflate progress.
+function distributeAssessmentAdjustment(items, adjustment) {
+  const direction = Math.sign(adjustment);
+  let remaining = Math.round(Math.abs(adjustment) * 100);
+  const eligible = items.filter(item => item.score > 0 && (direction < 0 || item.score < item.total))
+    .map(item => ({ ...item, change: 0, room: Math.round((direction < 0 ? item.score : item.total - item.score) * 100) }));
+  if (eligible.reduce((sum, item) => sum + item.room, 0) < remaining) return null;
+  while (remaining > 0) {
+    for (const item of eligible) {
+      const step = Math.min(100, remaining, item.room);
+      item.change += step;
+      item.room -= step;
+      remaining -= step;
+    }
+  }
+  return eligible.filter(item => item.change).map(({ itemId, item, score, total, change }) => ({
+    itemId, item, score, total, reportedScore: Math.round(score * 100 + direction * change) / 100,
+  }));
+}
+
 function questionEvidenceForSubmission(record, sub) {
   if (!record || !sub) return [];
   const questions = record.content && Array.isArray(record.content.questions)
@@ -698,4 +717,4 @@ function assignmentResultRows(teacherId) {
   return assignmentProgressRows(teacherId);
 }
 
-module.exports = { listClasses, buildGradebook, toWorkbook, fillSchoolTemplate, gatherStudentResults, summarizeStudent, assignmentResultRows, assignmentProgressRows, teacherSubmissionResult, isFinalisedAssessment, isAssessmentOnRecord, questionEvidenceForSubmission, gameQuestionEvidence };
+module.exports = { distributeAssessmentAdjustment, listClasses, buildGradebook, toWorkbook, fillSchoolTemplate, gatherStudentResults, summarizeStudent, assignmentResultRows, assignmentProgressRows, teacherSubmissionResult, isFinalisedAssessment, isAssessmentOnRecord, questionEvidenceForSubmission, gameQuestionEvidence };

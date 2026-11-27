@@ -6095,7 +6095,7 @@ app.get('/api/gradebook/:rosterId', requireAuth, (req, res) => {
 
 app.patch('/api/gradebook/:rosterId/adjustment', requireAuth, (req, res) => {
   if (req.user.role === 'student') return res.status(403).json({ error: 'Teachers only.' });
-  const { assessmentId, studentId, adjustment } = req.body || {};
+  const { assessmentId, studentId, adjustment, preview, confirmedChanges } = req.body || {};
   const sheet = gradebook.buildGradebook(req.userId, req.params.rosterId);
   const assessment = sheet?.assessments.find(item => item.id === assessmentId && item.kind === 'assignment');
   const cell = assessment && sheet.rows.find(row => row.studentId === studentId)?.cells[assessmentId];
@@ -6105,10 +6105,17 @@ app.patch('/api/gradebook/:rosterId/adjustment', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Use a whole-point adjustment that keeps the mark in range.' });
   }
   const record = assignments.getAssignment(assessmentId);
+  const submission = assignments.getSubmission(assessmentId, studentId);
+  const changes = gradebook.distributeAssessmentAdjustment(gradebook.questionEvidenceForSubmission(record, submission), adjustment);
+  if (!changes) return res.status(409).json({ error: 'There is not enough partial credit to add these points. Review the question marks or choose a smaller adjustment.' });
+  if (preview === true) return res.json({ changes, mark: earnedMark + adjustment, max: cell.max });
+  if (JSON.stringify(confirmedChanges) !== JSON.stringify(changes)) {
+    return res.status(409).json({ error: 'Preview the current question changes before saving.' });
+  }
   if (!roster.setGradebookAdjustment(req.userId, record.rosterId, assessmentId, studentId, adjustment)) {
     return res.status(404).json({ error: 'Class not found.' });
   }
-  notifyRecordedAssessmentSubmission(record, assignments.getSubmission(assessmentId, studentId));
+  notifyRecordedAssessmentSubmission(record, submission);
   res.json({ ok: true });
 });
 
@@ -6948,7 +6955,11 @@ app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:r
     const activitySetting = settingFor(a.assignmentId);
     if (activitySetting.excluded || Number(activitySetting.weight) <= 0) continue;
     const cell = gradebookRows.get(roster.normalizeStudentId(a.studentId))?.cells[a.assignmentId];
-    const official = cell?.adjustment ? { officialScore: cell.mark, officialTotal: cell.max } : {};
+    const changes = cell?.adjustment ? gradebook.distributeAssessmentAdjustment(a.questionEvidence || [], cell.mark - cell.earnedMark) : [];
+    const reportedScores = new Map((changes || []).map(item => [item.itemId, item.reportedScore]));
+    const questionEvidence = (a.questionEvidence || []).map(item => reportedScores.has(item.itemId)
+      ? { ...item, reportedScore: reportedScores.get(item.itemId) } : item);
+    const official = cell?.adjustment ? { officialScore: cell.mark, officialTotal: cell.max, adjustmentNeedsReview: changes === null } : {};
     push(a.studentId, { kind: 'assignment', type: a.type, assignmentId: a.assignmentId, topic: a.topic, subject: a.subject,
       title: a.title, mode: a.type === 'homework' ? 'homework' : 'classwork', activityId: `assignment:${a.assignmentId}`,
       score: a.score, total: a.total,
@@ -6959,7 +6970,7 @@ app.get('/api/v1/roster/:id/progress', requireApiAccess, requireScope('results:r
       teacherMarked: !!a.teacherMarked, officialRecordedAt: a.officialRecordedAt || null,
       provisional: false, learnerVisible: !!a.learnerVisible, status: a.status,
       lessonWorkspaceId: a.lessonWorkspaceId || null, unitId: a.unitId || null, unitName: a.unitName || null,
-      objectiveEvidence: a.objectiveEvidence || [], questionEvidence: a.questionEvidence || [], at: a.at, updatedAt: a.at });
+      objectiveEvidence: a.objectiveEvidence || [], questionEvidence, at: a.at, updatedAt: a.at });
   }
   const practiceCatalog = new Map(practice.listActivities().map(activity => [activity.id, activity]));
   const masteryPercentage = mastery => mastery === 'independent' ? 95 : mastery === 'developing_independence' ? 68 : 38;

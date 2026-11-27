@@ -3699,9 +3699,9 @@
           <h3 id="marksAdjustmentTitle">Adjust assessment mark</h3>
           <p id="marksAdjustmentContext"></p>
           <label>Points to add or subtract<input type="number" id="marksAdjustmentPoints" step="1" required></label>
-          <p class="hint">Enter a negative number to subtract points, or 0 to restore the earned mark. Applies to this mark sheet and its exports.</p>
-          <p id="marksAdjustmentStatus" role="status"></p>
-          <footer><button type="submit" class="btn accent">Save adjustment</button><button type="button" class="btn ghost" id="marksAdjustmentCancel">Cancel</button></footer>
+          <p class="hint">Enter a negative number to subtract points, or 0 to restore the earned mark. Preview how the adjustment is assigned to questions before saving.</p>
+          <p id="marksAdjustmentStatus" role="status"></p><ul id="marksAdjustmentPreview"></ul>
+          <footer><button type="submit" class="btn accent">Preview adjustment</button><button type="button" class="btn ghost" id="marksAdjustmentCancel">Cancel</button></footer>
         </form>
       </dialog>
       <dialog id="marksSubmissionDialog" aria-labelledby="marksSubmissionTitle">
@@ -8723,6 +8723,16 @@
       const cancel = $('marksAdjustmentCancel');
       const points = $('marksAdjustmentPoints');
       const status = $('marksAdjustmentStatus');
+      const previewList = $('marksAdjustmentPreview');
+      let confirmedChanges;
+      function resetPreview() {
+        confirmedChanges = undefined;
+        previewList.replaceChildren();
+        save.textContent = 'Preview adjustment';
+        status.textContent = '';
+      }
+      points.oninput = resetPreview;
+      resetPreview();
       const earnedMark = cell.earnedMark ?? cell.mark;
       $('marksAdjustmentContext').textContent = `${row.name} · ${assessment.title} · Earned ${earnedMark}/${cell.max}`;
       points.min = Math.ceil(-earnedMark);
@@ -8733,17 +8743,29 @@
       dialog.oncancel = event => { if (save.disabled) event.preventDefault(); };
       form.onsubmit = async event => {
         event.preventDefault();
-        save.disabled = cancel.disabled = true;
+        save.disabled = cancel.disabled = points.disabled = true;
         try {
           const response = await fetch(`/api/gradebook/${encodeURIComponent(g.rosterId)}/adjustment`, {
             method:'PATCH', headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({assessmentId, studentId, adjustment:points.valueAsNumber})
+            body:JSON.stringify({assessmentId, studentId, adjustment:points.valueAsNumber, preview:confirmedChanges === undefined, confirmedChanges})
           });
           if (!response.ok) throw Error((await response.json()).error || 'Could not save adjustment.');
+          if (confirmedChanges === undefined) {
+            const result = await response.json();
+            confirmedChanges = result.changes;
+            for (const item of confirmedChanges) {
+              const li = document.createElement('li');
+              li.textContent = `${item.item} · ${item.score} → ${item.reportedScore} out of ${item.total}`;
+              previewList.append(li);
+            }
+            status.textContent = `Reported total: ${result.mark}/${result.max}`;
+            save.textContent = 'Save adjustment';
+            return;
+          }
           dialog.close();
           if (g.rosterId === gbSelected) await loadGradebook(g.rosterId);
-        } catch (error) { status.textContent = error.message; }
-        finally { save.disabled = cancel.disabled = false; }
+        } catch (error) { resetPreview(); status.textContent = error.message; }
+        finally { save.disabled = cancel.disabled = points.disabled = false; }
       };
       dialog.showModal();
     }

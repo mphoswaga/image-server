@@ -149,3 +149,11 @@ test("historical compatibility does not approve later work or invalid stored tot
       null,
     );
 });
+
+test("adjustments preserve maxima and only add to partially correct answers", () => {
+  const items = [ [0, 2], [2, 2], [2, 3], [3, 6] ].map(([score, total], i) => ({ itemId: String(i), score, total }));
+  const changes = gb.distributeAssessmentAdjustment(items, 3);
+  assert.deepEqual(changes.map(item => [item.itemId, item.reportedScore]), [["2", 3], ["3", 5]]);
+  assert.equal(gb.distributeAssessmentAdjustment(items, 5), null);
+  assert.deepEqual(gb.distributeAssessmentAdjustment(items, -2).map(item => item.reportedScore), [1, 1]);
+});
