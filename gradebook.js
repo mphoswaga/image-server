@@ -360,6 +360,7 @@ function buildGradebook(userId, rosterId) {
   students.forEach(s => { cells[sid(s.id)] = {}; });
 
   for (const { summary: a, record } of asgs) {
+    const adjustments = relatedRosters.find(roster => roster.id === a.rosterId)?.gradebookAdjustments || {};
     const byStu = Object.fromEntries(assignments.getSubmissions(a.id).map(x => [sid(x.studentId), x]));
     const pcts = [];
     students.forEach(s => {
@@ -368,10 +369,12 @@ function buildGradebook(userId, rosterId) {
       if (!sub) return;
       const result = teacherSubmissionResult(record, sub);
       if (!result) return;
-      const { mark, max } = result;
+      const { mark: earnedMark, max } = result;
+      const adjustment = adjustments[JSON.stringify([a.id, studentId])] || 0;
+      const mark = adjustment ? Math.round(Math.max(0, Math.min(max, earnedMark + adjustment)) * 100) / 100 : earnedMark;
       const pct = pctOf(mark, max);
-      cells[studentId][a.id] = { mark, max, pct };
-      pcts.push(pct);
+      cells[studentId][a.id] = { mark, max, pct, ...(adjustment ? { earnedMark, adjustment } : {}) };
+      pcts.push(cells[studentId][a.id].pct);
     });
     const weight = weightFor(a.id);
     assessments.push({ id: a.id, kind: 'assignment', type: a.type, title: a.title, weight, excluded: weight <= 0,

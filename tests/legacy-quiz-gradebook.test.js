@@ -85,6 +85,12 @@ test("previously released 3B1 quiz keeps its official marks after shared-control
     max: 12,
     pct: 11 / 12,
   });
+  const studentId = book.rows[0].studentId;
+  roster.setGradebookAdjustment("teacher", r.id, quiz.id, studentId, -1);
+  const adjusted = gb.buildGradebook("teacher", r.id).rows[0].cells[quiz.id];
+  assert.deepEqual(adjusted, { mark: 10, max: 12, pct: 10 / 12, earnedMark: 11, adjustment: -1 });
+  roster.setGradebookAdjustment("teacher", r.id, quiz.id, studentId, 0);
+  assert.equal(gb.buildGradebook("teacher", r.id).rows[0].cells[quiz.id].mark, 11);
   assert.equal(
     fs.readFileSync(
       path.join(

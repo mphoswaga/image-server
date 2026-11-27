@@ -6093,6 +6093,24 @@ app.get('/api/gradebook/:rosterId', requireAuth, (req, res) => {
   res.json(gb);
 });
 
+app.patch('/api/gradebook/:rosterId/adjustment', requireAuth, (req, res) => {
+  if (req.user.role === 'student') return res.status(403).json({ error: 'Teachers only.' });
+  const { assessmentId, studentId, adjustment } = req.body || {};
+  const sheet = gradebook.buildGradebook(req.userId, req.params.rosterId);
+  const assessment = sheet?.assessments.find(item => item.id === assessmentId && item.kind === 'assignment');
+  const cell = assessment && sheet.rows.find(row => row.studentId === studentId)?.cells[assessmentId];
+  if (!cell) return res.status(404).json({ error: 'Recorded assessment mark not found.' });
+  const earnedMark = cell.earnedMark ?? cell.mark;
+  if (!Number.isSafeInteger(adjustment) || earnedMark + adjustment < 0 || earnedMark + adjustment > cell.max) {
+    return res.status(400).json({ error: 'Use a whole-point adjustment that keeps the mark in range.' });
+  }
+  const record = assignments.getAssignment(assessmentId);
+  if (!roster.setGradebookAdjustment(req.userId, record.rosterId, assessmentId, studentId, adjustment)) {
+    return res.status(404).json({ error: 'Class not found.' });
+  }
+  res.json({ ok: true });
+});
+
 app.patch('/api/gradebook/:rosterId/exclusions', requireAuth, (req, res) => {
   if (req.user.role === 'student') return res.status(403).json({ error: 'Teachers only.' });
   const excludedIds = roster.setGradebookExcludedIds(req.userId, req.params.rosterId, req.body && req.body.excludedIds);

@@ -271,6 +271,17 @@ function setGradebookExcludedIds(teacherId, rosterId, excludedIds) {
   return record.gradebookExcludedIds;
 }
 
+function setGradebookAdjustment(teacherId, rosterId, assessmentId, studentId, adjustment) {
+  const record = getRoster(teacherId, rosterId);
+  if (!record) return false;
+  const adjustments = record.gradebookAdjustments ||= {};
+  const key = JSON.stringify([assessmentId, studentId]);
+  if (adjustment) adjustments[key] = adjustment;
+  else delete adjustments[key];
+  writeJsonAtomic(rosterPath(teacherId, rosterId), record);
+  return true;
+}
+
 function setGradebookWeights(teacherId, rosterId, weights) {
   const record = getRoster(teacherId, rosterId);
   if (!record) return null;
@@ -515,7 +526,7 @@ function buildStudentsFromMapping(rows, idCol, nameCol, genderCol) {
 }
 
 module.exports = {
-  transferHistory, removeStudent, moveStudent, displayNameFrom, normalizeGender, setStudentGenders, renameRoster, renameStudent, setGradebookExcludedIds, setGradebookWeights, assignOrganization, reconcileOrganizationStudentNames,
+  transferHistory, removeStudent, moveStudent, displayNameFrom, normalizeGender, setStudentGenders, renameRoster, renameStudent, setGradebookExcludedIds, setGradebookWeights, setGradebookAdjustment, assignOrganization, reconcileOrganizationStudentNames,
   saveRoster, getRoster, getRosterOrMerged, listRosters, deleteRoster,
   findStudent, findStudentInRoster, findStudentAcrossAllTeachers, parseCSV,
   parseRosterFile, buildStudentsFromMapping, buildRosterTemplateWorkbook, normalizeStudentId,

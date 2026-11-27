@@ -1313,6 +1313,12 @@
     .gb-c { background:#fff5e6; color:#b26a00; } .gb-d { background:#fdecec; color:#c0392b; }
     .gb-none { color:var(--muted); opacity:.6; }
     .gb-review-test { background:none;border:0;padding:0;color:var(--primary);font:inherit;text-decoration:underline;text-underline-offset:3px;cursor:pointer; }
+    .gb-adjust-mark { cursor:pointer; border:1px solid transparent; background:transparent; font:inherit; }
+    .gb-adjust-mark:hover,.gb-adjust-mark:focus-visible { border-color:var(--primary); }
+    #marksAdjustmentDialog { width:min(420px,calc(100% - 24px));padding:20px;border:1px solid var(--border);border-radius:14px;background:white;color:inherit; }
+    #marksAdjustmentDialog::backdrop { background:#172b2866; }
+    #marksAdjustmentDialog form { display:grid;gap:12px; }
+    #marksAdjustmentDialog footer { display:flex;gap:8px; }
     #marksSubmissionDialog { width:min(900px,calc(100% - 24px));max-height:90vh;overflow:auto;padding:20px;border:1px solid var(--border);border-radius:14px;background:white;color:inherit; }
     #marksSubmissionDialog::backdrop { background:#172b2866; }
     .marks-review-heading { display:flex;align-items:start;justify-content:space-between;gap:12px;margin-bottom:16px; }
@@ -3688,6 +3694,16 @@
       </div>
       <div id="marksClassBar" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px"></div>
       <div id="marksBody"></div>
+      <dialog id="marksAdjustmentDialog" aria-labelledby="marksAdjustmentTitle">
+        <form>
+          <h3 id="marksAdjustmentTitle">Adjust assessment mark</h3>
+          <p id="marksAdjustmentContext"></p>
+          <label>Points to add or subtract<input type="number" id="marksAdjustmentPoints" step="1" required></label>
+          <p class="hint">Enter a negative number to subtract points, or 0 to restore the earned mark. Applies to this mark sheet and its exports.</p>
+          <p id="marksAdjustmentStatus" role="status"></p>
+          <footer><button type="submit" class="btn accent">Save adjustment</button><button type="button" class="btn ghost" id="marksAdjustmentCancel">Cancel</button></footer>
+        </form>
+      </dialog>
       <dialog id="marksSubmissionDialog" aria-labelledby="marksSubmissionTitle">
         <div class="marks-review-heading">
           <h2 id="marksSubmissionTitle"></h2>
@@ -8696,6 +8712,41 @@
     $('marksSubmissionResults').parentElement.addEventListener('click',event=>{
       if(event.target.closest('#marksSubmissionResults'))handleAssignmentPanelClick(event);
     });
+    function openMarksAdjustment(g, button) {
+      const { assessment: assessmentId, student: studentId } = button.dataset;
+      const assessment = g.assessments.find(item => item.id === assessmentId);
+      const row = g.rows.find(item => item.studentId === studentId);
+      const cell = row.cells[assessmentId];
+      const dialog = $('marksAdjustmentDialog');
+      const form = dialog.querySelector('form');
+      const save = form.querySelector('[type="submit"]');
+      const cancel = $('marksAdjustmentCancel');
+      const points = $('marksAdjustmentPoints');
+      const status = $('marksAdjustmentStatus');
+      const earnedMark = cell.earnedMark ?? cell.mark;
+      $('marksAdjustmentContext').textContent = `${row.name} · ${assessment.title} · Earned ${earnedMark}/${cell.max}`;
+      points.min = Math.ceil(-earnedMark);
+      points.max = Math.floor(cell.max-earnedMark);
+      points.value = cell.adjustment ?? 0;
+      status.textContent = '';
+      cancel.onclick = () => dialog.close();
+      dialog.oncancel = event => { if (save.disabled) event.preventDefault(); };
+      form.onsubmit = async event => {
+        event.preventDefault();
+        save.disabled = cancel.disabled = true;
+        try {
+          const response = await fetch(`/api/gradebook/${encodeURIComponent(g.rosterId)}/adjustment`, {
+            method:'PATCH', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({assessmentId, studentId, adjustment:points.valueAsNumber})
+          });
+          if (!response.ok) throw Error((await response.json()).error || 'Could not save adjustment.');
+          dialog.close();
+          if (g.rosterId === gbSelected) await loadGradebook(g.rosterId);
+        } catch (error) { status.textContent = error.message; }
+        finally { save.disabled = cancel.disabled = false; }
+      };
+      dialog.showModal();
+    }
     function renderGradebook(g){
       $('marksBody').classList.remove('show-weights');
       if(!g.assessments.length){ $('marksBody').innerHTML='<div class="empty-state"><p>No recorded assessments for this class yet</p><p style="font-size:13px;color:var(--muted)">Tick “Marked by teacher” on a completed test or project. Games appear here automatically.</p></div>'; return; }
@@ -8709,11 +8760,22 @@
       const head=`<tr><th class="sticky">Student</th>${g.assessments.map(a=>`<th title="${esc(a.title)}"><div style="display:flex;flex-direction:column;gap:4px;align-items:center"><span class="gb-th-type">${a.kind==='game'?'Game':esc(a.type||'Assessment')}${a.learnerVisible===false?(a.teacherMarked?' · On record, hidden from learners':' · Saved, awaiting teacher confirmation'):''}</span>${a.kind==='assignment'?`<button type="button" class="gb-review-test" data-assignment-id="${esc(a.id)}">${esc(a.title)}</button>`:`<span>${esc(a.title)}</span>`}<label class="marks-weight-setting" style="font-size:11px;font-weight:700;color:var(--muted)">Weight <input type="number" class="gb-weight-input" data-assessment-id="${esc(a.id)}" value="${Number(a.weight??1)}" min="0" max="10" step="0.25" style="width:58px;padding:3px 5px;border:1px solid var(--border);border-radius:6px;text-align:center;font:inherit"> ${a.excluded?'<em style="color:#b45309;font-style:normal">excluded</em>':''}</label></div></th>`).join('')}<th>Average</th></tr>`;
       const body=g.rows.map(r=>`<tr data-marks-student="${esc(r.name)}">
         <td class="sticky">${esc(r.name)}</td>
-        ${g.assessments.map(a=>{ const c=r.cells[a.id]; return `<td>${c?`<span class="gb-cell ${pctClass(c.pct)}">${c.mark}/${c.max}</span>`:'<span class="gb-none">—</span>'}</td>`; }).join('')}
+        ${g.assessments.map(a=>{
+          const c=r.cells[a.id];
+          if(!c)return '<td><span class="gb-none">—</span></td>';
+          const label=`${c.mark}/${c.max}`;
+          const style=`gb-cell ${pctClass(c.pct)}`;
+          return a.kind==='assignment'
+            ? `<td><button type="button" class="${style} gb-adjust-mark" data-assessment="${esc(a.id)}" data-student="${esc(r.studentId)}" aria-label="${esc(`Adjust ${r.name}, ${a.title}, ${label}`)}">${label}${c.adjustment?' *':''}</button></td>`
+            : `<td><span class="${style}">${label}</span></td>`;
+        }).join('')}
         <td class="avg">${r.average!=null?`<span class="gb-cell ${pctClass(r.average)}">${pctTxt(r.average)}</span>`:'<span class="gb-none">—</span>'}</td>
       </tr>`).join('');
       const foot=`<tr><td class="sticky">Class average</td>${g.assessments.map(a=>`<td>${pctTxt(a.average)}</td>`).join('')}<td>${pctTxt(g.classAverage)}</td></tr>`;
-      $('marksBody').innerHTML=summary+`<div class="marks-sheet-tools"><div><h3>Class mark sheet</h3><p>— means no mark recorded. Select a test or project title to review submitted work. Scroll across for all assessments.</p></div><label class="marks-search">Find a student<input id="marksStudentSearch" type="search" placeholder="Search by name"></label></div><details class="marks-average-settings"><summary>Average settings</summary><p>Weight 1 counts normally, 0.5 counts half, and 0 excludes an assessment from the weighted average.</p></details><div class="gb-scroll" tabindex="0" role="region" aria-label="Class mark sheet"><table class="gb" style="--marks-sheet-width:${190+132*g.assessments.length+95}px"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div><p id="marksSearchEmpty" class="hint" hidden>No students match this name.</p><details class="marks-overview"><summary><span>Assessment overview</span><small>Compare results and identify areas to revisit</small></summary>${LearningReport.html(LearningReport.gradebook(g))}</details>`;
+      $('marksBody').innerHTML=summary+`<div class="marks-sheet-tools"><div><h3>Class mark sheet</h3><p>Select a test or project mark to adjust it, or its title to review submitted work. * marks an adjusted total.</p></div><label class="marks-search">Find a student<input id="marksStudentSearch" type="search" placeholder="Search by name"></label></div><details class="marks-average-settings"><summary>Average settings</summary><p>Weight 1 counts normally, 0.5 counts half, and 0 excludes an assessment from the weighted average.</p></details><div class="gb-scroll" tabindex="0" role="region" aria-label="Class mark sheet"><table class="gb" style="--marks-sheet-width:${190+132*g.assessments.length+95}px"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div><p id="marksSearchEmpty" class="hint" hidden>No students match this name.</p><details class="marks-overview"><summary><span>Assessment overview</span><small>Compare results and identify areas to revisit</small></summary>${LearningReport.html(LearningReport.gradebook(g))}</details>`;
+      $('marksBody').querySelectorAll('.gb-adjust-mark').forEach(button => {
+        button.onclick = () => openMarksAdjustment(g, button);
+      });
       $('marksStudentSearch').oninput=event=>{
         const fold=value=>String(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').replace(/Đ/g,'D').toLocaleLowerCase();
         const query=fold(event.target.value.trim());let found=0;
