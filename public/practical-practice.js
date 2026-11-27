@@ -136,7 +136,7 @@
     },[['Library hours.txt'],['5 MB']]);
     const units = ['Byte (B)','Kilobyte (KB)','Megabyte (MB)','Gigabyte (GB)','Terabyte (TB)'];
     exercise('File-size ladder','Drag the boxes or use the arrows. Put the smallest unit at the top.',{
-      presentation:'order',table:[['Unit'],...[units[4],units[1],units[3],units[0],units[2]].map(unit=>[unit])],
+      presentation:'order',table:[['Unit'],...[units[4],units[0],units[3],units[1],units[2]].map(unit=>[unit])],
       inputs:units.map((_,index)=>({label:'Position '+(index+1)}))
     },units.map(unit=>[unit]));
     exercise('Turn data into information','Read the class votes to find the most popular library activity.',{
