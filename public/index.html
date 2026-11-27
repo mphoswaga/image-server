@@ -2441,21 +2441,43 @@
     .assessment-builder { margin-bottom:24px; padding:20px; border:1px solid var(--border); border-radius:16px; background:#fbfdfc; }
     .assessment-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 14px; }
     .assessment-grid .full { grid-column:1/-1; }
-    .assessment-cross-class { width:min(860px,calc(100% - 24px)); max-height:90dvh; padding:18px; border:1px solid var(--border); border-radius:15px; }
-    .assessment-cross-class::backdrop { background:#142e26a0; }
-    .assessment-cross-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr)); gap:10px; }
-    .assessment-cross-class fieldset { border:1px solid var(--border); border-radius:10px; padding:10px; min-width:0; }
-    .assessment-cross-class fieldset label { display:flex; align-items:center; gap:10px; min-height:44px; margin:0; }
-    .assessment-cross-actions { display:flex; flex-wrap:wrap; gap:8px; }
-    .assessment-cross-actions button { width:auto; min-height:44px; }
-    .assessment-cross-question { position:sticky; top:-18px; z-index:2; background:#f7fcf9; border:1px solid var(--border); border-radius:10px; padding:8px 12px; }
-    .assessment-cross-roster { display:grid; gap:12px; margin-top:10px; }
-    .assessment-cross-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:6px 12px; border-top:1px solid var(--border); padding:5px 0; }
+    .assessment-cross-class { box-sizing:border-box; width:min(1080px,calc(100% - 24px)); max-height:94dvh; padding:clamp(12px,2vw,24px); color:var(--text); border:1px solid var(--border); border-radius:16px; box-shadow:0 20px 70px #10291e38; }
+    .assessment-cross-class::backdrop { background:#18372d88; }
+    .assessment-cross-class header,.assessment-cross-actions { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .assessment-cross-class header h3 { font-size:1.45rem; margin:0; }
+    .assessment-cross-class .btn { width:auto; min-height:44px; }
+    .assessment-cross-class label { margin:0; }
+    .assessment-cross-grid { display:grid; grid-template-columns:minmax(100px,1fr) minmax(0,3fr); gap:12px; margin:12px 0; }
+    .assessment-cross-question { background:#f1f8f4; border:1px solid #c4dccf; border-radius:10px; padding:12px; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:8px 16px; }
+    .assessment-cross-question p { grid-column:1/-1; margin:0; font-size:14px; overflow-wrap:anywhere; }
+    .assessment-cross-bulk { display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin:14px 0; }
+    .assessment-cross-bulk input { max-width:90px; }
+    .assessment-cross-search { display:flex; align-items:end; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+    .assessment-cross-roster { display:grid; gap:16px; margin-top:12px; }
+    .assessment-cross-roster fieldset { margin:0; min-width:0; padding:0 12px 4px; border:1px solid var(--border); border-radius:10px; }
+    .assessment-cross-roster legend { padding:0 6px; font-weight:700; color:#155c42; }
+    .assessment-cross-row { display:grid; grid-template-columns:minmax(150px,1fr) minmax(0,2fr) auto; gap:12px; align-items:center; padding:10px 4px; }
+    .assessment-cross-row + .assessment-cross-row { border-top:1px solid var(--border); }
     .assessment-cross-row[hidden] { display:none; }
-    .assessment-cross-row .grade-mark-control { gap:6px; }
-    .assessment-cross-row input[type="number"] { width:82px; margin:0; }
-    .assessment-cross-row .grade-mark-control button { min-height:40px; }
+    .assessment-cross-row label { display:flex; align-items:center; gap:10px; font-weight:650; min-height:44px; overflow-wrap:anywhere; }
+    .assessment-cross-class input[type="checkbox"] { width:18px; height:18px; margin:0; flex:none; }
+    .assessment-cross-answer { min-width:0; white-space:pre-wrap; overflow-wrap:anywhere; font-size:14px; }
+    .assessment-cross-answer small { display:block; font-size:11px; color:var(--muted); font-weight:600; margin-bottom:2px; }
+    .assessment-cross-row .grade-mark-control { flex-wrap:nowrap; gap:6px; }
+    .assessment-cross-row input[type="number"] { width:70px; margin:0; min-height:42px; }
+    .assessment-cross-row .grade-mark-control button { min-height:44px; }
     .assessment-cross-class [role="status"]:empty { display:none; }
+    @media(min-width:681px) and (min-height:620px) {
+      .assessment-cross-question { position:sticky; top:0; z-index:1; }
+      .assessment-cross-question p { max-height:18vh; overflow:auto; }
+    }
+    @media(max-width:680px) {
+      .assessment-cross-question { grid-template-columns:minmax(0,1fr); }
+      .assessment-cross-actions { justify-content:start; }
+      .assessment-cross-row { grid-template-columns:minmax(0,1fr) auto; gap:4px 10px; }
+      .assessment-cross-answer { grid-column:1/-1; grid-row:2; padding:0 0 4px 28px; }
+      .assessment-cross-grid { grid-template-columns:minmax(0,1fr); gap:6px; }
+    }
     .assessment-methods { display:flex; flex-wrap:wrap; gap:6px; padding:5px; background:#edf4ef; border-radius:12px; margin:16px 0 10px; }
     .assessment-methods button { flex:1 1 130px; width:auto; min-height:44px; }
     .assessment-methods button[aria-pressed="true"] { background:#fff; color:var(--accent); border-color:#9ac6b0; box-shadow:0 1px 3px #143c2420; }
@@ -9356,23 +9378,23 @@
       const dialog=document.createElement('dialog');
       dialog.className='assessment-cross-class';
       dialog.setAttribute('aria-label','Mark across classes');
-      dialog.innerHTML=`<h3>Mark across classes</h3>
+      dialog.innerHTML=`<header><h3>Mark across classes</h3><button type="button" class="btn ghost" data-cross-close>Close</button></header>
         <div class="assessment-cross-grid">
           <label>Grade<select data-cross-grade></select></label>
           <label>Topic<select data-cross-topic></select></label>
         </div>
         <div class="assessment-cross-question">
           <label>Question<select data-cross-question></select></label>
-          <div class="assessment-cross-actions"><button type="button" class="btn ghost" data-cross-previous>Previous question</button><button type="button" class="btn ghost" data-cross-next>Next question</button><button type="button" class="btn ghost" data-cross-close>Close</button></div>
+          <div class="assessment-cross-actions"><button type="button" class="btn ghost" data-cross-previous>Previous question</button><button type="button" class="btn ghost" data-cross-next>Next question</button></div>
+          <p data-cross-prompt></p>
         </div>
-        <div class="assessment-cross-grid">
+        <div class="assessment-cross-bulk">
           <label>Action<select data-cross-operation><option value="set">Set mark</option><option value="add">Add marks</option><option value="remove">Remove marks</option></select></label>
           <label>Marks<input type="number" data-cross-amount step="0.01" min="0" inputmode="decimal"></label>
-        </div>
-        <div class="assessment-cross-actions"><button type="button" class="btn accent" data-cross-save disabled>Apply to selected learners</button></div>
+          <button type="button" class="btn accent" data-cross-save disabled>Apply to selected learners</button></div>
         <p data-cross-status role="status"></p>
-        <label>Search learners<input type="search" data-cross-search placeholder="Name or class"></label>
-        <label class="bulk-select-all"><input type="checkbox" data-cross-all> Select all matching learners</label>
+        <div class="assessment-cross-search"><label>Search learners<input type="search" data-cross-search placeholder="Name or class"></label>
+        <label class="bulk-select-all"><input type="checkbox" data-cross-all> Select all matching learners</label></div>
         <div class="assessment-cross-roster" data-cross-classes></div>`;
       const el=name=>dialog.querySelector(`[data-cross-${name}]`);
       const grade=el('grade'),topic=el('topic'),question=el('question'),operation=el('operation'),amount=el('amount');
@@ -9429,7 +9451,17 @@
             choice.checked=choices.has(choiceKey);
             const label=document.createElement('label');
             label.append(choice,learner.name);
-            row.append(label);
+            const response=document.createElement('div');
+            response.className='assessment-cross-answer';
+            const caption=document.createElement('small');
+            caption.textContent=matches.responseKind==='practical'?'Observation':'Student answer';
+            const answer=learner.answer;
+            let display=answer;
+            if(matches.responseKind==='practical')display=learner.observations?.join('\n')||'Teacher observation';
+            else if(matches.responseKind==='data-table')display=matches.responseFields.map((field,i)=>field+' — '+(answer?.[i]??'No response')).join('\n');
+            else if(matches.responseKind==='codequest'&&Array.isArray(answer))display=submittedCodeText(answer);
+            response.append(caption,String(display??'').trim()?String(display):'No answer recorded');
+            row.append(label,response);
             if(item.locked){
               const mark=document.createElement('span');
               mark.textContent=learner.mark==null?'Unmarked':`${learner.mark} / ${maximum}`;
@@ -9457,7 +9489,7 @@
       }
       async function loadMatches(wantedQuestion='',keepSelection=false){
         const token=++request;
-        matches=null;if(!keepSelection)choices.clear();classes.replaceChildren();updateApply();
+        el('prompt').replaceChildren();matches=null;if(!keepSelection)choices.clear();classes.replaceChildren();updateApply();
         if(!topic.value){question.replaceChildren();status.textContent='No assessments are available for this grade.';updateApply();return false;}
         status.textContent='Loading learners…';
         try{
@@ -9467,8 +9499,12 @@
           if(token!==request||!dialog.open)return false;
           if(!response.ok)throw new Error(data.error||'Could not load matching classes.');
           matches=data;
-          question.replaceChildren(...data.questions.map((item,index)=>new Option(`${index+1}. ${item.question} (${item.marks} marks)`,item.id)));
+          question.replaceChildren(...data.questions.map((item,index)=>new Option(`Question ${index+1} of ${data.questions.length} · ${item.marks} mark${item.marks===1?'':'s'} · ${item.question}`,item.id)));
           question.value=data.questionId;
+          const prompt=document.createElement('strong');
+          prompt.textContent=data.questions[question.selectedIndex].question;
+          el('prompt').append(prompt);
+          if(data.correctOption!=null)el('prompt').append(document.createElement('br'),'Correct answer: '+data.correctOption);
           status.textContent=operation.value==='set'?'':'Add and Remove apply to existing marks only.';
           renderLearners();
           return true;
@@ -9529,6 +9565,7 @@
         }
         const body={selections:[...byClass].map(([classId,studentIds])=>({classId,studentIds})),
           questionId:question.value,operation:action,amount:value};
+        const scrollBeforeSave=dialog.scrollTop;
         busy=true;
         for(const field of dialog.querySelectorAll('select,input,button'))field.disabled=true;
         status.textContent='Saving marks…';
@@ -9549,6 +9586,7 @@
           busy=false;
           for(const field of [grade,topic,question,operation,amount,close,search])field.disabled=false;
           renderLearners();
+          dialog.scrollTop=scrollBeforeSave;
         }
       }
       save.onclick=()=>saveMarks(operation.value,amount.valueAsNumber,selected());

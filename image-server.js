@@ -4533,14 +4533,22 @@ for (const method of ['get', 'patch']) {
       if (!questions[index]) return res.status(404).json({ error: 'Question not found.' });
       return res.json({
         title: source.title, grade: source.grade, questionId: questions[index].id,
+        responseKind: questions[index].kind,
+        responseFields: (questions[index].activity?.inputs || []).map(input => input.label),
+        correctOption: questions[index].kind === 'mcq' ? questions[index].options?.[questions[index].correctIndex] : null,
         questions: questions.map(({ id, question, marks }) => ({ id, question, marks })),
         classes: matches.map(record => {
           const context = bulkMarkContext(record);
           const question = questionsInSourceOrder(questions, record.content.questions)[index];
-          const learners = matchingClassTargets(record, context, question).map(target => ({
-            id: target.studentId, name: target.rosterStudent.name,
-            mark: bulkPreviousGrade(target, question.id).marksAwarded ?? null
-          })).sort((a, b) => a.name.localeCompare(b.name));
+          const learners = matchingClassTargets(record, context, question).map(target => {
+            const grade = bulkPreviousGrade(target, question.id);
+            const answer = target.submission?.answers?.[question.id];
+            return {
+              id: target.studentId, name: target.rosterStudent.name, mark: grade.marksAwarded ?? null,
+              answer: question.kind === 'mcq' ? question.options?.[answer] ?? null : answer ?? null,
+              observations: question.kind === 'practical' ? grade.processEvidence || [] : []
+            };
+          }).sort((a, b) => a.name.localeCompare(b.name));
           return { id: record.id, name: className(record), locked: Boolean(bulkMarkLock(record)), learners };
         })
       });

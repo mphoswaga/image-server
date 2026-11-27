@@ -87,3 +87,46 @@ test('sets, adds and removes marks on one matching question across classes', asy
     expect(result.manualLearners[0].grades).toEqual({});
   }
 });
+
+test('shows the submitted choice beside each learner and follows the selected question', async ({ page, browser }) => {
+  await signInDisposableTeacher(page, '-cross-class-answers');
+  for (const [index, name] of ['Class A', 'Class B'].entries()) {
+    const roster = await page.request.post('/api/roster', { data: {
+      name, rows: [{ ID: 'P1', Name: name + ' learner' }], idCol: 'ID', nameCol: 'Name',
+    } });
+    const questions = ['Which part absorbs water?', 'Which part makes food?'].map((prompt, i) => ({
+      id: 'q' + index + i, prompt, options: ['Roots', 'Leaves'], correctIndex: i, marks: 1,
+    }));
+    const saved = await page.request.post('/api/assessment', { data: {
+      rosterId: (await roster.json()).id,
+      assessment: { title: 'Plants', grade: 'Grade 2', subject: 'Science', totalMarks: 2,
+        assessmentType: 'test', deliveryMode: 'self-paced', objectives: [{ id: 'plants', text: 'Identify plant parts' }],
+        sections: [{ id: 's', title: 'Plant parts', type: 'mcq', objectiveIds: ['plants'], items: index ? questions.reverse() : questions }],
+      },
+    } });
+    expect(saved.ok(), await saved.text()).toBeTruthy();
+    const base = '/api/assignment/' + (await saved.json()).assessmentId;
+    const learner = await browser.newContext();
+    try {
+      const join = await (await learner.request.get(base + '/join')).json();
+      const entered = await learner.request.post(base + '/enter', { data: { handle: join.students[0].handle, pin: '4826' } });
+      expect(entered.ok(), await entered.text()).toBeTruthy();
+      const submitted = await learner.request.post(base + '/submit', { data: { answers: {
+        ['q' + index + '0']: index, ['q' + index + '1']: 1 - index,
+      } } });
+      expect(submitted.ok(), await submitted.text()).toBeTruthy();
+    } finally { await learner.close(); }
+  }
+  await page.locator('#assignmentsBtn').click();
+  await page.locator('#assessmentAcrossClasses').click();
+  const dialog = page.getByRole('dialog', { name: 'Mark across classes' });
+  const questions = dialog.getByRole('combobox', { name: 'Question', exact: true });
+  for (const [prompt, a, b] of [['absorbs water', 'Roots', 'Leaves'], ['makes food', 'Leaves', 'Roots']]) {
+    const option = questions.locator('option').filter({ hasText: prompt });
+    await questions.selectOption(await option.getAttribute('value'));
+    await expect(dialog.locator('[data-cross-prompt]')).toContainText(prompt);
+    await expect(dialog.getByRole('group', { name: 'Class A' }).locator('.assessment-cross-answer')).toHaveText('Student answer' + a);
+    await expect(dialog.getByRole('group', { name: 'Class B' }).locator('.assessment-cross-answer')).toHaveText('Student answer' + b);
+    expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBeTruthy();
+  }
+});
