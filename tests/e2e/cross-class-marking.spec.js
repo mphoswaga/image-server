@@ -28,6 +28,11 @@ test('sets, adds and removes marks on one matching question across classes', asy
   const otherGrade = await createClass('Grade 3A', 'Grade 3');
 
   const endpoint = '/api/assignment/' + a + '/grade/matching-classes';
+  for (const operation of ['set', 'add', 'remove']) {
+    const invalid = await page.request.patch(endpoint, { data: { classIds: [a, b], questionId: 'first', operation, amount: 0.24 } });
+    expect(invalid.status()).toBe(400);
+    expect((await invalid.json()).error).toContain('whole number');
+  }
   const initial = await (await page.request.get(endpoint)).json();
   expect(initial.classes.map(item => item.id)).toEqual([a, b]);
   const bad = await page.request.patch(endpoint, { data: { classIds: [a, different], questionId: 'first', operation: 'set', amount: 1 } });
@@ -49,7 +54,10 @@ test('sets, adds and removes marks on one matching question across classes', asy
   await expect(dialog.getByRole('group', {name:'Grade 2C'})).toHaveCount(0);
 
   const firstClass = dialog.getByRole('group', {name:'Grade 2A'});
-  await firstClass.getByRole('spinbutton', {name:'Mark for Grade 2A learner'}).fill('1');
+  const individualMark = firstClass.getByRole('spinbutton', {name:'Mark for Grade 2A learner'});
+  await expect(individualMark).toHaveAttribute('step', '1');
+  await expect(dialog.getByRole('spinbutton', {name:'Marks', exact:true})).toHaveAttribute('step', '1');
+  await individualMark.fill('1');
   await firstClass.getByRole('button', {name:'Save',exact:true}).click();
   await expect(dialog.getByRole('status')).toContainText('1 learner updated');
   const other = await (await page.request.get('/api/assignment/' + b + '/results')).json();

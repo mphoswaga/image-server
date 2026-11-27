@@ -9396,7 +9396,7 @@
         </div>
         <div class="assessment-cross-bulk">
           <label>Action<select data-cross-operation><option value="set">Set mark</option><option value="add">Add marks</option><option value="remove">Remove marks</option></select></label>
-          <label>Marks<input type="number" data-cross-amount step="0.01" min="0" inputmode="decimal"></label>
+          <label>Marks<input type="number" data-cross-amount step="1" min="0" inputmode="numeric"></label>
           <button type="button" class="btn accent" data-cross-save disabled>Apply to selected learners</button></div>
         <p data-cross-status role="status"></p>
         <div class="assessment-cross-search"><label>Search learners<input type="search" data-cross-search placeholder="Name or class"></label>
@@ -9443,7 +9443,7 @@
       }
       function renderLearners(){
         const maximum=matches?.questions.find(item=>item.id===question.value)?.marks;
-        amount.min=operation.value==='set'?'0':'0.01';
+        amount.min=operation.value==='set'?'0':'1';
         amount.max=operation.value==='set'&&maximum!=null?String(maximum):'';
         classes.replaceChildren(...(matches?.classes||[]).map(item=>{
           const group=document.createElement('fieldset');
@@ -9482,8 +9482,8 @@
             }else{
               const control=document.createElement('div');control.className='grade-mark-control';
               const mark=document.createElement('input');
-              mark.type='number';mark.min='0';mark.max=maximum;mark.step='0.01';mark.required=true;
-              mark.inputMode='decimal';mark.defaultValue=learner.mark??'';mark.placeholder='Unmarked';
+              mark.type='number';mark.min='0';mark.max=maximum;mark.step='1';mark.required=true;
+              mark.inputMode='numeric';mark.defaultValue=learner.mark??'';mark.placeholder='Unmarked';
               mark.setAttribute('aria-label',`Mark for ${learner.name}`);
               const max=document.createElement('span');max.textContent=`/ ${maximum}`;
               const apply=document.createElement('button');apply.type='button';apply.className='grade-override-btn';apply.textContent='Save';

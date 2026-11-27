@@ -4595,6 +4595,7 @@ for (const method of ['get', 'patch']) {
     const byId = new Map(matches.map(record => [record.id, record]));
     try {
       if (index < 0) throw bulkMarkError('Question not found.', 404);
+      if (!Number.isSafeInteger(amount)) throw bulkMarkError('Enter a whole number of marks.');
       validateBulkAmount(operation, amount, questions[index].marks);
       if (!ids.length || ids.some(id => !byId.has(id))) throw bulkMarkError('Select matching classes again. The assessment list may have changed.', 409);
       const selectedLearners = new Map();
