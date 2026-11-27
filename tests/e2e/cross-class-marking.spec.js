@@ -54,6 +54,11 @@ test('sets, adds and removes marks on one matching question across classes', asy
   await expect(dialog.getByRole('status')).toContainText('1 learner updated');
   const other = await (await page.request.get('/api/assignment/' + b + '/results')).json();
   expect(other.manualLearners[0].grades).toEqual({});
+  const review = dialog.getByRole('checkbox', { name: 'Marked by teacher for all matching classes' });
+  await review.check();
+  await expect(dialog.getByRole('status')).toContainText('partially marked practicals');
+  await expect(review).not.toBeChecked();
+  expect((await page.request.patch(endpoint + '/marked', { data: { classIds: [a, different] } })).status()).toBe(409);
 
   for (const [operation, amount, expected] of [['set','1',1],['add','3',2],['remove','4',0]]) {
     await dialog.getByRole('combobox',{name:'Action',exact:true}).selectOption(operation);
@@ -82,9 +87,23 @@ test('sets, adds and removes marks on one matching question across classes', asy
     expect(result.submissions[0].grades.second.marksAwarded).toBe(3);
   }
 
+  expect((await page.request.patch('/api/assignment/' + a + '/marked', { data: { marked: true } })).ok()).toBeTruthy();
+  await dialog.getByRole('button',{name:'Previous question'}).click();
+  await expect(dialog.locator('[data-cross-review-count]')).toContainText('1 of 2');
+  await dialog.getByLabel('Search learners').fill('Grade 2A');
+  await review.check();
+  await expect(dialog.getByRole('status')).toContainText('Assessment marked by teacher');
+  await expect(review).toBeChecked();
+  await expect(review).toBeDisabled();
+  for (const id of [a, b]) {
+    const result = await (await page.request.get('/api/assignment/' + id + '/results')).json();
+    expect(result.teacherMarked).toBe(true);
+    expect(result.resultsReleased).toBeFalsy();
+  }
   for (const id of [different, otherGrade]) {
     const result = await (await page.request.get('/api/assignment/' + id + '/results')).json();
     expect(result.manualLearners[0].grades).toEqual({});
+    expect(result.teacherMarked).toBe(false);
   }
 });
 

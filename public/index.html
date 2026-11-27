@@ -2450,6 +2450,8 @@
     .assessment-cross-grid { display:grid; grid-template-columns:minmax(100px,1fr) minmax(0,3fr); gap:12px; margin:12px 0; }
     .assessment-cross-question { background:#f1f8f4; border:1px solid #c4dccf; border-radius:10px; padding:12px; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:8px 16px; }
     .assessment-cross-question p { grid-column:1/-1; margin:0; font-size:14px; overflow-wrap:anywhere; }
+    .assessment-cross-review { display:flex; align-items:center; flex-wrap:wrap; gap:4px 14px; padding:8px 0 14px; }
+    .assessment-cross-review small { color:var(--muted); }
     .assessment-cross-bulk { display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin:14px 0; }
     .assessment-cross-bulk input { max-width:90px; }
     .assessment-cross-search { display:flex; align-items:end; justify-content:space-between; flex-wrap:wrap; gap:8px; }
@@ -9383,6 +9385,10 @@
           <label>Grade<select data-cross-grade></select></label>
           <label>Topic<select data-cross-topic></select></label>
         </div>
+        <div class="assessment-cross-review">
+          <label class="bulk-select-all"><input type="checkbox" data-cross-reviewed disabled> Marked by teacher for all matching classes</label>
+          <small data-cross-review-count></small>
+        </div>
         <div class="assessment-cross-question">
           <label>Question<select data-cross-question></select></label>
           <div class="assessment-cross-actions"><button type="button" class="btn ghost" data-cross-previous>Previous question</button><button type="button" class="btn ghost" data-cross-next>Next question</button></div>
@@ -9403,12 +9409,19 @@
       const grades=[...new Set(assessments.map(item=>item.grade))].sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));
       grade.replaceChildren(...grades.map(value=>new Option(value||'Unspecified grade',value||'')));
       if(initial)grade.value=initial.grade||'';
-      let matches=null,request=0,busy=false,changed=false;
+      let matches=null,request=0,busy=false,changed=false,reviewAttempted=false;
       const choices=new Map();
       const key=(classId,studentId)=>JSON.stringify([classId,studentId]);
       const selected=()=>[...choices.values()];
       const visibleBoxes=()=>[...classes.querySelectorAll('.assessment-cross-row:not([hidden]) input[type="checkbox"]:not(:disabled)')];
       function updateApply(){
+        const groups=matches?.classes||[];
+        const reviewed=groups.filter(group=>group.teacherMarked).length;
+        const tick=el('reviewed');
+        tick.checked=groups.length>0&&reviewed===groups.length;
+        tick.indeterminate=reviewed>0&&!tick.checked;
+        tick.disabled=busy||!groups.length||tick.checked;
+        el('review-count').textContent=groups.length?`${reviewed} of ${groups.length} classes marked · Whole assessment`:'';
         const boxes=visibleBoxes();
         const checked=boxes.filter(box=>box.checked);
         all.checked=Boolean(boxes.length)&&checked.length===boxes.length;
@@ -9470,7 +9483,7 @@
               const control=document.createElement('div');control.className='grade-mark-control';
               const mark=document.createElement('input');
               mark.type='number';mark.min='0';mark.max=maximum;mark.step='0.01';mark.required=true;
-              mark.inputMode='decimal';mark.value=learner.mark??'';mark.placeholder='Unmarked';
+              mark.inputMode='decimal';mark.defaultValue=learner.mark??'';mark.placeholder='Unmarked';
               mark.setAttribute('aria-label',`Mark for ${learner.name}`);
               const max=document.createElement('span');max.textContent=`/ ${maximum}`;
               const apply=document.createElement('button');apply.type='button';apply.className='grade-override-btn';apply.textContent='Save';
@@ -9552,9 +9565,33 @@
       dialog.oncancel=event=>{if(busy)event.preventDefault();};
       dialog.onclose=()=>{
         ++request;dialog.remove();
+        if(reviewAttempted){loadMyAssignments();return;}
         if(!changed)return;
         if(returnWrapId&&$(returnWrapId))loadAssignmentResults(initialId,returnWrapId);
         else loadMyAssignments();
+      };
+      el('reviewed').onchange=async()=>{
+        if(busy||!matches)return;
+        if([...classes.querySelectorAll('input[type="number"]')].some(field=>field.value!==field.defaultValue)||amount.value){
+          updateApply();status.textContent='Save or clear your pending marks before completing the assessment.';return;
+        }
+        busy=true;reviewAttempted=true;
+        const classIds=matches.classes.map(group=>group.id);
+        for(const field of dialog.querySelectorAll('select,input,button'))field.disabled=true;
+        let message;
+        try{
+          const response=await fetch(`/api/assignment/${encodeURIComponent(topic.value)}/grade/matching-classes/marked`,{
+            method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({classIds})
+          });
+          const result=await response.json();
+          if(!response.ok)throw new Error(result.error||'Could not record the review.');
+          message='Assessment marked by teacher for all matching classes.';
+        }catch(error){message=error.message;}
+        const loaded=await loadMatches(question.value);
+        busy=false;
+        for(const field of [grade,topic,question,operation,amount,close,search])field.disabled=false;
+        if(loaded)status.textContent=message;
+        renderLearners();
       };
       async function saveMarks(action,value,learners){
         if(busy||!learners.length)return;

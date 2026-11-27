@@ -2696,16 +2696,26 @@ app.patch('/api/assignment/:id/marked', requireAuth, (req, res) => {
   if (assessment.teacherId !== req.userId) return res.status(403).json({ error: 'Not your assessment.' });
   if (assessment.type !== 'assessment') return res.status(400).json({ error: 'Only tests and projects can be marked here.' });
   const marked = !!(req.body && req.body.marked);
+  const issue = teacherMarkedIssue(assessment, marked);
+  if (issue) return res.status(409).json({ error: issue });
+  res.json(recordTeacherReview(assessment, marked, req));
+});
+
+function teacherMarkedIssue(assessment, marked) {
   if (!marked && assignments.isReleased(assessment)) {
-    return res.status(409).json({ error: 'Recall the learner results before clearing the marked status.' });
+    return 'Recall the learner results before clearing the marked status.';
   }
   if (marked && assignments.deliveryState(assessment).mode === 'manual') {
     const completed = new Set(assignments.getSubmissions(assessment.id).map(submission => submission.studentId));
     const partial = assignments.loadDrafts(assessment.id).some(draft =>
       !completed.has(draft.studentId) && !assignments.isAbsent(assessment, draft.studentId) &&
       Object.keys(draft.observationGrades || {}).length);
-    if (partial) return res.status(409).json({ error: 'Finish entering marks for learners with partially marked practicals before completing this assessment.' });
+    if (partial) return 'Finish entering marks for learners with partially marked practicals before completing this assessment.';
   }
+  return '';
+}
+
+function recordTeacherReview(assessment, marked, req) {
   const updated = assignments.setTeacherMarked(assessment.id, marked);
   const submissions = assignments.getSubmissions(updated.id);
   const completeSubmissions = submissions.filter(submission => gradebook.teacherSubmissionResult(updated, submission));
@@ -2739,15 +2749,15 @@ app.patch('/api/assignment/:id/marked', requireAuth, (req, res) => {
     userId: req.userId, assessmentId: updated.id, rosterId: updated.rosterId || null,
     marked, recordedResults: recorded.length, pendingResults, ip: req.ip,
   });
-  res.json({
+  return {
     ok: true,
     teacherMarked: !!updated.teacherMarked,
     teacherMarkedAt: updated.teacherMarkedAt || null,
     recordedResults: recorded.length,
     pendingResults,
     rosterId: updated.rosterId || null,
-  });
-});
+  };
+}
 
 app.patch('/api/assignment/:id/school-captured', requireAuth, (req, res) => {
   const assessment = assignments.getAssignment(req.params.id);
@@ -4519,6 +4529,29 @@ function matchingClassTargets(record, context, question) {
     .filter(target => bulkMarkEligible(record, context, question, target));
 }
 
+app.patch('/api/assignment/:id/grade/matching-classes/marked', requireAuth, (req, res) => {
+  const source = assignments.getAssignment(req.params.id);
+  if (!source || source.teacherId !== req.userId || source.type !== 'assessment' || source.status === 'draft') {
+    return res.status(404).json({ error: 'Assessment not found.' });
+  }
+  const matches = matchingAssessmentClasses(source, req.userId);
+  const ids = req.body?.classIds;
+  if (!matches.length || !Array.isArray(ids) || matches.length !== ids.length || !matches.every(item => ids.includes(item.id))) {
+    return res.status(409).json({ error: 'The matching classes have changed. Review the updated class list before ticking again.' });
+  }
+  const remaining = matches.filter(item => !item.teacherMarked);
+  for (const record of remaining) {
+    const issue = teacherMarkedIssue(record, true);
+    if (issue) return res.status(409).json({ error: (roster.getRoster(req.userId, record.rosterId)?.name || 'Class') + ': ' + issue });
+  }
+  try {
+    for (const record of remaining) recordTeacherReview(record, true, req);
+    res.json({ ok: true, classes: matches.length });
+  } catch (error) {
+    res.status(500).json({ error: 'Could not finish recording every class. Check the updated class count and tick again to finish.' });
+  }
+});
+
 for (const method of ['get', 'patch']) {
   app[method]('/api/assignment/:id/grade/matching-classes', requireAuth, (req, res) => {
     const source = assignments.getAssignment(req.params.id);
@@ -4549,7 +4582,7 @@ for (const method of ['get', 'patch']) {
               observations: question.kind === 'practical' ? grade.processEvidence || [] : []
             };
           }).sort((a, b) => a.name.localeCompare(b.name));
-          return { id: record.id, name: className(record), locked: Boolean(bulkMarkLock(record)), learners };
+          return { id: record.id, name: className(record), teacherMarked: !!record.teacherMarked, locked: Boolean(bulkMarkLock(record)), learners };
         })
       });
     }
